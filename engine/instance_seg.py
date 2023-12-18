@@ -5,11 +5,12 @@ import pandas as pd
 from skimage.io import imread
 from tqdm import tqdm
 from skimage.segmentation import clear_border
+from skimage.transform import resize
 
 from data.post_processing.post_processing import (watershed_by_channels, voronoi_on_mask, 
-    remove_by_properties, repare_large_blobs)
-from data.pre_processing import create_instance_channels, create_test_instance_channels
-from utils.util import save_tif
+    remove_by_properties, repare_large_blobs, apply_binary_mask)
+from data.pre_processing import create_instance_channels, create_test_instance_channels, norm_range01
+from utils.util import save_tif, pad_and_reflect
 from utils.matching import matching, wrapper_matching_dataset_lazy
 from engine.metrics import jaccard_index, instance_segmentation_loss
 from engine.base_workflow import Base_Workflow
@@ -78,6 +79,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             self.all_matching_stats_post_processing = []   
         else:
             self.post_processing['instance_post'] = False            
+        self.instances_already_created = False 
 
     def define_metrics(self):
         """
@@ -89,24 +91,40 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, 
             self.cfg.PROBLEM.INSTANCE_SEG.DISTANCE_CHANNEL_MASK)
         if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BC", "BCM", "BP"]:
-            self.metrics.append(jaccard_index)
             self.first_not_binary_channel = len(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
+            self.metrics.append(
+                jaccard_index(device=self.device, num_classes=1, 
+                    first_not_binary_channel=self.first_not_binary_channel, 
+                    torchvision_models=True if self.cfg.MODEL.SOURCE == "torchvision" else False)
+            )
             self.metric_names.append("jaccard_index")
         elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BD":
-            self.metrics.append(jaccard_index)
             self.first_not_binary_channel = 1 
+            self.metrics.append(
+                jaccard_index(device=self.device, num_classes=1, 
+                    first_not_binary_channel=self.first_not_binary_channel, 
+                    torchvision_models=True if self.cfg.MODEL.SOURCE == "torchvision" else False)
+            ) 
             self.metric_names.append("jaccard_index")
             self.metrics.append(torch.nn.L1Loss())
             self.metric_names.append("L1_distance_channel")
         elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BCD", 'BCDv2']:
-            self.metrics.append(jaccard_index)
             self.first_not_binary_channel = 2
+            self.metrics.append(
+                jaccard_index(device=self.device, num_classes=1, 
+                    first_not_binary_channel=self.first_not_binary_channel, 
+                    torchvision_models=True if self.cfg.MODEL.SOURCE == "torchvision" else False)
+            )
             self.metric_names.append("jaccard_index")
             self.metrics.append(torch.nn.L1Loss())
             self.metric_names.append("L1_distance_channel")
         elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BDv2":
-            self.metrics.append(jaccard_index)
             self.first_not_binary_channel = 1
+            self.metrics.append(
+                jaccard_index(device=self.device, num_classes=1, 
+                    first_not_binary_channel=self.first_not_binary_channel, 
+                    torchvision_models=True if self.cfg.MODEL.SOURCE == "torchvision" else False)
+            )
             self.metrics.append(torch.nn.L1Loss())
             self.metric_names.append("jaccard_index")
             self.metric_names.append("L1_distance_channel")
@@ -139,8 +157,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             train_dis = []
             for i in range(len(self.metric_names)):
                 if self.metric_names[i] == "jaccard_index":
-                    iou = self.metrics[i](output, targets, self.device, num_classes=1, 
-                        first_not_binary_channel=self.first_not_binary_channel)
+                    iou = self.metrics[i](output, targets)
                     iou = iou.item() if not torch.isnan(iou) else 0
                     train_iou.append(iou)
                 elif self.metric_names[i] == "L1_distance_channel":
@@ -161,32 +178,37 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
         Parameters
         ----------
-        pred : Torch Tensor
-            Model predictions.
-        
+        pred : 4D/5D Torch tensor
+            Model predictions. E.g. ``(num_of_images, y, x, channels)`` for 2D or 
+            ``(num_of_images, z, y, x, channels)`` for 3D.
+
         filenames : List of str
             Predicted image's filenames.
         """
         #############################
         ### INSTANCE SEGMENTATION ###
         #############################
-        print("Creating instances with watershed . . .")
-        w_dir = os.path.join(self.cfg.PATHS.WATERSHED_DIR, filenames[0])
-        check_wa = w_dir if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHECK_MW else None
-        
-        w_pred = watershed_by_channels(pred, self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, ths=self.instance_ths, 
-            remove_before=self.cfg.PROBLEM.INSTANCE_SEG.DATA_REMOVE_BEFORE_MW, thres_small_before=self.cfg.PROBLEM.INSTANCE_SEG.DATA_REMOVE_SMALL_OBJ_BEFORE,
-            seed_morph_sequence=self.cfg.PROBLEM.INSTANCE_SEG.SEED_MORPH_SEQUENCE, seed_morph_radius=self.cfg.PROBLEM.INSTANCE_SEG.SEED_MORPH_RADIUS, 
-            erode_and_dilate_foreground=self.cfg.PROBLEM.INSTANCE_SEG.ERODE_AND_DILATE_FOREGROUND, fore_erosion_radius=self.cfg.PROBLEM.INSTANCE_SEG.FORE_EROSION_RADIUS, 
-            fore_dilation_radius=self.cfg.PROBLEM.INSTANCE_SEG.FORE_DILATION_RADIUS, rmv_close_points=self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS, 
-            remove_close_points_radius=self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS[0], resolution=self.cfg.DATA.TEST.RESOLUTION, save_dir=check_wa)
+        if not self.instances_already_created: 
+            print("Creating instances with watershed . . .")
+            w_dir = os.path.join(self.cfg.PATHS.WATERSHED_DIR, filenames[0])
+            check_wa = w_dir if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHECK_MW else None
+            
+            w_pred = watershed_by_channels(pred, self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, ths=self.instance_ths, 
+                remove_before=self.cfg.PROBLEM.INSTANCE_SEG.DATA_REMOVE_BEFORE_MW, thres_small_before=self.cfg.PROBLEM.INSTANCE_SEG.DATA_REMOVE_SMALL_OBJ_BEFORE,
+                seed_morph_sequence=self.cfg.PROBLEM.INSTANCE_SEG.SEED_MORPH_SEQUENCE, seed_morph_radius=self.cfg.PROBLEM.INSTANCE_SEG.SEED_MORPH_RADIUS, 
+                erode_and_dilate_foreground=self.cfg.PROBLEM.INSTANCE_SEG.ERODE_AND_DILATE_FOREGROUND, fore_erosion_radius=self.cfg.PROBLEM.INSTANCE_SEG.FORE_EROSION_RADIUS, 
+                fore_dilation_radius=self.cfg.PROBLEM.INSTANCE_SEG.FORE_DILATION_RADIUS, rmv_close_points=self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS, 
+                remove_close_points_radius=self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS[0], resolution=self.cfg.DATA.TEST.RESOLUTION, save_dir=check_wa)
 
-        save_tif(np.expand_dims(np.expand_dims(w_pred,-1),0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
-            filenames, verbose=self.cfg.TEST.VERBOSE)
+            save_tif(np.expand_dims(np.expand_dims(w_pred,-1),0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
+                filenames, verbose=self.cfg.TEST.VERBOSE)
 
-        # Add extra dimension if working in 2D
-        if w_pred.ndim == 2:
-            w_pred = np.expand_dims(w_pred,0)
+            # Add extra dimension if working in 2D
+            if w_pred.ndim == 2:
+                w_pred = np.expand_dims(w_pred,0)
+        else:
+            w_pred = pred.squeeze()
+            if w_pred.ndim == 2: w_pred = np.expand_dims(w_pred,0)
 
         if self.cfg.TEST.MATCHING_STATS and (self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST):
             print("Calculating matching stats . . .")
@@ -203,6 +225,10 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 _Y = imread(test_file).squeeze()
 
             if _Y.ndim == 2: _Y = np.expand_dims(_Y,0)
+
+            # For torchvision models that resize need to rezise the images 
+            if w_pred.shape != self._Y.shape:
+                _Y = resize(_Y, w_pred.shape, order=0)
 
             # Convert instances to integer
             if _Y.dtype == np.float32: _Y = _Y.astype(np.uint32)
@@ -355,7 +381,40 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         del colored_result
                 self.all_matching_stats_post_processing.append(results)
 
-    def after_merge_patches(self, pred, filenames):
+    def process_sample(self, norm):
+        """
+        Function to process a sample in the inference phase. 
+
+        Parameters
+        ----------
+        norm : List of dicts
+            Normalization used during training. Required to denormalize the predictions of the model.
+        """
+        if self.cfg.MODEL.SOURCE != "torchvision":
+            self.instances_already_created = False
+            super().process_sample(norm)
+        else:
+            self.instances_already_created = True
+            # Data channel check
+            if self.cfg.DATA.PATCH_SIZE[-1] != self._X.shape[-1]:
+                raise ValueError("Channel of the DATA.PATCH_SIZE given {} does not correspond with the loaded image {}. "
+                    "Please, check the channels of the images!".format(self.cfg.DATA.PATCH_SIZE[-1], self._X.shape[-1]))
+
+            ##################
+            ### FULL IMAGE ###
+            ##################
+            if self.cfg.TEST.STATS.FULL_IMG:
+                # Make the prediction
+                with torch.cuda.amp.autocast():
+                    pred = self.model_call_func(self._X)
+                del self._X 
+
+                if self.cfg.TEST.POST_PROCESSING.APPLY_MASK:
+                    pred = apply_binary_mask(pred, self.cfg.DATA.TEST.BINARY_MASKS)
+    
+                self.after_full_image(pred)
+
+    def after_merge_patches(self, pred):
         """
         Steps need to be done after merging all predicted patches into the original image.
 
@@ -363,12 +422,9 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         ----------
         pred : Torch Tensor
             Model prediction.
-
-        filenames : List of str
-            Filenames of the predicted images.  
         """
         if not self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
-            self.instance_seg_process(pred, filenames)        
+            self.instance_seg_process(pred, self.processing_filenames)        
 
     def after_merge_patches_by_chunks_proccess_patch(self, filename):
         """
@@ -383,7 +439,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         """
         pass
 
-    def after_full_image(self, pred, filenames):
+    def after_full_image(self, pred):
         """
         Steps that must be executed after generating the prediction by supplying the entire image to the model.
 
@@ -391,11 +447,9 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         ----------
         pred : Torch Tensor
             Model prediction.
-
-        filenames : List of str
-            Filenames of the predicted images.  
         """
-        pass
+        filename, file_extension = os.path.splitext(self.processing_filenames[0])
+        self.instance_seg_process(pred, [filename+"_full_image"+file_extension])  
 
     def after_all_images(self):
         """
@@ -406,8 +460,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             print("Analysing all images as a 3D stack . . .")    
             if type(self.all_pred) is list:
                 self.all_pred = np.concatenate(self.all_pred)
-                self.all_gt = np.concatenate(self.all_gt) if (self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST) else None
-            self.instance_seg_process(self.all_pred,  self.all_gt, ["3D_stack.tif"], [])
+            self.instance_seg_process(self.all_pred, ["3D_stack.tif"])
 
     def normalize_stats(self, image_counter): 
         """
@@ -435,17 +488,18 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         image_counter : int
             Number of images to call ``normalize_stats``.
         """
-        super().print_stats(image_counter)
-        super().print_post_processing_stats()
+        if self.cfg.MODEL.SOURCE != "torchvision":
+            super().print_stats(image_counter)
+            super().print_post_processing_stats()
 
-        print("Instance segmentation specific metrics:")
-        if self.cfg.TEST.MATCHING_STATS and (self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST) :
-            for i in range(len(self.cfg.TEST.MATCHING_STATS_THS)):
-                print("IoU TH={}".format(self.cfg.TEST.MATCHING_STATS_THS[i]))
-                print(self.stats['inst_stats'][i])
-                if self.post_processing['instance_post']:
-                    print("IoU (post-processing) TH={}".format(self.cfg.TEST.MATCHING_STATS_THS[i]))
-                    print(self.stats['inst_stats_vor'][i])
+            print("Instance segmentation specific metrics:")
+            if self.cfg.TEST.MATCHING_STATS and (self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST) :
+                for i in range(len(self.cfg.TEST.MATCHING_STATS_THS)):
+                    print("IoU TH={}".format(self.cfg.TEST.MATCHING_STATS_THS[i]))
+                    print(self.stats['inst_stats'][i])
+                    if self.post_processing['instance_post']:
+                        print("IoU (post-processing) TH={}".format(self.cfg.TEST.MATCHING_STATS_THS[i]))
+                        print(self.stats['inst_stats_vor'][i])
 
     def prepare_instance_data(self):
         """
@@ -507,3 +561,57 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
         return original_test_path, original_test_mask_path
 
+    def torchvision_model_call(self, in_img, is_train=False):
+        """
+        Call a regular Pytorch model.
+
+        Parameters
+        ----------
+        in_img : Tensor
+            Input image to pass through the model.
+
+        is_train : bool, optional
+            Whether if the call is during training or inference. 
+
+        Returns
+        -------
+        prediction : Tensor 
+            Image prediction. 
+        """
+        filename, file_extension = os.path.splitext(self.processing_filenames[0])
+
+        # Convert first to 0-255 range if uint16
+        if in_img.dtype == torch.float32:
+            if torch.max(in_img) > 1:
+                in_img = (norm_range01(in_img, torch.uint8)[0]*255).to(torch.uint8)
+            in_img = in_img.to(torch.uint8)
+        
+        # Apply TorchVision pre-processing
+        in_img = self.torchvision_preprocessing(in_img)
+        pred = self.model(in_img)
+        masks = pred[0]['masks'].cpu().numpy().transpose(0,2,3,1)
+        if masks.shape[0] != 0:
+            masks = np.argmax(pred[0]['masks'].cpu().numpy().transpose(0,2,3,1), axis=0)
+        else:
+            masks = torch.ones((1,)+pred[0]['masks'].cpu().numpy().transpose(0,2,3,1).shape[1:], dtype=torch.uint8)
+
+        if not is_train and masks.shape[0] != 0:
+            # Extract each output from MaskRCNN
+            bboxes = pred[0]['boxes'].cpu().numpy().astype(np.uint16)
+            labels = pred[0]['labels'].cpu().numpy()
+            scores = pred[0]['scores'].cpu().numpy()
+            
+            # Save all info in a csv file
+            df = pd.DataFrame(zip(labels, scores, bboxes[:,0],bboxes[:,1],bboxes[:,2],bboxes[:,3]), 
+                columns = ['label', 'scores', 'x1', 'y1', 'x2', 'y2'])
+            df = df.sort_values(by=['label']) 
+            df.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.FULL_IMAGE, filename+".csv"), index=False)
+
+            # Save masks
+            save_tif(np.expand_dims(masks,0), self.cfg.PATHS.RESULT_DIR.FULL_IMAGE, self.processing_filenames, 
+                verbose=self.cfg.TEST.VERBOSE)    
+
+        # Actually to allow training this should return a Torch Tensor and not a Numpy array. For instance, 
+        # segmentation training is disabled, due to the absence of generators that contain bboxes, so this can be left 
+        # returning a Numpy array. This will only be called in process_sample inference function and for full image setting
+        return np.expand_dims(masks.squeeze(),0) 

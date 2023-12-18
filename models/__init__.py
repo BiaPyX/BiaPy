@@ -10,20 +10,23 @@ from engine import prepare_optimizer
 from models.blocks import get_activation
 
 def build_model(cfg, job_identifier, device):
-    """Build selected model
+    """
+    Build selected model
 
-       Parameters
-       ----------
-       cfg : YACS CN object
-           Configuration.
+    Parameters
+    ----------
+    cfg : YACS CN object
+        Configuration.
 
-       job_identifier: str
-           Job name.
+    job_identifier: str
+        Job name.
 
-       Returns
-       -------
-       model : Keras model
-           Selected model.
+    device : Torch device
+        Using device ("cpu" or "cuda" for GPU). 
+    Returns
+    -------
+    model : Keras model
+        Selected model.
     """
     # Import the model
     if 'efficientnet' in cfg.MODEL.ARCHITECTURE.lower():
@@ -120,3 +123,93 @@ def build_model(cfg, job_identifier, device):
     summary(model, input_size=sample_size, col_names=("input_size", "output_size", "num_params"), depth=10,
         device="cpu" if "cuda" not in device.type else "cuda")
     return model
+
+
+def build_torchvision_model(cfg, device):
+    # Find model in TorchVision
+    if 'quantized_' in cfg.MODEL.TORCHVISION_MODEL_NAME:
+        mdl = importlib.import_module('torchvision.models.quantization', cfg.MODEL.TORCHVISION_MODEL_NAME)
+        w_prefix = "_quantizedweights"
+        tc_model_name = cfg.MODEL.TORCHVISION_MODEL_NAME.replace('quantized_','')
+        mdl_weigths = importlib.import_module('torchvision.models', cfg.MODEL.TORCHVISION_MODEL_NAME)
+    else:
+        w_prefix = "_weights"
+        tc_model_name = cfg.MODEL.TORCHVISION_MODEL_NAME
+        if cfg.PROBLEM.TYPE == 'CLASSIFICATION':
+            mdl = importlib.import_module('torchvision.models', cfg.MODEL.TORCHVISION_MODEL_NAME)
+        elif cfg.PROBLEM.TYPE == 'SEMANTIC_SEG':
+            mdl = importlib.import_module('torchvision.models.segmentation', cfg.MODEL.TORCHVISION_MODEL_NAME)
+        elif cfg.PROBLEM.TYPE in ['INSTANCE_SEG', 'DETECTION']:
+            mdl = importlib.import_module('torchvision.models.detection', cfg.MODEL.TORCHVISION_MODEL_NAME)
+        mdl_weigths = mdl
+
+    # Import model and weights
+    names = [x for x in mdl.__dict__ if not x.startswith("_")]
+    for weight_name in names:
+        if tc_model_name+w_prefix in weight_name.lower():
+            break 
+    weight_name = weight_name.replace('Quantized','')     
+    print(f"Pytorch model selected: {tc_model_name} (weights: {weight_name})")
+    globals().update(
+        {
+            tc_model_name: getattr(mdl, tc_model_name), 
+            weight_name: getattr(mdl_weigths, weight_name)
+        })
+
+    # Load model and weights 
+    model_torchvision_weights = eval(weight_name).DEFAULT
+    args = {}
+    model = eval(tc_model_name)(weights=model_torchvision_weights)
+
+    # Create new head
+    sample_size = None
+    out_classes = cfg.MODEL.N_CLASSES if cfg.MODEL.N_CLASSES > 2 else 1
+    if cfg.PROBLEM.TYPE == 'CLASSIFICATION':
+        if cfg.MODEL.N_CLASSES != 1000: # 1000 classes are the ones by default in ImageNet, which are the weights loaded by default
+            print(f"WARNING: Model's head changed from 1000 to {out_classes} so a finetunning is required to have good results")
+            if cfg.MODEL.TORCHVISION_MODEL_NAME in ['squeezenet1_0', 'squeezenet1_1']:
+                head = torch.nn.Conv2d(model.classifier[1].in_channels, out_classes, kernel_size=1, stride=1)
+                model.classifier[1] = head
+            else:
+                if hasattr(model, 'fc'):
+                    layer = "fc"
+                elif hasattr(model, 'classifier'):
+                    layer = 'classifier'
+                else: 
+                    layer = "head"
+                if isinstance(getattr(model, layer), list) or isinstance(getattr(model, layer), torch.nn.modules.container.Sequential):
+                    head = torch.nn.Linear(getattr(model, layer)[-1].in_features, out_classes, bias=True)
+                    getattr(model, layer)[-1] = head
+                else:
+                    head = torch.nn.Linear(getattr(model, layer).in_features, out_classes, bias=True)
+                    setattr(model, layer, head)
+            
+            # Fix sample input shape as required by some models
+            if cfg.MODEL.TORCHVISION_MODEL_NAME in ['maxvit_t']:
+                sample_size = (1, 3, 224, 224)
+    elif cfg.PROBLEM.TYPE == 'SEMANTIC_SEG':        
+        head = torch.nn.Conv2d(model.classifier[-1].in_channels, out_classes, kernel_size=1, stride=1)
+        model.classifier[-1] = head
+        head = torch.nn.Conv2d(model.aux_classifier[-1].in_channels, out_classes, kernel_size=1, stride=1)
+        model.aux_classifier[-1] = head
+    elif cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
+        # MaskRCNN
+        if cfg.MODEL.N_CLASSES != 91: # 91 classes are the ones by default in MaskRCNN
+            cls_score = torch.nn.Linear(in_features=1024, out_features=out_classes, bias=True)
+            model.roi_heads.box_predictor.cls_score = cls_score
+            mask_fcn_logits = torch.nn.Conv2d(model.roi_heads.mask_predictor.mask_fcn_logits.in_channels, out_classes, kernel_size=1, stride=1)
+            model.roi_heads.mask_predictor.mask_fcn_logits = mask_fcn_logits
+            print(f"Model's head changed from 91 to {out_classes} so a finetunning is required")
+
+    # Check the network created
+    model.to(device)
+    if sample_size is None:
+        if cfg.PROBLEM.NDIM == '2D':
+            sample_size = (1,cfg.DATA.PATCH_SIZE[2], cfg.DATA.PATCH_SIZE[0], cfg.DATA.PATCH_SIZE[1])
+        else:
+            sample_size = (1,cfg.DATA.PATCH_SIZE[3], cfg.DATA.PATCH_SIZE[0], cfg.DATA.PATCH_SIZE[1], cfg.DATA.PATCH_SIZE[2])
+
+    summary(model, input_size=sample_size, col_names=("input_size", "output_size", "num_params"), depth=10,
+        device="cpu" if "cuda" not in device.type else "cuda")
+
+    return model, model_torchvision_weights.transforms()

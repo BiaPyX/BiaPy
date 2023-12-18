@@ -12,7 +12,8 @@ from data.pre_processing import normalize
 
 def load_and_prepare_2D_train_data(train_path, train_mask_path, cross_val=False, cross_val_nsplits=5, cross_val_fold=1,
     val_split=0.1, seed=0, shuffle_val=True, num_crops_per_dataset=0, random_crops_in_DA=False, crop_shape=None, 
-    y_upscaling=1, ov=(0,0), padding=(0,0), minimum_foreground_perc=-1, reflect_to_complete_shape=False):
+    y_upscaling=1, ov=(0,0), padding=(0,0), minimum_foreground_perc=-1, reflect_to_complete_shape=False,
+    convert_to_rgb=False):
     """
     Load train and validation images from the given paths to create 2D data.
 
@@ -69,7 +70,11 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, cross_val=False,
     reflect_to_complete_shape : bool, optional
         Wheter to increase the shape of the dimension that have less size than selected patch size padding it with
         'reflect'.
-        
+    
+    convert_to_rgb : bool, optional
+        In case RGB images are expected, e.g. if ``crop_shape`` channel is 3, those images that are grayscale are 
+        converted into RGB.
+
     Returns
     -------
     X_train : 4D Numpy array
@@ -149,7 +154,8 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, cross_val=False,
 
     print("0) Loading train images . . .")
     X_train, orig_train_shape, _, t_filenames = load_data_from_dir(train_path, crop=crop, crop_shape=crop_shape, overlap=ov,
-        padding=padding, return_filenames=True, reflect_to_complete_shape=reflect_to_complete_shape)
+        padding=padding, return_filenames=True, reflect_to_complete_shape=reflect_to_complete_shape, 
+        convert_to_rgb=convert_to_rgb)
     if train_mask_path is not None:                                            
         print("1) Loading train GT . . .")
         scrop = (crop_shape[0]*y_upscaling, crop_shape[1]*y_upscaling, crop_shape[2])
@@ -778,7 +784,7 @@ def merge_data_with_overlap(data, original_shape, data_mask=None, overlap=(0,0),
         return merged_data
 
 
-def load_data_classification(data_dir, patch_shape, expected_classes=None, cross_val=False, cross_val_nsplits=5, cross_val_fold=1, 
+def load_data_classification(data_dir, patch_shape, convert_to_rgb=True, expected_classes=None, cross_val=False, cross_val_nsplits=5, cross_val_fold=1, 
     val_split=0.1, seed=0, shuffle_val=True):
     """
     Load data to train classification methods.
@@ -790,6 +796,10 @@ def load_data_classification(data_dir, patch_shape, expected_classes=None, cross
 
     patch_shape: Tuple of ints
         Shape of the patch. E.g. ``(y, x, channels)``.
+
+    convert_to_rgb : bool, optional
+        In case RGB images are expected, e.g. if ``crop_shape`` channel is 3, those images that are grayscale are 
+        converted into RGB.
 
     expected_classes : int, optional
         Expected number of classes to be loaded. 
@@ -863,7 +873,8 @@ def load_data_classification(data_dir, patch_shape, expected_classes=None, cross
             print("Found {} samples".format(len(ids)))
 
         # Loading images 
-        images, _, _, image_ids = load_data_from_dir(f, return_filenames=True, crop_shape=patch_shape)
+        images, _, _, image_ids = load_data_from_dir(f, return_filenames=True, crop_shape=patch_shape, 
+            convert_to_rgb=convert_to_rgb)
 
         X_data.append(images)
         Y_data.append((c_num,)*len(ids))

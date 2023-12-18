@@ -149,33 +149,57 @@ def check_configuration(cfg, check_data_paths=True):
     if cfg.TEST.ENABLE and cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK and cfg.PROBLEM.NDIM == "3D":
         raise ValueError("'TEST.ANALIZE_2D_IMGS_AS_3D_STACK' makes no sense when the problem is 3D. Disable it.")
 
-    if cfg.MODEL.SOURCE not in ["manual", "bmz"]:
-        raise ValueError("'MODEL.SOURCE' needs to be one between ['manual', 'bmz']")
+    if cfg.MODEL.SOURCE not in ["biapy", "bmz", "torchvision"]:
+        raise ValueError("'MODEL.SOURCE' needs to be one between ['biapy', 'bmz', 'torchvision']")
 
     if cfg.MODEL.SOURCE == "bmz":
         if cfg.TRAIN.ENABLE:
             raise ValueError("Currently not supported to train a BMZ model")
-        if cfg.MODEL.BMZ_DOI == "":
-            raise ValueError("'MODEL.BMZ_DOI' needs to be configured when 'MODEL.SOURCE' is 'bmz'")
+        if cfg.MODEL.BMZ.SOURCE_MODEL_DOI == "":
+            raise ValueError("'MODEL.BMZ.SOURCE_MODEL_DOI' needs to be configured when 'MODEL.SOURCE' is 'bmz'")
 
         # Check if the model exists
-        url = 'http://www.doi.org/'+cfg.MODEL.BMZ_DOI
+        url = 'http://www.doi.org/'+cfg.MODEL.BMZ.SOURCE_MODEL_DOI
         r = requests.get(url, stream=True, verify=True)
         if r.status_code >= 200 and r.status_code < 400:
-            print(f'BMZ model DOI: {cfg.MODEL.BMZ_DOI} found')
+            print(f'BMZ model DOI: {cfg.MODEL.BMZ.SOURCE_MODEL_DOI} found')
         else:
-            raise ValueError(f'BMZ model DOI: {cfg.MODEL.BMZ_DOI} not found. Aborting!')
-            
+            raise ValueError(f'BMZ model DOI: {cfg.MODEL.BMZ.SOURCE_MODEL_DOI} not found. Aborting!')
+
+    elif cfg.MODEL.SOURCE == "torchvision":
+        if cfg.MODEL.TORCHVISION_MODEL_NAME == "":
+            raise ValueError("'MODEL.TORCHVISION_MODEL_NAME' needs to be configured when 'MODEL.SOURCE' is 'torchvision'")
+
     model_arch = cfg.MODEL.ARCHITECTURE.lower()
     #### Semantic segmentation ####
     if cfg.PROBLEM.TYPE == 'SEMANTIC_SEG':
-        if cfg.MODEL.SOURCE == "manual":
+        if cfg.MODEL.SOURCE == "biapy":
             if cfg.MODEL.N_CLASSES < 2:
                 raise ValueError("'MODEL.N_CLASSES' need to be greater or equal 2 (binary case)")
             if cfg.LOSS.TYPE == "MASKED_BCE":
                 if cfg.MODEL.N_CLASSES > 2:
                     raise ValueError("Not implemented pipeline option: N_CLASSES > 2 and MASKED_BCE")
-                    
+        elif cfg.MODEL.SOURCE == "torchvision":
+            if cfg.MODEL.TORCHVISION_MODEL_NAME not in ['deeplabv3_mobilenet_v3_large', 'deeplabv3_resnet101', 'deeplabv3_resnet50', \
+                'fcn_resnet101', 'fcn_resnet50', 'lraspp_mobilenet_v3_large']:
+                raise ValueError("'MODEL.SOURCE' must be one between ['deeplabv3_mobilenet_v3_large', 'deeplabv3_resnet101', "
+                    "'deeplabv3_resnet50', 'fcn_resnet101', 'fcn_resnet50', 'lraspp_mobilenet_v3_large' ]")
+            if cfg.MODEL.TORCHVISION_MODEL_NAME in ['deeplabv3_mobilenet_v3_large'] and cfg.DATA.PATCH_SIZE[-1] != 3:
+                raise ValueError("'deeplabv3_mobilenet_v3_large' model expects 3 channel data (RGB). "
+                    f"'DATA.PATCH_SIZE' set is {cfg.DATA.PATCH_SIZE}")
+            if cfg.PROBLEM.NDIM == '3D':
+                raise ValueError("TorchVision model's for semantic segmentation are only available for 2D images")
+            if not cfg.TEST.STATS.FULL_IMG:
+                raise ValueError("With TorchVision models for semantic segmentation workflow only 'TEST.STATS.FULL_IMG' setting is available, so "
+                    "please set it.")
+            if cfg.TEST.STATS.PER_PATCH or cfg.TEST.STATS.MERGE_PATCHES:
+                raise ValueError("With TorchVision models for semantic segmentation workflow only 'TEST.STATS.FULL_IMG' setting is available, so "
+                    "please enable it and disable 'TEST.STATS.PER_PATCH' and 'TEST.STATS.MERGE_PATCHES'")
+            if cfg.TEST.AUGMENTATION:
+                print("WARNING: 'TEST.AUGMENTATION' is not available semantic segmentation workflow using TorchVision models")
+            if cfg.LOSS.TYPE != "CE":
+                raise ValueError("Only 'LOSS.TYPE' = 'CE' is available in semantic segmentation workflow using TorchVision models")
+
     #### Instance segmentation ####
     if cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
         assert cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ['BC', 'BCM', 'BCD', 'BCDv2', 'Dv2', 'BDv2', 'BP', 'BD'],\
@@ -203,10 +227,28 @@ def check_configuration(cfg, check_data_paths=True):
         if cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE == 'dense' and cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BCM":
             raise ValueError("'PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE' can not be 'dense' when 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS' is 'BCM'"
                 " as it does not have sense")
+        if cfg.MODEL.N_CLASSES > 2:
+            raise ValueError("'MODEL.N_CLASSES' greater than 2 is not allowed in Instance Segmentation workflow")
+        if cfg.MODEL.SOURCE == "torchvision":
+            if cfg.MODEL.TORCHVISION_MODEL_NAME not in ['maskrcnn_resnet50_fpn', 'maskrcnn_resnet50_fpn_v2']:
+                raise ValueError("'MODEL.SOURCE' must be one between ['maskrcnn_resnet50_fpn', 'maskrcnn_resnet50_fpn_v2']")
+            if cfg.PROBLEM.NDIM == '3D':
+                raise ValueError("TorchVision model's for instance segmentation are only available for 2D images")
+            if cfg.TRAIN.ENABLE:
+                raise NotImplementedError # require bbox generator etc.
+            if cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
+                raise ValueError("'TEST.ANALIZE_2D_IMGS_AS_3D_STACK' can not be activated with TorchVision models for instance segmentation "
+                    "workflow")
+            if not cfg.TEST.STATS.FULL_IMG:
+                raise ValueError("With TorchVision models for instance segmentation workflow only 'TEST.STATS.FULL_IMG' setting is available, so "
+                    "please set it.")
+            if cfg.TEST.STATS.PER_PATCH or cfg.TEST.STATS.MERGE_PATCHES:
+                raise ValueError("With TorchVision models for instance segmentation workflow only 'TEST.STATS.FULL_IMG' setting is available, so "
+                    "please enable it and disable 'TEST.STATS.PER_PATCH' and 'TEST.STATS.MERGE_PATCHES'")
 
     #### Detection ####
     if cfg.PROBLEM.TYPE == 'DETECTION':
-        if cfg.MODEL.SOURCE == "manual" and cfg.MODEL.N_CLASSES < 2:
+        if cfg.MODEL.SOURCE == "biapy" and cfg.MODEL.N_CLASSES < 2:
             raise ValueError("'MODEL.N_CLASSES' need to be greater or equal 2 (binary case)")
         if cfg.TEST.POST_PROCESSING.DET_WATERSHED:
             if any(len(x) != dim_count for x in cfg.TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION):
@@ -218,12 +260,31 @@ def check_configuration(cfg, check_data_paths=True):
                 raise ValueError("'TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES' need to be set to 'circularity' filtering when 'TEST.POST_PROCESSING.DET_WATERSHED' is enabled")
         if cfg.TEST.DET_POINT_CREATION_FUNCTION not in ['peak_local_max', 'blob_log']:
             raise ValueError("'TEST.DET_POINT_CREATION_FUNCTION' must be one between: ['peak_local_max', 'blob_log']")
-
+        if cfg.MODEL.SOURCE == "torchvision":
+            if cfg.MODEL.TORCHVISION_MODEL_NAME not in ['fasterrcnn_mobilenet_v3_large_320_fpn', 'fasterrcnn_mobilenet_v3_large_fpn', \
+                'fasterrcnn_resnet50_fpn', 'fasterrcnn_resnet50_fpn_v2', 'fcos_resnet50_fpn', 'ssd300_vgg16', 'ssdlite320_mobilenet_v3_large', \
+                'retinanet_resnet50_fpn', 'retinanet_resnet50_fpn_v2']:
+                raise ValueError("'MODEL.SOURCE' must be one between ['fasterrcnn_mobilenet_v3_large_320_fpn', 'fasterrcnn_mobilenet_v3_large_fpn', "
+                    "'fasterrcnn_resnet50_fpn', 'fasterrcnn_resnet50_fpn_v2', 'fcos_resnet50_fpn', 'ssd300_vgg16', 'ssdlite320_mobilenet_v3_large', "
+                    "'retinanet_resnet50_fpn', 'retinanet_resnet50_fpn_v2']")
+            if cfg.PROBLEM.NDIM == '3D':
+                raise ValueError("TorchVision model's for detection are only available for 2D images")
+            if cfg.TRAIN.ENABLE:
+                raise NotImplementedError # require bbox generator etc.
+            if not cfg.TEST.STATS.FULL_IMG:
+                raise ValueError("With TorchVision models for detection workflow only 'TEST.STATS.FULL_IMG' setting is available, so "
+                    "please set it.")
+            if cfg.TEST.STATS.PER_PATCH or cfg.TEST.STATS.MERGE_PATCHES:
+                raise ValueError("With TorchVision models for detection workflow only 'TEST.STATS.FULL_IMG' setting is available, so "
+                    "please enable it and disable 'TEST.STATS.PER_PATCH' and 'TEST.STATS.MERGE_PATCHES'")
+                    
     #### Super-resolution ####
     elif cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
         if cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING == 1:
             raise ValueError("Resolution scale must be provided with 'PROBLEM.SUPER_RESOLUTION.UPSCALING' variable")
         assert cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING in [2, 4], "PROBLEM.SUPER_RESOLUTION.UPSCALING not in [2, 4]"
+        if cfg.MODEL.SOURCE == "torchvision":
+            raise ValueError("'MODEL.SOURCE' as 'torchvision' is not available in super-resolution workflow")
 
     #### Self-supervision ####
     elif cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
@@ -237,6 +298,8 @@ def check_configuration(cfg, check_data_paths=True):
                 raise ValueError("'MODEL.ARCHITECTURE' need to be 'mae' when 'PROBLEM.SELF_SUPERVISED.PRETEXT_TASK' is 'masking'")  
         else:
             raise ValueError("'PROBLEM.SELF_SUPERVISED.PRETEXT_TASK' need to be among these options: ['crappify', 'masking']")
+        if cfg.MODEL.SOURCE == "torchvision":
+            raise ValueError("'MODEL.SOURCE' as 'torchvision' is not available in super-resolution workflow")
 
     #### Denoising ####
     elif cfg.PROBLEM.TYPE == 'DENOISING':
@@ -244,12 +307,50 @@ def check_configuration(cfg, check_data_paths=True):
             raise ValueError("Denoising is made in an unsupervised way so there is no ground truth required. Disable 'DATA.TEST.LOAD_GT'")
         if not check_value(cfg.PROBLEM.DENOISING.N2V_PERC_PIX):
             raise ValueError("PROBLEM.DENOISING.N2V_PERC_PIX not in [0, 1] range")
+        if cfg.MODEL.SOURCE == "torchvision":
+            raise ValueError("'MODEL.SOURCE' as 'torchvision' is not available in super-resolution workflow")
             
     #### Classification ####
     elif cfg.PROBLEM.TYPE == 'CLASSIFICATION':
         if cfg.TEST.BY_CHUNKS.ENABLE:
             raise ValueError("'TEST.BY_CHUNKS.ENABLE' can not be activated for CLASSIFICATION workflow")
-
+        if cfg.MODEL.SOURCE == "torchvision":
+            if cfg.MODEL.TORCHVISION_MODEL_NAME not in [
+                'alexnet', 'convnext_base', 'convnext_large', 'convnext_small', 'convnext_tiny', 'densenet121', 'densenet161', \
+                'densenet169', 'densenet201', 'efficientnet_b0', 'efficientnet_b1', 'efficientnet_b2', 'efficientnet_b3', \
+                'efficientnet_b4', 'efficientnet_b5', 'efficientnet_b6', 'efficientnet_b7', 'efficientnet_v2_l', 'efficientnet_v2_m', \
+                'efficientnet_v2_s', 'googlenet', 'inception_v3', 'maxvit_t', 'mnasnet0_5', 'mnasnet0_75', 'mnasnet1_0', 'mnasnet1_3', \
+                'mobilenet_v2', 'mobilenet_v3_large', 'mobilenet_v3_small',  'quantized_googlenet', 'quantized_inception_v3', \
+                'quantized_mobilenet_v2', 'quantized_mobilenet_v3_large', 'quantized_resnet18', 'quantized_resnet50', \
+                'quantized_resnext101_32x8d', 'quantized_resnext101_64x4d', 'quantized_shufflenet_v2_x0_5', 'quantized_shufflenet_v2_x1_0', \
+                'quantized_shufflenet_v2_x1_5', 'quantized_shufflenet_v2_x2_0', 'regnet_x_16gf', 'regnet_x_1_6gf', 'regnet_x_32gf', \
+                'regnet_x_3_2gf', 'regnet_x_400mf', 'regnet_x_800mf', 'regnet_x_8gf', 'regnet_y_128gf', 'regnet_y_16gf', 'regnet_y_1_6gf', \
+                'regnet_y_32gf', 'regnet_y_3_2gf', 'regnet_y_400mf', 'regnet_y_800mf', 'regnet_y_8gf', 'resnet101', 'resnet152', \
+                'resnet18', 'resnet34', 'resnet50', 'resnext101_32x8d', 'resnext101_64x4d', 'resnext50_32x4d', 'retinanet_resnet50_fpn', \
+                'shufflenet_v2_x0_5', 'shufflenet_v2_x1_0', 'shufflenet_v2_x1_5', 'shufflenet_v2_x2_0', \
+                'squeezenet1_0', 'squeezenet1_1', 'swin_b', 'swin_s', 'swin_t', 'swin_v2_b', 'swin_v2_s', 'swin_v2_t', \
+                'vgg11', 'vgg11_bn', 'vgg13', 'vgg13_bn', 'vgg16', 'vgg16_bn', 'vgg19', 'vgg19_bn', 'vit_b_16', 'vit_b_32', \
+                'vit_h_14', 'vit_l_16', 'vit_l_32', 'wide_resnet101_2', 'wide_resnet50_2']:
+                raise ValueError("'MODEL.SOURCE' must be one between [ "
+                    "'alexnet', 'convnext_base', 'convnext_large', 'convnext_small', 'convnext_tiny', 'densenet121', 'densenet161', "
+                    "'densenet169', 'densenet201', 'efficientnet_b0', 'efficientnet_b1', 'efficientnet_b2', 'efficientnet_b3', "
+                    "'efficientnet_b4', 'efficientnet_b5', 'efficientnet_b6', 'efficientnet_b7', 'efficientnet_v2_l', 'efficientnet_v2_m', "
+                    "'efficientnet_v2_s', 'googlenet', 'inception_v3', 'maxvit_t', 'mnasnet0_5', 'mnasnet0_75', 'mnasnet1_0', 'mnasnet1_3', "
+                    "'mobilenet_v2', 'mobilenet_v3_large', 'mobilenet_v3_small',  'quantized_googlenet', 'quantized_inception_v3', "
+                    "'quantized_mobilenet_v2', 'quantized_mobilenet_v3_large', 'quantized_resnet18', 'quantized_resnet50', "
+                    "'quantized_resnext101_32x8d', 'quantized_resnext101_64x4d', 'quantized_shufflenet_v2_x0_5', 'quantized_shufflenet_v2_x1_0', "
+                    "'quantized_shufflenet_v2_x1_5', 'quantized_shufflenet_v2_x2_0', 'regnet_x_16gf', 'regnet_x_1_6gf', 'regnet_x_32gf', "
+                    "'regnet_x_3_2gf', 'regnet_x_400mf', 'regnet_x_800mf', 'regnet_x_8gf', 'regnet_y_128gf', 'regnet_y_16gf', 'regnet_y_1_6gf', "
+                    "'regnet_y_32gf', 'regnet_y_3_2gf', 'regnet_y_400mf', 'regnet_y_800mf', 'regnet_y_8gf', 'resnet101', 'resnet152', "
+                    "'resnet18', 'resnet34', 'resnet50', 'resnext101_32x8d', 'resnext101_64x4d', 'resnext50_32x4d', 'retinanet_resnet50_fpn', "
+                    "'shufflenet_v2_x0_5', 'shufflenet_v2_x1_0', 'shufflenet_v2_x1_5', 'shufflenet_v2_x2_0', "
+                    "'squeezenet1_0', 'squeezenet1_1', 'swin_b', 'swin_s', 'swin_t', 'swin_v2_b', 'swin_v2_s', 'swin_v2_t', "
+                    "'vgg11', 'vgg11_bn', 'vgg13', 'vgg13_bn', 'vgg16', 'vgg16_bn', 'vgg19', 'vgg19_bn', 'vit_b_16', 'vit_b_32', "
+                    "'vit_h_14', 'vit_l_16', 'vit_l_32', 'wide_resnet101_2', 'wide_resnet50_2' "
+                    "]")
+            if cfg.PROBLEM.NDIM == '3D':
+                raise ValueError("TorchVision model's for classification are only available for 2D images")
+            
     ### Pre-processing ###
     if cfg.DATA.EXTRACT_RANDOM_PATCH and cfg.DATA.PROBABILITY_MAP:
         if cfg.DATA.W_FOREGROUND+cfg.DATA.W_BACKGROUND != 1:
@@ -354,7 +455,7 @@ def check_configuration(cfg, check_data_paths=True):
                         "when DATA.NORMALIZATION.TYPE == 'custom', DATA.TRAIN.IN_MEMORY needs to be True")
 
     ### Model ###
-    if cfg.MODEL.SOURCE == "manual":
+    if cfg.MODEL.SOURCE == "biapy":
         assert model_arch in ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'simple_cnn', 'efficientnet_b0', 
             'efficientnet_b1', 'efficientnet_b2', 'efficientnet_b3', 'efficientnet_b4','efficientnet_b5','efficientnet_b6','efficientnet_b7',
             'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae'],\
@@ -403,7 +504,7 @@ def check_configuration(cfg, check_data_paths=True):
     if len(opts) > 0:
         cfg.merge_from_list(opts)
 
-    if cfg.MODEL.SOURCE == "manual":
+    if cfg.MODEL.SOURCE == "biapy":
         assert cfg.MODEL.LAST_ACTIVATION.lower() in ["relu", "tanh", "leaky_relu", "elu", "gelu", "silu", "sigmoid","softmax", "linear", "none"], \
             "Get unknown activation key {}".format(activation)
     

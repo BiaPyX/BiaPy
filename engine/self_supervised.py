@@ -131,15 +131,12 @@ class Self_supervised_Workflow(Base_Workflow):
         # Swap with original images so we can calculate PSNR metric afterwards
         return batch
 
-    def process_sample(self, filenames, norm): 
+    def process_sample(self, norm): 
         """
         Function to process a sample in the inference phase. 
 
         Parameters
         ----------
-        filenames : List of str
-            Filenames fo the samples to process. 
-
         norm : List of dicts
             Normalization used during training. Required to denormalize the predictions of the model.
         """
@@ -247,14 +244,32 @@ class Self_supervised_Workflow(Base_Workflow):
             
         # Save image
         if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
-            fname, fext = os.path.splitext(filenames[0])
-            save_tif(np.expand_dims(pred,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filenames, verbose=self.cfg.TEST.VERBOSE)
+            fname, fext = os.path.splitext(self.processing_filenames[0])
+            save_tif(np.expand_dims(pred,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, self.processing_filenames, verbose=self.cfg.TEST.VERBOSE)
             if self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
                 save_tif(np.expand_dims(pred_mask,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, [fname+"_masked.tif"], verbose=self.cfg.TEST.VERBOSE)
                 save_tif(np.expand_dims(pred_visi,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, [fname+"_reconstruction_and_visible.tif"], verbose=self.cfg.TEST.VERBOSE)    
-            import pdb; pdb.set_trace()
 
-    def after_merge_patches(self, pred,filenames):
+    def torchvision_model_call(self, in_img, is_train=False):
+        """
+        Call a regular Pytorch model.
+
+        Parameters
+        ----------
+        in_img : Tensor
+            Input image to pass through the model.
+
+        is_train : bool, optional
+            Whether if the call is during training or inference. 
+
+        Returns
+        -------
+        prediction : Tensor 
+            Image prediction. 
+        """
+        pass
+
+    def after_merge_patches(self, pred):
         """
         Steps need to be done after merging all predicted patches into the original image.
 
@@ -262,9 +277,6 @@ class Self_supervised_Workflow(Base_Workflow):
         ----------
         pred : Torch Tensor
             Model prediction.
-
-        filenames : List of str
-            Filenames of the predicted images.  
         """
         pass
 
@@ -281,7 +293,7 @@ class Self_supervised_Workflow(Base_Workflow):
         """
         pass
 
-    def after_full_image(self, pred, filenames):
+    def after_full_image(self, pred):
         """
         Steps that must be executed after generating the prediction by supplying the entire image to the model.
 
@@ -289,9 +301,6 @@ class Self_supervised_Workflow(Base_Workflow):
         ----------
         pred : Torch Tensor
             Model prediction.
-
-        filenames : List of str
-            Filenames of the predicted images.  
         """
         pass
 

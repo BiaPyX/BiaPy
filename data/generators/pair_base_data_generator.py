@@ -343,6 +343,9 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         Nested lists equivalent to ndarray. Must have odd length in each dimension (center pixel is blind spot). ``None`` 
         implies normal N2V masking.
 
+    not_normalize : bool, optional
+        Whether to normalize the data or not. Useful in BMZ model as the normalization is made during the inference. 
+        
     norm_type : str, optional
         Type of normalization to be made. Options available: ``div`` or ``custom``.
 
@@ -357,8 +360,11 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
     instance_problem : bool, optional
         Advice the class that the workflow is of instance segmentation to divide the labels by channels.
+    
+    convert_to_rgb : bool, optional
+        In case RGB images are expected, e.g. if ``crop_shape`` channel is 3, those images that are grayscale are 
+        converted into RGB.
     """
-
     def __init__(self, ndim, X, Y, seed=0, in_memory=True, data_paths=None, da=True, da_prob=0.5, rotation90=False, 
                  rand_rot=False, rnd_rot_range=(-180,180), shear=False, shear_range=(-20,20), zoom=False, zoom_range=(0.8,1.2), 
                  shift=False, shift_range=(0.1,0.2), affine_mode='constant', vflip=False, hflip=False, elastic=False, 
@@ -377,12 +383,15 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                  pepper=False, pepper_amount=0.05, salt_and_pepper=False, salt_pep_amount=0.05, salt_pep_proportion=0.5, 
                  random_crops_in_DA=False, shape=(256,256,1), resolution=(-1,), prob_map=None, val=False, n_classes=1, 
                  extra_data_factor=1, n2v=False, n2v_perc_pix=0.198, n2v_manipulator='uniform_withCP', 
-                 n2v_neighborhood_radius=5, n2v_structMask=np.array([[0,1,1,1,1,1,1,1,1,1,0]]), norm_type='div',
-                 norm_custom_mean=None, norm_custom_std=None, normalizeY='as_mask', instance_problem=False, random_crop_scale=1):
+                 n2v_neighborhood_radius=5, n2v_structMask=np.array([[0,1,1,1,1,1,1,1,1,1,0]]), not_normalize=False,
+                 norm_type='div', norm_custom_mean=None, norm_custom_std=None, normalizeY='as_mask', instance_problem=False, 
+                 random_crop_scale=1, convert_to_rgb=False):
 
         self.ndim = ndim
         self.z_size = -1 
         self.val = val
+        self.convert_to_rgb = convert_to_rgb
+        self.not_normalize = not_normalize
         assert normalizeY in ['as_mask', 'as_image', 'none']
 
         if in_memory:
@@ -466,56 +475,60 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.first_no_bin_channel = -1
         self.div_Y_on_load_bin_channels = False
         self.div_Y_on_load_no_bin_channels = False
+        self.shape = shape
 
         # X data analysis
         self.X_norm = {}
-        self.X_norm['type'] = 'not_set_yet'
-        if norm_type == "custom":
-            if norm_custom_mean is not None and norm_custom_std is not None:
-                img, _ = self.load_sample(0)
-                self.X_norm['mean'] = norm_custom_mean
-                self.X_norm['std'] = norm_custom_std  
-                self.X_norm['orig_dtype'] = img.dtype
-            else:
-                if not in_memory:
-                    sam = []
-                    for i in range(len(self.data_paths)):
-                        img, _ = self.load_sample(i)
-                        sam.append(img)
-                        if shape[-1] != img.shape[-1]:
-                            raise ValueError("Channel of the DATA.PATCH_SIZE given {} does not correspond with the loaded image {}. "
-                                "Please, check the channels of the images!".format(shape[-1], img.shape[-1]))
-                        if not random_crops_in_DA and shape != img.shape:
-                            raise ValueError("Image shape {} does not match provided DATA.PATCH_SIZE {}. If you want to ensure "
-                            "that PATCH_SIZE you have two options: 1) Set IN_MEMORY = True (as the images will be cropped "
-                            "automatically to that DATA.PATCH_SIZE) ; 2) Set DATA.EXTRACT_RANDOM_PATCH = True to extract a patch "
-                            "(if possible) from loaded image".format(img.shape, shape))
-
-                    sam = np.array(sam)
-                    self.X_norm['mean'] = np.mean(sam)
-                    self.X_norm['std'] = np.std(sam)
-                    self.X_norm['orig_dtype'] = img.dtype
-                    del sam
-                else:
-                    img, _ = self.load_sample(0)
-                    self.X_norm['mean'] = np.mean(self.X)
-                    self.X_norm['std'] = np.std(self.X)    
-                    self.X_norm['orig_dtype'] = img.dtype
-
-            self.X_norm['type'] = 'custom'
-        else:       
+        self.X_norm['type'] = 'none'
+        if self.not_normalize:
             img, _ = self.load_sample(0)
-            img, nsteps = norm_range01(img)
-            self.X_norm.update(nsteps)
-            if shape[-1] != img.shape[-1]:
-                raise ValueError("Channel of the patch size given {} does not correspond with the loaded image {}. "
-                    "Please, check the channels of the images!".format(shape[-1], img.shape[-1]))
-            if not random_crops_in_DA and shape != img.shape:
-                raise ValueError("Image shape {} does not match provided DATA.PATCH_SIZE {}. If you want to ensure "
-                    "that PATCH_SIZE you have two options: 1) Set IN_MEMORY = True (as the images will be cropped "
-                    "automatically to that DATA.PATCH_SIZE) ; 2) Set DATA.EXTRACT_RANDOM_PATCH = True to extract a patch "
-                    "(if possible) from loaded image".format(img.shape, shape))
-            self.X_norm['type'] = 'div'    
+        else:
+            if norm_type == "custom":
+                if norm_custom_mean is not None and norm_custom_std is not None:
+                    img, _ = self.load_sample(0)
+                    self.X_norm['mean'] = norm_custom_mean
+                    self.X_norm['std'] = norm_custom_std  
+                    self.X_norm['orig_dtype'] = img.dtype
+                else:
+                    if not in_memory:
+                        sam = []
+                        for i in range(len(self.data_paths)):
+                            img, _ = self.load_sample(i)
+                            sam.append(img)
+                            if shape[-1] != img.shape[-1]:
+                                raise ValueError("Channel of the DATA.PATCH_SIZE given {} does not correspond with the loaded image {}. "
+                                    "Please, check the channels of the images!".format(shape[-1], img.shape[-1]))
+                            if not random_crops_in_DA and shape != img.shape:
+                                raise ValueError("Image shape {} does not match provided DATA.PATCH_SIZE {}. If you want to ensure "
+                                "that PATCH_SIZE you have two options: 1) Set IN_MEMORY = True (as the images will be cropped "
+                                "automatically to that DATA.PATCH_SIZE) ; 2) Set DATA.EXTRACT_RANDOM_PATCH = True to extract a patch "
+                                "(if possible) from loaded image".format(img.shape, shape))
+
+                        sam = np.array(sam)
+                        self.X_norm['mean'] = np.mean(sam)
+                        self.X_norm['std'] = np.std(sam)
+                        self.X_norm['orig_dtype'] = img.dtype
+                        del sam
+                    else:
+                        img, _ = self.load_sample(0)
+                        self.X_norm['mean'] = np.mean(self.X)
+                        self.X_norm['std'] = np.std(self.X)    
+                        self.X_norm['orig_dtype'] = img.dtype
+
+                self.X_norm['type'] = 'custom'
+            else:       
+                img, _ = self.load_sample(0)
+                img, nsteps = norm_range01(img)
+                self.X_norm.update(nsteps)
+                if shape[-1] != img.shape[-1]:
+                    raise ValueError("Channel of the patch size given {} does not correspond with the loaded image {}. "
+                        "Please, check the channels of the images!".format(shape[-1], img.shape[-1]))
+                if not random_crops_in_DA and shape != img.shape:
+                    raise ValueError("Image shape {} does not match provided DATA.PATCH_SIZE {}. If you want to ensure "
+                        "that PATCH_SIZE you have two options: 1) Set IN_MEMORY = True (as the images will be cropped "
+                        "automatically to that DATA.PATCH_SIZE) ; 2) Set DATA.EXTRACT_RANDOM_PATCH = True to extract a patch "
+                        "(if possible) from loaded image".format(img.shape, shape))
+                self.X_norm['type'] = 'div'                
 
         self.X_channels = img.shape[-1]
         self.Y_channels = img.shape[-1]
@@ -805,7 +818,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             X element normalized. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
         """
         # X normalization
-        if self.X_norm['type'] != "not_set_yet":
+        if self.X_norm['type'] != "none":
             if self.X_norm['type'] == 'div':
                 img, _ = norm_range01(img)
             elif self.X_norm['type'] == 'custom':
@@ -828,7 +841,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             Y element normalized. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
         """
         # Y normalization  
-        if self.X_norm['type'] != "not_set_yet":
+        if self.X_norm['type'] != "none":
             if self.normalizeY == 'as_mask' and self.Y_provided:  
                 if self.first_no_bin_channel != -1:
                     if self.div_Y_on_load_bin_channels:
@@ -909,8 +922,14 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         if self.n2v:
             img, mask = self.prepare_n2v(img)
             
-        img = torch.from_numpy(img.copy())
+        # If no normalization was applied, as is done with torchvision models, it can be an image of uint16 
+        # so we need to convert it to
+        if img.dtype == np.uint16:
+            img = torch.from_numpy(img.copy().astype(np.float32))
+        else:
+            img = torch.from_numpy(img.copy())
         mask = torch.from_numpy(mask.copy().astype(np.float32))
+
         return img, mask
 
     def apply_transform(self, image, mask, e_im=None, e_mask=None):

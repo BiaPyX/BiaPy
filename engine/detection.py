@@ -2,7 +2,6 @@ import os
 import math
 import csv
 import torch 
-import torch.nn.functional as F
 import numpy as np
 import pandas as pd
 from skimage.feature import peak_local_max, blob_log
@@ -14,9 +13,9 @@ from data.data_2D_manipulation import load_and_prepare_2D_train_data
 from data.data_3D_manipulation import load_and_prepare_3D_data
 from data.post_processing.post_processing import (remove_close_points, detection_watershed, 
     remove_by_properties)
-from data.pre_processing import create_detection_masks
+from data.pre_processing import create_detection_masks, norm_range01
 from utils.util import save_tif, read_chunked_data, write_chunked_data
-from engine.metrics import detection_metrics, jaccard_index, weighted_bce_dice_loss
+from engine.metrics import detection_metrics, jaccard_index, weighted_bce_dice_loss, CrossEntropyLoss_wrapper
 from engine.base_workflow import Base_Workflow
 
 class Detection_Workflow(Base_Workflow):
@@ -92,13 +91,16 @@ class Detection_Workflow(Base_Workflow):
         """
         Definition of self.metrics, self.metric_names and self.loss variables.
         """
+        self.metrics = [
+            jaccard_index(num_classes=self.cfg.MODEL.N_CLASSES, 
+                first_not_binary_channel=self.cfg.MODEL.N_CLASSES, device=self.device, 
+                torchvision_models=True if self.cfg.MODEL.SOURCE == "torchvision" else False)
+        ]
+        self.metric_names = ["jaccard_index"]
         if self.cfg.LOSS.TYPE == "CE": 
-            self.metrics = [jaccard_index]
-            self.metric_names = ["jaccard_index"]
-            self.loss = torch.nn.BCEWithLogitsLoss()
+            self.loss = CrossEntropyLoss_wrapper(self.device, num_classes=self.cfg.MODEL.N_CLASSES,
+                torchvision_models=True if self.cfg.MODEL.SOURCE == "torchvision" else False)
         elif self.cfg.LOSS.TYPE == "W_CE_DICE":
-            self.metrics = [jaccard_index]
-            self.metric_names = ["jaccard_index"]
             self.loss = weighted_bce_dice_loss(w_dice=0.66, w_bce=0.33)
 
     def metric_calculation(self, output, targets, metric_logger=None):
@@ -122,7 +124,7 @@ class Detection_Workflow(Base_Workflow):
             Value of the metric for the given prediction. 
         """
         with torch.no_grad():
-            train_iou = self.metrics[0](output, targets, self.device, num_classes=self.cfg.MODEL.N_CLASSES)
+            train_iou = self.metrics[0](output, targets)
             train_iou = train_iou.item() if not torch.isnan(train_iou) else 0
             if metric_logger is not None:
                 metric_logger.meters[self.metric_names[0]].update(train_iou)
@@ -451,7 +453,7 @@ class Detection_Workflow(Base_Workflow):
                 self.stats['d_recall'] = self.stats['d_recall'] / image_counter
                 self.stats['d_f1'] = self.stats['d_f1'] / image_counter
 
-    def after_merge_patches(self, pred, filenames):
+    def after_merge_patches(self, pred):
         """
         Steps need to be done after merging all predicted patches into the original image.
 
@@ -459,11 +461,8 @@ class Detection_Workflow(Base_Workflow):
         ----------
         pred : Torch Tensor
             Model prediction.
-
-        filenames : List of str
-            Filenames of the predicted images.  
         """
-        self.detection_process(pred, filenames, ['d_precision_per_crop', 'd_recall_per_crop', 'd_f1_per_crop'])
+        self.detection_process(pred, self.processing_filenames, ['d_precision_per_crop', 'd_recall_per_crop', 'd_f1_per_crop'])
 
     def after_merge_patches_by_chunks_proccess_patch(self, filename):
         """
@@ -533,7 +532,77 @@ class Detection_Workflow(Base_Workflow):
         if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
             pred_file.close()
 
-    def after_full_image(self, pred, filenames):
+    def process_sample(self, norm):
+        """
+        Function to process a sample in the inference phase. 
+
+        Parameters
+        ----------
+        norm : List of dicts
+            Normalization used during training. Required to denormalize the predictions of the model.
+        """
+        if self.cfg.MODEL.SOURCE != "torchvision":
+            super().process_sample(norm)
+        else:
+            # Data channel check
+            if self.cfg.DATA.PATCH_SIZE[-1] != self._X.shape[-1]:
+                raise ValueError("Channel of the DATA.PATCH_SIZE given {} does not correspond with the loaded image {}. "
+                    "Please, check the channels of the images!".format(self.cfg.DATA.PATCH_SIZE[-1], self._X.shape[-1]))
+
+            ##################
+            ### FULL IMAGE ###
+            ##################
+            if self.cfg.TEST.STATS.FULL_IMG:
+                # Make the prediction
+                with torch.cuda.amp.autocast():
+                    pred = self.model_call_func(self._X)
+                del self._X 
+
+    def torchvision_model_call(self, in_img, is_train=False):
+        """
+        Call a regular Pytorch model.
+
+        Parameters
+        ----------
+        in_img : Tensor
+            Input image to pass through the model.
+
+        is_train : bool, optional
+            Whether if the call is during training or inference. 
+
+        Returns
+        -------
+        prediction : Tensor 
+            Image prediction. 
+        """
+        filename, file_extension = os.path.splitext(self.processing_filenames[0])
+
+        # Convert first to 0-255 range if uint16
+        if in_img.dtype == torch.float32:
+            if torch.max(in_img) > 1:
+                in_img = (norm_range01(in_img, torch.uint8)[0]*255).to(torch.uint8)
+            in_img = in_img.to(torch.uint8)
+        
+        # Apply TorchVision pre-processing
+        in_img = self.torchvision_preprocessing(in_img)
+
+        pred = self.model(in_img)
+
+        bboxes = pred[0]['boxes'].cpu().numpy()
+        if not is_train and len(bboxes) != 0:
+            # Extract each output from prediction
+            labels = pred[0]['labels'].cpu().numpy()
+            scores = pred[0]['scores'].cpu().numpy()
+            
+            # Save all info in a csv file
+            df = pd.DataFrame(zip(labels, scores, bboxes[:,0],bboxes[:,1],bboxes[:,2],bboxes[:,3]), 
+                columns = ['label', 'scores', 'x1', 'y1', 'x2', 'y2'])
+            df = df.sort_values(by=['label']) 
+            df.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.FULL_IMAGE, filename+".csv"), index=False)
+
+        return None
+
+    def after_full_image(self, pred):
         """
         Steps that must be executed after generating the prediction by supplying the entire image to the model.
 
@@ -541,11 +610,8 @@ class Detection_Workflow(Base_Workflow):
         ----------
         pred : Torch Tensor
             Model prediction.
-
-        filenames : List of str
-            Filenames of the predicted images.  
         """
-        self.detection_process(pred, filenames, ['d_precision', 'd_recall', 'd_f1'])
+        self.detection_process(pred, self.processing_filenames, ['d_precision', 'd_recall', 'd_f1'])
 
     def after_all_images(self):
         """
@@ -562,7 +628,7 @@ class Detection_Workflow(Base_Workflow):
         image_counter : int
             Number of images to call ``normalize_stats``.
         """
-        if not self.use_gt: return 
+        if not self.use_gt or self.cfg.MODEL.SOURCE == "torchvision": return 
 
         super().print_stats(image_counter)
         super().print_post_processing_stats()

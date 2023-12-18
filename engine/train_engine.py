@@ -7,8 +7,8 @@ from timm.utils import accuracy
 
 from utils.misc import MetricLogger, SmoothedValue, all_reduce_mean, to_pytorch_format
 
-def train_one_epoch(cfg, model, loss_function, activations, metric_function, prepare_targets, data_loader, optimizer, 
-    device, loss_scaler, epoch, log_writer=None, lr_scheduler=None, start_steps=0, axis_order=(0,3,1,2)):
+def train_one_epoch(cfg, model, model_call_func, loss_function, activations, metric_function, prepare_targets, data_loader, optimizer, 
+    device, loss_scaler, epoch, log_writer=None, lr_scheduler=None, start_steps=0):
 
     model.train(True)
     metric_logger = MetricLogger(delimiter="  ")
@@ -28,13 +28,12 @@ def train_one_epoch(cfg, model, loss_function, activations, metric_function, pre
         it = start_steps + step  # global training iteration
 
         # Gather inputs
-        batch = to_pytorch_format(batch, axis_order, device)
         targets = prepare_targets(targets, batch)
 
         # Pass the images through the model
         # TODO: control autocast and mixed precision
         with torch.cuda.amp.autocast(enabled=False):
-            outputs = activations(model(batch), training=True)
+            outputs = activations(model_call_func(batch, is_train=True), training=True)
             loss = loss_function(outputs, targets)
 
         loss_value = loss.item()
@@ -84,8 +83,8 @@ def train_one_epoch(cfg, model, loss_function, activations, metric_function, pre
 
 
 @torch.no_grad()
-def evaluate(cfg, model, loss_function, activations, metric_function, prepare_targets, device, epoch, 
-    data_loader, lr_scheduler, axis_order=(0,3,1,2)):
+def evaluate(cfg, model, model_call_func, loss_function, activations, metric_function, prepare_targets, epoch, 
+    data_loader, lr_scheduler):
     metric_logger = MetricLogger(delimiter="  ")
     header = 'Epoch: [{}]'.format(epoch+1)
 
@@ -96,13 +95,12 @@ def evaluate(cfg, model, loss_function, activations, metric_function, prepare_ta
         # Gather inputs
         images = batch[0]
         targets = batch[1]
-        images = to_pytorch_format(images, axis_order, device)
         targets = prepare_targets(targets, images)
 
         # Pass the images through the model
         # TODO: control autocast and mixed precision
         with torch.cuda.amp.autocast(enabled=False):  
-            outputs = activations(model(images), training=True)
+            outputs = activations(model_call_func(images, is_train=True), training=True)
             loss = loss_function(outputs, targets)
         
         # Calculate the metrics

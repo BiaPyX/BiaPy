@@ -181,6 +181,10 @@ class Config:
         _C.DATA.NORMALIZATION.CUSTOM_MEAN = -1.0
         _C.DATA.NORMALIZATION.CUSTOM_STD = -1.0
         
+        # If 'DATA.PATCH_SIZE' selected has 3 channels, e.g. RGB images are expected, so will force grayscale images to be
+        # converted into RGB (e.g. in ImageNet some of the images are grayscale)
+        _C.DATA.FORCE_RGB = False
+
         # Train
         _C.DATA.TRAIN = CN()
         # Whether to check if the data mask contains correct values, e.g. same classes as defined
@@ -478,11 +482,60 @@ class Config:
         # Model definition
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         _C.MODEL = CN()
-        # Whether to define manually the model or load a pretrained one from Bioimage Model Zoo. 
-        # Options: ["manual", "bmz"]
-        _C.MODEL.SOURCE = "manual"
+        # Whether to define manually the model ('biapy'), load a pretrained one from Bioimage Model Zoo ('bmz') or use one 
+        # available in TorchVision ('torchvision'). 
+        # Options: ["biapy", "bmz", "torchvision"]
+        _C.MODEL.SOURCE = "biapy"
+
+        _C.MODEL.BMZ = CN()
         # DOI of the model from BMZ to load. It can not be empty if MODEL.SOURCE = "bmz".
-        _C.MODEL.BMZ_DOI = ""
+        _C.MODEL.BMZ.SOURCE_MODEL_DOI = ""
+
+        # BiaPy support using models of Torchvision . It can not be empty if MODEL.SOURCE = "torchvision".
+        # Models available here: https://pytorch.org/vision/stable/models.html
+        # They can be listed with: "from torchvision.models import list_models; list_models()"
+        #
+        # Semantic segmentation (https://pytorch.org/vision/stable/models.html#semantic-segmentation):
+        # 'deeplabv3_mobilenet_v3_large', 'deeplabv3_resnet101', 'deeplabv3_resnet50', 'fcn_resnet101', 'fcn_resnet50',
+        # 'lraspp_mobilenet_v3_large'
+        # 
+        # Object Detection (https://pytorch.org/vision/stable/models.html#object-detection-instance-segmentation-and-person-keypoint-detection)
+        # 'fasterrcnn_mobilenet_v3_large_320_fpn', 'fasterrcnn_mobilenet_v3_large_fpn', 'fasterrcnn_resnet50_fpn', 
+        # 'fasterrcnn_resnet50_fpn_v2', 'fcos_resnet50_fpn', 'ssd300_vgg16', 'ssdlite320_mobilenet_v3_large',
+        # 'retinanet_resnet50_fpn', 'retinanet_resnet50_fpn_v2',
+        #
+        # Instance Segmentation (https://pytorch.org/vision/stable/models.html#object-detection-instance-segmentation-and-person-keypoint-detection)
+        # 'maskrcnn_resnet50_fpn', 'maskrcnn_resnet50_fpn_v2'
+        # 
+        # Image classification (https://pytorch.org/vision/stable/models.html#classification):
+        # 'alexnet', 'convnext_base', 'convnext_large', 'convnext_small', 'convnext_tiny', 'densenet121', 'densenet161', 
+        # 'densenet169', 'densenet201', 'efficientnet_b0', 'efficientnet_b1', 'efficientnet_b2', 'efficientnet_b3', 
+        # 'efficientnet_b4', 'efficientnet_b5', 'efficientnet_b6', 'efficientnet_b7', 'efficientnet_v2_l', 'efficientnet_v2_m', 
+        # 'efficientnet_v2_s', 'googlenet', 'inception_v3', 'maxvit_t', 'mnasnet0_5', 'mnasnet0_75', 'mnasnet1_0', 'mnasnet1_3', 
+        # 'mobilenet_v2', 'mobilenet_v3_large', 'mobilenet_v3_small',  'quantized_googlenet', 'quantized_inception_v3', 
+        # 'quantized_mobilenet_v2', 'quantized_mobilenet_v3_large', 'quantized_resnet18', 'quantized_resnet50', 
+        # 'quantized_resnext101_32x8d', 'quantized_resnext101_64x4d', 'quantized_shufflenet_v2_x0_5', 'quantized_shufflenet_v2_x1_0', 
+        # 'quantized_shufflenet_v2_x1_5', 'quantized_shufflenet_v2_x2_0', 'regnet_x_16gf', 'regnet_x_1_6gf', 'regnet_x_32gf', 
+        # 'regnet_x_3_2gf', 'regnet_x_400mf', 'regnet_x_800mf', 'regnet_x_8gf', 'regnet_y_128gf', 'regnet_y_16gf', 'regnet_y_1_6gf', 
+        # 'regnet_y_32gf', 'regnet_y_3_2gf', 'regnet_y_400mf', 'regnet_y_800mf', 'regnet_y_8gf', 'resnet101', 'resnet152', 
+        # 'resnet18', 'resnet34', 'resnet50', 'resnext101_32x8d', 'resnext101_64x4d', 'resnext50_32x4d', 'retinanet_resnet50_fpn', 
+        # 'shufflenet_v2_x0_5', 'shufflenet_v2_x1_0', 'shufflenet_v2_x1_5', 'shufflenet_v2_x2_0', 
+        # 'squeezenet1_0', 'squeezenet1_1', 'swin_b', 'swin_s', 'swin_t', 'swin_v2_b', 'swin_v2_s', 'swin_v2_t', 
+        # 'vgg11', 'vgg11_bn', 'vgg13', 'vgg13_bn', 'vgg16', 'vgg16_bn', 'vgg19', 'vgg19_bn', 'vit_b_16', 'vit_b_32', 
+        # 'vit_h_14', 'vit_l_16', 'vit_l_32', 'wide_resnet101_2', 'wide_resnet50_2'
+        # 
+        # Listed but not supported:
+        # 
+        # (NOT SUPPORTED) Video classification (https://pytorch.org/vision/stable/models.html#video-classification):
+        # 'mc3_18', 'mvit_v1_b', 'mvit_v2_s', 'r2plus1d_18', 'r3d_18','swin3d_s', 'swin3d_t', 's3d', 'swin3d_b'
+        #
+        # (NOT SUPPORTED) Optical flow (https://pytorch.org/vision/stable/models.html#optical-flow):
+        # 'raft_large', 'raft_small'
+        # 
+        # (NOT SUPPORTED) Person Keypoint Detection (https://pytorch.org/vision/stable/models.html#object-detection-instance-segmentation-and-person-keypoint-detection)
+        # 'keypointrcnn_resnet50_fpn'
+        # 
+        _C.MODEL.TORCHVISION_MODEL_NAME = ""
 
         # Architecture of the network. Possible values are: 'unet', 'resunet', 'resunet++', 'attention_unet', 'nnunet',  
         # 'multiresunet', 'seunet', 'simple_cnn', 'efficientnet_b[0-7]', 'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'ViT'
@@ -503,7 +556,7 @@ class Config:
         _C.MODEL.ACTIVATION = 'ELU'
         # Las activation to use. Options 'sigmoid', 'softmax' or 'linear'
         _C.MODEL.LAST_ACTIVATION = 'sigmoid' 
-        # Number of classes without counting the background class (that should be using 0 label)
+        # Number of classes including the background class (that should be using 0 label)
         _C.MODEL.N_CLASSES = 2
         # Downsampling to be made in Z. This value will be the third integer of the MaxPooling operation. When facing
         # anysotropic datasets set it to get better performance

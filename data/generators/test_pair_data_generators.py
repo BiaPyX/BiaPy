@@ -61,10 +61,14 @@ class test_pair_data_generator(Dataset):
 
     sample_ids :  List of ints, optional
         When cross validation is used specific training samples are passed to the generator.
+    
+    convert_to_rgb : bool, optional
+        In case RGB images are expected, e.g. if ``crop_shape`` channel is 3, those images that are grayscale are 
+        converted into RGB.
     """
     def __init__(self, ndim, X=None, d_path=None, test_by_chunks=False, provide_Y=False, Y=None, dm_path=None, seed=42,
                  instance_problem=False, normalizeY='as_mask', norm_type='div', not_normalize=False,
-                 norm_custom_mean=None, norm_custom_std=None, reduce_mem=False, sample_ids=None):
+                 norm_custom_mean=None, norm_custom_std=None, reduce_mem=False, sample_ids=None, convert_to_rgb=False):
 
         if X is None and d_path is None:
             raise ValueError("One between 'X' or 'd_path' must be provided")
@@ -79,6 +83,8 @@ class test_pair_data_generator(Dataset):
         self.dm_path = dm_path
         self.test_by_chunks = test_by_chunks
         self.provide_Y = provide_Y
+        self.convert_to_rgb = convert_to_rgb
+
         if not reduce_mem:
             self.dtype = np.float32  
             self.dtype_str = "float32"
@@ -283,6 +289,9 @@ class test_pair_data_generator(Dataset):
                 if self.normalizeY == 'as_mask':
                     mask = mask.astype(np.uint8)
 
+        if self.convert_to_rgb and img.shape[-1] == 1:
+            img = np.repeat(img, 3, axis=-1)
+            
         return img, mask, xnorm
 
 

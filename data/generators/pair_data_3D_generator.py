@@ -49,7 +49,7 @@ class Pair3DImageDataGenerator(PairBaseDataGenerator):
             
         # Super-resolution check. if random_crops_in_DA is activated the images have not been cropped yet,
         # so this check can not be done and it will be done in the random crop
-        if not self.random_crops_in_DA and self.Y_provided:
+        if not self.random_crops_in_DA and self.Y_provided and self.random_crop_scale != 1:
             s = [img.shape[1]*self.random_crop_scale, img.shape[2]*self.random_crop_scale]
             if all(x!=y for x,y in zip(s,mask.shape[1:-1])):
                 raise ValueError("Images loaded need to be LR and its HR version. LR shape:"

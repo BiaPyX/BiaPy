@@ -10,6 +10,8 @@ from scipy.spatial import distance_matrix
 from scipy.optimize import linear_sum_assignment
 from torchmetrics import JaccardIndex
 from torchmetrics.image import StructuralSimilarityIndexMeasure
+from torchvision.transforms.functional import resize
+import torchvision.transforms as T
 
 def jaccard_index_numpy(y_true, y_pred):
     """Define Jaccard index.
@@ -79,58 +81,118 @@ def jaccard_index_numpy_without_background(y_true, y_pred):
     return jac
 
 
-def jaccard_index(y_pred, y_true, device, t=0.5, num_classes=2, first_not_binary_channel=2):
-    """
-    Define Jaccard index.
+class jaccard_index():
+    def __init__(self,  num_classes, first_not_binary_channel, device, t=0.5, torchvision_models=False):
+        """
+        Define Jaccard index.
 
-    Parameters
-    ---------- 
-    y_pred : Tensor
-        Predicted masks.
+        Parameters
+        ---------- 
+        num_classes : int
+            Number of classes.
 
-    y_true : Tensor
-        Ground truth masks.
-
-    t : float, optional
-        Threshold to be applied.
-
-    num_classes : int, optional
-        Number of classes.
-
-    first_not_binary_channel : int, optional
-        First channel not binary to not apply IoU in. 
+        first_not_binary_channel : int
+            First channel not binary to not apply IoU in. 
         
-    Returns
-    -------
-    jac : Tensor
-        Jaccard index value
-    """
-    if num_classes > 2:
-        jaccard = JaccardIndex(task="multiclass", threshold=t, num_classes=num_classes).to(device, non_blocking=True)
-        return jaccard(y_pred, y_true.squeeze())
-    else:
-        jaccard = JaccardIndex(task="binary", threshold=t, num_classes=num_classes).to(device, non_blocking=True)
-        return jaccard(y_pred[:,:first_not_binary_channel], y_true[:,:first_not_binary_channel])
+        device : Torch device
+            Using device ("cpu" or "cuda" for GPU). 
 
-def CrossEntropyLoss_wrapper(y_pred, y_true):
-    """
-    CrossEntropyLoss of Torch.
+        t : float, optional
+            Threshold to be applied.
 
-    Parameters
-    ----------
-    y_true : Tensor
-        Ground truth masks.
+        torchvision_models : bool, optional
+            Whether the workflow is using a TorchVision model or not. In that case the GT could be 
+            resized and normalized, as it was done so with TorchVision preprocessing for the X data.
+        """
+        self.torchvision_models = torchvision_models
+        self.loss = torch.nn.CrossEntropyLoss()
+        self.device = device 
+        self.first_not_binary_channel = first_not_binary_channel
+        self.num_classes = num_classes
+        self.t = t 
 
-    y_pred : Tensor
-        Predicted masks.
+        if self.num_classes > 2:
+            self.jaccard = JaccardIndex(task="multiclass", threshold=self.t, num_classes=self.num_classes).to(self.device, non_blocking=True)
+        else:
+            self.jaccard = JaccardIndex(task="binary", threshold=self.t, num_classes=self.num_classes).to(self.device, non_blocking=True)
 
-    Returns
-    -------
-    loss : Tensor
-        Loss value.
-    """
-    loss = torch.nn.CrossEntropyLoss()
-    return loss(y_pred, y_true.squeeze())
+    def __call__(self, y_pred, y_true):
+        """
+        Calculate CrossEntropyLoss.
+
+        Parameters
+        ----------
+        y_true : Tensor
+            Ground truth masks.
+
+        y_pred : Tensor
+            Predicted masks.
+
+        Returns
+        -------
+        loss : Tensor
+            Loss value.
+        """
+        # If image shape has changed due to TorchVision or BMZ preprocessing then the mask needs
+        # to be resized too
+        if self.torchvision_models:
+            if y_pred.shape[-2:] != y_true.shape[-2:]:    
+                y_true = resize(y_true, size=y_pred.shape[-2:], interpolation=T.InterpolationMode("nearest"))
+            if torch.max(y_true) > 1: 
+                y_true = (y_true/255).type(torch.LongTensor).to(self.device)
+        
+        return self.jaccard(y_pred[:,:self.first_not_binary_channel], y_true[:,:self.first_not_binary_channel])
+
+class CrossEntropyLoss_wrapper():
+    def __init__(self, device, num_classes, torchvision_models=False):
+        """
+        Wrapper to Pytorch's CrossEntropyLoss. 
+
+        Parameters
+        ----------
+        device : Torch device
+            Using device ("cpu" or "cuda" for GPU). 
+
+        torchvision_models : bool, optional
+            Whether the workflow is using a TorchVision model or not. In that case the GT could be 
+            resized and normalized, as it was done so with TorchVision preprocessing for the X data.
+        """
+        self.torchvision_models = torchvision_models
+        self.device = device 
+        self.num_classes = num_classes
+        if num_classes <= 2:
+            self.loss = torch.nn.BCEWithLogitsLoss()
+        else:
+            self.loss = torch.nn.CrossEntropyLoss()
+
+    def __call__(self, y_pred, y_true):
+        """
+        Calculate CrossEntropyLoss.
+
+        Parameters
+        ----------
+        y_true : Tensor
+            Ground truth masks.
+
+        y_pred : Tensor
+            Predicted masks.
+
+        Returns
+        -------
+        loss : Tensor
+            Loss value.
+        """
+        # If image shape has changed due to TorchVision or BMZ preprocessing then the mask needs
+        # to be resized too
+        if self.torchvision_models:
+            if y_pred.shape[-2:] != y_true.shape[-2:]:    
+                y_true = resize(y_true, size=y_pred.shape[-2:], interpolation=T.InterpolationMode("nearest"))
+            if torch.max(y_true) > 1: 
+                y_true = (y_true/255).type(torch.float32).to(self.device)
+
+        # import pdb;pdb.set_trace()    
+        # y_pred.shape, y_true.shape
+        return self.loss(y_pred, y_true)
 
 def dice_loss(y_true, y_pred):
     """Dice loss.

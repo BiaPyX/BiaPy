@@ -828,80 +828,85 @@ def onehot_encoding_to_img(encoded_image):
 
 
 def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), padding=(0,0), return_filenames=False,
-                       reflect_to_complete_shape=False, check_channel=True, check_drange=True):
-    """Load data from a directory. If ``crop=False`` all the data is suposed to have the same shape.
+                       reflect_to_complete_shape=False, check_channel=True, convert_to_rgb=False, check_drange=True):
+    """
+    Load data from a directory. If ``crop=False`` all the data is suposed to have the same shape.
 
-       Parameters
-       ----------
-       data_dir : str
-           Path to read the data from.
+    Parameters
+    ----------
+    data_dir : str
+        Path to read the data from.
 
-       crop : bool, optional
-           Crop each image into desired shape pointed by ``crop_shape``.
+    crop : bool, optional
+        Crop each image into desired shape pointed by ``crop_shape``.
 
-       crop_shape : Tuple of 3 ints, optional
-           Shape of the crop to be made. E.g. ``(y, x, channels)``.
+    crop_shape : Tuple of 3 ints, optional
+        Shape of the crop to be made. E.g. ``(y, x, channels)``.
 
-       overlap : Tuple of 2 floats, optional
-           Amount of minimum overlap on x and y dimensions. The values must  be on range ``[0, 1)``, that is, ``0%`` or
-           ``99%`` of overlap. E. g. ``(y, x)``.
+    overlap : Tuple of 2 floats, optional
+        Amount of minimum overlap on x and y dimensions. The values must  be on range ``[0, 1)``, that is, ``0%`` or
+        ``99%`` of overlap. E. g. ``(y, x)``.
 
-       padding : Tuple of 2 ints, optional
-           Size of padding to be added on each axis ``(y, x)``. E.g. ``(24, 24)``.
+    padding : Tuple of 2 ints, optional
+        Size of padding to be added on each axis ``(y, x)``. E.g. ``(24, 24)``.
 
-       return_filenames : bool, optional
-           Return a list with the loaded filenames. Useful when you need to save them afterwards with the same names as
-           the original ones.
+    return_filenames : bool, optional
+        Return a list with the loaded filenames. Useful when you need to save them afterwards with the same names as
+        the original ones.
 
-       reflect_to_complete_shape : bool, optional
-           Whether to increase the shape of the dimension that have less size than selected patch size padding it with
-           'reflect'.
+    reflect_to_complete_shape : bool, optional
+        Whether to increase the shape of the dimension that have less size than selected patch size padding it with
+        'reflect'.
 
-       check_channel : bool, optional
-           Whether to check if the crop_shape channel matches with the loaded images' one. 
-           
-       check_drange : bool, optional
-           Whether to check if the data loaded is in the same range. 
+    check_channel : bool, optional
+        Whether to check if the crop_shape channel matches with the loaded images' one. 
+        
+    convert_to_rgb : bool, optional
+        In case RGB images are expected, e.g. if ``crop_shape`` channel is 3, those images that are grayscale are 
+        converted into RGB.
 
-       Returns
-       -------
-       data : 4D Numpy array or list of 3D Numpy arrays
-           Data loaded. E.g. ``(num_of_images, y, x, channels)`` if all files have same shape, otherwise a list of
-           ``(y, x, channels)`` arrays will be returned.
+    check_drange : bool, optional
+        Whether to check if the data loaded is in the same range. 
 
-       data_shape : List of tuples
-           Shapes of all 3D images readed. Useful to reconstruct the original images together with ``crop_shape``.
+    Returns
+    -------
+    data : 4D Numpy array or list of 3D Numpy arrays
+        Data loaded. E.g. ``(num_of_images, y, x, channels)`` if all files have same shape, otherwise a list of
+        ``(y, x, channels)`` arrays will be returned.
 
-       crop_shape : List of tuples
-           Shape of the loaded 3D images after cropping. Useful to reconstruct the original images together with
-           ``data_shape``.
+    data_shape : List of tuples
+        Shapes of all 3D images readed. Useful to reconstruct the original images together with ``crop_shape``.
 
-       filenames : List of str, optional
-           Loaded filenames.
+    crop_shape : List of tuples
+        Shape of the loaded 3D images after cropping. Useful to reconstruct the original images together with
+        ``data_shape``.
 
-       Examples
-       --------
-       ::
+    filenames : List of str, optional
+        Loaded filenames.
 
-           # EXAMPLE 1
-           # Case where we need to load 165 images of shape (1024, 768)
-           data_path = "data/train/x"
+    Examples
+    --------
+    ::
 
-           load_data_from_dir(data_path)
-           # The function will print the shape of the created array. In this example:
-           #     *** Loaded data shape is (165, 768, 1024, 1)
-           # Notice height and width swap because of Numpy ndarray terminology
+        # EXAMPLE 1
+        # Case where we need to load 165 images of shape (1024, 768)
+        data_path = "data/train/x"
+
+        load_data_from_dir(data_path)
+        # The function will print the shape of the created array. In this example:
+        #     *** Loaded data shape is (165, 768, 1024, 1)
+        # Notice height and width swap because of Numpy ndarray terminology
 
 
-           # EXAMPLE 2
-           # Case where we need to load 165 images of shape (1024, 768) but
-           # cropping them into (256, 256, 1) patches
-           data_path = "data/train/x"
-           crop_shape = (256, 256, 1)
+        # EXAMPLE 2
+        # Case where we need to load 165 images of shape (1024, 768) but
+        # cropping them into (256, 256, 1) patches
+        data_path = "data/train/x"
+        crop_shape = (256, 256, 1)
 
-           load_data_from_dir(data_path, crop=True, crop_shape=crop_shape)
-           # The function will print the shape of the created array. In this example:
-           #     *** Loaded data shape is (1980, 256, 256, 1)
+        load_data_from_dir(data_path, crop=True, crop_shape=crop_shape)
+        # The function will print the shape of the created array. In this example:
+        #     *** Loaded data shape is (1980, 256, 256, 1)
     """
 
     if crop:
@@ -941,8 +946,11 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), pad
 
         if crop_shape is not None and check_channel:
             if crop_shape[-1] != img.shape[-1]:
-                raise ValueError("Channel of the patch size given {} does not correspond with the loaded image {}. "
-                    "Please, check the channels of the images!".format(crop_shape[-1], img.shape[-1]))
+                if crop_shape[-1] == 3 and convert_to_rgb:
+                    img = np.repeat(img, 3, axis=-1)
+                else:
+                    raise ValueError("Channel of the patch size given {} does not correspond with the loaded image {}. "
+                        "Please, check the channels of the images!".format(crop_shape[-1], img.shape[-1]))
 
         data_shape.append(img.shape)
         img = np.expand_dims(img, axis=0)
@@ -1043,91 +1051,96 @@ def load_ct_data_from_dir(data_dir, shape=None):
 
 
 def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False, overlap=(0,0,0), padding=(0,0,0),
-                            median_padding=False, reflect_to_complete_shape=False, check_channel=True, check_drange=True,
-                            return_filenames=False):
-    """Load data from a directory.
+        median_padding=False, reflect_to_complete_shape=False, check_channel=True, convert_to_rgb=False, check_drange=True,
+        return_filenames=False):
+    """
+    Load data from a directory.
 
-       Parameters
-       ----------
-       data_dir : str
-           Path to read the data from.
+    Parameters
+    ----------
+    data_dir : str
+        Path to read the data from.
 
-       crop : bool, optional
-           Crop each 3D image when readed.
+    crop : bool, optional
+        Crop each 3D image when readed.
 
-       crop_shape : Tuple of 4 ints, optional
-           Shape of the subvolumes to create when cropping.  E.g. ``(z, y, x, channels)``.
+    crop_shape : Tuple of 4 ints, optional
+        Shape of the subvolumes to create when cropping.  E.g. ``(z, y, x, channels)``.
 
-       verbose : bool, optional
-           Whether to enable verbosity.
+    verbose : bool, optional
+        Whether to enable verbosity.
 
-       overlap : Tuple of 3 floats, optional
-           Amount of minimum overlap on z, y and x dimensions. The values must be on range ``[0, 1)``, that is, ``0%``
-           or ``99%`` of overlap. E.g. ``(z, y, x)``.
+    overlap : Tuple of 3 floats, optional
+        Amount of minimum overlap on z, y and x dimensions. The values must be on range ``[0, 1)``, that is, ``0%``
+        or ``99%`` of overlap. E.g. ``(z, y, x)``.
 
-       padding : Tuple of 3 ints, optional
-           Size of padding to be added on each axis ``(z, y, x)``. E.g. ``(24, 24, 24)``.
+    padding : Tuple of 3 ints, optional
+        Size of padding to be added on each axis ``(z, y, x)``. E.g. ``(24, 24, 24)``.
 
-       median_padding : bool, optional
-           If ``True`` the padding value is the median value. If ``False``, the added values are zeroes.
+    median_padding : bool, optional
+        If ``True`` the padding value is the median value. If ``False``, the added values are zeroes.
 
-       reflect_to_complete_shape : bool, optional
-           Whether to increase the shape of the dimension that have less size than selected patch size padding it with
-           'reflect'.
+    reflect_to_complete_shape : bool, optional
+        Whether to increase the shape of the dimension that have less size than selected patch size padding it with
+        'reflect'.
 
-       check_channel : bool, optional
-           Whether to check if the crop_shape channel matches with the loaded images' one.
-           
-       check_drange : bool, optional
-           Whether to check if the data loaded is in the same range. 
+    check_channel : bool, optional
+        Whether to check if the crop_shape channel matches with the loaded images' one.
 
-       return_filenames : bool, optional
-           Return a list with the loaded filenames. Useful when you need to save them afterwards with the same names as
-           the original ones.
+    convert_to_rgb : bool, optional
+        In case RGB images are expected, e.g. if ``crop_shape`` channel is 3, those images that are grayscale are 
+        converted into RGB.
 
-       Returns
-       -------
-       data : 5D Numpy array or list of 4D Numpy arrays
-           Data loaded. E.g. ``(num_of_images, z, y, x, channels)`` if all files have same shape, otherwise a list of
-           ``(1, z, y, x, channels)`` arrays will be returned.
+    check_drange : bool, optional
+        Whether to check if the data loaded is in the same range. 
 
-       data_shape : List of tuples
-           Shapes of all 3D images readed. Useful to reconstruct the original images together with ``crop_shape``.
+    return_filenames : bool, optional
+        Return a list with the loaded filenames. Useful when you need to save them afterwards with the same names as
+        the original ones.
 
-       crop_shape : List of tuples
-           Shape of the loaded 3D images after cropping. Useful to reconstruct the original images together with
-           ``data_shape``.
+    Returns
+    -------
+    data : 5D Numpy array or list of 4D Numpy arrays
+        Data loaded. E.g. ``(num_of_images, z, y, x, channels)`` if all files have same shape, otherwise a list of
+        ``(1, z, y, x, channels)`` arrays will be returned.
 
-       filenames : List of str, optional
-           Loaded filenames.
+    data_shape : List of tuples
+        Shapes of all 3D images readed. Useful to reconstruct the original images together with ``crop_shape``.
 
-       Examples
-       --------
-       ::
+    crop_shape : List of tuples
+        Shape of the loaded 3D images after cropping. Useful to reconstruct the original images together with
+        ``data_shape``.
 
-           # EXAMPLE 1
-           # Case where we need to load 20 images of shape (1024, 1024, 91, 1)
-           data_path = "data/train/x"
+    filenames : List of str, optional
+        Loaded filenames.
 
-           data = load_data_from_dir(data_path)
-           # The function will print list's first position array's shape. In this example:
-           #     *** Loaded data[0] shape is (20, 91, 1024, 1024, 1)
-           # Notice height, width and depth swap as skimage.io imread function
-           # is used to load images
+    Examples
+    --------
+    ::
 
-           # EXAMPLE 2
-           # Same as example 1 but with unknown shape, cropping them into (256, 256, 40, 1) subvolumes with minimum
-           # overlap and storing filenames.
-           data_path = "data/train/x"
+        # EXAMPLE 1
+        # Case where we need to load 20 images of shape (1024, 1024, 91, 1)
+        data_path = "data/train/x"
 
-           X_test, orig_test_img_shapes, \
-           crop_test_img_shapes, te_filenames = load_3d_images_from_dir(
-               test_path, crop=True, crop_shape=(256, 256, 40, 1), overlap=(0,0,0), return_filenames=True)
+        data = load_data_from_dir(data_path)
+        # The function will print list's first position array's shape. In this example:
+        #     *** Loaded data[0] shape is (20, 91, 1024, 1024, 1)
+        # Notice height, width and depth swap as skimage.io imread function
+        # is used to load images
 
-           # The function will print the shape of the created array which its size is the concatenation in 0 axis of all
-           # subvolumes created for each 3D image in the given path. For example:
-           #     *** Loaded data shape is (350, 40, 256, 256, 1)
-           # Notice height, width and depth swap as skimage.io imread function is used to load images.
+        # EXAMPLE 2
+        # Same as example 1 but with unknown shape, cropping them into (256, 256, 40, 1) subvolumes with minimum
+        # overlap and storing filenames.
+        data_path = "data/train/x"
+
+        X_test, orig_test_img_shapes, \
+        crop_test_img_shapes, te_filenames = load_3d_images_from_dir(
+            test_path, crop=True, crop_shape=(256, 256, 40, 1), overlap=(0,0,0), return_filenames=True)
+
+        # The function will print the shape of the created array which its size is the concatenation in 0 axis of all
+        # subvolumes created for each 3D image in the given path. For example:
+        #     *** Loaded data shape is (350, 40, 256, 256, 1)
+        # Notice height, width and depth swap as skimage.io imread function is used to load images.
     """
     if crop and crop_shape is None:
         raise ValueError("'crop_shape' must be provided when 'crop' is True")
@@ -1175,8 +1188,11 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
         
         if crop_shape is not None and check_channel:
             if crop_shape[-1] != img.shape[-1]:
-                raise ValueError("Channel of the patch size given {} does not correspond with the loaded image {}. "
-                    "Please, check the channels of the images!".format(crop_shape[-1], img.shape[-1]))
+                if crop_shape[-1] == 3 and convert_to_rgb:
+                    img = np.repeat(img, 3, axis=-1)
+                else:
+                    raise ValueError("Channel of the patch size given {} does not correspond with the loaded image {}. "
+                        "Please, check the channels of the images!".format(crop_shape[-1], img.shape[-1]))
 
         data_shape.append(img.shape)
         if crop and img.shape != crop_shape[:3]+(img.shape[-1],):

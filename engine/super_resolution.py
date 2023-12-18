@@ -136,15 +136,12 @@ class Super_resolution_Workflow(Base_Workflow):
             targets = normalize(targets, self.data_norm['mean'], self.data_norm['std'])
         return targets
 
-    def process_sample(self, filenames, norm): 
+    def process_sample(self, norm): 
         """
         Function to process a sample in the inference phase. 
 
         Parameters
         ----------
-        filenames : List of str
-            Filenames fo the samples to process. 
-
         norm : List of dicts
             Normalization used during training. Required to denormalize the predictions of the model.
         """
@@ -241,7 +238,8 @@ class Super_resolution_Workflow(Base_Workflow):
 
         # Save image
         if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
-            save_tif(np.expand_dims(pred,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filenames, verbose=self.cfg.TEST.VERBOSE)
+            save_tif(np.expand_dims(pred,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, self.processing_filenames, 
+                verbose=self.cfg.TEST.VERBOSE)
     
         # Calculate PSNR
         if pred.dtype == np.dtype('uint16'):
@@ -252,7 +250,26 @@ class Super_resolution_Workflow(Base_Workflow):
             psnr_per_image = self.metrics[0](torch.from_numpy(pred), torch.from_numpy(self._Y))
             self.stats['psnr_per_image'] += psnr_per_image
 
-    def after_merge_patches(self, pred, filenames):
+    def torchvision_model_call(self, in_img, is_train=False):
+        """
+        Call a regular Pytorch model.
+
+        Parameters
+        ----------
+        in_img : Tensor
+            Input image to pass through the model.
+
+        is_train : bool, optional
+            Whether if the call is during training or inference. 
+
+        Returns
+        -------
+        prediction : Tensor 
+            Image prediction. 
+        """
+        pass
+
+    def after_merge_patches(self, pred):
         """
         Steps need to be done after merging all predicted patches into the original image.
 
@@ -260,9 +277,6 @@ class Super_resolution_Workflow(Base_Workflow):
         ----------
         pred : Torch Tensor
             Model prediction.
-
-        filenames : List of str
-            Filenames of the predicted images.  
         """
         pass
 
@@ -279,7 +293,7 @@ class Super_resolution_Workflow(Base_Workflow):
         """
         pass
 
-    def after_full_image(self, pred, filenames):
+    def after_full_image(self, pred):
         """
         Steps that must be executed after generating the prediction by supplying the entire image to the model.
 
@@ -287,9 +301,6 @@ class Super_resolution_Workflow(Base_Workflow):
         ----------
         pred : Torch Tensor
             Model prediction.
-
-        filenames : List of str
-            Filenames of the predicted images.  
         """
         pass
 

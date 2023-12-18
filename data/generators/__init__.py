@@ -14,34 +14,35 @@ from data.generators.test_single_data_generator import test_single_data_generato
 
 
 def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size, global_rank, dist=False):
-    """Create training and validation generators.
+    """
+    Create training and validation generators.
 
-       Parameters
-       ----------
-       cfg : YACS CN object
-           Configuration.
+    Parameters
+    ----------
+    cfg : YACS CN object
+        Configuration.
 
-       X_train : 4D/5D Numpy array
-           Training data. E.g. ``(num_of_images, y, x, channels)`` for ``2D`` or ``(num_of_images, z, y, x, channels)`` for ``3D``.
+    X_train : 4D/5D Numpy array
+        Training data. E.g. ``(num_of_images, y, x, channels)`` for ``2D`` or ``(num_of_images, z, y, x, channels)`` for ``3D``.
 
-       Y_train : 4D/5D Numpy array
-           Training data mask/class. E.g. ``(num_of_images, y, x, channels)`` for ``2D`` or ``(num_of_images, z, y, x, channels)`` for ``3D``
-           in all the workflows except classification. For this last the shape is ``(num_of_images, class)`` for both ``2D`` and ``3D``.
+    Y_train : 4D/5D Numpy array
+        Training data mask/class. E.g. ``(num_of_images, y, x, channels)`` for ``2D`` or ``(num_of_images, z, y, x, channels)`` for ``3D``
+        in all the workflows except classification. For this last the shape is ``(num_of_images, class)`` for both ``2D`` and ``3D``.
 
-       X_val : 4D/5D Numpy array
-           Validation data mask/class. E.g. ``(num_of_images, y, x, channels)`` for ``2D`` or ``(num_of_images, z, y, x, channels)`` for ``3D``.
+    X_val : 4D/5D Numpy array
+        Validation data mask/class. E.g. ``(num_of_images, y, x, channels)`` for ``2D`` or ``(num_of_images, z, y, x, channels)`` for ``3D``.
 
-       Y_val : 4D/5D Numpy array
-           Validation data mask/class. E.g. ``(num_of_images, y, x, channels)`` for ``2D`` or ``(num_of_images, z, y, x, channels)`` for ``3D``
-           in all the workflows except classification. For this last the shape is ``(num_of_images, class)`` for both ``2D`` and ``3D``. 
+    Y_val : 4D/5D Numpy array
+        Validation data mask/class. E.g. ``(num_of_images, y, x, channels)`` for ``2D`` or ``(num_of_images, z, y, x, channels)`` for ``3D``
+        in all the workflows except classification. For this last the shape is ``(num_of_images, class)`` for both ``2D`` and ``3D``. 
+    
+    Returns
+    -------
+    train_generator : Pair2DImageDataGenerator/Single2DImageDataGenerator (2D) or Pair3DImageDataGenerator/Single3DImageDataGenerator (3D)
+        Training data generator.
 
-       Returns
-       -------
-       train_generator : Pair2DImageDataGenerator/Single2DImageDataGenerator (2D) or Pair3DImageDataGenerator/Single3DImageDataGenerator (3D)
-           Training data generator.
-
-       val_generator : Pair2DImageDataGenerator/Single2DImageDataGenerator (2D) or Pair3DImageDataGenerator/Single3DImageDataGenerator (3D)
-           Validation data generator.
+    val_generator : Pair2DImageDataGenerator/Single2DImageDataGenerator (2D) or Pair3DImageDataGenerator/Single3DImageDataGenerator (3D)
+        Validation data generator.
     """
 
     # Calculate the probability map per image
@@ -97,6 +98,8 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
         data_paths = [cfg.DATA.TRAIN.PATH, cfg.DATA.TRAIN.GT_PATH] 
     else:
         data_paths = [cfg.DATA.TRAIN.PATH] 
+    
+    not_normalize = True if cfg.MODEL.SOURCE in ["bmz", "torchvision"] else False
     if cfg.PROBLEM.TYPE == 'CLASSIFICATION' or \
         (cfg.PROBLEM.TYPE == 'SELF_SUPERVISED' and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"):
         r_shape = cfg.DATA.PATCH_SIZE
@@ -115,7 +118,8 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
             median_blur=cfg.AUGMENTOR.MEDIAN_BLUR, mb_kernel=cfg.AUGMENTOR.MB_KERNEL, motion_blur=cfg.AUGMENTOR.MOTION_BLUR,
             motb_k_range=cfg.AUGMENTOR.MOTB_K_RANGE, gamma_contrast=cfg.AUGMENTOR.GAMMA_CONTRAST,
             gc_gamma=cfg.AUGMENTOR.GC_GAMMA, dropout=cfg.AUGMENTOR.DROPOUT, drop_range=cfg.AUGMENTOR.DROP_RANGE,
-            resize_shape=r_shape, norm_type=cfg.DATA.NORMALIZATION.TYPE, norm_custom_mean=custom_mean, norm_custom_std=custom_std)
+            resize_shape=r_shape, not_normalize=not_normalize, norm_type=cfg.DATA.NORMALIZATION.TYPE, 
+            norm_custom_mean=custom_mean, norm_custom_std=custom_std, convert_to_rgb=cfg.DATA.FORCE_RGB)
     else:
         dic = dict(ndim=ndim, X=X_train, Y=Y_train, seed=cfg.SYSTEM.SEED, in_memory=cfg.DATA.TRAIN.IN_MEMORY, 
             data_paths=data_paths, da=cfg.AUGMENTOR.ENABLE,
@@ -154,8 +158,9 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
             salt_pep_amount=cfg.AUGMENTOR.SALT_AND_PEPPER_AMOUNT, salt_pep_proportion=cfg.AUGMENTOR.SALT_AND_PEPPER_PROP,
             shape=cfg.DATA.PATCH_SIZE, resolution=cfg.DATA.TRAIN.RESOLUTION, random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, 
             prob_map=prob_map, n_classes=cfg.MODEL.N_CLASSES, extra_data_factor=cfg.DATA.TRAIN.REPLICATE, 
-            norm_type=cfg.DATA.NORMALIZATION.TYPE, norm_custom_mean=custom_mean, norm_custom_std=custom_std, 
-            random_crop_scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING)
+            not_normalize=not_normalize, norm_type=cfg.DATA.NORMALIZATION.TYPE, norm_custom_mean=custom_mean, 
+            norm_custom_std=custom_std, random_crop_scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
+            convert_to_rgb=cfg.DATA.FORCE_RGB)
 
         if cfg.PROBLEM.NDIM == '3D':
             dic['zflip'] = cfg.AUGMENTOR.ZFLIP
@@ -183,7 +188,7 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
         (cfg.PROBLEM.TYPE == 'SELF_SUPERVISED' and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"):
         ptype = "classification" if cfg.PROBLEM.TYPE == 'CLASSIFICATION' else "mae"
         val_generator = f_name(ndim=ndim, X=X_val, Y=Y_val, data_path=cfg.DATA.VAL.PATH, ptype=ptype, n_classes=cfg.MODEL.N_CLASSES, 
-            in_memory=mem, seed=cfg.SYSTEM.SEED, da=False, resize_shape=r_shape, 
+            in_memory=mem, seed=cfg.SYSTEM.SEED, da=False, resize_shape=r_shape, not_normalize=not_normalize,
             norm_custom_mean=custom_mean, norm_custom_std=custom_std)
     else:
         if cfg.PROBLEM.TYPE != 'DENOISING':
@@ -192,8 +197,8 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
             data_paths = [cfg.DATA.TRAIN.PATH] 
         dic = dict(ndim=ndim, X=X_val, Y=Y_val, in_memory=mem, data_paths=data_paths, da=False, shape=cfg.DATA.PATCH_SIZE,
             random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, val=True, n_classes=cfg.MODEL.N_CLASSES, 
-            seed=cfg.SYSTEM.SEED, norm_type=cfg.DATA.NORMALIZATION.TYPE, norm_custom_mean=custom_mean, norm_custom_std=custom_std, 
-            resolution=cfg.DATA.VAL.RESOLUTION, random_crop_scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING)
+            seed=cfg.SYSTEM.SEED, not_normalize=not_normalize, norm_type=cfg.DATA.NORMALIZATION.TYPE, norm_custom_mean=custom_mean, 
+            norm_custom_std=custom_std, resolution=cfg.DATA.VAL.RESOLUTION, random_crop_scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING)
         if cfg.PROBLEM.TYPE == 'INSTANCE_SEG': 
             dic['instance_problem'] = True
         elif cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
@@ -294,12 +299,13 @@ def create_test_augmentor(cfg, X_test, Y_test, cross_val_samples_ids):
     if cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
         normalizeY = 'none'
     
-    bmz = True if cfg.MODEL.SOURCE == "bmz" else False   
+    not_normalize = True if cfg.MODEL.SOURCE in ["bmz", "torchvision"] else False
     ndim = 3 if cfg.PROBLEM.NDIM == "3D" else 2
     dic = dict(ndim=ndim, X=X_test, d_path=cfg.DATA.TEST.PATH if cross_val_samples_ids is None else cfg.DATA.TRAIN.PATH, 
         test_by_chunks=cfg.TEST.BY_CHUNKS.ENABLE, provide_Y=provide_Y, Y=Y_test, dm_path=cfg.DATA.TEST.GT_PATH if cross_val_samples_ids is None else cfg.DATA.TRAIN.GT_PATH,
-        seed=cfg.SYSTEM.SEED, instance_problem=instance_problem, norm_type=cfg.DATA.NORMALIZATION.TYPE, not_normalize=bmz,
-        norm_custom_mean=custom_mean, norm_custom_std=custom_std, reduce_mem=cfg.TEST.REDUCE_MEMORY, sample_ids=cross_val_samples_ids)        
+        seed=cfg.SYSTEM.SEED, instance_problem=instance_problem, norm_type=cfg.DATA.NORMALIZATION.TYPE, not_normalize=not_normalize,
+        norm_custom_mean=custom_mean, norm_custom_std=custom_std, reduce_mem=cfg.TEST.REDUCE_MEMORY, sample_ids=cross_val_samples_ids,
+        convert_to_rgb=cfg.DATA.FORCE_RGB)        
         
     if cfg.PROBLEM.TYPE in ['CLASSIFICATION', 'SELF_SUPERVISED']:
         gen_name = test_single_data_generator 

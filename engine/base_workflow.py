@@ -15,7 +15,7 @@ import torch.distributed as dist
 import bioimageio.core
 import xarray as xr
 
-from models import build_model
+from models import build_model, build_torchvision_model
 from engine import prepare_optimizer, build_callbacks
 from data.generators import create_train_val_augmentors, create_test_augmentor, check_generator_consistence
 from utils.misc import (get_world_size, get_rank, is_main_process, save_model, time_text, load_model_checkpoint, TensorboardLogger,
@@ -122,9 +122,10 @@ class Base_Workflow(metaclass=ABCMeta):
         self.define_metrics()
 
         # Load Bioimage model Zoo pretrained model information
+        self.torchvision_preprocessing = None
         if self.cfg.MODEL.SOURCE == "bmz":
             print("Loading Bioimage Model Zoo pretrained model . . .")
-            self.bmz_model_resource = bioimageio.core.load_resource_description(self.cfg.MODEL.BMZ_DOI)
+            self.bmz_model_resource = bioimageio.core.load_resource_description(self.cfg.MODEL.BMZ.SOURCE_MODEL_DOI)
         
             # Change PATCH_SIZE with the one stored in the RDF
             input_image = np.load(self.bmz_model_resource.test_inputs[0])
@@ -211,7 +212,8 @@ class Base_Workflow(metaclass=ABCMeta):
                     random_crops_in_DA=self.cfg.DATA.EXTRACT_RANDOM_PATCH, crop_shape=self.cfg.DATA.PATCH_SIZE, 
                     y_upscaling=self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, ov=self.cfg.DATA.TRAIN.OVERLAP, 
                     padding=self.cfg.DATA.TRAIN.PADDING, minimum_foreground_perc=self.cfg.DATA.TRAIN.MINIMUM_FOREGROUND_PER,
-                    reflect_to_complete_shape=self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE)
+                    reflect_to_complete_shape=self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE, 
+                    convert_to_rgb=self.cfg.DATA.FORCE_RGB)
             
                 if self.cfg.DATA.VAL.FROM_TRAIN:
                     if self.cfg.DATA.VAL.CROSS_VAL:
@@ -232,8 +234,9 @@ class Base_Workflow(metaclass=ABCMeta):
                     print("1) Loading validation images . . .")
                     f_name = load_data_from_dir if self.cfg.PROBLEM.NDIM == '2D' else load_3d_images_from_dir
                     self.X_val, _, _ = f_name(self.cfg.DATA.VAL.PATH, crop=True, crop_shape=self.cfg.DATA.PATCH_SIZE,
-                                        overlap=self.cfg.DATA.VAL.OVERLAP, padding=self.cfg.DATA.VAL.PADDING,
-                                        reflect_to_complete_shape=self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE)
+                        overlap=self.cfg.DATA.VAL.OVERLAP, padding=self.cfg.DATA.VAL.PADDING,
+                        reflect_to_complete_shape=self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE,
+                        convert_to_rgb=self.cfg.DATA.FORCE_RGB)
 
                     if self.cfg.PROBLEM.NDIM == '2D':
                         crop_shape = (self.cfg.DATA.PATCH_SIZE[0]*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
@@ -243,9 +246,10 @@ class Base_Workflow(metaclass=ABCMeta):
                             self.cfg.DATA.PATCH_SIZE[2]*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, self.cfg.DATA.PATCH_SIZE[3])
                     if self.load_Y_val:
                         self.Y_val, _, _ = f_name(self.cfg.DATA.VAL.GT_PATH, crop=True, crop_shape=crop_shape,
-                                            overlap=self.cfg.DATA.VAL.OVERLAP, padding=self.cfg.DATA.VAL.PADDING,
-                                            reflect_to_complete_shape=self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE,
-                                            check_channel=False, check_drange=False)                            
+                            overlap=self.cfg.DATA.VAL.OVERLAP, padding=self.cfg.DATA.VAL.PADDING,
+                            reflect_to_complete_shape=self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE,
+                            check_channel=False, check_drange=False, 
+                            convert_to_rgb=self.cfg.DATA.FORCE_RGB)                            
                     else:
                         self.Y_val = None
                     if self.Y_val is not None and len(self.X_val) != len(self.Y_val):
@@ -291,7 +295,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 check_generator_consistence(
                     self.val_generator, self.cfg.PATHS.GEN_CHECKS+"_val", self.cfg.PATHS.GEN_MASK_CHECKS+"_val")
 
-    def bmz_model_call(self, in_img, to_pytorch=False):
+    def bmz_model_call(self, in_img, is_train=False):
         """
         Call Bioimage model zoo model.
 
@@ -300,22 +304,26 @@ class Base_Workflow(metaclass=ABCMeta):
         in_img : Tensor
             Input image to pass through the model.
 
-        to_pytorch : bool, optional
-            Not used here. Just added to be compatible with ``model_call`` function. 
-        
+        is_train : bool, optional
+            Whether if the call is during training or inference. 
+
         Returns
         -------
         prediction : Tensor 
             Image prediction. 
         """
-
-        # Convert Tensor to xarray
+        # Convert from Numpy to xarray.DataArray
         if self.cfg.PROBLEM.NDIM == '2D': 
-            in_img = in_img.transpose((0,3,1,2))
+            self.bmz_axes = ('b', 'c', 'y', 'x')
         else:
-            in_img = in_img.transpose((0,4,1,2,3))
-        in_img = {'input0': xr.DataArray(in_img, dims=tuple(self.bmz_axes,))}
-        
+            self.bmz_axes = ('b', 'c', 'z', 'y', 'x')
+        in_img = xr.DataArray(in_img.cpu().numpy(), dims=tuple(self.bmz_axes))
+
+        # Apply pre-processing
+        in_img = dict(zip([ipt.name for ipt in self.model.input_specs], (in_img,)))
+        self.bmz_computed_measures = {}
+        self.model.apply_preprocessing(in_img, self.bmz_computed_measures)
+
         # Predict
         prediction_tensors = self.model.predict(*list(in_img.values()))
 
@@ -325,46 +333,30 @@ class Base_Workflow(metaclass=ABCMeta):
 
         # Convert back to Tensor 
         prediction = torch.from_numpy(prediction['output0'].to_numpy())
-        return prediction 
 
-    def prepare_bmz_input(self, img):
+        return prediction
+
+    @abstractmethod
+    def torchvision_model_call(self, in_img, is_train=False):
         """
-        Apply Bioimage Model Zoo pre-processing step as determined by its RDF. 
+        Call a regular Pytorch model.
 
         Parameters
         ----------
-        img : Tensor
-            Input image to apply pre-processing to.
+        in_img : Tensor
+            Input image to pass through the model.
+
+        is_train : bool, optional
+            Whether if the call is during training or inference. 
 
         Returns
         -------
-        img : Tensor 
-            Pre-processed image. 
+        prediction : Tensor 
+            Image prediction. 
         """
-        # Convert from Numpy to xarray.DataArray
-        if self.cfg.PROBLEM.NDIM == '2D': 
-            img = img.transpose((0,3,1,2))
-            self.bmz_axes = ('b', 'c', 'y', 'x')
-        else:
-            img = img.transpose((0,4,1,2,3))
-            self.bmz_axes = ('b', 'c', 'z', 'y', 'x')
-        img = xr.DataArray(img, dims=tuple(self.bmz_axes))
+        raise NotImplementedError
 
-        # Apply pre-processing
-        img = dict(zip([ipt.name for ipt in self.model.input_specs], (img,)))
-        self.bmz_computed_measures = {}
-        self.model.apply_preprocessing(img, self.bmz_computed_measures)
-
-        # Convert into Tensor
-        img = img['input0'].to_numpy()
-        if self.cfg.PROBLEM.NDIM == '2D': 
-            img = img.transpose((0,2,3,1))
-        else:
-            img = img.transpose((0,2,3,4,1))
-        
-        return img
-
-    def model_call(self, in_img, to_pytorch=True):
+    def model_call_func(self, in_img, to_pytorch=True, is_train=False):
         """
         Call a regular Pytorch model.
 
@@ -376,6 +368,9 @@ class Base_Workflow(metaclass=ABCMeta):
         to_pytorch : bool, optional
             Whether if the input image needs to be converted into pytorch format or not.
         
+        is_train : bool, optional
+            Whether if the call is during training or inference. 
+
         Returns
         -------
         prediction : Tensor 
@@ -383,7 +378,13 @@ class Base_Workflow(metaclass=ABCMeta):
         """
         if to_pytorch:
             in_img = to_pytorch_format(in_img, self.axis_order, self.device)
-        return self.model(in_img)
+        if self.cfg.MODEL.SOURCE == "biapy":
+            p = self.model(in_img)
+        elif self.cfg.MODEL.SOURCE == "bmz":
+            p = self.bmz_model_call(in_img, is_train)
+        elif self.cfg.MODEL.SOURCE == "torchvision":
+            p = self.torchvision_model_call(in_img, is_train)
+        return p
 
     def prepare_model(self):
         """
@@ -392,13 +393,12 @@ class Base_Workflow(metaclass=ABCMeta):
         print("###############")
         print("# Build model #")
         print("###############")
-        if self.cfg.MODEL.SOURCE != "bmz":
+        if self.cfg.MODEL.SOURCE == "biapy":
             self.model = build_model(self.cfg, self.job_identifier, self.device)
-            self.model_without_ddp = self.model
-            self.model_call_func = self.model_call
-
+        elif self.cfg.MODEL.SOURCE == "torchvision":
+            self.model, self.torchvision_preprocessing = build_torchvision_model(self.cfg, self.device)
         # Bioimage Model Zoo pretrained models
-        else:
+        elif self.cfg.MODEL.SOURCE == "bmz":
             # Create a bioimage pipeline to create predictions
             try:
                 self.model = bioimageio.core.create_prediction_pipeline(
@@ -410,12 +410,10 @@ class Base_Workflow(metaclass=ABCMeta):
                 raise ValueError("An error ocurred when creating the BMZ model (see above). "
                     "BiaPy only supports models prepared with Torchscript.")
 
-            self.model_without_ddp = self.model
             if self.args.distributed:
                 raise ValueError("DDP can not be activated when loading a BMZ pretrained model")
 
-            self.model_call_func = self.bmz_model_call
-
+        self.model_without_ddp = self.model
         if self.args.distributed:
             self.model = torch.nn.parallel.DistributedDataParallel(self.model, device_ids=[self.args.gpu], 
                 find_unused_parameters=False)
@@ -452,10 +450,11 @@ class Base_Workflow(metaclass=ABCMeta):
         Training phase.
         """
         self.load_train_data()
+        self.prepare_model()
         self.prepare_train_generators()
         self.prepare_logging_tool()
         self.early_stopping = build_callbacks(self.cfg)
-        self.prepare_model()
+        
         self.optimizer, self.lr_scheduler, self.loss_scaler = prepare_optimizer(self.cfg, self.model_without_ddp, 
             len(self.train_generator))
  
@@ -484,10 +483,10 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.log_writer.set_step(epoch * self.num_training_steps_per_epoch)
 
             # Train
-            train_stats = train_one_epoch(self.cfg, model=self.model, loss_function=self.loss, activations=self.apply_model_activations, 
-                metric_function=self.metric_calculation, prepare_targets=self.prepare_targets, data_loader=self.train_generator, 
-                optimizer=self.optimizer, device=self.device, loss_scaler=self.loss_scaler, epoch=epoch, log_writer=self.log_writer, 
-                lr_scheduler=self.lr_scheduler, start_steps=epoch * self.num_training_steps_per_epoch, axis_order=self.axis_order)
+            train_stats = train_one_epoch(self.cfg, model=self.model, model_call_func=self.model_call_func, loss_function=self.loss, 
+                activations=self.apply_model_activations, metric_function=self.metric_calculation, prepare_targets=self.prepare_targets, 
+                data_loader=self.train_generator, optimizer=self.optimizer, device=self.device, loss_scaler=self.loss_scaler, epoch=epoch, 
+                log_writer=self.log_writer, lr_scheduler=self.lr_scheduler, start_steps=epoch * self.num_training_steps_per_epoch)
 
             # Save checkpoint
             if self.cfg.MODEL.SAVE_CKPT_FREQ != -1:
@@ -497,9 +496,9 @@ class Base_Workflow(metaclass=ABCMeta):
                 
             # Validation
             if self.val_generator is not None:
-                test_stats = evaluate(self.cfg, model=self.model, loss_function=self.loss, activations=self.apply_model_activations,
-                    metric_function=self.metric_calculation, prepare_targets=self.prepare_targets, epoch=epoch, 
-                    data_loader=self.val_generator, device=self.device, lr_scheduler=self.lr_scheduler, axis_order=self.axis_order)
+                test_stats = evaluate(self.cfg, model=self.model, model_call_func=self.model_call_func, loss_function=self.loss, 
+                    activations=self.apply_model_activations, metric_function=self.metric_calculation, prepare_targets=self.prepare_targets, 
+                    epoch=epoch, data_loader=self.val_generator, lr_scheduler=self.lr_scheduler)
 
                 # Save checkpoint is val loss improved 
                 if test_stats['loss'] < val_best_loss:
@@ -587,7 +586,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 if self.cfg.DATA.TEST.IN_MEMORY:
                     print("2) Loading test images . . .")
                     f_name = load_data_from_dir if self.cfg.PROBLEM.NDIM == '2D' else load_3d_images_from_dir
-                    self.X_test, _, _ = f_name(self.cfg.DATA.TEST.PATH)
+                    self.X_test, _, _ = f_name(self.cfg.DATA.TEST.PATH, convert_to_rgb=self.cfg.DATA.FORCE_RGB)
                     if self.cfg.DATA.TEST.LOAD_GT:
                         print("3) Loading test masks . . .")
                         self.Y_test, _, _ = f_name(self.cfg.DATA.TEST.GT_PATH, check_channel=False, check_drange=False)
@@ -694,15 +693,16 @@ class Base_Workflow(metaclass=ABCMeta):
         Test/Inference step.
         """
         self.load_test_data()
-        self.prepare_test_generators()
         if not self.model_prepared:
             self.prepare_model()
+        self.prepare_test_generators()
 
         # Switch to evaluation mode
         if self.cfg.MODEL.SOURCE != "bmz":
             self.model_without_ddp.eval()    
 
-            # Load checkpoint
+        # Load checkpoint
+        if self.cfg.MODEL.LOAD_CHECKPOINT:
             self.start_epoch = load_model_checkpoint(cfg=self.cfg, jobname=self.job_identifier, model_without_ddp=self.model_without_ddp,
                 device=self.device)
             if self.start_epoch == -1:
@@ -742,18 +742,20 @@ class Base_Workflow(metaclass=ABCMeta):
                 if len(self.test_filenames) == 0:
                     self.test_filenames = sorted(next(os.walk(self.cfg.DATA.TEST.PATH))[1])  
 
+                self.processing_filenames = self.test_filenames[i]
                 if is_main_process():
-                    print("Processing image: {}".format(self.test_filenames[i]))
+                    print("Processing image: {}".format(self.processing_filenames))
 
                 # Process each image separately
                 self.f_numbers = [i]
-                self.process_sample_by_chunks(self.test_filenames[i])
+                self.process_sample_by_chunks(self.processing_filenames)
             else:
                 # Process all the images in the batch, sample by sample
                 l_X = len(X)
                 for j in tqdm(range(l_X), leave=False):
+                    self.processing_filenames = self.test_filenames[(i*l_X)+j:(i*l_X)+j+1]
                     if is_main_process():
-                        print("Processing image(s): {}".format(self.test_filenames[(i*l_X)+j:(i*l_X)+j+1]))
+                        print("Processing image(s): {}".format(self.processing_filenames))
                     
                     if self.cfg.PROBLEM.TYPE != 'CLASSIFICATION':
                         if type(X) is tuple:
@@ -774,7 +776,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
                     # Process each image separately
                     self.f_numbers = list(range((i*l_X)+j,(i*l_X)+j+1)) 
-                    self.process_sample(self.test_filenames[(i*l_X)+j:(i*l_X)+j+1], norm=(X_norm, Y_norm))
+                    self.process_sample(norm=(X_norm, Y_norm))                        
 
             image_counter += 1
         
@@ -1021,15 +1023,12 @@ class Base_Workflow(metaclass=ABCMeta):
             if self.cfg.TEST.VERBOSE:
                 print(f"[Rank {get_rank()} ({os.getpid()})] Synched with main thread. Go for the next sample")
 
-    def process_sample(self, filenames, norm):
+    def process_sample(self, norm):
         """
         Function to process a sample in the inference phase. 
 
         Parameters
         ----------
-        filenames : List of str
-            Filenames fo the samples to process. 
-
         norm : List of dicts
             Normalization used during training. Required to denormalize the predictions of the model.
         """
@@ -1042,10 +1041,6 @@ class Base_Workflow(metaclass=ABCMeta):
         ### PER PATCH ###
         #################
         if self.cfg.TEST.STATS.PER_PATCH:
-            # Apply BMZ pre-processing 
-            if self.cfg.MODEL.SOURCE == "bmz":
-                self._X = self.prepare_bmz_input(self._X)
-
             # Reflect data to complete the needed shape
             if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE:
                 reflected_orig_shape = self._X.shape
@@ -1201,7 +1196,8 @@ class Base_Workflow(metaclass=ABCMeta):
 
             # Save image
             if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
-                save_tif(np.expand_dims(pred,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filenames, verbose=self.cfg.TEST.VERBOSE)
+                save_tif(np.expand_dims(pred,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, self.processing_filenames, 
+                    verbose=self.cfg.TEST.VERBOSE)
 
             #########################
             ### MERGE PATCH STATS ###
@@ -1231,12 +1227,12 @@ class Base_Workflow(metaclass=ABCMeta):
                     self.stats['ov_iou_post'] += _ov_iou_post
                     if pred.ndim == 4:
                         save_tif(np.expand_dims(pred,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,
-                                    filenames, verbose=self.cfg.TEST.VERBOSE)
+                            self.processing_filenames, verbose=self.cfg.TEST.VERBOSE)
                     else:
-                        save_tif(pred, self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING, filenames,
-                                    verbose=self.cfg.TEST.VERBOSE)
+                        save_tif(pred, self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING, self.processing_filenames,
+                            verbose=self.cfg.TEST.VERBOSE)
 
-            self.after_merge_patches(pred, filenames)
+            self.after_merge_patches(pred)
             
             if not self.cfg.TEST.STATS.FULL_IMG and self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
                 self.all_pred.append(pred)
@@ -1246,10 +1242,6 @@ class Base_Workflow(metaclass=ABCMeta):
         ### FULL IMAGE ###
         ##################
         if self.cfg.TEST.STATS.FULL_IMG and self.cfg.PROBLEM.NDIM == '2D':
-            # Apply BMZ pre-processing 
-            if self.cfg.MODEL.SOURCE == "bmz":
-                self._X = self.prepare_bmz_input(self._X)
-
             self._X, o_test_shape = check_downsample_division(self._X, len(self.cfg.MODEL.FEATURE_MAPS)-1)
             if self.cfg.DATA.TEST.LOAD_GT:
                 self._Y, _ = check_downsample_division(self._Y, len(self.cfg.MODEL.FEATURE_MAPS)-1)
@@ -1278,9 +1270,8 @@ class Base_Workflow(metaclass=ABCMeta):
                 )
                 pred = np.expand_dims(pred, 0)
             else:
-                self._X = to_pytorch_format(self._X, self.axis_order, self.device)
                 with torch.cuda.amp.autocast():
-                    pred = self.model_call_func(self._X, to_pytorch=False)
+                    pred = self.model_call_func(self._X)
                 pred = to_numpy_format(self.apply_model_activations(pred), self.axis_order_back)    
             del self._X 
 
@@ -1290,10 +1281,10 @@ class Base_Workflow(metaclass=ABCMeta):
 
             # Save image
             if pred.ndim == 4 and self.cfg.PROBLEM.NDIM == '3D':
-                save_tif(np.expand_dims(pred,0), self.cfg.PATHS.RESULT_DIR.FULL_IMAGE, filenames,
-                            verbose=self.cfg.TEST.VERBOSE)
+                save_tif(np.expand_dims(pred,0), self.cfg.PATHS.RESULT_DIR.FULL_IMAGE, self.processing_filenames,
+                    verbose=self.cfg.TEST.VERBOSE)
             else:
-                save_tif(pred, self.cfg.PATHS.RESULT_DIR.FULL_IMAGE, filenames, verbose=self.cfg.TEST.VERBOSE)
+                save_tif(pred, self.cfg.PATHS.RESULT_DIR.FULL_IMAGE, self.processing_filenames, verbose=self.cfg.TEST.VERBOSE)
 
             # Argmax if needed
             if self.cfg.MODEL.N_CLASSES > 2 and self.cfg.DATA.TEST.ARGMAX_TO_OUTPUT:
@@ -1312,7 +1303,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.all_pred.append(pred)
                 if self.cfg.DATA.TEST.LOAD_GT: self.all_gt.append(self._Y)
 
-            self.after_full_image(pred, filenames)
+            self.after_full_image(pred)
 
     def normalize_stats(self, image_counter):
         """
@@ -1376,7 +1367,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
 
     @abstractmethod
-    def after_merge_patches(self, pred, filenames):
+    def after_merge_patches(self, pred):
         """
         Place any code that needs to be done after merging all predicted patches into the original image.
 
@@ -1384,9 +1375,6 @@ class Base_Workflow(metaclass=ABCMeta):
         ----------
         pred : Torch Tensor
             Model prediction.
-
-        filenames : List of str
-            Filenames of the predicted images.  
         """
         raise NotImplementedError
 
@@ -1420,7 +1408,8 @@ class Base_Workflow(metaclass=ABCMeta):
                 pred = pred.transpose(new_pos)
 
         fname, file_extension = os.path.splitext(os.path.basename(filename))
-        self.after_merge_patches(pred, [fname+".tif"])
+        self.processing_filenames = [fname+".tif"]
+        self.after_merge_patches(pred)
 
     @abstractmethod
     def after_merge_patches_by_chunks_proccess_patch(self, filename):
@@ -1437,7 +1426,7 @@ class Base_Workflow(metaclass=ABCMeta):
         raise NotImplementedError
 
     @abstractmethod
-    def after_full_image(self, pred, filenames):
+    def after_full_image(self, pred):
         """
         Place here any code that must be executed after generating the prediction by supplying the entire image to the model. 
         To enable this, the model should be convolutional, and the image(s) should be in a 2D format. Using 3D images as 
@@ -1446,10 +1435,7 @@ class Base_Workflow(metaclass=ABCMeta):
         Parameters
         ----------
         pred : Torch Tensor
-            Model prediction.
-
-        filenames : List of str
-            Filenames of the predicted images.  
+            Model prediction. 
         """
         raise NotImplementedError
 

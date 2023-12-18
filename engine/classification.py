@@ -8,9 +8,9 @@ from sklearn.metrics import accuracy_score, confusion_matrix, classification_rep
 from torchmetrics import Accuracy
 
 from engine.base_workflow import Base_Workflow
+from data.pre_processing import norm_range01
 from data.data_2D_manipulation import load_data_classification
 from data.data_3D_manipulation import load_3d_data_classification
-from utils.misc import to_pytorch_format, to_numpy_format
 
 class Classification_Workflow(Base_Workflow):
     """
@@ -38,7 +38,7 @@ class Classification_Workflow(Base_Workflow):
         self.all_pred = [] 
         if self.cfg.DATA.TEST.LOAD_GT: 
             self.all_gt = []
-        self.test_filenames = []
+        self.test_filenames = None
         self.class_names = None
 
         # From now on, no modification of the cfg will be allowed
@@ -128,10 +128,10 @@ class Classification_Workflow(Base_Workflow):
                 val_split = self.cfg.DATA.VAL.SPLIT_TRAIN if self.cfg.DATA.VAL.FROM_TRAIN else 0.
                 f_name = load_data_classification if self.cfg.PROBLEM.NDIM == '2D' else load_3d_data_classification
                 print("0) Loading train images . . .")
-                objs = f_name(self.cfg.DATA.TRAIN.PATH, self.cfg.DATA.PATCH_SIZE, self.cfg.MODEL.N_CLASSES, 
-                    cross_val=self.cfg.DATA.VAL.CROSS_VAL, cross_val_nsplits=self.cfg.DATA.VAL.CROSS_VAL_NFOLD, 
-                    cross_val_fold=self.cfg.DATA.VAL.CROSS_VAL_FOLD, val_split=val_split, seed=self.cfg.SYSTEM.SEED, 
-                    shuffle_val=self.cfg.DATA.VAL.RANDOM)
+                objs = f_name(self.cfg.DATA.TRAIN.PATH, self.cfg.DATA.PATCH_SIZE, convert_to_rgb=self.cfg.PROBLEM.CLASSIFICATION.FORCE_RGB,
+                    expected_classes=self.cfg.MODEL.N_CLASSES, cross_val=self.cfg.DATA.VAL.CROSS_VAL, 
+                    cross_val_nsplits=self.cfg.DATA.VAL.CROSS_VAL_NFOLD, cross_val_fold=self.cfg.DATA.VAL.CROSS_VAL_FOLD, 
+                    val_split=val_split, seed=self.cfg.SYSTEM.SEED, shuffle_val=self.cfg.DATA.VAL.RANDOM)
             
                 if self.cfg.DATA.VAL.FROM_TRAIN:
                     if self.cfg.DATA.VAL.CROSS_VAL:
@@ -152,7 +152,8 @@ class Classification_Workflow(Base_Workflow):
                     print("1) Loading validation images . . .")
                     f_name = load_data_classification if self.cfg.PROBLEM.NDIM == '2D' else load_3d_data_classification
                     self.X_val, self.Y_val, _ = f_name(self.cfg.DATA.VAL.PATH, self.cfg.DATA.PATCH_SIZE, 
-                        self.cfg.MODEL.N_CLASSES, val_split=0)
+                        convert_to_rgb=self.cfg.PROBLEM.CLASSIFICATION.FORCE_RGB, expected_classes=self.cfg.MODEL.N_CLASSES, 
+                        val_split=0)
 
                     if self.Y_val is not None and len(self.X_val) != len(self.Y_val):
                         raise ValueError("Different number of raw and ground truth items ({} vs {}). "
@@ -172,8 +173,9 @@ class Classification_Workflow(Base_Workflow):
                 if self.cfg.DATA.TEST.IN_MEMORY:
                     print("2) Loading test images . . .")
                     f_name = load_data_classification if self.cfg.PROBLEM.NDIM == '2D' else load_3d_data_classification
-                    self.X_test, self.Y_test, self.test_filenames = f_name(self.cfg.DATA.TEST.PATH,  
-                        self.cfg.DATA.PATCH_SIZE, self.cfg.MODEL.N_CLASSES if self.cfg.DATA.TEST.LOAD_GT else None, val_split=0)
+                    self.X_test, self.Y_test, self.test_filenames = f_name(self.cfg.DATA.TEST.PATH, self.cfg.DATA.PATCH_SIZE,
+                        convert_to_rgb=self.cfg.PROBLEM.CLASSIFICATION.FORCE_RGB, 
+                        expected_classes=self.cfg.MODEL.N_CLASSES if self.cfg.DATA.TEST.LOAD_GT else None, val_split=0)
                     self.class_names = sorted(next(os.walk(self.cfg.DATA.TEST.PATH))[1])
                 else:
                     self.X_test, self.Y_test = None, None
@@ -217,32 +219,56 @@ class Classification_Workflow(Base_Workflow):
                 self.original_test_path = self.orig_train_path
                 self.original_test_mask_path = self.orig_train_mask_path  
 
-    def process_sample(self, filenames, norm):   
+    def process_sample(self, norm):   
         """
         Function to process a sample in the inference phase. 
 
         Parameters
         ----------
-        filenames : List of str
-            Filenames fo the samples to process. 
-
         norm : List of dicts
             Normalization used during training. Required to denormalize the predictions of the model.
         """
         self.stats['patch_counter'] += self._X.shape[0]
 
         # Predict each patch
-        self._X = to_pytorch_format(self._X, self.axis_order, self.device)
         l = int(math.ceil(self._X.shape[0]/self.cfg.TRAIN.BATCH_SIZE))
         for k in tqdm(range(l), leave=False):
             top = (k+1)*self.cfg.TRAIN.BATCH_SIZE if (k+1)*self.cfg.TRAIN.BATCH_SIZE < self._X.shape[0] else self._X.shape[0]
             with torch.cuda.amp.autocast():
-                p = self.model(self._X[k*self.cfg.TRAIN.BATCH_SIZE:top]).cpu().numpy()
+                p = self.model_call_func(self._X[k*self.cfg.TRAIN.BATCH_SIZE:top]).cpu().numpy()
             p = np.argmax(p, axis=1)
             self.all_pred.append(p)
 
         if self.cfg.DATA.TEST.LOAD_GT: 
             self.all_gt.append(self._Y)
+
+    def torchvision_model_call(self, in_img, is_train=False):
+        """
+        Call a regular Pytorch model.
+
+        Parameters
+        ----------
+        in_img : Tensors
+            Input image to pass through the model.
+
+        is_train : bool, optional
+            Whether if the call is during training or inference. 
+
+        Returns
+        -------
+        prediction : Tensor 
+            Image prediction. 
+        """
+        # Convert first to 0-255 range if uint16
+        if in_img.dtype == torch.float32:
+            if torch.max(in_img) > 255:
+                in_img = (norm_range01(in_img, torch.uint8)[0]*255).to(torch.uint8)
+            in_img = in_img.to(torch.uint8)
+    
+        # Apply TorchVision pre-processing
+        in_img = self.torchvision_preprocessing(in_img)
+
+        return self.model(in_img)        
 
     def after_all_images(self):
         """
@@ -276,19 +302,16 @@ class Classification_Workflow(Base_Workflow):
                 display_labels = ["Category {} ({})".format(i, self.class_names[i]) for i in range(self.cfg.MODEL.N_CLASSES)]
             else:
                 display_labels = ["Category {}".format(i) for i in range(self.cfg.MODEL.N_CLASSES)]
-            print(classification_report(self.all_gt, self.all_pred, target_names=display_labels))
+            print("\n"+classification_report(self.all_gt, self.all_pred, target_names=display_labels))
 
-    def after_merge_patches(self, pred, filenames):
+    def after_merge_patches(self, pred):
         """
         Steps need to be done after merging all predicted patches into the original image.
 
         Parameters
         ----------
         pred : Torch Tensor
-            Model prediction.
-
-        filenames : List of str
-            Filenames of the predicted images.  
+            Model prediction. 
         """
         pass
 
@@ -305,7 +328,7 @@ class Classification_Workflow(Base_Workflow):
         """
         pass
 
-    def after_full_image(self, pred, filenames):
+    def after_full_image(self, pred):
         """
         Steps that must be executed after generating the prediction by supplying the entire image to the model.
 
@@ -313,9 +336,6 @@ class Classification_Workflow(Base_Workflow):
         ----------
         pred : Torch Tensor
             Model prediction.
-
-        filenames : List of str
-            Filenames of the predicted images.  
         """
         pass
         

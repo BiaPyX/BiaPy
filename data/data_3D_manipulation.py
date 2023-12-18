@@ -9,7 +9,7 @@ from utils.util import load_3d_images_from_dir
 
 def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross_val_nsplits=5, cross_val_fold=1, 
     val_split=0.1, seed=0, shuffle_val=True, crop_shape=(80, 80, 80, 1), y_upscaling=1, random_crops_in_DA=False, 
-    ov=(0,0,0), padding=(0,0,0), minimum_foreground_perc=-1, reflect_to_complete_shape=False):
+    ov=(0,0,0), padding=(0,0,0), minimum_foreground_perc=-1, reflect_to_complete_shape=False, convert_to_rgb=False):
     """
     Load train and validation images from the given paths to create 3D data.
 
@@ -65,6 +65,10 @@ def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross
 
     self_supervised_args : dict, optional
         Arguments to create ground truth data for self-supervised workflow. 
+
+    convert_to_rgb : bool, optional
+        In case RGB images are expected, e.g. if ``crop_shape`` channel is 3, those images that are grayscale are 
+        converted into RGB.
 
     Returns
     -------
@@ -131,7 +135,8 @@ def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross
 
     print("0) Loading train images . . .")
     X_train, _, _, t_filenames = load_3d_images_from_dir(train_path, crop=crop, crop_shape=crop_shape,
-        overlap=ov, padding=padding, return_filenames=True, reflect_to_complete_shape=reflect_to_complete_shape)
+        overlap=ov, padding=padding, return_filenames=True, reflect_to_complete_shape=reflect_to_complete_shape,
+        convert_to_rgb=convert_to_rgb)
 
     if train_mask_path is not None:
         print("1) Loading train GT . . .")
@@ -322,13 +327,13 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0), 
        Parameters
        ----------
        data : 4D Numpy array
-           Data to crop. E.g. ``(num_of_images, y, x, channels)``.
+           Data to crop. E.g. ``(z, y, x, channels)``.
 
        vol_shape : 4D int tuple
            Shape of the volumes to create. E.g. ``(z, y, x, channels)``.
 
        data_mask : 4D Numpy array, optional
-            Data mask to crop. E.g. ``(num_of_images, y, x, channels)``.
+            Data mask to crop. E.g. ``(z, y, x, channels)``.
 
        overlap : Tuple of 3 floats, optional
             Amount of minimum overlap on x, y and z dimensions. The values must be on range ``[0, 1)``, that is, ``0%``
@@ -534,10 +539,10 @@ def merge_3D_data_with_overlap(data, orig_vol_shape, data_mask=None, overlap=(0,
        Returns
        -------
        merged_data : 4D Numpy array
-           Cropped image data. E.g. ``(num_of_images, y, x, channels)``.
+           Cropped image data. E.g. ``(z, y, x, channels)``.
 
        merged_data_mask : 5D Numpy array, optional
-           Cropped image data masks. E.g. ``(num_of_images, y, x, channels)``.
+           Cropped image data masks. E.g. ``(z, y, x, channels)``.
 
        Examples
        --------
@@ -689,7 +694,7 @@ def extract_3D_patch_with_overlap_yield(data, vol_shape, overlap=(0,0,0), paddin
     Parameters
     ----------
     data : H5 dataset
-        Data to extract patches from. E.g. ``(num_of_images, y, x, channels)``.
+        Data to extract patches from. E.g. ``(z, y, x, channels)``.
 
     vol_shape : 4D int tuple
         Shape of the patches to create. E.g. ``(z, y, x, channels)``.
@@ -879,8 +884,8 @@ def extract_3D_patch_with_overlap_yield(data, vol_shape, overlap=(0,0,0), paddin
                     yield img, real_patch_in_data, total_vol
 
 
-def load_3d_data_classification(data_dir, patch_shape, expected_classes=None, cross_val=False, cross_val_nsplits=5, cross_val_fold=1, 
-    val_split=0.1, seed=0, shuffle_val=True):
+def load_3d_data_classification(data_dir, patch_shape, convert_to_rgb=False, expected_classes=None, cross_val=False, cross_val_nsplits=5, 
+    cross_val_fold=1, val_split=0.1, seed=0, shuffle_val=True):
     """
     Load 3D data to train classification methods.
 
@@ -891,6 +896,10 @@ def load_3d_data_classification(data_dir, patch_shape, expected_classes=None, cr
 
     patch_shape: Tuple of ints
         Shape of the patch. E.g. ``(z, y, x, channels)``.
+
+    convert_to_rgb : bool, optional
+        In case RGB images are expected, e.g. if ``crop_shape`` channel is 3, those images that are grayscale are 
+        converted into RGB.
 
     expected_classes : int, optional
         Expected number of classes to be loaded. 
@@ -964,7 +973,8 @@ def load_3d_data_classification(data_dir, patch_shape, expected_classes=None, cr
             print("Found {} samples".format(len(ids)))
 
         # Loading images 
-        images, _, _, image_ids = load_3d_images_from_dir(f, return_filenames=True, crop_shape=patch_shape)
+        images, _, _, image_ids = load_3d_images_from_dir(f, return_filenames=True, crop_shape=patch_shape, 
+            convert_to_rgb=convert_to_rgb)
 
         X_data.append(images)
         Y_data.append((c_num,)*len(ids))

@@ -142,6 +142,9 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
     resize_shape : tuple of ints, optional
         If defined the input samples will be scaled into that shape.
 
+    not_normalize : bool, optional
+        Whether to normalize the data or not. Useful in BMZ model as the normalization is made during the inference. 
+        
     norm_type : str, optional
         Type of normalization to be made. Options available: ``div`` or ``custom``.
 
@@ -150,14 +153,18 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
     norm_custom_std : float, optional
         Std of the data used to normalize.
-    """
 
+    convert_to_rgb : bool, optional
+        In case RGB images are expected, e.g. if ``crop_shape`` channel is 3, those images that are grayscale are 
+        converted into RGB.
+    """
     def __init__(self, ndim, X, Y, data_path, ptype, n_classes, seed=0, in_memory=False, da=True, da_prob=0.5, rotation90=False, 
                  rand_rot=False, rnd_rot_range=(-180,180), shear=False, shear_range=(-20,20), zoom=False, zoom_range=(0.8,1.2), 
                  shift=False, shift_range=(0.1,0.2), affine_mode='constant', vflip=False, hflip=False, elastic=False, e_alpha=(240,250), 
                  e_sigma=25, e_mode='constant', g_blur=False, g_sigma=(1.0,2.0), median_blur=False, mb_kernel=(3,7), 
                  motion_blur=False, motb_k_range=(3,8), gamma_contrast=False, gc_gamma=(1.25,1.75), dropout=False, 
-                 drop_range=(0, 0.2), val=False, resize_shape=None, norm_type='div', norm_custom_mean=None, norm_custom_std=None):
+                 drop_range=(0, 0.2), val=False, resize_shape=None, not_normalize=False, norm_type='div', norm_custom_mean=None, 
+                 norm_custom_std=None, convert_to_rgb=False):
 
         if in_memory:
             if X.ndim != (ndim+2):
@@ -172,10 +179,15 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
             if in_memory and X is None:
                 raise ValueError("'X' needs to be provided together with 'in_memory'")
 
+        if resize_shape is None:
+            raise ValueError("'resize_shape' must be provided")   
+
         self.ptype = ptype
         self.ndim = ndim
         self.in_memory = in_memory
         self.z_size = -1 
+        self.convert_to_rgb = convert_to_rgb
+        self.not_normalize = not_normalize
 
         # Save paths where the data is stored
         if not in_memory:
@@ -221,45 +233,50 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
             self.length = len(self.X)
 
+        self.shape = resize_shape
+
         # X data analysis
         self.X_norm = {}
-        self.X_norm['type'] = 'not_set_yet'
-        if norm_type == 'custom':
-            if norm_custom_mean is not None and norm_custom_std is not None:
-                img, _ = self.load_sample(0)
-                self.X_norm['mean'] = norm_custom_mean
-                self.X_norm['std'] = norm_custom_std  
-                self.X_norm['orig_dtype'] = img.dtype
-            else:
-                if not in_memory:
-                    sam = []
-                    for i in range(len(self.data_path)):
-                        img, _ = self.load_sample(i)
-                        sam.append(img)
-                        if resize_shape[-1] != img.shape[-1]:
-                            raise ValueError("Channel of the patch size given {} does not correspond with the loaded image {}. "
-                                "Please, check the channels of the images!".format(resize_shape[-1], img.shape[-1]))
-                    sam = np.array(sam)
-                    
-                    self.X_norm['mean'] = np.mean(sam)
-                    self.X_norm['std'] = np.std(sam)
-                    self.X_norm['orig_dtype'] = sam.dtype
-                    del sam
-                else:
-                    img, _ = self.load_sample(0)
-                    self.X_norm['mean'] = np.mean(self.X)
-                    self.X_norm['std'] = np.std(self.X)    
-                    self.X_norm['orig_dtype'] = img.dtype
-                    
-            self.X_norm['type'] = 'custom'
-        else:                
+        self.X_norm['type'] = 'none'
+        if self.not_normalize:
             img, _ = self.load_sample(0)
-            img, nsteps = norm_range01(img)
-            self.X_norm.update(nsteps)
-            if resize_shape[-1] != img.shape[-1]:
-                raise ValueError("Channel of the patch size given {} does not correspond with the loaded image {}. "
-                    "Please, check the channels of the images!".format(resize_shape[-1], img.shape[-1]))
-            self.X_norm['type'] = 'div'            
+        else:
+            if norm_type == 'custom':
+                if norm_custom_mean is not None and norm_custom_std is not None:
+                    img, _ = self.load_sample(0)
+                    self.X_norm['mean'] = norm_custom_mean
+                    self.X_norm['std'] = norm_custom_std  
+                    self.X_norm['orig_dtype'] = img.dtype
+                else:
+                    if not in_memory:
+                        sam = []
+                        for i in range(len(self.data_path)):
+                            img, _ = self.load_sample(i)
+                            sam.append(img)
+                            if resize_shape[-1] != img.shape[-1]:
+                                raise ValueError("Channel of the patch size given {} does not correspond with the loaded image {}. "
+                                    "Please, check the channels of the images!".format(resize_shape[-1], img.shape[-1]))
+                        sam = np.array(sam)
+                        
+                        self.X_norm['mean'] = np.mean(sam)
+                        self.X_norm['std'] = np.std(sam)
+                        self.X_norm['orig_dtype'] = sam.dtype
+                        del sam
+                    else:
+                        img, _ = self.load_sample(0)
+                        self.X_norm['mean'] = np.mean(self.X)
+                        self.X_norm['std'] = np.std(self.X)    
+                        self.X_norm['orig_dtype'] = img.dtype
+                        
+                self.X_norm['type'] = 'custom'
+            else:                
+                img, _ = self.load_sample(0)
+                img, nsteps = norm_range01(img)
+                self.X_norm.update(nsteps)
+                if resize_shape[-1] != img.shape[-1]:
+                    raise ValueError("Channel of the patch size given {} does not correspond with the loaded image {}. "
+                        "Please, check the channels of the images!".format(resize_shape[-1], img.shape[-1]))
+                self.X_norm['type'] = 'div'            
 
         print("Normalization config used for X: {}".format(self.X_norm))
 
@@ -372,7 +389,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
             img = np.squeeze(img)
             
         # X normalization
-        if self.X_norm['type'] != "not_set_yet":
+        if self.X_norm['type'] != "none":
             if self.X_norm['type'] == 'div':
                 img, _ = norm_range01(img)
             elif self.X_norm['type'] == 'custom':
@@ -424,7 +441,12 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         if self.da:
             img = self.apply_transform(img)
 
-        img = torch.from_numpy(img.copy())
+        # If no normalization was applied, as is done with torchvision models, it can be an image of uint16 
+        # so we need to convert it to
+        if img.dtype == np.uint16:
+            img = torch.from_numpy(img.copy().astype(np.float32))
+        else:
+            img = torch.from_numpy(img.copy())
 
         return img, img_class
 

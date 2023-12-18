@@ -1711,20 +1711,21 @@ def repare_large_blobs(img, size_th=10000):
         
 
 def apply_binary_mask(X, bin_mask_dir):
-    """Apply a binary mask to remove values outside it.
+    """
+    Apply a binary mask to remove values outside it.
 
-       Parameters
-       ----------
-       X : 3D/4D Numpy array
-           Data to apply the mask. E.g. ``(y, x, channels)`` for 2D or ``(z, y, x, channels)`` for 3D.
+    Parameters
+    ----------
+    X : 3D/4D Numpy array
+        Data to apply the mask. E.g. ``(y, x, channels)`` for 2D or ``(z, y, x, channels)`` for 3D.
 
-       bin_mask_dir : str, optional
-           Directory where the binary mask are located.
+    bin_mask_dir : str, optional
+        Directory where the binary mask are located.
 
-       Returns
-       -------
-       X : 3D/4D Numpy array
-           Data with the mask applied. E.g. ``(y, x, channels)`` for 2D or ``(z, y, x, channels)`` for 3D.
+    Returns
+    -------
+    X : 3D/4D Numpy array
+        Data with the mask applied. E.g. ``(y, x, channels)`` for 2D or ``(z, y, x, channels)`` for 3D.
     """
 
     if X.ndim != 4 and X.ndim != 3:
