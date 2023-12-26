@@ -138,27 +138,26 @@ class jaccard_index():
         if self.torchvision_models:
             if y_pred.shape[-2:] != y_true.shape[-2:]:    
                 y_true = resize(y_true, size=y_pred.shape[-2:], interpolation=T.InterpolationMode("nearest"))
-            if torch.max(y_true) > 1: 
-                y_true = (y_true/255).type(torch.LongTensor).to(self.device)
+            if torch.max(y_true) > 1 and self.num_classes <= 2: 
+                y_true = (y_true/255).type(torch.long)
         
-        return self.jaccard(y_pred[:,:self.first_not_binary_channel], y_true[:,:self.first_not_binary_channel])
+        if self.num_classes <= 2:
+            return self.jaccard(y_pred[:,:self.first_not_binary_channel], y_true[:,:self.first_not_binary_channel])
+        else:
+            return self.jaccard(y_pred, y_true[:,0])
 
 class CrossEntropyLoss_wrapper():
-    def __init__(self, device, num_classes, torchvision_models=False):
+    def __init__(self, num_classes, torchvision_models=False):
         """
         Wrapper to Pytorch's CrossEntropyLoss. 
 
         Parameters
         ----------
-        device : Torch device
-            Using device ("cpu" or "cuda" for GPU). 
-
         torchvision_models : bool, optional
             Whether the workflow is using a TorchVision model or not. In that case the GT could be 
             resized and normalized, as it was done so with TorchVision preprocessing for the X data.
         """
         self.torchvision_models = torchvision_models
-        self.device = device 
         self.num_classes = num_classes
         if num_classes <= 2:
             self.loss = torch.nn.BCEWithLogitsLoss()
@@ -187,12 +186,13 @@ class CrossEntropyLoss_wrapper():
         if self.torchvision_models:
             if y_pred.shape[-2:] != y_true.shape[-2:]:    
                 y_true = resize(y_true, size=y_pred.shape[-2:], interpolation=T.InterpolationMode("nearest"))
-            if torch.max(y_true) > 1: 
-                y_true = (y_true/255).type(torch.float32).to(self.device)
+            if torch.max(y_true) > 1 and self.num_classes <= 2: 
+                y_true = (y_true/255).type(torch.float32)
 
-        # import pdb;pdb.set_trace()    
-        # y_pred.shape, y_true.shape
-        return self.loss(y_pred, y_true)
+        if self.num_classes <= 2:
+            return self.loss(y_pred, y_true)
+        else:
+            return self.loss(y_pred, y_true[:,0].type(torch.long))
 
 def dice_loss(y_true, y_pred):
     """Dice loss.
