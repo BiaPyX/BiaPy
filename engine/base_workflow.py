@@ -19,7 +19,7 @@ from models import build_model, build_torchvision_model
 from engine import prepare_optimizer, build_callbacks
 from data.generators import create_train_val_augmentors, create_test_augmentor, check_generator_consistence
 from utils.misc import (get_world_size, get_rank, is_main_process, save_model, time_text, load_model_checkpoint, TensorboardLogger,
-    to_pytorch_format, to_numpy_format, is_dist_avail_and_initialized, setup_for_distributed)
+    to_pytorch_format, to_numpy_format, is_dist_avail_and_initialized, setup_for_distributed, export_model_to_bmz)
 from utils.util import (load_data_from_dir, load_3d_images_from_dir, create_plots, pad_and_reflect, save_tif, check_downsample_division,
     read_chunked_data)
 from engine.train_engine import train_one_epoch, evaluate
@@ -571,6 +571,15 @@ class Base_Workflow(metaclass=ABCMeta):
                 print("Val {}: {}".format(self.metric_names[i], val_best_metric))
 
         print('Finished Training')
+
+        # Export model to BMZ format
+        if self.cfg.MODEL.BMZ.EXPORT_MODEL.ENABLE:
+            sample = next(enumerate(self.train_generator))
+            test_input = sample[1][0][0]
+            test_output = sample[1][1]
+            if not isinstance(test_output, int):
+                test_output = test_output[0]
+            export_model_to_bmz(self.cfg, self.job_identifier, self.model, test_input, test_output)
 
         self.destroy_train_data()
 
