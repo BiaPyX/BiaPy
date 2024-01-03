@@ -821,7 +821,8 @@ class Base_Workflow(metaclass=ABCMeta):
         
     def process_sample_by_chunks(self, filenames):
         """
-        Function to process a sample in the inference phase. 
+        Function to process a sample in the inference phase. A final H5/Zarr file is created in "TZCYX" or "TZYXC" order
+        depending on ``TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER`` ('T' is always included).
 
         Parameters
         ----------
@@ -835,6 +836,22 @@ class Base_Workflow(metaclass=ABCMeta):
         # Load data
         if file_extension in ['.hdf5', '.h5', ".zarr"]:
             self._X_file, self._X = read_chunked_data(self._X)
+        
+        data_shape = self._X.shape
+        # Consider only one image (remove 'T'), as it is for instance (1, 700, 3, 15000, 15000) in "TZCYX"
+        if 'T' in self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER:
+            if len(self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER) == self._X.ndim:
+                self._X = self._X[0] 
+            else:
+                data_shape = (1,)+data_shape
+        else:
+            data_shape = (1,)+data_shape
+
+        if len(self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER) != self._X.ndim:
+            if 'T' in self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER and \
+                len(self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER)-1 != self._X.ndim:
+                raise ValueError("'TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER' value {} does not match the number of dimensions of the loaded H5/Zarr "
+                    "file {} (ndim: {})".format(self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER, data_shape, len(data_shape)))
 
         # Data paths
         os.makedirs(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, exist_ok=True)
@@ -849,7 +866,6 @@ class Base_Workflow(metaclass=ABCMeta):
         in_data = self._X
 
         # Process in charge of processing one predicted patch
-        data_shape = self._X.shape
         output_handle_proc = mp.Process(target=insert_patch_into_dataset, args=(out_data_filename, out_data_mask_filename, 
             data_shape, self.output_queue, self.extract_info_queue, self.cfg, self.dtype_str, self.dtype, 
             self.cfg.TEST.BY_CHUNKS.FORMAT, self.cfg.TEST.VERBOSE))
@@ -917,6 +933,8 @@ class Base_Workflow(metaclass=ABCMeta):
             if is_dist_avail_and_initialized():
                 dist.barrier()
 
+        t_axes = (0,1,3,4,2) if "ZCYX" in self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER else (0,1,2,3,4)
+
         # Create the final H5/Zarr file that contains all the individual parts 
         if is_main_process():
             if self.cfg.SYSTEM.NUM_GPUS > 1:
@@ -958,8 +976,9 @@ class Base_Workflow(metaclass=ABCMeta):
                     for j, k in enumerate(list_of_vols_in_z[i]):
                         if self.cfg.TEST.VERBOSE:
                             print(f"Filling {k} [{z_vol_info[k][0]}:{z_vol_info[k][1]}]")
-                        data[z_vol_info[k][0]:z_vol_info[k][1]] = \
-                            data_part[z_vol_info[k][0]:z_vol_info[k][1]] / data_mask_part[z_vol_info[k][0]:z_vol_info[k][1]]                      
+                        data[:,z_vol_info[k][0]:z_vol_info[k][1]] = \
+                            data_part[:,z_vol_info[k][0]:z_vol_info[k][1]] / data_mask_part[:,z_vol_info[k][0]:z_vol_info[k][1]]                      
+
                         if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
                             allfile.flush() 
 
@@ -969,7 +988,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
                 # Save image
                 if self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF and self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
-                    save_tif(np.expand_dims(np.array(data, dtype=self.dtype),0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, 
+                    save_tif(np.array(data, dtype=self.dtype).transpose(t_axes), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, 
                         [filename+".tif"], verbose=self.cfg.TEST.VERBOSE)
                 if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
                     allfile.close()      
@@ -989,27 +1008,50 @@ class Base_Workflow(metaclass=ABCMeta):
                     pred_div = fid_div.create_dataset("data", shape=pred.shape, dtype=pred.dtype)
                     
                 # Fill the new data
-                z_vols = math.ceil(data_shape[0]/self.cfg.DATA.PATCH_SIZE[0])
-                y_vols = math.ceil(data_shape[1]/self.cfg.DATA.PATCH_SIZE[1])
-                x_vols = math.ceil(data_shape[2]/self.cfg.DATA.PATCH_SIZE[2])
+                if "ZYXC" in self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER:
+                    z_dim = data_shape[0]
+                    y_dim = data_shape[1]
+                    x_dim = data_shape[2]
+                else:
+                    z_dim = data_shape[0]
+                    y_dim = data_shape[2]
+                    x_dim = data_shape[3]
+                    
+                z_vols = math.ceil(z_dim/self.cfg.DATA.PATCH_SIZE[0])
+                y_vols = math.ceil(y_dim/self.cfg.DATA.PATCH_SIZE[1])
+                x_vols = math.ceil(x_dim/self.cfg.DATA.PATCH_SIZE[2])
                 for z in tqdm(range(z_vols)):
                     for y in range(y_vols):
                         for x in range(x_vols):
-                            pred_div[z*self.cfg.DATA.PATCH_SIZE[0]:min(data_shape[0],self.cfg.DATA.PATCH_SIZE[0]*(z+1)),
-                                    y*self.cfg.DATA.PATCH_SIZE[1]:min(data_shape[1],self.cfg.DATA.PATCH_SIZE[1]*(y+1)),
-                                    x*self.cfg.DATA.PATCH_SIZE[2]:min(data_shape[2],self.cfg.DATA.PATCH_SIZE[2]*(x+1))] = \
-                                pred[z*self.cfg.DATA.PATCH_SIZE[0]:min(data_shape[0],self.cfg.DATA.PATCH_SIZE[0]*(z+1)),
-                                    y*self.cfg.DATA.PATCH_SIZE[1]:min(data_shape[1],self.cfg.DATA.PATCH_SIZE[1]*(y+1)),
-                                    x*self.cfg.DATA.PATCH_SIZE[2]:min(data_shape[2],self.cfg.DATA.PATCH_SIZE[2]*(x+1))] / \
-                                mask[z*self.cfg.DATA.PATCH_SIZE[0]:min(data_shape[0],self.cfg.DATA.PATCH_SIZE[0]*(z+1)),
-                                    y*self.cfg.DATA.PATCH_SIZE[1]:min(data_shape[1],self.cfg.DATA.PATCH_SIZE[1]*(y+1)),
-                                    x*self.cfg.DATA.PATCH_SIZE[2]:min(data_shape[2],self.cfg.DATA.PATCH_SIZE[2]*(x+1))]
+                            if "ZYXC" in self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER:
+                                pred_div[:,z*self.cfg.DATA.PATCH_SIZE[0]:min(z_dim,self.cfg.DATA.PATCH_SIZE[0]*(z+1)),
+                                         y*self.cfg.DATA.PATCH_SIZE[1]:min(y_dim,self.cfg.DATA.PATCH_SIZE[1]*(y+1)),
+                                         x*self.cfg.DATA.PATCH_SIZE[2]:min(x_dim,self.cfg.DATA.PATCH_SIZE[2]*(x+1))] = \
+                                    pred[:,z*self.cfg.DATA.PATCH_SIZE[0]:min(z_dim,self.cfg.DATA.PATCH_SIZE[0]*(z+1)),
+                                         y*self.cfg.DATA.PATCH_SIZE[1]:min(y_dim,self.cfg.DATA.PATCH_SIZE[1]*(y+1)),
+                                         x*self.cfg.DATA.PATCH_SIZE[2]:min(x_dim,self.cfg.DATA.PATCH_SIZE[2]*(x+1))] / \
+                                    mask[:,z*self.cfg.DATA.PATCH_SIZE[0]:min(z_dim,self.cfg.DATA.PATCH_SIZE[0]*(z+1)),
+                                         y*self.cfg.DATA.PATCH_SIZE[1]:min(y_dim,self.cfg.DATA.PATCH_SIZE[1]*(y+1)),
+                                         x*self.cfg.DATA.PATCH_SIZE[2]:min(x_dim,self.cfg.DATA.PATCH_SIZE[2]*(x+1))]
+                            else:
+                                pred_div[:,z*self.cfg.DATA.PATCH_SIZE[0]:min(z_dim,self.cfg.DATA.PATCH_SIZE[0]*(z+1)),
+                                         :, 
+                                         y*self.cfg.DATA.PATCH_SIZE[1]:min(y_dim,self.cfg.DATA.PATCH_SIZE[1]*(y+1)),
+                                         x*self.cfg.DATA.PATCH_SIZE[2]:min(x_dim,self.cfg.DATA.PATCH_SIZE[2]*(x+1))] = \
+                                    pred[:,z*self.cfg.DATA.PATCH_SIZE[0]:min(z_dim,self.cfg.DATA.PATCH_SIZE[0]*(z+1)),
+                                         :,
+                                         y*self.cfg.DATA.PATCH_SIZE[1]:min(y_dim,self.cfg.DATA.PATCH_SIZE[1]*(y+1)),
+                                         x*self.cfg.DATA.PATCH_SIZE[2]:min(x_dim,self.cfg.DATA.PATCH_SIZE[2]*(x+1))] / \
+                                    mask[:,z*self.cfg.DATA.PATCH_SIZE[0]:min(z_dim,self.cfg.DATA.PATCH_SIZE[0]*(z+1)),
+                                         :,
+                                         y*self.cfg.DATA.PATCH_SIZE[1]:min(y_dim,self.cfg.DATA.PATCH_SIZE[1]*(y+1)),
+                                         x*self.cfg.DATA.PATCH_SIZE[2]:min(x_dim,self.cfg.DATA.PATCH_SIZE[2]*(x+1))]
                     if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
                         fid_div.flush()
 
                 # Save image
                 if self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF and self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
-                    save_tif(np.expand_dims(np.array(pred_div, dtype=self.dtype),0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, 
+                    save_tif(np.array(pred_div, dtype=self.dtype).transpose(t_axes), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, 
                         [os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename+".tif")],
                         verbose=self.cfg.TEST.VERBOSE)
                 if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
@@ -1496,9 +1538,9 @@ def extract_patch_from_dataset(data, cfg, input_queue, extract_info_queue, verbo
 
     # Process of extracting each patch
     patch_counter = 0
-    for obj in extract_3D_patch_with_overlap_yield(data, cfg.DATA.PATCH_SIZE, overlap=cfg.DATA.TEST.OVERLAP, 
-        padding=cfg.DATA.TEST.PADDING, total_ranks=max(1,cfg.SYSTEM.NUM_GPUS), rank=get_rank(), 
-        verbose=verbose):
+    for obj in extract_3D_patch_with_overlap_yield(data, cfg.DATA.PATCH_SIZE, cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
+        overlap=cfg.DATA.TEST.OVERLAP, padding=cfg.DATA.TEST.PADDING, total_ranks=max(1,cfg.SYSTEM.NUM_GPUS), 
+        rank=get_rank(), verbose=verbose):
 
         if is_main_process():
             img, patch_coords, total_vol, z_vol_info, list_of_vols_in_z = obj
@@ -1582,11 +1624,22 @@ def insert_patch_into_dataset(data_filename, data_filename_mask, data_shape, out
     # Obtain the total patches so we can display it for the user
     total_patches = extract_info_queue.get(timeout=60)
 
+    t_axes = (0,3,1,2) if "ZCYX" in cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER else (0,1,2,3)
+
     for i in tqdm(range(total_patches), disable=not is_main_process()):
         p, m, patch_coords = output_queue.get(timeout=60)
 
         if 'data' not in locals():
-            s = data_shape+(p.shape[-1],) if len(data_shape) == 3 else data_shape[:-1]+(p.shape[-1],)
+            if "ZYXC" in cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER:
+                s = data_shape+(p.shape[-1],) if len(data_shape) == 3 else data_shape[:-1]+(p.shape[-1],)
+            else: # "ZCYX"
+                s = list(data_shape)
+                if len(data_shape) == 4:
+                    s[1] = p.shape[-1]  
+                else:
+                    s[2] = p.shape[-1]
+                s = tuple(s)
+
             if file_type == "h5": 
                 data = fid.create_dataset("data", s, dtype=dtype_str, compression="gzip")
                 mask = fid_mask.create_dataset("data", s, dtype=dtype_str, compression="gzip")
@@ -1595,13 +1648,22 @@ def insert_patch_into_dataset(data_filename, data_filename_mask, data_shape, out
                 mask = fid_mask.create_dataset("data", shape=s, dtype=dtype_str)
 
         # Insert the patch into its original 
-        data[patch_coords[0][0]:patch_coords[0][1],
-            patch_coords[1][0]:patch_coords[1][1],
-            patch_coords[2][0]:patch_coords[2][1]] += p
-
-        mask[patch_coords[0][0]:patch_coords[0][1],
-            patch_coords[1][0]:patch_coords[1][1],
-            patch_coords[2][0]:patch_coords[2][1]] += m
+        if "ZYXC" in cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER:
+            data[0,patch_coords[0][0]:patch_coords[0][1],
+                 patch_coords[1][0]:patch_coords[1][1],
+                 patch_coords[2][0]:patch_coords[2][1]] += p
+            mask[0,patch_coords[0][0]:patch_coords[0][1],
+                 patch_coords[1][0]:patch_coords[1][1],
+                 patch_coords[2][0]:patch_coords[2][1]] += m
+        else:
+            data[0,patch_coords[0][0]:patch_coords[0][1],
+                 :,
+                 patch_coords[1][0]:patch_coords[1][1],
+                 patch_coords[2][0]:patch_coords[2][1]] += p.transpose(t_axes)
+            mask[0,patch_coords[0][0]:patch_coords[0][1],
+                 :,
+                 patch_coords[1][0]:patch_coords[1][1],
+                 patch_coords[2][0]:patch_coords[2][1]] += m.transpose(t_axes)
 
         # Force flush after some iterations
         if i % cfg.TEST.BY_CHUNKS.FLUSH_EACH == 0 and file_type == "h5":
@@ -1610,9 +1672,10 @@ def insert_patch_into_dataset(data_filename, data_filename_mask, data_shape, out
 
     # Save image
     if cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF and cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
-        save_tif(np.expand_dims(np.array(data, dtype=dtype),0), cfg.PATHS.RESULT_DIR.PER_IMAGE, 
+        t_axes = (0,1,3,4,2) if "ZCYX" in cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER else (0,1,2,3,4)
+        save_tif(np.array(data, dtype=dtype).transpose(t_axes), cfg.PATHS.RESULT_DIR.PER_IMAGE, 
             [filename+".tif"], verbose=verbose)
-        save_tif(np.expand_dims(np.array(mask, dtype=np.uint8),0), cfg.PATHS.RESULT_DIR.PER_IMAGE, 
+        save_tif(np.array(mask, dtype=np.uint8).transpose(t_axes), cfg.PATHS.RESULT_DIR.PER_IMAGE, 
             [filename+"_mask.tif"], verbose=verbose)
     if file_type == "h5":
         fid.close()        

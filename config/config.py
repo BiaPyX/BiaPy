@@ -717,6 +717,8 @@ class Config:
         _C.TEST.BY_CHUNKS.SAVE_OUT_TIF = False
         # In how many iterations the H5 writer needs to flush the data. No need to do so with Zarr files.
         _C.TEST.BY_CHUNKS.FLUSH_EACH = 100
+        # Input Numpy/Zarr/H5 image's axes order. Options: ['TZCYX', 'TZYXC', 'ZCYX', 'ZYXC']
+        _C.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER = 'TZCYX'
         # Whether if after reconstructing the prediction the pipeline will continue each workflow specific steps. For this process
         # the prediction image needs to be loaded into memory so be sure that it can fit in you memory. E.g. in instance 
         # segmentation the instances will be created from the prediction.
