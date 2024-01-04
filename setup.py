@@ -33,7 +33,7 @@ def getInclude():
 
 
 def setup_package():
-    __version__ = '3.1.1'
+    __version__ = '3.2.0'
     url = 'https://github.com/danifranco/BiaPy'
 
     setup(name='biapy',
