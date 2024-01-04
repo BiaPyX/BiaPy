@@ -838,19 +838,22 @@ class Base_Workflow(metaclass=ABCMeta):
         if file_extension in ['.hdf5', '.h5', ".zarr"]:
             self._X_file, self._X = read_chunked_data(self._X)
         
+        print(f"Loaded image shape is {self._X.shape}")
+
         data_shape = self._X.shape
-        # Consider only one image (remove 'T'), as it is for instance (1, 700, 3, 15000, 15000) in "TZCYX"
+
+        if self._X.ndim < 3:
+            raise ValueError("Loaded image need to have at least 3 dimensions: {} (ndim: {})".format(self._X.shape, self._X.ndim))
+
         if 'T' in self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER:
-            if len(self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER) != self._X.ndim:
+            if len(self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER) > len(data_shape):
                 data_shape = (1,)+data_shape
         else:
             data_shape = (1,)+data_shape
         
         if len(self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER) != self._X.ndim:
-            if 'T' in self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER and \
-                len(self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER)-1 != self._X.ndim:
-                raise ValueError("'TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER' value {} does not match the number of dimensions of the loaded H5/Zarr "
-                    "file {} (ndim: {})".format(self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER, data_shape, len(data_shape)))
+            raise ValueError("'TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER' value {} does not match the number of dimensions of the loaded H5/Zarr "
+                "file {} (ndim: {})".format(self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER, self._X.shape, self._X.ndim))
 
         # Data paths
         os.makedirs(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, exist_ok=True)
