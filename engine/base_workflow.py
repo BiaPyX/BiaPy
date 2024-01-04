@@ -12,8 +12,6 @@ from abc import ABCMeta, abstractmethod
 from sklearn.model_selection import StratifiedKFold
 import torch.multiprocessing as mp
 import torch.distributed as dist
-import bioimageio.core
-import xarray as xr
 
 from models import build_model, build_torchvision_model
 from engine import prepare_optimizer, build_callbacks
@@ -124,6 +122,9 @@ class Base_Workflow(metaclass=ABCMeta):
         # Load Bioimage model Zoo pretrained model information
         self.torchvision_preprocessing = None
         if self.cfg.MODEL.SOURCE == "bmz":
+            import bioimageio.core
+            import xarray as xr
+
             print("Loading Bioimage Model Zoo pretrained model . . .")
             self.bmz_model_resource = bioimageio.core.load_resource_description(self.cfg.MODEL.BMZ.SOURCE_MODEL_DOI)
         
