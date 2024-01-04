@@ -841,13 +841,11 @@ class Base_Workflow(metaclass=ABCMeta):
         data_shape = self._X.shape
         # Consider only one image (remove 'T'), as it is for instance (1, 700, 3, 15000, 15000) in "TZCYX"
         if 'T' in self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER:
-            if len(self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER) == self._X.ndim:
-                self._X = self._X[0] 
-            else:
+            if len(self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER) != self._X.ndim:
                 data_shape = (1,)+data_shape
         else:
             data_shape = (1,)+data_shape
-
+        
         if len(self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER) != self._X.ndim:
             if 'T' in self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER and \
                 len(self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER)-1 != self._X.ndim:

@@ -765,11 +765,21 @@ def extract_3D_patch_with_overlap_yield(data, vol_shape, axis_order, overlap=(0,
         y_dim = data_shape[1]
         x_dim = data_shape[2]
         c_dim = data_shape[3]
-    else:
+    elif 'TZYXC' in axis_order:
+        z_dim = data_shape[1]
+        y_dim = data_shape[2]
+        x_dim = data_shape[3]
+        c_dim = data_shape[4]
+    elif 'ZCYX' in axis_order:
         z_dim = data_shape[0]
         c_dim = data_shape[1]
         y_dim = data_shape[2]
         x_dim = data_shape[3]
+    else: # 'TZCYX'
+        z_dim = data_shape[1]
+        c_dim = data_shape[2]
+        y_dim = data_shape[3]
+        x_dim = data_shape[4]
 
     if vol_shape[0] > z_dim:
         raise ValueError("'vol_shape[0]' {} greater than {} (you can reduce 'DATA.PATCH_SIZE')"
@@ -872,8 +882,17 @@ def extract_3D_patch_with_overlap_yield(data, vol_shape, axis_order, overlap=(0,
                     img = data[start_z:finish_z,
                                start_y:finish_y,
                                start_x:finish_x]
-                else:
+                elif 'TZYXC' in axis_order:
+                    img = data[0,start_z:finish_z,
+                               start_y:finish_y,
+                               start_x:finish_x]
+                elif 'ZCYX' in axis_order:
                     img = data[start_z:finish_z,
+                               :,
+                               start_y:finish_y,
+                               start_x:finish_x].transpose((0,2,3,1))
+                else: # 'TZCYX'
+                    img = data[0,start_z:finish_z,
                                :,
                                start_y:finish_y,
                                start_x:finish_x].transpose((0,2,3,1))
