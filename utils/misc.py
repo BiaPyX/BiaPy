@@ -14,9 +14,6 @@ from pathlib import Path
 # from torch._six import inf
 from torch import inf
 from datetime import timedelta
-from bioimageio.core.build_spec import build_model
-from bioimageio.core.resource_tests import test_model
-from bioimageio.core import load_resource_description
 
 original_print = builtins.print
 
@@ -458,6 +455,10 @@ def export_model_to_bmz(cfg, jobname, model, test_input, test_output):
     test_output : 3D/4D Torch tensor
         Test output image sample. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
     """
+    from bioimageio.core.build_spec import build_model
+    from bioimageio.core.resource_tests import test_model
+    from bioimageio.core import load_resource_description
+
     # Save input/output samples
     os.makedirs(cfg.PATHS.RESULT_DIR.BMZ_BUILD, exist_ok=True)
     input_sample_path = os.path.join(cfg.PATHS.RESULT_DIR.BMZ_BUILD, "test-input.npy")
