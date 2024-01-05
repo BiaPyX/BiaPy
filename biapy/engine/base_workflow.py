@@ -19,7 +19,7 @@ from biapy.data.generators import create_train_val_augmentors, create_test_augme
 from biapy.utils.misc import (get_world_size, get_rank, is_main_process, save_model, time_text, load_model_checkpoint, TensorboardLogger,
     to_pytorch_format, to_numpy_format, is_dist_avail_and_initialized, setup_for_distributed, export_model_to_bmz)
 from biapy.utils.util import (load_data_from_dir, load_3d_images_from_dir, create_plots, pad_and_reflect, save_tif, check_downsample_division,
-    read_chunked_data)
+    read_chunked_data, order_dimensions)
 from biapy.engine.train_engine import train_one_epoch, evaluate
 from biapy.data.data_2D_manipulation import crop_data_with_overlap, merge_data_with_overlap, load_and_prepare_2D_train_data
 from biapy.data.data_3D_manipulation import (crop_3D_data_with_overlap, merge_3D_data_with_overlap, load_and_prepare_3D_data,
@@ -845,11 +845,11 @@ class Base_Workflow(metaclass=ABCMeta):
         if self._X.ndim < 3:
             raise ValueError("Loaded image need to have at least 3 dimensions: {} (ndim: {})".format(self._X.shape, self._X.ndim))
 
-        # if 'T' in self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER:
-        #     if len(self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER) > len(data_shape):
-        #         pass #data_shape = (1,)+data_shape
-        # else:
-        #     data_shape = (1,)+data_shape
+        if 'T' in self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER:
+            if len(self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER) > len(data_shape):
+                data_shape = (1,)+data_shape
+        else:
+            data_shape = (1,)+data_shape
 
         if len(self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER) != self._X.ndim:
             raise ValueError("'TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER' value {} does not match the number of dimensions of the loaded H5/Zarr "
@@ -1010,14 +1010,9 @@ class Base_Workflow(metaclass=ABCMeta):
                     pred_div = fid_div.create_dataset("data", shape=pred.shape, dtype=pred.dtype)
 
                 # Fill the new data
-                if "ZYXC" in self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER:
-                    z_dim = data_shape[0]
-                    y_dim = data_shape[1]
-                    x_dim = data_shape[2]
-                else:
-                    z_dim = data_shape[0]
-                    y_dim = data_shape[2]
-                    x_dim = data_shape[3]
+
+                t_dim, z_dim, c_dim, y_dim, x_dim = order_dimensions(
+                    data_shape, self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER)
 
                 z_vols = math.ceil(z_dim/self.cfg.DATA.PATCH_SIZE[0])
                 y_vols = math.ceil(y_dim/self.cfg.DATA.PATCH_SIZE[1])
@@ -1025,29 +1020,22 @@ class Base_Workflow(metaclass=ABCMeta):
                 for z in tqdm(range(z_vols)):
                     for y in range(y_vols):
                         for x in range(x_vols):
-                            if "ZYXC" in self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER:
-                                pred_div[:,z*self.cfg.DATA.PATCH_SIZE[0]:min(z_dim,self.cfg.DATA.PATCH_SIZE[0]*(z+1)),
-                                         y*self.cfg.DATA.PATCH_SIZE[1]:min(y_dim,self.cfg.DATA.PATCH_SIZE[1]*(y+1)),
-                                         x*self.cfg.DATA.PATCH_SIZE[2]:min(x_dim,self.cfg.DATA.PATCH_SIZE[2]*(x+1))] = \
-                                    pred[:,z*self.cfg.DATA.PATCH_SIZE[0]:min(z_dim,self.cfg.DATA.PATCH_SIZE[0]*(z+1)),
-                                         y*self.cfg.DATA.PATCH_SIZE[1]:min(y_dim,self.cfg.DATA.PATCH_SIZE[1]*(y+1)),
-                                         x*self.cfg.DATA.PATCH_SIZE[2]:min(x_dim,self.cfg.DATA.PATCH_SIZE[2]*(x+1))] / \
-                                    mask[:,z*self.cfg.DATA.PATCH_SIZE[0]:min(z_dim,self.cfg.DATA.PATCH_SIZE[0]*(z+1)),
-                                         y*self.cfg.DATA.PATCH_SIZE[1]:min(y_dim,self.cfg.DATA.PATCH_SIZE[1]*(y+1)),
-                                         x*self.cfg.DATA.PATCH_SIZE[2]:min(x_dim,self.cfg.DATA.PATCH_SIZE[2]*(x+1))]
-                            else:
-                                pred_div[:,z*self.cfg.DATA.PATCH_SIZE[0]:min(z_dim,self.cfg.DATA.PATCH_SIZE[0]*(z+1)),
-                                         :,
-                                         y*self.cfg.DATA.PATCH_SIZE[1]:min(y_dim,self.cfg.DATA.PATCH_SIZE[1]*(y+1)),
-                                         x*self.cfg.DATA.PATCH_SIZE[2]:min(x_dim,self.cfg.DATA.PATCH_SIZE[2]*(x+1))] = \
-                                    pred[:,z*self.cfg.DATA.PATCH_SIZE[0]:min(z_dim,self.cfg.DATA.PATCH_SIZE[0]*(z+1)),
-                                         :,
-                                         y*self.cfg.DATA.PATCH_SIZE[1]:min(y_dim,self.cfg.DATA.PATCH_SIZE[1]*(y+1)),
-                                         x*self.cfg.DATA.PATCH_SIZE[2]:min(x_dim,self.cfg.DATA.PATCH_SIZE[2]*(x+1))] / \
-                                    mask[:,z*self.cfg.DATA.PATCH_SIZE[0]:min(z_dim,self.cfg.DATA.PATCH_SIZE[0]*(z+1)),
-                                         :,
-                                         y*self.cfg.DATA.PATCH_SIZE[1]:min(y_dim,self.cfg.DATA.PATCH_SIZE[1]*(y+1)),
-                                         x*self.cfg.DATA.PATCH_SIZE[2]:min(x_dim,self.cfg.DATA.PATCH_SIZE[2]*(x+1))]
+
+                            slices = [
+                                slice(z*self.cfg.DATA.PATCH_SIZE[0], min(z_dim,self.cfg.DATA.PATCH_SIZE[0]*(z+1))),
+                                slice(y*self.cfg.DATA.PATCH_SIZE[1], min(y_dim,self.cfg.DATA.PATCH_SIZE[1]*(y+1))),
+                                slice(x*self.cfg.DATA.PATCH_SIZE[2], min(x_dim,self.cfg.DATA.PATCH_SIZE[2]*(x+1))),
+                                slice(None), # Channel
+                            ]
+
+                            data_ordered_slices = order_dimensions(
+                                slices,
+                                input_order="ZYXC",
+                                output_order=cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
+                                default_value=0)
+
+                            pred_div[data_ordered_slices] = pred[data_ordered_slices] / mask[data_ordered_slices]
+
                     if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
                         fid_div.flush()
 
@@ -1632,15 +1620,14 @@ def insert_patch_into_dataset(data_filename, data_filename_mask, data_shape, out
         p, m, patch_coords = output_queue.get(timeout=60)
 
         if 'data' not in locals():
-            if "ZYXC" in cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER:
-                s = data_shape+(p.shape[-1],) if len(data_shape) == 3 else data_shape[:-1]+(p.shape[-1],)
-            else: # "ZCYX"
-                s = list(data_shape)
-                if len(data_shape) == 4:
-                    s[1] = p.shape[-1]
-                else:
-                    s[2] = p.shape[-1]
-                s = tuple(s)
+
+            # Channel dimension should be equal to the number of channel of the prediction
+            s = np.array(data_shape)
+            c_dim_index = cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER.index("C")
+            if c_dim_index != -1: # if Channel exists
+                s[c_dim_index] = p.shape[-1]
+            else: # else, add it
+                s = np.append(s, p.shape[-1])
 
             if file_type == "h5":
                 data = fid.create_dataset("data", s, dtype=dtype_str, compression="gzip")
@@ -1649,23 +1636,30 @@ def insert_patch_into_dataset(data_filename, data_filename_mask, data_shape, out
                 data = fid.create_dataset("data", shape=s, dtype=dtype_str)
                 mask = fid_mask.create_dataset("data", shape=s, dtype=dtype_str)
 
-        # Insert the patch into its original
-        if "ZYXC" in cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER:
-            data[0,patch_coords[0][0]:patch_coords[0][1],
-                 patch_coords[1][0]:patch_coords[1][1],
-                 patch_coords[2][0]:patch_coords[2][1]] += p
-            mask[0,patch_coords[0][0]:patch_coords[0][1],
-                 patch_coords[1][0]:patch_coords[1][1],
-                 patch_coords[2][0]:patch_coords[2][1]] += m
-        else:
-            data[0,patch_coords[0][0]:patch_coords[0][1],
-                 :,
-                 patch_coords[1][0]:patch_coords[1][1],
-                 patch_coords[2][0]:patch_coords[2][1]] += p.transpose(t_axes)
-            mask[0,patch_coords[0][0]:patch_coords[0][1],
-                 :,
-                 patch_coords[1][0]:patch_coords[1][1],
-                 patch_coords[2][0]:patch_coords[2][1]] += m.transpose(t_axes)
+        slices = [
+            slice(patch_coords[0][0],patch_coords[0][1]),
+            slice(patch_coords[1][0],patch_coords[1][1]),
+            slice(patch_coords[2][0],patch_coords[2][1]),
+            slice(None), # Channel
+            ]
+
+        data_ordered_slices = order_dimensions(
+            slices,
+            input_order="ZYXC",
+            output_order=cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
+            default_value=0)
+
+        current_order = np.array(range(len(data.shape)))
+        transpose_order = order_dimensions(
+                    current_order,
+                    input_order="ZYXC",
+                    output_order=cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
+                    default_value=np.nan)
+
+        transpose_order = [x for x in transpose_order if not np.isnan(x)]
+
+        data[data_ordered_slices] += p.transpose(transpose_order)
+        mask[data_ordered_slices] += m.transpose(transpose_order)
 
         # Force flush after some iterations
         if i % cfg.TEST.BY_CHUNKS.FLUSH_EACH == 0 and file_type == "h5":
