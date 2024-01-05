@@ -5,10 +5,10 @@ from skimage.io import imread
 from tqdm import tqdm
 from sklearn.model_selection import train_test_split, StratifiedKFold
 
-from biapy.utils.util import load_3d_images_from_dir
+from biapy.utils.util import load_3d_images_from_dir, order_dimensions
 
-def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross_val_nsplits=5, cross_val_fold=1, 
-    val_split=0.1, seed=0, shuffle_val=True, crop_shape=(80, 80, 80, 1), y_upscaling=1, random_crops_in_DA=False, 
+def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross_val_nsplits=5, cross_val_fold=1,
+    val_split=0.1, seed=0, shuffle_val=True, crop_shape=(80, 80, 80, 1), y_upscaling=1, random_crops_in_DA=False,
     ov=(0,0,0), padding=(0,0,0), minimum_foreground_perc=-1, reflect_to_complete_shape=False, convert_to_rgb=False):
     """
     Load train and validation images from the given paths to create 3D data.
@@ -22,13 +22,13 @@ def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross
         Path to the training data masks.
 
     cross_val : bool, optional
-        Whether to use cross validation or not. 
+        Whether to use cross validation or not.
 
     cross_val_nsplits : int, optional
-        Number of folds for the cross validation. 
-    
+        Number of folds for the cross validation.
+
     cross_val_fold : int, optional
-        Number of the fold to be used as validation. 
+        Number of the fold to be used as validation.
 
     val_split : float, optional
         ``%`` of the train data used as validation (value between ``0`` and ``1``).
@@ -57,17 +57,17 @@ def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross
         Size of padding to be added on each axis ``(z, y, x)``. E.g. ``(24, 24, 24)``.
 
     minimum_foreground_perc : float, optional
-        Minimum percetnage of foreground that a sample need to have no not be discarded. 
+        Minimum percetnage of foreground that a sample need to have no not be discarded.
 
     reflect_to_complete_shape : bool, optional
         Wheter to increase the shape of the dimension that have less size than selected patch size padding it with
         'reflect'.
 
     self_supervised_args : dict, optional
-        Arguments to create ground truth data for self-supervised workflow. 
+        Arguments to create ground truth data for self-supervised workflow.
 
     convert_to_rgb : bool, optional
-        In case RGB images are expected, e.g. if ``crop_shape`` channel is 3, those images that are grayscale are 
+        In case RGB images are expected, e.g. if ``crop_shape`` channel is 3, those images that are grayscale are
         converted into RGB.
 
     Returns
@@ -117,19 +117,19 @@ def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross
 
     # Disable crops when random_crops_in_DA is selected
     if random_crops_in_DA:
-        crop = False  
+        crop = False
     else:
         if cross_val:
             crop = False
             # Delay the crop to be made after cross validation
-            delay_crop = True  
+            delay_crop = True
         else:
             crop = True
-            delay_crop = False  
+            delay_crop = False
 
     # Check validation
     if val_split > 0 or cross_val:
-        create_val = True  
+        create_val = True
     else:
         create_val = False
 
@@ -152,7 +152,7 @@ def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross
                                   "have the same shape. Please, crop them into your DATA.PATCH_SIZE and run again (you "
                                   "can use one of the script from here to crop: https://github.com/danifranco/BiaPy/tree/master/utils/scripts)")
 
-    # Discard images that do not surpass the foreground percentage threshold imposed 
+    # Discard images that do not surpass the foreground percentage threshold imposed
     if minimum_foreground_perc != -1 and Y_train is not None:
         print("Data that do not have {}% of foreground is discarded".format(minimum_foreground_perc))
 
@@ -167,7 +167,7 @@ def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross
             total_pixels = 1
             for val in list(Y_train[i].shape):
                 total_pixels *= val
-            
+
             discard = False
             if len(labels) == 1:
                 discard = True
@@ -185,19 +185,19 @@ def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross
                     X_train_keep.append(np.expand_dims(X_train[i],0))
                     Y_train_keep.append(np.expand_dims(Y_train[i],0))
         del X_train, Y_train
-        
+
         if not are_lists:
             X_train_keep = np.concatenate(X_train_keep)
             Y_train_keep = np.concatenate(Y_train_keep)
-        
-        # Rename 
-        X_train, Y_train = X_train_keep, Y_train_keep 
-        del X_train_keep, Y_train_keep 
 
-        print("{} samples discarded!".format(samples_discarded)) 
-        if type(Y_train) is not list:      
+        # Rename
+        X_train, Y_train = X_train_keep, Y_train_keep
+        del X_train_keep, Y_train_keep
+
+        print("{} samples discarded!".format(samples_discarded))
+        if type(Y_train) is not list:
             print("*** Remaining data shape is {}".format(X_train.shape))
-            if X_train.shape[0] <= 1 and create_val: 
+            if X_train.shape[0] <= 1 and create_val:
                 raise ValueError("0 or 1 sample left to train, which is insufficent. "
                 "Please, decrease the percentage to be more permissive")
         else:
@@ -209,7 +209,7 @@ def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross
     if Y_train is not None and len(X_train) != len(Y_train):
         raise ValueError("Different number of raw and ground truth items ({} vs {}). "
             "Please check the data!".format(len(X_train), len(Y_train)))
-            
+
     # Create validation data splitting the train
     if create_val:
         print("Creating validation data")
@@ -249,7 +249,7 @@ def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross
                 for img_num in range(len(X_train)):
                     if X_train[img_num].shape != crop_shape[:3]+(X_train[img_num].shape[-1],):
                         img = X_train[img_num]
-                        img = crop_3D_data_with_overlap(X_train[img_num][0] if isinstance(X_train, list) else X_train[img_num], 
+                        img = crop_3D_data_with_overlap(X_train[img_num][0] if isinstance(X_train, list) else X_train[img_num],
                             crop_shape[:3]+(X_train[img_num].shape[-1],), overlap=ov, padding=padding, verbose=False)
                     data.append(img)
                 X_train = np.concatenate(data)
@@ -267,13 +267,13 @@ def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross
                         data_mask.append(img)
                     Y_train = np.concatenate(data_mask)
                     del data_mask
-                    
+
                 # X_val
                 data = []
                 for img_num in range(len(X_val)):
                     if X_val[img_num].shape != crop_shape[:3]+(X_val[img_num].shape[-1],):
                         img = X_val[img_num]
-                        img = crop_3D_data_with_overlap(X_val[img_num][0] if isinstance(X_val, list) else X_val[img_num], 
+                        img = crop_3D_data_with_overlap(X_val[img_num][0] if isinstance(X_val, list) else X_val[img_num],
                             crop_shape[:3]+(X_val[img_num].shape[-1],), overlap=ov, padding=padding, verbose=False)
                     data.append(img)
                 X_val = np.concatenate(data)
@@ -476,7 +476,7 @@ def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0), 
         print("Real overlapping (pixels): {}".format(((vol_shape[0]-padding[0]*2)*real_ov_z,
               (vol_shape[1]-padding[1]*2)*real_ov_y,(vol_shape[2]-padding[2]*2)*real_ov_x)))
         print("{} patches per (z,y,x) axis".format((vols_per_z,vols_per_x,vols_per_y)))
-    
+
     total_vol = vols_per_z*vols_per_y*vols_per_x
     cropped_data = np.zeros((total_vol,) + padded_vol_shape, dtype=data.dtype)
     if data_mask is not None:
@@ -611,7 +611,7 @@ def merge_3D_data_with_overlap(data, orig_vol_shape, data_mask=None, overlap=(0,
     overlap_z = 1 if overlap[0] == 0 else 1-overlap[0]
     overlap_y = 1 if overlap[1] == 0 else 1-overlap[1]
     overlap_x = 1 if overlap[2] == 0 else 1-overlap[2]
-    
+
     padded_vol_shape = [orig_vol_shape[0]+2*padding[0], orig_vol_shape[1]+2*padding[1], orig_vol_shape[2]+2*padding[2]]
 
     # Z
@@ -639,9 +639,9 @@ def merge_3D_data_with_overlap(data, orig_vol_shape, data_mask=None, overlap=(0,
     last_x -= ovx_per_block*(vols_per_x-1)
 
     # Real overlap calculation for printing
-    real_ov_z = ovz_per_block/(pad_input_shape[1]-padding[0]*2) 
-    real_ov_y = ovy_per_block/(pad_input_shape[2]-padding[1]*2) 
-    real_ov_x = ovx_per_block/(pad_input_shape[3]-padding[2]*2) 
+    real_ov_z = ovz_per_block/(pad_input_shape[1]-padding[0]*2)
+    real_ov_y = ovy_per_block/(pad_input_shape[2]-padding[1]*2)
+    real_ov_x = ovx_per_block/(pad_input_shape[3]-padding[2]*2)
 
     if verbose:
         print("Real overlapping (%): {}".format((real_ov_z,real_ov_y,real_ov_x)))
@@ -683,13 +683,13 @@ def merge_3D_data_with_overlap(data, orig_vol_shape, data_mask=None, overlap=(0,
     else:
         return merged_data
 
-def extract_3D_patch_with_overlap_yield(data, vol_shape, axis_order, overlap=(0,0,0), padding=(0,0,0), total_ranks=1, 
+def extract_3D_patch_with_overlap_yield(data, vol_shape, axis_order, overlap=(0,0,0), padding=(0,0,0), total_ranks=1,
     rank=0, verbose=False):
     """
     Extract 3D patches into smaller patches with a defined overlap. Is supports multi-GPU inference
-    by setting ``total_ranks`` and ``rank`` variables. Each GPU will process a evenly number of 
-    volumes in ``Z`` axis. If the number of volumes in ``Z`` to be yielded are not divisible by the 
-    number of GPUs the first GPUs will process one more volume. 
+    by setting ``total_ranks`` and ``rank`` variables. Each GPU will process a evenly number of
+    volumes in ``Z`` axis. If the number of volumes in ``Z`` to be yielded are not divisible by the
+    number of GPUs the first GPUs will process one more volume.
 
     Parameters
     ----------
@@ -706,7 +706,7 @@ def extract_3D_patch_with_overlap_yield(data, vol_shape, axis_order, overlap=(0,
         Amount of minimum overlap on x, y and z dimensions. Should be the same as used in
         :func:`~crop_3D_data_with_overlap`. The values must be on range ``[0, 1)``, that is, ``0%`` or ``99%`` of
         overlap. E.g. ``(z, y, x)``.
-        
+
     padding : tuple of ints, optional
         Size of padding to be added on each axis ``(z, y, x)``. E.g. ``(24, 24, 24)``.
 
@@ -714,10 +714,10 @@ def extract_3D_patch_with_overlap_yield(data, vol_shape, axis_order, overlap=(0,
         Total number of GPUs.
 
     rank : int, optional
-        Rank of the current GPU. 
+        Rank of the current GPU.
 
     verbose : bool, optional
-        To print useful information for debugging. 
+        To print useful information for debugging.
 
     Yields
     ------
@@ -725,38 +725,32 @@ def extract_3D_patch_with_overlap_yield(data, vol_shape, axis_order, overlap=(0,
         Extracted patch from ``data``. E.g. ``(z, y, x, channels)``.
 
     real_patch_in_data : Tuple of tuples of ints
-        Coordinates of patch of each axis. Needed to reconstruct the entire image. 
+        Coordinates of patch of each axis. Needed to reconstruct the entire image.
         E.g. ``((0, 20), (0, 8), (16, 24))`` means that the yielded patch should be
         inserted in possition [0:20,0:8,16:24]. This calculate the padding made, so
-        only a portion of the real ``vol_shape`` is used. 
+        only a portion of the real ``vol_shape`` is used.
 
     total_vol : int
-        Total number of crops to extract. 
+        Total number of crops to extract.
 
     z_vol_info : dict, optional
-        Information of how the volumes in ``Z`` are inserted into the original data size. 
-        E.g. ``{0: [0, 20], 1: [20, 40], 2: [40, 60], 3: [60, 80], 4: [80, 100]}`` means that 
-        the first volume will be place in ``[0:20]`` position, the second will be placed in 
-        ``[20:40]`` and so on. 
+        Information of how the volumes in ``Z`` are inserted into the original data size.
+        E.g. ``{0: [0, 20], 1: [20, 40], 2: [40, 60], 3: [60, 80], 4: [80, 100]}`` means that
+        the first volume will be place in ``[0:20]`` position, the second will be placed in
+        ``[20:40]`` and so on.
 
     list_of_vols_in_z : list of list of int, optional
         Volumes in ``Z`` axis that each GPU will process. E.g. ``[[0, 1, 2], [3, 4]]`` means that
-        the first GPU will process volumes ``0``, ``1`` and ``2`` (``3`` in total) whereas the second 
-        GPU will process volumes ``3`` and ``4``. 
+        the first GPU will process volumes ``0``, ``1`` and ``2`` (``3`` in total) whereas the second
+        GPU will process volumes ``3`` and ``4``.
     """
+
     if verbose and rank == 0:
         print("### 3D-OV-CROP ###")
         print("Cropping {} images into {} with overlapping (axis order: {}). . .".format(data.shape, vol_shape, axis_order))
         print("Minimum overlap selected: {}".format(overlap))
         print("Padding: {}".format(padding))
 
-    data_shape = data.shape if data.ndim == 4 else data.shape + (1,)
-        
-    if len(data_shape) != 4:
-        raise ValueError("data expected to be 4 dimensional, given {}".format(data_shape))
-
-    if len(data_shape) != 4:
-        raise ValueError("data expected to be 4 dimensional, given {}".format(data_shape))
     if len(vol_shape) != 4:
         raise ValueError("vol_shape expected to be of length 4, given {}".format(vol_shape))
 
@@ -776,7 +770,7 @@ def extract_3D_patch_with_overlap_yield(data, vol_shape, axis_order, overlap=(0,
     for i,p in enumerate(padding):
         if p >= vol_shape[i]//2:
             raise ValueError("'Padding' can not be greater than the half of 'vol_shape'. Max value for this {} input shape is {}"
-                             .format(data_shape, [(vol_shape[0]//2)-1,(vol_shape[1]//2)-1,(vol_shape[2]//2)-1]))
+                             .format(data.shape, [(vol_shape[0]//2)-1,(vol_shape[1]//2)-1,(vol_shape[2]//2)-1]))
 
     padded_data_shape = [z_dim+padding[0]*2,y_dim+padding[1]*2,x_dim+padding[2]*2,c_dim]
     padded_vol_shape = vol_shape
@@ -819,10 +813,10 @@ def extract_3D_patch_with_overlap_yield(data, vol_shape, axis_order, overlap=(0,
         print("Real overlapping (pixels): {}".format(((vol_shape[0]-padding[0]*2)*real_ov_z,
               (vol_shape[1]-padding[1]*2)*real_ov_y,(vol_shape[2]-padding[2]*2)*real_ov_x)))
         print("{} patches per (z,y,x) axis".format((vols_per_z,vols_per_x,vols_per_y)))
-    
+
     vols_in_z = vols_per_z//total_ranks
     vols_per_z_per_rank = vols_in_z
-    if vols_per_z%total_ranks > rank: 
+    if vols_per_z%total_ranks > rank:
         vols_per_z_per_rank += 1
     total_vol = vols_per_z_per_rank*vols_per_y*vols_per_x
 
@@ -902,7 +896,7 @@ def extract_3D_patch_with_overlap_yield(data, vol_shape, axis_order, overlap=(0,
                     img = np.pad(img,((pad_z_left,pad_z_right),(pad_y_left,pad_y_right),(pad_x_left,pad_x_right),(0,0)), 'reflect')
 
                 assert img.shape == vol_shape, "Something went wrong during the patch extraction!"
-                
+
                 real_patch_in_data = [
                     [z*step_z-d_z,(z*step_z)+vol_shape[0]-d_z-(padding[0]*2)],
                     [y*step_y-d_y,(y*step_y)+vol_shape[1]-d_y-(padding[1]*2)],
@@ -915,7 +909,7 @@ def extract_3D_patch_with_overlap_yield(data, vol_shape, axis_order, overlap=(0,
                     yield img, real_patch_in_data, total_vol
 
 
-def load_3d_data_classification(data_dir, patch_shape, convert_to_rgb=False, expected_classes=None, cross_val=False, cross_val_nsplits=5, 
+def load_3d_data_classification(data_dir, patch_shape, convert_to_rgb=False, expected_classes=None, cross_val=False, cross_val_nsplits=5,
     cross_val_fold=1, val_split=0.1, seed=0, shuffle_val=True):
     """
     Load 3D data to train classification methods.
@@ -929,20 +923,20 @@ def load_3d_data_classification(data_dir, patch_shape, convert_to_rgb=False, exp
         Shape of the patch. E.g. ``(z, y, x, channels)``.
 
     convert_to_rgb : bool, optional
-        In case RGB images are expected, e.g. if ``crop_shape`` channel is 3, those images that are grayscale are 
+        In case RGB images are expected, e.g. if ``crop_shape`` channel is 3, those images that are grayscale are
         converted into RGB.
 
     expected_classes : int, optional
-        Expected number of classes to be loaded. 
+        Expected number of classes to be loaded.
 
     cross_val : bool, optional
-        Whether to use cross validation or not. 
+        Whether to use cross validation or not.
 
     cross_val_nsplits : int, optional
-        Number of folds for the cross validation. 
-    
+        Number of folds for the cross validation.
+
     cross_val_fold : int, optional
-        Number of the fold to be used as validation. 
+        Number of the fold to be used as validation.
 
     val_split : float, optional
         % of the train data used as validation (value between ``0`` and ``1``).
@@ -966,7 +960,7 @@ def load_3d_data_classification(data_dir, patch_shape, convert_to_rgb=False, exp
 
     Y_val : 1D Numpy array, optional
         Validation images' classes. E.g. ``(num_of_images)``.
-    
+
     all_ids : List of str
         Loaded data filenames.
 
@@ -978,7 +972,7 @@ def load_3d_data_classification(data_dir, patch_shape, convert_to_rgb=False, exp
 
     # Check validation
     if val_split > 0 or cross_val:
-        create_val = True  
+        create_val = True
     else:
         create_val = False
 
@@ -987,7 +981,7 @@ def load_3d_data_classification(data_dir, patch_shape, convert_to_rgb=False, exp
     if len(class_names) < 1:
         raise ValueError("There is no folder/class in {}".format(data_dir))
     if expected_classes is not None:
-        if expected_classes != len(class_names): 
+        if expected_classes != len(class_names):
             raise ValueError("Found number of classes ({}) and 'MODEL.N_CLASSES' ({}) must match"
                 .format(len(class_names), expected_classes))
         else:
@@ -1003,8 +997,8 @@ def load_3d_data_classification(data_dir, patch_shape, convert_to_rgb=False, exp
         else:
             print("Found {} samples".format(len(ids)))
 
-        # Loading images 
-        images, _, _, image_ids = load_3d_images_from_dir(f, return_filenames=True, crop_shape=patch_shape, 
+        # Loading images
+        images, _, _, image_ids = load_3d_images_from_dir(f, return_filenames=True, crop_shape=patch_shape,
             convert_to_rgb=convert_to_rgb)
 
         X_data.append(images)

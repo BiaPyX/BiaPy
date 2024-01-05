@@ -7,7 +7,7 @@ from biapy.utils.util import check_value
 
 def check_configuration(cfg, check_data_paths=True):
     """
-    Check if the configuration is good. 
+    Check if the configuration is good.
     """
 
     dim_count = 2 if cfg.PROBLEM.NDIM == '2D' else 3
@@ -28,7 +28,7 @@ def check_configuration(cfg, check_data_paths=True):
         if cfg.DATA.TEST.PADDING == (0,0):
             opts.extend(['DATA.TEST.PADDING', (0,0,0)])
 
-    # Adjust channel weights 
+    # Adjust channel weights
     if cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
         if not 'Dv2' in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
             channels_provided = len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
@@ -36,7 +36,7 @@ def check_configuration(cfg, check_data_paths=True):
             channels_provided = len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS.replace('Dv2',''))+1
         if len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS) != channels_provided:
             if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS == (1, 1):
-                opts.extend(['PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS', (1,)*channels_provided])    
+                opts.extend(['PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS', (1,)*channels_provided])
 
     if cfg.DATA.TRAIN.MINIMUM_FOREGROUND_PER != -1:
         if not check_value(cfg.DATA.TRAIN.MINIMUM_FOREGROUND_PER):
@@ -56,7 +56,7 @@ def check_configuration(cfg, check_data_paths=True):
     if cfg.TEST.POST_PROCESSING.DET_WATERSHED:
         for x in cfg.TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION:
             if not isinstance(x, list):
-                raise ValueError("'TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION' need to be a list of list") 
+                raise ValueError("'TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION' need to be a list of list")
             if any(y == -1 for y in x):
                 raise ValueError("Please set 'TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION' when using 'TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION'")
             if len(x) != dim_count:
@@ -68,7 +68,7 @@ def check_configuration(cfg, check_data_paths=True):
                 raise ValueError("'TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES' can not have a class number greater than 'MODEL.N_CLASSES'")
             min_class = np.min(cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES)
             if not all(cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES == np.array(range(min_class,len(cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES)+1))):
-                raise ValueError("'TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES' must be consecutive, e.g [1,2,3,4..]") 
+                raise ValueError("'TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES' must be consecutive, e.g [1,2,3,4..]")
             if len(cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_PATCH) != dim_count:
                 raise ValueError("'TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_PATCH' need to be of dimension {} for {} problem".format(dim_count, cfg.PROBLEM.NDIM))
 
@@ -76,7 +76,7 @@ def check_configuration(cfg, check_data_paths=True):
         for i in range(len(cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES)):
             if len(cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES[i]) > 1:
                 raise ValueError("In DETECTION 'TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES' can only be used for filtering 'circularity'.")
-            if len(cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES[i]) == 1 and cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES[i][0] != 'circularity':  
+            if len(cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES[i]) == 1 and cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES[i][0] != 'circularity':
                 raise ValueError("In DETECTION 'TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES' can only be used for filtering 'circularity'.")
 
     for i in range(len(cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES)):
@@ -95,7 +95,7 @@ def check_configuration(cfg, check_data_paths=True):
         if len(cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES[i]) > 0 and cfg.PROBLEM.TYPE not in ['INSTANCE_SEG', 'DETECTION']:
             raise ValueError("'TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES' can only be used in INSTANCE_SEG and DETECTION workflows")
 
-        # Check for unique values 
+        # Check for unique values
         if len([item for item, count in collections.Counter(cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES[i]).items() if count > 1]) > 0:
             raise ValueError("Non repeated values are allowed in 'TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES'")
         for j in range(len(cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES[i])):
@@ -105,8 +105,8 @@ def check_configuration(cfg, check_data_paths=True):
                 raise ValueError("'TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_SIGN' can only be one among these: ['gt', 'ge', 'lt', 'le']")
             if cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES[i][j] == "circularity" and not check_value(cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_VALUES[i][j]):
                 raise ValueError("Circularity can only have values in [0, 1] range (check  'TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_VALUES' values)")
-                
-    if cfg.PROBLEM.TYPE != 'INSTANCE_SEG':  
+
+    if cfg.PROBLEM.TYPE != 'INSTANCE_SEG':
         if cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK:
             raise ValueError("'TEST.POST_PROCESSING.VORONOI_ON_MASK' can only be enabled in a 'INSTANCE_SEG' problem")
     if cfg.TEST.POST_PROCESSING.DET_WATERSHED and cfg.PROBLEM.TYPE != 'DETECTION':
@@ -123,7 +123,7 @@ def check_configuration(cfg, check_data_paths=True):
         raise ValueError("'TEST.POST_PROCESSING.YZ_FILTERING' or 'TEST.POST_PROCESSING.Z_FILTERING' can only be enabled "
             "when 'PROBLEM.TYPE' is among ['SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION']")
 
-    # First update is done here as some checks from this point need to have those updates 
+    # First update is done here as some checks from this point need to have those updates
     if len(opts) > 0:
         cfg.merge_from_list(opts)
         opts = []
@@ -145,7 +145,7 @@ def check_configuration(cfg, check_data_paths=True):
 
     if cfg.LOSS.TYPE != "CE" and cfg.PROBLEM.TYPE not in ['SEMANTIC_SEG', 'DETECTION']:
         raise ValueError("Not implemented pipeline option: LOSS.TYPE != 'CE' only available in 'SEMANTIC_SEG' and 'DETECTION'")
-    
+
     if cfg.TEST.ENABLE and cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK and cfg.PROBLEM.NDIM == "3D":
         raise ValueError("'TEST.ANALIZE_2D_IMGS_AS_3D_STACK' makes no sense when the problem is 3D. Disable it.")
 
@@ -189,7 +189,7 @@ def check_configuration(cfg, check_data_paths=True):
                 raise ValueError("'MODEL.BMZ.EXPORT_MODEL.TAGS' can not be empty when 'MODEL.BMZ.EXPORT_MODEL.ENABLE' is True")
             for d in cfg.MODEL.BMZ.EXPORT_MODEL.TAGS:
                 if not isinstance(d, dict):
-                    raise ValueError("'MODEL.BMZ.EXPORT_MODEL.TAGS' must be a list of strings. E.g. [{'modality': 'electron-microscopy', 'content': 'mitochondria'}]")                    
+                    raise ValueError("'MODEL.BMZ.EXPORT_MODEL.TAGS' must be a list of strings. E.g. [{'modality': 'electron-microscopy', 'content': 'mitochondria'}]")
         if not isinstance(cfg.MODEL.BMZ.EXPORT_MODEL.CITE, list):
             raise ValueError("'MODEL.BMZ.EXPORT_MODEL.CITE' needs to be a list of dicts. E.g. [{'text': 'Gizmo et al.', 'doi': 'doi:10.1002/xyzacab123'}]")
         else:
@@ -210,7 +210,7 @@ def check_configuration(cfg, check_data_paths=True):
 
     if cfg.TEST.AUGMENTATION and cfg.TEST.REDUCE_MEMORY:
         raise ValueError("'TEST.AUGMENTATION' and 'TEST.REDUCE_MEMORY' are incompatible as the function used to make the rotation "
-            "does not support float16 data type.") 
+            "does not support float16 data type.")
 
     model_arch = cfg.MODEL.ARCHITECTURE.lower()
     #### Semantic segmentation ####
@@ -253,7 +253,7 @@ def check_configuration(cfg, check_data_paths=True):
                 raise ValueError("'PROBLEM.INSTANCE_SEG.DATA_CHANNELS' need to be one between ['BC', 'BCM', 'BCD', 'BCDv2'] "
                                 "when 'TEST.POST_PROCESSING.VORONOI_ON_MASK' is enabled")
             if not check_value(cfg.TEST.POST_PROCESSING.VORONOI_TH):
-                raise ValueError("'TEST.POST_PROCESSING.VORONOI_TH' not in [0, 1] range")   
+                raise ValueError("'TEST.POST_PROCESSING.VORONOI_TH' not in [0, 1] range")
         if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS not in ["BC", "BCM", "BCD", "BP"] and cfg.PROBLEM.INSTANCE_SEG.ERODE_AND_DILATE_FOREGROUND:
             raise ValueError("'PROBLEM.INSTANCE_SEG.ERODE_AND_DILATE_FOREGROUND' can only be used with 'BC', 'BCM', 'BP' or 'BCD' channels")
         for morph_operation in cfg.PROBLEM.INSTANCE_SEG.SEED_MORPH_SEQUENCE:
@@ -294,9 +294,9 @@ def check_configuration(cfg, check_data_paths=True):
             if any(len(x) != dim_count for x in cfg.TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION):
                 raise ValueError("Each structure object defined in 'TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION' "
                                  "need to be of {} dimension".format(dim_count))
-            if len(cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES[0]) != 0: 
+            if len(cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES[0]) != 0:
                 raise ValueError("'TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES' need to be set to 'circularity' filtering when 'TEST.POST_PROCESSING.DET_WATERSHED' is enabled")
-            if cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES[0][0] != 'circularity': 
+            if cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES[0][0] != 'circularity':
                 raise ValueError("'TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES' need to be set to 'circularity' filtering when 'TEST.POST_PROCESSING.DET_WATERSHED' is enabled")
         if cfg.TEST.DET_POINT_CREATION_FUNCTION not in ['peak_local_max', 'blob_log']:
             raise ValueError("'TEST.DET_POINT_CREATION_FUNCTION' must be one between: ['peak_local_max', 'blob_log']")
@@ -335,7 +335,7 @@ def check_configuration(cfg, check_data_paths=True):
                 raise ValueError("PROBLEM.SELF_SUPERVISED.NOISE not in [0, 1] range")
         elif cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
             if model_arch != 'mae':
-                raise ValueError("'MODEL.ARCHITECTURE' need to be 'mae' when 'PROBLEM.SELF_SUPERVISED.PRETEXT_TASK' is 'masking'")  
+                raise ValueError("'MODEL.ARCHITECTURE' need to be 'mae' when 'PROBLEM.SELF_SUPERVISED.PRETEXT_TASK' is 'masking'")
         else:
             raise ValueError("'PROBLEM.SELF_SUPERVISED.PRETEXT_TASK' need to be among these options: ['crappify', 'masking']")
         if cfg.MODEL.SOURCE == "torchvision":
@@ -349,7 +349,7 @@ def check_configuration(cfg, check_data_paths=True):
             raise ValueError("PROBLEM.DENOISING.N2V_PERC_PIX not in [0, 1] range")
         if cfg.MODEL.SOURCE == "torchvision":
             raise ValueError("'MODEL.SOURCE' as 'torchvision' is not available in super-resolution workflow")
-            
+
     #### Classification ####
     elif cfg.PROBLEM.TYPE == 'CLASSIFICATION':
         if cfg.TEST.BY_CHUNKS.ENABLE:
@@ -390,13 +390,13 @@ def check_configuration(cfg, check_data_paths=True):
                     "]")
             if cfg.PROBLEM.NDIM == '3D':
                 raise ValueError("TorchVision model's for classification are only available for 2D images")
-            
+
     ### Pre-processing ###
     if cfg.DATA.EXTRACT_RANDOM_PATCH and cfg.DATA.PROBABILITY_MAP:
         if cfg.DATA.W_FOREGROUND+cfg.DATA.W_BACKGROUND != 1:
             raise ValueError("cfg.DATA.W_FOREGROUND+cfg.DATA.W_BACKGROUND need to sum 1. E.g. 0.94 and 0.06 respectively.")
 
-    #### Data #### 
+    #### Data ####
     if cfg.TRAIN.ENABLE and check_data_paths:
         if not os.path.exists(cfg.DATA.TRAIN.PATH):
             raise ValueError("Train data dir not found: {}".format(cfg.DATA.TRAIN.PATH))
@@ -417,12 +417,10 @@ def check_configuration(cfg, check_data_paths=True):
             raise ValueError("'TEST.BY_CHUNKS' can not be activated when 'PROBLEM.NDIM' is 2D")
         assert cfg.TEST.BY_CHUNKS.FORMAT.lower() in ["h5", "zarr"], "'TEST.BY_CHUNKS.FORMAT' needs to be one between ['H5', 'Zarr']"
         opts.extend(['TEST.BY_CHUNKS.FORMAT', cfg.TEST.BY_CHUNKS.FORMAT.lower()])
-        if cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.ENABLE:     
+        if cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.ENABLE:
             assert cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE in ["chunk_by_chunk", "entire_pred"], \
                 "'TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE' needs to be one between ['chunk_by_chunk', 'entire_pred']"
-        if cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER not in ['TZCYX', 'TZYXC', 'ZCYX', 'ZYXC']:
-            raise ValueError("'TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER' can only be one between ['TZCYX', 'TZYXC', 'ZCYX', 'ZYXC']")
-            
+
     if cfg.TRAIN.ENABLE:
         if cfg.DATA.EXTRACT_RANDOM_PATCH and cfg.DATA.PROBABILITY_MAP:
             if not cfg.PROBLEM.TYPE == 'SEMANTIC_SEG':
@@ -430,11 +428,11 @@ def check_configuration(cfg, check_data_paths=True):
 
         if cfg.DATA.VAL.FROM_TRAIN and not cfg.DATA.VAL.CROSS_VAL and cfg.DATA.VAL.SPLIT_TRAIN <= 0:
             raise ValueError("'DATA.VAL.SPLIT_TRAIN' needs to be > 0 when 'DATA.VAL.FROM_TRAIN' == True")
-        
+
         if cfg.DATA.VAL.FROM_TRAIN and not cfg.DATA.TRAIN.IN_MEMORY:
             raise ValueError("Validation can not be extracted from train when 'DATA.TRAIN.IN_MEMORY' == False. Please set"
                              " 'DATA.VAL.FROM_TRAIN' to False and configure 'DATA.VAL.PATH'/'DATA.VAL.GT_PATH'")
-    if cfg.DATA.VAL.CROSS_VAL: 
+    if cfg.DATA.VAL.CROSS_VAL:
         if not cfg.DATA.VAL.FROM_TRAIN:
             raise ValueError("'DATA.VAL.CROSS_VAL' can only be used when 'DATA.VAL.FROM_TRAIN' is True")
         if cfg.DATA.VAL.CROSS_VAL_NFOLD < cfg.DATA.VAL.CROSS_VAL_FOLD:
@@ -498,7 +496,7 @@ def check_configuration(cfg, check_data_paths=True):
 
     ### Model ###
     if cfg.MODEL.SOURCE == "biapy":
-        assert model_arch in ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'simple_cnn', 'efficientnet_b0', 
+        assert model_arch in ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'simple_cnn', 'efficientnet_b0',
             'efficientnet_b1', 'efficientnet_b2', 'efficientnet_b3', 'efficientnet_b4','efficientnet_b5','efficientnet_b6','efficientnet_b7',
             'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae'],\
             "MODEL.ARCHITECTURE not in ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'simple_cnn', 'efficientnet_b[0-7]', 'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae']"
@@ -506,9 +504,9 @@ def check_configuration(cfg, check_data_paths=True):
             raise ValueError("For 3D these models are available: {}".format(['unet', 'resunet', 'resunet++', 'seunet', 'multiresunet', 'attention_unet', 'unetr', 'vit', 'mae']))
         if cfg.MODEL.N_CLASSES > 2 and cfg.PROBLEM.TYPE != "CLASSIFICATION" and model_arch not in ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'multiresunet']:
             raise ValueError("'MODEL.N_CLASSES' > 2 can only be used with 'MODEL.ARCHITECTURE' in ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'multiresunet']")
-        
+
         assert len(cfg.MODEL.FEATURE_MAPS) > 2, "'MODEL.FEATURE_MAPS' needs to have at least 3 values"
-        
+
         # Adjust dropout to feature maps
         if model_arch in ['vit', 'unetr', 'mae']:
             if all(x == 0 for x in cfg.MODEL.DROPOUT_VALUES):
@@ -549,7 +547,7 @@ def check_configuration(cfg, check_data_paths=True):
     if cfg.MODEL.SOURCE == "biapy":
         assert cfg.MODEL.LAST_ACTIVATION.lower() in ["relu", "tanh", "leaky_relu", "elu", "gelu", "silu", "sigmoid","softmax", "linear", "none"], \
             "Get unknown activation key {}".format(activation)
-    
+
         if cfg.MODEL.UPSAMPLE_LAYER.lower() not in ["upsampling", "convtranspose"]:
             raise ValueError("cfg.MODEL.UPSAMPLE_LAYER' needs to be one between ['upsampling', 'convtranspose']. Provided {}"
                             .format(cfg.MODEL.UPSAMPLE_LAYER))
@@ -558,7 +556,7 @@ def check_configuration(cfg, check_data_paths=True):
             raise ValueError("Not implemented pipeline option: semantic segmentation models are ['unet', 'resunet', 'resunet++', "
                             "'attention_unet', 'multiresunet', 'seunet', 'unetr']")
         if cfg.PROBLEM.TYPE == "INSTANCE_SEG" and model_arch not in ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'unetr', 'multiresunet']:
-            raise ValueError("Not implemented pipeline option: instance segmentation models are ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'unetr', 'multiresunet']")    
+            raise ValueError("Not implemented pipeline option: instance segmentation models are ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'unetr', 'multiresunet']")
         if cfg.PROBLEM.TYPE in ['DETECTION', 'DENOISING'] and \
             model_arch not in ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet']:
             raise ValueError("Architectures available for {} are: ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet']"
@@ -571,26 +569,26 @@ def check_configuration(cfg, check_data_paths=True):
                     raise ValueError("Architectures available for 3D 'SUPER_RESOLUTION' are: ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'multiresunet']")
                 assert cfg.MODEL.UNET_SR_UPSAMPLE_POSITION in ["pre", "post"], "'MODEL.UNET_SR_UPSAMPLE_POSITION' not in ['pre', 'post']"
         if cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
-            if model_arch not in ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet',  
+            if model_arch not in ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet',
                 'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae']:
-                raise ValueError("'SELF_SUPERVISED' models available are these: ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', " 
+                raise ValueError("'SELF_SUPERVISED' models available are these: ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', "
                     "'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae']")
         if cfg.PROBLEM.TYPE == 'CLASSIFICATION' and model_arch not in ['simple_cnn', 'vit'] and \
             'efficientnet' not in model_arch:
             raise ValueError("Architectures available for 'CLASSIFICATION' are: ['simple_cnn', 'efficientnet_b[0-7]', 'vit']")
-        if model_arch in ['unetr', 'vit', 'mae']:    
+        if model_arch in ['unetr', 'vit', 'mae']:
             if model_arch == 'mae' and cfg.PROBLEM.TYPE != 'SELF_SUPERVISED':
                 raise ValueError("'mae' model can only be used in 'SELF_SUPERVISED' workflow")
             if cfg.MODEL.VIT_EMBED_DIM % cfg.MODEL.VIT_NUM_HEADS != 0:
                 raise ValueError("'MODEL.VIT_EMBED_DIM' should be divisible by 'MODEL.VIT_NUM_HEADS'")
-            if not all([i == cfg.DATA.PATCH_SIZE[0] for i in cfg.DATA.PATCH_SIZE[:-1]]):      
+            if not all([i == cfg.DATA.PATCH_SIZE[0] for i in cfg.DATA.PATCH_SIZE[:-1]]):
                 raise ValueError("'unetr', 'vit' 'mae' models need to have same shape in all dimensions (e.g. DATA.PATCH_SIZE = (80,80,80,1) )")
         # Check that the input patch size is divisible in every level of the U-Net's like architectures, as the model
         # will throw an error not very clear for users
         if model_arch in ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'multiresunet']:
             for i in range(len(cfg.MODEL.FEATURE_MAPS)-1):
                 if cfg.MODEL.Z_DOWN[i] == 1 or (cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION' and cfg.PROBLEM.NDIM == '3D'):
-                    sizes = cfg.DATA.PATCH_SIZE[1:-1] 
+                    sizes = cfg.DATA.PATCH_SIZE[1:-1]
                 else:
                     sizes = cfg.DATA.PATCH_SIZE[:-1]
                 if not all([False for x in sizes if x%(np.power(2,(i+1))) != 0 or x == 0]):
@@ -615,11 +613,11 @@ def check_configuration(cfg, check_data_paths=True):
                 raise ValueError("'TRAIN.LR_SCHEDULER.REDUCEONPLATEAU_PATIENCE' needs to be set when 'TRAIN.LR_SCHEDULER.NAME' is 'reduceonplateau'")
             if cfg.TRAIN.LR_SCHEDULER.REDUCEONPLATEAU_PATIENCE >= cfg.TRAIN.PATIENCE:
                 raise ValueError("'TRAIN.LR_SCHEDULER.REDUCEONPLATEAU_PATIENCE' needs to be less than 'TRAIN.PATIENCE' ")
-      
+
         if cfg.TRAIN.LR_SCHEDULER.NAME == 'warmupcosine':
             if cfg.TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_EPOCHS == -1:
                 raise ValueError("'TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_EPOCHS' needs to be set when 'TRAIN.LR_SCHEDULER.NAME' is 'warmupcosine'")
-             
+
     #### Augmentation ####
     if cfg.AUGMENTOR.ENABLE:
         if not check_value(cfg.AUGMENTOR.DA_PROB):
@@ -633,7 +631,7 @@ def check_configuration(cfg, check_data_paths=True):
         if cfg.AUGMENTOR.ELASTIC:
             if cfg.AUGMENTOR.E_MODE not in ['constant', 'nearest', 'reflect', 'wrap']:
                 raise ValueError("AUGMENTOR.E_MODE not in ['constant', 'nearest', 'reflect', 'wrap']")
-        if cfg.AUGMENTOR.BRIGHTNESS: 
+        if cfg.AUGMENTOR.BRIGHTNESS:
             if cfg.AUGMENTOR.BRIGHTNESS_MODE not in ['2D', '3D'] and cfg.PROBLEM.NDIM == "3D":
                 raise ValueError("AUGMENTOR.BRIGHTNESS_MODE not in ['2D', '3D']")
         if cfg.AUGMENTOR.CONTRAST:
@@ -674,7 +672,7 @@ def check_configuration(cfg, check_data_paths=True):
                 raise ValueError("cfg.AUGMENTOR.GRID_D_RANGE values not in [0, 1] range")
             if not check_value(cfg.AUGMENTOR.GRID_ROTATE):
                 raise ValueError("AUGMENTOR.GRID_ROTATE not in [0, 1] range")
-                             
+
     #### Post-processing ####
     if cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS:
         if len(cfg.DATA.TEST.RESOLUTION) == 1:
@@ -683,4 +681,4 @@ def check_configuration(cfg, check_data_paths=True):
             raise ValueError("'DATA.TEST.RESOLUTION' must match in length to {}, which is the number of "
                              "dimensions".format(dim_count))
         if cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS[0] == -1:
-            raise ValueError("'TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS' needs to be set when 'TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS' is True")   
+            raise ValueError("'TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS' needs to be set when 'TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS' is True")
