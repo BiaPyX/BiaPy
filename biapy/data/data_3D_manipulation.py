@@ -760,26 +760,7 @@ def extract_3D_patch_with_overlap_yield(data, vol_shape, axis_order, overlap=(0,
     if len(vol_shape) != 4:
         raise ValueError("vol_shape expected to be of length 4, given {}".format(vol_shape))
 
-    if 'ZYXC' in axis_order:
-        z_dim = data_shape[0]
-        y_dim = data_shape[1]
-        x_dim = data_shape[2]
-        c_dim = data_shape[3]
-    elif 'TZYXC' in axis_order:
-        z_dim = data_shape[1]
-        y_dim = data_shape[2]
-        x_dim = data_shape[3]
-        c_dim = data_shape[4]
-    elif 'ZCYX' in axis_order:
-        z_dim = data_shape[0]
-        c_dim = data_shape[1]
-        y_dim = data_shape[2]
-        x_dim = data_shape[3]
-    else: # 'TZCYX'
-        z_dim = data_shape[1]
-        c_dim = data_shape[2]
-        y_dim = data_shape[3]
-        x_dim = data_shape[4]
+    t_dim, z_dim, c_dim, y_dim, x_dim = order_dimensions(data.shape, axis_order)
 
     if vol_shape[0] > z_dim:
         raise ValueError("'vol_shape[0]' {} greater than {} (you can reduce 'DATA.PATCH_SIZE')"
@@ -878,24 +859,34 @@ def extract_3D_patch_with_overlap_yield(data, vol_shape, axis_order, overlap=(0,
                 start_x = max(0, x*step_x-d_x-padding[2])
                 finish_x = min(x*step_x+vol_shape[2]-d_x-padding[2], x_dim)
 
-                if 'ZYXC' in axis_order:
-                    img = data[start_z:finish_z,
-                               start_y:finish_y,
-                               start_x:finish_x]
-                elif 'TZYXC' in axis_order:
-                    img = data[0,start_z:finish_z,
-                               start_y:finish_y,
-                               start_x:finish_x]
-                elif 'ZCYX' in axis_order:
-                    img = data[start_z:finish_z,
-                               :,
-                               start_y:finish_y,
-                               start_x:finish_x].transpose((0,2,3,1))
-                else: # 'TZCYX'
-                    img = data[0,start_z:finish_z,
-                               :,
-                               start_y:finish_y,
-                               start_x:finish_x].transpose((0,2,3,1))
+                slices = [slice(start_z, finish_z),
+                        slice(start_y, finish_y),
+                        slice(start_x, finish_x),
+                        slice(None), # Channel
+                        ]
+
+                data_ordered_slices = order_dimensions(
+                    slices,
+                    input_order="ZYXC",
+                    output_order=axis_order,
+                    default_value=0)
+
+                img = data[tuple(data_ordered_slices)]
+
+                # The image should have the channel dimension at the end
+                current_order = np.array(range(len(img.shape)))
+                transpose_order = order_dimensions(
+                    current_order, #
+                    input_order="ZYXC",
+                    output_order=axis_order,
+                    default_value=np.nan)
+
+                # determine the transpose order
+                transpose_order = [x for x in transpose_order if not np.isnan(x)]
+                transpose_order = np.argsort(transpose_order)
+                transpose_order = current_order[transpose_order]
+
+                img = np.transpose(img, transpose_order)
 
                 pad_z_left = padding[0]-z*step_z-d_z if start_z <= 0 else 0
                 pad_z_right = (start_z+vol_shape[0])-z_dim if start_z+vol_shape[0] > z_dim else 0
