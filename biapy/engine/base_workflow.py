@@ -936,7 +936,6 @@ class Base_Workflow(metaclass=ABCMeta):
                 dist.barrier()
 
         t_axes = (0,1,3,4,2) if "ZCYX" in self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER else (0,1,2,3,4)
-
         # Create the final H5/Zarr file that contains all the individual parts
         if is_main_process():
             if self.cfg.SYSTEM.NUM_GPUS > 1:
@@ -997,6 +996,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
             # Just make the division with the overlap
             else:
+
                 # Load predictions and overlapping mask
                 pred_file, pred = read_chunked_data(out_data_filename)
                 mask_file, mask = read_chunked_data(out_data_mask_filename)
@@ -1008,6 +1008,8 @@ class Base_Workflow(metaclass=ABCMeta):
                 else:
                     fid_div = zarr.open_group(out_data_div_filename, mode="w")
                     pred_div = fid_div.create_dataset("data", shape=pred.shape, dtype=pred.dtype)
+
+                    print(fid_div, out_data_div_filename)
 
                 # Fill the new data
 
@@ -1625,10 +1627,16 @@ def insert_patch_into_dataset(data_filename, data_filename_mask, data_shape, out
             # Channel dimension should be equal to the number of channel of the prediction
             s = np.array(data_shape)
             c_dim_index = cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER.index("C")
-            if c_dim_index != -1: # if Channel exists
-                s[c_dim_index] = p.shape[-1]
-            else: # else, add it
-                s = np.append(s, p.shape[-1])
+            t_dim_index = cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER.index("T")
+            if c_dim_index != -1: # if Channel exists remove it
+                # remove index
+                s = np.delete(s, c_dim_index)
+            if t_dim_index != -1: # if Channel exists remove it
+                # remove index
+                s = np.delete(s, t_dim_index)
+
+            # Add the number of channels of the prediction last
+            s = np.append(s, p.shape[-1])
 
             if file_type == "h5":
                 data = fid.create_dataset("data", s, dtype=dtype_str, compression="gzip")
@@ -1644,17 +1652,23 @@ def insert_patch_into_dataset(data_filename, data_filename_mask, data_shape, out
             slice(None), # Channel
             ]
 
+        # Channel must be the last dimension for the prediction
+        original_order = cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER
+        original_order = original_order.replace("C","")
+        to_predict_order = original_order + "C"
+        original_order = original_order.replace("T","")
+
         data_ordered_slices = order_dimensions(
             slices,
             input_order="ZYXC",
-            output_order=cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
+            output_order=to_predict_order,
             default_value=0)
 
         current_order = np.array(range(len(data.shape)))
         transpose_order = order_dimensions(
                     current_order,
                     input_order="ZYXC",
-                    output_order=cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
+                    output_order=to_predict_order,
                     default_value=np.nan)
 
         transpose_order = [x for x in transpose_order if not np.isnan(x)]
