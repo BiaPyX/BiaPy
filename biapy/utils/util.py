@@ -757,7 +757,7 @@ def check_masks(path, n_classes=2):
         values, _ = np.unique(img, return_counts=True)
         if len(values) > n_classes :
             raise ValueError("Error: given mask ({}) has more classes than specified in 'MODEL.N_CLASSES'."
-                             "That variable value need to be set without counting with background class. " 
+                             "That variable value need to be set without counting with background class. "
                              " E.g. if mask has [0,1,2] 'MODEL.N_CLASSES' should be 2.\n"
                              "Values found: {}".format(os.path.join(path, ids[i]), values))
         if not (values == range(len(values))).all() and len(values) > 2:
@@ -859,14 +859,14 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), pad
         'reflect'.
 
     check_channel : bool, optional
-        Whether to check if the crop_shape channel matches with the loaded images' one. 
-        
+        Whether to check if the crop_shape channel matches with the loaded images' one.
+
     convert_to_rgb : bool, optional
-        In case RGB images are expected, e.g. if ``crop_shape`` channel is 3, those images that are grayscale are 
+        In case RGB images are expected, e.g. if ``crop_shape`` channel is 3, those images that are grayscale are
         converted into RGB.
 
     check_drange : bool, optional
-        Whether to check if the data loaded is in the same range. 
+        Whether to check if the data loaded is in the same range.
 
     Returns
     -------
@@ -940,7 +940,7 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), pad
         if img.ndim == 2:
             img = np.expand_dims(img, -1)
         else:
-            if img.shape[0] <= 3: img = img.transpose((1,2,0))  
+            if img.shape[0] <= 3: img = img.transpose((1,2,0))
 
         if reflect_to_complete_shape: img = pad_and_reflect(img, crop_shape, verbose=False)
 
@@ -1088,11 +1088,11 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
         Whether to check if the crop_shape channel matches with the loaded images' one.
 
     convert_to_rgb : bool, optional
-        In case RGB images are expected, e.g. if ``crop_shape`` channel is 3, those images that are grayscale are 
+        In case RGB images are expected, e.g. if ``crop_shape`` channel is 3, those images that are grayscale are
         converted into RGB.
 
     check_drange : bool, optional
-        Whether to check if the data loaded is in the same range. 
+        Whether to check if the data loaded is in the same range.
 
     return_filenames : bool, optional
         Return a list with the loaded filenames. Useful when you need to save them afterwards with the same names as
@@ -1174,7 +1174,7 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
         if img.ndim < 3:
             raise ValueError("Read image seems to be 2D: {}. Path: {}".format(img.shape, os.path.join(data_dir, id_)))
 
-        if img.ndim == 3: 
+        if img.ndim == 3:
             img = np.expand_dims(img, -1)
         else:
             min_val = min(img.shape)
@@ -1185,7 +1185,7 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
 
         filenames.append(id_)
         if reflect_to_complete_shape: img = pad_and_reflect(img, crop_shape, verbose=verbose)
-        
+
         if crop_shape is not None and check_channel:
             if crop_shape[-1] != img.shape[-1]:
                 if crop_shape[-1] == 3 and convert_to_rgb:
@@ -1200,7 +1200,7 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
                                             median_padding=median_padding, verbose=verbose)
         else:
             img = np.expand_dims(img, axis=0)
-        
+
         c_shape.append(img.shape)
         data.append(img)
 
@@ -1354,7 +1354,6 @@ def pad_and_reflect(img, crop_shape, verbose=False):
             if verbose: print("Reflected from {} to {}".format(o_shape, img.shape))
     return img
 
-    
 def check_value(value, value_range=(0,1)):
     """Checks if a value is within a range """
     if isinstance(value, list) or isinstance(value, tuple):
@@ -1363,14 +1362,14 @@ def check_value(value, value_range=(0,1)):
                 if value_range[0] <= np.min(value[i]) or np.max(value[i]) <= value_range[1]:
                     return False
             else:
-                if not (value_range[0] <= value[i] <= value_range[1]):    
+                if not (value_range[0] <= value[i] <= value_range[1]):
                     return False
-        return True 
+        return True
     else:
         if isinstance(value, np.ndarray):
             if value_range[0] <= np.min(value) and np.max(value) <= value_range[1]:
                 return True
-        else:  
+        else:
             if value_range[0] <= value <= value_range[1]:
                 return True
         return False
@@ -1392,12 +1391,12 @@ def read_chunked_data(filename):
         if filename.endswith('.hdf5') or filename.endswith('.h5'):
             fid = h5py.File(filename,'r')
             data = fid[list(fid)[0]]
-        elif filename.endswith('.zarr'):  
+        elif filename.endswith('.zarr'):
             fid = zarr.open(filename,'r')
             data = fid[list(fid.array_keys())[0]]
         else:
             raise ValueError(f"File extension {os.path.splitext(fid)[1]} not recognized")
-    
+
         return fid, data
 
 def write_chunked_data(data, data_dir, filename, dtype_str="float32", verbose=True):
@@ -1416,7 +1415,7 @@ def write_chunked_data(data, data_dir, filename, dtype_str="float32", verbose=Tr
         Filename of the data to use.
 
     dtype_str : str, optional
-        Data type to use when saving. 
+        Data type to use when saving.
 
     verbose : bool, optional
         To print saving information.
@@ -1431,9 +1430,45 @@ def write_chunked_data(data, data_dir, filename, dtype_str="float32", verbose=Tr
     os.makedirs(data_dir, exist_ok=True)
 
     if ext in ['.hdf5', '.h5']:
-        fid = h5py.File(os.path.join(data_dir, filename), "w") 
+        fid = h5py.File(os.path.join(data_dir, filename), "w")
         data = fid.create_dataset("data", data.shape, dtype=dtype_str, compression="gzip")
     # Zarr
     else:
         fid = zarr.open_group(os.path.join(data_dir, filename), mode="w")
         data = fid.create_dataset("data", shape=data.shape, dtype=dtype_str)
+
+def order_dimensions(data, input_order, output_order='TZCYX', default_value=1):
+    """
+    Reorder data from any input order to output order.
+
+    Parameters
+    ----------
+    data : Numpy array like
+        data to reorder. E.g. ``(z, y, x, channels)``.
+
+    input_order : str
+        Order of the input data. E.g. ``ZYXC``.
+
+    output_order : str, optional
+        Order of the output data. E.g. ``TZCYX``.
+
+    default_value : Any, optional
+        Default value to use when a dimension is not present in the input order.
+
+    Returns
+    -------
+    shape : Tuple
+        Reordered data. E.g. ``(t, z, channel, y, x)``.
+    """
+
+    if input_order == output_order:
+        return data
+
+    output_data = []
+
+    for i in range(len(output_order)):
+        if output_order[i] in input_order:
+            output_data.append(data[input_order.index(output_order[i])])
+        else:
+            output_data.append(default_value)
+    return tuple(output_data)
