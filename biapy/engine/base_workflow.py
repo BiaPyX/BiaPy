@@ -1030,9 +1030,10 @@ class Base_Workflow(metaclass=ABCMeta):
 
                             data_ordered_slices = order_dimensions(
                                 slices,
-                                input_order="ZYXC",
-                                output_order=cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
-                                default_value=0)
+                                input_order = "ZYXC",
+                                output_order = self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
+                                default_value = 0,
+                                )
 
                             pred_div[data_ordered_slices] = pred[data_ordered_slices] / mask[data_ordered_slices]
 
