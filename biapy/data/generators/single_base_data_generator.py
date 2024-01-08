@@ -16,7 +16,7 @@ from biapy.data.generators.augmentors import random_crop_single, random_3D_crop_
 class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
     """
     Custom BaseDataGenerator based on `imgaug <https://github.com/aleju/imgaug-doc>`_
-    and our own `augmentors.py <https://github.com/danifranco/BiaPy/blob/master/generators/augmentors.py>`_
+    and our own `augmentors.py <https://github.com/danifranco/BiaPy/blob/master/biapy/data/generators/augmentors.py>`_
     transformations.
 
     Based on `microDL <https://github.com/czbiohub/microDL>`_ and
