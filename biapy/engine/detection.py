@@ -12,7 +12,7 @@ from tqdm import tqdm
 from biapy.data.data_2D_manipulation import load_and_prepare_2D_train_data
 from biapy.data.data_3D_manipulation import load_and_prepare_3D_data
 from biapy.data.post_processing.post_processing import (remove_close_points, detection_watershed, 
-    remove_by_properties)
+    measure_morphological_props_and_filter)
 from biapy.data.pre_processing import create_detection_masks, norm_range01
 from biapy.utils.util import save_tif, read_chunked_data, write_chunked_data
 from biapy.engine.metrics import detection_metrics, jaccard_index, weighted_bce_dice_loss, CrossEntropyLoss_wrapper
@@ -253,9 +253,11 @@ class Detection_Workflow(Base_Workflow):
                 donuts_nucleus_diameter=self.cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_NUCLEUS_DIAMETER, save_dir=check_wa)
             
             # Instance filtering by properties     
-            points_pred, labels, _, npixels, areas, circularities, diameters, comment, all_conds = remove_by_properties(points_pred, self.cfg.DATA.TEST.RESOLUTION, 
-                properties=self.cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES, prop_values=self.cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_VALUES,
-                comp_signs=self.cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_SIGN, coords_list=np.concatenate(all_points, axis=0))
+            points_pred, d_result = measure_morphological_props_and_filter(points_pred, self.cfg.DATA.TEST.RESOLUTION, 
+                properties=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS, 
+                prop_values=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.VALUES, 
+                comp_signs=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGN, 
+                coords_list=np.concatenate(all_points, axis=0))
 
             if file_ext in ['.hdf5', '.h5', ".zarr"]:
                 write_chunked_data(np.expand_dims(points_pred,-1), self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, filenames[0], dtype_str="uint8", 
@@ -274,10 +276,10 @@ class Detection_Workflow(Base_Workflow):
                 prob = np.concatenate(prob, axis=0)
                 all_classes = np.concatenate(all_classes, axis=0)
                 if self.cfg.TEST.POST_PROCESSING.DET_WATERSHED:
-                    size_measure = 'area' if ndim == 2 else 'volume'
-                    df = pd.DataFrame(zip(labels, list(aux[:,0]), list(aux[:,1]), list(aux[:,2]), list(prob), list(all_classes),\
-                        npixels, areas, circularities, diameters, comment, all_conds), columns =['pred_id', 'axis-0', 'axis-1', 'axis-2', 'probability', \
-                        'class', 'npixels', size_measure, 'circularity', 'diameters', 'comment', 'conditions'])
+                    df = pd.DataFrame(zip(d_result['labels'], list(aux[:,0]), list(aux[:,1]), list(aux[:,2]), list(prob), list(all_classes),
+                        d_result['npixels'], d_result['areas'], d_result['circularities'], d_result['diameters'], d_result['perimeters'], 
+                        d_result['comment'], d_result['conditions']), columns =['pred_id', 'axis-0', 'axis-1', 'axis-2', 'probability', 
+                        'class', 'npixels', 'volume', 'sphericity', 'diameter', 'perimeter (surface area)', 'comment', 'conditions'])
                     df = df.sort_values(by=['pred_id'])   
                 else:
                     labels = []
@@ -294,10 +296,11 @@ class Detection_Workflow(Base_Workflow):
                 prob = np.concatenate(prob, axis=0)
                 all_classes = np.concatenate(all_classes, axis=0)
                 if self.cfg.TEST.POST_PROCESSING.DET_WATERSHED:
-                    size_measure = 'area' if ndim == 2 else 'volume'
-                    df = pd.DataFrame(zip(labels, list(aux[:,0]), list(aux[:,1]), list(prob), list(all_classes),\
-                        npixels, areas, circularities, diameters, comment, all_conds), columns =['pred_id', 'axis-0', 'axis-1', 'probability', \
-                        'class', 'npixels', size_measure, 'circularity', 'diameters', 'comment', 'conditions'])
+                    df = pd.DataFrame(zip(d_result['labels'], list(aux[:,0]), list(aux[:,1]), list(prob), list(all_classes),
+                        d_result['npixels'], d_result['areas'], d_result['circularities'], d_result['diameters'], d_result['perimeters'], 
+                        d_result['elongations'], d_result['comment'], d_result['conditions']), columns =['pred_id', 'axis-0', 'axis-1', 
+                        'probability', 'class', 'npixels', 'area', 'circularity', 'diameter', 'perimeter', 'elongation', 'comment', 
+                        'conditions'])
                     df = df.sort_values(by=['pred_id'])   
                 else:
                     df = pd.DataFrame(zip(list(aux[:,0]), list(aux[:,1]), list(prob), list(all_classes)), 
@@ -305,9 +308,14 @@ class Detection_Workflow(Base_Workflow):
                     df = df.sort_values(by=['axis-0'])
             del aux 
 
+            # Save jus the points and their probabilities 
             df.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, os.path.splitext(filenames[0])[0]+'_full_info.csv'))
             if self.cfg.TEST.POST_PROCESSING.DET_WATERSHED:
-                df = df.drop(columns=['class', 'pred_id', 'npixels', size_measure, 'circularity', 'comment', 'conditions'])
+                if ndim == 2:
+                    cols = ['class', 'pred_id', 'npixels', 'area', 'circularity', 'perimeter', 'elongation', 'comment', 'conditions']
+                else:
+                    cols = ['class', 'pred_id', 'npixels', 'volume', 'sphericity', 'perimeter', 'surface area', 'comment', 'conditions']
+                df = df.drop(columns=cols)
             else:
                 df = df.drop(columns=['class'])
             df.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, os.path.splitext(filenames[0])[0]+'_prob.csv'))

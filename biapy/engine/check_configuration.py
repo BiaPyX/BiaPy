@@ -56,11 +56,11 @@ def check_configuration(cfg, check_data_paths=True):
     if cfg.TEST.POST_PROCESSING.DET_WATERSHED:
         for x in cfg.TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION:
             if not isinstance(x, list):
-                raise ValueError("'TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION' need to be a list of list") 
+                raise ValueError("'TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION' needs to be a list of list") 
             if any(y == -1 for y in x):
                 raise ValueError("Please set 'TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION' when using 'TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION'")
             if len(x) != dim_count:
-                raise ValueError("'TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION' need to be of dimension {} for {} problem".format(dim_count, cfg.PROBLEM.NDIM))
+                raise ValueError("'TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION' needs to be of dimension {} for {} problem".format(dim_count, cfg.PROBLEM.NDIM))
         if cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES != [-1]:
             if len(cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES) > cfg.MODEL.N_CLASSES:
                 raise ValueError("'TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES' length can't be greater than 'MODEL.N_CLASSES'")
@@ -70,42 +70,61 @@ def check_configuration(cfg, check_data_paths=True):
             if not all(cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES == np.array(range(min_class,len(cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES)+1))):
                 raise ValueError("'TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES' must be consecutive, e.g [1,2,3,4..]") 
             if len(cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_PATCH) != dim_count:
-                raise ValueError("'TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_PATCH' need to be of dimension {} for {} problem".format(dim_count, cfg.PROBLEM.NDIM))
+                raise ValueError("'TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_PATCH' needs to be of dimension {} for {} problem".format(dim_count, cfg.PROBLEM.NDIM))
 
+    if not (len(cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS) == \
+        len(cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.VALUES) == \
+        len(cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGN)):
+        raise ValueError("'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS', 'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.VALUES' and "
+            "'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGN' need to have same length")
+            
     if cfg.PROBLEM.TYPE == 'DETECTION':
-        for i in range(len(cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES)):
-            if len(cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES[i]) > 1:
-                raise ValueError("In DETECTION 'TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES' can only be used for filtering 'circularity'.")
-            if len(cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES[i]) == 1 and cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES[i][0] != 'circularity':  
-                raise ValueError("In DETECTION 'TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES' can only be used for filtering 'circularity'.")
+        if cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.ENABLE and \
+            cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.ENABLE:
+            for i in range(len(cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS)):
+                if len(cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS[i]) > 1:
+                    raise ValueError("In DETECTION 'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS' can only be used for filtering 'circularity'.")
+                if len(cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS[i]) == 1 and cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS[i][0] != 'circularity':  
+                    raise ValueError("In DETECTION 'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS' can only be used for filtering 'circularity'.")
+    
+    if cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.ENABLE and \
+        cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.ENABLE:
+        if cfg.PROBLEM.TYPE not in ['INSTANCE_SEG', 'DETECTION']:
+            raise ValueError("'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS' can only be used in INSTANCE_SEG and DETECTION workflows")
 
-    for i in range(len(cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES)):
-        if len(cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES[i]) == 0 or \
-           len(cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_VALUES[i]) == 0 or \
-           len(cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_SIGN[i]) == 0:
-           raise ValueError("'TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES', 'TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_VALUES' and "
-                "'TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_SIGN' can not be defined as [[]]. Leave them as []")
+        if len(cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS) == 0:
+            raise ValueError("'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS' can not be an empty list when "
+                "'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.ENABLE' is enabled")
 
-        if not (len(cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES[i]) == \
-            len(cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_VALUES[i]) == \
-            len(cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_SIGN[i])):
-            raise ValueError("'TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES', 'TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_VALUES' and "
-                "'TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_SIGN' need to have same length")
+        for i in range(len(cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS)):
+            if not isinstance(cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS[i], list):
+                raise ValueError("'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS' need to be a list of list. E.g. [ ['circularity'], ['area', 'diameter'] ]")
+            if not isinstance(cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.VALUES[i], list):
+                raise ValueError("'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.VALUES' need to be a list of list. E.g. [ [10], [15, 3] ]")
+            if not isinstance(cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGN[i], list):
+                raise ValueError("'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGN' need to be a list of list. E.g. [ ['gt'], ['le', 'gt'] ]")
 
-        if len(cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES[i]) > 0 and cfg.PROBLEM.TYPE not in ['INSTANCE_SEG', 'DETECTION']:
-            raise ValueError("'TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES' can only be used in INSTANCE_SEG and DETECTION workflows")
+            if not (len(cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS[i]) == \
+                len(cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.VALUES[i]) == \
+                len(cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGN[i])):
+                raise ValueError("'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS', 'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.VALUES' and "
+                    "'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGN' need to have same length")
 
-        # Check for unique values 
-        if len([item for item, count in collections.Counter(cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES[i]).items() if count > 1]) > 0:
-            raise ValueError("Non repeated values are allowed in 'TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES'")
-        for j in range(len(cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES[i])):
-            if cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES[i][j] not in ['circularity', 'npixels', 'area', 'diameter']:
-                raise ValueError("'TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES' can only be one among these: ['circularity', 'npixels', 'area', 'diameter']")
-            if cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_SIGN[i][j] not in ['gt', 'ge', 'lt', 'le']:
-                raise ValueError("'TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_SIGN' can only be one among these: ['gt', 'ge', 'lt', 'le']")
-            if cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES[i][j] == "circularity" and not check_value(cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_VALUES[i][j]):
-                raise ValueError("Circularity can only have values in [0, 1] range (check  'TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_VALUES' values)")
-                
+            # Check for unique values 
+            if len([item for item, count in collections.Counter(cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS[i]).items() if count > 1]) > 0:
+                raise ValueError("Non repeated values are allowed in 'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES'")
+            for j in range(len(cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS[i])):
+                if cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS[i][j] not in ['circularity', 'npixels', 'area', 'diameter', 'elongation', 'sphericity', 'perimeter']:
+                    raise ValueError("'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS' can only be one among these: ['circularity', 'npixels', 'area', 'diameter', 'elongation', 'sphericity', 'perimeter']")
+                if cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS[i][j] in ["circularity", "elongation"] and cfg.PROBLEM.NDIM != '2D':
+                    raise ValueError("'circularity' or 'elongation' properties can only be measured in 2D images. Delete them from 'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS'")
+                if cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS[i][j] == "sphericity" and cfg.PROBLEM.NDIM != '3D':
+                    raise ValueError("'sphericity' property can only be measured in 3D images. Delete it from 'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS'")
+                if cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGN[i][j] not in ['gt', 'ge', 'lt', 'le']:
+                    raise ValueError("'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGN' can only be one among these: ['gt', 'ge', 'lt', 'le']")
+                if cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS[i][j] == "circularity" and not check_value(cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.VALUES[i][j]):
+                    raise ValueError("Circularity can only have values in [0, 1] range (check  'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.VALUES' values)")
+                    
     if cfg.PROBLEM.TYPE != 'INSTANCE_SEG':  
         if cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK:
             raise ValueError("'TEST.POST_PROCESSING.VORONOI_ON_MASK' can only be enabled in a 'INSTANCE_SEG' problem")
@@ -129,16 +148,16 @@ def check_configuration(cfg, check_data_paths=True):
         opts = []
 
     #### General checks ####
-    assert cfg.PROBLEM.NDIM in ['2D', '3D'], "Problem need to be '2D' or '3D'"
+    assert cfg.PROBLEM.NDIM in ['2D', '3D'], "Problem needs to be '2D' or '3D'"
     assert cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'CLASSIFICATION', 'DETECTION', 'DENOISING', 'SUPER_RESOLUTION', 'SELF_SUPERVISED'],\
         "PROBLEM.TYPE not in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'CLASSIFICATION', 'DETECTION', 'DENOISING', 'SUPER_RESOLUTION', 'SELF_SUPERVISED']"
 
     if cfg.PROBLEM.NDIM == "2D" and not cfg.TEST.STATS.PER_PATCH and not cfg.TEST.STATS.FULL_IMG:
-        raise ValueError("At least one between 'TEST.STATS.PER_PATCH' or 'TEST.STATS.FULL_IMG' need to be True")
+        raise ValueError("At least one between 'TEST.STATS.PER_PATCH' or 'TEST.STATS.FULL_IMG' needs to be True")
 
     if cfg.PROBLEM.NDIM == '3D':
         if not cfg.TEST.STATS.PER_PATCH and not cfg.TEST.STATS.MERGE_PATCHES and cfg.PROBLEM.TYPE != "CLASSIFICATION":
-            raise ValueError("At least one between 'TEST.STATS.PER_PATCH' or 'TEST.STATS.MERGE_PATCHES' need to be True when 'PROBLEM.NDIM'=='3D'")
+            raise ValueError("At least one between 'TEST.STATS.PER_PATCH' or 'TEST.STATS.MERGE_PATCHES' needs to be True when 'PROBLEM.NDIM'=='3D'")
         if cfg.TEST.STATS.FULL_IMG:
             print("WARNING: TEST.STATS.FULL_IMG == True while using PROBLEM.NDIM == '3D'. As 3D images are usually 'huge'"
                 ", full image statistics will be disabled to avoid GPU memory overflow")
@@ -217,7 +236,7 @@ def check_configuration(cfg, check_data_paths=True):
     if cfg.PROBLEM.TYPE == 'SEMANTIC_SEG':
         if cfg.MODEL.SOURCE == "biapy":
             if cfg.MODEL.N_CLASSES < 2:
-                raise ValueError("'MODEL.N_CLASSES' need to be greater or equal 2 (binary case)")
+                raise ValueError("'MODEL.N_CLASSES' needs to be greater or equal 2 (binary case)")
             if cfg.LOSS.TYPE == "MASKED_BCE":
                 if cfg.MODEL.N_CLASSES > 2:
                     raise ValueError("Not implemented pipeline option: N_CLASSES > 2 and MASKED_BCE")
@@ -250,7 +269,7 @@ def check_configuration(cfg, check_data_paths=True):
                             "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'='BCD' 'PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS'=[0.5,0.5,1]")
         if cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK:
             if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS not in ['BC', 'BCM', 'BCD', 'BCDv2']:
-                raise ValueError("'PROBLEM.INSTANCE_SEG.DATA_CHANNELS' need to be one between ['BC', 'BCM', 'BCD', 'BCDv2'] "
+                raise ValueError("'PROBLEM.INSTANCE_SEG.DATA_CHANNELS' needs to be one between ['BC', 'BCM', 'BCD', 'BCDv2'] "
                                 "when 'TEST.POST_PROCESSING.VORONOI_ON_MASK' is enabled")
             if not check_value(cfg.TEST.POST_PROCESSING.VORONOI_TH):
                 raise ValueError("'TEST.POST_PROCESSING.VORONOI_TH' not in [0, 1] range")   
@@ -261,7 +280,7 @@ def check_configuration(cfg, check_data_paths=True):
                 raise ValueError("'PROBLEM.INSTANCE_SEG.SEED_MORPH_SEQUENCE' can only be a sequence with 'dilate' or 'erode' operations. "
                     "{} given".format(cfg.PROBLEM.INSTANCE_SEG.SEED_MORPH_SEQUENCE))
         if len(cfg.PROBLEM.INSTANCE_SEG.SEED_MORPH_SEQUENCE) != len(cfg.PROBLEM.INSTANCE_SEG.SEED_MORPH_RADIUS):
-            raise ValueError("'PROBLEM.INSTANCE_SEG.SEED_MORPH_SEQUENCE' length and 'PROBLEM.INSTANCE_SEG.SEED_MORPH_RADIUS' length need to be the same")
+            raise ValueError("'PROBLEM.INSTANCE_SEG.SEED_MORPH_SEQUENCE' length and 'PROBLEM.INSTANCE_SEG.SEED_MORPH_RADIUS' length needs to be the same")
         if cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE not in ['thick', 'inner', 'outer', 'subpixel', 'dense']:
             raise ValueError("'PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE' must be one between ['thick', 'inner', 'outer', 'subpixel', 'dense']")
         if cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE == 'dense' and cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BCM":
@@ -289,15 +308,21 @@ def check_configuration(cfg, check_data_paths=True):
     #### Detection ####
     if cfg.PROBLEM.TYPE == 'DETECTION':
         if cfg.MODEL.SOURCE == "biapy" and cfg.MODEL.N_CLASSES < 2:
-            raise ValueError("'MODEL.N_CLASSES' need to be greater or equal 2 (binary case)")
+            raise ValueError("'MODEL.N_CLASSES' needs to be greater or equal 2 (binary case)")
         if cfg.TEST.POST_PROCESSING.DET_WATERSHED:
             if any(len(x) != dim_count for x in cfg.TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION):
                 raise ValueError("Each structure object defined in 'TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION' "
-                                 "need to be of {} dimension".format(dim_count))
-            if len(cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES[0]) != 0: 
-                raise ValueError("'TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES' need to be set to 'circularity' filtering when 'TEST.POST_PROCESSING.DET_WATERSHED' is enabled")
-            if cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES[0][0] != 'circularity': 
-                raise ValueError("'TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES' need to be set to 'circularity' filtering when 'TEST.POST_PROCESSING.DET_WATERSHED' is enabled")
+                                 "needs to be of {} dimension".format(dim_count))
+            if not cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.ENABLE or \
+                not cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.ENABLE:
+                raise ValueError("'TEST.POST_PROCESSING.MEASURE_PROPERTIES.ENABLE' and "
+                    "'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.ENABLE' needs to be set when 'TEST.POST_PROCESSING.DET_WATERSHED' is enabled")
+            if len(cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS[0]) != 0: 
+                raise ValueError("'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS' needs to be set to 'circularity' or 'sphericity' filtering "
+                    "when 'TEST.POST_PROCESSING.DET_WATERSHED' is enabled")
+            if cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS[0][0] not in ['circularity', 'sphericity']: 
+                raise ValueError("'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS' needs to be set to 'circularity' or 'sphericity' filtering "
+                    "when 'TEST.POST_PROCESSING.DET_WATERSHED' is enabled")
         if cfg.TEST.DET_POINT_CREATION_FUNCTION not in ['peak_local_max', 'blob_log']:
             raise ValueError("'TEST.DET_POINT_CREATION_FUNCTION' must be one between: ['peak_local_max', 'blob_log']")
         if cfg.MODEL.SOURCE == "torchvision":
@@ -335,9 +360,9 @@ def check_configuration(cfg, check_data_paths=True):
                 raise ValueError("PROBLEM.SELF_SUPERVISED.NOISE not in [0, 1] range")
         elif cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
             if model_arch != 'mae':
-                raise ValueError("'MODEL.ARCHITECTURE' need to be 'mae' when 'PROBLEM.SELF_SUPERVISED.PRETEXT_TASK' is 'masking'")  
+                raise ValueError("'MODEL.ARCHITECTURE' needs to be 'mae' when 'PROBLEM.SELF_SUPERVISED.PRETEXT_TASK' is 'masking'")  
         else:
-            raise ValueError("'PROBLEM.SELF_SUPERVISED.PRETEXT_TASK' need to be among these options: ['crappify', 'masking']")
+            raise ValueError("'PROBLEM.SELF_SUPERVISED.PRETEXT_TASK' needs to be among these options: ['crappify', 'masking']")
         if cfg.MODEL.SOURCE == "torchvision":
             raise ValueError("'MODEL.SOURCE' as 'torchvision' is not available in super-resolution workflow")
 

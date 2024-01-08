@@ -788,49 +788,76 @@ class Config:
         # Apply a binary mask to remove possible segmentation outside it
         _C.TEST.POST_PROCESSING.APPLY_MASK = False
 
-        # Remove instances by the conditions based in each instance properties. The three variables, i.e. TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES,
-        # TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_VALUES and TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_SIGN will compose a list 
-        # of conditions to remove the instances. They are list of list of conditions. For instance, the conditions can be 
-        # like this: [['A'], ['B','C']]. Then, if the instance satisfy the first list of conditions, only 'A' in this first case 
-        # (from ['A'] list), or satisfy 'B' and 'C' (from ['B','C'] list) it will be removed from the image. In each sublist all the conditions
-        # must be satisfied. Available properties are: ['circularity', 'npixels', 'area', 'diameter']. When this post-processing step is 
-        # selected two .csv files will be created, one with the properties of each instance from the original image (will be placed in 
-        # PATHS.RESULT_DIR.PER_IMAGE_INSTANCES path), and another with only instances that remain once this post-processing has been 
-        # applied (will be placed in PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING path). In those csv files two more information columns will 
-        # appear: a list of conditions that each instance has satisfy or not ('Satisfied', 'No satisfied' respectively), and a comment with two 
-        # possible values, 'Strange' and 'Correct', telling you if the instance has been removed or not, respectively. 
+        # Whether to measure morphological features on each instances. It is always done 
+        _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES = CN() 
+        _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.ENABLE = False
+        # Remove instances by the conditions based in each instance properties. The three variables, i.e. 
+        # TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS, TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.VALUES 
+        # and TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGN will compose a list of conditions to remove the instances. 
+        # They are list of list of conditions. For instance, the conditions can be like this: [['A'], ['B','C']]. Then, if the instance satisfy 
+        # the first list of conditions, only 'A' in this first case (from ['A'] list), or satisfy 'B' and 'C' (from ['B','C'] list) it will be 
+        # removed from the image. In each sublist all the conditions must be satisfied. Available properties are: ['circularity', 'elongation',
+        # 'npixels', 'area', 'diameter', 'perimeter', 'sphericity']. When this post-processing step is selected two .csv files 
+        # will be created, one with the properties of each instance from the original image (will be placed in PATHS.RESULT_DIR.PER_IMAGE_INSTANCES 
+        # path), and another with only instances that remain once this post-processing has been applied (will be placed in 
+        # PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING path). In those csv files two more information columns will appear: a list of conditions 
+        # that each instance has satisfy or not ('Satisfied', 'No satisfied' respectively), and a comment with two possible values, 'Removed' 
+        # and 'Correct', telling you if the instance has been removed or not, respectively. Some of the properties follow the formulas used in
+        # MorphoLibJ library for Fiji https://doi.org/10.1093/bioinformatics/btw413
+        #
         # Each property descrition:
-        #   * 'circularity' of an area instance indicates how compact or elongated the instance is. A value of 1 indicates that the instance 
-        #     is a perfect circle (compact), and 0 indicates that it is a line (elongated). Calculated as: (4 * PI * area) / (perimeter^2).
-        #     In 3D, circularity is only measured in the center slices of the instance (one slice before the central slice, the central 
-        #     slice, and one after it). 
+        #   * 'circularity' is defined as the ratio of area over the square of the perimeter, normalized such that the value for a disk equals 
+        #     one: (4 * PI * area) / (perimeter^2). Only measurable for 2D images (use sphericity for 3D images). While values of circularity 
+        #     range theoretically within the interval [0;1], the measurements errors of the perimeter may produce circularity values above 1 
+        #     (Lehmann et al., 201211 ; https://doi.org/10.1093/bioinformatics/btw413). 
+        #
+        #   * 'elongation' is the inverse of the circularity. The values of elongation range from 1 for round particles and increase for 
+        #     elongated particles. Calculated as: (perimeter^2)/(4 * PI * area) . Only measurable for 2D images.
+        #
+        #   * 'npixels' corresponds to the sum of pixels that compose an instance. 
+        #
         #   * 'area' correspond to the number of pixels taking into account the image resolution (we call it 'area' also even in a 3D 
         #     image for simplicity, but that will be the volume in that case). In the resulting statistics 'volume' will appear in that 
         #     case too.
-        #   * 'npixels' corresponds to the sum of pixels that compose an instance.
+        #
         #   * 'diameter' calculated with the bounding box and by taking the maximum value of the box in x and y axes. In 3D, z axis 
-        #      is also taken into account. Does not take into account the image resolution. 
-        _C.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES = []
-        # Values of the properties listed in TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES that the instances need to satisfy to
-        # not be droped. Values for each property:
+        #     is also taken into account. Does not take into account the image resolution.
+        #
+        #   * 'perimeter', in 2D, approximates the contour as a line through the centers of border pixels using a 4-connectivity. In 3D, 
+        #     it is the surface area computed using Lewiner et al. algorithm (https://www.tandfonline.com/doi/abs/10.1080/10867651.2003.10487582)
+        #     using marching_cubes (https://scikit-image.org/docs/stable/api/skimage.measure.html#skimage.measure.marching_cubes) and 
+        #     mesh_surface_area(https://scikit-image.org/docs/stable/api/skimage.measure.html#skimage.measure.mesh_surface_area) functions 
+        #     of scikit-image. 
+        #
+        #   * 'sphericity', in 3D, it is the ratio of the squared volume over the cube of the surface area, normalized such that the value 
+        #     for a ball equals one: (36 * PI)*((volume^2)/(perimeter^3)). Only measurable for 3D images (use circularity for 2D images).
+        #
+        _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES = CN() 
+        # Whether to enable or not the filtering by properties
+        _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.ENABLE = False 
+        # List of properties to apply a filter. Available properties are: ['circularity', 'elongation', 'npixels', 'area', 'diameter', 
+        # 'perimeter', 'sphericity']  
+        _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS = []
+        # Values of the properties listed in TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES that the instances need to 
+        # satisfy to not be droped. Values for each property:
         # * 'circularity' must be a float in [0,1] range. 
         # * 'area', 'npixels' and 'diameter' can be integer/float. 
-        _C.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_VALUES = []
+        _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.VALUES = []
         # Sign to do the comparison. Options: ['gt', 'ge', 'lt', 'le'] that corresponds to "greather than", e.g. ">", 
         # "greather equal", e.g. ">=", "less than", e.g. "<", and "less equal" e.g. "<=" comparisons.
-        _C.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_SIGN = []
+        _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGN = []
         # A full example of this post-processing: 
         # If you want to remove those instances that have less than 100 pixels and circularity less equal to 0.7 you should 
         # declare the above three variables as follows:
-        # _C.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES = [['npixels', 'circularity']]
-        # _C.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_VALUES = [[100, 0.7]]
-        # _C.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_SIGN = [['lt', 'le']]
+        # _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES = [['npixels', 'circularity']]
+        # _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES_VALUES = [[100, 0.7]]
+        # _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES_SIGN = [['lt', 'le']]
         # You can also concatenate more restrictions and they will be applied in order. For instance, if you want to remove those 
         # instances that are bigger than an specific area, and do that before the condition described above, you can define the 
         # variables this way:
-        # _C.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES = [['area'], ['npixels', 'circularity']]
-        # _C.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_VALUES = [[500], [100, 0.7]]
-        # _C.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_SIGN = [['gt'], ['lt', 'le']]        
+        # _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES = [['area'], ['npixels', 'circularity']]
+        # _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES_VALUES = [[500], [100, 0.7]]
+        # _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES_SIGN = [['gt'], ['lt', 'le']]        
         # This way, the instances will be removed by 'area' and then by 'npixels' and 'circularity'
 
         ### Instance segmentation
