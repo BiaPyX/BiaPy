@@ -1483,21 +1483,24 @@ def measure_morphological_props_and_filter(img, resolution, filter_instances=Fal
         centers[label_index] = center
 
     # Calculate surface area (as in https://github.com/scikit-image/scikit-image/issues/3797) and sphericity
-    if image3d:
+    if image3d and total_labels > 0:
         img_aux = img.copy()
         img_aux, _, _ = relabel_sequential(img_aux)
         img_aux[find_boundaries(img_aux, mode='outer')] = 0
-        vts, fs, ns, cs = marching_cubes(img_aux, level=0, method='lewiner')
+        try:
+            vts, fs, ns, cs = marching_cubes(img_aux, level=0, method='lewiner')
+        except: 
+            print("Some error found during marching_cubes() call")
+        else:
+            lst = [[] for i in range(total_labels+1)]
+            for i in fs: lst[int(cs[i[0]])].append(i)
+            surface_area = [0 if len(i)==0 else mesh_surface_area(vts, i) for i in lst]
 
-        lst = [[] for i in range(total_labels+1)]
-        for i in fs: lst[int(cs[i[0]])].append(i)
-        surface_area = [0 if len(i)==0 else mesh_surface_area(vts, i) for i in lst]
-
-        for i in range(total_labels):
-            pixels = npixels[i]
-            sphericity = (36 * math.pi * pixels * pixels) / (surface_area[i+1] * surface_area[i+1] * surface_area[i+1])
-            perimeters[i] = surface_area[i+1]
-            circularities[i] = sphericity
+            for i in range(total_labels):
+                pixels = npixels[i]
+                sphericity = (36 * math.pi * pixels * pixels) / (surface_area[i+1] * surface_area[i+1] * surface_area[i+1])
+                perimeters[i] = surface_area[i+1]
+                circularities[i] = sphericity
 
     # Remove those instances that do not satisfy the properties      
     conditions = []
