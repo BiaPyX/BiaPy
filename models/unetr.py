@@ -190,7 +190,7 @@ class UNETR(nn.Module):
         for i, blk in enumerate(self.blocks):
             x = blk(x)    
             if (i+1) in skip_connection_index:
-                skip_connections.append(x[:, 1:, :])
+                skip_connections.insert(0, x[:, 1:, :])
 
         # CNN Decoder 
         x = self.bottleneck(self.proj_feat(x[:, 1:, :]))
