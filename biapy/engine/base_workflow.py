@@ -837,7 +837,11 @@ class Base_Workflow(metaclass=ABCMeta):
         # Load data
         if file_extension in ['.hdf5', '.h5', ".zarr"]:
             self._X_file, self._X = read_chunked_data(self._X)
-        
+        else: # Numpy array
+            if self._X.ndim == 3:
+                c_pos = -1 if self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER[-1] == 'C' else 1
+                self._X = np.expand_dims(self._X, c_pos)
+
         print(f"Loaded image shape is {self._X.shape}")
 
         data_shape = self._X.shape
