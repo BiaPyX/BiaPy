@@ -22,7 +22,7 @@ ENV PATH /installations/miniconda3/bin:$PATH
 RUN conda update --all
 
 # Copy BiaPy
-RUN git clone --depth 1 https://github.com/danifranco/BiaPy.git /installations/BiaPy
+RUN git clone --depth 1 https://github.com/BiaPyX/BiaPy.git /installations/BiaPy
 
 # Create the environment
 ENV PATH="/opt/conda/bin:$PATH"

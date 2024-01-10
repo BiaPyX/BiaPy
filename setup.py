@@ -34,7 +34,7 @@ def getInclude():
 
 def setup_package():
     __version__ = '3.2.0'
-    url = 'https://github.com/danifranco/BiaPy'
+    url = 'https://github.com/BiaPyX/BiaPy'
 
     setup(name='biapy',
           description='Bioimage analysis pipelines in Python',

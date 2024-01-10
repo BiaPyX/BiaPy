@@ -13,7 +13,7 @@ from biapy.data.pre_processing import denormalize
 
 class Single3DImageDataGenerator(SingleBaseDataGenerator):
     """Custom 3D data generator based on `imgaug <https://github.com/aleju/imgaug-doc>`_ and our own
-       `augmentors.py <https://github.com/danifranco/BiaPy/blob/master/biapy/data/generators/augmentors.py>`_
+       `augmentors.py <https://github.com/BiaPyX/BiaPy/blob/master/biapy/data/generators/augmentors.py>`_
        transformations. This generator will yield an image and its corresponding mask.
 
        Based on `microDL <https://github.com/czbiohub/microDL>`_ and

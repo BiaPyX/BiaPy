@@ -6,7 +6,7 @@ from biapy.data.generators.single_base_data_generator import SingleBaseDataGener
 
 class Single2DImageDataGenerator(SingleBaseDataGenerator):
     """Custom 2D data generator based on `imgaug <https://github.com/aleju/imgaug-doc>`_
-       and our own `augmentors.py <https://github.com/danifranco/BiaPy/blob/master/biapy/data/generators/augmentors.py>`_
+       and our own `augmentors.py <https://github.com/BiaPyX/BiaPy/blob/master/biapy/data/generators/augmentors.py>`_
        transformations. This generator will yield an image and its corresponding class.
 
        Based on `microDL <https://github.com/czbiohub/microDL>`_ and

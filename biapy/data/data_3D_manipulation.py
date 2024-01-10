@@ -150,7 +150,7 @@ def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross
         raise NotImplementedError("If you arrived here means that your images are not all of the same shape, and you "
                                   "select DATA.EXTRACT_RANDOM_PATCH = True, so no crops are made to ensure all images "
                                   "have the same shape. Please, crop them into your DATA.PATCH_SIZE and run again (you "
-                                  "can use one of the script from here to crop: https://github.com/danifranco/BiaPy/tree/master/biapy/utils/scripts)")
+                                  "can use one of the script from here to crop: https://github.com/BiaPyX/BiaPy/tree/master/biapy/utils/scripts)")
 
     # Discard images that do not surpass the foreground percentage threshold imposed 
     if minimum_foreground_perc != -1 and Y_train is not None:

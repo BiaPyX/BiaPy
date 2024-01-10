@@ -20,7 +20,7 @@ from biapy.data.pre_processing import normalize, norm_range01
 class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
     """
     Custom BaseDataGenerator based on `imgaug <https://github.com/aleju/imgaug-doc>`_
-    and our own `augmentors.py <https://github.com/danifranco/BiaPy/blob/master/biapy/data/generators/augmentors.py>`_
+    and our own `augmentors.py <https://github.com/BiaPyX/BiaPy/blob/master/biapy/data/generators/augmentors.py>`_
     transformations. 
 
     Based on `microDL <https://github.com/czbiohub/microDL>`_ and

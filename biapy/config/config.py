@@ -788,7 +788,8 @@ class Config:
         # Apply a binary mask to remove possible segmentation outside it
         _C.TEST.POST_PROCESSING.APPLY_MASK = False
 
-        # Whether to measure morphological features on each instances. It is always done 
+        # Whether to measure morphological features on each instances, i.e. 'circularity' (2D), 'elongation' (2D), 'npixels', 'area', 'diameter', 
+        # 'perimeter', 'sphericity' (3D)
         _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES = CN() 
         _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.ENABLE = False
         # Remove instances by the conditions based in each instance properties. The three variables, i.e. 
@@ -832,33 +833,31 @@ class Config:
         #   * 'sphericity', in 3D, it is the ratio of the squared volume over the cube of the surface area, normalized such that the value 
         #     for a ball equals one: (36 * PI)*((volume^2)/(perimeter^3)). Only measurable for 3D images (use circularity for 2D images).
         #
-        _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES = CN() 
-        # Whether to enable or not the filtering by properties
-        _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.ENABLE = False 
-        # List of properties to apply a filter. Available properties are: ['circularity', 'elongation', 'npixels', 'area', 'diameter', 
-        # 'perimeter', 'sphericity']  
-        _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS = []
-        # Values of the properties listed in TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES that the instances need to 
-        # satisfy to not be droped. Values for each property:
-        # * 'circularity' must be a float in [0,1] range. 
-        # * 'area', 'npixels' and 'diameter' can be integer/float. 
-        _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.VALUES = []
-        # Sign to do the comparison. Options: ['gt', 'ge', 'lt', 'le'] that corresponds to "greather than", e.g. ">", 
-        # "greather equal", e.g. ">=", "less than", e.g. "<", and "less equal" e.g. "<=" comparisons.
-        _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGN = []
         # A full example of this post-processing: 
         # If you want to remove those instances that have less than 100 pixels and circularity less equal to 0.7 you should 
         # declare the above three variables as follows:
-        # _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES = [['npixels', 'circularity']]
-        # _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES_VALUES = [[100, 0.7]]
-        # _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES_SIGN = [['lt', 'le']]
+        #   _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS = [['npixels', 'circularity']]
+        #   _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.VALUES = [[100, 0.7]]
+        #   _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGN = [['lt', 'le']]
         # You can also concatenate more restrictions and they will be applied in order. For instance, if you want to remove those 
         # instances that are bigger than an specific area, and do that before the condition described above, you can define the 
         # variables this way:
-        # _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES = [['area'], ['npixels', 'circularity']]
-        # _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES_VALUES = [[500], [100, 0.7]]
-        # _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES_SIGN = [['gt'], ['lt', 'le']]        
+        #   _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS = [['area'], ['npixels', 'circularity']]
+        #   _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.VALUES = [[500], [100, 0.7]]
+        #   _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGN = [['gt'], ['lt', 'le']]        
         # This way, the instances will be removed by 'area' and then by 'npixels' and 'circularity'
+        _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES = CN() 
+        # Whether to enable or not the filtering by properties
+        _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.ENABLE = False 
+        # List of lists of properties to apply a filter. Available properties are: ['circularity', 'elongation', 'npixels', 'area', 'diameter', 
+        # 'perimeter', 'sphericity']  
+        _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS = []
+        # List of ints/float that represent the values of the properties listed in TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES 
+        # that the instances need to satisfy to not be dropped.
+        _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.VALUES = []
+        # List of list of signs to do the comparison. Options: ['gt', 'ge', 'lt', 'le'] that corresponds to "greather than", e.g. ">", 
+        # "greather equal", e.g. ">=", "less than", e.g. "<", and "less equal" e.g. "<=" comparisons.
+        _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGN = []
 
         ### Instance segmentation
         # Whether to apply Voronoi using 'BC' or 'M' channels need to be present
