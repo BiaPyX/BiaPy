@@ -2,10 +2,11 @@ import os
 import numpy as np
 import collections
 import requests
-
+from pathlib import Path
+from biapy.utils.misc import get_checkpoint_path
 from biapy.utils.util import check_value
 
-def check_configuration(cfg, check_data_paths=True):
+def check_configuration(cfg, jobname, check_data_paths=True):
     """
     Check if the configuration is good. 
     """
@@ -625,6 +626,10 @@ def check_configuration(cfg, check_data_paths=True):
                         m += "\n 3) If the Z axis is the problem, as the patch size is normally less than in other axis due to resolution, you " + \
                             "can tune 'MODEL.Z_DOWN' variable to not downsample the image in all U-Net levels"
                     raise ValueError(m)
+
+    if cfg.MODEL.LOAD_CHECKPOINT and check_data_paths:
+        if not os.path.exists(get_checkpoint_path(cfg, jobname)):
+            raise FileNotFoundError(f"Model checkpoint not found at {get_checkpoint_path(cfg, jobname)}")
 
     ### Train ###
     assert cfg.TRAIN.OPTIMIZER in ['SGD', 'ADAM', 'ADAMW'], "TRAIN.OPTIMIZER not in ['SGD', 'ADAM', 'ADAMW']"
