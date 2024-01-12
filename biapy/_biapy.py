@@ -106,7 +106,7 @@ def run_job(config, result_dir=os.getenv('HOME'), name="unknown_job", run_id=1, 
     torch.set_num_threads(cpu_count)
     cfg.merge_from_list(['SYSTEM.NUM_CPUS', cpu_count])
 
-    check_configuration(cfg)
+    check_configuration(cfg, job_identifier)
     print("Configuration details:")
     print(cfg)
 

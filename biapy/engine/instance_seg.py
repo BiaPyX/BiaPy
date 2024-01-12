@@ -8,7 +8,7 @@ from skimage.segmentation import clear_border
 from skimage.transform import resize
 
 from biapy.data.post_processing.post_processing import (watershed_by_channels, voronoi_on_mask, 
-    remove_by_properties, repare_large_blobs, apply_binary_mask)
+    measure_morphological_props_and_filter, repare_large_blobs, apply_binary_mask)
 from biapy.data.pre_processing import create_instance_channels, create_test_instance_channels, norm_range01
 from biapy.utils.util import save_tif, pad_and_reflect
 from biapy.utils.matching import matching, wrapper_matching_dataset_lazy
@@ -68,12 +68,8 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         self.load_Y_val = True
 
         # Specific instance segmentation post-processing
-        self.remove_by_prop = False 
-        for i in range(len(self.cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES)):
-            if len(self.cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES[i]) > 0:
-                self.remove_by_prop = True
-                break 
-        if self.cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK or self.remove_by_prop or\
+        if self.cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK or \
+            self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.ENABLE or \
             self.cfg.TEST.POST_PROCESSING.REPARE_LARGE_BLOBS_SIZE != -1:
             self.post_processing['instance_post'] = True
             self.all_matching_stats_post_processing = []   
@@ -295,18 +291,25 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         if self.cfg.TEST.POST_PROCESSING.REPARE_LARGE_BLOBS_SIZE != -1:
             w_pred = repare_large_blobs(w_pred, self.cfg.TEST.POST_PROCESSING.REPARE_LARGE_BLOBS_SIZE)
 
-        if self.remove_by_prop:
-            w_pred, labels, centers, npixels, areas, circularities, diameters, comment, all_conds = remove_by_properties(w_pred, self.cfg.DATA.TEST.RESOLUTION, 
-                properties=self.cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES, prop_values=self.cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_VALUES,
-                comp_signs=self.cfg.TEST.POST_PROCESSING.REMOVE_BY_PROPERTIES_SIGN)
+        if self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.ENABLE or \
+            self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.ENABLE:
+            w_pred, d_result = measure_morphological_props_and_filter(w_pred.squeeze(), self.cfg.DATA.TEST.RESOLUTION, 
+                filter_instances=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.ENABLE,
+                properties=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS, 
+                prop_values=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.VALUES,
+                comp_signs=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGN)
 
             # Save all instance stats            
-            if w_pred.ndim == 2:
-                df = pd.DataFrame(zip(np.array(labels, dtype=np.uint64), list(centers[:,0]), list(centers[:,1]), npixels, areas, circularities, 
-                    diameters, comment, all_conds), columns=['label', 'axis-0', 'axis-1', 'npixels', 'area' , 'circularity', 'diameter', 'comment', 'conditions'])
+            if self.cfg.PROBLEM.NDIM == "2D":
+                df = pd.DataFrame(zip(np.array(d_result['labels'], dtype=np.uint64), list(d_result['centers'][:,0]), list(d_result['centers'][:,1]), 
+                    d_result['npixels'], d_result['areas'], d_result['circularities'], d_result['diameters'], d_result['perimeters'], d_result['elongations'],
+                    d_result['comment'], d_result['conditions']), columns=['label', 'axis-0', 'axis-1', 'npixels', 'area', 'circularity', 'diameter', 
+                    'perimeter', 'elongation', 'comment', 'conditions'])
             else:
-                df = pd.DataFrame(zip(np.array(labels, dtype=np.uint64), list(centers[:,0]), list(centers[:,1]), list(centers[:,2]), npixels, areas, circularities, 
-                    diameters, comment, all_conds), columns=['label', 'axis-0', 'axis-1', 'axis-2', 'npixels', 'volume' , 'circularity', 'diameter', 'comment', 'conditions'])
+                df = pd.DataFrame(zip(np.array(d_result['labels'], dtype=np.uint64), list(d_result['centers'][:,0]), list(d_result['centers'][:,1]), 
+                    list(d_result['centers'][:,2]), d_result['npixels'], d_result['areas'], d_result['circularities'], d_result['diameters'], 
+                    d_result['perimeters'], d_result['comment'], d_result['conditions']), columns=['label', 'axis-0', 'axis-1', 
+                    'axis-2', 'npixels', 'volume', 'sphericity', 'diameter', 'perimeter (surface area)', 'comment', 'conditions'])
             df = df.sort_values(by=['label'])   
             df.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES, os.path.splitext(filenames[0])[0]+'_full_stats.csv'), index=False)
             # Save only remain instances stats
