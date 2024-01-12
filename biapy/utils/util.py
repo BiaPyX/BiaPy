@@ -1393,6 +1393,8 @@ def read_chunked_data(filename):
             data = fid[list(fid)[0]]
         elif filename.endswith('.zarr'):
             fid = zarr.open(filename,'r')
+            if len(list((fid.group_keys()))) != 0:
+                fid = fid[list(fid.group_keys())[0]]
             data = fid[list(fid.array_keys())[0]]
         else:
             raise ValueError(f"File extension {os.path.splitext(fid)[1]} not recognized")
