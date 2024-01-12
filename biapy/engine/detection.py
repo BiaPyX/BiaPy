@@ -468,7 +468,7 @@ class Detection_Workflow(Base_Workflow):
         """
         Place any code that needs to be done after merging all predicted patches into the original image
         but in the process made chunk by chunk. This function will operate patch by patch defined by
-        ``DATA.PATCH_SIZE``.
+        ``DATA.PATCH_SIZE`` + ``DATA.PADDING``.
 
         Parameters
         ----------
@@ -496,6 +496,9 @@ class Detection_Workflow(Base_Workflow):
             for y in range(y_vols):
                 for x in range(x_vols):
                     print("Processing patch {}/{} of image".format(c, total_patches))
+                    
+                    print("D: z: {}-{}, y: {}-{}, x: {}-{}".format(z*self.cfg.DATA.PATCH_SIZE[0],min(z_dim,self.cfg.DATA.PATCH_SIZE[0]*(z+1)),
+                        y*self.cfg.DATA.PATCH_SIZE[1],min(y_dim,self.cfg.DATA.PATCH_SIZE[1]*(y+1)),x*self.cfg.DATA.PATCH_SIZE[2],min(x_dim,self.cfg.DATA.PATCH_SIZE[2]*(x+1))))
                     fname = _filename+"_patch"+str(c).zfill(d)+file_ext
 
                     slices = [
@@ -527,8 +530,13 @@ class Detection_Workflow(Base_Workflow):
 
                     patch = raw_patch.transpose(transpose_order)
 
-
                     df_patch = self.detection_process(patch, [fname])
+                    
+                    # add the patch shift to the detected coordinates
+                    shift = np.array([z*self.cfg.DATA.PATCH_SIZE[0], y*self.cfg.DATA.PATCH_SIZE[1], x*self.cfg.DATA.PATCH_SIZE[2]])
+                    df_patch['axis-0'] = df_patch['axis-0'] + shift[0]
+                    df_patch['axis-1'] = df_patch['axis-1'] + shift[1]
+                    df_patch['axis-2'] = df_patch['axis-2'] + shift[2]
 
                     c+=1
 
