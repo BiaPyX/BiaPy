@@ -1,12 +1,12 @@
 import os
 import math
 import csv
-import torch
+import torch 
 import numpy as np
 import pandas as pd
 from skimage.feature import peak_local_max, blob_log
 from skimage.measure import label, regionprops_table
-from skimage.morphology import disk, dilation
+from skimage.morphology import disk, dilation        
 from tqdm import tqdm
 
 from biapy.data.data_2D_manipulation import load_and_prepare_2D_train_data
@@ -21,21 +21,21 @@ from biapy.engine.base_workflow import Base_Workflow
 class Detection_Workflow(Base_Workflow):
     """
     Detection workflow where the goal is to localize objects in the input image, not requiring a pixel-level class.
-    More details in `our documentation <https://biapy.readthedocs.io/en/latest/workflows/detection.html>`_.
+    More details in `our documentation <https://biapy.readthedocs.io/en/latest/workflows/detection.html>`_.  
 
     Parameters
     ----------
     cfg : YACS configuration
         Running configuration.
-
+    
     Job_identifier : str
         Complete name of the running job.
 
     device : Torch device
-        Device used.
+        Device used. 
 
     args : argpase class
-        Arguments used in BiaPy's call.
+        Arguments used in BiaPy's call. 
     """
     def __init__(self, cfg, job_identifier, device, args, **kwargs):
         super(Detection_Workflow, self).__init__(cfg, job_identifier, device, args, **kwargs)
@@ -56,9 +56,9 @@ class Detection_Workflow(Base_Workflow):
         self.original_test_mask_path = self.prepare_detection_data()
 
         if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
-            self.use_gt = True
+            self.use_gt = True 
         if self.cfg.TEST.BY_CHUNKS.ENABLE and self.cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.ENABLE:
-            self.use_gt = False
+            self.use_gt = False 
 
         if self.use_gt:
             self.csv_files = sorted(next(os.walk(self.original_test_mask_path))[2])
@@ -85,19 +85,19 @@ class Detection_Workflow(Base_Workflow):
         if self.cfg.TEST.POST_PROCESSING.DET_WATERSHED or self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS:
             self.post_processing['detection_post'] = True
         else:
-            self.post_processing['detection_post'] = False
+            self.post_processing['detection_post'] = False    
 
     def define_metrics(self):
         """
         Definition of self.metrics, self.metric_names and self.loss variables.
         """
         self.metrics = [
-            jaccard_index(num_classes=self.cfg.MODEL.N_CLASSES,
-                first_not_binary_channel=self.cfg.MODEL.N_CLASSES, device=self.device,
+            jaccard_index(num_classes=self.cfg.MODEL.N_CLASSES, 
+                first_not_binary_channel=self.cfg.MODEL.N_CLASSES, device=self.device, 
                 torchvision_models=True if self.cfg.MODEL.SOURCE == "torchvision" else False)
         ]
         self.metric_names = ["jaccard_index"]
-        if self.cfg.LOSS.TYPE == "CE":
+        if self.cfg.LOSS.TYPE == "CE": 
             self.loss = CrossEntropyLoss_wrapper(num_classes=self.cfg.MODEL.N_CLASSES,
                 torchvision_models=True if self.cfg.MODEL.SOURCE == "torchvision" else False)
         elif self.cfg.LOSS.TYPE == "W_CE_DICE":
@@ -105,23 +105,23 @@ class Detection_Workflow(Base_Workflow):
 
     def metric_calculation(self, output, targets, metric_logger=None):
         """
-        Execution of the metrics defined in :func:`~define_metrics` function.
+        Execution of the metrics defined in :func:`~define_metrics` function. 
 
         Parameters
         ----------
         output : Torch Tensor
-            Prediction of the model.
+            Prediction of the model. 
 
         targets : Torch Tensor
-            Ground truth to compare the prediction with.
+            Ground truth to compare the prediction with. 
 
         metric_logger : MetricLogger, optional
-            Class to be updated with the new metric(s) value(s) calculated.
-
+            Class to be updated with the new metric(s) value(s) calculated. 
+        
         Returns
         -------
         value : float
-            Value of the metric for the given prediction.
+            Value of the metric for the given prediction. 
         """
         with torch.no_grad():
             train_iou = self.metrics[0](output, targets)
@@ -133,14 +133,14 @@ class Detection_Workflow(Base_Workflow):
 
     def detection_process(self, pred, filenames, metric_names=[]):
         """
-        Detection workflow engine for test/inference. Process model's prediction to prepare detection output and
-        calculate metrics.
+        Detection workflow engine for test/inference. Process model's prediction to prepare detection output and 
+        calculate metrics. 
 
         Parameters
         ----------
         pred : Torch Tensor
             Model predictions.
-
+        
         filenames : List of str
             Predicted image's filenames.
 
@@ -159,13 +159,13 @@ class Detection_Workflow(Base_Workflow):
                 min_th_peak = self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK[0]
             else:
                 min_th_peak = self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK[channel]
-
+            
             # Find points
             if self.cfg.TEST.DET_POINT_CREATION_FUNCTION == "peak_local_max":
                 pred_coordinates = peak_local_max(pred[...,channel].astype(np.float32), threshold_abs=min_th_peak, exclude_border=False)
             else:
-                pred_coordinates = blob_log(pred[...,channel]*255, min_sigma=self.cfg.TEST.DET_BLOB_LOG_MIN_SIGMA,
-                    max_sigma=self.cfg.TEST.DET_BLOB_LOG_MAX_SIGMA, num_sigma=self.cfg.TEST.DET_BLOB_LOG_NUM_SIGMA,
+                pred_coordinates = blob_log(pred[...,channel]*255, min_sigma=self.cfg.TEST.DET_BLOB_LOG_MIN_SIGMA, 
+                    max_sigma=self.cfg.TEST.DET_BLOB_LOG_MAX_SIGMA, num_sigma=self.cfg.TEST.DET_BLOB_LOG_NUM_SIGMA, 
                     threshold=min_th_peak, exclude_border=False)
                 pred_coordinates = pred_coordinates[:,:3].astype(int) # Remove sigma
 
@@ -178,8 +178,8 @@ class Detection_Workflow(Base_Workflow):
 
                 pred_coordinates = remove_close_points(pred_coordinates, radius, self.cfg.DATA.TEST.RESOLUTION,
                     ndim=ndim)
-
-            all_points.append(pred_coordinates)
+                    
+            all_points.append(pred_coordinates)   
             c_size = 1 if len(pred_coordinates) == 0 else len(pred_coordinates)
             all_classes.append(np.full(c_size, channel))
 
@@ -195,7 +195,7 @@ class Detection_Workflow(Base_Workflow):
 
             new_points, all_classes = remove_close_points(all_points, radius, self.cfg.DATA.TEST.RESOLUTION,
                 classes=all_classes, ndim=ndim)
-
+            
             # Create again list of arrays of all points
             all_points = []
             for i in range(classes):
@@ -204,7 +204,7 @@ class Detection_Workflow(Base_Workflow):
                 all_points[c].append(new_points[i])
             del new_points
         # Create a file with detected point and other image with predictions ids (if GT given)
-        print("Creating the images with detected points . . .")
+        print("Creating the images with detected points . . .")   
         points_pred = np.zeros(pred.shape[:-1], dtype=np.uint8)
         for n, pred_coordinates in enumerate(all_points):
             if self.use_gt:
@@ -214,14 +214,14 @@ class Detection_Workflow(Base_Workflow):
                 points_pred[z,y,x] = n+1
                 if self.use_gt:
                     pred_id_img[z,y,x] = j+1
-
-            # Dilate and save the prediction ids for the current class
+            
+            # Dilate and save the prediction ids for the current class 
             if self.use_gt:
-                for i in range(pred_id_img.shape[0]):
+                for i in range(pred_id_img.shape[0]):                                                                                  
                     pred_id_img[i] = dilation(pred_id_img[i], disk(3))
                 if file_ext in ['.hdf5', '.h5', ".zarr"]:
-                    write_chunked_data(np.expand_dims(pred_id_img,-1), self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
-                        os.path.splitext(filenames[0])[0]+'_class'+str(n+1)+'_pred_ids'+file_ext, dtype_str="uint32",
+                    write_chunked_data(np.expand_dims(pred_id_img,-1), self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, 
+                        os.path.splitext(filenames[0])[0]+'_class'+str(n+1)+'_pred_ids'+file_ext, dtype_str="uint32", 
                         verbose=self.cfg.TEST.VERBOSE)
                 else:
                     save_tif(np.expand_dims(np.expand_dims(pred_id_img,0),-1), self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
@@ -233,10 +233,10 @@ class Detection_Workflow(Base_Workflow):
 
         # Dilate and save the detected point image
         if len(pred_coordinates) > 0:
-            for i in range(points_pred.shape[0]):
-                points_pred[i] = dilation(points_pred[i], disk(3))
+            for i in range(points_pred.shape[0]):                                                                                  
+                points_pred[i] = dilation(points_pred[i], disk(3)) 
         if file_ext in ['.hdf5', '.h5', ".zarr"]:
-            write_chunked_data(np.expand_dims(points_pred,-1), self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, filenames[0],
+            write_chunked_data(np.expand_dims(points_pred,-1), self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, filenames[0], 
                 dtype_str="uint8", verbose=self.cfg.TEST.VERBOSE)
         else:
             save_tif(np.expand_dims(np.expand_dims(points_pred,0),-1), self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
@@ -249,7 +249,7 @@ class Detection_Workflow(Base_Workflow):
             check_wa = w_dir if self.cfg.PROBLEM.DETECTION.DATA_CHECK_MW else None
             points_pred = detection_watershed(points_pred, all_points, data_filename, self.cfg.TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION,
                 clases, ndim=ndim, donuts_classes=self.cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES,
-                donuts_patch=self.cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_PATCH,
+                donuts_patch=self.cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_PATCH, 
                 donuts_nucleus_diameter=self.cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_NUCLEUS_DIAMETER, save_dir=check_wa)
             
             # Instance filtering by properties     
@@ -260,14 +260,14 @@ class Detection_Workflow(Base_Workflow):
                 coords_list=np.concatenate(all_points, axis=0))
 
             if file_ext in ['.hdf5', '.h5', ".zarr"]:
-                write_chunked_data(np.expand_dims(points_pred,-1), self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, filenames[0], dtype_str="uint8",
+                write_chunked_data(np.expand_dims(points_pred,-1), self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, filenames[0], dtype_str="uint8", 
                     verbose=self.cfg.TEST.VERBOSE)
             else:
                 save_tif(np.expand_dims(np.expand_dims(points_pred,0),-1), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,
                     filenames, verbose=self.cfg.TEST.VERBOSE)
         del points_pred
 
-        # Save coords in a couple of csv files
+        # Save coords in a couple of csv files            
         aux = np.concatenate(all_points, axis=0)
         df = None
         if len(aux) != 0:
@@ -287,7 +287,7 @@ class Detection_Workflow(Base_Workflow):
                         for j in range(len(pred_coordinates)):
                             labels.append(j+1)
 
-                    df = pd.DataFrame(zip(labels, list(aux[:,0]), list(aux[:,1]), list(aux[:,2]), list(prob), list(all_classes)),
+                    df = pd.DataFrame(zip(labels, list(aux[:,0]), list(aux[:,1]), list(aux[:,2]), list(prob), list(all_classes)), 
                         columns =['pred_id', 'axis-0', 'axis-1', 'axis-2', 'probability', 'class'])
                     df = df.sort_values(by=['pred_id'])
             else:
@@ -303,10 +303,10 @@ class Detection_Workflow(Base_Workflow):
                         'conditions'])
                     df = df.sort_values(by=['pred_id'])   
                 else:
-                    df = pd.DataFrame(zip(list(aux[:,0]), list(aux[:,1]), list(prob), list(all_classes)),
+                    df = pd.DataFrame(zip(list(aux[:,0]), list(aux[:,1]), list(prob), list(all_classes)), 
                         columns =['axis-0', 'axis-1', 'probability', 'class'])
                     df = df.sort_values(by=['axis-0'])
-            del aux
+            del aux 
 
             # Save jus the points and their probabilities 
             df.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, os.path.splitext(filenames[0])[0]+'_full_info.csv'))
@@ -335,10 +335,10 @@ class Detection_Workflow(Base_Workflow):
                     csv_filename = os.path.join(self.original_test_mask_path, self.csv_files[self.f_numbers[0]])
                     print("Its respective CSV file seems to be: {}".format(csv_filename))
                 print("Reading GT data from: {}".format(csv_filename))
-                df_gt = pd.read_csv(csv_filename, index_col=0)
+                df_gt = pd.read_csv(csv_filename, index_col=0)     
                 zcoords = df_gt['axis-0'].tolist()
                 ycoords = df_gt['axis-1'].tolist()
-                if self.cfg.PROBLEM.NDIM == '3D':
+                if self.cfg.PROBLEM.NDIM == '3D': 
                     xcoords = df_gt['axis-2'].tolist()
                     gt_coordinates = [[z,y,x] for z,y,x in zip(zcoords,ycoords,xcoords)]
                 else:
@@ -350,7 +350,7 @@ class Detection_Workflow(Base_Workflow):
                 else:
                     v_size = (1,self.cfg.DATA.TEST.RESOLUTION[0], self.cfg.DATA.TEST.RESOLUTION[1])
 
-                # Calculate detection metrics
+                # Calculate detection metrics 
                 if len(pred_coordinates) > 0:
                     print("Detection (class "+str(ch+1)+")")
                     d_metrics, gt_assoc, fp = detection_metrics(gt_coordinates, pred_coordinates, tolerance=self.cfg.TEST.DET_TOLERANCE[ch],
@@ -360,7 +360,7 @@ class Detection_Workflow(Base_Workflow):
                     all_channel_d_metrics[1] += d_metrics[3]
                     all_channel_d_metrics[2] += d_metrics[5]
 
-                    # Save csv files with the associations between GT points and predicted ones
+                    # Save csv files with the associations between GT points and predicted ones 
                     dfs.append([gt_assoc.copy(),fp.copy()])
                     if self.cfg.PROBLEM.NDIM == "2D":
                         gt_assoc = gt_assoc.drop(columns=['axis-0'])
@@ -368,7 +368,7 @@ class Detection_Workflow(Base_Workflow):
                         gt_assoc = gt_assoc.rename(columns={'axis-1': 'axis-0', 'axis-2': 'axis-1'})
                         fp = fp.rename(columns={'axis-1': 'axis-0', 'axis-2': 'axis-1'})
                     gt_assoc.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, os.path.splitext(filenames[0])[0]+'_class'+str(ch+1)+'_gt_assoc.csv'))
-                    fp.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, os.path.splitext(filenames[0])[0]+'_class'+str(ch+1)+'_fp.csv'))
+                    fp.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, os.path.splitext(filenames[0])[0]+'_class'+str(ch+1)+'_fp.csv'))             
                 else:
                     print("No point found to calculate the metrics!")
 
@@ -382,7 +382,7 @@ class Detection_Workflow(Base_Workflow):
             self.stats[metric_names[0]] += all_channel_d_metrics[0]
             self.stats[metric_names[1]] += all_channel_d_metrics[1]
             self.stats[metric_names[2]] += all_channel_d_metrics[2]
-
+            
             print("Creating the image with a summary of detected points and false positives with colors . . .")
             points_pred = np.zeros(pred_shape[:-1]+(3,), dtype=np.uint8)
             for ch, gt_coords in enumerate(gt_all_coords):
@@ -397,47 +397,47 @@ class Detection_Workflow(Base_Workflow):
                     if len(dfs) > 0:
                         if gt_assoc[gt_assoc['gt_id'] == j+1]["tag"].iloc[0] == "TP":
                             points_pred[z,y,x] = (0,255,0)# Green
-                        else:
+                        else:   
                             points_pred[z,y,x] = (255,0,0)# Red
-                    else:
+                    else:                           
                         points_pred[z,y,x] = (255,0,0)# Red
 
                     gt_id_img[z,y,x] = j+1
 
-                # Dilate and save the GT ids for the current class
-                for i in range(gt_id_img.shape[0]):
+                # Dilate and save the GT ids for the current class 
+                for i in range(gt_id_img.shape[0]):      
                     gt_id_img[i] = dilation(gt_id_img[i], disk(3))
                 if file_ext in ['.hdf5', '.h5', ".zarr"]:
-                    write_chunked_data(np.expand_dims(gt_id_img,-1), self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
-                        os.path.splitext(filenames[0])[0]+'_class'+str(ch+1)+'_gt_ids'+file_ext, dtype_str="uint32",
+                    write_chunked_data(np.expand_dims(gt_id_img,-1), self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, 
+                        os.path.splitext(filenames[0])[0]+'_class'+str(ch+1)+'_gt_ids'+file_ext, dtype_str="uint32", 
                         verbose=self.cfg.TEST.VERBOSE)
                 else:
                     save_tif(np.expand_dims(np.expand_dims(gt_id_img,0),-1), self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
                         [os.path.splitext(filenames[0])[0]+'_class'+str(ch+1)+'_gt_ids.csv'], verbose=self.cfg.TEST.VERBOSE)
-
+                
                 # FP
                 if len(dfs) > 0:
                     for cor in zip(fp['axis-0'].tolist(),fp['axis-1'].tolist(),fp['axis-2'].tolist()):
-                        z, y, x =  cor
+                        z, y, x =  cor  
                         z,y,x = int(z),int(y),int(x)
                         points_pred[z,y,x] = (0,0,255) # Blue
 
-            # Dilate and save the predicted points for the current class
-            for i in range(points_pred.shape[0]):
-                for j in range(points_pred.shape[-1]):
-                    points_pred[i,...,j] = dilation(points_pred[i,...,j], disk(3))
+            # Dilate and save the predicted points for the current class 
+            for i in range(points_pred.shape[0]):      
+                for j in range(points_pred.shape[-1]):                                                                              
+                    points_pred[i,...,j] = dilation(points_pred[i,...,j], disk(3)) 
             if file_ext in ['.hdf5', '.h5', ".zarr"]:
-                write_chunked_data(points_pred, self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, filenames[0],
+                write_chunked_data(points_pred, self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, filenames[0], 
                     dtype_str="uint8", verbose=self.cfg.TEST.VERBOSE)
             else:
                 save_tif(np.expand_dims(points_pred,0), self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
-                    filenames, verbose=self.cfg.TEST.VERBOSE)
-
-        return df
+                    filenames, verbose=self.cfg.TEST.VERBOSE)    
+                            
+        return df 
 
     def normalize_stats(self, image_counter):
         """
-        Normalize statistics.
+        Normalize statistics.  
 
         Parameters
         ----------
@@ -475,15 +475,15 @@ class Detection_Workflow(Base_Workflow):
     def after_merge_patches_by_chunks_proccess_patch(self, filename):
         """
         Place any code that needs to be done after merging all predicted patches into the original image
-        but in the process made chunk by chunk. This function will operate patch by patch defined by
+        but in the process made chunk by chunk. This function will operate patch by patch defined by 
         ``DATA.PATCH_SIZE``.
 
         Parameters
         ----------
         filename : List of str
-            Filename of the predicted image H5/Zarr.
+            Filename of the predicted image H5/Zarr.  
         """
-
+        
         _filename, file_ext = os.path.splitext(os.path.basename(filename))
         print("Detection workflow pipeline continues for image {}".format(_filename))
 
@@ -548,9 +548,9 @@ class Detection_Workflow(Base_Workflow):
                             df_patch['file'] = fname
                             df = pd.concat([df, df_patch], ignore_index=True)
 
-        # Apply post-processing of removing points
+        # Apply post-processing of removing points         
         if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS and self.postpone_postproc:
-            # Take point coords
+            # Take point coords 
             pred_coordinates = []
             coordz = df['axis-0'].tolist()
             coordy = df['axis-1'].tolist()
@@ -561,7 +561,7 @@ class Detection_Workflow(Base_Workflow):
             pred_coordinates, droped_pos = remove_close_points(pred_coordinates, radius, self.cfg.DATA.TEST.RESOLUTION,
                 ndim=3, return_drops=True)
 
-            # Remove points from dataframe
+            # Remove points from dataframe 
             df = df.drop(droped_pos)
 
         # Save large csv with all point of all patches
@@ -573,7 +573,7 @@ class Detection_Workflow(Base_Workflow):
 
     def process_sample(self, norm):
         """
-        Function to process a sample in the inference phase.
+        Function to process a sample in the inference phase. 
 
         Parameters
         ----------
@@ -595,7 +595,7 @@ class Detection_Workflow(Base_Workflow):
                 # Make the prediction
                 with torch.cuda.amp.autocast():
                     pred = self.model_call_func(self._X)
-                del self._X
+                del self._X 
 
     def torchvision_model_call(self, in_img, is_train=False):
         """
@@ -607,12 +607,12 @@ class Detection_Workflow(Base_Workflow):
             Input image to pass through the model.
 
         is_train : bool, optional
-            Whether if the call is during training or inference.
+            Whether if the call is during training or inference. 
 
         Returns
         -------
-        prediction : Tensor
-            Image prediction.
+        prediction : Tensor 
+            Image prediction. 
         """
         filename, file_extension = os.path.splitext(self.processing_filenames[0])
 
@@ -621,7 +621,7 @@ class Detection_Workflow(Base_Workflow):
             if torch.max(in_img) > 1:
                 in_img = (norm_range01(in_img, torch.uint8)[0]*255).to(torch.uint8)
             in_img = in_img.to(torch.uint8)
-
+        
         # Apply TorchVision pre-processing
         in_img = self.torchvision_preprocessing(in_img)
 
@@ -632,11 +632,11 @@ class Detection_Workflow(Base_Workflow):
             # Extract each output from prediction
             labels = pred[0]['labels'].cpu().numpy()
             scores = pred[0]['scores'].cpu().numpy()
-
+            
             # Save all info in a csv file
-            df = pd.DataFrame(zip(labels, scores, bboxes[:,0],bboxes[:,1],bboxes[:,2],bboxes[:,3]),
+            df = pd.DataFrame(zip(labels, scores, bboxes[:,0],bboxes[:,1],bboxes[:,2],bboxes[:,3]), 
                 columns = ['label', 'scores', 'x1', 'y1', 'x2', 'y2'])
-            df = df.sort_values(by=['label'])
+            df = df.sort_values(by=['label']) 
             df.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.FULL_IMAGE, filename+".csv"), index=False)
 
         return None
@@ -654,20 +654,20 @@ class Detection_Workflow(Base_Workflow):
 
     def after_all_images(self):
         """
-        Steps that must be done after predicting all images.
+        Steps that must be done after predicting all images. 
         """
         super().after_all_images()
 
     def print_stats(self, image_counter):
         """
-        Print statistics.
+        Print statistics.  
 
         Parameters
         ----------
         image_counter : int
             Number of images to call ``normalize_stats``.
         """
-        if not self.use_gt or self.cfg.MODEL.SOURCE == "torchvision": return
+        if not self.use_gt or self.cfg.MODEL.SOURCE == "torchvision": return 
 
         super().print_stats(image_counter)
         super().print_post_processing_stats()
@@ -686,7 +686,7 @@ class Detection_Workflow(Base_Workflow):
     def prepare_detection_data(self):
         """
         Creates detection ground truth images to train the model based on the ground truth coordinates provided.
-        They will be saved in a separate folder in the root path of the ground truth.
+        They will be saved in a separate folder in the root path of the ground truth. 
         """
         print("############################")
         print("#  PREPARE DETECTION DATA  #")
@@ -705,7 +705,7 @@ class Detection_Workflow(Base_Workflow):
                 if len(next(os.walk(self.cfg.DATA.TRAIN.DETECTION_MASK_DIR))[2]) != len(next(os.walk(self.cfg.DATA.TRAIN.GT_PATH))[2]):
                     print("Different number of files found in {} and {}. Trying to create the the rest again"
                         .format(self.cfg.DATA.TRAIN.GT_PATH,self.cfg.DATA.TRAIN.DETECTION_MASK_DIR))
-                    create_mask = True
+                    create_mask = True    
 
             if create_mask:
                 create_detection_masks(self.cfg)
@@ -722,8 +722,8 @@ class Detection_Workflow(Base_Workflow):
                 if len(next(os.walk(self.cfg.DATA.VAL.DETECTION_MASK_DIR))[2]) != len(next(os.walk(self.cfg.DATA.VAL.GT_PATH))[2]):
                     print("Different number of files found in {} and {}. Trying to create the the rest again"
                         .format(self.cfg.DATA.VAL.GT_PATH,self.cfg.DATA.VAL.DETECTION_MASK_DIR))
-                    create_mask = True
-
+                    create_mask = True 
+                    
             if create_mask:
                 create_detection_masks(self.cfg, data_type='val')
 
@@ -739,7 +739,7 @@ class Detection_Workflow(Base_Workflow):
                 if len(next(os.walk(self.cfg.DATA.TEST.DETECTION_MASK_DIR))[2]) != len(next(os.walk(self.cfg.DATA.TEST.GT_PATH))[2]):
                     print("Different number of files found in {} and {}. Trying to create the the rest again"
                         .format(self.cfg.DATA.TEST.GT_PATH,self.cfg.DATA.TEST.DETECTION_MASK_DIR))
-                    create_mask = True
+                    create_mask = True 
             if create_mask:
                 create_detection_masks(self.cfg, data_type='test')
 
@@ -755,6 +755,6 @@ class Detection_Workflow(Base_Workflow):
             opts.extend(['DATA.TEST.GT_PATH', self.cfg.DATA.TEST.DETECTION_MASK_DIR])
             original_test_mask_path = self.cfg.DATA.TEST.GT_PATH
         self.cfg.merge_from_list(opts)
-
+        
 
         return original_test_mask_path
