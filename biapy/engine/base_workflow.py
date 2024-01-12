@@ -975,10 +975,23 @@ class Base_Workflow(metaclass=ABCMeta):
                             data = allfile.create_dataset("data", shape=data_part.shape, dtype=self.dtype_str, compression="gzip")
 
                     for j, k in enumerate(list_of_vols_in_z[i]):
+                        
+                        slices = [
+                            slice(z_vol_info[k][0],z_vol_info[k][1]), # z (only z axis is distributed across GPUs)
+                            slice(None), # y
+                            slice(None), # x
+                            slice(None), # Channel
+                        ]
+                        
+                        data_ordered_slices = order_dimensions(
+                            slices,
+                            input_order="ZYXC",
+                            output_order=self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
+                            default_value=0)
+
                         if self.cfg.TEST.VERBOSE:
                             print(f"Filling {k} [{z_vol_info[k][0]}:{z_vol_info[k][1]}]")
-                        data[:,z_vol_info[k][0]:z_vol_info[k][1]] = \
-                            data_part[:,z_vol_info[k][0]:z_vol_info[k][1]] / data_mask_part[:,z_vol_info[k][0]:z_vol_info[k][1]]
+                        data[data_ordered_slices] = data_part[data_ordered_slices] / data_mask_part[data_ordered_slices]
 
                         if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
                             allfile.flush()
