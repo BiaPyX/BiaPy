@@ -1392,12 +1392,17 @@ def read_chunked_data(filename):
         if filename.endswith('.hdf5') or filename.endswith('.h5'):
             fid = h5py.File(filename,'r')
             data = fid[list(fid)[0]]
-        elif filename.endswith('.zarr'):  
+        elif filename.endswith('.zarr'):
             fid = zarr.open(filename,'r')
-            data = fid[list(fid.array_keys())[0]]
+            if len(list((fid.group_keys()))) != 0: # if the zarr has groups
+                fid = fid[list(fid.group_keys())[0]]
+            if len(list((fid.array_keys()))) != 0: # if the zarr has arrays
+                data = fid[list(fid.array_keys())[0]]
+            else: 
+                data = fid
         else:
             raise ValueError(f"File extension {os.path.splitext(fid)[1]} not recognized")
-    
+
         return fid, data
 
 def write_chunked_data(data, data_dir, filename, dtype_str="float32", verbose=True):
