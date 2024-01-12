@@ -14,7 +14,7 @@ from biapy.data.data_3D_manipulation import load_and_prepare_3D_data
 from biapy.data.post_processing.post_processing import (remove_close_points, detection_watershed, 
     measure_morphological_props_and_filter)
 from biapy.data.pre_processing import create_detection_masks, norm_range01
-from biapy.utils.util import save_tif, read_chunked_data, write_chunked_data
+from biapy.utils.util import save_tif, read_chunked_data, write_chunked_data, order_dimensions
 from biapy.engine.metrics import detection_metrics, jaccard_index, weighted_bce_dice_loss, CrossEntropyLoss_wrapper
 from biapy.engine.base_workflow import Base_Workflow
 
@@ -489,11 +489,14 @@ class Detection_Workflow(Base_Workflow):
 
         # Load H5/Zarr
         pred_file, pred = read_chunked_data(filename)
-        
+
+        t_dim, z_dim, c_dim, y_dim, x_dim = order_dimensions(pred.shape,
+                        self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER)
+
         # Fill the new data
-        z_vols = math.ceil(pred.shape[0]/self.cfg.DATA.PATCH_SIZE[0])
-        y_vols = math.ceil(pred.shape[1]/self.cfg.DATA.PATCH_SIZE[1])
-        x_vols = math.ceil(pred.shape[2]/self.cfg.DATA.PATCH_SIZE[2])
+        z_vols = math.ceil(z_dim/self.cfg.DATA.PATCH_SIZE[0])
+        y_vols = math.ceil(y_dim/self.cfg.DATA.PATCH_SIZE[1])
+        x_vols = math.ceil(x_dim/self.cfg.DATA.PATCH_SIZE[2])
         total_patches = z_vols*y_vols*x_vols
         d = len(str(total_patches))
         c=1
@@ -502,11 +505,39 @@ class Detection_Workflow(Base_Workflow):
                 for x in range(x_vols):
                     print("Processing patch {}/{} of image".format(c, total_patches))
                     fname = _filename+"_patch"+str(c).zfill(d)+file_ext
-                    df_patch = self.detection_process(
-                        pred[z*self.cfg.DATA.PATCH_SIZE[0]:min(pred.shape[0],self.cfg.DATA.PATCH_SIZE[0]*(z+1)),
-                             y*self.cfg.DATA.PATCH_SIZE[1]:min(pred.shape[1],self.cfg.DATA.PATCH_SIZE[1]*(y+1)),
-                             x*self.cfg.DATA.PATCH_SIZE[2]:min(pred.shape[2],self.cfg.DATA.PATCH_SIZE[2]*(x+1))], 
-                        [fname])
+
+                    slices = [
+                        slice(z*self.cfg.DATA.PATCH_SIZE[0],min(z_dim,self.cfg.DATA.PATCH_SIZE[0]*(z+1))),
+                        slice(y*self.cfg.DATA.PATCH_SIZE[1],min(y_dim,self.cfg.DATA.PATCH_SIZE[1]*(y+1))),
+                        slice(x*self.cfg.DATA.PATCH_SIZE[2],min(x_dim,self.cfg.DATA.PATCH_SIZE[2]*(x+1))),
+                        slice(None), # Channel
+                    ]
+
+                    data_ordered_slices = order_dimensions(
+                        slices,
+                        input_order = "ZYXC",
+                        output_order = self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
+                        default_value = 0,
+                        )
+
+                    raw_patch = pred[data_ordered_slices]
+
+                    current_order = np.array(range(len(pred.shape)))
+                    transpose_order = order_dimensions(
+                                current_order,
+                                input_order= "ZYXC",
+                                output_order= self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
+                                default_value= np.nan)
+
+                    transpose_order = [x for x in transpose_order if not np.isnan(x)]
+                    transpose_order = np.argsort(transpose_order)
+                    transpose_order = current_order[transpose_order]
+
+                    patch = raw_patch.transpose(transpose_order)
+
+
+                    df_patch = self.detection_process(patch, [fname])
+
                     c+=1
 
                     if 'df' not in locals():

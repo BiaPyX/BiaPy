@@ -1442,3 +1442,39 @@ def write_chunked_data(data, data_dir, filename, dtype_str="float32", verbose=Tr
     else:
         fid = zarr.open_group(os.path.join(data_dir, filename), mode="w")
         data = fid.create_dataset("data", shape=data.shape, dtype=dtype_str)
+
+def order_dimensions(data, input_order, output_order='TZCYX', default_value=1):
+    """
+    Reorder data from any input order to output order.
+
+    Parameters
+    ----------
+    data : Numpy array like
+        data to reorder. E.g. ``(z, y, x, channels)``.
+
+    input_order : str
+        Order of the input data. E.g. ``ZYXC``.
+
+    output_order : str, optional
+        Order of the output data. E.g. ``TZCYX``.
+
+    default_value : Any, optional
+        Default value to use when a dimension is not present in the input order.
+
+    Returns
+    -------
+    shape : Tuple
+        Reordered data. E.g. ``(t, z, channel, y, x)``.
+    """
+
+    if input_order == output_order:
+        return data
+
+    output_data = []
+
+    for i in range(len(output_order)):
+        if output_order[i] in input_order:
+            output_data.append(data[input_order.index(output_order[i])])
+        else:
+            output_data.append(default_value)
+    return tuple(output_data)

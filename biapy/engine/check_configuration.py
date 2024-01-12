@@ -446,9 +446,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         if cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.ENABLE:     
             assert cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE in ["chunk_by_chunk", "entire_pred"], \
                 "'TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE' needs to be one between ['chunk_by_chunk', 'entire_pred']"
-        if cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER not in ['TZCYX', 'TZYXC', 'ZCYX', 'ZYXC']:
-            raise ValueError("'TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER' can only be one between ['TZCYX', 'TZYXC', 'ZCYX', 'ZYXC']")
-            
+
     if cfg.TRAIN.ENABLE:
         if cfg.DATA.EXTRACT_RANDOM_PATCH and cfg.DATA.PROBABILITY_MAP:
             if not cfg.PROBLEM.TYPE == 'SEMANTIC_SEG':
