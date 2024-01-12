@@ -22,9 +22,9 @@ from scipy.ndimage.filters import median_filter
 from scipy.ndimage.measurements import center_of_mass
 from skimage import morphology
 from skimage.morphology import disk, ball, remove_small_objects, dilation, erosion
-from skimage.segmentation import watershed
+from skimage.segmentation import watershed, find_boundaries, relabel_sequential
 from skimage.filters import rank, threshold_otsu
-from skimage.measure import label, regionprops_table
+from skimage.measure import label, regionprops_table, marching_cubes, mesh_surface_area
 from skimage.io import imread
 from skimage.exposure import equalize_adapthist
 
@@ -397,6 +397,7 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
 
     if remove_before:
         seed_map = remove_small_objects(seed_map, thres_small_before)
+        seed_map, _, _ = relabel_sequential(seed_map)
 
     segm = watershed(-semantic, seed_map, mask=foreground)
 
@@ -1337,17 +1338,16 @@ def detection_watershed(seeds, coords, data_filename, first_dilation, nclasses=1
 
     return segm
 
-def remove_by_properties(img, resolution, properties, prop_values, comp_signs, coords_list=None):
+def measure_morphological_props_and_filter(img, resolution, filter_instances=False, properties=[[]], prop_values=[[]], comp_signs=[[]]):
     """
-    Checks the properties of input image's instances. it calculates each instance id, number of pixels, area/volume 
-    (2D/3D respec. and taking into account the resolution) and circularity properties. All instances that satisfy 
-    the conditions composed by ``properties``, ``prop_values`` and ``comp_signs`` variables will be removed from 
-    ``img``. Apart from returning all properties this function will return also a list identifying those instances 
-    that satisfy and not satify the conditions. Those removed will be marked as 'Strange' whereas the rest are 'Correct'. 
-    For 3D the circularity is only measured in the center slices of the instance (one slice before the central slice, 
-    the central slice, and one after it), which is decided by the given coordinates in ``coords_list`` or calculated 
-    taking the central slice in z of each instance, which is computationally more expensive as the bboxes are calculated.   
-    
+    Measures the properties of input image's instances. It calculates each instance id, number of pixels, area/volume 
+    (2D/3D respec. and taking into account the resolution), diameter, perimeter/surface_area (2D/3D respec.), 
+    circularity/sphericity (2D/3D respec.) and elongation properties. All instances that satisfy the conditions composed 
+    by ``properties``, ``prop_values`` and ``comp_signs`` variables will be removed from ``img``. Apart from returning 
+    all properties this function will return also a list identifying those instances that satisfy and not satify the 
+    conditions. Those removed will be marked as 'Removed' whereas the rest are 'Correct'. Some of the properties follow 
+    the formulas used in `MorphoLibJ library for Fiji <https://doi.org/10.1093/bioinformatics/btw413>`__.
+
     Parameters
     ----------
     img : 2D/3D Numpy array
@@ -1356,19 +1356,19 @@ def remove_by_properties(img, resolution, properties, prop_values, comp_signs, c
     resolution : str
         Path to load the image paired with seeds. 
 
-    properties : List of lists of str
-        List of lists of properties to remove the instances. Options available: ['circularity', 'npixels', 'area', 'diameter'].
-        E.g. [['size'], ['circularity', 'npixels']].
+    filter_instances : bool, optional
+        Whether to do instance filtering or not.
 
-    prop_values : List of lists of floats/ints
-        List of lists of values for each property. E.g. [[70], [0.7, 2000]]. 
+    properties : List of lists of str, optional
+        List of lists of properties to remove the instances. Options available: ``['circularity', 'npixels', 'area', 'diameter',
+        'elongation', 'sphericity', 'perimeter']``. E.g. ``[['size'], ['circularity', 'npixels']]``.
 
-    comp_signs : List of list of str    
+    prop_values : List of lists of floats/ints, optional
+        List of lists of values for each property. E.g. ``[[70], [0.7, 2000]]``. 
+
+    comp_signs : List of list of str, optional
         List of lists of signs to compose the conditions, together ``properties`` ``prop_values``, that the instances must 
-        satify to be removed from the input ``img``. E.g. [['le'], ['lt', 'ge']]. 
-
-    coords_list : List of 3 ints, optional
-        Coordinates of all detected points.
+        satify to be removed from the input ``img``. E.g. ``[['le'], ['lt', 'ge']]``. 
 
     Returns
     ------- 
@@ -1376,211 +1376,208 @@ def remove_by_properties(img, resolution, properties, prop_values, comp_signs, c
         Input image without the instances that do not satisfy the circularity constraint. 
         Image with instances. E.g. ``(1450, 2000)`` for 2D and ``(397, 1450, 2000)`` for 3D.
 
-    labels : Array of ints
-        Instance label list. 
-    
-    centers : Array of ints 
-        Coordinates of the centers of each instance. 
-
-    npixels : Array of ints
-        Number of pixels of each instance. 
+    d_result : dict
+        Results of the morphological measurements. All the information of the non-filtered 
+        instances (if declared to do so) are listed. It contains:
         
-    areas : Array of ints
-        Areas/volumes (2D/3D) of each instance based on the given resolution.
-    
-    circularities : Array of ints
-        Circularity of each instance.
+        labels : Array of ints
+            Instance label list. 
+        
+        centers : Array of ints 
+            Coordinates of the centers of each instance. 
 
-    diameters : Array of ints
-        Diameter of each instance obtained from the bounding box.
+        npixels : Array of ints
+            Number of pixels of each instance. 
+            
+        areas : Array of ints
+            Area/volume (2D/3D) of each instance based on the given resolution.
+        
+        circularities : Array of ints
+            Circularity/sphericity (2D/3D) of each instance. In 2D, ``circularity`` of an instance is defined 
+            as the ratio of area over the square of the perimeter, normalized such that the value 
+            for a disk equals one: ``(4 * PI * area) / (perimeter^2)``. While values of circularity 
+            range theoretically within the interval [0;1], the measurements errors of the perimeter 
+            may produce circularity values above 1 (`Lehmann et al. <https://doi.org/10.1093/bioinformatics/btw413>`__). 
+            In 3D, ``sphericity`` is is the ratio of the squared volume over the cube of the surface area, 
+            normalized such that the value for a ball equals one: ``(36 * PI)*((volume^2)/(perimeter^3))``. 
 
-    comment : List of str
-        List containing 'Correct' string when the instance surpass the circularity 
-        threshold and 'Strange' otherwise.
-    
-    all_conditions : List of str
-        List of conditions that each instance has satisfy or not. 
+        diameters : Array of ints
+            Diameter of each instance obtained from the bounding box.
+
+        elongations : Array of ints
+            Elongation of each instance. It is the inverse of the circularity. The values of elongation range from 
+            ``1`` for round particles and increase for elongated particles. Calculated as: ``(perimeter^2)/(4 * PI * area)``. 
+            Only measurable for 2D images.
+
+        perimeter : Array of ints
+            In 2D, approximates the contour as a line through the centers of border pixels using a 4-connectivity. 
+            In 3D, it is the surface area computed using 
+            `Lewiner et al. algorithm <https://www.tandfonline.com/doi/abs/10.1080/10867651.2003.10487582>`__ using 
+            `marching_cubes <https://scikit-image.org/docs/stable/api/skimage.measure.html#skimage.measure.marching_cubes>`__ and 
+            `mesh_surface_area <https://scikit-image.org/docs/stable/api/skimage.measure.html#skimage.measure.mesh_surface_area>`__ 
+            functions of scikit-image. 
+
+        comment : List of str
+            List containing 'Correct' string when the instance surpass the circularity threshold and 'Removed' 
+            otherwise.
+        
+        conditions : List of str
+            List of conditions that each instance has satisfy or not. 
     """
     print("Checking the properties of instances . . .")
 
-    image3d = True if img.ndim == 3 else False
+    if img.ndim == 3:
+        image3d = True  
+        if len(resolution) == 2:
+            resolution = resolution+(resolution[-1],)
+    else:
+        image3d = False
+
     correct_str = "Correct"
-    unsure_str = "Strange"
+    unsure_str = "Removed"
 
     comment = []
-    label_list_coords = []
-    label_list_unique, npixels = np.unique(img, return_counts=True)
-    label_list_unique = label_list_unique[1:] # Delete background instance '0'
+    label_list = []
+    label_list, npixels = np.unique(img, return_counts=True)
+    
+    # Delete background instance '0'
+    label_list = label_list[1:] 
     npixels = npixels[1:]
 
-    if coords_list is not None:
-        total_labels = len(coords_list)
-        
-        # Obtain each instance labels based on the input image first
-        for c in coords_list:
-            if image3d:
-                label_list_coords.append(img[c[0],c[1],c[2]])
-            else:
-                label_list_coords.append(img[c[1],c[2]])
-            comment.append('none')
+    total_labels = len(label_list)
+    comment = ['none' for i in range(total_labels)]
 
-        areas = np.zeros(total_labels, dtype=np.uint32)
-        diameters = np.zeros(total_labels, dtype=np.uint32)
-        diam_calc = False
-        # Insert in the label position the area/volume
-        for i, pixels in enumerate(npixels):
-            label = label_list_unique[i]
-            label_index = label_list_coords.index(label)
-            if image3d:
-                vol = pixels*(resolution[0]+resolution[1]+resolution[2])
-            else:
-                vol = pixels*(resolution[0]+resolution[1])
-            areas[label_index] = vol
-
-        centers = np.array(coords_list, dtype=np.uint16)
-
-    # If no coords_list is given it is calculated by each instance central slice in z
-    else:
-        label_list_coords = list(label_list_unique).copy()
-        total_labels = len(label_list_unique)
-        coords_list = [[] for i in range(total_labels)]
-        comment = ['none' for i in range(total_labels)]
-        areas = np.zeros(total_labels, dtype=np.uint32)
-        diameters = np.zeros(total_labels, dtype=np.uint32)
-        centers = np.zeros((total_labels, 3 if image3d else 2), dtype=np.uint16)
-        diam_calc = True
-
-        props = regionprops_table(img, properties=('label', 'bbox')) 
-        for k, label in enumerate(props['label']):
-            label_index, = np.where(label_list_unique == label)[0]
-            pixels = npixels[label_index]
-
-            if image3d:
-                z_coord_start = props['bbox-0'][k]
-                z_coord_finish = props['bbox-3'][k]
-                central_slice = (z_coord_start+z_coord_finish)//2
-
-                vol = pixels*(resolution[0]+resolution[1]+resolution[2])
-
-                diam = max(props['bbox-3'][k]-props['bbox-0'][k],props['bbox-4'][k]-props['bbox-1'][k],props['bbox-5'][k]-props['bbox-2'][k])
-                center = [(props['bbox-3'][k]-props['bbox-0'][k])//2, (props['bbox-4'][k]-props['bbox-1'][k])//2, (props['bbox-5'][k]-props['bbox-2'][k])//2]
-            else:
-                central_slice = 0
-                vol = pixels*(resolution[0]+resolution[1])
-                diam = max(props['bbox-2'][k]-props['bbox-0'][k],props['bbox-3'][k]-props['bbox-1'][k])
-                center = [(props['bbox-2'][k]-props['bbox-0'][k])//2, (props['bbox-3'][k]-props['bbox-1'][k])//2]
-            slices = []
-            if central_slice-1 >= z_coord_start: slices.append(central_slice-1)
-            slices.append(central_slice)
-            if central_slice+1 <= z_coord_finish: slices.append(central_slice+1)
-            coords_list[label_index] = slices.copy()
-            areas[label_index] = vol
-            diameters[label_index] = diam
-            centers[label_index] = center
-
+    # Measure array definitions
+    areas = np.zeros(total_labels, dtype=np.uint32)
+    diameters = np.zeros(total_labels, dtype=np.uint32)
+    centers = np.zeros((total_labels, 3 if image3d else 2), dtype=np.uint16)
     circularities = np.zeros(total_labels, dtype=np.float32)
-    circularities_count = np.zeros(total_labels, dtype=np.uint8)
-    print("{} instances found before property filtering".format(total_labels))
-
+    perimeters = np.zeros(total_labels, dtype=np.uint32)
     if not image3d:
-        img = np.expand_dims(img,0)  
+        elongations = np.zeros(total_labels, dtype=np.float32)    
 
-    # Circularity calculation in the slice where the central point was considerer by the model
-    # which is marked by coords_list
-    for i in tqdm(range(img.shape[0]), leave=False):
-        props = regionprops_table(img[i], properties=('label','area', 'perimeter', 'bbox'))             
-        if len(props['label'])>0:                           
-            for k, l in enumerate(props['label']):
-                multiple_slices = False
-                j = label_list_coords.index(l)
-                if image3d:
-                    coord = coords_list[j]
-                    
-                    if len(coord) > 1:
-                        coord = [coord[0]]
-                        multiple_slices = True
+    # Area, diameter, center, circularity (if 2D), elongation (if 2D) and perimeter (if 2D) calculation over the whole image 
+    lprops = ['label', 'bbox', 'perimeter'] if not image3d else ['label', 'bbox']
+    props = regionprops_table(img, properties=(lprops)) 
+    for k, l in tqdm(enumerate(props['label']), total=len(props['label']), leave=False):
+        label_index = np.where(label_list == l)[0]
+        pixels = npixels[label_index]
 
-                    if not diam_calc:
-                        diam = max(props['bbox-3'][k]-props['bbox-0'][k],props['bbox-4'][k]-props['bbox-1'][k],props['bbox-5'][k]-props['bbox-2'][k])
-                else:
-                    coord = [0]
-                    if not diam_calc:
-                        diam = max(props['bbox-2'][k]-props['bbox-0'][k],props['bbox-3'][k]-props['bbox-1'][k])
+        if image3d:
+            vol = pixels*(resolution[0]+resolution[1]+resolution[2])
+            diam = max(props['bbox-3'][k]-props['bbox-0'][k],props['bbox-4'][k]-props['bbox-1'][k],props['bbox-5'][k]-props['bbox-2'][k])
+            center = [(props['bbox-3'][k]-props['bbox-0'][k])//2, (props['bbox-4'][k]-props['bbox-1'][k])//2, (props['bbox-5'][k]-props['bbox-2'][k])//2]
+        else:
+            vol = pixels*(resolution[0]+resolution[1])
+            diam = max(props['bbox-2'][k]-props['bbox-0'][k],props['bbox-3'][k]-props['bbox-1'][k])
+            center = [(props['bbox-2'][k]-props['bbox-0'][k])//2, (props['bbox-3'][k]-props['bbox-1'][k])//2]
+            perimeter = props['perimeter'][k]
+            elongations[label_index] = (perimeter*perimeter)/(4 * math.pi * pixels)
+            circularity = (4 * math.pi * pixels) / (perimeter*perimeter)
 
-                # If instances' center point matches the slice i
-                if coord[0] == i: 
-                    # Save the circularity if the area is at least 10% of the instance (as tiny blobs have high circularity)
-                    if props['perimeter'][k] != 0 and props['area'][k] > npixels[j]*0.1:
-                        circularity = (4 * math.pi * props['area'][k]) / (props['perimeter'][k]*props['perimeter'][k])
-                        circularities[j] += circularity
-                        circularities_count[j] += 1     
+            perimeters[label_index] = perimeter
+            circularities[label_index] = circularity
 
-                    if multiple_slices:
-                        v = coords_list[j].pop(0)
-                        coords_list[j].append(v)
+        areas[label_index] = vol
+        diameters[label_index] = diam
+        centers[label_index] = center
 
-                if not diam_calc:
-                    diameters[j] = diam
+    # Calculate surface area (as in https://github.com/scikit-image/scikit-image/issues/3797) and sphericity
+    if image3d and total_labels > 0:
+        img_aux = img.copy()
+        img_aux, _, _ = relabel_sequential(img_aux)
+        img_aux[find_boundaries(img_aux, mode='outer')] = 0
+        try:
+            vts, fs, ns, cs = marching_cubes(img_aux, level=0, method='lewiner')
+        except: 
+            print("Some error found during marching_cubes() call")
+        else:
+            lst = [[] for i in range(total_labels+1)]
+            for i in fs: lst[int(cs[i[0]])].append(i)
+            surface_area = [0 if len(i)==0 else mesh_surface_area(vts, i) for i in lst]
+
+            for i in range(total_labels):
+                pixels = npixels[i]
+                sphericity = (36 * math.pi * pixels * pixels) / (surface_area[i+1] * surface_area[i+1] * surface_area[i+1])
+                perimeters[i] = surface_area[i+1]
+                circularities[i] = sphericity
 
     # Remove those instances that do not satisfy the properties      
-    all_conditions = []
+    conditions = []
     labels_removed = 0
     for i in tqdm(range(len(circularities)), leave=False):
+        conditions.append([])
+        if filter_instances:
+            for k, list_of_conditions in enumerate(properties):
+                # Check each list of conditions
+                comps = []
+                for j, prop in enumerate(list_of_conditions):
+                    if prop == "circularity":
+                        value_to_compare = circularities[i]
+                    elif prop == "npixels":
+                        value_to_compare = npixels[i]
+                    elif prop == "area":
+                        value_to_compare = areas[i]
+                    elif prop == "diameter":
+                        value_to_compare = diameters[i]
+                    elif prop == "perimeter":
+                        value_to_compare = perimeters[i]
+                    elif prop == "elongation":
+                        value_to_compare = elongations[i]
 
-        all_conditions.append([])
-        for k, props in enumerate(properties):
-            comps = []
+                    if comp_signs[k][j] == "gt":
+                        if value_to_compare > prop_values[k][j]:
+                            comps.append(True)
+                        else:
+                            comps.append(False)
+                    elif comp_signs[k][j] == "ge":
+                        if value_to_compare >= prop_values[k][j]:
+                            comps.append(True)
+                        else:
+                            comps.append(False)
+                    elif comp_signs[k][j] == "lt":
+                        if value_to_compare < prop_values[k][j]:
+                            comps.append(True)
+                        else:
+                            comps.append(False)
+                    elif comp_signs[k][j] == "le":
+                        if value_to_compare <= prop_values[k][j]:
+                            comps.append(True)
+                        else:
+                            comps.append(False)
 
-            # Check each property
-            for j in range(len(props)):
-                if props[j] == "circularity":
-                    circularities[i] = circularities[i]/circularities_count[i] if circularities_count[i] != 0 else 0
-                    value_to_compare = circularities[i]
-                elif props[j] == "npixels":
-                    value_to_compare = npixels[i]
-                elif props[j] == "areas":
-                    value_to_compare = areas[i]
-                elif props[j] == "diameters":
-                    value_to_compare = diameters[i]
+                # Check if the conditions where satified
+                if all(comps):
+                    conditions[-1].append(True)
+                else:
+                    conditions[-1].append(False)            
+        
+        # If satisfied all conditions remove the instance 
+        if any(conditions[-1]):
+            comment[i] = unsure_str
+            img[img==label_list[i]] = 0
+            labels_removed += 1
+        else:
+            comment[i] = correct_str
 
-                if comp_signs[k][j] == "gt":
-                    if value_to_compare > prop_values[k][j]:
-                        comps.append(True)
-                    else:
-                        comps.append(False)
-                elif comp_signs[k][j] == "ge":
-                    if value_to_compare >= prop_values[k][j]:
-                        comps.append(True)
-                    else:
-                        comps.append(False)
-                elif comp_signs[k][j] == "lt":
-                    if value_to_compare < prop_values[k][j]:
-                        comps.append(True)
-                    else:
-                        comps.append(False)
-                elif comp_signs[k][j] == "le":
-                    if value_to_compare <= prop_values[k][j]:
-                        comps.append(True)
-                    else:
-                        comps.append(False)
-
-            # if satisfy all conditions remove the instance 
-            if all(comps):
-                comment[i] = unsure_str
-                img[img==label_list_coords[i]] = 0
-                labels_removed += 1
-                all_conditions[-1].append("Satisfied")
-                break
-            else:
-                comment[i] = correct_str
-                all_conditions[-1].append("No satisfied")            
+    d_result = {
+        'labels': label_list,
+        'centers': centers,
+        'npixels': npixels,
+        'areas': areas,
+        'circularities': circularities,
+        'diameters': diameters,
+        'perimeters': perimeters,
+        'comment': comment,
+        'conditions': conditions,
+    }
 
     if not image3d:
-        img = img[0]
+        d_result["elongations"] = elongations
 
     print("Removed {} instances by properties ({}), {} instances left".format(labels_removed, properties, total_labels-labels_removed))
 
-    return img, label_list_coords, centers, npixels, areas, circularities, diameters, comment, all_conditions
+    return img, d_result
     
 def find_neighbors(img, label, neighbors=1):
     """
