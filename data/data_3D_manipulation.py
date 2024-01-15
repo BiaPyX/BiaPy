@@ -6,10 +6,12 @@ from tqdm import tqdm
 from sklearn.model_selection import train_test_split, StratifiedKFold
 
 from utils.util import load_3d_images_from_dir
+from data.pre_processing import preprocess_data
 
 def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross_val_nsplits=5, cross_val_fold=1, 
     val_split=0.1, seed=0, shuffle_val=True, crop_shape=(80, 80, 80, 1), y_upscaling=1, random_crops_in_DA=False, 
-    ov=(0,0,0), padding=(0,0,0), minimum_foreground_perc=-1, reflect_to_complete_shape=False):
+    ov=(0,0,0), padding=(0,0,0), minimum_foreground_perc=-1, reflect_to_complete_shape=False, preprocess_cfg=None,
+    is_y_mask=False):
     """
     Load train and validation images from the given paths to create 3D data.
 
@@ -65,6 +67,12 @@ def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross
 
     self_supervised_args : dict, optional
         Arguments to create ground truth data for self-supervised workflow. 
+            
+    preprocess_cfg : dict, optional
+        Configuration parameters for preprocessing, is necessary in case you want to apply any preprocessing.
+
+    is_y_mask : bool, optional
+        Whether the data are masks. It is used to control the preprocessing of the data.
 
     Returns
     -------
@@ -131,13 +139,15 @@ def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross
 
     print("0) Loading train images . . .")
     X_train, _, _, t_filenames = load_3d_images_from_dir(train_path, crop=crop, crop_shape=crop_shape,
-        overlap=ov, padding=padding, return_filenames=True, reflect_to_complete_shape=reflect_to_complete_shape)
+        overlap=ov, padding=padding, return_filenames=True, reflect_to_complete_shape=reflect_to_complete_shape,
+        preprocess_cfg=preprocess_cfg, is_mask=False, preprocess_f=preprocess_data)
 
     if train_mask_path is not None:
         print("1) Loading train GT . . .")
         scrop = (crop_shape[0], crop_shape[1]*y_upscaling, crop_shape[2]*y_upscaling, crop_shape[3])
         Y_train, _, _ = load_3d_images_from_dir(train_mask_path, crop=crop, crop_shape=scrop, overlap=ov,
-            padding=padding, reflect_to_complete_shape=reflect_to_complete_shape, check_channel=False, check_drange=False)
+            padding=padding, reflect_to_complete_shape=reflect_to_complete_shape, check_channel=False, check_drange=False,
+            preprocess_cfg=preprocess_cfg, is_mask=is_y_mask, preprocess_f=preprocess_data)
     else:
         Y_train = None
 

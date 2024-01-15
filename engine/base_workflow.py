@@ -27,6 +27,7 @@ from data.data_3D_manipulation import (crop_3D_data_with_overlap, merge_3D_data_
 from data.post_processing.post_processing import ensemble8_2d_predictions, ensemble16_3d_predictions, apply_binary_mask
 from engine.metrics import jaccard_index_numpy, voc_calculation
 from data.post_processing import apply_post_processing
+from data.pre_processing import preprocess_data
 
 
 class Base_Workflow(metaclass=ABCMeta):
@@ -189,13 +190,16 @@ class Base_Workflow(metaclass=ABCMeta):
             if self.cfg.DATA.TRAIN.IN_MEMORY:
                 val_split = self.cfg.DATA.VAL.SPLIT_TRAIN if self.cfg.DATA.VAL.FROM_TRAIN else 0.
                 f_name = load_and_prepare_2D_train_data if self.cfg.PROBLEM.NDIM == '2D' else load_and_prepare_3D_data
+                preprocess_cfg = self.cfg.DATA.PREPROCESS if self.cfg.DATA.PREPROCESS.TRAIN else None
+                is_y_mask = self.cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG']
                 objs = f_name(self.cfg.DATA.TRAIN.PATH, self.mask_path, cross_val=self.cfg.DATA.VAL.CROSS_VAL, 
                     cross_val_nsplits=self.cfg.DATA.VAL.CROSS_VAL_NFOLD, cross_val_fold=self.cfg.DATA.VAL.CROSS_VAL_FOLD, 
                     val_split=val_split, seed=self.cfg.SYSTEM.SEED, shuffle_val=self.cfg.DATA.VAL.RANDOM, 
                     random_crops_in_DA=self.cfg.DATA.EXTRACT_RANDOM_PATCH, crop_shape=self.cfg.DATA.PATCH_SIZE, 
                     y_upscaling=self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, ov=self.cfg.DATA.TRAIN.OVERLAP, 
                     padding=self.cfg.DATA.TRAIN.PADDING, minimum_foreground_perc=self.cfg.DATA.TRAIN.MINIMUM_FOREGROUND_PER,
-                    reflect_to_complete_shape=self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE)
+                    reflect_to_complete_shape=self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE, preprocess_cfg = preprocess_cfg,
+                    is_y_mask = is_y_mask)
             
                 if self.cfg.DATA.VAL.FROM_TRAIN:
                     if self.cfg.DATA.VAL.CROSS_VAL:
@@ -215,9 +219,12 @@ class Base_Workflow(metaclass=ABCMeta):
                 if self.cfg.DATA.VAL.IN_MEMORY:
                     print("1) Loading validation images . . .")
                     f_name = load_data_from_dir if self.cfg.PROBLEM.NDIM == '2D' else load_3d_images_from_dir
+                    preprocess_cfg = self.cfg.DATA.PREPROCESS if self.cfg.DATA.PREPROCESS.VAL else None
+                    is_y_mask = self.cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG']
                     self.X_val, _, _ = f_name(self.cfg.DATA.VAL.PATH, crop=True, crop_shape=self.cfg.DATA.PATCH_SIZE,
                                         overlap=self.cfg.DATA.VAL.OVERLAP, padding=self.cfg.DATA.VAL.PADDING,
-                                        reflect_to_complete_shape=self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE)
+                                        reflect_to_complete_shape=self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE, 
+                                        preprocess_cfg = preprocess_cfg, is_mask = False, preprocess_f=preprocess_data)
 
                     if self.cfg.PROBLEM.NDIM == '2D':
                         crop_shape = (self.cfg.DATA.PATCH_SIZE[0]*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
@@ -229,7 +236,8 @@ class Base_Workflow(metaclass=ABCMeta):
                         self.Y_val, _, _ = f_name(self.cfg.DATA.VAL.GT_PATH, crop=True, crop_shape=crop_shape,
                                             overlap=self.cfg.DATA.VAL.OVERLAP, padding=self.cfg.DATA.VAL.PADDING,
                                             reflect_to_complete_shape=self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE,
-                                            check_channel=False, check_drange=False)                            
+                                            check_channel=False, check_drange=False, preprocess_cfg = preprocess_cfg,
+                                            is_mask = is_y_mask, preprocess_f=preprocess_data)                            
                     else:
                         self.Y_val = None
                     if self.Y_val is not None and len(self.X_val) != len(self.Y_val):
@@ -456,10 +464,14 @@ class Base_Workflow(metaclass=ABCMeta):
                 if self.cfg.DATA.TEST.IN_MEMORY:
                     print("2) Loading test images . . .")
                     f_name = load_data_from_dir if self.cfg.PROBLEM.NDIM == '2D' else load_3d_images_from_dir
-                    self.X_test, _, _ = f_name(self.cfg.DATA.TEST.PATH)
+                    preprocess_cfg = self.cfg.DATA.PREPROCESS if self.cfg.DATA.PREPROCESS.TEST else None
+                    is_y_mask = self.cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG']
+                    self.X_test, _, _ = f_name(self.cfg.DATA.TEST.PATH, preprocess_cfg=preprocess_cfg, is_mask=False, 
+                                               preprocess_f=preprocess_data)
                     if self.cfg.DATA.TEST.LOAD_GT:
                         print("3) Loading test masks . . .")
-                        self.Y_test, _, _ = f_name(self.cfg.DATA.TEST.GT_PATH, check_channel=False, check_drange=False)
+                        self.Y_test, _, _ = f_name(self.cfg.DATA.TEST.GT_PATH, check_channel=False, check_drange=False, 
+                                                   preprocess_cfg=preprocess_cfg, is_mask=is_y_mask, preprocess_f=preprocess_data)
                         if len(self.X_test) != len(self.Y_test):
                             raise ValueError("Different number of raw and ground truth items ({} vs {}). "
                                 "Please check the data!".format(len(self.X_test), len(self.Y_test)))

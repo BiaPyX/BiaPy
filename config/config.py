@@ -213,6 +213,75 @@ class Config:
         # INSTANCE_SEG and DETECTION. 
         _C.DATA.TRAIN.MINIMUM_FOREGROUND_PER = -1.
 
+        # PREPROCESSING
+        # Same preprocessing will be applied to all selected datasets
+        _C.DATA.PREPROCESS = CN()
+        # Apply preprocessing to training dataset
+        _C.DATA.PREPROCESS.TRAIN = False
+        # Apply preprocessing to validation dataset
+        _C.DATA.PREPROCESS.VAL = False
+        # Apply preprocessing to testing dataset
+        _C.DATA.PREPROCESS.TEST = False
+
+        # Resize datasets
+        _C.DATA.PREPROCESS.RESIZE = CN()
+        _C.DATA.PREPROCESS.RESIZE.ACTIVATE = False
+        # Desired resize size. when using 3D data, size must be also in 3D (ex. (512,512,512))
+        _C.DATA.PREPROCESS.RESIZE.OUTPUT_SHAPE = (512,512)
+        # interpolation order: {0: Nearest-neighbor, 1: Bi-linear (default), 2: Bi-quadratic, 3: Bi-cubic, 4: Bi-quartic, 5: Bi-quintic}
+        _C.DATA.PREPROCESS.RESIZE.ORDER = 1
+        # Points outside the boundaries of the input are filled according to the given mode: {‘constant’, ‘edge’, ‘symmetric’, ‘reflect’, ‘wrap’}
+        _C.DATA.PREPROCESS.RESIZE.MODE = 'reflect'
+        # Used in conjunction with mode ‘constant’, the value outside the image boundaries.
+        _C.DATA.PREPROCESS.RESIZE.CVAL = 0
+        # Whether to clip the output to the range of values of the input image.
+        _C.DATA.PREPROCESS.RESIZE.CLIP = True
+        # Whether to keep the original range of values.
+        _C.DATA.PREPROCESS.RESIZE.PRESERVE_RANGE = True
+        # Whether to apply a Gaussian filter to smooth the image prior to downsampling.
+        _C.DATA.PREPROCESS.RESIZE.ANTI_ALIASING = False
+
+        # Gaussian blur
+        _C.DATA.PREPROCESS.GAUSSIAN_BLUR = CN()
+        _C.DATA.PREPROCESS.GAUSSIAN_BLUR.ACTIVATE = False
+        # Standard deviation for Gaussian kernel.
+        _C.DATA.PREPROCESS.GAUSSIAN_BLUR.SIGMA = 1
+        # The mode parameter determines how the array borders are handled: {‘reflect’, ‘constant’, ‘nearest’, ‘mirror’, ‘wrap’} ‘constant’ value = 0
+        _C.DATA.PREPROCESS.GAUSSIAN_BLUR.MODE = 'nearest'
+        # If None, the image is assumed to be a grayscale (single channel) image. 
+        # Otherwise, this parameter indicates which axis of the array corresponds to channels.
+        _C.DATA.PREPROCESS.GAUSSIAN_BLUR.CHANNEL_AXIS = None
+
+        # Median blur
+        _C.DATA.PREPROCESS.MEDIAN_BLUR = CN()
+        _C.DATA.PREPROCESS.MEDIAN_BLUR.ACTIVATE = False
+        # is a N-D array of 1’s and 0’s with the same number of dimension than image. 
+        # If None, footprint will be a N-D array with 3 elements for each dimension (e.g., vector, square, cube, etc.)
+        _C.DATA.PREPROCESS.MEDIAN_BLUR.FOOTPRINT = None
+        
+        # Histogram matching
+        _C.DATA.PREPROCESS.MATCH_HISTOGRAM = CN()
+        _C.DATA.PREPROCESS.MATCH_HISTOGRAM.ACTIVATE = False
+        # the path of the reference images, from which the reference histogram will be extracted 
+        _C.DATA.PREPROCESS.MATCH_HISTOGRAM.REFERENCE_PATH = os.path.join("user_data", 'test', 'x')
+
+        # Contrast Limited Adaptive Histogram Equalization
+        _C.DATA.PREPROCESS.CLAHE = CN()
+        _C.DATA.PREPROCESS.CLAHE.ACTIVATE = False
+        # Defines the shape of contextual regions used in the algorithm. 
+        # By default, kernel_size is 1/8 of image height by 1/8 of its width.
+        _C.DATA.PREPROCESS.CLAHE.KERNEL_SIZE = None
+        # Clipping limit, normalized between 0 and 1 (higher values give more contrast).
+        _C.DATA.PREPROCESS.CLAHE.CLIP_LIMIT = 0.01
+
+        # Canny or edge detection (only 2D - grayscale or RGB)
+        _C.DATA.PREPROCESS.CANNY = CN()
+        _C.DATA.PREPROCESS.CANNY.ACTIVATE = False
+        # Lower bound for hysteresis thresholding (linking edges). If None, low_threshold is set to 10% of dtype’s max.
+        _C.DATA.PREPROCESS.CANNY.LOW_THRESHOLD = None
+        # Upper bound for hysteresis thresholding (linking edges). If None, high_threshold is set to 20% of dtype’s max.
+        _C.DATA.PREPROCESS.CANNY.HIGH_THRESHOLD = None
+
         # Test
         _C.DATA.TEST = CN()
         # Whether to check if the data mask contains correct values, e.g. same classes as defined

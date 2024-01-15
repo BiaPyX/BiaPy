@@ -11,7 +11,10 @@ from scipy.ndimage.measurements import center_of_mass
 from skimage.morphology import disk, dilation, erosion, binary_erosion, binary_dilation
 from skimage.measure import label, regionprops
 from skimage.transform import resize
-from skimage.feature import peak_local_max
+from skimage.feature import peak_local_max, canny
+from skimage.exposure import equalize_adapthist
+from skimage.color import rgb2gray
+from skimage.filters import gaussian, median
 
 from utils.util import load_data_from_dir, load_3d_images_from_dir, save_tif
 
@@ -885,3 +888,338 @@ def denormalize(data, means, stds, out_type="float32"):
         return ((data * stds) + means).to(numpy_torch_dtype_dict[out_type][0])
     else:
         return ((data * stds) + means).astype(numpy_torch_dtype_dict[out_type][1])
+
+def resize_images(images, **kwards):
+    '''
+    The function resizes all the images using the specified parameters or default values if not provided.
+    
+    Parameters
+    ----------
+    images: Numpy array or list of numpy arrays
+        The `images` parameter is the list of all input images that you want to resize.
+    
+    output_shape: iterable
+        Size of the generated output image. E.g. `(256,256)`
+
+    (kwards): optional
+        skimage.transform.resize() parameters are also allowed. 
+        <https://scikit-image.org/docs/stable/api/skimage.transform.html#skimage.transform.resize>
+        
+    Returns
+    -------
+    resized_images: Numpy array or list of numpy arrays
+        The resized images. The returned data will use the same data type as the given `images`.
+    
+    '''
+
+    resized_images = [resize(img, **kwards).astype(img.dtype) for img in images]
+    if isinstance(images, np.ndarray):
+        resized_images = np.array(resized_images, dtype=images.dtype)
+    return resized_images
+
+def apply_gaussian_blur(images, **kwards):
+    '''
+    The function applies a Gaussian blur to all images.
+    
+    Parameters
+    ----------
+    images: Numpy array or list of numpy arrays
+        The input images on which the Gaussian blur will be applied.
+
+    (kwards): optional
+        skimage.filters.gaussian() parameters are also allowed. 
+        <https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.gaussian>
+    
+    Returns
+    -------
+    blurred_images: Numpy array or list of numpy arrays
+        A Gaussian blurred images. The returned data will use the same data type as the given `images`.
+    
+    '''
+    def _process(image, **kwards):
+        im = gaussian(image, **kwards) # returns 0-1 range
+        if np.issubdtype(image.dtype, np.integer):
+            im = im * np.iinfo(image.dtype).max 
+        im = im.astype(image.dtype)
+        return im
+
+    blurred_images = [_process(img, **kwards) for img in images]
+    if isinstance(images, np.ndarray):
+        blurred_images = np.array(blurred_images, dtype=images.dtype)
+    return blurred_images
+
+def apply_median_blur(images, **kwards):
+    '''
+    The function applies a median blur filter to all images.
+    
+    Parameters
+    ----------
+    image: Numpy array or list of numpy arrays
+        The input image on which the median blur operation will be applied.
+    
+    (kwards): optional
+        skimage.filters.median() parameters are also allowed. 
+        <https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.median>
+
+    Returns
+    -------
+    blurred_images: Numpy array or list of numpy arrays
+        The median-blurred images. The returned data will use the same data type as the given `images`.
+    
+    '''
+
+    blurred_images = [median(img, **kwards).astype(img.dtype) for img in images]
+    if isinstance(images, np.ndarray):
+        blurred_images = np.array(blurred_images, dtype=images.dtype)
+    return blurred_images
+
+def detect_edges(images, **kwards):
+    '''
+    The function `detect_edges` takes the 2D images as input, converts it to grayscale if necessary, and
+    applies the Canny edge detection algorithm to detect edges in the image.
+    
+    Parameters
+    ----------
+    images: Numpy array or list of numpy arrays
+        The list of all input images on which the edge detection will be performed. It can be either a color image with
+        shape (height, width, 3) or a grayscale image with shape (height, width, 1).
+    
+    (kwards): optional
+        skimage.feature.canny() parameters are also allowed. 
+        <https://scikit-image.org/docs/stable/api/skimage.feature.html#skimage.feature.canny>
+
+    Returns
+    -------
+    edges: Numpy array or list of numpy arrays
+        The edges of the input images. The returned numpy arrays will be uint8, where background is black (0) and edges white (255).
+        The returned data will use the same structure as the given `images` (list[numpy array] or numpy array).
+    
+    '''
+
+    def to_gray(image):
+        c = image.shape[-1]
+        if c == 3:
+            image = rgb2gray(image)
+        elif c == 1:
+            image = image[...,0]
+        else:
+            raise ValueError(f'Detect edges function does not allow given ammount of channels ({c} channels). '
+                             'Only accepts grayscale and RGB 2D images (1 or 3 channels).')
+        return image
+    
+    def set_type(image, dtype):
+        im = image.astype(dtype)
+        im = im[..., np.newaxis] # add channel dim
+        im = im * 255
+        return im
+
+    edges = [set_type(canny(to_gray(img), **kwards), np.uint8) for img in images]
+    if isinstance(images, np.ndarray):
+        edges = np.array(edges, dtype=np.uint8) 
+    return edges
+
+def _histogram_matching(source_imgs, target_imgs):
+    '''
+    Given a set of target images, it will obtain their mean histogram 
+    and applies histogram matching to all images from sorce images.
+    
+    Parameters
+    ----------
+    source_imgs: Numpy array or list of numpy arrays
+        The images of the source domain, to which the histogram matching is to be applied.
+
+    target_imgs: Numpy array
+        The target domain images, from which mean histogram will be obtained.
+    
+    Returns
+    -------
+    matched_images : list of numpy arrays
+        A set of source images with target's histogram
+    '''
+
+    hist_mean,_ = np.histogram(target_imgs.ravel(), bins=np.arange(np.iinfo(target_imgs.dtype).max + 1))
+    hist_mean = hist_mean / target_imgs.shape[0] # number of images
+    
+    # calculate normalized quantiles
+    tmpl_size = np.sum(hist_mean) 
+    tmpl_quantiles = np.cumsum(hist_mean) / tmpl_size
+
+    del target_imgs
+    
+    # based on scikit implementation. 
+    # source: https://github.com/scikit-image/scikit-image/blob/v0.18.0/skimage/exposure/histogram_matching.py#L22-L70
+    def _match_cumulative_cdf(source, tmpl_quantiles):
+        src_values, src_unique_indices, src_counts = np.unique(source.ravel(),
+                                                            return_inverse=True,
+                                                            return_counts=True)
+
+        # calculate normalized quantiles
+        src_size = source.size # number of pixels
+        src_quantiles = np.cumsum(src_counts) / src_size # normalize
+        interp_a_values = np.interp(src_quantiles, tmpl_quantiles, np.arange(len(tmpl_quantiles)))
+
+        return interp_a_values[src_unique_indices].reshape(source.shape)
+
+    #apply histogram matching
+    results = [_match_cumulative_cdf(image, tmpl_quantiles).astype(image.dtype) for image in source_imgs ]
+    return results
+
+def apply_histogram_matching(images, reference_path, is_2d):
+    '''
+    The function returns the images with their histogram matched to the histogram of the reference images, 
+    loaded from the given reference_path.
+    
+    Parameters
+    ----------
+    images: Numpy array or list of numpy arrays
+        The list of input images whose histogram needs to be matched to the reference histogram. It should be a
+        numpy array representing the image.
+
+    reference_path: str
+        The reference_path is the directory path to the reference images. From reference images, we will extract
+        the reference histogram with which we want to match the histogram of the images. It represents 
+        the desired distribution of pixel intensities in the output image.
+    
+    is_2d: Bool
+        The value indicate if the data given in `reference_path` is 2D (is_2d = True) or 3D (is_2d = False).
+    
+    Returns
+    -------
+    matched_images : Numpy array or list of numpy arrays
+        The result of matching the histogram of the input images to the histogram of the reference image.
+        The returned data will use the same data type as the given `images`.
+    '''
+    f_name = load_data_from_dir if is_2d else load_3d_images_from_dir
+    references, *_ = f_name(reference_path)
+    
+    matched_images = _histogram_matching(images, references)
+    if isinstance(images, np.ndarray):
+        matched_images = np.array(matched_images, dtype=images.dtype)
+    return matched_images
+
+def apply_clahe(images, **kwards):
+    '''
+    The function applies Contrast Limited Adaptive Histogram Equalization (CLAHE) to an image and
+    returns the result.
+    
+    Parameters
+    ----------
+    images: Numpy array or list of numpy arrays
+        The list of input images that you want to apply the CLAHE (Contrast Limited Adaptive Histogram Equalization)
+        algorithm to.
+
+    (kwards): optional
+        skimage.exposure.equalize_adapthist() parameters are also allowed. 
+        <https://scikit-image.org/docs/stable/api/skimage.exposure.html#skimage.exposure.equalize_adapthist>
+    
+    Returns
+    -------
+    processed_images: Numpy array or list of numpy arrays
+        The images after applying the Contrast Limited Adaptive Histogram Equalization (CLAHE) algorithm.
+        The returned data will use the same data type as the given `images`.
+    '''
+
+    def _process(image, **kwards):
+        im = equalize_adapthist(image, **kwards) # returns 0-1 range
+        if np.issubdtype(image.dtype, np.integer):
+            im = im * np.iinfo(image.dtype).max 
+        im = im.astype(image.dtype)
+        return im
+    
+    processed_images = [_process(img, **kwards) for img in images]
+    if isinstance(images, np.ndarray):
+        processed_images = np.array(processed_images, dtype=images.dtype)
+    return processed_images
+
+def preprocess_data(cfg, x_data=[], y_data=[], is_2d=True, is_y_mask=False):
+    """
+    The function preprocesses data by applying various image processing techniques.
+    
+    Parameters
+    ----------
+    cfg: dict
+        The `cfg` parameter is a configuration object that contains various settings for
+        preprocessing the data. It is used to control the behavior of different preprocessing techniques
+        such as image resizing, blurring, histogram matching, etc.
+
+    x_data: numpy array or list of numpy arrays, optional
+        A list of input data (images) to be preprocessed.
+    
+    y_data: numpy array or list of numpy arrays, optional
+        A list of target data that corresponds to the x_data.
+      
+    is_2d: Bool, optional
+        A boolean flag indicating whether the data is 2D or not. Defaults to True.
+      
+    is_y_mask: Bool, optional
+        is_y_mask is a boolean parameter that indicates whether the y_data is a mask or not. If
+        it is set to True, the resize operation for y_data will use the nearest neighbor interpolation
+        method (order=0), otherwise it will use the interpolation method specified in the cfg.RESIZE.ORDER
+        parameter. Defaults to False.
+    
+    Returns
+    -------
+    x_data: numpy array or list of numpy arrays, optional
+        Preprocessed data.
+
+    y_data: numpy array or list of numpy arrays, optional
+        Preprocessed data.
+    """
+    
+    if cfg.RESIZE.ACTIVATE:
+        if len(x_data) > 0:
+            x_data = resize_images(x_data,
+                output_shape = cfg.RESIZE.OUTPUT_SHAPE,
+                order = cfg.RESIZE.ORDER,
+                mode = cfg.RESIZE.MODE,
+                cval = cfg.RESIZE.CVAL,
+                clip = cfg.RESIZE.CLIP,
+                preserve_range = cfg.RESIZE.PRESERVE_RANGE,
+                anti_aliasing = cfg.RESIZE.ANTI_ALIASING
+            )
+        if len(y_data) > 0:
+            # if y is a mask, then use nearest
+            y_order = 0 if is_y_mask else cfg.RESIZE.ORDER
+            y_data = resize_images(y_data,
+                output_shape = cfg.RESIZE.OUTPUT_SHAPE,
+                order = y_order,
+                mode = cfg.RESIZE.MODE,
+                cval = cfg.RESIZE.CVAL,
+                clip = cfg.RESIZE.CLIP,
+                preserve_range = cfg.RESIZE.PRESERVE_RANGE,
+                anti_aliasing = cfg.RESIZE.ANTI_ALIASING
+            )
+
+    if len(x_data) > 0:
+        if cfg.GAUSSIAN_BLUR.ACTIVATE:
+            x_data = apply_gaussian_blur(x_data,
+                sigma = cfg.GAUSSIAN_BLUR.SIGMA,
+                mode = cfg.GAUSSIAN_BLUR.MODE,
+                channel_axis = cfg.GAUSSIAN_BLUR.CHANNEL_AXIS,
+            )
+        if cfg.MEDIAN_BLUR.ACTIVATE:
+            x_data = apply_median_blur(x_data,
+                footprint = cfg.MEDIAN_BLUR.FOOTPRINT,
+            )
+        if cfg.MATCH_HISTOGRAM.ACTIVATE:
+            x_data = apply_histogram_matching(x_data,
+                reference_path = cfg.MATCH_HISTOGRAM.REFERENCE_PATH,
+                is_2d = is_2d,
+            )
+        if cfg.CLAHE.ACTIVATE:
+            x_data = apply_clahe(x_data,
+                kernel_size = cfg.CLAHE.KERNEL_SIZE,
+                clip_limit = cfg.CLAHE.CLIP_LIMIT,
+            )
+        if cfg.CANNY.ACTIVATE:
+            x_data = detect_edges(x_data,
+                low_threshold = cfg.CANNY.LOW_THRESHOLD,
+                high_threshold = cfg.CANNY.HIGH_THRESHOLD,
+            )
+    
+    if len(x_data) > 0 and len(y_data) > 0:
+        return x_data, y_data
+    if len(y_data) > 0:
+        return y_data
+    else:
+        return x_data
