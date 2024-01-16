@@ -914,6 +914,9 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), pad
            #     *** Loaded data shape is (1980, 256, 256, 1)
     """
 
+    if preprocess_f != None and preprocess_cfg == None:
+        raise ValueError("The preprocessing configuration ('preprocess_cfg') is missing.")
+
     if crop:
         from data.data_2D_manipulation import crop_data_with_overlap
 
@@ -954,7 +957,7 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), pad
                 raise ValueError("Channel of the patch size given {} does not correspond with the loaded image {}. "
                     "Please, check the channels of the images!".format(crop_shape[-1], img.shape[-1]))
 
-        if (preprocess_cfg == None) or (preprocess_f == None):
+        if preprocess_f == None:
             data_shape.append(img.shape)
             img = np.expand_dims(img, axis=0)
             if crop and img[0].shape != crop_shape[:2]+(img.shape[-1],):
@@ -963,25 +966,25 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), pad
             c_shape.append(img.shape)
         data.append(img)
         
-    if (preprocess_cfg != None) and (preprocess_f != None):
+    if preprocess_f != None:
         if is_mask:
             # data contains masks
             data = preprocess_f(preprocess_cfg, y_data = data, is_2d = True, is_y_mask = is_mask)
         else:
             data = preprocess_f(preprocess_cfg, x_data = data, is_2d = True)
     
-    _data = []
-    for img_num in range(len(data)):
-        img = data[img_num]
-        data_shape.append(img.shape)
-        img = np.expand_dims(img, axis=0)
-        if crop and img[0].shape != crop_shape[:2]+(img.shape[-1],):
-            img = crop_data_with_overlap(img, crop_shape[:2]+(img.shape[-1],), overlap=overlap, padding=padding,
-                                        verbose=False)
-        c_shape.append(img.shape)
-        _data.append(img)
-    del data
-    data = _data
+        _data = []
+        for img_num in range(len(data)):
+            img = data[img_num]
+            data_shape.append(img.shape)
+            img = np.expand_dims(img, axis=0)
+            if crop and img[0].shape != crop_shape[:2]+(img.shape[-1],):
+                img = crop_data_with_overlap(img, crop_shape[:2]+(img.shape[-1],), overlap=overlap, padding=padding,
+                                            verbose=False)
+            c_shape.append(img.shape)
+            _data.append(img)
+        del data
+        data = _data
 
     same_shape = True
     s = data[0].shape
@@ -1171,6 +1174,9 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
     """
     if crop and crop_shape is None:
         raise ValueError("'crop_shape' must be provided when 'crop' is True")
+    
+    if preprocess_f != None and preprocess_cfg == None:
+        raise ValueError("The preprocessing configuration ('preprocess_cfg') is missing.")
 
     print("Loading data from {}".format(data_dir))
     ids = sorted(next(os.walk(data_dir))[2])
@@ -1218,7 +1224,7 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
                 raise ValueError("Channel of the patch size given {} does not correspond with the loaded image {}. "
                     "Please, check the channels of the images!".format(crop_shape[-1], img.shape[-1]))
 
-        if (preprocess_cfg == None) or (preprocess_f == None):
+        if preprocess_f == None:
             data_shape.append(img.shape)
             if crop and img.shape != crop_shape[:3]+(img.shape[-1],):
                 img = crop_3D_data_with_overlap(img, crop_shape[:3]+(img.shape[-1],), overlap=overlap, padding=padding,
@@ -1228,26 +1234,26 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
             c_shape.append(img.shape)
         data.append(img)
     
-    if (preprocess_cfg != None) and (preprocess_f != None):
+    if preprocess_f != None:
         if is_mask:
             # data contains masks
             data = preprocess_f(preprocess_cfg, y_data = data, is_2d = False, is_y_mask = is_mask)
         else:
             data = preprocess_f(preprocess_cfg, x_data = data, is_2d = False)
     
-    _data = []
-    for img_num in range(len(data)):
-        img = data[img_num]
-        data_shape.append(img.shape)
-        if crop and img.shape != crop_shape[:3]+(img.shape[-1],):
-            img = crop_3D_data_with_overlap(img, crop_shape[:3]+(img.shape[-1],), overlap=overlap, padding=padding,
-                                            median_padding=median_padding, verbose=verbose)
-        else:
-            img = np.expand_dims(img, axis=0)
-        c_shape.append(img.shape)
-        _data.append(img)
-    del data
-    data = _data
+        _data = []
+        for img_num in range(len(data)):
+            img = data[img_num]
+            data_shape.append(img.shape)
+            if crop and img.shape != crop_shape[:3]+(img.shape[-1],):
+                img = crop_3D_data_with_overlap(img, crop_shape[:3]+(img.shape[-1],), overlap=overlap, padding=padding,
+                                                median_padding=median_padding, verbose=verbose)
+            else:
+                img = np.expand_dims(img, axis=0)
+            c_shape.append(img.shape)
+            _data.append(img)
+        del data
+        data = _data
 
     same_shape = True
     s = data[0].shape

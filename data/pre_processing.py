@@ -902,8 +902,8 @@ def resize_images(images, **kwards):
         Size of the generated output image. E.g. `(256,256)`
 
     (kwards): optional
-        skimage.transform.resize() parameters are also allowed. 
-        <https://scikit-image.org/docs/stable/api/skimage.transform.html#skimage.transform.resize>
+        `skimage.transform.resize() <https://scikit-image.org/docs/stable/api/skimage.transform.html#skimage.transform.resize>`__
+        parameters are also allowed. 
         
     Returns
     -------
@@ -927,8 +927,8 @@ def apply_gaussian_blur(images, **kwards):
         The input images on which the Gaussian blur will be applied.
 
     (kwards): optional
-        skimage.filters.gaussian() parameters are also allowed. 
-        <https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.gaussian>
+        `skimage.filters.gaussian() <https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.gaussian>`__
+        parameters are also allowed. 
     
     Returns
     -------
@@ -958,8 +958,8 @@ def apply_median_blur(images, **kwards):
         The input image on which the median blur operation will be applied.
     
     (kwards): optional
-        skimage.filters.median() parameters are also allowed. 
-        <https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.median>
+        `skimage.filters.median() <https://scikit-image.org/docs/stable/api/skimage.filters.html#skimage.filters.median>`__
+        parameters are also allowed.
 
     Returns
     -------
@@ -985,8 +985,8 @@ def detect_edges(images, **kwards):
         shape (height, width, 3) or a grayscale image with shape (height, width, 1).
     
     (kwards): optional
-        skimage.feature.canny() parameters are also allowed. 
-        <https://scikit-image.org/docs/stable/api/skimage.feature.html#skimage.feature.canny>
+        `skimage.feature.canny() <https://scikit-image.org/docs/stable/api/skimage.feature.html#skimage.feature.canny>`__
+        parameters are also allowed.
 
     Returns
     -------
@@ -1007,13 +1007,13 @@ def detect_edges(images, **kwards):
                              'Only accepts grayscale and RGB 2D images (1 or 3 channels).')
         return image
     
-    def set_type(image, dtype):
-        im = image.astype(dtype)
+    def set_uint8(image):
+        im = image.astype(np.uint8)
         im = im[..., np.newaxis] # add channel dim
         im = im * 255
         return im
 
-    edges = [set_type(canny(to_gray(img), **kwards), np.uint8) for img in images]
+    edges = [set_uint8(canny(to_gray(img), **kwards)) for img in images]
     if isinstance(images, np.ndarray):
         edges = np.array(edges, dtype=np.uint8) 
     return edges
@@ -1080,8 +1080,9 @@ def apply_histogram_matching(images, reference_path, is_2d):
         the reference histogram with which we want to match the histogram of the images. It represents 
         the desired distribution of pixel intensities in the output image.
     
-    is_2d: Bool
-        The value indicate if the data given in `reference_path` is 2D (is_2d = True) or 3D (is_2d = False).
+    is_2d: bool, optional
+        The value indicate if the data given in ``reference_path`` is 2D (``is_2d = True``) or 3D (``is_2d = False``).
+        Defaults to True.
     
     Returns
     -------
@@ -1109,8 +1110,8 @@ def apply_clahe(images, **kwards):
         algorithm to.
 
     (kwards): optional
-        skimage.exposure.equalize_adapthist() parameters are also allowed. 
-        <https://scikit-image.org/docs/stable/api/skimage.exposure.html#skimage.exposure.equalize_adapthist>
+        `skimage.exposure.equalize_adapthist() <https://scikit-image.org/docs/stable/api/skimage.exposure.html#skimage.exposure.equalize_adapthist>`__
+        parameters are also allowed.
     
     Returns
     -------
@@ -1142,14 +1143,20 @@ def preprocess_data(cfg, x_data=[], y_data=[], is_2d=True, is_y_mask=False):
         preprocessing the data. It is used to control the behavior of different preprocessing techniques
         such as image resizing, blurring, histogram matching, etc.
 
-    x_data: numpy array or list of numpy arrays, optional
-        A list of input data (images) to be preprocessed.
+    x_data: 4D/5D numpy array or list of 3D/4D numpy arrays, optional
+        The input data (images) to be preprocessed. The first dimension must be the number of images. 
+        E.g. ``(num_of_images, y, x, channels)`` or ``(num_of_images, z, y, x, channels)``.
+        In case of using a list, the format of the images remains the same. Each item in the list
+        corresponds to a different image.
     
-    y_data: numpy array or list of numpy arrays, optional
-        A list of target data that corresponds to the x_data.
+    y_data: 4D/5D numpy array or list of 3D/4D numpy arrays, optional
+        The target data that corresponds to the x_data. The first dimension must be the number of images. 
+        E.g. ``(num_of_images, y, x, channels)`` or ``(num_of_images, z, y, x, channels)``.
+        In case of using a list, the format of the images remains the same. Each item in the list
+        corresponds to a different image.
       
     is_2d: Bool, optional
-        A boolean flag indicating whether the data is 2D or not. Defaults to True.
+        A boolean flag indicating whether the reference data for histogram matching is 2D or not. Defaults to True.
       
     is_y_mask: Bool, optional
         is_y_mask is a boolean parameter that indicates whether the y_data is a mask or not. If
@@ -1159,11 +1166,11 @@ def preprocess_data(cfg, x_data=[], y_data=[], is_2d=True, is_y_mask=False):
     
     Returns
     -------
-    x_data: numpy array or list of numpy arrays, optional
-        Preprocessed data.
+    x_data: 4D/5D numpy array or list of 3D/4D numpy arrays, optional
+        Preprocessed data. The same structure and dimensionality of the given data will be returned.
 
-    y_data: numpy array or list of numpy arrays, optional
-        Preprocessed data.
+    y_data: 4D/5D numpy array or list of 3D/4D numpy arrays, optional
+        Preprocessed data. The same structure and dimensionality of the given data will be returned.
     """
     
     if cfg.RESIZE.ACTIVATE:

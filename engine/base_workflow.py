@@ -191,6 +191,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 val_split = self.cfg.DATA.VAL.SPLIT_TRAIN if self.cfg.DATA.VAL.FROM_TRAIN else 0.
                 f_name = load_and_prepare_2D_train_data if self.cfg.PROBLEM.NDIM == '2D' else load_and_prepare_3D_data
                 preprocess_cfg = self.cfg.DATA.PREPROCESS if self.cfg.DATA.PREPROCESS.TRAIN else None
+                preprocess_fn = preprocess_data if self.cfg.DATA.PREPROCESS.TRAIN else None
                 is_y_mask = self.cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG']
                 objs = f_name(self.cfg.DATA.TRAIN.PATH, self.mask_path, cross_val=self.cfg.DATA.VAL.CROSS_VAL, 
                     cross_val_nsplits=self.cfg.DATA.VAL.CROSS_VAL_NFOLD, cross_val_fold=self.cfg.DATA.VAL.CROSS_VAL_FOLD, 
@@ -199,7 +200,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     y_upscaling=self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, ov=self.cfg.DATA.TRAIN.OVERLAP, 
                     padding=self.cfg.DATA.TRAIN.PADDING, minimum_foreground_perc=self.cfg.DATA.TRAIN.MINIMUM_FOREGROUND_PER,
                     reflect_to_complete_shape=self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE, preprocess_cfg = preprocess_cfg,
-                    is_y_mask = is_y_mask)
+                    is_y_mask = is_y_mask, preprocess_f=preprocess_fn)
             
                 if self.cfg.DATA.VAL.FROM_TRAIN:
                     if self.cfg.DATA.VAL.CROSS_VAL:
@@ -220,11 +221,12 @@ class Base_Workflow(metaclass=ABCMeta):
                     print("1) Loading validation images . . .")
                     f_name = load_data_from_dir if self.cfg.PROBLEM.NDIM == '2D' else load_3d_images_from_dir
                     preprocess_cfg = self.cfg.DATA.PREPROCESS if self.cfg.DATA.PREPROCESS.VAL else None
+                    preprocess_fn = preprocess_data if self.cfg.DATA.PREPROCESS.VAL else None
                     is_y_mask = self.cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG']
                     self.X_val, _, _ = f_name(self.cfg.DATA.VAL.PATH, crop=True, crop_shape=self.cfg.DATA.PATCH_SIZE,
                                         overlap=self.cfg.DATA.VAL.OVERLAP, padding=self.cfg.DATA.VAL.PADDING,
                                         reflect_to_complete_shape=self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE, 
-                                        preprocess_cfg = preprocess_cfg, is_mask = False, preprocess_f=preprocess_data)
+                                        preprocess_cfg = preprocess_cfg, is_mask = False, preprocess_f=preprocess_fn)
 
                     if self.cfg.PROBLEM.NDIM == '2D':
                         crop_shape = (self.cfg.DATA.PATCH_SIZE[0]*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
@@ -237,7 +239,7 @@ class Base_Workflow(metaclass=ABCMeta):
                                             overlap=self.cfg.DATA.VAL.OVERLAP, padding=self.cfg.DATA.VAL.PADDING,
                                             reflect_to_complete_shape=self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE,
                                             check_channel=False, check_drange=False, preprocess_cfg = preprocess_cfg,
-                                            is_mask = is_y_mask, preprocess_f=preprocess_data)                            
+                                            is_mask = is_y_mask, preprocess_f=preprocess_fn)                            
                     else:
                         self.Y_val = None
                     if self.Y_val is not None and len(self.X_val) != len(self.Y_val):
@@ -465,13 +467,14 @@ class Base_Workflow(metaclass=ABCMeta):
                     print("2) Loading test images . . .")
                     f_name = load_data_from_dir if self.cfg.PROBLEM.NDIM == '2D' else load_3d_images_from_dir
                     preprocess_cfg = self.cfg.DATA.PREPROCESS if self.cfg.DATA.PREPROCESS.TEST else None
+                    preprocess_fn = preprocess_data if self.cfg.DATA.PREPROCESS.TEST else None
                     is_y_mask = self.cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG']
                     self.X_test, _, _ = f_name(self.cfg.DATA.TEST.PATH, preprocess_cfg=preprocess_cfg, is_mask=False, 
-                                               preprocess_f=preprocess_data)
+                                               preprocess_f=preprocess_fn)
                     if self.cfg.DATA.TEST.LOAD_GT:
                         print("3) Loading test masks . . .")
                         self.Y_test, _, _ = f_name(self.cfg.DATA.TEST.GT_PATH, check_channel=False, check_drange=False, 
-                                                   preprocess_cfg=preprocess_cfg, is_mask=is_y_mask, preprocess_f=preprocess_data)
+                                                   preprocess_cfg=preprocess_cfg, is_mask=is_y_mask, preprocess_f=preprocess_fn)
                         if len(self.X_test) != len(self.Y_test):
                             raise ValueError("Different number of raw and ground truth items ({} vs {}). "
                                 "Please check the data!".format(len(self.X_test), len(self.Y_test)))
