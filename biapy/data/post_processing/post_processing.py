@@ -477,43 +477,39 @@ def calculate_z_filtering(data, mf_size=5):
 
     return out_data 
 
-def ensemble8_2d_predictions(o_img, pred_func, batch_size_value=1, n_classes=1):
-    """Outputs the mean prediction of a given image generating its 8 possible rotations and flips.
+def ensemble8_2d_predictions(o_img, pred_func, batch_size_value=1):
+    """
+    Outputs the mean prediction of a given image generating its 8 possible rotations and flips.
 
-       Parameters
-       ----------
-       o_img : 3D Numpy array
-           Input image. E.g. ``(y, x, channels)``.
+    Parameters
+    ----------
+    o_img : 3D Numpy array
+        Input image. E.g. ``(y, x, channels)``.
 
-       pred_func : function
-           Function to make predictions.
+    pred_func : function
+        Function to make predictions.
 
-       batch_size_value : int, optional
-           Batch size value.
+    batch_size_value : int, optional
+        Batch size value.
 
-       n_classes : int, optional
-           Number of classes.
+    Returns
+    -------
+    out : 3D Numpy array
+        Output image ensembled. E.g. ``(y, x, channels)``.
 
-       Returns
-       -------
-       out : 3D Numpy array
-           Output image ensembled. E.g. ``(y, x, channels)``.
+    Examples
+    --------
+    ::
 
-       Examples
-       --------
-       ::
+        # EXAMPLE 1
+        # Apply ensemble to each image of X_test
+        X_test = np.ones((165, 768, 1024, 1))
+        out_X_test = np.zeros(X_test.shape, dtype=(np.float32))
 
-           # EXAMPLE 1
-           # Apply ensemble to each image of X_test
-           X_test = np.ones((165, 768, 1024, 1))
-           out_X_test = np.zeros(X_test.shape, dtype=(np.float32))
-
-           for i in tqdm(range(X_test.shape[0])):
-               pred_ensembled = ensemble8_2d_predictions(X_test[i],
-                   pred_func=(lambda img_batch_subdiv: model.predict(img_batch_subdiv)), n_classes=n_classes)
-               out_X_test[i] = pred_ensembled
-
-           # Notice that here pred_func is created based on model.predict function of Keras
+        for i in tqdm(range(X_test.shape[0])):
+            pred_ensembled = ensemble8_2d_predictions(X_test[i],
+                pred_func=(lambda img_batch_subdiv: model(img_batch_subdiv)), n_classes=n_classes)
+            out_X_test[i] = pred_ensembled
     """
 
     # Prepare all the image transformations per channel
@@ -562,9 +558,6 @@ def ensemble8_2d_predictions(o_img, pred_func, batch_size_value=1, n_classes=1):
         if isinstance(r_aux, list):
             r_aux = np.array(r_aux[-1])
 
-        if n_classes > 1:
-            r_aux = np.expand_dims(np.argmax(r_aux, -1), -1)
-
         _decoded_aug_img.append(r_aux)
     _decoded_aug_img = np.concatenate(_decoded_aug_img)
 
@@ -609,43 +602,39 @@ def ensemble8_2d_predictions(o_img, pred_func, batch_size_value=1, n_classes=1):
     return np.mean(out, axis=0)
 
 
-def ensemble16_3d_predictions(vol, pred_func, batch_size_value=1, n_classes=1):
-    """Outputs the mean prediction of a given image generating its 16 possible rotations and flips.
+def ensemble16_3d_predictions(vol, pred_func, batch_size_value=1):
+    """
+    Outputs the mean prediction of a given image generating its 16 possible rotations and flips.
 
-       Parameters
-       ----------
-       o_img : 4D Numpy array
-           Input image. E.g. ``(z, y, x, channels)``.
+    Parameters
+    ----------
+    o_img : 4D Numpy array
+        Input image. E.g. ``(z, y, x, channels)``.
 
-       pred_func : function
-           Function to make predictions.
+    pred_func : function
+        Function to make predictions.
 
-       batch_size_value : int, optional
-           Batch size value.
+    batch_size_value : int, optional
+        Batch size value.
 
-       n_classes : int, optional
-           Number of classes.
+    Returns
+    -------
+    out : 4D Numpy array
+        Output image ensembled. E.g. ``(z, y, x, channels)``.
 
-       Returns
-       -------
-       out : 4D Numpy array
-           Output image ensembled. E.g. ``(z, y, x, channels)``.
+    Examples
+    --------
+    ::
 
-       Examples
-       --------
-       ::
+        # EXAMPLE 1
+        # Apply ensemble to each image of X_test
+        X_test = np.ones((10, 165, 768, 1024, 1))
+        out_X_test = np.zeros(X_test.shape, dtype=(np.float32))
 
-           # EXAMPLE 1
-           # Apply ensemble to each image of X_test
-           X_test = np.ones((10, 165, 768, 1024, 1))
-           out_X_test = np.zeros(X_test.shape, dtype=(np.float32))
-
-           for i in tqdm(range(X_test.shape[0])):
-               pred_ensembled = ensemble8_2d_predictions(X_test[i],
-                   pred_func=(lambda img_batch_subdiv: model.predict(img_batch_subdiv)), n_classes=n_classes)
-               out_X_test[i] = pred_ensembled
-
-           # Notice that here pred_func is created based on model.predict function of Keras
+        for i in tqdm(range(X_test.shape[0])):
+            pred_ensembled = ensemble8_2d_predictions(X_test[i],
+                pred_func=(lambda img_batch_subdiv: model(img_batch_subdiv)))
+            out_X_test[i] = pred_ensembled
     """
 
     total_vol = []
@@ -704,9 +693,6 @@ def ensemble16_3d_predictions(vol, pred_func, batch_size_value=1, n_classes=1):
         # Take just the last output of the network in case it returns more than one output
         if isinstance(r_aux, list):
             r_aux = np.array(r_aux[-1])
-
-        if n_classes > 1:
-            r_aux = np.expand_dims(np.argmax(r_aux, -1), -1)
 
         if r_aux.ndim == 4:
             r_aux = np.expand_dims(r_aux, 0)

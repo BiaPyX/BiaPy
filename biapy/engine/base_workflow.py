@@ -1184,7 +1184,7 @@ class Base_Workflow(metaclass=ABCMeta):
             if self.cfg.TEST.AUGMENTATION:
                 for k in tqdm(range(self._X.shape[0]), leave=False):
                     if self.cfg.PROBLEM.NDIM == '2D':
-                        p = ensemble8_2d_predictions(self._X[k], n_classes=self.cfg.MODEL.N_CLASSES,
+                        p = ensemble8_2d_predictions(self._X[k],
                             pred_func=(
                                 lambda img_batch_subdiv: 
                                     to_numpy_format(
@@ -1329,7 +1329,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
             # Make the prediction
             if self.cfg.TEST.AUGMENTATION:
-                pred = ensemble8_2d_predictions(self._X[0], n_classes=self.cfg.MODEL.N_CLASSES,
+                pred = ensemble8_2d_predictions(self._X[0],
                     pred_func=(
                         lambda img_batch_subdiv: 
                             to_numpy_format(
