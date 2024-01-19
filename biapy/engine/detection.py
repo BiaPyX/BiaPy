@@ -507,15 +507,16 @@ class Detection_Workflow(Base_Workflow):
                     
                     print("D: z: {}-{}, y: {}-{}, x: {}-{}".format(z*self.cfg.DATA.PATCH_SIZE[0],min(z_dim,self.cfg.DATA.PATCH_SIZE[0]*(z+1)),
                         y*self.cfg.DATA.PATCH_SIZE[1],min(y_dim,self.cfg.DATA.PATCH_SIZE[1]*(y+1)),x*self.cfg.DATA.PATCH_SIZE[2],min(x_dim,self.cfg.DATA.PATCH_SIZE[2]*(x+1))))
+                    
                     fname = _filename+"_patch"+str(c).zfill(d)+file_ext
-
+                    
                     slices = [
-                        slice(z*self.cfg.DATA.PATCH_SIZE[0],min(z_dim,self.cfg.DATA.PATCH_SIZE[0]*(z+1))),
-                        slice(y*self.cfg.DATA.PATCH_SIZE[1],min(y_dim,self.cfg.DATA.PATCH_SIZE[1]*(y+1))),
-                        slice(x*self.cfg.DATA.PATCH_SIZE[2],min(x_dim,self.cfg.DATA.PATCH_SIZE[2]*(x+1))),
+                        slice(max(0,z*self.cfg.DATA.PATCH_SIZE[0]-self.cfg.DATA.TEST.PADDING[0]),min(z_dim,self.cfg.DATA.PATCH_SIZE[0]*(z+1)+self.cfg.DATA.TEST.PADDING[0])),
+                        slice(max(0,y*self.cfg.DATA.PATCH_SIZE[1]-self.cfg.DATA.TEST.PADDING[1]),min(y_dim,self.cfg.DATA.PATCH_SIZE[1]*(y+1)+self.cfg.DATA.TEST.PADDING[1])),
+                        slice(max(0,x*self.cfg.DATA.PATCH_SIZE[2]-self.cfg.DATA.TEST.PADDING[2]),min(x_dim,self.cfg.DATA.PATCH_SIZE[2]*(x+1)+self.cfg.DATA.TEST.PADDING[2])),
                         slice(None), # Channel
                     ]
-
+                    
                     data_ordered_slices = order_dimensions(
                         slices,
                         input_order = "ZYXC",
@@ -539,6 +540,22 @@ class Detection_Workflow(Base_Workflow):
                     patch = raw_patch.transpose(transpose_order)
 
                     df_patch = self.detection_process(patch, [fname])
+                    
+                    if z*self.cfg.DATA.PATCH_SIZE[0]-self.cfg.DATA.TEST.PADDING[0] >=0: # if a patch was added
+                        df_patch['axis-0'] = df_patch['axis-0'] - self.cfg.DATA.TEST.PADDING[0] # shift the coordinates to the correct patch position
+                    if y*self.cfg.DATA.PATCH_SIZE[1]-self.cfg.DATA.TEST.PADDING[1] >=0:
+                        df_patch['axis-1'] = df_patch['axis-1'] - self.cfg.DATA.TEST.PADDING[1]
+                    if x*self.cfg.DATA.PATCH_SIZE[2]-self.cfg.DATA.TEST.PADDING[2] >=0:
+                        df_patch['axis-2'] = df_patch['axis-2'] - self.cfg.DATA.TEST.PADDING[2]
+
+                    df_patch = df_patch[df_patch['axis-0'] >= 0] # remove all coordinate from the previous patch
+                    df_patch = df_patch[df_patch['axis-0'] < self.cfg.DATA.PATCH_SIZE[0]] # remove all coordinate from the next patch
+                    df_patch = df_patch[df_patch['axis-1'] >= 0]
+                    df_patch = df_patch[df_patch['axis-1'] < self.cfg.DATA.PATCH_SIZE[1]]
+                    df_patch = df_patch[df_patch['axis-2'] >= 0]
+                    df_patch = df_patch[df_patch['axis-2'] < self.cfg.DATA.PATCH_SIZE[2]]
+
+                    df_patch = df_patch.reset_index(drop=True)
                     
                     # add the patch shift to the detected coordinates
                     shift = np.array([z*self.cfg.DATA.PATCH_SIZE[0], y*self.cfg.DATA.PATCH_SIZE[1], x*self.cfg.DATA.PATCH_SIZE[2]])
