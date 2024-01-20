@@ -55,6 +55,7 @@ class Detection_Workflow(Base_Workflow):
 
         self.original_test_mask_path = self.prepare_detection_data()
 
+        self.use_gt = False 
         if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
             self.use_gt = True 
         if self.cfg.TEST.BY_CHUNKS.ENABLE and self.cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.ENABLE:

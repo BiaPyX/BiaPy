@@ -779,30 +779,30 @@ class Base_Workflow(metaclass=ABCMeta):
                     self.processing_filenames = self.test_filenames[(i*l_X)+j:(i*l_X)+j+1]
                     if is_main_process():
                         print("Processing image(s): {}".format(self.processing_filenames))
-                    
-                    if self.cfg.PROBLEM.TYPE != 'CLASSIFICATION':
-                        if type(X) is tuple:
-                            self._X = X[j]
-                            if self.cfg.DATA.TEST.LOAD_GT and self.cfg.PROBLEM.TYPE not in ["SELF_SUPERVISED"]:
-                                self._Y = Y[j]  
+                        
+                        if self.cfg.PROBLEM.TYPE != 'CLASSIFICATION':
+                            if type(X) is tuple:
+                                self._X = X[j]
+                                if self.cfg.DATA.TEST.LOAD_GT and self.cfg.PROBLEM.TYPE not in ["SELF_SUPERVISED"]:
+                                    self._Y = Y[j]  
+                                else:
+                                    self._Y = None
                             else:
-                                self._Y = None
+                                self._X = np.expand_dims(X[j],0)
+                                if self.cfg.DATA.TEST.LOAD_GT and self.cfg.PROBLEM.TYPE not in ["SELF_SUPERVISED"]:
+                                    self._Y = np.expand_dims(Y[j],0)  
+                                else:
+                                    self._Y = None
                         else:
-                            self._X = np.expand_dims(X[j],0)
-                            if self.cfg.DATA.TEST.LOAD_GT and self.cfg.PROBLEM.TYPE not in ["SELF_SUPERVISED"]:
-                                self._Y = np.expand_dims(Y[j],0)  
-                            else:
-                                self._Y = None
-                    else:
-                        self._X = np.expand_dims(X[j], 0)                    
-                        self._Y = np.expand_dims(Y, 0) if self.cfg.DATA.TEST.LOAD_GT else None
+                            self._X = np.expand_dims(X[j], 0)                    
+                            self._Y = np.expand_dims(Y, 0) if self.cfg.DATA.TEST.LOAD_GT else None
 
-                    # Process each image separately
-                    self.f_numbers = list(range((i*l_X)+j,(i*l_X)+j+1)) 
-                    self.process_sample(norm=(X_norm, Y_norm))                        
-
+                        # Process each image separately
+                        self.f_numbers = list(range((i*l_X)+j,(i*l_X)+j+1)) 
+                        self.process_sample(norm=(X_norm, Y_norm))                        
+            
             image_counter += 1
-        
+  
         # Deactivate again the print function
         if self.cfg.TEST.BY_CHUNKS.ENABLE and self.cfg.PROBLEM.NDIM == '3D':
             setup_for_distributed(is_main_process())
