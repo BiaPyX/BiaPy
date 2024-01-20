@@ -1656,7 +1656,7 @@ def insert_patch_into_dataset(data_filename, data_filename_mask, data_shape, out
             s = np.array(data_shape)
             c_dim_index = cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER.index("C")
             if c_dim_index != -1: # if Channel exists
-                s[c_dim_index] = p.shape[-1]
+                s[2] = p.shape[-1]
             else: # else, add it
                 s = np.append(s, p.shape[-1])
 
@@ -1688,7 +1688,7 @@ def insert_patch_into_dataset(data_filename, data_filename_mask, data_shape, out
                     default_value=np.nan)
 
         transpose_order = [x for x in transpose_order if not np.isnan(x)]
-
+        data_ordered_slices = (slice(None, None, None),)+data_ordered_slices
         data[data_ordered_slices] += p.transpose(transpose_order)
         mask[data_ordered_slices] += m.transpose(transpose_order)
 

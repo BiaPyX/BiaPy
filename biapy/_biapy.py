@@ -136,4 +136,4 @@ def run_job(config, result_dir=os.getenv('HOME'), name="unknown_job", run_id=1, 
         dist.destroy_process_group()
 
     print("FINISHED JOB {} !!".format(job_identifier))
-
+    sys.exit(0)
