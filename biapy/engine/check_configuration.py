@@ -446,6 +446,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         if cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.ENABLE:     
             assert cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE in ["chunk_by_chunk", "entire_pred"], \
                 "'TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE' needs to be one between ['chunk_by_chunk', 'entire_pred']"
+        if len(cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER) < 4:
+            raise ValueError("'TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER' needs to be at least of length 4, e.g., 'ZCYX'")
 
     if cfg.TRAIN.ENABLE:
         if cfg.DATA.EXTRACT_RANDOM_PATCH and cfg.DATA.PROBABILITY_MAP:
@@ -477,40 +479,40 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         raise ValueError("Test resolution needs to be a tuple with {} values".format(dim_count))
 
     if len(cfg.DATA.TRAIN.OVERLAP) != dim_count:
-        raise ValueError("When PROBLEM.NDIM == {} DATA.TRAIN.OVERLAP tuple must be lenght {}, given {}."
+        raise ValueError("When PROBLEM.NDIM == {} DATA.TRAIN.OVERLAP tuple must be length {}, given {}."
                          .format(cfg.PROBLEM.NDIM, dim_count, cfg.DATA.TRAIN.OVERLAP))
     if any(not check_value(x) for x in cfg.DATA.TRAIN.OVERLAP):
             raise ValueError("DATA.TRAIN.OVERLAP not in [0, 1] range")
     if len(cfg.DATA.TRAIN.PADDING) != dim_count:
-        raise ValueError("When PROBLEM.NDIM == {} DATA.TRAIN.PADDING tuple must be lenght {}, given {}."
+        raise ValueError("When PROBLEM.NDIM == {} DATA.TRAIN.PADDING tuple must be length {}, given {}."
                          .format(cfg.PROBLEM.NDIM, dim_count, cfg.DATA.TRAIN.PADDING))
     if len(cfg.DATA.VAL.OVERLAP) != dim_count:
-        raise ValueError("When PROBLEM.NDIM == {} DATA.VAL.OVERLAP tuple must be lenght {}, given {}."
+        raise ValueError("When PROBLEM.NDIM == {} DATA.VAL.OVERLAP tuple must be length {}, given {}."
                          .format(cfg.PROBLEM.NDIM, dim_count, cfg.DATA.VAL.OVERLAP))
     if any(not check_value(x) for x in cfg.DATA.VAL.OVERLAP):
             raise ValueError("DATA.VAL.OVERLAP not in [0, 1] range")
     if len(cfg.DATA.VAL.PADDING) != dim_count:
-        raise ValueError("When PROBLEM.NDIM == {} DATA.VAL.PADDING tuple must be lenght {}, given {}."
+        raise ValueError("When PROBLEM.NDIM == {} DATA.VAL.PADDING tuple must be length {}, given {}."
                          .format(cfg.PROBLEM.NDIM, dim_count, cfg.DATA.VAL.PADDING))
     if len(cfg.DATA.TEST.OVERLAP) != dim_count:
-        raise ValueError("When PROBLEM.NDIM == {} DATA.TEST.OVERLAP tuple must be lenght {}, given {}."
+        raise ValueError("When PROBLEM.NDIM == {} DATA.TEST.OVERLAP tuple must be length {}, given {}."
                          .format(cfg.PROBLEM.NDIM, dim_count, cfg.DATA.TEST.OVERLAP))
     if any(not check_value(x) for x in cfg.DATA.TEST.OVERLAP):
             raise ValueError("DATA.TEST.OVERLAP not in [0, 1] range")
     if len(cfg.DATA.TEST.PADDING) != dim_count:
-        raise ValueError("When PROBLEM.NDIM == {} DATA.TEST.PADDING tuple must be lenght {}, given {}."
+        raise ValueError("When PROBLEM.NDIM == {} DATA.TEST.PADDING tuple must be length {}, given {}."
                          .format(cfg.PROBLEM.NDIM, dim_count, cfg.DATA.TEST.PADDING))
     if len(cfg.DATA.PATCH_SIZE) != dim_count+1:
-        raise ValueError("When PROBLEM.NDIM == {} DATA.PATCH_SIZE tuple must be lenght {}, given {}."
+        raise ValueError("When PROBLEM.NDIM == {} DATA.PATCH_SIZE tuple must be length {}, given {}."
                          .format(cfg.PROBLEM.NDIM, dim_count+1, cfg.DATA.PATCH_SIZE))
     if len(cfg.DATA.TRAIN.RESOLUTION) != 1 and len(cfg.DATA.TRAIN.RESOLUTION) != dim_count:
-        raise ValueError("When PROBLEM.NDIM == {} DATA.TRAIN.RESOLUTION tuple must be lenght {}, given {}."
+        raise ValueError("When PROBLEM.NDIM == {} DATA.TRAIN.RESOLUTION tuple must be length {}, given {}."
                          .format(cfg.PROBLEM.NDIM, dim_count, cfg.DATA.TRAIN.RESOLUTION))
     if len(cfg.DATA.VAL.RESOLUTION) != 1 and len(cfg.DATA.VAL.RESOLUTION) != dim_count:
-        raise ValueError("When PROBLEM.NDIM == {} DATA.VAL.RESOLUTION tuple must be lenght {}, given {}."
+        raise ValueError("When PROBLEM.NDIM == {} DATA.VAL.RESOLUTION tuple must be length {}, given {}."
                          .format(cfg.PROBLEM.NDIM, dim_count, cfg.DATA.VAL.RESOLUTION))
     if len(cfg.DATA.TEST.RESOLUTION) != 1 and len(cfg.DATA.TEST.RESOLUTION) != dim_count:
-        raise ValueError("When PROBLEM.NDIM == {} DATA.TEST.RESOLUTION tuple must be lenght {}, given {}."
+        raise ValueError("When PROBLEM.NDIM == {} DATA.TEST.RESOLUTION tuple must be length {}, given {}."
                          .format(cfg.PROBLEM.NDIM, dim_count, cfg.DATA.TEST.RESOLUTION))
     assert cfg.DATA.NORMALIZATION.TYPE in ['div', 'custom'], "DATA.NORMALIZATION.TYPE not in ['div', 'custom']"
     if cfg.DATA.NORMALIZATION.TYPE == 'custom':
