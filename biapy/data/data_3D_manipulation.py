@@ -838,7 +838,7 @@ def extract_3D_patch_with_overlap_yield(data, vol_shape, axis_order, overlap=(0,
         for j in range(vols):
             z = c+j
             real_start_z = z*step_z
-            real_finish_z = min(real_start_z+step_z, z_dim)
+            real_finish_z = min(real_start_z+step_z+ovz_per_block, z_dim)
             z_vol_info[z] = [real_start_z, real_finish_z]
         list_of_vols_in_z.append(list(range(c,c+vols)))
         c += vols
