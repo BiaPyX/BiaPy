@@ -163,11 +163,13 @@ class Detection_Workflow(Base_Workflow):
             
             # Find points
             if self.cfg.TEST.DET_POINT_CREATION_FUNCTION == "peak_local_max":
-                pred_coordinates = peak_local_max(pred[...,channel].astype(np.float32), threshold_abs=min_th_peak, exclude_border=False)
+                pred_coordinates = peak_local_max(pred[...,channel].astype(np.float32),
+                                                  threshold_abs=min_th_peak,
+                                                  exclude_border=self.cfg.TEST.DET_EXCLUDE_BORDER)
             else:
                 pred_coordinates = blob_log(pred[...,channel]*255, min_sigma=self.cfg.TEST.DET_BLOB_LOG_MIN_SIGMA, 
                     max_sigma=self.cfg.TEST.DET_BLOB_LOG_MAX_SIGMA, num_sigma=self.cfg.TEST.DET_BLOB_LOG_NUM_SIGMA, 
-                    threshold=min_th_peak, exclude_border=False)
+                    threshold=min_th_peak, exclude_border=self.cfg.TEST.DET_EXCLUDE_BORDER)
                 pred_coordinates = pred_coordinates[:,:3].astype(int) # Remove sigma
 
             # Remove close points per class as post-processing method
@@ -476,15 +478,15 @@ class Detection_Workflow(Base_Workflow):
     def after_merge_patches_by_chunks_proccess_patch(self, filename):
         """
         Place any code that needs to be done after merging all predicted patches into the original image
-        but in the process made chunk by chunk. This function will operate patch by patch defined by 
-        ``DATA.PATCH_SIZE``.
+        but in the process made chunk by chunk. This function will operate patch by patch defined by
+        ``DATA.PATCH_SIZE`` + ``DATA.PADDING``.
 
         Parameters
         ----------
         filename : List of str
-            Filename of the predicted image H5/Zarr.  
+            Filename of the predicted image H5/Zarr.
         """
-        
+
         _filename, file_ext = os.path.splitext(os.path.basename(filename))
         print("Detection workflow pipeline continues for image {}".format(_filename))
 
@@ -505,15 +507,19 @@ class Detection_Workflow(Base_Workflow):
             for y in range(y_vols):
                 for x in range(x_vols):
                     print("Processing patch {}/{} of image".format(c, total_patches))
+                    
+                    print("D: z: {}-{}, y: {}-{}, x: {}-{}".format(z*self.cfg.DATA.PATCH_SIZE[0],min(z_dim,self.cfg.DATA.PATCH_SIZE[0]*(z+1)),
+                        y*self.cfg.DATA.PATCH_SIZE[1],min(y_dim,self.cfg.DATA.PATCH_SIZE[1]*(y+1)),x*self.cfg.DATA.PATCH_SIZE[2],min(x_dim,self.cfg.DATA.PATCH_SIZE[2]*(x+1))))
+                    
                     fname = _filename+"_patch"+str(c).zfill(d)+file_ext
-
+                    
                     slices = [
-                        slice(z*self.cfg.DATA.PATCH_SIZE[0],min(z_dim,self.cfg.DATA.PATCH_SIZE[0]*(z+1))),
-                        slice(y*self.cfg.DATA.PATCH_SIZE[1],min(y_dim,self.cfg.DATA.PATCH_SIZE[1]*(y+1))),
-                        slice(x*self.cfg.DATA.PATCH_SIZE[2],min(x_dim,self.cfg.DATA.PATCH_SIZE[2]*(x+1))),
+                        slice(max(0,z*self.cfg.DATA.PATCH_SIZE[0]-self.cfg.DATA.TEST.PADDING[0]),min(z_dim,self.cfg.DATA.PATCH_SIZE[0]*(z+1)+self.cfg.DATA.TEST.PADDING[0])),
+                        slice(max(0,y*self.cfg.DATA.PATCH_SIZE[1]-self.cfg.DATA.TEST.PADDING[1]),min(y_dim,self.cfg.DATA.PATCH_SIZE[1]*(y+1)+self.cfg.DATA.TEST.PADDING[1])),
+                        slice(max(0,x*self.cfg.DATA.PATCH_SIZE[2]-self.cfg.DATA.TEST.PADDING[2]),min(x_dim,self.cfg.DATA.PATCH_SIZE[2]*(x+1)+self.cfg.DATA.TEST.PADDING[2])),
                         slice(None), # Channel
                     ]
-
+                    
                     data_ordered_slices = order_dimensions(
                         slices,
                         input_order = "ZYXC",
@@ -536,8 +542,29 @@ class Detection_Workflow(Base_Workflow):
 
                     patch = raw_patch.transpose(transpose_order)
 
-
                     df_patch = self.detection_process(patch, [fname])
+                    
+                    if z*self.cfg.DATA.PATCH_SIZE[0]-self.cfg.DATA.TEST.PADDING[0] >=0: # if a patch was added
+                        df_patch['axis-0'] = df_patch['axis-0'] - self.cfg.DATA.TEST.PADDING[0] # shift the coordinates to the correct patch position
+                    if y*self.cfg.DATA.PATCH_SIZE[1]-self.cfg.DATA.TEST.PADDING[1] >=0:
+                        df_patch['axis-1'] = df_patch['axis-1'] - self.cfg.DATA.TEST.PADDING[1]
+                    if x*self.cfg.DATA.PATCH_SIZE[2]-self.cfg.DATA.TEST.PADDING[2] >=0:
+                        df_patch['axis-2'] = df_patch['axis-2'] - self.cfg.DATA.TEST.PADDING[2]
+
+                    df_patch = df_patch[df_patch['axis-0'] >= 0] # remove all coordinate from the previous patch
+                    df_patch = df_patch[df_patch['axis-0'] < self.cfg.DATA.PATCH_SIZE[0]] # remove all coordinate from the next patch
+                    df_patch = df_patch[df_patch['axis-1'] >= 0]
+                    df_patch = df_patch[df_patch['axis-1'] < self.cfg.DATA.PATCH_SIZE[1]]
+                    df_patch = df_patch[df_patch['axis-2'] >= 0]
+                    df_patch = df_patch[df_patch['axis-2'] < self.cfg.DATA.PATCH_SIZE[2]]
+
+                    df_patch = df_patch.reset_index(drop=True)
+                    
+                    # add the patch shift to the detected coordinates
+                    shift = np.array([z*self.cfg.DATA.PATCH_SIZE[0], y*self.cfg.DATA.PATCH_SIZE[1], x*self.cfg.DATA.PATCH_SIZE[2]])
+                    df_patch['axis-0'] = df_patch['axis-0'] + shift[0]
+                    df_patch['axis-1'] = df_patch['axis-1'] + shift[1]
+                    df_patch['axis-2'] = df_patch['axis-2'] + shift[2]
 
                     c+=1
 
@@ -549,9 +576,9 @@ class Detection_Workflow(Base_Workflow):
                             df_patch['file'] = fname
                             df = pd.concat([df, df_patch], ignore_index=True)
 
-        # Apply post-processing of removing points         
+        # Apply post-processing of removing points
         if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS and self.postpone_postproc:
-            # Take point coords 
+            # Take point coords
             pred_coordinates = []
             coordz = df['axis-0'].tolist()
             coordy = df['axis-1'].tolist()
@@ -562,7 +589,7 @@ class Detection_Workflow(Base_Workflow):
             pred_coordinates, droped_pos = remove_close_points(pred_coordinates, radius, self.cfg.DATA.TEST.RESOLUTION,
                 ndim=3, return_drops=True)
 
-            # Remove points from dataframe 
+            # Remove points from dataframe
             df = df.drop(droped_pos)
 
         # Save large csv with all point of all patches
@@ -571,6 +598,7 @@ class Detection_Workflow(Base_Workflow):
 
         if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
             pred_file.close()
+
 
     def process_sample(self, norm):
         """
