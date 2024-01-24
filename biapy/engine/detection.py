@@ -162,11 +162,13 @@ class Detection_Workflow(Base_Workflow):
             
             # Find points
             if self.cfg.TEST.DET_POINT_CREATION_FUNCTION == "peak_local_max":
-                pred_coordinates = peak_local_max(pred[...,channel].astype(np.float32), threshold_abs=min_th_peak, exclude_border=True)
+                pred_coordinates = peak_local_max(pred[...,channel].astype(np.float32),
+                                                  threshold_abs=min_th_peak,
+                                                  exclude_border=self.cfg.TEST.DET_EXCLUDE_BORDER)
             else:
                 pred_coordinates = blob_log(pred[...,channel]*255, min_sigma=self.cfg.TEST.DET_BLOB_LOG_MIN_SIGMA, 
                     max_sigma=self.cfg.TEST.DET_BLOB_LOG_MAX_SIGMA, num_sigma=self.cfg.TEST.DET_BLOB_LOG_NUM_SIGMA, 
-                    threshold=min_th_peak, exclude_border=True)
+                    threshold=min_th_peak, exclude_border=self.cfg.TEST.DET_EXCLUDE_BORDER)
                 pred_coordinates = pred_coordinates[:,:3].astype(int) # Remove sigma
 
             # Remove close points per class as post-processing method
