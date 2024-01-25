@@ -560,23 +560,6 @@ class Config:
         # DOI of the model from BMZ to load. It can not be empty if MODEL.SOURCE = "bmz".
         _C.MODEL.BMZ.SOURCE_MODEL_DOI = ""
         # BMZ model export options
-        _C.MODEL.BMZ.EXPORT_MODEL = CN()
-        # Whether to export the model to BMZ format or not
-        _C.MODEL.BMZ.EXPORT_MODEL.ENABLE = False
-        # Name of the model
-        _C.MODEL.BMZ.EXPORT_MODEL.NAME = ""
-        # Description of the model
-        _C.MODEL.BMZ.EXPORT_MODEL.DESCRIPTION = ""
-        # Authors of the model. Need to be a list of dicts, e.g. authors=[{"name": "Gizmo"}]
-        _C.MODEL.BMZ.EXPORT_MODEL.AUTHORS = []
-        # License of the model. E.g. "CC-BY-4.0"
-        _C.MODEL.BMZ.EXPORT_MODEL.LICENSE = ""
-        # Tags to make models more findable on the website, e.g. tags=["nucleus-segmentation"]
-        _C.MODEL.BMZ.EXPORT_MODEL.TAGS = []
-        # List of dictionaries of citations associated, e.g. [{"text": "Gizmo et al.", "doi": "doi:10.1002/xyzacab123"}]
-        _C.MODEL.BMZ.EXPORT_MODEL.CITE = []
-        # Path to a file with a documentation of the model in markdown, e.g. "my-model/doc.md"
-        _C.MODEL.BMZ.EXPORT_MODEL.DOCUMENTATION = ""
 
         # BiaPy support using models of Torchvision . It can not be empty if MODEL.SOURCE = "torchvision".
         # Models available here: https://pytorch.org/vision/stable/models.html
@@ -1012,8 +995,6 @@ class Config:
         _C.PATHS.STD_INFO_FILE = os.path.join(_C.PATHS.CHECKPOINT, 'normalization_std_value.npy')
         # Path where the images used in MAE will be saved suring inference
         _C.PATHS.MAE_OUT_DIR = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'MAE_checks')
-        # Paths where all file for Bioimage Model Zoo integration will be placed 
-        _C.PATHS.RESULT_DIR.BMZ_BUILD = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'bmz_model')
         
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Logging

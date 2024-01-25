@@ -186,42 +186,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         else:
             raise ValueError(f'BMZ model DOI: {cfg.MODEL.BMZ.SOURCE_MODEL_DOI} not found. Aborting!')
 
-    if cfg.MODEL.BMZ.EXPORT_MODEL.ENABLE:
-        if cfg.MODEL.BMZ.EXPORT_MODEL.NAME == "":
-            raise ValueError("'MODEL.BMZ.EXPORT_MODEL.NAME' can not be empty when 'MODEL.BMZ.EXPORT_MODEL.ENABLE' is True")
-        if cfg.MODEL.BMZ.EXPORT_MODEL.DESCRIPTION == "":
-            raise ValueError("'MODEL.BMZ.EXPORT_MODEL.DESCRIPTION' can not be empty when 'MODEL.BMZ.EXPORT_MODEL.ENABLE' is True")
-        # Authors of the model. Need to be a list of dicts, e.g. authors=[{"name": "Daniel"}]
-        if not isinstance(cfg.MODEL.BMZ.EXPORT_MODEL.AUTHORS, list):
-            raise ValueError("'MODEL.BMZ.EXPORT_MODEL.AUTHORS' needs to be a list of dicts. E.g. [{'name': 'Daniel'}]")
-        else:
-            if len(cfg.MODEL.BMZ.EXPORT_MODEL.AUTHORS) == 0:
-                raise ValueError("'MODEL.BMZ.EXPORT_MODEL.AUTHORS' can not be empty when 'MODEL.BMZ.EXPORT_MODEL.ENABLE' is True")
-            for d in cfg.MODEL.BMZ.EXPORT_MODEL.AUTHORS:
-                if not isinstance(d, dict):
-                    raise ValueError("'MODEL.BMZ.EXPORT_MODEL.AUTHORS' must be a list of dicts. E.g. [{'name': 'Daniel'}]")
-        if cfg.MODEL.BMZ.EXPORT_MODEL.LICENSE == "":
-                raise ValueError("'MODEL.BMZ.EXPORT_MODEL.LICENSE' can not be empty. E.g. 'CC-BY-4.0'")
-        if not isinstance(cfg.MODEL.BMZ.EXPORT_MODEL.TAGS, list):
-            raise ValueError("'MODEL.BMZ.EXPORT_MODEL.TAGS' needs to be a list of strings. E.g. [{'modality': 'electron-microscopy', 'content': 'mitochondria'}]")
-        else:
-            if len(cfg.MODEL.BMZ.EXPORT_MODEL.TAGS) == 0:
-                raise ValueError("'MODEL.BMZ.EXPORT_MODEL.TAGS' can not be empty when 'MODEL.BMZ.EXPORT_MODEL.ENABLE' is True")
-            for d in cfg.MODEL.BMZ.EXPORT_MODEL.TAGS:
-                if not isinstance(d, dict):
-                    raise ValueError("'MODEL.BMZ.EXPORT_MODEL.TAGS' must be a list of strings. E.g. [{'modality': 'electron-microscopy', 'content': 'mitochondria'}]")                    
-        if not isinstance(cfg.MODEL.BMZ.EXPORT_MODEL.CITE, list):
-            raise ValueError("'MODEL.BMZ.EXPORT_MODEL.CITE' needs to be a list of dicts. E.g. [{'text': 'Gizmo et al.', 'doi': 'doi:10.1002/xyzacab123'}]")
-        else:
-            for d in cfg.MODEL.BMZ.EXPORT_MODEL.CITE:
-                if not isinstance(d, dict):
-                    raise ValueError("'MODEL.BMZ.EXPORT_MODEL.CITE' needs to be a list of dicts. E.g. [{'text': 'Gizmo et al.', 'doi': 'doi:10.1002/xyzacab123'}]")
-        if cfg.MODEL.BMZ.EXPORT_MODEL.DOCUMENTATION == "":
-            raise ValueError("'MODEL.BMZ.EXPORT_MODEL.DOCUMENTATION' can not be empty. E.g. '/home/user/my-model/doc.md'")
-        else:
-            if not os.path.exists(cfg.MODEL.BMZ.EXPORT_MODEL.DOCUMENTATION):
-                raise ValueError("'MODEL.BMZ.EXPORT_MODEL.DOCUMENTATION' file does not exist!")
-
     elif cfg.MODEL.SOURCE == "torchvision":
         if cfg.MODEL.TORCHVISION_MODEL_NAME == "":
             raise ValueError("'MODEL.TORCHVISION_MODEL_NAME' needs to be configured when 'MODEL.SOURCE' is 'torchvision'")
@@ -421,7 +385,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     if cfg.DATA.EXTRACT_RANDOM_PATCH and cfg.DATA.PROBABILITY_MAP:
         if cfg.DATA.W_FOREGROUND+cfg.DATA.W_BACKGROUND != 1:
             raise ValueError("cfg.DATA.W_FOREGROUND+cfg.DATA.W_BACKGROUND need to sum 1. E.g. 0.94 and 0.06 respectively.")
-    if not cfg.DATA.TRAIN.IN_MEMORY and cfg.DATA.PREPROCESS.TRAIN:
+        if not cfg.DATA.TRAIN.IN_MEMORY and cfg.DATA.PREPROCESS.TRAIN:
             raise ValueError('To use preprocessing DATA.TRAIN.IN_MEMORY needs to be True.')
         if not cfg.DATA.VAL.IN_MEMORY and cfg.DATA.PREPROCESS.VAL:
             raise ValueError('To use preprocessing DATA.VAL.IN_MEMORY needs to be True.')

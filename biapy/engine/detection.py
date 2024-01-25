@@ -48,11 +48,7 @@ class Detection_Workflow(Base_Workflow):
         self.stats['d_precision_per_crop'] = 0
         self.stats['d_recall_per_crop'] = 0
         self.stats['d_f1_per_crop'] = 0
-
-        print("####################\n"
-              "#  PRE-PROCESSING  #\n"
-              "####################\n")
-
+        
         self.original_test_mask_path = self.prepare_detection_data()
 
         self.use_gt = False 

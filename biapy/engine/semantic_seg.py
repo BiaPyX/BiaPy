@@ -32,9 +32,6 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
     def __init__(self, cfg, job_identifier, device, args, **kwargs):
         super(Semantic_Segmentation_Workflow, self).__init__(cfg, job_identifier, device, args, **kwargs)
 
-        print("####################")      
-        print("#  PRE-PROCESSING  #")
-        print("####################")
         if cfg.TRAIN.ENABLE and cfg.DATA.TRAIN.CHECK_DATA:
             if cfg.LOSS.TYPE == 'MASKED_BCE':
                 check_masks(cfg.DATA.TRAIN.GT_PATH, n_classes=3)

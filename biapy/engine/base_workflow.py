@@ -17,7 +17,7 @@ from biapy.models import build_model, build_torchvision_model
 from biapy.engine import prepare_optimizer, build_callbacks
 from biapy.data.generators import create_train_val_augmentors, create_test_augmentor, check_generator_consistence
 from biapy.utils.misc import (get_world_size, get_rank, is_main_process, save_model, time_text, load_model_checkpoint, TensorboardLogger,
-    to_pytorch_format, to_numpy_format, is_dist_avail_and_initialized, setup_for_distributed, export_model_to_bmz)
+    to_pytorch_format, to_numpy_format, is_dist_avail_and_initialized, setup_for_distributed)
 from biapy.utils.util import (load_data_from_dir, load_3d_images_from_dir, create_plots, pad_and_reflect, save_tif, check_downsample_division,
     read_chunked_data, order_dimensions)
 from biapy.engine.train_engine import train_one_epoch, evaluate
@@ -63,6 +63,9 @@ class Base_Workflow(metaclass=ABCMeta):
         self.test_filenames = None 
         self.metrics = []
         self.data_norm = None
+        self.model = None
+        self.optimizer = None
+        self.loss_scaler = None
         self.model_prepared = False 
         self.dtype = np.float32 if not self.cfg.TEST.REDUCE_MEMORY else np.float16 
         self.dtype_str = "float32" if not self.cfg.TEST.REDUCE_MEMORY else "float16" 
@@ -122,6 +125,9 @@ class Base_Workflow(metaclass=ABCMeta):
 
         # Load Bioimage model Zoo pretrained model information
         self.torchvision_preprocessing = None
+        self.bmz_test_input = None
+        self.bmz_test_output = None
+        self.bmz_model_resource = None
         if self.cfg.MODEL.SOURCE == "bmz":
             import bioimageio.core
             import xarray as xr
@@ -135,7 +141,7 @@ class Base_Workflow(metaclass=ABCMeta):
             print("[BMZ] Changed 'DATA.PATCH_SIZE' from {} to {} as defined in the RDF"
                   .format(self.cfg.DATA.PATCH_SIZE,opts[1]))
             self.cfg.merge_from_list(opts)
-            
+
             
     @abstractmethod
     def define_metrics(self):
@@ -399,6 +405,10 @@ class Base_Workflow(metaclass=ABCMeta):
         """
         Build the model.
         """
+        if self.model_prepared:
+            print("Model already prepared!")
+            return 
+
         print("###############")
         print("# Build model #")
         print("###############")
@@ -429,6 +439,13 @@ class Base_Workflow(metaclass=ABCMeta):
             self.model_without_ddp = self.model.module
         self.model_prepared = True
 
+        # Load checkpoint if necessary
+        if self.cfg.MODEL.SOURCE == "biapy" and self.cfg.MODEL.LOAD_CHECKPOINT:
+            self.start_epoch = load_model_checkpoint(cfg=self.cfg, jobname=self.job_identifier, model_without_ddp=self.model_without_ddp,
+                    device=self.device, optimizer=self.optimizer, loss_scaler=self.loss_scaler)
+        else:
+            self.start_epoch = 0  
+            
     def prepare_logging_tool(self):
         """
         Prepare looging tool.
@@ -459,20 +476,14 @@ class Base_Workflow(metaclass=ABCMeta):
         Training phase.
         """
         self.load_train_data()
-        self.prepare_model()
+        if not self.model_prepared:
+            self.prepare_model()
         self.prepare_train_generators()
         self.prepare_logging_tool()
         self.early_stopping = build_callbacks(self.cfg)
         
         self.optimizer, self.lr_scheduler, self.loss_scaler = prepare_optimizer(self.cfg, self.model_without_ddp, 
-            len(self.train_generator))
- 
-        # Load checkpoint if necessary
-        if self.cfg.MODEL.LOAD_CHECKPOINT:
-            self.start_epoch = load_model_checkpoint(cfg=self.cfg, jobname=self.job_identifier, model_without_ddp=self.model_without_ddp,
-                    device=self.device, optimizer=self.optimizer, loss_scaler=self.loss_scaler)
-        else:
-            self.start_epoch = 0      
+            len(self.train_generator))    
 
         print("#####################")
         print("#  TRAIN THE MODEL  #")
@@ -581,14 +592,13 @@ class Base_Workflow(metaclass=ABCMeta):
 
         print('Finished Training')
 
-        # Export model to BMZ format
-        if self.cfg.MODEL.BMZ.EXPORT_MODEL.ENABLE:
+        # Save two samples to export the model to BMZ 
+        if self.bmz_test_input is None:
             sample = next(enumerate(self.train_generator))
-            test_input = sample[1][0][0]
-            test_output = sample[1][1]
-            if not isinstance(test_output, int):
-                test_output = test_output[0]
-            export_model_to_bmz(self.cfg, self.job_identifier, self.model, test_input, test_output)
+            self.bmz_test_input = sample[1][0][0]
+            self.bmz_test_output = sample[1][1]
+            if not isinstance(self.bmz_test_output, int):
+                self.bmz_test_output = self.bmz_test_output[0]
 
         self.destroy_train_data()
 
@@ -724,12 +734,9 @@ class Base_Workflow(metaclass=ABCMeta):
         if self.cfg.MODEL.SOURCE != "bmz":
             self.model_without_ddp.eval()    
 
-        # Load checkpoint
-        if self.cfg.MODEL.LOAD_CHECKPOINT:
-            self.start_epoch = load_model_checkpoint(cfg=self.cfg, jobname=self.job_identifier, model_without_ddp=self.model_without_ddp,
-                device=self.device)
-            if self.start_epoch == -1:
-                raise ValueError("There was a problem loading the checkpoint. Test phase aborted!")
+        # Check possible checkpoint problems
+        if self.start_epoch == -1:
+            raise ValueError("There was a problem loading the checkpoint. Test phase aborted!")
 
         image_counter = 0
         

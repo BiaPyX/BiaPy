@@ -1,7 +1,7 @@
 import argparse
 import os
 
-from biapy import run_job
+from biapy import BiaPy
 
 if __name__ == '__main__':
 
@@ -47,4 +47,5 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
 
-    run_job(**vars(args))
+    biapy = BiaPy(**vars(args))
+    biapy.run_job()
