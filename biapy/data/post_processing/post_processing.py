@@ -1458,8 +1458,8 @@ def measure_morphological_props_and_filter(img, resolution, filter_instances=Fal
             diam = max(props['bbox-2'][k]-props['bbox-0'][k],props['bbox-3'][k]-props['bbox-1'][k])
             center = [(props['bbox-2'][k]-props['bbox-0'][k])//2, (props['bbox-3'][k]-props['bbox-1'][k])//2]
             perimeter = props['perimeter'][k]
-            elongations[label_index] = (perimeter*perimeter)/(4 * math.pi * pixels)
-            circularity = (4 * math.pi * pixels) / (perimeter*perimeter)
+            elongations[label_index] = (perimeter*perimeter)/(4 * math.pi * pixels) if pixels > 0 else 0 
+            circularity = (4 * math.pi * pixels) / (perimeter*perimeter) if perimeter > 0 else 0
 
             perimeters[label_index] = perimeter
             circularities[label_index] = circularity
@@ -1483,8 +1483,7 @@ def measure_morphological_props_and_filter(img, resolution, filter_instances=Fal
             surface_area = [0 if len(i)==0 else mesh_surface_area(vts, i) for i in lst]
 
             for i in range(total_labels):
-                pixels = npixels[i]
-                sphericity = (36 * math.pi * pixels * pixels) / (surface_area[i+1] * surface_area[i+1] * surface_area[i+1])
+                sphericity = (36 * math.pi * pixels * pixels) / (surface_area[i+1] * surface_area[i+1] * surface_area[i+1]) if surface_area[i+1] > 0 else 0
                 perimeters[i] = surface_area[i+1]
                 circularities[i] = sphericity
 
