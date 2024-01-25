@@ -167,9 +167,7 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
 
         if cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
             dic['instance_problem'] = True
-        elif cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
-            dic['normalizeY'] = 'none'
-        elif cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
+        elif cfg.PROBLEM.TYPE in ['SELF_SUPERVISED', 'SUPER_RESOLUTION']:
             dic['normalizeY'] = 'as_image'
         elif cfg.PROBLEM.TYPE == 'DENOISING':
             dic['n2v']=True
@@ -201,9 +199,7 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
             norm_custom_std=custom_std, resolution=cfg.DATA.VAL.RESOLUTION, random_crop_scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING)
         if cfg.PROBLEM.TYPE == 'INSTANCE_SEG': 
             dic['instance_problem'] = True
-        elif cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
-            dic['normalizeY'] = 'none'
-        elif cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
+        elif cfg.PROBLEM.TYPE in ['SELF_SUPERVISED', 'SUPER_RESOLUTION']:
             dic['normalizeY'] = 'as_image'
         elif cfg.PROBLEM.TYPE == 'DENOISING':
             dic['n2v'] = True

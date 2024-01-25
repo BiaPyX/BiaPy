@@ -331,4 +331,8 @@ class MultiResUnet(torch.nn.Module):
 
         out =  self.last_block(x_multires9)
         
+        # Clip values in SR
+        if self.pre_upsampling is not None or self.post_upsampling is not None:
+            out = torch.clamp(out, min=0, max=1)
+            
         return out

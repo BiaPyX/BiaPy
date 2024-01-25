@@ -113,7 +113,7 @@ class Self_supervised_Workflow(Base_Workflow):
     def prepare_targets(self, targets, batch):
         """
         Location to perform any necessary data transformations to ``targets``
-        before inputting it into the model.
+        before calculating the loss.
 
         Parameters
         ----------

@@ -158,6 +158,11 @@ class SE_U_Net(nn.Module):
             x = self.post_upsampling(x)
             
         x = self.last_block(x)
+
+        # Clip values in SR
+        if self.pre_upsampling is not None or self.post_upsampling is not None:
+            x = torch.clamp(x, min=0, max=1)  
+            
         return x
 
     def _init_weights(self, m):

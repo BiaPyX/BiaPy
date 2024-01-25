@@ -1,4 +1,5 @@
 
+import torch
 from torch import nn
 
 class ChannelAttention(nn.Module):
@@ -68,4 +69,5 @@ class rcan(nn.Module):
         x += residual
         x = self.upscale(x)
         x = self.conv2(x)
+        x = torch.clamp(x, min=0, max=1)
         return x

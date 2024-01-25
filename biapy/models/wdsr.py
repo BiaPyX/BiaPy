@@ -69,6 +69,7 @@ class wdsr(nn.Module):
   def forward(self, x):
     x = self.body(x) + self.skip(x)
     x = self.shuf(x)
+    x = torch.clamp(x, min=0, max=1)
     return x
 
 

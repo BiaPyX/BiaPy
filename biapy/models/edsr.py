@@ -40,7 +40,7 @@ class EDSR(nn.Module):
         x_new = self.last_conv_of_block(x_new)
         out = out + x_new
         out = self.last_block(out)    
-
+        out = torch.clamp(out, min=0, max=1)
         return out
 
 class SR_convblock(nn.Module):

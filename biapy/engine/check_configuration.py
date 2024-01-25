@@ -315,6 +315,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         assert cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING in [2, 4], "PROBLEM.SUPER_RESOLUTION.UPSCALING not in [2, 4]"
         if cfg.MODEL.SOURCE == "torchvision":
             raise ValueError("'MODEL.SOURCE' as 'torchvision' is not available in super-resolution workflow")
+        if cfg.DATA.NORMALIZATION.TYPE != "div":
+            raise ValueError("'DATA.NORMALIZATION.TYPE' can only be set to 'div' in SR workflow")
 
     #### Self-supervision ####
     elif cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':

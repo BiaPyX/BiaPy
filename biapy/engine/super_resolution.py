@@ -108,34 +108,6 @@ class Super_resolution_Workflow(Base_Workflow):
             else:
                 return train_psnr
 
-    def prepare_targets(self, targets, batch):
-        """
-        Location to perform any necessary data transformations to ``targets``
-        before inputting it into the model.
-
-        Parameters
-        ----------
-        targets : Torch Tensor
-            Ground truth to compare the prediction with.
-
-        batch : Torch Tensor
-            Prediction of the model. Not used here. 
-
-        Returns
-        -------
-        targets : Torch tensor
-            Resulting targets. 
-        """
-        targets = to_pytorch_format(targets, self.axis_order, self.device)
-        if self.data_norm['type'] == 'div':
-            if len([x for x in list(self.data_norm.keys()) if not 'reduced' in x]) > 0:
-                targets = targets/255
-            else:
-                targets = targets/65535
-        else:
-            targets = normalize(targets, self.data_norm['mean'], self.data_norm['std'])
-        return targets
-
     def process_sample(self, norm): 
         """
         Function to process a sample in the inference phase. 
