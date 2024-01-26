@@ -540,37 +540,39 @@ class Detection_Workflow(Base_Workflow):
 
                     df_patch = self.detection_process(patch, [fname])
                     
-                    if z*self.cfg.DATA.PATCH_SIZE[0]-self.cfg.DATA.TEST.PADDING[0] >=0: # if a patch was added
-                        df_patch['axis-0'] = df_patch['axis-0'] - self.cfg.DATA.TEST.PADDING[0] # shift the coordinates to the correct patch position
-                    if y*self.cfg.DATA.PATCH_SIZE[1]-self.cfg.DATA.TEST.PADDING[1] >=0:
-                        df_patch['axis-1'] = df_patch['axis-1'] - self.cfg.DATA.TEST.PADDING[1]
-                    if x*self.cfg.DATA.PATCH_SIZE[2]-self.cfg.DATA.TEST.PADDING[2] >=0:
-                        df_patch['axis-2'] = df_patch['axis-2'] - self.cfg.DATA.TEST.PADDING[2]
-
-                    df_patch = df_patch[df_patch['axis-0'] >= 0] # remove all coordinate from the previous patch
-                    df_patch = df_patch[df_patch['axis-0'] < self.cfg.DATA.PATCH_SIZE[0]] # remove all coordinate from the next patch
-                    df_patch = df_patch[df_patch['axis-1'] >= 0]
-                    df_patch = df_patch[df_patch['axis-1'] < self.cfg.DATA.PATCH_SIZE[1]]
-                    df_patch = df_patch[df_patch['axis-2'] >= 0]
-                    df_patch = df_patch[df_patch['axis-2'] < self.cfg.DATA.PATCH_SIZE[2]]
-
-                    df_patch = df_patch.reset_index(drop=True)
-                    
-                    # add the patch shift to the detected coordinates
-                    shift = np.array([z*self.cfg.DATA.PATCH_SIZE[0], y*self.cfg.DATA.PATCH_SIZE[1], x*self.cfg.DATA.PATCH_SIZE[2]])
-                    df_patch['axis-0'] = df_patch['axis-0'] + shift[0]
-                    df_patch['axis-1'] = df_patch['axis-1'] + shift[1]
-                    df_patch['axis-2'] = df_patch['axis-2'] + shift[2]
-
                     c+=1
+                    
+                    if df_patch is not None: # if there is at least one point detected
+                        
+                        if z*self.cfg.DATA.PATCH_SIZE[0]-self.cfg.DATA.TEST.PADDING[0] >=0: # if a patch was added
+                            df_patch['axis-0'] = df_patch['axis-0'] - self.cfg.DATA.TEST.PADDING[0] # shift the coordinates to the correct patch position
+                        if y*self.cfg.DATA.PATCH_SIZE[1]-self.cfg.DATA.TEST.PADDING[1] >=0:
+                            df_patch['axis-1'] = df_patch['axis-1'] - self.cfg.DATA.TEST.PADDING[1]
+                        if x*self.cfg.DATA.PATCH_SIZE[2]-self.cfg.DATA.TEST.PADDING[2] >=0:
+                            df_patch['axis-2'] = df_patch['axis-2'] - self.cfg.DATA.TEST.PADDING[2]
 
-                    if 'df' not in locals():
-                        df = df_patch.copy()
-                        df['file'] = fname
-                    else:
-                        if df_patch is not None:
-                            df_patch['file'] = fname
-                            df = pd.concat([df, df_patch], ignore_index=True)
+                        df_patch = df_patch[df_patch['axis-0'] >= 0] # remove all coordinate from the previous patch
+                        df_patch = df_patch[df_patch['axis-0'] < self.cfg.DATA.PATCH_SIZE[0]] # remove all coordinate from the next patch
+                        df_patch = df_patch[df_patch['axis-1'] >= 0]
+                        df_patch = df_patch[df_patch['axis-1'] < self.cfg.DATA.PATCH_SIZE[1]]
+                        df_patch = df_patch[df_patch['axis-2'] >= 0]
+                        df_patch = df_patch[df_patch['axis-2'] < self.cfg.DATA.PATCH_SIZE[2]]
+
+                        df_patch = df_patch.reset_index(drop=True)
+                        
+                        # add the patch shift to the detected coordinates
+                        shift = np.array([z*self.cfg.DATA.PATCH_SIZE[0], y*self.cfg.DATA.PATCH_SIZE[1], x*self.cfg.DATA.PATCH_SIZE[2]])
+                        df_patch['axis-0'] = df_patch['axis-0'] + shift[0]
+                        df_patch['axis-1'] = df_patch['axis-1'] + shift[1]
+                        df_patch['axis-2'] = df_patch['axis-2'] + shift[2]
+
+
+                        if 'df' not in locals():
+                            df = df_patch.copy()
+                            df['file'] = fname
+                        else:
+                                df_patch['file'] = fname
+                                df = pd.concat([df, df_patch], ignore_index=True)
 
         # Apply post-processing of removing points
         if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS and self.postpone_postproc:
