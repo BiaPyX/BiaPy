@@ -540,11 +540,11 @@ class Detection_Workflow(Base_Workflow):
 
                     c+=1
 
-                    if 'df' not in locals():
-                        df = df_patch.copy()
-                        df['file'] = fname
-                    else:
-                        if df_patch is not None:
+                    if df_patch is not None:
+                        if 'df' not in locals():
+                            df = df_patch.copy()
+                            df['file'] = fname
+                        else:
                             df_patch['file'] = fname
                             df = pd.concat([df, df_patch], ignore_index=True)
 
