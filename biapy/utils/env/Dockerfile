@@ -7,8 +7,7 @@ RUN apt-get update && apt-get install -y \
     wget \
     ffmpeg \
     libsm6 \
-    libxext6 \
-    git 
+    libxext6 
 
 # Download and prepare conda
 RUN wget -q -P /tmp \
@@ -20,9 +19,6 @@ RUN wget -q -P /tmp \
 ENV PATH /installations/miniconda3/bin:$PATH
 RUN conda update --all
 
-# Copy BiaPy
-RUN git clone --depth 1 https://github.com/BiaPyX/BiaPy.git /installations/BiaPy
-
 # Create the environment
 ENV PATH="/opt/conda/bin:$PATH"
 RUN . /installations/miniconda3/etc/profile.d/conda.sh
@@ -33,8 +29,7 @@ RUN conda update -qy conda \
 # Set up shell to use the created env
 SHELL ["conda", "run", "-n", "BiaPy_env", "/bin/bash", "-c"]
 
-# Install dependencies 
-RUN conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia
-RUN cd /installations/BiaPy/ && pip install --editable .
+# Install BiaPy
+RUN pip install biapy
 
 ENTRYPOINT ["conda", "run", "--no-capture-output", "-n", "BiaPy_env", "python3", "-u", "/installations/BiaPy/main.py"]

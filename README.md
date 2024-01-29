@@ -34,9 +34,9 @@ You can also use BiaPy through our graphical user interface (GUI).
 
 ### Download BiaPy GUI for you OS
 
-- [Windows 64-bit](https://drive.google.com/file/d/1iV0wzdFhpCpBCBgsameGyT3iFyQ6av5o/view?usp=drive_link) 
-- [Linux 64-bit](https://drive.google.com/file/d/13jllkLTR6S3yVZLRdMwhWUu7lq3HyJsD/view?usp=drive_link) 
-- [macOS 64-bit](https://drive.google.com/file/d/1fIpj9A8SWIN1fABEUAS--DNhOHzqSL7f/view?usp=drive_link) 
+- [Windows 64-bit](https://drive.google.com/uc?export=download&id=1iV0wzdFhpCpBCBgsameGyT3iFyQ6av5o) 
+- [Linux 64-bit](https://drive.google.com/uc?export=download&id=13jllkLTR6S3yVZLRdMwhWUu7lq3HyJsD) 
+- [macOS 64-bit](https://drive.google.com/uc?export=download&id=1fIpj9A8SWIN1fABEUAS--DNhOHzqSL7f) 
 
 ### Project's page
 [[BiaPy GUI](https://github.com/BiaPyX/BiaPy-GUI)]
