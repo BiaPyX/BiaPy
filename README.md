@@ -73,6 +73,8 @@ You can also use BiaPy through our graphical user interface (GUI).
 | [Luis M. Escudero](http://www.scutoids.es/)                                                        | Supervision                 | <ul> <li>Instituto de Biomedicina de Sevilla (IBiS), Hospital Universitario Virgen del Rocío/CSIC/Universidad de Sevilla and Dept. de Biología Celular, Facultad de Biología, Universidad de Sevilla </li> <li> Biomedical Network Research Centre on Neurodegenerative Diseases (CIBERNED) </li> </ul>                                                    |
 | [Iván Hidalgo Cenalmor](https://henriqueslab.github.io/team/2023-03-16-IH/)                        | Implementation              | <ul> <li> Optical cell biology group, Instituto Gulbenkian de Ciência, Oerias, Portugal </li> </lu>                                                                                                                                                                                                                                                              |
 | [Donglai Wei](https://donglaiw.github.io/)                                                        | Supervision                 | <ul> <li>Boston College</li> </ul>  |
+| [Clément Caporal](https://scholar.google.com/citations?hl=en&user=R0fXJGUAAAAJ)                                                        | Implementation                 | <ul> <li>Laboratoire d’Optique et Biosciences, CNRS, Inserm, Ecole Polytechnique</li> </ul>  |
+| [Anatole Chessel](https://scholar.google.com/citations?hl=en&user=GC8aiVsAAAAJ)                                                        | Supervision                 | <ul> <li>Laboratoire d’Optique et Biosciences, CNRS, Inserm, Ecole Polytechnique</li> </ul>  |
 
 ## Citation
 ```
