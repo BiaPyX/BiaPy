@@ -128,7 +128,7 @@ class Classification_Workflow(Base_Workflow):
                 val_split = self.cfg.DATA.VAL.SPLIT_TRAIN if self.cfg.DATA.VAL.FROM_TRAIN else 0.
                 f_name = load_data_classification if self.cfg.PROBLEM.NDIM == '2D' else load_3d_data_classification
                 print("0) Loading train images . . .")
-                objs = f_name(self.cfg.DATA.TRAIN.PATH, self.cfg.DATA.PATCH_SIZE, convert_to_rgb=self.cfg.PROBLEM.CLASSIFICATION.FORCE_RGB,
+                objs = f_name(self.cfg.DATA.TRAIN.PATH, self.cfg.DATA.PATCH_SIZE, convert_to_rgb=self.cfg.DATA.FORCE_RGB,
                     expected_classes=self.cfg.MODEL.N_CLASSES, cross_val=self.cfg.DATA.VAL.CROSS_VAL, 
                     cross_val_nsplits=self.cfg.DATA.VAL.CROSS_VAL_NFOLD, cross_val_fold=self.cfg.DATA.VAL.CROSS_VAL_FOLD, 
                     val_split=val_split, seed=self.cfg.SYSTEM.SEED, shuffle_val=self.cfg.DATA.VAL.RANDOM)
@@ -152,7 +152,7 @@ class Classification_Workflow(Base_Workflow):
                     print("1) Loading validation images . . .")
                     f_name = load_data_classification if self.cfg.PROBLEM.NDIM == '2D' else load_3d_data_classification
                     self.X_val, self.Y_val, _ = f_name(self.cfg.DATA.VAL.PATH, self.cfg.DATA.PATCH_SIZE, 
-                        convert_to_rgb=self.cfg.PROBLEM.CLASSIFICATION.FORCE_RGB, expected_classes=self.cfg.MODEL.N_CLASSES, 
+                        convert_to_rgb=self.cfg.DATA.FORCE_RGB, expected_classes=self.cfg.MODEL.N_CLASSES, 
                         val_split=0)
 
                     if self.Y_val is not None and len(self.X_val) != len(self.Y_val):
@@ -174,7 +174,7 @@ class Classification_Workflow(Base_Workflow):
                     print("2) Loading test images . . .")
                     f_name = load_data_classification if self.cfg.PROBLEM.NDIM == '2D' else load_3d_data_classification
                     self.X_test, self.Y_test, self.test_filenames = f_name(self.cfg.DATA.TEST.PATH, self.cfg.DATA.PATCH_SIZE,
-                        convert_to_rgb=self.cfg.PROBLEM.CLASSIFICATION.FORCE_RGB, 
+                        convert_to_rgb=self.cfg.DATA.FORCE_RGB, 
                         expected_classes=self.cfg.MODEL.N_CLASSES if self.cfg.DATA.TEST.LOAD_GT else None, val_split=0)
                     self.class_names = sorted(next(os.walk(self.cfg.DATA.TEST.PATH))[1])
                 else:
