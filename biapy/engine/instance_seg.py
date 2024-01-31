@@ -211,7 +211,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
             # Need to load instance labels, as Y are binary channels used for IoU calculation
             if self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
-                del self.Y
+                del self._Y
                 _Y = np.zeros(w_pred.shape, dtype=w_pred.dtype)
                 for i in range(len(self.test_filenames)):
                     test_file = os.path.join(self.original_test_mask_path, self.test_filenames[i])
@@ -223,7 +223,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             if _Y.ndim == 2: _Y = np.expand_dims(_Y,0)
 
             # For torchvision models that resize need to rezise the images 
-            if w_pred.shape != self._Y.shape:
+            if w_pred.shape != _Y.shape:
                 _Y = resize(_Y, w_pred.shape, order=0)
 
             # Convert instances to integer
