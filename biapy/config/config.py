@@ -229,7 +229,7 @@ class Config:
 
         # Resize datasets
         _C.DATA.PREPROCESS.RESIZE = CN()
-        _C.DATA.PREPROCESS.RESIZE.ACTIVATE = False
+        _C.DATA.PREPROCESS.RESIZE.ENABLE = False
         # Desired resize size. when using 3D data, size must be also in 3D (ex. (512,512,512))
         _C.DATA.PREPROCESS.RESIZE.OUTPUT_SHAPE = (512,512)
         # interpolation order: {0: Nearest-neighbor, 1: Bi-linear (default), 2: Bi-quadratic, 3: Bi-cubic, 4: Bi-quartic, 5: Bi-quintic}
@@ -247,7 +247,7 @@ class Config:
 
         # Gaussian blur
         _C.DATA.PREPROCESS.GAUSSIAN_BLUR = CN()
-        _C.DATA.PREPROCESS.GAUSSIAN_BLUR.ACTIVATE = False
+        _C.DATA.PREPROCESS.GAUSSIAN_BLUR.ENABLE = False
         # Standard deviation for Gaussian kernel.
         _C.DATA.PREPROCESS.GAUSSIAN_BLUR.SIGMA = 1
         # The mode parameter determines how the array borders are handled: {‘reflect’, ‘constant’, ‘nearest’, ‘mirror’, ‘wrap’} ‘constant’ value = 0
@@ -258,20 +258,17 @@ class Config:
 
         # Median blur
         _C.DATA.PREPROCESS.MEDIAN_BLUR = CN()
-        _C.DATA.PREPROCESS.MEDIAN_BLUR.ACTIVATE = False
-        # is a N-D array of 1’s and 0’s with the same number of dimension than image. 
-        # If None, footprint will be a N-D array with 3 elements for each dimension (e.g., vector, square, cube, etc.)
-        _C.DATA.PREPROCESS.MEDIAN_BLUR.FOOTPRINT = None
+        _C.DATA.PREPROCESS.MEDIAN_BLUR.ENABLE = False
         
-        # Histogram matching
+        # Histogram matching. More info at: https://en.wikipedia.org/wiki/Histogram_matching
         _C.DATA.PREPROCESS.MATCH_HISTOGRAM = CN()
-        _C.DATA.PREPROCESS.MATCH_HISTOGRAM.ACTIVATE = False
+        _C.DATA.PREPROCESS.MATCH_HISTOGRAM.ENABLE = False
         # the path of the reference images, from which the reference histogram will be extracted 
         _C.DATA.PREPROCESS.MATCH_HISTOGRAM.REFERENCE_PATH = os.path.join("user_data", 'test', 'x')
 
-        # Contrast Limited Adaptive Histogram Equalization
+        # Contrast Limited Adaptive Histogram Equalization. More info at: https://en.wikipedia.org/wiki/Adaptive_histogram_equalization#Contrast_Limited_AHE
         _C.DATA.PREPROCESS.CLAHE = CN()
-        _C.DATA.PREPROCESS.CLAHE.ACTIVATE = False
+        _C.DATA.PREPROCESS.CLAHE.ENABLE = False
         # Defines the shape of contextual regions used in the algorithm. 
         # By default, kernel_size is 1/8 of image height by 1/8 of its width.
         _C.DATA.PREPROCESS.CLAHE.KERNEL_SIZE = None
@@ -280,7 +277,7 @@ class Config:
 
         # Canny or edge detection (only 2D - grayscale or RGB)
         _C.DATA.PREPROCESS.CANNY = CN()
-        _C.DATA.PREPROCESS.CANNY.ACTIVATE = False
+        _C.DATA.PREPROCESS.CANNY.ENABLE = False
         # Lower bound for hysteresis thresholding (linking edges). If None, low_threshold is set to 10% of dtype’s max.
         _C.DATA.PREPROCESS.CANNY.LOW_THRESHOLD = None
         # Upper bound for hysteresis thresholding (linking edges). If None, high_threshold is set to 20% of dtype’s max.

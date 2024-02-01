@@ -383,7 +383,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             if cfg.PROBLEM.NDIM == '3D':
                 raise ValueError("TorchVision model's for classification are only available for 2D images")
             
-    ### Pre-processing ###
     if cfg.DATA.EXTRACT_RANDOM_PATCH and cfg.DATA.PROBABILITY_MAP:
         if cfg.DATA.W_FOREGROUND+cfg.DATA.W_BACKGROUND != 1:
             raise ValueError("cfg.DATA.W_FOREGROUND+cfg.DATA.W_BACKGROUND need to sum 1. E.g. 0.94 and 0.06 respectively.")
@@ -393,26 +392,31 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             raise ValueError('To use preprocessing DATA.VAL.IN_MEMORY needs to be True.')
         if not cfg.DATA.TEST.IN_MEMORY and cfg.DATA.PREPROCESS.TEST:
             raise ValueError('To use preprocessing DATA.TEST.IN_MEMORY needs to be True.')
-        if cfg.DATA.PREPROCESS.TRAIN or cfg.DATA.PREPROCESS.TEST or cfg.DATA.PREPROCESS.VAL:
-            if cfg.DATA.PREPROCESS.RESIZE.ACTIVATE:
-                if cfg.PROBLEM.TYPE == 'DETECTION':
-                    raise ValueError('Resizing preprocessing is not available for the DETECTION workflow.')
-                if cfg.PROBLEM.NDIM == '3D':
-                    if cfg.DATA.PREPROCESS.RESIZE.OUTPUT_SHAPE == (512,512):
-                        opts.extend(['DATA.PREPROCESS.RESIZE.OUTPUT_SHAPE', (512,512,512)])
-                    elif len(cfg.DATA.PREPROCESS.RESIZE.OUTPUT_SHAPE) != 3:
-                        raise ValueError("When 'PROBLEM.NDIM' is 3D, cfg.DATA.PREPROCESS.RESIZE.OUTPUT_SHAPE must indicate desired size for each dimension."
-                                        f"Given shape ({cfg.DATA.PREPROCESS.RESIZE.OUTPUT_SHAPE}) is not compatible.")
-                if cfg.PROBLEM.NDIM == '2D' and len(cfg.DATA.PREPROCESS.RESIZE.OUTPUT_SHAPE) != 2:
-                        raise ValueError("When 'PROBLEM.NDIM' is 2D, cfg.DATA.PREPROCESS.RESIZE.OUTPUT_SHAPE must indicate desired size for each dimension."
-                                        f"Given shape ({cfg.DATA.PREPROCESS.RESIZE.OUTPUT_SHAPE}) is not compatible.")
-                for i, s in enumerate(cfg.DATA.PREPROCESS.RESIZE.OUTPUT_SHAPE):
-                    if cfg.DATA.PATCH_SIZE[i] > s:
-                        raise ValueError(f'cfg.DATA.PREPROCESS.RESIZE.OUTPUT_SHAPE {cfg.DATA.PREPROCESS.RESIZE.OUTPUT_SHAPE} can not be smaller than cfg.DATA.PATCH_SIZE {cfg.DATA.PATCH_SIZE}.')
-            if cfg.DATA.PREPROCESS.CANNY.ACTIVATE and cfg.PROBLEM.NDIM != '2D':
-                raise ValueError("Canny or edge detection can not be activated when 'PROBLEM.NDIM' is 2D.")
+    
+    ### Pre-processing ###
+    if cfg.DATA.PREPROCESS.TRAIN or cfg.DATA.PREPROCESS.TEST or cfg.DATA.PREPROCESS.VAL:
+        if cfg.DATA.PREPROCESS.RESIZE.ACTIVATE:
+            if cfg.PROBLEM.TYPE == 'DETECTION':
+                raise ValueError('Resizing preprocessing is not available for the DETECTION workflow.')
+            if cfg.PROBLEM.NDIM == '3D':
+                if cfg.DATA.PREPROCESS.RESIZE.OUTPUT_SHAPE == (512,512):
+                    opts.extend(['DATA.PREPROCESS.RESIZE.OUTPUT_SHAPE', (512,512,512)])
+                elif len(cfg.DATA.PREPROCESS.RESIZE.OUTPUT_SHAPE) != 3:
+                    raise ValueError("When 'PROBLEM.NDIM' is 3D, cfg.DATA.PREPROCESS.RESIZE.OUTPUT_SHAPE must indicate desired size for each dimension."
+                                    f"Given shape ({cfg.DATA.PREPROCESS.RESIZE.OUTPUT_SHAPE}) is not compatible.")
+            if cfg.PROBLEM.NDIM == '2D' and len(cfg.DATA.PREPROCESS.RESIZE.OUTPUT_SHAPE) != 2:
+                    raise ValueError("When 'PROBLEM.NDIM' is 2D, cfg.DATA.PREPROCESS.RESIZE.OUTPUT_SHAPE must indicate desired size for each dimension."
+                                    f"Given shape ({cfg.DATA.PREPROCESS.RESIZE.OUTPUT_SHAPE}) is not compatible.")
+            for i, s in enumerate(cfg.DATA.PREPROCESS.RESIZE.OUTPUT_SHAPE):
+                if cfg.DATA.PATCH_SIZE[i] > s:
+                    raise ValueError(f'cfg.DATA.PREPROCESS.RESIZE.OUTPUT_SHAPE {cfg.DATA.PREPROCESS.RESIZE.OUTPUT_SHAPE} can not be smaller than cfg.DATA.PATCH_SIZE {cfg.DATA.PATCH_SIZE}.')
+        if cfg.DATA.PREPROCESS.CANNY.ACTIVATE and cfg.PROBLEM.NDIM != '2D':
+            raise ValueError("Canny or edge detection can not be activated when 'PROBLEM.NDIM' is 2D.")
         if not cfg.DATA.PREPROCESS.VAL and cfg.DATA.VAL.FROM_TRAIN and cfg.DATA.PREPROCESS.TRAIN:
             raise ValueError('When validation data comes from train and cfg.DATA.PREPROCESS.TRAIN is True, cfg.DATA.PREPROCESS.VAL also needs to be True.')
+        if cfg.DATA.PREPROCESS.MATCH_HISTOGRAM.ENABLE:
+            if not os.path.exists(cfg.DATA.PREPROCESS.MATCH_HISTOGRAM.REFERENCE_PATH):
+                raise ValueError(f"Path pointed by 'DATA.PREPROCESS.MATCH_HISTOGRAM.REFERENCE_PATH' does not exist: {cfg.DATA.PREPROCESS.MATCH_HISTOGRAM.REFERENCE_PATH}")
 
     #### Data #### 
     if cfg.TRAIN.ENABLE and check_data_paths:

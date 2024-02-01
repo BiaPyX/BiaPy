@@ -1172,10 +1172,10 @@ def preprocess_data(cfg, x_data=[], y_data=[], is_2d=True, is_y_mask=False):
         In case of using a list, the format of the images remains the same. Each item in the list
         corresponds to a different image.
       
-    is_2d: Bool, optional
+    is_2d: bool, optional
         A boolean flag indicating whether the reference data for histogram matching is 2D or not. Defaults to True.
       
-    is_y_mask: Bool, optional
+    is_y_mask: bool, optional
         is_y_mask is a boolean parameter that indicates whether the y_data is a mask or not. If
         it is set to True, the resize operation for y_data will use the nearest neighbor interpolation
         method (order=0), otherwise it will use the interpolation method specified in the cfg.RESIZE.ORDER
@@ -1191,6 +1191,7 @@ def preprocess_data(cfg, x_data=[], y_data=[], is_2d=True, is_y_mask=False):
     """
     
     if cfg.RESIZE.ACTIVATE:
+        print("Preprocessing: applying resize . . .")
         if len(x_data) > 0:
             x_data = resize_images(x_data,
                 output_shape = cfg.RESIZE.OUTPUT_SHAPE,
@@ -1216,26 +1217,31 @@ def preprocess_data(cfg, x_data=[], y_data=[], is_2d=True, is_y_mask=False):
 
     if len(x_data) > 0:
         if cfg.GAUSSIAN_BLUR.ACTIVATE:
+            print("Preprocessing: applying gaussian blur . . .")
             x_data = apply_gaussian_blur(x_data,
                 sigma = cfg.GAUSSIAN_BLUR.SIGMA,
                 mode = cfg.GAUSSIAN_BLUR.MODE,
                 channel_axis = cfg.GAUSSIAN_BLUR.CHANNEL_AXIS,
             )
         if cfg.MEDIAN_BLUR.ACTIVATE:
+            print("Preprocessing: applying median blur . . .")
             x_data = apply_median_blur(x_data,
                 footprint = cfg.MEDIAN_BLUR.FOOTPRINT,
             )
         if cfg.MATCH_HISTOGRAM.ACTIVATE:
+            print("Preprocessing: applying histogram matching . . .")
             x_data = apply_histogram_matching(x_data,
                 reference_path = cfg.MATCH_HISTOGRAM.REFERENCE_PATH,
                 is_2d = is_2d,
             )
         if cfg.CLAHE.ACTIVATE:
+            print("Preprocessing: applying CLAHE . . .")
             x_data = apply_clahe(x_data,
                 kernel_size = cfg.CLAHE.KERNEL_SIZE,
                 clip_limit = cfg.CLAHE.CLIP_LIMIT,
             )
         if cfg.CANNY.ACTIVATE:
+            print("Preprocessing: applying Canny . . .")
             x_data = detect_edges(x_data,
                 low_threshold = cfg.CANNY.LOW_THRESHOLD,
                 high_threshold = cfg.CANNY.HIGH_THRESHOLD,
