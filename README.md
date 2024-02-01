@@ -17,29 +17,34 @@
       <img src="https://img.shields.io/badge/IEEE-Paper-00629B.svg" /></a>
 </p>
 
-[BiaPy](https://github.com/BiaPyX/BiaPy) is an open source Python library for building bioimage analysis pipelines. This repository is actively under development by the Biomedical Computer Vision group at the [University of the Basque Country](https://www.ehu.eus/en/en-home) and the [Donostia International Physics Center](http://dipc.ehu.es/). 
+[BiaPy](https://biapyx.github.io) is an open source ready-to-use all-in-one library that provides deep-learning workflows for a large variety of bioimage analysis tasks, including 2D and 3D [semantic segmentation](https://biapy.readthedocs.io/en/latest/workflows/semantic_segmentation.html), [instance segmentation](https://biapy.readthedocs.io/en/latest/workflows/instance_segmentation.html), [object detection](https://biapy.readthedocs.io/en/latest/workflows/detection.html), [image denoising](https://biapy.readthedocs.io/en/latest/workflows/denoising.html), [single image super-resolution](https://biapy.readthedocs.io/en/latest/workflows/super_resolution.html), [self-supervised learning](https://biapy.readthedocs.io/en/latest/workflows/self_supervision.html) and [image classification](https://biapy.readthedocs.io/en/latest/workflows/classification.html). 
+                        
+BiaPy is a versatile platform designed to accommodate both proficient computer scientists and users less experienced in programming. It offers diverse and user-friendly access points to our workflows.
 
-The library provides an easy way to create image processing pipelines that are typically used in the analysis of biology microscopy images in 2D and 3D. Namely, BiaPy contains ready-to-use solutions for the tasks of [semantic segmentation](https://biapy.readthedocs.io/en/latest/workflows/semantic_segmentation.html), [instance segmentation](https://biapy.readthedocs.io/en/latest/workflows/instance_segmentation.html), [object detection](https://biapy.readthedocs.io/en/latest/workflows/detection.html), [image denoising](https://biapy.readthedocs.io/en/latest/workflows/denoising.html), [single image super-resolution](https://biapy.readthedocs.io/en/latest/workflows/super_resolution.html), [self-supervised learning](https://biapy.readthedocs.io/en/latest/workflows/self_supervision.html) and [image classification](https://biapy.readthedocs.io/en/latest/workflows/classification.html). The source code is based on Pytorch as backend. Given BiaPy’s deep learning based core, a machine with a graphics processing unit (GPU) is recommended for fast training and execution.                                                                                                                                
+This repository is actively under development by the Biomedical Computer Vision group at the [University of the Basque Country](https://www.ehu.eus/en/en-home) and the [Donostia International Physics Center](http://dipc.ehu.es/).       
+
 ![BiaPy workflows](https://raw.githubusercontent.com/BiaPyX/BiaPy/master/img/BiaPy-workflow-readme.svg)
 
 ## Description video
-Find a gentle introduction to BiaPy in this video of Ignacio Arganda-Carreras in [the Virtual Pub of Euro-BioImaging](https://www.eurobioimaging.eu/about-us/virtual-pub):
+Find a comprehensive overview of BiaPy and its functionality in the following videos:
 
-[![BiaPy description video](./img/BiaPy-Euro-BioImaging-youtube.png)](https://www.youtube.com/watch?v=t5cqpjWQS9Q "BiaPy: a ready-to-use library for Bioimage Analysis Pipelines")
+| [![BiaPy history and GUI demo](./img/BiaPy_presentation_and_demo_at_RTmfm.jpg)](https://www.youtube.com/watch?v=Gnm-VsZQ6Cc "BiaPy: a ready-to-use library for Bioimage Analysis Pipelines") <br> <span style="font-weight:normal">BiaPy history and GUI demo at [RTmfm](https://rtmfm.cnrs.fr/en/) by Ignacio Arganda-Carreras and Daniel Franco-Barranco.</span> |
+|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| [![BiaPy presentation](./img/BiaPy-Euro-BioImaging-youtube.png)](https://youtu.be/6eYtX-ySpc0 "BiaPy: a ready-to-use library for Bioimage Analysis Pipelines") <br> BiaPy presentation at [Virtual Pub of Euro-BioImaging](https://www.eurobioimaging.eu/) by Ignacio Arganda-Carreras.                                                                      |                          |                          |                              |                           |
+
 ## User interface
 
 You can also use BiaPy through our graphical user interface (GUI).
 
 ![BiaPy GUI](https://raw.githubusercontent.com/BiaPyX/BiaPy/master/img/BiaPy_GUI_main_page.png)
 
-### Download BiaPy GUI for you OS
+## Download BiaPy GUI for you OS
 
 - [Windows 64-bit](https://drive.google.com/uc?export=download&id=1iV0wzdFhpCpBCBgsameGyT3iFyQ6av5o) 
 - [Linux 64-bit](https://drive.google.com/uc?export=download&id=13jllkLTR6S3yVZLRdMwhWUu7lq3HyJsD) 
 - [macOS 64-bit](https://drive.google.com/uc?export=download&id=1fIpj9A8SWIN1fABEUAS--DNhOHzqSL7f) 
 
-### Project's page
-[[BiaPy GUI](https://github.com/BiaPyX/BiaPy-GUI)]
+Project's page: [[BiaPy GUI](https://github.com/BiaPyX/BiaPy-GUI)]
 
 ## Applications using BiaPy
 
