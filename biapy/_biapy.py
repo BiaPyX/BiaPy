@@ -290,12 +290,23 @@ class BiaPy():
         output_sample_path = os.path.join(bmz_cfg['build_dir'], "test-output.npy")
         test_input = self.workflow.bmz_test_input if 'test_input' not in bmz_cfg else bmz_cfg['test_input']
         test_output = self.workflow.bmz_test_output if 'test_output' not in bmz_cfg else bmz_cfg['test_output']
+        
         if test_input.ndim == 3:
             np.save(input_sample_path, test_input.permute((2, 0 ,1)).unsqueeze(0))
-            np.save(output_sample_path, test_output.permute((2, 0 ,1)).unsqueeze(0))
+            in_axis = ["bcyx"]
         else:
             np.save(input_sample_path, test_input.permute((3, 0 ,1, 2)).unsqueeze(0))
+            in_axis = ["bczyx"]
+
+        if test_output.ndim == 3:
+            np.save(output_sample_path, test_output.permute((2, 0 ,1)).unsqueeze(0))
+            out_axis = ["bcyx"]
+        elif test_output.ndim == 4:
             np.save(output_sample_path, test_output.permute((3, 0 ,1, 2)).unsqueeze(0))
+            out_axis = ["bczyx"]
+        else:
+            np.save(output_sample_path, test_output.unsqueeze(0))
+            out_axis = ["bc"]
 
         # Name of the model
         if 'model_name' in bmz_cfg:
@@ -359,8 +370,8 @@ class BiaPy():
             # these are passed as list because we support multiple inputs / outputs per model
             test_inputs=[input_sample_path],
             test_outputs=[output_sample_path],
-            input_axes=["bcyx"] if 'input_axes' not in bmz_cfg else bmz_cfg['input_axes'],
-            output_axes=["bcyx"] if 'output_axes' not in bmz_cfg else bmz_cfg['output_axes'],
+            input_axes=in_axis if 'input_axes' not in bmz_cfg else bmz_cfg['input_axes'],
+            output_axes=out_axis if 'output_axes' not in bmz_cfg else bmz_cfg['output_axes'],
             # where to save the model zip, how to call the model and a short description of it
             output_path=os.path.join(bmz_cfg['build_dir'], "model.zip"),
             name=model_name,
@@ -396,4 +407,3 @@ class BiaPy():
             dist.destroy_process_group()
 
         print("FINISHED JOB {} !!".format(self.job_identifier))
-        sys.exit(0)

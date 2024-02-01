@@ -1,5 +1,6 @@
 import argparse
 import os
+import sys
 
 from biapy import BiaPy
 
@@ -46,6 +47,6 @@ if __name__ == '__main__':
                         help='Backend to use in distributed mode')
     args = parser.parse_args()
 
-
-    biapy = BiaPy(**vars(args))
-    biapy.run_job()
+    _biapy = BiaPy(**vars(args))
+    _biapy.run_job()
+    sys.exit(0)

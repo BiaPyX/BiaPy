@@ -588,7 +588,7 @@ class Base_Workflow(metaclass=ABCMeta):
         if self.val_generator is not None:
             print("Val loss: {}".format(val_best_loss))
             for i in range(len(self.metric_names)):
-                print("Val {}: {}".format(self.metric_names[i], val_best_metric))
+                print("Val {}: {}".format(self.metric_names[i], val_best_metric[i]))
 
         print('Finished Training')
 
