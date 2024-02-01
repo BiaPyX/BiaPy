@@ -444,7 +444,7 @@ def export_model_to_bmz(cfg, jobname, model, test_input, test_output):
         Running configuration.
 
     jobname : str
-        Name of the job usedto find model's checkpoint. 
+        Name of the job used to find model's checkpoint. 
     
     model : Pytorch model
         Model to export.
