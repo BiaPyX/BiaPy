@@ -59,7 +59,7 @@ class Base_Workflow(metaclass=ABCMeta):
         self.cross_val_samples_ids = None
         self.post_processing = {}
         self.post_processing['per_image'] = False
-        self.post_processing['all_images'] = False
+        self.post_processing['as_3D_stack'] = False
         self.test_filenames = None 
         self.metrics = []
         self.data_norm = None
@@ -88,17 +88,19 @@ class Base_Workflow(metaclass=ABCMeta):
         self.stats['patch_counter'] = 0
 
         # Merging the image
-        self.stats['iou_per_image'] = 0
-        self.stats['ov_iou_per_image'] = 0
+        self.stats['iou_merge_patches'] = 0
+        self.stats['ov_iou_merge_patches'] = 0
+        self.stats['iou_merge_patches_post'] = 0
+        self.stats['ov_iou_merge_patches_post'] = 0
+
+        # As 3D stack
+        self.stats['iou_as_3D_stack_post'] = 0
+        self.stats['ov_iou_as_3D_stack_post'] = 0
 
         # Full image
         self.stats['loss'] = 0
         self.stats['iou'] = 0
         self.stats['ov_iou'] = 0
-
-        # Post processing
-        self.stats['iou_post'] = 0
-        self.stats['ov_iou_post'] = 0
 
         self.world_size = get_world_size()
         self.global_rank = get_rank()
@@ -111,7 +113,7 @@ class Base_Workflow(metaclass=ABCMeta):
         # Test variables
         if self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK and self.cfg.PROBLEM.NDIM == "2D":
             if self.cfg.TEST.POST_PROCESSING.YZ_FILTERING or self.cfg.TEST.POST_PROCESSING.Z_FILTERING:
-                self.post_processing['all_images'] = True
+                self.post_processing['as_3D_stack'] = True
         elif self.cfg.PROBLEM.NDIM == "3D":
             if self.cfg.TEST.POST_PROCESSING.YZ_FILTERING or self.cfg.TEST.POST_PROCESSING.Z_FILTERING:
                 self.post_processing['per_image'] = True
@@ -1285,25 +1287,25 @@ class Base_Workflow(metaclass=ABCMeta):
                 if self.cfg.DATA.TEST.LOAD_GT and self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS != "Dv2":
                     if self._Y.ndim > pred.ndim: self._Y = self._Y[0]
                     if self.cfg.LOSS.TYPE != 'MASKED_BCE':
-                        _iou_per_image = jaccard_index_numpy((self._Y>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8))
-                        _ov_iou_per_image = voc_calculation((self._Y>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8),
-                                                        _iou_per_image)
+                        _iou_merge_patches = jaccard_index_numpy((self._Y>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8))
+                        _ov_iou_merge_patches = voc_calculation((self._Y>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8),
+                                                        _iou_merge_patches)
                     else:
                         exclusion_mask = self._Y < 2
                         binY = self._Y * exclusion_mask.astype( float )
-                        _iou_per_image = jaccard_index_numpy((binY>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8))
-                        _ov_iou_per_image = voc_calculation((binY>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8),
-                                                        _iou_per_image)
-                    self.stats['iou_per_image'] += _iou_per_image
-                    self.stats['ov_iou_per_image'] += _ov_iou_per_image
+                        _iou_merge_patches = jaccard_index_numpy((binY>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8))
+                        _ov_iou_merge_patches = voc_calculation((binY>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8),
+                                                        _iou_merge_patches)
+                    self.stats['iou_merge_patches'] += _iou_merge_patches
+                    self.stats['ov_iou_merge_patches'] += _ov_iou_merge_patches
 
                 ############################
                 ### POST-PROCESSING (3D) ###
                 ############################
                 if self.post_processing['per_image']:
                     pred, _iou_post, _ov_iou_post = apply_post_processing(self.cfg, pred, self._Y)
-                    self.stats['iou_post'] += _iou_post
-                    self.stats['ov_iou_post'] += _ov_iou_post
+                    self.stats['iou_merge_patches_post'] += _iou_post
+                    self.stats['ov_iou_merge_patches_post'] += _ov_iou_post
                     if pred.ndim == 4:
                         save_tif(np.expand_dims(pred,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,
                             self.processing_filenames, verbose=self.cfg.TEST.VERBOSE)
@@ -1398,18 +1400,21 @@ class Base_Workflow(metaclass=ABCMeta):
         self.stats['iou_per_crop'] = self.stats['iou_per_crop'] / self.stats['patch_counter'] if self.stats['patch_counter'] != 0 else 0
 
         # Merge patches
-        self.stats['iou_per_image'] = self.stats['iou_per_image'] / image_counter
-        self.stats['ov_iou_per_image'] = self.stats['ov_iou_per_image'] / image_counter
+        self.stats['iou_merge_patches'] = self.stats['iou_merge_patches'] / image_counter
+        self.stats['ov_iou_merge_patches'] = self.stats['ov_iou_merge_patches'] / image_counter
 
         # Full image
         self.stats['iou'] = self.stats['iou'] / image_counter
         self.stats['loss'] = self.stats['loss'] / image_counter
         self.stats['ov_iou'] = self.stats['ov_iou'] / image_counter
 
-        if self.post_processing['per_image'] or self.post_processing['all_images']:
-            self.stats['iou_post'] = self.stats['iou_post'] / image_counter
-            self.stats['ov_iou_post'] = self.stats['ov_iou_post'] / image_counter
-
+        if self.post_processing['per_image']:
+            self.stats['iou_merge_patches_post'] = self.stats['iou_merge_patches_post'] / image_counter
+            self.stats['ov_iou_merge_patches_post'] = self.stats['ov_iou_merge_patches_post'] / image_counter
+        if self.post_processing['as_3D_stack']:
+            self.stats['iou_as_3D_stack_post'] = self.stats['iou_as_3D_stack_post'] / image_counter
+            self.stats['ov_iou_as_3D_stack_post'] = self.stats['ov_iou_as_3D_stack_post'] / image_counter
+            
     def print_stats(self, image_counter):
         """
         Print statistics.  
@@ -1426,8 +1431,8 @@ class Base_Workflow(metaclass=ABCMeta):
                 print("Test Foreground IoU (per patch): {}".format(self.stats['iou_per_crop']))
                 print(" ")
                 if self.cfg.TEST.STATS.MERGE_PATCHES:
-                    print("Test Foreground IoU (merge patches): {}".format(self.stats['iou_per_image']))
-                    print("Test Overall IoU (merge patches): {}".format(self.stats['ov_iou_per_image']))
+                    print("Test Foreground IoU (merge patches): {}".format(self.stats['iou_merge_patches']))
+                    print("Test Overall IoU (merge patches): {}".format(self.stats['ov_iou_merge_patches']))
                     print(" ")
             if self.cfg.TEST.STATS.FULL_IMG:
                 print("Loss (per image): {}".format(self.stats['loss']))
@@ -1439,11 +1444,14 @@ class Base_Workflow(metaclass=ABCMeta):
         """
         Print post-processing statistics.
         """
-        if self.post_processing['per_image'] or self.post_processing['all_images']:
-            print("Test Foreground IoU (post-processing): {}".format(self.stats['iou_post']))
-            print("Test Overall IoU (post-processing): {}".format(self.stats['ov_iou_post']))
+        if self.post_processing['per_image']:
+            print("Test Foreground IoU (merge patches - post-processing): {}".format(self.stats['iou_merge_patches_post']))
+            print("Test Overall IoU (merge patches - post-processing): {}".format(self.stats['ov_iou_merge_patches_post']))
             print(" ")
-
+        if self.post_processing['as_3D_stack']:
+            print("Test Foreground IoU (as 3D stack - post-processing): {}".format(self.stats['iou_as_3D_stack_post']))
+            print("Test Overall IoU (as 3D stack - post-processing): {}".format(self.stats['ov_iou_as_3D_stack_post']))
+            print(" ")     
 
     @abstractmethod
     def after_merge_patches(self, pred):
@@ -1525,10 +1533,10 @@ class Base_Workflow(metaclass=ABCMeta):
         ############################
         ### POST-PROCESSING (2D) ###
         ############################
-        if self.post_processing['all_images']:
+        if self.post_processing['as_3D_stack']:
             self.all_pred = np.concatenate(self.all_pred)
             self.all_gt = np.concatenate(self.all_gt) if self.cfg.DATA.TEST.LOAD_GT else None
-            self.all_pred, self.stats['iou_post'], self.stats['ov_iou_post'] = apply_post_processing(self.cfg, self.all_pred, self.all_gt)
+            self.all_pred, self.stats['iou_as_3D_stack_post'], self.stats['ov_iou_as_3D_stack_post'] = apply_post_processing(self.cfg, self.all_pred, self.all_gt)
             save_tif(np.expand_dims(self.all_pred,0), self.cfg.PATHS.RESULT_DIR.AS_3D_STACK_POST_PROCESSING, verbose=self.cfg.TEST.VERBOSE)
 
 def extract_patch_from_dataset(data, cfg, input_queue, extract_info_queue, verbose=False):

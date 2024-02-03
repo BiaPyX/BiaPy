@@ -45,9 +45,9 @@ class Detection_Workflow(Base_Workflow):
         self.stats['d_recall'] = 0
         self.stats['d_f1'] = 0
 
-        self.stats['d_precision_per_crop'] = 0
-        self.stats['d_recall_per_crop'] = 0
-        self.stats['d_f1_per_crop'] = 0
+        self.stats['d_precision_merge_patches'] = 0
+        self.stats['d_recall_merge_patches'] = 0
+        self.stats['d_f1_merge_patches'] = 0
         
         self.original_test_mask_path = self.prepare_detection_data()
 
@@ -452,9 +452,9 @@ class Detection_Workflow(Base_Workflow):
                 csvwriter.writerow([nr+1] + self.cell_count_lines[nr])
         if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
             if self.cfg.TEST.STATS.PER_PATCH:
-                self.stats['d_precision_per_crop'] = self.stats['d_precision_per_crop'] / image_counter
-                self.stats['d_recall_per_crop'] = self.stats['d_recall_per_crop'] / image_counter
-                self.stats['d_f1_per_crop'] = self.stats['d_f1_per_crop'] / image_counter
+                self.stats['d_precision_merge_patches'] = self.stats['d_precision_merge_patches'] / image_counter
+                self.stats['d_recall_merge_patches'] = self.stats['d_recall_merge_patches'] / image_counter
+                self.stats['d_f1_merge_patches'] = self.stats['d_f1_merge_patches'] / image_counter
             if self.cfg.TEST.STATS.FULL_IMG:
                 self.stats['d_precision'] = self.stats['d_precision'] / image_counter
                 self.stats['d_recall'] = self.stats['d_recall'] / image_counter
@@ -469,7 +469,7 @@ class Detection_Workflow(Base_Workflow):
         pred : Torch Tensor
             Model prediction.
         """
-        self.detection_process(pred, self.processing_filenames, ['d_precision_per_crop', 'd_recall_per_crop', 'd_f1_per_crop'])
+        self.detection_process(pred, self.processing_filenames, ['d_precision_merge_patches', 'd_recall_merge_patches', 'd_f1_merge_patches'])
 
     def after_merge_patches_by_chunks_proccess_patch(self, filename):
         """
@@ -702,9 +702,9 @@ class Detection_Workflow(Base_Workflow):
         print("Detection specific metrics:")
         if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
             if self.cfg.TEST.STATS.PER_PATCH:
-                print("Detection - Test Precision (merge patches): {}".format(self.stats['d_precision_per_crop']))
-                print("Detection - Test Recall (merge patches): {}".format(self.stats['d_recall_per_crop']))
-                print("Detection - Test F1 (merge patches): {}".format(self.stats['d_f1_per_crop']))
+                print("Detection - Test Precision (merge patches): {}".format(self.stats['d_precision_merge_patches']))
+                print("Detection - Test Recall (merge patches): {}".format(self.stats['d_recall_merge_patches']))
+                print("Detection - Test F1 (merge patches): {}".format(self.stats['d_f1_merge_patches']))
             if self.cfg.TEST.STATS.FULL_IMG:
                 print("Detection - Test Precision (per image): {}".format(self.stats['d_precision']))
                 print("Detection - Test Recall (per image): {}".format(self.stats['d_recall']))

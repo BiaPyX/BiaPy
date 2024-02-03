@@ -39,7 +39,23 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
         self.original_test_path, self.original_test_mask_path = self.prepare_instance_data()
 
+        # Merging the image
+        self.all_matching_stats_merge_patches = []
+        self.all_matching_stats_merge_patches_post = []
+        self.stats['inst_stats_merge_patches'] = None
+        self.stats['inst_stats_merge_patches_post'] = None
+
+        # As 3D stack
+        self.all_matching_stats_as_3D_stack = []
+        self.all_matching_stats_as_3D_stack_post = []
+        self.stats['inst_stats_as_3D_stack'] = None
+        self.stats['inst_stats_as_3D_stack_post'] = None
+
+        # Full image
         self.all_matching_stats = []
+        self.all_matching_stats_post = []
+        self.stats['inst_stats'] = None
+        self.stats['inst_stats_post'] = None
 
         self.instance_ths = {}
         self.instance_ths['TYPE'] = self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH_TYPE
@@ -72,7 +88,6 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.ENABLE or \
             self.cfg.TEST.POST_PROCESSING.REPARE_LARGE_BLOBS_SIZE != -1:
             self.post_processing['instance_post'] = True
-            self.all_matching_stats_post_processing = []   
         else:
             self.post_processing['instance_post'] = False            
         self.instances_already_created = False 
@@ -215,7 +230,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             print("Calculating matching stats . . .")
 
             # Need to load instance labels, as Y are binary channels used for IoU calculation
-            if self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
+            if self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK and len(self.test_filenames) == w_pred.shape[0]:
                 del self._Y
                 _Y = np.zeros(w_pred.shape, dtype=w_pred.dtype)
                 for i in range(len(self.test_filenames)):
@@ -287,8 +302,6 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     save_tif(np.expand_dims(colored_result,0), self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS,
                             [os.path.splitext(filenames[0])[0]+'_th_{}.tif'.format(thr)], verbose=self.cfg.TEST.VERBOSE)          
                     del colored_result
-            self.all_matching_stats.append(results)
-
 
         ###################
         # Post-processing #
@@ -331,16 +344,17 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             print("Clearing borders . . .")
             w_pred = clear_border(w_pred)
 
+        results_post_proc = None
         if self.post_processing['instance_post']:
             save_tif(np.expand_dims(np.expand_dims(w_pred,-1),0), out_dir_post_proc, filenames, verbose=self.cfg.TEST.VERBOSE)
 
             if self.cfg.TEST.MATCHING_STATS and (self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST):
                 print("Calculating matching stats after post-processing . . .")
-                results = matching(_Y, w_pred, thresh=self.cfg.TEST.MATCHING_STATS_THS, report_matches=True)
+                results_post_proc = matching(_Y, w_pred, thresh=self.cfg.TEST.MATCHING_STATS_THS, report_matches=True)
                 
-                for i in range(len(results)):
+                for i in range(len(results_post_proc)):
                     # Extract TPs, FPs and FNs from the resulting matching data structure 
-                    r_stats = results[i] 
+                    r_stats = results_post_proc[i] 
                     thr = r_stats['thresh']
 
                     # TP and FN
@@ -386,7 +400,8 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         save_tif(np.expand_dims(colored_result,0), self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS,
                                 [os.path.splitext(filenames[0])[0]+'_post-proc_th_{}.tif'.format(thr)], verbose=self.cfg.TEST.VERBOSE)          
                         del colored_result
-                self.all_matching_stats_post_processing.append(results)
+
+        return results, results_post_proc
 
     def process_sample(self, norm):
         """
@@ -431,8 +446,11 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             Model prediction.
         """
         if not self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
-            self.instance_seg_process(pred, self.processing_filenames, self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
+            r, r_post = self.instance_seg_process(pred, self.processing_filenames, self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
                 self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING)        
+            self.all_matching_stats_merge_patches.append(r)
+            if r_post is not None:
+                self.all_matching_stats_merge_patches_post.append(r_post)
 
     def after_merge_patches_by_chunks_proccess_patch(self, filename):
         """
@@ -457,8 +475,11 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             Model prediction.
         """
         filename, file_extension = os.path.splitext(self.processing_filenames[0])
-        self.instance_seg_process(pred, [filename+"_full_image"+file_extension], self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_INSTANCES,
+        r, r_post = self.instance_seg_process(pred, [filename+"_full_image"+file_extension], self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_INSTANCES,
             self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_POST_PROCESSING)  
+        self.all_matching_stats.append(r)
+        if r_post is not None:
+            self.all_matching_stats_post.append(r_post)
 
     def after_all_images(self):
         """
@@ -469,8 +490,11 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             print("Analysing all images as a 3D stack . . .")    
             if type(self.all_pred) is list:
                 self.all_pred = np.concatenate(self.all_pred)
-            self.instance_seg_process(self.all_pred, ["3D_stack.tif"], self.cfg.PATHS.RESULT_DIR.AS_3D_STACK,
+            r, r_post = self.instance_seg_process(self.all_pred, ["3D_stack.tif"], self.cfg.PATHS.RESULT_DIR.AS_3D_STACK,
                 self.cfg.PATHS.RESULT_DIR.AS_3D_STACK_POST_PROCESSING)
+            self.all_matching_stats_as_3D_stack.append(r)
+            if r_post is not None:
+                self.all_matching_stats_as_3D_stack_post.append(r_post)
 
     def normalize_stats(self, image_counter): 
         """
@@ -485,9 +509,26 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
         if (self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST):
             if self.cfg.TEST.MATCHING_STATS:
-                self.stats['inst_stats'] = wrapper_matching_dataset_lazy(self.all_matching_stats, self.cfg.TEST.MATCHING_STATS_THS)
+                # Merge patches
+                if len(self.all_matching_stats_merge_patches) > 0:
+                    self.stats['inst_stats_merge_patches'] = wrapper_matching_dataset_lazy(self.all_matching_stats_merge_patches, self.cfg.TEST.MATCHING_STATS_THS)
+                # As 3D stack
+                if len(self.all_matching_stats_as_3D_stack) > 0:
+                    self.stats['inst_stats_as_3D_stack'] = wrapper_matching_dataset_lazy(self.all_matching_stats_as_3D_stack, self.cfg.TEST.MATCHING_STATS_THS)
+                # Full image
+                if len(self.all_matching_stats) > 0:
+                    self.stats['inst_stats'] = wrapper_matching_dataset_lazy(self.all_matching_stats, self.cfg.TEST.MATCHING_STATS_THS)
                 if self.post_processing['instance_post']:
-                    self.stats['inst_stats_vor'] = wrapper_matching_dataset_lazy(self.all_matching_stats_post_processing, self.cfg.TEST.MATCHING_STATS_THS)
+                    # Merge patches
+                    if len(self.all_matching_stats_merge_patches_post) > 0:
+                        self.stats['inst_stats_merge_patches_post'] = wrapper_matching_dataset_lazy(self.all_matching_stats_merge_patches_post, self.cfg.TEST.MATCHING_STATS_THS)
+                    # As 3D stack
+                    if len(self.all_matching_stats_as_3D_stack_post) > 0:
+                        self.stats['inst_stats_as_3D_stack_post'] = wrapper_matching_dataset_lazy(self.all_matching_stats_as_3D_stack_post, self.cfg.TEST.MATCHING_STATS_THS)
+                    # Full image
+                    if len(self.all_matching_stats_post) > 0:
+                        self.stats['inst_stats_post'] = wrapper_matching_dataset_lazy(self.all_matching_stats_post, self.cfg.TEST.MATCHING_STATS_THS)
+
 
     def print_stats(self, image_counter):
         """
@@ -506,10 +547,32 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             if self.cfg.TEST.MATCHING_STATS and (self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST) :
                 for i in range(len(self.cfg.TEST.MATCHING_STATS_THS)):
                     print("IoU TH={}".format(self.cfg.TEST.MATCHING_STATS_THS[i]))
-                    print(self.stats['inst_stats'][i])
+                    # Merge patches 
+                    if self.stats['inst_stats_merge_patches'] is not None:
+                        print("      Merge patches:")
+                        print(f"      {self.stats['inst_stats_merge_patches'][i]}")
+                    # As 3D stack
+                    if self.stats['inst_stats_as_3D_stack'] is not None:
+                        print("      As 3D stack:")
+                        print(f"      {self.stats['inst_stats_as_3D_stack'][i]}")
+                    # Full image
+                    if self.stats['inst_stats'] is not None:
+                        print("      Full image:")
+                        print(f"      {self.stats['inst_stats'][i]}")
                     if self.post_processing['instance_post']:
                         print("IoU (post-processing) TH={}".format(self.cfg.TEST.MATCHING_STATS_THS[i]))
-                        print(self.stats['inst_stats_vor'][i])
+                        # Merge patches 
+                        if self.stats['inst_stats_merge_patches_post'] is not None:
+                            print("      Merge patches (post-processing):")
+                            print(f"      {self.stats['inst_stats_merge_patches_post'][i]}")
+                        # As 3D stack
+                        if self.stats['inst_stats_as_3D_stack_post'] is not None:
+                            print("      As 3D stack (post-processing):")
+                            print(f"      {self.stats['inst_stats_as_3D_stack_post'][i]}")
+                        # Full image
+                        if self.stats['inst_stats_post'] is not None:
+                            print("      Full image (post-processing):")
+                            print(f"      {self.stats['inst_stats_post'][i]}")
 
     def prepare_instance_data(self):
         """

@@ -34,7 +34,7 @@ class Super_resolution_Workflow(Base_Workflow):
     """
     def __init__(self, cfg, job_identifier, device, args, **kwargs):
         super(Super_resolution_Workflow, self).__init__(cfg, job_identifier, device, args, **kwargs)
-        self.stats['psnr_per_image'] = 0
+        self.stats['psnr_merge_patches'] = 0
 
         # From now on, no modification of the cfg will be allowed
         self.cfg.freeze()
@@ -219,8 +219,8 @@ class Super_resolution_Workflow(Base_Workflow):
         if self._Y.dtype == np.dtype('uint16'):
             self._Y = self._Y.astype(np.float32)
         if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
-            psnr_per_image = self.metrics[0](torch.from_numpy(pred), torch.from_numpy(self._Y))
-            self.stats['psnr_per_image'] += psnr_per_image
+            psnr_merge_patches = self.metrics[0](torch.from_numpy(pred), torch.from_numpy(self._Y))
+            self.stats['psnr_merge_patches'] += psnr_merge_patches
 
     def torchvision_model_call(self, in_img, is_train=False):
         """
@@ -291,7 +291,7 @@ class Super_resolution_Workflow(Base_Workflow):
         image_counter : int
             Number of images to average the metrics.
         """
-        self.stats['psnr_per_image'] = self.stats['psnr_per_image'] / image_counter
+        self.stats['psnr_merge_patches'] = self.stats['psnr_merge_patches'] / image_counter
 
     def print_stats(self, image_counter):
         """
@@ -305,7 +305,7 @@ class Super_resolution_Workflow(Base_Workflow):
         self.normalize_stats(image_counter)
 
         if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
-            print("Test PSNR (merge patches): {}".format(self.stats['psnr_per_image']))
+            print("Test PSNR (merge patches): {}".format(self.stats['psnr_merge_patches']))
             print(" ")
 
 
