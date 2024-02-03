@@ -167,7 +167,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             else:
                 return train_iou
 
-    def instance_seg_process(self, pred, filenames):
+    def instance_seg_process(self, pred, filenames, out_dir, out_dir_post_proc):
         """
         Instance segmentation workflow engine for test/inference. Process model's prediction to prepare 
         instance segmentation output and calculate metrics. 
@@ -180,6 +180,12 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
         filenames : List of str
             Predicted image's filenames.
+
+        out_dir : path
+            Output directory to save the instances.
+            
+        out_dir_post_proc : path
+            Output directory to save the post-processed instances.
         """
         #############################
         ### INSTANCE SEGMENTATION ###
@@ -196,8 +202,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 fore_dilation_radius=self.cfg.PROBLEM.INSTANCE_SEG.FORE_DILATION_RADIUS, rmv_close_points=self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS, 
                 remove_close_points_radius=self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS[0], resolution=self.cfg.DATA.TEST.RESOLUTION, save_dir=check_wa)
 
-            save_tif(np.expand_dims(np.expand_dims(w_pred,-1),0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
-                filenames, verbose=self.cfg.TEST.VERBOSE)
+            save_tif(np.expand_dims(np.expand_dims(w_pred,-1),0), out_dir, filenames, verbose=self.cfg.TEST.VERBOSE)
 
             # Add extra dimension if working in 2D
             if w_pred.ndim == 2:
@@ -311,11 +316,11 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     d_result['perimeters'], d_result['comment'], d_result['conditions']), columns=['label', 'axis-0', 'axis-1', 
                     'axis-2', 'npixels', 'volume', 'sphericity', 'diameter', 'perimeter (surface area)', 'comment', 'conditions'])
             df = df.sort_values(by=['label'])   
-            df.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES, os.path.splitext(filenames[0])[0]+'_full_stats.csv'), index=False)
+            df.to_csv(os.path.join(out_dir, os.path.splitext(filenames[0])[0]+'_full_stats.csv'), index=False)
             # Save only remain instances stats
             df = df[df["comment"].str.contains("Strange")==False] 
-            os.makedirs(self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING, exist_ok=True)
-            df.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING, os.path.splitext(filenames[0])[0]+'_filtered_stats.csv'), index=False)
+            os.makedirs(out_dir_post_proc, exist_ok=True)
+            df.to_csv(os.path.join(out_dir_post_proc, os.path.splitext(filenames[0])[0]+'_filtered_stats.csv'), index=False)
             del df
 
         if self.cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK:
@@ -327,8 +332,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             w_pred = clear_border(w_pred)
 
         if self.post_processing['instance_post']:
-            save_tif(np.expand_dims(np.expand_dims(w_pred,-1),0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,
-                filenames, verbose=self.cfg.TEST.VERBOSE)
+            save_tif(np.expand_dims(np.expand_dims(w_pred,-1),0), out_dir_post_proc, filenames, verbose=self.cfg.TEST.VERBOSE)
 
             if self.cfg.TEST.MATCHING_STATS and (self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST):
                 print("Calculating matching stats after post-processing . . .")
@@ -427,7 +431,8 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             Model prediction.
         """
         if not self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
-            self.instance_seg_process(pred, self.processing_filenames)        
+            self.instance_seg_process(pred, self.processing_filenames, self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
+                self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING)        
 
     def after_merge_patches_by_chunks_proccess_patch(self, filename):
         """
@@ -452,7 +457,8 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             Model prediction.
         """
         filename, file_extension = os.path.splitext(self.processing_filenames[0])
-        self.instance_seg_process(pred, [filename+"_full_image"+file_extension])  
+        self.instance_seg_process(pred, [filename+"_full_image"+file_extension], self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_INSTANCES,
+            self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_POST_PROCESSING)  
 
     def after_all_images(self):
         """
@@ -463,7 +469,8 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             print("Analysing all images as a 3D stack . . .")    
             if type(self.all_pred) is list:
                 self.all_pred = np.concatenate(self.all_pred)
-            self.instance_seg_process(self.all_pred, ["3D_stack.tif"])
+            self.instance_seg_process(self.all_pred, ["3D_stack.tif"], self.cfg.PATHS.RESULT_DIR.AS_3D_STACK,
+                self.cfg.PATHS.RESULT_DIR.AS_3D_STACK_POST_PROCESSING)
 
     def normalize_stats(self, image_counter): 
         """
