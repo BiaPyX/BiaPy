@@ -53,8 +53,4 @@ TRAIN:
 TEST:
     ENABLE: True
     AUGMENTATION: False
-    STATS:
-        PER_PATCH: True
-        MERGE_PATCHES: True
-        FULL_IMG: False
     VERBOSE: True

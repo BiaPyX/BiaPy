@@ -784,14 +784,12 @@ class Config:
         _C.TEST.AUGMENTATION = False
         # Whether to evaluate or not
         _C.TEST.EVALUATE = True
-        # Stack 2D images into a 3D image and then process it entirely instead of going image per image. This stacks
-        # images that have been merged with 'TEST.STATS.MERGE_PATCHES' = True or 'TEST.STATS.FULL_IMG' (priorizes this later)  
+        # Stack 2D images into a 3D image and then process it entirely instead of going image per image
         _C.TEST.ANALIZE_2D_IMGS_AS_3D_STACK = False
 
-        _C.TEST.STATS = CN()
-        _C.TEST.STATS.PER_PATCH = False
-        _C.TEST.STATS.MERGE_PATCHES = False # Only used when _C.TEST.STATS.PER_PATCH = True
-        _C.TEST.STATS.FULL_IMG = True # Only when if PROBLEM.NDIM = '2D' as 3D images are huge for the GPU
+        # If PROBLEM.NDIM = '2D' this can be activated to process each image entirely instead of patch by patch. Only can be done 
+        # if the neural network is fully convolutional
+        _C.TEST.FULL_IMG = False 
 
         ### Instance segmentation
         # Whether to calculate matching statistics (average overlap, accuracy, recall, precision, etc.)
@@ -830,8 +828,7 @@ class Config:
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Post-processing
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # When PROBLEM.NDIM = '2D' only applies when _C.TEST.STATS.FULL_IMG = True, if PROBLEM.NDIM = '3D' is applied
-        # when _C.TEST.STATS.MERGE_PATCHES = True
+        # When PROBLEM.NDIM = '2D' only applies when _C.TEST.ANALIZE_2D_IMGS_AS_3D_STACK = True
         _C.TEST.POST_PROCESSING = CN()
         _C.TEST.POST_PROCESSING.YZ_FILTERING = False
         _C.TEST.POST_PROCESSING.YZ_FILTERING_SIZE = 5

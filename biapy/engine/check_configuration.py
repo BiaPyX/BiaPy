@@ -153,15 +153,9 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     assert cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'CLASSIFICATION', 'DETECTION', 'DENOISING', 'SUPER_RESOLUTION', 'SELF_SUPERVISED'],\
         "PROBLEM.TYPE not in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'CLASSIFICATION', 'DETECTION', 'DENOISING', 'SUPER_RESOLUTION', 'SELF_SUPERVISED']"
 
-    if cfg.PROBLEM.NDIM == "2D" and not cfg.TEST.STATS.PER_PATCH and not cfg.TEST.STATS.FULL_IMG:
-        raise ValueError("At least one between 'TEST.STATS.PER_PATCH' or 'TEST.STATS.FULL_IMG' needs to be True")
-
-    if cfg.PROBLEM.NDIM == '3D':
-        if not cfg.TEST.STATS.PER_PATCH and not cfg.TEST.STATS.MERGE_PATCHES and cfg.PROBLEM.TYPE != "CLASSIFICATION":
-            raise ValueError("At least one between 'TEST.STATS.PER_PATCH' or 'TEST.STATS.MERGE_PATCHES' needs to be True when 'PROBLEM.NDIM'=='3D'")
-        if cfg.TEST.STATS.FULL_IMG:
-            print("WARNING: TEST.STATS.FULL_IMG == True while using PROBLEM.NDIM == '3D'. As 3D images are usually 'huge'"
-                ", full image statistics will be disabled to avoid GPU memory overflow")
+    if cfg.PROBLEM.NDIM == '3D' and cfg.TEST.FULL_IMG:
+        print("WARNING: TEST.FULL_IMG == True while using PROBLEM.NDIM == '3D'. As 3D images are usually 'huge'"
+            ", full image statistics will be disabled to avoid GPU memory overflow")
 
     if cfg.LOSS.TYPE != "CE" and cfg.PROBLEM.TYPE not in ['SEMANTIC_SEG', 'DETECTION']:
         raise ValueError("Not implemented pipeline option: LOSS.TYPE != 'CE' only available in 'SEMANTIC_SEG' and 'DETECTION'")
@@ -215,12 +209,9 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     f"'DATA.PATCH_SIZE' set is {cfg.DATA.PATCH_SIZE}")
             if cfg.PROBLEM.NDIM == '3D':
                 raise ValueError("TorchVision model's for semantic segmentation are only available for 2D images")
-            if not cfg.TEST.STATS.FULL_IMG:
-                raise ValueError("With TorchVision models for semantic segmentation workflow only 'TEST.STATS.FULL_IMG' setting is available, so "
+            if not cfg.TEST.FULL_IMG:
+                raise ValueError("With TorchVision models for semantic segmentation workflow only 'TEST.FULL_IMG' setting is available, so "
                     "please set it.")
-            if cfg.TEST.STATS.PER_PATCH or cfg.TEST.STATS.MERGE_PATCHES:
-                raise ValueError("With TorchVision models for semantic segmentation workflow only 'TEST.STATS.FULL_IMG' setting is available, so "
-                    "please enable it and disable 'TEST.STATS.PER_PATCH' and 'TEST.STATS.MERGE_PATCHES'")
             if cfg.LOSS.TYPE != "CE":
                 raise ValueError("Only 'LOSS.TYPE' = 'CE' is available in semantic segmentation workflow using TorchVision models")
 
@@ -263,12 +254,9 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             if cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
                 raise ValueError("'TEST.ANALIZE_2D_IMGS_AS_3D_STACK' can not be activated with TorchVision models for instance segmentation "
                     "workflow")
-            if not cfg.TEST.STATS.FULL_IMG:
-                raise ValueError("With TorchVision models for instance segmentation workflow only 'TEST.STATS.FULL_IMG' setting is available, so "
+            if not cfg.TEST.FULL_IMG:
+                raise ValueError("With TorchVision models for instance segmentation workflow only 'TEST.FULL_IMG' setting is available, so "
                     "please set it.")
-            if cfg.TEST.STATS.PER_PATCH or cfg.TEST.STATS.MERGE_PATCHES:
-                raise ValueError("With TorchVision models for instance segmentation workflow only 'TEST.STATS.FULL_IMG' setting is available, so "
-                    "please enable it and disable 'TEST.STATS.PER_PATCH' and 'TEST.STATS.MERGE_PATCHES'")
 
     #### Detection ####
     if cfg.PROBLEM.TYPE == 'DETECTION':
@@ -301,12 +289,9 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 raise ValueError("TorchVision model's for detection are only available for 2D images")
             if cfg.TRAIN.ENABLE:
                 raise NotImplementedError # require bbox generator etc.
-            if not cfg.TEST.STATS.FULL_IMG:
-                raise ValueError("With TorchVision models for detection workflow only 'TEST.STATS.FULL_IMG' setting is available, so "
+            if not cfg.TEST.FULL_IMG:
+                raise ValueError("With TorchVision models for detection workflow only 'TEST.FULL_IMG' setting is available, so "
                     "please set it.")
-            if cfg.TEST.STATS.PER_PATCH or cfg.TEST.STATS.MERGE_PATCHES:
-                raise ValueError("With TorchVision models for detection workflow only 'TEST.STATS.FULL_IMG' setting is available, so "
-                    "please enable it and disable 'TEST.STATS.PER_PATCH' and 'TEST.STATS.MERGE_PATCHES'")
 
     #### Super-resolution ####
     elif cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':

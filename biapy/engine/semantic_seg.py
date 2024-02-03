@@ -96,7 +96,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
             ##################
             ### FULL IMAGE ###
             ##################
-            if self.cfg.TEST.STATS.FULL_IMG:
+            if self.cfg.TEST.FULL_IMG:
                 resized_Y = False
                 # Evaluate each img
                 if self.cfg.DATA.TEST.LOAD_GT:

@@ -425,7 +425,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             ##################
             ### FULL IMAGE ###
             ##################
-            if self.cfg.TEST.STATS.FULL_IMG:
+            if self.cfg.TEST.FULL_IMG:
                 # Make the prediction
                 with torch.cuda.amp.autocast():
                     pred = self.model_call_func(self._X)

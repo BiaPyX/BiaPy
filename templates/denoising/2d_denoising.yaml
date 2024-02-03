@@ -50,7 +50,4 @@ TRAIN:
 TEST:
     ENABLE: True
     AUGMENTATION: False
-    STATS:
-        PER_PATCH: True
-        MERGE_PATCHES: True
-        FULL_IMG: False
+    FULL_IMG: False

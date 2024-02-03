@@ -451,11 +451,11 @@ class Detection_Workflow(Base_Workflow):
             for nr in range(len(self.cell_count_lines)):
                 csvwriter.writerow([nr+1] + self.cell_count_lines[nr])
         if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
-            if self.cfg.TEST.STATS.PER_PATCH:
+            if not self.cfg.TEST.FULL_IMG:
                 self.stats['d_precision_merge_patches'] = self.stats['d_precision_merge_patches'] / image_counter
                 self.stats['d_recall_merge_patches'] = self.stats['d_recall_merge_patches'] / image_counter
                 self.stats['d_f1_merge_patches'] = self.stats['d_f1_merge_patches'] / image_counter
-            if self.cfg.TEST.STATS.FULL_IMG:
+            else:
                 self.stats['d_precision'] = self.stats['d_precision'] / image_counter
                 self.stats['d_recall'] = self.stats['d_recall'] / image_counter
                 self.stats['d_f1'] = self.stats['d_f1'] / image_counter
@@ -618,7 +618,7 @@ class Detection_Workflow(Base_Workflow):
             ##################
             ### FULL IMAGE ###
             ##################
-            if self.cfg.TEST.STATS.FULL_IMG:
+            if self.cfg.TEST.FULL_IMG:
                 # Make the prediction
                 with torch.cuda.amp.autocast():
                     pred = self.model_call_func(self._X)
@@ -701,11 +701,11 @@ class Detection_Workflow(Base_Workflow):
 
         print("Detection specific metrics:")
         if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
-            if self.cfg.TEST.STATS.PER_PATCH:
+            if not self.cfg.TEST.FULL_IMG:
                 print("Detection - Test Precision (merge patches): {}".format(self.stats['d_precision_merge_patches']))
                 print("Detection - Test Recall (merge patches): {}".format(self.stats['d_recall_merge_patches']))
                 print("Detection - Test F1 (merge patches): {}".format(self.stats['d_f1_merge_patches']))
-            if self.cfg.TEST.STATS.FULL_IMG:
+            else:
                 print("Detection - Test Precision (per image): {}".format(self.stats['d_precision']))
                 print("Detection - Test Recall (per image): {}".format(self.stats['d_recall']))
                 print("Detection - Test F1 (per image): {}".format(self.stats['d_f1']))
