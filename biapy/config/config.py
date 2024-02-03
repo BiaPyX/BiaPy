@@ -237,7 +237,7 @@ class Config:
         # Points outside the boundaries of the input are filled according to the given mode: {‘constant’, ‘edge’, ‘symmetric’, ‘reflect’, ‘wrap’}
         _C.DATA.PREPROCESS.RESIZE.MODE = 'reflect'
         # Used in conjunction with mode ‘constant’, the value outside the image boundaries.
-        _C.DATA.PREPROCESS.RESIZE.CVAL = 0
+        _C.DATA.PREPROCESS.RESIZE.CVAL = 0.
         # Whether to clip the output to the range of values of the input image.
         _C.DATA.PREPROCESS.RESIZE.CLIP = True
         # Whether to keep the original range of values.

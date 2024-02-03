@@ -1190,7 +1190,7 @@ def preprocess_data(cfg, x_data=[], y_data=[], is_2d=True, is_y_mask=False):
         Preprocessed data. The same structure and dimensionality of the given data will be returned.
     """
     
-    if cfg.RESIZE.ACTIVATE:
+    if cfg.RESIZE.ENABLE:
         print("Preprocessing: applying resize . . .")
         if len(x_data) > 0:
             x_data = resize_images(x_data,
@@ -1216,31 +1216,31 @@ def preprocess_data(cfg, x_data=[], y_data=[], is_2d=True, is_y_mask=False):
             )
 
     if len(x_data) > 0:
-        if cfg.GAUSSIAN_BLUR.ACTIVATE:
+        if cfg.GAUSSIAN_BLUR.ENABLE:
             print("Preprocessing: applying gaussian blur . . .")
             x_data = apply_gaussian_blur(x_data,
                 sigma = cfg.GAUSSIAN_BLUR.SIGMA,
                 mode = cfg.GAUSSIAN_BLUR.MODE,
                 channel_axis = cfg.GAUSSIAN_BLUR.CHANNEL_AXIS,
             )
-        if cfg.MEDIAN_BLUR.ACTIVATE:
+        if cfg.MEDIAN_BLUR.ENABLE:
             print("Preprocessing: applying median blur . . .")
             x_data = apply_median_blur(x_data,
                 footprint = cfg.MEDIAN_BLUR.FOOTPRINT,
             )
-        if cfg.MATCH_HISTOGRAM.ACTIVATE:
+        if cfg.MATCH_HISTOGRAM.ENABLE:
             print("Preprocessing: applying histogram matching . . .")
             x_data = apply_histogram_matching(x_data,
                 reference_path = cfg.MATCH_HISTOGRAM.REFERENCE_PATH,
                 is_2d = is_2d,
             )
-        if cfg.CLAHE.ACTIVATE:
+        if cfg.CLAHE.ENABLE:
             print("Preprocessing: applying CLAHE . . .")
             x_data = apply_clahe(x_data,
                 kernel_size = cfg.CLAHE.KERNEL_SIZE,
                 clip_limit = cfg.CLAHE.CLIP_LIMIT,
             )
-        if cfg.CANNY.ACTIVATE:
+        if cfg.CANNY.ENABLE:
             print("Preprocessing: applying Canny . . .")
             x_data = detect_edges(x_data,
                 low_threshold = cfg.CANNY.LOW_THRESHOLD,
