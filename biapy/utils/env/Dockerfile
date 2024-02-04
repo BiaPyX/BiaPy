@@ -7,7 +7,8 @@ RUN apt-get update && apt-get install -y \
     wget \
     ffmpeg \
     libsm6 \
-    libxext6 
+    libxext6 \
+	git
 
 # Download and prepare conda
 RUN wget -q -P /tmp \
@@ -32,4 +33,9 @@ SHELL ["conda", "run", "-n", "BiaPy_env", "/bin/bash", "-c"]
 # Install BiaPy
 RUN pip install biapy
 
+# Clone BiaPy, as running it with python -c "" stops the container with no error after a few seconds running 
+RUN git clone --depth 1 https://github.com/BiaPyX/BiaPy.git  --branch v3.3.3 /installations/BiaPy
+
 ENTRYPOINT ["conda", "run", "--no-capture-output", "-n", "BiaPy_env", "python3", "-u", "/installations/BiaPy/main.py"]
+# ENTRYPOINT ["conda", "run", "--no-capture-output", "-n", "BiaPy_env", "python3", "-u", "-c", "from biapy import BiaPy; BiaPy(..)"]
+
