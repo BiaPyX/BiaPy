@@ -810,7 +810,7 @@ class Config:
         _C.TEST.DET_MIN_TH_TO_BE_PEAK = [0.2]
         # Corresponds to 'exclude_border' argument of 'peak_local_max' or 'blob_log' function of skimage. If True it will exclude
         # peaks from the border of the image to avoid partial detection.
-        _C.TEST.DET_EXCLUDE_BORDER = True
+        _C.TEST.DET_EXCLUDE_BORDER = False
         # Corresponds to 'min_sigma' argument of 'blob_log' function. It is the minimum standard deviation for Gaussian kernel. 
         # Keep this low to detect smaller blobs. The standard deviations of the Gaussian filter are given for each axis as a 
         # sequence, or as a single number, in which case it is equal for all axes.
