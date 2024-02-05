@@ -1,4 +1,7 @@
 import torchvision.models as models
+from torchvision.models._api import WeightsEnum
+from torch.hub import load_state_dict_from_url
+
 import torch.nn as nn
 
 def efficientnet(efficientnet_name, image_shape, n_classes=2, load_imagenet_weights=True):
@@ -23,6 +26,12 @@ def efficientnet(efficientnet_name, image_shape, n_classes=2, load_imagenet_weig
     model : Torch model
         EfficientNet model.
     """
+
+    def get_state_dict(self, *args, **kwargs):
+        kwargs.pop("check_hash")
+        return load_state_dict_from_url(self.url, *args, **kwargs)
+    WeightsEnum.get_state_dict = get_state_dict
+
     model = getattr(models, efficientnet_name)(weights="IMAGENET1K_V1" if load_imagenet_weights else None) 
 
     # Change the final classification head.
