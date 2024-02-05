@@ -582,9 +582,11 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae']:
                 raise ValueError("'SELF_SUPERVISED' models available are these: ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', " 
                     "'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae']")
-        if cfg.PROBLEM.TYPE == 'CLASSIFICATION' and model_arch not in ['simple_cnn', 'vit'] and \
-            'efficientnet' not in model_arch:
-            raise ValueError("Architectures available for 'CLASSIFICATION' are: ['simple_cnn', 'efficientnet_b[0-7]', 'vit']")
+        if cfg.PROBLEM.TYPE == 'CLASSIFICATION':
+            if model_arch not in ['simple_cnn', 'vit'] and 'efficientnet' not in model_arch:
+                raise ValueError("Architectures available for 'CLASSIFICATION' are: ['simple_cnn', 'efficientnet_b[0-7]', 'vit']")
+            if cfg.PROBLEM.NDIM == '3D' and 'efficientnet' in model_arch:
+                raise ValueError("EfficientNet architectures are only available for 2D images")
         if model_arch in ['unetr', 'vit', 'mae']:    
             if model_arch == 'mae' and cfg.PROBLEM.TYPE != 'SELF_SUPERVISED':
                 raise ValueError("'mae' model can only be used in 'SELF_SUPERVISED' workflow")

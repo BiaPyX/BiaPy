@@ -553,11 +553,17 @@ class Config:
         # Options: ["biapy", "bmz", "torchvision"]
         _C.MODEL.SOURCE = "biapy"
 
+        #
+        # BMZ BACKEND MODELS AND OPTIONS
+        #
         _C.MODEL.BMZ = CN()
         # DOI of the model from BMZ to load. It can not be empty if MODEL.SOURCE = "bmz".
         _C.MODEL.BMZ.SOURCE_MODEL_DOI = ""
         # BMZ model export options
 
+        #
+        # TOCHIVISION BACKEND MODELS AND OPTIONS
+        #
         # BiaPy support using models of Torchvision . It can not be empty if MODEL.SOURCE = "torchvision".
         # Models available here: https://pytorch.org/vision/stable/models.html
         # They can be listed with: "from torchvision.models import list_models; list_models()"
@@ -604,9 +610,17 @@ class Config:
         # 
         _C.MODEL.TORCHVISION_MODEL_NAME = ""
 
-        # Architecture of the network. Possible values are: 'unet', 'resunet', 'resunet++', 'attention_unet', 'nnunet',  
-        # 'multiresunet', 'seunet', 'simple_cnn', 'efficientnet_b[0-7]', 'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'ViT'
-        # 'mae'
+        #
+        # BIAPY BACKEND MODELS
+        #
+        # Architecture of the network. Possible values are: 
+        #   * Semantic segmentation: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'unetr'
+        #   * Instance segmentation: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'unetr'
+        #   * Detection: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'unetr' 
+        #   * Denoising: 'unet', 'resunet', 'resunet++', 'attention_unet', 'seunet' 
+        #   * Super-resolution: 'edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'multiresunet' 
+        #   * Self-supervision: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae' 
+        #   * Classification: 'simple_cnn', 'vit', 'efficientnet_b[0-7]' (only 2D)
         _C.MODEL.ARCHITECTURE = 'unet'
         # Number of feature maps on each level of the network.
         _C.MODEL.FEATURE_MAPS = [16, 32, 64, 128, 256]
