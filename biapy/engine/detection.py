@@ -160,8 +160,8 @@ class Detection_Workflow(Base_Workflow):
             # Find points
             if self.cfg.TEST.DET_POINT_CREATION_FUNCTION == "peak_local_max":
                 pred_coordinates = peak_local_max(pred[...,channel].astype(np.float32),
-                                                  threshold_abs=min_th_peak,
-                                                  exclude_border=self.cfg.TEST.DET_EXCLUDE_BORDER)
+                    min_distance=self.cfg.TEST.DET_PEAK_LOCAL_MAX_MIN_DISTANCE, threshold_abs=min_th_peak,
+                    exclude_border=self.cfg.TEST.DET_EXCLUDE_BORDER)
             else:
                 pred_coordinates = blob_log(pred[...,channel]*255, min_sigma=self.cfg.TEST.DET_BLOB_LOG_MIN_SIGMA, 
                     max_sigma=self.cfg.TEST.DET_BLOB_LOG_MAX_SIGMA, num_sigma=self.cfg.TEST.DET_BLOB_LOG_NUM_SIGMA, 

@@ -805,6 +805,8 @@ class Config:
         # 'peak_local_max': https://scikit-image.org/docs/stable/api/skimage.feature.html#skimage.feature.peak_local_max 
         # 'blob_log': https://scikit-image.org/docs/stable/api/skimage.feature.html#skimage.feature.blob_log
         _C.TEST.DET_POINT_CREATION_FUNCTION = 'peak_local_max'
+        # The minimal allowed distance separating peaks. To find the maximum number of peaks, use min_distance=1.
+        _C.TEST.DET_PEAK_LOCAL_MAX_MIN_DISTANCE = 1
         # Minimun value to consider a point as a peak. Corresponds to 'threshold_abs' argument of the function
         # 'peak_local_max' of skimage.feature
         _C.TEST.DET_MIN_TH_TO_BE_PEAK = [0.2]
