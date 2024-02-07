@@ -226,6 +226,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             w_pred = pred.squeeze()
             if w_pred.ndim == 2: w_pred = np.expand_dims(w_pred,0)
 
+        results = None
         if self.cfg.TEST.MATCHING_STATS and (self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST):
             print("Calculating matching stats . . .")
 
@@ -448,7 +449,8 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         if not self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
             r, r_post = self.instance_seg_process(pred, self.processing_filenames, self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
                 self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING)        
-            self.all_matching_stats_merge_patches.append(r)
+            if r is not None:
+                self.all_matching_stats_merge_patches.append(r)
             if r_post is not None:
                 self.all_matching_stats_merge_patches_post.append(r_post)
 
@@ -477,7 +479,8 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         filename, file_extension = os.path.splitext(self.processing_filenames[0])
         r, r_post = self.instance_seg_process(pred, [filename+"_full_image"+file_extension], self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_INSTANCES,
             self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_POST_PROCESSING)  
-        self.all_matching_stats.append(r)
+        if r is not None:
+            self.all_matching_stats.append(r)
         if r_post is not None:
             self.all_matching_stats_post.append(r_post)
 
@@ -492,7 +495,8 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 self.all_pred = np.concatenate(self.all_pred)
             r, r_post = self.instance_seg_process(self.all_pred, ["3D_stack.tif"], self.cfg.PATHS.RESULT_DIR.AS_3D_STACK,
                 self.cfg.PATHS.RESULT_DIR.AS_3D_STACK_POST_PROCESSING)
-            self.all_matching_stats_as_3D_stack.append(r)
+            if r is not None:
+                self.all_matching_stats_as_3D_stack.append(r)
             if r_post is not None:
                 self.all_matching_stats_as_3D_stack_post.append(r_post)
 
