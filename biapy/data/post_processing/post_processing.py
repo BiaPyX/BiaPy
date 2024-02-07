@@ -192,7 +192,8 @@ def boundary_refinement_watershed2(X, Y_pred, save_marks_dir=None):
 
 def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_small_before=10, seed_morph_sequence=[], 
     seed_morph_radius=[], erode_and_dilate_foreground=False, fore_erosion_radius=5, fore_dilation_radius=5, 
-    rmv_close_points=False, remove_close_points_radius=-1, resolution=[1,1,1], save_dir=None):
+    rmv_close_points=False, remove_close_points_radius=-1, resolution=[1,1,1], watershed_by_2d_slices=False, 
+    save_dir=None):
     """
     Convert binary foreground probability maps and instance contours to instance masks via watershed segmentation
     algorithm.
@@ -247,6 +248,10 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
     resolution : ndarray of floats
         Resolution of the data, in ``(z,y,x)`` to calibrate coordinates. E.g. ``[30,8,8]``.    
 
+    watershed_by_2d_slices : bool, optional
+        Whether to apply or not the watershed to create instances slice by slice in a 3D problem. This can solve instances invading 
+        others if the objects in Z axis overlap too much. 
+        
     save_dir :  str, optional
         Directory to save watershed output into.
     """
@@ -399,17 +404,24 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
         seed_map = remove_small_objects(seed_map, thres_small_before)
         seed_map, _, _ = relabel_sequential(seed_map)
 
-    segm = watershed(-semantic, seed_map, mask=foreground)
-
     # Choose appropiate dtype
-    max_value = np.max(segm)
+    max_value = np.max(seed_map)
     if max_value < 255:
-        segm = segm.astype(np.uint8)
+        appropiate_dtype = np.uint8 
     elif max_value < 65535:
-        segm = segm.astype(np.uint16)
+        appropiate_dtype = np.uint16
     else:
-        segm = segm.astype(np.uint32)
-
+        appropiate_dtype = np.uint32
+        
+    if watershed_by_2d_slices:
+        print("Doing watershed by 2D slices")
+        segm = np.zeros(seed_map.shape, dtype=appropiate_dtype)
+        for z in tqdm(range(len(segm))):
+            segm[z] = watershed(-semantic[z], seed_map[z], mask=foreground[z])
+    else:
+        segm = watershed(-semantic, seed_map, mask=foreground)
+        segm = segm.astype(appropiate_dtype)
+    
     if save_dir is not None:
         save_tif(np.expand_dims(np.expand_dims(seed_map,-1),0).astype(segm.dtype), save_dir, ["seed_map.tif"], verbose=False)
         save_tif(np.expand_dims(np.expand_dims(semantic,-1),0).astype(np.float32), save_dir, ["semantic.tif"], verbose=False)

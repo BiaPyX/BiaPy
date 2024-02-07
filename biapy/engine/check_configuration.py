@@ -242,6 +242,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         if cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE == 'dense' and cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BCM":
             raise ValueError("'PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE' can not be 'dense' when 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS' is 'BCM'"
                 " as it does not have sense")
+        if cfg.PROBLEM.INSTANCE_SEG.WATERSHED_BY_2D_SLICES:
+            if cfg.PROBLEM.NDIM == "2D" and not cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
+                raise ValueError("'PROBLEM.INSTANCE_SEG.WATERSHED_BY_2D_SLICE' can only be activated when 'PROBLEM.NDIM' == 3D or "
+                    "in 2D when 'TEST.ANALIZE_2D_IMGS_AS_3D_STACK' is enabled")
         if cfg.MODEL.N_CLASSES > 2:
             raise ValueError("'MODEL.N_CLASSES' greater than 2 is not allowed in Instance Segmentation workflow")
         if cfg.MODEL.SOURCE == "torchvision":

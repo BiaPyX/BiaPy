@@ -104,7 +104,10 @@ class Config:
         _C.PROBLEM.INSTANCE_SEG.FORE_DILATION_RADIUS = 5
         # Whether to save watershed check files
         _C.PROBLEM.INSTANCE_SEG.DATA_CHECK_MW = False
-        
+        # Whether to apply or not the watershed to create instances slice by slice in a 3D problem. This can solve instances invading 
+        # others if the objects in Z axis overlap too much. 
+        _C.PROBLEM.INSTANCE_SEG.WATERSHED_BY_2D_SLICES = False
+
         ### DETECTION
         _C.PROBLEM.DETECTION = CN()
         # Size of the disk that will be used to dilate the central point created from the CSV file. 0 to not dilate and only create a 3x3 square.
