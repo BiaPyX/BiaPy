@@ -453,7 +453,7 @@ class Base_Workflow(metaclass=ABCMeta):
         Prepare looging tool.
         """
         print("#######################")
-        print("# Prepare loggin tool #")
+        print("# Prepare logging tool #")
         print("#######################")
         # To start the logging
         now = datetime.datetime.now()

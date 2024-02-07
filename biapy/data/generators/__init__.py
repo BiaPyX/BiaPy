@@ -210,7 +210,7 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
         val_generator = f_name(**dic)
 
     # Generate examples of data augmentation
-    if cfg.AUGMENTOR.AUG_SAMPLES:
+    if cfg.AUGMENTOR.AUG_SAMPLES and cfg.AUGMENTOR.ENABLE:
         print("Creating generator samples . . .")
         train_generator.get_transformed_samples(
             cfg.AUGMENTOR.AUG_NUM_SAMPLES, save_to_dir=True, train=False, out_dir=cfg.PATHS.DA_SAMPLES,
