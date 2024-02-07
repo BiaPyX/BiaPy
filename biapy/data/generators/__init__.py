@@ -221,6 +221,7 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
     total_batch_size = cfg.TRAIN.BATCH_SIZE * world_size * cfg.TRAIN.ACCUM_ITER
     training_samples = len(train_generator)
     num_workers = min(num_workers, training_samples)
+    print(f"Number of workers: {num_workers}")
     num_training_steps_per_epoch = training_samples // total_batch_size
     print("Accumulate grad iterations: %d" % cfg.TRAIN.ACCUM_ITER)
     print("Effective batch size: %d" % total_batch_size)

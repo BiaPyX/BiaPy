@@ -129,7 +129,7 @@ class Self_supervised_Workflow(Base_Workflow):
             Resulting targets. 
         """
         # Swap with original images so we can calculate PSNR metric afterwards
-        return batch
+        return batch.to(self.device)
 
     def process_sample(self, norm): 
         """
