@@ -182,7 +182,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             else:
                 return train_iou
 
-    def instance_seg_process(self, pred, filenames, out_dir, out_dir_post_proc):
+    def instance_seg_process(self, pred, filenames, out_dir, out_dir_post_proc, resolution):
         """
         Instance segmentation workflow engine for test/inference. Process model's prediction to prepare 
         instance segmentation output and calculate metrics. 
@@ -215,7 +215,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 seed_morph_sequence=self.cfg.PROBLEM.INSTANCE_SEG.SEED_MORPH_SEQUENCE, seed_morph_radius=self.cfg.PROBLEM.INSTANCE_SEG.SEED_MORPH_RADIUS, 
                 erode_and_dilate_foreground=self.cfg.PROBLEM.INSTANCE_SEG.ERODE_AND_DILATE_FOREGROUND, fore_erosion_radius=self.cfg.PROBLEM.INSTANCE_SEG.FORE_EROSION_RADIUS, 
                 fore_dilation_radius=self.cfg.PROBLEM.INSTANCE_SEG.FORE_DILATION_RADIUS, rmv_close_points=self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS, 
-                remove_close_points_radius=self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS[0], resolution=self.cfg.DATA.TEST.RESOLUTION, save_dir=check_wa)
+                remove_close_points_radius=self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS[0], resolution=resolution, save_dir=check_wa)
 
             save_tif(np.expand_dims(np.expand_dims(w_pred,-1),0), out_dir, filenames, verbose=self.cfg.TEST.VERBOSE)
 
@@ -312,7 +312,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
         if self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.ENABLE or \
             self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.ENABLE:
-            w_pred, d_result = measure_morphological_props_and_filter(w_pred.squeeze(), self.cfg.DATA.TEST.RESOLUTION, 
+            w_pred, d_result = measure_morphological_props_and_filter(w_pred.squeeze(), resolution, 
                 filter_instances=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.ENABLE,
                 properties=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS, 
                 prop_values=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.VALUES,
@@ -447,8 +447,9 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             Model prediction.
         """
         if not self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
+            resolution = self.cfg.DATA.TEST.RESOLUTION if len(self.cfg.DATA.TEST.RESOLUTION) == 2 else self.cfg.DATA.TEST.RESOLUTION[1:]
             r, r_post = self.instance_seg_process(pred, self.processing_filenames, self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
-                self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING)        
+                self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING, resolution)        
             if r is not None:
                 self.all_matching_stats_merge_patches.append(r)
             if r_post is not None:
@@ -476,13 +477,14 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         pred : Torch Tensor
             Model prediction.
         """
-        filename, file_extension = os.path.splitext(self.processing_filenames[0])
-        r, r_post = self.instance_seg_process(pred, [filename+"_full_image"+file_extension], self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_INSTANCES,
-            self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_POST_PROCESSING)  
-        if r is not None:
-            self.all_matching_stats.append(r)
-        if r_post is not None:
-            self.all_matching_stats_post.append(r_post)
+        if not self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
+            resolution = self.cfg.DATA.TEST.RESOLUTION if len(self.cfg.DATA.TEST.RESOLUTION) == 2 else self.cfg.DATA.TEST.RESOLUTION[1:]
+            r, r_post = self.instance_seg_process(pred, self.processing_filenames, self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_INSTANCES,
+                self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_POST_PROCESSING, resolution)  
+            if r is not None:
+                self.all_matching_stats.append(r)
+            if r_post is not None:
+                self.all_matching_stats_post.append(r_post)
 
     def after_all_images(self):
         """
@@ -493,8 +495,9 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             print("Analysing all images as a 3D stack . . .")    
             if type(self.all_pred) is list:
                 self.all_pred = np.concatenate(self.all_pred)
+            resolution = self.cfg.DATA.TEST.RESOLUTION if len(self.cfg.DATA.TEST.RESOLUTION) == 3 else (self.cfg.DATA.TEST.RESOLUTION[0],)+self.cfg.DATA.TEST.RESOLUTION
             r, r_post = self.instance_seg_process(self.all_pred, ["3D_stack.tif"], self.cfg.PATHS.RESULT_DIR.AS_3D_STACK,
-                self.cfg.PATHS.RESULT_DIR.AS_3D_STACK_POST_PROCESSING)
+                self.cfg.PATHS.RESULT_DIR.AS_3D_STACK_POST_PROCESSING, resolution)
             if r is not None:
                 self.all_matching_stats_as_3D_stack.append(r)
             if r_post is not None:

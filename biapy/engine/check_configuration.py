@@ -452,12 +452,20 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         raise ValueError("'DATA.TEST.USE_VAL_AS_TEST' can only be used when 'DATA.VAL.CROSS_VAL' is selected")
     if cfg.DATA.TEST.USE_VAL_AS_TEST and not cfg.TRAIN.ENABLE and cfg.DATA.TEST.IN_MEMORY:
         print("WARNING: 'DATA.TEST.IN_MEMORY' is disabled when 'DATA.TEST.USE_VAL_AS_TEST' is enabled")
-    if len(cfg.DATA.TRAIN.RESOLUTION) != dim_count:
-        raise ValueError("Train resolution needs to be a tuple with {} values".format(dim_count))
-    if len(cfg.DATA.VAL.RESOLUTION) != dim_count:
-        raise ValueError("Validation resolution needs to be a tuple with {} values".format(dim_count))
-    if len(cfg.DATA.TEST.RESOLUTION) != dim_count:
-        raise ValueError("Test resolution needs to be a tuple with {} values".format(dim_count))
+    if len(cfg.DATA.TRAIN.RESOLUTION) != 1 and len(cfg.DATA.TRAIN.RESOLUTION) != dim_count:
+        raise ValueError("When PROBLEM.NDIM == {} DATA.TRAIN.RESOLUTION tuple must be length {}, given {}."
+                         .format(cfg.PROBLEM.NDIM, dim_count, cfg.DATA.TRAIN.RESOLUTION))
+    if len(cfg.DATA.VAL.RESOLUTION) != 1 and len(cfg.DATA.VAL.RESOLUTION) != dim_count:
+        raise ValueError("When PROBLEM.NDIM == {} DATA.VAL.RESOLUTION tuple must be length {}, given {}."
+                         .format(cfg.PROBLEM.NDIM, dim_count, cfg.DATA.VAL.RESOLUTION))
+    if cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK and cfg.PROBLEM.TYPE == "INSTANCE_SEG":
+        if len(cfg.DATA.TEST.RESOLUTION) != 2 and len(cfg.DATA.TEST.RESOLUTION) != 3:
+            raise ValueError("'DATA.TEST.RESOLUTION' needs to be a tuple with 2 or 3 values (both valid because "
+                "'TEST.ANALIZE_2D_IMGS_AS_3D_STACK' is activated in this case)".format(dim_count))
+    else:
+        if len(cfg.DATA.TEST.RESOLUTION) != 1 and len(cfg.DATA.TEST.RESOLUTION) != dim_count:
+            raise ValueError("When PROBLEM.NDIM == {} DATA.TEST.RESOLUTION tuple must be length {}, given {}."
+                             .format(cfg.PROBLEM.NDIM, dim_count, cfg.DATA.TEST.RESOLUTION))    
 
     if len(cfg.DATA.TRAIN.OVERLAP) != dim_count:
         raise ValueError("When PROBLEM.NDIM == {} DATA.TRAIN.OVERLAP tuple must be length {}, given {}."
@@ -486,15 +494,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     if len(cfg.DATA.PATCH_SIZE) != dim_count+1:
         raise ValueError("When PROBLEM.NDIM == {} DATA.PATCH_SIZE tuple must be length {}, given {}."
                          .format(cfg.PROBLEM.NDIM, dim_count+1, cfg.DATA.PATCH_SIZE))
-    if len(cfg.DATA.TRAIN.RESOLUTION) != 1 and len(cfg.DATA.TRAIN.RESOLUTION) != dim_count:
-        raise ValueError("When PROBLEM.NDIM == {} DATA.TRAIN.RESOLUTION tuple must be length {}, given {}."
-                         .format(cfg.PROBLEM.NDIM, dim_count, cfg.DATA.TRAIN.RESOLUTION))
-    if len(cfg.DATA.VAL.RESOLUTION) != 1 and len(cfg.DATA.VAL.RESOLUTION) != dim_count:
-        raise ValueError("When PROBLEM.NDIM == {} DATA.VAL.RESOLUTION tuple must be length {}, given {}."
-                         .format(cfg.PROBLEM.NDIM, dim_count, cfg.DATA.VAL.RESOLUTION))
-    if len(cfg.DATA.TEST.RESOLUTION) != 1 and len(cfg.DATA.TEST.RESOLUTION) != dim_count:
-        raise ValueError("When PROBLEM.NDIM == {} DATA.TEST.RESOLUTION tuple must be length {}, given {}."
-                         .format(cfg.PROBLEM.NDIM, dim_count, cfg.DATA.TEST.RESOLUTION))
     assert cfg.DATA.NORMALIZATION.TYPE in ['div', 'custom'], "DATA.NORMALIZATION.TYPE not in ['div', 'custom']"
     if cfg.DATA.NORMALIZATION.TYPE == 'custom':
         if cfg.DATA.NORMALIZATION.CUSTOM_MEAN == -1 and cfg.DATA.NORMALIZATION.CUSTOM_STD == -1:
