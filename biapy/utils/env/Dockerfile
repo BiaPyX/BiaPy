@@ -33,8 +33,12 @@ SHELL ["conda", "run", "-n", "BiaPy_env", "/bin/bash", "-c"]
 # Install BiaPy
 RUN pip install biapy
 
+# Install Pytorch 2.2.0 + CUDA 11.8
+RUN pip install torch==2.2.0 torchvision==0.17.0 torchaudio==2.2.0 --index-url https://download.pytorch.org/whl/cu118
+RUN pip install timm torchmetrics
+
 # Clone BiaPy, as running it with python -c "" stops the container with no error after a few seconds running 
-RUN git clone --depth 1 https://github.com/BiaPyX/BiaPy.git  --branch v3.3.3 /installations/BiaPy
+RUN git clone --depth 1 https://github.com/BiaPyX/BiaPy.git  --branch v3.3.4 /installations/BiaPy
 
 ENTRYPOINT ["conda", "run", "--no-capture-output", "-n", "BiaPy_env", "python3", "-u", "/installations/BiaPy/main.py"]
 # ENTRYPOINT ["conda", "run", "--no-capture-output", "-n", "BiaPy_env", "python3", "-u", "-c", "from biapy import BiaPy; BiaPy(..)"]
