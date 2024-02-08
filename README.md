@@ -4,9 +4,9 @@
 
 <p align="left">
     <a href="https://www.python.org/">
-      <img src="https://img.shields.io/badge/Python-3.8-yellow.svg" /></a>
+      <img src="https://img.shields.io/badge/Python-3.10-yellow.svg" /></a>
     <a href= "https://pytorch.org/">
-      <img src="https://img.shields.io/badge/PyTorch-2.1-orange.svg" /></a>
+      <img src="https://img.shields.io/badge/PyTorch-2.2-orange.svg" /></a>
     <a href= "https://pypi.org/project/biapy/">
       <img src="https://img.shields.io/pypi/v/biapy.svg?color=green" /></a>
     <a href= "https://github.com/BiaPyX/BiaPy/blob/master/LICENSE">

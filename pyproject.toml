@@ -1,104 +1,40 @@
-[tool.poetry]
-name = "biapy"
-version = "3.3.4"
-description = "BiaPy: Bioimage analysis pipelines in Python"
-authors = ["Daniel Franco-Barranco <daniel.franco@dipc.org>"]
-readme = "README.md"
-license = "LICENSE.md"
-
-[tool.poetry.dependencies]
-python = "^3.10"
-torch = { version = "2.2.0", source="torch"}
-torchaudio = { version = "2.2.0", source="torch"}
-torchvision = { version = "0.17.0", source="torch"}
-asciitree = "0.3.3"
-bioimageio-core = "0.5.9"
-bioimageio-spec = "0.4.9.post5"
-certifi = "2022.12.7"
-charset-normalizer = "2.1.1"
-click = "8.1.7"
-contourpy = "1.2.0"
-cycler = "0.12.1"
-edt = "2.3.2"
-fasteners = "0.19"
-fastremap = "1.14.1"
-filelock = "3.9.0"
-fill-voids = "2.0.6"
-fonttools = "4.48.1"
-fsspec = "2024.2.0"
-h5py = "3.10.0"
-huggingface-hub = "0.20.3"
-idna = "3.4"
-imagecodecs = "2024.1.1"
-imageio = "2.33.1"
-imgaug = "0.4.0"
-jinja2 = "3.1.2"
-joblib = "1.3.2"
-kiwisolver = "1.4.5"
-lazy-loader = "0.3"
-lightning-utilities = "0.10.1"
-markupsafe = "2.1.3"
-marshmallow = "3.20.2"
-marshmallow-jsonschema = "0.13.0"
-marshmallow-union = "0.1.15.post1"
-matplotlib = "3.8.2"
-mpmath = "1.3.0"
-networkx = "3.2.1"
-numcodecs = "0.12.1"
-numpy = "1.26.3"
-nvidia-cublas-cu11 = "11.11.3.6"
-nvidia-cuda-cupti-cu11 = "11.8.87"
-nvidia-cuda-nvrtc-cu11 = "11.8.89"
-nvidia-cuda-runtime-cu11 = "11.8.89"
-nvidia-cudnn-cu11 = "8.7.0.84"
-nvidia-cufft-cu11 = "10.9.0.58"
-nvidia-curand-cu11 = "10.3.0.86"
-nvidia-cusolver-cu11 = "11.4.1.48"
-nvidia-cusparse-cu11 = "11.7.5.86"
-nvidia-nccl-cu11 = "2.19.3"
-nvidia-nvtx-cu11 = "11.8.86"
-opencv-python = "4.9.0.80"
-packaging = "23.2"
-pandas = "2.2.0"
-pillow = "10.2.0"
-protobuf = "4.25.2"
-pydot = "2.0.0"
-pyparsing = "3.1.1"
-python-dateutil = "2.8.2"
-pytz = "2024.1"
-pyyaml = "6.0.1"
-requests = "2.28.1"
-ruamel-yaml = "0.18.6"
-ruamel-yaml-clib = "0.2.8"
-safetensors = "0.4.2"
-scikit-image = "0.22.0"
-scikit-learn = "1.4.0"
-scipy = "1.12.0"
-shapely = "2.0.2"
-six = "1.16.0"
-sympy = "1.12"
-tensorboardx = "2.6.2.2"
-threadpoolctl = "3.2.0"
-tifffile = "2024.1.30"
-timm = "0.9.12"
-torchinfo = "1.8.0"
-torchmetrics = "1.3.0.post0"
-tqdm = "4.66.1"
-triton = "2.2.0"
-typer = "0.9.0"
-typing-extensions = "4.8.0"
-tzdata = "2023.4"
-urllib3 = "1.26.13"
-xarray = "2024.1.1"
-yacs = "0.1.8"
-zarr = "2.16.1"
-
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["setuptools>=45", "wheel", "setuptools_scm>=6.2", "numpy>=1.24.3"]
+build-backend = "setuptools.build_meta"
 
+[project]
+name = "biapy"
+version = "3.3.4.2"
+description = "BiaPy: Bioimage analysis pipelines in Python"
+readme = "README.md"
+authors = [{ name = "Daniel Franco-Barranco", email = "daniel.franco@dipc.org" }]
+license = { file = "LICENSE" }
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Environment :: GPU :: NVIDIA CUDA :: 11.8",
+    "Programming Language :: Python :: 3.10",
+]
+keywords = ["feed", "reader", "tutorial"]
+dependencies = [
+    "imgaug>=0.4.0",
+    "matplotlib>=3.7.1",
+    "scikit-learn>=1.4.0",
+    "pydot>=1.4.2",
+    "yacs>=0.1.8",
+    "tqdm>=4.66.1",
+    "scikit-image>=0.22.0",
+    "edt>=2.3.2",
+    "fill-voids>=2.0.6",
+    "opencv-python>=4.8.0.76",
+    "pandas>=1.5.3",
+    "torchinfo>=1.8.0",
+    "tensorboardX>=2.6.2.2",
+    "h5py>=3.9.0",
+    "zarr>=2.16.1",
+    "bioimageio.core==0.5.9",
+    "imagecodecs>=2024.1.1",
+]
+requires-python = ">=3.10"
 
-[[tool.poetry.source]]
-name = "torch"
-url = "https://download.pytorch.org/whl/cu118"
-secondary = true
+[project.urls]
+Homepage = "https://github.com/BiaPyX/BiaPy"
