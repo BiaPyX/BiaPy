@@ -13,6 +13,8 @@
       <img src="https://img.shields.io/badge/License-MIT-blue.svg" /></a>
     <a href= "https://biapy.readthedocs.io/en/latest/">
       <img src="https://img.shields.io/badge/Doc-Latest-2BAF2B.svg" /></a>
+    <a href= "https://www.biorxiv.org/content/10.1101/2024.02.03.576026v1">
+      <img src="https://img.shields.io/badge/bioRxiv-Paper-bd2635.svg" /></a>
     <a href= "https://ieeexplore.ieee.org/abstract/document/10230593">
       <img src="https://img.shields.io/badge/IEEE-Paper-00629B.svg" /></a>
 </p>
