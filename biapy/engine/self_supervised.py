@@ -58,7 +58,7 @@ class Self_supervised_Workflow(Base_Workflow):
         """
         Definition of self.metrics, self.metric_names and self.loss variables.
         """
-        self.metrics = [PeakSignalNoiseRatio()]
+        self.metrics = [PeakSignalNoiseRatio().to(self.device)]
         self.metric_names = ["PSNR"]
         if self.cfg.MODEL.ARCHITECTURE == 'mae':
             print("Overriding 'LOSS.TYPE' to set it to MSE loss (masking patches)")
@@ -98,10 +98,9 @@ class Self_supervised_Workflow(Base_Workflow):
         # Calculate PSNR
         if self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == 'masking':
             _, pred, _ = output
-            pred = self.model_without_ddp.unpatchify(pred).to(torch.float32).detach().cpu()
+            pred = self.model_without_ddp.unpatchify(pred)
         else:
-            pred = output.to(torch.float32).detach().cpu()
-        targets = targets.to(torch.float32).detach().cpu()
+            pred = output
         with torch.no_grad():
             train_psnr = self.metrics[0](pred, targets)
             train_psnr = train_psnr.item() if not torch.isnan(train_psnr) else 0
