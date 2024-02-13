@@ -18,8 +18,9 @@ class Config:
         # System
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         _C.SYSTEM = CN()
-        # Number of CPUs to use
-        _C.SYSTEM.NUM_CPUS = 10
+        # Maximum number of workers to load data in parallel. Set it to "-1" to set any limit. Normally a few cores 
+        # will be used in this last case, as the biggest calculations will be on the GPU.
+        _C.SYSTEM.NUM_WORKERS = -1
         # Do not set it as its value will be calculated based in --gpu input arg
         _C.SYSTEM.NUM_GPUS = 0
 

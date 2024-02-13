@@ -216,7 +216,7 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
             cfg.AUGMENTOR.AUG_NUM_SAMPLES, save_to_dir=True, train=False, out_dir=cfg.PATHS.DA_SAMPLES,
             draw_grid=cfg.AUGMENTOR.DRAW_GRID)
 
-    num_workers = max(cfg.SYSTEM.NUM_CPUS // cfg.SYSTEM.NUM_GPUS, 1) if dist else cfg.SYSTEM.NUM_CPUS
+    num_workers = max(cfg.SYSTEM.NUM_WORKERS // cfg.SYSTEM.NUM_GPUS, 1) if dist else cfg.SYSTEM.NUM_WORKERS
     # Training dataset
     total_batch_size = cfg.TRAIN.BATCH_SIZE * world_size * cfg.TRAIN.ACCUM_ITER
     training_samples = len(train_generator)
