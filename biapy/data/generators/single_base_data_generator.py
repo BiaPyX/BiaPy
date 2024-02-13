@@ -11,7 +11,7 @@ from skimage.io import imsave, imread
 from imgaug import augmenters as iaa
 
 from biapy.data.pre_processing import normalize, norm_range01
-from biapy.data.generators.augmentors import random_crop_single, random_3D_crop_single, resize_img
+from biapy.data.generators.augmentors import random_crop_single, random_3D_crop_single, resize_img, rotation
 
 class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
     """
@@ -287,14 +287,17 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.da = da
         self.da_prob = da_prob
         self.val = val
+        
+        self.rand_rot = rand_rot
+        self.rnd_rot_range = rnd_rot_range
+        self.rotation90 = rotation90
+        self.affine_mode = affine_mode
 
         self.da_options = []
         self.trans_made = ''
         if rotation90:
-            self.da_options.append(iaa.Sometimes(da_prob, iaa.Rot90((1, 3))))
             self.trans_made += '_rot[90,180,270]'
         if rand_rot:
-            self.da_options.append(iaa.Sometimes(da_prob, iaa.Affine(rotate=rnd_rot_range, mode=affine_mode)))
             self.trans_made += '_rrot'+str(rnd_rot_range)
         if shear:
             self.da_options.append(iaa.Sometimes(da_prob, iaa.Affine(rotate=shear_range, mode=affine_mode)))
@@ -466,6 +469,14 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         """
         # Save shape
         o_img_shape = image.shape
+
+        # Apply random rotations
+        if self.rand_rot and random.uniform(0, 1) < self.da_prob:
+            image = rotation(image, angles=self.rnd_rot_range, mode=self.affine_mode)
+
+        # Apply square rotations
+        if self.rotation90 and random.uniform(0, 1) < self.da_prob:
+            image = rotation(image, angles=[90, 180, 270], mode=self.affine_mode)
 
         # Reshape 3D volumes to 2D image type with multiple channels to pass through imgaug lib
         if self.ndim == 3:

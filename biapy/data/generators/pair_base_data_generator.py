@@ -624,6 +624,10 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.salt_and_pepper = salt_and_pepper
         self.salt_pep_amount = salt_pep_amount
         self.salt_pep_proportion = salt_pep_proportion
+        self.rand_rot = rand_rot
+        self.rnd_rot_range = rnd_rot_range
+        self.rotation90 = rotation90
+        self.affine_mode = affine_mode
 
         # Instance segmentation options
         self.instance_problem = instance_problem
@@ -664,10 +668,8 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.da_options = []
         self.trans_made = ''
         if rotation90:
-            self.da_options.append(iaa.Sometimes(da_prob, iaa.Rot90((1, 3))))
             self.trans_made += '_rot[90,180,270]'
         if rand_rot:
-            self.da_options.append(iaa.Sometimes(da_prob, iaa.Affine(rotate=rnd_rot_range, mode=affine_mode)))
             self.trans_made += '_rrot'+str(rnd_rot_range)
         if shear:
             self.da_options.append(iaa.Sometimes(da_prob, iaa.Affine(rotate=shear_range, mode=affine_mode)))
@@ -988,6 +990,14 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         # Apply channel shuffle
         if self.channel_shuffle and random.uniform(0, 1) < self.da_prob:
             image = shuffle_channels(image)
+
+        # Apply random rotations
+        if self.rand_rot and random.uniform(0, 1) < self.da_prob:
+            image, mask = rotation(image, mask, angles=self.rnd_rot_range, mode=self.affine_mode)
+
+        # Apply square rotations
+        if self.rotation90 and random.uniform(0, 1) < self.da_prob:
+            image, mask = rotation(image, mask, angles=[90, 180, 270], mode=self.affine_mode)
 
         # Reshape 3D volumes to 2D image type with multiple channels to pass through imgaug lib
         if self.ndim == 3:

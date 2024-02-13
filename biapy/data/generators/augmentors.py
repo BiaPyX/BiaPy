@@ -3,7 +3,7 @@ import random
 import math
 import numpy as np
 from PIL import Image
-from skimage.transform import resize
+from skimage.transform import resize, rotate
 from skimage.draw import line
 from scipy.ndimage.measurements import label
 from scipy.ndimage.morphology import binary_dilation
@@ -1498,3 +1498,47 @@ def resize_img(img, shape):
     """
 
     return resize(img, shape, order=1, mode='reflect', clip=True, preserve_range=True, anti_aliasing=True) 
+
+
+def rotation(img, mask=None, angles=[], mode="reflect"):
+    """
+    Apply a rotation to input ``image`` and ``mask`` (if provided). 
+
+    Parameters
+    ----------
+    img : 3D/4D Numpy array
+        Image to rotate. E.g. ``(y, x, channels)`` for ``2D`` or  ``(z, y, x, channels)`` for ``3D``.
+
+    mask : 3D/4D Numpy array, optional
+        Mask to rotate. E.g. ``(y, x, channels)`` for ``2D`` or  ``(z, y, x, channels)`` for ``3D``.
+
+    angles : List of ints, optional
+        List of angles to choose the rotation to be made. E.g. [90,180,360].
+
+    mode : str, optional
+        How to fill up the new values created. Options: ``constant``, ``edge``, ``symmetric``, 
+        ``reflect`` and ``wrap``.
+
+    Returns
+    -------
+    img : 3D/4D Numpy array
+        Rotated image. E.g. ``(y, x, channels)`` for ``2D`` or  ``(z, y, x, channels)`` for ``3D``.
+
+    mask : 3D/4D Numpy array, optional
+        Rotated mask. E.g. ``(y, x, channels)`` for ``2D`` or  ``(z, y, x, channels)`` for ``3D``.
+    """
+
+    if len(angles) == 0:
+        angle = np.random.randint(0, 360)
+    elif isinstance(angles, tuple):
+        assert len(angles) == 2, "If a tuple is provided it must have length of 2"
+        angle = np.random.randint(angles[0], angles[1])
+    elif isinstance(angles, list):
+        angle = angles[np.random.randint(0, len(angles)-1)]
+    else:
+        raise ValueError("Not a list/tuple provided in 'angles'")
+
+    if mask is None:
+        return rotate(img, angle, mode=mode)
+    else:
+        return rotate(img, angle, mode=mode), rotate(mask.astype(np.float32), angle, order=0, mode=mode)
