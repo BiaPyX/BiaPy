@@ -85,8 +85,7 @@ class SE_U_Net(nn.Module):
         # Super-resolution
         self.pre_upsampling = None
         if upsampling_factor > 1 and upsampling_position == "pre":
-            mpool = (1, 2, 2) if self.ndim == 3 else (2, 2)
-            self.pre_upsampling = convtranspose(image_shape[-1], image_shape[-1], kernel_size=mpool, stride=mpool)
+            self.pre_upsampling = convtranspose(image_shape[-1], image_shape[-1], kernel_size=upsampling_factor, stride=upsampling_factor)
 
         # ENCODER
         self.down_path = nn.ModuleList()
@@ -117,8 +116,7 @@ class SE_U_Net(nn.Module):
         # Super-resolution
         self.post_upsampling = None
         if upsampling_factor > 1 and upsampling_position == "post":
-            mpool = (1, 2, 2) if self.ndim == 3 else (2, 2)
-            self.post_upsampling = convtranspose(feature_maps[0], self.n_classes, kernel_size=mpool, stride=mpool)
+            self.post_upsampling = convtranspose(feature_maps[0], self.n_classes, kernel_size=upsampling_factor, stride=upsampling_factor)
 
         # Instance segmentation
         if output_channels is not None:

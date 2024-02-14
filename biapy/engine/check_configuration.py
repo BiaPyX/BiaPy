@@ -538,13 +538,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
         # Adjust Z_DOWN values to feature maps
         if all(x == 0 for x in cfg.MODEL.Z_DOWN):
-            if cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION' and cfg.PROBLEM.NDIM == '3D':
-                opts.extend(['MODEL.Z_DOWN', (1,)*(len(cfg.MODEL.FEATURE_MAPS)-1)])
-            else:
-                opts.extend(['MODEL.Z_DOWN', (2,)*(len(cfg.MODEL.FEATURE_MAPS)-1)])
-        elif (cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION' and cfg.PROBLEM.NDIM == '3D') and \
-            any(x != 1 for x in cfg.MODEL.Z_DOWN):
-            raise ValueError("'MODEL.Z_DOWN' != 1 not allowed in super-resolution workflow")
+            opts.extend(['MODEL.Z_DOWN', (2,)*(len(cfg.MODEL.FEATURE_MAPS)-1)])
         elif any([False for x in cfg.MODEL.Z_DOWN if x != 1 and x != 2]):
             raise ValueError("'MODEL.Z_DOWN' needs to be 1 or 2")
         else:
@@ -601,7 +595,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         # will throw an error not very clear for users
         if model_arch in ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'multiresunet']:
             for i in range(len(cfg.MODEL.FEATURE_MAPS)-1):
-                if cfg.MODEL.Z_DOWN[i] == 1 or (cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION' and cfg.PROBLEM.NDIM == '3D'):
+                if cfg.MODEL.Z_DOWN[i] == 1:
                     sizes = cfg.DATA.PATCH_SIZE[1:-1] 
                 else:
                     sizes = cfg.DATA.PATCH_SIZE[:-1]

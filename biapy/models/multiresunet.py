@@ -214,8 +214,7 @@ class MultiResUnet(torch.nn.Module):
         # Super-resolution   
         self.pre_upsampling = None
         if upsampling_factor > 1 and upsampling_position == "pre":
-            mpool = (1, 2, 2) if self.ndim == 3 else (2, 2)
-            self.pre_upsampling = convtranspose(input_channels, input_channels, kernel_size=mpool, stride=mpool)
+            self.pre_upsampling = convtranspose(input_channels, input_channels, kernel_size=upsampling_factor, stride=upsampling_factor)
 
         # Encoder Path
         self.multiresblock1 = Multiresblock(conv, batchnorm_layer, input_channels,32)
@@ -273,8 +272,7 @@ class MultiResUnet(torch.nn.Module):
         # Super-resolution
         self.post_upsampling = None
         if upsampling_factor > 1 and upsampling_position == "post":
-            mpool = (1, 2, 2) if self.ndim == 3 else (2, 2)
-            self.post_upsampling = convtranspose(self.in_filters9, self.n_classes, kernel_size=mpool, stride=mpool)
+            self.post_upsampling = convtranspose(self.in_filters9, self.n_classes, kernel_size=upsampling_factor, stride=upsampling_factor)
 
         # Instance segmentation
         if output_channels is not None:
