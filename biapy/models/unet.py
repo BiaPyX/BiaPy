@@ -77,12 +77,12 @@ class U_Net(nn.Module):
             conv = nn.Conv3d
             convtranspose = nn.ConvTranspose3d
             batchnorm_layer = nn.BatchNorm3d if batch_norm else None
-            self.pooling = nn.MaxPool3d
+            pooling = nn.MaxPool3d
         else:
             conv = nn.Conv2d
             convtranspose = nn.ConvTranspose2d
             batchnorm_layer = nn.BatchNorm2d if batch_norm else None
-            self.pooling = nn.MaxPool2d
+            pooling = nn.MaxPool2d
             
         # Super-resolution
         self.pre_upsampling = None
@@ -92,12 +92,15 @@ class U_Net(nn.Module):
 
         # ENCODER
         self.down_path = nn.ModuleList()
+        self.mpooling_layers = nn.ModuleList()
         in_channels = image_shape[-1]
         for i in range(self.depth):
             self.down_path.append( 
                 DoubleConvBlock(conv, in_channels, feature_maps[i], k_size, activation, batchnorm_layer,
                     drop_values[i])
             )
+            mpool = (z_down[i], 2, 2) if self.ndim == 3 else (2, 2)
+            self.mpooling_layers.append(pooling(mpool))
             in_channels = feature_maps[i]
 
         self.bottleneck = DoubleConvBlock(conv, in_channels, feature_maps[-1], k_size, activation, batchnorm_layer,
@@ -142,12 +145,12 @@ class U_Net(nn.Module):
 
         # Down
         blocks = []
-        for i, down in enumerate(self.down_path):
+        for i, layers in enumerate(zip(self.down_path,self.mpooling_layers)):
+            down, pool = layers
             x = down(x)
             if i != len(self.down_path):
                 blocks.append(x)
-                mpool = (self.z_down[i], 2, 2) if self.ndim == 3 else (2, 2)
-                x = self.pooling(mpool)(x) 
+                x = pool(x) 
 
         x = self.bottleneck(x) 
 

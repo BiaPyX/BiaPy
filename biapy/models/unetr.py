@@ -195,12 +195,13 @@ class UNETR(nn.Module):
         # CNN Decoder 
         x = self.bottleneck(self.proj_feat(x[:, 1:, :]))
 
-        for i in range(self.total_upscale_factor-1):
+        for i, layers in enumerate(zip(self.mid_blue_block,self.two_yellow_layers,self.up_green_layers)):
+            blue, yellow, green = layers
             z = self.proj_feat(skip_connections[i])
-            z = self.mid_blue_block[i](z)
+            z = blue(z)
             x = torch.cat([x, z], dim=1)
-            x = self.two_yellow_layers[i](x)
-            x = self.up_green_layers[i](x)
+            x = yellow(x)
+            x = green(x)
             
         # first skip connection (out of transformer)
         first_skip = self.two_yellow_layers[-2](input)

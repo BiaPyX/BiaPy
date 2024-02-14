@@ -10,7 +10,7 @@ def fftshift2d(img, size_psc=128):
     fs12 = img[:,:, h//2:, :w//2]
     fs21 = img[:,:, :h//2, w//2:]
     fs22 = img[:,:, :h//2, :w//2]
-    output = torch.cat([torch.cat([fs11, fs21], axis=2), torch.cat([fs12, fs22], axis=2)], axis=3)
+    output = torch.cat([torch.cat([fs11, fs21], dim=2), torch.cat([fs12, fs22], dim=2)], dim=3)
     return output
 
 class RCAB(nn.Module):

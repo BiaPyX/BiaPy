@@ -94,7 +94,7 @@ class Multiresblock(torch.nn.Module):
         b = self.conv_5x5(a)
         c = self.conv_7x7(b)
 
-        x = torch.cat([a,b,c],axis=1)
+        x = torch.cat([a,b,c],dim=1)
         x = self.batch_norm1(x)
 
         x = x + shrtct
@@ -144,16 +144,16 @@ class Respath(torch.nn.Module):
         
     
     def forward(self,x):
-        for i in range(self.respath_length):
+        for short, conv, bn in zip(self.shortcuts,self.convs,self.bns):
 
-            shortcut = self.shortcuts[i](x)
+            shortcut = short(x)
 
-            x = self.convs[i](x)
-            x = self.bns[i](x)
+            x = conv(x)
+            x = bn(x)
             x = torch.nn.functional.relu(x)
 
             x = x + shortcut
-            x = self.bns[i](x)
+            x = bn(x)
             x = torch.nn.functional.relu(x)
 
         return x
@@ -313,16 +313,16 @@ class MultiResUnet(torch.nn.Module):
 
         x_multires5 = self.multiresblock5(x_pool4)
 
-        up6 = torch.cat([self.upsample6(x_multires5),x_multires4],axis=1)
+        up6 = torch.cat([self.upsample6(x_multires5),x_multires4],dim=1)
         x_multires6 = self.multiresblock6(up6)
 
-        up7 = torch.cat([self.upsample7(x_multires6),x_multires3],axis=1)
+        up7 = torch.cat([self.upsample7(x_multires6),x_multires3],dim=1)
         x_multires7 = self.multiresblock7(up7)
 
-        up8 = torch.cat([self.upsample8(x_multires7),x_multires2],axis=1)
+        up8 = torch.cat([self.upsample8(x_multires7),x_multires2],dim=1)
         x_multires8 = self.multiresblock8(up8)
 
-        up9 = torch.cat([self.upsample9(x_multires8),x_multires1],axis=1)
+        up9 = torch.cat([self.upsample9(x_multires8),x_multires1],dim=1)
         x_multires9 = self.multiresblock9(up9)
 
         # Super-resolution
