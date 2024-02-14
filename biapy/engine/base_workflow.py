@@ -1018,6 +1018,8 @@ class Base_Workflow(metaclass=ABCMeta):
 
                         if self.cfg.TEST.VERBOSE:
                             print(f"Filling {k} [{z_vol_info[k][0]}:{z_vol_info[k][1]}]")
+                        if len(self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER) == 4 and 'T' not in self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER:
+                            data_ordered_slices = (slice(None, None, None),)+data_ordered_slices
                         data[data_ordered_slices] = data_part[data_ordered_slices] / data_mask_part[data_ordered_slices]
 
                         if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
