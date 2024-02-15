@@ -1500,7 +1500,7 @@ def resize_img(img, shape):
     return resize(img, shape, order=1, mode='reflect', clip=True, preserve_range=True, anti_aliasing=True) 
 
 
-def rotation(img, mask=None, angles=[], mode="reflect"):
+def rotation(img, mask=None, angles=[], mode="reflect", mask_type='as_mask'):
     """
     Apply a rotation to input ``image`` and ``mask`` (if provided). 
 
@@ -1518,6 +1518,10 @@ def rotation(img, mask=None, angles=[], mode="reflect"):
     mode : str, optional
         How to fill up the new values created. Options: ``constant``, ``edge``, ``symmetric``, 
         ``reflect`` and ``wrap``.
+
+    mask_type : str, optional
+        How ``mask`` is going to be treated. Options: ``as_mask``, ``as_image``. With ``as_mask`` 
+        the interpolation order will be 0 (nearest).
 
     Returns
     -------
@@ -1538,7 +1542,8 @@ def rotation(img, mask=None, angles=[], mode="reflect"):
     else:
         raise ValueError("Not a list/tuple provided in 'angles'")
 
+    mask_order = 0 if mask_type == 'as_mask' else 1
     if mask is None:
         return rotate(img, angle, mode=mode)
     else:
-        return rotate(img, angle, mode=mode), rotate(mask.astype(np.float32), angle, order=0, mode=mode)
+        return rotate(img, angle, mode=mode), rotate(mask.astype(np.float32), angle, order=mask_order, mode=mode)

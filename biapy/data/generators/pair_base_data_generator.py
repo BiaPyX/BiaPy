@@ -356,7 +356,8 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         Std of the data used to normalize.
     
     normalizeY : str, optional
-        Whether Y is going to be normalized or not. 
+        Whether Y is going to be normalized or not. Options: ``as_mask``, ``as_image``. With ``as_image`` the image will be 
+        treated as another image and not as a mask (for normalization and interpolation).
 
     instance_problem : bool, optional
         Advice the class that the workflow is of instance segmentation to divide the labels by channels.
@@ -993,11 +994,11 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         # Apply random rotations
         if self.rand_rot and random.uniform(0, 1) < self.da_prob:
-            image, mask = rotation(image, mask, angles=self.rnd_rot_range, mode=self.affine_mode)
+            image, mask = rotation(image, mask, angles=self.rnd_rot_range, mode=self.affine_mode, mask_type=self.normalizeY)
 
         # Apply square rotations
         if self.rotation90 and random.uniform(0, 1) < self.da_prob:
-            image, mask = rotation(image, mask, angles=[90, 180, 270], mode=self.affine_mode)
+            image, mask = rotation(image, mask, angles=[90, 180, 270], mode=self.affine_mode, mask_type=self.normalizeY)
 
         # Reshape 3D volumes to 2D image type with multiple channels to pass through imgaug lib
         if self.ndim == 3:
