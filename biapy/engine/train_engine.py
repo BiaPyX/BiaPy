@@ -20,8 +20,8 @@ def train_one_epoch(cfg, model, model_call_func, loss_function, activations, met
                         
     for step, (batch, targets) in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
 
-	# Apply warmup cosine decay scheduler if selected
-	# (notice we use a per iteration (instead of per epoch) lr scheduler)
+        # Apply warmup cosine decay scheduler if selected
+        # (notice we use a per iteration (instead of per epoch) lr scheduler)
         if epoch % cfg.TRAIN.ACCUM_ITER == 0 and cfg.TRAIN.LR_SCHEDULER.NAME == 'warmupcosine':
             lr_scheduler.adjust_learning_rate(optimizer, step / len(data_loader) + epoch)
 
