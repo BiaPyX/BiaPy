@@ -165,7 +165,7 @@ class MaskedAutoencoderViT(nn.Module):
             Where ``N`` is the batch size, ``L`` is the multiplication of dimension (i.e. ``Z``, 
             ``H`` and ``W``) and ``C`` are the channels.
         """
-        p = self.patch_embed.patch_size[0]
+        p = self.patch_embed.patch_size
         
         if self.ndim == 2:
             assert imgs.shape[2] == imgs.shape[3] and imgs.shape[2] % p == 0
@@ -198,7 +198,7 @@ class MaskedAutoencoderViT(nn.Module):
             MAE model. in 2D: ``(N, C, H, W)`` in 3D: ``(N, C, Z, H, W)``. Where ``N`` is the batch size, 
             ``C`` are the channels, ``Z`` image depth, ``H`` image height and ``W`` image's width. 
         """
-        p = self.patch_embed.patch_size[0]
+        p = self.patch_embed.patch_size
         if self.ndim == 2:
             h = w = int(x.shape[1]**.5)
             assert h * w == x.shape[1]
@@ -390,7 +390,7 @@ class MaskedAutoencoderViT(nn.Module):
 
             # visualize the mask
             mask = _mask[i].unsqueeze(dim=0).detach()
-            mask = mask.unsqueeze(-1).repeat(1, 1, self.patch_embed.patch_size[0]**self.ndim *self.in_chans)  # (N, H*W, p*p*3)
+            mask = mask.unsqueeze(-1).repeat(1, 1, self.patch_embed.patch_size**self.ndim *self.in_chans)  # (N, H*W, p*p*3)
             mask = self.unpatchify(mask)[0]  # 1 is removing, 0 is keeping
             mask = mask.detach().cpu()
             x = _x[i].detach().cpu()
