@@ -223,7 +223,7 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
     # Reduce number of workers in case there is no training data 
     num_workers = min(num_workers, training_samples)
     # To not create more than 8 processes per GPU
-    if cfg.SYSTEM.NUM_GPUS > 1:
+    if cfg.SYSTEM.NUM_GPUS >= 1:
         num_workers = min(num_workers, 8*cfg.SYSTEM.NUM_GPUS)
     num_training_steps_per_epoch = training_samples // total_batch_size
     print(f"Number of workers: {num_workers}")
@@ -361,3 +361,43 @@ def check_generator_consistence(gen, data_out_dir, mask_out_dir, filenames=None)
             save_tif(np.expand_dims(X_test[k],0), data_out_dir, fil, verbose=False)
             save_tif(np.expand_dims(Y_test[k],0), mask_out_dir, fil, verbose=False)
             c += 1
+
+# To accelerate each first batch in epoch without need to.
+# Sources: https://discuss.pytorch.org/t/enumerate-dataloader-slow/87778/4
+#          https://github.com/huggingface/pytorch-image-models/pull/140/files
+# Explanation:
+# When using the data loader of pytorch, at the beginning of every epoch, we have to wait a 
+# lot and the training speed is very low from the first iteration. It is because the pytorch 
+# data loader is reinitialized from scratch. With this, we do not waste time, and just the 
+# first initialization of the the dataloader at the first epoch takes time, but for the next 
+# epochs, the first iteration of every new epoch is as fast as the iterations in the middle 
+# of an epoch.
+class MultiEpochsDataLoader(torch.utils.data.DataLoader):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._DataLoader__initialized = False
+        self.batch_sampler = _RepeatSampler(self.batch_sampler)
+        self._DataLoader__initialized = True
+        self.iterator = super().__iter__()
+
+    def __len__(self):
+        return len(self.batch_sampler.sampler)
+
+    def __iter__(self):
+        for i in range(len(self)):
+            yield next(self.iterator)
+
+
+class _RepeatSampler(object):
+    """ Sampler that repeats forever.
+    Args:
+        sampler (Sampler)
+    """
+
+    def __init__(self, sampler):
+        self.sampler = sampler
+
+    def __iter__(self):
+        while True:
+            yield from iter(self.sampler)

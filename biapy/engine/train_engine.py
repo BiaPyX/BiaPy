@@ -8,11 +8,14 @@ from timm.utils import accuracy
 from biapy.utils.misc import MetricLogger, SmoothedValue, all_reduce_mean, to_pytorch_format
 
 def train_one_epoch(cfg, model, model_call_func, loss_function, activations, metric_function, prepare_targets, data_loader, optimizer, 
-    device, loss_scaler, epoch, log_writer=None, lr_scheduler=None, start_steps=0):
+    device, loss_scaler, epoch, log_writer=None, lr_scheduler=None, start_steps=0, verbose=False):
 
     model.train(True)
-    metric_logger = MetricLogger(delimiter="  ")
-    metric_logger.add_meter('lr', SmoothedValue(window_size=1, fmt='{value:.6f}'))
+
+    # Ensure correct order of each epoch info by adding loss first
+    metric_logger = MetricLogger(delimiter="  ", verbose=verbose)
+    metric_logger.add_meter('loss', SmoothedValue())
+
     header = 'Epoch: [{}]'.format(epoch+1)
     print_freq = 10
 
@@ -56,24 +59,27 @@ def train_one_epoch(cfg, model, model_call_func, loss_function, activations, met
         if device.type != 'cpu':
             torch.cuda.synchronize()
 
-        # Update metrics 
+        # Update loss in loggers
         metric_logger.update(loss=loss_value)
+        loss_value_reduce = all_reduce_mean(loss_value)
+        if log_writer is not None: log_writer.update(loss=loss_value_reduce, head="loss")
+
+        # Update lr in loggers
         max_lr = 0.
         for group in optimizer.param_groups:
             max_lr = max(max_lr, group["lr"])
+        if step == 0:
+            metric_logger.add_meter('lr', SmoothedValue(window_size=1, fmt='{value:.6f}'))
         metric_logger.update(lr=max_lr)
-        weight_decay_value = None
-        for group in optimizer.param_groups:
-            if group["weight_decay"] > 0:
-                weight_decay_value = group["weight_decay"]
-        metric_logger.update(weight_decay=weight_decay_value)
-
-        # Update logging file writer
-        loss_value_reduce = all_reduce_mean(loss_value)
-        if log_writer is not None:
-            log_writer.update(loss=loss_value_reduce, head="loss")
-            if lr_scheduler is not None:
-                log_writer.update(lr=max_lr, head="opt")
+        if log_writer is not None: log_writer.update(lr=max_lr, head="opt")
+        
+        # Update weight_decay in loggers
+        if verbose:
+            weight_decay_value = None
+            for group in optimizer.param_groups:
+                if group["weight_decay"] > 0:
+                    weight_decay_value = group["weight_decay"]
+            metric_logger.update(weight_decay=weight_decay_value)
             log_writer.update(weight_decay=weight_decay_value, head="opt")
 
     # Gather the stats from all processes

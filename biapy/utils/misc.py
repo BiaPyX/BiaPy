@@ -355,9 +355,10 @@ class SmoothedValue(object):
 
 
 class MetricLogger(object):
-    def __init__(self, delimiter="\t"):
+    def __init__(self, delimiter="\t", verbose=False):
         self.meters = defaultdict(SmoothedValue)
         self.delimiter = delimiter
+        self.verbose = verbose 
 
     def update(self, **kwargs):
         for k, v in kwargs.items():
@@ -406,7 +407,7 @@ class MetricLogger(object):
             '{meters}',
             'iter-time: {time}'
         ]
-        if torch.cuda.is_available():
+        if torch.cuda.is_available() and self.verbose:
             log_msg.append('max mem: {memory:.0f}MB')
         log_msg = self.delimiter.join(log_msg)
         MB = 1024.0 * 1024.0
@@ -416,7 +417,7 @@ class MetricLogger(object):
             if i % print_freq == 0 or i == len(iterable) - 1:
                 eta_seconds = iter_time.global_avg * (len(iterable) - i)
                 eta_string = str(datetime.timedelta(seconds=int(eta_seconds)))
-                if torch.cuda.is_available():
+                if torch.cuda.is_available() and self.verbose:
                     print(log_msg.format(
                         i, len(iterable), eta=eta_string,
                         meters=str(self),

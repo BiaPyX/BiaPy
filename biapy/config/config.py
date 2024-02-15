@@ -710,6 +710,8 @@ class Config:
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         _C.TRAIN = CN()
         _C.TRAIN.ENABLE = False
+        # Enable verbosity
+        _C.TRAIN.VERBOSE = False
         # Optimizer to use. Possible values: "SGD", "ADAM" or "ADAMW"
         _C.TRAIN.OPTIMIZER = 'SGD'
         # Learning rate 
