@@ -52,6 +52,7 @@ class Self_supervised_Workflow(Base_Workflow):
         if cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == 'masking':
             self.load_Y_val = False
         else:
+            self.mask_path = cfg.DATA.TRAIN.GT_PATH
             self.load_Y_val = True
 
     def define_metrics(self):
@@ -127,8 +128,11 @@ class Self_supervised_Workflow(Base_Workflow):
         targets : Torch tensor
             Resulting targets. 
         """
-        # Swap with original images so we can calculate PSNR metric afterwards
-        return batch.to(self.device)
+        if self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == 'masking':
+            # Swap with original images so we can calculate PSNR metric afterwards
+            return batch.to(self.device)
+        else:
+            return to_pytorch_format(targets, self.axis_order, self.device, dtype=self.loss_dtype)
 
     def process_sample(self, norm): 
         """
