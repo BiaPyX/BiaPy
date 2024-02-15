@@ -216,13 +216,17 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
             cfg.AUGMENTOR.AUG_NUM_SAMPLES, save_to_dir=True, train=False, out_dir=cfg.PATHS.DA_SAMPLES,
             draw_grid=cfg.AUGMENTOR.DRAW_GRID)
 
-    num_workers = max(cfg.SYSTEM.NUM_WORKERS // cfg.SYSTEM.NUM_GPUS, 1) if dist else cfg.SYSTEM.NUM_WORKERS
     # Training dataset
     total_batch_size = cfg.TRAIN.BATCH_SIZE * world_size * cfg.TRAIN.ACCUM_ITER
     training_samples = len(train_generator)
+    num_workers = max(cfg.SYSTEM.NUM_WORKERS // cfg.SYSTEM.NUM_GPUS, 1) if dist else cfg.SYSTEM.NUM_WORKERS
+    # Reduce number of workers in case there is no training data 
     num_workers = min(num_workers, training_samples)
-    print(f"Number of workers: {num_workers}")
+    # To not create more than 8 processes per GPU
+    if cfg.SYSTEM.NUM_GPUS > 1:
+        num_workers = min(num_workers, 8*cfg.SYSTEM.NUM_GPUS)
     num_training_steps_per_epoch = training_samples // total_batch_size
+    print(f"Number of workers: {num_workers}")
     print("Accumulate grad iterations: %d" % cfg.TRAIN.ACCUM_ITER)
     print("Effective batch size: %d" % total_batch_size)
     sampler_train = torch.utils.data.DistributedSampler(
