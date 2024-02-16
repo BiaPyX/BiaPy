@@ -616,7 +616,7 @@ def merge_3D_data_with_overlap(data, orig_vol_shape, data_mask=None, overlap=(0,
                               padding[1]:data_mask.shape[2]-padding[1],
                               padding[2]:data_mask.shape[3]-padding[2], :]
         merged_data_mask = np.zeros(orig_vol_shape[:3]+(data_mask.shape[-1],), dtype=np.float32)
-    ov_map_counter = np.zeros((orig_vol_shape), dtype=np.uint16)
+    ov_map_counter = np.zeros((orig_vol_shape[:-1]+(1,)), dtype=np.uint16)
 
     # Calculate overlapping variables
     overlap_z = 1 if overlap[0] == 0 else 1-overlap[0]

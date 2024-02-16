@@ -685,10 +685,10 @@ def merge_data_with_overlap(data, original_shape, data_mask=None, overlap=(0,0),
 
     merged_data = np.zeros((original_shape), dtype=np.float32)
     if data_mask is not None:
-        merged_data_mask = np.zeros((original_shape), dtype=np.float32)
+        merged_data_mask = np.zeros((original_shape[:-1]+(data_mask.shape[-1],)), dtype=np.float32)
         data_mask = data_mask[:, padding[0]:data_mask.shape[1]-padding[0], padding[1]:data_mask.shape[2]-padding[1]]
 
-    ov_map_counter = np.zeros(original_shape, dtype=np.int32)
+    ov_map_counter = np.zeros(original_shape[:-1]+(1,), dtype=np.int32)
     if out_dir is not None:
         crop_grid = np.zeros(original_shape[1:], dtype=np.int32)
 
