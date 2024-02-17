@@ -137,7 +137,10 @@ class jaccard_index():
             if torch.max(y_true) > 1 and self.num_classes <= 2: 
                 y_true = (y_true/255).type(torch.long)
         
-        return self.jaccard(y_pred, y_true.squeeze())
+        if self.num_classes > 2:
+            return self.jaccard(y_pred, y_true.squeeze())
+        else:
+            return self.jaccard(y_pred, y_true)
 
 class instance_metrics():
     def __init__(self, num_classes, metric_names, device, torchvision_models=False):
