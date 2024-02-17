@@ -2,6 +2,7 @@
 
 import torch
 import torch.nn as nn
+from typing import List
 
 class Conv_batchnorm(torch.nn.Module):
     """
@@ -290,10 +291,11 @@ class MultiResUnet(torch.nn.Module):
             self.last_block = Conv_batchnorm(conv, batchnorm_layer, self.in_filters9, self.n_classes, kernel_size = 1, activation='None')
 
         # Multi-head: instances + classification
+        self.last_class_head = None
         if self.multiclass:
             self.last_class_head = conv(self.in_filters9, self.n_classes, kernel_size=1, padding='same')
 
-    def forward(self, x : torch.Tensor)-> torch.Tensor:
+    def forward(self, x : torch.Tensor)-> torch.Tensor | List[torch.Tensor]:
         # Super-resolution
         if self.pre_upsampling is not None:
             x = self.pre_upsampling(x)
@@ -333,7 +335,7 @@ class MultiResUnet(torch.nn.Module):
             x_multires9 = self.post_upsampling(x_multires9)
 
         class_head_out = torch.empty(())    
-        if self.multiclass:
+        if self.multiclass and self.last_class_head is not None:
             class_head_out = self.last_class_head(x_multires9) 
 
         out =  self.last_block(x_multires9)

@@ -2,6 +2,7 @@ import math
 import torch
 import torch.nn as nn
 from timm.models.vision_transformer import Block
+from typing import List
 
 from biapy.models.blocks import DoubleConvBlock, ConvBlock
 from biapy.models.tr_layers import PatchEmbed
@@ -171,6 +172,7 @@ class UNETR(nn.Module):
             self.last_block = conv(num_filters, self.n_classes, kernel_size=1, padding='same')
 
         # Multi-head: instances + classification
+        self.last_class_head = None
         if self.multiclass:
             self.last_class_head = conv(num_filters, self.n_classes, kernel_size=1, padding='same')
 
@@ -181,7 +183,7 @@ class UNETR(nn.Module):
         x = x.permute(self.permutation).contiguous()
         return x
 
-    def forward(self, input):
+    def forward(self, input)-> torch.Tensor | List[torch.Tensor]:
         # Vit part
         B = input.shape[0]  
         x = self.patch_embed(input)
@@ -215,7 +217,7 @@ class UNETR(nn.Module):
         # UNETR output 
         x = self.two_yellow_layers[-1](x)
         class_head_out = torch.empty(())    
-        if self.multiclass:
+        if self.multiclass and self.last_class_head is not None:
             class_head_out = self.last_class_head(x) 
         x = self.last_block(x)
         

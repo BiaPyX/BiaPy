@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from typing import List
 
 from biapy.models.blocks import ResConvBlock, ResUpBlock
 
@@ -136,12 +137,13 @@ class ResUNet(nn.Module):
             self.last_block = conv(feature_maps[0], self.n_classes, kernel_size=1, padding='same')
 
         # Multi-head: instances + classification
+        self.last_class_head = None
         if self.multiclass:
             self.last_class_head = conv(feature_maps[0], self.n_classes, kernel_size=1, padding='same')
 
         self.apply(self._init_weights)
 
-    def forward(self, x):
+     def forward(self, x) -> torch.Tensor | List[torch.Tensor]:
         # Super-resolution
         if self.pre_upsampling is not None:
             x = self.pre_upsampling(x)
@@ -166,7 +168,7 @@ class ResUNet(nn.Module):
             x = self.post_upsampling(x)
 
         class_head_out = torch.empty(())    
-        if self.multiclass:
+        if self.multiclass and self.last_class_head is not None:
             class_head_out = self.last_class_head(x) 
 
         x = self.last_block(x)
