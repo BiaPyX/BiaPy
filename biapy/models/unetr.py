@@ -219,7 +219,7 @@ class UNETR(nn.Module):
             class_head_out = self.last_class_head(x) 
         x = self.last_block(x)
         
-        if class_head_out is not None:
+        if self.multiclass:
             return [x, class_head_out]
         else:
             return x

@@ -342,7 +342,7 @@ class MultiResUnet(torch.nn.Module):
         if self.pre_upsampling is not None or self.post_upsampling is not None:
             out = torch.clamp(out, min=0, max=1)
             
-        if class_head_out is not None:
+        if self.multiclass:
             return [out, class_head_out]
         else:
             return out

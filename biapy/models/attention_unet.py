@@ -182,7 +182,7 @@ class Attention_U_Net(nn.Module):
         if self.pre_upsampling is not None or self.post_upsampling is not None:
             x = torch.clamp(x, min=0, max=1)
         
-        if class_head_out is not None:
+        if self.multiclass:
             return [x, class_head_out]
         else:
             return x
