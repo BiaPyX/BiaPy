@@ -1377,7 +1377,7 @@ def pad_and_reflect(img, crop_shape, verbose=False):
        Returns
        -------
        img : 3D/4D Numpy array
-           Image padded (if needed). E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
+           Image padded. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
     """
     if img.ndim == 4 and len(crop_shape) != 4:
         raise ValueError("'crop_shape' needs to have 4 values as the input array has 4 dims")

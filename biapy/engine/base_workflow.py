@@ -1146,8 +1146,7 @@ class Base_Workflow(metaclass=ABCMeta):
             original_data_shape = self._X.shape
             
             # Crop if necessary
-            if self._X.shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1] or any(x == 0 for x in self.cfg.DATA.TEST.PADDING)\
-                or any(x == 0 for x in self.cfg.DATA.TEST.OVERLAP):
+            if self._X.shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
                 # Copy X to be used later in full image 
                 if self.cfg.PROBLEM.NDIM != '3D': 
                     X_original = self._X.copy()
@@ -1250,8 +1249,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 del self._X, p
 
             # Reconstruct the predictions
-            if original_data_shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1] or any(x == 0 for x in self.cfg.DATA.TEST.PADDING)\
-                or any(x == 0 for x in self.cfg.DATA.TEST.OVERLAP):
+            if original_data_shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
                 if self.cfg.PROBLEM.NDIM == '3D': original_data_shape = original_data_shape[1:]
                 f_name = merge_data_with_overlap if self.cfg.PROBLEM.NDIM == '2D' else merge_3D_data_with_overlap
 
@@ -1275,11 +1273,17 @@ class Base_Workflow(metaclass=ABCMeta):
                     del X_original
             else:
                 pred = pred[0]
+                if self._Y is not None: self._Y = self._Y[0]
 
-            if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE and self.cfg.PROBLEM.NDIM == '3D':
-                pred = pred[-reflected_orig_shape[1]:,-reflected_orig_shape[2]:,-reflected_orig_shape[3]:]
-                if self._Y is not None:
-                    self._Y = self._Y[-reflected_orig_shape[1]:,-reflected_orig_shape[2]:,-reflected_orig_shape[3]:]
+            if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE: 
+                if self.cfg.PROBLEM.NDIM == '2D':
+                    pred = pred[-reflected_orig_shape[1]:,-reflected_orig_shape[2]:]
+                    if self._Y is not None:
+                        self._Y = self._Y[-reflected_orig_shape[1]:,-reflected_orig_shape[2]:]
+                else:
+                    pred = pred[-reflected_orig_shape[1]:,-reflected_orig_shape[2]:,-reflected_orig_shape[3]:]
+                    if self._Y is not None:
+                        self._Y = self._Y[-reflected_orig_shape[1]:,-reflected_orig_shape[2]:,-reflected_orig_shape[3]:]
 
             # Argmax if needed
             if self.cfg.MODEL.N_CLASSES > 2 and self.cfg.DATA.TEST.ARGMAX_TO_OUTPUT:
