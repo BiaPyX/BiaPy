@@ -53,7 +53,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
 
         # Activations for each output channel:
         # channel number : 'activation'
-        self.activations = {':': 'CE_Sigmoid'}
+        self.activations = [{':': 'CE_Sigmoid'}]
 
         # Workflow specific training variables
         self.mask_path = cfg.DATA.TRAIN.GT_PATH
@@ -65,8 +65,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         Definition of self.metrics, self.metric_names and self.loss variables.
         """
         self.metrics = [
-            jaccard_index(num_classes=self.cfg.MODEL.N_CLASSES, 
-                first_not_binary_channel=self.cfg.MODEL.N_CLASSES, device=self.device, 
+            jaccard_index(num_classes=self.cfg.MODEL.N_CLASSES, device=self.device, 
                 torchvision_models=True if self.cfg.MODEL.SOURCE == "torchvision" else False)
         ]
         self.metric_names = ["jaccard_index"]

@@ -24,7 +24,7 @@ class Config:
         # Do not set it as its value will be calculated based in --gpu input arg
         _C.SYSTEM.NUM_GPUS = 0
 
-        # Math seed
+        # Math seed to generate random numbers. Used to ensure reproducibility in the results. 
         _C.SYSTEM.SEED = 0
         # Pin CPU memory in DataLoader for more efficient (sometimes) transfer to GPU.
         _C.SYSTEM.PIN_MEM = True
@@ -322,7 +322,7 @@ class Config:
         # Test data resolution. Need to be provided in (z,y,x) order. Only applies when _C.PROBLEM.TYPE = 'DETECTION' now.
         _C.DATA.TEST.RESOLUTION = (-1,)
         # Whether to apply argmax to the predicted images 
-        _C.DATA.TEST.ARGMAX_TO_OUTPUT = False
+        _C.DATA.TEST.ARGMAX_TO_OUTPUT = True
 
         # Validation
         _C.DATA.VAL = CN()

@@ -1500,7 +1500,7 @@ def resize_img(img, shape):
     return resize(img, shape, order=1, mode='reflect', clip=True, preserve_range=True, anti_aliasing=True) 
 
 
-def rotation(img, mask=None, angles=[], mode="reflect", mask_type='as_mask'):
+def rotation(img, mask=None, heat=None, angles=[], mode="reflect", mask_type='as_mask'):
     """
     Apply a rotation to input ``image`` and ``mask`` (if provided). 
 
@@ -1511,6 +1511,9 @@ def rotation(img, mask=None, angles=[], mode="reflect", mask_type='as_mask'):
 
     mask : 3D/4D Numpy array, optional
         Mask to rotate. E.g. ``(y, x, channels)`` for ``2D`` or  ``(z, y, x, channels)`` for ``3D``.
+
+    heat : 3D/4D Numpy array, optional
+        Heatmap (float mask) to rotate. E.g. ``(y, x, channels)`` for ``2D`` or  ``(z, y, x, channels)`` for ``3D``.
 
     angles : List of ints, optional
         List of angles to choose the rotation to be made. E.g. [90,180,360].
@@ -1530,6 +1533,10 @@ def rotation(img, mask=None, angles=[], mode="reflect", mask_type='as_mask'):
 
     mask : 3D/4D Numpy array, optional
         Rotated mask. E.g. ``(y, x, channels)`` for ``2D`` or  ``(z, y, x, channels)`` for ``3D``.
+    
+    heat : 3D/4D Numpy array, optional
+        Rotated heatmap. Returned if ``mask`` is provided. E.g. ``(y, x, channels)`` for ``2D`` or  
+        ``(z, y, x, channels)`` for ``3D``.
     """
 
     if len(angles) == 0:
@@ -1542,8 +1549,16 @@ def rotation(img, mask=None, angles=[], mode="reflect", mask_type='as_mask'):
     else:
         raise ValueError("Not a list/tuple provided in 'angles'")
 
-    mask_order = 0 if mask_type == 'as_mask' else 1
+    img = rotate(img, angle, mode=mode)
+
+    if mask is not None:
+        mask_order = 0 if mask_type == 'as_mask' else 1
+        mask = rotate(mask.astype(np.float32), angle, order=mask_order, mode=mode)
+    if heat is not None:
+        heat = rotate(heat.astype(np.float32), angle, mode=mode)
+
     if mask is None:
-        return rotate(img, angle, mode=mode)
+        return img
     else:
-        return rotate(img, angle, mode=mode), rotate(mask.astype(np.float32), angle, order=mask_order, mode=mode)
+        return img, mask, heat
+            

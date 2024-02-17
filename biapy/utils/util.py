@@ -757,12 +757,9 @@ def check_masks(path, n_classes=2):
         values, _ = np.unique(img, return_counts=True)
         if len(values) > n_classes :
             raise ValueError("Error: given mask ({}) has more classes than specified in 'MODEL.N_CLASSES'."
-                             "That variable value need to be set without counting with background class. " 
-                             " E.g. if mask has [0,1,2] 'MODEL.N_CLASSES' should be 2.\n"
+                             "That variable value need to be counting with the background class." 
+                             " E.g. if mask has [0,1,2] values 'MODEL.N_CLASSES' should be 3.\n"
                              "Values found: {}".format(os.path.join(path, ids[i]), values))
-        if not (values == range(len(values))).all() and len(values) > 2:
-            raise ValueError("Mask values need to be consecutive. E.g. [0,1,2,3...]. Provided: {}"
-                .format(values))
 
 def img_to_onehot_encoding(img, num_classes=2):
     """Converts image given into one-hot encode format.

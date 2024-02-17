@@ -710,17 +710,29 @@ class Base_Workflow(metaclass=ABCMeta):
         pred : Torch tensor
             Resulting predictions after applying last activation(s). 
         """
-        for key, value in self.activations.items():
-            # Ignore CE_Sigmoid as torch.nn.BCEWithLogitsLoss will apply Sigmoid automatically in a way 
-            # that is more stable numerically (ref: https://pytorch.org/docs/stable/generated/torch.nn.BCEWithLogitsLoss.html)
-            if (training and value not in ["Linear", "CE_Sigmoid"]) or (not training and value != "Linear"):
-                value = "Sigmoid" if value == "CE_Sigmoid" else value
-                act = getattr(torch.nn, value)()
-                if key == ':':
-                    pred = act(pred)
-                else:
-                    pred[:,int(key),...] = act(pred[:,int(key),...])
-        return pred
+        if not isinstance(pred, list):
+            multiple_heads = False
+            pred = [pred]
+        else: 
+            multiple_heads = True
+            assert len(pred) == len(self.activations), "Activations length need to match prediction list length in multiple heads setting"
+
+        for out_heads in range(len(pred)):
+            for key, value in self.activations[out_heads].items():
+                # Ignore CE_Sigmoid as torch.nn.BCEWithLogitsLoss will apply Sigmoid automatically in a way 
+                # that is more stable numerically (ref: https://pytorch.org/docs/stable/generated/torch.nn.BCEWithLogitsLoss.html)
+                if (training and value not in ["Linear", "CE_Sigmoid"]) or (not training and value != "Linear"):
+                    value = "Sigmoid" if value == "CE_Sigmoid" else value
+                    act = getattr(torch.nn, value)()
+                    if key == ':':
+                        pred[out_heads] = act(pred[out_heads])
+                    else:
+                        pred[out_heads][:,int(key),...] = act(pred[out_heads][:,int(key),...])
+
+        if not multiple_heads:
+            return pred[0]
+        else:
+            return pred
 
     @torch.no_grad()
     def test(self):
@@ -923,18 +935,18 @@ class Base_Workflow(metaclass=ABCMeta):
                 p = ensemble16_3d_predictions(img[0], batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
                     pred_func=(
                         lambda img_batch_subdiv: 
-                            to_numpy_format(
-                                self.apply_model_activations(
-                                    self.model_call_func(img_batch_subdiv),
-                                    ), 
-                                self.axis_order_back
-                            )
+                            self.apply_model_activations(
+                                self.model_call_func(img_batch_subdiv),
+                                )   
                     )
                 )
             else:
                 with torch.cuda.amp.autocast():
-                    p = self.model_call_func(img)
-                    p = to_numpy_format(self.apply_model_activations(p), self.axis_order_back)
+                    p = self.apply_model_activations(self.model_call_func(img))
+            # Multi-head concatenation
+            if isinstance(p, list):
+                p = torch.cat((p[0], torch.argmax(p[1], axis=1).unsqueeze(1)), dim=1)
+            p = to_numpy_format(p, self.axis_order_back)
 
             # Create a mask with the overlap. Calculate the exact part of the patch that will be inserted in the 
             # final H5/Zarr file
@@ -1198,26 +1210,24 @@ class Base_Workflow(metaclass=ABCMeta):
                         p = ensemble8_2d_predictions(self._X[k],
                             pred_func=(
                                 lambda img_batch_subdiv: 
-                                    to_numpy_format(
-                                        self.apply_model_activations(
-                                            self.model_call_func(img_batch_subdiv),
-                                            ), 
-                                        self.axis_order_back
-                                    )
+                                    self.apply_model_activations(
+                                        self.model_call_func(img_batch_subdiv),
+                                        ), 
                             )
                         )
                     else:
                         p = ensemble16_3d_predictions(self._X[k], batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
                             pred_func=(
                                 lambda img_batch_subdiv: 
-                                    to_numpy_format(
-                                        self.apply_model_activations(
-                                            self.model_call_func(img_batch_subdiv),
-                                            ), 
-                                        self.axis_order_back
-                                    )
+                                    self.apply_model_activations(
+                                        self.model_call_func(img_batch_subdiv),
+                                        ),   
                             )
                         )
+                    # Multi-head concatenation
+                    if isinstance(p, list):
+                        p = torch.cat((p[0], p[1]), dim=1)
+                    p = to_numpy_format(p, self.axis_order_back)
                     if 'pred' not in locals():
                         pred = np.zeros((self._X.shape[0],)+p.shape, dtype=self.dtype)
                     pred[k] = p
@@ -1226,8 +1236,11 @@ class Base_Workflow(metaclass=ABCMeta):
                 for k in tqdm(range(l), leave=False):
                     top = (k+1)*self.cfg.TRAIN.BATCH_SIZE if (k+1)*self.cfg.TRAIN.BATCH_SIZE < self._X.shape[0] else self._X.shape[0]
                     with torch.cuda.amp.autocast():
-                        p = self.model_call_func(self._X[k*self.cfg.TRAIN.BATCH_SIZE:top])
-                        p = to_numpy_format(self.apply_model_activations(p), self.axis_order_back)
+                        p = self.apply_model_activations(self.model_call_func(self._X[k*self.cfg.TRAIN.BATCH_SIZE:top]))
+                        # Multi-head concatenation
+                        if isinstance(p, list):
+                            p = torch.cat((p[0], p[1]), dim=1)
+                        p = to_numpy_format(p, self.axis_order_back)
                     if 'pred' not in locals():
                         pred = np.zeros((self._X.shape[0],)+p.shape[1:], dtype=self.dtype)
                     pred[k*self.cfg.TRAIN.BATCH_SIZE:top] = p
@@ -1270,7 +1283,12 @@ class Base_Workflow(metaclass=ABCMeta):
 
             # Argmax if needed
             if self.cfg.MODEL.N_CLASSES > 2 and self.cfg.DATA.TEST.ARGMAX_TO_OUTPUT:
-                pred = np.expand_dims(np.argmax(pred,-1), -1)
+                # Multi-head case of instance segmentation
+                if pred.shape[-1] > self.cfg.MODEL.N_CLASSES:
+                    pred = np.concatenate([pred[...,:-(self.cfg.MODEL.N_CLASSES)], 
+                        np.expand_dims(np.argmax(pred[...,-(self.cfg.MODEL.N_CLASSES):],-1), -1)], axis=-1)
+                else:
+                    pred = np.expand_dims(np.argmax(pred,-1), -1)
                 if self.cfg.DATA.TEST.LOAD_GT: self._Y = np.expand_dims(np.argmax(self._Y,-1), -1)
 
             # Apply mask
@@ -1329,7 +1347,6 @@ class Base_Workflow(metaclass=ABCMeta):
             if self.cfg.DATA.TEST.LOAD_GT:
                 with torch.cuda.amp.autocast():
                     output = self.model_call_func(self._X)
-                    
                     loss = self.loss(output, to_pytorch_format(self._Y, self.axis_order, self.device, dtype=self.loss_dtype))
                 self.stats['loss'] += loss.item()
                 del output
@@ -1339,19 +1356,23 @@ class Base_Workflow(metaclass=ABCMeta):
                 pred = ensemble8_2d_predictions(self._X[0],
                     pred_func=(
                         lambda img_batch_subdiv: 
-                            to_numpy_format(
-                                self.apply_model_activations(
-                                    self.model_call_func(img_batch_subdiv),
-                                    ), 
-                                self.axis_order_back
-                            )
+                            self.apply_model_activations(
+                                self.model_call_func(img_batch_subdiv),
+                                ), 
                     )
                 )
+                # Multi-head concatenation
+                if isinstance(p, list):
+                    pred = torch.cat((pred[0], torch.argmax(pred[1], axis=1).unsqueeze(1)), dim=1)
+                pred = to_numpy_format(pred, self.axis_order_back) 
                 pred = np.expand_dims(pred, 0)
             else:
                 with torch.cuda.amp.autocast():
-                    pred = self.model_call_func(self._X)
-                pred = to_numpy_format(self.apply_model_activations(pred), self.axis_order_back)    
+                    pred = self.apply_model_activations(self.model_call_func(self._X))
+                # Multi-head concatenation
+                if isinstance(p, list):
+                    pred = torch.cat((pred[0], torch.argmax(pred[1], axis=1).unsqueeze(1)), dim=1)  
+                pred = to_numpy_format(pred, self.axis_order_back)  
             del self._X 
 
             # Recover original shape if padded with check_downsample_division

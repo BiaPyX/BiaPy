@@ -12,7 +12,7 @@ from biapy.data.post_processing.post_processing import (watershed_by_channels, v
 from biapy.data.pre_processing import create_instance_channels, create_test_instance_channels, norm_range01
 from biapy.utils.util import save_tif, pad_and_reflect
 from biapy.utils.matching import matching, wrapper_matching_dataset_lazy
-from biapy.engine.metrics import jaccard_index, instance_segmentation_loss
+from biapy.engine.metrics import jaccard_index, instance_segmentation_loss, instance_metrics
 from biapy.engine.base_workflow import Base_Workflow
 
 class Instance_Segmentation_Workflow(Base_Workflow):
@@ -44,19 +44,37 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         self.all_matching_stats_merge_patches_post = []
         self.stats['inst_stats_merge_patches'] = None
         self.stats['inst_stats_merge_patches_post'] = None
+        # Multi-head: instances + classification
+        if self.cfg.MODEL.N_CLASSES > 2:
+            self.all_class_stats_merge_patches = []
+            self.all_class_stats_merge_patches_post = []
+            self.stats['class_stats_merge_patches'] = None
+            self.stats['class_stats_merge_patches_post'] = None
 
         # As 3D stack
         self.all_matching_stats_as_3D_stack = []
         self.all_matching_stats_as_3D_stack_post = []
         self.stats['inst_stats_as_3D_stack'] = None
         self.stats['inst_stats_as_3D_stack_post'] = None
+        # Multi-head: instances + classification
+        if self.cfg.MODEL.N_CLASSES > 2:
+            self.all_class_stats_as_3D_stack = []
+            self.all_class_stats_as_3D_stack_post = []
+            self.stats['class_stats_as_3D_stack'] = None
+            self.stats['class_stats_as_3D_stack_post'] = None
 
         # Full image
         self.all_matching_stats = []
         self.all_matching_stats_post = []
         self.stats['inst_stats'] = None
         self.stats['inst_stats_post'] = None
-
+        # Multi-head: instances + classification
+        if self.cfg.MODEL.N_CLASSES > 2:
+            self.all_class_stats = []
+            self.all_class_stats_post = []
+            self.stats['class_stats'] = None
+            self.stats['class_stats_post'] = None
+                
         self.instance_ths = {}
         self.instance_ths['TYPE'] = self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH_TYPE
         self.instance_ths['TH_BINARY_MASK'] = self.cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH_BINARY_MASK
@@ -70,6 +88,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
         # Activations for each output channel:
         # channel number : 'activation'
+        self.activations = {}
         if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "Dv2":
             self.activations = {'0': 'Linear'}
         elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BC", "BP", "BCM"]:
@@ -79,6 +98,12 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BCD", "BCDv2"]:
             self.activations = {'0': 'CE_Sigmoid', '1': 'CE_Sigmoid', '2': 'Linear'}
 
+        # Multi-head: instances + classification
+        if self.cfg.MODEL.N_CLASSES > 2:
+            self.activations = [self.activations, {'0': 'Linear'}]
+        else:
+            self.activations = [self.activations]
+            
         # Workflow specific training variables
         self.mask_path = cfg.DATA.TRAIN.GT_PATH
         self.load_Y_val = True
@@ -98,50 +123,38 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         """
         self.metrics = []
         self.metric_names = []
-        self.loss = instance_segmentation_loss(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS,
+        self.loss = instance_segmentation_loss(
+            self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS,
             self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, 
-            self.cfg.PROBLEM.INSTANCE_SEG.DISTANCE_CHANNEL_MASK)
-        if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BC", "BCM", "BP"]:
-            self.first_not_binary_channel = len(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
-            self.metrics.append(
-                jaccard_index(device=self.device, num_classes=1, 
-                    first_not_binary_channel=self.first_not_binary_channel, 
-                    torchvision_models=True if self.cfg.MODEL.SOURCE == "torchvision" else False)
-            )
-            self.metric_names.append("jaccard_index")
+            self.cfg.PROBLEM.INSTANCE_SEG.DISTANCE_CHANNEL_MASK,
+            self.cfg.MODEL.N_CLASSES
+        )
+
+        if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BC":
+            self.metric_names = ["jaccard_index", "jaccard_index"]
+        elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BCM":
+            self.metric_names = ["jaccard_index", "jaccard_index", "jaccard_index"]
+        elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BP":
+            self.metric_names = ["jaccard_index", "jaccard_index"]
         elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BD":
-            self.first_not_binary_channel = 1 
-            self.metrics.append(
-                jaccard_index(device=self.device, num_classes=1, 
-                    first_not_binary_channel=self.first_not_binary_channel, 
-                    torchvision_models=True if self.cfg.MODEL.SOURCE == "torchvision" else False)
-            ) 
-            self.metric_names.append("jaccard_index")
-            self.metrics.append(torch.nn.L1Loss())
-            self.metric_names.append("L1_distance_channel")
+            self.metric_names = ["jaccard_index", "L1_distance_channel"]
         elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BCD", 'BCDv2']:
-            self.first_not_binary_channel = 2
-            self.metrics.append(
-                jaccard_index(device=self.device, num_classes=1, 
-                    first_not_binary_channel=self.first_not_binary_channel, 
-                    torchvision_models=True if self.cfg.MODEL.SOURCE == "torchvision" else False)
-            )
-            self.metric_names.append("jaccard_index")
-            self.metrics.append(torch.nn.L1Loss())
-            self.metric_names.append("L1_distance_channel")
+            self.metric_names = ["jaccard_index", "jaccard_index", "L1_distance_channel"]
         elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BDv2":
-            self.first_not_binary_channel = 1
-            self.metrics.append(
-                jaccard_index(device=self.device, num_classes=1, 
-                    first_not_binary_channel=self.first_not_binary_channel, 
-                    torchvision_models=True if self.cfg.MODEL.SOURCE == "torchvision" else False)
-            )
-            self.metrics.append(torch.nn.L1Loss())
-            self.metric_names.append("jaccard_index")
-            self.metric_names.append("L1_distance_channel")
+            self.metric_names = ["jaccard_index", "L1_distance_channel"]
         elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "Dv2":
-            self.metrics.append(torch.nn.L1Loss())
-            self.metric_names.append("L1_distance_channel")
+            self.metric_names = ["L1_distance_channel"]
+
+        # Multi-head: instances + classification    
+        if self.cfg.MODEL.N_CLASSES > 2:
+            self.metric_names.append("jaccard_index_classes")
+            # Used to calculate IoU with the classification results 
+            self.jaccard_index_matching = jaccard_index(device="cpu",  
+                num_classes=self.cfg.MODEL.N_CLASSES)
+
+        self.metrics = instance_metrics(num_classes=self.cfg.MODEL.N_CLASSES,
+            metric_names=self.metric_names, device=self.device, 
+            torchvision_models=True if self.cfg.MODEL.SOURCE == "torchvision" else False)
 
     def metric_calculation(self, output, targets, metric_logger=None):
         """
@@ -164,23 +177,16 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             Value of the metric for the given prediction. 
         """
         with torch.no_grad():
-            train_iou = []
-            train_dis = []
-            for i in range(len(self.metric_names)):
-                if self.metric_names[i] == "jaccard_index":
-                    iou = self.metrics[i](output, targets)
-                    iou = iou.item() if not torch.isnan(iou) else 0
-                    train_iou.append(iou)
-                elif self.metric_names[i] == "L1_distance_channel":
-                    train_dis.append(self.metrics[i](output, targets).item())
-            train_iou = np.mean(train_iou)
-            train_dis = np.mean(train_dis)
-            if metric_logger is not None:
-                metric_logger.meters[self.metric_names[0]].update(train_iou)
-                if len(self.metric_names) > 1:
-                    metric_logger.meters[self.metric_names[1]].update(train_dis)
-            else:
-                return train_iou
+            out = self.metrics(output, targets)
+            first_val = None
+            for key, value in out.items():
+                value = value.item() if not torch.isnan(value) else 0
+                if first_val is None and key == "jaccard_index": 
+                    first_val = value
+                if metric_logger is not None:
+                    metric_logger.meters[key].update(value)
+        if first_val is None: first_val = 0
+        return first_val
 
     def instance_seg_process(self, pred, filenames, out_dir, out_dir_post_proc, resolution):
         """
@@ -206,6 +212,12 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         ### INSTANCE SEGMENTATION ###
         #############################
         if not self.instances_already_created: 
+
+            # Multi-head: instances + classification
+            if self.cfg.MODEL.N_CLASSES > 2:
+                class_channel = np.expand_dims(pred[...,-1], -1)
+                pred = pred[...,:-1] 
+
             print("Creating instances with watershed . . .")
             w_dir = os.path.join(self.cfg.PATHS.WATERSHED_DIR, filenames[0])
             check_wa = w_dir if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHECK_MW else None
@@ -218,16 +230,43 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 remove_close_points_radius=self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS[0], resolution=resolution, save_dir=check_wa,
                 watershed_by_2d_slices=self.cfg.PROBLEM.INSTANCE_SEG.WATERSHED_BY_2D_SLICES)
 
-            save_tif(np.expand_dims(np.expand_dims(w_pred,-1),0), out_dir, filenames, verbose=self.cfg.TEST.VERBOSE)
+            # Multi-head: instances + classification
+            if self.cfg.MODEL.N_CLASSES > 2:
+                print("Adapting class channel . . .")
+                labels = np.unique(w_pred)[1:]
+                new_class_channel = np.zeros(w_pred.shape, dtype=w_pred.dtype)
+                # Classify each instance counting the most prominent class of all the pixels that compose it
+                for l in labels:
+                    instance_classes, instance_classes_count = np.unique(class_channel[w_pred == l], return_counts=True)
+                    
+                    # Remove background
+                    if instance_classes[0] == 0:
+                        instance_classes = instance_classes[1:]
+                        instance_classes_count = instance_classes_count[1:]
+
+                    if len(instance_classes) > 0:
+                        label_selected = int(instance_classes[np.argmax(instance_classes_count)])
+                    else: # Label by default with class 1 in case there was no class info
+                        label_selected = 1 
+                    new_class_channel = np.where(w_pred == l, label_selected, new_class_channel) 
+
+                class_channel = new_class_channel
+                class_channel = class_channel.squeeze()
+                del new_class_channel
+                save_tif(np.expand_dims(np.concatenate([np.expand_dims(w_pred.squeeze(),-1), np.expand_dims(class_channel,-1)],axis=-1),0), 
+                    out_dir, filenames, verbose=self.cfg.TEST.VERBOSE)
+            else:
+                save_tif(np.expand_dims(np.expand_dims(w_pred,-1),0), out_dir, filenames, verbose=self.cfg.TEST.VERBOSE)
 
             # Add extra dimension if working in 2D
             if w_pred.ndim == 2:
-                w_pred = np.expand_dims(w_pred,0)
+                w_pred = np.expand_dims(w_pred,0) 
         else:
             w_pred = pred.squeeze()
             if w_pred.ndim == 2: w_pred = np.expand_dims(w_pred,0)
 
         results = None
+        results_class = None
         if self.cfg.TEST.MATCHING_STATS and (self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST):
             print("Calculating matching stats . . .")
 
@@ -242,7 +281,42 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 test_file = os.path.join(self.original_test_mask_path, self.test_filenames[self.f_numbers[0]])
                 _Y = imread(test_file).squeeze()
 
-            if _Y.ndim == 2: _Y = np.expand_dims(_Y,0)
+            # Multi-head: instances + classification
+            if self.cfg.MODEL.N_CLASSES > 2:
+                # Channel check
+                error_shape = None
+                if self.cfg.PROBLEM.NDIM == "2D" and _Y.ndim != 3:
+                    error_shape = (256,256,2)
+                elif self.cfg.PROBLEM.NDIM == "3D" and _Y.ndim != 4:
+                    error_shape = (40,256,256,2)
+                if error_shape is not None:
+                    raise ValueError(f"Image {test_file} wrong dimension. In instance segmentation, when 'MODEL.N_CLASSES' are "
+                        f"more than 2 labels need to have two channels, e.g. {error_shape}, containing the instance "
+                        "segmentation map (first channel) and classification map (second channel).")
+                
+                # Ensure channel position
+                if self.cfg.PROBLEM.NDIM == "2D":
+                    if _Y.shape[0] <= 3: _Y = _Y.transpose((1,2,0)) 
+                else:    
+                    min_val = min(_Y.shape)
+                    channel_pos = _Y.shape.index(min_val)
+                    if channel_pos != 3 and _Y.shape[channel_pos] <= 4:
+                        new_pos = [x for x in range(4) if x != channel_pos]+[channel_pos,]
+                        _Y = _Y.transpose(new_pos)
+
+                # Separate instance and classification channels
+                _Y_classes = _Y[...,1] # Classes 
+                _Y = _Y[...,0] # Instances 
+
+                # Measure class IoU
+                class_iou = self.jaccard_index_matching(torch.as_tensor(class_channel.squeeze().astype(np.int32)),
+                    torch.as_tensor(_Y_classes.squeeze().astype(np.int32)))
+                class_iou = class_iou.item() if not torch.isnan(class_iou) else 0
+                print(f"Class IoU: {class_iou}")
+                results_class = class_iou
+
+            if _Y.ndim == 2: 
+                _Y = np.expand_dims(_Y,0)
 
             # For torchvision models that resize need to rezise the images 
             if w_pred.shape != _Y.shape:
@@ -340,17 +414,38 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
         if self.cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK:
             w_pred = voronoi_on_mask(w_pred, pred, th=self.cfg.TEST.POST_PROCESSING.VORONOI_TH, verbose=self.cfg.TEST.VERBOSE)
-            del pred
+        del pred
 
         if self.cfg.TEST.POST_PROCESSING.CLEAR_BORDER:
             print("Clearing borders . . .")
             w_pred = clear_border(w_pred)
 
         results_post_proc = None
+        results_class_post_proc = None
         if self.post_processing['instance_post']:
-            save_tif(np.expand_dims(np.expand_dims(w_pred,-1),0), out_dir_post_proc, filenames, verbose=self.cfg.TEST.VERBOSE)
+            # Multi-head: instances + classification
+            if self.cfg.MODEL.N_CLASSES > 2:
+                w_pred = w_pred.squeeze()
+                class_channel = np.where(w_pred>0, class_channel, 0) # Adapt changes to post-processed w_pred
+                save_tif(np.expand_dims(np.concatenate([np.expand_dims(w_pred,-1), np.expand_dims(class_channel,-1)],axis=-1),0), 
+                    out_dir_post_proc, filenames, verbose=self.cfg.TEST.VERBOSE)
+            else:
+                save_tif(np.expand_dims(np.expand_dims(w_pred,-1),0), out_dir_post_proc, filenames, verbose=self.cfg.TEST.VERBOSE)
 
             if self.cfg.TEST.MATCHING_STATS and (self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST):
+                # Multi-head: instances + classification
+                if self.cfg.MODEL.N_CLASSES > 2:
+                    # Measure class IoU
+                    class_iou = self.jaccard_index_matching(torch.as_tensor(class_channel.squeeze().astype(np.int32)),
+                        torch.as_tensor(_Y_classes.squeeze().astype(np.int32)))
+                    class_iou = class_iou.item() if not torch.isnan(class_iou) else 0
+                    print(f"Class IoU (post-processing): {class_iou}")
+                    results_class_post_proc = class_iou
+                    
+                # Add extra dimension if working in 2D
+                if w_pred.ndim == 2:
+                    w_pred = np.expand_dims(w_pred,0)
+
                 print("Calculating matching stats after post-processing . . .")
                 results_post_proc = matching(_Y, w_pred, thresh=self.cfg.TEST.MATCHING_STATS_THS, report_matches=True)
                 
@@ -403,7 +498,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                                 [os.path.splitext(filenames[0])[0]+'_post-proc_th_{}.tif'.format(thr)], verbose=self.cfg.TEST.VERBOSE)          
                         del colored_result
 
-        return results, results_post_proc
+        return results, results_post_proc, results_class, results_class_post_proc
 
     def process_sample(self, norm):
         """
@@ -449,12 +544,16 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         """
         if not self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
             resolution = self.cfg.DATA.TEST.RESOLUTION if len(self.cfg.DATA.TEST.RESOLUTION) == 2 else self.cfg.DATA.TEST.RESOLUTION[1:]
-            r, r_post = self.instance_seg_process(pred, self.processing_filenames, self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
+            r, r_post, rcls, rcls_post = self.instance_seg_process(pred, self.processing_filenames, self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
                 self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING, resolution)        
             if r is not None:
                 self.all_matching_stats_merge_patches.append(r)
             if r_post is not None:
                 self.all_matching_stats_merge_patches_post.append(r_post)
+            if rcls is not None:
+                self.all_class_stats_merge_patches.append(rcls)
+            if rcls_post is not None:
+                self.all_class_stats_merge_patches_post.append(rcls_post)    
 
     def after_merge_patches_by_chunks_proccess_patch(self, filename):
         """
@@ -480,12 +579,16 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         """
         if not self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
             resolution = self.cfg.DATA.TEST.RESOLUTION if len(self.cfg.DATA.TEST.RESOLUTION) == 2 else self.cfg.DATA.TEST.RESOLUTION[1:]
-            r, r_post = self.instance_seg_process(pred, self.processing_filenames, self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_INSTANCES,
+            r, r_post, rcls, rcls_post = self.instance_seg_process(pred, self.processing_filenames, self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_INSTANCES,
                 self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_POST_PROCESSING, resolution)  
             if r is not None:
                 self.all_matching_stats.append(r)
             if r_post is not None:
                 self.all_matching_stats_post.append(r_post)
+            if rcls is not None:
+                self.all_class_stats.append(rcls)
+            if rcls_post is not None:
+                self.all_class_stats_post.append(rcls_post) 
 
     def after_all_images(self):
         """
@@ -497,12 +600,16 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             if type(self.all_pred) is list:
                 self.all_pred = np.concatenate(self.all_pred)
             resolution = self.cfg.DATA.TEST.RESOLUTION if len(self.cfg.DATA.TEST.RESOLUTION) == 3 else (self.cfg.DATA.TEST.RESOLUTION[0],)+self.cfg.DATA.TEST.RESOLUTION
-            r, r_post = self.instance_seg_process(self.all_pred, ["3D_stack.tif"], self.cfg.PATHS.RESULT_DIR.AS_3D_STACK,
+            r, r_post, rcls, rcls_post = self.instance_seg_process(self.all_pred, ["3D_stack.tif"], self.cfg.PATHS.RESULT_DIR.AS_3D_STACK,
                 self.cfg.PATHS.RESULT_DIR.AS_3D_STACK_POST_PROCESSING, resolution)
             if r is not None:
                 self.all_matching_stats_as_3D_stack.append(r)
             if r_post is not None:
                 self.all_matching_stats_as_3D_stack_post.append(r_post)
+            if rcls is not None:
+                self.all_class_stats_as_3D_stack.append(rcls)
+            if rcls_post is not None:
+                self.all_class_stats_as_3D_stack_post.append(rcls_post) 
 
     def normalize_stats(self, image_counter): 
         """
@@ -536,7 +643,29 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     # Full image
                     if len(self.all_matching_stats_post) > 0:
                         self.stats['inst_stats_post'] = wrapper_matching_dataset_lazy(self.all_matching_stats_post, self.cfg.TEST.MATCHING_STATS_THS)
+                
+                # Multi-head: instances + classification
+                if self.cfg.MODEL.N_CLASSES > 2:
+                    # Merge patches
+                    if len(self.all_class_stats_merge_patches) > 0:
+                        self.stats['class_stats_merge_patches'] = np.mean(self.all_class_stats_merge_patches)
+                    # As 3D stack    
+                    if len(self.all_class_stats_as_3D_stack) > 0:
+                        self.stats['class_stats_as_3D_stack'] = np.mean(self.all_class_stats_as_3D_stack)
+                    # Full image
+                    if len(self.all_class_stats) > 0:
+                        self.stats['class_stats'] = np.mean(self.all_class_stats)
 
+                    if self.post_processing['instance_post']:
+                        # Merge patches
+                        if len(self.all_class_stats_merge_patches_post) > 0:
+                            self.stats['class_stats_merge_patches_post'] = np.mean(self.all_class_stats_merge_patches_post) 
+                        # As 3D stack   
+                        if len(self.all_class_stats_as_3D_stack_post) > 0:
+                            self.stats['class_stats_as_3D_stack_post'] = np.mean(self.all_class_stats_as_3D_stack_post)
+                        # Full image 
+                        if len(self.all_class_stats_post) > 0:
+                            self.stats['class_stats_post'] = np.mean(self.all_class_stats_post)
 
     def print_stats(self, image_counter):
         """
@@ -581,6 +710,29 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         if self.stats['inst_stats_post'] is not None:
                             print("      Full image (post-processing):")
                             print(f"      {self.stats['inst_stats_post'][i]}")
+
+                # Multi-head: instances + classification
+                if self.cfg.MODEL.N_CLASSES > 2:
+                    # Merge patches
+                    if self.stats['class_stats_merge_patches'] is not None:
+                        print(f"      Merge patches classification IoU: {self.stats['class_stats_merge_patches']}")
+                    # As 3D stack    
+                    if self.stats['class_stats_as_3D_stack'] is not None:
+                        print(f"      As 3D stack classification IoU: {self.stats['class_stats_as_3D_stack']}")
+                    # Full image
+                    if self.stats['class_stats'] is not None:
+                        print(f"      Full image classification IoU: {self.stats['class_stats']}")
+
+                    if self.post_processing['instance_post']:
+                        # Merge patches
+                        if self.stats['class_stats_merge_patches_post'] is not None:
+                            print(f"      Merge patches classification IoU (post-processing): {self.stats['class_stats_merge_patches_post']}")
+                        # As 3D stack    
+                        if self.stats['class_stats_as_3D_stack_post'] is not None:
+                            print(f"      As 3D stack classification IoU (post-processing): {self.stats['class_stats_as_3D_stack_post']}")
+                        # Full image
+                        if self.stats['class_stats_post'] is not None:
+                            print(f"      Full image classification IoU (post-processing): {self.stats['class_stats_post']}")
 
     def prepare_instance_data(self):
         """

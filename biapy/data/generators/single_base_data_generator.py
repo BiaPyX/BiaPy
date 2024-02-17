@@ -376,8 +376,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         """
         # Choose the data source
         if self.in_memory:
-            img = self.X[idx]
-            img = np.squeeze(img)
+            img = np.squeeze(self.X[idx].copy())
             img_class = self.Y[idx] if self.ptype == "classification" else 0
         else:
             sample_id = self.all_samples[idx]

@@ -199,6 +199,7 @@ class MultiResUnet(torch.nn.Module):
         self.ndim = ndim
         self.alpha = alpha
         self.n_classes = 1 if n_classes <= 2 else n_classes
+        self.multiclass = True if n_classes > 2 and output_channels is not None else False
 
         if self.ndim == 3:
             conv = nn.Conv3d
@@ -288,6 +289,10 @@ class MultiResUnet(torch.nn.Module):
         else:
             self.last_block = Conv_batchnorm(conv, batchnorm_layer, self.in_filters9, self.n_classes, kernel_size = 1, activation='None')
 
+        # Multi-head: instances + classification
+        if self.multiclass:
+            self.last_class_head = conv(self.in_filters9, self.n_classes, kernel_size=1, padding='same')
+
     def forward(self, x : torch.Tensor)-> torch.Tensor:
         # Super-resolution
         if self.pre_upsampling is not None:
@@ -327,10 +332,17 @@ class MultiResUnet(torch.nn.Module):
         if self.post_upsampling is not None:
             x_multires9 = self.post_upsampling(x_multires9)
 
+        class_head_out = torch.empty(())    
+        if self.multiclass:
+            class_head_out = self.last_class_head(x_multires9) 
+
         out =  self.last_block(x_multires9)
         
         # Clip values in SR
         if self.pre_upsampling is not None or self.post_upsampling is not None:
             out = torch.clamp(out, min=0, max=1)
             
-        return out
+        if class_head_out is not None:
+            return [out, class_head_out]
+        else:
+            return out

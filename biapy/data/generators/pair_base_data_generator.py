@@ -314,7 +314,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         data must be the same on each epoch). Valid when ``random_crops_in_DA`` is set.
 
     n_classes : int, optional
-        Number of classes. If ``> 1`` one-hot encoding will be done on the ground truth.
+        Number of classes. 
 
     extra_data_factor : int, optional
         Factor to multiply the batches yielded in a epoch. It acts as if ``X`` and ``Y``` where concatenated
@@ -358,7 +358,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
     normalizeY : str, optional
         Whether Y is going to be normalized or not. Options: ``as_mask``, ``as_image``. With ``as_image`` the image will be 
         treated as another image and not as a mask (for normalization and interpolation).
-
+    
     instance_problem : bool, optional
         Advice the class that the workflow is of instance segmentation to divide the labels by channels.
     
@@ -473,9 +473,8 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 self.Y = Y
             self.length = len(self.X)
         
-        self.first_no_bin_channel = -1
-        self.div_Y_on_load_bin_channels = False
-        self.div_Y_on_load_no_bin_channels = False
+        self.channel_info = {}
+        self.no_bin_channel_found = False
         self.shape = shape
 
         # X data analysis
@@ -538,30 +537,41 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         # Y data analysis
         if self.Y_provided:
-            found = False
             # Loop over a few masks to ensure foreground class is present to decide normalization
             n_samples = len(self.data_mask_path) if not in_memory else len(self.Y)
+            self.channels_to_analize = -1
+            analized = False
+            print("Checking which channel of the mask needs normalization . . .")
             for i in range(n_samples):
                 _, mask = self.load_sample(i)
                 if self.normalizeY == 'as_mask':
-                    # Store wheter all channels of the gt are binary or not (i.e. distance transform channel)
-                    if not found and (mask.dtype is np.dtype(np.float32) or mask.dtype is np.dtype(np.float64)) and instance_problem:
-                        for j in range(mask.shape[-1]):
-                            if len(np.unique(mask[...,j])) > 2:
-                                self.first_no_bin_channel = j
-                                found = True
-                                break
-
-                    # If found high values divide masks
-                    if self.first_no_bin_channel != -1:
-                        if self.first_no_bin_channel != 0:
-                            if np.max(mask[...,:self.first_no_bin_channel]) > 30: self.div_Y_on_load_bin_channels = True
-                            if np.max(mask[...,self.first_no_bin_channel:]) > 30: self.div_Y_on_load_no_bin_channels = True
+                    # Store which channels are binary or not (e.g. distance transform channel is not binary)
+                    if not analized:
+                        if n_classes > 2 and instance_problem:
+                            self.channels_to_analize = mask.shape[-1]-1  
+                            self.channel_info[self.channels_to_analize] = {'type': 'classes'}
+                            self.channel_info[self.channels_to_analize]['div'] = False
                         else:
-                            if np.max(mask) > 30: self.div_Y_on_load_bin_channels = True
-                            if np.max(mask) > 30: self.div_Y_on_load_no_bin_channels = True 
-                    else:
-                        if np.max(mask) > 30: self.div_Y_on_load_bin_channels = True 
+                            self.channels_to_analize = mask.shape[-1]
+                        analized = True
+
+                    for j in range(self.channels_to_analize):
+                        if j not in self.channel_info:
+                            self.channel_info[j] = {'type': 'bin'}
+                            self.channel_info[j]['div'] = False
+
+                        if instance_problem:
+                            if len(np.unique(mask[...,j])) > 2:
+                                self.channel_info[j]['type'] = 'no_bin'
+                                self.no_bin_channel_found = True  
+                            if np.max(mask[...,j]) > 30:
+                                self.channel_info[j]['div'] = True
+                        else: # In semantic seg, maybe the mask are in 255
+                            if np.max(mask[...,j]) > n_classes:
+                                self.channel_info[j]['div'] = True
+
+            if self.channels_to_analize == -1: 
+                self.channels_to_analize = mask.shape[-1]  
             self.Y_channels = mask.shape[-1]
             self.Y_dtype = mask.dtype
             del mask
@@ -777,12 +787,9 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         # Choose the data source
         idx = _idx % self.length
         if self.in_memory:
-            img = self.X[idx]
-            img = np.squeeze(img)
-
+            img = np.squeeze(self.X[idx].copy())
             if self.Y_provided:
-                mask = self.Y[idx]
-                mask = np.squeeze(mask)
+                mask = np.squeeze(self.Y[idx].copy())
         else:
             if self.data_paths[idx].endswith('.npy'):
                 img = np.load(os.path.join(self.paths[0], self.data_paths[idx]))
@@ -795,15 +802,17 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             img = np.squeeze(img)
             if self.Y_provided:
                 mask = np.squeeze(mask)
-        
-        img = self.norm_X(img)
 
         if self.Y_provided:
-            mask = self.norm_Y(mask)
             img, mask = self.ensure_shape(img, mask)
-            return img, mask
         else:
             img = self.ensure_shape(img, None)
+
+        img = self.norm_X(img)
+        if self.Y_provided:
+            mask = self.norm_Y(mask)
+            return img, mask
+        else:
             return img, np.zeros(img.shape, dtype=np.float32)
 
     def norm_X(self, img):
@@ -843,19 +852,12 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         mask : 3D/4D Numpy array
             Y element normalized. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
         """
-        # Y normalization  
+        # Y normalization
         if self.X_norm['type'] != "none":
-            if self.normalizeY == 'as_mask' and self.Y_provided:  
-                if self.first_no_bin_channel != -1:
-                    if self.div_Y_on_load_bin_channels:
-                        mask[...,:self.first_no_bin_channel] = mask[...,:self.first_no_bin_channel]/255
-                    if self.div_Y_on_load_no_bin_channels:
-                        if self.first_no_bin_channel != 0:
-                            mask[...,self.first_no_bin_channel:] = mask[...,self.first_no_bin_channel:]/255
-                        else:
-                            mask = mask/255
-                else:
-                    if self.div_Y_on_load_bin_channels: mask = mask/255
+            if self.normalizeY == 'as_mask' and self.Y_provided: 
+                for j in range(self.channels_to_analize):
+                    if self.channel_info[j]['div']:
+                        mask[...,j] = mask[...,j]/255
             elif self.normalizeY == 'as_image' and self.Y_provided: 
                 if self.X_norm['type'] == 'div':
                     mask, _ = norm_range01(mask)
@@ -965,20 +967,26 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             Transformed image mask. E.g. ``(y, x, channels)`` in ``2D`` or ``(y, x, z, channels)`` in ``3D``.
         """
         # Split heatmaps from masks
-        if self.first_no_bin_channel != -1:
-            if self.first_no_bin_channel != 0:
-                heat = mask[...,self.first_no_bin_channel:]
-                mask = mask[...,:self.first_no_bin_channel]
+        heat = None
+        if self.no_bin_channel_found:
+            heat = []
+            new_mask = []
+            for j in range(mask.shape[-1]):
+                if self.channel_info[j]['type'] == "no_bin":
+                    heat.append(np.expand_dims(mask[...,j],-1))
+                else:
+                    new_mask.append(np.expand_dims(mask[...,j],-1))
+                        
+            heat = np.concatenate(heat, axis=-1)
+            if len(new_mask) == 0:
+                mask = np.zeros(mask.shape) # Fake mask   
             else:
-                heat = mask
-                mask = np.zeros(mask.shape) # Fake mask
+                mask = np.concatenate(new_mask, axis=-1)
+            del new_mask
+
             o_heat_shape = heat.shape
-            o_mask_shape = mask.shape
             if self.ndim == 3:
                 heat = heat.reshape(heat.shape[:(self.ndim-1)]+(heat.shape[2]*heat.shape[3],))
-            heat = HeatmapsOnImage(heat, shape=heat.shape, min_value=0.0, max_value=np.max(heat)+sys.float_info.epsilon)
-        else:
-            heat = None
 
         # Save shape
         o_img_shape = image.shape
@@ -994,11 +1002,13 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         # Apply random rotations
         if self.rand_rot and random.uniform(0, 1) < self.da_prob:
-            image, mask = rotation(image, mask, angles=self.rnd_rot_range, mode=self.affine_mode, mask_type=self.normalizeY)
+            image, mask, heat = rotation(image, mask, heat=heat, angles=self.rnd_rot_range, mode=self.affine_mode, 
+                mask_type=self.normalizeY)
 
         # Apply square rotations
         if self.rotation90 and random.uniform(0, 1) < self.da_prob:
-            image, mask = rotation(image, mask, angles=[90, 180, 270], mode=self.affine_mode, mask_type=self.normalizeY)
+            image, mask, heat = rotation(image, mask, heat=heat, angles=[90, 180, 270], mode=self.affine_mode, 
+                mask_type=self.normalizeY)
 
         # Reshape 3D volumes to 2D image type with multiple channels to pass through imgaug lib
         if self.ndim == 3:
@@ -1007,6 +1017,9 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             if e_im is not None: e_im = e_im.reshape(e_im.shape[:2]+(e_im.shape[2]*e_im.shape[3],))
             if e_mask is not None: e_mask = e_mask.reshape(e_mask.shape[:2]+(e_mask.shape[2]*e_mask.shape[3],))
             #if e_heat is not None: e_heat = e_heat.reshape(e_heat.shape[:2]+(e_heat.shape[2]*e_heat.shape[3],))
+        # Convert heatmap into imgaug object
+        if heat is not None:
+            heat = HeatmapsOnImage(heat, shape=heat.shape, min_value=0.0, max_value=np.max(heat)+sys.float_info.epsilon)
 
         # Apply cutout
         if self.cutout and random.uniform(0, 1) < self.da_prob:
@@ -1091,14 +1104,21 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         mask = mask.reshape(o_mask_shape)
 
         # Merge heatmaps and masks again
-        if self.first_no_bin_channel != -1:
+        if self.no_bin_channel_found:
             heat = heat_out.get_arr()
             if self.ndim == 3:
                 heat = heat.reshape(o_heat_shape)
-            if self.first_no_bin_channel != 0:
-                mask = np.concatenate((mask,heat),axis=-1)
-            else:
-                mask = heat
+
+            new_mask = []
+            hi, mi = 0, 0
+            for j in range(len(self.channel_info)):
+                if self.channel_info[j]['type'] == "no_bin":
+                    new_mask.append(np.expand_dims(heat[...,hi],-1))
+                    hi += 1
+                else:
+                    new_mask.append(np.expand_dims(mask[...,mi],-1))
+                    mi += 1
+            mask = np.concatenate(new_mask, axis=-1)
 
         return image, mask
 

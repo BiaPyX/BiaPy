@@ -48,11 +48,32 @@ def create_instance_channels(cfg, data_type='train'):
     print("Creating Y_{} channels . . .".format(data_type))
     if isinstance(Y, list):
         for i in tqdm(range(len(Y))):
-            Y[i] = labels_into_channels(Y[i], mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, save_dir=getattr(cfg.PATHS, tag+'_INSTANCE_CHANNELS_CHECK'),
-                          fb_mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE)
+            if cfg.MODEL.N_CLASSES > 2:
+                if Y[i].shape[-1] != 2:
+                    raise ValueError("In instance segmentation, when 'MODEL.N_CLASSES' are more than 2 labels need to have two channels, "
+                        "e.g. (256,256,2), containing the instance segmentation map (first channel) and classification map (second channel).")
+                else:
+                    class_channel = np.expand_dims(Y[i,...,1].copy(),-1)
+                    Y[i] = labels_into_channels(Y[i], mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, save_dir=getattr(cfg.PATHS, tag+'_INSTANCE_CHANNELS_CHECK'),
+                        fb_mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE)
+                    Y[i] = np.concatenate([Y[i],class_channel],axis=-1)
+            else:
+                Y[i] = labels_into_channels(Y[i], mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, save_dir=getattr(cfg.PATHS, tag+'_INSTANCE_CHANNELS_CHECK'),
+                    fb_mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE)
     else:
-        Y = labels_into_channels(Y, mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, save_dir=getattr(cfg.PATHS, tag+'_INSTANCE_CHANNELS_CHECK'),
-                   fb_mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE)
+        if cfg.MODEL.N_CLASSES > 2:
+            if Y.shape[-1] != 2:
+                raise ValueError("In instance segmentation, when 'MODEL.N_CLASSES' are more than 2 labels need to have two channels, "
+                    "e.g. (256,256,2), containing the instance segmentation map (first channel) and classification map (second channel).")
+            else:
+                class_channel = np.expand_dims(Y[...,1].copy(),-1)
+                Y = labels_into_channels(Y, mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, save_dir=getattr(cfg.PATHS, tag+'_INSTANCE_CHANNELS_CHECK'),
+                    fb_mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE)
+                Y = np.concatenate([Y, class_channel], axis=-1)
+        else:
+            Y = labels_into_channels(Y, mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, save_dir=getattr(cfg.PATHS, tag+'_INSTANCE_CHANNELS_CHECK'),
+                fb_mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE)
+    
     save_tif(Y, data_dir=getattr(cfg.DATA, tag).INSTANCE_CHANNELS_MASK_DIR, filenames=filenames, verbose=cfg.TEST.VERBOSE)
     X, _, _, filenames = f_name(getattr(cfg.DATA, tag).PATH, return_filenames=True)
     print("Creating X_{} channels . . .".format(data_type))

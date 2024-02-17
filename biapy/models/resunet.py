@@ -72,6 +72,7 @@ class ResUNet(nn.Module):
         self.ndim = 3 if len(image_shape) == 4 else 2 
         self.z_down = z_down
         self.n_classes = 1 if n_classes <= 2 else n_classes
+        self.multiclass = True if n_classes > 2 and output_channels is not None else False
         if self.ndim == 3:
             conv = nn.Conv3d
             convtranspose = nn.ConvTranspose3d
@@ -134,6 +135,10 @@ class ResUNet(nn.Module):
         else:
             self.last_block = conv(feature_maps[0], self.n_classes, kernel_size=1, padding='same')
 
+        # Multi-head: instances + classification
+        if self.multiclass:
+            self.last_class_head = conv(feature_maps[0], self.n_classes, kernel_size=1, padding='same')
+
         self.apply(self._init_weights)
 
     def forward(self, x):
@@ -160,13 +165,20 @@ class ResUNet(nn.Module):
         if self.post_upsampling is not None:
             x = self.post_upsampling(x)
 
+        class_head_out = torch.empty(())    
+        if self.multiclass:
+            class_head_out = self.last_class_head(x) 
+
         x = self.last_block(x)
 
         # Clip values in SR
         if self.pre_upsampling is not None or self.post_upsampling is not None:
             x = torch.clamp(x, min=0, max=1)            
 
-        return x
+        if class_head_out is not None:
+            return [x, class_head_out]
+        else:
+            return x
 
     def _init_weights(self, m):
         if isinstance(m, nn.Conv2d) or isinstance(m, nn.Conv3d):

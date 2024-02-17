@@ -41,7 +41,7 @@ class Super_resolution_Workflow(Base_Workflow):
 
         # Activations for each output channel:
         # channel number : 'activation'
-        self.activations = {':': 'Linear'}
+        self.activations = [{':': 'Linear'}]
 
         # Workflow specific training variables
         self.mask_path = cfg.DATA.TRAIN.GT_PATH

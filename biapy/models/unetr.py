@@ -79,6 +79,7 @@ class UNETR(nn.Module):
         self.ViT_hidd_mult = ViT_hidd_mult
         self.ndim = 3 if len(input_shape) == 4 else 2
         self.n_classes = 1 if n_classes <= 2 else n_classes
+        self.multiclass = True if n_classes > 2 and output_channels is not None else False
 
         if self.ndim == 3:
             conv = nn.Conv3d
@@ -169,6 +170,10 @@ class UNETR(nn.Module):
         else:
             self.last_block = conv(num_filters, self.n_classes, kernel_size=1, padding='same')
 
+        # Multi-head: instances + classification
+        if self.multiclass:
+            self.last_class_head = conv(num_filters, self.n_classes, kernel_size=1, padding='same')
+
         self.apply(self._init_weights)
         
     def proj_feat(self, x):
@@ -209,8 +214,15 @@ class UNETR(nn.Module):
         
         # UNETR output 
         x = self.two_yellow_layers[-1](x)
+        class_head_out = torch.empty(())    
+        if self.multiclass:
+            class_head_out = self.last_class_head(x) 
         x = self.last_block(x)
-        return x
+        
+        if class_head_out is not None:
+            return [x, class_head_out]
+        else:
+            return x
 
     def _init_weights(self, m):
         if isinstance(m, nn.Conv2d) or isinstance(m, nn.Conv3d):

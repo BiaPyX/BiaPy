@@ -31,10 +31,9 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
     # Adjust channel weights 
     if cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
-        if not 'Dv2' in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
-            channels_provided = len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
-        else:
-            channels_provided = len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS.replace('Dv2',''))+1
+        channels_provided = len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS.replace('Dv2','D'))
+        if cfg.MODEL.N_CLASSES > 2: 
+            channels_provided += 1
         if len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS) != channels_provided:
             if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS == (1, 1):
                 opts.extend(['PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS', (1,)*channels_provided])    
@@ -190,6 +189,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         raise ValueError("'TEST.AUGMENTATION' and 'TEST.REDUCE_MEMORY' are incompatible as the function used to make the rotation "
             "does not support float16 data type.") 
 
+    if cfg.MODEL.N_CLASSES > 2 and cfg.PROBLEM.TYPE not in ['SEMANTIC_SEG','INSTANCE_SEG','DETECTION','CLASSIFICATION']:
+        raise ValueError("'MODEL.N_CLASSES' can only be greater than 2 in the following workflows: 'SEMANTIC_SEG', "
+            "'INSTANCE_SEG', 'DETECTION' and 'CLASSIFICATION'")
+
     model_arch = cfg.MODEL.ARCHITECTURE.lower()
     #### Semantic segmentation ####
     if cfg.PROBLEM.TYPE == 'SEMANTIC_SEG':
@@ -222,7 +225,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         if len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS) != channels_provided:
             raise ValueError("'PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS' needs to be of the same length as the channels selected in 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'. "
                             "E.g. 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'='BC' 'PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS'=[1,0.5]. "
-                            "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'='BCD' 'PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS'=[0.5,0.5,1]")
+                            "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'='BCD' 'PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS'=[0.5,0.5,1]. "
+                            "If 'MODEL.N_CLASSES' > 2 one more weigth need to be provided.")
         if cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK:
             if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS not in ['BC', 'BCM', 'BCD', 'BCDv2']:
                 raise ValueError("'PROBLEM.INSTANCE_SEG.DATA_CHANNELS' needs to be one between ['BC', 'BCM', 'BCD', 'BCDv2'] "
@@ -246,8 +250,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             if cfg.PROBLEM.NDIM == "2D" and not cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
                 raise ValueError("'PROBLEM.INSTANCE_SEG.WATERSHED_BY_2D_SLICE' can only be activated when 'PROBLEM.NDIM' == 3D or "
                     "in 2D when 'TEST.ANALIZE_2D_IMGS_AS_3D_STACK' is enabled")
-        if cfg.MODEL.N_CLASSES > 2:
-            raise ValueError("'MODEL.N_CLASSES' greater than 2 is not allowed in Instance Segmentation workflow")
         if cfg.MODEL.SOURCE == "torchvision":
             if cfg.MODEL.TORCHVISION_MODEL_NAME not in ['maskrcnn_resnet50_fpn', 'maskrcnn_resnet50_fpn_v2']:
                 raise ValueError("'MODEL.SOURCE' must be one between ['maskrcnn_resnet50_fpn', 'maskrcnn_resnet50_fpn_v2']")
@@ -514,8 +516,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "MODEL.ARCHITECTURE not in ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'simple_cnn', 'efficientnet_b[0-7]', 'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae']"
         if model_arch not in ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'multiresunet', 'unetr', 'vit', 'mae'] and cfg.PROBLEM.NDIM == '3D' and cfg.PROBLEM.TYPE != "CLASSIFICATION":
             raise ValueError("For 3D these models are available: {}".format(['unet', 'resunet', 'resunet++', 'seunet', 'multiresunet', 'attention_unet', 'unetr', 'vit', 'mae']))
-        if cfg.MODEL.N_CLASSES > 2 and cfg.PROBLEM.TYPE != "CLASSIFICATION" and model_arch not in ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'multiresunet']:
-            raise ValueError("'MODEL.N_CLASSES' > 2 can only be used with 'MODEL.ARCHITECTURE' in ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'multiresunet']")
+        if cfg.MODEL.N_CLASSES > 2 and cfg.PROBLEM.TYPE != "CLASSIFICATION" and model_arch not in ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'multiresunet', 'unetr']:
+            raise ValueError("'MODEL.N_CLASSES' > 2 can only be used with 'MODEL.ARCHITECTURE' in ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'multiresunet', 'unetr']")
         
         assert len(cfg.MODEL.FEATURE_MAPS) > 2, "'MODEL.FEATURE_MAPS' needs to have at least 3 values"
         

@@ -82,7 +82,7 @@ def jaccard_index_numpy_without_background(y_true, y_pred):
 
 
 class jaccard_index():
-    def __init__(self,  num_classes, first_not_binary_channel, device, t=0.5, torchvision_models=False):
+    def __init__(self,  num_classes, device, t=0.5, torchvision_models=False):
         """
         Define Jaccard index.
 
@@ -91,9 +91,6 @@ class jaccard_index():
         num_classes : int
             Number of classes.
 
-        first_not_binary_channel : int
-            First channel not binary to not apply IoU in. 
-        
         device : Torch device
             Using device ("cpu" or "cuda" for GPU). 
 
@@ -107,7 +104,6 @@ class jaccard_index():
         self.torchvision_models = torchvision_models
         self.loss = torch.nn.CrossEntropyLoss()
         self.device = device 
-        self.first_not_binary_channel = first_not_binary_channel
         self.num_classes = num_classes
         self.t = t 
 
@@ -141,10 +137,109 @@ class jaccard_index():
             if torch.max(y_true) > 1 and self.num_classes <= 2: 
                 y_true = (y_true/255).type(torch.long)
         
-        if self.num_classes <= 2:
-            return self.jaccard(y_pred[:,:self.first_not_binary_channel], y_true[:,:self.first_not_binary_channel])
+        return self.jaccard(y_pred, y_true.squeeze())
+
+class instance_metrics():
+    def __init__(self, num_classes, metric_names, device, torchvision_models=False):
+        """
+        Define Jaccard index.
+
+        Parameters
+        ---------- 
+        num_classes : int
+            Number of classes.
+
+        channels_to_not_process : list of ints
+            Non-binary channels to not apply IoU on them. 
+        
+        device : Torch device
+            Using device ("cpu" or "cuda" for GPU). 
+
+        t : float, optional
+            Threshold to be applied.
+
+        torchvision_models : bool, optional
+            Whether the workflow is using a TorchVision model or not. In that case the GT could be 
+            resized and normalized, as it was done so with TorchVision preprocessing for the X data.
+        """
+
+        self.num_classes = num_classes
+        self.metric_names = metric_names
+        self.device = device 
+        self.torchvision_models = torchvision_models
+        
+        self.jaccard = None
+        self.jaccard_multi = None
+        self.l1loss = None
+        self.multihead = False
+        self.metric_func = []
+        for i in range(len(metric_names)):
+            if metric_names[i] == "jaccard_index" and self.jaccard is None:
+                self.jaccard = JaccardIndex(task="binary", threshold=0.5, num_classes=2).to(self.device, non_blocking=True)
+                loss_func = self.jaccard
+            elif metric_names[i] == "L1_distance_channel" and self.l1loss is None:   
+                self.l1loss = torch.nn.L1Loss()
+                loss_func = self.l1loss
+            elif metric_names[i] == "jaccard_index_classes" and self.jaccard_multi is None: 
+                self.jaccard_multi = JaccardIndex(task="multiclass", threshold=0.5, num_classes=self.num_classes).to(self.device, non_blocking=True)
+                self.multihead = True 
+                loss_func = self.jaccard_multi
+
+            self.metric_func.append(loss_func)
+
+    def __call__(self, y_pred, y_true):
+        """
+        Calculate CrossEntropyLoss.
+
+        Parameters
+        ----------
+        y_true : Tensor
+            Ground truth masks.
+
+        y_pred : Tensor or list of Tensors
+            Prediction.
+
+        Returns
+        -------
+        dict : dict
+            Metrics and their values.
+        """
+        # Check multi-head 
+        if isinstance(y_pred, list):
+            num_channels = y_pred[0].shape[1]+1
+            _y_pred = y_pred[0]
+            _y_pred_class = torch.argmax(y_pred[1], axis=1)
         else:
-            return self.jaccard(y_pred, y_true[:,0])
+            num_channels = y_pred.shape[1]
+            _y_pred = y_pred
+            assert "jaccard_index_classes" not in self.metric_names[i], "'jaccard_index_classes' can only be used with multi-head predictions"
+
+        # If image shape has changed due to TorchVision or BMZ preprocessing then the mask needs
+        # to be resized too
+        if self.torchvision_models:
+            if _y_pred.shape[-2:] != y_true.shape[-2:]:    
+                y_true = resize(y_true, size=_y_pred.shape[-2:], interpolation=T.InterpolationMode("nearest"))
+            if torch.max(y_true) > 1 and self.num_classes <= 2: 
+                y_true = (y_true/255).type(torch.long)
+
+        res_metrics = {}       
+        for i in range(num_channels):
+            if self.metric_names[i] not in res_metrics:
+                res_metrics[self.metric_names[i]] = []
+            # Measure metric 
+            if self.metric_names[i] == "jaccard_index_classes":
+                res_metrics[self.metric_names[i]].append(self.metric_func[i](_y_pred_class, y_true[:,1]))
+            else:
+                res_metrics[self.metric_names[i]].append(self.metric_func[i](_y_pred[:,i], y_true[:,0]))
+        
+        # Mean of same metric values 
+        for key, value in res_metrics.items():
+            if len(value) > 1:
+                res_metrics[key] = torch.mean(torch.as_tensor(value))
+            else:
+                res_metrics[key] = torch.as_tensor(value[0])
+        return res_metrics
+
 
 class CrossEntropyLoss_wrapper():
     def __init__(self, num_classes, torchvision_models=False):
@@ -328,56 +423,93 @@ def binary_crossentropy_weighted(weights):
     return loss
 
 
-def instance_segmentation_loss(weights=(1,0.2), out_channels="BC", mask_distance_channel=True):
-    """
-    Custom loss that mixed BCE and MSE depending on the ``out_channels`` variable.
+class instance_segmentation_loss():
+    def __init__(self, weights=(1,0.2), out_channels="BC", mask_distance_channel=True, n_classes=2):
+        """
+        Custom loss that mixed BCE and MSE depending on the ``out_channels`` variable.
 
-    Parameters
-    ----------
-    weights : 2 float tuple, optional
-        Weights to be applied to segmentation (binary and contours) and to distances respectively. E.g. ``(1, 0.2)``,
-        ``1`` should be multipled by ``BCE`` for the first two channels and ``0.2`` to ``MSE`` for the last channel.
+        Parameters
+        ----------
+        weights : 2 float tuple, optional
+            Weights to be applied to segmentation (binary and contours) and to distances respectively. E.g. ``(1, 0.2)``,
+            ``1`` should be multipled by ``BCE`` for the first two channels and ``0.2`` to ``MSE`` for the last channel.
 
-    out_channels : str, optional
-        Channels to operate with. 
+        out_channels : str, optional
+            Channels to operate with. 
 
-    mask_distance_channel : bool, optional
-        Whether to mask the distance channel to only calculate the loss in those regions where the binary mask
-        defined by B channel is present. 
-    """
-    binary_channels_loss = torch.nn.BCEWithLogitsLoss()
-    distance_channels_loss = torch.nn.L1Loss()
-    def loss(y_pred, y_true):
-        if "D" in out_channels and out_channels != "Dv2":
-            if mask_distance_channel:  
-                D = y_pred[:,-1] * y_true[:,0]
+        mask_distance_channel : bool, optional
+            Whether to mask the distance channel to only calculate the loss in those regions where the binary mask
+            defined by B channel is present. 
+        """
+        self.weights = weights
+        self.out_channels = out_channels
+        self.mask_distance_channel = mask_distance_channel 
+        self.n_classes = n_classes
+        self.d_channel = -2 if n_classes > 2 else -1 
+
+        self.binary_channels_loss = torch.nn.BCEWithLogitsLoss()
+        self.distance_channels_loss = torch.nn.L1Loss()
+        self.class_channel_loss = torch.nn.CrossEntropyLoss()
+
+    def __call__(self, y_pred, y_true):
+        """
+        Calculate instance segmentation loss.
+
+        Parameters
+        ----------
+        y_true : Tensor
+            Ground truth masks.
+
+        y_pred : Tensor or list of Tensors
+            Predictions.
+
+        Returns
+        -------
+        loss : Tensor
+            Loss value.
+        """
+        if isinstance(y_pred, list):
+            _y_pred = y_pred[0]
+            _y_pred_class = y_pred[1]
+        else:
+            _y_pred = y_pred
+
+        if "D" in self.out_channels and self.out_channels != "Dv2":
+            if self.mask_distance_channel:  
+                D = _y_pred[:,self.d_channel] * y_true[:,0]
             else:
-                D = y_pred[:,-1] 
-        if out_channels == "BC":
-            return weights[0]*binary_channels_loss(y_pred[:,0], y_true[:,0])+\
-                   weights[1]*binary_channels_loss(y_pred[:,1], y_true[:,1])
-        elif out_channels == "BCM":
-            return weights[0]*binary_channels_loss(y_pred[:,0], y_true[:,0])+\
-                   weights[1]*binary_channels_loss(y_pred[:,1], y_true[:,1])+\
-                   weights[2]*binary_channels_loss(y_pred[:,2], y_true[:,2])   
-        elif out_channels == "BCD":
-            return weights[0]*binary_channels_loss(y_pred[:,0], y_true[:,0])+\
-                   weights[1]*binary_channels_loss(y_pred[:,1], y_true[:,1])+\
-                   weights[2]*distance_channels_loss(D, y_true[:,2]) 
-        elif out_channels == "BCDv2":
-            return weights[0]*binary_channels_loss(y_pred[:,0], y_true[:,0])+\
-                   weights[1]*binary_channels_loss(y_pred[:,1], y_true[:,1])+\
-                   weights[2]*distance_channels_loss(D, y_true[:,2]) 
-        elif out_channels in ["BDv2", "BD"]:
-            return weights[0]*binary_channels_loss(y_pred[:,0], y_true[:,0])+\
-                   weights[1]*distance_channels_loss(D, y_true[:,1])
-        elif out_channels == "BP":
-            return weights[0]*binary_channels_loss(y_pred[:,0], y_true[:,0])+\
-                   weights[1]*binary_channels_loss(y_pred[:,1], y_true[:,1])
+                D = _y_pred[:,self.d_channel] 
+
+        loss = 0
+        if self.out_channels == "BC":
+            loss = self.weights[0]*self.binary_channels_loss(_y_pred[:,0], y_true[:,0])+\
+                   self.weights[1]*self.binary_channels_loss(_y_pred[:,1], y_true[:,1])
+        elif self.out_channels == "BCM":
+            loss = self.weights[0]*self.binary_channels_loss(_y_pred[:,0], y_true[:,0])+\
+                   self.weights[1]*self.binary_channels_loss(_y_pred[:,1], y_true[:,1])+\
+                   self.weights[2]*self.binary_channels_loss(_y_pred[:,2], y_true[:,2])   
+        elif self.out_channels == "BCD":
+            loss = self.weights[0]*self.binary_channels_loss(_y_pred[:,0], y_true[:,0])+\
+                   self.weights[1]*self.binary_channels_loss(_y_pred[:,1], y_true[:,1])+\
+                   self.weights[2]*self.distance_channels_loss(D, y_true[:,2]) 
+        elif self.out_channels == "BCDv2":
+            loss = self.weights[0]*self.binary_channels_loss(_y_pred[:,0], y_true[:,0])+\
+                   self.weights[1]*self.binary_channels_loss(_y_pred[:,1], y_true[:,1])+\
+                   self.weights[2]*self.distance_channels_loss(D, y_true[:,2]) 
+        elif self.out_channels in ["BDv2", "BD"]:
+            loss = self.weights[0]*self.binary_channels_loss(_y_pred[:,0], y_true[:,0])+\
+                   self.weights[1]*self.distance_channels_loss(D, y_true[:,1])
+        elif self.out_channels == "BP":
+            loss = self.weights[0]*self.binary_channels_loss(_y_pred[:,0], y_true[:,0])+\
+                   self.weights[1]*self.binary_channels_loss(_y_pred[:,1], y_true[:,1])
         # Dv2
         else:
-            return weights[0]*distance_channels_loss(y_pred, y_true)
-    return loss
+            loss = self.weights[0]*self.distance_channels_loss(_y_pred, y_true)
+
+        if self.n_classes > 2:
+            loss += self.weights[-1]*self.class_channel_loss(_y_pred_class, y_true[:,-1].type(torch.long))
+        
+        return loss
 
 def detection_metrics(true, pred, tolerance=10, voxel_size=(1,1,1), return_assoc=False, verbose=False):
     """Calculate detection metrics based on
