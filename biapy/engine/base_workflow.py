@@ -933,16 +933,12 @@ class Base_Workflow(metaclass=ABCMeta):
             img, _ = self.test_generator.norm_X(img)
             if self.cfg.TEST.AUGMENTATION:
                 p = ensemble16_3d_predictions(img[0], batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
-                    pred_func=(
-                        lambda img_batch_subdiv: 
-                            self.apply_model_activations(
-                                self.model_call_func(img_batch_subdiv),
-                                )   
-                    )
-                )
+                    axis_order_back=self.axis_order_back, pred_func=self.model_call_func, 
+                    axis_order=self.axis_order, device=self.device)
             else:
                 with torch.cuda.amp.autocast():
-                    p = self.apply_model_activations(self.model_call_func(img))
+                    p = self.model_call_func(img)
+            p = self.apply_model_activations(p)
             # Multi-head concatenation
             if isinstance(p, list):
                 p = torch.cat((p[0], torch.argmax(p[1], axis=1).unsqueeze(1)), dim=1)
@@ -1206,29 +1202,19 @@ class Base_Workflow(metaclass=ABCMeta):
             if self.cfg.TEST.AUGMENTATION:
                 for k in tqdm(range(self._X.shape[0]), leave=False):
                     if self.cfg.PROBLEM.NDIM == '2D':
-                        p = ensemble8_2d_predictions(self._X[k],
-                            pred_func=(
-                                lambda img_batch_subdiv: 
-                                    self.apply_model_activations(
-                                        self.model_call_func(img_batch_subdiv),
-                                        ), 
-                            )
-                        )
+                        p = ensemble8_2d_predictions(self._X[k], axis_order_back=self.axis_order_back,
+                            pred_func=self.model_call_func, axis_order=self.axis_order, device=self.device)
                     else:
                         p = ensemble16_3d_predictions(self._X[k], batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
-                            pred_func=(
-                                lambda img_batch_subdiv: 
-                                    self.apply_model_activations(
-                                        self.model_call_func(img_batch_subdiv),
-                                        ),   
-                            )
-                        )
+                            axis_order_back=self.axis_order_back, pred_func=self.model_call_func, 
+                            axis_order=self.axis_order, device=self.device)
+                    p = self.apply_model_activations(p)
                     # Multi-head concatenation
                     if isinstance(p, list):
                         p = torch.cat((p[0], p[1]), dim=1)
                     p = to_numpy_format(p, self.axis_order_back)
                     if 'pred' not in locals():
-                        pred = np.zeros((self._X.shape[0],)+p.shape, dtype=self.dtype)
+                        pred = np.zeros((self._X.shape[0],)+p.shape[1:], dtype=self.dtype)
                     pred[k] = p
             else:
                 l = int(math.ceil(self._X.shape[0]/self.cfg.TRAIN.BATCH_SIZE))
@@ -1357,26 +1343,17 @@ class Base_Workflow(metaclass=ABCMeta):
 
             # Make the prediction
             if self.cfg.TEST.AUGMENTATION:
-                pred = ensemble8_2d_predictions(self._X[0],
-                    pred_func=(
-                        lambda img_batch_subdiv: 
-                            self.apply_model_activations(
-                                self.model_call_func(img_batch_subdiv),
-                                ), 
-                    )
-                )
-                # Multi-head concatenation
-                if isinstance(p, list):
-                    pred = torch.cat((pred[0], torch.argmax(pred[1], axis=1).unsqueeze(1)), dim=1)
-                pred = to_numpy_format(pred, self.axis_order_back) 
-                pred = np.expand_dims(pred, 0)
+                pred = ensemble8_2d_predictions(self._X[0], axis_order_back=self.axis_order_back, 
+                    pred_func=self.model_call_func, axis_order=self.axis_order, device=self.device)
             else:
                 with torch.cuda.amp.autocast():
-                    pred = self.apply_model_activations(self.model_call_func(self._X))
-                # Multi-head concatenation
-                if isinstance(p, list):
-                    pred = torch.cat((pred[0], torch.argmax(pred[1], axis=1).unsqueeze(1)), dim=1)  
-                pred = to_numpy_format(pred, self.axis_order_back)  
+                    pred = self.model_call_func(self._X)
+            pred = self.apply_model_activations(pred)
+            # Multi-head concatenation
+            if isinstance(p, list):
+                pred = torch.cat((pred[0], torch.argmax(pred[1], axis=1).unsqueeze(1)), dim=1)  
+            pred = to_numpy_format(pred, self.axis_order_back)  
+            if self.cfg.TEST.AUGMENTATION: pred = np.expand_dims(pred, 0)
             del self._X 
 
             # Recover original shape if padded with check_downsample_division

@@ -215,7 +215,7 @@ class instance_metrics():
         else:
             num_channels = y_pred.shape[1]
             _y_pred = y_pred
-            assert "jaccard_index_classes" not in self.metric_names[i], "'jaccard_index_classes' can only be used with multi-head predictions"
+            assert "jaccard_index_classes" not in self.metric_names, "'jaccard_index_classes' can only be used with multi-head predictions"
 
         # If image shape has changed due to TorchVision or BMZ preprocessing then the mask needs
         # to be resized too

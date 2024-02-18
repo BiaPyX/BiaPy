@@ -33,6 +33,7 @@ from biapy.utils.util import pad_and_reflect, save_tif
 from biapy.data.pre_processing import normalize
 from biapy.data.data_3D_manipulation import crop_3D_data_with_overlap
 from biapy.data.pre_processing import reduce_dtype
+from biapy.utils.misc import to_numpy_format, to_pytorch_format
 
 def boundary_refinement_watershed(X, Y_pred, erode=True, save_marks_dir=None):
     """Apply watershed to the given predictions with the goal of refine the boundaries of the artifacts.
@@ -489,7 +490,7 @@ def calculate_z_filtering(data, mf_size=5):
 
     return out_data 
 
-def ensemble8_2d_predictions(o_img, pred_func, batch_size_value=1):
+def ensemble8_2d_predictions(o_img, pred_func, axis_order_back, axis_order, device, batch_size_value=1):
     """
     Outputs the mean prediction of a given image generating its 8 possible rotations and flips.
 
@@ -500,6 +501,15 @@ def ensemble8_2d_predictions(o_img, pred_func, batch_size_value=1):
 
     pred_func : function
         Function to make predictions.
+
+    axis_order_back : tuple
+        Axis order to convert from tensor to numpy. E.g. ``(0,3,1,2)``.
+    
+    axis_order : tuple 
+        Axis order to convert from numpy to tensor. E.g. ``(0,3,1,2)``. 
+
+    device : Torch device
+        Device used. 
 
     batch_size_value : int, optional
         Batch size value.
@@ -567,9 +577,12 @@ def ensemble8_2d_predictions(o_img, pred_func, batch_size_value=1):
             r_aux = pred_func(total_img[i*batch_size_value:top])
 
         # Take just the last output of the network in case it returns more than one output
+        channel_split = None
         if isinstance(r_aux, list):
-            r_aux = np.array(r_aux[-1])
-
+            channel_split = r_aux[0].shape[1]
+            r_aux = np.concatenate([to_numpy_format(r_aux[0], axis_order_back),to_numpy_format(r_aux[1], axis_order_back)],axis=-1)
+        else:
+            r_aux = to_numpy_format(r_aux, axis_order_back)
         _decoded_aug_img.append(r_aux)
     _decoded_aug_img = np.concatenate(_decoded_aug_img)
 
@@ -611,10 +624,16 @@ def ensemble8_2d_predictions(o_img, pred_func, batch_size_value=1):
         else:
             out[i] = out_img[i,:,abs(pad_to_square):]
 
-    return np.mean(out, axis=0)
+    out = np.expand_dims(np.mean(out, axis=0),0)
+    out = to_pytorch_format(out, axis_order, device)
+
+    if channel_split is not None:
+        return [out[:,:channel_split],out[:,channel_split:]]
+    else:
+        return out
 
 
-def ensemble16_3d_predictions(vol, pred_func, batch_size_value=1):
+def ensemble16_3d_predictions(vol, pred_func, axis_order_back, axis_order, device, batch_size_value=1):
     """
     Outputs the mean prediction of a given image generating its 16 possible rotations and flips.
 
@@ -625,6 +644,15 @@ def ensemble16_3d_predictions(vol, pred_func, batch_size_value=1):
 
     pred_func : function
         Function to make predictions.
+        
+    axis_order_back : tuple
+        Axis order to convert from tensor to numpy. E.g. ``(0,3,1,2,4)``.
+    
+    axis_order : tuple 
+        Axis order to convert from numpy to tensor. E.g. ``(0,3,1,2,4)``. 
+
+    device : Torch device
+        Device used. 
 
     batch_size_value : int, optional
         Batch size value.
@@ -703,8 +731,12 @@ def ensemble16_3d_predictions(vol, pred_func, batch_size_value=1):
             r_aux = pred_func(total_vol[i*batch_size_value:top])
 
         # Take just the last output of the network in case it returns more than one output
+        channel_split = None
         if isinstance(r_aux, list):
-            r_aux = np.array(r_aux[-1])
+            channel_split = r_aux[0].shape[1]
+            r_aux = np.concatenate([to_numpy_format(r_aux[0], axis_order_back),to_numpy_format(r_aux[1], axis_order_back)],axis=-1)
+        else:
+            r_aux = to_numpy_format(r_aux, axis_order_back)
 
         if r_aux.ndim == 4:
             r_aux = np.expand_dims(r_aux, 0)
@@ -759,7 +791,13 @@ def ensemble16_3d_predictions(vol, pred_func, batch_size_value=1):
         else:
             out[i] = out_vols[i,:,abs(pad_to_square):,:,:]
 
-    return np.mean(out, axis=0)
+    out = np.expand_dims(np.mean(out, axis=0),0)
+    out = to_pytorch_format(out, axis_order, device)
+
+    if channel_split is not None:
+        return [out[:,:channel_split],out[:,channel_split:]]
+    else:
+        return out
 
 
 def create_th_plot(ths, y_list, th_name="TH_BINARY_MASK", chart_dir=None, per_sample=True, ideal_value=None):
