@@ -407,7 +407,8 @@ class Config:
         # “no change” and 0.5 denotes “half of the axis size”.
         _C.AUGMENTOR.SHIFT_RANGE = (0.1, 0.2)
         # How to fill up the new values created with affine transformations (rotations, shear, shift and zoom).
-        # Same meaning as in skimage (and numpy.pad()): 'constant', 'edge', 'symmetric', 'reflect' and 'wrap'
+        # Same meaning as in scipy: 'reflect', grid-'mirror', 'constant', 'grid-constant', 'nearest', 'mirror', 
+        # 'grid-wrap' and 'wrap'. 
         _C.AUGMENTOR.AFFINE_MODE = 'constant'
         # Make vertical flips
         _C.AUGMENTOR.VFLIP = False

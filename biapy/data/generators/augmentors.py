@@ -3,10 +3,11 @@ import random
 import math
 import numpy as np
 from PIL import Image
-from skimage.transform import resize, rotate
+from skimage.transform import resize
 from skimage.draw import line
 from scipy.ndimage.measurements import label
 from scipy.ndimage.morphology import binary_dilation
+from scipy.ndimage import rotate
 
 
 def cutout(img, mask, channels, z_size, nb_iterations=(1,3), size=(0.2,0.4), cval=0, res_relation=(1,1), apply_to_mask=False):
@@ -1519,8 +1520,8 @@ def rotation(img, mask=None, heat=None, angles=[], mode="reflect", mask_type='as
         List of angles to choose the rotation to be made. E.g. [90,180,360].
 
     mode : str, optional
-        How to fill up the new values created. Options: ``constant``, ``edge``, ``symmetric``, 
-        ``reflect`` and ``wrap``.
+        How to fill up the new values created. Options: ``reflect``, ``grid-mirror``,
+        ``constant``, ``grid-constant``, ``nearest``, ``mirror``, ``grid-wrap``, ``wrap``.
 
     mask_type : str, optional
         How ``mask`` is going to be treated. Options: ``as_mask``, ``as_image``. With ``as_mask`` 
@@ -1549,14 +1550,13 @@ def rotation(img, mask=None, heat=None, angles=[], mode="reflect", mask_type='as
     else:
         raise ValueError("Not a list/tuple provided in 'angles'")
 
-    img = rotate(img, angle, mode=mode)
+    img = rotate(img, angle=angle, mode=mode, reshape=False)
 
     if mask is not None:
         mask_order = 0 if mask_type == 'as_mask' else 1
-        mask = rotate(mask.astype(np.float32), angle, order=mask_order, mode=mode)
+        mask = rotate(mask, angle=angle, order=mask_order, mode=mode, reshape=False)
     if heat is not None:
-        heat = rotate(heat.astype(np.float32), angle, mode=mode)
-
+        heat = rotate(heat, angle=angle, mode=mode, reshape=False)
     if mask is None:
         return img
     else:
