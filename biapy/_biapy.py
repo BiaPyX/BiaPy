@@ -219,12 +219,23 @@ class BiaPy():
         # Check if BiaPy has been run so some of the variables have been created
         if not self.workflow.model_prepared:
             raise ValueError("You need first to call prepare_model(), train(), test() or run_job() functions so the model can be built")
-        if 'test_input' in bmz_cfg and bmz_cfg['test_input'] is None and self.workflow.bmz_test_input is None:
-            raise ValueError("No bmz_cfg['test_input'] available. You can: 1) provide it using bmz_config['test_input'] "
-                "or run the training phase, by calling train() or run_job() functions.")
-        if 'test_output' in bmz_cfg and bmz_cfg['test_output'] is None and self.workflow.bmz_test_output is None:
-            raise ValueError("No bmz_cfg['test_output'] available. You can: 1) provide it using bmz_config['test_output'] "
-                "or run the training phase, by calling train() or run_job() functions.")
+        error = False
+        if self.workflow.bmz_test_input is None:
+            if 'test_input' not in bmz_cfg:
+                error = True
+            elif bmz_cfg['test_input'] is None:
+                error = True
+            if error:
+                raise ValueError("No bmz_cfg['test_input'] available. You can: 1) provide it using bmz_config['test_input'] "
+                    "or run the training phase, by calling train() or run_job() functions.")
+        if self.workflow.bmz_test_output is None:
+            if 'test_output' not in bmz_cfg:
+                error = True
+            elif bmz_cfg['test_output'] is None:
+                error = True
+            if error:
+                raise ValueError("No bmz_cfg['test_output'] available. You can: 1) provide it using bmz_config['test_output'] "
+                    "or run the training phase, by calling train() or run_job() functions.")
 
         # Check BMZ dictionary keys and values 
         if bmz_cfg['description'] == "":
