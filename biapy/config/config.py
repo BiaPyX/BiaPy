@@ -18,9 +18,10 @@ class Config:
         # System
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         _C.SYSTEM = CN()
-        # Maximum number of workers to load data in parallel. Set it to "-1" to set any limit. Normally a few cores 
-        # will be used in this last case, as the biggest calculations will be on the GPU.
-        _C.SYSTEM.NUM_WORKERS = -1
+        # Maximum number of CPUs to use. Set it to "-1" to not set a limit.
+        _C.SYSTEM.NUM_CPUS = -1
+        # Maximum number of workers to load data in parallel. You can disable this option by setting 0.
+        _C.SYSTEM.NUM_WORKERS = 5
         # Do not set it as its value will be calculated based in --gpu input arg
         _C.SYSTEM.NUM_GPUS = 0
 
@@ -173,7 +174,7 @@ class Config:
         _C.DATA.W_FOREGROUND = 0.94 # Used when _C.DATA.PROBABILITY_MAP=True
         _C.DATA.W_BACKGROUND = 0.06 # Used when _C.DATA.PROBABILITY_MAP=True
 
-        # Whether to reshape de dimensions that does not satisfy the pathc shape selected by padding it with reflect.
+        # Whether to reshape the dimensions that does not satisfy the patch shape selected by padding it with reflect.
         _C.DATA.REFLECT_TO_COMPLETE_SHAPE = False
 
         _C.DATA.NORMALIZATION = CN()

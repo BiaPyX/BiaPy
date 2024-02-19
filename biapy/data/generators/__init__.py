@@ -219,9 +219,8 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
     # Training dataset
     total_batch_size = cfg.TRAIN.BATCH_SIZE * world_size * cfg.TRAIN.ACCUM_ITER
     training_samples = len(train_generator)
-    num_workers = max(cfg.SYSTEM.NUM_WORKERS // cfg.SYSTEM.NUM_GPUS, 1) if dist else cfg.SYSTEM.NUM_WORKERS
     # Reduce number of workers in case there is no training data 
-    num_workers = min(num_workers, training_samples)
+    num_workers = min(cfg.SYSTEM.NUM_WORKERS, training_samples)
     # To not create more than 8 processes per GPU
     if cfg.SYSTEM.NUM_GPUS >= 1:
         num_workers = min(num_workers, 8*cfg.SYSTEM.NUM_GPUS)

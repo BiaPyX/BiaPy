@@ -119,12 +119,13 @@ class BiaPy():
         set_seed(self.cfg.SYSTEM.SEED)
         
         # Number of CPU calculation
-        if self.cfg.SYSTEM.NUM_WORKERS == -1:
+        if self.cfg.SYSTEM.NUM_CPUS == -1:
             self.cpu_count = multiprocessing.cpu_count()
         else:
-            self.cpu_count = self.cfg.SYSTEM.NUM_WORKERS
+            self.cpu_count = self.cfg.SYSTEM.NUM_CPUS
+        if self.cpu_count < 1: self.cpu_count = 1 # At least 1 CPU
         torch.set_num_threads(self.cpu_count)
-        self.cfg.merge_from_list(['SYSTEM.NUM_WORKERS', self.cpu_count])
+        self.cfg.merge_from_list(['SYSTEM.NUM_CPUS', self.cpu_count])
 
         check_configuration(self.cfg, self.job_identifier)
         print("Configuration details:")
