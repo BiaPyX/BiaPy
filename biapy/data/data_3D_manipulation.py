@@ -43,8 +43,8 @@ def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross
     crop_shape : 4D tuple
         Shape of the train subvolumes to create. E.g. ``(z, y, x, channels)``.
 
-    y_upscaling : int, optional
-        Upscaling to be done when loading Y data. User for super-resolution workflow.
+    y_upscaling : Tuple of 3 ints, optional
+        Upscaling to be done when loading Y data. Use for super-resolution workflow.
 
     random_crops_in_DA : bool, optional
         To advice the method that not preparation of the data must be done, as random subvolumes will be created on
@@ -150,7 +150,7 @@ def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross
 
     if train_mask_path is not None:
         print("1) Loading train GT . . .")
-        scrop = (crop_shape[0], crop_shape[1]*y_upscaling, crop_shape[2]*y_upscaling, crop_shape[3])
+        scrop = (crop_shape[0]*y_upscaling[0], crop_shape[1]*y_upscaling[1], crop_shape[2]*y_upscaling[2], crop_shape[3])
         Y_train, _, _ = load_3d_images_from_dir(train_mask_path, crop=crop, crop_shape=scrop, overlap=ov,
             padding=padding, reflect_to_complete_shape=reflect_to_complete_shape, check_channel=False, check_drange=False,
             preprocess_cfg=preprocess_cfg, is_mask=is_y_mask, preprocess_f=preprocess_f)
@@ -269,7 +269,7 @@ def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross
                 # Y_train
                 if Y_train is not None:
                     data_mask = []
-                    scrop = (crop_shape[0], crop_shape[1]*y_upscaling, crop_shape[2]*y_upscaling, crop_shape[3])
+                    scrop = (crop_shape[0], crop_shape[1]*y_upscaling[0], crop_shape[2]*y_upscaling[1], crop_shape[3]*y_upscaling[2])
                     for img_num in range(len(Y_train)):
                         if Y_train[img_num].shape != scrop[:3]+(Y_train[img_num].shape[-1],):
                             img = Y_train[img_num]
@@ -293,7 +293,7 @@ def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross
                 # Y_val
                 if Y_val is not None:
                     data_mask = []
-                    scrop = (crop_shape[0], crop_shape[1]*y_upscaling, crop_shape[2]*y_upscaling, crop_shape[3])
+                    scrop = (crop_shape[0], crop_shape[1]*y_upscaling[0], crop_shape[2]*y_upscaling[1], crop_shape[3]*y_upscaling[2])
                     for img_num in range(len(Y_val)):
                         if Y_val[img_num].shape != scrop[:3]+(Y_val[img_num].shape[-1],):
                             img = Y_val[img_num]

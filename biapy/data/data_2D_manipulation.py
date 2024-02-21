@@ -12,7 +12,7 @@ from biapy.data.pre_processing import normalize
 
 def load_and_prepare_2D_train_data(train_path, train_mask_path, cross_val=False, cross_val_nsplits=5, cross_val_fold=1,
     val_split=0.1, seed=0, shuffle_val=True, num_crops_per_dataset=0, random_crops_in_DA=False, crop_shape=None, 
-    y_upscaling=1, ov=(0,0), padding=(0,0), minimum_foreground_perc=-1, reflect_to_complete_shape=False,
+    y_upscaling=(1,1), ov=(0,0), padding=(0,0), minimum_foreground_perc=-1, reflect_to_complete_shape=False,
     convert_to_rgb=False,  preprocess_cfg=None, is_y_mask=False, preprocess_f=None):
     """
     Load train and validation images from the given paths to create 2D data.
@@ -54,7 +54,7 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, cross_val=False,
     crop_shape : 3D int tuple, optional
         Shape of the crops. E.g. ``(y, x, channels)``.
 
-    y_upscaling : int, optional
+    y_upscaling : 2 int tuple, optional
         Upscaling to be done when loading Y data. User for super-resolution workflow.
 
     ov : 2 floats tuple, optional
@@ -167,7 +167,7 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, cross_val=False,
         convert_to_rgb=convert_to_rgb, preprocess_cfg=preprocess_cfg, is_mask=False, preprocess_f=preprocess_f)
     if train_mask_path is not None:                                            
         print("1) Loading train GT . . .")
-        scrop = (crop_shape[0]*y_upscaling, crop_shape[1]*y_upscaling, crop_shape[2])
+        scrop = (crop_shape[0]*y_upscaling[0], crop_shape[1]*y_upscaling[1], crop_shape[2])
         Y_train, _, _, _ = load_data_from_dir(train_mask_path, crop=crop, crop_shape=scrop, overlap=ov, padding=padding, 
             return_filenames=True, check_channel=False, check_drange=False, reflect_to_complete_shape=reflect_to_complete_shape,
             preprocess_cfg=preprocess_cfg, is_mask=is_y_mask, preprocess_f=preprocess_f)
@@ -285,7 +285,7 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, cross_val=False,
                 # Y_train
                 if Y_train is not None:
                     data_mask = []
-                    scrop = (crop_shape[0]*y_upscaling, crop_shape[1]*y_upscaling, crop_shape[2])
+                    scrop = (crop_shape[0]*y_upscaling[0], crop_shape[1]*y_upscaling[1], crop_shape[2])
                     for img_num in range(len(Y_train)):
                         if Y_train[img_num].shape != scrop[:2]+(Y_train[img_num].shape[-1],):
                             img = Y_train[img_num]
@@ -309,7 +309,7 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, cross_val=False,
                 # Y_val
                 if Y_val is not None:
                     data_mask = []
-                    scrop = (crop_shape[0]*y_upscaling, crop_shape[1]*y_upscaling, crop_shape[2])
+                    scrop = (crop_shape[0]*y_upscaling[0], crop_shape[1]*y_upscaling[1], crop_shape[2])
                     for img_num in range(len(Y_val)):
                         if Y_val[img_num].shape != scrop[:2]+(Y_val[img_num].shape[-1],):
                             img = Y_val[img_num]

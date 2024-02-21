@@ -135,8 +135,8 @@ class Config:
 
         ### SUPER_RESOLUTION
         _C.PROBLEM.SUPER_RESOLUTION = CN()
-        # Upscaling to be done to the input images. Options: [2, 4]
-        _C.PROBLEM.SUPER_RESOLUTION.UPSCALING = 1
+        # Upscaling to be done to the input images on every dimension. Examples: (2,2) in 2D or (2,2,2) in 3D.
+        _C.PROBLEM.SUPER_RESOLUTION.UPSCALING = ()
 
         ### SELF_SUPERVISED
         _C.PROBLEM.SELF_SUPERVISED = CN()
