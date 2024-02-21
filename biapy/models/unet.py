@@ -88,7 +88,7 @@ class U_Net(nn.Module):
             
         # Super-resolution
         self.pre_upsampling = None
-        if upsampling_factor is not empty and upsampling_position == "pre":
+        if len(upsampling_factor)>0 and upsampling_position == "pre":
             self.pre_upsampling = convtranspose(image_shape[-1], image_shape[-1], kernel_size=upsampling_factor, stride=upsampling_factor)
 
         # ENCODER
@@ -119,7 +119,7 @@ class U_Net(nn.Module):
         
         # Super-resolution
         self.post_upsampling = None
-        if upsampling_factor is not empty and upsampling_position == "post":
+        if len(upsampling_factor)>0 and upsampling_position == "post":
             self.post_upsampling = convtranspose(feature_maps[0], self.n_classes, kernel_size=upsampling_factor, stride=upsampling_factor)
 
         # Instance segmentation
