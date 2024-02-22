@@ -11,6 +11,9 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     Check if the configuration is good. 
     """
 
+    if cfg.SYSTEM.NUM_WORKERS < 0:
+        raise ValueError("'SYSTEM.NUM_WORKERS' can not be less than 0")
+
     dim_count = 2 if cfg.PROBLEM.NDIM == '2D' else 3
 
     # Adjust overlap and padding in the default setting if it was not set

@@ -197,6 +197,10 @@ def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross
                     Y_train_keep.append(np.expand_dims(Y_train[i],0))
         del X_train, Y_train
         
+        if len(X_train_keep) == 0:
+            raise ValueError("'TRAIN.MINIMUM_FOREGROUND_PER' value is too high, leading to the discarding of all training samples. Please, "
+                "reduce its value.")
+
         if not are_lists:
             X_train_keep = np.concatenate(X_train_keep)
             Y_train_keep = np.concatenate(Y_train_keep)
