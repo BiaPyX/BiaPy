@@ -1350,7 +1350,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     pred = self.model_call_func(self._X)
             pred = self.apply_model_activations(pred)
             # Multi-head concatenation
-            if isinstance(p, list):
+            if isinstance(pred, list):
                 pred = torch.cat((pred[0], torch.argmax(pred[1], axis=1).unsqueeze(1)), dim=1)  
             pred = to_numpy_format(pred, self.axis_order_back)  
             if self.cfg.TEST.AUGMENTATION: pred = np.expand_dims(pred, 0)
