@@ -80,7 +80,8 @@ def train_one_epoch(cfg, model, model_call_func, loss_function, activations, met
                 if group["weight_decay"] > 0:
                     weight_decay_value = group["weight_decay"]
             metric_logger.update(weight_decay=weight_decay_value)
-            log_writer.update(weight_decay=weight_decay_value, head="opt")
+            if log_writer is not None:
+                log_writer.update(weight_decay=weight_decay_value, head="opt")
 
     # Gather the stats from all processes
     metric_logger.synchronize_between_processes()

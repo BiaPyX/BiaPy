@@ -508,7 +508,8 @@ class Base_Workflow(metaclass=ABCMeta):
             train_stats = train_one_epoch(self.cfg, model=self.model, model_call_func=self.model_call_func, loss_function=self.loss, 
                 activations=self.apply_model_activations, metric_function=self.metric_calculation, prepare_targets=self.prepare_targets, 
                 data_loader=self.train_generator, optimizer=self.optimizer, device=self.device, loss_scaler=self.loss_scaler, epoch=epoch, 
-                log_writer=self.log_writer, lr_scheduler=self.lr_scheduler, start_steps=epoch * self.num_training_steps_per_epoch)
+                log_writer=self.log_writer, lr_scheduler=self.lr_scheduler, start_steps=epoch * self.num_training_steps_per_epoch,
+                verbose=self.cfg.TRAIN.VERBOSE)
 
             # Save checkpoint
             if self.cfg.MODEL.SAVE_CKPT_FREQ != -1:

@@ -17,7 +17,11 @@ def prepare_optimizer(cfg, model_without_ddp, steps_per_epoch):
            Configuration.
     """
     lr = cfg.TRAIN.LR if cfg.TRAIN.LR_SCHEDULER.NAME != "warmupcosine" else cfg.TRAIN.LR_SCHEDULER.MIN_LR
-    optimizer = optim_factory.create_optimizer_v2(model_without_ddp, opt=cfg.TRAIN.OPTIMIZER, lr=lr, weight_decay=cfg.TRAIN.W_DECAY)
+    opt_args = {}
+    if cfg.TRAIN.OPTIMIZER in ["ADAM", "ADAMW"]:
+        opt_args["betas"] = cfg.TRAIN.OPT_BETAS
+    optimizer = optim_factory.create_optimizer_v2(model_without_ddp, opt=cfg.TRAIN.OPTIMIZER, lr=lr, weight_decay=cfg.TRAIN.W_DECAY,
+        **opt_args)
     print(optimizer)
 
     # Learning rate schedulers
