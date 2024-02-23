@@ -51,7 +51,7 @@ class Super_resolution_Workflow(Base_Workflow):
         """
         Definition of self.metrics, self.metric_names and self.loss variables.
         """
-        self.metrics = [PeakSignalNoiseRatio(data_range=(0.,1.))]
+        self.metrics = [PeakSignalNoiseRatio()]
         self.metric_names = ["PSNR"]
         if self.cfg.MODEL.ARCHITECTURE == 'dfcan':
             print("Overriding 'LOSS.TYPE' to set it to DFCAN loss")
