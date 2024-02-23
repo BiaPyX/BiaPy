@@ -12,6 +12,8 @@ class EDSR(nn.Module):
     """
     def __init__(self, ndim=2, num_filters=64, num_of_residual_blocks=16, upsampling_factor=2, num_channels=3):
         super(EDSR, self).__init__()
+        if type( upsampling_factor ) is tuple:
+            upsampling_factor = upsampling_factor[0]
         self.ndim = ndim
 
         if self.ndim == 3:
