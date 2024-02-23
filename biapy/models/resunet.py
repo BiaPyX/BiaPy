@@ -119,7 +119,7 @@ class ResUNet(nn.Module):
         
         # Super-resolution
         self.post_upsampling = None
-        if len(upsampling_factor > 1) and upsampling_position == "post":
+        if len(upsampling_factor) > 1 and upsampling_position == "post":
             self.post_upsampling = convtranspose(feature_maps[0], feature_maps[0], kernel_size=upsampling_factor, stride=upsampling_factor)
 
         # Instance segmentation
@@ -143,7 +143,7 @@ class ResUNet(nn.Module):
 
         self.apply(self._init_weights)
 
-     def forward(self, x) -> torch.Tensor | List[torch.Tensor]:
+    def forward(self, x) -> torch.Tensor | List[torch.Tensor]:
         # Super-resolution
         if self.pre_upsampling is not None:
             x = self.pre_upsampling(x)
