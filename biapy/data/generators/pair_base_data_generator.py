@@ -673,6 +673,8 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             self.extra_data_factor = extra_data_factor
             self.o_indexes = np.concatenate([self.o_indexes]*extra_data_factor)
             self.length = self.length*extra_data_factor
+            self.data_paths = self.data_paths*extra_data_factor
+            self.data_mask_path = self.data_mask_path*extra_data_factor
         else:
             self.extra_data_factor = 1
 
