@@ -72,16 +72,6 @@ def train_one_epoch(cfg, model, model_call_func, loss_function, activations, met
             metric_logger.add_meter('lr', SmoothedValue(window_size=1, fmt='{value:.6f}'))
         metric_logger.update(lr=max_lr)
         if log_writer is not None: log_writer.update(lr=max_lr, head="opt")
-        
-        # Update weight_decay in loggers
-        if verbose:
-            weight_decay_value = None
-            for group in optimizer.param_groups:
-                if group["weight_decay"] > 0:
-                    weight_decay_value = group["weight_decay"]
-            metric_logger.update(weight_decay=weight_decay_value)
-            if log_writer is not None:
-                log_writer.update(weight_decay=weight_decay_value, head="opt")
 
     # Gather the stats from all processes
     metric_logger.synchronize_between_processes()
