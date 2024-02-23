@@ -848,7 +848,7 @@ def norm_range01(x, dtype=np.float32):
 
     if x.dtype == np.uint8 or x.dtype == torch.uint8:
         x = x/255
-        norm_steps['div_255'] = 1
+        norm_steps['div'] = 1
     else:
         if (isinstance(x, np.ndarray) and np.max(x) > 255) or \
             (torch.is_tensor(x) and torch.max(x) > 255):
@@ -857,7 +857,7 @@ def norm_range01(x, dtype=np.float32):
         elif (isinstance(x, np.ndarray) and np.max(x) > 2) or \
             (torch.is_tensor(x) and torch.max(x) > 2):
             x = x/255
-            norm_steps['div_255'] = 1
+            norm_steps['div'] = 1
 
     if torch.is_tensor(x):
         x = x.to(dtype)
@@ -866,7 +866,7 @@ def norm_range01(x, dtype=np.float32):
     return x, norm_steps
 
 def undo_norm_range01(x, xnorm):
-    if 'div_255' in xnorm:
+    if 'div' == xnorm['type']:
         x = (x*255)
         if isinstance(x, np.ndarray): 
             x = x.astype(np.uint8)
