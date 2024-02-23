@@ -120,7 +120,7 @@ class U_Net(nn.Module):
         # Super-resolution
         self.post_upsampling = None
         if len(upsampling_factor)>0 and upsampling_position == "post":
-            self.post_upsampling = convtranspose(feature_maps[0], self.n_classes, kernel_size=upsampling_factor, stride=upsampling_factor)
+            self.post_upsampling = convtranspose(feature_maps[0], feature_maps[0], kernel_size=upsampling_factor, stride=upsampling_factor)
 
         # Instance segmentation
         if output_channels is not None:
@@ -174,8 +174,8 @@ class U_Net(nn.Module):
         x = self.last_block(x)
 
         # Clip values in SR
-        if self.pre_upsampling is not None or self.post_upsampling is not None:
-            x = torch.clamp(x, min=0, max=1)
+        #if self.pre_upsampling is not None or self.post_upsampling is not None:
+        #    x = torch.clamp(x, min=0, max=1)
 
         if self.multiclass:
             return [x, class_head_out]
