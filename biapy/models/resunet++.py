@@ -162,7 +162,7 @@ class ResUNetPlusPlus(nn.Module):
 
         self.apply(self._init_weights)
 
-     def forward(self, x) -> torch.Tensor | List[torch.Tensor]:
+    def forward(self, x) -> torch.Tensor | List[torch.Tensor]:
         # Super-resolution
         if self.pre_upsampling is not None:
             x = self.pre_upsampling(x)
