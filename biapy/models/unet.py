@@ -44,7 +44,7 @@ class U_Net(nn.Module):
         ``BDv2``, ``Dv2`` and ``BCM``.
 
     upsampling_factor : tuple of ints, optional
-        Factor of upsampling for super resolution workflow. 
+        Factor of upsampling for super resolution workflow for each dimension.
 
     upsampling_position : str, optional
         Whether the upsampling is going to be made previously (``pre`` option) to the model 

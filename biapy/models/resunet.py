@@ -43,8 +43,8 @@ class ResUNet(nn.Module):
         Channels to operate with. Possible values: ``BC``, ``BCD``, ``BP``, ``BCDv2``,
         ``BDv2``, ``Dv2`` and ``BCM``.
 
-    upsampling_factor : int, optional
-        Factor of upsampling for super resolution workflow. 
+    upsampling_factor : tuple of ints, optional
+        Factor of upsampling for super resolution workflow for each dimension.
 
     upsampling_position : str, optional
         Whether the upsampling is going to be made previously (``pre`` option) to the model 
@@ -87,7 +87,7 @@ class ResUNet(nn.Module):
             
         # Super-resolution
         self.pre_upsampling = None
-        if upsampling_factor > 1 and upsampling_position == "pre":
+        if len(upsampling_factor) > 1 and upsampling_position == "pre":
             self.pre_upsampling = convtranspose(image_shape[-1], image_shape[-1], kernel_size=upsampling_factor, stride=upsampling_factor)
 
         # ENCODER
@@ -119,8 +119,8 @@ class ResUNet(nn.Module):
         
         # Super-resolution
         self.post_upsampling = None
-        if upsampling_factor > 1 and upsampling_position == "post":
-            self.post_upsampling = convtranspose(feature_maps[0], self.n_classes, kernel_size=upsampling_factor, stride=upsampling_factor)
+        if len(upsampling_factor > 1) and upsampling_position == "post":
+            self.post_upsampling = convtranspose(feature_maps[0], feature_maps[0], kernel_size=upsampling_factor, stride=upsampling_factor)
 
         # Instance segmentation
         if output_channels is not None:
@@ -172,10 +172,6 @@ class ResUNet(nn.Module):
             class_head_out = self.last_class_head(x) 
 
         x = self.last_block(x)
-
-        # Clip values in SR
-        if self.pre_upsampling is not None or self.post_upsampling is not None:
-            x = torch.clamp(x, min=0, max=1)            
 
         if self.multiclass:
             return [x, class_head_out]
