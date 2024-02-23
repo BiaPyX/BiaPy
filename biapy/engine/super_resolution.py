@@ -187,12 +187,12 @@ class Super_resolution_Workflow(Base_Workflow):
                 pad = tuple(p*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[0] for p in self.cfg.DATA.TEST.PADDING)
                 ov = tuple(o*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[1] for o in self.cfg.DATA.TEST.OVERLAP)
             else:
-                pad = (self.cfg.DATA.TEST.PADDING[0], 
-                       self.cfg.DATA.TEST.PADDING[1]*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[0],
-                       self.cfg.DATA.TEST.PADDING[2]*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[1])
-                ov = (self.cfg.DATA.TEST.OVERLAP[0], 
-                      self.cfg.DATA.TEST.OVERLAP[1]*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[0],
-                      self.cfg.DATA.TEST.OVERLAP[2]*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[1])
+                pad = (self.cfg.DATA.TEST.PADDING[0]*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[0],
+                       self.cfg.DATA.TEST.PADDING[1]*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[1],
+                       self.cfg.DATA.TEST.PADDING[2]*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[2])
+                ov = (self.cfg.DATA.TEST.OVERLAP[0]*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[0],
+                      self.cfg.DATA.TEST.OVERLAP[1]*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[1],
+                      self.cfg.DATA.TEST.OVERLAP[2]*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[2])
             pred = f_name(pred, original_data_shape[:-1]+(pred.shape[-1],), padding=pad, 
                 overlap=ov, verbose=self.cfg.TEST.VERBOSE)
         else:
@@ -312,5 +312,3 @@ class Super_resolution_Workflow(Base_Workflow):
             print("Test PSNR (merge patches): {}".format(self.stats['psnr_merge_patches']))
             print(" ")
 
-
-        
