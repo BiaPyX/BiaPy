@@ -306,7 +306,9 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     elif cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
         if not( cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING ):
             raise ValueError("Resolution scale must be provided with 'PROBLEM.SUPER_RESOLUTION.UPSCALING' variable")
-        assert all( i > 0 for i in cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING), "PROBLEM.SUPER_RESOLUTION.UPSCALING are not positive integers"
+        assert all( i > 0 for i in cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING), "'PROBLEM.SUPER_RESOLUTION.UPSCALING' are not positive integers"
+        if len(cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING) != dim_count:
+            raise ValueError(f"'PROBLEM.SUPER_RESOLUTION.UPSCALING' needs to be a tuple of {dim_count} integers")
         if cfg.MODEL.SOURCE == "torchvision":
             raise ValueError("'MODEL.SOURCE' as 'torchvision' is not available in super-resolution workflow")
         if cfg.DATA.NORMALIZATION.TYPE != "div":
@@ -551,6 +553,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 raise ValueError("'MODEL.Z_DOWN' length must be 4 when using 'multiresunet'")
             elif len(cfg.MODEL.FEATURE_MAPS)-1 != len(cfg.MODEL.Z_DOWN):
                 raise ValueError("'MODEL.FEATURE_MAPS' length minus one and 'MODEL.Z_DOWN' length must be equal")
+
+    # Correct UPSCALING for other workflows than SR
+    if len(cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING) == 0:
+        opts.extend(['PROBLEM.SUPER_RESOLUTION.UPSCALING', (1,)*dim_count])
 
     if len(opts) > 0:
         cfg.merge_from_list(opts)

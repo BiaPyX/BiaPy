@@ -8,7 +8,7 @@ from sklearn.model_selection import train_test_split, StratifiedKFold
 from biapy.utils.util import load_3d_images_from_dir, order_dimensions
 
 def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross_val_nsplits=5, cross_val_fold=1, 
-    val_split=0.1, seed=0, shuffle_val=True, crop_shape=(80, 80, 80, 1), y_upscaling=1, random_crops_in_DA=False, 
+    val_split=0.1, seed=0, shuffle_val=True, crop_shape=(80, 80, 80, 1), y_upscaling=(1,1,1), random_crops_in_DA=False, 
     ov=(0,0,0), padding=(0,0,0), minimum_foreground_perc=-1, reflect_to_complete_shape=False, convert_to_rgb=False,
     preprocess_cfg=None, is_y_mask=False, preprocess_f=None):
     """

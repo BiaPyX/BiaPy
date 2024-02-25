@@ -1020,7 +1020,7 @@ def GridMask(img, channels, z_size, ratio=0.6, d_range=(30,60), rotate=1, invert
 
 
 def random_crop_pair(image, mask, random_crop_size, val=False, draw_prob_map_points=False, img_prob=None, weight_map=None,
-        scale=1):
+        scale=(1,1)):
     """Random crop for an image and its mask. No crop is done in those dimensions that ``random_crop_size`` is greater than
        the input image shape in those dimensions. For instance, if an input image is ``400x150`` and ``random_crop_size``
        is ``224x224`` the resulting image will be ``224x150``.
@@ -1049,8 +1049,8 @@ def random_crop_pair(image, mask, random_crop_size, val=False, draw_prob_map_poi
        weight_map : bool, optional
            Weight map of the given image. E.g. ``(y, x, channels)``.
 
-       scale : int, optional
-           Scale factor the second image given.
+       scale : tuple of 2 ints, optional
+           Scale factor the second image given. E.g. ``(2,2)``.
 
        Returns
        -------
@@ -1116,26 +1116,26 @@ def random_crop_pair(image, mask, random_crop_size, val=False, draw_prob_map_poi
             y = np.random.randint(0, height - dy + 1) if height - dy +1 > 0 else 0
 
     # Super-resolution check
-    if scale != 1:
+    if any([x != 1 for x in scale]):
         img_out_shape = img[y:(y+dy), x:(x+dx)].shape
-        mask_out_shape = mask[y*scale:(y+dy)*scale, x*scale:(x+dx)*scale].shape
-        s = [img_out_shape[0]*scale, img_out_shape[1]*scale]
+        mask_out_shape = mask[y*scale[0]:(y+dy)*scale[0], x*scale[1]:(x+dx)*scale[1]].shape
+        s = [img_out_shape[0]*scale[0], img_out_shape[1]*scale[1]]
         if all(x!=y for x,y in zip(s,mask_out_shape)):
             raise ValueError("Images can not be cropped to a PATCH_SIZE of {}. Inputs: LR image shape={} "
                 "and HR image shape={}. When cropping the output shapes are {} and {}, for LR and HR images respectively. "
                 "Try to reduce DATA.PATCH_SIZE".format(random_crop_size, img.shape, mask.shape, img_out_shape, mask_out_shape))
 
     if draw_prob_map_points == True:
-        return img[y:(y+dy), x:(x+dx)], mask[y*scale:(y+dy)*scale, x*scale:(x+dx)*scale], oy, ox, y, x
+        return img[y:(y+dy), x:(x+dx)], mask[y*scale[0]:(y+dy)*scale[0], x*scale[1]:(x+dx)*scale[1]], oy, ox, y, x
     else:
         if weight_map is not None:
-            return img[y:(y+dy), x:(x+dx)], mask[y*scale:(y+dy)*scale, x*scale:(x+dx)*scale], weight_map[y:(y+dy), x:(x+dx)]
+            return img[y:(y+dy), x:(x+dx)], mask[y*scale[0]:(y+dy)*scale[0], x*scale[1]:(x+dx)*scale[1]], weight_map[y:(y+dy), x:(x+dx)]
         else:
-            return img[y:(y+dy), x:(x+dx)], mask[y*scale:(y+dy)*scale, x*scale:(x+dx)*scale]
+            return img[y:(y+dy), x:(x+dx)], mask[y*scale[0]:(y+dy)*scale[0], x*scale[1]:(x+dx)*scale[1]]
 
 
 def random_3D_crop_pair(image, mask, random_crop_size, val=False, img_prob=None, weight_map=None, draw_prob_map_points=False,
-        scale=1):
+        scale=(1,1,1)):
     """Extracts a random 3D patch from the given image and mask. No crop is done in those dimensions that ``random_crop_size`` is 
        greater than the input image shape in those dimensions. For instance, if an input image is ``10x400x150`` and ``random_crop_size``
        is ``10x224x224`` the resulting image will be ``10x224x150``.
@@ -1164,8 +1164,8 @@ def random_3D_crop_pair(image, mask, random_crop_size, val=False, img_prob=None,
        draw_prob_map_points : bool, optional
            To return the voxel chosen to be the center of the crop.
 
-       scale : int, optional
-           Scale factor the second image given.
+       scale : tuple of 3 ints, optional
+           Scale factor the second image given. E.g. ``(2,4,4)``.
 
        Returns
        -------
@@ -1252,21 +1252,21 @@ def random_3D_crop_pair(image, mask, random_crop_size, val=False, img_prob=None,
             x = np.random.randint(0, rows - dx + 1) if rows - dx +1 > 0 else 0
 
      # Super-resolution check
-    if scale != 1:
+    if any([x != 1 for x in scale]):
         img_out_shape = vol[z:(z+dz), y:(y+dy), x:(x+dx)].shape
-        mask_out_shape = mask[z:(z+dz), y*scale:(y+dy)*scale, x*scale:(x+dx)*scale].shape
-        s = [img_out_shape[0], img_out_shape[1]*scale, img_out_shape[2]*scale]
+        mask_out_shape = mask[z*scale[0]:(z+dz)*scale[0], y*scale[1]:(y+dy)*scale[1], x*scale[2]:(x+dx)*scale[2]].shape
+        s = [img_out_shape[0]*scale[0], img_out_shape[1]*scale[1], img_out_shape[2]*scale[2]]
         if all(x!=y for x,y in zip(s,mask_out_shape)):
             raise ValueError("Images can not be cropped to a PATCH_SIZE of {}. Inputs: LR image shape={} "
                 "and HR image shape={}. When cropping the output shapes are {} and {}, for LR and HR images respectively. "
                 "Try to reduce DATA.PATCH_SIZE".format(random_crop_size, vol.shape, mask.shape, img_out_shape, mask_out_shape))
 
     if draw_prob_map_points:
-        return vol[z:(z+dz), y:(y+dy), x:(x+dx)], mask[z:(z+dz), y*scale:(y+dy)*scale, x*scale:(x+dx)*scale],\
+        return vol[z:(z+dz), y:(y+dy), x:(x+dx)], mask[z*scale[0]:(z+dz)*scale[0], y*scale[1]:(y+dy)*scale[1], x*scale[2]:(x+dx)*scale[2]],\
                oz, oy, ox, z, y, x
     else:
         if weight_map is not None:
-            return vol[z:(z+dz), y:(y+dy), x:(x+dx)], mask[z:(z+dz), y*scale:(y+dy)*scale, x*scale:(x+dx)*scale],\
+            return vol[z:(z+dz), y:(y+dy), x:(x+dx)], mask[z*scale[0]:(z+dz)*scale[0], y*scale[1]:(y+dy)*scale[1], x*scale[2]:(x+dx)*scale[2]],\
                    weight_map[z:(z+dz), y:(y+dy), x:(x+dx)]
         else:
             return vol[z:(z+dz), y:(y+dy), x:(x+dx)], mask[z:(z+dz), y:(y+dy), x:(x+dx)]
