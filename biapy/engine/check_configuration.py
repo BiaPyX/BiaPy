@@ -304,9 +304,9 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
     #### Super-resolution ####
     elif cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
-        if cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING == 1:
+        if not( cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING ):
             raise ValueError("Resolution scale must be provided with 'PROBLEM.SUPER_RESOLUTION.UPSCALING' variable")
-        assert cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING in [2, 4], "PROBLEM.SUPER_RESOLUTION.UPSCALING not in [2, 4]"
+        assert all( i > 0 for i in cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING), "PROBLEM.SUPER_RESOLUTION.UPSCALING are not positive integers"
         if cfg.MODEL.SOURCE == "torchvision":
             raise ValueError("'MODEL.SOURCE' as 'torchvision' is not available in super-resolution workflow")
         if cfg.DATA.NORMALIZATION.TYPE != "div":

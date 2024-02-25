@@ -12,6 +12,8 @@ class EDSR(nn.Module):
     """
     def __init__(self, ndim=2, num_filters=64, num_of_residual_blocks=16, upsampling_factor=2, num_channels=3):
         super(EDSR, self).__init__()
+        if type( upsampling_factor ) is tuple:
+            upsampling_factor = upsampling_factor[0]
         self.ndim = ndim
 
         if self.ndim == 3:
@@ -40,7 +42,6 @@ class EDSR(nn.Module):
         x_new = self.last_conv_of_block(x_new)
         out = out + x_new
         out = self.last_block(out)    
-        out = torch.clamp(out, min=0, max=1)
         return out
 
 class SR_convblock(nn.Module):
