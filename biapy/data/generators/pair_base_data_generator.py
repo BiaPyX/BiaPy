@@ -362,6 +362,9 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
     instance_problem : bool, optional
         Advice the class that the workflow is of instance segmentation to divide the labels by channels.
     
+    random_crop_scale : tuple of ints, optional
+        Scale factor the mask used in super-resolution workflow. E.g. ``(2,2)``.
+
     convert_to_rgb : bool, optional
         In case RGB images are expected, e.g. if ``crop_shape`` channel is 3, those images that are grayscale are 
         converted into RGB.
@@ -386,7 +389,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                  extra_data_factor=1, n2v=False, n2v_perc_pix=0.198, n2v_manipulator='uniform_withCP', 
                  n2v_neighborhood_radius=5, n2v_structMask=np.array([[0,1,1,1,1,1,1,1,1,1,0]]), not_normalize=False,
                  norm_type='div', norm_custom_mean=None, norm_custom_std=None, normalizeY='as_mask', instance_problem=False, 
-                 random_crop_scale=1, convert_to_rgb=False):
+                 random_crop_scale=(1,1), convert_to_rgb=False):
 
         self.ndim = ndim
         self.z_size = -1 
@@ -412,7 +415,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             if self.Y_provided and _Y.ndim != (self.ndim+2):
                 raise ValueError("Y must be a {}D Numpy array".format((self.ndim+1)))
 
-            if type(X) != list and random_crop_scale==1 and self.Y_provided:
+            if type(X) != list and all([x == 1 for x in random_crop_scale]) and self.Y_provided:
                 if X.shape[:(self.ndim+1)] != Y.shape[:(self.ndim+1)]:
                     raise ValueError("The shape of X and Y must be the same. {} != {}".format(X.shape[:(self.ndim+1)], Y.shape[:(self.ndim+1)]))
 
@@ -455,6 +458,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.random_crops_in_DA = random_crops_in_DA
         self.in_memory = in_memory
         self.normalizeY = normalizeY
+        self.data_paths = None
         if not in_memory:
             # Save paths where the data is stored
             self.paths = data_paths
@@ -473,6 +477,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 self.Y = Y
             self.length = len(self.X)
         
+        self.real_length = self.length
         self.channel_info = {}
         self.no_bin_channel_found = False
         self.shape = shape
@@ -673,8 +678,9 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             self.extra_data_factor = extra_data_factor
             self.o_indexes = np.concatenate([self.o_indexes]*extra_data_factor)
             self.length = self.length*extra_data_factor
-            self.data_paths = self.data_paths*extra_data_factor
-            self.data_mask_path = self.data_mask_path*extra_data_factor
+            if self.data_paths is not None:
+                self.data_paths = self.data_paths*extra_data_factor
+                self.data_mask_path = self.data_mask_path*extra_data_factor
         else:
             self.extra_data_factor = 1
 
@@ -787,7 +793,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             Y element. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
         """
         # Choose the data source
-        idx = _idx % self.length
+        idx = _idx % self.real_length
         if self.in_memory:
             img = np.squeeze(self.X[idx].copy())
             if self.Y_provided:
