@@ -101,7 +101,10 @@ def build_model(cfg, job_identifier, device):
             model = EDSR(ndim=ndim, num_filters=64, num_of_residual_blocks=16, upsampling_factor=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, 
                 num_channels=cfg.DATA.PATCH_SIZE[-1])
         elif modelname == 'rcan':
-            model = rcan(ndim=ndim, filters=16, n_sub_block=int(np.log2(cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING)), num_channels=cfg.DATA.PATCH_SIZE[-1])
+            scale = cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING
+            if type(scale) is tuple:
+                scale = scale[0]
+            model = rcan(ndim=ndim, filters=16, scale=scale, n_sub_block=int(np.log2(scale)), num_channels=cfg.DATA.PATCH_SIZE[-1])
         elif modelname == 'dfcan':
             model = DFCAN(ndim=ndim, input_shape=cfg.DATA.PATCH_SIZE, scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, n_ResGroup = 4, n_RCAB = 4)
         elif modelname == 'wdsr':
