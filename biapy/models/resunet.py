@@ -66,7 +66,7 @@ class ResUNet(nn.Module):
     """
     def __init__(self, image_shape=(256, 256, 1), activation="ELU", feature_maps=[32, 64, 128, 256], drop_values=[0.1,0.1,0.1,0.1],
         batch_norm=False, k_size=3, upsample_layer="convtranspose", z_down=[2,2,2,2], n_classes=1, 
-        output_channels="BC", upsampling_factor=1, upsampling_position="pre"):
+        output_channels="BC", upsampling_factor=(), upsampling_position="pre"):
         super(ResUNet, self).__init__()
 
         self.depth = len(feature_maps)-1
