@@ -1,6 +1,7 @@
 SYSTEM:
-    NUM_WORKERS: -1
-
+    NUM_CPUS: -1
+    NUM_WORKERS: 5
+    
 PROBLEM:
     TYPE: SUPER_RESOLUTION
     NDIM: 3D
