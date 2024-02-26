@@ -234,6 +234,8 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
             pred = (pred>0.5).astype(np.uint8)        
         if pred.ndim == 4 and self.cfg.PROBLEM.NDIM == '3D':
             pred = np.expand_dims(pred,0)
+        if pred.ndim == 3 and self.cfg.PROBLEM.NDIM == '2D':
+            pred = np.expand_dims(pred,0)
         save_tif(pred, self.cfg.PATHS.RESULT_DIR.PER_IMAGE_BIN, self.processing_filenames, verbose=self.cfg.TEST.VERBOSE)
 
     def after_merge_patches_by_chunks_proccess_patch(self, filename):
