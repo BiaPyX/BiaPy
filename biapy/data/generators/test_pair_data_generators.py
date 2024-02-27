@@ -198,7 +198,7 @@ class test_pair_data_generator(Dataset):
                 mask = mask/255
         elif self.normalizeY == 'as_image':
             if self.X_norm['type'] == 'div':
-                mask, xnorm = norm_range01(mask, dtype=self.dtype)
+                mask, ynorm = norm_range01(mask, dtype=self.dtype)
             elif self.X_norm['type'] == 'custom':
                 mask = normalize(mask, self.X_norm['mean'], self.X_norm['std'], out_type=self.dtype_str)
         return mask, ynorm
@@ -281,7 +281,7 @@ class test_pair_data_generator(Dataset):
             # Normalization
             img, xnorm = self.norm_X(img)
             if self.provide_Y:
-                mask, xnorm = self.norm_Y(mask)
+                mask, _ = self.norm_Y(mask)
 
             img = np.expand_dims(img, 0).astype(self.dtype)
             if self.provide_Y:
