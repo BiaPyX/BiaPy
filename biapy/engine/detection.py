@@ -2,6 +2,7 @@ import os
 import math
 import csv
 import torch 
+import torch.distributed as dist
 import numpy as np
 import pandas as pd
 from skimage.feature import peak_local_max, blob_log
@@ -15,6 +16,7 @@ from biapy.data.post_processing.post_processing import (remove_close_points, det
     measure_morphological_props_and_filter)
 from biapy.data.pre_processing import create_detection_masks, norm_range01
 from biapy.utils.util import save_tif, read_chunked_data, write_chunked_data, order_dimensions
+from biapy.utils.misc import is_main_process, is_dist_avail_and_initialized
 from biapy.engine.metrics import detection_metrics, jaccard_index, weighted_bce_dice_loss, CrossEntropyLoss_wrapper
 from biapy.engine.base_workflow import Base_Workflow
 
@@ -714,60 +716,68 @@ class Detection_Workflow(Base_Workflow):
         Creates detection ground truth images to train the model based on the ground truth coordinates provided.
         They will be saved in a separate folder in the root path of the ground truth. 
         """
-        print("############################")
-        print("#  PREPARE DETECTION DATA  #")
-        print("############################")
         original_test_mask_path = None
+        
+        if is_main_process():
+            print("############################")
+            print("#  PREPARE DETECTION DATA  #")
+            print("############################")
 
-        # Create selected channels for train data
-        if self.cfg.TRAIN.ENABLE or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
-            create_mask = False
-            if not os.path.isdir(self.cfg.DATA.TRAIN.DETECTION_MASK_DIR):
-                print("You select to create detection masks from given .csv files but no file is detected in {}. "
-                    "So let's prepare the data. Notice that, if you do not modify 'DATA.TRAIN.DETECTION_MASK_DIR' "
-                    "path, this process will be done just once!".format(self.cfg.DATA.TRAIN.DETECTION_MASK_DIR))
-                create_mask = True
-            else:
-                if len(next(os.walk(self.cfg.DATA.TRAIN.DETECTION_MASK_DIR))[2]) != len(next(os.walk(self.cfg.DATA.TRAIN.GT_PATH))[2]):
-                    print("Different number of files found in {} and {}. Trying to create the the rest again"
-                        .format(self.cfg.DATA.TRAIN.GT_PATH,self.cfg.DATA.TRAIN.DETECTION_MASK_DIR))
-                    create_mask = True    
+            # Create selected channels for train data
+            if self.cfg.TRAIN.ENABLE or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
+                create_mask = False
+                if not os.path.isdir(self.cfg.DATA.TRAIN.DETECTION_MASK_DIR):
+                    print("You select to create detection masks from given .csv files but no file is detected in {}. "
+                        "So let's prepare the data. Notice that, if you do not modify 'DATA.TRAIN.DETECTION_MASK_DIR' "
+                        "path, this process will be done just once!".format(self.cfg.DATA.TRAIN.DETECTION_MASK_DIR))
+                    create_mask = True
+                else:
+                    if len(next(os.walk(self.cfg.DATA.TRAIN.DETECTION_MASK_DIR))[2]) != len(next(os.walk(self.cfg.DATA.TRAIN.GT_PATH))[2]) and \
+                       len(next(os.walk(self.cfg.DATA.TRAIN.DETECTION_MASK_DIR))[1]) != len(next(os.walk(self.cfg.DATA.TRAIN.GT_PATH))[2]):
+                        print("Different number of files found in {} and {}. Trying to create the the rest again"
+                            .format(self.cfg.DATA.TRAIN.GT_PATH,self.cfg.DATA.TRAIN.DETECTION_MASK_DIR))
+                        create_mask = True    
 
-            if create_mask:
-                create_detection_masks(self.cfg)
+                if create_mask:
+                    create_detection_masks(self.cfg)
 
-        # Create selected channels for val data
-        if self.cfg.TRAIN.ENABLE and not self.cfg.DATA.VAL.FROM_TRAIN:
-            create_mask = False
-            if not os.path.isdir(self.cfg.DATA.VAL.DETECTION_MASK_DIR):
-                print("You select to create detection masks from given .csv files but no file is detected in {}. "
-                    "So let's prepare the data. Notice that, if you do not modify 'DATA.VAL.DETECTION_MASK_DIR' "
-                    "path, this process will be done just once!".format(self.cfg.DATA.VAL.DETECTION_MASK_DIR))
-                create_mask = True
-            else:
-                if len(next(os.walk(self.cfg.DATA.VAL.DETECTION_MASK_DIR))[2]) != len(next(os.walk(self.cfg.DATA.VAL.GT_PATH))[2]):
-                    print("Different number of files found in {} and {}. Trying to create the the rest again"
-                        .format(self.cfg.DATA.VAL.GT_PATH,self.cfg.DATA.VAL.DETECTION_MASK_DIR))
-                    create_mask = True 
-                    
-            if create_mask:
-                create_detection_masks(self.cfg, data_type='val')
+            # Create selected channels for val data
+            if self.cfg.TRAIN.ENABLE and not self.cfg.DATA.VAL.FROM_TRAIN:
+                create_mask = False
+                if not os.path.isdir(self.cfg.DATA.VAL.DETECTION_MASK_DIR):
+                    print("You select to create detection masks from given .csv files but no file is detected in {}. "
+                        "So let's prepare the data. Notice that, if you do not modify 'DATA.VAL.DETECTION_MASK_DIR' "
+                        "path, this process will be done just once!".format(self.cfg.DATA.VAL.DETECTION_MASK_DIR))
+                    create_mask = True
+                else:
+                    if len(next(os.walk(self.cfg.DATA.VAL.DETECTION_MASK_DIR))[2]) != len(next(os.walk(self.cfg.DATA.VAL.GT_PATH))[2]) and \
+                       len(next(os.walk(self.cfg.DATA.VAL.DETECTION_MASK_DIR))[1]) != len(next(os.walk(self.cfg.DATA.VAL.GT_PATH))[2]):
+                        print("Different number of files found in {} and {}. Trying to create the the rest again"
+                            .format(self.cfg.DATA.VAL.GT_PATH,self.cfg.DATA.VAL.DETECTION_MASK_DIR))
+                        create_mask = True 
+                        
+                if create_mask:
+                    create_detection_masks(self.cfg, data_type='val')
 
-        # Create selected channels for test data once
-        if self.cfg.TEST.ENABLE and self.cfg.DATA.TEST.LOAD_GT and not self.cfg.DATA.TEST.USE_VAL_AS_TEST:
-            create_mask = False
-            if not os.path.isdir(self.cfg.DATA.TEST.DETECTION_MASK_DIR):
-                print("You select to create detection masks from given .csv files but no file is detected in {}. "
-                    "So let's prepare the data. Notice that, if you do not modify 'DATA.TEST.DETECTION_MASK_DIR' "
-                    "path, this process will be done just once!".format(self.cfg.DATA.TEST.DETECTION_MASK_DIR))
-                create_mask = True
-            else:
-                if len(next(os.walk(self.cfg.DATA.TEST.DETECTION_MASK_DIR))[2]) != len(next(os.walk(self.cfg.DATA.TEST.GT_PATH))[2]):
-                    print("Different number of files found in {} and {}. Trying to create the the rest again"
-                        .format(self.cfg.DATA.TEST.GT_PATH,self.cfg.DATA.TEST.DETECTION_MASK_DIR))
-                    create_mask = True 
-            if create_mask:
-                create_detection_masks(self.cfg, data_type='test')
+            # Create selected channels for test data once
+            if self.cfg.TEST.ENABLE and self.cfg.DATA.TEST.LOAD_GT and not self.cfg.DATA.TEST.USE_VAL_AS_TEST:
+                create_mask = False
+                if not os.path.isdir(self.cfg.DATA.TEST.DETECTION_MASK_DIR):
+                    print("You select to create detection masks from given .csv files but no file is detected in {}. "
+                        "So let's prepare the data. Notice that, if you do not modify 'DATA.TEST.DETECTION_MASK_DIR' "
+                        "path, this process will be done just once!".format(self.cfg.DATA.TEST.DETECTION_MASK_DIR))
+                    create_mask = True
+                else:
+                    if len(next(os.walk(self.cfg.DATA.TEST.DETECTION_MASK_DIR))[2]) != len(next(os.walk(self.cfg.DATA.TEST.GT_PATH))[2]) and \
+                       len(next(os.walk(self.cfg.DATA.TEST.DETECTION_MASK_DIR))[2]) != len(next(os.walk(self.cfg.DATA.TEST.GT_PATH))[2]):
+                        print("Different number of files found in {} and {}. Trying to create the the rest again"
+                            .format(self.cfg.DATA.TEST.GT_PATH,self.cfg.DATA.TEST.DETECTION_MASK_DIR))
+                        create_mask = True 
+                if create_mask:
+                    create_detection_masks(self.cfg, data_type='test')
+
+        if is_dist_avail_and_initialized():
+            dist.barrier()
 
         opts = []
         if self.cfg.TRAIN.ENABLE:
@@ -776,6 +786,10 @@ class Detection_Workflow(Base_Workflow):
             if not self.cfg.DATA.VAL.FROM_TRAIN:
                 print("DATA.VAL.GT_PATH changed from {} to {}".format(self.cfg.DATA.VAL.GT_PATH, self.cfg.DATA.VAL.DETECTION_MASK_DIR))
                 opts.extend(['DATA.VAL.GT_PATH', self.cfg.DATA.VAL.DETECTION_MASK_DIR])
+            if create_mask and self.cfg.DATA.TRAIN.INPUT_MASK_AXES_ORDER != 'TZCYX':
+                print(f"DATA.TRAIN.INPUT_MASK_AXES_ORDER changed from '{self.cfg.DATA.TRAIN.INPUT_MASK_AXES_ORDER}' to 'TZCYX'. Remember to set that value "
+                    " in future runs if you reuse the mask created.")
+                opts.extend(['DATA.TRAIN.INPUT_MASK_AXES_ORDER', 'TZCYX']) 
         if self.cfg.TEST.ENABLE and self.cfg.DATA.TEST.LOAD_GT:
             print("DATA.TEST.GT_PATH changed from {} to {}".format(self.cfg.DATA.TEST.GT_PATH, self.cfg.DATA.TEST.DETECTION_MASK_DIR))
             opts.extend(['DATA.TEST.GT_PATH', self.cfg.DATA.TEST.DETECTION_MASK_DIR])

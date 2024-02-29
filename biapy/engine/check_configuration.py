@@ -450,8 +450,29 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             raise ValueError("'DATA.VAL.SPLIT_TRAIN' needs to be > 0 when 'DATA.VAL.FROM_TRAIN' == True")
         
         if cfg.DATA.VAL.FROM_TRAIN and not cfg.DATA.TRAIN.IN_MEMORY:
-            raise ValueError("Validation can not be extracted from train when 'DATA.TRAIN.IN_MEMORY' == False. Please set"
-                             " 'DATA.VAL.FROM_TRAIN' to False and configure 'DATA.VAL.PATH'/'DATA.VAL.GT_PATH'")
+            zarr_files = sorted(next(os.walk(cfg.DATA.TRAIN.PATH))[1])
+            if len(zarr_files) == 0:
+                raise ValueError("Validation can only be extracted from train, when 'DATA.TRAIN.IN_MEMORY' == False, if 'DATA.TRAIN.PATH' "
+                    " contain Zarr files. If it's not your case, please, set 'DATA.VAL.FROM_TRAIN' to False and configure "
+                    "'DATA.VAL.PATH'/'DATA.VAL.GT_PATH'")
+        if cfg.PROBLEM.NDIM == '2D' and cfg.DATA.TRAIN.INPUT_IMG_AXES_ORDER != 'TZCYX':
+            raise ValueError("'DATA.TRAIN.INPUT_IMG_AXES_ORDER' can not be set in 2D problems")
+        if cfg.PROBLEM.NDIM == '2D' and cfg.DATA.TRAIN.INPUT_MASK_AXES_ORDER != 'TZCYX':
+            raise ValueError("'DATA.TRAIN.INPUT_MASK_AXES_ORDER' can not be set in 2D problems")
+        if len(cfg.DATA.TRAIN.INPUT_IMG_AXES_ORDER) < 3:
+            raise ValueError("'DATA.TRAIN.INPUT_IMG_AXES_ORDER' needs to be at least of length 3, e.g., 'ZYX'")
+        if len(cfg.DATA.TRAIN.INPUT_MASK_AXES_ORDER) < 3:
+            raise ValueError("'DATA.TRAIN.INPUT_MASK_AXES_ORDER' needs to be at least of length 3, e.g., 'ZYX'")
+
+        if cfg.PROBLEM.NDIM == '2D' and cfg.DATA.VAL.INPUT_IMG_AXES_ORDER != 'TZCYX':
+            raise ValueError("'DATA.VAL.INPUT_IMG_AXES_ORDER' can not be set in 2D problems")
+        if cfg.PROBLEM.NDIM == '2D' and cfg.DATA.VAL.INPUT_MASK_AXES_ORDER != 'TZCYX':
+            raise ValueError("'DATA.VAL.INPUT_MASK_AXES_ORDER' can not be set in 2D problems")
+        if len(cfg.DATA.VAL.INPUT_IMG_AXES_ORDER) < 3:
+            raise ValueError("'DATA.VAL.INPUT_IMG_AXES_ORDER' needs to be at least of length 3, e.g., 'ZYX'")
+        if len(cfg.DATA.VAL.INPUT_MASK_AXES_ORDER) < 3:
+            raise ValueError("'DATA.VAL.INPUT_MASK_AXES_ORDER' needs to be at least of length 3, e.g., 'ZYX'")
+
     if cfg.DATA.VAL.CROSS_VAL: 
         if not cfg.DATA.VAL.FROM_TRAIN:
             raise ValueError("'DATA.VAL.CROSS_VAL' can only be used when 'DATA.VAL.FROM_TRAIN' is True")
@@ -512,6 +533,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 if not cfg.DATA.TRAIN.IN_MEMORY:
                     raise ValueError("If no 'DATA.NORMALIZATION.CUSTOM_MEAN' and 'DATA.NORMALIZATION.CUSTOM_STD' were provided "
                         "when DATA.NORMALIZATION.TYPE == 'custom', DATA.TRAIN.IN_MEMORY needs to be True")
+    if cfg.DATA.TRAIN.REPLICATE:
+        if cfg.PROBLEM.TYPE == 'CLASSIFICATION' or \
+        (cfg.PROBLEM.TYPE == 'SELF_SUPERVISED' and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"):
+            print("WARNING: 'DATA.TRAIN.REPLICATE' has no effect in the selected workflow")
 
     ### Model ###
     if cfg.MODEL.SOURCE == "biapy":

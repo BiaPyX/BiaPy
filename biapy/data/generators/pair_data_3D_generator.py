@@ -22,7 +22,10 @@ class Pair3DImageDataGenerator(PairBaseDataGenerator):
     """
     def __init__(self, zflip=False, **kwars):
         super().__init__(**kwars)
-        self.z_size = self.shape[0] if self.random_crops_in_DA else self.X.shape[1]
+        if self.random_crops_in_DA or self.data_mode['type'] == "chunked_data":
+            self.z_size = self.shape[0]
+        else:
+            self.z_size = self.X.shape[1]
         self.zflip = zflip
         self.grid_d_size = (self.shape[1]*self.grid_d_range[0], self.shape[2]*self.grid_d_range[1],\
                             self.shape[0]*self.grid_d_range[0], self.shape[0]*self.grid_d_range[1])

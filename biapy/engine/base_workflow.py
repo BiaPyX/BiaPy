@@ -23,7 +23,7 @@ from biapy.utils.util import (load_data_from_dir, load_3d_images_from_dir, creat
 from biapy.engine.train_engine import train_one_epoch, evaluate
 from biapy.data.data_2D_manipulation import crop_data_with_overlap, merge_data_with_overlap, load_and_prepare_2D_train_data
 from biapy.data.data_3D_manipulation import (crop_3D_data_with_overlap, merge_3D_data_with_overlap, load_and_prepare_3D_data, 
-    extract_3D_patch_with_overlap_yield)
+    load_and_prepare_3D_efficient_format_data, load_3D_efficient_files, extract_3D_patch_with_overlap_yield)
 from biapy.data.post_processing.post_processing import ensemble8_2d_predictions, ensemble16_3d_predictions, apply_binary_mask
 from biapy.engine.metrics import jaccard_index_numpy, voc_calculation
 from biapy.data.post_processing import apply_post_processing
@@ -237,7 +237,49 @@ class Base_Workflow(metaclass=ABCMeta):
                     self.X_train, self.Y_train, self.train_filenames = objs
                 del objs
             else:
-                self.X_train, self.Y_train = None, None
+                # Checking if the user inputted Zarr/H5 files 
+                zarr_files = sorted(next(os.walk(self.cfg.DATA.TRAIN.PATH))[1])
+                h5_files = sorted(next(os.walk(self.cfg.DATA.TRAIN.PATH))[2])
+                if self.cfg.PROBLEM.NDIM == '3D' and (len(zarr_files) > 0 and '.zarr' in zarr_files[0]) or \
+                    (len(h5_files) > 0 and '.h5' in h5_files[0]):
+                    val_split = self.cfg.DATA.VAL.SPLIT_TRAIN if self.cfg.DATA.VAL.FROM_TRAIN else 0.
+
+                    if len(zarr_files) > 0 and '.zarr' in zarr_files[0]:
+                        print("Working with Zarr files . . .")
+                        img_files = [os.path.join(self.cfg.DATA.TRAIN.PATH, x) for x in zarr_files]
+                        mask_files = [os.path.join(self.mask_path, x) for x in sorted(next(os.walk(self.mask_path))[1])]
+                    elif len(h5_files) > 0 and '.h5' in h5_files[0]:
+                        print("Working with H5 files . . .")
+                        img_files = [os.path.join(self.cfg.DATA.TRAIN.PATH, x) for x in h5_files]
+                        mask_files = [os.path.join(self.mask_path, x) for x in sorted(next(os.walk(self.mask_path))[2])]
+                    del zarr_files, h5_files
+
+                    if self.cfg.DATA.EXTRACT_RANDOM_PATCH:
+                        print("WARNING: 'DATA.EXTRACT_RANDOM_PATCH' not taken into account when working with Zarr/H5 images")
+                    if self.cfg.DATA.FORCE_RGB:
+                        print("WARNING: 'DATA.FORCE_RGB' not taken into account when working with Zarr/H5 images")
+
+                    objs = load_and_prepare_3D_efficient_format_data(
+                        img_files, mask_files, input_img_axes=self.cfg.DATA.TRAIN.INPUT_IMG_AXES_ORDER, 
+                        input_mask_axes=self.cfg.DATA.TRAIN.INPUT_MASK_AXES_ORDER, 
+                        cross_val=self.cfg.DATA.VAL.CROSS_VAL, cross_val_nsplits=self.cfg.DATA.VAL.CROSS_VAL_NFOLD, 
+                        cross_val_fold=self.cfg.DATA.VAL.CROSS_VAL_FOLD, val_split=val_split, seed=self.cfg.SYSTEM.SEED, 
+                        shuffle_val=self.cfg.DATA.VAL.RANDOM, crop_shape=self.cfg.DATA.PATCH_SIZE, 
+                        y_upscaling=self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, 
+                        ov=self.cfg.DATA.TRAIN.OVERLAP, padding=self.cfg.DATA.TRAIN.PADDING, 
+                        minimum_foreground_perc=self.cfg.DATA.TRAIN.MINIMUM_FOREGROUND_PER)
+                    
+                    if self.cfg.DATA.VAL.FROM_TRAIN:
+                        if self.cfg.DATA.VAL.CROSS_VAL:
+                            self.X_train, self.Y_train, self.X_val, self.Y_val, self.cross_val_samples_ids = objs
+                        else:
+                            self.X_train, self.Y_train, self.X_val, self.Y_val = objs
+                    else:
+                        self.X_train, self.Y_train = objs
+                    del objs
+                    
+                else:
+                    self.X_train, self.Y_train = None, None
 
             ##################
             ### VALIDATION ###
@@ -274,7 +316,48 @@ class Base_Workflow(metaclass=ABCMeta):
                         raise ValueError("Different number of raw and ground truth items ({} vs {}). "
                             "Please check the data!".format(len(self.X_val), len(self.Y_val)))
                 else:
-                    self.X_val, self.Y_val = None, None
+                    # Checking if the user inputted Zarr/H5 files 
+                    zarr_files = sorted(next(os.walk(self.cfg.DATA.VAL.PATH))[1])
+                    h5_files = sorted(next(os.walk(self.cfg.DATA.VAL.PATH))[2])
+                    if self.cfg.PROBLEM.NDIM == '3D' and (len(zarr_files) > 0 and '.zarr' in zarr_files[0]) or \
+                        (len(h5_files) > 0 and '.h5' in h5_files[0]):
+                        print("1) Loading validation image information . . .")
+                        if len(zarr_files) > 0 and '.zarr' in zarr_files[0]:
+                            print("Working with Zarr files . . .")
+                            img_files = [os.path.join(self.cfg.DATA.VAL.PATH, x) for x in zarr_files]
+                            mask_files = [os.path.join(self.mask_path, x) for x in sorted(next(os.walk(self.mask_path))[1])]
+                        elif len(h5_files) > 0 and '.h5' in h5_files[0]:
+                            print("Working with H5 files . . .")
+                            img_files = [os.path.join(self.cfg.DATA.VAL.PATH, x) for x in h5_files]
+                            mask_files = [os.path.join(self.mask_path, x) for x in sorted(next(os.walk(self.mask_path))[2])]
+                        del zarr_files, h5_files
+
+                        if self.cfg.DATA.FORCE_RGB:
+                            print("WARNING: 'DATA.FORCE_RGB' not taken into account when working with Zarr/H5 images")
+
+                        self.X_val, _ = load_3D_efficient_files(data_path=img_files, input_axes=self.cfg.DATA.VAL.INPUT_IMG_AXES_ORDER,
+                            crop_shape=self.cfg.DATA.PATCH_SIZE, overlap=self.cfg.DATA.VAL.OVERLAP, padding=self.cfg.DATA.VAL.PADDING)
+
+                        if self.cfg.PROBLEM.NDIM == '2D':
+                            crop_shape = (self.cfg.DATA.PATCH_SIZE[0]*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[0],
+                                self.cfg.DATA.PATCH_SIZE[1]*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[1], self.cfg.DATA.PATCH_SIZE[2])
+                        else:
+                            crop_shape = (self.cfg.DATA.PATCH_SIZE[0], self.cfg.DATA.PATCH_SIZE[1]*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[0],
+                                self.cfg.DATA.PATCH_SIZE[2]*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[1],
+                                self.cfg.DATA.PATCH_SIZE[3]*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[2])
+
+                        if self.load_Y_val:
+                            print("1) Loading validation GT information . . .")
+                            self.Y_val, _ = load_3D_efficient_files(data_path=img_files, input_axes=self.cfg.DATA.VAL.INPUT_IMG_AXES_ORDER,
+                                crop_shape=crop_shape, overlap=self.cfg.DATA.VAL.OVERLAP, padding=self.cfg.DATA.VAL.PADDING, check_channel=False)                          
+                        else:
+                            self.Y_val = None
+                        if self.Y_val is not None and len(self.X_val) != len(self.Y_val):
+                            raise ValueError("Different number of raw and ground truth items ({} vs {}). "
+                                "Please check the data!".format(len(self.X_val), len(self.Y_val)))
+
+                    else:        
+                        self.X_val, self.Y_val = None, None
 
     def destroy_train_data(self):
         """

@@ -242,6 +242,36 @@ def save_tif(X, data_dir=None, filenames=None, verbose=True):
             imsave(f, np.expand_dims(aux, 0), imagej=True, metadata={'axes': 'TZCYXS'}, check_contrast=False)
 
 
+def save_zarr(X, data_dir=None, filename=None, verbose=True):
+    """Save an image as .zarr in the given directory.
+
+       Parameters
+       ----------
+       X : 5D numpy array
+           Data to save as images. The first dimension must be the number of images. E.g.
+           ``(num_of_images, y, x, channels)`` or ``(num_of_images, z, y, x, channels)``.
+
+       data_dir : str, optional
+           Path to store X images.
+
+       filename : str, optional
+           Filename that should be used when saving each image.
+
+       verbose : bool, optional
+            To print saving information.
+    """
+    assert X.ndim == 5, "X needs to be a numpy array of 5 dimensions, e.g. (1, 100, 1000, 1000, 3)"
+    if verbose:
+        print("Saving {} data as .zarr in folder: {}".format(X.shape, data_dir))
+
+    # Change to TZCYX
+    X = X.transpose((0,1,4,2,3))
+    
+    os.makedirs(data_dir, exist_ok=True)
+    zarr_name = os.path.join(data_dir, os.path.splitext(filename)[0] + os.extsep + "zarr") 
+    zarr_group = zarr.save(zarr_name, X, compression="gzip")   
+
+
 def save_tif_pair_discard(X, Y, data_dir=None, suffix="", filenames=None, discard=True, verbose=True):
     """Save images in the given directory.
 
@@ -923,22 +953,31 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), pad
 
     print("Loading data from {}".format(data_dir))
     ids = sorted(next(os.walk(data_dir))[2])
+    fids = sorted(next(os.walk(data_dir))[1])
     data = []
     data_shape = []
     c_shape = []
     filenames = []
 
     if len(ids) == 0:
-        raise ValueError("No images found in dir {}".format(data_dir))
+        if len(fids) == 0: # Trying Zarr
+            raise ValueError("No images found in dir {}".format(data_dir))
+        _ids = fids
+    else:
+        _ids = ids
 
-    for n, id_ in tqdm(enumerate(ids), total=len(ids)):
+    for n, id_ in tqdm(enumerate(_ids), total=len(_ids)):
         if id_.endswith('.npy'):
             img = np.load(os.path.join(data_dir, id_))
         elif id_.endswith('.hdf5') or id_.endswith('.h5'):
             img = h5py.File(os.path.join(data_dir, id_),'r')
             img = np.array(img[list(img)[0]])
         else:
-            img = imread(os.path.join(data_dir, id_))
+            if len(ids) > 0:
+                img = imread(os.path.join(data_dir, id_))
+            else: # Working with Zarr 
+                _, img = read_chunked_data(os.path.join(data_dir, fids[n]))
+                img = np.array(img)
         img = np.squeeze(img)
 
         if img.ndim > 3:
@@ -1188,9 +1227,14 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
 
     print("Loading data from {}".format(data_dir))
     ids = sorted(next(os.walk(data_dir))[2])
+    fids = sorted(next(os.walk(data_dir))[1])
 
     if len(ids) == 0:
-        raise ValueError("No images found in dir {}".format(data_dir))
+        if len(fids) == 0: # Trying Zarr
+            raise ValueError("No images found in dir {}".format(data_dir))
+        _ids = fids
+    else:
+        _ids = ids
 
     if crop:
         from biapy.data.data_3D_manipulation import crop_3D_data_with_overlap
@@ -1202,14 +1246,18 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
     ax = None
 
     # Read images
-    for n, id_ in tqdm(enumerate(ids), total=len(ids)):
+    for n, id_ in tqdm(enumerate(_ids), total=len(_ids)):
         if id_.endswith('.npy'):
             img = np.load(os.path.join(data_dir, id_))
         elif id_.endswith('.hdf5') or id_.endswith('.h5'):
             img = h5py.File(os.path.join(data_dir, id_),'r')
             img = np.array(img[list(img)[0]])
         else:
-            img = imread(os.path.join(data_dir, id_))
+            if len(ids) > 0:
+                img = imread(os.path.join(data_dir, id_))
+            else: # Working with Zarr 
+                _, img = read_chunked_data(os.path.join(data_dir, fids[n]))
+                img = np.array(img)
         img = np.squeeze(img)
 
         if img.ndim < 3:

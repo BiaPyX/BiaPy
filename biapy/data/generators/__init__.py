@@ -99,6 +99,15 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
     else:
         data_paths = [cfg.DATA.TRAIN.PATH] 
     
+    data_mode = {}
+    if cfg.DATA.TRAIN.IN_MEMORY:
+        data_mode['type'] = "in_memory"
+    else:
+        if cfg.PROBLEM.NDIM == '3D' and X_train is not None and isinstance(X_train, list) and isinstance(X_train[0], dict) and \
+            'filepath' in X_train[0] and ('.zarr' in X_train[0]['filepath'] or '.h5' in X_train[0]['filepath']):
+            data_mode['type'] = "chunked_data"
+        else:
+            data_mode['type'] = "not_in_memory"
     not_normalize = True if cfg.MODEL.SOURCE in ["bmz", "torchvision"] else False
     if cfg.PROBLEM.TYPE == 'CLASSIFICATION' or \
         (cfg.PROBLEM.TYPE == 'SELF_SUPERVISED' and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"):
@@ -108,7 +117,7 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
             print("Changing patch size from {} to {} to use efficientnet_b0".format(cfg.DATA.PATCH_SIZE[:-1], r_shape))
         ptype = "classification" if cfg.PROBLEM.TYPE == 'CLASSIFICATION' else "mae"
         dic = dict(ndim=ndim, X=X_train, Y=Y_train, data_path=cfg.DATA.TRAIN.PATH, ptype=ptype, n_classes=cfg.MODEL.N_CLASSES,
-            seed=cfg.SYSTEM.SEED, da=cfg.AUGMENTOR.ENABLE, in_memory=cfg.DATA.TRAIN.IN_MEMORY, da_prob=cfg.AUGMENTOR.DA_PROB,
+            seed=cfg.SYSTEM.SEED, da=cfg.AUGMENTOR.ENABLE, data_mode=data_mode, da_prob=cfg.AUGMENTOR.DA_PROB,
             rotation90=cfg.AUGMENTOR.ROT90, rand_rot=cfg.AUGMENTOR.RANDOM_ROT, rnd_rot_range=cfg.AUGMENTOR.RANDOM_ROT_RANGE,
             shear=cfg.AUGMENTOR.SHEAR, shear_range=cfg.AUGMENTOR.SHEAR_RANGE, zoom=cfg.AUGMENTOR.ZOOM,
             zoom_range=cfg.AUGMENTOR.ZOOM_RANGE, shift=cfg.AUGMENTOR.SHIFT, shift_range=cfg.AUGMENTOR.SHIFT_RANGE,
@@ -121,7 +130,7 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
             resize_shape=r_shape, not_normalize=not_normalize, norm_type=cfg.DATA.NORMALIZATION.TYPE, 
             norm_custom_mean=custom_mean, norm_custom_std=custom_std, convert_to_rgb=cfg.DATA.FORCE_RGB)
     else:
-        dic = dict(ndim=ndim, X=X_train, Y=Y_train, seed=cfg.SYSTEM.SEED, in_memory=cfg.DATA.TRAIN.IN_MEMORY, 
+        dic = dict(ndim=ndim, X=X_train, Y=Y_train, seed=cfg.SYSTEM.SEED, data_mode=data_mode, 
             data_paths=data_paths, da=cfg.AUGMENTOR.ENABLE,
             da_prob=cfg.AUGMENTOR.DA_PROB, rotation90=cfg.AUGMENTOR.ROT90, rand_rot=cfg.AUGMENTOR.RANDOM_ROT,
             rnd_rot_range=cfg.AUGMENTOR.RANDOM_ROT_RANGE, shear=cfg.AUGMENTOR.SHEAR, shear_range=cfg.AUGMENTOR.SHEAR_RANGE,
@@ -181,19 +190,34 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
     data_norm = train_generator.get_data_normalization()
 
     print("Initializing val data generator . . .")
-    mem = cfg.DATA.VAL.IN_MEMORY if not cfg.DATA.VAL.FROM_TRAIN else True
+    val_data_mode = {}
+    if cfg.DATA.VAL.FROM_TRAIN:
+        if data_mode['type'] == "chunked_data":
+            val_data_mode['type'] = "chunked_data"
+        else:
+            val_data_mode['type'] = "in_memory"
+    else:
+        if cfg.DATA.VAL.IN_MEMORY:
+            val_data_mode['type'] = "in_memory"
+        else:
+            if cfg.PROBLEM.NDIM == '3D' and X_val is not None and isinstance(X_val, list) and isinstance(X_val[0], dict) and \
+                'filepath' in X_val[0] and ('.zarr' in X_val[0]['filepath'] or '.h5' in X_val[0]['filepath']):
+                val_data_mode['type'] = "chunked_data"
+            else:
+                val_data_mode['type'] = "not_in_memory"
+
     if cfg.PROBLEM.TYPE == 'CLASSIFICATION' or \
         (cfg.PROBLEM.TYPE == 'SELF_SUPERVISED' and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"):
         ptype = "classification" if cfg.PROBLEM.TYPE == 'CLASSIFICATION' else "mae"
         val_generator = f_name(ndim=ndim, X=X_val, Y=Y_val, data_path=cfg.DATA.VAL.PATH, ptype=ptype, n_classes=cfg.MODEL.N_CLASSES, 
-            in_memory=mem, seed=cfg.SYSTEM.SEED, da=False, resize_shape=r_shape, not_normalize=not_normalize,
+            data_mode=val_data_mode, seed=cfg.SYSTEM.SEED, da=False, resize_shape=r_shape, not_normalize=not_normalize,
             norm_custom_mean=custom_mean, norm_custom_std=custom_std)
     else:
         if cfg.PROBLEM.TYPE != 'DENOISING':
             data_paths = [cfg.DATA.TRAIN.PATH, cfg.DATA.TRAIN.GT_PATH] 
         else:
             data_paths = [cfg.DATA.TRAIN.PATH] 
-        dic = dict(ndim=ndim, X=X_val, Y=Y_val, in_memory=mem, data_paths=data_paths, da=False, shape=cfg.DATA.PATCH_SIZE,
+        dic = dict(ndim=ndim, X=X_val, Y=Y_val, data_mode=val_data_mode, data_paths=data_paths, da=False, shape=cfg.DATA.PATCH_SIZE,
             random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, val=True, n_classes=cfg.MODEL.N_CLASSES, 
             seed=cfg.SYSTEM.SEED, not_normalize=not_normalize, norm_type=cfg.DATA.NORMALIZATION.TYPE, norm_custom_mean=custom_mean, 
             norm_custom_std=custom_std, resolution=cfg.DATA.VAL.RESOLUTION, random_crop_scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING)

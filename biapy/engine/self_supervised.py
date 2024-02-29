@@ -4,12 +4,13 @@ import math
 import numpy as np
 from tqdm import tqdm
 from torchmetrics.image import PeakSignalNoiseRatio
+import torch.distributed as dist
 
 from biapy.data.data_2D_manipulation import crop_data_with_overlap, merge_data_with_overlap
 from biapy.data.data_3D_manipulation import crop_3D_data_with_overlap, merge_3D_data_with_overlap
 from biapy.data.post_processing.post_processing import ensemble8_2d_predictions, ensemble16_3d_predictions
 from biapy.utils.util import save_tif
-from biapy.utils.misc import to_pytorch_format, to_numpy_format
+from biapy.utils.misc import to_pytorch_format, to_numpy_format, is_main_process, is_dist_avail_and_initialized
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.data.pre_processing import create_ssl_source_data_masks, denormalize, undo_norm_range01
 from biapy.engine.metrics import MaskedAutoencoderViT_loss
@@ -345,63 +346,67 @@ class Self_supervised_Workflow(Base_Workflow):
             print("No SSL data needs to be prepared for masking, as it will be generated on the fly")
             return
 
-        print("############################")
-        print("#  PREPARE DETECTION DATA  #")
-        print("############################")
+        if is_main_process():
+            print("############################")
+            print("#  PREPARE DETECTION DATA  #")
+            print("############################")
 
-        # Create selected channels for train data
-        if self.cfg.TRAIN.ENABLE:
-            create_mask = False
-            if not os.path.isdir(self.cfg.DATA.TRAIN.SSL_SOURCE_DIR):
-                print("You select to create detection masks from given .csv files but no file is detected in {}. "
-                    "So let's prepare the data. Notice that, if you do not modify 'DATA.TRAIN.SSL_SOURCE_DIR' "
-                    "path, this process will be done just once!".format(self.cfg.DATA.TRAIN.SSL_SOURCE_DIR))
-                create_mask = True
-            else:
-                if len(next(os.walk(self.cfg.DATA.TRAIN.SSL_SOURCE_DIR))[2]) != len(next(os.walk(self.cfg.DATA.TRAIN.PATH))[2]):
-                    print("Different number of files found in {} and {}. Trying to create the the rest again"
-                        .format(self.cfg.DATA.TRAIN.GT_PATH, self.cfg.DATA.TRAIN.SSL_SOURCE_DIR))
-                    create_mask = True 
+            # Create selected channels for train data
+            if self.cfg.TRAIN.ENABLE:
+                create_mask = False
+                if not os.path.isdir(self.cfg.DATA.TRAIN.SSL_SOURCE_DIR):
+                    print("You select to create detection masks from given .csv files but no file is detected in {}. "
+                        "So let's prepare the data. Notice that, if you do not modify 'DATA.TRAIN.SSL_SOURCE_DIR' "
+                        "path, this process will be done just once!".format(self.cfg.DATA.TRAIN.SSL_SOURCE_DIR))
+                    create_mask = True
                 else:
-                    print("Train source data found in {}".format(self.cfg.DATA.TRAIN.SSL_SOURCE_DIR))   
-            if create_mask:
-                create_ssl_source_data_masks(self.cfg, data_type='train')
+                    if len(next(os.walk(self.cfg.DATA.TRAIN.SSL_SOURCE_DIR))[2]) != len(next(os.walk(self.cfg.DATA.TRAIN.PATH))[2]):
+                        print("Different number of files found in {} and {}. Trying to create the the rest again"
+                            .format(self.cfg.DATA.TRAIN.GT_PATH, self.cfg.DATA.TRAIN.SSL_SOURCE_DIR))
+                        create_mask = True 
+                    else:
+                        print("Train source data found in {}".format(self.cfg.DATA.TRAIN.SSL_SOURCE_DIR))   
+                if create_mask:
+                    create_ssl_source_data_masks(self.cfg, data_type='train')
 
-        # Create selected channels for val data
-        if self.cfg.TRAIN.ENABLE and not self.cfg.DATA.VAL.FROM_TRAIN:
-            create_mask = False
-            if not os.path.isdir(self.cfg.DATA.VAL.SSL_SOURCE_DIR):
-                print("You select to create detection masks from given .csv files but no file is detected in {}. "
-                    "So let's prepare the data. Notice that, if you do not modify 'DATA.VAL.SSL_SOURCE_DIR' "
-                    "path, this process will be done just once!".format(self.cfg.DATA.VAL.SSL_SOURCE_DIR))
-                create_mask = True
-            else:
-                if len(next(os.walk(self.cfg.DATA.VAL.SSL_SOURCE_DIR))[2]) != len(next(os.walk(self.cfg.DATA.VAL.PATH))[2]):
-                    print("Different number of files found in {} and {}. Trying to create the the rest again"
-                        .format(self.cfg.DATA.VAL.GT_PATH, self.cfg.DATA.VAL.SSL_SOURCE_DIR))
-                    create_mask = True   
+            # Create selected channels for val data
+            if self.cfg.TRAIN.ENABLE and not self.cfg.DATA.VAL.FROM_TRAIN:
+                create_mask = False
+                if not os.path.isdir(self.cfg.DATA.VAL.SSL_SOURCE_DIR):
+                    print("You select to create detection masks from given .csv files but no file is detected in {}. "
+                        "So let's prepare the data. Notice that, if you do not modify 'DATA.VAL.SSL_SOURCE_DIR' "
+                        "path, this process will be done just once!".format(self.cfg.DATA.VAL.SSL_SOURCE_DIR))
+                    create_mask = True
                 else:
-                    print("Validation source data found in {}".format(self.cfg.DATA.VAL.SSL_SOURCE_DIR)) 
-            if create_mask:         
-                create_ssl_source_data_masks(self.cfg, data_type='val')
+                    if len(next(os.walk(self.cfg.DATA.VAL.SSL_SOURCE_DIR))[2]) != len(next(os.walk(self.cfg.DATA.VAL.PATH))[2]):
+                        print("Different number of files found in {} and {}. Trying to create the the rest again"
+                            .format(self.cfg.DATA.VAL.GT_PATH, self.cfg.DATA.VAL.SSL_SOURCE_DIR))
+                        create_mask = True   
+                    else:
+                        print("Validation source data found in {}".format(self.cfg.DATA.VAL.SSL_SOURCE_DIR)) 
+                if create_mask:         
+                    create_ssl_source_data_masks(self.cfg, data_type='val')
 
-        # Create selected channels for test data
-        if self.cfg.TEST.ENABLE:
-            create_mask = False
-            if not os.path.isdir(self.cfg.DATA.TEST.SSL_SOURCE_DIR):
-                print("You select to create detection masks from given .csv files but no file is detected in {}. "
-                    "So let's prepare the data. Notice that, if you do not modify 'DATA.TEST.SSL_SOURCE_DIR' "
-                    "path, this process will be done just once!".format(self.cfg.DATA.TEST.SSL_SOURCE_DIR))
-                create_mask = True
-            else:
-                if len(next(os.walk(self.cfg.DATA.TEST.SSL_SOURCE_DIR))[2]) != len(next(os.walk(self.cfg.DATA.TEST.PATH))[2]):
-                    print("Different number of files found in {} and {}. Trying to create the the rest again"
-                        .format(self.cfg.DATA.TEST.GT_PATH, self.cfg.DATA.TEST.SSL_SOURCE_DIR))
-                    create_mask = True    
+            # Create selected channels for test data
+            if self.cfg.TEST.ENABLE:
+                create_mask = False
+                if not os.path.isdir(self.cfg.DATA.TEST.SSL_SOURCE_DIR):
+                    print("You select to create detection masks from given .csv files but no file is detected in {}. "
+                        "So let's prepare the data. Notice that, if you do not modify 'DATA.TEST.SSL_SOURCE_DIR' "
+                        "path, this process will be done just once!".format(self.cfg.DATA.TEST.SSL_SOURCE_DIR))
+                    create_mask = True
                 else:
-                    print("Test source data found in {}".format(self.cfg.DATA.TEST.SSL_SOURCE_DIR))
-            if create_mask:
-                create_ssl_source_data_masks(self.cfg, data_type='test')
+                    if len(next(os.walk(self.cfg.DATA.TEST.SSL_SOURCE_DIR))[2]) != len(next(os.walk(self.cfg.DATA.TEST.PATH))[2]):
+                        print("Different number of files found in {} and {}. Trying to create the the rest again"
+                            .format(self.cfg.DATA.TEST.GT_PATH, self.cfg.DATA.TEST.SSL_SOURCE_DIR))
+                        create_mask = True    
+                    else:
+                        print("Test source data found in {}".format(self.cfg.DATA.TEST.SSL_SOURCE_DIR))
+                if create_mask:
+                    create_ssl_source_data_masks(self.cfg, data_type='test')
+
+        if is_dist_avail_and_initialized():
+            dist.barrier()
 
         opts = []
         if self.cfg.TRAIN.ENABLE:
