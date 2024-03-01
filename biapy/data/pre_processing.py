@@ -18,7 +18,7 @@ from skimage.color import rgb2gray
 from skimage.filters import gaussian, median
 
 from biapy.utils.util import load_data_from_dir, load_3d_images_from_dir, save_tif, save_zarr, read_chunked_data
-
+from biapy.utils.misc import is_main_process
 
 #########################
 # INSTANCE SEGMENTATION #
@@ -48,7 +48,7 @@ def create_instance_channels(cfg, data_type='train'):
     Y, _, _, filenames = f_name(getattr(cfg.DATA, tag).GT_PATH, check_drange=False, return_filenames=True)
     print("Creating Y_{} channels . . .".format(data_type))
     if isinstance(Y, list):
-        for i in tqdm(range(len(Y))):
+        for i in tqdm(range(len(Y)), disable=not is_main_process()):
             if cfg.MODEL.N_CLASSES > 2:
                 if Y[i].shape[-1] != 2:
                     raise ValueError("In instance segmentation, when 'MODEL.N_CLASSES' are more than 2 labels need to have two channels, "
@@ -102,7 +102,7 @@ def create_test_instance_channels(cfg):
         Y_test, _, _, test_filenames = f_name(cfg.DATA.TEST.GT_PATH, check_drange=False, return_filenames=True)
         print("Creating Y_test channels . . .")
         if isinstance(Y_test, list):
-            for i in tqdm(range(len(Y_test))):
+            for i in tqdm(range(len(Y_test)), disable=not is_main_process()):
                 Y_test[i] = labels_into_channels(Y_test[i], mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, save_dir=cfg.PATHS.TEST_INSTANCE_CHANNELS_CHECK,
                                             fb_mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE)
         else:
@@ -165,7 +165,7 @@ def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
         dtype = np.uint8
 
     new_mask = np.zeros(data_mask.shape[:d_shape] + (c_number,), dtype=dtype)
-    for img in tqdm(range(data_mask.shape[0])):
+    for img in tqdm(range(data_mask.shape[0]), disable=not is_main_process()):
         vol = data_mask[img,...,0].astype(np.int64)
         instances = np.unique(vol)
         instance_count = len(instances)
@@ -408,7 +408,7 @@ def create_detection_masks(cfg, data_type='train'):
             # Create masks
             print("Creating all points . . .")
             mask = np.zeros((shape+(classes,)), dtype=np.uint8)
-            for j in tqdm(range(len(z_axis_point)), total=len(z_axis_point), leave=False):
+            for j in tqdm(range(len(z_axis_point), disable=not is_main_process()), total=len(z_axis_point), leave=False):
                 a0_coord = z_axis_point[j]
                 a1_coord = y_axis_point[j]
                 if cfg.PROBLEM.NDIM == '3D':
@@ -464,7 +464,7 @@ def create_detection_masks(cfg, data_type='train'):
             if cfg.PROBLEM.DETECTION.CENTRAL_POINT_DILATION > 0:
                 print("Dilating all points . . .")
                 if cfg.PROBLEM.NDIM == '2D': mask = np.expand_dims(mask,0)
-                for k in tqdm(range(mask.shape[0]), total=len(mask), leave=False): 
+                for k in tqdm(range(mask.shape[0]), total=len(mask), leave=False, disable=not is_main_process()): 
                     for ch in range(mask.shape[-1]):                                                                                  
                         mask[k,...,ch] = binary_dilation_scipy(mask[k,...,ch], iterations=1,  structure=disk(cfg.PROBLEM.DETECTION.CENTRAL_POINT_DILATION))                                                                                                                                                    
                 if cfg.PROBLEM.NDIM == '2D': mask = mask[0]
@@ -472,7 +472,7 @@ def create_detection_masks(cfg, data_type='train'):
             if cfg.PROBLEM.DETECTION.CHECK_POINTS_CREATED:
                 print("Check points created to see if some of them are very close that create a large label") 
                 error_found = False
-                for ch in tqdm(range(mask.shape[-1]), total=len(mask), leave=False):
+                for ch in tqdm(range(mask.shape[-1]), total=len(mask), leave=False, disable=not is_main_process()):
                     _, index, counts = np.unique(label(clear_border(mask[...,ch])), return_counts=True, return_index=True)                     
                     # 0 is background so valid element is 1. We will compare that value with the rest                                                                         
                     ref_value = counts[1]                                                                                           
@@ -701,7 +701,7 @@ def calculate_2D_volume_prob_map(Y, Y_path=None, w_foreground=0.94, w_background
     print("Connstructing the probability map . . .")
     maps = []
     diff_shape = False
-    for i in tqdm(range(l)):
+    for i in tqdm(range(l), disable=not is_main_process()):
         if isinstance(prob_map, list):
             _map = prob_map[i][0].copy().astype(np.float32)
         else:

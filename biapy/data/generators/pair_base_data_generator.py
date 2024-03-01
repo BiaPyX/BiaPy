@@ -17,6 +17,7 @@ from torch.utils.data import Dataset
 from biapy.utils.util import img_to_onehot_encoding, read_chunked_data
 from biapy.data.generators.augmentors import *
 from biapy.data.pre_processing import normalize, norm_range01
+from biapy.utils.misc import is_main_process
 
 class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
     """
@@ -552,7 +553,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             self.channels_to_analize = -1
             analized = False
             print("Checking which channel of the mask needs normalization . . .")
-            for i in tqdm(range(n_samples)):
+            for i in tqdm(range(n_samples), disable=not is_main_process()):
                 _, mask = self.load_sample(i)
                 if self.normalizeY == 'as_mask':
                     # Store which channels are binary or not (e.g. distance transform channel is not binary)
@@ -1294,7 +1295,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         orig_images = None
         # Generate the examples
         print("0) Creating samples of data augmentation . . .")
-        for i in tqdm(range(num_examples)):
+        for i in tqdm(range(num_examples), disable=not is_main_process()):
             if random_images:
                 pos = random.randint(0,self.length-1) if self.length > 2 else 0
             else:

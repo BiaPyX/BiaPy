@@ -368,14 +368,14 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     colored_result = np.zeros(w_pred.shape+(3,), dtype=np.uint8)
 
                     print("Painting TPs and FNs . . .")
-                    for j in tqdm(range(len(gt_match))):
+                    for j in tqdm(range(len(gt_match)), disable=not is_main_process()):
                         color = (0,255,0) if tag[j] == "TP" else (255,0,0) # Green or red
                         colored_result[np.where(_Y == gt_match[j])] = color
-                    for j in tqdm(range(len(gt_unmatch))):
+                    for j in tqdm(range(len(gt_unmatch)), disable=not is_main_process()):
                         colored_result[np.where(_Y == gt_unmatch[j])] = (255,0,0) # Red
 
                     print("Painting FPs . . .")
-                    for j in tqdm(range(len(fp_instances))):
+                    for j in tqdm(range(len(fp_instances)), disable=not is_main_process()):
                         colored_result[np.where(w_pred == fp_instances[j])] = (0,0,255) # Blue
 
                     save_tif(np.expand_dims(colored_result,0), self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS,
@@ -487,14 +487,14 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         colored_result = np.zeros(w_pred.shape+(3,), dtype=np.uint8)
 
                         print("Painting TPs and FNs . . .")
-                        for j in tqdm(range(len(gt_match))):
+                        for j in tqdm(range(len(gt_match)), disable=not is_main_process()):
                             color = (0,255,0) if tag[j] == "TP" else (255,0,0) # Green or red
                             colored_result[np.where(_Y == gt_match[j])] = color
-                        for j in tqdm(range(len(gt_unmatch))):
+                        for j in tqdm(range(len(gt_unmatch)), disable=not is_main_process()):
                             colored_result[np.where(_Y == gt_unmatch[j])] = (255,0,0) # Red
                             
                         print("Painting FPs . . .")
-                        for j in tqdm(range(len(fp_instances))):
+                        for j in tqdm(range(len(fp_instances)), disable=not is_main_process()):
                             colored_result[np.where(w_pred == fp_instances[j])] = (0,0,255) # Blue
 
                         save_tif(np.expand_dims(colored_result,0), self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS,

@@ -500,7 +500,7 @@ class Detection_Workflow(Base_Workflow):
         total_patches = z_vols*y_vols*x_vols
         d = len(str(total_patches))
         c=1
-        for z in tqdm(range(z_vols)):
+        for z in tqdm(range(z_vols), disable=not is_main_process()):
             for y in range(y_vols):
                 for x in range(x_vols):
                     print("Processing patch {}/{} of image".format(c, total_patches))
@@ -717,7 +717,8 @@ class Detection_Workflow(Base_Workflow):
         They will be saved in a separate folder in the root path of the ground truth. 
         """
         original_test_mask_path = None
-        
+        create_mask = False
+
         if is_main_process():
             print("############################")
             print("#  PREPARE DETECTION DATA  #")

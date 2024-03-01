@@ -11,6 +11,7 @@ from biapy.engine.base_workflow import Base_Workflow
 from biapy.data.pre_processing import norm_range01
 from biapy.data.data_2D_manipulation import load_data_classification
 from biapy.data.data_3D_manipulation import load_3d_data_classification
+from biapy.utils.misc import is_main_process
 
 class Classification_Workflow(Base_Workflow):
     """
@@ -232,7 +233,7 @@ class Classification_Workflow(Base_Workflow):
 
         # Predict each patch
         l = int(math.ceil(self._X.shape[0]/self.cfg.TRAIN.BATCH_SIZE))
-        for k in tqdm(range(l), leave=False):
+        for k in tqdm(range(l), leave=False, disable=not is_main_process()):
             top = (k+1)*self.cfg.TRAIN.BATCH_SIZE if (k+1)*self.cfg.TRAIN.BATCH_SIZE < self._X.shape[0] else self._X.shape[0]
             with torch.cuda.amp.autocast():
                 p = self.model_call_func(self._X[k*self.cfg.TRAIN.BATCH_SIZE:top]).cpu().numpy()

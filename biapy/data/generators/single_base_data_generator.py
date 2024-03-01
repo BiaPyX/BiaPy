@@ -12,6 +12,7 @@ from imgaug import augmenters as iaa
 
 from biapy.data.pre_processing import normalize, norm_range01
 from biapy.data.generators.augmentors import random_crop_single, random_3D_crop_single, resize_img, rotation
+from biapy.utils.misc import is_main_process
 
 class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
     """
@@ -553,7 +554,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         # Generate the examples
         print("0) Creating the examples of data augmentation . . .")
-        for i in tqdm(range(num_examples)):
+        for i in tqdm(range(num_examples), disable=not is_main_process()):
             if random_images:
                 pos = random.randint(0,self.length-1) if self.length > 2 else 0
             else:

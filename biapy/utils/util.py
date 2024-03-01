@@ -15,6 +15,7 @@ from skimage import measure
 from collections import namedtuple
 
 from biapy.engine.metrics import jaccard_index_numpy, voc_calculation
+from biapy.utils.misc import is_main_process
 
 def create_plots(results, metrics, job_id, chartOutDir):
     """Create loss and main metric plots with the given results.
@@ -221,7 +222,7 @@ def save_tif(X, data_dir=None, filenames=None, verbose=True):
         ndims = X[0].ndim
 
     d = len(str(len(X)))
-    for i in tqdm(range(len(X)), leave=False):
+    for i in tqdm(range(len(X)), leave=False, disable=not is_main_process()):
         if filenames is None:
             f = os.path.join(data_dir, str(i).zfill(d)+'.tif')
         else:
@@ -313,7 +314,7 @@ def save_tif_pair_discard(X, Y, data_dir=None, suffix="", filenames=None, discar
 
     _dtype = X.dtype if X.dtype in [np.uint8, np.uint16, np.float32] else np.float32
     d = len(str(len(X)))
-    for i in tqdm(range(X.shape[0]), leave=False):
+    for i in tqdm(range(X.shape[0]), leave=False, disable=not is_main_process()):
         if len(np.unique(Y[i])) >= 2 or not discard:
             if filenames is None:
                 f1 = os.path.join(data_dir, 'x'+suffix, str(i).zfill(d)+'.tif')
@@ -383,7 +384,7 @@ def save_img(X=None, data_dir=None, Y=None, mask_dir=None, scale_mask=True,
         v = 1 if np.max(X) > 2 else 255
         if X.ndim > 4:
             d = len(str(X.shape[0]*X.shape[3]))
-            for i in tqdm(range(X.shape[0])):
+            for i in tqdm(range(X.shape[0]), disable=not is_main_process()):
                 for j in range(X.shape[3]):
                     if X.shape[-1] == 1:
                         im = Image.fromarray((X[i,:,:,j,0]*v).astype(np.uint8))
@@ -398,7 +399,7 @@ def save_img(X=None, data_dir=None, Y=None, mask_dir=None, scale_mask=True,
                     im.save(f)
         else:
             d = len(str(X.shape[0]))
-            for i in tqdm(range(X.shape[0])):
+            for i in tqdm(range(X.shape[0]), disable=not is_main_process()):
                 if X.shape[-1] == 1:
                     im = Image.fromarray((X[i,:,:,0]*v).astype(np.uint8))
                     im = im.convert('L')
@@ -423,7 +424,7 @@ def save_img(X=None, data_dir=None, Y=None, mask_dir=None, scale_mask=True,
         v = 1 if np.max(Y) > 2 or not scale_mask else 255
         if Y.ndim > 4:
             d = len(str(Y.shape[0]*Y.shape[3]))
-            for i in tqdm(range(Y.shape[0])):
+            for i in tqdm(range(Y.shape[0]), disable=not is_main_process()):
                 for j in range(Y.shape[3]):
                     for k in range(Y.shape[-1]):
                         im = Image.fromarray((Y[i,:,:,j,k]*v).astype(np.uint8))
@@ -437,7 +438,7 @@ def save_img(X=None, data_dir=None, Y=None, mask_dir=None, scale_mask=True,
                         im.save(f)
         else:
             d = len(str(Y.shape[0]))
-            for i in tqdm(range(0, Y.shape[0])):
+            for i in tqdm(range(0, Y.shape[0]), disable=not is_main_process()):
                 for j in range(Y.shape[-1]):
                     im = Image.fromarray((Y[i,:,:,j]*v).astype(np.uint8))
                     im = im.convert('L')
@@ -665,7 +666,7 @@ def divide_images_on_classes(data, data_mask, out_dir, num_classes=2, th=0.8):
 
     print("Dividing provided data into {} classes . . .".format(num_classes))
     d = len(str(data.shape[0]))
-    for i in tqdm(range(data.shape[0])):
+    for i in tqdm(range(data.shape[0]), disable=not is_main_process()):
         # Assign the image to a class if it has, in percentage, more pixels of
         # that class than the given threshold
         for j in range(num_classes):
@@ -966,7 +967,7 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), pad
     else:
         _ids = ids
 
-    for n, id_ in tqdm(enumerate(_ids), total=len(_ids)):
+    for n, id_ in tqdm(enumerate(_ids), total=len(_ids), disable=not is_main_process()):
         if id_.endswith('.npy'):
             img = np.load(os.path.join(data_dir, id_))
         elif id_.endswith('.hdf5') or id_.endswith('.h5'):
@@ -1097,7 +1098,7 @@ def load_ct_data_from_dir(data_dir, shape=None):
         max_x = 0
         max_y = 0
         max_z = 0
-        for n, id_ in tqdm(enumerate(ids), total=len(ids)):
+        for n, id_ in tqdm(enumerate(ids), total=len(ids), disable=not is_main_process()):
             img = nib.load(os.path.join(data_dir, id_))
             img = np.array(img.dataobj)
 
@@ -1110,7 +1111,7 @@ def load_ct_data_from_dir(data_dir, shape=None):
 
     # Create the array
     data = np.zeros((len(ids), ) + _shape, dtype=np.float32)
-    for n, id_ in tqdm(enumerate(ids), total=len(ids)):
+    for n, id_ in tqdm(enumerate(ids), total=len(ids), disable=not is_main_process()):
         img = nib.load(os.path.join(data_dir, id_))
         img = np.array(img.dataobj)
         data[n,0:img.shape[0],0:img.shape[1],0:img.shape[2]] = img
@@ -1246,7 +1247,7 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
     ax = None
 
     # Read images
-    for n, id_ in tqdm(enumerate(_ids), total=len(_ids)):
+    for n, id_ in tqdm(enumerate(_ids), total=len(_ids), disable=not is_main_process()):
         if id_.endswith('.npy'):
             img = np.load(os.path.join(data_dir, id_))
         elif id_.endswith('.hdf5') or id_.endswith('.h5'):
@@ -1398,7 +1399,7 @@ def save_npy_files(X, data_dir=None, filenames=None, verbose=True):
             raise ValueError("Filenames array and length of X have different shapes: {} vs {}".format(len(filenames),len(X)))
 
     d = len(str(len(X)))
-    for i in tqdm(range(len(X)), leave=False):
+    for i in tqdm(range(len(X)), leave=False, disable=not is_main_process()):
         if filenames is None:
             f = os.path.join(data_dir, str(i).zfill(d)+'.npy')
         else:

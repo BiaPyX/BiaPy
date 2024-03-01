@@ -7,6 +7,7 @@ from tqdm import tqdm
 from sklearn.model_selection import train_test_split, StratifiedKFold
 
 from biapy.utils.util import load_3d_images_from_dir, order_dimensions, read_chunked_data
+from biapy.utils.misc import is_main_process
 
 def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross_val_nsplits=5, cross_val_fold=1, 
     val_split=0.1, seed=0, shuffle_val=True, crop_shape=(80, 80, 80, 1), y_upscaling=(1,1,1), random_crops_in_DA=False, 
@@ -173,7 +174,7 @@ def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross
         are_lists = True if type(Y_train) is list else False
 
         samples_discarded = 0
-        for i in tqdm(range(len(Y_train)), leave=False):
+        for i in tqdm(range(len(Y_train)), leave=False, disable=not is_main_process()):
             labels, npixels = np.unique((Y_train[i]>0).astype(np.uint8), return_counts=True)
  
             discard = False
@@ -438,7 +439,7 @@ def load_and_prepare_3D_efficient_format_data(train_path, train_mask_path, input
         samples_discarded = 0
         last_data_file = {}
 
-        for i in tqdm(range(len(Y_train)), leave=False):
+        for i in tqdm(range(len(Y_train)), leave=False, disable=not is_main_process()):
             data_info = Y_train[i]
 
             if 'filepath' not in last_data_file or last_data_file['filepath'] != data_info['filepath']:
@@ -624,7 +625,7 @@ def load_3D_efficient_files(data_path, input_axes, crop_shape, overlap, padding,
         total_patches, z_vol_info, list_of_vols_in_z = obj
 
         for obj in tqdm(extract_3D_patch_with_overlap_yield(data, crop_shape, input_axes, overlap=overlap, 
-            padding=padding, total_ranks=1, rank=0, verbose=False), total=total_patches):
+            padding=padding, total_ranks=1, rank=0, verbose=False), total=total_patches, disable=not is_main_process()):
             
             img, patch_coords, _, _, _ = obj
             
@@ -1073,7 +1074,7 @@ def extract_3D_patch_with_overlap_yield(data, vol_shape, axis_order, overlap=(0,
         the first GPU will process volumes ``0``, ``1`` and ``2`` (``3`` in total) whereas the second 
         GPU will process volumes ``3`` and ``4``. 
     """
-    if verbose and rank == 0:
+    if rank == 0:
         print("### 3D-OV-CROP ###")
         print("Cropping {} images into {} with overlapping (axis order: {}). . .".format(data.shape, vol_shape, axis_order))
         print("Minimum overlap selected: {}".format(overlap))
@@ -1136,7 +1137,7 @@ def extract_3D_patch_with_overlap_yield(data, vol_shape, axis_order, overlap=(0,
     real_ov_z = ovz_per_block/(vol_shape[0]-padding[0]*2)
     real_ov_y = ovy_per_block/(vol_shape[1]-padding[1]*2)
     real_ov_x = ovx_per_block/(vol_shape[2]-padding[2]*2)
-    if verbose and rank == 0:
+    if rank == 0:
         print("Real overlapping (%): {}".format((real_ov_z,real_ov_y,real_ov_x)))
         print("Real overlapping (pixels): {}".format(((vol_shape[0]-padding[0]*2)*real_ov_z,
               (vol_shape[1]-padding[1]*2)*real_ov_y,(vol_shape[2]-padding[2]*2)*real_ov_x)))

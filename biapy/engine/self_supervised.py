@@ -158,7 +158,7 @@ class Self_supervised_Workflow(Base_Workflow):
 
         # Predict each patch
         if self.cfg.TEST.AUGMENTATION:
-            for k in tqdm(range(self._X.shape[0]), leave=False):
+            for k in tqdm(range(self._X.shape[0]), leave=False, disable=not is_main_process()):
                 if self.cfg.PROBLEM.NDIM == '2D':
                     p = ensemble8_2d_predictions(self._X[k], n_classes=self.cfg.MODEL.N_CLASSES,
                             pred_func=(
@@ -188,7 +188,7 @@ class Self_supervised_Workflow(Base_Workflow):
                 pred[k] = p
         else:
             l = int(math.ceil(self._X.shape[0]/self.cfg.TRAIN.BATCH_SIZE))
-            for k in tqdm(range(l), leave=False):
+            for k in tqdm(range(l), leave=False, disable=not is_main_process()):
                 top = (k+1)*self.cfg.TRAIN.BATCH_SIZE if (k+1)*self.cfg.TRAIN.BATCH_SIZE < self._X.shape[0] else self._X.shape[0]                
                 with torch.cuda.amp.autocast():
                     p = self.model(to_pytorch_format(self._X[k*self.cfg.TRAIN.BATCH_SIZE:top], self.axis_order, self.device))

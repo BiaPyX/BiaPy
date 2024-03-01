@@ -8,7 +8,7 @@ from biapy.data.data_2D_manipulation import crop_data_with_overlap, merge_data_w
 from biapy.data.data_3D_manipulation import crop_3D_data_with_overlap, merge_3D_data_with_overlap
 from biapy.data.post_processing.post_processing import ensemble8_2d_predictions, ensemble16_3d_predictions
 from biapy.utils.util import save_tif
-from biapy.utils.misc import to_pytorch_format, to_numpy_format
+from biapy.utils.misc import to_pytorch_format, to_numpy_format, is_main_process
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.engine.metrics import dfcan_loss
 from biapy.data.pre_processing import normalize, denormalize, undo_norm_range01
@@ -141,7 +141,7 @@ class Super_resolution_Workflow(Base_Workflow):
         # Predict each patch
         pred = []
         if self.cfg.TEST.AUGMENTATION:
-            for k in tqdm(range(self._X.shape[0]), leave=False):
+            for k in tqdm(range(self._X.shape[0]), leave=False, disable=not is_main_process()):
                 if self.cfg.PROBLEM.NDIM == '2D':
                     p = ensemble8_2d_predictions(self._X[k], n_classes=self.cfg.MODEL.N_CLASSES,
                             pred_func=(
@@ -170,7 +170,7 @@ class Super_resolution_Workflow(Base_Workflow):
         else:
             self._X = to_pytorch_format(self._X, self.axis_order, self.device)
             l = int(math.ceil(self._X.shape[0]/self.cfg.TRAIN.BATCH_SIZE))
-            for k in tqdm(range(l), leave=False):
+            for k in tqdm(range(l), leave=False, disable=not is_main_process()):
                 top = (k+1)*self.cfg.TRAIN.BATCH_SIZE if (k+1)*self.cfg.TRAIN.BATCH_SIZE < self._X.shape[0] else self._X.shape[0]
                 with torch.cuda.amp.autocast():
                     p = self.model(self._X[k*self.cfg.TRAIN.BATCH_SIZE:top])

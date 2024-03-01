@@ -9,6 +9,7 @@ from PIL import Image
 
 from biapy.utils.util import load_data_from_dir
 from biapy.data.pre_processing import normalize
+from biapy.utils.misc import is_main_process
 
 def load_and_prepare_2D_train_data(train_path, train_mask_path, cross_val=False, cross_val_nsplits=5, cross_val_fold=1,
     val_split=0.1, seed=0, shuffle_val=True, num_crops_per_dataset=0, random_crops_in_DA=False, crop_shape=None, 
@@ -183,7 +184,7 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, cross_val=False,
         are_lists = True if type(Y_train) is list else False
 
         samples_discarded = 0
-        for i in tqdm(range(len(Y_train)), leave=False):
+        for i in tqdm(range(len(Y_train)), leave=False, disable=not is_main_process()):
             labels, npixels = np.unique((Y_train[i]>0).astype(np.uint8), return_counts=True)
 
             total_pixels = 1
