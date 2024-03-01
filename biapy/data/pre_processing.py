@@ -204,7 +204,11 @@ def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
             f = "thick" if fb_mode == "dense" else fb_mode
             new_mask[img,...,1] = find_boundaries(vol, mode=f).astype(np.uint8)
             if fb_mode == "dense" and mode != "BCM":
-                new_mask[img,...,1] = 1 - binary_dilation(new_mask[img,...,1], disk(1))
+                if new_mask[img,...,1].ndim == 2:
+                    new_mask[img,...,1] = 1 - binary_dilation(new_mask[img,...,1], disk(1))
+                else:
+                    for j in range(new_mask[img,...,1].shape[0]):
+                        new_mask[img,j,...,1] = 1 - binary_dilation(new_mask[img,j,...,1], disk(1))
                 new_mask[img,...,1] = 1 - ( (vol>0) * new_mask[img,...,1])
             if 'B' in mode:
                 # Remove contours from segmentation maps
