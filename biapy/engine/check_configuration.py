@@ -318,12 +318,15 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     elif cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
         if cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "crappify":
             if cfg.PROBLEM.SELF_SUPERVISED.RESIZING_FACTOR not in [2,4,6]:
-                raise ValueError("PROBLEM.SELF_SUPERVISED.RESIZING_FACTOR not in [2,4,6]")
+                raise ValueError("'PROBLEM.SELF_SUPERVISED.RESIZING_FACTOR' not in [2,4,6]")
             if not check_value(cfg.PROBLEM.SELF_SUPERVISED.NOISE):
-                raise ValueError("PROBLEM.SELF_SUPERVISED.NOISE not in [0, 1] range")
+                raise ValueError("'PROBLEM.SELF_SUPERVISED.NOISE' not in [0, 1] range")
         elif cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
             if model_arch != 'mae':
                 raise ValueError("'MODEL.ARCHITECTURE' needs to be 'mae' when 'PROBLEM.SELF_SUPERVISED.PRETEXT_TASK' is 'masking'")  
+            assert cfg.MODEL.MAE_MASK_TYPE in ["random", "grid"], "'MODEL.MAE_MASK_TYPE' needs to be one between ['random', 'grid']"
+            if cfg.MODEL.MAE_MASK_TYPE == "random" and not check_value(cfg.MODEL.MAE_MASK_RATIO):
+                raise ValueError("'MODEL.MAE_MASK_RATIO' not in [0, 1] range")
         else:
             raise ValueError("'PROBLEM.SELF_SUPERVISED.PRETEXT_TASK' needs to be among these options: ['crappify', 'masking']")
         if cfg.MODEL.SOURCE == "torchvision":

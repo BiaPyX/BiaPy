@@ -75,12 +75,14 @@ class MaskedAutoencoderViT(nn.Module):
     """
     def __init__(self, img_size=224, patch_size=16, in_chans=3, ndim=2, embed_dim=1024, depth=24, num_heads=16,
         mlp_ratio=4., decoder_embed_dim=512, decoder_depth=8, decoder_num_heads=16, norm_layer=nn.LayerNorm, 
-        norm_pix_loss=False, mask_ratio=0.5):
+        norm_pix_loss=False, masking_type="random", mask_ratio=0.5):
         super().__init__()
         self.ndim = ndim
         self.in_chans = in_chans
         self.mask_ratio = mask_ratio
+        self.masking_type = masking_type
 
+        assert masking_type in ["random", "grid"]
         # --------------------------------------------------------------------------
         # MAE encoder specifics
         self.patch_embed = PatchEmbed(img_size=img_size, patch_size=patch_size, in_chans=in_chans,
@@ -111,6 +113,8 @@ class MaskedAutoencoderViT(nn.Module):
         self.decoder_norm = norm_layer(decoder_embed_dim)
         self.decoder_pred = nn.Linear(decoder_embed_dim, patch_size**self.ndim * in_chans, bias=True) # decoder to patch
         # --------------------------------------------------------------------------
+        
+        self.masking_func = self.random_masking if masking_type == "random" else self.grid_masking
 
         self.norm_pix_loss = norm_pix_loss
 
@@ -247,6 +251,29 @@ class MaskedAutoencoderViT(nn.Module):
 
         return x_masked, mask, ids_restore
 
+    def grid_masking(self, x):
+        """
+        Perform per-sample random masking by per-sample shuffling.
+        Per-sample shuffling is done by argsort random noise.
+
+        Parameters
+        ----------
+        x : Tensor
+            Input images. Is shape is ``(N, L, D)`` shape. Where ``N`` is the batch size, 
+            ``L`` is the multiplication of dimension (i.e. ``Z``, ``H`` and ``W``) and 
+            ``D`` is ``embed_dim``.
+        """
+        N, L, D = x.shape  # batch, length, dim
+
+        mask = torch.ones([N, L], device=x.device)
+        ids_restore = torch.argsort(mask, dim=1)
+        mask[:,::2] = 0
+        
+        ids_keep = torch.argsort(mask, dim=1)[:,:L//2]
+        x_masked = torch.gather(x, dim=1, index=ids_keep.unsqueeze(-1).repeat(1, 1, D))
+
+        return x_masked, mask, ids_restore
+
     def forward_encoder(self, x):
         """
         Encoder forward pass. 
@@ -258,8 +285,7 @@ class MaskedAutoencoderViT(nn.Module):
         x = x + self.pos_embed[:, 1:, :]
 
         # masking: length -> length * mask_ratio
-        x, mask, ids_restore = self.random_masking(x)
-
+        x, mask, ids_restore = self.masking_func(x)
         # append cls token
         cls_token = self.cls_token + self.pos_embed[:, :1, :]
         cls_tokens = cls_token.expand(x.shape[0], -1, -1)

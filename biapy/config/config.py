@@ -684,7 +684,9 @@ class Config:
         _C.MODEL.MAE_DEC_NUM_HEADS = 16
         # Size of the dense layers of the final classifier
         _C.MODEL.MAE_DEC_MLP_DIMS = 2048
-        # Percentage of the input image to mask. Value between 0 and 1. 
+        # Type of the masking strategy. Options: ["grid", "random"]
+        _C.MODEL.MAE_MASK_TYPE = "grid"
+        # Percentage of the input image to mask (applied only when MODEL.MAE_MASK_TYPE == "random"). Value between 0 and 1. 
         _C.MODEL.MAE_MASK_RATIO = 0.5
 
         # UNETR
