@@ -583,11 +583,11 @@ class Detection_Workflow(Base_Workflow):
             for z,y,x in zip(coordz,coordy,coordx):
                 pred_coordinates.append([z,y,x])
             radius = self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS[0]
-            pred_coordinates, droped_pos = remove_close_points(pred_coordinates, radius, self.cfg.DATA.TEST.RESOLUTION,
+            pred_coordinates, dropped_pos = remove_close_points(pred_coordinates, radius, self.cfg.DATA.TEST.RESOLUTION,
                 ndim=3, return_drops=True)
 
             # Remove points from dataframe
-            df = df.drop(droped_pos)
+            df = df.drop(dropped_pos)
 
         # Save large csv with all point of all patches
         df = df.sort_values(by=['file'])
