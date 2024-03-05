@@ -276,6 +276,11 @@ class Base_Workflow(metaclass=ABCMeta):
                 else:
                     self.X_val, self.Y_val = None, None
 
+        # Ensure all the processes have read the data                 
+        if is_dist_avail_and_initialized():
+            print("Waiting until all processes have read the data . . .")
+            dist.barrier()
+
     def destroy_train_data(self):
         """
         Delete training variable to release memory.
@@ -438,7 +443,7 @@ class Base_Workflow(metaclass=ABCMeta):
         self.model_without_ddp = self.model
         if self.args.distributed:
             self.model = torch.nn.parallel.DistributedDataParallel(self.model, device_ids=[self.args.gpu], 
-                find_unused_parameters=False)
+                find_unused_parameters=True)
             self.model_without_ddp = self.model.module
         self.model_prepared = True
 

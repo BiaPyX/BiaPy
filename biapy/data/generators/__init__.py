@@ -167,7 +167,7 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
 
         if cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
             dic['instance_problem'] = True
-        elif cfg.PROBLEM.TYPE in ['SELF_SUPERVISED', 'SUPER_RESOLUTION']:
+        elif cfg.PROBLEM.TYPE in ['SELF_SUPERVISED', 'SUPER_RESOLUTION', "IMAGE_TO_IMAGE"]:
             dic['normalizeY'] = 'as_image'
         elif cfg.PROBLEM.TYPE == 'DENOISING':
             dic['n2v']=True
@@ -199,7 +199,7 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
             norm_custom_std=custom_std, resolution=cfg.DATA.VAL.RESOLUTION, random_crop_scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING)
         if cfg.PROBLEM.TYPE == 'INSTANCE_SEG': 
             dic['instance_problem'] = True
-        elif cfg.PROBLEM.TYPE in ['SELF_SUPERVISED', 'SUPER_RESOLUTION']:
+        elif cfg.PROBLEM.TYPE in ['SELF_SUPERVISED', 'SUPER_RESOLUTION', "IMAGE_TO_IMAGE"]:
             dic['normalizeY'] = 'as_image'
         elif cfg.PROBLEM.TYPE == 'DENOISING':
             dic['n2v'] = True
@@ -297,7 +297,7 @@ def create_test_augmentor(cfg, X_test, Y_test, cross_val_samples_ids):
         provide_Y=False
     else:
         provide_Y=cfg.DATA.TEST.LOAD_GT
-    if cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
+    if cfg.PROBLEM.TYPE in ['SUPER_RESOLUTION', "IMAGE_TO_IMAGE"]:
         normalizeY = 'none'
     
     not_normalize = True if cfg.MODEL.SOURCE in ["bmz", "torchvision"] else False
