@@ -8,6 +8,7 @@ from skimage.feature import peak_local_max, blob_log
 from skimage.measure import label, regionprops_table
 from skimage.morphology import disk, dilation        
 from tqdm import tqdm
+from concurrent.futures import ThreadPoolExecutor
 
 from biapy.data.data_2D_manipulation import load_and_prepare_2D_train_data
 from biapy.data.data_3D_manipulation import load_and_prepare_3D_data
@@ -617,7 +618,6 @@ class Detection_Workflow(Base_Workflow):
         total_patches = z_vols*y_vols*x_vols
         d = len(str(total_patches))
         c=1
-        from concurrent.futures import ThreadPoolExecutor
 
         with ThreadPoolExecutor(max_workers=self.cfg.SYSTEM.NUM_WORKERS) as executor:
             futures = []
