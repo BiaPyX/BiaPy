@@ -8,6 +8,7 @@ from skimage.feature import peak_local_max, blob_log
 from skimage.measure import label, regionprops_table
 from skimage.morphology import disk, dilation        
 from tqdm import tqdm
+from concurrent.futures import ThreadPoolExecutor
 
 from biapy.data.data_2D_manipulation import load_and_prepare_2D_train_data
 from biapy.data.data_3D_manipulation import load_and_prepare_3D_data
@@ -470,6 +471,125 @@ class Detection_Workflow(Base_Workflow):
         """
         self.detection_process(pred, self.processing_filenames, ['d_precision_merge_patches', 'd_recall_merge_patches', 'd_f1_merge_patches'])
 
+    def process_patch(self, z, y, x, _filename, total_patches, c, pred, d, file_ext, z_dim, y_dim, x_dim):
+        """
+        Process a patch for the detection workflow.
+
+        Parameters
+        ----------
+        z : int
+            Patch z index.
+
+        y : int
+            Patch y index.
+
+        x : int
+            Patch x index.
+
+        _filename : str
+            Filename of the predicted image H5/Zarr.
+
+        total_patches : int
+            Total number of patches.
+
+        c : int
+            Current patch number.
+
+        pred : 4D numpy array
+            Model prediction.
+
+        d : int
+            Number of digits of the total patches.
+
+        file_ext : str
+            File extension of the predicted image.
+
+        z_dim : int
+            Dimension of the z axis.
+
+        y_dim : int
+            Dimension of the y axis.
+
+        x_dim : int
+            Dimension of the x axis.
+
+        Returns
+        -------
+        df_patch : DataFrame
+            Detected points in the patch.
+
+        fname : str
+            Filename of the patch.
+        
+        """
+
+        print("Processing patch {}/{} of image".format(c, total_patches))
+        
+        print("D: z: {}-{}, y: {}-{}, x: {}-{}".format(z*self.cfg.DATA.PATCH_SIZE[0],min(z_dim,self.cfg.DATA.PATCH_SIZE[0]*(z+1)),
+            y*self.cfg.DATA.PATCH_SIZE[1],min(y_dim,self.cfg.DATA.PATCH_SIZE[1]*(y+1)),x*self.cfg.DATA.PATCH_SIZE[2],min(x_dim,self.cfg.DATA.PATCH_SIZE[2]*(x+1))))
+        
+        fname = _filename+"_patch"+str(c).zfill(d)+file_ext
+        
+        slices = [
+            slice(max(0,z*self.cfg.DATA.PATCH_SIZE[0]-self.cfg.DATA.TEST.PADDING[0]),min(z_dim,self.cfg.DATA.PATCH_SIZE[0]*(z+1)+self.cfg.DATA.TEST.PADDING[0])),
+            slice(max(0,y*self.cfg.DATA.PATCH_SIZE[1]-self.cfg.DATA.TEST.PADDING[1]),min(y_dim,self.cfg.DATA.PATCH_SIZE[1]*(y+1)+self.cfg.DATA.TEST.PADDING[1])),
+            slice(max(0,x*self.cfg.DATA.PATCH_SIZE[2]-self.cfg.DATA.TEST.PADDING[2]),min(x_dim,self.cfg.DATA.PATCH_SIZE[2]*(x+1)+self.cfg.DATA.TEST.PADDING[2])),
+            slice(None), # Channel
+        ]
+        
+        data_ordered_slices = order_dimensions(
+            slices,
+            input_order = "ZYXC",
+            output_order = self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
+            default_value = 0,
+            )
+
+        raw_patch = pred[data_ordered_slices]
+
+        current_order = np.array(range(len(pred.shape)))
+        transpose_order = order_dimensions(
+                    current_order,
+                    input_order= "ZYXC",
+                    output_order= self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
+                    default_value= np.nan)
+
+        transpose_order = [x for x in transpose_order if not np.isnan(x)]
+        transpose_order = np.argsort(transpose_order)
+        transpose_order = current_order[transpose_order]
+
+        patch = raw_patch.transpose(transpose_order)
+
+        df_patch = self.detection_process(patch, [fname])
+        
+        
+        if df_patch is not None: # if there is at least one point detected
+            
+            if z*self.cfg.DATA.PATCH_SIZE[0]-self.cfg.DATA.TEST.PADDING[0] >=0: # if a patch was added
+                df_patch['axis-0'] = df_patch['axis-0'] - self.cfg.DATA.TEST.PADDING[0] # shift the coordinates to the correct patch position
+            if y*self.cfg.DATA.PATCH_SIZE[1]-self.cfg.DATA.TEST.PADDING[1] >=0:
+                df_patch['axis-1'] = df_patch['axis-1'] - self.cfg.DATA.TEST.PADDING[1]
+            if x*self.cfg.DATA.PATCH_SIZE[2]-self.cfg.DATA.TEST.PADDING[2] >=0:
+                df_patch['axis-2'] = df_patch['axis-2'] - self.cfg.DATA.TEST.PADDING[2]
+
+            df_patch = df_patch[df_patch['axis-0'] >= 0] # remove all coordinate from the previous patch
+            df_patch = df_patch[df_patch['axis-0'] < self.cfg.DATA.PATCH_SIZE[0]] # remove all coordinate from the next patch
+            df_patch = df_patch[df_patch['axis-1'] >= 0]
+            df_patch = df_patch[df_patch['axis-1'] < self.cfg.DATA.PATCH_SIZE[1]]
+            df_patch = df_patch[df_patch['axis-2'] >= 0]
+            df_patch = df_patch[df_patch['axis-2'] < self.cfg.DATA.PATCH_SIZE[2]]
+
+            df_patch = df_patch.reset_index(drop=True)
+            
+            # add the patch shift to the detected coordinates
+            shift = np.array([z*self.cfg.DATA.PATCH_SIZE[0], y*self.cfg.DATA.PATCH_SIZE[1], x*self.cfg.DATA.PATCH_SIZE[2]])
+            df_patch['axis-0'] = df_patch['axis-0'] + shift[0]
+            df_patch['axis-1'] = df_patch['axis-1'] + shift[1]
+            df_patch['axis-2'] = df_patch['axis-2'] + shift[2]
+
+            return df_patch, fname
+        
+        return None, None
+
     def after_merge_patches_by_chunks_proccess_patch(self, filename):
         """
         Place any code that needs to be done after merging all predicted patches into the original image
@@ -498,80 +618,24 @@ class Detection_Workflow(Base_Workflow):
         total_patches = z_vols*y_vols*x_vols
         d = len(str(total_patches))
         c=1
-        for z in tqdm(range(z_vols)):
-            for y in range(y_vols):
-                for x in range(x_vols):
-                    print("Processing patch {}/{} of image".format(c, total_patches))
-                    
-                    print("D: z: {}-{}, y: {}-{}, x: {}-{}".format(z*self.cfg.DATA.PATCH_SIZE[0],min(z_dim,self.cfg.DATA.PATCH_SIZE[0]*(z+1)),
-                        y*self.cfg.DATA.PATCH_SIZE[1],min(y_dim,self.cfg.DATA.PATCH_SIZE[1]*(y+1)),x*self.cfg.DATA.PATCH_SIZE[2],min(x_dim,self.cfg.DATA.PATCH_SIZE[2]*(x+1))))
-                    
-                    fname = _filename+"_patch"+str(c).zfill(d)+file_ext
-                    
-                    slices = [
-                        slice(max(0,z*self.cfg.DATA.PATCH_SIZE[0]-self.cfg.DATA.TEST.PADDING[0]),min(z_dim,self.cfg.DATA.PATCH_SIZE[0]*(z+1)+self.cfg.DATA.TEST.PADDING[0])),
-                        slice(max(0,y*self.cfg.DATA.PATCH_SIZE[1]-self.cfg.DATA.TEST.PADDING[1]),min(y_dim,self.cfg.DATA.PATCH_SIZE[1]*(y+1)+self.cfg.DATA.TEST.PADDING[1])),
-                        slice(max(0,x*self.cfg.DATA.PATCH_SIZE[2]-self.cfg.DATA.TEST.PADDING[2]),min(x_dim,self.cfg.DATA.PATCH_SIZE[2]*(x+1)+self.cfg.DATA.TEST.PADDING[2])),
-                        slice(None), # Channel
-                    ]
-                    
-                    data_ordered_slices = order_dimensions(
-                        slices,
-                        input_order = "ZYXC",
-                        output_order = self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
-                        default_value = 0,
-                        )
 
-                    raw_patch = pred[data_ordered_slices]
+        with ThreadPoolExecutor(max_workers=self.cfg.SYSTEM.NUM_WORKERS) as executor:
+            futures = []
+            for z in tqdm(range(z_vols)):
+                for y in range(y_vols):
+                    for x in range(x_vols):
+                        futures.append(executor.submit(self.process_patch, z, y, x, _filename, total_patches, c, pred, d, file_ext, z_dim, y_dim, x_dim))
+                        c+=1
 
-                    current_order = np.array(range(len(pred.shape)))
-                    transpose_order = order_dimensions(
-                                current_order,
-                                input_order= "ZYXC",
-                                output_order= self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
-                                default_value= np.nan)
-
-                    transpose_order = [x for x in transpose_order if not np.isnan(x)]
-                    transpose_order = np.argsort(transpose_order)
-                    transpose_order = current_order[transpose_order]
-
-                    patch = raw_patch.transpose(transpose_order)
-
-                    df_patch = self.detection_process(patch, [fname])
-                    
-                    c+=1
-                    
-                    if df_patch is not None: # if there is at least one point detected
-                        
-                        if z*self.cfg.DATA.PATCH_SIZE[0]-self.cfg.DATA.TEST.PADDING[0] >=0: # if a patch was added
-                            df_patch['axis-0'] = df_patch['axis-0'] - self.cfg.DATA.TEST.PADDING[0] # shift the coordinates to the correct patch position
-                        if y*self.cfg.DATA.PATCH_SIZE[1]-self.cfg.DATA.TEST.PADDING[1] >=0:
-                            df_patch['axis-1'] = df_patch['axis-1'] - self.cfg.DATA.TEST.PADDING[1]
-                        if x*self.cfg.DATA.PATCH_SIZE[2]-self.cfg.DATA.TEST.PADDING[2] >=0:
-                            df_patch['axis-2'] = df_patch['axis-2'] - self.cfg.DATA.TEST.PADDING[2]
-
-                        df_patch = df_patch[df_patch['axis-0'] >= 0] # remove all coordinate from the previous patch
-                        df_patch = df_patch[df_patch['axis-0'] < self.cfg.DATA.PATCH_SIZE[0]] # remove all coordinate from the next patch
-                        df_patch = df_patch[df_patch['axis-1'] >= 0]
-                        df_patch = df_patch[df_patch['axis-1'] < self.cfg.DATA.PATCH_SIZE[1]]
-                        df_patch = df_patch[df_patch['axis-2'] >= 0]
-                        df_patch = df_patch[df_patch['axis-2'] < self.cfg.DATA.PATCH_SIZE[2]]
-
-                        df_patch = df_patch.reset_index(drop=True)
-                        
-                        # add the patch shift to the detected coordinates
-                        shift = np.array([z*self.cfg.DATA.PATCH_SIZE[0], y*self.cfg.DATA.PATCH_SIZE[1], x*self.cfg.DATA.PATCH_SIZE[2]])
-                        df_patch['axis-0'] = df_patch['axis-0'] + shift[0]
-                        df_patch['axis-1'] = df_patch['axis-1'] + shift[1]
-                        df_patch['axis-2'] = df_patch['axis-2'] + shift[2]
-
-
-                        if 'df' not in locals():
-                            df = df_patch.copy()
-                            df['file'] = fname
-                        else:
-                                df_patch['file'] = fname
-                                df = pd.concat([df, df_patch], ignore_index=True)
+        for future in futures:
+            df_patch, fname = future.result()
+            if df_patch is not None:
+                if 'df' not in locals():
+                    df = df_patch.copy()
+                    df['file'] = fname
+                else:
+                    df_patch['file'] = fname
+                    df = pd.concat([df, df_patch], ignore_index=True)
 
         # Apply post-processing of removing points
         if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS and self.postpone_postproc:
@@ -583,11 +647,11 @@ class Detection_Workflow(Base_Workflow):
             for z,y,x in zip(coordz,coordy,coordx):
                 pred_coordinates.append([z,y,x])
             radius = self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS[0]
-            pred_coordinates, droped_pos = remove_close_points(pred_coordinates, radius, self.cfg.DATA.TEST.RESOLUTION,
+            pred_coordinates, dropped_pos = remove_close_points(pred_coordinates, radius, self.cfg.DATA.TEST.RESOLUTION,
                 ndim=3, return_drops=True)
 
             # Remove points from dataframe
-            df = df.drop(droped_pos)
+            df = df.drop(dropped_pos)
 
         # Save large csv with all point of all patches
         df = df.sort_values(by=['file'])
