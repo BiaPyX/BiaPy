@@ -204,7 +204,11 @@ def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
             f = "thick" if fb_mode == "dense" else fb_mode
             new_mask[img,...,1] = find_boundaries(vol, mode=f).astype(np.uint8)
             if fb_mode == "dense" and mode != "BCM":
-                new_mask[img,...,1] = 1 - binary_dilation(new_mask[img,...,1], disk(1))
+                if new_mask[img,...,1].ndim == 2:
+                    new_mask[img,...,1] = 1 - binary_dilation(new_mask[img,...,1], disk(1))
+                else:
+                    for j in range(new_mask[img,...,1].shape[0]):
+                        new_mask[img,j,...,1] = 1 - binary_dilation(new_mask[img,j,...,1], disk(1))
                 new_mask[img,...,1] = 1 - ( (vol>0) * new_mask[img,...,1])
             if 'B' in mode:
                 # Remove contours from segmentation maps
@@ -846,9 +850,9 @@ def norm_range01(x, dtype=np.float32):
     norm_steps = {}
     norm_steps['orig_dtype'] = x.dtype
 
-    if x.dtype == np.uint8 or x.dtype == torch.uint8:
+    if x.dtype in [np.uint8, torch.uint8]:
         x = x/255
-        norm_steps['div_255'] = 1
+        norm_steps['div'] = 1
     else:
         if (isinstance(x, np.ndarray) and np.max(x) > 255) or \
             (torch.is_tensor(x) and torch.max(x) > 255):
@@ -857,7 +861,7 @@ def norm_range01(x, dtype=np.float32):
         elif (isinstance(x, np.ndarray) and np.max(x) > 2) or \
             (torch.is_tensor(x) and torch.max(x) > 2):
             x = x/255
-            norm_steps['div_255'] = 1
+            norm_steps['div'] = 1
 
     if torch.is_tensor(x):
         x = x.to(dtype)
@@ -866,21 +870,28 @@ def norm_range01(x, dtype=np.float32):
     return x, norm_steps
 
 def undo_norm_range01(x, xnorm):
-    if 'div_255' in xnorm:
-        x = (x*255)
-        if isinstance(x, np.ndarray): 
-            x = x.astype(np.uint8)
+    if 'div' == xnorm['type']:
+        # Prevent values go outside expected range 
+        if isinstance(x, np.ndarray):
+            x = np.clip(x, 0, 1) 
         else:
-            x = x.to(torch.uint8)
-    reductions = [key for key, value in xnorm.items() if 'reduced' in key.lower()]
-    if len(reductions)>0:
-        reductions = reductions[0]
-        reductions = reductions.replace('reduced_','')
-        x = (x*65535)
-        if isinstance(x, np.ndarray): 
-            x = x.astype(eval("np.{}".format(reductions) ))
+            x = torch.clamp(x, 0, 1)
+        if 'div' in xnorm:
+            x = (x*255)
+            if isinstance(x, np.ndarray): 
+                x = x.astype(np.uint8)
+            else:
+                x = x.to(torch.uint8)
         else:
-            x = x.to(eval("torch.{}".format(reductions) ))
+            reductions = [key for key, value in xnorm.items() if 'reduced' in key.lower()]
+            if len(reductions)>0:
+                reductions = reductions[0]
+                reductions = reductions.replace('reduced_','')
+                x = (x*65535)
+                if isinstance(x, np.ndarray): 
+                    x = x.astype(eval("np.{}".format(reductions) ))
+                else:
+                    x = x.to(eval("torch.{}".format(reductions) ))            
     return x
 
 def reduce_dtype(x, x_min, x_max, out_min=0, out_max=1, out_type=np.float32):

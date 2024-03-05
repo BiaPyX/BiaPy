@@ -187,15 +187,15 @@ class MultiResUnet(torch.nn.Module):
         Channels to operate with. Possible values: ``BC``, ``BCD``, ``BP``, ``BCDv2``,
         ``BDv2``, ``Dv2`` and ``BCM``.
 
-    upsampling_factor : int, optional
-        Factor of upsampling for super resolution workflow. 
+    upsampling_factor : tuple of ints, optional
+        Factor of upsampling for super resolution workflow for each dimension.
 
     upsampling_position : str, optional
         Whether the upsampling is going to be made previously (``pre`` option) to the model 
         or after the model (``post`` option).
     """
     def __init__(self, ndim, input_channels, alpha=1.67, n_classes=1, z_down=[2,2,2,2], output_channels="BC", 
-        upsampling_factor=1, upsampling_position="pre"): 
+        upsampling_factor=(), upsampling_position="pre"):
         super().__init__()
         self.ndim = ndim
         self.alpha = alpha
@@ -215,7 +215,7 @@ class MultiResUnet(torch.nn.Module):
 
         # Super-resolution   
         self.pre_upsampling = None
-        if upsampling_factor > 1 and upsampling_position == "pre":
+        if len(upsampling_factor) > 1 and upsampling_position == "pre":
             self.pre_upsampling = convtranspose(input_channels, input_channels, kernel_size=upsampling_factor, stride=upsampling_factor)
 
         # Encoder Path
@@ -273,8 +273,8 @@ class MultiResUnet(torch.nn.Module):
 
         # Super-resolution
         self.post_upsampling = None
-        if upsampling_factor > 1 and upsampling_position == "post":
-            self.post_upsampling = convtranspose(self.in_filters9, self.n_classes, kernel_size=upsampling_factor, stride=upsampling_factor)
+        if len(upsampling_factor) > 1 and upsampling_position == "post":
+            self.post_upsampling = convtranspose(self.in_filters9, self.in_filters9, kernel_size=upsampling_factor, stride=upsampling_factor)
 
         # Instance segmentation
         if output_channels is not None:
@@ -339,10 +339,6 @@ class MultiResUnet(torch.nn.Module):
             class_head_out = self.last_class_head(x_multires9) 
 
         out =  self.last_block(x_multires9)
-        
-        # Clip values in SR
-        if self.pre_upsampling is not None or self.post_upsampling is not None:
-            out = torch.clamp(out, min=0, max=1)
             
         if self.multiclass:
             return [out, class_head_out]

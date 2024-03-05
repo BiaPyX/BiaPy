@@ -11,6 +11,9 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     Check if the configuration is good. 
     """
 
+    if cfg.SYSTEM.NUM_WORKERS < 0:
+        raise ValueError("'SYSTEM.NUM_WORKERS' can not be less than 0")
+
     dim_count = 2 if cfg.PROBLEM.NDIM == '2D' else 3
 
     # Adjust overlap and padding in the default setting if it was not set
@@ -149,8 +152,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
     #### General checks ####
     assert cfg.PROBLEM.NDIM in ['2D', '3D'], "Problem needs to be '2D' or '3D'"
-    assert cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'CLASSIFICATION', 'DETECTION', 'DENOISING', 'SUPER_RESOLUTION', 'SELF_SUPERVISED'],\
-        "PROBLEM.TYPE not in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'CLASSIFICATION', 'DETECTION', 'DENOISING', 'SUPER_RESOLUTION', 'SELF_SUPERVISED']"
+    assert cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'CLASSIFICATION', 'DETECTION', 'DENOISING', 'SUPER_RESOLUTION', 'SELF_SUPERVISED', 'IMAGE_TO_IMAGE'],\
+        "PROBLEM.TYPE not in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'CLASSIFICATION', 'DETECTION', 'DENOISING', 'SUPER_RESOLUTION', 'SELF_SUPERVISED', 'IMAGE_TO_IMAGE']"
 
     if cfg.PROBLEM.NDIM == '3D' and cfg.TEST.FULL_IMG:
         print("WARNING: TEST.FULL_IMG == True while using PROBLEM.NDIM == '3D'. As 3D images are usually 'huge'"
@@ -301,9 +304,11 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
     #### Super-resolution ####
     elif cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
-        if cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING == 1:
+        if not( cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING ):
             raise ValueError("Resolution scale must be provided with 'PROBLEM.SUPER_RESOLUTION.UPSCALING' variable")
-        assert cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING in [2, 4], "PROBLEM.SUPER_RESOLUTION.UPSCALING not in [2, 4]"
+        assert all( i > 0 for i in cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING), "'PROBLEM.SUPER_RESOLUTION.UPSCALING' are not positive integers"
+        if len(cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING) != dim_count:
+            raise ValueError(f"'PROBLEM.SUPER_RESOLUTION.UPSCALING' needs to be a tuple of {dim_count} integers")
         if cfg.MODEL.SOURCE == "torchvision":
             raise ValueError("'MODEL.SOURCE' as 'torchvision' is not available in super-resolution workflow")
         if cfg.DATA.NORMALIZATION.TYPE != "div":
@@ -313,12 +318,15 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     elif cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
         if cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "crappify":
             if cfg.PROBLEM.SELF_SUPERVISED.RESIZING_FACTOR not in [2,4,6]:
-                raise ValueError("PROBLEM.SELF_SUPERVISED.RESIZING_FACTOR not in [2,4,6]")
+                raise ValueError("'PROBLEM.SELF_SUPERVISED.RESIZING_FACTOR' not in [2,4,6]")
             if not check_value(cfg.PROBLEM.SELF_SUPERVISED.NOISE):
-                raise ValueError("PROBLEM.SELF_SUPERVISED.NOISE not in [0, 1] range")
+                raise ValueError("'PROBLEM.SELF_SUPERVISED.NOISE' not in [0, 1] range")
         elif cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
             if model_arch != 'mae':
                 raise ValueError("'MODEL.ARCHITECTURE' needs to be 'mae' when 'PROBLEM.SELF_SUPERVISED.PRETEXT_TASK' is 'masking'")  
+            assert cfg.MODEL.MAE_MASK_TYPE in ["random", "grid"], "'MODEL.MAE_MASK_TYPE' needs to be one between ['random', 'grid']"
+            if cfg.MODEL.MAE_MASK_TYPE == "random" and not check_value(cfg.MODEL.MAE_MASK_RATIO):
+                raise ValueError("'MODEL.MAE_MASK_RATIO' not in [0, 1] range")
         else:
             raise ValueError("'PROBLEM.SELF_SUPERVISED.PRETEXT_TASK' needs to be among these options: ['crappify', 'masking']")
         if cfg.MODEL.SOURCE == "torchvision":
@@ -548,6 +556,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 raise ValueError("'MODEL.Z_DOWN' length must be 4 when using 'multiresunet'")
             elif len(cfg.MODEL.FEATURE_MAPS)-1 != len(cfg.MODEL.Z_DOWN):
                 raise ValueError("'MODEL.FEATURE_MAPS' length minus one and 'MODEL.Z_DOWN' length must be equal")
+
+    # Correct UPSCALING for other workflows than SR
+    if len(cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING) == 0:
+        opts.extend(['PROBLEM.SUPER_RESOLUTION.UPSCALING', (1,)*dim_count])
 
     if len(opts) > 0:
         cfg.merge_from_list(opts)

@@ -13,6 +13,8 @@ class wdsr(nn.Module):
   """
   def __init__(self, scale, num_filters=32, num_res_blocks=16, res_block_expansion=6, num_channels=1):
     super(wdsr, self).__init__()
+    if type( scale ) is tuple:
+        scale = scale[0]
     kernel_size = 3
     skip_kernel_size = 5
     weight_norm = torch.nn.utils.weight_norm
@@ -69,7 +71,6 @@ class wdsr(nn.Module):
   def forward(self, x):
     x = self.body(x) + self.skip(x)
     x = self.shuf(x)
-    x = torch.clamp(x, min=0, max=1)
     return x
 
 

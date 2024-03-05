@@ -51,6 +51,8 @@ class rcan(nn.Module):
     """
     def __init__(self, ndim, num_channels=3, filters=64, scale=2, n_sub_block=2, num_rcab=20, reduction=16):
       super(rcan, self).__init__()
+      if type(scale) is tuple:
+        scale = scale[0]
       self.ndim = ndim 
       self.sf = nn.Conv2d(num_channels, filters, kernel_size=3, padding="same")
       self.rgs = nn.Sequential(*[RG(filters, num_rcab, reduction) for _ in range(n_sub_block)])
@@ -69,5 +71,4 @@ class rcan(nn.Module):
         x += residual
         x = self.upscale(x)
         x = self.conv2(x)
-        x = torch.clamp(x, min=0, max=1)
         return x

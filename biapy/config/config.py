@@ -136,8 +136,8 @@ class Config:
 
         ### SUPER_RESOLUTION
         _C.PROBLEM.SUPER_RESOLUTION = CN()
-        # Upscaling to be done to the input images. Options: [2, 4]
-        _C.PROBLEM.SUPER_RESOLUTION.UPSCALING = 1
+        # Upscaling to be done to the input images on every dimension. Examples: (2,2) in 2D or (2,2,2) in 3D.
+        _C.PROBLEM.SUPER_RESOLUTION.UPSCALING = ()
 
         ### SELF_SUPERVISED
         _C.PROBLEM.SELF_SUPERVISED = CN()
@@ -684,7 +684,9 @@ class Config:
         _C.MODEL.MAE_DEC_NUM_HEADS = 16
         # Size of the dense layers of the final classifier
         _C.MODEL.MAE_DEC_MLP_DIMS = 2048
-        # Percentage of the input image to mask. Value between 0 and 1. 
+        # Type of the masking strategy. Options: ["grid", "random"]
+        _C.MODEL.MAE_MASK_TYPE = "grid"
+        # Percentage of the input image to mask (applied only when MODEL.MAE_MASK_TYPE == "random"). Value between 0 and 1. 
         _C.MODEL.MAE_MASK_RATIO = 0.5
 
         # UNETR
@@ -719,7 +721,9 @@ class Config:
         # Learning rate 
         _C.TRAIN.LR = 1.E-4
         # Weight decay
-        _C.TRAIN.W_DECAY = 0.05
+        _C.TRAIN.W_DECAY = 0.02
+        # Coefficients used for computing running averages of gradient and its square. Used in ADAM and ADAMW optmizers
+        _C.TRAIN.OPT_BETAS = (0.9, 0.999)
         # Batch size
         _C.TRAIN.BATCH_SIZE = 2
         # If memory or # gpus is limited, use this variable to maintain the effective batch size, which is 

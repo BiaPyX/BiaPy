@@ -1,11 +1,12 @@
 SYSTEM:
-    NUM_WORKERS: -1
-
+    NUM_CPUS: -1
+    NUM_WORKERS: 5
+    
 PROBLEM:
     TYPE: SUPER_RESOLUTION
     NDIM: 3D
     SUPER_RESOLUTION:
-        UPSCALING: 2
+        UPSCALING: (2,2,2)
   
 DATA: 
     PATCH_SIZE: (10, 48, 48, 1)

@@ -138,7 +138,7 @@ class jaccard_index():
                 y_true = (y_true/255).type(torch.long)
         
         if self.num_classes > 2:
-            return self.jaccard(y_pred, y_true.squeeze())
+            return self.jaccard(y_pred, y_true.squeeze() if y_true.shape[0] > 1 else y_true.squeeze().unsqueeze(0))
         else:
             return self.jaccard(y_pred, y_true)
 

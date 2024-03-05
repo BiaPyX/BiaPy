@@ -78,6 +78,8 @@ class DFCAN(nn.Module):
     """
     def __init__(self, ndim, input_shape, scale=2, n_ResGroup = 4, n_RCAB = 4): 
         super().__init__()
+        if type( scale ) is tuple:
+            scale = scale[0]
         self.ndim = ndim
         size_psc = input_shape[0]
         self.input=nn.Sequential(
