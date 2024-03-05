@@ -38,6 +38,8 @@ class Image_to_Image_Workflow(Base_Workflow):
         # channel number : 'activation'
         self.activations = [{':': 'Linear'}]
         
+        self.mask_path = cfg.DATA.TRAIN.GT_PATH
+        
     def define_metrics(self):
         """
         Definition of self.metrics, self.metric_names and self.loss variables.
@@ -69,7 +71,7 @@ class Image_to_Image_Workflow(Base_Workflow):
             Value of the metric for the given prediction. 
         """
         with torch.no_grad():
-            train_mse = self.metrics[0](output.squeeze(), targets[:,0].squeeze())
+            train_mse = self.metrics[0](output.squeeze(), targets.squeeze())
             train_mse = train_mse.item() if not torch.isnan(train_mse) else 0
             if metric_logger is not None:
                 metric_logger.meters[self.metric_names[0]].update(train_mse)

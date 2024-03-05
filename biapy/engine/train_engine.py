@@ -82,7 +82,10 @@ def train_one_epoch(cfg, model, model_call_func, loss_function, activations, met
 @torch.no_grad()
 def evaluate(cfg, model, model_call_func, loss_function, activations, metric_function, prepare_targets, epoch, 
     data_loader, lr_scheduler):
+
+    # Ensure correct order of each epoch info by adding loss first
     metric_logger = MetricLogger(delimiter="  ")
+    metric_logger.add_meter('loss', SmoothedValue())
     header = 'Epoch: [{}]'.format(epoch+1)
 
     # Switch to evaluation mode

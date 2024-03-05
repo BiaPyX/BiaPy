@@ -192,7 +192,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         raise ValueError("'TEST.AUGMENTATION' and 'TEST.REDUCE_MEMORY' are incompatible as the function used to make the rotation "
             "does not support float16 data type.") 
 
-    if cfg.MODEL.N_CLASSES > 2 and cfg.PROBLEM.TYPE not in ['SEMANTIC_SEG','INSTANCE_SEG','DETECTION','CLASSIFICATION']:
+    if cfg.MODEL.N_CLASSES > 2 and cfg.PROBLEM.TYPE not in ['SEMANTIC_SEG','INSTANCE_SEG','DETECTION','CLASSIFICATION',"IMAGE_TO_IMAGE"]:
         raise ValueError("'MODEL.N_CLASSES' can only be greater than 2 in the following workflows: 'SEMANTIC_SEG', "
             "'INSTANCE_SEG', 'DETECTION' and 'CLASSIFICATION'")
 
