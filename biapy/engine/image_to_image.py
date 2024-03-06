@@ -156,7 +156,6 @@ class Image_to_Image_Workflow(Base_Workflow):
         del self._X, p
 
         # Reconstruct the predictions
-        pred = np.concatenate(pred)
         if original_data_shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
             if self.cfg.PROBLEM.NDIM == '3D': original_data_shape = original_data_shape[1:]
             f_name = merge_data_with_overlap if self.cfg.PROBLEM.NDIM == '2D' else merge_3D_data_with_overlap
