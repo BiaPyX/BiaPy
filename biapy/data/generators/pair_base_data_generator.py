@@ -548,8 +548,8 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 n_samples = len(self.data_mask_path) 
             elif data_mode['type'] == "in_memory":
                 n_samples = len(self.Y)
-            else: # data_mode['type'] == "chunked_data":
-                n_samples = min(1000,int(len(self.Y)*0.1))
+            else: # data_mode['type'] == "chunked_data":                
+                n_samples = 1000 if len(self.Y) > 1000 else len(self.Y)
             self.channels_to_analize = -1
             analized = False
             print("Checking which channel of the mask needs normalization . . .")

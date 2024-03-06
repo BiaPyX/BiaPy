@@ -359,6 +359,11 @@ class Base_Workflow(metaclass=ABCMeta):
                     else:        
                         self.X_val, self.Y_val = None, None
 
+        # Ensure all the processes have read the data                 
+        if is_dist_avail_and_initialized():
+            print("Waiting until all processes have read the data . . .")
+            dist.barrier()
+
     def destroy_train_data(self):
         """
         Delete training variable to release memory.
@@ -849,7 +854,7 @@ class Base_Workflow(metaclass=ABCMeta):
             setup_for_distributed(True)
 
         # Process all the images
-        for i, batch in tqdm(enumerate(self.test_generator), total=len(self.test_generator)):
+        for i, batch in tqdm(enumerate(self.test_generator), total=len(self.test_generator), disable=not is_main_process()):
             if self.cfg.DATA.TEST.LOAD_GT and self.cfg.PROBLEM.TYPE not in ["SELF_SUPERVISED"]:
                 X, X_norm, Y, Y_norm = batch
             else:
@@ -881,10 +886,10 @@ class Base_Workflow(metaclass=ABCMeta):
             else:
                 # Process all the images in the batch, sample by sample
                 l_X = len(X)
-                for j in tqdm(range(l_X), leave=False):
+                for j in tqdm(range(l_X), leave=False, disable=not is_main_process()):
                     self.processing_filenames = self.test_filenames[(i*l_X)+j:(i*l_X)+j+1]
                     if is_main_process():
-                        print("Processing image(s): {}".format(self.processing_filenames))
+                        print(f"[Rank {get_rank()} ({os.getpid()})] Processing image(s): {self.processing_filenames}")
                         
                         if self.cfg.PROBLEM.TYPE != 'CLASSIFICATION':
                             if type(X) is tuple:
@@ -908,10 +913,6 @@ class Base_Workflow(metaclass=ABCMeta):
                         self.process_sample(norm=(X_norm, Y_norm))                        
             
             image_counter += 1
-  
-        # Deactivate again the print function
-        if self.cfg.TEST.BY_CHUNKS.ENABLE and self.cfg.PROBLEM.NDIM == '3D':
-            setup_for_distributed(is_main_process())
 
         self.destroy_test_data()
 
@@ -967,12 +968,6 @@ class Base_Workflow(metaclass=ABCMeta):
 
         if self._X.ndim < 3:
             raise ValueError("Loaded image need to have at least 3 dimensions: {} (ndim: {})".format(self._X.shape, self._X.ndim))
-
-        if 'T' in self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER:
-            if len(self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER) > len(data_shape):
-                data_shape = (1,)+data_shape
-        else:
-            data_shape = (1,)+data_shape
         
         if len(self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER) != self._X.ndim:
             raise ValueError("'TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER' value {} does not match the number of dimensions of the loaded H5/Zarr "
@@ -1054,8 +1049,6 @@ class Base_Workflow(metaclass=ABCMeta):
             if is_dist_avail_and_initialized():
                 dist.barrier()
 
-        t_axes = (0,1,3,4,2) if "ZCYX" in self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER else (0,1,2,3,4)
-
         # Create the final H5/Zarr file that contains all the individual parts 
         if is_main_process():
             if self.cfg.SYSTEM.NUM_GPUS > 1:
@@ -1124,8 +1117,20 @@ class Base_Workflow(metaclass=ABCMeta):
 
                 # Save image
                 if self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF and self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
-                    save_tif(np.array(data, dtype=self.dtype).transpose(t_axes), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, 
-                        [filename+".tif"], verbose=self.cfg.TEST.VERBOSE)
+                    if "C" not in self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER:
+                        out_data_order = self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER + "C"
+                    else:
+                        out_data_order = self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER
+                    current_order = np.array(range(len(data.shape)))
+                    transpose_order = order_dimensions(current_order, input_order=out_data_order,
+                        output_order="TZYXC", default_value=np.nan)
+                    transpose_order = [x for x in transpose_order if not np.isnan(x)]
+                    data = np.array(data, dtype=self.dtype).transpose(transpose_order)
+                    if "T" not in out_data_order:
+                        data = np.expand_dims(data,0)
+
+                    save_tif(data, self.cfg.PATHS.RESULT_DIR.PER_IMAGE, [filename+".tif"], verbose=self.cfg.TEST.VERBOSE)
+
                 if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
                     allfile.close()      
 
@@ -1151,7 +1156,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 z_vols = math.ceil(z_dim/self.cfg.DATA.PATCH_SIZE[0])
                 y_vols = math.ceil(y_dim/self.cfg.DATA.PATCH_SIZE[1])
                 x_vols = math.ceil(x_dim/self.cfg.DATA.PATCH_SIZE[2])
-                for z in tqdm(range(z_vols)):
+                for z in tqdm(range(z_vols), disable=not is_main_process()):
                     for y in range(y_vols):
                         for x in range(x_vols):
 
@@ -1176,9 +1181,21 @@ class Base_Workflow(metaclass=ABCMeta):
 
                 # Save image
                 if self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF and self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
-                    save_tif(np.array(pred_div, dtype=self.dtype).transpose(t_axes), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, 
-                        [os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename+".tif")],
+                    if "C" not in self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER:
+                        out_data_order = self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER + "C"
+                    else:
+                        out_data_order = self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER
+                    current_order = np.array(range(len(pred_div.shape)))
+                    transpose_order = order_dimensions(current_order, input_order=out_data_order,
+                        output_order="TZYXC", default_value=np.nan)
+                    transpose_order = [x for x in transpose_order if not np.isnan(x)]
+                    pred_div = np.array(pred_div, dtype=self.dtype).transpose(transpose_order)
+                    if "T" not in out_data_order:
+                        pred_div = np.expand_dims(pred_div,0)
+
+                    save_tif(pred_div, self.cfg.PATHS.RESULT_DIR.PER_IMAGE, [os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename+".tif")],
                         verbose=self.cfg.TEST.VERBOSE)
+
                 if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
                     pred_file.close()
                     mask_file.close()
@@ -1190,7 +1207,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 else:            
                     self.after_merge_patches_by_chunks_proccess_entire_pred(out_data_div_filename) 
                     
-        # Wait until the main thread is done to predit the next sample
+        # Wait until the main thread is done to predict the next sample
         if self.cfg.SYSTEM.NUM_GPUS > 1 :
             if self.cfg.TEST.VERBOSE:
                 print(f"[Rank {get_rank()} ({os.getpid()})] Process waiting . . . ")
@@ -1267,7 +1284,7 @@ class Base_Workflow(metaclass=ABCMeta):
             # Evaluate each patch
             if self.cfg.DATA.TEST.LOAD_GT and self.cfg.TEST.EVALUATE:
                 l = int(math.ceil(self._X.shape[0]/self.cfg.TRAIN.BATCH_SIZE))
-                for k in tqdm(range(l), leave=False):
+                for k in tqdm(range(l), leave=False, disable=not is_main_process()):
                     top = (k+1)*self.cfg.TRAIN.BATCH_SIZE if (k+1)*self.cfg.TRAIN.BATCH_SIZE < self._X.shape[0] else self._X.shape[0]
                     with torch.cuda.amp.autocast():
                         output = self.apply_model_activations(self.model_call_func(self._X[k*self.cfg.TRAIN.BATCH_SIZE:top]))
@@ -1285,7 +1302,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
             # Predict each patch
             if self.cfg.TEST.AUGMENTATION:
-                for k in tqdm(range(self._X.shape[0]), leave=False):
+                for k in tqdm(range(self._X.shape[0]), leave=False, disable=not is_main_process()):
                     if self.cfg.PROBLEM.NDIM == '2D':
                         p = ensemble8_2d_predictions(self._X[k], axis_order_back=self.axis_order_back,
                             pred_func=self.model_call_func, axis_order=self.axis_order, device=self.device)
@@ -1303,7 +1320,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     pred[k] = p
             else:
                 l = int(math.ceil(self._X.shape[0]/self.cfg.TRAIN.BATCH_SIZE))
-                for k in tqdm(range(l), leave=False):
+                for k in tqdm(range(l), leave=False, disable=not is_main_process()):
                     top = (k+1)*self.cfg.TRAIN.BATCH_SIZE if (k+1)*self.cfg.TRAIN.BATCH_SIZE < self._X.shape[0] else self._X.shape[0]
                     with torch.cuda.amp.autocast():
                         p = self.apply_model_activations(self.model_call_func(self._X[k*self.cfg.TRAIN.BATCH_SIZE:top]))
@@ -1743,54 +1760,38 @@ def insert_patch_into_dataset(data_filename, data_filename_mask, data_shape, out
     
     # Obtain the total patches so we can display it for the user
     total_patches = extract_info_queue.get(timeout=60)
-
-    t_axes = (0,3,1,2) if "ZCYX" in cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER else (0,1,2,3)
-
     for i in tqdm(range(total_patches), disable=not is_main_process()):
         p, m, patch_coords = output_queue.get(timeout=60)
 
         if 'data' not in locals():
-
             # Channel dimension should be equal to the number of channel of the prediction
-            s = np.array(data_shape)
-            c_dim_index = cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER.index("C")
-            if c_dim_index != -1: # if Channel exists
-                if len(cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER) == 4 and 'T' not in cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER:
-                    c_dim_index += 1
-                s[c_dim_index] = p.shape[-1]
-            else: # else, add it
-                s = np.append(s, p.shape[-1])
+            out_data_shape = tuple(data_shape)
+            if "C" not in cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER:
+                out_data_shape = tuple(out_data_shape) + (p.shape[-1],)
+                out_data_order = cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER + "C"
+            else:
+                out_data_order = cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER
 
             if file_type == "h5":
-                data = fid.create_dataset("data", s, dtype=dtype_str, compression="gzip")
-                mask = fid_mask.create_dataset("data", s, dtype=dtype_str, compression="gzip")
+                data = fid.create_dataset("data", out_data_shape, dtype=dtype_str, compression="gzip")
+                mask = fid_mask.create_dataset("data", out_data_shape, dtype=dtype_str, compression="gzip")
             else:
-                data = fid.create_dataset("data", shape=s, dtype=dtype_str)
-                mask = fid_mask.create_dataset("data", shape=s, dtype=dtype_str)
+                data = fid.create_dataset("data", shape=out_data_shape, dtype=dtype_str)
+                mask = fid_mask.create_dataset("data", shape=out_data_shape, dtype=dtype_str)
 
-        slices = [
-            slice(patch_coords[0][0],patch_coords[0][1]),
-            slice(patch_coords[1][0],patch_coords[1][1]),
-            slice(patch_coords[2][0],patch_coords[2][1]),
-            slice(None), # Channel
-            ]
+        # Adjust slices to calculate where to insert the predicted patch. This slice does not have into account the 
+        # channel so any of them can be inserted 
+        slices = [slice(patch_coords[0][0],patch_coords[0][1]),slice(patch_coords[1][0],patch_coords[1][1]),
+            slice(patch_coords[2][0],patch_coords[2][1]), slice(None)]
+        data_ordered_slices = tuple(order_dimensions(slices, input_order="ZYXC", output_order=cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
+            default_value=0))
 
-        data_ordered_slices = order_dimensions(
-            slices,
-            input_order="ZYXC",
-            output_order=cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
-            default_value=0)
-
-        current_order = np.array(range(len(data.shape)))
-        transpose_order = order_dimensions(
-                    current_order,
-                    input_order="ZYXC",
-                    output_order=cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
-                    default_value=np.nan)
-
+        # Adjust patch slice to transpose it before inserting intop the final data 
+        current_order = np.array(range(len(p.shape)))
+        transpose_order = order_dimensions(current_order, input_order="ZYXC", output_order=out_data_order,
+            default_value=np.nan)
         transpose_order = [x for x in transpose_order if not np.isnan(x)]
-        if len(cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER) == 4 and 'T' not in cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER:
-            data_ordered_slices = (slice(None, None, None),)+data_ordered_slices
+
         data[data_ordered_slices] += p.transpose(transpose_order)
         mask[data_ordered_slices] += m.transpose(transpose_order)
 
@@ -1801,11 +1802,17 @@ def insert_patch_into_dataset(data_filename, data_filename_mask, data_shape, out
 
     # Save image
     if cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF and cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
-        t_axes = (0,1,3,4,2) if "ZCYX" in cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER else (0,1,2,3,4)
-        save_tif(np.array(data, dtype=dtype).transpose(t_axes), cfg.PATHS.RESULT_DIR.PER_IMAGE, 
-            [filename+".tif"], verbose=verbose)
-        save_tif(np.array(mask, dtype=np.uint8).transpose(t_axes), cfg.PATHS.RESULT_DIR.PER_IMAGE, 
-            [filename+"_mask.tif"], verbose=verbose)
+        current_order = np.array(range(len(data.shape)))
+        transpose_order = order_dimensions(current_order, input_order=out_data_order,
+            output_order="TZYXC", default_value=np.nan)
+        transpose_order = [x for x in transpose_order if not np.isnan(x)]
+        data = np.array(data, dtype=dtype).transpose(transpose_order)
+        mask = np.array(mask, dtype=dtype).transpose(transpose_order)
+        if "T" not in out_data_order:
+            data = np.expand_dims(data,0)
+            mask = np.expand_dims(mask,0)
+        save_tif(data, cfg.PATHS.RESULT_DIR.PER_IMAGE, [filename+".tif"], verbose=verbose)
+        save_tif(mask, cfg.PATHS.RESULT_DIR.PER_IMAGE, [filename+"_mask.tif"], verbose=verbose)
     if file_type == "h5":
         fid.close()        
         fid_mask.close()

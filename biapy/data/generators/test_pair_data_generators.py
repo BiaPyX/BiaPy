@@ -92,10 +92,14 @@ class test_pair_data_generator(Dataset):
             self.dtype = np.float16
             self.dtype_str = "float16"
         self.data_path = sorted(next(os.walk(d_path))[2]) if X is None else None
+        if len(self.data_path) == 0:
+            self.data_path = sorted(next(os.walk(d_path))[1])
         if sample_ids is not None and self.data_path is not None:
             self.data_path = [x for i, x in enumerate(self.data_path) if i in sample_ids]
         if provide_Y:
             self.data_mask_path = sorted(next(os.walk(dm_path))[2]) if Y is None else None
+            if len(self.data_mask_path) == 0:
+                self.data_mask_path = sorted(next(os.walk(dm_path))[1])
             if sample_ids is not None and self.data_mask_path is not None:
                 self.data_mask_path = [x for i, x in enumerate(self.data_mask_path) if i in sample_ids]
                 
@@ -140,7 +144,7 @@ class test_pair_data_generator(Dataset):
         if xnorm:
             self.X_norm.update(xnorm)
 
-        if mask is not None:
+        if mask is not None and not test_by_chunks:
             self.Y_norm = {}
             if normalizeY == 'as_mask':
                 self.Y_norm['type'] = 'div'
@@ -229,7 +233,8 @@ class test_pair_data_generator(Dataset):
                     if self.provide_Y:
                         mask = os.path.join(self.dm_path, self.data_mask_path[idx])
                 else:
-                   raise NotImplementedError
+                    raise ValueError("If you are using Zarr images please set 'TEST.BY_CHUNKS.ENABLE' and configure "
+                        "its options.")
             else:
                 img = imread(os.path.join(self.d_path, self.data_path[idx]))
                 img = np.squeeze(img)

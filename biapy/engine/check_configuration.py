@@ -438,8 +438,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         if cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.ENABLE:     
             assert cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE in ["chunk_by_chunk", "entire_pred"], \
                 "'TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE' needs to be one between ['chunk_by_chunk', 'entire_pred']"
-        if len(cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER) < 4:
-            raise ValueError("'TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER' needs to be at least of length 4, e.g., 'ZCYX'")
+        if len(cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER) < 3:
+            raise ValueError("'TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER' needs to be at least of length 3, e.g., 'ZYX'")
+        if cfg.MODEL.N_CLASSES > 2:
+            raise ValueError("Not implemented pipeline option: 'MODEL.N_CLASSES' > 2 and 'TEST.BY_CHUNKS'")
 
     if cfg.TRAIN.ENABLE:
         if cfg.DATA.EXTRACT_RANDOM_PATCH and cfg.DATA.PROBABILITY_MAP:

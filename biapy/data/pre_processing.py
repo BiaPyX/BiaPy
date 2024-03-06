@@ -17,7 +17,7 @@ from skimage.exposure import equalize_adapthist
 from skimage.color import rgb2gray
 from skimage.filters import gaussian, median
 
-from biapy.utils.util import load_data_from_dir, load_3d_images_from_dir, save_tif, save_zarr, read_chunked_data
+from biapy.utils.util import load_data_from_dir, load_3d_images_from_dir, save_tif, write_chunked_data, read_chunked_data
 from biapy.utils.misc import is_main_process
 
 #########################
@@ -408,7 +408,7 @@ def create_detection_masks(cfg, data_type='train'):
             # Create masks
             print("Creating all points . . .")
             mask = np.zeros((shape+(classes,)), dtype=np.uint8)
-            for j in tqdm(range(len(z_axis_point), disable=not is_main_process()), total=len(z_axis_point), leave=False):
+            for j in tqdm(range(len(z_axis_point)), disable=not is_main_process(), total=len(z_axis_point), leave=False):
                 a0_coord = z_axis_point[j]
                 a1_coord = y_axis_point[j]
                 if cfg.PROBLEM.NDIM == '3D':
@@ -489,7 +489,7 @@ def create_detection_masks(cfg, data_type='train'):
                                      "If you consider that the points are valid simply disable "
                                      "'PROBLEM.DETECTION.CHECK_POINTS_CREATED' so this check is not done again!")
             if working_with_chunked_data:
-                save_zarr(np.expand_dims(mask,0), out_dir, img_filename)
+                write_chunked_data(np.expand_dims(mask,0), out_dir, img_filename, dtype_str="uint8", verbose=True)
             else:
                 save_tif(np.expand_dims(mask,0), out_dir, [img_filename])
         else:

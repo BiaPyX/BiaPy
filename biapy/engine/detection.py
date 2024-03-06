@@ -56,8 +56,6 @@ class Detection_Workflow(Base_Workflow):
         self.use_gt = False 
         if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
             self.use_gt = True 
-        if self.cfg.TEST.BY_CHUNKS.ENABLE and self.cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.ENABLE:
-            self.use_gt = False 
 
         if self.use_gt:
             self.csv_files = sorted(next(os.walk(self.original_test_mask_path))[2])
@@ -76,16 +74,24 @@ class Detection_Workflow(Base_Workflow):
         self.load_Y_val = True
 
         # Workflow specific test variables
-        self.postpone_postproc = False
+        self.by_chunks = False
         if cfg.TEST.BY_CHUNKS.ENABLE and cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.ENABLE and \
             cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE == "chunk_by_chunk":
-            self.postpone_postproc = True
+            self.by_chunks = True
+            self.stats['d_precision_by_chunks'] = 0
+            self.stats['d_recall_by_chunks'] = 0
+            self.stats['d_f1_by_chunks'] = 0
 
         if self.cfg.TEST.POST_PROCESSING.DET_WATERSHED or self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS:
             self.post_processing['detection_post'] = True
         else:
             self.post_processing['detection_post'] = False    
 
+        if self.cfg.PROBLEM.NDIM == '3D':
+            self.v_size = (self.cfg.DATA.TEST.RESOLUTION[0], self.cfg.DATA.TEST.RESOLUTION[1], self.cfg.DATA.TEST.RESOLUTION[2])
+        else:
+            self.v_size = (1,self.cfg.DATA.TEST.RESOLUTION[0], self.cfg.DATA.TEST.RESOLUTION[1])
+            
     def define_metrics(self):
         """
         Definition of self.metrics, self.metric_names and self.loss variables.
@@ -129,7 +135,7 @@ class Detection_Workflow(Base_Workflow):
             else:
                 return train_iou
 
-    def detection_process(self, pred, filenames, metric_names=[]):
+    def detection_process(self, pred, filenames, metric_names=[], patch_pos=None, verbose=False):
         """
         Detection workflow engine for test/inference. Process model's prediction to prepare detection output and 
         calculate metrics. 
@@ -148,11 +154,13 @@ class Detection_Workflow(Base_Workflow):
         file_ext = os.path.splitext(filenames[0])[1]
         ndim = 2 if self.cfg.PROBLEM.NDIM == "2D" else 3
         pred_shape = pred.shape
-        print("Capturing the local maxima ")
+        if self.cfg.TEST.VERBOSE:
+            print("Capturing the local maxima ")
         all_points = []
         all_classes = []
         for channel in range(pred.shape[-1]):
-            print("Class {}".format(channel+1))
+            if self.cfg.TEST.VERBOSE:
+                print("Class {}".format(channel+1))
             if len(self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK) == 1:
                 min_th_peak = self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK[0]
             else:
@@ -170,7 +178,7 @@ class Detection_Workflow(Base_Workflow):
                 pred_coordinates = pred_coordinates[:,:3].astype(int) # Remove sigma
 
             # Remove close points per class as post-processing method
-            if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS and not self.postpone_postproc:
+            if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS and not self.by_chunks:
                 if len(self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS) == 1:
                     radius = self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS[0]
                 else:
@@ -186,8 +194,9 @@ class Detection_Workflow(Base_Workflow):
         # Remove close points again seeing all classes together, as it can be that a point is detected in both classes
         # if there is not clear distinction between them
         classes = 1 if self.cfg.MODEL.N_CLASSES <= 2 else self.cfg.MODEL.N_CLASSES
-        if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS and classes > 1 and not self.postpone_postproc:
-            print("All classes together")
+        if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS and classes > 1 and not self.by_chunks:
+            if self.cfg.TEST.VERBOSE:
+                print("All classes together")
             radius = np.min(self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS)
 
             all_points = np.concatenate(all_points, axis=0)
@@ -204,7 +213,8 @@ class Detection_Workflow(Base_Workflow):
                 all_points[c].append(new_points[i])
             del new_points
         # Create a file with detected point and other image with predictions ids (if GT given)
-        print("Creating the images with detected points . . .")   
+        if self.cfg.TEST.VERBOSE:
+            print("Creating the images with detected points . . .")   
         points_pred = np.zeros(pred.shape[:-1], dtype=np.uint8)
         for n, pred_coordinates in enumerate(all_points):
             if self.use_gt:
@@ -220,7 +230,7 @@ class Detection_Workflow(Base_Workflow):
                 for i in range(pred_id_img.shape[0]):                                                                                  
                     pred_id_img[i] = dilation(pred_id_img[i], disk(3))
                 if file_ext in ['.hdf5', '.h5', ".zarr"]:
-                    write_chunked_data(np.expand_dims(pred_id_img,-1), self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, 
+                    write_chunked_data(np.expand_dims(np.expand_dims(pred_id_img,-1),0), self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, 
                         os.path.splitext(filenames[0])[0]+'_class'+str(n+1)+'_pred_ids'+file_ext, dtype_str="uint32", 
                         verbose=self.cfg.TEST.VERBOSE)
                 else:
@@ -236,8 +246,8 @@ class Detection_Workflow(Base_Workflow):
             for i in range(points_pred.shape[0]):                                                                                  
                 points_pred[i] = dilation(points_pred[i], disk(3)) 
         if file_ext in ['.hdf5', '.h5', ".zarr"]:
-            write_chunked_data(np.expand_dims(points_pred,-1), self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, filenames[0], 
-                dtype_str="uint8", verbose=self.cfg.TEST.VERBOSE)
+            write_chunked_data(np.expand_dims(np.expand_dims(points_pred,-1),0), self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, 
+                filenames[0], dtype_str="uint8", verbose=self.cfg.TEST.VERBOSE)
         else:
             save_tif(np.expand_dims(np.expand_dims(points_pred,0),-1), self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
                 filenames, verbose=self.cfg.TEST.VERBOSE)
@@ -260,8 +270,8 @@ class Detection_Workflow(Base_Workflow):
                 coords_list=np.concatenate(all_points, axis=0))
 
             if file_ext in ['.hdf5', '.h5', ".zarr"]:
-                write_chunked_data(np.expand_dims(points_pred,-1), self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, filenames[0], dtype_str="uint8", 
-                    verbose=self.cfg.TEST.VERBOSE)
+                write_chunked_data(np.expand_dims(np.expand_dims(points_pred,-1),0), self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, 
+                    filenames[0], dtype_str="uint8", verbose=self.cfg.TEST.VERBOSE)
             else:
                 save_tif(np.expand_dims(np.expand_dims(points_pred,0),-1), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,
                     filenames, verbose=self.cfg.TEST.VERBOSE)
@@ -308,7 +318,7 @@ class Detection_Workflow(Base_Workflow):
                     df = df.sort_values(by=['axis-0'])
             del aux 
 
-            # Save jus the points and their probabilities 
+            # Save just the points and their probabilities 
             df.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, os.path.splitext(filenames[0])[0]+'_full_info.csv'))
             if self.cfg.TEST.POST_PROCESSING.DET_WATERSHED:
                 if ndim == 2:
@@ -325,76 +335,131 @@ class Detection_Workflow(Base_Workflow):
             all_channel_d_metrics = [0,0,0]
             dfs = []
             gt_all_coords = []
-            for ch, pred_coordinates in enumerate(all_points):
 
-                # Read the GT coordinates from the CSV file
-                csv_filename = os.path.join(self.original_test_mask_path, os.path.splitext(filenames[0])[0]+'.csv')
-                if not os.path.exists(csv_filename):
+            # Read the GT coordinates from the CSV file
+            csv_filename = os.path.join(self.original_test_mask_path, os.path.splitext(filenames[0])[0]+'.csv')
+            if not os.path.exists(csv_filename):
+                if self.cfg.TEST.VERBOSE:
                     print("WARNING: The CSV file seems to have different name than image. Using the CSV file "
                             "with the same position as the CSV in the directory. Check if it is correct!")
-                    csv_filename = os.path.join(self.original_test_mask_path, self.csv_files[self.f_numbers[0]])
+                csv_filename = os.path.join(self.original_test_mask_path, self.csv_files[self.f_numbers[0]])
+                if self.cfg.TEST.VERBOSE:
                     print("Its respective CSV file seems to be: {}".format(csv_filename))
+            if self.cfg.TEST.VERBOSE:
                 print("Reading GT data from: {}".format(csv_filename))
-                df_gt = pd.read_csv(csv_filename, index_col=0)     
-                zcoords = df_gt['axis-0'].tolist()
-                ycoords = df_gt['axis-1'].tolist()
-                if self.cfg.PROBLEM.NDIM == '3D': 
-                    xcoords = df_gt['axis-2'].tolist()
-                    gt_coordinates = [[z,y,x] for z,y,x in zip(zcoords,ycoords,xcoords)]
-                else:
-                    gt_coordinates = [[0,y,x] for y,x in zip(zcoords,ycoords)]
-                gt_all_coords.append(gt_coordinates)
+            df_gt = pd.read_csv(csv_filename, index_col=0)     
+            df_gt = df_gt.rename(columns=lambda x: x.strip())
+            zcoords = df_gt['axis-0'].tolist()
+            ycoords = df_gt['axis-1'].tolist()
+            class_info = None
+            if self.cfg.PROBLEM.NDIM == '3D': 
+                xcoords = df_gt['axis-2'].tolist()
+                gt_coordinates = [[z,y,x] for z,y,x in zip(zcoords,ycoords,xcoords)]        
+            else:
+                gt_coordinates = [[0,y,x] for y,x in zip(zcoords,ycoords)]
 
-                if self.cfg.PROBLEM.NDIM == '3D':
-                    v_size = (self.cfg.DATA.TEST.RESOLUTION[0], self.cfg.DATA.TEST.RESOLUTION[1], self.cfg.DATA.TEST.RESOLUTION[2])
+            if len(df_gt.columns) == ndim+1:
+                if 'class' not in df_gt:
+                    raise ValueError(f"The column number {ndim+1}, if provided, must be 'class' (representing each point class)")
                 else:
-                    v_size = (1,self.cfg.DATA.TEST.RESOLUTION[0], self.cfg.DATA.TEST.RESOLUTION[1])
+                    class_info = df_gt['class'].tolist()
+
+            # Take only into account the GT points corresponding to the patch at hand 
+            if patch_pos is not None:
+                patch_gt_coordinates = []
+                for j, cor in enumerate(gt_coordinates):
+                    z,y,x = cor
+                    z,y,x = int(z),int(y),int(x)
+                    if patch_pos[0][0] <= z < patch_pos[0][1] and \
+                        patch_pos[1][0] <= y < patch_pos[1][1] and \
+                        patch_pos[2][0] <= x < patch_pos[2][1]:
+                        z = z-patch_pos[0][0]
+                        y = y-patch_pos[1][0]
+                        x = x-patch_pos[2][0]
+                        patch_gt_coordinates.append([z,y,x])
+                        if z >= pred_shape[0] or y >= pred_shape[1] or x >= pred_shape[2]:
+                            raise ValueError(f"Point [{z},{y},{x}] outside image with shape {pred_shape}")                           
+                gt_coordinates = patch_gt_coordinates.copy()
+            gt_all_coords.append(gt_coordinates)
+
+            for ch, pred_coordinates in enumerate(all_points):
+                # If there was class info take only the points related to the class at hand
+                if class_info is not None:
+                    class_points = []
+                    for i in range(len(gt_coordinates)):
+                        if int(class_info[i]) == ch:
+                            class_points.append(gt_coordinates[i])
+                    gt_coordinates = class_points.copy()
+                    del class_points
 
                 # Calculate detection metrics 
                 if len(pred_coordinates) > 0:
-                    print("Detection (class "+str(ch+1)+")")
+                    if self.cfg.TEST.VERBOSE:
+                        print("Detection (class "+str(ch+1)+")")
                     d_metrics, gt_assoc, fp = detection_metrics(gt_coordinates, pred_coordinates, tolerance=self.cfg.TEST.DET_TOLERANCE[ch],
-                        voxel_size=v_size, return_assoc=True, verbose=self.cfg.TEST.VERBOSE)
-                    print("Detection metrics: {}".format(d_metrics))
-                    all_channel_d_metrics[0] += d_metrics[1]
-                    all_channel_d_metrics[1] += d_metrics[3]
-                    all_channel_d_metrics[2] += d_metrics[5]
+                        voxel_size=self.v_size, return_assoc=True, verbose=self.cfg.TEST.VERBOSE)
+                    if self.cfg.TEST.VERBOSE:
+                        print("Detection metrics: {}".format(d_metrics))
+                    all_channel_d_metrics[0] += d_metrics["Precision"]
+                    all_channel_d_metrics[1] += d_metrics["Recall"]
+                    all_channel_d_metrics[2] += d_metrics["F1"]
 
-                    # Save csv files with the associations between GT points and predicted ones 
-                    dfs.append([gt_assoc.copy(),fp.copy()])
+                    # Save csv files with the associations between GT points and predicted ones
+                    if gt_assoc is not None and fp is not None:
+                        dfs.append([gt_assoc.copy(),fp.copy()])
+                    else:
+                        if gt_assoc is not None:
+                            dfs.append([gt_assoc.copy(),None])
+                        if fp is not None:
+                            dfs.append([None, fp.copy()])
                     if self.cfg.PROBLEM.NDIM == "2D":
-                        gt_assoc = gt_assoc.drop(columns=['axis-0'])
-                        fp = fp.drop(columns=['axis-0'])
-                        gt_assoc = gt_assoc.rename(columns={'axis-1': 'axis-0', 'axis-2': 'axis-1'})
-                        fp = fp.rename(columns={'axis-1': 'axis-0', 'axis-2': 'axis-1'})
-                    gt_assoc.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, os.path.splitext(filenames[0])[0]+'_class'+str(ch+1)+'_gt_assoc.csv'))
-                    fp.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, os.path.splitext(filenames[0])[0]+'_class'+str(ch+1)+'_fp.csv'))             
+                        if gt_assoc is not None:
+                            gt_assoc = gt_assoc.drop(columns=['axis-0'])
+                            gt_assoc = gt_assoc.rename(columns={'axis-1': 'axis-0', 'axis-2': 'axis-1'})
+                        if fp is not None:
+                            fp = fp.drop(columns=['axis-0'])                    
+                            fp = fp.rename(columns={'axis-1': 'axis-0', 'axis-2': 'axis-1'})
+                    if gt_assoc is not None:
+                        gt_assoc.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, os.path.splitext(filenames[0])[0]+'_class'+str(ch+1)+'_gt_assoc.csv'))
+                    if fp is not None:
+                        fp.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, os.path.splitext(filenames[0])[0]+'_class'+str(ch+1)+'_fp.csv'))             
                 else:
-                    print("No point found to calculate the metrics!")
+                    if self.cfg.TEST.VERBOSE:
+                        print("No point found to calculate the metrics!")
 
-            print("All classes "+str(ch+1))
-            all_channel_d_metrics[0] = all_channel_d_metrics[0]/len(all_points)
-            all_channel_d_metrics[1] = all_channel_d_metrics[1]/len(all_points)
-            all_channel_d_metrics[2] = all_channel_d_metrics[2]/len(all_points)
-            print("Detection metrics: {}".format(["Precision", all_channel_d_metrics[0],
-                "Recall", all_channel_d_metrics[1], "F1", all_channel_d_metrics[2]]))
+            if self.cfg.TEST.VERBOSE:
+                if len(gt_coordinates) == 0: 
+                    print("No points found in GT!")
+                print("All classes "+str(ch+1))
+            for k in range(len(all_channel_d_metrics)):
+                all_channel_d_metrics[k] = all_channel_d_metrics[k]/len(all_points)
+            if self.cfg.TEST.VERBOSE:
+                print("Detection metrics: {}".format(["Precision", all_channel_d_metrics[0],
+                    "Recall", all_channel_d_metrics[1], "F1", all_channel_d_metrics[2]]))
 
-            self.stats[metric_names[0]] += all_channel_d_metrics[0]
-            self.stats[metric_names[1]] += all_channel_d_metrics[1]
-            self.stats[metric_names[2]] += all_channel_d_metrics[2]
-            
-            print("Creating the image with a summary of detected points and false positives with colors . . .")
+            if not self.by_chunks:
+                self.stats[metric_names[0]] += all_channel_d_metrics[0]
+                self.stats[metric_names[1]] += all_channel_d_metrics[1]
+                self.stats[metric_names[2]] += all_channel_d_metrics[2]
+
+            if self.cfg.TEST.VERBOSE:
+                print("Creating the image with a summary of detected points and false positives with colors . . .")
             points_pred = np.zeros(pred_shape[:-1]+(3,), dtype=np.uint8)
             for ch, gt_coords in enumerate(gt_all_coords):
-                if len(dfs) > 0:
-                    gt_assoc, fp = dfs[ch]
+                # if gt_assoc is None: 
+                gt_assoc, fp = None, None
+                if len(dfs) > 0 and len(dfs[i]) > 0:
+                    if dfs[i][0] is not None:
+                        gt_assoc = dfs[ch][0]
+                    if dfs[i][1] is not None:
+                        fp = dfs[ch][1]
 
                 # TP and FN
                 gt_id_img = np.zeros(pred_shape[:-1], dtype=np.uint32)
                 for j, cor in enumerate(gt_coords):
                     z,y,x = cor
                     z,y,x = int(z),int(y),int(x)
-                    if len(dfs) > 0:
+                    if gt_assoc is not None:
                         if gt_assoc[gt_assoc['gt_id'] == j+1]["tag"].iloc[0] == "TP":
                             points_pred[z,y,x] = (0,255,0)# Green
                         else:   
@@ -408,7 +473,7 @@ class Detection_Workflow(Base_Workflow):
                 for i in range(gt_id_img.shape[0]):      
                     gt_id_img[i] = dilation(gt_id_img[i], disk(3))
                 if file_ext in ['.hdf5', '.h5', ".zarr"]:
-                    write_chunked_data(np.expand_dims(gt_id_img,-1), self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, 
+                    write_chunked_data(np.expand_dims(np.expand_dims(gt_id_img,-1),0), self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, 
                         os.path.splitext(filenames[0])[0]+'_class'+str(ch+1)+'_gt_ids'+file_ext, dtype_str="uint32", 
                         verbose=self.cfg.TEST.VERBOSE)
                 else:
@@ -416,7 +481,7 @@ class Detection_Workflow(Base_Workflow):
                         [os.path.splitext(filenames[0])[0]+'_class'+str(ch+1)+'_gt_ids.csv'], verbose=self.cfg.TEST.VERBOSE)
                 
                 # FP
-                if len(dfs) > 0:
+                if fp is not None:
                     for cor in zip(fp['axis-0'].tolist(),fp['axis-1'].tolist(),fp['axis-2'].tolist()):
                         z, y, x =  cor  
                         z,y,x = int(z),int(y),int(x)
@@ -427,7 +492,7 @@ class Detection_Workflow(Base_Workflow):
                 for j in range(points_pred.shape[-1]):                                                                              
                     points_pred[i,...,j] = dilation(points_pred[i,...,j], disk(3)) 
             if file_ext in ['.hdf5', '.h5', ".zarr"]:
-                write_chunked_data(points_pred, self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, filenames[0], 
+                write_chunked_data(np.expand_dims(points_pred,0), self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, filenames[0], 
                     dtype_str="uint8", verbose=self.cfg.TEST.VERBOSE)
             else:
                 save_tif(np.expand_dims(points_pred,0), self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
@@ -452,14 +517,19 @@ class Detection_Workflow(Base_Workflow):
             for nr in range(len(self.cell_count_lines)):
                 csvwriter.writerow([nr+1] + self.cell_count_lines[nr])
         if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
-            if not self.cfg.TEST.FULL_IMG:
-                self.stats['d_precision_merge_patches'] = self.stats['d_precision_merge_patches'] / image_counter
-                self.stats['d_recall_merge_patches'] = self.stats['d_recall_merge_patches'] / image_counter
-                self.stats['d_f1_merge_patches'] = self.stats['d_f1_merge_patches'] / image_counter
+            if self.by_chunks:
+                self.stats['d_precision_by_chunks'] = self.stats['d_precision_by_chunks'] / image_counter
+                self.stats['d_recall_by_chunks'] = self.stats['d_recall_by_chunks'] / image_counter
+                self.stats['d_f1_by_chunks'] = self.stats['d_f1_by_chunks'] / image_counter
             else:
-                self.stats['d_precision'] = self.stats['d_precision'] / image_counter
-                self.stats['d_recall'] = self.stats['d_recall'] / image_counter
-                self.stats['d_f1'] = self.stats['d_f1'] / image_counter
+                if not self.cfg.TEST.FULL_IMG:
+                    self.stats['d_precision_merge_patches'] = self.stats['d_precision_merge_patches'] / image_counter
+                    self.stats['d_recall_merge_patches'] = self.stats['d_recall_merge_patches'] / image_counter
+                    self.stats['d_f1_merge_patches'] = self.stats['d_f1_merge_patches'] / image_counter
+                else:
+                    self.stats['d_precision'] = self.stats['d_precision'] / image_counter
+                    self.stats['d_recall'] = self.stats['d_recall'] / image_counter
+                    self.stats['d_f1'] = self.stats['d_f1'] / image_counter
 
     def after_merge_patches(self, pred):
         """
@@ -471,6 +541,131 @@ class Detection_Workflow(Base_Workflow):
             Model prediction.
         """
         self.detection_process(pred, self.processing_filenames, ['d_precision_merge_patches', 'd_recall_merge_patches', 'd_f1_merge_patches'])
+
+    def process_patch(self, z, y, x, _filename, total_patches, c, pred, d, file_ext, z_dim, y_dim, x_dim):
+        """
+        Process a patch for the detection workflow.
+
+        Parameters
+        ----------
+        z : int
+            Patch z index.
+
+        y : int
+            Patch y index.
+
+        x : int
+            Patch x index.
+
+        _filename : str
+            Filename of the predicted image H5/Zarr.
+
+        total_patches : int
+            Total number of patches.
+
+        c : int
+            Current patch number.
+
+        pred : 4D numpy array
+            Model prediction.
+
+        d : int
+            Number of digits of the total patches.
+
+        file_ext : str
+            File extension of the predicted image.
+
+        z_dim : int
+            Dimension of the z axis.
+
+        y_dim : int
+            Dimension of the y axis.
+
+        x_dim : int
+            Dimension of the x axis.
+
+        Returns
+        -------
+        df_patch : DataFrame
+            Detected points in the patch.
+
+        fname : str
+            Filename of the patch.
+        
+        """
+        print("Processing patch {}/{} of image".format(c, total_patches))
+        if self.cfg.TEST.VERBOSE:    
+            print("D: z: {}-{}, y: {}-{}, x: {}-{}".format(
+                max(0,z*self.cfg.DATA.PATCH_SIZE[0]-self.cfg.DATA.TEST.PADDING[0]),min(z_dim,self.cfg.DATA.PATCH_SIZE[0]*(z+1)+self.cfg.DATA.TEST.PADDING[0]),
+                max(0,y*self.cfg.DATA.PATCH_SIZE[1]-self.cfg.DATA.TEST.PADDING[1]),min(y_dim,self.cfg.DATA.PATCH_SIZE[1]*(y+1)+self.cfg.DATA.TEST.PADDING[1]),
+                max(0,x*self.cfg.DATA.PATCH_SIZE[2]-self.cfg.DATA.TEST.PADDING[2]),min(x_dim,self.cfg.DATA.PATCH_SIZE[2]*(x+1)+self.cfg.DATA.TEST.PADDING[2])))
+            
+        fname = _filename+"_patch"+str(c).zfill(d)+file_ext
+        
+        slices = [
+            slice(max(0,z*self.cfg.DATA.PATCH_SIZE[0]-self.cfg.DATA.TEST.PADDING[0]),min(z_dim,self.cfg.DATA.PATCH_SIZE[0]*(z+1)+self.cfg.DATA.TEST.PADDING[0])),
+            slice(max(0,y*self.cfg.DATA.PATCH_SIZE[1]-self.cfg.DATA.TEST.PADDING[1]),min(y_dim,self.cfg.DATA.PATCH_SIZE[1]*(y+1)+self.cfg.DATA.TEST.PADDING[1])),
+            slice(max(0,x*self.cfg.DATA.PATCH_SIZE[2]-self.cfg.DATA.TEST.PADDING[2]),min(x_dim,self.cfg.DATA.PATCH_SIZE[2]*(x+1)+self.cfg.DATA.TEST.PADDING[2])),
+            slice(None), # Channel
+        ]
+        
+        data_ordered_slices = order_dimensions(
+            slices,
+            input_order = "ZYXC",
+            output_order = self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
+            default_value = 0,
+            )
+
+        raw_patch = pred[data_ordered_slices]
+
+        if "C" not in self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER:                                                     
+            expected_out_data_order = self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER + "C"                                
+        else:                                                                                                           
+            expected_out_data_order = self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER
+
+        current_order = np.array(range(len(pred.shape)))
+        transpose_order = order_dimensions(
+                    current_order,
+                    input_order= expected_out_data_order,
+                    output_order= "ZYXC",
+                    default_value= np.nan)
+
+        transpose_order = [x for x in transpose_order if not np.isnan(x)]
+        transpose_order = np.argsort(transpose_order)
+        transpose_order = current_order[transpose_order]
+
+        patch = raw_patch.transpose(transpose_order)
+
+        patch_pos = [(k.start,k.stop) for k in data_ordered_slices]
+        df_patch = self.detection_process(patch, [fname], patch_pos=patch_pos)
+        
+        if df_patch is not None: # if there is at least one point detected
+            
+            if z*self.cfg.DATA.PATCH_SIZE[0]-self.cfg.DATA.TEST.PADDING[0] >=0: # if a patch was added
+                df_patch['axis-0'] = df_patch['axis-0'] - self.cfg.DATA.TEST.PADDING[0] # shift the coordinates to the correct patch position
+            if y*self.cfg.DATA.PATCH_SIZE[1]-self.cfg.DATA.TEST.PADDING[1] >=0:
+                df_patch['axis-1'] = df_patch['axis-1'] - self.cfg.DATA.TEST.PADDING[1]
+            if x*self.cfg.DATA.PATCH_SIZE[2]-self.cfg.DATA.TEST.PADDING[2] >=0:
+                df_patch['axis-2'] = df_patch['axis-2'] - self.cfg.DATA.TEST.PADDING[2]
+
+            df_patch = df_patch[df_patch['axis-0'] >= 0] # remove all coordinate from the previous patch
+            df_patch = df_patch[df_patch['axis-0'] < self.cfg.DATA.PATCH_SIZE[0]] # remove all coordinate from the next patch
+            df_patch = df_patch[df_patch['axis-1'] >= 0]
+            df_patch = df_patch[df_patch['axis-1'] < self.cfg.DATA.PATCH_SIZE[1]]
+            df_patch = df_patch[df_patch['axis-2'] >= 0]
+            df_patch = df_patch[df_patch['axis-2'] < self.cfg.DATA.PATCH_SIZE[2]]
+
+            df_patch = df_patch.reset_index(drop=True)
+            
+            # add the patch shift to the detected coordinates
+            shift = np.array([z*self.cfg.DATA.PATCH_SIZE[0], y*self.cfg.DATA.PATCH_SIZE[1], x*self.cfg.DATA.PATCH_SIZE[2]])
+            df_patch['axis-0'] = df_patch['axis-0'] + shift[0]
+            df_patch['axis-1'] = df_patch['axis-1'] + shift[1]
+            df_patch['axis-2'] = df_patch['axis-2'] + shift[2]
+
+            return df_patch, fname
+        
+        return None, None
 
     def after_merge_patches_by_chunks_proccess_patch(self, filename):
         """
@@ -524,59 +719,26 @@ class Detection_Workflow(Base_Workflow):
                         default_value = 0,
                         )
 
-                    raw_patch = pred[data_ordered_slices]
+        with ThreadPoolExecutor(max_workers=self.cfg.SYSTEM.NUM_WORKERS) as executor:
+            futures = []
+            for z in tqdm(range(z_vols), disable=not is_main_process()):
+                for y in range(y_vols):
+                    for x in range(x_vols):
+                        futures.append(executor.submit(self.process_patch, z, y, x, _filename, total_patches, c, pred, d, file_ext, z_dim, y_dim, x_dim))
+                        c+=1
 
-                    current_order = np.array(range(len(pred.shape)))
-                    transpose_order = order_dimensions(
-                                current_order,
-                                input_order= "ZYXC",
-                                output_order= self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
-                                default_value= np.nan)
-
-                    transpose_order = [x for x in transpose_order if not np.isnan(x)]
-                    transpose_order = np.argsort(transpose_order)
-                    transpose_order = current_order[transpose_order]
-
-                    patch = raw_patch.transpose(transpose_order)
-
-                    df_patch = self.detection_process(patch, [fname])
-                    
-                    c+=1
-                    
-                    if df_patch is not None: # if there is at least one point detected
-                        
-                        if z*self.cfg.DATA.PATCH_SIZE[0]-self.cfg.DATA.TEST.PADDING[0] >=0: # if a patch was added
-                            df_patch['axis-0'] = df_patch['axis-0'] - self.cfg.DATA.TEST.PADDING[0] # shift the coordinates to the correct patch position
-                        if y*self.cfg.DATA.PATCH_SIZE[1]-self.cfg.DATA.TEST.PADDING[1] >=0:
-                            df_patch['axis-1'] = df_patch['axis-1'] - self.cfg.DATA.TEST.PADDING[1]
-                        if x*self.cfg.DATA.PATCH_SIZE[2]-self.cfg.DATA.TEST.PADDING[2] >=0:
-                            df_patch['axis-2'] = df_patch['axis-2'] - self.cfg.DATA.TEST.PADDING[2]
-
-                        df_patch = df_patch[df_patch['axis-0'] >= 0] # remove all coordinate from the previous patch
-                        df_patch = df_patch[df_patch['axis-0'] < self.cfg.DATA.PATCH_SIZE[0]] # remove all coordinate from the next patch
-                        df_patch = df_patch[df_patch['axis-1'] >= 0]
-                        df_patch = df_patch[df_patch['axis-1'] < self.cfg.DATA.PATCH_SIZE[1]]
-                        df_patch = df_patch[df_patch['axis-2'] >= 0]
-                        df_patch = df_patch[df_patch['axis-2'] < self.cfg.DATA.PATCH_SIZE[2]]
-
-                        df_patch = df_patch.reset_index(drop=True)
-                        
-                        # add the patch shift to the detected coordinates
-                        shift = np.array([z*self.cfg.DATA.PATCH_SIZE[0], y*self.cfg.DATA.PATCH_SIZE[1], x*self.cfg.DATA.PATCH_SIZE[2]])
-                        df_patch['axis-0'] = df_patch['axis-0'] + shift[0]
-                        df_patch['axis-1'] = df_patch['axis-1'] + shift[1]
-                        df_patch['axis-2'] = df_patch['axis-2'] + shift[2]
-
-
-                        if 'df' not in locals():
-                            df = df_patch.copy()
-                            df['file'] = fname
-                        else:
-                                df_patch['file'] = fname
-                                df = pd.concat([df, df_patch], ignore_index=True)
+        for future in futures:
+            df_patch, fname = future.result()
+            if df_patch is not None:
+                if 'df' not in locals():
+                    df = df_patch.copy()
+                    df['file'] = fname
+                else:
+                    df_patch['file'] = fname
+                    df = pd.concat([df, df_patch], ignore_index=True)
 
         # Apply post-processing of removing points
-        if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS and self.postpone_postproc:
+        if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS and self.by_chunks:
             # Take point coords
             pred_coordinates = []
             coordz = df['axis-0'].tolist()
@@ -598,7 +760,34 @@ class Detection_Workflow(Base_Workflow):
         if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
             pred_file.close()
 
+        # Calculate metrics with all the points  
+        if self.use_gt:
+            print("Calculating detection metrics with all the points found . . .")
 
+            # Read the GT coordinates from the CSV file
+            csv_filename = os.path.join(self.original_test_mask_path, os.path.splitext(filename[0])[0]+'.csv')
+            if not os.path.exists(csv_filename):
+                if self.cfg.TEST.VERBOSE:
+                    print("WARNING: The CSV file seems to have different name than image. Using the CSV file "
+                            "with the same position as the CSV in the directory. Check if it is correct!")
+                csv_filename = os.path.join(self.original_test_mask_path, self.csv_files[self.f_numbers[0]])
+                if self.cfg.TEST.VERBOSE:
+                    print("Its respective CSV file seems to be: {}".format(csv_filename))
+            if self.cfg.TEST.VERBOSE:
+                print("Reading GT data from: {}".format(csv_filename))
+            df_gt = pd.read_csv(csv_filename, index_col=0)   
+            df_gt = df_gt.rename(columns=lambda x: x.strip())
+            gt_coordinates = [[z,y,x] for z,y,x in zip(df_gt['axis-0'].tolist(),df_gt['axis-1'].tolist(),df_gt['axis-2'].tolist())]
+
+            # Measure metrics
+            d_metrics, gt_assoc, fp = detection_metrics(gt_coordinates, pred_coordinates, tolerance=self.cfg.TEST.DET_TOLERANCE[0],
+                voxel_size=self.v_size, return_assoc=True, verbose=self.cfg.TEST.VERBOSE)
+            print("Detection metrics: {}".format(d_metrics))
+
+            self.stats['d_precision_by_chunks'] = d_metrics["Precision"]
+            self.stats['d_recall_by_chunks'] = d_metrics["Recall"]
+            self.stats['d_f1_by_chunks'] = d_metrics["F1"]
+        
     def process_sample(self, norm):
         """
         Function to process a sample in the inference phase. 
@@ -702,14 +891,19 @@ class Detection_Workflow(Base_Workflow):
 
         print("Detection specific metrics:")
         if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
-            if not self.cfg.TEST.FULL_IMG:
-                print("Detection - Test Precision (merge patches): {}".format(self.stats['d_precision_merge_patches']))
-                print("Detection - Test Recall (merge patches): {}".format(self.stats['d_recall_merge_patches']))
-                print("Detection - Test F1 (merge patches): {}".format(self.stats['d_f1_merge_patches']))
+            if self.by_chunks:
+                print("Detection - Test Precision (per image): {}".format(self.stats['d_precision_by_chunks']))
+                print("Detection - Test Recall (per image): {}".format(self.stats['d_recall_by_chunks']))
+                print("Detection - Test F1 (per image): {}".format(self.stats['d_f1_by_chunks']))
             else:
-                print("Detection - Test Precision (per image): {}".format(self.stats['d_precision']))
-                print("Detection - Test Recall (per image): {}".format(self.stats['d_recall']))
-                print("Detection - Test F1 (per image): {}".format(self.stats['d_f1']))
+                if not self.cfg.TEST.FULL_IMG:
+                    print("Detection - Test Precision (merge patches): {}".format(self.stats['d_precision_merge_patches']))
+                    print("Detection - Test Recall (merge patches): {}".format(self.stats['d_recall_merge_patches']))
+                    print("Detection - Test F1 (merge patches): {}".format(self.stats['d_f1_merge_patches']))
+                else:
+                    print("Detection - Test Precision (per image): {}".format(self.stats['d_precision']))
+                    print("Detection - Test Recall (per image): {}".format(self.stats['d_recall']))
+                    print("Detection - Test F1 (per image): {}".format(self.stats['d_f1']))
 
     def prepare_detection_data(self):
         """
@@ -770,7 +964,7 @@ class Detection_Workflow(Base_Workflow):
                     create_mask = True
                 else:
                     if len(next(os.walk(self.cfg.DATA.TEST.DETECTION_MASK_DIR))[2]) != len(next(os.walk(self.cfg.DATA.TEST.GT_PATH))[2]) and \
-                       len(next(os.walk(self.cfg.DATA.TEST.DETECTION_MASK_DIR))[2]) != len(next(os.walk(self.cfg.DATA.TEST.GT_PATH))[2]):
+                       len(next(os.walk(self.cfg.DATA.TEST.DETECTION_MASK_DIR))[1]) != len(next(os.walk(self.cfg.DATA.TEST.GT_PATH))[2]):
                         print("Different number of files found in {} and {}. Trying to create the the rest again"
                             .format(self.cfg.DATA.TEST.GT_PATH,self.cfg.DATA.TEST.DETECTION_MASK_DIR))
                         create_mask = True 

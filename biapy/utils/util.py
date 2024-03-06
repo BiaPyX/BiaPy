@@ -242,37 +242,6 @@ def save_tif(X, data_dir=None, filenames=None, verbose=True):
         except:
             imsave(f, np.expand_dims(aux, 0), imagej=True, metadata={'axes': 'TZCYXS'}, check_contrast=False)
 
-
-def save_zarr(X, data_dir=None, filename=None, verbose=True):
-    """Save an image as .zarr in the given directory.
-
-       Parameters
-       ----------
-       X : 5D numpy array
-           Data to save as images. The first dimension must be the number of images. E.g.
-           ``(num_of_images, y, x, channels)`` or ``(num_of_images, z, y, x, channels)``.
-
-       data_dir : str, optional
-           Path to store X images.
-
-       filename : str, optional
-           Filename that should be used when saving each image.
-
-       verbose : bool, optional
-            To print saving information.
-    """
-    assert X.ndim == 5, "X needs to be a numpy array of 5 dimensions, e.g. (1, 100, 1000, 1000, 3)"
-    if verbose:
-        print("Saving {} data as .zarr in folder: {}".format(X.shape, data_dir))
-
-    # Change to TZCYX
-    X = X.transpose((0,1,4,2,3))
-    
-    os.makedirs(data_dir, exist_ok=True)
-    zarr_name = os.path.join(data_dir, os.path.splitext(filename)[0] + os.extsep + "zarr") 
-    zarr_group = zarr.save(zarr_name, X, compression="gzip")   
-
-
 def save_tif_pair_discard(X, Y, data_dir=None, suffix="", filenames=None, discard=True, verbose=True):
     """Save images in the given directory.
 
@@ -1512,7 +1481,7 @@ def read_chunked_data(filename):
             else: 
                 data = fid
         else:
-            raise ValueError(f"File extension {os.path.splitext(fid)[1]} not recognized")
+            raise ValueError(f"File extension {filename} not recognized")
 
         return fid, data
 
@@ -1522,8 +1491,8 @@ def write_chunked_data(data, data_dir, filename, dtype_str="float32", verbose=Tr
 
     Parameters
     ----------
-    X : 4D numpy array
-        Data to save. E.g. ``(z, y, x, channels)``.
+    data : 5D numpy array
+        Data to save. E.g. ``(1, z, y, x, channels)``.
 
     data_dir : str
         Path to store X images.
@@ -1537,8 +1506,11 @@ def write_chunked_data(data, data_dir, filename, dtype_str="float32", verbose=Tr
     verbose : bool, optional
         To print saving information.
     """
-    if data.ndim != 4:
-        raise ValueError(f"Expected data needs to have 4 dimensions. Given data shape: {data.shape}")
+    if data.ndim != 5:
+        raise ValueError(f"Expected data needs to have 5 dimensions (in 'TZYXC' order). Given data shape: {data.shape}")
+
+    # Change to TZCYX
+    data = data.transpose((0,1,4,2,3))
 
     ext = os.path.splitext(filename)[1]
     if verbose:
