@@ -480,7 +480,7 @@ def load_and_prepare_3D_efficient_format_data(train_path, train_mask_path, input
                 "reduce its value.")
 
         # Remove samples 
-        for i in range(len(X_train_remove)):
+        for i in X_train_remove:
             del X_train[i], Y_train[i]
 
         # Rearrange ids 
