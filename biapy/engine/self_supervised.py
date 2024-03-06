@@ -159,31 +159,16 @@ class Self_supervised_Workflow(Base_Workflow):
         if self.cfg.TEST.AUGMENTATION:
             for k in tqdm(range(self._X.shape[0]), leave=False):
                 if self.cfg.PROBLEM.NDIM == '2D':
-                    p = ensemble8_2d_predictions(self._X[k], n_classes=self.cfg.MODEL.N_CLASSES,
-                            pred_func=(
-                                lambda img_batch_subdiv: 
-                                    to_numpy_format(
-                                        self.apply_model_activations(
-                                            self.model(to_pytorch_format(img_batch_subdiv, self.axis_order, self.device)),
-                                            ), 
-                                        self.axis_order_back
-                                    )
-                            )
-                        )
+                    p = ensemble8_2d_predictions(self._X[k], axis_order_back=self.axis_order_back,
+                            pred_func=self.model_call_func, axis_order=self.axis_order, device=self.device)
                 else:
                     p = ensemble16_3d_predictions(self._X[k], batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
-                            pred_func=(
-                                lambda img_batch_subdiv: 
-                                    to_numpy_format(
-                                        self.apply_model_activations(
-                                            self.model(to_pytorch_format(img_batch_subdiv, self.axis_order, self.device)),
-                                            ), 
-                                        self.axis_order_back
-                                    )
-                            )
-                        )
+                            axis_order_back=self.axis_order_back, pred_func=self.model_call_func, 
+                            axis_order=self.axis_order, device=self.device)
+                p = self.apply_model_activations(p)
+                p = to_numpy_format(p, self.axis_order_back)
                 if 'pred' not in locals():
-                    pred = np.zeros((self._X.shape[0],)+p.shape, dtype=self.dtype)
+                    pred = np.zeros((self._X.shape[0],)+p.shape[1:], dtype=self.dtype)
                 pred[k] = p
         else:
             l = int(math.ceil(self._X.shape[0]/self.cfg.TRAIN.BATCH_SIZE))

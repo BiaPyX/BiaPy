@@ -139,34 +139,20 @@ class Super_resolution_Workflow(Base_Workflow):
                     padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE)
 
         # Predict each patch
-        pred = []
         if self.cfg.TEST.AUGMENTATION:
             for k in tqdm(range(self._X.shape[0]), leave=False):
                 if self.cfg.PROBLEM.NDIM == '2D':
-                    p = ensemble8_2d_predictions(self._X[k], n_classes=self.cfg.MODEL.N_CLASSES,
-                            pred_func=(
-                                lambda img_batch_subdiv: 
-                                    to_numpy_format(
-                                        self.apply_model_activations(
-                                            self.model(to_pytorch_format(img_batch_subdiv, self.axis_order, self.device)),
-                                            ), 
-                                        self.axis_order_back
-                                    )
-                            )
-                        )
+                    p = ensemble8_2d_predictions(self._X[k], axis_order_back=self.axis_order_back,
+                            pred_func=self.model_call_func, axis_order=self.axis_order, device=self.device)
                 else:
                     p = ensemble16_3d_predictions(self._X[k], batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
-                            pred_func=(
-                                lambda img_batch_subdiv: 
-                                    to_numpy_format(
-                                        self.apply_model_activations(
-                                            self.model(to_pytorch_format(img_batch_subdiv, self.axis_order, self.device)),
-                                            ), 
-                                        self.axis_order_back
-                                    )
-                            )
-                        )
-                pred.append(np.expand_dims(p,0))
+                            axis_order_back=self.axis_order_back, pred_func=self.model_call_func, 
+                            axis_order=self.axis_order, device=self.device)
+                p = self.apply_model_activations(p)
+                p = to_numpy_format(p, self.axis_order_back)
+                if 'pred' not in locals():
+                    pred = np.zeros((self._X.shape[0],)+p.shape[1:], dtype=self.dtype)
+                pred[k] = p
         else:
             self._X = to_pytorch_format(self._X, self.axis_order, self.device)
             l = int(math.ceil(self._X.shape[0]/self.cfg.TRAIN.BATCH_SIZE))
@@ -174,12 +160,13 @@ class Super_resolution_Workflow(Base_Workflow):
                 top = (k+1)*self.cfg.TRAIN.BATCH_SIZE if (k+1)*self.cfg.TRAIN.BATCH_SIZE < self._X.shape[0] else self._X.shape[0]
                 with torch.cuda.amp.autocast():
                     p = self.model(self._X[k*self.cfg.TRAIN.BATCH_SIZE:top])
-                    p = to_numpy_format(self.apply_model_activations(p), self.axis_order_back)
-                pred.append(p)
+                p = to_numpy_format(self.apply_model_activations(p), self.axis_order_back)
+                if 'pred' not in locals():
+                    pred = np.zeros((self._X.shape[0],)+p.shape[1:], dtype=self.dtype)
+                pred[k*self.cfg.TRAIN.BATCH_SIZE:top] = p
         del self._X, p
 
         # Reconstruct the predictions
-        pred = np.concatenate(pred)
         if original_data_shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
             if self.cfg.PROBLEM.NDIM == '3D': original_data_shape = original_data_shape[1:]
             f_name = merge_data_with_overlap if self.cfg.PROBLEM.NDIM == '2D' else merge_3D_data_with_overlap
