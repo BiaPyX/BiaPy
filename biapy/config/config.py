@@ -35,7 +35,7 @@ class Config:
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         _C.PROBLEM = CN()
         # Possible options: 'SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION', 'DENOISING', 'SUPER_RESOLUTION', 
-        # 'SELF_SUPERVISED' and 'CLASSIFICATION'
+        # 'SELF_SUPERVISED', 'CLASSIFICATION' and 'IMAGE_TO_IMAGE'
         _C.PROBLEM.TYPE = 'SEMANTIC_SEG'
         # Possible options: '2D' and '3D'
         _C.PROBLEM.NDIM = '2D'
