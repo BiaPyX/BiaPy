@@ -385,12 +385,12 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     if cfg.DATA.EXTRACT_RANDOM_PATCH and cfg.DATA.PROBABILITY_MAP:
         if cfg.DATA.W_FOREGROUND+cfg.DATA.W_BACKGROUND != 1:
             raise ValueError("cfg.DATA.W_FOREGROUND+cfg.DATA.W_BACKGROUND need to sum 1. E.g. 0.94 and 0.06 respectively.")
-        if not cfg.DATA.TRAIN.IN_MEMORY and cfg.DATA.PREPROCESS.TRAIN:
-            raise ValueError('To use preprocessing DATA.TRAIN.IN_MEMORY needs to be True.')
-        if not cfg.DATA.VAL.IN_MEMORY and cfg.DATA.PREPROCESS.VAL:
-            raise ValueError('To use preprocessing DATA.VAL.IN_MEMORY needs to be True.')
-        if not cfg.DATA.TEST.IN_MEMORY and cfg.DATA.PREPROCESS.TEST:
-            raise ValueError('To use preprocessing DATA.TEST.IN_MEMORY needs to be True.')
+    if not cfg.DATA.TRAIN.IN_MEMORY and cfg.DATA.PREPROCESS.TRAIN:
+        raise ValueError('To use preprocessing DATA.TRAIN.IN_MEMORY needs to be True.')
+    if not cfg.DATA.VAL.IN_MEMORY and cfg.DATA.PREPROCESS.VAL:
+        raise ValueError('To use preprocessing DATA.VAL.IN_MEMORY needs to be True.')
+    if not cfg.DATA.TEST.IN_MEMORY and cfg.DATA.PREPROCESS.TEST:
+        raise ValueError('To use preprocessing DATA.TEST.IN_MEMORY needs to be True.')
     
     ### Pre-processing ###
     if cfg.DATA.PREPROCESS.TRAIN or cfg.DATA.PREPROCESS.TEST or cfg.DATA.PREPROCESS.VAL:
