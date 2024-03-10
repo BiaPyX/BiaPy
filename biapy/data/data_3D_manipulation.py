@@ -610,6 +610,7 @@ def load_3D_efficient_files(data_path, input_axes, crop_shape, overlap, padding,
     data_total_patches = []
     c = 0
     for i, filename in enumerate(data_path):
+        print(f"Reading Zarr/H5 file: {filename}")
         file, data = read_chunked_data(filename)
 
         # Get the total patches so we can use tqdm so the user can see the time

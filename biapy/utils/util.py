@@ -1520,11 +1520,11 @@ def write_chunked_data(data, data_dir, filename, dtype_str="float32", verbose=Tr
 
     if ext in ['.hdf5', '.h5']:
         fid = h5py.File(os.path.join(data_dir, filename), "w") 
-        data = fid.create_dataset("data", data.shape, dtype=dtype_str, compression="gzip")
+        data = fid.create_dataset("data", data=data, dtype=dtype_str, compression="gzip")
     # Zarr
     else:
         fid = zarr.open_group(os.path.join(data_dir, filename), mode="w")
-        data = fid.create_dataset("data", shape=data.shape, dtype=dtype_str)
+        data = fid.create_dataset("data", data=data, dtype=dtype_str)
 
 def order_dimensions(data, input_order, output_order='TZCYX', default_value=1):
     """

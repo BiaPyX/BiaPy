@@ -9,6 +9,7 @@ from skimage.feature import peak_local_max, blob_log
 from skimage.measure import label, regionprops_table
 from skimage.morphology import disk, dilation        
 from tqdm import tqdm
+from concurrent.futures import ThreadPoolExecutor
 
 from biapy.data.data_2D_manipulation import load_and_prepare_2D_train_data
 from biapy.data.data_3D_manipulation import load_and_prepare_3D_data
@@ -737,15 +738,16 @@ class Detection_Workflow(Base_Workflow):
                     df_patch['file'] = fname
                     df = pd.concat([df, df_patch], ignore_index=True)
 
+        # Take point coords
+        pred_coordinates = []
+        coordz = df['axis-0'].tolist()
+        coordy = df['axis-1'].tolist()
+        coordx = df['axis-2'].tolist()
+        for z,y,x in zip(coordz,coordy,coordx):
+            pred_coordinates.append([z,y,x])
+
         # Apply post-processing of removing points
         if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS and self.by_chunks:
-            # Take point coords
-            pred_coordinates = []
-            coordz = df['axis-0'].tolist()
-            coordy = df['axis-1'].tolist()
-            coordx = df['axis-2'].tolist()
-            for z,y,x in zip(coordz,coordy,coordx):
-                pred_coordinates.append([z,y,x])
             radius = self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS[0]
             pred_coordinates, droped_pos = remove_close_points(pred_coordinates, radius, self.cfg.DATA.TEST.RESOLUTION,
                 ndim=3, return_drops=True)

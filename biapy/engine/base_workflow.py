@@ -961,8 +961,9 @@ class Base_Workflow(metaclass=ABCMeta):
             if self._X.ndim == 3:
                 c_pos = -1 if self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER[-1] == 'C' else 1
                 self._X = np.expand_dims(self._X, c_pos)
-
-        print(f"Loaded image shape is {self._X.shape}")
+                
+        if is_main_process():
+            print(f"Loaded image shape is {self._X.shape}")
 
         data_shape = self._X.shape
 
