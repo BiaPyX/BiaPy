@@ -46,12 +46,18 @@ class Detection_Workflow(Base_Workflow):
         # Detection stats
         self.stats['d_precision'] = 0
         self.stats['d_recall'] = 0
-        self.stats['d_f1'] = 0
+        self.stats['d_F1'] = 0
+        self.stats['d_TP'] = 0
+        self.stats['d_FP'] = 0
+        self.stats['d_FN'] = 0
 
         self.stats['d_precision_merge_patches'] = 0
         self.stats['d_recall_merge_patches'] = 0
-        self.stats['d_f1_merge_patches'] = 0
-        
+        self.stats['d_F1_merge_patches'] = 0
+        self.stats['d_TP_merge_patches'] = 0
+        self.stats['d_FP_merge_patches'] = 0
+        self.stats['d_FN_merge_patches'] = 0
+
         self.original_test_mask_path = self.prepare_detection_data()
 
         self.use_gt = False 
@@ -81,7 +87,10 @@ class Detection_Workflow(Base_Workflow):
             self.by_chunks = True
             self.stats['d_precision_by_chunks'] = 0
             self.stats['d_recall_by_chunks'] = 0
-            self.stats['d_f1_by_chunks'] = 0
+            self.stats['d_F1_by_chunks'] = 0
+            self.stats['d_TP_by_chunks'] = 0
+            self.stats['d_FP_by_chunks'] = 0
+            self.stats['d_FN_by_chunks'] = 0
 
         if self.cfg.TEST.POST_PROCESSING.DET_WATERSHED or self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS:
             self.post_processing['detection_post'] = True
@@ -213,70 +222,72 @@ class Detection_Workflow(Base_Workflow):
             for i, c in enumerate(all_classes):
                 all_points[c].append(new_points[i])
             del new_points
+
         # Create a file with detected point and other image with predictions ids (if GT given)
-        if self.cfg.TEST.VERBOSE:
-            print("Creating the images with detected points . . .")   
-        points_pred = np.zeros(pred.shape[:-1], dtype=np.uint8)
-        for n, pred_coordinates in enumerate(all_points):
-            if self.use_gt:
-                pred_id_img = np.zeros(pred_shape[:-1], dtype=np.uint32)
-            for j, coord in enumerate(pred_coordinates):
-                z,y,x = coord
-                points_pred[z,y,x] = n+1
+        if not self.by_chunks:
+            if self.cfg.TEST.VERBOSE:
+                print("Creating the images with detected points . . .")   
+            points_pred = np.zeros(pred.shape[:-1], dtype=np.uint8)
+            for n, pred_coordinates in enumerate(all_points):
                 if self.use_gt:
-                    pred_id_img[z,y,x] = j+1
-            
-            # Dilate and save the prediction ids for the current class 
-            if self.use_gt:
-                for i in range(pred_id_img.shape[0]):                                                                                  
-                    pred_id_img[i] = dilation(pred_id_img[i], disk(3))
-                if file_ext in ['.hdf5', '.h5', ".zarr"]:
-                    write_chunked_data(np.expand_dims(np.expand_dims(pred_id_img,-1),0), self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, 
-                        os.path.splitext(filenames[0])[0]+'_class'+str(n+1)+'_pred_ids'+file_ext, dtype_str="uint32", 
-                        verbose=self.cfg.TEST.VERBOSE)
-                else:
-                    save_tif(np.expand_dims(np.expand_dims(pred_id_img,0),-1), self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
-                        [os.path.splitext(filenames[0])[0]+'_class'+str(n+1)+'_pred_ids.tif'], verbose=self.cfg.TEST.VERBOSE)
+                    pred_id_img = np.zeros(pred_shape[:-1], dtype=np.uint32)
+                for j, coord in enumerate(pred_coordinates):
+                    z,y,x = coord
+                    points_pred[z,y,x] = n+1
+                    if self.use_gt:
+                        pred_id_img[z,y,x] = j+1
+                
+                # Dilate and save the prediction ids for the current class 
+                if self.use_gt:
+                    for i in range(pred_id_img.shape[0]):                                                                                  
+                        pred_id_img[i] = dilation(pred_id_img[i], disk(3))
+                    if file_ext in ['.hdf5', '.h5', ".zarr"]:
+                        write_chunked_data(np.expand_dims(np.expand_dims(pred_id_img,-1),0), self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, 
+                            os.path.splitext(filenames[0])[0]+'_class'+str(n+1)+'_pred_ids'+file_ext, dtype_str="uint32", 
+                            verbose=self.cfg.TEST.VERBOSE)
+                    else:
+                        save_tif(np.expand_dims(np.expand_dims(pred_id_img,0),-1), self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
+                            [os.path.splitext(filenames[0])[0]+'_class'+str(n+1)+'_pred_ids.tif'], verbose=self.cfg.TEST.VERBOSE)
 
-            self.cell_count_lines.append([filenames, len(pred_coordinates)])
+                self.cell_count_lines.append([filenames, len(pred_coordinates)])
 
-        if self.use_gt: del pred_id_img
+            if self.use_gt: del pred_id_img
 
-        # Dilate and save the detected point image
-        if len(pred_coordinates) > 0:
-            for i in range(points_pred.shape[0]):                                                                                  
-                points_pred[i] = dilation(points_pred[i], disk(3)) 
-        if file_ext in ['.hdf5', '.h5', ".zarr"]:
-            write_chunked_data(np.expand_dims(np.expand_dims(points_pred,-1),0), self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, 
-                filenames[0], dtype_str="uint8", verbose=self.cfg.TEST.VERBOSE)
-        else:
-            save_tif(np.expand_dims(np.expand_dims(points_pred,0),-1), self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
-                filenames, verbose=self.cfg.TEST.VERBOSE)
-
-        # Detection watershed
-        if self.cfg.TEST.POST_PROCESSING.DET_WATERSHED:
-            data_filename = os.path.join(self.cfg.DATA.TEST.PATH, filenames[0])
-            w_dir = os.path.join(self.cfg.PATHS.WATERSHED_DIR, filenames[0])
-            check_wa = w_dir if self.cfg.PROBLEM.DETECTION.DATA_CHECK_MW else None
-            points_pred = detection_watershed(points_pred, all_points, data_filename, self.cfg.TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION,
-                clases, ndim=ndim, donuts_classes=self.cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES,
-                donuts_patch=self.cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_PATCH, 
-                donuts_nucleus_diameter=self.cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_NUCLEUS_DIAMETER, save_dir=check_wa)
-            
-            # Instance filtering by properties     
-            points_pred, d_result = measure_morphological_props_and_filter(points_pred, self.cfg.DATA.TEST.RESOLUTION, 
-                properties=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS, 
-                prop_values=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.VALUES, 
-                comp_signs=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGN, 
-                coords_list=np.concatenate(all_points, axis=0))
-
+            # Dilate and save the detected point image
+            if len(pred_coordinates) > 0:
+                for i in range(points_pred.shape[0]):                                                                                  
+                    points_pred[i] = dilation(points_pred[i], disk(3)) 
             if file_ext in ['.hdf5', '.h5', ".zarr"]:
-                write_chunked_data(np.expand_dims(np.expand_dims(points_pred,-1),0), self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, 
+                write_chunked_data(np.expand_dims(np.expand_dims(points_pred,-1),0), self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, 
                     filenames[0], dtype_str="uint8", verbose=self.cfg.TEST.VERBOSE)
             else:
-                save_tif(np.expand_dims(np.expand_dims(points_pred,0),-1), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,
+                save_tif(np.expand_dims(np.expand_dims(points_pred,0),-1), self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
                     filenames, verbose=self.cfg.TEST.VERBOSE)
-        del points_pred
+
+            # Detection watershed
+            if self.cfg.TEST.POST_PROCESSING.DET_WATERSHED:
+                data_filename = os.path.join(self.cfg.DATA.TEST.PATH, filenames[0])
+                w_dir = os.path.join(self.cfg.PATHS.WATERSHED_DIR, filenames[0])
+                check_wa = w_dir if self.cfg.PROBLEM.DETECTION.DATA_CHECK_MW else None
+                points_pred = detection_watershed(points_pred, all_points, data_filename, self.cfg.TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION,
+                    clases, ndim=ndim, donuts_classes=self.cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES,
+                    donuts_patch=self.cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_PATCH, 
+                    donuts_nucleus_diameter=self.cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_NUCLEUS_DIAMETER, save_dir=check_wa)
+                
+                # Instance filtering by properties     
+                points_pred, d_result = measure_morphological_props_and_filter(points_pred, self.cfg.DATA.TEST.RESOLUTION, 
+                    properties=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS, 
+                    prop_values=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.VALUES, 
+                    comp_signs=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGN, 
+                    coords_list=np.concatenate(all_points, axis=0))
+
+                if file_ext in ['.hdf5', '.h5', ".zarr"]:
+                    write_chunked_data(np.expand_dims(np.expand_dims(points_pred,-1),0), self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, 
+                        filenames[0], dtype_str="uint8", verbose=self.cfg.TEST.VERBOSE)
+                else:
+                    save_tif(np.expand_dims(np.expand_dims(points_pred,0),-1), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,
+                        filenames, verbose=self.cfg.TEST.VERBOSE)
+            del points_pred
 
         # Save coords in a couple of csv files            
         aux = np.concatenate(all_points, axis=0)
@@ -320,6 +331,7 @@ class Detection_Workflow(Base_Workflow):
             del aux 
 
             # Save just the points and their probabilities 
+            os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, exist_ok=True)
             df.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, os.path.splitext(filenames[0])[0]+'_full_info.csv'))
             if self.cfg.TEST.POST_PROCESSING.DET_WATERSHED:
                 if ndim == 2:
@@ -333,7 +345,7 @@ class Detection_Workflow(Base_Workflow):
 
         # Calculate detection metrics
         if self.use_gt:
-            all_channel_d_metrics = [0,0,0]
+            all_channel_d_metrics = [0,0,0,0,0,0]
             dfs = []
             gt_all_coords = []
 
@@ -404,6 +416,9 @@ class Detection_Workflow(Base_Workflow):
                     all_channel_d_metrics[0] += d_metrics["Precision"]
                     all_channel_d_metrics[1] += d_metrics["Recall"]
                     all_channel_d_metrics[2] += d_metrics["F1"]
+                    all_channel_d_metrics[3] += d_metrics["TP"]
+                    all_channel_d_metrics[4] += d_metrics["FP"]
+                    all_channel_d_metrics[5] += d_metrics["FN"]
 
                     # Save csv files with the associations between GT points and predicted ones
                     if gt_assoc is not None and fp is not None:
@@ -442,63 +457,67 @@ class Detection_Workflow(Base_Workflow):
                 self.stats[metric_names[0]] += all_channel_d_metrics[0]
                 self.stats[metric_names[1]] += all_channel_d_metrics[1]
                 self.stats[metric_names[2]] += all_channel_d_metrics[2]
+                self.stats[metric_names[3]] += all_channel_d_metrics[3]
+                self.stats[metric_names[4]] += all_channel_d_metrics[4]
+                self.stats[metric_names[5]] += all_channel_d_metrics[5]
 
             if self.cfg.TEST.VERBOSE:
                 print("Creating the image with a summary of detected points and false positives with colors . . .")
-            points_pred = np.zeros(pred_shape[:-1]+(3,), dtype=np.uint8)
-            for ch, gt_coords in enumerate(gt_all_coords):
-                # if gt_assoc is None: 
-                gt_assoc, fp = None, None
-                if len(dfs) > 0 and len(dfs[i]) > 0:
-                    if dfs[i][0] is not None:
-                        gt_assoc = dfs[ch][0]
-                    if dfs[i][1] is not None:
-                        fp = dfs[ch][1]
+            if self.by_chunks:
+                points_pred = np.zeros(pred_shape[:-1]+(3,), dtype=np.uint8)
+                for ch, gt_coords in enumerate(gt_all_coords):
+                    # if gt_assoc is None: 
+                    gt_assoc, fp = None, None
+                    if len(dfs) > 0 and len(dfs[i]) > 0:
+                        if dfs[i][0] is not None:
+                            gt_assoc = dfs[ch][0]
+                        if dfs[i][1] is not None:
+                            fp = dfs[ch][1]
 
-                # TP and FN
-                gt_id_img = np.zeros(pred_shape[:-1], dtype=np.uint32)
-                for j, cor in enumerate(gt_coords):
-                    z,y,x = cor
-                    z,y,x = int(z),int(y),int(x)
-                    if gt_assoc is not None:
-                        if gt_assoc[gt_assoc['gt_id'] == j+1]["tag"].iloc[0] == "TP":
-                            points_pred[z,y,x] = (0,255,0)# Green
-                        else:   
-                            points_pred[z,y,x] = (255,0,0)# Red
-                    else:                           
-                        points_pred[z,y,x] = (255,0,0)# Red
-
-                    gt_id_img[z,y,x] = j+1
-
-                # Dilate and save the GT ids for the current class 
-                for i in range(gt_id_img.shape[0]):      
-                    gt_id_img[i] = dilation(gt_id_img[i], disk(3))
-                if file_ext in ['.hdf5', '.h5', ".zarr"]:
-                    write_chunked_data(np.expand_dims(np.expand_dims(gt_id_img,-1),0), self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, 
-                        os.path.splitext(filenames[0])[0]+'_class'+str(ch+1)+'_gt_ids'+file_ext, dtype_str="uint32", 
-                        verbose=self.cfg.TEST.VERBOSE)
-                else:
-                    save_tif(np.expand_dims(np.expand_dims(gt_id_img,0),-1), self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
-                        [os.path.splitext(filenames[0])[0]+'_class'+str(ch+1)+'_gt_ids.csv'], verbose=self.cfg.TEST.VERBOSE)
-                
-                # FP
-                if fp is not None:
-                    for cor in zip(fp['axis-0'].tolist(),fp['axis-1'].tolist(),fp['axis-2'].tolist()):
-                        z, y, x =  cor  
+                    # TP and FN
+                    gt_id_img = np.zeros(pred_shape[:-1], dtype=np.uint32)
+                    for j, cor in enumerate(gt_coords):
+                        z,y,x = cor
                         z,y,x = int(z),int(y),int(x)
-                        points_pred[z,y,x] = (0,0,255) # Blue
+                        if gt_assoc is not None:
+                            if gt_assoc[gt_assoc['gt_id'] == j+1]["tag"].iloc[0] == "TP":
+                                points_pred[z,y,x] = (0,255,0)# Green
+                            else:   
+                                points_pred[z,y,x] = (255,0,0)# Red
+                        else:                           
+                            points_pred[z,y,x] = (255,0,0)# Red
 
-            # Dilate and save the predicted points for the current class 
-            for i in range(points_pred.shape[0]):      
-                for j in range(points_pred.shape[-1]):                                                                              
-                    points_pred[i,...,j] = dilation(points_pred[i,...,j], disk(3)) 
-            if file_ext in ['.hdf5', '.h5', ".zarr"]:
-                write_chunked_data(np.expand_dims(points_pred,0), self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, filenames[0], 
-                    dtype_str="uint8", verbose=self.cfg.TEST.VERBOSE)
-            else:
-                save_tif(np.expand_dims(points_pred,0), self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
-                    filenames, verbose=self.cfg.TEST.VERBOSE)    
-                            
+                        gt_id_img[z,y,x] = j+1
+
+                    # Dilate and save the GT ids for the current class 
+                    for i in range(gt_id_img.shape[0]):      
+                        gt_id_img[i] = dilation(gt_id_img[i], disk(3))
+                    if file_ext in ['.hdf5', '.h5', ".zarr"]:
+                        write_chunked_data(np.expand_dims(np.expand_dims(gt_id_img,-1),0), self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, 
+                            os.path.splitext(filenames[0])[0]+'_class'+str(ch+1)+'_gt_ids'+file_ext, dtype_str="uint32", 
+                            verbose=self.cfg.TEST.VERBOSE)
+                    else:
+                        save_tif(np.expand_dims(np.expand_dims(gt_id_img,0),-1), self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
+                            [os.path.splitext(filenames[0])[0]+'_class'+str(ch+1)+'_gt_ids.csv'], verbose=self.cfg.TEST.VERBOSE)
+                    
+                    # FP
+                    if fp is not None:
+                        for cor in zip(fp['axis-0'].tolist(),fp['axis-1'].tolist(),fp['axis-2'].tolist()):
+                            z, y, x =  cor  
+                            z,y,x = int(z),int(y),int(x)
+                            points_pred[z,y,x] = (0,0,255) # Blue
+
+                # Dilate and save the predicted points for the current class 
+                for i in range(points_pred.shape[0]):      
+                    for j in range(points_pred.shape[-1]):                                                                              
+                        points_pred[i,...,j] = dilation(points_pred[i,...,j], disk(3)) 
+                if file_ext in ['.hdf5', '.h5', ".zarr"]:
+                    write_chunked_data(np.expand_dims(points_pred,0), self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, filenames[0], 
+                        dtype_str="uint8", verbose=self.cfg.TEST.VERBOSE)
+                else:
+                    save_tif(np.expand_dims(points_pred,0), self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
+                        filenames, verbose=self.cfg.TEST.VERBOSE)    
+                                
         return df 
 
     def normalize_stats(self, image_counter):
@@ -521,16 +540,16 @@ class Detection_Workflow(Base_Workflow):
             if self.by_chunks:
                 self.stats['d_precision_by_chunks'] = self.stats['d_precision_by_chunks'] / image_counter
                 self.stats['d_recall_by_chunks'] = self.stats['d_recall_by_chunks'] / image_counter
-                self.stats['d_f1_by_chunks'] = self.stats['d_f1_by_chunks'] / image_counter
+                self.stats['d_F1_by_chunks'] = self.stats['d_F1_by_chunks'] / image_counter
             else:
                 if not self.cfg.TEST.FULL_IMG:
                     self.stats['d_precision_merge_patches'] = self.stats['d_precision_merge_patches'] / image_counter
                     self.stats['d_recall_merge_patches'] = self.stats['d_recall_merge_patches'] / image_counter
-                    self.stats['d_f1_merge_patches'] = self.stats['d_f1_merge_patches'] / image_counter
+                    self.stats['d_F1_merge_patches'] = self.stats['d_F1_merge_patches'] / image_counter
                 else:
                     self.stats['d_precision'] = self.stats['d_precision'] / image_counter
                     self.stats['d_recall'] = self.stats['d_recall'] / image_counter
-                    self.stats['d_f1'] = self.stats['d_f1'] / image_counter
+                    self.stats['d_F1'] = self.stats['d_F1'] / image_counter
 
     def after_merge_patches(self, pred):
         """
@@ -541,7 +560,8 @@ class Detection_Workflow(Base_Workflow):
         pred : Torch Tensor
             Model prediction.
         """
-        self.detection_process(pred, self.processing_filenames, ['d_precision_merge_patches', 'd_recall_merge_patches', 'd_f1_merge_patches'])
+        self.detection_process(pred, self.processing_filenames, ['d_precision_merge_patches', 'd_recall_merge_patches', 
+            'd_F1_merge_patches', 'd_TP_merge_patches', 'd_FP_merge_patches', 'd_FN_merge_patches'])
 
     def process_patch(self, z, y, x, _filename, total_patches, c, pred, d, file_ext, z_dim, y_dim, x_dim):
         """
@@ -632,12 +652,10 @@ class Detection_Workflow(Base_Workflow):
                     default_value= np.nan)
 
         transpose_order = [x for x in transpose_order if not np.isnan(x)]
-        transpose_order = np.argsort(transpose_order)
         transpose_order = current_order[transpose_order]
-
         patch = raw_patch.transpose(transpose_order)
 
-        patch_pos = [(k.start,k.stop) for k in data_ordered_slices]
+        patch_pos = [(k.start,k.stop) for k in slices]
         df_patch = self.detection_process(patch, [fname], patch_pos=patch_pos)
         
         if df_patch is not None: # if there is at least one point detected
@@ -699,11 +717,6 @@ class Detection_Workflow(Base_Workflow):
         for z in tqdm(range(z_vols), disable=not is_main_process()):
             for y in range(y_vols):
                 for x in range(x_vols):
-                    print("Processing patch {}/{} of image".format(c, total_patches))
-                    
-                    print("D: z: {}-{}, y: {}-{}, x: {}-{}".format(z*self.cfg.DATA.PATCH_SIZE[0],min(z_dim,self.cfg.DATA.PATCH_SIZE[0]*(z+1)),
-                        y*self.cfg.DATA.PATCH_SIZE[1],min(y_dim,self.cfg.DATA.PATCH_SIZE[1]*(y+1)),x*self.cfg.DATA.PATCH_SIZE[2],min(x_dim,self.cfg.DATA.PATCH_SIZE[2]*(x+1))))
-                    
                     fname = _filename+"_patch"+str(c).zfill(d)+file_ext
                     
                     slices = [
@@ -786,10 +799,13 @@ class Detection_Workflow(Base_Workflow):
                 voxel_size=self.v_size, return_assoc=True, verbose=self.cfg.TEST.VERBOSE)
             print("Detection metrics: {}".format(d_metrics))
 
-            self.stats['d_precision_by_chunks'] = d_metrics["Precision"]
-            self.stats['d_recall_by_chunks'] = d_metrics["Recall"]
-            self.stats['d_f1_by_chunks'] = d_metrics["F1"]
-        
+            self.stats['d_precision_by_chunks'] += d_metrics["Precision"]
+            self.stats['d_recall_by_chunks'] += d_metrics["Recall"]
+            self.stats['d_F1_by_chunks'] += d_metrics["F1"]
+            self.stats['d_TP_by_chunks'] += d_metrics["TP"] 
+            self.stats['d_FP_by_chunks'] += d_metrics["FP"] 
+            self.stats['d_FN_by_chunks'] += d_metrics["FN"]
+
     def process_sample(self, norm):
         """
         Function to process a sample in the inference phase. 
@@ -869,7 +885,7 @@ class Detection_Workflow(Base_Workflow):
         pred : Torch Tensor
             Model prediction.
         """
-        self.detection_process(pred, self.processing_filenames, ['d_precision', 'd_recall', 'd_f1'])
+        self.detection_process(pred, self.processing_filenames, ['d_precision', 'd_recall', 'd_F1', 'd_TP', 'd_FP', 'd_FN'])
 
     def after_all_images(self):
         """
@@ -896,16 +912,25 @@ class Detection_Workflow(Base_Workflow):
             if self.by_chunks:
                 print("Detection - Test Precision (per image): {}".format(self.stats['d_precision_by_chunks']))
                 print("Detection - Test Recall (per image): {}".format(self.stats['d_recall_by_chunks']))
-                print("Detection - Test F1 (per image): {}".format(self.stats['d_f1_by_chunks']))
+                print("Detection - Test F1 (per image): {}".format(self.stats['d_F1_by_chunks']))
+                print("Detection - Test TP (per image): {}".format(self.stats['d_TP_by_chunks']))
+                print("Detection - Test FP (per image): {}".format(self.stats['d_FP_by_chunks']))
+                print("Detection - Test FN (per image): {}".format(self.stats['d_FN_by_chunks']))
             else:
                 if not self.cfg.TEST.FULL_IMG:
                     print("Detection - Test Precision (merge patches): {}".format(self.stats['d_precision_merge_patches']))
                     print("Detection - Test Recall (merge patches): {}".format(self.stats['d_recall_merge_patches']))
-                    print("Detection - Test F1 (merge patches): {}".format(self.stats['d_f1_merge_patches']))
+                    print("Detection - Test F1 (merge patches): {}".format(self.stats['d_F1_merge_patches']))
+                    print("Detection - Test TP (merge patches): {}".format(self.stats['d_TP_merge_patches']))
+                    print("Detection - Test FP (merge patches): {}".format(self.stats['d_FP_merge_patches']))
+                    print("Detection - Test FN (merge patches): {}".format(self.stats['d_FN_merge_patches']))
                 else:
                     print("Detection - Test Precision (per image): {}".format(self.stats['d_precision']))
                     print("Detection - Test Recall (per image): {}".format(self.stats['d_recall']))
-                    print("Detection - Test F1 (per image): {}".format(self.stats['d_f1']))
+                    print("Detection - Test F1 (per image): {}".format(self.stats['d_F1']))
+                    print("Detection - Test TP (per image): {}".format(self.stats['d_TP']))
+                    print("Detection - Test FP (per image): {}".format(self.stats['d_FP']))
+                    print("Detection - Test FN (per image): {}".format(self.stats['d_FN']))
 
     def prepare_detection_data(self):
         """
