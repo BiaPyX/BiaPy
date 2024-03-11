@@ -608,18 +608,17 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         # Check that the input patch size is divisible in every level of the U-Net's like architectures, as the model
         # will throw an error not very clear for users
         if model_arch in ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'multiresunet']:
+            z_size = cfg.DATA.PATCH_SIZE[0]
             for i in range(len(cfg.MODEL.FEATURE_MAPS)-1):
-                if cfg.MODEL.Z_DOWN[i] == 1:
-                    sizes = cfg.DATA.PATCH_SIZE[1:-1] 
-                else:
-                    sizes = cfg.DATA.PATCH_SIZE[:-1]
-                if not all([False for x in sizes if x%(np.power(2,(i+1))) != 0 or x == 0]):
+                sizes = cfg.DATA.PATCH_SIZE[:-1]
+                if not all([False for x in sizes if x%(np.power(2,(i+1))) != 0 and z_size % cfg.MODEL.Z_DOWN[i] != 0 or x == 0]):
                     m = "The 'DATA.PATCH_SIZE' provided is not divisible by 2 in each of the U-Net's levels. You can:\n 1) Reduce the number " + \
                             "of levels (by reducing 'cfg.MODEL.FEATURE_MAPS' array's length)\n 2) Increase 'DATA.PATCH_SIZE'"
                     if cfg.PROBLEM.NDIM == '3D':
                         m += "\n 3) If the Z axis is the problem, as the patch size is normally less than in other axis due to resolution, you " + \
                             "can tune 'MODEL.Z_DOWN' variable to not downsample the image in all U-Net levels"
                     raise ValueError(m)
+                z_size = z_size // cfg.MODEL.Z_DOWN[i]
 
     if cfg.MODEL.LOAD_CHECKPOINT and check_data_paths:
         if not os.path.exists(get_checkpoint_path(cfg, jobname)):
