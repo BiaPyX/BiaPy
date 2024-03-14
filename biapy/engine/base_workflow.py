@@ -1139,192 +1139,201 @@ class Base_Workflow(metaclass=ABCMeta):
         ### PER PATCH ###
         #################
         if not self.cfg.TEST.FULL_IMG or self.cfg.PROBLEM.NDIM == '3D':
-            # Reflect data to complete the needed shape
-            if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE:
-                reflected_orig_shape = self._X.shape
-                self._X = np.expand_dims(pad_and_reflect(self._X[0], self.cfg.DATA.PATCH_SIZE, verbose=self.cfg.TEST.VERBOSE),0)
-                if self.cfg.DATA.TEST.LOAD_GT:
-                    self._Y = np.expand_dims(pad_and_reflect(self._Y[0], self.cfg.DATA.PATCH_SIZE, verbose=self.cfg.TEST.VERBOSE),0)
-
-            original_data_shape = self._X.shape
-            
-            # Crop if necessary
-            if self._X.shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
-                # Copy X to be used later in full image 
-                if self.cfg.PROBLEM.NDIM != '3D': 
-                    X_original = self._X.copy()
-
-                if self.cfg.DATA.TEST.LOAD_GT and self._X.shape[:-1] != self._Y.shape[:-1]:
-                    raise ValueError("Image {} and mask {} differ in shape (without considering the channels, i.e. last dimension)"
-                                     .format(self._X.shape,self._Y.shape))
-
-                if self.cfg.PROBLEM.NDIM == '2D':
-                    obj = crop_data_with_overlap(self._X, self.cfg.DATA.PATCH_SIZE, data_mask=self._Y, overlap=self.cfg.DATA.TEST.OVERLAP, 
-                        padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE)
+            if not self.cfg.TEST.REUSE_PREDICTIONS:
+                # Reflect data to complete the needed shape
+                if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE:
+                    reflected_orig_shape = self._X.shape
+                    self._X = np.expand_dims(pad_and_reflect(self._X[0], self.cfg.DATA.PATCH_SIZE, verbose=self.cfg.TEST.VERBOSE),0)
                     if self.cfg.DATA.TEST.LOAD_GT:
-                        self._X, self._Y = obj
-                    else:
-                        self._X = obj
-                    del obj
-                else:
-                    if self.cfg.TEST.REDUCE_MEMORY:
-                        self._X = crop_3D_data_with_overlap(self._X[0], self.cfg.DATA.PATCH_SIZE, overlap=self.cfg.DATA.TEST.OVERLAP, 
-                            padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE, 
-                            median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING)
-                        if self.cfg.DATA.TEST.LOAD_GT:
-                            self._Y = crop_3D_data_with_overlap(self._Y[0], self.cfg.DATA.PATCH_SIZE[:-1]+(self._Y.shape[-1],), overlap=self.cfg.DATA.TEST.OVERLAP, 
-                                padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE, 
-                                median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING)
-                    else:
-                        if self.cfg.DATA.TEST.LOAD_GT: self._Y = self._Y[0]
-                        obj = crop_3D_data_with_overlap(self._X[0], self.cfg.DATA.PATCH_SIZE, data_mask=self._Y, overlap=self.cfg.DATA.TEST.OVERLAP, 
-                            padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE, 
-                            median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING)
+                        self._Y = np.expand_dims(pad_and_reflect(self._Y[0], self.cfg.DATA.PATCH_SIZE, verbose=self.cfg.TEST.VERBOSE),0)
+
+                original_data_shape = self._X.shape
+                
+                # Crop if necessary
+                if self._X.shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
+                    # Copy X to be used later in full image 
+                    if self.cfg.PROBLEM.NDIM != '3D': 
+                        X_original = self._X.copy()
+
+                    if self.cfg.DATA.TEST.LOAD_GT and self._X.shape[:-1] != self._Y.shape[:-1]:
+                        raise ValueError("Image {} and mask {} differ in shape (without considering the channels, i.e. last dimension)"
+                                        .format(self._X.shape,self._Y.shape))
+
+                    if self.cfg.PROBLEM.NDIM == '2D':
+                        obj = crop_data_with_overlap(self._X, self.cfg.DATA.PATCH_SIZE, data_mask=self._Y, overlap=self.cfg.DATA.TEST.OVERLAP, 
+                            padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE)
                         if self.cfg.DATA.TEST.LOAD_GT:
                             self._X, self._Y = obj
                         else:
                             self._X = obj
                         del obj
-
-            # Evaluate each patch
-            if self.cfg.DATA.TEST.LOAD_GT and self.cfg.TEST.EVALUATE:
-                l = int(math.ceil(self._X.shape[0]/self.cfg.TRAIN.BATCH_SIZE))
-                for k in tqdm(range(l), leave=False):
-                    top = (k+1)*self.cfg.TRAIN.BATCH_SIZE if (k+1)*self.cfg.TRAIN.BATCH_SIZE < self._X.shape[0] else self._X.shape[0]
-                    with torch.cuda.amp.autocast():
-                        output = self.apply_model_activations(self.model_call_func(self._X[k*self.cfg.TRAIN.BATCH_SIZE:top]))
-                        loss = self.loss(output, to_pytorch_format(self._Y[k*self.cfg.TRAIN.BATCH_SIZE:top], self.axis_order, self.device, dtype=self.loss_dtype))
-
-                    # Calculate the metrics
-                    train_iou = self.metric_calculation(output, to_pytorch_format(self._Y[k*self.cfg.TRAIN.BATCH_SIZE:top], self.axis_order, self.device, dtype=self.loss_dtype))
-                    
-                    self.stats['loss_per_crop'] += loss.item()
-                    self.stats['iou_per_crop'] += train_iou
-                    
-                del output    
-
-            self.stats['patch_counter'] += self._X.shape[0]
-
-            # Predict each patch
-            if self.cfg.TEST.AUGMENTATION:
-                for k in tqdm(range(self._X.shape[0]), leave=False):
-                    if self.cfg.PROBLEM.NDIM == '2D':
-                        p = ensemble8_2d_predictions(self._X[k], axis_order_back=self.axis_order_back,
-                            pred_func=self.model_call_func, axis_order=self.axis_order, device=self.device)
                     else:
-                        p = ensemble16_3d_predictions(self._X[k], batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
-                            axis_order_back=self.axis_order_back, pred_func=self.model_call_func, 
-                            axis_order=self.axis_order, device=self.device)
-                    p = self.apply_model_activations(p)
-                    # Multi-head concatenation
-                    if isinstance(p, list):
-                        p = torch.cat((p[0], p[1]), dim=1)
-                    p = to_numpy_format(p, self.axis_order_back)
-                    if 'pred' not in locals():
-                        pred = np.zeros((self._X.shape[0],)+p.shape[1:], dtype=self.dtype)
-                    pred[k] = p
-            else:
-                l = int(math.ceil(self._X.shape[0]/self.cfg.TRAIN.BATCH_SIZE))
-                for k in tqdm(range(l), leave=False):
-                    top = (k+1)*self.cfg.TRAIN.BATCH_SIZE if (k+1)*self.cfg.TRAIN.BATCH_SIZE < self._X.shape[0] else self._X.shape[0]
-                    with torch.cuda.amp.autocast():
-                        p = self.apply_model_activations(self.model_call_func(self._X[k*self.cfg.TRAIN.BATCH_SIZE:top]))
+                        if self.cfg.TEST.REDUCE_MEMORY:
+                            self._X = crop_3D_data_with_overlap(self._X[0], self.cfg.DATA.PATCH_SIZE, overlap=self.cfg.DATA.TEST.OVERLAP, 
+                                padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE, 
+                                median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING)
+                            if self.cfg.DATA.TEST.LOAD_GT:
+                                self._Y = crop_3D_data_with_overlap(self._Y[0], self.cfg.DATA.PATCH_SIZE[:-1]+(self._Y.shape[-1],), overlap=self.cfg.DATA.TEST.OVERLAP, 
+                                    padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE, 
+                                    median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING)
+                        else:
+                            if self.cfg.DATA.TEST.LOAD_GT: self._Y = self._Y[0]
+                            obj = crop_3D_data_with_overlap(self._X[0], self.cfg.DATA.PATCH_SIZE, data_mask=self._Y, overlap=self.cfg.DATA.TEST.OVERLAP, 
+                                padding=self.cfg.DATA.TEST.PADDING, verbose=self.cfg.TEST.VERBOSE, 
+                                median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING)
+                            if self.cfg.DATA.TEST.LOAD_GT:
+                                self._X, self._Y = obj
+                            else:
+                                self._X = obj
+                            del obj
+
+                # Evaluate each patch
+                if self.cfg.DATA.TEST.LOAD_GT and self.cfg.TEST.EVALUATE:
+                    l = int(math.ceil(self._X.shape[0]/self.cfg.TRAIN.BATCH_SIZE))
+                    for k in tqdm(range(l), leave=False):
+                        top = (k+1)*self.cfg.TRAIN.BATCH_SIZE if (k+1)*self.cfg.TRAIN.BATCH_SIZE < self._X.shape[0] else self._X.shape[0]
+                        with torch.cuda.amp.autocast():
+                            output = self.apply_model_activations(self.model_call_func(self._X[k*self.cfg.TRAIN.BATCH_SIZE:top]))
+                            loss = self.loss(output, to_pytorch_format(self._Y[k*self.cfg.TRAIN.BATCH_SIZE:top], self.axis_order, self.device, dtype=self.loss_dtype))
+
+                        # Calculate the metrics
+                        train_iou = self.metric_calculation(output, to_pytorch_format(self._Y[k*self.cfg.TRAIN.BATCH_SIZE:top], self.axis_order, self.device, dtype=self.loss_dtype))
+                        
+                        self.stats['loss_per_crop'] += loss.item()
+                        self.stats['iou_per_crop'] += train_iou
+                        
+                    del output    
+
+                self.stats['patch_counter'] += self._X.shape[0]
+
+                # Predict each patch
+                if self.cfg.TEST.AUGMENTATION:
+                    for k in tqdm(range(self._X.shape[0]), leave=False):
+                        if self.cfg.PROBLEM.NDIM == '2D':
+                            p = ensemble8_2d_predictions(self._X[k], axis_order_back=self.axis_order_back,
+                                pred_func=self.model_call_func, axis_order=self.axis_order, device=self.device)
+                        else:
+                            p = ensemble16_3d_predictions(self._X[k], batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
+                                axis_order_back=self.axis_order_back, pred_func=self.model_call_func, 
+                                axis_order=self.axis_order, device=self.device)
+                        p = self.apply_model_activations(p)
                         # Multi-head concatenation
                         if isinstance(p, list):
                             p = torch.cat((p[0], p[1]), dim=1)
                         p = to_numpy_format(p, self.axis_order_back)
-                    if 'pred' not in locals():
-                        pred = np.zeros((self._X.shape[0],)+p.shape[1:], dtype=self.dtype)
-                    pred[k*self.cfg.TRAIN.BATCH_SIZE:top] = p
+                        if 'pred' not in locals():
+                            pred = np.zeros((self._X.shape[0],)+p.shape[1:], dtype=self.dtype)
+                        pred[k] = p
+                else:
+                    l = int(math.ceil(self._X.shape[0]/self.cfg.TRAIN.BATCH_SIZE))
+                    for k in tqdm(range(l), leave=False):
+                        top = (k+1)*self.cfg.TRAIN.BATCH_SIZE if (k+1)*self.cfg.TRAIN.BATCH_SIZE < self._X.shape[0] else self._X.shape[0]
+                        with torch.cuda.amp.autocast():
+                            p = self.apply_model_activations(self.model_call_func(self._X[k*self.cfg.TRAIN.BATCH_SIZE:top]))
+                            # Multi-head concatenation
+                            if isinstance(p, list):
+                                p = torch.cat((p[0], p[1]), dim=1)
+                            p = to_numpy_format(p, self.axis_order_back)
+                        if 'pred' not in locals():
+                            pred = np.zeros((self._X.shape[0],)+p.shape[1:], dtype=self.dtype)
+                        pred[k*self.cfg.TRAIN.BATCH_SIZE:top] = p
 
-            # Delete self._X as in 3D there is no full image
-            if self.cfg.PROBLEM.NDIM == '3D':
-                del self._X, p
+                # Delete self._X as in 3D there is no full image
+                if self.cfg.PROBLEM.NDIM == '3D':
+                    del self._X, p
 
-            # Reconstruct the predictions
-            if original_data_shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
-                if self.cfg.PROBLEM.NDIM == '3D': original_data_shape = original_data_shape[1:]
-                f_name = merge_data_with_overlap if self.cfg.PROBLEM.NDIM == '2D' else merge_3D_data_with_overlap
+                # Reconstruct the predictions
+                if original_data_shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
+                    if self.cfg.PROBLEM.NDIM == '3D': original_data_shape = original_data_shape[1:]
+                    f_name = merge_data_with_overlap if self.cfg.PROBLEM.NDIM == '2D' else merge_3D_data_with_overlap
 
-                if self.cfg.TEST.REDUCE_MEMORY:
-                    pred = f_name(pred, original_data_shape[:-1]+(pred.shape[-1],), padding=self.cfg.DATA.TEST.PADDING, 
-                        overlap=self.cfg.DATA.TEST.OVERLAP, verbose=self.cfg.TEST.VERBOSE)
-                    if self.cfg.DATA.TEST.LOAD_GT:
-                        self._Y = f_name(self._Y, original_data_shape[:-1]+(self._Y.shape[-1],), padding=self.cfg.DATA.TEST.PADDING, 
+                    if self.cfg.TEST.REDUCE_MEMORY:
+                        pred = f_name(pred, original_data_shape[:-1]+(pred.shape[-1],), padding=self.cfg.DATA.TEST.PADDING, 
                             overlap=self.cfg.DATA.TEST.OVERLAP, verbose=self.cfg.TEST.VERBOSE)
-                else:
-                    obj = f_name(pred, original_data_shape[:-1]+(pred.shape[-1],), data_mask=self._Y,
-                        padding=self.cfg.DATA.TEST.PADDING, overlap=self.cfg.DATA.TEST.OVERLAP,
-                        verbose=self.cfg.TEST.VERBOSE)
-                    if self.cfg.DATA.TEST.LOAD_GT:
-                        pred, self._Y = obj
+                        if self.cfg.DATA.TEST.LOAD_GT:
+                            self._Y = f_name(self._Y, original_data_shape[:-1]+(self._Y.shape[-1],), padding=self.cfg.DATA.TEST.PADDING, 
+                                overlap=self.cfg.DATA.TEST.OVERLAP, verbose=self.cfg.TEST.VERBOSE)
                     else:
-                        pred = obj
-                    del obj
-                if self.cfg.PROBLEM.NDIM != '3D': 
-                    self._X = X_original.copy()
-                    del X_original
-            else:
-                pred = pred[0]
-                if self._Y is not None: self._Y = self._Y[0]
-
-            if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE: 
-                if self.cfg.PROBLEM.NDIM == '2D':
-                    pred = pred[-reflected_orig_shape[1]:,-reflected_orig_shape[2]:]
-                    if self._Y is not None:
-                        self._Y = self._Y[-reflected_orig_shape[1]:,-reflected_orig_shape[2]:]
+                        obj = f_name(pred, original_data_shape[:-1]+(pred.shape[-1],), data_mask=self._Y,
+                            padding=self.cfg.DATA.TEST.PADDING, overlap=self.cfg.DATA.TEST.OVERLAP,
+                            verbose=self.cfg.TEST.VERBOSE)
+                        if self.cfg.DATA.TEST.LOAD_GT:
+                            pred, self._Y = obj
+                        else:
+                            pred = obj
+                        del obj
+                    if self.cfg.PROBLEM.NDIM != '3D': 
+                        self._X = X_original.copy()
+                        del X_original
                 else:
-                    pred = pred[-reflected_orig_shape[1]:,-reflected_orig_shape[2]:,-reflected_orig_shape[3]:]
-                    if self._Y is not None:
-                        self._Y = self._Y[-reflected_orig_shape[1]:,-reflected_orig_shape[2]:,-reflected_orig_shape[3]:]
+                    pred = pred[0]
+                    if self._Y is not None: self._Y = self._Y[0]
 
-            # Argmax if needed
-            if self.cfg.MODEL.N_CLASSES > 2 and self.cfg.DATA.TEST.ARGMAX_TO_OUTPUT:
-                # Multi-head case of instance segmentation
-                if pred.shape[-1] > self.cfg.MODEL.N_CLASSES:
-                    pred = np.concatenate([pred[...,:-(self.cfg.MODEL.N_CLASSES)], 
-                        np.expand_dims(np.argmax(pred[...,-(self.cfg.MODEL.N_CLASSES):],-1), -1)], axis=-1)
-                else:
-                    pred = np.expand_dims(np.argmax(pred,-1), -1)
-                if self.cfg.DATA.TEST.LOAD_GT: self._Y = np.expand_dims(np.argmax(self._Y,-1), -1)
+                if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE: 
+                    if self.cfg.PROBLEM.NDIM == '2D':
+                        pred = pred[-reflected_orig_shape[1]:,-reflected_orig_shape[2]:]
+                        if self._Y is not None:
+                            self._Y = self._Y[-reflected_orig_shape[1]:,-reflected_orig_shape[2]:]
+                    else:
+                        pred = pred[-reflected_orig_shape[1]:,-reflected_orig_shape[2]:,-reflected_orig_shape[3]:]
+                        if self._Y is not None:
+                            self._Y = self._Y[-reflected_orig_shape[1]:,-reflected_orig_shape[2]:,-reflected_orig_shape[3]:]
 
-            # Apply mask
-            if self.cfg.TEST.POST_PROCESSING.APPLY_MASK:
-                pred = apply_binary_mask(pred, self.cfg.DATA.TEST.BINARY_MASKS)
+                # Argmax if needed
+                if self.cfg.MODEL.N_CLASSES > 2 and self.cfg.DATA.TEST.ARGMAX_TO_OUTPUT:
+                    # Multi-head case of instance segmentation
+                    if pred.shape[-1] > self.cfg.MODEL.N_CLASSES:
+                        pred = np.concatenate([pred[...,:-(self.cfg.MODEL.N_CLASSES)], 
+                            np.expand_dims(np.argmax(pred[...,-(self.cfg.MODEL.N_CLASSES):],-1), -1)], axis=-1)
+                    else:
+                        pred = np.expand_dims(np.argmax(pred,-1), -1)
+                    if self.cfg.DATA.TEST.LOAD_GT: self._Y = np.expand_dims(np.argmax(self._Y,-1), -1)
 
-            # Save image
-            if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
-                save_tif(np.expand_dims(pred,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, self.processing_filenames, 
-                    verbose=self.cfg.TEST.VERBOSE)
+                # Apply mask
+                if self.cfg.TEST.POST_PROCESSING.APPLY_MASK:
+                    pred = apply_binary_mask(pred, self.cfg.DATA.TEST.BINARY_MASKS)
 
-            if self.cfg.DATA.TEST.LOAD_GT and self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS != "Dv2":
-                if self._Y.ndim > pred.ndim: self._Y = self._Y[0]
-                if self.cfg.LOSS.TYPE != 'MASKED_BCE':
-                    _iou_merge_patches = jaccard_index_numpy((self._Y>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8))
-                    _ov_iou_merge_patches = voc_calculation((self._Y>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8),
-                                                    _iou_merge_patches)
-                else:
-                    exclusion_mask = self._Y < 2
-                    binY = self._Y * exclusion_mask.astype( float )
-                    _iou_merge_patches = jaccard_index_numpy((binY>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8))
-                    _ov_iou_merge_patches = voc_calculation((binY>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8),
-                                                    _iou_merge_patches)
-                self.stats['iou_merge_patches'] += _iou_merge_patches
-                self.stats['ov_iou_merge_patches'] += _ov_iou_merge_patches
-
-            ############################
-            ### POST-PROCESSING (3D) ###
-            ############################
-            if self.post_processing['per_image']:
-                pred, _iou_post, _ov_iou_post = apply_post_processing(self.cfg, pred, self._Y)
-                self.stats['iou_merge_patches_post'] += _iou_post
-                self.stats['ov_iou_merge_patches_post'] += _ov_iou_post
-                if pred.ndim == 4:
-                    save_tif(np.expand_dims(pred,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,
-                        self.processing_filenames, verbose=self.cfg.TEST.VERBOSE)
-                else:
-                    save_tif(pred, self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING, self.processing_filenames,
+                # Save image
+                if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
+                    save_tif(np.expand_dims(pred,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, self.processing_filenames, 
                         verbose=self.cfg.TEST.VERBOSE)
+
+                if self.cfg.DATA.TEST.LOAD_GT and self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS != "Dv2":
+                    if self._Y.ndim > pred.ndim: self._Y = self._Y[0]
+                    if self.cfg.LOSS.TYPE != 'MASKED_BCE':
+                        _iou_merge_patches = jaccard_index_numpy((self._Y>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8))
+                        _ov_iou_merge_patches = voc_calculation((self._Y>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8),
+                                                        _iou_merge_patches)
+                    else:
+                        exclusion_mask = self._Y < 2
+                        binY = self._Y * exclusion_mask.astype( float )
+                        _iou_merge_patches = jaccard_index_numpy((binY>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8))
+                        _ov_iou_merge_patches = voc_calculation((binY>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8),
+                                                        _iou_merge_patches)
+                    self.stats['iou_merge_patches'] += _iou_merge_patches
+                    self.stats['ov_iou_merge_patches'] += _ov_iou_merge_patches
+
+                ############################
+                ### POST-PROCESSING (3D) ###
+                ############################
+                if self.post_processing['per_image']:
+                    pred, _iou_post, _ov_iou_post = apply_post_processing(self.cfg, pred, self._Y)
+                    self.stats['iou_merge_patches_post'] += _iou_post
+                    self.stats['ov_iou_merge_patches_post'] += _ov_iou_post
+                    if pred.ndim == 4:
+                        save_tif(np.expand_dims(pred,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,
+                            self.processing_filenames, verbose=self.cfg.TEST.VERBOSE)
+                    else:
+                        save_tif(pred, self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING, self.processing_filenames,
+                            verbose=self.cfg.TEST.VERBOSE)
+            else:
+                # load predictions from file
+                if self.post_processing['per_image']:
+                    pred, _, _ = load_3d_images_from_dir( self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING )
+                else:
+                    pred, _, _ = load_3d_images_from_dir( self.cfg.PATHS.RESULT_DIR.PER_IMAGE )
+                if pred.ndim == 5:
+                    pred = np.squeeze( pred )
 
             self.after_merge_patches(pred)
             
@@ -1337,55 +1346,61 @@ class Base_Workflow(metaclass=ABCMeta):
         ##################
         if self.cfg.TEST.FULL_IMG and self.cfg.PROBLEM.NDIM == '2D':
             self._X, o_test_shape = check_downsample_division(self._X, len(self.cfg.MODEL.FEATURE_MAPS)-1)
-            if self.cfg.DATA.TEST.LOAD_GT:
-                self._Y, _ = check_downsample_division(self._Y, len(self.cfg.MODEL.FEATURE_MAPS)-1)
+            if not self.cfg.TEST.REUSE_PREDICTIONS:
+                if self.cfg.DATA.TEST.LOAD_GT:
+                    self._Y, _ = check_downsample_division(self._Y, len(self.cfg.MODEL.FEATURE_MAPS)-1)
 
-            # Evaluate each img
-            if self.cfg.DATA.TEST.LOAD_GT:
-                with torch.cuda.amp.autocast():
-                    output = self.model_call_func(self._X)
-                    loss = self.loss(output, to_pytorch_format(self._Y, self.axis_order, self.device, dtype=self.loss_dtype))
-                self.stats['loss'] += loss.item()
-                del output
+                # Evaluate each img
+                if self.cfg.DATA.TEST.LOAD_GT:
+                    with torch.cuda.amp.autocast():
+                        output = self.model_call_func(self._X)
+                        loss = self.loss(output, to_pytorch_format(self._Y, self.axis_order, self.device, dtype=self.loss_dtype))
+                    self.stats['loss'] += loss.item()
+                    del output
 
-            # Make the prediction
-            if self.cfg.TEST.AUGMENTATION:
-                pred = ensemble8_2d_predictions(self._X[0], axis_order_back=self.axis_order_back, 
-                    pred_func=self.model_call_func, axis_order=self.axis_order, device=self.device)
+                # Make the prediction
+                if self.cfg.TEST.AUGMENTATION:
+                    pred = ensemble8_2d_predictions(self._X[0], axis_order_back=self.axis_order_back, 
+                        pred_func=self.model_call_func, axis_order=self.axis_order, device=self.device)
+                else:
+                    with torch.cuda.amp.autocast():
+                        pred = self.model_call_func(self._X)
+                pred = self.apply_model_activations(pred)
+                # Multi-head concatenation
+                if isinstance(pred, list):
+                    pred = torch.cat((pred[0], torch.argmax(pred[1], axis=1).unsqueeze(1)), dim=1)  
+                pred = to_numpy_format(pred, self.axis_order_back)  
+                if self.cfg.TEST.AUGMENTATION: pred = np.expand_dims(pred, 0)
+                del self._X 
+
+                # Recover original shape if padded with check_downsample_division
+                pred = pred[:,:o_test_shape[1],:o_test_shape[2]]
+                if self.cfg.DATA.TEST.LOAD_GT: self._Y = self._Y[:,:o_test_shape[1],:o_test_shape[2]]
+
+                # Save image
+                if pred.ndim == 4 and self.cfg.PROBLEM.NDIM == '3D':
+                    save_tif(np.expand_dims(pred,0), self.cfg.PATHS.RESULT_DIR.FULL_IMAGE, self.processing_filenames,
+                        verbose=self.cfg.TEST.VERBOSE)
+                else:
+                    save_tif(pred, self.cfg.PATHS.RESULT_DIR.FULL_IMAGE, self.processing_filenames, verbose=self.cfg.TEST.VERBOSE)
+
+                # Argmax if needed
+                if self.cfg.MODEL.N_CLASSES > 2 and self.cfg.DATA.TEST.ARGMAX_TO_OUTPUT:
+                    pred = np.expand_dims(np.argmax(pred,-1), -1)
+                    if self.cfg.DATA.TEST.LOAD_GT: self._Y = np.expand_dims(np.argmax(self._Y,-1), -1)
+
+                if self.cfg.TEST.POST_PROCESSING.APPLY_MASK:
+                    pred = apply_binary_mask(pred, self.cfg.DATA.TEST.BINARY_MASKS)
+                    
+                if self.cfg.DATA.TEST.LOAD_GT:
+                    score = jaccard_index_numpy((self._Y>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8))
+                    self.stats['iou'] += score
+                    self.stats['ov_iou'] += voc_calculation((self._Y>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8), score)
             else:
-                with torch.cuda.amp.autocast():
-                    pred = self.model_call_func(self._X)
-            pred = self.apply_model_activations(pred)
-            # Multi-head concatenation
-            if isinstance(pred, list):
-                pred = torch.cat((pred[0], torch.argmax(pred[1], axis=1).unsqueeze(1)), dim=1)  
-            pred = to_numpy_format(pred, self.axis_order_back)  
-            if self.cfg.TEST.AUGMENTATION: pred = np.expand_dims(pred, 0)
-            del self._X 
-
-            # Recover original shape if padded with check_downsample_division
-            pred = pred[:,:o_test_shape[1],:o_test_shape[2]]
-            if self.cfg.DATA.TEST.LOAD_GT: self._Y = self._Y[:,:o_test_shape[1],:o_test_shape[2]]
-
-            # Save image
-            if pred.ndim == 4 and self.cfg.PROBLEM.NDIM == '3D':
-                save_tif(np.expand_dims(pred,0), self.cfg.PATHS.RESULT_DIR.FULL_IMAGE, self.processing_filenames,
-                    verbose=self.cfg.TEST.VERBOSE)
-            else:
-                save_tif(pred, self.cfg.PATHS.RESULT_DIR.FULL_IMAGE, self.processing_filenames, verbose=self.cfg.TEST.VERBOSE)
-
-            # Argmax if needed
-            if self.cfg.MODEL.N_CLASSES > 2 and self.cfg.DATA.TEST.ARGMAX_TO_OUTPUT:
-                pred = np.expand_dims(np.argmax(pred,-1), -1)
-                if self.cfg.DATA.TEST.LOAD_GT: self._Y = np.expand_dims(np.argmax(self._Y,-1), -1)
-
-            if self.cfg.TEST.POST_PROCESSING.APPLY_MASK:
-                pred = apply_binary_mask(pred, self.cfg.DATA.TEST.BINARY_MASKS)
-                
-            if self.cfg.DATA.TEST.LOAD_GT:
-                score = jaccard_index_numpy((self._Y>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8))
-                self.stats['iou'] += score
-                self.stats['ov_iou'] += voc_calculation((self._Y>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8), score)
+                # load predictions from file
+                pred, _, _ = load_data_from_dir( self.cfg.PATHS.RESULT_DIR.FULL_IMAGE )
+                if pred.ndim == 5:
+                    pred = np.squeeze( pred )
 
             if self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
                 self.all_pred.append(pred)

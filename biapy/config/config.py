@@ -812,6 +812,8 @@ class Config:
         _C.TEST.EVALUATE = True
         # Stack 2D images into a 3D image and then process it entirely instead of going image per image
         _C.TEST.ANALIZE_2D_IMGS_AS_3D_STACK = False
+        # Whether to reuse the existing ones (from file) or calculate predictions using the model
+        _C.TEST.REUSE_PREDICTIONS = False
 
         # If PROBLEM.NDIM = '2D' this can be activated to process each image entirely instead of patch by patch. Only can be done 
         # if the neural network is fully convolutional
