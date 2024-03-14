@@ -436,8 +436,10 @@ class Detection_Workflow(Base_Workflow):
                             fp = fp.drop(columns=['axis-0'])                    
                             fp = fp.rename(columns={'axis-1': 'axis-0', 'axis-2': 'axis-1'})
                     if gt_assoc is not None:
+                        os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, exist_ok=True)
                         gt_assoc.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, os.path.splitext(filenames[0])[0]+'_class'+str(ch+1)+'_gt_assoc.csv'))
                     if fp is not None:
+                        os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, exist_ok=True)
                         fp.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, os.path.splitext(filenames[0])[0]+'_class'+str(ch+1)+'_fp.csv'))             
                 else:
                     if self.cfg.TEST.VERBOSE:
@@ -463,7 +465,7 @@ class Detection_Workflow(Base_Workflow):
 
             if self.cfg.TEST.VERBOSE:
                 print("Creating the image with a summary of detected points and false positives with colors . . .")
-            if self.by_chunks:
+            if not self.by_chunks:
                 points_pred = np.zeros(pred_shape[:-1]+(3,), dtype=np.uint8)
                 for ch, gt_coords in enumerate(gt_all_coords):
                     # if gt_assoc is None: 
@@ -715,7 +717,8 @@ class Detection_Workflow(Base_Workflow):
         d = len(str(total_patches))
         c=1
 
-        with ThreadPoolExecutor(max_workers=self.cfg.SYSTEM.NUM_WORKERS) as executor:
+        workers = self.cfg.SYSTEM.NUM_WORKERS if self.cfg.SYSTEM.NUM_WORKERS > 0 else None
+        with ThreadPoolExecutor(max_workers=workers) as executor:
             futures = []
             for z in tqdm(range(z_vols), disable=not is_main_process()):
                 for y in range(y_vols):

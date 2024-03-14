@@ -1768,6 +1768,7 @@ def insert_patch_into_dataset(data_filename, data_filename_mask, data_shape, out
                 out_data_shape = tuple(out_data_shape) + (p.shape[-1],)
                 out_data_order = cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER + "C"
             else:
+                out_data_shape = tuple(out_data_shape[:-1]) + (p.shape[-1],)
                 out_data_order = cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER
 
             if file_type == "h5":
