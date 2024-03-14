@@ -609,9 +609,19 @@ def load_3D_efficient_files(data_path, input_axes, crop_shape, overlap, padding,
     data_info = {}
     data_total_patches = []
     c = 0
+    assert len(crop_shape) == 4, f"Provided crop_shape is not a 4D tuple: {crop_shape}"
+
     for i, filename in enumerate(data_path):
         print(f"Reading Zarr/H5 file: {filename}")
         file, data = read_chunked_data(filename)
+
+        # Modify crop_shape with the channel
+        c_index = -1
+        try:
+            c_index = input_axes.index("C")
+            crop_shape = crop_shape[:-1]+(data.shape[c_index],)
+        except:
+            pass 
 
         # Get the total patches so we can use tqdm so the user can see the time
         obj = extract_3D_patch_with_overlap_yield(data, crop_shape, input_axes, overlap=overlap, padding=padding, 
@@ -632,7 +642,8 @@ def load_3D_efficient_files(data_path, input_axes, crop_shape, overlap, padding,
             
             data_info[c] = {}
             data_info[c]['filepath'] = filename
-            data_info[c]['patch_coords'] = order_dimensions(patch_coords, input_order="ZYX", output_order=input_axes, default_value=0)
+            data_info[c]['patch_coords'] = order_dimensions(patch_coords, input_order="ZYX", output_order=input_axes, 
+                default_value=img.shape[c_index])
 
             c += 1 
 
@@ -1230,7 +1241,7 @@ def extract_3D_patch_with_overlap_yield(data, vol_shape, axis_order, overlap=(0,
                 else:
                     img = np.pad(img,((pad_z_left,pad_z_right),(pad_y_left,pad_y_right),(pad_x_left,pad_x_right),(0,0)), 'reflect')
 
-                assert img.shape == vol_shape, "Something went wrong during the patch extraction!"
+                assert img.shape[:-1] == vol_shape[:-1], f"Image shape and expected shape differ: {img.shape} vs {vol_shape}"
                 
                 real_patch_in_data = [
                     [z*step_z-d_z,(z*step_z)+vol_shape[0]-d_z-(padding[0]*2)],

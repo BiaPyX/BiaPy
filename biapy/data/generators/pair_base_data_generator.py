@@ -827,7 +827,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             for j in range(len(self.X[idx]['patch_coords'])):
                 if isinstance(self.X[idx]['patch_coords'][j], int):
                     # +1 to prevent 0 length axes that can not be removed with np.squeeze later
-                    slices.append(slice(self.X[idx]['patch_coords'][j]+1)) 
+                    slices.append(slice(0,self.X[idx]['patch_coords'][j]+1)) 
                 else:
                     slices.append(slice(self.X[idx]['patch_coords'][j][0],self.X[idx]['patch_coords'][j][1]))
 
@@ -844,7 +844,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 for j in range(len(self.Y[idx]['patch_coords'])):
                     if isinstance(self.Y[idx]['patch_coords'][j], int):
                         # +1 to prevent 0 length axes that can not be removed with np.squeeze later
-                        slices.append(slice(self.Y[idx]['patch_coords'][j]+1)) 
+                        slices.append(slice(0,self.Y[idx]['patch_coords'][j]+1)) 
                     else:
                         slices.append(slice(self.Y[idx]['patch_coords'][j][0],self.Y[idx]['patch_coords'][j][1]))
 
