@@ -1052,6 +1052,13 @@ class Base_Workflow(metaclass=ABCMeta):
 
         # Create the final H5/Zarr file that contains all the individual parts 
         if is_main_process():
+            if "C" not in self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER:
+                out_data_order = self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER + "C"
+                c_index = -1
+            else:
+                out_data_order = self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER
+                c_index = out_data_order.index("C")
+                
             if self.cfg.SYSTEM.NUM_GPUS > 1:
                 # Obtain parts of the data created by all GPUs
                 if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
@@ -1090,17 +1097,17 @@ class Base_Workflow(metaclass=ABCMeta):
 
                     for j, k in enumerate(list_of_vols_in_z[i]):
                         
-                        slices = [
+                        slices = (
                             slice(z_vol_info[k][0],z_vol_info[k][1]), # z (only z axis is distributed across GPUs)
                             slice(None), # y
                             slice(None), # x
                             slice(None), # Channel
-                        ]
+                        )
                         
                         data_ordered_slices = order_dimensions(
                             slices,
                             input_order="ZYXC",
-                            output_order=self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
+                            output_order=out_data_order,
                             default_value=0)
 
                         if self.cfg.TEST.VERBOSE:
@@ -1118,10 +1125,6 @@ class Base_Workflow(metaclass=ABCMeta):
 
                 # Save image
                 if self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF and self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
-                    if "C" not in self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER:
-                        out_data_order = self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER + "C"
-                    else:
-                        out_data_order = self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER
                     current_order = np.array(range(len(data.shape)))
                     transpose_order = order_dimensions(current_order, input_order=out_data_order,
                         output_order="TZYXC", default_value=np.nan)
@@ -1149,11 +1152,10 @@ class Base_Workflow(metaclass=ABCMeta):
                     fid_div = zarr.open_group(out_data_div_filename, mode="w")
                     pred_div = fid_div.create_dataset("data", shape=pred.shape, dtype=pred.dtype)
                     
-                # Fill the new data
-
                 t_dim, z_dim, c_dim, y_dim, x_dim = order_dimensions(
                     data_shape, self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER)
-
+                
+                # Fill the new data
                 z_vols = math.ceil(z_dim/self.cfg.DATA.PATCH_SIZE[0])
                 y_vols = math.ceil(y_dim/self.cfg.DATA.PATCH_SIZE[1])
                 x_vols = math.ceil(x_dim/self.cfg.DATA.PATCH_SIZE[2])
@@ -1161,20 +1163,19 @@ class Base_Workflow(metaclass=ABCMeta):
                     for y in range(y_vols):
                         for x in range(x_vols):
 
-                            slices = [
+                            slices = (
                                 slice(z*self.cfg.DATA.PATCH_SIZE[0], min(z_dim,self.cfg.DATA.PATCH_SIZE[0]*(z+1))),
                                 slice(y*self.cfg.DATA.PATCH_SIZE[1], min(y_dim,self.cfg.DATA.PATCH_SIZE[1]*(y+1))),
                                 slice(x*self.cfg.DATA.PATCH_SIZE[2], min(x_dim,self.cfg.DATA.PATCH_SIZE[2]*(x+1))),
-                                slice(None), # Channel
-                            ]
+                                slice(0,pred.shape[c_index]), # Channel
+                            )
 
                             data_ordered_slices = order_dimensions(
                                 slices,
                                 input_order = "ZYXC",
-                                output_order = self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
+                                output_order = out_data_order,
                                 default_value = 0,
                                 )
-
                             pred_div[data_ordered_slices] = pred[data_ordered_slices] / mask[data_ordered_slices]
 
                     if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
@@ -1182,10 +1183,6 @@ class Base_Workflow(metaclass=ABCMeta):
 
                 # Save image
                 if self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF and self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
-                    if "C" not in self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER:
-                        out_data_order = self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER + "C"
-                    else:
-                        out_data_order = self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER
                     current_order = np.array(range(len(pred_div.shape)))
                     transpose_order = order_dimensions(current_order, input_order=out_data_order,
                         output_order="TZYXC", default_value=np.nan)
@@ -1782,8 +1779,8 @@ def insert_patch_into_dataset(data_filename, data_filename_mask, data_shape, out
 
         # Adjust slices to calculate where to insert the predicted patch. This slice does not have into account the 
         # channel so any of them can be inserted 
-        slices = [slice(patch_coords[0][0],patch_coords[0][1]),slice(patch_coords[1][0],patch_coords[1][1]),
-            slice(patch_coords[2][0],patch_coords[2][1]), slice(None)]
+        slices = (slice(patch_coords[0][0],patch_coords[0][1]),slice(patch_coords[1][0],patch_coords[1][1]),
+            slice(patch_coords[2][0],patch_coords[2][1]), slice(None))
         data_ordered_slices = tuple(order_dimensions(slices, input_order="ZYXC", output_order=cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
             default_value=0))
 

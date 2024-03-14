@@ -623,12 +623,12 @@ class Detection_Workflow(Base_Workflow):
             
         fname = _filename+"_patch"+str(c).zfill(d)+file_ext
         
-        slices = [
+        slices = (
             slice(max(0,z*self.cfg.DATA.PATCH_SIZE[0]-self.cfg.DATA.TEST.PADDING[0]),min(z_dim,self.cfg.DATA.PATCH_SIZE[0]*(z+1)+self.cfg.DATA.TEST.PADDING[0])),
             slice(max(0,y*self.cfg.DATA.PATCH_SIZE[1]-self.cfg.DATA.TEST.PADDING[1]),min(y_dim,self.cfg.DATA.PATCH_SIZE[1]*(y+1)+self.cfg.DATA.TEST.PADDING[1])),
             slice(max(0,x*self.cfg.DATA.PATCH_SIZE[2]-self.cfg.DATA.TEST.PADDING[2]),min(x_dim,self.cfg.DATA.PATCH_SIZE[2]*(x+1)+self.cfg.DATA.TEST.PADDING[2])),
             slice(None), # Channel
-        ]
+        )
         
         data_ordered_slices = order_dimensions(
             slices,
@@ -714,24 +714,6 @@ class Detection_Workflow(Base_Workflow):
         total_patches = z_vols*y_vols*x_vols
         d = len(str(total_patches))
         c=1
-        for z in tqdm(range(z_vols), disable=not is_main_process()):
-            for y in range(y_vols):
-                for x in range(x_vols):
-                    fname = _filename+"_patch"+str(c).zfill(d)+file_ext
-                    
-                    slices = [
-                        slice(max(0,z*self.cfg.DATA.PATCH_SIZE[0]-self.cfg.DATA.TEST.PADDING[0]),min(z_dim,self.cfg.DATA.PATCH_SIZE[0]*(z+1)+self.cfg.DATA.TEST.PADDING[0])),
-                        slice(max(0,y*self.cfg.DATA.PATCH_SIZE[1]-self.cfg.DATA.TEST.PADDING[1]),min(y_dim,self.cfg.DATA.PATCH_SIZE[1]*(y+1)+self.cfg.DATA.TEST.PADDING[1])),
-                        slice(max(0,x*self.cfg.DATA.PATCH_SIZE[2]-self.cfg.DATA.TEST.PADDING[2]),min(x_dim,self.cfg.DATA.PATCH_SIZE[2]*(x+1)+self.cfg.DATA.TEST.PADDING[2])),
-                        slice(None), # Channel
-                    ]
-                    
-                    data_ordered_slices = order_dimensions(
-                        slices,
-                        input_order = "ZYXC",
-                        output_order = self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
-                        default_value = 0,
-                        )
 
         with ThreadPoolExecutor(max_workers=self.cfg.SYSTEM.NUM_WORKERS) as executor:
             futures = []
