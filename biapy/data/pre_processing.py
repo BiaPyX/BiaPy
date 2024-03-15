@@ -130,8 +130,14 @@ def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
            Data mask to create the new array from. It is expected to have just one channel. E.g. ``(10, 200, 1000, 1000, 1)``
 
        mode : str, optional
-           Operation mode. Possible values: ``C``, ``BC`` and ``BCD``.  ``C`` corresponds to using only contours, ``BC`` corresponds to
-           using binary segmentation+contour and ``BCD`` stands for binary segmentation+contour+distances.
+           Operation mode. Possible values: ``C``, ``BC``, ``BCM``, ``BCD``, ``BD``, ``BCDv2``, ``Dv2``, ``BDv2`` and ``BP``.
+            - 'B' stands for 'Binary segmentation', containing each instance region without the contour. 
+            - 'C' stands for 'Contour', containing each instance contour. 
+            - 'D' stands for 'Distance', each pixel containing the distance of it to the center of the object. 
+            - 'M' stands for 'Mask', contains the B and the C channels, i.e. the foreground mask. 
+              Is simply achieved by binarizing input instance masks. 
+            - 'Dv2' stands for 'Distance V2', which is an updated version of 'D' channel calculating background distance as well.
+            - 'P' stands for 'Points' and contains the central points of an instance (as in Detection workflow)
 
        fb_mode : str, optional
           Mode of the find_boundaries function from ``scikit-image`` or "dense". More info in:
