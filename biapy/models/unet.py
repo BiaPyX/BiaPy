@@ -124,7 +124,7 @@ class U_Net(nn.Module):
 
         # Instance segmentation
         if output_channels is not None:
-            if output_channels == "Dv2":
+            if output_channels in ["C", "Dv2"]:
                 self.last_block = conv(feature_maps[0], 1, kernel_size=1, padding='same')
             elif output_channels in ["BC", "BP"]:
                 self.last_block = conv(feature_maps[0], 2, kernel_size=1, padding='same')

@@ -1333,7 +1333,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 else:
                     pred, _, _ = load_3d_images_from_dir( self.cfg.PATHS.RESULT_DIR.PER_IMAGE )
                 if pred.ndim == 5:
-                    pred = np.squeeze( pred )
+                    pred = np.squeeze( pred, 0 )
 
             self.after_merge_patches(pred)
             
@@ -1400,7 +1400,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 # load predictions from file
                 pred, _, _ = load_data_from_dir( self.cfg.PATHS.RESULT_DIR.FULL_IMAGE )
                 if pred.ndim == 5:
-                    pred = np.squeeze( pred )
+                    pred = np.squeeze( pred, 0 )
 
             if self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
                 self.all_pred.append(pred)

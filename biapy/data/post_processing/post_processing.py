@@ -208,7 +208,7 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
         Binary foreground labels and contours data to apply watershed into. E.g. ``(397, 1450, 2000, 2)``.
 
     channels : str
-        Channel type used. Possible options: ``BC``, ``BCM``, ``BCD``, ``BCDv2``, ``Dv2`` and ``BDv2``.
+        Channel type used. Possible options: ``C``, ``BC``, ``BCM``, ``BCD``, ``BCDv2``, ``Dv2`` and ``BDv2``.
 
     ths : float, optional
         Thresholds to be used on each channel. ``TH_BINARY_MASK`` used in the semantic mask to create watershed seeds;
@@ -257,7 +257,7 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
         Directory to save watershed output into.
     """
 
-    assert channels in ['BC', 'BCM', 'BCD', 'BCDv2', 'Dv2', 'BDv2', 'BP', 'BD']
+    assert channels in ['C', 'BC', 'BCM', 'BCD', 'BCDv2', 'Dv2', 'BDv2', 'BP', 'BD']
 
     def erode_seed_and_foreground():
         nonlocal seed_map
@@ -306,6 +306,22 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
         
         res = (1,)+resolution if len(resolution) == 2 else resolution
         semantic = edt.edt(foreground, anisotropy=res, black_border=False, order='C')
+        seed_map = label(seed_map, connectivity=1)
+    elif channels in ["C"]:
+        if ths['TYPE'] == "auto":
+            ths['TH_BINARY_MASK'] = threshold_otsu(1-data[...,0])
+            ths['TH_CONTOUR'] = threshold_otsu(data[...,0])
+            ths['TH_FOREGROUND'] = ths['TH_BINARY_MASK']/2
+        seed_map = (1-data[...,0] > ths['TH_BINARY_MASK']) * (data[...,0] < ths['TH_CONTOUR'])
+        foreground = (1-data[...,0] > ths['TH_FOREGROUND'])
+        
+        if len(seed_morph_sequence) != 0 or erode_and_dilate_foreground:
+            erode_seed_and_foreground()
+        
+        res = (1,)+resolution if len(resolution) == 2 else resolution
+        #semantic = edt.edt(foreground, anisotropy=res, black_border=False, order='C')
+        # use contour channel as input to watershed
+        semantic = -data[...,0]
         seed_map = label(seed_map, connectivity=1)
     elif channels in ["BP"]:
         if ths['TYPE'] == "auto":
@@ -426,7 +442,7 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
     if save_dir is not None:
         save_tif(np.expand_dims(np.expand_dims(seed_map,-1),0).astype(segm.dtype), save_dir, ["seed_map.tif"], verbose=False)
         save_tif(np.expand_dims(np.expand_dims(semantic,-1),0).astype(np.float32), save_dir, ["semantic.tif"], verbose=False)
-        if channels in ["BC", "BCM", "BCD", "BP"]:
+        if channels in ["C", "BC", "BCM", "BCD", "BP"]:
             save_tif(np.expand_dims(np.expand_dims(foreground,-1),0).astype(np.uint8), save_dir, ["foreground.tif"], verbose=False)
     return segm
 

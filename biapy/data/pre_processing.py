@@ -130,8 +130,8 @@ def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
            Data mask to create the new array from. It is expected to have just one channel. E.g. ``(10, 200, 1000, 1000, 1)``
 
        mode : str, optional
-           Operation mode. Possible values: ``BC`` and ``BCD``.  ``BC`` corresponds to use binary segmentation+contour.
-           ``BCD`` stands for binary segmentation+contour+distances.
+           Operation mode. Possible values: ``C``, ``BC`` and ``BCD``.  ``C`` corresponds to using only contours, ``BC`` corresponds to
+           using binary segmentation+contour and ``BCD`` stands for binary segmentation+contour+distances.
 
        fb_mode : str, optional
           Mode of the find_boundaries function from ``scikit-image`` or "dense". More info in:
@@ -148,7 +148,7 @@ def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
     """
 
     assert data_mask.ndim in [5, 4]
-    assert mode in ['BC', 'BCM', 'BCD', 'BD', 'BCDv2', 'Dv2', 'BDv2', 'BP']
+    assert mode in ['C', 'BC', 'BCM', 'BCD', 'BD', 'BCDv2', 'Dv2', 'BDv2', 'BP']
 
     d_shape = 4 if data_mask.ndim == 5 else 3
     if mode in ['BCDv2', 'Dv2', 'BDv2']:
@@ -157,6 +157,8 @@ def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
         c_number = 3
     elif mode in ['BC', 'BP', 'BD']:
         c_number = 2
+    elif mode in ['C']:
+        c_number = 1
 
     if 'D' in mode:
         dtype = np.float32  
@@ -200,19 +202,20 @@ def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
                 new_mask[img,...,1] = dilation(new_mask[img,...,1], disk(3))  
 
         # Contour
-        if ('C' in mode or 'Dv2' in mode) and instance_count != 1: 
+        if ('C' in mode or 'Dv2' in mode) and instance_count != 1:
+            c_channel = 0 if mode == 'C' else 1
             f = "thick" if fb_mode == "dense" else fb_mode
-            new_mask[img,...,1] = find_boundaries(vol, mode=f).astype(np.uint8)
+            new_mask[img,...,c_channel] = find_boundaries(vol, mode=f).astype(np.uint8)
             if fb_mode == "dense" and mode != "BCM":
-                if new_mask[img,...,1].ndim == 2:
-                    new_mask[img,...,1] = 1 - binary_dilation(new_mask[img,...,1], disk(1))
+                if new_mask[img,...,c_channel].ndim == 2:
+                    new_mask[img,...,c_channel] = 1 - binary_dilation(new_mask[img,...,c_channel], disk(1))
                 else:
-                    for j in range(new_mask[img,...,1].shape[0]):
-                        new_mask[img,j,...,1] = 1 - binary_dilation(new_mask[img,j,...,1], disk(1))
-                new_mask[img,...,1] = 1 - ( (vol>0) * new_mask[img,...,1])
+                    for j in range(new_mask[img,...,c_channel].shape[0]):
+                        new_mask[img,j,...,c_channel] = 1 - binary_dilation(new_mask[img,j,...,c_channel], disk(1))
+                new_mask[img,...,c_channel] = 1 - ( (vol>0) * new_mask[img,...,c_channel])
             if 'B' in mode:
                 # Remove contours from segmentation maps
-                new_mask[img,...,0][np.where(new_mask[img,...,1] == 1)] = 0
+                new_mask[img,...,0][np.where(new_mask[img,...,] == 1)] = 0
             if mode == "BCM":
                 new_mask[img,...,2] = (vol>0).astype(np.uint8)
 
@@ -255,9 +258,9 @@ def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
         suffix = []
         if mode == "Dv2":
             suffix.append('_distance.tif')
-        else:
+        elif mode != "C":
             suffix.append('_semantic.tif')
-        if mode in ["BC", "BCM", "BCD", "BCDv2"]:
+        if mode in ["C", "BC", "BCM", "BCD", "BCDv2"]:
             suffix.append('_contour.tif')
             if mode in ["BCD", "BCDv2"]:
                 suffix.append('_distance.tif')

@@ -278,7 +278,7 @@ class MultiResUnet(torch.nn.Module):
 
         # Instance segmentation
         if output_channels is not None:
-            if output_channels == "Dv2":
+            if output_channels in ["C", "Dv2"]:
                 self.last_block = conv(self.in_filters9, 1, kernel_size=1, padding='same')
             elif output_channels in ["BC", "BP"]:
                 self.last_block = conv(self.in_filters9, 2, kernel_size=1, padding='same')
