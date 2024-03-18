@@ -62,6 +62,9 @@ class test_single_data_generator(Dataset):
     norm_custom_std : float, optional
         Std of the data used to normalize.
 
+    norm_custom_mode :  str, optional
+        Whether to apply the normalization by sample or with all dataset statistics. Options: ``'image'`` or ``'dataset'``.
+        
     reduce_mem : bool, optional
         To reduce the dtype from float32 to float16. 
 
@@ -78,8 +81,8 @@ class test_single_data_generator(Dataset):
     """
     def __init__(self, ndim, ptype, X=None, d_path=None, test_by_chunks=False, provide_Y=False, Y=None, 
         dm_path=None, seed=42, instance_problem=False, norm_type='div', not_normalize=False, norm_custom_mean=None, 
-        norm_custom_std=None, crop_center=False, reduce_mem=False, resize_shape=None, sample_ids=None,
-        convert_to_rgb=False):
+        norm_custom_std=None, norm_custom_mode=None, crop_center=False, reduce_mem=False, resize_shape=None, 
+        sample_ids=None, convert_to_rgb=False):
         if X is None and d_path is None:
             raise ValueError("One between 'X' or 'd_path' must be provided")
         if crop_center and resize_shape is None:
@@ -144,6 +147,7 @@ class test_single_data_generator(Dataset):
                     self.X_norm['std'] = norm_custom_std
                     del img
                 self.X_norm['type'] = 'custom'
+                self.X_norm['mode'] = norm_custom_mode
                 self.X_norm['orig_dtype'] = img.dtype
             if xnorm is not None:
                 self.X_norm.update(xnorm)
@@ -193,7 +197,10 @@ class test_single_data_generator(Dataset):
             if self.X_norm['type'] == 'div':
                 img, xnorm = norm_range01(img, dtype=self.dtype)
             elif self.X_norm['type'] == 'custom':
-                img = normalize(img, self.X_norm['mean'], self.X_norm['std'], out_type=self.dtype_str)
+                if self.X_norm['mode'] == "image":
+                    img = normalize(img, img.mean(), img.std(), out_type=self.dtype_str)
+                else:
+                    img = normalize(img, self.X_norm['mean'], self.X_norm['std'], out_type=self.dtype_str)
             
         img = np.expand_dims(img, 0).astype(self.dtype)
 

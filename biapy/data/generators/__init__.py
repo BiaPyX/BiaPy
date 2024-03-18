@@ -59,7 +59,7 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
                               save_dir=cfg.PATHS.PROB_MAP_DIR)
 
     # Normalization checks
-    custom_mean, custom_std = None, None
+    custom_mean, custom_std, custom_mode = None, None, None
     if cfg.DATA.NORMALIZATION.TYPE == 'custom':
         if cfg.DATA.NORMALIZATION.CUSTOM_MEAN == -1 and cfg.DATA.NORMALIZATION.CUSTOM_STD == -1:
             print("Train/Val normalization: trying to load mean and std from {}".format(cfg.PATHS.MEAN_INFO_FILE))
@@ -78,6 +78,7 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
         else:
             custom_mean = cfg.DATA.NORMALIZATION.CUSTOM_MEAN
             custom_std = cfg.DATA.NORMALIZATION.CUSTOM_STD
+        custom_mode = cfg.DATA.NORMALIZATION.CUSTOM_MODE
         print("Train/Val normalization: using mean {} and std: {}".format(custom_mean, custom_std))
 
     if cfg.PROBLEM.NDIM == '2D':
@@ -119,7 +120,8 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
             motb_k_range=cfg.AUGMENTOR.MOTB_K_RANGE, gamma_contrast=cfg.AUGMENTOR.GAMMA_CONTRAST,
             gc_gamma=cfg.AUGMENTOR.GC_GAMMA, dropout=cfg.AUGMENTOR.DROPOUT, drop_range=cfg.AUGMENTOR.DROP_RANGE,
             resize_shape=r_shape, not_normalize=not_normalize, norm_type=cfg.DATA.NORMALIZATION.TYPE, 
-            norm_custom_mean=custom_mean, norm_custom_std=custom_std, convert_to_rgb=cfg.DATA.FORCE_RGB)
+            norm_custom_mean=custom_mean, norm_custom_std=custom_std, norm_custom_mode=custom_mode, 
+            convert_to_rgb=cfg.DATA.FORCE_RGB)
     else:
         dic = dict(ndim=ndim, X=X_train, Y=Y_train, seed=cfg.SYSTEM.SEED, in_memory=cfg.DATA.TRAIN.IN_MEMORY, 
             data_paths=data_paths, da=cfg.AUGMENTOR.ENABLE,
@@ -159,7 +161,7 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
             shape=cfg.DATA.PATCH_SIZE, resolution=cfg.DATA.TRAIN.RESOLUTION, random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, 
             prob_map=prob_map, n_classes=cfg.MODEL.N_CLASSES, extra_data_factor=cfg.DATA.TRAIN.REPLICATE, 
             not_normalize=not_normalize, norm_type=cfg.DATA.NORMALIZATION.TYPE, norm_custom_mean=custom_mean, 
-            norm_custom_std=custom_std, random_crop_scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
+            norm_custom_std=custom_std,  norm_custom_mode=custom_mode, random_crop_scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
             convert_to_rgb=cfg.DATA.FORCE_RGB)
 
         if cfg.PROBLEM.NDIM == '3D':
@@ -187,7 +189,7 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
         ptype = "classification" if cfg.PROBLEM.TYPE == 'CLASSIFICATION' else "mae"
         val_generator = f_name(ndim=ndim, X=X_val, Y=Y_val, data_path=cfg.DATA.VAL.PATH, ptype=ptype, n_classes=cfg.MODEL.N_CLASSES, 
             in_memory=mem, seed=cfg.SYSTEM.SEED, da=False, resize_shape=r_shape, not_normalize=not_normalize,
-            norm_custom_mean=custom_mean, norm_custom_std=custom_std)
+            norm_custom_mean=custom_mean, norm_custom_std=custom_std, norm_custom_mode=custom_mode)
     else:
         if cfg.PROBLEM.TYPE != 'DENOISING':
             data_paths = [cfg.DATA.TRAIN.PATH, cfg.DATA.TRAIN.GT_PATH] 
@@ -196,7 +198,8 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
         dic = dict(ndim=ndim, X=X_val, Y=Y_val, in_memory=mem, data_paths=data_paths, da=False, shape=cfg.DATA.PATCH_SIZE,
             random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, val=True, n_classes=cfg.MODEL.N_CLASSES, 
             seed=cfg.SYSTEM.SEED, not_normalize=not_normalize, norm_type=cfg.DATA.NORMALIZATION.TYPE, norm_custom_mean=custom_mean, 
-            norm_custom_std=custom_std, resolution=cfg.DATA.VAL.RESOLUTION, random_crop_scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING)
+            norm_custom_std=custom_std, norm_custom_mode=custom_mode, resolution=cfg.DATA.VAL.RESOLUTION, 
+            random_crop_scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING)
         if cfg.PROBLEM.TYPE == 'INSTANCE_SEG': 
             dic['instance_problem'] = True
         elif cfg.PROBLEM.TYPE in ['SELF_SUPERVISED', 'SUPER_RESOLUTION', "IMAGE_TO_IMAGE"]:
@@ -276,7 +279,7 @@ def create_test_augmentor(cfg, X_test, Y_test, cross_val_samples_ids):
     test_generator : test_pair_data_generator
         Test data generator.
     """
-    custom_mean, custom_std = None, None
+    custom_mean, custom_std, custom_mode = None, None, None
     if cfg.DATA.NORMALIZATION.TYPE == 'custom':
         if cfg.DATA.NORMALIZATION.CUSTOM_MEAN == -1 and cfg.DATA.NORMALIZATION.CUSTOM_STD == -1:
             print("Test normalization: trying to load mean and std from {}".format(cfg.PATHS.MEAN_INFO_FILE))
@@ -289,10 +292,11 @@ def create_test_augmentor(cfg, X_test, Y_test, cross_val_samples_ids):
         else:
             custom_mean = cfg.DATA.NORMALIZATION.CUSTOM_MEAN
             custom_std = cfg.DATA.NORMALIZATION.CUSTOM_STD
+        custom_mode = cfg.DATA.NORMALIZATION.CUSTOM_MODE
         print("Test normalization: using mean {} and std: {}".format(custom_mean, custom_std))
 
     instance_problem = True if cfg.PROBLEM.TYPE == 'INSTANCE_SEG' else False
-    normalizeY='as_mask'
+    normalizeY = 'as_mask'
     if cfg.PROBLEM.TYPE in ['SELF_SUPERVISED']:
         provide_Y=False
     else:
@@ -305,8 +309,8 @@ def create_test_augmentor(cfg, X_test, Y_test, cross_val_samples_ids):
     dic = dict(ndim=ndim, X=X_test, d_path=cfg.DATA.TEST.PATH if cross_val_samples_ids is None else cfg.DATA.TRAIN.PATH, 
         test_by_chunks=cfg.TEST.BY_CHUNKS.ENABLE, provide_Y=provide_Y, Y=Y_test, dm_path=cfg.DATA.TEST.GT_PATH if cross_val_samples_ids is None else cfg.DATA.TRAIN.GT_PATH,
         seed=cfg.SYSTEM.SEED, instance_problem=instance_problem, norm_type=cfg.DATA.NORMALIZATION.TYPE, not_normalize=not_normalize,
-        norm_custom_mean=custom_mean, norm_custom_std=custom_std, reduce_mem=cfg.TEST.REDUCE_MEMORY, sample_ids=cross_val_samples_ids,
-        convert_to_rgb=cfg.DATA.FORCE_RGB)        
+        norm_custom_mean=custom_mean, norm_custom_std=custom_std, norm_custom_mode=custom_mode, reduce_mem=cfg.TEST.REDUCE_MEMORY, 
+        sample_ids=cross_val_samples_ids, convert_to_rgb=cfg.DATA.FORCE_RGB)        
         
     if cfg.PROBLEM.TYPE in ['CLASSIFICATION', 'SELF_SUPERVISED']:
         gen_name = test_single_data_generator 

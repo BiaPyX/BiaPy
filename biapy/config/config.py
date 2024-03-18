@@ -183,9 +183,12 @@ class Config:
         #   'custom' to use DATA.NORMALIZATION.CUSTOM_MEAN and DATA.NORMALIZATION.CUSTOM_STD to normalize
         #   '' if no normalization to be applied 
         _C.DATA.NORMALIZATION.TYPE = 'div'
+        # Whether to apply the normalization by sample or with all dataset statistics
+        _C.DATA.NORMALIZATION.CUSTOM_MODE = "image"
         _C.DATA.NORMALIZATION.CUSTOM_MEAN = -1.0
         _C.DATA.NORMALIZATION.CUSTOM_STD = -1.0
         
+
         # If 'DATA.PATCH_SIZE' selected has 3 channels, e.g. RGB images are expected, so will force grayscale images to be
         # converted into RGB (e.g. in ImageNet some of the images are grayscale)
         _C.DATA.FORCE_RGB = False

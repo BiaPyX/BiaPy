@@ -154,6 +154,9 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
     norm_custom_std : float, optional
         Std of the data used to normalize.
 
+    norm_custom_mode :  str, optional
+        Whether to apply the normalization by sample or with all dataset statistics. Options: ``'image'`` or ``'dataset'``.
+        
     convert_to_rgb : bool, optional
         In case RGB images are expected, e.g. if ``crop_shape`` channel is 3, those images that are grayscale are 
         converted into RGB.
@@ -164,7 +167,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
                  e_sigma=25, e_mode='constant', g_blur=False, g_sigma=(1.0,2.0), median_blur=False, mb_kernel=(3,7), 
                  motion_blur=False, motb_k_range=(3,8), gamma_contrast=False, gc_gamma=(1.25,1.75), dropout=False, 
                  drop_range=(0, 0.2), val=False, resize_shape=None, not_normalize=False, norm_type='div', norm_custom_mean=None, 
-                 norm_custom_std=None, convert_to_rgb=False):
+                 norm_custom_std=None, norm_custom_mode=None, convert_to_rgb=False):
 
         if in_memory:
             if X.ndim != (ndim+2):
@@ -267,7 +270,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
                         self.X_norm['mean'] = np.mean(self.X)
                         self.X_norm['std'] = np.std(self.X)    
                         self.X_norm['orig_dtype'] = img.dtype
-                        
+                self.X_norm['mode'] = norm_custom_mode        
                 self.X_norm['type'] = 'custom'
             else:                
                 img, _ = self.load_sample(0)
@@ -395,7 +398,10 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
             if self.X_norm['type'] == 'div':
                 img, _ = norm_range01(img)
             elif self.X_norm['type'] == 'custom':
-                img = normalize(img, self.X_norm['mean'], self.X_norm['std'])
+                if self.X_norm['mode'] == "image":
+                    img = normalize(img, img.mean(), img.std())
+                else:
+                    img = normalize(img, self.X_norm['mean'], self.X_norm['std'])
 
         img = self.ensure_shape(img)
 

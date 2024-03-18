@@ -355,6 +355,9 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
     norm_custom_std : float, optional
         Std of the data used to normalize.
     
+    norm_custom_mode :  str, optional
+        Whether to apply the normalization by sample or with all dataset statistics. Options: ``'image'`` or ``'dataset'``.
+
     normalizeY : str, optional
         Whether Y is going to be normalized or not. Options: ``as_mask``, ``as_image``. With ``as_image`` the image will be 
         treated as another image and not as a mask (for normalization and interpolation).
@@ -388,8 +391,8 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                  random_crops_in_DA=False, shape=(256,256,1), resolution=(-1,), prob_map=None, val=False, n_classes=1, 
                  extra_data_factor=1, n2v=False, n2v_perc_pix=0.198, n2v_manipulator='uniform_withCP', 
                  n2v_neighborhood_radius=5, n2v_structMask=np.array([[0,1,1,1,1,1,1,1,1,1,0]]), not_normalize=False,
-                 norm_type='div', norm_custom_mean=None, norm_custom_std=None, normalizeY='as_mask', instance_problem=False, 
-                 random_crop_scale=(1,1), convert_to_rgb=False):
+                 norm_type='div', norm_custom_mean=None, norm_custom_std=None, norm_custom_mode=None, normalizeY='as_mask', 
+                 instance_problem=False, random_crop_scale=(1,1), convert_to_rgb=False):
 
         self.ndim = ndim
         self.z_size = -1 
@@ -519,7 +522,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                         self.X_norm['mean'] = np.mean(self.X)
                         self.X_norm['std'] = np.std(self.X)    
                         self.X_norm['orig_dtype'] = img.dtype
-
+                self.X_norm['mode'] = norm_custom_mode
                 self.X_norm['type'] = 'custom'
             else:       
                 img, _ = self.load_sample(0)
@@ -842,7 +845,10 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             if self.X_norm['type'] == 'div':
                 img, _ = norm_range01(img)
             elif self.X_norm['type'] == 'custom':
-                img = normalize(img, self.X_norm['mean'], self.X_norm['std'])
+                if self.X_norm['mode'] == "image":
+                    img = normalize(img, img.mean(), img.std())
+                else:
+                    img = normalize(img, self.X_norm['mean'], self.X_norm['std'])
         return img 
 
     def norm_Y(self, mask):   
@@ -870,7 +876,10 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 if self.X_norm['type'] == 'div':
                     mask, _ = norm_range01(mask)
                 elif self.X_norm['type'] == 'custom':
-                    mask = normalize(mask, self.X_norm['mean'], self.X_norm['std'])
+                    if self.X_norm['mode'] == "image":
+                        mask = normalize(mask, mask.mean(), mask.std())
+                    else:
+                        mask = normalize(mask, self.X_norm['mean'], self.X_norm['std'])
         return mask 
 
     def getitem(self, index):

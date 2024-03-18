@@ -388,7 +388,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     if not cfg.DATA.TRAIN.IN_MEMORY and cfg.DATA.PREPROCESS.TRAIN:
         raise ValueError('To use preprocessing DATA.TRAIN.IN_MEMORY needs to be True.')
     if not cfg.DATA.VAL.IN_MEMORY and cfg.DATA.PREPROCESS.VAL:
-        raise ValueError('To use preprocessing DATA.VAL.IN_MEMORY needs to be True.')
+        if cfg.DATA.VAL.FROM_TRAIN:
+            print("WARNING: validation preprocessing will be done based on 'DATA.PREPROCESS.TRAIN', as 'DATA.VAL.FROM_TRAIN' is selected")
+        else:
+            raise ValueError('To use preprocessing DATA.VAL.IN_MEMORY needs to be True.')
     if not cfg.DATA.TEST.IN_MEMORY and cfg.DATA.PREPROCESS.TEST:
         raise ValueError('To use preprocessing DATA.TEST.IN_MEMORY needs to be True.')
     
@@ -515,6 +518,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 if not cfg.DATA.TRAIN.IN_MEMORY:
                     raise ValueError("If no 'DATA.NORMALIZATION.CUSTOM_MEAN' and 'DATA.NORMALIZATION.CUSTOM_STD' were provided "
                         "when DATA.NORMALIZATION.TYPE == 'custom', DATA.TRAIN.IN_MEMORY needs to be True")
+        assert cfg.DATA.NORMALIZATION.CUSTOM_MODE in ["image", "dataset"], "'DATA.NORMALIZATION.CUSTOM_MODE' needs to be one between ['image', 'dataset']"
 
     ### Model ###
     if cfg.MODEL.SOURCE == "biapy":
