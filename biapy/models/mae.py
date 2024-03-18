@@ -265,10 +265,10 @@ class MaskedAutoencoderViT(nn.Module):
         """
         N, L, D = x.shape  # batch, length, dim
 
-        mask = torch.ones([N, L], device=x.device)
+        mask = torch.zeros([N, L], device=x.device)
         ids_restore = torch.argsort(mask, dim=1)
-        mask[:,::2] = 0
-        
+        mask[::2,::2] = 1
+        mask[1::2,1::2] = 1
         ids_keep = torch.argsort(mask, dim=1)[:,:L//2]
         x_masked = torch.gather(x, dim=1, index=ids_keep.unsqueeze(-1).repeat(1, 1, D))
 
