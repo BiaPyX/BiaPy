@@ -156,7 +156,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
     norm_custom_mode :  str, optional
         Whether to apply the normalization by sample or with all dataset statistics. Options: ``'image'`` or ``'dataset'``.
-        
+
     convert_to_rgb : bool, optional
         In case RGB images are expected, e.g. if ``crop_shape`` channel is 3, those images that are grayscale are 
         converted into RGB.
@@ -244,7 +244,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         if self.not_normalize:
             img, _ = self.load_sample(0)
         else:
-            if norm_type == 'custom':
+            if norm_type == 'custom' and norm_custom_mode == "dataset":
                 if norm_custom_mean is not None and norm_custom_std is not None:
                     img, _ = self.load_sample(0)
                     self.X_norm['mean'] = norm_custom_mean
@@ -271,6 +271,10 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
                         self.X_norm['std'] = np.std(self.X)    
                         self.X_norm['orig_dtype'] = img.dtype
                 self.X_norm['mode'] = norm_custom_mode        
+                self.X_norm['type'] = 'custom'
+            elif norm_type == "custom" and norm_custom_mode == "image":
+                img, _ = self.load_sample(0)
+                self.X_norm['mode'] = norm_custom_mode
                 self.X_norm['type'] = 'custom'
             else:                
                 img, _ = self.load_sample(0)

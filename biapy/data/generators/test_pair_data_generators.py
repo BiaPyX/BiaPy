@@ -133,7 +133,7 @@ class test_pair_data_generator(Dataset):
         if provide_Y:
             self.Y_norm = {}
             self.Y_norm['type'] = 'div'
-        img, mask, xnorm = self.load_sample(0)
+        img, mask, xnorm, _ = self.load_sample(0)
 
         if norm_type == 'custom' and not not_normalize:
             if norm_custom_mean is not None and norm_custom_std is not None:
@@ -177,6 +177,9 @@ class test_pair_data_generator(Dataset):
                 img, xnorm = norm_range01(img, dtype=self.dtype)
             elif self.X_norm['type'] == 'custom':
                 if self.X_norm['mode'] == "image":
+                    xnorm = {}
+                    xnorm['mean'] = img.mean()
+                    xnorm['std'] = img.std()
                     img = normalize(img, img.mean(), img.std(), out_type=self.dtype_str)
                 else:
                     img = normalize(img, self.X_norm['mean'], self.X_norm['std'], out_type=self.dtype_str)
@@ -209,6 +212,9 @@ class test_pair_data_generator(Dataset):
                 mask, ynorm = norm_range01(mask, dtype=self.dtype)
             elif self.X_norm['type'] == 'custom':
                 if self.X_norm['mode'] == "image":
+                    ynorm = {}
+                    ynorm['mean'] = mask.mean()
+                    ynorm['std'] = mask.std()
                     mask = normalize(mask, mask.mean(), mask.std(), out_type=self.dtype_str)
                 else:
                     mask = normalize(mask, self.X_norm['mean'], self.X_norm['std'], out_type=self.dtype_str)
@@ -216,7 +222,7 @@ class test_pair_data_generator(Dataset):
 
     def load_sample(self, idx):
         """Load one data sample given its corresponding index."""
-        mask = None
+        mask, ynorm = None, None
         # Choose the data source
         if self.X is None:
             if self.data_path[idx].endswith('.npy'):
@@ -292,7 +298,7 @@ class test_pair_data_generator(Dataset):
             # Normalization
             img, xnorm = self.norm_X(img)
             if self.provide_Y:
-                mask, _ = self.norm_Y(mask)
+                mask, ynorm = self.norm_Y(mask)
 
             img = np.expand_dims(img, 0).astype(self.dtype)
             if self.provide_Y:
@@ -303,7 +309,7 @@ class test_pair_data_generator(Dataset):
         if self.convert_to_rgb and img.shape[-1] == 1:
             img = np.repeat(img, 3, axis=-1)
             
-        return img, mask, xnorm
+        return img, mask, xnorm, ynorm
 
 
     def __len__(self):
@@ -329,15 +335,17 @@ class test_pair_data_generator(Dataset):
                Y element, for instance, a mask. E.g. ``(z, y, x, channels)`` if ``2D`` or 
                ``(y, x, channels)`` if ``3D``.
         """
-        img, mask, norm = self.load_sample(index)
+        img, mask, xnorm, ynorm = self.load_sample(index)
         
-        if norm is not None:
-            self.X_norm.update(norm)
-                    
+        if xnorm is not None:
+            self.X_norm.update(xnorm)
+        if ynorm is not None:
+            self.Y_norm.update(ynorm)
+
         if self.provide_Y:
             return img, self.X_norm, mask, self.Y_norm
         else:
             return img, self.X_norm
 
     def get_data_normalization(self):
-        return self.X_norm
+        return self.X_norm, self.Y_norm

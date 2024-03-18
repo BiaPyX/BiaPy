@@ -61,23 +61,24 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
     # Normalization checks
     custom_mean, custom_std, custom_mode = None, None, None
     if cfg.DATA.NORMALIZATION.TYPE == 'custom':
-        if cfg.DATA.NORMALIZATION.CUSTOM_MEAN == -1 and cfg.DATA.NORMALIZATION.CUSTOM_STD == -1:
-            print("Train/Val normalization: trying to load mean and std from {}".format(cfg.PATHS.MEAN_INFO_FILE))
-            print("Train/Val normalization: trying to load std from {}".format(cfg.PATHS.STD_INFO_FILE))
-            if not os.path.exists(cfg.PATHS.MEAN_INFO_FILE) or not os.path.exists(cfg.PATHS.STD_INFO_FILE):
-                print("Train/Val normalization: mean and/or std files not found. Calculating it for the first time")
-                custom_mean = np.mean(X_train)
-                custom_std = np.std(X_train)
-                os.makedirs(os.path.dirname(cfg.PATHS.MEAN_INFO_FILE), exist_ok=True)
-                np.save(cfg.PATHS.MEAN_INFO_FILE, custom_mean)
-                np.save(cfg.PATHS.STD_INFO_FILE, custom_std)
+        if cfg.DATA.NORMALIZATION.CUSTOM_MODE == "dataset":
+            if cfg.DATA.NORMALIZATION.CUSTOM_MEAN == -1 and cfg.DATA.NORMALIZATION.CUSTOM_STD == -1:
+                print("Train/Val normalization: trying to load mean and std from {}".format(cfg.PATHS.MEAN_INFO_FILE))
+                print("Train/Val normalization: trying to load std from {}".format(cfg.PATHS.STD_INFO_FILE))
+                if not os.path.exists(cfg.PATHS.MEAN_INFO_FILE) or not os.path.exists(cfg.PATHS.STD_INFO_FILE):
+                    print("Train/Val normalization: mean and/or std files not found. Calculating it for the first time")
+                    custom_mean = np.mean(X_train)
+                    custom_std = np.std(X_train)
+                    os.makedirs(os.path.dirname(cfg.PATHS.MEAN_INFO_FILE), exist_ok=True)
+                    np.save(cfg.PATHS.MEAN_INFO_FILE, custom_mean)
+                    np.save(cfg.PATHS.STD_INFO_FILE, custom_std)
+                else:
+                    custom_mean = float(np.load(cfg.PATHS.MEAN_INFO_FILE))
+                    custom_std = float(np.load(cfg.PATHS.STD_INFO_FILE))
+                    print("Train/Val normalization values loaded!")
             else:
-                custom_mean = float(np.load(cfg.PATHS.MEAN_INFO_FILE))
-                custom_std = float(np.load(cfg.PATHS.STD_INFO_FILE))
-                print("Train/Val normalization values loaded!")
-        else:
-            custom_mean = cfg.DATA.NORMALIZATION.CUSTOM_MEAN
-            custom_std = cfg.DATA.NORMALIZATION.CUSTOM_STD
+                custom_mean = cfg.DATA.NORMALIZATION.CUSTOM_MEAN
+                custom_std = cfg.DATA.NORMALIZATION.CUSTOM_STD
         custom_mode = cfg.DATA.NORMALIZATION.CUSTOM_MODE
         print("Train/Val normalization: using mean {} and std: {}".format(custom_mean, custom_std))
 
@@ -281,17 +282,18 @@ def create_test_augmentor(cfg, X_test, Y_test, cross_val_samples_ids):
     """
     custom_mean, custom_std, custom_mode = None, None, None
     if cfg.DATA.NORMALIZATION.TYPE == 'custom':
-        if cfg.DATA.NORMALIZATION.CUSTOM_MEAN == -1 and cfg.DATA.NORMALIZATION.CUSTOM_STD == -1:
-            print("Test normalization: trying to load mean and std from {}".format(cfg.PATHS.MEAN_INFO_FILE))
-            print("Test normalization: trying to load std from {}".format(cfg.PATHS.STD_INFO_FILE))
-            if not os.path.exists(cfg.PATHS.MEAN_INFO_FILE) or not os.path.exists(cfg.PATHS.STD_INFO_FILE):
-                raise FileNotFoundError("Not mean/std files found in {} and {}"
-                    .format(cfg.PATHS.MEAN_INFO_FILE, cfg.PATHS.STD_INFO_FILE))
-            custom_mean = float(np.load(cfg.PATHS.MEAN_INFO_FILE))
-            custom_std = float(np.load(cfg.PATHS.STD_INFO_FILE))
-        else:
-            custom_mean = cfg.DATA.NORMALIZATION.CUSTOM_MEAN
-            custom_std = cfg.DATA.NORMALIZATION.CUSTOM_STD
+        if cfg.DATA.NORMALIZATION.CUSTOM_MODE == "dataset":
+            if cfg.DATA.NORMALIZATION.CUSTOM_MEAN == -1 and cfg.DATA.NORMALIZATION.CUSTOM_STD == -1:
+                print("Test normalization: trying to load mean and std from {}".format(cfg.PATHS.MEAN_INFO_FILE))
+                print("Test normalization: trying to load std from {}".format(cfg.PATHS.STD_INFO_FILE))
+                if not os.path.exists(cfg.PATHS.MEAN_INFO_FILE) or not os.path.exists(cfg.PATHS.STD_INFO_FILE):
+                    raise FileNotFoundError("Not mean/std files found in {} and {}"
+                        .format(cfg.PATHS.MEAN_INFO_FILE, cfg.PATHS.STD_INFO_FILE))
+                custom_mean = float(np.load(cfg.PATHS.MEAN_INFO_FILE))
+                custom_std = float(np.load(cfg.PATHS.STD_INFO_FILE))
+            else:
+                custom_mean = cfg.DATA.NORMALIZATION.CUSTOM_MEAN
+                custom_std = cfg.DATA.NORMALIZATION.CUSTOM_STD
         custom_mode = cfg.DATA.NORMALIZATION.CUSTOM_MODE
         print("Test normalization: using mean {} and std: {}".format(custom_mean, custom_std))
 

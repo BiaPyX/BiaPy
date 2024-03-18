@@ -7,7 +7,7 @@ from torchmetrics.image import PeakSignalNoiseRatio
 from tqdm import tqdm
 
 from biapy.engine.base_workflow import Base_Workflow
-from biapy.utils.util import save_tif, check_masks
+from biapy.utils.util import save_tif, check_masks, pad_and_reflect
 from biapy.utils.misc import to_pytorch_format, to_numpy_format
 from biapy.data.pre_processing import norm_range01, undo_norm_range01, denormalize
 from biapy.data.post_processing.post_processing import ensemble8_2d_predictions, ensemble16_3d_predictions
@@ -98,6 +98,13 @@ class Image_to_Image_Workflow(Base_Workflow):
         """
         original_data_shape = self._X.shape
     
+        # Reflect data to complete the needed shape
+        if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE:
+            reflected_orig_shape = self._X.shape
+            self._X = np.expand_dims(pad_and_reflect(self._X[0], self.cfg.DATA.PATCH_SIZE, verbose=self.cfg.TEST.VERBOSE),0)
+            if self.cfg.DATA.TEST.LOAD_GT:
+                self._Y = np.expand_dims(pad_and_reflect(self._Y[0], self.cfg.DATA.PATCH_SIZE, verbose=self.cfg.TEST.VERBOSE),0)
+
         # Crop if necessary
         if self._X.shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
             if self.cfg.PROBLEM.NDIM == '2D':
@@ -177,6 +184,16 @@ class Image_to_Image_Workflow(Base_Workflow):
         else:
             pred = pred[0]
 
+        if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE: 
+            if self.cfg.PROBLEM.NDIM == '2D':
+                pred = pred[-reflected_orig_shape[1]:,-reflected_orig_shape[2]:]
+                if self._Y is not None:
+                    self._Y = self._Y[-reflected_orig_shape[1]:,-reflected_orig_shape[2]:]
+            else:
+                pred = pred[-reflected_orig_shape[1]:,-reflected_orig_shape[2]:,-reflected_orig_shape[3]:]
+                if self._Y is not None:
+                    self._Y = self._Y[-reflected_orig_shape[1]:,-reflected_orig_shape[2]:,-reflected_orig_shape[3]:]
+
         # Undo normalization
         x_norm = norm[0]
         if x_norm['type'] == 'div':
@@ -197,9 +214,9 @@ class Image_to_Image_Workflow(Base_Workflow):
                 verbose=self.cfg.TEST.VERBOSE)
 
         # Calculate PSNR
-        if pred.dtype == np.dtype('uint16'):
-            pred = pred.astype(np.float32)
         if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
+            if pred.dtype == np.dtype('uint16'):
+                pred = pred.astype(np.float32)
             if self._Y.dtype == np.dtype('uint16'):
                 self._Y = self._Y.astype(np.float32)
             psnr_merge_patches = self.metrics[0](torch.from_numpy(pred), torch.from_numpy(self._Y))
@@ -276,7 +293,7 @@ class Image_to_Image_Workflow(Base_Workflow):
         image_counter : int
             Number of images to average the metrics.
         """
-        pass
+        self.stats['psnr_merge_patches'] = self.stats['psnr_merge_patches'] / image_counter
 
     def print_stats(self, image_counter):
         """
@@ -288,6 +305,10 @@ class Image_to_Image_Workflow(Base_Workflow):
             Number of images to call ``normalize_stats``.
         """
         self.normalize_stats(image_counter)
+
+        if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
+            print("Test PSNR (merge patches): {}".format(self.stats['psnr_merge_patches']))
+            print(" ")
 
 
         

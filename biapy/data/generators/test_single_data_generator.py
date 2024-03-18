@@ -198,6 +198,9 @@ class test_single_data_generator(Dataset):
                 img, xnorm = norm_range01(img, dtype=self.dtype)
             elif self.X_norm['type'] == 'custom':
                 if self.X_norm['mode'] == "image":
+                    xnorm = {}
+                    xnorm['mean'] = img.mean()
+                    xnorm['std'] = img.std()
                     img = normalize(img, img.mean(), img.std(), out_type=self.dtype_str)
                 else:
                     img = normalize(img, self.X_norm['mean'], self.X_norm['std'], out_type=self.dtype_str)
