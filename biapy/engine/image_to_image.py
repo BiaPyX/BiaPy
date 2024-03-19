@@ -104,6 +104,8 @@ class Image_to_Image_Workflow(Base_Workflow):
             self._X = np.expand_dims(pad_and_reflect(self._X[0], self.cfg.DATA.PATCH_SIZE, verbose=self.cfg.TEST.VERBOSE),0)
             if self.cfg.DATA.TEST.LOAD_GT:
                 self._Y = np.expand_dims(pad_and_reflect(self._Y[0], self.cfg.DATA.PATCH_SIZE, verbose=self.cfg.TEST.VERBOSE),0)
+        
+        original_data_shape = self._X.shape
 
         # Crop if necessary
         if self._X.shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
