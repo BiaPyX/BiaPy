@@ -515,7 +515,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     if cfg.DATA.NORMALIZATION.TYPE == 'custom':
         if cfg.DATA.NORMALIZATION.CUSTOM_MEAN == -1 and cfg.DATA.NORMALIZATION.CUSTOM_STD == -1:
             if not os.path.exists(cfg.PATHS.MEAN_INFO_FILE) or not os.path.exists(cfg.PATHS.STD_INFO_FILE):
-                if not cfg.DATA.TRAIN.IN_MEMORY:
+                if not cfg.DATA.TRAIN.IN_MEMORY and cfg.DATA.NORMALIZATION.CUSTOM_MODE == "dataset":
                     raise ValueError("If no 'DATA.NORMALIZATION.CUSTOM_MEAN' and 'DATA.NORMALIZATION.CUSTOM_STD' were provided "
                         "when DATA.NORMALIZATION.TYPE == 'custom', DATA.TRAIN.IN_MEMORY needs to be True")
         assert cfg.DATA.NORMALIZATION.CUSTOM_MODE in ["image", "dataset"], "'DATA.NORMALIZATION.CUSTOM_MODE' needs to be one between ['image', 'dataset']"

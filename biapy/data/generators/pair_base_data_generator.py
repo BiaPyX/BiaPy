@@ -549,14 +549,15 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         # Y data analysis
         if self.Y_provided:
-            # Loop over a few masks to ensure foreground class is present to decide normalization
-            n_samples = len(self.data_mask_path) if not in_memory else len(self.Y)
             self.channels_to_analize = -1
-            analized = False
-            print("Checking which channel of the mask needs normalization . . .")
-            for i in range(n_samples):
-                _, mask = self.load_sample(i)
-                if self.normalizeY == 'as_mask':
+            
+            # Loop over a few masks to ensure foreground class is present to decide normalization
+            if self.normalizeY == 'as_mask':
+                print("Checking which channel of the mask needs normalization . . .")
+                n_samples = len(self.data_mask_path) if not in_memory else len(self.Y)
+                analized = False
+                for i in range(n_samples):
+                    _, mask = self.load_sample(i)
                     # Store which channels are binary or not (e.g. distance transform channel is not binary)
                     if not analized:
                         if n_classes > 2 and instance_problem:
@@ -581,6 +582,8 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                         else: # In semantic seg, maybe the mask are in 255
                             if np.max(mask[...,j]) > n_classes:
                                 self.channel_info[j]['div'] = True
+
+            _, mask = self.load_sample(0)
 
             if self.channels_to_analize == -1: 
                 self.channels_to_analize = mask.shape[-1]  

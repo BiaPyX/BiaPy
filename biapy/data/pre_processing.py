@@ -915,9 +915,15 @@ def normalize(data, means, stds, out_type="float32"):
         "complex128" : [torch.complex128, np.complex128],
     }
     if torch.is_tensor(data):
-        return ((data - means) / stds).to(numpy_torch_dtype_dict[out_type][0])
+        if stds == 0:
+            return data.to(numpy_torch_dtype_dict[out_type][0])
+        else:
+            return ((data - means) / stds).to(numpy_torch_dtype_dict[out_type][0])
     else:
-        return ((data - means) / stds).astype(numpy_torch_dtype_dict[out_type][1])
+        if stds == 0:
+            return data.astype(numpy_torch_dtype_dict[out_type][1])
+        else:
+            return ((data - means) / stds).astype(numpy_torch_dtype_dict[out_type][1])
 
 def denormalize(data, means, stds, out_type="float32"):
     numpy_torch_dtype_dict = {
