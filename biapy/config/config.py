@@ -47,7 +47,7 @@ class Config:
 
         ### INSTANCE_SEG
         _C.PROBLEM.INSTANCE_SEG = CN()
-        # Possible options: 'C', 'BC', 'BP', 'BD', 'BCM', 'BCD', 'BCDv2', 'Dv2' and 'BDv2'. This variable determines the channels to be created 
+        # Possible options: 'C', 'BC', 'BP', 'BD', 'BCM', 'BCD', 'BCDv2', 'Dv2', 'BDv2' and 'A'. This variable determines the channels to be created 
         # based on input instance masks. These option are composed from these individual options:
         #   - 'B' stands for 'Binary segmentation', containing each instance region without the contour. 
         #   - 'C' stands for 'Contour', containing each instance contour. 
@@ -56,6 +56,7 @@ class Config:
         #     Is simply achieved by binarizing input instance masks. 
         #   - 'Dv2' stands for 'Distance V2', which is an updated version of 'D' channel calculating background distance as well.
         #   - 'P' stands for 'Points' and contains the central points of an instance (as in Detection workflow) 
+        #   - 'A' stands for 'Affinities" and contains the affinity values for each dimension.
         _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS = 'BC'
         # Whether to mask the distance channel to only calculate the loss in those regions where the binary mask
         # defined by B channel is present
@@ -808,6 +809,8 @@ class Config:
         _C.TEST.VERBOSE = True
         # Make test-time augmentation. Infer over 8 possible rotations for 2D img and 16 when 3D
         _C.TEST.AUGMENTATION = False
+        # Select test-time augmentation mode. Options: "mean" (default), "min", "max".
+        _C.TEST.AUGMENTATION_MODE = "mean"
         # Whether to evaluate or not
         _C.TEST.EVALUATE = True
         # Stack 2D images into a 3D image and then process it entirely instead of going image per image

@@ -208,7 +208,7 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
         Binary foreground labels and contours data to apply watershed into. E.g. ``(397, 1450, 2000, 2)``.
 
     channels : str
-        Channel type used. Possible options: ``C``, ``BC``, ``BCM``, ``BCD``, ``BCDv2``, ``Dv2`` and ``BDv2``.
+        Channel type used. Possible options: ``A``, ``C``, ``BC``, ``BCM``, ``BCD``, ``BCDv2``, ``Dv2`` and ``BDv2``.
 
     ths : float, optional
         Thresholds to be used on each channel. ``TH_BINARY_MASK`` used in the semantic mask to create watershed seeds;
@@ -257,7 +257,7 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
         Directory to save watershed output into.
     """
 
-    assert channels in ['C', 'BC', 'BCM', 'BCD', 'BCDv2', 'Dv2', 'BDv2', 'BP', 'BD']
+    assert channels in ['A', 'C', 'BC', 'BCM', 'BCD', 'BCDv2', 'Dv2', 'BDv2', 'BP', 'BD']
 
     def erode_seed_and_foreground():
         nonlocal seed_map
@@ -321,7 +321,24 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
         res = (1,)+resolution if len(resolution) == 2 else resolution
         #semantic = edt.edt(foreground, anisotropy=res, black_border=False, order='C')
         # use contour channel as input to watershed
-        semantic = -data[...,0]
+        semantic = data[...,0]
+        seed_map = label(seed_map, connectivity=1)
+    elif channels in ["A"]:
+        foreground_probs = (data[...,0]+data[...,1]+data[...,2])/3.0 if data.ndim == 4 else (data[...,0]+data[...,1])/2.0
+        
+        if ths['TYPE'] == "auto":
+            ths['TH_BINARY_MASK'] = threshold_otsu(foreground_probs)
+            ths['TH_CONTOUR'] = threshold_otsu(1-foreground_probs)
+            ths['TH_FOREGROUND'] = ths['TH_BINARY_MASK']/2
+        seed_map = (foreground_probs > ths['TH_BINARY_MASK']) * (1-foreground_probs < ths['TH_CONTOUR'])
+        foreground = (foreground_probs > ths['TH_FOREGROUND'])
+        
+        if len(seed_morph_sequence) != 0 or erode_and_dilate_foreground:
+            erode_seed_and_foreground()
+        
+        res = (1,)+resolution if len(resolution) == 2 else resolution
+        # use contour channel as input to watershed
+        semantic = 1-foreground_probs
         seed_map = label(seed_map, connectivity=1)
     elif channels in ["BP"]:
         if ths['TYPE'] == "auto":
@@ -442,7 +459,7 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
     if save_dir is not None:
         save_tif(np.expand_dims(np.expand_dims(seed_map,-1),0).astype(segm.dtype), save_dir, ["seed_map.tif"], verbose=False)
         save_tif(np.expand_dims(np.expand_dims(semantic,-1),0).astype(np.float32), save_dir, ["semantic.tif"], verbose=False)
-        if channels in ["C", "BC", "BCM", "BCD", "BP"]:
+        if channels in ["A", "C", "BC", "BCM", "BCD", "BP"]:
             save_tif(np.expand_dims(np.expand_dims(foreground,-1),0).astype(np.uint8), save_dir, ["foreground.tif"], verbose=False)
     return segm
 
@@ -506,7 +523,7 @@ def calculate_z_filtering(data, mf_size=5):
 
     return out_data 
 
-def ensemble8_2d_predictions(o_img, pred_func, axis_order_back, axis_order, device, batch_size_value=1):
+def ensemble8_2d_predictions(o_img, pred_func, axis_order_back, axis_order, device, batch_size_value=1, mode='mean'):
     """
     Outputs the mean prediction of a given image generating its 8 possible rotations and flips.
 
@@ -530,6 +547,9 @@ def ensemble8_2d_predictions(o_img, pred_func, axis_order_back, axis_order, devi
     batch_size_value : int, optional
         Batch size value.
 
+    mode : str, optional
+        Ensemble mode. Possible options: "mean", "min", "max".
+
     Returns
     -------
     out : 3D Numpy array
@@ -549,6 +569,7 @@ def ensemble8_2d_predictions(o_img, pred_func, axis_order_back, axis_order, devi
                 pred_func=(lambda img_batch_subdiv: model(img_batch_subdiv)), n_classes=n_classes)
             out_X_test[i] = pred_ensembled
     """
+    assert mode in ["mean", "min", "max"], "Get unknown ensemble mode {}".format(mode)
 
     # Prepare all the image transformations per channel
     total_img = []
@@ -640,7 +661,12 @@ def ensemble8_2d_predictions(o_img, pred_func, axis_order_back, axis_order, devi
         else:
             out[i] = out_img[i,:,abs(pad_to_square):]
 
-    out = np.expand_dims(np.mean(out, axis=0),0)
+    funct = np.mean
+    if mode == "min":
+        funct = np.min
+    elif mode == "max":
+        funct = np.max
+    out = np.expand_dims(funct(out, axis=0),0)
     out = to_pytorch_format(out, axis_order, device)
 
     if channel_split is not None:
@@ -649,7 +675,7 @@ def ensemble8_2d_predictions(o_img, pred_func, axis_order_back, axis_order, devi
         return out
 
 
-def ensemble16_3d_predictions(vol, pred_func, axis_order_back, axis_order, device, batch_size_value=1):
+def ensemble16_3d_predictions(vol, pred_func, axis_order_back, axis_order, device, batch_size_value=1, mode="mean"):
     """
     Outputs the mean prediction of a given image generating its 16 possible rotations and flips.
 
@@ -673,6 +699,9 @@ def ensemble16_3d_predictions(vol, pred_func, axis_order_back, axis_order, devic
     batch_size_value : int, optional
         Batch size value.
 
+    mode : str, optional
+        Ensemble mode. Possible options: "mean", "min", "max".
+
     Returns
     -------
     out : 4D Numpy array
@@ -692,6 +721,7 @@ def ensemble16_3d_predictions(vol, pred_func, axis_order_back, axis_order, devic
                 pred_func=(lambda img_batch_subdiv: model(img_batch_subdiv)))
             out_X_test[i] = pred_ensembled
     """
+    assert mode in ["mean", "min", "max"], "Get unknown ensemble mode {}".format(mode)
 
     total_vol = []
     for channel in range(vol.shape[-1]):
@@ -806,8 +836,13 @@ def ensemble16_3d_predictions(vol, pred_func, axis_order_back, axis_order, devic
             out[i] = out_vols[i,:,:,abs(pad_to_square):,:]
         else:
             out[i] = out_vols[i,:,abs(pad_to_square):,:,:]
-
-    out = np.expand_dims(np.mean(out, axis=0),0)
+    
+    funct = np.mean
+    if mode == "min":
+        funct = np.min
+    elif mode == "max":
+        funct = np.max
+    out = np.expand_dims(funct(out, axis=0),0)
     out = to_pytorch_format(out, axis_order, device)
 
     if channel_split is not None:

@@ -487,7 +487,7 @@ class instance_segmentation_loss():
         if self.out_channels == "BC":
             loss = self.weights[0]*self.binary_channels_loss(_y_pred[:,0], y_true[:,0])+\
                    self.weights[1]*self.binary_channels_loss(_y_pred[:,1], y_true[:,1])
-        elif self.out_channels == "BCM":
+        elif self.out_channels in ["BCM"]:
             loss = self.weights[0]*self.binary_channels_loss(_y_pred[:,0], y_true[:,0])+\
                    self.weights[1]*self.binary_channels_loss(_y_pred[:,1], y_true[:,1])+\
                    self.weights[2]*self.binary_channels_loss(_y_pred[:,2], y_true[:,2])   
@@ -507,6 +507,10 @@ class instance_segmentation_loss():
                    self.weights[1]*self.binary_channels_loss(_y_pred[:,1], y_true[:,1])
         elif self.out_channels == "C":
             loss = self.binary_channels_loss(_y_pred, y_true)
+        elif self.out_channels in ["A"]:
+            loss = self.binary_channels_loss(_y_pred[:,0], y_true[:,0])+\
+                   self.binary_channels_loss(_y_pred[:,1], y_true[:,1])+\
+                   self.binary_channels_loss(_y_pred[:,2], y_true[:,2])
         # Dv2
         else:
             loss = self.weights[0]*self.distance_channels_loss(_y_pred, y_true)

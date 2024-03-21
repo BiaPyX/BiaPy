@@ -16,7 +16,7 @@ from skimage.exposure import equalize_adapthist
 from skimage.color import rgb2gray
 from skimage.filters import gaussian, median
 
-from biapy.utils.util import load_data_from_dir, load_3d_images_from_dir, save_tif
+from biapy.utils.util import load_data_from_dir, load_3d_images_from_dir, save_tif, seg2aff_pni, seg_widen_border
 
 
 #########################
@@ -138,6 +138,7 @@ def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
               Is simply achieved by binarizing input instance masks. 
             - 'Dv2' stands for 'Distance V2', which is an updated version of 'D' channel calculating background distance as well.
             - 'P' stands for 'Points' and contains the central points of an instance (as in Detection workflow)
+            - 'A' stands for 'Affinities" and contains the affinity values for each dimension
 
        fb_mode : str, optional
           Mode of the find_boundaries function from ``scikit-image`` or "dense". More info in:
@@ -154,7 +155,7 @@ def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
     """
 
     assert data_mask.ndim in [5, 4]
-    assert mode in ['C', 'BC', 'BCM', 'BCD', 'BD', 'BCDv2', 'Dv2', 'BDv2', 'BP']
+    assert mode in ['C', 'BC', 'BCM', 'BCD', 'BD', 'BCDv2', 'Dv2', 'BDv2', 'BP', 'A']
 
     d_shape = 4 if data_mask.ndim == 5 else 3
     if mode in ['BCDv2', 'Dv2', 'BDv2']:
@@ -165,6 +166,9 @@ def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
         c_number = 2
     elif mode in ['C']:
         c_number = 1
+    elif mode in ['A']:
+        # the number of affinity channels depends on the dimensions of the input image
+        c_number = 3 if data_mask.ndim == 5 else 2
 
     if 'D' in mode:
         dtype = np.float32  
@@ -184,7 +188,22 @@ def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
             vol_b_dist= scipy.ndimage.distance_transform_edt(vol_b_dist)
             vol_b_dist = np.max(vol_b_dist)-vol_b_dist
             new_mask[img,...,3] = vol_b_dist.copy()
-
+        # Affinities
+        if 'A' in mode:
+            #import pdb; pdb.set_trace()
+            ins_vol = np.copy(vol)
+            if fb_mode == "dense":
+                ins_vol = seg_widen_border( vol )
+                #if ins_vol.ndim == 3:
+                #    for i in range(ins_vol.shape[0]):                                                                                  
+                #        ins_vol[i,...] = erosion(vol[i,...], disk(1)) 
+                #else:
+                #    ins_vol = erosion(vol, disk(1)) 
+            affs = seg2aff_pni( ins_vol, dtype=dtype )
+            affs = np.transpose( affs, (1,2,3,0))
+            if c_number == 2:
+                affs = np.squeeze( affs, 0)
+            new_mask[img] = affs
         # Semantic mask
         if 'B' in mode and instance_count != 1:
             new_mask[img,...,0] = (vol>0).copy().astype(np.uint8)
@@ -276,6 +295,8 @@ def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
             suffix.append('_points.tif')
         elif mode in ["BDv2", "BD"]:
             suffix.append('_distance.tif')
+        elif mode == "A":
+            suffix.append('_affinity.tif')
 
         for i in range(min(3,len(new_mask))):
             for j in range(len(suffix)):

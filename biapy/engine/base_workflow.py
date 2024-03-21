@@ -941,7 +941,7 @@ class Base_Workflow(metaclass=ABCMeta):
             if self.cfg.TEST.AUGMENTATION:
                 p = ensemble16_3d_predictions(img[0], batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
                     axis_order_back=self.axis_order_back, pred_func=self.model_call_func, 
-                    axis_order=self.axis_order, device=self.device)
+                    axis_order=self.axis_order, device=self.device, mode=self.cfg.TEST.AUGMENTATION_MODE)
             else:
                 with torch.cuda.amp.autocast():
                     p = self.model_call_func(img)
@@ -1211,11 +1211,12 @@ class Base_Workflow(metaclass=ABCMeta):
                     for k in tqdm(range(self._X.shape[0]), leave=False):
                         if self.cfg.PROBLEM.NDIM == '2D':
                             p = ensemble8_2d_predictions(self._X[k], axis_order_back=self.axis_order_back,
-                                pred_func=self.model_call_func, axis_order=self.axis_order, device=self.device)
+                                pred_func=self.model_call_func, axis_order=self.axis_order, device=self.device,
+                                mode=self.cfg.TEST.AUGMENTATION_MODE)
                         else:
                             p = ensemble16_3d_predictions(self._X[k], batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
                                 axis_order_back=self.axis_order_back, pred_func=self.model_call_func, 
-                                axis_order=self.axis_order, device=self.device)
+                                axis_order=self.axis_order, device=self.device, mode=self.cfg.TEST.AUGMENTATION_MODE)
                         p = self.apply_model_activations(p)
                         # Multi-head concatenation
                         if isinstance(p, list):
@@ -1361,7 +1362,8 @@ class Base_Workflow(metaclass=ABCMeta):
                 # Make the prediction
                 if self.cfg.TEST.AUGMENTATION:
                     pred = ensemble8_2d_predictions(self._X[0], axis_order_back=self.axis_order_back, 
-                        pred_func=self.model_call_func, axis_order=self.axis_order, device=self.device)
+                        pred_func=self.model_call_func, axis_order=self.axis_order, device=self.device,
+                        mode=self.cfg.TEST.AUGMENTATION_MODE)
                 else:
                     with torch.cuda.amp.autocast():
                         pred = self.model_call_func(self._X)

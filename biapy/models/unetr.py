@@ -167,6 +167,8 @@ class UNETR(nn.Module):
                 self.last_block = conv(num_filters, 2, kernel_size=1, padding='same')
             elif output_channels in ["BCM", "BCD", "BCDv2"]:
                 self.last_block = conv(num_filters, 3, kernel_size=1, padding='same')
+            elif output_channels in ["A"]:
+                self.last_block = conv(num_filters, self.ndim, kernel_size=1, padding='same')
         # Other
         else:
             self.last_block = conv(num_filters, self.n_classes, kernel_size=1, padding='same')

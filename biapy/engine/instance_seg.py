@@ -91,7 +91,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         self.activations = {}
         if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "Dv2":
             self.activations = {'0': 'Linear'}
-        elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["C", "BC", "BP", "BCM"]:
+        elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["A","C", "BC", "BP", "BCM"]:
             self.activations = {':': 'CE_Sigmoid'}
         elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BDv2", "BD"]:
             self.activations = {'0': 'CE_Sigmoid', '1': 'Linear'}
@@ -134,7 +134,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             self.metric_names = ["jaccard_index", "jaccard_index"]
         if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "C":
             self.metric_names = ["jaccard_index"]
-        elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BCM":
+        elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["A", "BCM"]:
             self.metric_names = ["jaccard_index", "jaccard_index", "jaccard_index"]
         elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BP":
             self.metric_names = ["jaccard_index", "jaccard_index"]
