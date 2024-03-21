@@ -96,8 +96,7 @@ class Image_to_Image_Workflow(Base_Workflow):
         norm : List of dicts
             Normalization used during training. Required to denormalize the predictions of the model.
         """
-        original_data_shape = self._X.shape
-    
+
         # Reflect data to complete the needed shape
         if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE:
             reflected_orig_shape = self._X.shape
@@ -183,18 +182,20 @@ class Image_to_Image_Workflow(Base_Workflow):
                 else:
                     pred = obj
                 del obj
-        else:
-            pred = pred[0]
+
+            if self.cfg.PROBLEM.NDIM == '3D': 
+                pred = np.expand_dims(pred,0)
+                if self._Y is not None:  self._Y = np.expand_dims(self._Y,0)
 
         if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE: 
             if self.cfg.PROBLEM.NDIM == '2D':
-                pred = pred[-reflected_orig_shape[1]:,-reflected_orig_shape[2]:]
+                pred = pred[:,-reflected_orig_shape[1]:,-reflected_orig_shape[2]:]
                 if self._Y is not None:
-                    self._Y = self._Y[-reflected_orig_shape[1]:,-reflected_orig_shape[2]:]
+                    self._Y = self._Y[:,-reflected_orig_shape[1]:,-reflected_orig_shape[2]:]
             else:
-                pred = pred[-reflected_orig_shape[1]:,-reflected_orig_shape[2]:,-reflected_orig_shape[3]:]
+                pred = pred[:,-reflected_orig_shape[1]:,-reflected_orig_shape[2]:,-reflected_orig_shape[3]:]
                 if self._Y is not None:
-                    self._Y = self._Y[-reflected_orig_shape[1]:,-reflected_orig_shape[2]:,-reflected_orig_shape[3]:]
+                    self._Y = self._Y[:,-reflected_orig_shape[1]:,-reflected_orig_shape[2]:,-reflected_orig_shape[3]:]
 
         # Undo normalization
         x_norm = norm[0]
@@ -212,7 +213,7 @@ class Image_to_Image_Workflow(Base_Workflow):
 
         # Save image
         if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
-            save_tif(np.expand_dims(pred,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, self.processing_filenames, 
+            save_tif(pred, self.cfg.PATHS.RESULT_DIR.PER_IMAGE, self.processing_filenames, 
                 verbose=self.cfg.TEST.VERBOSE)
 
         # Calculate PSNR

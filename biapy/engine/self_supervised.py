@@ -8,7 +8,7 @@ from torchmetrics.image import PeakSignalNoiseRatio
 from biapy.data.data_2D_manipulation import crop_data_with_overlap, merge_data_with_overlap
 from biapy.data.data_3D_manipulation import crop_3D_data_with_overlap, merge_3D_data_with_overlap
 from biapy.data.post_processing.post_processing import ensemble8_2d_predictions, ensemble16_3d_predictions
-from biapy.utils.util import save_tif
+from biapy.utils.util import save_tif, pad_and_reflect
 from biapy.utils.misc import to_pytorch_format, to_numpy_format
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.data.pre_processing import create_ssl_source_data_masks, denormalize, undo_norm_range01
@@ -143,6 +143,13 @@ class Self_supervised_Workflow(Base_Workflow):
         norm : List of dicts
             Normalization used during training. Required to denormalize the predictions of the model.
         """
+        # Reflect data to complete the needed shape
+        if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE:
+            reflected_orig_shape = self._X.shape
+            self._X = np.expand_dims(pad_and_reflect(self._X[0], self.cfg.DATA.PATCH_SIZE, verbose=self.cfg.TEST.VERBOSE),0)
+            if self.cfg.DATA.TEST.LOAD_GT:
+                self._Y = np.expand_dims(pad_and_reflect(self._Y[0], self.cfg.DATA.PATCH_SIZE, verbose=self.cfg.TEST.VERBOSE),0)
+        
         original_data_shape = self._X.shape
     
         # Crop if necessary
@@ -210,12 +217,30 @@ class Self_supervised_Workflow(Base_Workflow):
                     overlap=self.cfg.DATA.TEST.OVERLAP, verbose=self.cfg.TEST.VERBOSE)
                 pred_visi = f_name(pred_visi, original_data_shape[:-1]+(pred_visi.shape[-1],), padding=self.cfg.DATA.TEST.PADDING, 
                     overlap=self.cfg.DATA.TEST.OVERLAP, verbose=self.cfg.TEST.VERBOSE)
-        else:
-            pred = pred[0]
-            if self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
-                pred_mask = pred_mask[0]
-                pred_visi = pred_visi[0]
+                if self.cfg.PROBLEM.NDIM == '3D': 
+                    pred_mask = np.expand_dims(pred_mask,0)
+                    pred_visi = np.expand_dims(pred_visi,0)
 
+            if self.cfg.PROBLEM.NDIM == '3D': 
+                pred = np.expand_dims(pred,0)
+                if self._Y is not None:  self._Y = np.expand_dims(self._Y,0)
+
+        if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE: 
+            if self.cfg.PROBLEM.NDIM == '2D':
+                pred = pred[:,-reflected_orig_shape[1]:,-reflected_orig_shape[2]:]
+                if self._Y is not None:
+                    self._Y = self._Y[:,-reflected_orig_shape[1]:,-reflected_orig_shape[2]:]
+                if self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
+                    pred_mask = pred_mask[:,-reflected_orig_shape[1]:,-reflected_orig_shape[2]:]
+                    pred_visi = pred_visi[:,-reflected_orig_shape[1]:,-reflected_orig_shape[2]:]    
+            else:
+                pred = pred[:,-reflected_orig_shape[1]:,-reflected_orig_shape[2]:,-reflected_orig_shape[3]:]
+                if self._Y is not None:
+                    self._Y = self._Y[:,-reflected_orig_shape[1]:,-reflected_orig_shape[2]:,-reflected_orig_shape[3]:]
+                if self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
+                    pred_mask = pred_mask[:,-reflected_orig_shape[1]:,-reflected_orig_shape[2]:,-reflected_orig_shape[3]:]
+                    pred_visi = pred_visi[:,-reflected_orig_shape[1]:,-reflected_orig_shape[2]:,-reflected_orig_shape[3]:]
+            
         # Undo normalization
         x_norm = norm[0]
         if x_norm['type'] == 'div':
@@ -233,10 +258,10 @@ class Self_supervised_Workflow(Base_Workflow):
         # Save image
         if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
             fname, fext = os.path.splitext(self.processing_filenames[0])
-            save_tif(np.expand_dims(pred,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, self.processing_filenames, verbose=self.cfg.TEST.VERBOSE)
+            save_tif(pred, self.cfg.PATHS.RESULT_DIR.PER_IMAGE, self.processing_filenames, verbose=self.cfg.TEST.VERBOSE)
             if self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
-                save_tif(np.expand_dims(pred_mask,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, [fname+"_masked.tif"], verbose=self.cfg.TEST.VERBOSE)
-                save_tif(np.expand_dims(pred_visi,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, [fname+"_reconstruction_and_visible.tif"], verbose=self.cfg.TEST.VERBOSE)    
+                save_tif(pred_mask, self.cfg.PATHS.RESULT_DIR.PER_IMAGE, [fname+"_masked.tif"], verbose=self.cfg.TEST.VERBOSE)
+                save_tif(pred_visi, self.cfg.PATHS.RESULT_DIR.PER_IMAGE, [fname+"_reconstruction_and_visible.tif"], verbose=self.cfg.TEST.VERBOSE)    
 
     def torchvision_model_call(self, in_img, is_train=False):
         """

@@ -443,7 +443,7 @@ class Base_Workflow(metaclass=ABCMeta):
         self.model_without_ddp = self.model
         if self.args.distributed:
             self.model = torch.nn.parallel.DistributedDataParallel(self.model, device_ids=[self.args.gpu], 
-                find_unused_parameters=True)
+                find_unused_parameters=False)
             self.model_without_ddp = self.model.module
         self.model_prepared = True
 
@@ -1265,19 +1265,19 @@ class Base_Workflow(metaclass=ABCMeta):
                     if self.cfg.PROBLEM.NDIM != '3D': 
                         self._X = X_original.copy()
                         del X_original
-                else:
-                    pred = pred[0]
-                    if self._Y is not None: self._Y = self._Y[0]
+                    else:
+                        pred = np.expand_dims(pred,0)
+                        if self._Y is not None:  self._Y = np.expand_dims(self._Y,0)
 
                 if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE: 
                     if self.cfg.PROBLEM.NDIM == '2D':
-                        pred = pred[-reflected_orig_shape[1]:,-reflected_orig_shape[2]:]
+                        pred = pred[:,-reflected_orig_shape[1]:,-reflected_orig_shape[2]:]
                         if self._Y is not None:
-                            self._Y = self._Y[-reflected_orig_shape[1]:,-reflected_orig_shape[2]:]
+                            self._Y = self._Y[:,-reflected_orig_shape[1]:,-reflected_orig_shape[2]:]
                     else:
-                        pred = pred[-reflected_orig_shape[1]:,-reflected_orig_shape[2]:,-reflected_orig_shape[3]:]
+                        pred = pred[:,-reflected_orig_shape[1]:,-reflected_orig_shape[2]:,-reflected_orig_shape[3]:]
                         if self._Y is not None:
-                            self._Y = self._Y[-reflected_orig_shape[1]:,-reflected_orig_shape[2]:,-reflected_orig_shape[3]:]
+                            self._Y = self._Y[:,-reflected_orig_shape[1]:,-reflected_orig_shape[2]:,-reflected_orig_shape[3]:]
 
                 # Argmax if needed
                 if self.cfg.MODEL.N_CLASSES > 2 and self.cfg.DATA.TEST.ARGMAX_TO_OUTPUT:
@@ -1291,25 +1291,24 @@ class Base_Workflow(metaclass=ABCMeta):
 
                 # Apply mask
                 if self.cfg.TEST.POST_PROCESSING.APPLY_MASK:
-                    pred = apply_binary_mask(pred, self.cfg.DATA.TEST.BINARY_MASKS)
+                    pred = np.expand_dims(apply_binary_mask(pred[0], self.cfg.DATA.TEST.BINARY_MASKS),0)
 
                 # Save image
                 if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
-                    save_tif(np.expand_dims(pred,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, self.processing_filenames, 
+                    save_tif(pred, self.cfg.PATHS.RESULT_DIR.PER_IMAGE, self.processing_filenames, 
                         verbose=self.cfg.TEST.VERBOSE)
 
                 if self.cfg.DATA.TEST.LOAD_GT and self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS != "Dv2":
-                    if self._Y.ndim > pred.ndim: self._Y = self._Y[0]
                     if self.cfg.LOSS.TYPE != 'MASKED_BCE':
                         _iou_merge_patches = jaccard_index_numpy((self._Y>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8))
                         _ov_iou_merge_patches = voc_calculation((self._Y>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8),
-                                                        _iou_merge_patches)
+                            _iou_merge_patches)
                     else:
                         exclusion_mask = self._Y < 2
                         binY = self._Y * exclusion_mask.astype( float )
                         _iou_merge_patches = jaccard_index_numpy((binY>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8))
                         _ov_iou_merge_patches = voc_calculation((binY>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8),
-                                                        _iou_merge_patches)
+                            _iou_merge_patches)
                     self.stats['iou_merge_patches'] += _iou_merge_patches
                     self.stats['ov_iou_merge_patches'] += _ov_iou_merge_patches
 
@@ -1320,20 +1319,13 @@ class Base_Workflow(metaclass=ABCMeta):
                     pred, _iou_post, _ov_iou_post = apply_post_processing(self.cfg, pred, self._Y)
                     self.stats['iou_merge_patches_post'] += _iou_post
                     self.stats['ov_iou_merge_patches_post'] += _ov_iou_post
-                    if pred.ndim == 4:
-                        save_tif(np.expand_dims(pred,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,
-                            self.processing_filenames, verbose=self.cfg.TEST.VERBOSE)
-                    else:
-                        save_tif(pred, self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING, self.processing_filenames,
-                            verbose=self.cfg.TEST.VERBOSE)
+                    save_tif(pred, self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING, self.processing_filenames,
+                        verbose=self.cfg.TEST.VERBOSE)
             else:
-                # load predictions from file
-                if self.post_processing['per_image']:
-                    pred, _, _ = load_3d_images_from_dir( self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING )
-                else:
-                    pred, _, _ = load_3d_images_from_dir( self.cfg.PATHS.RESULT_DIR.PER_IMAGE )
-                if pred.ndim == 5:
-                    pred = np.squeeze( pred )
+                # Load predictions from file
+                f = self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING if self.post_processing['per_image'] else self.cfg.PATHS.RESULT_DIR.PER_IMAGE
+                f_name = load_data_from_dir if self.cfg.PROBLEM.NDIM == '2D' else load_3d_images_from_dir
+                pred, _, _ = f_name(f)
 
             self.after_merge_patches(pred)
             

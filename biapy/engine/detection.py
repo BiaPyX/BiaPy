@@ -135,8 +135,9 @@ class Detection_Workflow(Base_Workflow):
 
         Parameters
         ----------
-        pred : Torch Tensor
-            Model predictions.
+        pred : 4D/5D Torch tensor
+            Model predictions. E.g. ``(num_of_images, y, x, channels)`` for 2D or 
+            ``(num_of_images, z, y, x, channels)`` for 3D.
         
         filenames : List of str
             Predicted image's filenames.
@@ -144,6 +145,11 @@ class Detection_Workflow(Base_Workflow):
         metric_names : List of str
             Metrics names.
         """
+        if self.cfg.PROBLEM.NDIM == "2D" and not self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
+            assert pred.ndim == 4, "Prediction doesn't have 4 dim: {pred.shape}"
+        else:
+            assert pred.ndim == 5, "Prediction doesn't have 5 dim: {pred.shape}"
+
         file_ext = os.path.splitext(filenames[0])[1]
         ndim = 2 if self.cfg.PROBLEM.NDIM == "2D" else 3
         pred_shape = pred.shape

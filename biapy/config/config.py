@@ -174,7 +174,8 @@ class Config:
         _C.DATA.W_FOREGROUND = 0.94 # Used when _C.DATA.PROBABILITY_MAP=True
         _C.DATA.W_BACKGROUND = 0.06 # Used when _C.DATA.PROBABILITY_MAP=True
 
-        # Whether to reshape the dimensions that does not satisfy the patch shape selected by padding it with reflect.
+        # Whether to reshape the dimensions that does not satisfy the patch shape selected by padding it with reflect. It's not
+        # implemented in super-resolution workflow.
         _C.DATA.REFLECT_TO_COMPLETE_SHAPE = False
 
         _C.DATA.NORMALIZATION = CN()

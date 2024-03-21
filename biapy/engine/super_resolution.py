@@ -182,8 +182,10 @@ class Super_resolution_Workflow(Base_Workflow):
                       self.cfg.DATA.TEST.OVERLAP[2]*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[2])
             pred = f_name(pred, original_data_shape[:-1]+(pred.shape[-1],), padding=pad, 
                 overlap=ov, verbose=self.cfg.TEST.VERBOSE)
-        else:
-            pred = pred[0]
+
+            if self.cfg.PROBLEM.NDIM == '3D': 
+                pred = np.expand_dims(pred,0)
+                if self._Y is not None:  self._Y = np.expand_dims(self._Y,0)
 
         # Undo normalization
         x_norm = norm[0]
@@ -201,7 +203,7 @@ class Super_resolution_Workflow(Base_Workflow):
 
         # Save image
         if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
-            save_tif(np.expand_dims(pred,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, self.processing_filenames, 
+            save_tif(pred, self.cfg.PATHS.RESULT_DIR.PER_IMAGE, self.processing_filenames, 
                 verbose=self.cfg.TEST.VERBOSE)
     
         # Calculate PSNR

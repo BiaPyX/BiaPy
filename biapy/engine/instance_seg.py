@@ -10,7 +10,7 @@ from skimage.transform import resize
 from biapy.data.post_processing.post_processing import (watershed_by_channels, voronoi_on_mask, 
     measure_morphological_props_and_filter, repare_large_blobs, apply_binary_mask)
 from biapy.data.pre_processing import create_instance_channels, create_test_instance_channels, norm_range01
-from biapy.utils.util import save_tif, pad_and_reflect
+from biapy.utils.util import save_tif
 from biapy.utils.matching import matching, wrapper_matching_dataset_lazy
 from biapy.engine.metrics import jaccard_index, instance_segmentation_loss, instance_metrics
 from biapy.engine.base_workflow import Base_Workflow
@@ -208,6 +208,11 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         out_dir_post_proc : path
             Output directory to save the post-processed instances.
         """
+        if self.cfg.PROBLEM.NDIM == "2D" and not self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
+            assert pred.ndim == 4, "Prediction doesn't have 4 dim: {pred.shape}"
+        else:
+            assert pred.ndim == 5, "Prediction doesn't have 5 dim: {pred.shape}"
+
         #############################
         ### INSTANCE SEGMENTATION ###
         #############################
