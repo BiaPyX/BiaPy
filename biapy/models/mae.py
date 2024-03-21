@@ -9,6 +9,7 @@
 # DeiT: https://github.com/facebookresearch/deit
 # --------------------------------------------------------
 
+import math
 from functools import partial
 import numpy as np
 import torch
@@ -68,6 +69,9 @@ class MaskedAutoencoderViT(nn.Module):
     mask_ratio : float, optional
         Percentage of the input image to mask. Value between 0 and 1. 
 
+    device : Torch device
+        Device used. 
+
     Returns
     -------
     model : Torch model
@@ -75,7 +79,7 @@ class MaskedAutoencoderViT(nn.Module):
     """
     def __init__(self, img_size=224, patch_size=16, in_chans=3, ndim=2, embed_dim=1024, depth=24, num_heads=16,
         mlp_ratio=4., decoder_embed_dim=512, decoder_depth=8, decoder_num_heads=16, norm_layer=nn.LayerNorm, 
-        norm_pix_loss=False, masking_type="random", mask_ratio=0.5):
+        norm_pix_loss=False, masking_type="random", mask_ratio=0.5, device=None):
         super().__init__()
         self.ndim = ndim
         self.in_chans = in_chans
@@ -113,8 +117,20 @@ class MaskedAutoencoderViT(nn.Module):
         self.decoder_norm = norm_layer(decoder_embed_dim)
         self.decoder_pred = nn.Linear(decoder_embed_dim, patch_size**self.ndim * in_chans, bias=True) # decoder to patch
         # --------------------------------------------------------------------------
-        
-        self.masking_func = self.random_masking if masking_type == "random" else self.grid_masking
+        if masking_type == "random":
+            self.masking_func = self.random_masking
+        else:
+            self.masking_func = self.grid_masking
+            
+            # Define grid mask, as it doesn't change over epochs
+            D, L = embed_dim, self.patch_embed.num_patches
+            self.mask = torch.zeros([int(math.sqrt(1024)),int(math.sqrt(1024))], device=device)
+            self.mask[::2,::2] = 1
+            self.mask[1::2,1::2] = 1
+            self.mask = self.mask.flatten()
+            self.ids_keep = torch.argsort(self.mask)[:L//2].unsqueeze(-1).repeat(1, 1, D)
+            self.mask = self.mask.unsqueeze(0)
+            self.ids_restore = torch.argsort(torch.argsort(self.mask))
 
         self.norm_pix_loss = norm_pix_loss
 
@@ -253,8 +269,7 @@ class MaskedAutoencoderViT(nn.Module):
 
     def grid_masking(self, x):
         """
-        Perform per-sample random masking by per-sample shuffling.
-        Per-sample shuffling is done by argsort random noise.
+        Perform grid masking for each sample.
 
         Parameters
         ----------
@@ -265,14 +280,9 @@ class MaskedAutoencoderViT(nn.Module):
         """
         N, L, D = x.shape  # batch, length, dim
 
-        mask = torch.zeros([N, L], device=x.device)
-        ids_restore = torch.argsort(mask, dim=1)
-        mask[::2,::2] = 1
-        mask[1::2,1::2] = 1
-        ids_keep = torch.argsort(mask, dim=1)[:,:L//2]
-        x_masked = torch.gather(x, dim=1, index=ids_keep.unsqueeze(-1).repeat(1, 1, D))
-
-        return x_masked, mask, ids_restore
+        mask = self.mask.repeat(N, 1)
+        x_masked = torch.gather(x, dim=1, index=self.ids_keep)
+        return x_masked, mask, self.ids_restore
 
     def forward_encoder(self, x):
         """
