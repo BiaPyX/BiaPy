@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from typing import List
 
-from biapy.models.blocks import ResConvBlock, ResUpBlock, ConvBlock
+from biapy.models.blocks import ResConvBlock, ResUpBlock, ConvBlock, get_norm_2d, get_norm_3d
 
 class ResUNet(nn.Module):
     """
@@ -24,8 +24,8 @@ class ResUNet(nn.Module):
     drop_values : float, optional
         Dropout value to be fixed.
 
-    batch_norm : bool, optional
-        Make batch normalization.
+    normalization : str, optional
+        Normalization layer (one of ``'bn'``, ``'sync_bn'`` ``'in'``, ``'gn'`` or ``'none'``).
 
     k_size : int, optional
         Kernel size.
@@ -71,7 +71,7 @@ class ResUNet(nn.Module):
     Image created with `PlotNeuralNet <https://github.com/HarisIqbal88/PlotNeuralNet>`_.
     """
     def __init__(self, image_shape=(256, 256, 1), activation="ELU", feature_maps=[32, 64, 128, 256], drop_values=[0.1,0.1,0.1,0.1],
-        batch_norm=False, k_size=3, upsample_layer="convtranspose", z_down=[2,2,2,2], n_classes=1, 
+        normalization='none', k_size=3, upsample_layer="convtranspose", z_down=[2,2,2,2], n_classes=1, 
         output_channels="BC", upsampling_factor=(), upsampling_position="pre", isotropy=False, larger_io=True):
         super(ResUNet, self).__init__()
 
@@ -85,12 +85,12 @@ class ResUNet(nn.Module):
         if self.ndim == 3:
             conv = nn.Conv3d
             convtranspose = nn.ConvTranspose3d
-            batchnorm_layer = nn.BatchNorm3d if batch_norm else None
+            batchnorm_layer = get_norm_3d( normalization )
             pooling = nn.MaxPool3d
         else:
             conv = nn.Conv2d
             convtranspose = nn.ConvTranspose2d
-            batchnorm_layer = nn.BatchNorm2d if batch_norm else None
+            batchnorm_layer = get_norm_2d( normalization )
             pooling = nn.MaxPool2d
             
         # Super-resolution

@@ -634,8 +634,8 @@ class Config:
         # Values to make the dropout with. Set to 0 to prevent dropout. When using it with 'ViT' or 'unetr' 
         # a list with just one number must be provided 
         _C.MODEL.DROPOUT_VALUES = [0., 0., 0., 0., 0.]
-        # To active batch normalization
-        _C.MODEL.BATCH_NORMALIZATION = True
+        # Normalization layer (one of ``'bn'``, ``'sync_bn'`` ``'in'``, ``'gn'`` or ``'none'``).
+        _C.MODEL.NORMALIZATION = 'bn'
         # Kernel size
         _C.MODEL.KERNEL_SIZE = 3
         # Upsampling layer to use in the model. Options: ["upsampling", "convtranspose"]

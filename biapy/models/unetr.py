@@ -4,7 +4,7 @@ import torch.nn as nn
 from timm.models.vision_transformer import Block
 from typing import List
 
-from biapy.models.blocks import DoubleConvBlock, ConvBlock
+from biapy.models.blocks import DoubleConvBlock, ConvBlock, get_norm_2d, get_norm_3d
 from biapy.models.tr_layers import PatchEmbed
 
 class UNETR(nn.Module):
@@ -41,7 +41,7 @@ class UNETR(nn.Module):
         doubled.
 
     norm_layer : Torch layer, optional
-        Nomarlization layer to use in ViT backbone.
+        Normalization layer to use in ViT backbone.
 
     n_classes : int, optional
         Number of classes to predict. Is the number of channels in the output tensor.
@@ -54,8 +54,8 @@ class UNETR(nn.Module):
         E.g. if we have ``12`` transformer encoder layers, and we set ``ViT_hidd_mult = 3``, we are going to take
         ``[1*ViT_hidd_mult, 2*ViT_hidd_mult, 3*ViT_hidd_mult]`` -> ``[Z3, Z6, Z9]`` encoder's signals. 
 
-    batch_norm : bool, optional
-        Whether to use batch normalization or not.
+    normalization : str, optional
+        Normalization layer (one of ``'bn'``, ``'sync_bn'`` ``'in'``, ``'gn'`` or ``'none'``).
 
     dropout : bool, optional
         Dropout rate for the decoder (can be a list of dropout rates for each layer).
@@ -70,7 +70,7 @@ class UNETR(nn.Module):
         UNETR model.
     """
     def __init__(self, input_shape, patch_size, embed_dim, depth, num_heads, mlp_ratio=4., num_filters = 16, 
-        norm_layer=nn.LayerNorm, n_classes = 1, decoder_activation = 'relu', ViT_hidd_mult = 3, batch_norm = True, 
+        norm_layer=nn.LayerNorm, n_classes = 1, decoder_activation = 'relu', ViT_hidd_mult = 3, normalization = 'bn', 
         dropout = 0.0, output_channels="BC"):
         super().__init__()
         
@@ -85,7 +85,7 @@ class UNETR(nn.Module):
         if self.ndim == 3:
             conv = nn.Conv3d
             convtranspose = nn.ConvTranspose3d
-            batchnorm_layer = nn.BatchNorm3d if batch_norm else None
+            batchnorm_layer = get_norm_3d( normalization )
             self.reshape_shape = (
                 self.input_shape[0]//self.patch_size, 
                 self.input_shape[1]//self.patch_size,
@@ -96,7 +96,7 @@ class UNETR(nn.Module):
         else:
             conv = nn.Conv2d
             convtranspose = nn.ConvTranspose2d
-            batchnorm_layer = nn.BatchNorm2d if batch_norm else None
+            batchnorm_layer = get_norm_2d( normalization )
             self.reshape_shape = (
                 self.input_shape[0]//self.patch_size, 
                 self.input_shape[1]//self.patch_size,

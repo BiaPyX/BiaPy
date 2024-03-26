@@ -42,7 +42,7 @@ def build_model(cfg, job_identifier, device):
     # Model building
     if modelname in ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet']:
         args = dict(image_shape=cfg.DATA.PATCH_SIZE, activation=cfg.MODEL.ACTIVATION.lower(), feature_maps=cfg.MODEL.FEATURE_MAPS, 
-            drop_values=cfg.MODEL.DROPOUT_VALUES, batch_norm=cfg.MODEL.BATCH_NORMALIZATION, k_size=cfg.MODEL.KERNEL_SIZE,
+            drop_values=cfg.MODEL.DROPOUT_VALUES, normalization=cfg.MODEL.NORMALIZATION, k_size=cfg.MODEL.KERNEL_SIZE,
             upsample_layer=cfg.MODEL.UPSAMPLE_LAYER, z_down=cfg.MODEL.Z_DOWN)
         if modelname == 'unet':
             f_name = U_Net
@@ -96,7 +96,7 @@ def build_model(cfg, job_identifier, device):
                 depth=cfg.MODEL.VIT_NUM_LAYERS, num_heads=cfg.MODEL.VIT_NUM_HEADS, mlp_ratio=cfg.MODEL.VIT_MLP_RATIO, 
                 num_filters=cfg.MODEL.UNETR_VIT_NUM_FILTERS, n_classes=cfg.MODEL.N_CLASSES, 
                 decoder_activation=cfg.MODEL.UNETR_DEC_ACTIVATION, ViT_hidd_mult=cfg.MODEL.UNETR_VIT_HIDD_MULT, 
-                batch_norm=cfg.MODEL.BATCH_NORMALIZATION, dropout=cfg.MODEL.DROPOUT_VALUES[0])
+                normalization=cfg.MODEL.NORMALIZATION, dropout=cfg.MODEL.DROPOUT_VALUES[0])
             args['output_channels'] = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS if cfg.PROBLEM.TYPE == 'INSTANCE_SEG' else None
             model = UNETR(**args)
         elif modelname == 'edsr':

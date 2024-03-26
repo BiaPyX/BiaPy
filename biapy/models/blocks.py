@@ -414,6 +414,86 @@ def get_activation(activation: str = 'relu') -> nn.Module:
     }
     return activation_dict[activation]
 
+# ----------------------
+# Normalization Layers
+# Code from Pytorch for Connectomics:
+# https://github.com/zudi-lin/pytorch_connectomics/blob/6fbd5457463ae178ecd93b2946212871e9c617ee/connectomics/model/utils/misc.py#L330-L408
+# ----------------------
+
+def get_norm_3d(norm: str, out_channels: int, bn_momentum: float = 0.1) -> nn.Module:
+    """Get the specified normalization layer for a 3D model.
+
+    Args:
+        norm (str): one of ``'bn'``, ``'sync_bn'`` ``'in'``, ``'gn'`` or ``'none'``.
+        out_channels (int): channel number.
+        bn_momentum (float): the momentum of normalization layers.
+    Returns:
+        nn.Module: the normalization layer
+    """
+    assert norm in ["bn", "sync_bn", "gn", "in", "none"], \
+        "Get unknown normalization layer key {}".format(norm)
+    if norm == "gn": assert out_channels%8 == 0, "GN requires channels to separable into 8 groups"
+    norm = {
+        "bn": nn.BatchNorm3d,
+        "sync_bn": nn.SyncBatchNorm,
+        "in": nn.InstanceNorm3d,
+        "gn": lambda channels: nn.GroupNorm(8, channels),
+        "none": nn.Identity,
+    }[norm]
+    if norm in ["bn", "sync_bn", "in"]:
+        return norm(out_channels, momentum=bn_momentum)
+    else:
+        return norm(out_channels)
+
+
+def get_norm_2d(norm: str, out_channels: int, bn_momentum: float = 0.1) -> nn.Module:
+    """Get the specified normalization layer for a 2D model.
+
+    Args:
+        norm (str): one of ``'bn'``, ``'sync_bn'`` ``'in'``, ``'gn'`` or ``'none'``.
+        out_channels (int): channel number.
+        bn_momentum (float): the momentum of normalization layers.
+    Returns:
+        nn.Module: the normalization layer
+    """
+    assert norm in ["bn", "sync_bn", "gn", "in", "none"], \
+        "Get unknown normalization layer key {}".format(norm)
+    norm = {
+        "bn": nn.BatchNorm2d,
+        "sync_bn": nn.SyncBatchNorm,
+        "in": nn.InstanceNorm2d,
+        "gn": lambda channels: nn.GroupNorm(16, channels),
+        "none": nn.Identity,
+    }[norm]
+    if norm in ["bn", "sync_bn", "in"]:
+        return norm(out_channels, momentum=bn_momentum)
+    else:
+        return norm(out_channels)
+
+
+def get_norm_1d(norm: str, out_channels: int, bn_momentum: float = 0.1) -> nn.Module:
+    """Get the specified normalization layer for a 1D model.
+
+    Args:
+        norm (str): one of ``'bn'``, ``'sync_bn'`` ``'in'``, ``'gn'`` or ``'none'``.
+        out_channels (int): channel number.
+        bn_momentum (float): the momentum of normalization layers.
+    Returns:
+        nn.Module: the normalization layer
+    """
+    assert norm in ["bn", "sync_bn", "gn", "in", "none"], \
+        "Get unknown normalization layer key {}".format(norm)
+    norm = {
+        "bn": nn.BatchNorm1d,
+        "sync_bn": nn.BatchNorm1d,
+        "in": nn.InstanceNorm1d,
+        "gn": lambda channels: nn.GroupNorm(16, channels),
+        "none": nn.Identity,
+    }[norm]
+    if norm in ["bn", "sync_bn", "in"]:
+        return norm(out_channels, momentum=bn_momentum)
+    else:
+        return norm(out_channels)
 
 class ResUNetPlusPlus_AttentionBlock(nn.Module):
     """ Adapted from `here <https://github.com/rishikksh20/ResUnet/blob/master/core/modules.py>`_.
