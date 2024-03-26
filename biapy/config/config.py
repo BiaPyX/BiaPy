@@ -649,6 +649,8 @@ class Config:
         # Downsampling to be made in Z. This value will be the third integer of the MaxPooling operation. When facing
         # anysotropic datasets set it to get better performance
         _C.MODEL.Z_DOWN = [0, 0, 0, 0]
+        # For each level of the model (U-Net levels), set to true or false if the dimensions of the feature maps are isotropic.
+        _C.MODEL.ISOTROPY = [False, False, False, True, True]
         # Checkpoint: set to True to load previous training weigths (needed for inference or to make fine-tunning)
         _C.MODEL.LOAD_CHECKPOINT = False
         # When loading checkpoints whether if only model's weights are going to be loaded or optimizer, epochs and loss_scaler. 

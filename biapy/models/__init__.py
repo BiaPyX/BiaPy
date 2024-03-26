@@ -48,12 +48,14 @@ def build_model(cfg, job_identifier, device):
             f_name = U_Net
         elif modelname == 'resunet':
             f_name = ResUNet
+            args['isotropy'] = cfg.MODEL.ISOTROPY
         elif modelname == 'resunet++':
             f_name = ResUNetPlusPlus
         elif modelname == 'attention_unet':
             f_name = Attention_U_Net
         elif modelname == 'seunet':
             f_name = SE_U_Net
+            args['isotropy'] = cfg.MODEL.ISOTROPY
 
         args['output_channels'] = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS if cfg.PROBLEM.TYPE == 'INSTANCE_SEG' else None        
         if cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
