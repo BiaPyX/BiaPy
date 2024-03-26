@@ -13,6 +13,7 @@ from biapy.data.pre_processing import norm_range01, undo_norm_range01, denormali
 from biapy.data.post_processing.post_processing import ensemble8_2d_predictions, ensemble16_3d_predictions
 from biapy.data.data_2D_manipulation import crop_data_with_overlap, merge_data_with_overlap
 from biapy.data.data_3D_manipulation import crop_3D_data_with_overlap, merge_3D_data_with_overlap
+from biapy.engine.metrics import weighted_L1
 
 class Image_to_Image_Workflow(Base_Workflow):
     """
@@ -52,7 +53,8 @@ class Image_to_Image_Workflow(Base_Workflow):
         self.metrics = [PeakSignalNoiseRatio().to(self.device), torch.nn.MSELoss()]
         self.metric_names = ["PSNR", "MSE"]
         print("Overriding 'LOSS.TYPE' to set it to MAE")
-        self.loss = torch.nn.L1Loss()
+        # self.loss = torch.nn.L1Loss()
+        self.loss = weighted_L1()
 
     def metric_calculation(self, output, targets, metric_logger=None):
         """
@@ -75,10 +77,10 @@ class Image_to_Image_Workflow(Base_Workflow):
             Value of the metric for the given prediction. 
         """
         with torch.no_grad():
-            train_psnr = self.metrics[0](output.squeeze(), targets.squeeze())
+            train_psnr = self.metrics[0](output.squeeze(), targets[0].squeeze())
             train_psnr = train_psnr.item() if not torch.isnan(train_psnr) else 0
 
-            train_mse = self.metrics[1](output.squeeze(), targets.squeeze())
+            train_mse = self.metrics[1](output.squeeze(), targets[0].squeeze())
             train_mse = train_mse.item() if not torch.isnan(train_mse) else 0
 
             if metric_logger is not None:
@@ -86,6 +88,27 @@ class Image_to_Image_Workflow(Base_Workflow):
                 metric_logger.meters[self.metric_names[1]].update(train_mse)
 
             return train_psnr, train_mse
+
+    def prepare_targets(self, targets, batch):
+        """
+        Location to perform any necessary data transformations to ``targets``
+        before calculating the loss.
+
+        Parameters
+        ----------
+        targets : Torch Tensor
+            Ground truth to compare the prediction with.
+
+        batch : Torch Tensor
+            Prediction of the model. Only used in SSL workflow. 
+
+        Returns
+        -------
+        targets : Torch tensor
+            Resulting targets. 
+        """
+        # We do not use 'batch' input but in SSL workflow
+        return [to_pytorch_format(targets[0], self.axis_order, self.device), targets[1].to(self.device, non_blocking=True)]
 
     def process_sample(self, norm): 
         """
@@ -224,8 +247,7 @@ class Image_to_Image_Workflow(Base_Workflow):
                 self._Y = self._Y.astype(np.float32)
             psnr_merge_patches = self.metrics[0](torch.from_numpy(pred), torch.from_numpy(self._Y))
             self.stats['psnr_merge_patches'] += psnr_merge_patches
-
-
+        
     def torchvision_model_call(self, in_img, is_train=False):
         """
         Call a regular Pytorch model.

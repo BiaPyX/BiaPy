@@ -3,9 +3,9 @@ import os
 from PIL import Image
 
 from biapy.utils.util import save_tif
-from biapy.data.generators.pair_base_data_generator import PairBaseDataGenerator
+from biapy.data.generators.i2i_pair_base_data_generator import I2IPairBaseDataGenerator
 
-class Pair2DImageDataGenerator(PairBaseDataGenerator):
+class Pair2DImageDataGenerator(I2IPairBaseDataGenerator):
     """Custom 2D data generator based on `imgaug <https://github.com/aleju/imgaug-doc>`_
        and our own `augmentors.py <https://github.com/BiaPyX/BiaPy/blob/master/biapy/data/generators/augmentors.py>`_
        transformations. This generator will yield an image and its corresponding mask.
