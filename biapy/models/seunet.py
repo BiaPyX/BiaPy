@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from typing import List
 
-from biapy.models.blocks import DoubleConvBlock, UpBlock
+from biapy.models.blocks import DoubleConvBlock, UpBlock, ConvBlock
 
 class SE_U_Net(nn.Module):
     """
@@ -50,6 +50,12 @@ class SE_U_Net(nn.Module):
         Whether the upsampling is going to be made previously (``pre`` option) to the model 
         or after the model (``post`` option).
 
+    isotropy : bool or list of bool, optional
+        Whether to use 3d or 2d convolutions at each U-Net level even if input is 3d.
+
+    larger_io : bool, optional
+        Whether to use extra and larger kernels in the input and output layers.
+
     Returns
     -------
     model : Torch model
@@ -65,7 +71,7 @@ class SE_U_Net(nn.Module):
     """
     def __init__(self, image_shape=(256, 256, 1), activation="ELU", feature_maps=[32, 64, 128, 256], drop_values=[0.1,0.1,0.1,0.1],
         batch_norm=False, k_size=3, upsample_layer="convtranspose", z_down=[2,2,2,2], n_classes=1, 
-        output_channels="BC", upsampling_factor=(), upsampling_position="pre"):
+        output_channels="BC", upsampling_factor=(), upsampling_position="pre", isotropy=False, larger_io=True):
         super(SE_U_Net, self).__init__()
 
         self.depth = len(feature_maps)-1
@@ -73,6 +79,8 @@ class SE_U_Net(nn.Module):
         self.z_down = z_down
         self.n_classes = 1 if n_classes <= 2 else n_classes
         self.multiclass = True if n_classes > 2 and output_channels is not None else False
+        if type( isotropy ) == bool:
+            isotropy = isotropy * len( feature_maps )
         if self.ndim == 3:
             conv = nn.Conv3d
             convtranspose = nn.ConvTranspose3d
@@ -93,28 +101,58 @@ class SE_U_Net(nn.Module):
         self.down_path = nn.ModuleList()
         self.mpooling_layers = nn.ModuleList()
         in_channels = image_shape[-1]
+
+        # extra (larger) input layer
+        if larger_io:
+            kernel_size = (k_size+2, k_size+2) if self.ndim == 2 else (k_size+2, k_size+2, k_size+2)
+            if isotropy[0] is False and self.ndim == 3:
+                kernel_size = (1, k_size+2, k_size+2)
+            self.conv_in = ConvBlock(conv=conv, in_size=in_channels, out_size=feature_maps[0], 
+                                             k_size=kernel_size, act=activation, batch_norm=batchnorm_layer)
+            in_channels = feature_maps[0]
+        else:
+            self.conv_in = None
+
         for i in range(self.depth):
+            kernel_size = (k_size, k_size) if self.ndim == 2 else (k_size, k_size, k_size)
+            if isotropy[i] is False and self.ndim == 3:
+                kernel_size = (1, k_size, k_size)
             self.down_path.append( 
-                DoubleConvBlock(conv, in_channels, feature_maps[i], k_size, activation, batchnorm_layer,
+                DoubleConvBlock(conv, in_channels, feature_maps[i], kernel_size, activation, batchnorm_layer,
                     drop_values[i], se_block=True)
             )
             mpool = (z_down[i], 2, 2) if self.ndim == 3 else (2, 2)
             self.mpooling_layers.append(pooling(mpool))
             in_channels = feature_maps[i]
 
-        self.bottleneck = DoubleConvBlock(conv, in_channels, feature_maps[-1], k_size, activation, batchnorm_layer,
+        kernel_size = (k_size, k_size) if self.ndim == 2 else (k_size, k_size, k_size)
+        if isotropy[-1] is False and self.ndim == 3:
+            kernel_size = (1, k_size, k_size)
+        self.bottleneck = DoubleConvBlock(conv, in_channels, feature_maps[-1], kernel_size, activation, batchnorm_layer,
             drop_values[-1])
 
         # DECODER
         self.up_path = nn.ModuleList()
         in_channels = feature_maps[-1]
         for i in range(self.depth-1, -1, -1):
+            kernel_size = (k_size, k_size) if self.ndim == 2 else (k_size, k_size, k_size)
+            if isotropy[i] is False and self.ndim == 3:
+                kernel_size = (1, k_size, k_size)
             self.up_path.append( 
                 UpBlock(self.ndim, convtranspose, in_channels, feature_maps[i], z_down[i], upsample_layer, 
-                    conv, k_size, activation, batchnorm_layer, drop_values[i], se_block=True)
+                    conv, kernel_size, activation, batchnorm_layer, drop_values[i], se_block=True)
             )
             in_channels = feature_maps[i]
         
+        # extra (larger) output layer
+        if larger_io:
+            kernel_size = (k_size+2, k_size+2) if self.ndim == 2 else (k_size+2, k_size+2, k_size+2)
+            if isotropy[0] is False and self.ndim == 3:
+                kernel_size = (1, k_size+2, k_size+2)
+            self.conv_out = ConvBlock(conv=conv, in_size=feature_maps[0], out_size=feature_maps[0], 
+                                             k_size=kernel_size, act=activation, batch_norm=batchnorm_layer)
+        else:
+            self.conv_out = None
         # Super-resolution
         self.post_upsampling = None
         if len(upsampling_factor) > 1 and upsampling_position == "post":
@@ -148,6 +186,10 @@ class SE_U_Net(nn.Module):
         if self.pre_upsampling is not None:
             x = self.pre_upsampling(x)
 
+        # extra large-kernel input layer
+        if self.conv_in is not None:
+            x = self.conv_in( x )
+
         # Down
         blocks = []
         for i, layers in enumerate(zip(self.down_path,self.mpooling_layers)):
@@ -162,6 +204,10 @@ class SE_U_Net(nn.Module):
         # Up
         for i, up in enumerate(self.up_path):
             x = up(x, blocks[-i - 1])
+
+        # extra large-kernel output layer
+        if self.conv_out is not None:
+            x = self.conv_out( x )
 
         # Super-resolution
         if self.post_upsampling is not None:
