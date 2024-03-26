@@ -85,12 +85,10 @@ class Attention_U_Net(nn.Module):
         if self.ndim == 3:
             conv = nn.Conv3d
             convtranspose = nn.ConvTranspose3d
-            batchnorm_layer = get_norm_3d( normalization )
             pooling = nn.MaxPool3d
         else:
             conv = nn.Conv2d
             convtranspose = nn.ConvTranspose2d
-            batchnorm_layer = get_norm_2d( normalization )
             pooling = nn.MaxPool2d
             
         # Super-resolution
@@ -104,14 +102,14 @@ class Attention_U_Net(nn.Module):
         in_channels = image_shape[-1]
         for i in range(self.depth):
             self.down_path.append( 
-                DoubleConvBlock(conv, in_channels, feature_maps[i], k_size, activation, batchnorm_layer,
+                DoubleConvBlock(conv, in_channels, feature_maps[i], k_size, activation, normalization,
                     drop_values[i])
             )
             mpool = (self.z_down[i], 2, 2) if self.ndim == 3 else (2, 2)
             self.mpooling_layers.append(pooling(mpool))
             in_channels = feature_maps[i]
 
-        self.bottleneck = DoubleConvBlock(conv, in_channels, feature_maps[-1], k_size, activation, batchnorm_layer,
+        self.bottleneck = DoubleConvBlock(conv, in_channels, feature_maps[-1], k_size, activation, normalization,
             drop_values[-1])
 
         # DECODER
@@ -120,7 +118,7 @@ class Attention_U_Net(nn.Module):
         for i in range(self.depth-1, -1, -1):
             self.up_path.append( 
                 UpBlock(self.ndim, convtranspose, in_channels, feature_maps[i], z_down[i], upsample_layer, 
-                    conv, k_size, activation, batchnorm_layer, drop_values[i], attention_gate=True)
+                    conv, k_size, activation, normalization, drop_values[i], attention_gate=True)
             )
             in_channels = feature_maps[i]
         

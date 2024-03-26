@@ -85,12 +85,10 @@ class ResUNet(nn.Module):
         if self.ndim == 3:
             conv = nn.Conv3d
             convtranspose = nn.ConvTranspose3d
-            batchnorm_layer = get_norm_3d( normalization )
             pooling = nn.MaxPool3d
         else:
             conv = nn.Conv2d
             convtranspose = nn.ConvTranspose2d
-            batchnorm_layer = get_norm_2d( normalization )
             pooling = nn.MaxPool2d
             
         # Super-resolution
@@ -109,7 +107,7 @@ class ResUNet(nn.Module):
             if isotropy[0] is False and self.ndim == 3:
                 kernel_size = (1, k_size+2, k_size+2)
             self.conv_in = ConvBlock(conv=conv, in_size=in_channels, out_size=feature_maps[0], 
-                                             k_size=kernel_size, act=activation, batch_norm=batchnorm_layer)
+                                             k_size=kernel_size, act=activation, norm=normalization)
             in_channels = feature_maps[0]
         else:
             self.conv_in = None
@@ -120,7 +118,7 @@ class ResUNet(nn.Module):
                 kernel_size = (1, k_size, k_size) 
             self.down_path.append( 
                 ResConvBlock(conv=conv, in_size=in_channels, out_size=feature_maps[i], k_size=kernel_size, act=activation, 
-                    batch_norm=batchnorm_layer, dropout=drop_values[i], first_block=True if i==0 else False)
+                    norm=normalization, dropout=drop_values[i], first_block=True if i==0 else False)
             )
             mpool = (z_down[i], 2, 2) if self.ndim == 3 else (2, 2)
             self.mpooling_layers.append(pooling(mpool))
@@ -130,7 +128,7 @@ class ResUNet(nn.Module):
         if isotropy[-1] is False and self.ndim == 3:
             kernel_size = (1, k_size, k_size)
         self.bottleneck = ResConvBlock(conv=conv, in_size=in_channels, out_size=feature_maps[-1], k_size=kernel_size, 
-            act=activation, batch_norm=batchnorm_layer, dropout=drop_values[-1])
+            act=activation, norm=normalization, dropout=drop_values[-1])
 
         # DECODER
         self.up_path = nn.ModuleList()
@@ -142,7 +140,7 @@ class ResUNet(nn.Module):
             self.up_path.append( 
                 ResUpBlock(ndim=self.ndim, convtranspose=convtranspose, in_size=in_channels, out_size=feature_maps[i], 
                     in_size_bridge=feature_maps[i], z_down=z_down[i], up_mode=upsample_layer, 
-                    conv=conv, k_size=kernel_size, act=activation, batch_norm=batchnorm_layer, dropout=drop_values[i])
+                    conv=conv, k_size=kernel_size, act=activation, norm=normalization, dropout=drop_values[i])
             )
             in_channels = feature_maps[i]
         
@@ -152,7 +150,7 @@ class ResUNet(nn.Module):
             if isotropy[0] is False and self.ndim == 3:
                 kernel_size = (1, k_size+2, k_size+2)
             self.conv_out = ConvBlock(conv=conv, in_size=feature_maps[0], out_size=feature_maps[0], 
-                                             k_size=kernel_size, act=activation, batch_norm=batchnorm_layer)
+                                             k_size=kernel_size, act=activation, norm=normalization)
         else:
             self.conv_out = None
         # Super-resolution

@@ -77,12 +77,10 @@ class ResUNetPlusPlus(nn.Module):
         if self.ndim == 3:
             conv = nn.Conv3d
             convtranspose = nn.ConvTranspose3d
-            batchnorm_layer = get_norm_3d( normalization )
             pooling = nn.MaxPool3d
         else:
             conv = nn.Conv2d
             convtranspose = nn.ConvTranspose2d
-            batchnorm_layer = get_norm_2d( normalization )
             pooling = nn.MaxPool2d
             
         # Super-resolution
@@ -98,7 +96,7 @@ class ResUNetPlusPlus(nn.Module):
         self.sqex_blocks = nn.ModuleList()
         self.down_path.append( 
                 ResConvBlock(conv=conv, in_size=image_shape[-1], out_size=feature_maps[0], k_size=k_size, act=activation, 
-                    batch_norm=batchnorm_layer, dropout=drop_values[0], skip_k_size=k_size, skip_batch_norm=batchnorm_layer, 
+                    norm=normalization, dropout=drop_values[0], skip_k_size=k_size, skip_norm=normalization, 
                     first_block=True)
             )
         self.sqex_blocks.append(SqExBlock(feature_maps[0], ndim=self.ndim))
@@ -108,7 +106,7 @@ class ResUNetPlusPlus(nn.Module):
         for i in range(self.depth):
             self.down_path.append( 
                 ResConvBlock(conv=conv, in_size=in_channels, out_size=feature_maps[i+1], k_size=k_size, act=activation, 
-                    batch_norm=batchnorm_layer, dropout=drop_values[i], skip_k_size=k_size, skip_batch_norm=batchnorm_layer, 
+                    norm=normalization, dropout=drop_values[i], skip_k_size=k_size, skip_norm=normalization, 
                     first_block=False)
             )
             mpool = (z_down[i+1], 2, 2) if self.ndim == 3 else (2, 2)
@@ -117,7 +115,7 @@ class ResUNetPlusPlus(nn.Module):
             if i != self.depth-1:
                 self.sqex_blocks.append(SqExBlock(in_channels, ndim=self.ndim))
         self.sqex_blocks.append(None) # So it can be used zip() with the length of self.down_path and self.mpooling_layers
-        self.aspp_bridge = ASPP(conv=conv, in_dims=in_channels, out_dims=feature_maps[-1], batch_norm=batchnorm_layer)
+        self.aspp_bridge = ASPP(conv=conv, in_dims=in_channels, out_dims=feature_maps[-1], norm=normalization)
 
         # DECODER
         self.up_path = nn.ModuleList()
@@ -125,16 +123,16 @@ class ResUNetPlusPlus(nn.Module):
         for i in range(self.depth-1, -1, -1):
             self.attentions.append(
                 ResUNetPlusPlus_AttentionBlock(conv=conv, maxpool=pooling, input_encoder=feature_maps[i], 
-                    input_decoder=feature_maps[i+2], output_dim=feature_maps[i+2], batch_norm=batchnorm_layer,
+                    input_decoder=feature_maps[i+2], output_dim=feature_maps[i+2], norm=normalization,
                     z_down=z_down[i+1])
             )
             self.up_path.append( 
                 ResUpBlock(ndim=self.ndim, convtranspose=convtranspose, in_size=feature_maps[i+2], out_size=feature_maps[i+1], 
                     in_size_bridge=feature_maps[i], z_down=z_down[i+1], up_mode=upsample_layer, 
-                    conv=conv, k_size=k_size, act=activation, batch_norm=batchnorm_layer, dropout=drop_values[i+2], 
-                    skip_k_size=k_size, skip_batch_norm=batchnorm_layer)
+                    conv=conv, k_size=k_size, act=activation, norm=normalization, dropout=drop_values[i+2], 
+                    skip_k_size=k_size, skip_norm=normalization)
             )
-        self.aspp_out = ASPP(conv=conv, in_dims=feature_maps[1], out_dims=feature_maps[0], batch_norm=batchnorm_layer)
+        self.aspp_out = ASPP(conv=conv, in_dims=feature_maps[1], out_dims=feature_maps[0], norm=normalization)
         
         # Super-resolution
         self.post_upsampling = None
