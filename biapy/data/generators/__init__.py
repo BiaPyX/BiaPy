@@ -193,9 +193,9 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
             norm_custom_mean=custom_mean, norm_custom_std=custom_std, norm_custom_mode=custom_mode)
     else:
         if cfg.PROBLEM.TYPE != 'DENOISING':
-            data_paths = [cfg.DATA.TRAIN.PATH, cfg.DATA.TRAIN.GT_PATH] 
+            data_paths = [cfg.DATA.VAL.PATH, cfg.DATA.VAL.GT_PATH] 
         else:
-            data_paths = [cfg.DATA.TRAIN.PATH] 
+            data_paths = [cfg.DATA.VAL.PATH] 
         dic = dict(ndim=ndim, X=X_val, Y=Y_val, in_memory=mem, data_paths=data_paths, da=False, shape=cfg.DATA.PATCH_SIZE,
             random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, val=True, n_classes=cfg.MODEL.N_CLASSES, 
             seed=cfg.SYSTEM.SEED, not_normalize=not_normalize, norm_type=cfg.DATA.NORMALIZATION.TYPE, norm_custom_mean=custom_mean, 
