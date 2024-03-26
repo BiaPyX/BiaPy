@@ -700,6 +700,8 @@ class Config:
         _C.MODEL.UNETR_VIT_NUM_FILTERS = 16
         # Decoder activation
         _C.MODEL.UNETR_DEC_ACTIVATION = 'relu'
+        # Decoder convolutions' kernel size 
+        _C.MODEL.UNETR_DEC_KERNEL_SIZE = 3
 
         # Specific for SR models based on U-Net architectures. Options are ["pre", "post"]
         _C.MODEL.UNET_SR_UPSAMPLE_POSITION = "pre"

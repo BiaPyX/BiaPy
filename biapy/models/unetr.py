@@ -60,6 +60,9 @@ class UNETR(nn.Module):
     dropout : bool, optional
         Dropout rate for the decoder (can be a list of dropout rates for each layer).
 
+    k_size : int, optional
+        Decoder convolutions' kernel size.
+
     output_channels : str, optional
         Channels to operate with. Possible values: ``BC``, ``BCD``, ``BP``, ``BCDv2``,
         ``BDv2``, ``Dv2`` and ``BCM``.
@@ -71,7 +74,7 @@ class UNETR(nn.Module):
     """
     def __init__(self, input_shape, patch_size, embed_dim, depth, num_heads, mlp_ratio=4., num_filters = 16, 
         norm_layer=nn.LayerNorm, n_classes = 1, decoder_activation = 'relu', ViT_hidd_mult = 3, batch_norm = True, 
-        dropout = 0.0, output_channels="BC"):
+        dropout = 0.0, k_size=3, output_channels="BC"):
         super().__init__()
         
         self.input_shape = input_shape
@@ -81,7 +84,8 @@ class UNETR(nn.Module):
         self.ndim = 3 if len(input_shape) == 4 else 2
         self.n_classes = 1 if n_classes <= 2 else n_classes
         self.multiclass = True if n_classes > 2 and output_channels is not None else False
-
+        self.k_size = k_size
+        
         if self.ndim == 3:
             conv = nn.Conv3d
             convtranspose = nn.ConvTranspose3d
@@ -136,25 +140,25 @@ class UNETR(nn.Module):
                     convtranspose(in_size, num_filters * (2**layer), kernel_size=2, stride=2, bias=False)
                 )
                 block.append(
-                    ConvBlock(conv, in_size=num_filters * (2**layer), out_size=num_filters * (2**layer), k_size=3, 
+                    ConvBlock(conv, in_size=num_filters * (2**layer), out_size=num_filters * (2**layer), k_size=k_size, 
                         act=decoder_activation, batch_norm=batchnorm_layer, dropout=dropout[layer])
                 )
                 in_size = num_filters * (2**layer)
             self.mid_blue_block.append(nn.Sequential(*block))
             self.two_yellow_layers.append(
-                DoubleConvBlock(conv, in_size*2, in_size, k_size=3, act=decoder_activation, batch_norm=batchnorm_layer,
+                DoubleConvBlock(conv, in_size*2, in_size, k_size=k_size, act=decoder_activation, batch_norm=batchnorm_layer,
                     dropout=dropout[layer]))
             self.up_green_layers.append(
                 convtranspose(in_size, num_filters * (2**(layer-1)), kernel_size=2, stride=2, bias=False))
         
         # Last two yellow block for the first skip connection 
         self.two_yellow_layers.append(
-            DoubleConvBlock(conv, input_shape[-1], num_filters, k_size=3, act=decoder_activation, batch_norm=batchnorm_layer,
+            DoubleConvBlock(conv, input_shape[-1], num_filters, k_size=k_size, act=decoder_activation, batch_norm=batchnorm_layer,
                 dropout=dropout[0]))
 
         # Last convolutions 
         self.two_yellow_layers.append(
-            DoubleConvBlock(conv, num_filters*2, num_filters, k_size=3, act=decoder_activation, batch_norm=batchnorm_layer,
+            DoubleConvBlock(conv, num_filters*2, num_filters, k_size=k_size, act=decoder_activation, batch_norm=batchnorm_layer,
                 dropout=dropout[0]))
 
         # Instance segmentation

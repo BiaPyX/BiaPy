@@ -281,8 +281,8 @@ class MaskedAutoencoderViT(nn.Module):
         N, L, D = x.shape  # batch, length, dim
 
         mask = self.mask.repeat(N, 1)
-        x_masked = torch.gather(x, dim=1, index=self.ids_keep)
-        return x_masked, mask, self.ids_restore
+        x_masked = torch.gather(x, dim=1, index=self.ids_keep.repeat(N, 1, 1))
+        return x_masked, mask, self.ids_restore.repeat(N, 1)
 
     def forward_encoder(self, x):
         """

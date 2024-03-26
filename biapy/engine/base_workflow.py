@@ -275,6 +275,8 @@ class Base_Workflow(metaclass=ABCMeta):
                             "Please check the data!".format(len(self.X_val), len(self.Y_val)))
                 else:
                     self.X_val, self.Y_val = None, None
+            else:
+                self.X_val, self.Y_val = None, None
 
         # Ensure all the processes have read the data                 
         if is_dist_avail_and_initialized():
@@ -442,8 +444,9 @@ class Base_Workflow(metaclass=ABCMeta):
 
         self.model_without_ddp = self.model
         if self.args.distributed:
+            find_unused_parameters = True if self.cfg.MODEL.ARCHITECTURE.lower() == "unetr" else False
             self.model = torch.nn.parallel.DistributedDataParallel(self.model, device_ids=[self.args.gpu], 
-                find_unused_parameters=False)
+                find_unused_parameters=find_unused_parameters)
             self.model_without_ddp = self.model.module
         self.model_prepared = True
 
