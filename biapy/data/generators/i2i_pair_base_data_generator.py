@@ -840,7 +840,14 @@ class I2IPairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 mask = np.squeeze(self.Y[idx].copy())
         else:
             if not self.val:
-                random_raw_image = np.random.randint(0, len(self.data[f"sample_{idx}"]["raw"]))
+                nimages = len(self.data[f"sample_{idx}"]["raw"])
+                if nimages % 2 == 0:
+                    probs = np.concatenate([np.linspace(0.1, 1.1, nimages//2),np.linspace(1.1, 0.1, nimages//2)])
+                else:
+                    probs = np.concatenate([np.linspace(0.1, 1.1, nimages//2),[1],np.linspace(1.1, 0.1, nimages//2)])
+                probs = probs/probs.sum()
+                random_raw_image = np.random.choice(nimages, size=1, p=probs)[0]
+                # random_raw_image = np.random.randint(0, len(self.data[f"sample_{idx}"]["raw"]))
                 img = imread(self.data[f"sample_{idx}"]["raw"][random_raw_image])
             else:
                 img = imread(self.data[f"sample_{idx}"]["raw"])
