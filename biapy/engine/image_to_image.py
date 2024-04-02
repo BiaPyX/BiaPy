@@ -13,7 +13,7 @@ from biapy.data.pre_processing import norm_range01, undo_norm_range01, denormali
 from biapy.data.post_processing.post_processing import ensemble8_2d_predictions, ensemble16_3d_predictions
 from biapy.data.data_2D_manipulation import crop_data_with_overlap, merge_data_with_overlap
 from biapy.data.data_3D_manipulation import crop_3D_data_with_overlap, merge_3D_data_with_overlap
-from biapy.engine.metrics import weighted_L1
+from biapy.engine.metrics import weighted_L1, weighted_MSE
 
 class Image_to_Image_Workflow(Base_Workflow):
     """
@@ -53,8 +53,7 @@ class Image_to_Image_Workflow(Base_Workflow):
         self.metrics = [PeakSignalNoiseRatio().to(self.device), torch.nn.MSELoss()]
         self.metric_names = ["PSNR", "MSE"]
         print("Overriding 'LOSS.TYPE' to set it to MAE")
-        # self.loss = torch.nn.L1Loss()
-        self.loss = weighted_L1()
+        self.loss = weighted_MSE()
 
     def metric_calculation(self, output, targets, metric_logger=None):
         """

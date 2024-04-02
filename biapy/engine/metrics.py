@@ -664,11 +664,9 @@ def MaskedAutoencoderViT_loss(y_pred, y_true, model):
 class weighted_L1():
     def __init__(self):
         """
-        Custom loss that
-
+        Wrapper to L1 loss function. 
         """
-        # self.l1_loss = torch.nn.L1Loss(reduction='none')
-        self.l1_loss = torch.nn.L1Loss(reduction='mean')
+        self.loss = torch.nn.L1Loss(reduction='none')
 
     def __call__(self, y_pred, y_true):
         """
@@ -687,8 +685,30 @@ class weighted_L1():
         loss : Tensor
             Loss value.
         """
-        # loss_per_sample = self.l1_loss(y_pred, y_true[0]) 
-        # import pdb; pdb.set_trace()
-        # loss_per_sample = loss_per_sample.view(loss_per_sample.shape[0],-1).mean(1)
-        # return torch.mean(loss_per_sample*y_true[1])
-        return self.l1_loss(y_pred, y_true[0]) 
+        return self.loss(y_pred, y_true[0]) 
+
+class weighted_MSE():
+    def __init__(self):
+        """
+        Wrapper to MSE loss function. 
+        """
+        self.loss = torch.nn.MSELoss(reduction='mean')
+
+    def __call__(self, y_pred, y_true):
+        """
+        Calculate instance segmentation loss.
+
+        Parameters
+        ----------
+        y_true : Tensor
+            Ground truth masks.
+
+        y_pred : Tensor or list of Tensors
+            Predictions.
+
+        Returns
+        -------
+        loss : Tensor
+            Loss value.
+        """
+        return self.loss(y_pred, y_true[0]) 
