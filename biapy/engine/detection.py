@@ -135,9 +135,8 @@ class Detection_Workflow(Base_Workflow):
 
         Parameters
         ----------
-        pred : 4D/5D Torch tensor
-            Model predictions. E.g. ``(num_of_images, y, x, channels)`` for 2D or 
-            ``(num_of_images, z, y, x, channels)`` for 3D.
+        pred : 4D Torch tensor
+            Model predictions. E.g. ``(z, y, x, channels)`` for both 2D and 3D.
         
         filenames : List of str
             Predicted image's filenames.
@@ -145,10 +144,7 @@ class Detection_Workflow(Base_Workflow):
         metric_names : List of str
             Metrics names.
         """
-        if self.cfg.PROBLEM.NDIM == "2D" and not self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
-            assert pred.ndim == 4, "Prediction doesn't have 4 dim: {pred.shape}"
-        else:
-            assert pred.ndim == 5, "Prediction doesn't have 5 dim: {pred.shape}"
+        assert pred.ndim == 4, "Prediction doesn't have 4 dim: {pred.shape}"
 
         file_ext = os.path.splitext(filenames[0])[1]
         ndim = 2 if self.cfg.PROBLEM.NDIM == "2D" else 3
@@ -475,8 +471,12 @@ class Detection_Workflow(Base_Workflow):
         pred : Torch Tensor
             Model prediction.
         """
-        self.detection_process(pred, self.processing_filenames, ['d_precision_merge_patches', 'd_recall_merge_patches', 'd_f1_merge_patches'])
-
+        if pred.shape[0] == 1:
+            if self.cfg.PROBLEM.NDIM == "3D": pred = pred[0]
+            self.detection_process(pred, self.processing_filenames, ['d_precision_merge_patches', 
+                'd_recall_merge_patches', 'd_f1_merge_patches'])
+        else:
+            NotImplementedError
     def process_patch(self, z, y, x, _filename, total_patches, c, pred, d, file_ext, z_dim, y_dim, x_dim):
         """
         Process a patch for the detection workflow.
@@ -746,7 +746,11 @@ class Detection_Workflow(Base_Workflow):
         pred : Torch Tensor
             Model prediction.
         """
-        self.detection_process(pred, self.processing_filenames, ['d_precision', 'd_recall', 'd_f1'])
+        if pred.shape[0] == 1:
+            if self.cfg.PROBLEM.NDIM == "3D": pred = pred[0]
+            self.detection_process(pred, self.processing_filenames, ['d_precision', 'd_recall', 'd_f1'])
+        else:
+            NotImplementedError
 
     def after_all_images(self):
         """

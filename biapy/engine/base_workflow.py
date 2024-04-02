@@ -213,6 +213,7 @@ class Base_Workflow(metaclass=ABCMeta):
             print("##########################")
             print("#   LOAD TRAINING DATA   #")
             print("##########################")
+            self.X_val, self.Y_val = None, None
             if self.cfg.DATA.TRAIN.IN_MEMORY:
                 val_split = self.cfg.DATA.VAL.SPLIT_TRAIN if self.cfg.DATA.VAL.FROM_TRAIN else 0.
                 f_name = load_and_prepare_2D_train_data if self.cfg.PROBLEM.NDIM == '2D' else load_and_prepare_3D_data
@@ -268,15 +269,9 @@ class Base_Workflow(metaclass=ABCMeta):
                             reflect_to_complete_shape=self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE,
                             check_channel=False, check_drange=False,convert_to_rgb=self.cfg.DATA.FORCE_RGB, 
                             preprocess_cfg = preprocess_cfg, is_mask = is_y_mask, preprocess_f=preprocess_fn)                            
-                    else:
-                        self.Y_val = None
                     if self.Y_val is not None and len(self.X_val) != len(self.Y_val):
                         raise ValueError("Different number of raw and ground truth items ({} vs {}). "
                             "Please check the data!".format(len(self.X_val), len(self.Y_val)))
-                else:
-                    self.X_val, self.Y_val = None, None
-            else:
-                self.X_val, self.Y_val = None, None
 
         # Ensure all the processes have read the data                 
         if is_dist_avail_and_initialized():

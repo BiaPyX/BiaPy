@@ -196,8 +196,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         Parameters
         ----------
         pred : 4D/5D Torch tensor
-            Model predictions. E.g. ``(num_of_images, y, x, channels)`` for 2D or 
-            ``(num_of_images, z, y, x, channels)`` for 3D.
+            Model predictions. E.g. ``(z, y, x, channels)`` for both 2D and 3D.
 
         filenames : List of str
             Predicted image's filenames.
@@ -208,10 +207,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         out_dir_post_proc : path
             Output directory to save the post-processed instances.
         """
-        if self.cfg.PROBLEM.NDIM == "2D" and not self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
-            assert pred.ndim == 4, "Prediction doesn't have 4 dim: {pred.shape}"
-        else:
-            assert pred.ndim == 5, "Prediction doesn't have 5 dim: {pred.shape}"
+        assert pred.ndim == 4, "Prediction doesn't have 4 dim: {pred.shape}"
 
         #############################
         ### INSTANCE SEGMENTATION ###
@@ -547,18 +543,22 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         pred : Torch Tensor
             Model prediction.
         """
-        if not self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
-            resolution = self.cfg.DATA.TEST.RESOLUTION if len(self.cfg.DATA.TEST.RESOLUTION) == 2 else self.cfg.DATA.TEST.RESOLUTION[1:]
-            r, r_post, rcls, rcls_post = self.instance_seg_process(pred, self.processing_filenames, self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
-                self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING, resolution)        
-            if r is not None:
-                self.all_matching_stats_merge_patches.append(r)
-            if r_post is not None:
-                self.all_matching_stats_merge_patches_post.append(r_post)
-            if rcls is not None:
-                self.all_class_stats_merge_patches.append(rcls)
-            if rcls_post is not None:
-                self.all_class_stats_merge_patches_post.append(rcls_post)    
+        if pred.shape[0] == 1:
+            if self.cfg.PROBLEM.NDIM == "3D": pred = pred[0]
+            if not self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
+                resolution = self.cfg.DATA.TEST.RESOLUTION if len(self.cfg.DATA.TEST.RESOLUTION) == 2 else self.cfg.DATA.TEST.RESOLUTION[1:]
+                r, r_post, rcls, rcls_post = self.instance_seg_process(pred, self.processing_filenames, self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
+                    self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING, resolution)        
+                if r is not None:
+                    self.all_matching_stats_merge_patches.append(r)
+                if r_post is not None:
+                    self.all_matching_stats_merge_patches_post.append(r_post)
+                if rcls is not None:
+                    self.all_class_stats_merge_patches.append(rcls)
+                if rcls_post is not None:
+                    self.all_class_stats_merge_patches_post.append(rcls_post)   
+        else:
+            NotImplementedError 
 
     def after_merge_patches_by_chunks_proccess_patch(self, filename):
         """
@@ -582,18 +582,22 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         pred : Torch Tensor
             Model prediction.
         """
-        if not self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
-            resolution = self.cfg.DATA.TEST.RESOLUTION if len(self.cfg.DATA.TEST.RESOLUTION) == 2 else self.cfg.DATA.TEST.RESOLUTION[1:]
-            r, r_post, rcls, rcls_post = self.instance_seg_process(pred, self.processing_filenames, self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_INSTANCES,
-                self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_POST_PROCESSING, resolution)  
-            if r is not None:
-                self.all_matching_stats.append(r)
-            if r_post is not None:
-                self.all_matching_stats_post.append(r_post)
-            if rcls is not None:
-                self.all_class_stats.append(rcls)
-            if rcls_post is not None:
-                self.all_class_stats_post.append(rcls_post) 
+        if pred.shape[0] == 1:
+            if self.cfg.PROBLEM.NDIM == "3D": pred = pred[0]
+            if not self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
+                resolution = self.cfg.DATA.TEST.RESOLUTION if len(self.cfg.DATA.TEST.RESOLUTION) == 2 else self.cfg.DATA.TEST.RESOLUTION[1:]
+                r, r_post, rcls, rcls_post = self.instance_seg_process(pred, self.processing_filenames, self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_INSTANCES,
+                    self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_POST_PROCESSING, resolution)  
+                if r is not None:
+                    self.all_matching_stats.append(r)
+                if r_post is not None:
+                    self.all_matching_stats_post.append(r_post)
+                if rcls is not None:
+                    self.all_class_stats.append(rcls)
+                if rcls_post is not None:
+                    self.all_class_stats_post.append(rcls_post) 
+        else:
+            NotImplementedError
 
     def after_all_images(self):
         """
