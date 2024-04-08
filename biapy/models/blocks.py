@@ -341,7 +341,7 @@ class ResConvBlock(nn.Module):
 
 class ResUpBlock(nn.Module):
     def __init__(self, ndim, convtranspose, in_size, out_size, in_size_bridge, z_down, up_mode, conv, k_size, 
-        act=None, norm='none', skip_k_size=1, skip_batch_norm=None, dropout=0):
+        act=None, norm='none', skip_k_size=1, skip_norm='none', dropout=0):
         """
         Residual upsampling block.
 
@@ -385,8 +385,9 @@ class ResUpBlock(nn.Module):
         skip_k_size : int, optional
             Kernel size for the skip connection convolution. Used in resunet++.
         
-        skip_batch_norm : nn.BatchNorm Torch layer, optional
-            Batch normalization layer to use in the skip connection. Used in resunet++.
+        skip_norm : str, optional
+            Normalization layer to use in the skip connection (one of ``'bn'``, ``'sync_bn'`` ``'in'``,
+            ``'gn'`` or ``'none'``). Used in resunet++.
 
         drop_value : float, optional
             Dropout value to be fixed.
@@ -401,7 +402,7 @@ class ResUpBlock(nn.Module):
             
         self.conv_block = ResConvBlock(conv=conv, in_size=in_size+in_size_bridge, out_size=out_size, 
             k_size=k_size, act=act, norm=norm, dropout=dropout, skip_k_size=skip_k_size,
-            skip_batch_norm=skip_batch_norm)
+            skip_norm=skip_norm)
 
     def forward(self, x, bridge):
         up = self.up(x)
