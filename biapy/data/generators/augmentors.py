@@ -658,7 +658,7 @@ def brightness_em(image, brightness_factor=(0,0),  mode='2D', invert=False, inve
     if brightness_factor[0] == 0 and brightness_factor[1] == 0: return image
 
     # Force mode if 2D
-    if img.ndim == 3: mode == '3D'
+    if image.ndim == 3: mode == '3D'
 
     b_factor = random.uniform(brightness_factor[0], brightness_factor[1])
     if mode == '2D':
