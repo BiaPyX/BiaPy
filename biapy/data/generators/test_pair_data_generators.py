@@ -8,7 +8,7 @@ from skimage.io import imread
 from PIL import Image
 from PIL.TiffTags import TAGS
 
-from biapy.data.pre_processing import normalize, norm_range01
+from biapy.data.pre_processing import normalize, norm_range01, percentile_norm
 
 
 class test_pair_data_generator(Dataset):
@@ -44,20 +44,8 @@ class test_pair_data_generator(Dataset):
     instance_problem : bool, optional
         To not divide the labels if being in an instance segmenation problem.
 
-    norm_type : str, optional
-        Type of normalization to be made. Options available: ``div`` or ``custom``.
-
-    not_normalize : bool, optional
-        Whether to normalize the data or not. Useful in BMZ model as the normalization is made during the inference. 
-
-    norm_custom_mean : float, optional
-        Mean of the data used to normalize.
-
-    norm_custom_std : float, optional
-        Std of the data used to normalize.
-    
-    norm_custom_mode :  str, optional
-        Whether to apply the normalization by sample or with all dataset statistics. Options: ``'image'`` or ``'dataset'``.
+    norm_dict : str, optional
+        Normalization instructions. 
 
     reduce_mem : bool, optional
         To reduce the dtype from float32 to float16. 
@@ -70,17 +58,16 @@ class test_pair_data_generator(Dataset):
         converted into RGB.
     """
     def __init__(self, ndim, X=None, d_path=None, test_by_chunks=False, provide_Y=False, Y=None, dm_path=None, seed=42,
-                 instance_problem=False, normalizeY='as_mask', norm_type='div', not_normalize=False,
-                 norm_custom_mean=None, norm_custom_std=None, norm_custom_mode=None, reduce_mem=False, sample_ids=None, 
-                 convert_to_rgb=False):
+                 instance_problem=False, norm_dict=None, reduce_mem=False, sample_ids=None, convert_to_rgb=False):
 
         if X is None and d_path is None:
             raise ValueError("One between 'X' or 'd_path' must be provided")
         if provide_Y:
             if Y is None and dm_path is None:
                 raise ValueError("One between 'Y' or 'dm_path' must be provided")
-        assert normalizeY in ['as_mask', 'as_image', 'none']
-        
+        assert norm_dict['mask_norm'] in ['as_mask', 'as_image', 'none']
+        assert norm_dict != None, "Normalization instructions must be provided with 'norm_dict'"
+
         self.X = X
         self.Y = Y
         self.d_path = d_path
@@ -88,6 +75,7 @@ class test_pair_data_generator(Dataset):
         self.test_by_chunks = test_by_chunks
         self.provide_Y = provide_Y
         self.convert_to_rgb = convert_to_rgb
+        self.norm_dict = norm_dict
 
         if not reduce_mem:
             self.dtype = np.float32  
@@ -124,9 +112,7 @@ class test_pair_data_generator(Dataset):
         else:
             self.len = len(X)
         self.o_indexes = np.arange(self.len)
-        self.normalizeY = normalizeY
         
-        self.not_normalize = not_normalize
         # Check if a division is required
         self.X_norm = {}
         self.X_norm['type'] = 'div'
@@ -135,23 +121,31 @@ class test_pair_data_generator(Dataset):
             self.Y_norm['type'] = 'div'
         img, mask, xnorm, _ = self.load_sample(0)
 
-        if norm_type == 'custom' and not not_normalize:
-            if norm_custom_mean is not None and norm_custom_std is not None:
-                self.X_norm['mean'] = norm_custom_mean
-                self.X_norm['std'] = norm_custom_std
+        if norm_dict['enable']:
             self.X_norm['orig_dtype'] = img.dtype
-            self.X_norm['mode'] = norm_custom_mode    
-            self.X_norm['type'] = 'custom'
+            self.X_norm['application_mode'] = norm_dict['application_mode'] 
+            if norm_dict['type'] == 'custom':
+                self.X_norm['type'] = 'custom' 
+                if 'mean' in norm_dict and 'std' in norm_dict:
+                    self.X_norm['mean'] = norm_dict['mean']
+                    self.X_norm['std'] = norm_dict['std']
+            elif norm_dict['type'] == "percentile":
+                self.X_norm['type'] = 'percentile'
+                self.X_norm['lower_bound'] = norm_dict['lower_bound']
+                self.X_norm['upper_bound'] = norm_dict['upper_bound'] 
+                self.X_norm['lower_value'] = norm_dict['lower_value']
+                self.X_norm['upper_value'] = norm_dict['upper_value'] 
+
         if xnorm:
             self.X_norm.update(xnorm)
 
         if mask is not None:
             self.Y_norm = {}
-            if normalizeY == 'as_mask':
+            if norm_dict['mask_norm'] == 'as_mask':
                 self.Y_norm['type'] = 'div'
                 if (np.max(mask) > 30 and not instance_problem):
                     self.Y_norm['div'] = 1   
-            elif normalizeY == 'as_image':
+            elif norm_dict['mask_norm'] == 'as_image':
                 self.Y_norm.update(self.X_norm)
 
     def norm_X(self, img):
@@ -172,17 +166,24 @@ class test_pair_data_generator(Dataset):
             Normalization info. 
         """
         xnorm = None
-        if not self.not_normalize:
+        if self.norm_dict['enable']:
             if self.X_norm['type'] == 'div':
                 img, xnorm = norm_range01(img, dtype=self.dtype)
             elif self.X_norm['type'] == 'custom':
-                if self.X_norm['mode'] == "image":
+                if self.X_norm['application_mode'] == "image":
                     xnorm = {}
                     xnorm['mean'] = img.mean()
                     xnorm['std'] = img.std()
                     img = normalize(img, img.mean(), img.std(), out_type=self.dtype_str)
                 else:
                     img = normalize(img, self.X_norm['mean'], self.X_norm['std'], out_type=self.dtype_str)
+            elif self.X_norm['type'] == 'percentile':                                                                   
+                if self.X_norm['application_mode'] == "image":                                                                      
+                    img, xnorm = percentile_norm(img, lower=self.X_norm['lower_bound'],                                     
+                        upper=self.X_norm['upper_bound'])                                                
+                else:                                                                                                   
+                    img, xnorm = percentile_norm(img, lwr_perc_val=self.X_norm['lower_value'],                                     
+                        uppr_perc_val=self.X_norm['upper_value']) 
         return img, xnorm
 
     def norm_Y(self, mask):   
@@ -204,20 +205,27 @@ class test_pair_data_generator(Dataset):
             Normalization info.
         """
         ynorm = None
-        if self.normalizeY == 'as_mask':
+        if self.norm_dict['mask_norm'] == 'as_mask':
             if 'div' in self.Y_norm:
                 mask = mask/255
-        elif self.normalizeY == 'as_image':
+        elif self.norm_dict['mask_norm'] == 'as_image':
             if self.X_norm['type'] == 'div':
                 mask, ynorm = norm_range01(mask, dtype=self.dtype)
             elif self.X_norm['type'] == 'custom':
-                if self.X_norm['mode'] == "image":
+                if self.X_norm['application_mode'] == "image":
                     ynorm = {}
                     ynorm['mean'] = mask.mean()
                     ynorm['std'] = mask.std()
                     mask = normalize(mask, mask.mean(), mask.std(), out_type=self.dtype_str)
                 else:
                     mask = normalize(mask, self.X_norm['mean'], self.X_norm['std'], out_type=self.dtype_str)
+            elif self.X_norm['type'] == 'percentile':  
+                if self.X_norm['application_mode'] == "image":                                                                      
+                    mask, ynorm = percentile_norm(mask, lower=self.X_norm['lower_bound'],                                     
+                        upper=self.X_norm['upper_bound'])                                                
+                else:                                                                                                   
+                    mask, ynorm = percentile_norm(mask, lwr_perc_val=self.X_norm['lower_value'],                                     
+                        uppr_perc_val=self.X_norm['upper_value'])
         return mask, ynorm
 
     def load_sample(self, idx):
@@ -303,7 +311,7 @@ class test_pair_data_generator(Dataset):
             img = np.expand_dims(img, 0).astype(self.dtype)
             if self.provide_Y:
                 mask = np.expand_dims(mask, 0)
-                if self.normalizeY == 'as_mask':
+                if self.norm_dict['mask_norm'] == 'as_mask':
                     mask = mask.astype(np.uint8)
 
         if self.convert_to_rgb and img.shape[-1] == 1:

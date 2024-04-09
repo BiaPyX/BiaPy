@@ -63,14 +63,6 @@ class Single3DImageDataGenerator(SingleBaseDataGenerator):
         return image.transpose((2,1,0,3))
 
     def save_aug_samples(self, img, orig_images, i, pos, out_dir, draw_grid):
-        # Undo X normalization
-        if self.X_norm['type'] == 'div' and 'div' in self.X_norm:
-            orig_images['o_x'] = orig_images['o_x']*255
-            img = img*255
-        elif self.X_norm['type'] == 'custom':
-            img = denormalize(img, self.X_norm['mean'], self.X_norm['std'])
-            orig_images['o_x'] = denormalize(orig_images['o_x'], self.X_norm['mean'], self.X_norm['std'])
-
         # Original image
         if draw_grid: self.draw_grid(orig_images['o_x'])
         aux = np.expand_dims(orig_images['o_x'], 0).astype(np.float32)

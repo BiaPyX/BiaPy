@@ -511,14 +511,19 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     if len(cfg.DATA.PATCH_SIZE) != dim_count+1:
         raise ValueError("When PROBLEM.NDIM == {} DATA.PATCH_SIZE tuple must be length {}, given {}."
                          .format(cfg.PROBLEM.NDIM, dim_count+1, cfg.DATA.PATCH_SIZE))
-    assert cfg.DATA.NORMALIZATION.TYPE in ['div', 'custom'], "DATA.NORMALIZATION.TYPE not in ['div', 'custom']"
-    if cfg.DATA.NORMALIZATION.TYPE == 'custom':
-        if cfg.DATA.NORMALIZATION.CUSTOM_MEAN == -1 and cfg.DATA.NORMALIZATION.CUSTOM_STD == -1:
-            if not os.path.exists(cfg.PATHS.MEAN_INFO_FILE) or not os.path.exists(cfg.PATHS.STD_INFO_FILE):
-                if not cfg.DATA.TRAIN.IN_MEMORY and cfg.DATA.NORMALIZATION.CUSTOM_MODE == "dataset":
-                    raise ValueError("If no 'DATA.NORMALIZATION.CUSTOM_MEAN' and 'DATA.NORMALIZATION.CUSTOM_STD' were provided "
-                        "when DATA.NORMALIZATION.TYPE == 'custom', DATA.TRAIN.IN_MEMORY needs to be True")
-        assert cfg.DATA.NORMALIZATION.CUSTOM_MODE in ["image", "dataset"], "'DATA.NORMALIZATION.CUSTOM_MODE' needs to be one between ['image', 'dataset']"
+    assert cfg.DATA.NORMALIZATION.TYPE in ['div', 'custom', 'percentile'], "DATA.NORMALIZATION.TYPE not in ['div', 'custom', 'percentile']"
+    assert cfg.DATA.NORMALIZATION.APPLICATION_MODE in ["image", "dataset"], "'DATA.NORMALIZATION.APPLICATION_MODE' needs to be one between ['image', 'dataset']"
+    if not cfg.DATA.TRAIN.IN_MEMORY and cfg.DATA.NORMALIZATION.APPLICATION_MODE == "dataset":
+        raise ValueError("'DATA.NORMALIZATION.APPLICATION_MODE' == 'dataset' can only be applied if 'DATA.TRAIN.IN_MEMORY' == True")            
+    if cfg.DATA.NORMALIZATION.TYPE == 'percentile':
+        if cfg.DATA.NORMALIZATION.PERC_LOWER == -1:
+            raise ValueError("'DATA.NORMALIZATION.PERC_LOWER' needs to be set when DATA.NORMALIZATION.TYPE == 'percentile'")
+        if cfg.DATA.NORMALIZATION.PERC_UPPER == -1:
+            raise ValueError("'DATA.NORMALIZATION.PERC_UPPER' needs to be set when DATA.NORMALIZATION.TYPE == 'percentile'")
+        if not check_value(cfg.DATA.NORMALIZATION.PERC_LOWER, value_range=(0,100)):
+            raise ValueError("'DATA.NORMALIZATION.PERC_LOWER' not in [0, 100] range")
+        if not check_value(cfg.DATA.NORMALIZATION.PERC_UPPER, value_range=(0,100)):
+            raise ValueError("'DATA.NORMALIZATION.PERC_UPPER' not in [0, 100] range")
 
     ### Model ###
     if cfg.MODEL.SOURCE == "biapy":

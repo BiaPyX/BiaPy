@@ -15,7 +15,7 @@ from imgaug.augmentables.segmaps import SegmentationMapsOnImage
                  
 from biapy.utils.util import img_to_onehot_encoding
 from biapy.data.generators.augmentors import *
-from biapy.data.pre_processing import normalize, norm_range01
+from biapy.data.pre_processing import normalize, norm_range01, percentile_norm
 
 class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
     """
@@ -342,26 +342,10 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         Masking kernel for StructN2V to hide pixels adjacent to main blind spot. Value 1 = 'hidden', Value 0 = 'non hidden'. 
         Nested lists equivalent to ndarray. Must have odd length in each dimension (center pixel is blind spot). ``None`` 
         implies normal N2V masking.
-
-    not_normalize : bool, optional
-        Whether to normalize the data or not. Useful in BMZ model as the normalization is made during the inference. 
-        
-    norm_type : str, optional
-        Type of normalization to be made. Options available: ``div`` or ``custom``.
-
-    norm_custom_mean : float, optional
-        Mean of the data used to normalize.
-
-    norm_custom_std : float, optional
-        Std of the data used to normalize.
     
-    norm_custom_mode :  str, optional
-        Whether to apply the normalization by sample or with all dataset statistics. Options: ``'image'`` or ``'dataset'``.
+    norm_dict : dict, optional
+        Normalization instructions.
 
-    normalizeY : str, optional
-        Whether Y is going to be normalized or not. Options: ``as_mask``, ``as_image``. With ``as_image`` the image will be 
-        treated as another image and not as a mask (for normalization and interpolation).
-    
     instance_problem : bool, optional
         Advice the class that the workflow is of instance segmentation to divide the labels by channels.
     
@@ -390,16 +374,16 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                  pepper=False, pepper_amount=0.05, salt_and_pepper=False, salt_pep_amount=0.05, salt_pep_proportion=0.5, 
                  random_crops_in_DA=False, shape=(256,256,1), resolution=(-1,), prob_map=None, val=False, n_classes=1, 
                  extra_data_factor=1, n2v=False, n2v_perc_pix=0.198, n2v_manipulator='uniform_withCP', 
-                 n2v_neighborhood_radius=5, n2v_structMask=np.array([[0,1,1,1,1,1,1,1,1,1,0]]), not_normalize=False,
-                 norm_type='div', norm_custom_mean=None, norm_custom_std=None, norm_custom_mode=None, normalizeY='as_mask', 
+                 n2v_neighborhood_radius=5, n2v_structMask=np.array([[0,1,1,1,1,1,1,1,1,1,0]]), norm_dict=None, 
                  instance_problem=False, random_crop_scale=(1,1), convert_to_rgb=False):
 
         self.ndim = ndim
         self.z_size = -1 
         self.val = val
         self.convert_to_rgb = convert_to_rgb
-        self.not_normalize = not_normalize
-        assert normalizeY in ['as_mask', 'as_image', 'none']
+        assert norm_dict['mask_norm'] in ['as_mask', 'as_image', 'none']
+        assert norm_dict != None, "Normalization instructions must be provided with 'norm_dict'"
+        self.norm_dict = norm_dict
 
         if in_memory:
             # If not Y was provided and this generator was still selected means that we need to generate it. 
@@ -460,7 +444,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         self.random_crops_in_DA = random_crops_in_DA
         self.in_memory = in_memory
-        self.normalizeY = normalizeY
         self.data_paths = None
         if not in_memory:
             # Save paths where the data is stored
@@ -488,48 +471,29 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         # X data analysis
         self.X_norm = {}
         self.X_norm['type'] = 'none'
-        if self.not_normalize:
-            img, _ = self.load_sample(0)
-        else:
-            if norm_type == "custom" and norm_custom_mode == "dataset":
-                if norm_custom_mean is not None and norm_custom_std is not None:
-                    img, _ = self.load_sample(0)
-                    self.X_norm['mean'] = norm_custom_mean
-                    self.X_norm['std'] = norm_custom_std  
-                    self.X_norm['orig_dtype'] = img.dtype
-                else:
-                    if not in_memory:
-                        sam = []
-                        for i in range(len(self.data_paths)):
-                            img, _ = self.load_sample(i)
-                            sam.append(img)
-                            if shape[-1] != img.shape[-1]:
-                                raise ValueError("Channel of the DATA.PATCH_SIZE given {} does not correspond with the loaded image {}. "
-                                    "Please, check the channels of the images!".format(shape[-1], img.shape[-1]))
-                            if not random_crops_in_DA and shape != img.shape:
-                                raise ValueError("Image shape {} does not match provided DATA.PATCH_SIZE {}. If you want to ensure "
-                                "that PATCH_SIZE you have two options: 1) Set IN_MEMORY = True (as the images will be cropped "
-                                "automatically to that DATA.PATCH_SIZE) ; 2) Set DATA.EXTRACT_RANDOM_PATCH = True to extract a patch "
-                                "(if possible) from loaded image".format(img.shape, shape))
-
-                        sam = np.array(sam)
-                        self.X_norm['mean'] = np.mean(sam)
-                        self.X_norm['std'] = np.std(sam)
-                        self.X_norm['orig_dtype'] = img.dtype
-                        del sam
+        img, _ = self.load_sample(0)
+        if norm_dict['enable']:
+            self.X_norm['application_mode'] = norm_dict['application_mode']
+            self.X_norm['orig_dtype'] = img.dtype
+            if norm_dict['type'] == "custom":
+                self.X_norm['type'] = 'custom'    
+                if norm_dict['application_mode'] == "dataset":    
+                    if 'mean' in norm_dict and 'std' in norm_dict:    
+                        self.X_norm['mean'] = norm_dict['mean']
+                        self.X_norm['std'] = norm_dict['std']  
                     else:
-                        img, _ = self.load_sample(0)
                         self.X_norm['mean'] = np.mean(self.X)
-                        self.X_norm['std'] = np.std(self.X)    
-                        self.X_norm['orig_dtype'] = img.dtype
-                self.X_norm['mode'] = norm_custom_mode
-                self.X_norm['type'] = 'custom'
-            elif norm_type == "custom" and norm_custom_mode == "image":
-                img, _ = self.load_sample(0)
-                self.X_norm['mode'] = norm_custom_mode
-                self.X_norm['type'] = 'custom'
-            else:       
-                img, _ = self.load_sample(0)
+                        self.X_norm['std'] = np.std(self.X)                            
+            elif norm_dict['type'] == "percentile":
+                self.X_norm['type'] = 'percentile'
+                img, nsteps = percentile_norm(img, lower=norm_dict['lower_bound'], upper=norm_dict['lower_bound'],
+                    lwr_perc_val=norm_dict['lower_bound'], uppr_perc_val=norm_dict['lower_bound'])
+                self.X_norm.update(nsteps)
+                self.X_norm['lower_bound'] = norm_dict['lower_bound']
+                self.X_norm['upper_bound'] = norm_dict['upper_bound'] 
+                self.X_norm['lower_value'] = norm_dict['lower_value']
+                self.X_norm['upper_value'] = norm_dict['upper_value'] 
+            else: # norm_dict['type'] == "div"
                 img, nsteps = norm_range01(img)
                 self.X_norm.update(nsteps)
                 if shape[-1] != img.shape[-1]:
@@ -552,7 +516,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             self.channels_to_analize = -1
             
             # Loop over a few masks to ensure foreground class is present to decide normalization
-            if self.normalizeY == 'as_mask':
+            if self.norm_dict['mask_norm'] == 'as_mask':
                 print("Checking which channel of the mask needs normalization . . .")
                 n_samples = len(self.data_mask_path) if not in_memory else len(self.Y)
                 analized = False
@@ -593,7 +557,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             
         print("Normalization config used for X: {}".format(self.X_norm))
         if self.Y_provided:
-            print("Normalization config used for Y: {}".format(self.normalizeY))
+            print("Normalization config used for Y: {}".format(norm_dict['mask_norm']))
 
         if self.ndim == 2:
             resolution = tuple(resolution[i] for i in [1, 0]) # y, x -> x, y
@@ -852,10 +816,17 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             if self.X_norm['type'] == 'div':
                 img, _ = norm_range01(img)
             elif self.X_norm['type'] == 'custom':
-                if self.X_norm['mode'] == "image":
+                if self.X_norm['application_mode'] == "image":
                     img = normalize(img, img.mean(), img.std())
                 else:
                     img = normalize(img, self.X_norm['mean'], self.X_norm['std'])
+            elif self.X_norm['type'] == 'percentile':                                                                   
+                if self.X_norm['application_mode'] == "image":                                                                      
+                    img, _ = percentile_norm(img, lower=self.X_norm['lower_bound'],                                     
+                        upper=self.X_norm['upper_bound'])                                                
+                else:                                                                                                   
+                    img, _ = percentile_norm(img, lwr_perc_val=self.X_norm['lower_value'],                                     
+                        uppr_perc_val=self.X_norm['upper_value']) 
         return img 
 
     def norm_Y(self, mask):   
@@ -875,18 +846,25 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         """
         # Y normalization
         if self.X_norm['type'] != "none":
-            if self.normalizeY == 'as_mask' and self.Y_provided: 
+            if self.norm_dict['mask_norm'] == 'as_mask' and self.Y_provided: 
                 for j in range(self.channels_to_analize):
                     if self.channel_info[j]['div']:
                         mask[...,j] = mask[...,j]/255
-            elif self.normalizeY == 'as_image' and self.Y_provided: 
+            elif self.norm_dict['mask_norm'] == 'as_image' and self.Y_provided: 
                 if self.X_norm['type'] == 'div':
                     mask, _ = norm_range01(mask)
                 elif self.X_norm['type'] == 'custom':
-                    if self.X_norm['mode'] == "image":
+                    if self.X_norm['application_mode'] == "image":
                         mask = normalize(mask, mask.mean(), mask.std())
                     else:
                         mask = normalize(mask, self.X_norm['mean'], self.X_norm['std'])
+                elif self.X_norm['type'] == 'percentile':                                                                   
+                    if self.X_norm['application_mode'] == "image":                                                                      
+                        mask, _ = percentile_norm(mask, lower=self.X_norm['lower_bound'],                                     
+                            upper=self.X_norm['upper_bound'])                                                
+                    else:                                                                                                   
+                        mask, _ = percentile_norm(mask, lwr_perc_val=self.X_norm['lower_value'],                                     
+                            uppr_perc_val=self.X_norm['upper_value']) 
         return mask 
 
     def getitem(self, index):
@@ -1027,12 +1005,12 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         # Apply random rotations
         if self.rand_rot and random.uniform(0, 1) < self.da_prob:
             image, mask, heat = rotation(image, mask, heat=heat, angles=self.rnd_rot_range, mode=self.affine_mode, 
-                mask_type=self.normalizeY)
+                mask_type=self.norm_dict['mask_norm'])
 
         # Apply square rotations
         if self.rotation90 and random.uniform(0, 1) < self.da_prob:
             image, mask, heat = rotation(image, mask, heat=heat, angles=[90, 180, 270], mode=self.affine_mode, 
-                mask_type=self.normalizeY)
+                mask_type=self.norm_dict['mask_norm'])
 
         # Reshape 3D volumes to 2D image type with multiple channels to pass through imgaug lib
         if self.ndim == 3:
@@ -1110,7 +1088,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             image = random_noise(image, mode='s&p', amount=self.salt_pep_amount, salt_vs_pepper=self.salt_pep_proportion)
 
         # Apply transformations to the volume and its mask
-        if self.normalizeY == 'as_mask':  
+        if self.norm_dict['mask_norm'] == 'as_mask':  
             # Change dtype to supported one by imgaug
             mask = mask.astype(np.uint8)
             

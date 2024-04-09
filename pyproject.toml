@@ -36,5 +36,8 @@ dependencies = [
 ]
 requires-python = ">=3.10"
 
+[project.scripts]
+spam-cli = "biapy:BiaPy"
+
 [project.urls]
 Homepage = "https://github.com/BiaPyX/BiaPy"

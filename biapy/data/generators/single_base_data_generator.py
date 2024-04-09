@@ -10,7 +10,7 @@ import imgaug as ia
 from skimage.io import imsave, imread
 from imgaug import augmenters as iaa
 
-from biapy.data.pre_processing import normalize, norm_range01
+from biapy.data.pre_processing import normalize, norm_range01, percentile_norm
 from biapy.data.generators.augmentors import random_crop_single, random_3D_crop_single, resize_img, rotation
 
 class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
@@ -142,20 +142,8 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
     resize_shape : tuple of ints, optional
         If defined the input samples will be scaled into that shape.
 
-    not_normalize : bool, optional
-        Whether to normalize the data or not. Useful in BMZ model as the normalization is made during the inference. 
-        
-    norm_type : str, optional
-        Type of normalization to be made. Options available: ``div`` or ``custom``.
-
-    norm_custom_mean : float, optional
-        Mean of the data used to normalize.
-
-    norm_custom_std : float, optional
-        Std of the data used to normalize.
-
-    norm_custom_mode :  str, optional
-        Whether to apply the normalization by sample or with all dataset statistics. Options: ``'image'`` or ``'dataset'``.
+    norm_dict : dict, optional
+        Normalization instructions. 
 
     convert_to_rgb : bool, optional
         In case RGB images are expected, e.g. if ``crop_shape`` channel is 3, those images that are grayscale are 
@@ -166,8 +154,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
                  shift=False, shift_range=(0.1,0.2), affine_mode='constant', vflip=False, hflip=False, elastic=False, e_alpha=(240,250), 
                  e_sigma=25, e_mode='constant', g_blur=False, g_sigma=(1.0,2.0), median_blur=False, mb_kernel=(3,7), 
                  motion_blur=False, motb_k_range=(3,8), gamma_contrast=False, gc_gamma=(1.25,1.75), dropout=False, 
-                 drop_range=(0, 0.2), val=False, resize_shape=None, not_normalize=False, norm_type='div', norm_custom_mean=None, 
-                 norm_custom_std=None, norm_custom_mode=None, convert_to_rgb=False):
+                 drop_range=(0, 0.2), val=False, resize_shape=None, norm_dict=None, convert_to_rgb=False):
 
         if in_memory:
             if X.ndim != (ndim+2):
@@ -190,7 +177,6 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.in_memory = in_memory
         self.z_size = -1 
         self.convert_to_rgb = convert_to_rgb
-        self.not_normalize = not_normalize
 
         # Save paths where the data is stored
         if not in_memory:
@@ -241,43 +227,29 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         # X data analysis
         self.X_norm = {}
         self.X_norm['type'] = 'none'
-        if self.not_normalize:
-            img, _ = self.load_sample(0)
-        else:
-            if norm_type == 'custom' and norm_custom_mode == "dataset":
-                if norm_custom_mean is not None and norm_custom_std is not None:
-                    img, _ = self.load_sample(0)
-                    self.X_norm['mean'] = norm_custom_mean
-                    self.X_norm['std'] = norm_custom_std  
-                    self.X_norm['orig_dtype'] = img.dtype
-                else:
-                    if not in_memory:
-                        sam = []
-                        for i in range(len(self.data_path)):
-                            img, _ = self.load_sample(i)
-                            sam.append(img)
-                            if resize_shape[-1] != img.shape[-1]:
-                                raise ValueError("Channel of the patch size given {} does not correspond with the loaded image {}. "
-                                    "Please, check the channels of the images!".format(resize_shape[-1], img.shape[-1]))
-                        sam = np.array(sam)
-                        
-                        self.X_norm['mean'] = np.mean(sam)
-                        self.X_norm['std'] = np.std(sam)
-                        self.X_norm['orig_dtype'] = sam.dtype
-                        del sam
+        img, _ = self.load_sample(0)
+        if norm_dict['enable']:
+            self.X_norm['application_mode'] = norm_dict['application_mode']
+            self.X_norm['orig_dtype'] = img.dtype
+            if norm_dict['type'] == "custom":
+                self.X_norm['type'] = 'custom'    
+                if norm_dict['application_mode'] == "dataset":    
+                    if 'mean' in norm_dict and 'std' in norm_dict:    
+                        self.X_norm['mean'] = norm_dict['mean']
+                        self.X_norm['std'] = norm_dict['std']  
                     else:
-                        img, _ = self.load_sample(0)
                         self.X_norm['mean'] = np.mean(self.X)
-                        self.X_norm['std'] = np.std(self.X)    
-                        self.X_norm['orig_dtype'] = img.dtype
-                self.X_norm['mode'] = norm_custom_mode        
-                self.X_norm['type'] = 'custom'
-            elif norm_type == "custom" and norm_custom_mode == "image":
-                img, _ = self.load_sample(0)
-                self.X_norm['mode'] = norm_custom_mode
-                self.X_norm['type'] = 'custom'
-            else:                
-                img, _ = self.load_sample(0)
+                        self.X_norm['std'] = np.std(self.X)
+            elif norm_dict['type'] == "percentile":
+                self.X_norm['type'] = 'percentile'
+                img, nsteps = percentile_norm(img, lower=norm_dict['lower_bound'], upper=norm_dict['lower_bound'],
+                    lwr_perc_val=norm_dict['lower_bound'], uppr_perc_val=norm_dict['lower_bound'])
+                self.X_norm.update(nsteps)
+                self.X_norm['lower_bound'] = norm_dict['lower_bound']
+                self.X_norm['upper_bound'] = norm_dict['upper_bound'] 
+                self.X_norm['lower_value'] = norm_dict['lower_value']
+                self.X_norm['upper_value'] = norm_dict['upper_value'] 
+            else: # norm_dict['type'] == "div"                
                 img, nsteps = norm_range01(img)
                 self.X_norm.update(nsteps)
                 if resize_shape[-1] != img.shape[-1]:
@@ -402,11 +374,17 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
             if self.X_norm['type'] == 'div':
                 img, _ = norm_range01(img)
             elif self.X_norm['type'] == 'custom':
-                if self.X_norm['mode'] == "image":
+                if self.X_norm['application_mode'] == "image":
                     img = normalize(img, img.mean(), img.std())
                 else:
                     img = normalize(img, self.X_norm['mean'], self.X_norm['std'])
-
+            elif self.X_norm['type'] == 'percentile':                                                                   
+                if self.X_norm['application_mode'] == "image":                                                                      
+                    img, _ = percentile_norm(img, lower=self.X_norm['lower_bound'],                                     
+                        upper=self.X_norm['upper_bound'])                                                
+                else:                                                                                                   
+                    img, _ = percentile_norm(img, lwr_perc_val=self.X_norm['lower_value'],                                     
+                        uppr_perc_val=self.X_norm['upper_value']) 
         img = self.ensure_shape(img)
 
         return img, img_class
