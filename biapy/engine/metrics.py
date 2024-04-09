@@ -177,16 +177,16 @@ class instance_metrics():
         self.multihead = False
         self.metric_func = []
         for i in range(len(metric_names)):
-            if metric_names[i] == "jaccard_index" and self.jaccard is None:
+            if "jaccard_index_classes" in metric_names[i] and self.jaccard_multi is None: 
+                self.jaccard_multi = JaccardIndex(task="multiclass", threshold=0.5, num_classes=self.num_classes).to(self.device, non_blocking=True)
+                self.multihead = True 
+                loss_func = self.jaccard_multi
+            elif "jaccard_index" in metric_names[i] and self.jaccard is None:
                 self.jaccard = JaccardIndex(task="binary", threshold=0.5, num_classes=2).to(self.device, non_blocking=True)
                 loss_func = self.jaccard
             elif metric_names[i] == "L1_distance_channel" and self.l1loss is None:   
                 self.l1loss = torch.nn.L1Loss()
                 loss_func = self.l1loss
-            elif metric_names[i] == "jaccard_index_classes" and self.jaccard_multi is None: 
-                self.jaccard_multi = JaccardIndex(task="multiclass", threshold=0.5, num_classes=self.num_classes).to(self.device, non_blocking=True)
-                self.multihead = True 
-                loss_func = self.jaccard_multi
 
             self.metric_func.append(loss_func)
 

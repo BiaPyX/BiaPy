@@ -225,8 +225,8 @@ class Config:
         # performing some augmentations, e.g. cutout. If defined it need to be (y,x)/(z,y,x) and needs to be to be a 2D
         # tuple when using _C.PROBLEM.NDIM='2D' and 3D tuple when using _C.PROBLEM.NDIM='3D'
         _C.DATA.TRAIN.RESOLUTION = (-1,)
-        # Minimum foreground percentage that each image loaded need to have to not discard it. This option is only valid for SEMANTIC_SEG, 
-        # INSTANCE_SEG and DETECTION. 
+        # Minimum foreground percentage that each image loaded need to have to not discard it (only used when TRAIN.IN_MEMORY == True). 
+        # This option is only valid for SEMANTIC_SEG, INSTANCE_SEG and DETECTION. 
         _C.DATA.TRAIN.MINIMUM_FOREGROUND_PER = -1.
 
         # PREPROCESSING

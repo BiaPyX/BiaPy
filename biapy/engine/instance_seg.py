@@ -131,17 +131,17 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         )
 
         if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BC":
-            self.metric_names = ["jaccard_index", "jaccard_index"]
+            self.metric_names = ["jaccard_index_B", "jaccard_index_C"]
         elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BCM":
-            self.metric_names = ["jaccard_index", "jaccard_index", "jaccard_index"]
+            self.metric_names = ["jaccard_index_B", "jaccard_index_C", "jaccard_index_M"]
         elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BP":
-            self.metric_names = ["jaccard_index", "jaccard_index"]
+            self.metric_names = ["jaccard_index_B", "jaccard_index_P"]
         elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BD":
-            self.metric_names = ["jaccard_index", "L1_distance_channel"]
+            self.metric_names = ["jaccard_index_B", "L1_distance_channel"]
         elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BCD", 'BCDv2']:
-            self.metric_names = ["jaccard_index", "jaccard_index", "L1_distance_channel"]
+            self.metric_names = ["jaccard_index_B", "jaccard_index_C", "L1_distance_channel"]
         elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BDv2":
-            self.metric_names = ["jaccard_index", "L1_distance_channel"]
+            self.metric_names = ["jaccard_index_B", "L1_distance_channel"]
         elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "Dv2":
             self.metric_names = ["L1_distance_channel"]
 
@@ -181,7 +181,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             first_val = None
             for key, value in out.items():
                 value = value.item() if not torch.isnan(value) else 0
-                if first_val is None and key == "jaccard_index": 
+                if first_val is None and "jaccard_index" in key: 
                     first_val = value
                 if metric_logger is not None:
                     metric_logger.meters[key].update(value)
