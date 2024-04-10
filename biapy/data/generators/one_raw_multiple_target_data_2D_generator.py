@@ -3,12 +3,12 @@ import os
 from PIL import Image
 
 from biapy.utils.util import save_tif
-from biapy.data.generators.pair_base_data_generator import PairBaseDataGenerator
+from biapy.data.generators.one_raw_multiple_target_data_base_generator import oneRawMultipleTargetBaseDataGenerator
 
-class Pair2DImageDataGenerator(PairBaseDataGenerator):
+class oneRawMultipleTarget2DImageDataGenerator(oneRawMultipleTargetBaseDataGenerator):
     """Custom 2D data generator based on `imgaug <https://github.com/aleju/imgaug-doc>`_
        and our own `augmentors.py <https://github.com/BiaPyX/BiaPy/blob/master/biapy/data/generators/augmentors.py>`_
-       transformations. This generator will yield an image and its corresponding mask.
+       transformations. This generator will yield an image and its corresponding target image.
 
        Based on `microDL <https://github.com/czbiohub/microDL>`_ and
        `Shervine's blog <https://stanford.edu/~shervine/blog/keras-how-to-generate-data-on-the-fly>`_.
