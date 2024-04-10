@@ -84,7 +84,7 @@ class test_pair_data_generator(Dataset):
             self.dtype = np.float16
             self.dtype_str = "float16"
         self.data_path = sorted(next(os.walk(d_path))[2]) if X is None else None
-        if len(self.data_path) == 0:
+        if self.data_path is not None and len(self.data_path) == 0:
             self.data_path = sorted(next(os.walk(d_path))[1])
         if sample_ids is not None and self.data_path is not None:
             self.data_path = [x for i, x in enumerate(self.data_path) if i in sample_ids]
@@ -126,7 +126,7 @@ class test_pair_data_generator(Dataset):
         img, mask, xnorm, _ = self.load_sample(0)
 
         if norm_dict['enable']:
-            self.X_norm['orig_dtype'] = img.dtype
+            self.X_norm['orig_dtype'] = img.dtype if isinstance(img, np.ndarray) else "Zarr"
             self.X_norm['application_mode'] = norm_dict['application_mode'] 
             if norm_dict['type'] == 'custom':
                 self.X_norm['type'] = 'custom' 

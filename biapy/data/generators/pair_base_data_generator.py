@@ -384,7 +384,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.val = val
         self.convert_to_rgb = convert_to_rgb
         self.norm_dict = norm_dict
-        self.not_normalize = not_normalize
         self.data_mode = data_mode
 
         if data_mode['type'] == "in_memory":
