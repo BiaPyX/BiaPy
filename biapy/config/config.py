@@ -228,6 +228,10 @@ class Config:
         # Minimum foreground percentage that each image loaded need to have to not discard it (only used when TRAIN.IN_MEMORY == True). 
         # This option is only valid for SEMANTIC_SEG, INSTANCE_SEG and DETECTION. 
         _C.DATA.TRAIN.MINIMUM_FOREGROUND_PER = -1.
+        # Order of the axes of the image when using Zarr/H5 images to train
+        _C.DATA.TRAIN.INPUT_IMG_AXES_ORDER = 'TZCYX'
+        # Order of the axes of the mask when using Zarr/H5 images to train
+        _C.DATA.TRAIN.INPUT_MASK_AXES_ORDER = 'TZCYX'
 
         # PREPROCESSING
         # Same preprocessing will be applied to all selected datasets
@@ -375,7 +379,11 @@ class Config:
         _C.DATA.VAL.BINARY_MASKS = os.path.join("user_data", 'val', 'bin_mask')
         # Not used yet.
         _C.DATA.VAL.RESOLUTION = (-1,)
-
+        # Order of the axes of the image when using Zarr/H5 images to train
+        _C.DATA.VAL.INPUT_IMG_AXES_ORDER = 'TZCYX'
+        # Order of the axes of the mask when using Zarr/H5 images to train. 
+        # detection the mask
+        _C.DATA.VAL.INPUT_MASK_AXES_ORDER = 'TZCYX'
 
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Data augmentation (DA)

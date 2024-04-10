@@ -1,6 +1,7 @@
 import os
 import torch
 import scipy
+import h5py
 import numpy as np
 from tqdm import tqdm
 import pandas as pd
@@ -16,8 +17,8 @@ from skimage.exposure import equalize_adapthist
 from skimage.color import rgb2gray
 from skimage.filters import gaussian, median
 
-from biapy.utils.util import load_data_from_dir, load_3d_images_from_dir, save_tif
-
+from biapy.utils.util import load_data_from_dir, load_3d_images_from_dir, save_tif, write_chunked_data, read_chunked_data
+from biapy.utils.misc import is_main_process
 
 #########################
 # INSTANCE SEGMENTATION #
@@ -47,7 +48,7 @@ def create_instance_channels(cfg, data_type='train'):
     Y, _, _, filenames = f_name(getattr(cfg.DATA, tag).GT_PATH, check_drange=False, return_filenames=True)
     print("Creating Y_{} channels . . .".format(data_type))
     if isinstance(Y, list):
-        for i in tqdm(range(len(Y))):
+        for i in tqdm(range(len(Y)), disable=not is_main_process()):
             if cfg.MODEL.N_CLASSES > 2:
                 if Y[i].shape[-1] != 2:
                     raise ValueError("In instance segmentation, when 'MODEL.N_CLASSES' are more than 2 labels need to have two channels, "
@@ -101,7 +102,7 @@ def create_test_instance_channels(cfg):
         Y_test, _, _, test_filenames = f_name(cfg.DATA.TEST.GT_PATH, check_drange=False, return_filenames=True)
         print("Creating Y_test channels . . .")
         if isinstance(Y_test, list):
-            for i in tqdm(range(len(Y_test))):
+            for i in tqdm(range(len(Y_test)), disable=not is_main_process()):
                 Y_test[i] = labels_into_channels(Y_test[i], mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, save_dir=cfg.PATHS.TEST_INSTANCE_CHANNELS_CHECK,
                                             fb_mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE)
         else:
@@ -164,7 +165,7 @@ def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
         dtype = np.uint8
 
     new_mask = np.zeros(data_mask.shape[:d_shape] + (c_number,), dtype=dtype)
-    for img in tqdm(range(data_mask.shape[0])):
+    for img in tqdm(range(data_mask.shape[0]), disable=not is_main_process()):
         vol = data_mask[img,...,0].astype(np.int64)
         instances = np.unique(vol)
         instance_count = len(instances)
@@ -303,8 +304,17 @@ def create_detection_masks(cfg, data_type='train'):
     label_dir = getattr(cfg.DATA, tag).GT_PATH
     out_dir = getattr(cfg.DATA, tag).DETECTION_MASK_DIR
     img_ids = sorted(next(os.walk(img_dir))[2])
+    working_with_chunked_data = False
+    if len(img_ids) == 0:
+        img_ids = sorted(next(os.walk(img_dir))[1])
+        working_with_chunked_data = True
+    if len(img_ids) == 0:
+        raise ValueError(f"No data found in folder {img_dir}")
     img_ext = '.'+img_ids[0].split('.')[-1]
+    if working_with_chunked_data and '.zarr' != img_ext:
+        raise ValueError(f"No data found in folder {img_dir}")
     ids = sorted(next(os.walk(label_dir))[2])
+
     if len(img_ids) != len(ids):
         raise ValueError("Different number of CSV files and images found ({} vs {}). "
             "Please check that every image has one and only one CSV file".format(len(ids), len(img_ids)))
@@ -321,7 +331,7 @@ def create_detection_masks(cfg, data_type='train'):
     print("Creating {} detection masks . . .".format(data_type))
     for i in range(len(ids)):
         img_filename = os.path.splitext(ids[i])[0]+img_ext
-        if not os.path.exists(os.path.join(out_dir, img_filename)):
+        if not os.path.exists(os.path.join(out_dir, img_filename)) and not os.path.exists(os.path.join(out_dir, img_ids[i])):
             print("Attempting to create mask from CSV file: {}".format(os.path.join(label_dir, ids[i])))
             if not os.path.exists(os.path.join(img_dir, img_filename)):
                 print("WARNING: The image seems to have different name than its CSV file. Using the CSV file that's "
@@ -330,21 +340,32 @@ def create_detection_masks(cfg, data_type='train'):
             print("Its respective image seems to be: {}".format(os.path.join(img_dir, img_filename)))
             
             df = pd.read_csv(os.path.join(label_dir, ids[i]))  
-            img = imread(os.path.join(img_dir, img_filename))
-            
-            # Adjust shape
-            img = np.squeeze(img)
-            if cfg.PROBLEM.NDIM == '2D':
-                if img.ndim == 2:
-                    img = np.expand_dims(img, -1)
-                else:
-                    if img.shape[0] <= 3: img = img.transpose((1,2,0))   
-            else: 
-                if img.ndim == 3: 
-                    img = np.expand_dims(img, -1)
-                else:
-                    if img.shape[0] <= 3: img = img.transpose((1,2,3,0))
+            if '.zarr' != img_ext:
+                img = imread(os.path.join(img_dir, img_filename))
 
+                # Adjust shape
+                img = np.squeeze(img)
+                if cfg.PROBLEM.NDIM == '2D':
+                    if img.ndim == 2:
+                        img = np.expand_dims(img, -1)
+                    else:
+                        if img.shape[0] <= 3: img = img.transpose((1,2,0))   
+                else: 
+                    if img.ndim == 3: 
+                        img = np.expand_dims(img, -1)
+                    else:
+                        if img.shape[0] <= 3: img = img.transpose((1,2,3,0))
+                shape = img.shape[:-1]
+            else:
+                img_zarr_file, img = read_chunked_data(os.path.join(img_dir, img_filename))
+                shape = img.shape
+
+                if isinstance(img_zarr_file, h5py.File):
+                    img_zarr_file.close()
+                del img_zarr_file
+                
+            del img 
+            
             # Discard first index column to not have error if it is not sorted 
             p_number=df.iloc[: , 0].to_list()
             df = df.iloc[: , 1:]
@@ -390,8 +411,8 @@ def create_detection_masks(cfg, data_type='train'):
 
             # Create masks
             print("Creating all points . . .")
-            mask = np.zeros((img.shape[:-1]+(classes,)), dtype=np.uint8)
-            for j in tqdm(range(len(z_axis_point)), total=len(z_axis_point), leave=False):
+            mask = np.zeros((shape+(classes,)), dtype=np.uint8)
+            for j in tqdm(range(len(z_axis_point)), disable=not is_main_process(), total=len(z_axis_point), leave=False):
                 a0_coord = z_axis_point[j]
                 a1_coord = y_axis_point[j]
                 if cfg.PROBLEM.NDIM == '3D':
@@ -428,7 +449,7 @@ def create_detection_masks(cfg, data_type='train'):
                                 mask[a0_coord,a1_coord+1,a2_coord-1,c_point] = 1             
                     else:  
                         print("WARNING: discarding point {} which seems to be out of shape: {}"
-                              .format([a0_coord,a1_coord,a2_coord], img.shape))                                                                                                     
+                              .format([a0_coord,a1_coord,a2_coord], shape))                                                                                                     
                 else:
                     if a0_coord < mask.shape[0] and a1_coord < mask.shape[1]:                                                                                                              
                         if 1 in mask[max(0,a0_coord-4):min(mask.shape[0],a0_coord+5),                                   
@@ -441,12 +462,13 @@ def create_detection_masks(cfg, data_type='train'):
                         if a1_coord-1 > 0: mask[a0_coord,a1_coord-1,c_point] = 1                                     
                     else:  
                         print("WARNING: discarding point {} which seems to be out of shape: {}"
-                              .format([a0_coord,a1_coord], img.shape))     
+                              .format([a0_coord,a1_coord], shape))     
 
             # Dilate the mask
             if cfg.PROBLEM.DETECTION.CENTRAL_POINT_DILATION > 0:
+                print("Dilating all points . . .")
                 if cfg.PROBLEM.NDIM == '2D': mask = np.expand_dims(mask,0)
-                for k in range(mask.shape[0]): 
+                for k in tqdm(range(mask.shape[0]), total=len(mask), leave=False, disable=not is_main_process()): 
                     for ch in range(mask.shape[-1]):                                                                                  
                         mask[k,...,ch] = binary_dilation_scipy(mask[k,...,ch], iterations=1,  structure=disk(cfg.PROBLEM.DETECTION.CENTRAL_POINT_DILATION))                                                                                                                                                    
                 if cfg.PROBLEM.NDIM == '2D': mask = mask[0]
@@ -454,7 +476,7 @@ def create_detection_masks(cfg, data_type='train'):
             if cfg.PROBLEM.DETECTION.CHECK_POINTS_CREATED:
                 print("Check points created to see if some of them are very close that create a large label") 
                 error_found = False
-                for ch in range(mask.shape[-1]):
+                for ch in tqdm(range(mask.shape[-1]), total=len(mask), leave=False, disable=not is_main_process()):
                     _, index, counts = np.unique(label(clear_border(mask[...,ch])), return_counts=True, return_index=True)                     
                     # 0 is background so valid element is 1. We will compare that value with the rest                                                                         
                     ref_value = counts[1]                                                                                           
@@ -470,11 +492,17 @@ def create_detection_masks(cfg, data_type='train'):
                     raise ValueError("Duplicate points have been found so please check them before continuing. "
                                      "If you consider that the points are valid simply disable "
                                      "'PROBLEM.DETECTION.CHECK_POINTS_CREATED' so this check is not done again!")
-
-            save_tif(np.expand_dims(mask,0), out_dir, [img_filename])
+            if working_with_chunked_data:
+                write_chunked_data(np.expand_dims(mask,0), out_dir, img_filename, dtype_str="uint8", verbose=True)
+            else:
+                save_tif(np.expand_dims(mask,0), out_dir, [img_filename])
         else:
-            print("Mask file {} found for CSV file: {}".format(os.path.join(out_dir, img_filename), 
-                os.path.join(label_dir, ids[i])))
+            if os.path.exists(os.path.join(out_dir, img_filename)):
+                print("Mask file {} found for CSV file: {}".format(os.path.join(out_dir, img_filename), 
+                    os.path.join(label_dir, ids[i])))
+            else:
+                print("Mask file {} found for CSV file: {}".format(os.path.join(out_dir, img_ids[i]), 
+                    os.path.join(label_dir, ids[i])))
 
 #######
 # SSL #
@@ -677,7 +705,7 @@ def calculate_2D_volume_prob_map(Y, Y_path=None, w_foreground=0.94, w_background
     print("Connstructing the probability map . . .")
     maps = []
     diff_shape = False
-    for i in tqdm(range(l)):
+    for i in tqdm(range(l), disable=not is_main_process()):
         if isinstance(prob_map, list):
             _map = prob_map[i][0].copy().astype(np.float32)
         else:

@@ -1,11 +1,13 @@
 import math
 import os
+import h5py
 import numpy as np
 from skimage.io import imread
 from tqdm import tqdm
 from sklearn.model_selection import train_test_split, StratifiedKFold
 
-from biapy.utils.util import load_3d_images_from_dir, order_dimensions
+from biapy.utils.util import load_3d_images_from_dir, order_dimensions, read_chunked_data
+from biapy.utils.misc import is_main_process
 
 def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross_val_nsplits=5, cross_val_fold=1, 
     val_split=0.1, seed=0, shuffle_val=True, crop_shape=(80, 80, 80, 1), y_upscaling=(1,1,1), random_crops_in_DA=False, 
@@ -172,17 +174,17 @@ def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross
         are_lists = True if type(Y_train) is list else False
 
         samples_discarded = 0
-        for i in tqdm(range(len(Y_train)), leave=False):
+        for i in tqdm(range(len(Y_train)), leave=False, disable=not is_main_process()):
             labels, npixels = np.unique((Y_train[i]>0).astype(np.uint8), return_counts=True)
-
-            total_pixels = 1
-            for val in list(Y_train[i].shape):
-                total_pixels *= val
-            
+ 
             discard = False
             if len(labels) == 1:
                 discard = True
             else:
+                total_pixels = 1
+                for val in list(Y_train[i].shape):
+                    total_pixels *= val
+                    
                 if (sum(npixels[1:]/total_pixels)) < minimum_foreground_perc:
                     discard = True
 
@@ -334,6 +336,327 @@ def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross
             print("*** Loaded train GT shape is: {}".format(Y_train.shape))
         return X_train, Y_train, t_filenames
 
+
+def load_and_prepare_3D_efficient_format_data(train_path, train_mask_path, input_img_axes, input_mask_axes=None, cross_val=False, 
+    cross_val_nsplits=5, cross_val_fold=1, val_split=0.1, seed=0, shuffle_val=True, crop_shape=(80, 80, 80, 1), y_upscaling=(1,1,1), 
+    ov=(0,0,0), padding=(0,0,0), minimum_foreground_perc=-1):
+    """
+    Load train and validation images from the given paths to create 3D data.
+
+    Parameters
+    ----------
+    train_path : str
+        Path to the training data.
+
+    train_mask_path : str
+        Path to the training data masks.
+
+    input_img_axes : str
+        Order of axes of the data in ``train_path``. One between ['TZCYX', 'TZYXC', 'ZCYX', 'ZYXC'].
+
+    input_mask_axes : str, optional
+        Order of axes of the data in ``train_mask_path``. One between ['TZCYX', 'TZYXC', 'ZCYX', 'ZYXC'].
+
+    cross_val : bool, optional
+        Whether to use cross validation or not. 
+
+    cross_val_nsplits : int, optional
+        Number of folds for the cross validation. 
+    
+    cross_val_fold : int, optional
+        Number of the fold to be used as validation. 
+
+    val_split : float, optional
+        ``%`` of the train data used as validation (value between ``0`` and ``1``).
+
+    seed : int, optional
+        Seed value.
+
+    shuffle_val : bool, optional
+        Take random training examples to create validation data.
+
+    crop_shape : 4D tuple
+        Shape of the train subvolumes to create. E.g. ``(z, y, x, channels)``.
+
+    y_upscaling : Tuple of 3 ints, optional
+        Upscaling to be done when loading Y data. Use for super-resolution workflow.
+
+    ov : Tuple of 3 floats, optional
+        Amount of minimum overlap on x, y and z dimensions. The values must be on range ``[0, 1)``, that is, ``0%``
+        or ``99%`` of overlap. E. g. ``(z, y, x)``.
+
+    padding : Tuple of ints, optional
+        Size of padding to be added on each axis ``(z, y, x)``. E.g. ``(24, 24, 24)``.
+
+    minimum_foreground_perc : float, optional
+        Minimum percetnage of foreground that a sample need to have no not be discarded. 
+
+    Returns
+    -------
+    X_train : 5D Numpy array
+        Train images. E.g. ``(num_of_images, z, y, x, channels)``.
+
+    Y_train : 5D Numpy array
+        Train images' mask. E.g. ``(num_of_images, z, y, x, channels)``.
+
+    X_val : 5D Numpy array, optional
+        Validation images (``val_split > 0``). E.g. ``(num_of_images, z, y, x, channels)``.
+
+    Y_val : 5D Numpy array, optional
+        Validation images' mask (``val_split > 0``). E.g. ``(num_of_images, z, y, x, channels)``.
+    """
+
+    print("### LOAD DATA INFO ###")
+
+    # Check validation
+    if val_split > 0 or cross_val:
+        create_val = True  
+    else:
+        create_val = False
+
+    print("0) Loading train image information . . .")
+    X_train, X_train_total_patches = load_3D_efficient_files(train_path, input_img_axes, crop_shape, ov, padding)
+
+    if train_mask_path is not None:
+        if input_mask_axes is None:
+            raise ValueError("input_mask_axes need to be provided")
+
+        print("0) Loading train GT information . . .")
+        scrop = (crop_shape[0]*y_upscaling[0], crop_shape[1]*y_upscaling[1], crop_shape[2]*y_upscaling[2], crop_shape[3])
+        Y_train, Y_train_total_patches = load_3D_efficient_files(train_mask_path, input_mask_axes, scrop, ov, padding, 
+            check_channel=False)
+
+        for i in range(len(Y_train_total_patches)):
+            if Y_train_total_patches[i] != X_train_total_patches[i]:
+                raise ValueError(f"Seems that the image {X_train[i]['filepath']} and its mask pair {Y_train[i]['filepath']} have "
+                    f"different data, as they led to different total amount of patches ({Y_train_total_patches[i]} vs {X_train_total_patches[i]})")
+                    
+    # Discard images that do not surpass the foreground percentage threshold imposed 
+    if minimum_foreground_perc != -1 and Y_train is not None:
+        print("Data that do not have {}% of foreground is discarded".format(minimum_foreground_perc))
+
+        X_train_remove = []
+        samples_discarded = 0
+        last_data_file = {}
+
+        for i in tqdm(range(len(Y_train)), leave=False, disable=not is_main_process()):
+            data_info = Y_train[i]
+
+            if 'filepath' not in last_data_file or last_data_file['filepath'] != data_info['filepath']:
+                if 'filepath' in last_data_file and isinstance(file, h5py.File):
+                    file.close()
+                file, data = read_chunked_data(data_info['filepath'])
+                last_data_file = data_info.copy()
+
+            # Prepare slices to extract the patch
+            slices = []
+            for j in range(len(data_info['patch_coords'])):
+                if isinstance(data_info['patch_coords'][j], int):
+                    # +1 to prevent 0 length axes that can not be removed with np.squeeze later
+                    slices.append(slice(data_info['patch_coords'][j]+1)) 
+                else:
+                    slices.append(slice(data_info['patch_coords'][j][0],data_info['patch_coords'][j][1]))
+
+            img = np.array(data[tuple(slices)])
+            labels, npixels = np.unique((img>0).astype(np.uint8), return_counts=True)
+
+            discard = False
+            if len(labels) == 1:
+                discard = True
+            else:
+                total_pixels = 1
+                for val in list(img.shape):
+                    total_pixels *= val
+
+                if (sum(npixels[1:]/total_pixels)) < minimum_foreground_perc:
+                    discard = True
+
+            if discard:
+                samples_discarded += 1
+                X_train_remove.append(i)
+        
+        if len(Y_train)-len(X_train_remove) <= 1:
+            raise ValueError("'TRAIN.MINIMUM_FOREGROUND_PER' value is too high, leading to the discarding of all training samples. Please, "
+                "reduce its value.")
+
+        # Remove samples 
+        for i in X_train_remove:
+            del X_train[i], Y_train[i]
+
+        # Rearrange ids 
+        X_train = {c:v[1] for c,v in enumerate(X_train.items())}
+        Y_train = {c:v[1] for c,v in enumerate(Y_train.items())}
+
+        print("{} samples discarded!".format(samples_discarded)) 
+        print("*** Remaining data samples: {}".format(len(X_train)))   
+   
+    if Y_train is not None and len(X_train) != len(Y_train):
+        raise ValueError("Different number of raw and ground truth items ({} vs {}). "
+            "Please check the data!".format(len(X_train), len(Y_train)))
+    
+    # Create validation data splitting the train
+    if create_val:
+        print("Creating validation data")
+        Y_val = None
+        if not cross_val:
+            if Y_train is not None:
+                X_train, X_val, Y_train, Y_val = train_test_split(
+                    X_train, Y_train, test_size=val_split, shuffle=shuffle_val, random_state=seed)
+            else:
+                X_train, X_val = train_test_split(
+                    X_train, test_size=val_split, shuffle=shuffle_val, random_state=seed)
+        else:
+            skf = StratifiedKFold(n_splits=cross_val_nsplits, shuffle=shuffle_val,
+                random_state=seed)
+            fold = 1
+            train_index, test_index = None, None
+
+            y_len = len(Y_train) if Y_train is not None else len(X_train)
+            for t_index, te_index in skf.split(np.zeros(len(X_train)), np.zeros(y_len)):
+                if cross_val_fold == fold:
+                    X_train, X_val = X_train[t_index], X_train[te_index]
+                    if Y_train is not None:
+                        Y_train, Y_val = Y_train[t_index], Y_train[te_index]
+                    train_index, test_index = t_index.copy(), te_index.copy()
+                    break
+                fold+= 1
+
+            if len(test_index) > 5:
+                print("Fold number {}. Printing the first 5 ids: {}".format(fold, test_index[:5]))
+            else:
+                print("Fold number {}. Indexes used in cross validation: {}".format(fold, test_index))
+
+    patch_coords = order_dimensions(X_train[0]['patch_coords'], input_order=input_img_axes, output_order="ZYX", default_value=0)
+
+    shape = (
+        len(X_train), 
+        patch_coords[0][1]-patch_coords[0][0],
+        patch_coords[1][1]-patch_coords[1][0],
+        patch_coords[2][1]-patch_coords[2][0],
+    )
+    if Y_train is not None:
+        patch_coords = order_dimensions(Y_train[0]['patch_coords'], input_order=input_mask_axes, output_order="ZYX", default_value=0)
+        yshape = (
+            len(Y_train), 
+            patch_coords[0][1]-patch_coords[0][0],
+            patch_coords[1][1]-patch_coords[1][0],
+            patch_coords[2][1]-patch_coords[2][0],
+        )
+    if create_val:
+        print("*** Loaded train data shape is: {}".format(shape))
+        if Y_train is not None:
+            print("*** Loaded train GT shape is: {}".format(yshape))
+        patch_coords = order_dimensions(X_val[0]['patch_coords'], input_order=input_img_axes, output_order="ZYX", default_value=0)
+        shape = (
+            len(X_val), 
+            patch_coords[0][1]-patch_coords[0][0],
+            patch_coords[1][1]-patch_coords[1][0],
+            patch_coords[2][1]-patch_coords[2][0],
+        )
+        print("*** Loaded validation data shape is: {}".format(shape))
+        if Y_val is not None:
+            patch_coords = order_dimensions(Y_val[0]['patch_coords'], input_order=input_mask_axes, output_order="ZYX", default_value=0)
+            shape = (
+                len(Y_val), 
+                patch_coords[0][1]-patch_coords[0][0],
+                patch_coords[1][1]-patch_coords[1][0],
+                patch_coords[2][1]-patch_coords[2][0],
+            )
+            print("*** Loaded validation GT shape is: {}".format(shape))
+        if not cross_val:
+            return X_train, Y_train, X_val, Y_val
+        else:
+            return X_train, Y_train, X_val, Y_val, test_index
+    else:
+        print("*** Loaded train data shape is: {}".format(shape))
+        if Y_train is not None:
+            print("*** Loaded train GT shape is: {}".format(yshape))
+        return X_train, Y_train
+
+def load_3D_efficient_files(data_path, input_axes, crop_shape, overlap, padding, check_channel=True):
+    """
+    Load information of all patches that can be extracted from all the Zarr/H5 samples in ``data_path``.
+
+    Parameters
+    ----------
+    data_path : str
+        Path to the training data.
+
+    input_axes : str
+        Order of axes of the data in ``data_path``. One between ['TZCYX', 'TZYXC', 'ZCYX', 'ZYXC'].
+
+    crop_shape : 4D tuple
+        Shape of the train subvolumes to create. E.g. ``(z, y, x, channels)``.
+
+    overlap : Tuple of 3 floats, optional
+        Amount of minimum overlap on x, y and z dimensions. The values must be on range ``[0, 1)``, that is, ``0%``
+        or ``99%`` of overlap. E. g. ``(z, y, x)``.
+
+    padding : Tuple of ints, optional
+        Size of padding to be added on each axis ``(z, y, x)``. E.g. ``(24, 24, 24)``.
+
+    check_channel : bool, optional
+        Whether to check if the crop_shape channel matches with the loaded images' one. 
+        
+    Returns
+    -------
+    data_info : dict
+        All patch info that can be extracted from all the Zarr/H5 samples in ``data_path``.
+
+    data_info_total_patches : List of ints
+        Amount of patches extracted from each sample in ``data_path``.
+    """
+    data_info = {}
+    data_total_patches = []
+    c = 0
+    assert len(crop_shape) == 4, f"Provided crop_shape is not a 4D tuple: {crop_shape}"
+
+    for i, filename in enumerate(data_path):
+        print(f"Reading Zarr/H5 file: {filename}")
+        file, data = read_chunked_data(filename)
+
+        # Modify crop_shape with the channel
+        c_index = -1
+        try:
+            c_index = input_axes.index("C")
+            crop_shape = crop_shape[:-1]+(data.shape[c_index],)
+        except:
+            pass 
+
+        # Get the total patches so we can use tqdm so the user can see the time
+        obj = extract_3D_patch_with_overlap_yield(data, crop_shape, input_axes, overlap=overlap, padding=padding, 
+            total_ranks=1, rank=0, return_only_stats=True, verbose=True)
+        __unnamed_iterator = iter(obj)
+        while True:
+            try:
+                obj = next(__unnamed_iterator)
+            except StopIteration:  # StopIteration caught here without inspecting it
+                break 
+        del __unnamed_iterator                          
+        total_patches, z_vol_info, list_of_vols_in_z = obj
+
+        for obj in tqdm(extract_3D_patch_with_overlap_yield(data, crop_shape, input_axes, overlap=overlap, 
+            padding=padding, total_ranks=1, rank=0, verbose=False), total=total_patches, disable=not is_main_process()):
+            
+            img, patch_coords, _, _, _ = obj
+            
+            data_info[c] = {}
+            data_info[c]['filepath'] = filename
+            data_info[c]['patch_coords'] = order_dimensions(patch_coords, input_order="ZYX", output_order=input_axes, 
+                default_value=img.shape[c_index])
+
+            c += 1 
+
+            if check_channel and crop_shape[-1] != img.shape[-1]:
+                raise ValueError("Channel of the patch size given {} does not correspond with the loaded image {}. "
+                    "Please, check the channels of the images!".format(crop_shape[-1], img.shape[-1]))
+
+        if isinstance(file, h5py.File):
+            file.close()
+            
+        data_total_patches.append(total_patches)
+    
+    return data_info, data_total_patches
 
 def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0), padding=(0,0,0), verbose=True,
     median_padding=False):
@@ -699,7 +1022,7 @@ def merge_3D_data_with_overlap(data, orig_vol_shape, data_mask=None, overlap=(0,
         return merged_data
 
 def extract_3D_patch_with_overlap_yield(data, vol_shape, axis_order, overlap=(0,0,0), padding=(0,0,0), total_ranks=1, 
-    rank=0, verbose=False):
+    rank=0, return_only_stats=False, verbose=False):
     """
     Extract 3D patches into smaller patches with a defined overlap. Is supports multi-GPU inference
     by setting ``total_ranks`` and ``rank`` variables. Each GPU will process a evenly number of 
@@ -731,6 +1054,10 @@ def extract_3D_patch_with_overlap_yield(data, vol_shape, axis_order, overlap=(0,
     rank : int, optional
         Rank of the current GPU. 
 
+    return_only_stats : bool, optional
+        To just return the crop statistics without yielding any patch. Useful to precalculate how many patches
+        are going to be created before doing it. 
+
     verbose : bool, optional
         To print useful information for debugging. 
 
@@ -759,7 +1086,7 @@ def extract_3D_patch_with_overlap_yield(data, vol_shape, axis_order, overlap=(0,
         the first GPU will process volumes ``0``, ``1`` and ``2`` (``3`` in total) whereas the second 
         GPU will process volumes ``3`` and ``4``. 
     """
-    if verbose and rank == 0:
+    if rank == 0:
         print("### 3D-OV-CROP ###")
         print("Cropping {} images into {} with overlapping (axis order: {}). . .".format(data.shape, vol_shape, axis_order))
         print("Minimum overlap selected: {}".format(overlap))
@@ -822,7 +1149,7 @@ def extract_3D_patch_with_overlap_yield(data, vol_shape, axis_order, overlap=(0,
     real_ov_z = ovz_per_block/(vol_shape[0]-padding[0]*2)
     real_ov_y = ovy_per_block/(vol_shape[1]-padding[1]*2)
     real_ov_x = ovx_per_block/(vol_shape[2]-padding[2]*2)
-    if verbose and rank == 0:
+    if rank == 0:
         print("Real overlapping (%): {}".format((real_ov_z,real_ov_y,real_ov_x)))
         print("Real overlapping (pixels): {}".format(((vol_shape[0]-padding[0]*2)*real_ov_z,
               (vol_shape[1]-padding[1]*2)*real_ov_y,(vol_shape[2]-padding[2]*2)*real_ov_x)))
@@ -852,6 +1179,10 @@ def extract_3D_patch_with_overlap_yield(data, vol_shape, axis_order, overlap=(0,
         print("Rank {}: Total number of patches: {} - {} patches per (z,y,x) axis (per GPU)"
             .format(rank, total_vol, (vols_per_z_per_rank,vols_per_x,vols_per_y)))
 
+    if return_only_stats:
+        yield total_vol, z_vol_info, list_of_vols_in_z
+        return
+
     for _z in range(vols_per_z_per_rank):
         z = list_of_vols_in_z[rank][0]+_z
         for y in range(vols_per_y):
@@ -867,11 +1198,12 @@ def extract_3D_patch_with_overlap_yield(data, vol_shape, axis_order, overlap=(0,
                 start_x = max(0, x*step_x-d_x-padding[2])
                 finish_x = min(x*step_x+vol_shape[2]-d_x-padding[2], x_dim)
 
-                slices = [slice(start_z, finish_z),
-                        slice(start_y, finish_y),
-                        slice(start_x, finish_x),
-                        slice(None), # Channel
-                        ]
+                slices = [
+                    slice(start_z, finish_z),
+                    slice(start_y, finish_y),
+                    slice(start_x, finish_x),
+                    slice(None), # Channel
+                ]
 
                 data_ordered_slices = order_dimensions(
                     slices,
@@ -909,7 +1241,7 @@ def extract_3D_patch_with_overlap_yield(data, vol_shape, axis_order, overlap=(0,
                 else:
                     img = np.pad(img,((pad_z_left,pad_z_right),(pad_y_left,pad_y_right),(pad_x_left,pad_x_right),(0,0)), 'reflect')
 
-                assert img.shape == vol_shape, "Something went wrong during the patch extraction!"
+                assert img.shape[:-1] == vol_shape[:-1], f"Image shape and expected shape differ: {img.shape} vs {vol_shape}"
                 
                 real_patch_in_data = [
                     [z*step_z-d_z,(z*step_z)+vol_shape[0]-d_z-(padding[0]*2)],

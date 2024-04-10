@@ -9,7 +9,7 @@ from biapy.data.data_3D_manipulation import crop_3D_data_with_overlap, merge_3D_
 from biapy.data.post_processing.post_processing import ensemble8_2d_predictions, ensemble16_3d_predictions
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.utils.util import save_tif, pad_and_reflect
-from biapy.utils.misc import to_pytorch_format, to_numpy_format
+from biapy.utils.misc import to_pytorch_format, to_numpy_format, is_main_process
 from biapy.data.pre_processing import denormalize, undo_norm_range01
 from biapy.engine.metrics import n2v_loss_mse
 
@@ -132,7 +132,7 @@ class Denoising_Workflow(Base_Workflow):
 
         # Predict each patch
         if self.cfg.TEST.AUGMENTATION:
-            for k in tqdm(range(self._X.shape[0]), leave=False):
+            for k in tqdm(range(self._X.shape[0]), leave=False, disable=not is_main_process()):
                 if self.cfg.PROBLEM.NDIM == '2D':
                     p = ensemble8_2d_predictions(self._X[k], axis_order_back=self.axis_order_back,
                             pred_func=self.model_call_func, axis_order=self.axis_order, device=self.device)
@@ -148,7 +148,7 @@ class Denoising_Workflow(Base_Workflow):
         else:
             self._X = to_pytorch_format(self._X, self.axis_order, self.device)
             l = int(math.ceil(self._X.shape[0]/self.cfg.TRAIN.BATCH_SIZE))
-            for k in tqdm(range(l), leave=False):
+            for k in tqdm(range(l), leave=False, disable=not is_main_process()):
                 top = (k+1)*self.cfg.TRAIN.BATCH_SIZE if (k+1)*self.cfg.TRAIN.BATCH_SIZE < self._X.shape[0] else self._X.shape[0]
                 with torch.cuda.amp.autocast():
                     p = self.model(self._X[k*self.cfg.TRAIN.BATCH_SIZE:top])
@@ -530,7 +530,7 @@ def manipulate_val_data(X_val, Y_val, perc_pix=0.198, shape=(64, 64), value_mani
     n_chan = X_val.shape[-1]
 
     Y_val *= 0
-    for j in tqdm(range(X_val.shape[0]), desc='Preparing validation data: '):
+    for j in tqdm(range(X_val.shape[0]), desc='Preparing validation data: ', disable=not is_main_process()):
         coords = get_stratified_coords(box_size=box_size,
                                        shape=np.array(X_val.shape)[1:-1])
         for c in range(n_chan):

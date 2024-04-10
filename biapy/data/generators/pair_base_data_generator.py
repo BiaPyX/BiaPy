@@ -1,10 +1,9 @@
-from abc import ABCMeta, abstractmethod
-from torch.utils.data import Dataset
 import numpy as np
 import random
 import torch
 import os
 import sys
+import h5py
 import imgaug as ia
 from tqdm import tqdm
 from imgaug import augmenters as iaa
@@ -12,10 +11,13 @@ from skimage.io import imread
 from skimage.util import random_noise
 from imgaug.augmentables.heatmaps import HeatmapsOnImage
 from imgaug.augmentables.segmaps import SegmentationMapsOnImage
-                 
-from biapy.utils.util import img_to_onehot_encoding
+from abc import ABCMeta, abstractmethod
+from torch.utils.data import Dataset                 
+
+from biapy.utils.util import img_to_onehot_encoding, read_chunked_data
 from biapy.data.generators.augmentors import *
 from biapy.data.pre_processing import normalize, norm_range01, percentile_norm
+from biapy.utils.misc import is_main_process
 
 class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
     """
@@ -40,13 +42,9 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
     seed : int, optional
         Seed for random functions.
 
-    in_memory : bool, optional
-        If ``True`` data used will be ``X`` and ``Y``. If ``False`` it will be loaded directly from disk using
-        ``data_paths``.
-
     data_paths : List of str, optional
-        If ``in_memory`` is ``True`` this list should contain the paths to load data and masks. ``data_paths[0]``
-        should be data path and ``data_paths[1]`` masks path.
+        If the data is in memory (``data_mode['type']`` == ``'in_memory'``), this list should contain the paths to load data and 
+        masks. ``data_paths[0]`` should be data path and ``data_paths[1]`` masks path.
 
     da : bool, optional
         To activate the data augmentation.
@@ -356,7 +354,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         In case RGB images are expected, e.g. if ``crop_shape`` channel is 3, those images that are grayscale are 
         converted into RGB.
     """
-    def __init__(self, ndim, X, Y, seed=0, in_memory=True, data_paths=None, da=True, da_prob=0.5, rotation90=False, 
+    def __init__(self, ndim, X, Y, seed=0, data_mode={}, data_paths=None, da=True, da_prob=0.5, rotation90=False, 
                  rand_rot=False, rnd_rot_range=(-180,180), shear=False, shear_range=(-20,20), zoom=False, zoom_range=(0.8,1.2), 
                  shift=False, shift_range=(0.1,0.2), affine_mode='constant', vflip=False, hflip=False, elastic=False, 
                  e_alpha=(240,250), e_sigma=25, e_mode='constant', g_blur=False, g_sigma=(1.0,2.0), median_blur=False, 
@@ -376,22 +374,23 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                  extra_data_factor=1, n2v=False, n2v_perc_pix=0.198, n2v_manipulator='uniform_withCP', 
                  n2v_neighborhood_radius=5, n2v_structMask=np.array([[0,1,1,1,1,1,1,1,1,1,0]]), norm_dict=None, 
                  instance_problem=False, random_crop_scale=(1,1), convert_to_rgb=False):
+        
+        assert norm_dict != None, "Normalization instructions must be provided with 'norm_dict'"
+        assert norm_dict['mask_norm'] in ['as_mask', 'as_image', 'none']
+        assert data_mode['type'] in ['in_memory', 'not_in_memory', 'chunked_data']
 
         self.ndim = ndim
         self.z_size = -1 
         self.val = val
         self.convert_to_rgb = convert_to_rgb
-        assert norm_dict['mask_norm'] in ['as_mask', 'as_image', 'none']
-        assert norm_dict != None, "Normalization instructions must be provided with 'norm_dict'"
         self.norm_dict = norm_dict
+        self.not_normalize = not_normalize
+        self.data_mode = data_mode
 
-        if in_memory:
+        if data_mode['type'] == "in_memory":
             # If not Y was provided and this generator was still selected means that we need to generate it. 
             # This workflow type is common in Denoising.
-            if Y is not None:
-                self.Y_provided = True
-            else:
-                self.Y_provided = False
+            self.Y_provided = Y is not None 
 
             _X = X if type(X) != list else X[0]
             if self.Y_provided:
@@ -406,32 +405,33 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 if X.shape[:(self.ndim+1)] != Y.shape[:(self.ndim+1)]:
                     raise ValueError("The shape of X and Y must be the same. {} != {}".format(X.shape[:(self.ndim+1)], Y.shape[:(self.ndim+1)]))
 
-        if in_memory and X is None:
-            raise ValueError("'X' need to be provided together with 'in_memory'")
+        if data_mode['type'] == "in_memory" and X is None:
+            raise ValueError("'X' need to be provided together with data_mode['type'] == 'in_memory'")
 
-        if not in_memory :
+        if data_mode['type'] == "not_in_memory" :
             if len(data_paths) == 2:
                 self.Y_provided = True
             elif len(data_paths) == 1:
                 self.Y_provided = False
             else:
                 raise ValueError("'data_paths' must contain one or two paths: 1) data path ; 2) data masks path (optional)")
+        elif data_mode['type'] == "chunked_data":
+            self.Y_provided = Y is not None 
 
         if shape is None:
             raise ValueError("'shape' must be provided")   
 
-        if random_crops_in_DA:
-            if in_memory:
-                if ndim == 3:
-                    if shape[0] > _X.shape[1] or shape[1] > _X.shape[2] or shape[2] > _X.shape[3]:
-                        raise ValueError("Given 'shape' is bigger than the data provided")
-                else:
-                    if shape[0] > _X.shape[1] or shape[1] > _X.shape[2]:
-                        raise ValueError("Given 'shape' is bigger than the data provided")
-                    if shape[0] != shape[1]:
-                        raise ValueError("When 'random_crops_in_DA' is selected the shape given must be square, e.g. (256, 256, 1)")
+        if random_crops_in_DA and data_mode['type'] == "in_memory":
+            if ndim == 3:
+                if shape[0] > _X.shape[1] or shape[1] > _X.shape[2] or shape[2] > _X.shape[3]:
+                    raise ValueError("Given 'shape' is bigger than the data provided")
+            else:
+                if shape[0] > _X.shape[1] or shape[1] > _X.shape[2]:
+                    raise ValueError("Given 'shape' is bigger than the data provided")
+                if shape[0] != shape[1]:
+                    raise ValueError("When 'random_crops_in_DA' is selected the shape given must be square, e.g. (256, 256, 1)")
 
-        if not in_memory and not random_crops_in_DA:
+        if data_mode['type'] == "not_in_memory" and not random_crops_in_DA:
             m = "TRAIN" if not val else "VAL"
             print("WARNING: you are going to load samples from disk (as 'DATA.{}.IN_MEMORY' = False) and "
                   "'DATA.EXTRACT_RANDOM_PATCH' = False so all samples are expected to have the same shape".format(m))
@@ -443,9 +443,8 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.random_crop_scale = random_crop_scale
 
         self.random_crops_in_DA = random_crops_in_DA
-        self.in_memory = in_memory
         self.data_paths = None
-        if not in_memory:
+        if data_mode['type'] == "not_in_memory":
             # Save paths where the data is stored
             self.paths = data_paths
             self.data_paths = sorted(next(os.walk(data_paths[0]))[2])
@@ -457,7 +456,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             self.length = len(self.data_paths)
             if self.length == 0:
                 raise ValueError("No image found in {}".format(data_paths))
-        else:
+        else: # data_mode['type'] in ["in_memory", "chunked_data"]
             self.X = X
             if self.Y_provided:
                 self.Y = Y
@@ -518,7 +517,12 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             # Loop over a few masks to ensure foreground class is present to decide normalization
             if self.norm_dict['mask_norm'] == 'as_mask':
                 print("Checking which channel of the mask needs normalization . . .")
-                n_samples = len(self.data_mask_path) if not in_memory else len(self.Y)
+                if data_mode['type'] == "not_in_memory":
+                    n_samples = len(self.data_mask_path) 
+                elif data_mode['type'] == "in_memory":
+                    n_samples = len(self.Y)
+                else: # data_mode['type'] == "chunked_data":                
+                    n_samples = 1000 if len(self.Y) > 1000 else len(self.Y)
                 analized = False
                 for i in range(n_samples):
                     _, mask = self.load_sample(i)
@@ -633,7 +637,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             self.value_manipulation = get_value_manipulation(n2v_manipulator, n2v_neighborhood_radius)
             self.n2v_structMask = n2v_structMask 
             self.apply_structN2Vmask_func = apply_structN2Vmask if self.ndim == 2 else apply_structN2Vmask3D
-        if self.in_memory: 
+        if data_mode['type'] == "in_memory": 
             del _X
             if self.Y_provided:
                 del _Y
@@ -768,15 +772,18 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         """
         # Choose the data source
         idx = _idx % self.real_length
-        if self.in_memory:
+        if self.data_mode['type'] == "in_memory": 
             img = np.squeeze(self.X[idx].copy())
             if self.Y_provided:
                 mask = np.squeeze(self.Y[idx].copy())
-        else:
+        elif self.data_mode['type'] == "not_in_memory": 
             if self.data_paths[idx].endswith('.npy'):
                 img = np.load(os.path.join(self.paths[0], self.data_paths[idx]))
                 if self.Y_provided:
                     mask = np.load(os.path.join(self.paths[1], self.data_mask_path[idx]))
+            elif self.data_paths[idx].endswith('.zarr'):       
+                _, img = read_chunked_data(os.path.join(data_dir, fids[n]))
+                img = np.array(img)
             else:
                 img = imread(os.path.join(self.paths[0], self.data_paths[idx]))
                 if self.Y_provided:
@@ -784,7 +791,40 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             img = np.squeeze(img)
             if self.Y_provided:
                 mask = np.squeeze(mask)
+        else: # self.data_mode['type'] == "chunked_data"
+            imgfile, img = read_chunked_data(self.X[idx]['filepath'])
 
+            # Prepare slices to extract the patch
+            slices = []
+            for j in range(len(self.X[idx]['patch_coords'])):
+                if isinstance(self.X[idx]['patch_coords'][j], int):
+                    # +1 to prevent 0 length axes that can not be removed with np.squeeze later
+                    slices.append(slice(0,self.X[idx]['patch_coords'][j]+1)) 
+                else:
+                    slices.append(slice(self.X[idx]['patch_coords'][j][0],self.X[idx]['patch_coords'][j][1]))
+
+            img = np.squeeze(np.array(img[tuple(slices)]))
+            
+            if isinstance(imgfile, h5py.File):
+                imgfile.close()
+
+            if self.Y_provided:
+                maskfile, mask = read_chunked_data(self.Y[idx]['filepath'])
+
+                # Prepare slices to extract the patch
+                slices = []
+                for j in range(len(self.Y[idx]['patch_coords'])):
+                    if isinstance(self.Y[idx]['patch_coords'][j], int):
+                        # +1 to prevent 0 length axes that can not be removed with np.squeeze later
+                        slices.append(slice(0,self.Y[idx]['patch_coords'][j]+1)) 
+                    else:
+                        slices.append(slice(self.Y[idx]['patch_coords'][j][0],self.Y[idx]['patch_coords'][j][1]))
+
+                mask = np.squeeze(np.array(mask[tuple(slices)]))
+
+                if isinstance(maskfile, h5py.File):
+                    maskfile.close()
+                
         if self.Y_provided:
             img, mask = self.ensure_shape(img, mask)
         else:
@@ -1247,7 +1287,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         orig_images = None
         # Generate the examples
         print("0) Creating samples of data augmentation . . .")
-        for i in tqdm(range(num_examples)):
+        for i in tqdm(range(num_examples), disable=not is_main_process()):
             if random_images:
                 pos = random.randint(0,self.length-1) if self.length > 2 else 0
             else:
