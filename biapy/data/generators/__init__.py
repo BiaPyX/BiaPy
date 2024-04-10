@@ -11,6 +11,8 @@ from biapy.data.generators.single_data_2D_generator import Single2DImageDataGene
 from biapy.data.generators.single_data_3D_generator import Single3DImageDataGenerator
 from biapy.data.generators.test_pair_data_generators import test_pair_data_generator
 from biapy.data.generators.test_single_data_generator import test_single_data_generator
+from biapy.data.generators.one_raw_multiple_target_data_2D_generator import oneRawMultipleTarget2DImageDataGenerator
+from biapy.data.generators.one_raw_multiple_target_data_3D_generator import oneRawMultipleTarget3DImageDataGenerator
 
 
 def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size, global_rank, dist=False):
@@ -123,12 +125,16 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
         if cfg.PROBLEM.TYPE == 'CLASSIFICATION' or \
             (cfg.PROBLEM.TYPE == 'SELF_SUPERVISED' and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"):
             f_name = Single2DImageDataGenerator 
+        elif cfg.PROBLEM.TYPE == 'IMAGE_TO_IMAGE':
+            f_name = oneRawMultipleTarget2DImageDataGenerator 
         else:
             f_name = Pair2DImageDataGenerator
     else:
         if cfg.PROBLEM.TYPE == 'CLASSIFICATION' or \
             (cfg.PROBLEM.TYPE == 'SELF_SUPERVISED' and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"):
             f_name = Single3DImageDataGenerator 
+        elif cfg.PROBLEM.TYPE == 'IMAGE_TO_IMAGE':
+            f_name = oneRawMultipleTarget3DImageDataGenerator 
         else:
             f_name = Pair3DImageDataGenerator
     

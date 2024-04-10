@@ -12,6 +12,7 @@ from torchmetrics import JaccardIndex
 from torchmetrics.image import StructuralSimilarityIndexMeasure
 from torchvision.transforms.functional import resize
 import torchvision.transforms as T
+from pytorch_msssim import ssim, ms_ssim, SSIM, MS_SSIM
 
 def jaccard_index_numpy(y_true, y_pred):
     """Define Jaccard index.
@@ -659,3 +660,82 @@ def MaskedAutoencoderViT_loss(y_pred, y_true, model):
 
     loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
     return loss
+
+
+class weighted_L1():
+    def __init__(self):
+        """
+        Wrapper to L1 loss function. 
+        """
+        self.loss = torch.nn.L1Loss(reduction='mean')
+
+    def __call__(self, y_pred, y_true):
+        """
+        Calculate instance segmentation loss.
+
+        Parameters
+        ----------
+        y_true : Tensor
+            Ground truth masks.
+
+        y_pred : Tensor or list of Tensors
+            Predictions.
+
+        Returns
+        -------
+        loss : Tensor
+            Loss value.
+        """
+        return self.loss(y_pred, y_true[0]) 
+
+class weighted_MSE():
+    def __init__(self):
+        """
+        Wrapper to MSE loss function. 
+        """
+        self.loss = torch.nn.MSELoss(reduction='mean')
+
+    def __call__(self, y_pred, y_true):
+        """
+        Calculate instance segmentation loss.
+
+        Parameters
+        ----------
+        y_true : Tensor
+            Ground truth masks.
+
+        y_pred : Tensor or list of Tensors
+            Predictions.
+
+        Returns
+        -------
+        loss : Tensor
+            Loss value.
+        """
+        return self.loss(y_pred, y_true[0]) 
+
+class SSIM_wrapper():
+    def __init__(self):
+        """
+        Wrapper to SSIM loss function. 
+        """
+        self.loss = SSIM(data_range=1, size_average=True, channel=1)
+
+    def __call__(self, y_pred, y_true):
+        """
+        Calculate instance segmentation loss.
+
+        Parameters
+        ----------
+        y_true : Tensor
+            Ground truth masks.
+
+        y_pred : Tensor or list of Tensors
+            Predictions.
+
+        Returns
+        -------
+        loss : Tensor
+            Loss value.
+        """
+        return 1-self.loss(y_pred, y_true[0])
