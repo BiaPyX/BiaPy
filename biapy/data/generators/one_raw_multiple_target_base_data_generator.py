@@ -501,7 +501,7 @@ class oneRawMultipleTargetBaseDataGenerator(Dataset, metaclass=ABCMeta):
         # X data analysis
         self.X_norm = {}
         self.X_norm['type'] = 'none'
-        img, _ = self.load_sample(0)
+        img, _, _ = self.load_sample(0)
         if norm_dict['enable']:
             self.X_norm['application_mode'] = norm_dict['application_mode']
             self.X_norm['orig_dtype'] = img.dtype

@@ -3,7 +3,7 @@ import os
 from PIL import Image
 
 from biapy.utils.util import save_tif
-from biapy.data.generators.one_raw_multiple_target_data_base_generator import oneRawMultipleTargetBaseDataGenerator
+from biapy.data.generators.one_raw_multiple_target_base_data_generator import oneRawMultipleTargetBaseDataGenerator
 
 class oneRawMultipleTarget2DImageDataGenerator(oneRawMultipleTargetBaseDataGenerator):
     """Custom 2D data generator based on `imgaug <https://github.com/aleju/imgaug-doc>`_
