@@ -22,6 +22,7 @@ requirements = [
     "zarr>=2.16.1",
     "bioimageio.core==0.5.9",
     "imagecodecs>=2024.1.1",
+    "pytorch-msssim>=1.0.0",
 ]
 
 

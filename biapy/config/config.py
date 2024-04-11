@@ -184,7 +184,7 @@ class Config:
         #   'custom' to use DATA.NORMALIZATION.CUSTOM_MEAN and DATA.NORMALIZATION.CUSTOM_STD to normalize
         #   'percentile' if no normalization to be applied 
         _C.DATA.NORMALIZATION.TYPE = 'div'
-        # Whether to apply the normalization by sample or by all dataset statistics
+        # Whether to apply the normalization by sample ("image") or by all dataset statistics ("dataset"). Options: ["image", "dataset"]  
         _C.DATA.NORMALIZATION.APPLICATION_MODE = "image"
         # Custom normalization variables: mean and std (they are calculated if not provided)
         _C.DATA.NORMALIZATION.CUSTOM_MEAN = -1.0
