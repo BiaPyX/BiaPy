@@ -144,15 +144,14 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
     else:
         data_paths = [cfg.DATA.TRAIN.PATH] 
     
-    data_mode = {}
     if cfg.DATA.TRAIN.IN_MEMORY:
-        data_mode['type'] = "in_memory"
+        data_mode = "in_memory"
     else:
         if cfg.PROBLEM.NDIM == '3D' and X_train is not None and isinstance(X_train, list) and isinstance(X_train[0], dict) and \
             'filepath' in X_train[0] and ('.zarr' in X_train[0]['filepath'] or '.h5' in X_train[0]['filepath']):
-            data_mode['type'] = "chunked_data"
+            data_mode = "chunked_data"
         else:
-            data_mode['type'] = "not_in_memory"
+            data_mode = "not_in_memory"
     norm_dict['enable'] = False if cfg.MODEL.SOURCE in ["bmz", "torchvision"] else True
     if cfg.PROBLEM.TYPE == 'CLASSIFICATION' or \
         (cfg.PROBLEM.TYPE == 'SELF_SUPERVISED' and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"):
@@ -233,21 +232,20 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
     data_norm = train_generator.get_data_normalization()
 
     print("Initializing val data generator . . .")
-    val_data_mode = {}
     if cfg.DATA.VAL.FROM_TRAIN:
-        if data_mode['type'] == "chunked_data":
-            val_data_mode['type'] = "chunked_data"
+        if data_mode == "chunked_data":
+            val_data_mode = "chunked_data"
         else:
-            val_data_mode['type'] = "in_memory"
+            val_data_mode = "in_memory"
     else:
         if cfg.DATA.VAL.IN_MEMORY:
-            val_data_mode['type'] = "in_memory"
+            val_data_mode = "in_memory"
         else:
             if cfg.PROBLEM.NDIM == '3D' and X_val is not None and isinstance(X_val, list) and isinstance(X_val[0], dict) and \
                 'filepath' in X_val[0] and ('.zarr' in X_val[0]['filepath'] or '.h5' in X_val[0]['filepath']):
-                val_data_mode['type'] = "chunked_data"
+                val_data_mode = "chunked_data"
             else:
-                val_data_mode['type'] = "not_in_memory"
+                val_data_mode = "not_in_memory"
 
     if cfg.PROBLEM.TYPE == 'CLASSIFICATION' or \
         (cfg.PROBLEM.TYPE == 'SELF_SUPERVISED' and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"):
