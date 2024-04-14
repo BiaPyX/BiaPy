@@ -35,7 +35,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         Image class. ``(num_of_images, class)``.
 
     data_path : List of str, optional
-        If ``in_memory`` is ``True`` this should contain the path to load images.
+        If the data is in memory (``data_mode`` == ``'in_memory'``) this should contain the path to load images.
 
     ptype : str
         Problem type. Options ['mae','classification'].
@@ -46,9 +46,8 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
     seed : int, optional
         Seed for random functions.
 
-    in_memory : bool, optional
-        If ``True`` data used will be ``X`` and ``Y``. If ``False`` it will be loaded directly from disk using
-        ``data_path``.
+    data_mode : str, optional
+        Information about how the data needs to be managed. Options: ['in_memory', 'not_in_memory', 'chunked_data']
 
     da : bool, optional
         To activate the data augmentation.
@@ -150,37 +149,40 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         In case RGB images are expected, e.g. if ``crop_shape`` channel is 3, those images that are grayscale are 
         converted into RGB.
     """
-    def __init__(self, ndim, X, Y, data_path, ptype, n_classes, seed=0, in_memory=False, da=True, da_prob=0.5, rotation90=False, 
+    def __init__(self, ndim, X, Y, data_path, ptype, n_classes, seed=0, data_mode="", da=True, da_prob=0.5, rotation90=False, 
                  rand_rot=False, rnd_rot_range=(-180,180), shear=False, shear_range=(-20,20), zoom=False, zoom_range=(0.8,1.2), 
                  shift=False, shift_range=(0.1,0.2), affine_mode='constant', vflip=False, hflip=False, elastic=False, e_alpha=(240,250), 
                  e_sigma=25, e_mode='constant', g_blur=False, g_sigma=(1.0,2.0), median_blur=False, mb_kernel=(3,7), 
                  motion_blur=False, motb_k_range=(3,8), gamma_contrast=False, gc_gamma=(1.25,1.75), dropout=False, 
                  drop_range=(0, 0.2), val=False, resize_shape=None, norm_dict=None, convert_to_rgb=False):
 
-        if in_memory:
+        assert norm_dict != None, "Normalization instructions must be provided with 'norm_dict'"
+        assert norm_dict['mask_norm'] in ['as_mask', 'as_image', 'none']
+        assert data_mode in ['in_memory', 'not_in_memory', 'chunked_data']
+        assert ptype in ['mae', 'classification']
+
+        if data_mode == "in_memory":
             if X.ndim != (ndim+2):
                 raise ValueError("X must be a {}D Numpy array".format((ndim+1)))
         
-        assert ptype in ['mae', 'classification']
-
         if ptype == "classification":
-            if in_memory and (X is None or Y is None):
-                raise ValueError("'X' and 'Y' need to be provided together with 'in_memory'")
+            if data_mode == "in_memory" and (X is None or Y is None):
+                raise ValueError("'X' and 'Y' need to be provided together with data_mode == 'in_memory'")
         else:
-            if in_memory and X is None:
-                raise ValueError("'X' needs to be provided together with 'in_memory'")
+            if data_mode == "in_memory" and X is None:
+                raise ValueError("'X' needs to be provided together with data_mode == 'in_memory'")
 
         if resize_shape is None:
             raise ValueError("'resize_shape' must be provided")   
 
         self.ptype = ptype
         self.ndim = ndim
-        self.in_memory = in_memory
         self.z_size = -1 
         self.convert_to_rgb = convert_to_rgb
+        self.data_mode = data_mode
 
         # Save paths where the data is stored
-        if not in_memory:
+        if data_mode == "not_in_memory":
             self.data_path = data_path
             if ptype == "mae":
                 self.all_samples = sorted(next(os.walk(data_path))[2])
@@ -355,7 +357,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
             Y element. 
         """
         # Choose the data source
-        if self.in_memory:
+        if self.data_mode == "in_memory":
             img = np.squeeze(self.X[idx].copy())
             img_class = self.Y[idx] if self.ptype == "classification" else 0
         else:

@@ -56,9 +56,15 @@ class test_pair_data_generator(Dataset):
     convert_to_rgb : bool, optional
         In case RGB images are expected, e.g. if ``crop_shape`` channel is 3, those images that are grayscale are 
         converted into RGB.
+    
+    multiple_raw_images : bool, optional
+        Whether to consider more than one raw images or not. In this case, a folder per each sample is expected. Visit
+        `LightMyCells challenge approach <https://biapy.readthedocs.io/en/latest/tutorials/image-to-image/lightmycells.html>`_ 
+        for a real use case.  
     """
     def __init__(self, ndim, X=None, d_path=None, test_by_chunks=False, provide_Y=False, Y=None, dm_path=None, seed=42,
-                 instance_problem=False, norm_dict=None, reduce_mem=False, sample_ids=None, convert_to_rgb=False):
+                 instance_problem=False, norm_dict=None, reduce_mem=False, sample_ids=None, convert_to_rgb=False,
+                 multiple_raw_images=False):
 
         if X is None and d_path is None:
             raise ValueError("One between 'X' or 'd_path' must be provided")
@@ -76,6 +82,7 @@ class test_pair_data_generator(Dataset):
         self.provide_Y = provide_Y
         self.convert_to_rgb = convert_to_rgb
         self.norm_dict = norm_dict
+        self.multiple_raw_images = multiple_raw_images
 
         if not reduce_mem:
             self.dtype = np.float32  
@@ -83,36 +90,73 @@ class test_pair_data_generator(Dataset):
         else:
             self.dtype = np.float16
             self.dtype_str = "float16"
-        self.data_path = sorted(next(os.walk(d_path))[2]) if X is None else None
-        if self.data_path is not None and len(self.data_path) == 0:
-            self.data_path = sorted(next(os.walk(d_path))[1])
-        if sample_ids is not None and self.data_path is not None:
-            self.data_path = [x for i, x in enumerate(self.data_path) if i in sample_ids]
-        if provide_Y:
-            self.data_mask_path = sorted(next(os.walk(dm_path))[2]) if Y is None else None
-            if len(self.data_mask_path) == 0:
-                self.data_mask_path = sorted(next(os.walk(dm_path))[1])
-            if sample_ids is not None and self.data_mask_path is not None:
-                self.data_mask_path = [x for i, x in enumerate(self.data_mask_path) if i in sample_ids]
-                
-            if self.data_path is not None and self.data_mask_path is not None:
-                if len(self.data_path) != len(self.data_mask_path):
-                    raise ValueError("Different number of raw and ground truth items ({} vs {}). "
-                        "Please check the data!".format(len(self.data_path), len(self.data_mask_path)))
+
+        self.all_files_in_same_folder = not self.multiple_raw_images
+        if self.multiple_raw_images:
+            self.data_paths = sorted(next(os.walk(d_path))[1])
+            if len(self.data_paths) == 0:
+                self.all_files_in_same_folder = True
+                print("Seems that even 'PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER' was selected the test "
+                    "data is not organized in a folder each sample, so BiaPy is trying to load the data as all files"
+                    "are within the same directory.")
+
+        if self.all_files_in_same_folder:
+            self.data_path = sorted(next(os.walk(d_path))[2]) if X is None else None
+            if self.data_path is not None and len(self.data_path) == 0:
+                self.data_path = sorted(next(os.walk(d_path))[1])
+            if sample_ids is not None and self.data_path is not None:
+                self.data_path = [x for i, x in enumerate(self.data_path) if i in sample_ids]
+            if provide_Y:
+                self.data_mask_path = sorted(next(os.walk(dm_path))[2]) if Y is None else None
+                if self.data_mask_path is not None and len(self.data_mask_path) == 0:
+                    self.data_mask_path = sorted(next(os.walk(dm_path))[1])
+                if sample_ids is not None and self.data_mask_path is not None:
+                    self.data_mask_path = [x for i, x in enumerate(self.data_mask_path) if i in sample_ids]
+                    
+                if self.data_path is not None and self.data_mask_path is not None:
+                    if len(self.data_path) != len(self.data_mask_path):
+                        raise ValueError("Different number of raw and ground truth items ({} vs {}). "
+                            "Please check the data!".format(len(self.data_path), len(self.data_mask_path)))
         self.seed = seed
         self.ndim = ndim
         if X is None:
-            self.len = len(self.data_path)
-            if len(self.data_path) == 0:
-                if test_by_chunks:
-                    print("No image found in {} folder. Assumming that files are zarr directories.")
-                    self.data_path = sorted(next(os.walk(d_path))[1])
-                    if provide_Y:
-                        self.data_mask_path = sorted(next(os.walk(dm_path))[1])
-                    if len(self.data_path) == 0:
-                        raise ValueError("No zarr files found in {}".format(d_path))
-                else:
-                    raise ValueError("No test image found in {}".format(d_path))
+            if not self.all_files_in_same_folder:
+                self.data = {}
+                self.data_paths = sorted(next(os.walk(d_path))[1])
+                if self.provide_Y:
+                    self.data_mask_path = sorted(next(os.walk(dm_path))[1])
+                    if len(self.data_paths) != len(self.data_mask_path):
+                        raise ValueError("Different number of raw and ground truth items ({} vs {}). "
+                            "Please check the data!".format(len(self.data_path), len(self.data_mask_path)))
+                c = 0
+                for i in range(len(self.data_paths)):
+                    if self.provide_Y:
+                        gt_image_path = next(os.walk(os.path.join(dm_path,self.data_mask_path[i])))[2][0]
+                    associated_raw_image_dir = os.path.join(d_path, self.data_paths[i]) 
+                    
+                    samples = sorted(next(os.walk(associated_raw_image_dir))[2])
+                    for j in range(len(samples)):
+                        self.data[f"sample_{c}"] = {}
+                        self.data[f"sample_{c}"]["raw"] = os.path.join(associated_raw_image_dir,samples[j])
+                        if self.provide_Y:
+                            self.data[f"sample_{c}"]["gt"] = os.path.join(dm_path,self.data_mask_path[i],gt_image_path)
+                        c += 1
+
+                self.len = len(self.data)
+                if self.len == 0:
+                    raise ValueError("No image found in {}".format(d_path))
+            else:
+                self.len = len(self.data_path)
+                if len(self.data_path) == 0:
+                    if test_by_chunks:
+                        print("No image found in {} folder. Assumming that files are zarr directories.")
+                        self.data_path = sorted(next(os.walk(d_path))[1])
+                        if provide_Y:
+                            self.data_mask_path = sorted(next(os.walk(dm_path))[1])
+                        if len(self.data_path) == 0:
+                            raise ValueError("No zarr files found in {}".format(d_path))
+                    else:
+                        raise ValueError("No test image found in {}".format(d_path))
         else:
             self.len = len(X)
         self.o_indexes = np.arange(self.len)
@@ -123,7 +167,7 @@ class test_pair_data_generator(Dataset):
         if provide_Y:
             self.Y_norm = {}
             self.Y_norm['type'] = 'div'
-        img, mask, xnorm, _ = self.load_sample(0)
+        img, mask, xnorm, _, _ = self.load_sample(0)
 
         if norm_dict['enable']:
             self.X_norm['orig_dtype'] = img.dtype if isinstance(img, np.ndarray) else "Zarr"
@@ -234,39 +278,49 @@ class test_pair_data_generator(Dataset):
 
     def load_sample(self, idx):
         """Load one data sample given its corresponding index."""
-        mask, ynorm = None, None
+        mask, ynorm, filename = None, None, None
         # Choose the data source
         if self.X is None:
-            if self.data_path[idx].endswith('.npy'):
-                img = np.load(os.path.join(self.d_path, self.data_path[idx]))
-                if self.provide_Y:
-                    mask = np.load(os.path.join(self.dm_path, self.data_mask_path[idx]))
-            elif self.data_path[idx].endswith('.hdf5') or self.data_path[idx].endswith('.h5'):
-                if not self.test_by_chunks:
-                    img = h5py.File(os.path.join(self.d_path, self.data_path[idx]),'r')
-                    img = img[list(img)[0]]
-                    if self.provide_Y:
-                        mask = h5py.File(os.path.join(self.dm_path, self.data_mask_path[idx]),'r')
-                        mask = mask[list(mask)[0]]
-                else:
-                    img = os.path.join(self.d_path, self.data_path[idx])
-                    if self.provide_Y:
-                        mask = os.path.join(self.dm_path, self.data_mask_path[idx])
-            elif self.data_path[idx].endswith('.zarr'):
-                if self.test_by_chunks:
-                    img = os.path.join(self.d_path, self.data_path[idx])
-                    if self.provide_Y:
-                        mask = os.path.join(self.dm_path, self.data_mask_path[idx])
-                else:
-                    raise ValueError("If you are using Zarr images please set 'TEST.BY_CHUNKS.ENABLE' and configure "
-                        "its options.")
-            else:
-                img = imread(os.path.join(self.d_path, self.data_path[idx]))
+            if not self.all_files_in_same_folder:
+                img = imread(self.data[f"sample_{idx}"]["raw"])
                 img = np.squeeze(img)
+                filename = self.data[f"sample_{idx}"]["raw"]
                 if self.provide_Y:
-                    mask = imread(os.path.join(self.dm_path, self.data_mask_path[idx]))
-                    mask = np.squeeze(mask)  
+                    mask = imread(self.data[f"sample_{idx}"]["gt"])
+                    mask = np.squeeze(mask)   
+            else:
+                filename = os.path.join(self.d_path, self.data_path[idx])
+                if self.data_path[idx].endswith('.npy'):
+                    img = np.load(os.path.join(self.d_path, self.data_path[idx]))
+                    if self.provide_Y:
+                        mask = np.load(os.path.join(self.dm_path, self.data_mask_path[idx]))
+                elif self.data_path[idx].endswith('.hdf5') or self.data_path[idx].endswith('.h5'):
+                    if not self.test_by_chunks:
+                        img = h5py.File(os.path.join(self.d_path, self.data_path[idx]),'r')
+                        img = img[list(img)[0]]
+                        if self.provide_Y:
+                            mask = h5py.File(os.path.join(self.dm_path, self.data_mask_path[idx]),'r')
+                            mask = mask[list(mask)[0]]
+                    else:
+                        img = os.path.join(self.d_path, self.data_path[idx])
+                        if self.provide_Y:
+                            mask = os.path.join(self.dm_path, self.data_mask_path[idx])
+                elif self.data_path[idx].endswith('.zarr'):
+                    if self.test_by_chunks:
+                        img = os.path.join(self.d_path, self.data_path[idx])
+                        if self.provide_Y:
+                            mask = os.path.join(self.dm_path, self.data_mask_path[idx])
+                    else:
+                        raise ValueError("If you are using Zarr images please set 'TEST.BY_CHUNKS.ENABLE' and configure "
+                            "its options.")
+                else:
+                    img = imread(os.path.join(self.d_path, self.data_path[idx]))
+                    img = np.squeeze(img)
+                    if self.provide_Y:
+                        mask = imread(os.path.join(self.dm_path, self.data_mask_path[idx]))
+                        mask = np.squeeze(mask)  
         else:
+            filename = idx
             img = self.X[idx]
             img = np.squeeze(img)
 
@@ -322,7 +376,7 @@ class test_pair_data_generator(Dataset):
         if self.convert_to_rgb and img.shape[-1] == 1:
             img = np.repeat(img, 3, axis=-1)
             
-        return img, mask, xnorm, ynorm
+        return img, mask, xnorm, ynorm, filename
 
 
     def __len__(self):
@@ -331,24 +385,37 @@ class test_pair_data_generator(Dataset):
 
 
     def __getitem__(self, index):
-        """Generation of one pair of data.
-
-           Parameters
-           ----------
-           index : int
-               Sample index counter.
-
-           Returns
-           -------
-           img : 3D/4D Numpy array
-               X element, for instance, an image. E.g. ``(z, y, x, channels)`` if ``2D`` or 
-               ``(y, x, channels)`` if ``3D``. 
-               
-           mask : 3D/4D Numpy array
-               Y element, for instance, a mask. E.g. ``(z, y, x, channels)`` if ``2D`` or 
-               ``(y, x, channels)`` if ``3D``.
         """
-        img, mask, xnorm, ynorm = self.load_sample(index)
+        Generation of one pair of data.
+
+        Parameters
+        ----------
+        index : int
+            Sample index counter.
+
+        Returns
+        -------
+        dict : dict
+            Dictionary containing:
+
+            img : 4D/5D Numpy array
+                X element, for instance, an image. E.g. ``(1, z, y, x, channels)`` if ``2D`` or 
+                ``(1, y, x, channels)`` if ``3D``. 
+                
+            X_norm : dict
+                X element normalization steps.
+
+            file : str or int
+                Processed image file path or integer position in loaded data.
+            
+            mask : 4D/5D Numpy array, optional
+                Y element, for instance, a mask. E.g. ``(1, z, y, x, channels)`` if ``2D`` or 
+                    ``(1, y, x, channels)`` if ``3D``.
+            
+            Y_norm : dict, optional
+                Y element normalization steps.
+        """
+        img, mask, xnorm, ynorm, filename = self.load_sample(index)
         
         if xnorm is not None:
             self.X_norm.update(xnorm)
@@ -356,9 +423,9 @@ class test_pair_data_generator(Dataset):
             self.Y_norm.update(ynorm)
 
         if self.provide_Y:
-            return img, self.X_norm, mask, self.Y_norm
+            return {"X": img, "X_norm": self.X_norm, "Y": mask, "Y_norm": self.Y_norm, "file": filename}
         else:
-            return img, self.X_norm
+            return {"X": img, "X_norm": self.X_norm, "file": filename}
 
     def get_data_normalization(self):
         return self.X_norm

@@ -154,6 +154,15 @@ class Config:
         # Number between [0, 1] indicating the std of the Gaussian noise N(0,std).
         _C.PROBLEM.SELF_SUPERVISED.NOISE = 0.2
 
+        ### IMAGE_TO_IMAGE
+        _C.PROBLEM.IMAGE_TO_IMAGE = CN()
+        # To use a custom data loader to load a random image from each image sample folder. The data needs to be structured
+        # in an special way, that is, instead of having images in the training/val folder a folder for each sample is expected, 
+        # where in each of those different versions of the same data sample will be placed. Visit the following tutorial
+        # for a real use case and a more detailed description:
+        #   - https://biapy.readthedocs.io/en/latest/tutorials/image-to-image/lightmycells.html 
+        _C.PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER = False
+
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Dataset
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

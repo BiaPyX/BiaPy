@@ -11,8 +11,6 @@ from biapy.data.generators.single_data_2D_generator import Single2DImageDataGene
 from biapy.data.generators.single_data_3D_generator import Single3DImageDataGenerator
 from biapy.data.generators.test_pair_data_generators import test_pair_data_generator
 from biapy.data.generators.test_single_data_generator import test_single_data_generator
-from biapy.data.generators.one_raw_multiple_target_data_2D_generator import oneRawMultipleTarget2DImageDataGenerator
-from biapy.data.generators.one_raw_multiple_target_data_3D_generator import oneRawMultipleTarget3DImageDataGenerator
 
 
 def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size, global_rank, dist=False):
@@ -125,16 +123,12 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
         if cfg.PROBLEM.TYPE == 'CLASSIFICATION' or \
             (cfg.PROBLEM.TYPE == 'SELF_SUPERVISED' and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"):
             f_name = Single2DImageDataGenerator 
-        elif cfg.PROBLEM.TYPE == 'IMAGE_TO_IMAGE':
-            f_name = oneRawMultipleTarget2DImageDataGenerator 
         else:
             f_name = Pair2DImageDataGenerator
     else:
         if cfg.PROBLEM.TYPE == 'CLASSIFICATION' or \
             (cfg.PROBLEM.TYPE == 'SELF_SUPERVISED' and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"):
             f_name = Single3DImageDataGenerator 
-        elif cfg.PROBLEM.TYPE == 'IMAGE_TO_IMAGE':
-            f_name = oneRawMultipleTarget3DImageDataGenerator 
         else:
             f_name = Pair3DImageDataGenerator
     
@@ -215,11 +209,14 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
 
         if cfg.PROBLEM.NDIM == '3D':
             dic['zflip'] = cfg.AUGMENTOR.ZFLIP
-
         if cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
             dic['instance_problem'] = True
-        elif cfg.PROBLEM.TYPE in ['SELF_SUPERVISED', 'SUPER_RESOLUTION', "IMAGE_TO_IMAGE"]:
+        elif cfg.PROBLEM.TYPE in ['SELF_SUPERVISED', 'SUPER_RESOLUTION']:
             norm_dict['mask_norm'] = 'as_image'
+        elif cfg.PROBLEM.TYPE == 'IMAGE_TO_IMAGE':
+            norm_dict['mask_norm'] = 'as_image'
+            if cfg.PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER:
+                dic['multiple_raw_images'] = True
         elif cfg.PROBLEM.TYPE == 'DENOISING':
             dic['n2v']=True
             dic['n2v_perc_pix'] = cfg.PROBLEM.DENOISING.N2V_PERC_PIX
@@ -263,8 +260,12 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
             random_crop_scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING)
         if cfg.PROBLEM.TYPE == 'INSTANCE_SEG': 
             dic['instance_problem'] = True
-        elif cfg.PROBLEM.TYPE in ['SELF_SUPERVISED', 'SUPER_RESOLUTION', "IMAGE_TO_IMAGE"]:
+        elif cfg.PROBLEM.TYPE in ['SELF_SUPERVISED', 'SUPER_RESOLUTION']:
             norm_dict['mask_norm'] = 'as_image'
+        elif cfg.PROBLEM.TYPE == "IMAGE_TO_IMAGE":
+            norm_dict['mask_norm'] = 'as_image'
+            if cfg.PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER:
+                dic['multiple_raw_images'] = True
         elif cfg.PROBLEM.TYPE == 'DENOISING':
             dic['n2v'] = True
             dic['n2v_perc_pix'] = cfg.PROBLEM.DENOISING.N2V_PERC_PIX
@@ -422,7 +423,10 @@ def create_test_augmentor(cfg, X_test, Y_test, cross_val_samples_ids):
             dic['ptype'] = "ssl"
     else:
         gen_name = test_pair_data_generator
-        
+
+    if cfg.PROBLEM.TYPE == "IMAGE_TO_IMAGE" and cfg.PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER:
+        dic['multiple_raw_images'] = True
+
     test_generator = gen_name(**dic)
     data_norm = test_generator.get_data_normalization()
     return test_generator, data_norm

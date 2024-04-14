@@ -14,7 +14,7 @@ from imgaug.augmentables.segmaps import SegmentationMapsOnImage
 from abc import ABCMeta, abstractmethod
 from torch.utils.data import Dataset                 
 
-from biapy.utils.util import img_to_onehot_encoding, read_chunked_data
+from biapy.utils.util import img_to_onehot_encoding, pad_and_reflect, read_chunked_data
 from biapy.data.generators.augmentors import *
 from biapy.data.pre_processing import normalize, norm_range01, percentile_norm
 from biapy.utils.misc import is_main_process
@@ -356,6 +356,11 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
     convert_to_rgb : bool, optional
         In case RGB images are expected, e.g. if ``crop_shape`` channel is 3, those images that are grayscale are 
         converted into RGB.
+    
+    multiple_raw_images : bool, optional
+        Whether to consider more than one raw images or not. In this case, a folder per each sample is expected. Visit
+        `LightMyCells challenge approach <https://biapy.readthedocs.io/en/latest/tutorials/image-to-image/lightmycells.html>`_ 
+        for a real use case.  
     """
     def __init__(self, ndim, X, Y, seed=0, data_mode="", data_paths=None, da=True, da_prob=0.5, rotation90=False, 
                  rand_rot=False, rnd_rot_range=(-180,180), shear=False, shear_range=(-20,20), zoom=False, zoom_range=(0.8,1.2), 
@@ -376,7 +381,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                  random_crops_in_DA=False, shape=(256,256,1), resolution=(-1,), prob_map=None, val=False, n_classes=1, 
                  extra_data_factor=1, n2v=False, n2v_perc_pix=0.198, n2v_manipulator='uniform_withCP', 
                  n2v_neighborhood_radius=5, n2v_structMask=np.array([[0,1,1,1,1,1,1,1,1,1,0]]), norm_dict=None, 
-                 instance_problem=False, random_crop_scale=(1,1), convert_to_rgb=False):
+                 instance_problem=False, random_crop_scale=(1,1), convert_to_rgb=False, multiple_raw_images=False):
         
         assert norm_dict != None, "Normalization instructions must be provided with 'norm_dict'"
         assert norm_dict['mask_norm'] in ['as_mask', 'as_image', 'none']
@@ -388,6 +393,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.convert_to_rgb = convert_to_rgb
         self.norm_dict = norm_dict
         self.data_mode = data_mode
+        self.multiple_raw_images = multiple_raw_images
 
         if data_mode == "in_memory":
             # If not Y was provided and this generator was still selected means that we need to generate it. 
@@ -449,15 +455,45 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         if data_mode == "not_in_memory":
             # Save paths where the data is stored
             self.paths = data_paths
-            self.data_paths = sorted(next(os.walk(data_paths[0]))[2])
-            if self.Y_provided:
-                self.data_mask_path = sorted(next(os.walk(data_paths[1]))[2])
-                if len(self.data_paths) != len(self.data_mask_path):
-                    raise ValueError("Different number of raw and ground truth images ({} vs {}). "
-                        "Please check the data!".format(len(self.data_paths), len(self.data_mask_path)))
-            self.length = len(self.data_paths)
-            if self.length == 0:
-                raise ValueError("No image found in {}".format(data_paths))
+            if self.multiple_raw_images:
+                self.data = {}
+                self.data_paths = sorted(next(os.walk(data_paths[0]))[1])
+                assert self.Y_provided, "Implementation error. Contact BiaPy team"
+                if self.Y_provided:
+                    self.data_mask_path = sorted(next(os.walk(data_paths[1]))[1])
+                    c = 0
+                    for i in range(len(self.data_mask_path)):
+                        gt_image_path = next(os.walk(os.path.join(data_paths[1],self.data_mask_path[i])))[2][0]
+                        associated_raw_image_dir = os.path.join(data_paths[0], self.data_mask_path[i])
+                        
+                        samples = sorted(next(os.walk(associated_raw_image_dir))[2])
+                        if self.val:    
+                            for j in range(len(samples)):
+                                self.data[f"sample_{c}"] = {}
+                                self.data[f"sample_{c}"]["raw"] = os.path.join(associated_raw_image_dir,samples[j])
+                                self.data[f"sample_{c}"]["gt"] = os.path.join(data_paths[1],self.data_mask_path[i],gt_image_path)
+                                c += 1
+                        else:
+                            self.data[f"sample_{c}"] = {}
+                            self.data[f"sample_{c}"]["raw"] = []
+                            for j in range(len(samples)):
+                                self.data[f"sample_{c}"]["raw"].append(os.path.join(associated_raw_image_dir,samples[j]))
+                            self.data[f"sample_{c}"]["gt"] = os.path.join(data_paths[1],self.data_mask_path[i],gt_image_path)
+                            c += 1
+
+                self.length = len(self.data)
+                if self.length == 0:
+                    raise ValueError("No image found in {}".format(data_paths[0]))
+            else:
+                self.data_paths = sorted(next(os.walk(data_paths[0]))[2])
+                if self.Y_provided:
+                    self.data_mask_path = sorted(next(os.walk(data_paths[1]))[2])
+                    if len(self.data_paths) != len(self.data_mask_path):
+                        raise ValueError("Different number of raw and ground truth images ({} vs {}). "
+                            "Please check the data!".format(len(self.data_paths), len(self.data_mask_path)))
+                self.length = len(self.data_paths)
+                if self.length == 0:
+                    raise ValueError("No image found in {}".format(data_paths))
         else: # data_mode in ["in_memory", "chunked_data"]
             self.X = X
             if self.Y_provided:
@@ -779,20 +815,31 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             if self.Y_provided:
                 mask = np.squeeze(self.Y[idx].copy())
         elif self.data_mode == "not_in_memory": 
-            if self.data_paths[idx].endswith('.npy'):
-                img = np.load(os.path.join(self.paths[0], self.data_paths[idx]))
-                if self.Y_provided:
-                    mask = np.load(os.path.join(self.paths[1], self.data_mask_path[idx]))
-            elif self.data_paths[idx].endswith('.zarr'):       
-                _, img = read_chunked_data(os.path.join(data_dir, fids[n]))
-                img = np.array(img)
+            if self.multiple_raw_images:
+                if not self.val:
+                    random_raw_image = np.random.randint(0, len(self.data[f"sample_{idx}"]["raw"]))
+                    img = imread(self.data[f"sample_{idx}"]["raw"][random_raw_image])
+                else:
+                    img = imread(self.data[f"sample_{idx}"]["raw"])
+                mask = imread(self.data[f"sample_{idx}"]["gt"])
+                
+                img = np.squeeze(img)
+                mask = np.squeeze(mask)   
             else:
-                img = imread(os.path.join(self.paths[0], self.data_paths[idx]))
+                if self.data_paths[idx].endswith('.npy'):
+                    img = np.load(os.path.join(self.paths[0], self.data_paths[idx]))
+                    if self.Y_provided:
+                        mask = np.load(os.path.join(self.paths[1], self.data_mask_path[idx]))
+                elif self.data_paths[idx].endswith('.zarr'):       
+                    _, img = read_chunked_data(os.path.join(data_dir, fids[n]))
+                    img = np.array(img)
+                else:
+                    img = imread(os.path.join(self.paths[0], self.data_paths[idx]))
+                    if self.Y_provided:
+                        mask = imread(os.path.join(self.paths[1], self.data_mask_path[idx]))
+                img = np.squeeze(img)
                 if self.Y_provided:
-                    mask = imread(os.path.join(self.paths[1], self.data_mask_path[idx]))
-            img = np.squeeze(img)
-            if self.Y_provided:
-                mask = np.squeeze(mask)
+                    mask = np.squeeze(mask)
         else: # self.data_mode == "chunked_data"
             imgfile, img = read_chunked_data(self.X[idx]['filepath'])
 
@@ -955,6 +1002,11 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                     img_prob = self.prob_map[j]
             else:
                 img_prob = None
+            
+            # Pad and reflect img/mask if necessary
+            img = pad_and_reflect(img, self.shape, verbose=False)
+            mask = pad_and_reflect(mask, self.shape, verbose=False)
+
             img, mask = self.random_crop_func(img, mask, self.shape[:self.ndim], self.val, img_prob=img_prob,
                 scale=self.random_crop_scale)
 

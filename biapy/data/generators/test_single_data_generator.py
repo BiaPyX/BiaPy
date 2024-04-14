@@ -66,10 +66,13 @@ class test_single_data_generator(Dataset):
     convert_to_rgb : bool, optional
         In case RGB images are expected, e.g. if ``crop_shape`` channel is 3, those images that are grayscale are 
         converted into RGB.
+    
+    multiple_raw_images : bool, optional
+        Not used in this generator yet but added for compatibility. 
     """
     def __init__(self, ndim, ptype, X=None, d_path=None, test_by_chunks=False, provide_Y=False, Y=None, 
         dm_path=None, seed=42, instance_problem=False, norm_dict=None, crop_center=False, 
-        reduce_mem=False, resize_shape=None, sample_ids=None, convert_to_rgb=False):
+        reduce_mem=False, resize_shape=None, sample_ids=None, convert_to_rgb=False, multiple_raw_images=False):
         if X is None and d_path is None:
             raise ValueError("One between 'X' or 'd_path' must be provided")
         if crop_center and resize_shape is None:
@@ -127,7 +130,7 @@ class test_single_data_generator(Dataset):
         self.X_norm['type'] = 'none'
         if norm_dict['enable']:
             self.X_norm['type'] = 'div'
-            img, _, xnorm = self.load_sample(0)
+            img, _, xnorm, _ = self.load_sample(0)
             self.X_norm['application_mode'] = norm_dict['application_mode']
             self.X_norm['orig_dtype'] = img.dtype
             if norm_dict['type'] == 'custom':
@@ -147,13 +150,13 @@ class test_single_data_generator(Dataset):
             
     def load_sample(self, idx):
         """Load one data sample given its corresponding index."""
-        img_class = None
+        img_class, filename = None, None
 
         # Choose the data source
         if self.X is not None:
             img = self.X[idx]
             img = np.squeeze(img)
-
+            filename = idx
             if self.provide_Y:
                 img_class = self.Y[idx] if self.ptype == "classification" else 0
         else:
@@ -167,6 +170,7 @@ class test_single_data_generator(Dataset):
                 img_class = 0 
             img = np.load(f) if sample_id.endswith('.npy') else imread(f)
             img = np.squeeze(img)
+            filename = f 
 
         # Correct dimensions 
         if self.ndim == 3:
@@ -205,11 +209,12 @@ class test_single_data_generator(Dataset):
                     img, xnorm = percentile_norm(img, lwr_perc_val=self.norm_dict['lower_value'],                                     
                         uppr_perc_val=self.norm_dict['upper_value']) 
         img = np.expand_dims(img, 0).astype(self.dtype)
+        img_class = np.expand_dims(img_class, 0)
 
         if self.convert_to_rgb and img.shape[-1] == 1:
             img = np.repeat(img, 3, axis=-1)
 
-        return img, img_class, xnorm
+        return img, img_class, xnorm, filename
 
 
     def __len__(self):
@@ -218,23 +223,33 @@ class test_single_data_generator(Dataset):
 
 
     def __getitem__(self, index):
-        """Generation of one sample of data.
-
-           Parameters
-           ----------
-           index : int
-               Sample index counter.
-
-           Returns
-           -------
-           img : 3D Numpy array
-               X element, for instance, an image. E.g. ``(y, x, channels)``.
-
-           img_class : ints
-               Y element, for instance, a class number.
         """
+        Generation of one sample of data.
 
-        img, img_class, norm = self.load_sample(index)
+        Parameters
+        ----------
+        index : int
+            Sample index counter.
+
+        Returns
+        -------
+        dict : dict
+            Dictionary containing:
+
+            img : 4D/5D Numpy array
+                X element, for instance, an image. E.g. ``(1, z, y, x, channels)`` if ``2D`` or 
+                ``(1, y, x, channels)`` if ``3D``. 
+                
+            X_norm : dict
+                X element normalization steps.
+
+            file : str or int
+                Processed image file path or integer position in loaded data.
+                
+            img_class : 2D Numpy array, optional
+                Y element, for instance, a class number. E.g. ``(1, class)``.
+        """
+        img, img_class, norm, filename = self.load_sample(index)
         
         if self.crop_center and img.shape[:-1] != self.resize_shape[:-1]:
             img = center_crop_single(img[0], self.resize_shape)
@@ -246,11 +261,11 @@ class test_single_data_generator(Dataset):
 
         if self.ptype == "classification":
             if self.provide_Y:
-                return img, self.X_norm, img_class, None
+                return {"X": img, "X_norm": self.X_norm, "Y": img_class, "file": filename}
             else:
-                return img, self.X_norm
+                return {"X": img, "X_norm": self.X_norm, "file": filename}
         else: # SSL - MAE
-            return img, self.X_norm
-            
+            return {"X": img, "X_norm": self.X_norm, "file": filename}
+
     def get_data_normalization(self):
         return self.X_norm

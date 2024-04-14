@@ -381,7 +381,19 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     "]")
             if cfg.PROBLEM.NDIM == '3D':
                 raise ValueError("TorchVision model's for classification are only available for 2D images")
-            
+
+    #### Image to image ####
+    elif cfg.PROBLEM.TYPE == 'IMAGE_TO_IMAGE':
+        if cfg.MODEL.SOURCE == "torchvision":
+            raise ValueError("'MODEL.SOURCE' as 'torchvision' is not available in image to image workflow")
+        if cfg.PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER:
+            if cfg.DATA.TRAIN.IN_MEMORY:
+                raise ValueError("'PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER' can only be used if 'DATA.TRAIN.IN_MEMORY' == 'False'")
+            if cfg.DATA.VAL.IN_MEMORY:
+                raise ValueError("'PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER' can only be used if 'DATA.VAL.IN_MEMORY' == 'False'")
+            if cfg.DATA.TEST.IN_MEMORY:
+                raise ValueError("'PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER' can only be used if 'DATA.TEST.IN_MEMORY' == 'False'")
+
     if cfg.DATA.EXTRACT_RANDOM_PATCH and cfg.DATA.PROBABILITY_MAP:
         if cfg.DATA.W_FOREGROUND+cfg.DATA.W_BACKGROUND != 1:
             raise ValueError("cfg.DATA.W_FOREGROUND+cfg.DATA.W_BACKGROUND need to sum 1. E.g. 0.94 and 0.06 respectively.")

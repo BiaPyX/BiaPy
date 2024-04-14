@@ -760,9 +760,9 @@ class Base_Workflow(metaclass=ABCMeta):
         """
         print("Releasing memory . . .")
         if 'X_test' in locals() or 'X_test' in globals():
-            del self.self.X_test
+            del self.X_test
         if 'Y_test' in locals() or 'Y_test' in globals():
-            del self.self.Y_test
+            del self.Y_test
         if 'test_generator' in locals() or 'test_generator' in globals():
             del self.test_generator
         if '_X' in locals() or '_X' in globals():
@@ -854,63 +854,24 @@ class Base_Workflow(metaclass=ABCMeta):
             setup_for_distributed(True)
 
         # Process all the images
-        for i, batch in tqdm(enumerate(self.test_generator), total=len(self.test_generator), disable=not is_main_process()):
-            if self.cfg.DATA.TEST.LOAD_GT and self.cfg.PROBLEM.TYPE not in ["SELF_SUPERVISED"]:
-                X, X_norm, Y, Y_norm = batch
-            else:
-                X, X_norm = batch
-                Y, Y_norm = None, None
-            del batch
+        for i, gen_obj in tqdm(enumerate(self.test_generator), total=len(self.test_generator), disable=not is_main_process()):
+            self._X, X_norm, self._Y, Y_norm = None, None, None, None
+            if 'X' in gen_obj: self._X = gen_obj['X']
+            if 'X_norm' in gen_obj: X_norm = gen_obj['X_norm']
+            if 'Y' in gen_obj: self._Y = gen_obj['Y']
+            if 'Y_norm' in gen_obj: Y_norm = gen_obj['Y_norm']
+            self.processing_filenames = self.test_filenames[gen_obj['file']] if isinstance(gen_obj['file'], int) else gen_obj['file']
+            self.processing_filenames = [os.path.basename(self.processing_filenames)]
+            self.f_numbers = [i]
+            del gen_obj
 
-            if self.cfg.TEST.BY_CHUNKS.ENABLE and self.cfg.PROBLEM.NDIM == '3D':
-                if type(X) is tuple:
-                    self._X = X[0]
-                    if self.cfg.DATA.TEST.LOAD_GT and self.cfg.PROBLEM.TYPE not in ["SELF_SUPERVISED"]:
-                        self._Y = Y[0]  
-                    else:
-                        self._Y = None
+            if is_main_process():
+                if self.cfg.TEST.BY_CHUNKS.ENABLE and self.cfg.PROBLEM.NDIM == '3D':
+                    print(f"[Rank {get_rank()} ({os.getpid()})] Processing image(s): {self.processing_filenames[0]}")
+                    self.process_sample_by_chunks(self.processing_filenames[0])
                 else:
-                    self._X = X
-                    self._Y = Y if self.cfg.DATA.TEST.LOAD_GT else None  
-
-                if len(self.test_filenames) == 0:
-                    self.test_filenames = sorted(next(os.walk(self.cfg.DATA.TEST.PATH))[1])  
-
-                self.processing_filenames = self.test_filenames[i]
-                if is_main_process():
-                    print("Processing image: {}".format(self.processing_filenames))
-
-                # Process each image separately
-                self.f_numbers = [i]
-                self.process_sample_by_chunks(self.processing_filenames)
-            else:
-                # Process all the images in the batch, sample by sample
-                l_X = len(X)
-                for j in tqdm(range(l_X), leave=False, disable=not is_main_process()):
-                    self.processing_filenames = self.test_filenames[(i*l_X)+j:(i*l_X)+j+1]
-                    if is_main_process():
-                        print(f"[Rank {get_rank()} ({os.getpid()})] Processing image(s): {self.processing_filenames}")
-                        
-                        if self.cfg.PROBLEM.TYPE != 'CLASSIFICATION':
-                            if type(X) is tuple:
-                                self._X = X[j]
-                                if self.cfg.DATA.TEST.LOAD_GT and self.cfg.PROBLEM.TYPE not in ["SELF_SUPERVISED"]:
-                                    self._Y = Y[j]  
-                                else:
-                                    self._Y = None
-                            else:
-                                self._X = np.expand_dims(X[j],0)
-                                if self.cfg.DATA.TEST.LOAD_GT and self.cfg.PROBLEM.TYPE not in ["SELF_SUPERVISED"]:
-                                    self._Y = np.expand_dims(Y[j],0)  
-                                else:
-                                    self._Y = None
-                        else:
-                            self._X = np.expand_dims(X[j], 0)                    
-                            self._Y = np.expand_dims(Y, 0) if self.cfg.DATA.TEST.LOAD_GT else None
-
-                        # Process each image separately
-                        self.f_numbers = list(range((i*l_X)+j,(i*l_X)+j+1)) 
-                        self.process_sample(norm=(X_norm, Y_norm))                        
+                    print("Processing image: {}".format(self.processing_filenames[0]))
+                    self.process_sample(norm=(X_norm, Y_norm))                        
             
             image_counter += 1
 

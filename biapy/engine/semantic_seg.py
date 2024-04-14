@@ -230,7 +230,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         # Save simple binarization of predictions
         if self.cfg.MODEL.N_CLASSES > 2:
             _type = np.uint8 if self.cfg.MODEL.N_CLASSES < 255 else np.uint16
-            pred = np.argmax(pred, axis=-1).astype(_type)        
+            pred = np.expand_dims(np.argmax(pred, axis=-1),-1).astype(_type)        
         else:
             pred = (pred>0.5).astype(np.uint8)        
         save_tif(pred, self.cfg.PATHS.RESULT_DIR.PER_IMAGE_BIN, self.processing_filenames, verbose=self.cfg.TEST.VERBOSE)

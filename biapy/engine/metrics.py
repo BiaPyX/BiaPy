@@ -665,7 +665,7 @@ def MaskedAutoencoderViT_loss(y_pred, y_true, model):
     return loss
 
 
-class weighted_L1():
+class L1_wrapper():
     def __init__(self):
         """
         Wrapper to L1 loss function. 
@@ -689,9 +689,9 @@ class weighted_L1():
         loss : Tensor
             Loss value.
         """
-        return self.loss(y_pred, y_true[0]) 
+        return self.loss(y_pred, y_true) 
 
-class weighted_MSE():
+class MSE_wrapper():
     def __init__(self):
         """
         Wrapper to MSE loss function. 
@@ -715,7 +715,7 @@ class weighted_MSE():
         loss : Tensor
             Loss value.
         """
-        return self.loss(y_pred, y_true[0]) 
+        return self.loss(y_pred, y_true) 
 
 class SSIM_wrapper():
     def __init__(self):
@@ -741,4 +741,4 @@ class SSIM_wrapper():
         loss : Tensor
             Loss value.
         """
-        return 1-self.loss(y_pred, y_true[0])
+        return 1-self.loss(y_pred, y_true)
