@@ -4,7 +4,7 @@ import numpy as np
 from tqdm import tqdm
 
 from biapy.utils.util import save_tif
-from biapy.data.pre_processing import calculate_2D_volume_prob_map, calculate_3D_volume_prob_map, save_tif
+from biapy.data.pre_processing import calculate_2D_volume_prob_map, calculate_3D_volume_prob_map, save_tif, percentile_clip
 from biapy.data.generators.pair_data_2D_generator import Pair2DImageDataGenerator
 from biapy.data.generators.pair_data_3D_generator import Pair3DImageDataGenerator
 from biapy.data.generators.single_data_2D_generator import Single2DImageDataGenerator
@@ -63,10 +63,23 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
     norm_dict['type'] = cfg.DATA.NORMALIZATION.TYPE
     norm_dict['mask_norm'] = 'as_mask'
     norm_dict['application_mode'] = cfg.DATA.NORMALIZATION.APPLICATION_MODE
+
+    # Percentile clipping
+    if cfg.DATA.NORMALIZATION.PERC_CLIP:
+        norm_dict['lower_bound'] = cfg.DATA.NORMALIZATION.PERC_LOWER
+        norm_dict['upper_bound'] = cfg.DATA.NORMALIZATION.PERC_UPPER
+        if cfg.DATA.NORMALIZATION.APPLICATION_MODE == "dataset":
+            X_train, norm_dict['dataset_X_lower_value'], \
+            norm_dict['dataset_X_upper_value'] = percentile_clip(X_train, norm_dict['lower_bound'], norm_dict['upper_bound'])
+            np.save(cfg.PATHS.LWR_X_FILE, norm_dict['dataset_X_lower_value'])
+            np.save(cfg.PATHS.UPR_X_FILE, norm_dict['dataset_X_upper_value'])
+
+        print(f"X_train clipped using the following values: {norm_dict}")
+
     if cfg.DATA.NORMALIZATION.TYPE == 'custom':    
         if cfg.DATA.NORMALIZATION.APPLICATION_MODE == "dataset":
             if cfg.DATA.NORMALIZATION.CUSTOM_MEAN == -1 and cfg.DATA.NORMALIZATION.CUSTOM_STD == -1:
-                print("Train/Val normalization: trying to load mean and std from {}".format(cfg.PATHS.MEAN_INFO_FILE))
+                print("Train/Val normalization: trying to load mean from {}".format(cfg.PATHS.MEAN_INFO_FILE))
                 print("Train/Val normalization: trying to load std from {}".format(cfg.PATHS.STD_INFO_FILE))
                 if not os.path.exists(cfg.PATHS.MEAN_INFO_FILE) or not os.path.exists(cfg.PATHS.STD_INFO_FILE):
                     print("Train/Val normalization: mean and/or std files not found. Calculating it for the first time")
@@ -84,40 +97,6 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
                 norm_dict['std'] = cfg.DATA.NORMALIZATION.CUSTOM_STD
         if 'mean' in norm_dict:
             print("Train/Val normalization: using mean {} and std: {}".format(norm_dict['mean'], norm_dict['std']))
-    elif cfg.DATA.NORMALIZATION.TYPE == 'percentile':
-        norm_dict['lower_bound'] = cfg.DATA.NORMALIZATION.PERC_LOWER
-        norm_dict['upper_bound'] = cfg.DATA.NORMALIZATION.PERC_UPPER
-        norm_dict['lower_value'] = None
-        norm_dict['upper_value'] = None
-        if cfg.DATA.NORMALIZATION.APPLICATION_MODE == "dataset":
-            print("Train/Val normalization: trying to load lower bound percentile value from {}".format(cfg.PATHS.LWR_VAL_FILE))
-            print("Train/Val normalization: trying to load lower bound percentile value from {}".format(cfg.PATHS.UPR_VAL_FILE))
-            calc_percentiles = False
-            if not os.path.exists(cfg.PATHS.LWR_VAL_FILE):
-                calc_percentiles = True
-            else:
-                lwr_p_perc, _ = np.load(cfg.PATHS.LWR_VAL_FILE)
-                if lwr_p_perc != norm_dict['lower_bound']:
-                    calc_percentiles = True    
-            if not os.path.exists(cfg.PATHS.UPR_VAL_FILE):
-                calc_percentiles = True    
-            else:
-                upr_p_perc, _ = np.load(cfg.PATHS.UPR_VAL_FILE)
-                if upr_p_perc != norm_dict['upper_bound']:
-                    calc_percentiles = True  
-            
-            if calc_percentiles:
-                print("Train/Val normalization: lower and/or upper bound percentile value files not found (or pencentiles differ from "
-                    " the one stored). Calculating it for the first time")
-                norm_dict['lower_value'] = np.percentile(X_train, norm_dict['lower_bound'])
-                norm_dict['upper_value'] = np.percentile(X_train, norm_dict['upper_bound'])
-                os.makedirs(os.path.dirname(cfg.PATHS.LWR_VAL_FILE), exist_ok=True)
-                np.save(cfg.PATHS.LWR_VAL_FILE, [norm_dict['lower_bound'],norm_dict['lower_value']])
-                np.save(cfg.PATHS.UPR_VAL_FILE, [norm_dict['upper_bound'],norm_dict['upper_value']])
-            else:
-                norm_dict['lower_value'] = float(np.load(cfg.PATHS.LWR_VAL_FILE)[1])
-                norm_dict['upper_value'] = float(np.load(cfg.PATHS.UPR_VAL_FILE)[1])
-                print("Train/Val normalization values loaded!")
 
     if cfg.PROBLEM.NDIM == '2D':
         if cfg.PROBLEM.TYPE == 'CLASSIFICATION' or \
@@ -224,6 +203,14 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
             dic['n2v_neighborhood_radius'] = cfg.PROBLEM.DENOISING.N2V_NEIGHBORHOOD_RADIUS
             dic['n2v_structMask'] = np.array([[0,1,1,1,1,1,1,1,1,1,0]]) if cfg.PROBLEM.DENOISING.N2V_STRUCTMASK else None
 
+    if norm_dict['mask_norm'] == 'as_image' and cfg.DATA.NORMALIZATION.PERC_CLIP and \
+        cfg.DATA.NORMALIZATION.APPLICATION_MODE == "dataset":
+        Y_train, norm_dict['dataset_Y_lower_value'], \
+            norm_dict['dataset_Y_upper_value'] = percentile_clip(Y_train, norm_dict['lower_bound'], norm_dict['upper_bound'])
+        np.save(cfg.PATHS.LWR_Y_FILE, norm_dict['dataset_Y_lower_value'])
+        np.save(cfg.PATHS.UPR_Y_FILE, norm_dict['dataset_Y_upper_value'])
+        print(f"Y_train clipped using the following values: {norm_dict}")
+
     print("Initializing train data generator . . .")
     train_generator = f_name(**dic)
     data_norm = train_generator.get_data_normalization()
@@ -243,6 +230,15 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
                 val_data_mode = "chunked_data"
             else:
                 val_data_mode = "not_in_memory"
+
+    if norm_dict['mask_norm'] == 'as_image' and cfg.DATA.NORMALIZATION.PERC_CLIP and \
+        cfg.DATA.NORMALIZATION.APPLICATION_MODE == "dataset":
+        X_val, _, _ = percentile_clip(X_val, lwr_perc_val=norm_dict['dataset_X_lower_value'],
+            uppr_perc_val=norm_dict['dataset_X_upper_value'])
+        Y_val, _, _ = percentile_clip(Y_val, lwr_perc_val=norm_dict['dataset_Y_lower_value'],
+            uppr_perc_val=norm_dict['dataset_Y_upper_value'])
+        print(f"X_val clipped using the following values: {norm_dict}")
+        print(f"Y_val clipped using the following values: {norm_dict}")
 
     if cfg.PROBLEM.TYPE == 'CLASSIFICATION' or \
         (cfg.PROBLEM.TYPE == 'SELF_SUPERVISED' and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"):
@@ -345,13 +341,30 @@ def create_test_augmentor(cfg, X_test, Y_test, cross_val_samples_ids):
     norm_dict['type'] = cfg.DATA.NORMALIZATION.TYPE
     norm_dict['mask_norm'] = 'as_mask'
     norm_dict['application_mode'] = cfg.DATA.NORMALIZATION.APPLICATION_MODE
+
+    # Percentile clipping
+    if cfg.DATA.NORMALIZATION.PERC_CLIP:
+        norm_dict['lower_bound'] = cfg.DATA.NORMALIZATION.PERC_LOWER
+        norm_dict['upper_bound'] = cfg.DATA.NORMALIZATION.PERC_UPPER
+        if cfg.DATA.NORMALIZATION.APPLICATION_MODE == "dataset":
+            if not os.path.exists(cfg.PATHS.LWR_X_FILE) or not os.path.exists(cfg.PATHS.UPR_X_FILE):
+                    raise FileNotFoundError("Lower/uper percentile files not found in {} and {}"
+                        .format(cfg.PATHS.LWR_X_FILE, cfg.PATHS.UPR_X_FILE))
+            else:
+                norm_dict['dataset_X_lower_value'] = float(np.load(cfg.PATHS.LWR_X_FILE))
+                norm_dict['dataset_X_upper_value'] = float(np.load(cfg.PATHS.UPR_X_FILE))
+
+            X_test, _, _ = percentile_clip(X_test, lwr_perc_val=norm_dict['dataset_X_lower_value'],
+                uppr_perc_val=norm_dict['dataset_X_upper_value'])
+        print(f"X_test clipped using the following values: {norm_dict}")
+
     if cfg.DATA.NORMALIZATION.TYPE == 'custom':    
         if cfg.DATA.NORMALIZATION.APPLICATION_MODE == "dataset":
             if cfg.DATA.NORMALIZATION.CUSTOM_MEAN == -1 and cfg.DATA.NORMALIZATION.CUSTOM_STD == -1:
-                print("Test normalization: trying to load mean and std from {}".format(cfg.PATHS.MEAN_INFO_FILE))
+                print("Test normalization: trying to load mean from {}".format(cfg.PATHS.MEAN_INFO_FILE))
                 print("Test normalization: trying to load std from {}".format(cfg.PATHS.STD_INFO_FILE))
                 if not os.path.exists(cfg.PATHS.MEAN_INFO_FILE) or not os.path.exists(cfg.PATHS.STD_INFO_FILE):
-                    raise FileNotFoundError("Not mean/std files found in {} and {}"
+                    raise FileNotFoundError("Mean/std files not found in {} and {}"
                         .format(cfg.PATHS.MEAN_INFO_FILE, cfg.PATHS.STD_INFO_FILE))
                 norm_dict['mean'] = float(np.load(cfg.PATHS.MEAN_INFO_FILE))
                 norm_dict['std'] = float(np.load(cfg.PATHS.STD_INFO_FILE))
@@ -360,39 +373,6 @@ def create_test_augmentor(cfg, X_test, Y_test, cross_val_samples_ids):
                 norm_dict['std'] = cfg.DATA.NORMALIZATION.CUSTOM_STD
         if 'mean' in norm_dict:
             print("Test normalization: using mean {} and std: {}".format(norm_dict['mean'], norm_dict['std']))
-    elif cfg.DATA.NORMALIZATION.TYPE == 'percentile':
-        norm_dict['lower_bound'] = cfg.DATA.NORMALIZATION.PERC_LOWER
-        norm_dict['upper_bound'] = cfg.DATA.NORMALIZATION.PERC_UPPER
-        norm_dict['lower_value'] = None
-        norm_dict['upper_value'] = None
-        if cfg.DATA.NORMALIZATION.APPLICATION_MODE == "dataset":
-            print("Test normalization: trying to load lower bound percentile value from {}".format(cfg.PATHS.LWR_VAL_FILE))
-            print("Test normalization: trying to load lower bound percentile value from {}".format(cfg.PATHS.UPR_VAL_FILE))
-            calc_percentiles = False
-            if not os.path.exists(cfg.PATHS.LWR_VAL_FILE):
-                calc_percentiles = True
-            else:
-                lwr_p_perc, _ = np.load(cfg.PATHS.LWR_VAL_FILE)
-                if lwr_p_perc != norm_dict['lower_bound']:
-                    calc_percentiles = True    
-            if not os.path.exists(cfg.PATHS.UPR_VAL_FILE):
-                calc_percentiles = True    
-            else:
-                upr_p_perc, _ = np.load(cfg.PATHS.UPR_VAL_FILE)
-                if upr_p_perc != norm_dict['upper_bound']:
-                    calc_percentiles = True  
-            
-            if calc_percentiles:
-                raise FileNotFoundError("Not lower/upper bound percentile files found in {} and {}"
-                        .format(cfg.PATHS.MEAN_INFO_FILE, cfg.PATHS.STD_INFO_FILE))
-            else:
-                norm_dict['lower_value'] = float(np.load(cfg.PATHS.LWR_VAL_FILE)[1])
-                norm_dict['upper_value'] = float(np.load(cfg.PATHS.UPR_VAL_FILE)[1])
-                print("Train/Val normalization values loaded!")
-
-    elif cfg.DATA.NORMALIZATION.TYPE == 'percentile':
-        norm_dict['lower_bound'] = cfg.DATA.NORMALIZATION.PERC_LOWER
-        norm_dict['upper_bound'] = cfg.DATA.NORMALIZATION.PERC_UPPER
 
     instance_problem = True if cfg.PROBLEM.TYPE == 'INSTANCE_SEG' else False
     if cfg.PROBLEM.TYPE in ['SELF_SUPERVISED']:

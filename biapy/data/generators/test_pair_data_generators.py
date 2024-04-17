@@ -8,7 +8,7 @@ from skimage.io import imread
 from PIL import Image
 from PIL.TiffTags import TAGS
 
-from biapy.data.pre_processing import normalize, norm_range01, percentile_norm
+from biapy.data.pre_processing import normalize, norm_range01, percentile_clip
 
 
 class test_pair_data_generator(Dataset):
@@ -215,23 +215,21 @@ class test_pair_data_generator(Dataset):
         """
         xnorm = None
         if self.norm_dict['enable']:
+            # Percentile clipping
+            if 'lower_bound' in self.norm_dict and self.norm_dict['application_mode'] == "image":
+                img, _, _ = percentile_clip(img, lower=self.norm_dict['lower_bound'],                                     
+                    upper=self.norm_dict['upper_bound'])
+
             if self.X_norm['type'] == 'div':
                 img, xnorm = norm_range01(img, dtype=self.dtype)
             elif self.X_norm['type'] == 'custom':
-                if self.X_norm['application_mode'] == "image":
+                if self.norm_dict['application_mode'] == "image":
                     xnorm = {}
                     xnorm['mean'] = img.mean()
                     xnorm['std'] = img.std()
                     img = normalize(img, img.mean(), img.std(), out_type=self.dtype_str)
                 else:
                     img = normalize(img, self.X_norm['mean'], self.X_norm['std'], out_type=self.dtype_str)
-            elif self.X_norm['type'] == 'percentile':                                                                   
-                if self.X_norm['application_mode'] == "image":                                                                      
-                    img, xnorm = percentile_norm(img, lower=self.X_norm['lower_bound'],                                     
-                        upper=self.X_norm['upper_bound'])                                                
-                else:                                                                                                   
-                    img, xnorm = percentile_norm(img, lwr_perc_val=self.X_norm['lower_value'],                                     
-                        uppr_perc_val=self.X_norm['upper_value']) 
         return img, xnorm
 
     def norm_Y(self, mask):   
@@ -257,23 +255,21 @@ class test_pair_data_generator(Dataset):
             if 'div' in self.Y_norm:
                 mask = mask/255
         elif self.norm_dict['mask_norm'] == 'as_image':
+            # Percentile clipping
+            if 'lower_bound' in self.norm_dict and self.norm_dict['application_mode'] == "image":
+                mask, _, _ = percentile_clip(mask, lower=self.norm_dict['lower_bound'],                                     
+                    upper=self.norm_dict['upper_bound'])
+
             if self.X_norm['type'] == 'div':
                 mask, ynorm = norm_range01(mask, dtype=self.dtype)
             elif self.X_norm['type'] == 'custom':
-                if self.X_norm['application_mode'] == "image":
+                if self.norm_dict['application_mode'] == "image":
                     ynorm = {}
                     ynorm['mean'] = mask.mean()
                     ynorm['std'] = mask.std()
                     mask = normalize(mask, mask.mean(), mask.std(), out_type=self.dtype_str)
                 else:
                     mask = normalize(mask, self.X_norm['mean'], self.X_norm['std'], out_type=self.dtype_str)
-            elif self.X_norm['type'] == 'percentile':  
-                if self.X_norm['application_mode'] == "image":                                                                      
-                    mask, ynorm = percentile_norm(mask, lower=self.X_norm['lower_bound'],                                     
-                        upper=self.X_norm['upper_bound'])                                                
-                else:                                                                                                   
-                    mask, ynorm = percentile_norm(mask, lwr_perc_val=self.X_norm['lower_value'],                                     
-                        uppr_perc_val=self.X_norm['upper_value'])
         return mask, ynorm
 
     def load_sample(self, idx):

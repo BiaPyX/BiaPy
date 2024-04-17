@@ -972,28 +972,14 @@ def denormalize(data, means, stds, out_type="float32"):
     else:
         return ((data * stds) + means).astype(numpy_torch_dtype_dict[out_type][1])
 
-def percentile_norm(x, lower=0.1, upper=99.9, lwr_perc_val=None,
+def percentile_clip(x, lower=0.1, upper=99.9, lwr_perc_val=None,
     uppr_perc_val=None):
-    norm_steps = {}
-    norm_steps['orig_dtype'] = x.dtype
-    if x.dtype in [np.uint8, torch.uint8]:
-        x = x/255
-        norm_steps['div'] = 1
-    else:
-        if (isinstance(x, np.ndarray) and np.max(x) > 255) or \
-            (torch.is_tensor(x) and torch.max(x) > 255):
-            norm_steps['reduced_{}'.format(x.dtype)] = 1
-        elif (isinstance(x, np.ndarray) and np.max(x) > 2) or \
-            (torch.is_tensor(x) and torch.max(x) > 2):
-            norm_steps['div'] = 1
-
-    x_lwr = np.percentile(x, lower) if lwr_perc_val is None else lwr_perc_val
-    x_upr = np.percentile(x, upper) if uppr_perc_val is None else uppr_perc_val
-    if x_upr - x_lwr > 1e-3:
-        x = (x - x_lwr) / (x_upr - x_lwr)
-    else:
-        x[:] = 0    
-    return np.clip(x, 0, 1).astype(np.float32), norm_steps
+    x_lwr = float(np.percentile(x, lower)) if lwr_perc_val is None else lwr_perc_val
+    x_upr = float(np.percentile(x, upper)) if uppr_perc_val is None else uppr_perc_val
+    if 'float' not in str(x.dtype):
+        x_lwr = int(x_lwr)
+        x_upr = int(x_upr)
+    return np.clip(x, x_lwr, x_upr, out=x), x_lwr, x_upr
 
 def resize_images(images, **kwards):
     '''

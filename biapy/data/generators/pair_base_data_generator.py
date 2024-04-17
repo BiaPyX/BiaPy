@@ -16,7 +16,7 @@ from torch.utils.data import Dataset
 
 from biapy.utils.util import img_to_onehot_encoding, pad_and_reflect, read_chunked_data
 from biapy.data.generators.augmentors import *
-from biapy.data.pre_processing import normalize, norm_range01, percentile_norm
+from biapy.data.pre_processing import normalize, norm_range01, percentile_clip
 from biapy.utils.misc import is_main_process
 
 class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
@@ -521,15 +521,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                     else:
                         self.X_norm['mean'] = np.mean(self.X)
                         self.X_norm['std'] = np.std(self.X)                            
-            elif norm_dict['type'] == "percentile":
-                self.X_norm['type'] = 'percentile'
-                img, nsteps = percentile_norm(img, lower=norm_dict['lower_bound'], upper=norm_dict['lower_bound'],
-                    lwr_perc_val=norm_dict['lower_bound'], uppr_perc_val=norm_dict['lower_bound'])
-                self.X_norm.update(nsteps)
-                self.X_norm['lower_bound'] = norm_dict['lower_bound']
-                self.X_norm['upper_bound'] = norm_dict['upper_bound'] 
-                self.X_norm['lower_value'] = norm_dict['lower_value']
-                self.X_norm['upper_value'] = norm_dict['upper_value'] 
             else: # norm_dict['type'] == "div"
                 img, nsteps = norm_range01(img)
                 self.X_norm.update(nsteps)
@@ -902,20 +893,18 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         """
         # X normalization
         if self.X_norm['type'] != "none":
+            # Percentile clipping
+            if 'lower_bound' in self.norm_dict and self.norm_dict['application_mode'] == "image":
+                img, _, _ = percentile_clip(img, lower=self.norm_dict['lower_bound'],                                     
+                    upper=self.norm_dict['upper_bound'])
+
             if self.X_norm['type'] == 'div':
                 img, _ = norm_range01(img)
             elif self.X_norm['type'] == 'custom':
-                if self.X_norm['application_mode'] == "image":
+                if self.norm_dict['application_mode'] == "image":
                     img = normalize(img, img.mean(), img.std())
                 else:
                     img = normalize(img, self.X_norm['mean'], self.X_norm['std'])
-            elif self.X_norm['type'] == 'percentile':                                                                   
-                if self.X_norm['application_mode'] == "image":                                                                      
-                    img, _ = percentile_norm(img, lower=self.X_norm['lower_bound'],                                     
-                        upper=self.X_norm['upper_bound'])                                                
-                else:                                                                                                   
-                    img, _ = percentile_norm(img, lwr_perc_val=self.X_norm['lower_value'],                                     
-                        uppr_perc_val=self.X_norm['upper_value']) 
         return img 
 
     def norm_Y(self, mask):   
@@ -940,20 +929,18 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                     if self.channel_info[j]['div']:
                         mask[...,j] = mask[...,j]/255
             elif self.norm_dict['mask_norm'] == 'as_image' and self.Y_provided: 
+                # Percentile clipping
+                if 'lower_bound' in self.norm_dict and self.norm_dict['application_mode'] == "image":
+                    mask, _, _ = percentile_clip(mask, lower=self.norm_dict['lower_bound'],                                     
+                        upper=self.norm_dict['upper_bound'])
+
                 if self.X_norm['type'] == 'div':
                     mask, _ = norm_range01(mask)
                 elif self.X_norm['type'] == 'custom':
-                    if self.X_norm['application_mode'] == "image":
+                    if self.norm_dict['application_mode'] == "image":
                         mask = normalize(mask, mask.mean(), mask.std())
                     else:
                         mask = normalize(mask, self.X_norm['mean'], self.X_norm['std'])
-                elif self.X_norm['type'] == 'percentile':                                                                   
-                    if self.X_norm['application_mode'] == "image":                                                                      
-                        mask, _ = percentile_norm(mask, lower=self.X_norm['lower_bound'],                                     
-                            upper=self.X_norm['upper_bound'])                                                
-                    else:                                                                                                   
-                        mask, _ = percentile_norm(mask, lwr_perc_val=self.X_norm['lower_value'],                                     
-                            uppr_perc_val=self.X_norm['upper_value']) 
         return mask 
 
     def getitem(self, index):

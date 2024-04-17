@@ -896,7 +896,11 @@ def load_data_classification(data_dir, patch_shape, convert_to_rgb=True, expecte
         all_ids += image_ids
 
     # Fuse all data
-    X_data = np.concatenate(X_data, 0)
+    try:
+        X_data = np.concatenate(X_data, 0)
+    except:
+        raise ValueError("Seems that there is a problem merging the image into just one array. Are you sure that all the images"
+            " have the same shape? If not, do not try to load it into memory (DATA.*.IN_MEMORY variables)")
     Y_data = np.concatenate(Y_data, 0)
     Y_data = np.squeeze(Y_data)
 

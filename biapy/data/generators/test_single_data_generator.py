@@ -7,7 +7,7 @@ from skimage.io import imread
 from PIL import Image
 from PIL.TiffTags import TAGS
 
-from biapy.data.pre_processing import normalize, norm_range01, percentile_norm
+from biapy.data.pre_processing import normalize, norm_range01, percentile_clip
 from biapy.data.generators.augmentors import center_crop_single, resize_img
 
 
@@ -191,23 +191,22 @@ class test_single_data_generator(Dataset):
         # Normalization
         xnorm = None
         if self.norm_dict['enable']:
+            # Percentile clipping
+            if 'lower_bound' in self.norm_dict and self.norm_dict['application_mode'] == "image":
+                img, _, _ = percentile_clip(img, lower=self.norm_dict['lower_bound'],                                     
+                    upper=self.norm_dict['upper_bound'])
+
             if self.X_norm['type'] == 'div':
                 img, xnorm = norm_range01(img, dtype=self.dtype)
             elif self.X_norm['type'] == 'custom':
-                if self.X_norm['application_mode'] == "image":
+                if self.norm_dict['application_mode'] == "image":
                     xnorm = {}
                     xnorm['mean'] = img.mean()
                     xnorm['std'] = img.std()
                     img = normalize(img, img.mean(), img.std(), out_type=self.dtype_str)
                 else:
                     img = normalize(img, self.X_norm['mean'], self.X_norm['std'], out_type=self.dtype_str)
-            elif self.X_norm['type'] == 'percentile':                                                                   
-                if self.X_norm['application_mode'] == "image":                                                                      
-                    img, xnorm = percentile_norm(img, lower=self.norm_dict['lower_bound'],                                     
-                        upper=self.norm_dict['upper_bound'])                                                
-                else:                                                                                                   
-                    img, xnorm = percentile_norm(img, lwr_perc_val=self.norm_dict['lower_value'],                                     
-                        uppr_perc_val=self.norm_dict['upper_value']) 
+
         img = np.expand_dims(img, 0).astype(self.dtype)
         img_class = np.expand_dims(img_class, 0)
 

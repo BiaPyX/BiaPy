@@ -191,14 +191,15 @@ class Config:
         # Normalization type to use. Possible options:
         #   'div' to divide values from 0/255 (or 0/65535 if uint16) in [0,1] range
         #   'custom' to use DATA.NORMALIZATION.CUSTOM_MEAN and DATA.NORMALIZATION.CUSTOM_STD to normalize
-        #   'percentile' if no normalization to be applied 
         _C.DATA.NORMALIZATION.TYPE = 'div'
         # Whether to apply the normalization by sample ("image") or by all dataset statistics ("dataset"). Options: ["image", "dataset"]  
         _C.DATA.NORMALIZATION.APPLICATION_MODE = "image"
         # Custom normalization variables: mean and std (they are calculated if not provided)
         _C.DATA.NORMALIZATION.CUSTOM_MEAN = -1.0
         _C.DATA.NORMALIZATION.CUSTOM_STD = -1.0
-        # Lower and upper bound for percentile normalization. Must be set when DATA.NORMALIZATION.TYPE = 'percentile'
+        # Whether to apply or not a percentile clipping before normalizing the data
+        _C.DATA.NORMALIZATION.PERC_CLIP = False
+        # Lower and upper bound for percentile clip. Must be set when DATA.NORMALIZATION.PERC_CLIP = 'True'
         _C.DATA.NORMALIZATION.PERC_LOWER = -1.0
         _C.DATA.NORMALIZATION.PERC_UPPER = -1.0
 
@@ -1047,8 +1048,10 @@ class Config:
         _C.PATHS.MEAN_INFO_FILE = os.path.join(_C.PATHS.CHECKPOINT, 'normalization_mean_value.npy')
         _C.PATHS.STD_INFO_FILE = os.path.join(_C.PATHS.CHECKPOINT, 'normalization_std_value.npy')
         # Percentile normalization paths
-        _C.PATHS.LWR_VAL_FILE = os.path.join(_C.PATHS.CHECKPOINT, 'lower_bound_perc.npy')
-        _C.PATHS.UPR_VAL_FILE = os.path.join(_C.PATHS.CHECKPOINT, 'upper_bound_perc.npy')
+        _C.PATHS.LWR_X_FILE = os.path.join(_C.PATHS.CHECKPOINT, 'lower_bound_X_perc.npy')
+        _C.PATHS.UPR_X_FILE = os.path.join(_C.PATHS.CHECKPOINT, 'upper_bound_X_perc.npy')
+        _C.PATHS.LWR_Y_FILE = os.path.join(_C.PATHS.CHECKPOINT, 'lower_bound_Y_perc.npy')
+        _C.PATHS.UPR_Y_FILE = os.path.join(_C.PATHS.CHECKPOINT, 'upper_bound_Y_perc.npy')
         # Path where the images used in MAE will be saved suring inference
         _C.PATHS.MAE_OUT_DIR = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'MAE_checks')
         
