@@ -1,0 +1,79 @@
+SYSTEM:
+    NUM_CPUS: -1
+    NUM_WORKERS: 5
+
+PROBLEM:
+    TYPE: IMAGE_TO_IMAGE
+    NDIM: 2D
+    IMAGE_TO_IMAGE:
+      MULTIPLE_RAW_ONE_TARGET_LOADER: True
+
+DATA: 
+    PATCH_SIZE: (1024, 1024, 1)
+    EXTRACT_RANDOM_PATCH: False
+    REFLECT_TO_COMPLETE_SHAPE: True
+    NORMALIZATION:
+        TYPE: 'custom'
+        APPLICATION_MODE: 'image'
+    TRAIN:
+        PATH: /path/tubulin/x
+        GT_PATH: /path/tubulin/y
+        IN_MEMORY: False
+    VAL:
+        DIST_EVAL: True
+        PATH: /path/tubulin/val_x
+        GT_PATH: /path/tubulin/val_y
+        IN_MEMORY: False
+        FROM_TRAIN: False
+        SPLIT_TRAIN: 0.1
+    TEST:                                                                                                               
+        PATH: /path/tubulin/val_x
+        IN_MEMORY: False
+        LOAD_GT: False
+        PADDING: (200,200)
+
+AUGMENTOR:
+    ENABLE: True
+    ROT90: True
+    VFLIP: True
+    HFLIP: True
+    BRIGHTNESS: True
+    CONTRAST: True
+    ELASTIC: True
+    RANDOM_ROT: True
+    AFFINE_MODE: 'mirror'
+    GRIDMASK: True
+    GRID_D_RANGE: (0.2, 0.6)
+
+MODEL:
+    ARCHITECTURE: unetr
+    VIT_TOKEN_SIZE: 32
+    VIT_EMBED_DIM: 768
+    VIT_NUM_LAYERS: 12
+    VIT_NUM_HEADS: 12
+    VIT_MLP_RATIO: 4.
+    VIT_NORM_EPS: 1.E-6
+    UNETR_VIT_HIDD_MULT: 3
+    UNETR_VIT_NUM_FILTERS: 16
+    UNETR_DEC_ACTIVATION: 'relu'
+    UNETR_DEC_KERNEL_SIZE: 7
+    N_CLASSES: 2
+    LOAD_CHECKPOINT: True
+
+TRAIN:
+    ENABLE: False
+    OPTIMIZER: ADAMW
+    LR: 1.E-4
+    BATCH_SIZE: 2
+    EPOCHS: 1300
+    PATIENCE: 500
+    LR_SCHEDULER:
+        NAME: 'warmupcosine'
+        MIN_LR: 5.E-6
+        WARMUP_COSINE_DECAY_EPOCHS: 80
+TEST:
+    ENABLE: True
+    AUGMENTATION: False
+
+PATHS:
+  CHECKPOINT_FILE: /path/checkpoints/lightmycells_tubulin.pth
