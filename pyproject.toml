@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "biapy"
-version = "3.4.0"
+version = "3.4.1"
 description = "BiaPy: Bioimage analysis pipelines in Python"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -18,7 +18,6 @@ classifiers = [
 ]
 keywords = ["feed", "reader", "tutorial"]
 dependencies = [
-    "imgaug>=0.4.0",
     "matplotlib>=3.7.1",
     "scikit-learn>=1.4.0",
     "pydot>=1.4.2",
@@ -36,7 +35,9 @@ dependencies = [
     "bioimageio.core==0.5.9",
     "imagecodecs>=2024.1.1",
     "pytorch-msssim>=1.0.0",
-    "numpy>=1.26.4",
+    "numpy>=1.25.2",
+    "imageio>=2.31.6",
+    "imgaug>=0.4.0",
 ]
 
 [project.scripts]
