@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "biapy"
-version = "3.4.1"
+version = "3.4.2"
 description = "BiaPy: Bioimage analysis pipelines in Python"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -23,7 +23,10 @@ dependencies = [
     "pydot>=1.4.2",
     "yacs>=0.1.8",
     "tqdm>=4.66.1",
-    "scikit-image>=0.22.0",
+# "scikit-image>=0.21.0" forces the installation of its latest version in Colab (as there 0.19.3 version is installed).
+# This leads to install a higher imageio library version (higher than the 2.31.6 installed in Colab) and force to reload 
+# the kernel, which is tedious for end users
+    "scikit-image<=0.21.0,>=0.19.3",
     "edt>=2.3.2",
     "fill-voids>=2.0.6",
     "opencv-python>=4.8.0.76",
