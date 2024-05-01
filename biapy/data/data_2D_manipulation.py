@@ -908,10 +908,15 @@ def load_data_classification(data_dir, patch_shape, convert_to_rgb=True, expecte
     if create_val:
         print("Creating validation data")
         if not cross_val:
+            if len(X_train) == 1:
+                raise ValueError("Validation data can not be extracted from training data as it only has one sample. Please check the data.")
             X_data, X_val, Y_data, Y_val = train_test_split(
                 X_data, Y_data, test_size=val_split, shuffle=shuffle_val, random_state=seed,
                 stratify=Y_data)
         else:
+            if len(X_train) < cross_val_nsplits:
+                raise ValueError(f"Validation data can not be extracted from training data as the number of splits ({cross_val_nsplits}) "
+                    f"is greater than the number of samples {len(X_train)}. Please check the data.")
             skf = StratifiedKFold(n_splits=cross_val_nsplits, shuffle=shuffle_val,
                 random_state=seed)
             fold = 1

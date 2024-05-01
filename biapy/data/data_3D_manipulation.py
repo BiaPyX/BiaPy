@@ -232,6 +232,8 @@ def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross
         print("Creating validation data")
         Y_val = None
         if not cross_val:
+            if len(X_train) == 1:
+                raise ValueError("Validation data can not be extracted from training data as it only has one sample. Please check the data.")
             if Y_train is not None:
                 X_train, X_val, Y_train, Y_val = train_test_split(
                     X_train, Y_train, test_size=val_split, shuffle=shuffle_val, random_state=seed)
@@ -239,6 +241,9 @@ def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross
                 X_train, X_val = train_test_split(
                     X_train, test_size=val_split, shuffle=shuffle_val, random_state=seed)
         else:
+            if len(X_train) < cross_val_nsplits:
+                raise ValueError(f"Validation data can not be extracted from training data as the number of splits ({cross_val_nsplits}) "
+                    f"is greater than the number of samples {len(X_train)}. Please check the data.")
             skf = StratifiedKFold(n_splits=cross_val_nsplits, shuffle=shuffle_val,
                 random_state=seed)
             fold = 1
