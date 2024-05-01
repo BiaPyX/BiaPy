@@ -984,9 +984,9 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             # Capture probability map
             if self.prob_map is not None:
                 if isinstance(self.prob_map, list):
-                    img_prob = np.load(self.prob_map[j])
+                    img_prob = np.load(self.prob_map[index])
                 else:
-                    img_prob = self.prob_map[j]
+                    img_prob = self.prob_map[index]
             else:
                 img_prob = None
             
@@ -1339,13 +1339,9 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 orig_images = {}
                 orig_images['o_x'] = np.copy(img) 
                 orig_images['o_y'] = np.copy(mask) 
-                orig_images['o_x2'] = np.copy(img) 
-                orig_images['o_y2'] = np.copy(mask) 
                 if draw_grid:
                     self.draw_grid(orig_images['o_x'])
                     self.draw_grid(orig_images['o_y'])
-                    self.draw_grid(orig_images['o_x2'])
-                    self.draw_grid(orig_images['o_y2'])
 
             # Apply random crops if it is selected
             if self.random_crops_in_DA:

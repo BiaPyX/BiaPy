@@ -1089,7 +1089,7 @@ def random_crop_pair(image, mask, random_crop_size, val=False, draw_prob_map_poi
             # Generate the random coordinates based on the distribution
             choices = np.prod(img_prob.shape)
             index = np.random.choice(choices, size=1, p=prob)
-            coordinates = np.unravel_index(index, dims=img_prob.shape)
+            coordinates = np.unravel_index(index, img_prob.shape)
             x = int(coordinates[1][0])
             y = int(coordinates[0][0])
             ox = int(coordinates[1][0])

@@ -98,17 +98,19 @@ class Pair3DImageDataGenerator(PairBaseDataGenerator):
         save_tif(aux, out_dir, [str(i)+"_x_aug_"+str(pos)+"_"+self.trans_made+'.tif'], verbose=False)
         aux = np.expand_dims(mask,0).astype(np.float32)
         save_tif(aux, out_dir, [str(i)+"_y_aug_"+str(pos)+"_"+self.trans_made+'.tif'], verbose=False)
+        del img, mask
 
         # Save the original images with a red point and a blue square that represents the point selected with
         # the probability map and the random volume extracted from the original data
         if self.random_crops_in_DA and self.prob_map is not None and i == 0:
-            os.makedirs(out_dir, exist_ok=True)
-
+            aux, auxm = self.load_sample(pos)
+            if aux.max() < 1: aux *= 255 
+            if auxm.max() == 1: auxm *= 255
+            aux, auxm = (aux).astype(np.uint8), auxm.astype(np.uint8)
+             
             print("The selected point of the random crop was [{},{},{}]".format(point_dict['oz'],point_dict['oy'],point_dict['ox']))
 
-            aux = (orig_images['o_x2']).astype(np.uint8)
             if aux.shape[-1] == 1: aux = np.repeat(aux, 3, axis=3)
-            auxm = (orig_images['o_y2']).astype(np.uint8)
             if auxm.shape[-1] == 1: auxm = np.repeat(auxm, 3, axis=3)
 
             for s in range(aux.shape[0]):
@@ -138,7 +140,7 @@ class Pair3DImageDataGenerator(PairBaseDataGenerator):
                         p_size=6
                         for row in range(point_dict['ox']-p_size,point_dict['ox']+p_size):
                             for col in range(point_dict['oy']-p_size,point_dict['oy']+p_size):
-                                if col >= 0 and col < img.shape[1] and row >= 0 and row < img.shape[2]:
+                                if col >= 0 and col < aux.shape[1] and row >= 0 and row < aux.shape[2]:
                                     px[row, col] = (255, 0, 0)
                                     py[row, col] = (255, 0, 0)
 
@@ -146,9 +148,9 @@ class Pair3DImageDataGenerator(PairBaseDataGenerator):
                     auxm[s] = m
 
             aux = np.expand_dims(aux,0).astype(np.float32)
-            save_tif(aux, out_dir, ["extract_example_"+str(pos)+"_mark_x_"+self.trans_made+'.tif'], verbose=False)
-
+            save_tif(aux, out_dir, [str(i)+"_"+str(pos)+'_mark_x'+self.trans_made+'.tif'], verbose=False)
+            
             auxm = np.expand_dims(auxm,0).astype(np.float32)
-            save_tif(auxm, out_dir, ["extract_example_"+str(pos)+"_mark_y_"+self.trans_made+'.tif'], verbose=False)
+            save_tif(auxm, out_dir, [str(i)+"_"+str(pos)+'_mark_y'+self.trans_made+'.tif'], verbose=False)
 
 
