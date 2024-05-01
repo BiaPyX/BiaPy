@@ -1414,7 +1414,6 @@ class Base_Workflow(metaclass=ABCMeta):
                 if isinstance(pred, list):
                     pred = torch.cat((pred[0], torch.argmax(pred[1], axis=1).unsqueeze(1)), dim=1)  
                 pred = to_numpy_format(pred, self.axis_order_back)  
-                if self.cfg.TEST.AUGMENTATION: pred = np.expand_dims(pred, 0)
                 del self._X 
 
                 # Recover original shape if padded with check_downsample_division
@@ -1477,9 +1476,6 @@ class Base_Workflow(metaclass=ABCMeta):
         if self.post_processing['per_image']:
             self.stats['iou_merge_patches_post'] = self.stats['iou_merge_patches_post'] / image_counter
             self.stats['ov_iou_merge_patches_post'] = self.stats['ov_iou_merge_patches_post'] / image_counter
-        if self.post_processing['as_3D_stack']:
-            self.stats['iou_as_3D_stack_post'] = self.stats['iou_as_3D_stack_post'] / image_counter
-            self.stats['ov_iou_as_3D_stack_post'] = self.stats['ov_iou_as_3D_stack_post'] / image_counter
             
     def print_stats(self, image_counter):
         """
@@ -1601,6 +1597,8 @@ class Base_Workflow(metaclass=ABCMeta):
         if self.post_processing['as_3D_stack']:
             self.all_pred = np.concatenate(self.all_pred)
             self.all_gt = np.concatenate(self.all_gt) if self.cfg.DATA.TEST.LOAD_GT else None
+            save_tif(np.expand_dims(self.all_pred,0), self.cfg.PATHS.RESULT_DIR.AS_3D_STACK, verbose=self.cfg.TEST.VERBOSE)
+            save_tif(np.expand_dims((self.all_pred>0.5).astype(np.uint8),0), self.cfg.PATHS.RESULT_DIR.AS_3D_STACK_BIN, verbose=self.cfg.TEST.VERBOSE)
             self.all_pred, self.stats['iou_as_3D_stack_post'], self.stats['ov_iou_as_3D_stack_post'] = apply_post_processing(self.cfg, self.all_pred, self.all_gt)
             save_tif(np.expand_dims(self.all_pred,0), self.cfg.PATHS.RESULT_DIR.AS_3D_STACK_POST_PROCESSING, verbose=self.cfg.TEST.VERBOSE)
 

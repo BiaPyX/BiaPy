@@ -1014,6 +1014,7 @@ class Config:
         _C.PATHS.RESULT_DIR.FULL_IMAGE_INSTANCES = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'full_image_instances')
         _C.PATHS.RESULT_DIR.FULL_IMAGE_POST_PROCESSING = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'full_image_post_processing')
         _C.PATHS.RESULT_DIR.AS_3D_STACK = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'as_3d_stack')
+        _C.PATHS.RESULT_DIR.AS_3D_STACK_BIN = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'as_3d_stack_binarized')
         _C.PATHS.RESULT_DIR.AS_3D_STACK_POST_PROCESSING = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'as_3d_stack_post_processing')
         _C.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'per_image_local_max_check')
         _C.PATHS.RESULT_DIR.DET_ASSOC_POINTS = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'point_associations')
