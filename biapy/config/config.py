@@ -891,9 +891,11 @@ class Config:
         _C.TEST.POST_PROCESSING.YZ_FILTERING_SIZE = 5
         _C.TEST.POST_PROCESSING.Z_FILTERING = False
         _C.TEST.POST_PROCESSING.Z_FILTERING_SIZE = 5
-        # Apply a binary mask to remove possible segmentation outside it
+        # Apply a binary mask to remove possible segmentation outside it (you need to provide the mask and it must 
+        # contain two values: '1' -> preserve the pixel ; '0' discard pixel )
         _C.TEST.POST_PROCESSING.APPLY_MASK = False
 
+        ### Instance segmentation
         # Whether to measure morphological features on each instances, i.e. 'circularity' (2D), 'elongation' (2D), 'npixels', 'area', 'diameter', 
         # 'perimeter', 'sphericity' (3D)
         _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES = CN() 
@@ -964,7 +966,6 @@ class Config:
         # "greather equal", e.g. ">=", "less than", e.g. "<", and "less equal" e.g. "<=" comparisons.
         _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGN = []
 
-        ### Instance segmentation
         # Whether to apply Voronoi using 'BC' or 'M' channels need to be present
         _C.TEST.POST_PROCESSING.VORONOI_ON_MASK = False
         # Threshold to be applied to the 'M' channel when expanding the instances with Voronoi. Need to be in [0,1] range.

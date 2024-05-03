@@ -113,6 +113,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
         # Specific instance segmentation post-processing
         if self.cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK or \
+            self.cfg.TEST.POST_PROCESSING.CLEAR_BORDER or\
             self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.ENABLE or \
             self.cfg.TEST.POST_PROCESSING.REPARE_LARGE_BLOBS_SIZE != -1:
             self.post_processing['instance_post'] = True
@@ -422,7 +423,10 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
         if self.cfg.TEST.POST_PROCESSING.CLEAR_BORDER:
             print("Clearing borders . . .")
-            w_pred = clear_border(w_pred)
+            if self.cfg.PROBLEM.NDIM == "2D":
+                w_pred = np.expand_dims(clear_border(w_pred[0]),0)
+            else:
+                w_pred = clear_border(w_pred)
 
         results_post_proc = None
         results_class_post_proc = None
@@ -612,7 +616,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             if type(self.all_pred) is list:
                 self.all_pred = np.concatenate(self.all_pred)
             resolution = self.cfg.DATA.TEST.RESOLUTION if len(self.cfg.DATA.TEST.RESOLUTION) == 3 else (self.cfg.DATA.TEST.RESOLUTION[0],)+self.cfg.DATA.TEST.RESOLUTION
-            r, r_post, rcls, rcls_post = self.instance_seg_process(self.all_pred, ["3D_stack.tif"], self.cfg.PATHS.RESULT_DIR.AS_3D_STACK,
+            r, r_post, rcls, rcls_post = self.instance_seg_process(self.all_pred, ["3D_stack_instances.tif"], self.cfg.PATHS.RESULT_DIR.AS_3D_STACK,
                 self.cfg.PATHS.RESULT_DIR.AS_3D_STACK_POST_PROCESSING, resolution)
             if r is not None:
                 self.all_matching_stats_as_3D_stack.append(r)
