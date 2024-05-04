@@ -1477,8 +1477,9 @@ def measure_morphological_props_and_filter(img, resolution, filter_instances=Fal
     label_list, npixels = np.unique(img, return_counts=True)
     
     # Delete background instance '0'
-    label_list = label_list[1:] 
-    npixels = npixels[1:]
+    if label_list[0] == 0:
+        label_list = label_list[1:] 
+        npixels = npixels[1:]
 
     total_labels = len(label_list)
     comment = ['none' for i in range(total_labels)]

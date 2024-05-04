@@ -300,7 +300,7 @@ class Detection_Workflow(Base_Workflow):
                 all_classes = np.concatenate(all_classes, axis=0)
                 if self.cfg.TEST.POST_PROCESSING.DET_WATERSHED:
                     df = pd.DataFrame(zip(d_result['labels'], list(aux[:,0]), list(aux[:,1]), list(aux[:,2]), list(prob), list(all_classes),
-                        d_result['npixels'], d_result['areas'], d_result['circularities'], d_result['diameters'], d_result['perimeters'], 
+                        d_result['npixels'], d_result['areas'], d_result['sphericities'], d_result['diameters'], d_result['perimeters'], 
                         d_result['comment'], d_result['conditions']), columns =['pred_id', 'axis-0', 'axis-1', 'axis-2', 'probability', 
                         'class', 'npixels', 'volume', 'sphericity', 'diameter', 'perimeter (surface area)', 'comment', 'conditions'])
                     df = df.sort_values(by=['pred_id'])   
@@ -338,7 +338,7 @@ class Detection_Workflow(Base_Workflow):
                 if ndim == 2:
                     cols = ['class', 'pred_id', 'npixels', 'area', 'circularity', 'perimeter', 'elongation', 'comment', 'conditions']
                 else:
-                    cols = ['class', 'pred_id', 'npixels', 'volume', 'sphericity', 'perimeter', 'surface area', 'comment', 'conditions']
+                    cols = ['class', 'pred_id', 'npixels', 'volume', 'sphericity', 'perimeter (surface area)', 'comment', 'conditions']
                 df = df.drop(columns=cols)
             else:
                 df = df.drop(columns=['class'])
@@ -471,10 +471,10 @@ class Detection_Workflow(Base_Workflow):
                 for ch, gt_coords in enumerate(gt_all_coords):
                     # if gt_assoc is None: 
                     gt_assoc, fp = None, None
-                    if len(dfs) > 0 and len(dfs[i]) > 0:
-                        if dfs[i][0] is not None:
+                    if len(dfs) > 0 and len(dfs[ch]) > 0:
+                        if dfs[ch][0] is not None:
                             gt_assoc = dfs[ch][0]
-                        if dfs[i][1] is not None:
+                        if dfs[ch][1] is not None:
                             fp = dfs[ch][1]
 
                     # TP and FN
