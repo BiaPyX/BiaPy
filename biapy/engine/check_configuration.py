@@ -54,6 +54,11 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     if len(cfg.DATA.TEST.RESOLUTION) == 1 and cfg.DATA.TEST.RESOLUTION[0] == -1:
         opts.extend(['DATA.TEST.RESOLUTION', (1,)*dim_count])
 
+    if cfg.TEST.POST_PROCESSING.REPARE_LARGE_BLOBS_SIZE != -1:
+        if cfg.PROBLEM.TYPE != 'INSTANCE_SEG':
+            raise ValueError("'TEST.POST_PROCESSING.REPARE_LARGE_BLOBS_SIZE' can only be set when 'PROBLEM.TYPE' is 'INSTANCE_SEG'")
+        if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS != 'BP':
+            raise ValueError("'TEST.POST_PROCESSING.REPARE_LARGE_BLOBS_SIZE' only makes sense when 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS == 'BP'")
     if cfg.TEST.POST_PROCESSING.DET_WATERSHED and cfg.PROBLEM.TYPE != 'DETECTION':
         raise ValueError("'TEST.POST_PROCESSING.DET_WATERSHED' can only be set when 'PROBLEM.TYPE' is 'DETECTION'")
     if cfg.TEST.POST_PROCESSING.DET_WATERSHED:
