@@ -272,7 +272,7 @@ class Detection_Workflow(Base_Workflow):
                 w_dir = os.path.join(self.cfg.PATHS.WATERSHED_DIR, filenames[0])
                 check_wa = w_dir if self.cfg.PROBLEM.DETECTION.DATA_CHECK_MW else None
                 points_pred = detection_watershed(points_pred, all_points, data_filename, self.cfg.TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION,
-                    clases, ndim=ndim, donuts_classes=self.cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES,
+                    nclasses=classes, ndim=ndim, donuts_classes=self.cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES,
                     donuts_patch=self.cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_PATCH, 
                     donuts_nucleus_diameter=self.cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_NUCLEUS_DIAMETER, save_dir=check_wa)
                 
@@ -280,8 +280,7 @@ class Detection_Workflow(Base_Workflow):
                 points_pred, d_result = measure_morphological_props_and_filter(points_pred, self.cfg.DATA.TEST.RESOLUTION, 
                     properties=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS, 
                     prop_values=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.VALUES, 
-                    comp_signs=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGN, 
-                    coords_list=np.concatenate(all_points, axis=0))
+                    comp_signs=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGN)
 
                 if file_ext in ['.hdf5', '.h5', ".zarr"]:
                     write_chunked_data(np.expand_dims(np.expand_dims(points_pred,-1),0), self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, 
