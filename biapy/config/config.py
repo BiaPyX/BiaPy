@@ -188,20 +188,22 @@ class Config:
         _C.DATA.REFLECT_TO_COMPLETE_SHAPE = False
 
         _C.DATA.NORMALIZATION = CN()
-        # Normalization type to use. Possible options:
-        #   'div' to divide values from 0/255 (or 0/65535 if uint16) in [0,1] range
-        #   'custom' to use DATA.NORMALIZATION.CUSTOM_MEAN and DATA.NORMALIZATION.CUSTOM_STD to normalize
-        _C.DATA.NORMALIZATION.TYPE = 'div'
-        # Whether to apply the normalization by sample ("image") or by all dataset statistics ("dataset"). Options: ["image", "dataset"]  
-        _C.DATA.NORMALIZATION.APPLICATION_MODE = "image"
-        # Custom normalization variables: mean and std (they are calculated if not provided)
-        _C.DATA.NORMALIZATION.CUSTOM_MEAN = -1.0
-        _C.DATA.NORMALIZATION.CUSTOM_STD = -1.0
         # Whether to apply or not a percentile clipping before normalizing the data
         _C.DATA.NORMALIZATION.PERC_CLIP = False
         # Lower and upper bound for percentile clip. Must be set when DATA.NORMALIZATION.PERC_CLIP = 'True'
         _C.DATA.NORMALIZATION.PERC_LOWER = -1.0
         _C.DATA.NORMALIZATION.PERC_UPPER = -1.0
+        # Normalization type to use. Possible options:
+        #   'div' to divide values from 0/255 (or 0/65535 if uint16) in [0,1] range
+        #   'custom' to use DATA.NORMALIZATION.CUSTOM_MEAN and DATA.NORMALIZATION.CUSTOM_STD to normalize
+        _C.DATA.NORMALIZATION.TYPE = 'div'
+        # Whether to apply the normalization by sample ("image") or by all dataset statistics ("dataset"). 
+        # Used with 'DATA.NORMALIZATION.PERC_CLIP' == 'True' and/or when 'DATA.NORMALIZATION.TYPE' == 'custom'. 
+        # Options: ["image", "dataset"]  
+        _C.DATA.NORMALIZATION.APPLICATION_MODE = "image"
+        # Custom normalization variables: mean and std (they are calculated if not provided)
+        _C.DATA.NORMALIZATION.CUSTOM_MEAN = -1.0
+        _C.DATA.NORMALIZATION.CUSTOM_STD = -1.0
 
         # If 'DATA.PATCH_SIZE' selected has 3 channels, e.g. RGB images are expected, so will force grayscale images to be
         # converted into RGB (e.g. in ImageNet some of the images are grayscale)
