@@ -388,15 +388,19 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         # Post-processing #
         ###################
         if self.cfg.TEST.POST_PROCESSING.REPARE_LARGE_BLOBS_SIZE != -1:
-            w_pred = repare_large_blobs(w_pred, self.cfg.TEST.POST_PROCESSING.REPARE_LARGE_BLOBS_SIZE)
+            if self.cfg.PROBLEM.NDIM == "2D": w_pred = w_pred[0]
+            w_pred = repare_large_blobs(w_pred[0], self.cfg.TEST.POST_PROCESSING.REPARE_LARGE_BLOBS_SIZE)
+            if self.cfg.PROBLEM.NDIM == "2D": w_pred = np.expand_dims(w_pred,0)
 
         if self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.ENABLE or \
             self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.ENABLE:
-            w_pred, d_result = measure_morphological_props_and_filter(w_pred.squeeze(), resolution, 
+            if self.cfg.PROBLEM.NDIM == "2D": w_pred = w_pred[0]
+            w_pred, d_result = measure_morphological_props_and_filter(w_pred, resolution, 
                 filter_instances=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.ENABLE,
                 properties=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS, 
                 prop_values=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.VALUES,
                 comp_signs=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGN)
+            if self.cfg.PROBLEM.NDIM == "2D": w_pred = np.expand_dims(w_pred,0)
 
             # Save all instance stats            
             if self.cfg.PROBLEM.NDIM == "2D":
@@ -423,17 +427,17 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
         if self.cfg.TEST.POST_PROCESSING.CLEAR_BORDER:
             print("Clearing borders . . .")
-            if self.cfg.PROBLEM.NDIM == "2D":
-                w_pred = np.expand_dims(clear_border(w_pred[0]),0)
-            else:
-                w_pred = clear_border(w_pred)
+            if self.cfg.PROBLEM.NDIM == "2D": w_pred = w_pred[0]
+            w_pred = clear_border(w_pred)
+            if self.cfg.PROBLEM.NDIM == "2D": w_pred = np.expand_dims(w_pred,0)
 
         results_post_proc = None
         results_class_post_proc = None
         if self.post_processing['instance_post']:
+            if self.cfg.PROBLEM.NDIM == "2D": w_pred = w_pred[0]
+
             # Multi-head: instances + classification
             if self.cfg.MODEL.N_CLASSES > 2:
-                w_pred = w_pred.squeeze()
                 class_channel = np.where(w_pred>0, class_channel, 0) # Adapt changes to post-processed w_pred
                 save_tif(np.expand_dims(np.concatenate([np.expand_dims(w_pred,-1), np.expand_dims(class_channel,-1)],axis=-1),0), 
                     out_dir_post_proc, filenames, verbose=self.cfg.TEST.VERBOSE)
@@ -450,9 +454,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     print(f"Class IoU (post-processing): {class_iou}")
                     results_class_post_proc = class_iou
                     
-                # Add extra dimension if working in 2D
-                if w_pred.ndim == 2:
-                    w_pred = np.expand_dims(w_pred,0)
+                if self.cfg.PROBLEM.NDIM == "2D": w_pred = np.expand_dims(w_pred,0)
 
                 print("Calculating matching stats after post-processing . . .")
                 results_post_proc = matching(_Y, w_pred, thresh=self.cfg.TEST.MATCHING_STATS_THS, report_matches=True)
