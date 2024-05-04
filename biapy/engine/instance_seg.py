@@ -391,6 +391,16 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             if self.cfg.PROBLEM.NDIM == "2D": w_pred = w_pred[0]
             w_pred = repare_large_blobs(w_pred[0], self.cfg.TEST.POST_PROCESSING.REPARE_LARGE_BLOBS_SIZE)
             if self.cfg.PROBLEM.NDIM == "2D": w_pred = np.expand_dims(w_pred,0)
+        
+        if self.cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK:
+            w_pred = voronoi_on_mask(w_pred, pred, th=self.cfg.TEST.POST_PROCESSING.VORONOI_TH, verbose=self.cfg.TEST.VERBOSE)
+        del pred
+
+        if self.cfg.TEST.POST_PROCESSING.CLEAR_BORDER:
+            print("Clearing borders . . .")
+            if self.cfg.PROBLEM.NDIM == "2D": w_pred = w_pred[0]
+            w_pred = clear_border(w_pred)
+            if self.cfg.PROBLEM.NDIM == "2D": w_pred = np.expand_dims(w_pred,0)
 
         if self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.ENABLE or \
             self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.ENABLE:
@@ -410,7 +420,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     'perimeter', 'elongation', 'comment', 'conditions'])
             else:
                 df = pd.DataFrame(zip(np.array(d_result['labels'], dtype=np.uint64), list(d_result['centers'][:,0]), list(d_result['centers'][:,1]), 
-                    list(d_result['centers'][:,2]), d_result['npixels'], d_result['areas'], d_result['circularities'], d_result['diameters'], 
+                    list(d_result['centers'][:,2]), d_result['npixels'], d_result['areas'], d_result['sphericities'], d_result['diameters'], 
                     d_result['perimeters'], d_result['comment'], d_result['conditions']), columns=['label', 'axis-0', 'axis-1', 
                     'axis-2', 'npixels', 'volume', 'sphericity', 'diameter', 'perimeter (surface area)', 'comment', 'conditions'])
             df = df.sort_values(by=['label'])   
@@ -420,16 +430,6 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             os.makedirs(out_dir_post_proc, exist_ok=True)
             df.to_csv(os.path.join(out_dir_post_proc, os.path.splitext(filenames[0])[0]+'_filtered_stats.csv'), index=False)
             del df
-
-        if self.cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK:
-            w_pred = voronoi_on_mask(w_pred, pred, th=self.cfg.TEST.POST_PROCESSING.VORONOI_TH, verbose=self.cfg.TEST.VERBOSE)
-        del pred
-
-        if self.cfg.TEST.POST_PROCESSING.CLEAR_BORDER:
-            print("Clearing borders . . .")
-            if self.cfg.PROBLEM.NDIM == "2D": w_pred = w_pred[0]
-            w_pred = clear_border(w_pred)
-            if self.cfg.PROBLEM.NDIM == "2D": w_pred = np.expand_dims(w_pred,0)
 
         results_post_proc = None
         results_class_post_proc = None
