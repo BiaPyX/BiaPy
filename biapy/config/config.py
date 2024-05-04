@@ -386,9 +386,6 @@ class Config:
         # Padding to be done in (y,x)/(z,y,x) when cropping validation data. Useful to avoid patch 'border effect'. This 
         # is only used when the validation is loaded from disk, and thus, not extracted from training. 
         _C.DATA.VAL.PADDING = (0,0)
-        # Directory where validation binary masks should be located. This binary mask will be applied only when MW_TH*
-        # optimized values are find, that is, when _C.PROBLEM.INSTANCE_SEG.DATA_MW_OPTIMIZE_THS = True and _C.TEST.POST_PROCESSING.APPLY_MASK = True
-        _C.DATA.VAL.BINARY_MASKS = os.path.join("user_data", 'val', 'bin_mask')
         # Not used yet.
         _C.DATA.VAL.RESOLUTION = (-1,)
         # Order of the axes of the image when using Zarr/H5 images to train
@@ -894,7 +891,8 @@ class Config:
         _C.TEST.POST_PROCESSING.Z_FILTERING = False
         _C.TEST.POST_PROCESSING.Z_FILTERING_SIZE = 5
         # Apply a binary mask to remove possible segmentation outside it (you need to provide the mask and it must 
-        # contain two values: '1' -> preserve the pixel ; '0' discard pixel )
+        # contain two values: '1' -> preserve the pixel ; '0' discard pixel ). A mask for each test sample must be 
+        # provided and it will be loaded using 'DATA.TEST.BINARY_MASKS' variable.
         _C.TEST.POST_PROCESSING.APPLY_MASK = False
 
         ### Instance segmentation
@@ -989,7 +987,8 @@ class Config:
         _C.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS = [-1.0]
         # Whether to apply a watershed to grow the points detected 
         _C.TEST.POST_PROCESSING.DET_WATERSHED = False
-        # Structure per each class to dilate the initial seeds before watershed
+        # Structure per each class to dilate the initial seeds before watershed. For instance, with two classes in a 3D problem:
+        # [ [2,2,1], [10,10,4] ]
         _C.TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION = [[-1,-1],]
         # List of classes to be consider as 'donuts'. For those class points, the 'donuts' type cell means that their nucleus is 
         # to big and that the seeds need to be dilated more so the watershed can grow the instances properly.
@@ -1027,7 +1026,6 @@ class Config:
         _C.PATHS.PROFILER = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'profiler')
 
         # Name of the folder where the charts of the loss and metrics values while training the network are stored.
-        # Additionally, MW_TH* variable charts are stored if _C.PROBLEM.INSTANCE_SEG.DATA_MW_OPTIMIZE_THS = True
         _C.PATHS.CHARTS = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'charts')
         # Folder where samples of DA will be stored
         _C.PATHS.DA_SAMPLES = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'aug')
@@ -1095,8 +1093,6 @@ class Config:
         self._C.DATA.VAL.INSTANCE_CHANNELS_DIR = self._C.DATA.VAL.PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         self._C.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR = self._C.DATA.VAL.GT_PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         # If value is not the default
-        if self._C.DATA.VAL.BINARY_MASKS == os.path.join("user_data", 'val', 'bin_mask'):
-            self._C.DATA.VAL.BINARY_MASKS = os.path.join(self._C.DATA.VAL.PATH, '..', 'bin_mask')
         self._C.DATA.VAL.DETECTION_MASK_DIR = self._C.DATA.VAL.GT_PATH+'_detection_masks'
         self._C.DATA.VAL.SSL_SOURCE_DIR = self._C.DATA.VAL.PATH+'_ssl_source'
         self._C.DATA.TEST.INSTANCE_CHANNELS_DIR = self._C.DATA.TEST.PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
