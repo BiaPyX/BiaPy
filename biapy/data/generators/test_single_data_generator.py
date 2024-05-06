@@ -192,9 +192,13 @@ class test_single_data_generator(Dataset):
         xnorm = None
         if self.norm_dict['enable']:
             # Percentile clipping
-            if 'lower_bound' in self.norm_dict and self.norm_dict['application_mode'] == "image":
-                img, _, _ = percentile_clip(img, lower=self.norm_dict['lower_bound'],                                     
-                    upper=self.norm_dict['upper_bound'])
+            if 'lower_bound' in self.norm_dict:
+                if self.norm_dict['application_mode'] == "image":
+                    img, _, _ = percentile_clip(img, lower=self.norm_dict['lower_bound'],                                     
+                        upper=self.norm_dict['upper_bound'])
+                elif self.norm_dict['application_mode'] == "dataset" and not self.norm_dict['clipped']:
+                    img, _, _ = percentile_clip(img, lwr_perc_val=self.norm_dict['dataset_X_lower_value'],                                     
+                        uppr_perc_val=self.norm_dict['dataset_X_upper_value'])
 
             if self.X_norm['type'] == 'div':
                 img, xnorm = norm_range01(img, dtype=self.dtype)

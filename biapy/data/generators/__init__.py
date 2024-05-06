@@ -347,6 +347,7 @@ def create_test_augmentor(cfg, X_test, Y_test, cross_val_samples_ids):
     if cfg.DATA.NORMALIZATION.PERC_CLIP:
         norm_dict['lower_bound'] = cfg.DATA.NORMALIZATION.PERC_LOWER
         norm_dict['upper_bound'] = cfg.DATA.NORMALIZATION.PERC_UPPER
+        norm_dict['clipped'] = X_test is not None
         if cfg.DATA.NORMALIZATION.APPLICATION_MODE == "dataset":
             if not os.path.exists(cfg.PATHS.LWR_X_FILE) or not os.path.exists(cfg.PATHS.UPR_X_FILE):
                     raise FileNotFoundError("Lower/uper percentile files not found in {} and {}"
@@ -355,9 +356,12 @@ def create_test_augmentor(cfg, X_test, Y_test, cross_val_samples_ids):
                 norm_dict['dataset_X_lower_value'] = float(np.load(cfg.PATHS.LWR_X_FILE))
                 norm_dict['dataset_X_upper_value'] = float(np.load(cfg.PATHS.UPR_X_FILE))
 
-            X_test, _, _ = percentile_clip(X_test, lwr_perc_val=norm_dict['dataset_X_lower_value'],
-                uppr_perc_val=norm_dict['dataset_X_upper_value'])
-        print(f"X_test clipped using the following values: {norm_dict}")
+            if X_test is not None:
+                X_test, _, _ = percentile_clip(X_test, lwr_perc_val=norm_dict['dataset_X_lower_value'],
+                    uppr_perc_val=norm_dict['dataset_X_upper_value'])
+                
+        if X_test is not None:        
+            print(f"X_test clipped using the following values: {norm_dict}")
 
     if cfg.DATA.NORMALIZATION.TYPE == 'custom':    
         if cfg.DATA.NORMALIZATION.APPLICATION_MODE == "dataset":

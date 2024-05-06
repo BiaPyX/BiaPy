@@ -1116,7 +1116,7 @@ def extract_3D_patch_with_overlap_yield(data, vol_shape, axis_order, overlap=(0,
     for i,p in enumerate(padding):
         if p >= vol_shape[i]//2:
             raise ValueError("'Padding' can not be greater than the half of 'vol_shape'. Max value for this {} input shape is {}"
-                             .format(data_shape, [(vol_shape[0]//2)-1,(vol_shape[1]//2)-1,(vol_shape[2]//2)-1]))
+                             .format(data.shape, [(vol_shape[0]//2)-1,(vol_shape[1]//2)-1,(vol_shape[2]//2)-1]))
 
     padded_data_shape = [z_dim+padding[0]*2,y_dim+padding[1]*2,x_dim+padding[2]*2,c_dim]
     padded_vol_shape = vol_shape
