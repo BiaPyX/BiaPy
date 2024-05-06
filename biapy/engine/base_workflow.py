@@ -659,11 +659,11 @@ class Base_Workflow(metaclass=ABCMeta):
                 if (epoch+1) % self.cfg.LOG.CHART_CREATION_FREQ == 0:
                     create_plots(self.plot_values, self.metric_names, self.job_identifier, self.cfg.PATHS.CHARTS)
 
-                if self.val_generator is not None and self.early_stopping is not None:
-                    self.early_stopping(test_stats['loss'])
-                    if self.early_stopping.early_stop:
-                        print("Early stopping")
-                        break
+            if self.val_generator is not None and self.early_stopping is not None:
+                self.early_stopping(test_stats['loss'])
+                if self.early_stopping.early_stop:
+                    print("Early stopping")
+                    break
                         
             e_end = time.time()
             t_epoch = e_end - e_start
