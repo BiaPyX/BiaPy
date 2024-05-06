@@ -865,11 +865,11 @@ class Base_Workflow(metaclass=ABCMeta):
             self.f_numbers = [i]
             del gen_obj
 
-            if is_main_process():
-                if self.cfg.TEST.BY_CHUNKS.ENABLE and self.cfg.PROBLEM.NDIM == '3D':
-                    print(f"[Rank {get_rank()} ({os.getpid()})] Processing image(s): {self.processing_filenames[0]}")
-                    self.process_sample_by_chunks(self.processing_filenames[0])
-                else:
+            if self.cfg.TEST.BY_CHUNKS.ENABLE and self.cfg.PROBLEM.NDIM == '3D':
+                print(f"[Rank {get_rank()} ({os.getpid()})] Processing image(s): {self.processing_filenames[0]}")
+                self.process_sample_by_chunks(self.processing_filenames[0])
+            else:
+                if is_main_process():
                     print("Processing image: {}".format(self.processing_filenames[0]))
                     self.process_sample(norm=(X_norm, Y_norm))                        
             
