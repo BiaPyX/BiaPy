@@ -731,7 +731,7 @@ class Detection_Workflow(Base_Workflow):
                     for x in range(x_vols):
                         futures.append(executor.submit(self.process_patch, z, y, x, _filename, total_patches, c, pred, d, file_ext, z_dim, y_dim, x_dim))
                         c+=1
-
+        df = None
         for future in futures:
             df_patch, fname = future.result()
             if df_patch is not None:
@@ -744,6 +744,9 @@ class Detection_Workflow(Base_Workflow):
 
         # Take point coords
         pred_coordinates = []
+        if df is None: 
+            print("No points created, skipping evaluation . . .")
+            return 
         coordz = df['axis-0'].tolist()
         coordy = df['axis-1'].tolist()
         coordx = df['axis-2'].tolist()
