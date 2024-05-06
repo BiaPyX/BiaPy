@@ -71,6 +71,7 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
         if cfg.DATA.NORMALIZATION.APPLICATION_MODE == "dataset":
             X_train, norm_dict['dataset_X_lower_value'], \
             norm_dict['dataset_X_upper_value'] = percentile_clip(X_train, norm_dict['lower_bound'], norm_dict['upper_bound'])
+            os.makedirs(os.path.dirname(cfg.PATHS.LWR_X_FILE), exist_ok=True)
             np.save(cfg.PATHS.LWR_X_FILE, norm_dict['dataset_X_lower_value'])
             np.save(cfg.PATHS.UPR_X_FILE, norm_dict['dataset_X_upper_value'])
 
