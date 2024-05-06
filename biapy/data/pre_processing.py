@@ -358,7 +358,7 @@ def create_detection_masks(cfg, data_type='train'):
                 shape = img.shape[:-1]
             else:
                 img_zarr_file, img = read_chunked_data(os.path.join(img_dir, img_filename))
-                shape = img.shape
+                shape = img.shape if img.ndim == 3 else img.shape[:-1]
 
                 if isinstance(img_zarr_file, h5py.File):
                     img_zarr_file.close()
@@ -470,7 +470,8 @@ def create_detection_masks(cfg, data_type='train'):
                 if cfg.PROBLEM.NDIM == '2D': mask = np.expand_dims(mask,0)
                 for k in tqdm(range(mask.shape[0]), total=len(mask), leave=False, disable=not is_main_process()): 
                     for ch in range(mask.shape[-1]):                                                                                  
-                        mask[k,...,ch] = binary_dilation_scipy(mask[k,...,ch], iterations=1,  structure=disk(cfg.PROBLEM.DETECTION.CENTRAL_POINT_DILATION))                                                                                                                                                    
+                        mask[k,...,ch] = binary_dilation_scipy(mask[k,...,ch], iterations=1,  
+                            structure=disk(cfg.PROBLEM.DETECTION.CENTRAL_POINT_DILATION))                                                                                                                                                    
                 if cfg.PROBLEM.NDIM == '2D': mask = mask[0]
 
             if cfg.PROBLEM.DETECTION.CHECK_POINTS_CREATED:
