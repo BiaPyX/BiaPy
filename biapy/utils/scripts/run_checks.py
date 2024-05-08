@@ -97,6 +97,24 @@ denoising_3d_data_drive_link = "https://drive.google.com/uc?id=1OIjnUoJKdnbClBlp
 denoising_3d_data_filename = "flywing3D.zip"
 denoising_3d_data_outpath = os.path.join(denoising_folder, "flywing3D")
 
+###########
+# SR
+###########
+super_resolution_folder = os.path.join(data_folder, "sr")
+
+# 2D
+super_resolution_2d_template = "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/super-resolution/2d_super-resolution.yaml"
+super_resolution_2d_template_local = os.path.join(super_resolution_folder, "2d_super_resolution.yaml")
+super_resolution_2d_data_drive_link = "https://drive.google.com/uc?id=1rtrR_jt8hcBEqvwx_amFBNR7CMP5NXLo"
+super_resolution_2d_data_filename = "sr_data_2D.zip"
+super_resolution_2d_data_outpath = os.path.join(super_resolution_folder, "sr_data_2D")
+# 3D
+super_resolution_3d_template = "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/super-resolution/3d_super-resolution.yaml"
+super_resolution_3d_template_local = os.path.join(super_resolution_folder, "3d_super_resolution.yaml")
+super_resolution_3d_data_drive_link = "https://drive.google.com/uc?id=1TfQVK7arJiRAVmKHRebsfi8NEas8ni4s"
+super_resolution_3d_data_filename = "sr_data_3D.zip"
+super_resolution_3d_data_outpath = os.path.join(super_resolution_folder, "sr_data_3D")
+
 
 if not os.path.exists(biapy_folder): 
     raise ValueError(f"BiaPy not found in: {biapy_folder}")
@@ -207,13 +225,13 @@ all_test_info["Test8"] = {
 
 all_test_info["Test11"] = {
     "enable": True,
-    "run_experiment": True,
+    "run_experiment": False,
     "jobname": "test11",
     "description": "3D Detection. Zarr 3D data (Brainglobe). custom norm, percentile norm, per image. "
         "MINIMUM_FOREGROUND_PER. warmupcosine. Basic DA. resunet. test by chunks: Zarr. Post-proc: remove close points",
     "yaml": "test_11.yaml",
     "internal_checks": [
-        {"type": "regular", "pattern": "Detection - Test F1 (merge patches)", "gt": True, "value": 0.1},
+        {"type": "regular", "pattern": "Detection - Test F1 (per image)", "gt": True, "value": 0.15},
     ]
 }
 
@@ -238,6 +256,30 @@ all_test_info["Test10"] = {
     "yaml": "test_10.yaml",
     "internal_checks": [
         {"type": "regular", "pattern": "Validation MSE:", "gt": False, "value": 1.},
+    ]
+}
+
+all_test_info["Test12"] = {
+    "enable": False,
+    "run_experiment": False,
+    "jobname": "test12",
+    "description": "2D super-resolution. SR 2D data. Cross-val. Basic DA. DFCAN",
+    "yaml": "test_12.yaml",
+    "internal_checks": [
+        {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 22.0},
+        {"type": "regular", "pattern": "Test PSNR (merge patches)", "gt": True, "value": 22.0},
+    ]
+}
+
+all_test_info["Test13"] = {
+    "enable": True,
+    "run_experiment": False,
+    "jobname": "test13",
+    "description": "3D super-resolution. SR 3D data. Cross-val. Basic DA. DFCAN",
+    "yaml": "test_13.yaml",
+    "internal_checks": [
+        {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 13.0},
+        {"type": "regular", "pattern": "Test PSNR (merge patches)", "gt": True, "value": 13.0},
     ]
 }
 
@@ -407,6 +449,40 @@ if not os.path.exists(denoising_3d_data_outpath) and all_test_info["Test10"]["en
     if not os.path.exists(denoising_3d_template_local):
         print("Downloading denoising YAML . . .") 
         _, _ = urllib.request.urlretrieve(denoising_3d_template, filename=denoising_3d_template_local)
+
+###########
+# SR
+###########
+
+# General things: 2D Data + YAML donwload
+if not os.path.exists(super_resolution_2d_data_outpath) and all_test_info["Test12"]["enable"]:
+    print("Downloading 2D super_resolution data . . .")
+    
+    os.makedirs(super_resolution_folder, exist_ok=True)
+    os.chdir(super_resolution_folder)
+    gdown.download(super_resolution_2d_data_drive_link, super_resolution_2d_data_filename, quiet=True)
+
+    with ZipFile(os.path.join(super_resolution_folder, super_resolution_2d_data_filename), 'r') as zObject: 
+        zObject.extractall(path=super_resolution_2d_data_outpath) 
+
+    if not os.path.exists(super_resolution_2d_template_local):
+        print("Downloading super_resolution YAML . . .") 
+        _, _ = urllib.request.urlretrieve(super_resolution_2d_template, filename=super_resolution_2d_template_local)
+
+# General things: 3D Data + YAML donwload
+if not os.path.exists(super_resolution_3d_data_outpath) and all_test_info["Test13"]["enable"]:
+    print("Downloading 3D super_resolution data . . .")
+    
+    os.makedirs(super_resolution_folder, exist_ok=True)
+    os.chdir(super_resolution_folder)
+    gdown.download(super_resolution_3d_data_drive_link, super_resolution_3d_data_filename, quiet=True)
+
+    with ZipFile(os.path.join(super_resolution_folder, super_resolution_3d_data_filename), 'r') as zObject: 
+        zObject.extractall(path=super_resolution_3d_data_outpath) 
+
+    if not os.path.exists(super_resolution_3d_template_local):
+        print("Downloading super_resolution YAML . . .") 
+        _, _ = urllib.request.urlretrieve(super_resolution_3d_template, filename=super_resolution_3d_template_local)
 
 
 def print_inventory(dct): 
@@ -1395,5 +1471,145 @@ if all_test_info["Test10"]["enable"]:
 
     # Test result  
     print_result(results, all_test_info["Test10"]["jobname"], int_checks)
+
+#~~~~~~~~~~~~
+# Test 12 
+#~~~~~~~~~~~~
+if all_test_info["Test12"]["enable"]:
+    print("######")
+    print("Running Test 12")
+    print_inventory(all_test_info["Test12"])
+
+    #*******************
+    # File preparation 
+    #*******************
+    # Open config file
+    with open(super_resolution_2d_template_local, 'r') as stream:
+        try:
+            biapy_config = yaml.safe_load(stream)
+        except yaml.YAMLError as exc:
+            raise ValueError(exc)
+
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(super_resolution_2d_data_outpath, "data", "train", "LR")
+    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(super_resolution_2d_data_outpath, "data", "train", "HR")
+    biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
+    biapy_config['DATA']['VAL']['CROSS_VAL'] = True
+    biapy_config['DATA']['VAL']['CROSS_VAL_NFOLD'] = 5
+    biapy_config['DATA']['VAL']['CROSS_VAL_FOLD'] = 2
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(super_resolution_2d_data_outpath, "data", "test", "LR")
+    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(super_resolution_2d_data_outpath, "data", "test", "HR")
+    biapy_config['DATA']['TEST']['IN_MEMORY'] = False
+    biapy_config['DATA']['TEST']['USE_VAL_AS_TEST'] = True
+ 
+    biapy_config['TRAIN']['ENABLE'] = True
+    biapy_config['TRAIN']['EPOCHS'] = 20
+    biapy_config['TRAIN']['PATIENCE'] = -1 
+
+    biapy_config['MODEL']['ARCHITECTURE'] = 'dfcan'
+    biapy_config['MODEL']['LOAD_CHECKPOINT'] = False
+
+    biapy_config['TEST']['ENABLE'] = True
+    biapy_config['TEST']['FULL_IMG'] = False
+
+    # Save file
+    test_file = os.path.join(super_resolution_folder, all_test_info["Test12"]["yaml"])
+    with open(test_file, 'w') as outfile:
+        yaml.dump(biapy_config, outfile, default_flow_style=False)
+
+    # Run  
+    if all_test_info["Test12"]["run_experiment"]:
+        runjob(all_test_info["Test12"], results_folder, test_file, biapy_folder)
+
+    # Check  
+    results = []
+    res, last_lines = check_finished(all_test_info["Test12"], "Test 12")
+    if not res:
+        print("Internal check not passed: seems that it didn't finish")
+    results.append(res)
+    int_checks = 1
+    for checks in all_test_info["Test12"]["internal_checks"]: 
+        if checks["type"] == "regular":
+            results.append(check_value(last_lines, checks["pattern"], checks["value"], checks["gt"]))
+        else:
+            results.append(check_DatasetMatching(last_lines, checks["pattern"], checks["value"], gt=checks["gt"], 
+                value_to_check=checks["nApparition"], metric=checks["metric"]))
+        int_checks += 1
+        if not results[-1]:
+            print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
+
+    # Test result  
+    print_result(results, all_test_info["Test12"]["jobname"], int_checks)
+
+#~~~~~~~~~~~~
+# Test 13 
+#~~~~~~~~~~~~
+if all_test_info["Test13"]["enable"]:
+    print("######")
+    print("Running Test 13")
+    print_inventory(all_test_info["Test13"])
+
+    #*******************
+    # File preparation 
+    #*******************
+    # Open config file
+    with open(super_resolution_3d_template_local, 'r') as stream:
+        try:
+            biapy_config = yaml.safe_load(stream)
+        except yaml.YAMLError as exc:
+            raise ValueError(exc)
+
+    biapy_config['PROBLEM']['SUPER_RESOLUTION']['UPSCALING'] = "(1,1,1)"
+    biapy_config['DATA']['EXTRACT_RANDOM_PATCH'] = True
+
+    biapy_config['DATA']['PATCH_SIZE'] = "(6,128,128,1)"
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(super_resolution_3d_data_outpath, "data", "train", "LR")
+    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(super_resolution_3d_data_outpath, "data", "train", "HR")
+    biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
+    biapy_config['DATA']['VAL']['CROSS_VAL'] = True
+    biapy_config['DATA']['VAL']['CROSS_VAL_NFOLD'] = 5
+    biapy_config['DATA']['VAL']['CROSS_VAL_FOLD'] = 4
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(super_resolution_3d_data_outpath, "data", "test", "LR")
+    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(super_resolution_3d_data_outpath, "data", "test", "HR")
+    biapy_config['DATA']['TEST']['IN_MEMORY'] = False
+    biapy_config['DATA']['TEST']['USE_VAL_AS_TEST'] = True
+ 
+    biapy_config['TRAIN']['ENABLE'] = True
+    biapy_config['TRAIN']['EPOCHS'] = 20
+    biapy_config['TRAIN']['PATIENCE'] = -1 
+
+    biapy_config['MODEL']['ARCHITECTURE'] = 'resunet++'
+    biapy_config['MODEL']['Z_DOWN'] = [1,1,1,1]
+    biapy_config['MODEL']['LOAD_CHECKPOINT'] = False
+
+    biapy_config['TEST']['ENABLE'] = True
+
+    # Save file
+    test_file = os.path.join(super_resolution_folder, all_test_info["Test13"]["yaml"])
+    with open(test_file, 'w') as outfile:
+        yaml.dump(biapy_config, outfile, default_flow_style=False)
+
+    # Run  
+    if all_test_info["Test13"]["run_experiment"]:
+        runjob(all_test_info["Test13"], results_folder, test_file, biapy_folder)
+
+    # Check  
+    results = []
+    res, last_lines = check_finished(all_test_info["Test13"], "Test 13")
+    if not res:
+        print("Internal check not passed: seems that it didn't finish")
+    results.append(res)
+    int_checks = 1
+    for checks in all_test_info["Test13"]["internal_checks"]: 
+        if checks["type"] == "regular":
+            results.append(check_value(last_lines, checks["pattern"], checks["value"], checks["gt"]))
+        else:
+            results.append(check_DatasetMatching(last_lines, checks["pattern"], checks["value"], gt=checks["gt"], 
+                value_to_check=checks["nApparition"], metric=checks["metric"]))
+        int_checks += 1
+        if not results[-1]:
+            print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
+
+    # Test result  
+    print_result(results, all_test_info["Test13"]["jobname"], int_checks)
 
 import pdb; pdb.set_trace()
