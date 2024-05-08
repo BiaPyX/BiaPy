@@ -11,7 +11,7 @@ PROBLEM:
         UPSCALING: (2,2,2)
   
 DATA: 
-    PATCH_SIZE: (10, 48, 48, 1)
+    PATCH_SIZE: (6, 128, 128, 1)
     TRAIN:                                                                                                              
         PATH: /path/to/data
         GT_PATH: /path/to/data

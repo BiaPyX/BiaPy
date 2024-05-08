@@ -128,6 +128,7 @@ def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross
     print("### LOAD ###")
 
     # Disable crops when random_crops_in_DA is selected
+    delay_crop = False
     if random_crops_in_DA:
         crop = False  
     else:
@@ -137,7 +138,6 @@ def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross
             delay_crop = True  
         else:
             crop = True
-            delay_crop = False  
 
     # Check validation
     if val_split > 0 or cross_val:
@@ -156,14 +156,20 @@ def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross
         Y_train, _, _ = load_3d_images_from_dir(train_mask_path, crop=crop, crop_shape=scrop, overlap=ov,
             padding=padding, reflect_to_complete_shape=reflect_to_complete_shape, check_channel=False, check_drange=False,
             preprocess_cfg=preprocess_cfg, is_mask=is_y_mask, preprocess_f=preprocess_f)
+
+        # Check that the shape of all images match
+        if isinstance(Y_train, list):
+            for i in range(len(Y_train)):
+                xshape = X_train[i].shape
+                yshape = Y_train[i].shape
+                real_x_shape = (xshape[0]*y_upscaling[0], xshape[1]*y_upscaling[1], xshape[2]*y_upscaling[2], xshape[3]) 
+                real_y_shape = (yshape[0]*y_upscaling[0], yshape[1]*y_upscaling[1], yshape[2]*y_upscaling[2], yshape[3])
+                if real_x_shape != real_y_shape:
+                    raise ValueError(f"There is a mismatch between input image and its corresponding ground truth ({real_x_shape} vs "
+                        f"{real_y_shape}). Please check the images. Specifically, the sample that doesn't match is the number {i}"
+                        f" (file: {t_filenames[i]})")
     else:
         Y_train = None
-
-    if isinstance(X_train, list):
-        raise NotImplementedError("If you arrived here means that your images are not all of the same shape, and you "
-                                  "select DATA.EXTRACT_RANDOM_PATCH = True, so no crops are made to ensure all images "
-                                  "have the same shape. Please, crop them into your DATA.PATCH_SIZE and run again (you "
-                                  "can use one of the script from here to crop: https://github.com/BiaPyX/BiaPy/tree/master/biapy/utils/scripts)")
 
     # Discard images that do not surpass the foreground percentage threshold imposed 
     if minimum_foreground_perc != -1 and Y_train is not None:
@@ -248,13 +254,26 @@ def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross
                 random_state=seed)
             fold = 1
             train_index, test_index = None, None
-
             y_len = len(Y_train) if Y_train is not None else len(X_train)
             for t_index, te_index in skf.split(np.zeros(len(X_train)), np.zeros(y_len)):
                 if cross_val_fold == fold:
-                    X_train, X_val = X_train[t_index], X_train[te_index]
+                    if not isinstance(X_train, list):
+                        X_train, X_val = X_train[t_index], X_train[te_index]
+                    else:
+                        X_val = []
+                        for val_idx in te_index:
+                            X_val.append(X_train[val_idx])
+                        for val_idx in te_index:
+                            del X_train[val_idx]
                     if Y_train is not None:
-                        Y_train, Y_val = Y_train[t_index], Y_train[te_index]
+                        if not isinstance(X_train, list):
+                            Y_train, Y_val = Y_train[t_index], Y_train[te_index]
+                        else:
+                            Y_val = []
+                            for val_idx in te_index:
+                                Y_val.append(Y_train[val_idx])
+                            for val_idx in te_index:
+                                del Y_train[val_idx]
                     train_index, test_index = t_index.copy(), te_index.copy()
                     break
                 fold+= 1
@@ -270,7 +289,6 @@ def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross
                 data = []
                 for img_num in range(len(X_train)):
                     if X_train[img_num].shape != crop_shape[:3]+(X_train[img_num].shape[-1],):
-                        img = X_train[img_num]
                         img = crop_3D_data_with_overlap(X_train[img_num][0] if isinstance(X_train, list) else X_train[img_num], 
                             crop_shape[:3]+(X_train[img_num].shape[-1],), overlap=ov, padding=padding, verbose=False)
                     data.append(img)
@@ -280,10 +298,9 @@ def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross
                 # Y_train
                 if Y_train is not None:
                     data_mask = []
-                    scrop = (crop_shape[0], crop_shape[1]*y_upscaling[0], crop_shape[2]*y_upscaling[1], crop_shape[3]*y_upscaling[2])
+                    scrop = (crop_shape[0]*y_upscaling[0], crop_shape[1]*y_upscaling[1], crop_shape[2]*y_upscaling[2], crop_shape[3])
                     for img_num in range(len(Y_train)):
                         if Y_train[img_num].shape != scrop[:3]+(Y_train[img_num].shape[-1],):
-                            img = Y_train[img_num]
                             img = crop_3D_data_with_overlap(Y_train[img_num][0] if isinstance(Y_train, list) else Y_train[img_num],
                                 scrop[:3]+(Y_train[img_num].shape[-1],), overlap=ov, padding=padding, verbose=False)
                         data_mask.append(img)
@@ -294,7 +311,6 @@ def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross
                 data = []
                 for img_num in range(len(X_val)):
                     if X_val[img_num].shape != crop_shape[:3]+(X_val[img_num].shape[-1],):
-                        img = X_val[img_num]
                         img = crop_3D_data_with_overlap(X_val[img_num][0] if isinstance(X_val, list) else X_val[img_num], 
                             crop_shape[:3]+(X_val[img_num].shape[-1],), overlap=ov, padding=padding, verbose=False)
                     data.append(img)
@@ -304,10 +320,9 @@ def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross
                 # Y_val
                 if Y_val is not None:
                     data_mask = []
-                    scrop = (crop_shape[0], crop_shape[1]*y_upscaling[0], crop_shape[2]*y_upscaling[1], crop_shape[3]*y_upscaling[2])
+                    scrop = (crop_shape[0]*y_upscaling[0], crop_shape[1]*y_upscaling[1], crop_shape[2]*y_upscaling[2], crop_shape[3])
                     for img_num in range(len(Y_val)):
                         if Y_val[img_num].shape != scrop[:3]+(Y_val[img_num].shape[-1],):
-                            img = Y_val[img_num]
                             img = crop_3D_data_with_overlap(Y_val[img_num][0] if isinstance(Y_val, list) else Y_val[img_num],
                                 scrop[:3]+(Y_val[img_num].shape[-1],), overlap=ov, padding=padding, verbose=False)
                         data_mask.append(img)
@@ -315,7 +330,7 @@ def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross
                     del data_mask
 
     # Convert the original volumes as they were a unique subvolume
-    if random_crops_in_DA and X_train.ndim == 4:
+    if random_crops_in_DA and not isinstance(X_train, list) and X_train.ndim == 4:
         X_train = np.expand_dims(X_train, axis=0)
         if Y_train is not None:
             Y_train = np.expand_dims(Y_train, axis=0)
@@ -324,13 +339,35 @@ def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross
             if Y_val is not None:
                 Y_val = np.expand_dims(Y_val, axis=0)
 
+    # Check that the shape of all images match
+    if Y_train is not None:
+        if not isinstance(X_train, list):
+            if Y_train.shape[0] != X_train.shape[0]:
+                raise ValueError(f"Seems that input images do not correspond to their ground truth in shape ({X_train.shape[0]} samples vs "
+                    f"{Y_train.shape[0]} samples). Please check the images. If you are in super-resolution workflow maybe you did not "
+                    "configured properly 'PROBLEM.SUPER_RESOLUTION.UPSCALING' variable")
+        else:
+            if Y_train[0].shape[0] != X_train[0].shape[0]:
+                raise ValueError(f"Seems that input images do not correspond to their ground truth in shape ({X_train[0].shape[0]} samples vs "
+                    f"{Y_train[0].shape[0]} samples). Please check the images. If you are in super-resolution workflow maybe you did not "
+                    "configured properly 'PROBLEM.SUPER_RESOLUTION.UPSCALING' variable")
+
+    s = X_train.shape if not isinstance(X_train, list) else (len(X_train),)+X_train[0].shape[1:]
+    if Y_train is not None:
+        sm = Y_train.shape if not isinstance(Y_train, list) else (len(Y_train),)+Y_train[0].shape[1:]
     if create_val:
-        print("*** Loaded train data shape is: {}".format(X_train.shape))
-        if Y_train is not None:
-            print("*** Loaded train GT shape is: {}".format(Y_train.shape))
-        print("*** Loaded validation data shape is: {}".format(X_val.shape))
+        sv = X_val.shape if not isinstance(X_val, list) else (len(X_val),)+X_val[0].shape[1:]
         if Y_val is not None:
-            print("*** Loaded validation GT shape is: {}".format(Y_val.shape))
+            svm = Y_val.shape if not isinstance(Y_val, list) else (len(Y_val),)+Y_val[0].shape[1:]
+        if not isinstance(X_train, list):
+            print("Not all samples seem to have the same shape. Number of samples: {}".format(len(X_train)))
+        print("*** Loaded train data shape is: {}".format(s))
+        if Y_train is not None:
+            print("*** Loaded train GT shape is: {}".format(sm))
+        print("*** Loaded validation data shape is: {}".format(sv))
+        if Y_val is not None:
+            print("*** Loaded validation GT shape is: {}".format(svm))
+        print("### END LOAD ###")
         if not cross_val:
             return X_train, Y_train, X_val, Y_val, t_filenames
         else:
@@ -519,9 +556,23 @@ def load_and_prepare_3D_efficient_format_data(train_path, train_mask_path, input
             y_len = len(Y_train) if Y_train is not None else len(X_train)
             for t_index, te_index in skf.split(np.zeros(len(X_train)), np.zeros(y_len)):
                 if cross_val_fold == fold:
-                    X_train, X_val = X_train[t_index], X_train[te_index]
+                    if not isinstance(X_train, list):
+                        X_train, X_val = X_train[t_index], X_train[te_index]
+                    else:
+                        X_val = []
+                        for val_idx in te_index:
+                            X_val.append(X_train[val_idx])
+                        for val_idx in te_index:
+                            del X_train[val_idx]
                     if Y_train is not None:
-                        Y_train, Y_val = Y_train[t_index], Y_train[te_index]
+                        if not isinstance(X_train, list):
+                            Y_train, Y_val = Y_train[t_index], Y_train[te_index]
+                        else:
+                            Y_val = []
+                            for val_idx in te_index:
+                                Y_val.append(Y_train[val_idx])  
+                            for val_idx in te_index:
+                                del Y_train[val_idx]                              
                     train_index, test_index = t_index.copy(), te_index.copy()
                     break
                 fold+= 1
@@ -1375,8 +1426,18 @@ def load_3d_data_classification(data_dir, patch_shape, convert_to_rgb=False, exp
 
             for t_index, te_index in skf.split(X_data, Y_data):
                 if cross_val_fold == fold:
-                    X_data, X_val = X_data[t_index], X_data[te_index]
-                    Y_data, Y_val = Y_data[t_index], Y_data[te_index]
+                    if not isinstance(X_data, list):
+                        X_data, X_val = X_data[t_index], X_data[te_index]
+                        Y_data, Y_val = Y_data[t_index], Y_data[te_index]
+                    else:
+                        X_val = []
+                        Y_val = []
+                        for val_idx in te_index:
+                            X_val.append(X_data[val_idx])
+                            Y_val.append(Y_data[val_idx])
+                        for val_idx in te_index:
+                            del X_val[val_idx]
+                            del Y_val[val_idx]
                     train_index, test_index = t_index.copy(), te_index.copy()
                     break
                 fold+= 1

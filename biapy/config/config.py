@@ -184,7 +184,7 @@ class Config:
         _C.DATA.W_BACKGROUND = 0.06 # Used when _C.DATA.PROBABILITY_MAP=True
 
         # Whether to reshape the dimensions that does not satisfy the patch shape selected by padding it with reflect. It's not
-        # implemented in super-resolution workflow.
+        # implemented in super-resolution inference phase workflow (as usually the patch size is small).
         _C.DATA.REFLECT_TO_COMPLETE_SHAPE = False
 
         _C.DATA.NORMALIZATION = CN()
@@ -842,7 +842,7 @@ class Config:
         _C.TEST.REUSE_PREDICTIONS = False
 
         # If PROBLEM.NDIM = '2D' this can be activated to process each image entirely instead of patch by patch. Only can be done 
-        # if the neural network is fully convolutional
+        # if the neural network is fully convolutional. It's not implemented in super-resolution workflow. 
         _C.TEST.FULL_IMG = False 
 
         ### Instance segmentation

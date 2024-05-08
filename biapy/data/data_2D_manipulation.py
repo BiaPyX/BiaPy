@@ -102,7 +102,7 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, cross_val=False,
     filenames : List of str
         Loaded train filenames.
 
-    val_index : List of ints
+    test_index : List of ints
         Indexes of the samples beloging to the validation.
 
     Examples
@@ -144,7 +144,7 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, cross_val=False,
     print("### LOAD ###")
 
     # Disable crops when random_crops_in_DA is selected
-    # Disable crops when random_crops_in_DA is selected
+    delay_crop = False
     if random_crops_in_DA:
         crop = False  
     else:
@@ -154,7 +154,6 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, cross_val=False,
             delay_crop = True  
         else:
             crop = True
-            delay_crop = False  
 
     # Check validation
     if val_split > 0 or cross_val:
@@ -172,6 +171,19 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, cross_val=False,
         Y_train, _, _, _ = load_data_from_dir(train_mask_path, crop=crop, crop_shape=scrop, overlap=ov, padding=padding, 
             return_filenames=True, check_channel=False, check_drange=False, reflect_to_complete_shape=reflect_to_complete_shape,
             preprocess_cfg=preprocess_cfg, is_mask=is_y_mask, preprocess_f=preprocess_f)
+        
+        # Check that the shape of all images match
+        if isinstance(Y_train, list):
+            for i in range(len(Y_train)):
+                xshape = X_train[i].shape
+                yshape = Y_train[i].shape
+                real_x_shape = (xshape[0]*y_upscaling[0], xshape[1]*y_upscaling[1], xshape[2]) 
+                real_y_shape = (yshape[0]*y_upscaling[0], yshape[1]*y_upscaling[1], yshape[2])
+                print(real_x_shape,real_y_shape)
+                if real_x_shape != real_y_shape:
+                    raise ValueError(f"There is a mismatch between input image and its corresponding ground truth ({real_x_shape} vs "
+                        f"{real_y_shape}). Please check the images. Specifically, the sample that doesn't match is the number {i}"
+                        f" (file: {t_filenames[i]})")
     else:
         Y_train = None
     
@@ -257,22 +269,36 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, cross_val=False,
             skf = StratifiedKFold(n_splits=cross_val_nsplits, shuffle=shuffle_val,
                 random_state=seed)
             fold = 1
-            train_index, val_index = None, None
+            train_index, test_index = None, None
 
             y_len = len(Y_train) if Y_train is not None else len(X_train)
             for t_index, te_index in skf.split(np.zeros(len(X_train)), np.zeros(y_len)):
                 if cross_val_fold == fold:
-                    X_train, X_val = X_train[t_index], X_train[te_index]
+                    if not isinstance(X_train, list):
+                        X_train, X_val = X_train[t_index], X_train[te_index]
+                    else:
+                        X_val = []
+                        for val_idx in te_index:
+                            X_val.append(X_train[val_idx])
+                        for val_idx in te_index:
+                            del X_val[val_idx]
                     if Y_train is not None:
-                        Y_train, Y_val = Y_train[t_index], Y_train[te_index]
+                        if not isinstance(Y_train, list):
+                            Y_train, Y_val = Y_train[t_index], Y_train[te_index]
+                        else:
+                            Y_val = []
+                            for val_idx in te_index:
+                                Y_val.append(Y_val[val_idx])
+                            for val_idx in te_index:
+                                del Y_val[val_idx]
                     train_index, test_index = t_index.copy(), te_index.copy()
                     break
                 fold+= 1
 
-            if len(val_index) > 5:
-                print("Fold number {}. Printing the first 5 ids: {}".format(fold, val_index[:5]))
+            if len(test_index) > 5:
+                print("Fold number {}. Printing the first 5 ids: {}".format(fold, test_index[:5]))
             else:
-                print("Fold number {}. Indexes used in cross validation: {}".format(fold, val_index))
+                print("Fold number {}. Indexes used in cross validation: {}".format(fold, test_index))
 
             # Then crop after cross validation
             if delay_crop:
@@ -280,8 +306,8 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, cross_val=False,
                 data = []
                 for img_num in range(len(X_train)):
                     if X_train[img_num].shape != crop_shape[:2]+(X_train[img_num].shape[-1],):
-                        img = X_train[img_num]
-                        img = crop_2D_data_with_overlap(X_train[img_num][0] if isinstance(X_train, list) else X_train[img_num], 
+                        img = crop_data_with_overlap(
+                            X_train[img_num][0] if isinstance(X_train, list) else np.expand_dims(X_train[img_num],0), 
                             crop_shape[:2]+(X_train[img_num].shape[-1],), overlap=ov, padding=padding, verbose=False)
                     data.append(img)
                 X_train = np.concatenate(data)
@@ -293,8 +319,8 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, cross_val=False,
                     scrop = (crop_shape[0]*y_upscaling[0], crop_shape[1]*y_upscaling[1], crop_shape[2])
                     for img_num in range(len(Y_train)):
                         if Y_train[img_num].shape != scrop[:2]+(Y_train[img_num].shape[-1],):
-                            img = Y_train[img_num]
-                            img = crop_2D_data_with_overlap(Y_train[img_num][0] if isinstance(Y_train, list) else Y_train[img_num],
+                            img = crop_data_with_overlap(
+                                Y_train[img_num][0] if isinstance(Y_train, list) else np.expand_dims(Y_train[img_num],0),
                                 scrop[:2]+(Y_train[img_num].shape[-1],), overlap=ov, padding=padding, verbose=False)
                         data_mask.append(img)
                     Y_train = np.concatenate(data_mask)
@@ -304,8 +330,8 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, cross_val=False,
                 data = []
                 for img_num in range(len(X_val)):
                     if X_val[img_num].shape != crop_shape[:2]+(X_val[img_num].shape[-1],):
-                        img = X_val[img_num]
-                        img = crop_2D_data_with_overlap(X_val[img_num][0] if isinstance(X_val, list) else X_val[img_num], 
+                        img = crop_data_with_overlap(
+                            X_val[img_num][0] if isinstance(X_val, list) else np.expand_dims(X_val[img_num],0), 
                             crop_shape[:2]+(X_val[img_num].shape[-1],), overlap=ov, padding=padding, verbose=False)
                     data.append(img)
                 X_val = np.concatenate(data)
@@ -317,12 +343,25 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, cross_val=False,
                     scrop = (crop_shape[0]*y_upscaling[0], crop_shape[1]*y_upscaling[1], crop_shape[2])
                     for img_num in range(len(Y_val)):
                         if Y_val[img_num].shape != scrop[:2]+(Y_val[img_num].shape[-1],):
-                            img = Y_val[img_num]
-                            img = crop_2D_data_with_overlap(Y_val[img_num][0] if isinstance(Y_val, list) else Y_val[img_num],
+                            img = crop_data_with_overlap(
+                                Y_val[img_num][0] if isinstance(Y_val, list) else np.expand_dims(Y_val[img_num],0),
                                 scrop[:2]+(Y_val[img_num].shape[-1],), overlap=ov, padding=padding, verbose=False)
                         data_mask.append(img)
                     Y_val = np.concatenate(data_mask)
                     del data_mask
+
+    # Check that the shape of all images match
+    if Y_train is not None:
+        if not isinstance(X_train, list):
+            if Y_train.shape[0] != X_train.shape[0]:
+                raise ValueError(f"Seems that input images do not correspond to their ground truth in shape ({X_train.shape[0]} samples vs "
+                    f"{Y_train.shape[0]} samples). Please check the images. If you are in super-resolution workflow maybe you did not "
+                    "configured properly 'PROBLEM.SUPER_RESOLUTION.UPSCALING' variable")
+        else:
+            if Y_train[0].shape[0] != X_train[0].shape[0]:
+                raise ValueError(f"Seems that input images do not correspond to their ground truth in shape ({X_train[0].shape[0]} samples vs "
+                    f"{Y_train[0].shape[0]} samples). Please check the images. If you are in super-resolution workflow maybe you did not "
+                    "configured properly 'PROBLEM.SUPER_RESOLUTION.UPSCALING' variable")
 
     s = X_train.shape if not isinstance(X_train, list) else (len(X_train),)+X_train[0].shape[1:]
     if Y_train is not None:
@@ -344,7 +383,7 @@ def load_and_prepare_2D_train_data(train_path, train_mask_path, cross_val=False,
         if not cross_val:
             return X_train, Y_train, X_val, Y_val, t_filenames
         else:
-            return X_train, Y_train, X_val, Y_val, t_filenames, val_index
+            return X_train, Y_train, X_val, Y_val, t_filenames, test_index
     else:
         print("*** Loaded train data shape is: {}".format(s))
         print("### END LOAD ###")
@@ -443,7 +482,11 @@ def crop_data_with_overlap(data, crop_shape, data_mask=None, overlap=(0,0), padd
            #     **** New data shape is: (3960, 256, 256, 1)
     """
 
+    if data.ndim != 4:
+        raise ValueError("data expected to be 4 dimensional, given {}".format(data.shape))
     if data_mask is not None:
+        if data.ndim != 4:
+            raise ValueError("data mask expected to be 4 dimensional, given {}".format(data_mask.shape))
         if data.shape[:-1] != data_mask.shape[:-1]:
             raise ValueError("data and data_mask shapes mismatch: {} vs {}".format(data.shape[:-1], data_mask.shape[:-1]))
 
@@ -854,7 +897,7 @@ def load_data_classification(data_dir, patch_shape, convert_to_rgb=True, expecte
     all_ids : List of str
         Loaded data filenames.
 
-    val_index : List of ints
+    test_index : List of ints
         Indexes of the samples beloging to the validation.
     """
 
@@ -908,31 +951,41 @@ def load_data_classification(data_dir, patch_shape, convert_to_rgb=True, expecte
     if create_val:
         print("Creating validation data")
         if not cross_val:
-            if len(X_train) == 1:
+            if len(X_data) == 1:
                 raise ValueError("Validation data can not be extracted from training data as it only has one sample. Please check the data.")
             X_data, X_val, Y_data, Y_val = train_test_split(
                 X_data, Y_data, test_size=val_split, shuffle=shuffle_val, random_state=seed,
                 stratify=Y_data)
         else:
-            if len(X_train) < cross_val_nsplits:
+            if len(X_data) < cross_val_nsplits:
                 raise ValueError(f"Validation data can not be extracted from training data as the number of splits ({cross_val_nsplits}) "
-                    f"is greater than the number of samples {len(X_train)}. Please check the data.")
+                    f"is greater than the number of samples {len(X_data)}. Please check the data.")
             skf = StratifiedKFold(n_splits=cross_val_nsplits, shuffle=shuffle_val,
                 random_state=seed)
             fold = 1
-            train_index, val_index = None, None
+            train_index, test_index = None, None
 
             for t_index, te_index in skf.split(X_data, Y_data):
                 if cross_val_fold == fold:
-                    X_data, X_val = X_data[t_index], X_data[te_index]
-                    Y_data, Y_val = Y_data[t_index], Y_data[te_index]
-                    train_index, val_index = t_index.copy(), te_index.copy()
+                    if not isinstance(X_data, list):
+                        X_data, X_val = X_data[t_index], X_data[te_index]
+                        Y_data, Y_val = Y_data[t_index], Y_data[te_index]
+                    else:
+                        X_val = []
+                        Y_val = []
+                        for val_idx in te_index:
+                            X_val.append(X_data[val_idx])
+                            Y_val.append(Y_data[val_idx])
+                        for val_idx in te_index:
+                            del X_val[val_idx]
+                            del Y_val[val_idx]
+                    train_index, test_index = t_index.copy(), te_index.copy()
                     break
                 fold+= 1
-            if len(val_index) > 5:
-                print("Fold number {}. Printing the first 5 ids: {}".format(fold, val_index[:5]))
+            if len(test_index) > 5:
+                print("Fold number {}. Printing the first 5 ids: {}".format(fold, test_index[:5]))
             else:
-                print("Fold number {}. Indexes used in cross validation: {}".format(fold, val_index))
+                print("Fold number {}. Indexes used in cross validation: {}".format(fold, test_index))
 
     if create_val:
         print("*** Loaded train data shape is: {}".format(X_data.shape))
@@ -940,7 +993,7 @@ def load_data_classification(data_dir, patch_shape, convert_to_rgb=True, expecte
         if not cross_val:
             return X_data, Y_data, X_val, Y_val, all_ids
         else:
-            return X_data, Y_data, X_val, Y_val, all_ids, val_index
+            return X_data, Y_data, X_val, Y_val, all_ids, test_index
     else:
         print("*** Loaded train data shape is: {}".format(X_data.shape))
         return X_data, Y_data, all_ids
