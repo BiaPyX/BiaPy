@@ -434,7 +434,7 @@ class Config:
         # How to fill up the new values created with affine transformations (rotations, shear, shift and zoom).
         # Same meaning as in scipy: 'reflect', grid-'mirror', 'constant', 'grid-constant', 'nearest', 'mirror', 
         # 'grid-wrap' and 'wrap'. 
-        _C.AUGMENTOR.AFFINE_MODE = 'constant'
+        _C.AUGMENTOR.AFFINE_MODE = 'reflect'
         # Make vertical flips
         _C.AUGMENTOR.VFLIP = False
         # Make horizontal flips
