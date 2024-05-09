@@ -323,6 +323,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 raise ValueError("'PROBLEM.SELF_SUPERVISED.RESIZING_FACTOR' not in [2,4,6]")
             if not check_value(cfg.PROBLEM.SELF_SUPERVISED.NOISE):
                 raise ValueError("'PROBLEM.SELF_SUPERVISED.NOISE' not in [0, 1] range")
+            if model_arch == 'mae':
+                raise ValueError("'MODEL.ARCHITECTURE' can not be 'mae' when 'PROBLEM.SELF_SUPERVISED.PRETEXT_TASK' is 'crappify'")
         elif cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
             if model_arch != 'mae':
                 raise ValueError("'MODEL.ARCHITECTURE' needs to be 'mae' when 'PROBLEM.SELF_SUPERVISED.PRETEXT_TASK' is 'masking'")  
