@@ -471,7 +471,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         return image
 
-    def draw_grid(self, im, grid_width=50):
+    def draw_grid(self, im, grid_width=None):
         """
         Draw grid of the specified size on an image.
 
@@ -483,15 +483,27 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         grid_width : int, optional
             Grid's width.
         """
-        v = 1 if int(np.max(im)) == 0 else int(np.max(im))
+        v = np.max(im)
+        if grid_width is not None:
+            grid_y = grid_width
+            grid_x = grid_width
+        else:
+            grid_y = im.shape[self.ndim-2]//5
+            grid_x = im.shape[self.ndim-2]//5
 
-        for i in range(0, im.shape[0], grid_width):
-            im[i] = v
-        for j in range(0, im.shape[1], grid_width):
-            im[:, j] = v
+        if self.ndim == 2:
+            for i in range(0, im.shape[0], grid_y):
+                im[i] = [v]*im.shape[-1]
+            for j in range(0, im.shape[1], grid_x):
+                im[:, j] = [v]*im.shape[-1]
+        else:
+            for k in range(0, im.shape[0]):
+                for i in range(0, im.shape[2], grid_x):
+                    im[k,:,i] = [v]*im.shape[-1]
+                for j in range(0, im.shape[1], grid_y):
+                    im[k,j] = [v]*im.shape[-1]
+        return im
         
-        return im 
-
     def get_transformed_samples(self, num_examples, random_images=True, save_to_dir=True, out_dir='aug', train=False,
                                 draw_grid=True):
         """
@@ -534,7 +546,6 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         sample_x = []
 
         # Generate the examples
-        print("0) Creating the examples of data augmentation . . .")
         for i in tqdm(range(num_examples), disable=not is_main_process()):
             if random_images:
                 pos = random.randint(0,self.length-1) if self.length > 2 else 0

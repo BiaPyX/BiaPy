@@ -1395,7 +1395,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 self.save_aug_samples(sample_x[i], sample_y[i], orig_images, i, pos, out_dir, point_dict)
 
 
-    def draw_grid(self, im, grid_width=50):
+    def draw_grid(self, im, grid_width=None):
         """
         Draw grid of the specified size on an image.
 
@@ -1408,24 +1408,24 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             Grid's width.
         """
         v = np.max(im)
+        if grid_width is not None:
+            grid_y = grid_width
+            grid_x = grid_width
+        else:
+            grid_y = im.shape[self.ndim-2]//5
+            grid_x = im.shape[self.ndim-2]//5
 
         if self.ndim == 2:
-            for i in range(0, im.shape[0], grid_width):
-                im[i] = v
-            for j in range(0, im.shape[1], grid_width):
-                im[:, j] = v
+            for i in range(0, im.shape[0], grid_y):
+                im[i] = [v]*im.shape[-1]
+            for j in range(0, im.shape[1], grid_x):
+                im[:, j] = [v]*im.shape[-1]
         else:
             for k in range(0, im.shape[0]):
-                for i in range(0, im.shape[2], grid_width):
-                    if im.shape[-1] == 1:
-                        im[k,:,i] = v
-                    else:
-                        im[k,:,i] = [v]*im.shape[-1]
-                for j in range(0, im.shape[1], grid_width):
-                    if im.shape[-1] == 1:
-                        im[k,j] = v
-                    else:
-                        im[k,j] = [v]*im.shape[-1]
+                for i in range(0, im.shape[2], grid_x):
+                    im[k,:,i] = [v]*im.shape[-1]
+                for j in range(0, im.shape[1], grid_y):
+                    im[k,j] = [v]*im.shape[-1]
         return im
         
     def prepare_n2v(self, _img):
