@@ -124,9 +124,14 @@ class MaskedAutoencoderViT(nn.Module):
             
             # Define grid mask, as it doesn't change over epochs
             D, L = embed_dim, self.patch_embed.num_patches
-            self.mask = torch.zeros([img_size//patch_size,img_size//patch_size], device=device)
-            self.mask[::2,::2] = 1
-            self.mask[1::2,1::2] = 1
+            if self.ndim == 2:
+                self.mask = torch.zeros([img_size//patch_size,img_size//patch_size], device=device)
+                self.mask[::2,::2] = 1
+                self.mask[1::2,1::2] = 1
+            else:
+                self.mask = torch.zeros([img_size//patch_size,img_size//patch_size,img_size//patch_size], device=device)
+                self.mask[::2,::2,::2] = 1
+                self.mask[1::2,1::2,1::2] = 1
             self.mask = self.mask.flatten()
             self.ids_keep = torch.argsort(self.mask)[:L//2].unsqueeze(-1).repeat(1, 1, D)
             self.mask = self.mask.unsqueeze(0)
@@ -415,8 +420,6 @@ class MaskedAutoencoderViT(nn.Module):
             Predicted image with visible patches. In 2D: ``(N, H, W, C)``, in 3D: ``(N, Z, H, W, C)``. Where ``N`` is the batch size, 
             ``C`` are the channels, ``Z`` image depth, ``H`` image height and ``W`` image's width. 
         """
-        print("Saving MAE images . . .")
-
         pred = np.zeros(_x.shape, dtype=dtype)
         p_mask = np.zeros(_x.shape, dtype=dtype)
         pred_visi = np.zeros(_x.shape, dtype=dtype)
