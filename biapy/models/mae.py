@@ -124,7 +124,7 @@ class MaskedAutoencoderViT(nn.Module):
             
             # Define grid mask, as it doesn't change over epochs
             D, L = embed_dim, self.patch_embed.num_patches
-            self.mask = torch.zeros([int(math.sqrt(1024)),int(math.sqrt(1024))], device=device)
+            self.mask = torch.zeros([img_size//patch_size,img_size//patch_size], device=device)
             self.mask[::2,::2] = 1
             self.mask[1::2,1::2] = 1
             self.mask = self.mask.flatten()
