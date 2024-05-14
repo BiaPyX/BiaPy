@@ -324,8 +324,9 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
         semantic = data[...,0]
         seed_map = label(seed_map, connectivity=1)
     elif channels in ["A"]:
-        foreground_probs = (data[...,0]+data[...,1]+data[...,2])/3.0 if data.ndim == 4 else (data[...,0]+data[...,1])/2.0
-        
+        # For now use the minimum values between all affinities (to enhance borders)
+        foreground_probs = np.min(data, axis=-1)
+
         if ths['TYPE'] == "auto":
             ths['TH_BINARY_MASK'] = threshold_otsu(foreground_probs)
             ths['TH_CONTOUR'] = threshold_otsu(1-foreground_probs)
