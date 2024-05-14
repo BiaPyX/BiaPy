@@ -6,14 +6,17 @@ from skimage.io import imread
 from tqdm import tqdm
 from skimage.segmentation import clear_border
 from skimage.transform import resize
+import torch.distributed as dist
 
 from biapy.data.post_processing.post_processing import (watershed_by_channels, voronoi_on_mask, 
     measure_morphological_props_and_filter, repare_large_blobs, apply_binary_mask)
 from biapy.data.pre_processing import create_instance_channels, create_test_instance_channels, norm_range01
-from biapy.utils.util import save_tif, pad_and_reflect
+from biapy.utils.util import save_tif
 from biapy.utils.matching import matching, wrapper_matching_dataset_lazy
 from biapy.engine.metrics import jaccard_index, instance_segmentation_loss, instance_metrics
 from biapy.engine.base_workflow import Base_Workflow
+from biapy.utils.misc import is_main_process, is_dist_avail_and_initialized
+
 
 class Instance_Segmentation_Workflow(Base_Workflow):
     """
@@ -110,6 +113,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
         # Specific instance segmentation post-processing
         if self.cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK or \
+            self.cfg.TEST.POST_PROCESSING.CLEAR_BORDER or\
             self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.ENABLE or \
             self.cfg.TEST.POST_PROCESSING.REPARE_LARGE_BLOBS_SIZE != -1:
             self.post_processing['instance_post'] = True
@@ -131,19 +135,24 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         )
 
         if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BC":
-            self.metric_names = ["jaccard_index", "jaccard_index"]
+            self.metric_names = ["jaccard_index_B", "jaccard_index_C"]
         if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "C":
             self.metric_names = ["jaccard_index"]
-        elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["A", "BCM"]:
-            self.metric_names = ["jaccard_index", "jaccard_index", "jaccard_index"]
+        elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BCM"]:
+            self.metric_names = ["jaccard_index_B", "jaccard_index_C", "jaccard_index_M"]
+        elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["A"]:
+            if self.cfg.PROBLEM.NDIM == '3D':
+                self.metric_names = ["jaccard_index_A_Z", "jaccard_index_A_Y", "jaccard_index_A_X"]
+            else:
+                self.metric_names = ["jaccard_index_A_Y", "jaccard_index_A_X"]
         elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BP":
-            self.metric_names = ["jaccard_index", "jaccard_index"]
+            self.metric_names = ["jaccard_index_B", "jaccard_index_P"]
         elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BD":
-            self.metric_names = ["jaccard_index", "L1_distance_channel"]
+            self.metric_names = ["jaccard_index_B", "L1_distance_channel"]
         elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BCD", 'BCDv2']:
-            self.metric_names = ["jaccard_index", "jaccard_index", "L1_distance_channel"]
+            self.metric_names = ["jaccard_index_B", "jaccard_index_C", "L1_distance_channel"]
         elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BDv2":
-            self.metric_names = ["jaccard_index", "L1_distance_channel"]
+            self.metric_names = ["jaccard_index_B", "L1_distance_channel"]
         elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "Dv2":
             self.metric_names = ["L1_distance_channel"]
 
@@ -183,7 +192,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             first_val = None
             for key, value in out.items():
                 value = value.item() if not torch.isnan(value) else 0
-                if first_val is None and key == "jaccard_index": 
+                if first_val is None and "jaccard_index" in key: 
                     first_val = value
                 if metric_logger is not None:
                     metric_logger.meters[key].update(value)
@@ -198,8 +207,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         Parameters
         ----------
         pred : 4D/5D Torch tensor
-            Model predictions. E.g. ``(num_of_images, y, x, channels)`` for 2D or 
-            ``(num_of_images, z, y, x, channels)`` for 3D.
+            Model predictions. E.g. ``(z, y, x, channels)`` for both 2D and 3D.
 
         filenames : List of str
             Predicted image's filenames.
@@ -210,6 +218,8 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         out_dir_post_proc : path
             Output directory to save the post-processed instances.
         """
+        assert pred.ndim == 4, "Prediction doesn't have 4 dim: {pred.shape}"
+
         #############################
         ### INSTANCE SEGMENTATION ###
         #############################
@@ -367,14 +377,14 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     colored_result = np.zeros(w_pred.shape+(3,), dtype=np.uint8)
 
                     print("Painting TPs and FNs . . .")
-                    for j in tqdm(range(len(gt_match))):
+                    for j in tqdm(range(len(gt_match)), disable=not is_main_process()):
                         color = (0,255,0) if tag[j] == "TP" else (255,0,0) # Green or red
                         colored_result[np.where(_Y == gt_match[j])] = color
-                    for j in tqdm(range(len(gt_unmatch))):
+                    for j in tqdm(range(len(gt_unmatch)), disable=not is_main_process()):
                         colored_result[np.where(_Y == gt_unmatch[j])] = (255,0,0) # Red
 
                     print("Painting FPs . . .")
-                    for j in tqdm(range(len(fp_instances))):
+                    for j in tqdm(range(len(fp_instances)), disable=not is_main_process()):
                         colored_result[np.where(w_pred == fp_instances[j])] = (0,0,255) # Blue
 
                     save_tif(np.expand_dims(colored_result,0), self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS,
@@ -385,15 +395,29 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         # Post-processing #
         ###################
         if self.cfg.TEST.POST_PROCESSING.REPARE_LARGE_BLOBS_SIZE != -1:
-            w_pred = repare_large_blobs(w_pred, self.cfg.TEST.POST_PROCESSING.REPARE_LARGE_BLOBS_SIZE)
+            if self.cfg.PROBLEM.NDIM == "2D": w_pred = w_pred[0]
+            w_pred = repare_large_blobs(w_pred[0], self.cfg.TEST.POST_PROCESSING.REPARE_LARGE_BLOBS_SIZE)
+            if self.cfg.PROBLEM.NDIM == "2D": w_pred = np.expand_dims(w_pred,0)
+        
+        if self.cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK:
+            w_pred = voronoi_on_mask(w_pred, pred, th=self.cfg.TEST.POST_PROCESSING.VORONOI_TH, verbose=self.cfg.TEST.VERBOSE)
+        del pred
+
+        if self.cfg.TEST.POST_PROCESSING.CLEAR_BORDER:
+            print("Clearing borders . . .")
+            if self.cfg.PROBLEM.NDIM == "2D": w_pred = w_pred[0]
+            w_pred = clear_border(w_pred)
+            if self.cfg.PROBLEM.NDIM == "2D": w_pred = np.expand_dims(w_pred,0)
 
         if self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.ENABLE or \
             self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.ENABLE:
-            w_pred, d_result = measure_morphological_props_and_filter(w_pred.squeeze(), resolution, 
+            if self.cfg.PROBLEM.NDIM == "2D": w_pred = w_pred[0]
+            w_pred, d_result = measure_morphological_props_and_filter(w_pred, resolution, 
                 filter_instances=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.ENABLE,
                 properties=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS, 
                 prop_values=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.VALUES,
                 comp_signs=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGN)
+            if self.cfg.PROBLEM.NDIM == "2D": w_pred = np.expand_dims(w_pred,0)
 
             # Save all instance stats            
             if self.cfg.PROBLEM.NDIM == "2D":
@@ -403,7 +427,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     'perimeter', 'elongation', 'comment', 'conditions'])
             else:
                 df = pd.DataFrame(zip(np.array(d_result['labels'], dtype=np.uint64), list(d_result['centers'][:,0]), list(d_result['centers'][:,1]), 
-                    list(d_result['centers'][:,2]), d_result['npixels'], d_result['areas'], d_result['circularities'], d_result['diameters'], 
+                    list(d_result['centers'][:,2]), d_result['npixels'], d_result['areas'], d_result['sphericities'], d_result['diameters'], 
                     d_result['perimeters'], d_result['comment'], d_result['conditions']), columns=['label', 'axis-0', 'axis-1', 
                     'axis-2', 'npixels', 'volume', 'sphericity', 'diameter', 'perimeter (surface area)', 'comment', 'conditions'])
             df = df.sort_values(by=['label'])   
@@ -414,20 +438,13 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             df.to_csv(os.path.join(out_dir_post_proc, os.path.splitext(filenames[0])[0]+'_filtered_stats.csv'), index=False)
             del df
 
-        if self.cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK:
-            w_pred = voronoi_on_mask(w_pred, pred, th=self.cfg.TEST.POST_PROCESSING.VORONOI_TH, verbose=self.cfg.TEST.VERBOSE)
-        del pred
-
-        if self.cfg.TEST.POST_PROCESSING.CLEAR_BORDER:
-            print("Clearing borders . . .")
-            w_pred = clear_border(w_pred)
-
         results_post_proc = None
         results_class_post_proc = None
         if self.post_processing['instance_post']:
+            if self.cfg.PROBLEM.NDIM == "2D": w_pred = w_pred[0]
+
             # Multi-head: instances + classification
             if self.cfg.MODEL.N_CLASSES > 2:
-                w_pred = w_pred.squeeze()
                 class_channel = np.where(w_pred>0, class_channel, 0) # Adapt changes to post-processed w_pred
                 save_tif(np.expand_dims(np.concatenate([np.expand_dims(w_pred,-1), np.expand_dims(class_channel,-1)],axis=-1),0), 
                     out_dir_post_proc, filenames, verbose=self.cfg.TEST.VERBOSE)
@@ -444,9 +461,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     print(f"Class IoU (post-processing): {class_iou}")
                     results_class_post_proc = class_iou
                     
-                # Add extra dimension if working in 2D
-                if w_pred.ndim == 2:
-                    w_pred = np.expand_dims(w_pred,0)
+                if self.cfg.PROBLEM.NDIM == "2D": w_pred = np.expand_dims(w_pred,0)
 
                 print("Calculating matching stats after post-processing . . .")
                 results_post_proc = matching(_Y, w_pred, thresh=self.cfg.TEST.MATCHING_STATS_THS, report_matches=True)
@@ -486,14 +501,14 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         colored_result = np.zeros(w_pred.shape+(3,), dtype=np.uint8)
 
                         print("Painting TPs and FNs . . .")
-                        for j in tqdm(range(len(gt_match))):
+                        for j in tqdm(range(len(gt_match)), disable=not is_main_process()):
                             color = (0,255,0) if tag[j] == "TP" else (255,0,0) # Green or red
                             colored_result[np.where(_Y == gt_match[j])] = color
-                        for j in tqdm(range(len(gt_unmatch))):
+                        for j in tqdm(range(len(gt_unmatch)), disable=not is_main_process()):
                             colored_result[np.where(_Y == gt_unmatch[j])] = (255,0,0) # Red
                             
                         print("Painting FPs . . .")
-                        for j in tqdm(range(len(fp_instances))):
+                        for j in tqdm(range(len(fp_instances)), disable=not is_main_process()):
                             colored_result[np.where(w_pred == fp_instances[j])] = (0,0,255) # Blue
 
                         save_tif(np.expand_dims(colored_result,0), self.cfg.PATHS.RESULT_DIR.INST_ASSOC_POINTS,
@@ -544,18 +559,22 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         pred : Torch Tensor
             Model prediction.
         """
-        if not self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
-            resolution = self.cfg.DATA.TEST.RESOLUTION if len(self.cfg.DATA.TEST.RESOLUTION) == 2 else self.cfg.DATA.TEST.RESOLUTION[1:]
-            r, r_post, rcls, rcls_post = self.instance_seg_process(pred, self.processing_filenames, self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
-                self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING, resolution)        
-            if r is not None:
-                self.all_matching_stats_merge_patches.append(r)
-            if r_post is not None:
-                self.all_matching_stats_merge_patches_post.append(r_post)
-            if rcls is not None:
-                self.all_class_stats_merge_patches.append(rcls)
-            if rcls_post is not None:
-                self.all_class_stats_merge_patches_post.append(rcls_post)    
+        if pred.shape[0] == 1:
+            if self.cfg.PROBLEM.NDIM == "3D": pred = pred[0]
+            if not self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
+                resolution = self.cfg.DATA.TEST.RESOLUTION if len(self.cfg.DATA.TEST.RESOLUTION) == 2 else self.cfg.DATA.TEST.RESOLUTION[1:]
+                r, r_post, rcls, rcls_post = self.instance_seg_process(pred, self.processing_filenames, self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
+                    self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING, resolution)        
+                if r is not None:
+                    self.all_matching_stats_merge_patches.append(r)
+                if r_post is not None:
+                    self.all_matching_stats_merge_patches_post.append(r_post)
+                if rcls is not None:
+                    self.all_class_stats_merge_patches.append(rcls)
+                if rcls_post is not None:
+                    self.all_class_stats_merge_patches_post.append(rcls_post)   
+        else:
+            NotImplementedError 
 
     def after_merge_patches_by_chunks_proccess_patch(self, filename):
         """
@@ -579,18 +598,22 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         pred : Torch Tensor
             Model prediction.
         """
-        if not self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
-            resolution = self.cfg.DATA.TEST.RESOLUTION if len(self.cfg.DATA.TEST.RESOLUTION) == 2 else self.cfg.DATA.TEST.RESOLUTION[1:]
-            r, r_post, rcls, rcls_post = self.instance_seg_process(pred, self.processing_filenames, self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_INSTANCES,
-                self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_POST_PROCESSING, resolution)  
-            if r is not None:
-                self.all_matching_stats.append(r)
-            if r_post is not None:
-                self.all_matching_stats_post.append(r_post)
-            if rcls is not None:
-                self.all_class_stats.append(rcls)
-            if rcls_post is not None:
-                self.all_class_stats_post.append(rcls_post) 
+        if pred.shape[0] == 1:
+            if self.cfg.PROBLEM.NDIM == "3D": pred = pred[0]
+            if not self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
+                resolution = self.cfg.DATA.TEST.RESOLUTION if len(self.cfg.DATA.TEST.RESOLUTION) == 2 else self.cfg.DATA.TEST.RESOLUTION[1:]
+                r, r_post, rcls, rcls_post = self.instance_seg_process(pred, self.processing_filenames, self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_INSTANCES,
+                    self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_POST_PROCESSING, resolution)  
+                if r is not None:
+                    self.all_matching_stats.append(r)
+                if r_post is not None:
+                    self.all_matching_stats_post.append(r_post)
+                if rcls is not None:
+                    self.all_class_stats.append(rcls)
+                if rcls_post is not None:
+                    self.all_class_stats_post.append(rcls_post) 
+        else:
+            NotImplementedError
 
     def after_all_images(self):
         """
@@ -602,7 +625,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             if type(self.all_pred) is list:
                 self.all_pred = np.concatenate(self.all_pred)
             resolution = self.cfg.DATA.TEST.RESOLUTION if len(self.cfg.DATA.TEST.RESOLUTION) == 3 else (self.cfg.DATA.TEST.RESOLUTION[0],)+self.cfg.DATA.TEST.RESOLUTION
-            r, r_post, rcls, rcls_post = self.instance_seg_process(self.all_pred, ["3D_stack.tif"], self.cfg.PATHS.RESULT_DIR.AS_3D_STACK,
+            r, r_post, rcls, rcls_post = self.instance_seg_process(self.all_pred, ["3D_stack_instances.tif"], self.cfg.PATHS.RESULT_DIR.AS_3D_STACK,
                 self.cfg.PATHS.RESULT_DIR.AS_3D_STACK_POST_PROCESSING, resolution)
             if r is not None:
                 self.all_matching_stats_as_3D_stack.append(r)
@@ -741,37 +764,42 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         Creates instance segmentation ground truth images to train the model based on the ground truth instances provided.
         They will be saved in a separate folder in the root path of the ground truth. 
         """
-        print("###########################")
-        print("#  PREPARE INSTANCE DATA  #")
-        print("###########################")
         original_test_path, original_test_mask_path = None, None
 
-        # Create selected channels for train data
-        if (self.cfg.TRAIN.ENABLE or self.cfg.DATA.TEST.USE_VAL_AS_TEST) and (not os.path.isdir(self.cfg.DATA.TRAIN.INSTANCE_CHANNELS_DIR) or \
-            not os.path.isdir(self.cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR)):
-            print("You select to create {} channels from given instance labels and no file is detected in {}. "
-                    "So let's prepare the data. Notice that, if you do not modify 'DATA.TRAIN.INSTANCE_CHANNELS_DIR' "
-                    "path, this process will be done just once!".format(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
-                    self.cfg.DATA.TRAIN.INSTANCE_CHANNELS_DIR))
-            create_instance_channels(self.cfg)
+        if is_main_process():
+            print("###########################")
+            print("#  PREPARE INSTANCE DATA  #")
+            print("###########################")
 
-        # Create selected channels for val data
-        if self.cfg.TRAIN.ENABLE and not self.cfg.DATA.VAL.FROM_TRAIN and (not os.path.isdir(self.cfg.DATA.VAL.INSTANCE_CHANNELS_DIR) or \
-            not os.path.isdir(self.cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR)):
-            print("You select to create {} channels from given instance labels and no file is detected in {}. "
-                    "So let's prepare the data. Notice that, if you do not modify 'DATA.VAL.INSTANCE_CHANNELS_DIR' "
-                    "path, this process will be done just once!".format(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
-                    self.cfg.DATA.VAL.INSTANCE_CHANNELS_DIR))
-            create_instance_channels(self.cfg, data_type='val')
+            # Create selected channels for train data
+            if (self.cfg.TRAIN.ENABLE or self.cfg.DATA.TEST.USE_VAL_AS_TEST) and (not os.path.isdir(self.cfg.DATA.TRAIN.INSTANCE_CHANNELS_DIR) or \
+                not os.path.isdir(self.cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR)):
+                print("You select to create {} channels from given instance labels and no file is detected in {}. "
+                        "So let's prepare the data. Notice that, if you do not modify 'DATA.TRAIN.INSTANCE_CHANNELS_DIR' "
+                        "path, this process will be done just once!".format(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
+                        self.cfg.DATA.TRAIN.INSTANCE_CHANNELS_DIR))
+                create_instance_channels(self.cfg)
 
-        # Create selected channels for test data once
-        if self.cfg.TEST.ENABLE and not self.cfg.DATA.TEST.USE_VAL_AS_TEST and (not os.path.isdir(self.cfg.DATA.TEST.INSTANCE_CHANNELS_DIR) or \
-            (not os.path.isdir(self.cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR) and self.cfg.DATA.TEST.LOAD_GT)) and not self.cfg.TEST.BY_CHUNKS.ENABLE:
-            print("You select to create {} channels from given instance labels and no file is detected in {}. "
-                    "So let's prepare the data. Notice that, if you do not modify 'DATA.TEST.INSTANCE_CHANNELS_DIR' "
-                    "path, this process will be done just once!".format(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
-                    self.cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR))
-            create_test_instance_channels(self.cfg)
+            # Create selected channels for val data
+            if self.cfg.TRAIN.ENABLE and not self.cfg.DATA.VAL.FROM_TRAIN and (not os.path.isdir(self.cfg.DATA.VAL.INSTANCE_CHANNELS_DIR) or \
+                not os.path.isdir(self.cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR)):
+                print("You select to create {} channels from given instance labels and no file is detected in {}. "
+                        "So let's prepare the data. Notice that, if you do not modify 'DATA.VAL.INSTANCE_CHANNELS_DIR' "
+                        "path, this process will be done just once!".format(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
+                        self.cfg.DATA.VAL.INSTANCE_CHANNELS_DIR))
+                create_instance_channels(self.cfg, data_type='val')
+
+            # Create selected channels for test data once
+            if self.cfg.TEST.ENABLE and not self.cfg.DATA.TEST.USE_VAL_AS_TEST and (not os.path.isdir(self.cfg.DATA.TEST.INSTANCE_CHANNELS_DIR) or \
+                (not os.path.isdir(self.cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR) and self.cfg.DATA.TEST.LOAD_GT)) and not self.cfg.TEST.BY_CHUNKS.ENABLE:
+                print("You select to create {} channels from given instance labels and no file is detected in {}. "
+                        "So let's prepare the data. Notice that, if you do not modify 'DATA.TEST.INSTANCE_CHANNELS_DIR' "
+                        "path, this process will be done just once!".format(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
+                        self.cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR))
+                create_test_instance_channels(self.cfg)
+
+        if is_dist_avail_and_initialized():
+            dist.barrier()
 
         opts = []
         if self.cfg.TRAIN.ENABLE:

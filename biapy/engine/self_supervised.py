@@ -4,12 +4,13 @@ import math
 import numpy as np
 from tqdm import tqdm
 from torchmetrics.image import PeakSignalNoiseRatio
+import torch.distributed as dist
 
 from biapy.data.data_2D_manipulation import crop_data_with_overlap, merge_data_with_overlap
 from biapy.data.data_3D_manipulation import crop_3D_data_with_overlap, merge_3D_data_with_overlap
 from biapy.data.post_processing.post_processing import ensemble8_2d_predictions, ensemble16_3d_predictions
-from biapy.utils.util import save_tif
-from biapy.utils.misc import to_pytorch_format, to_numpy_format
+from biapy.utils.util import save_tif, pad_and_reflect
+from biapy.utils.misc import to_pytorch_format, to_numpy_format, is_main_process, is_dist_avail_and_initialized
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.data.pre_processing import create_ssl_source_data_masks, denormalize, undo_norm_range01
 from biapy.engine.metrics import MaskedAutoencoderViT_loss
@@ -143,6 +144,13 @@ class Self_supervised_Workflow(Base_Workflow):
         norm : List of dicts
             Normalization used during training. Required to denormalize the predictions of the model.
         """
+        # Reflect data to complete the needed shape
+        if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE:
+            reflected_orig_shape = self._X.shape
+            self._X = np.expand_dims(pad_and_reflect(self._X[0], self.cfg.DATA.PATCH_SIZE, verbose=self.cfg.TEST.VERBOSE),0)
+            if self.cfg.DATA.TEST.LOAD_GT:
+                self._Y = np.expand_dims(pad_and_reflect(self._Y[0], self.cfg.DATA.PATCH_SIZE, verbose=self.cfg.TEST.VERBOSE),0)
+        
         original_data_shape = self._X.shape
     
         # Crop if necessary
@@ -157,7 +165,7 @@ class Self_supervised_Workflow(Base_Workflow):
 
         # Predict each patch
         if self.cfg.TEST.AUGMENTATION:
-            for k in tqdm(range(self._X.shape[0]), leave=False):
+            for k in tqdm(range(self._X.shape[0]), leave=False, disable=not is_main_process()):
                 if self.cfg.PROBLEM.NDIM == '2D':
                     p = ensemble8_2d_predictions(self._X[k], axis_order_back=self.axis_order_back,
                             pred_func=self.model_call_func, axis_order=self.axis_order, device=self.device)
@@ -172,7 +180,7 @@ class Self_supervised_Workflow(Base_Workflow):
                 pred[k] = p
         else:
             l = int(math.ceil(self._X.shape[0]/self.cfg.TRAIN.BATCH_SIZE))
-            for k in tqdm(range(l), leave=False):
+            for k in tqdm(range(l), leave=False, disable=not is_main_process()):
                 top = (k+1)*self.cfg.TRAIN.BATCH_SIZE if (k+1)*self.cfg.TRAIN.BATCH_SIZE < self._X.shape[0] else self._X.shape[0]                
                 with torch.cuda.amp.autocast():
                     p = self.model(to_pytorch_format(self._X[k*self.cfg.TRAIN.BATCH_SIZE:top], self.axis_order, self.device))
@@ -210,12 +218,30 @@ class Self_supervised_Workflow(Base_Workflow):
                     overlap=self.cfg.DATA.TEST.OVERLAP, verbose=self.cfg.TEST.VERBOSE)
                 pred_visi = f_name(pred_visi, original_data_shape[:-1]+(pred_visi.shape[-1],), padding=self.cfg.DATA.TEST.PADDING, 
                     overlap=self.cfg.DATA.TEST.OVERLAP, verbose=self.cfg.TEST.VERBOSE)
-        else:
-            pred = pred[0]
-            if self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
-                pred_mask = pred_mask[0]
-                pred_visi = pred_visi[0]
+                if self.cfg.PROBLEM.NDIM == '3D': 
+                    pred_mask = np.expand_dims(pred_mask,0)
+                    pred_visi = np.expand_dims(pred_visi,0)
 
+            if self.cfg.PROBLEM.NDIM == '3D': 
+                pred = np.expand_dims(pred,0)
+                if self._Y is not None:  self._Y = np.expand_dims(self._Y,0)
+
+        if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE: 
+            if self.cfg.PROBLEM.NDIM == '2D':
+                pred = pred[:,-reflected_orig_shape[1]:,-reflected_orig_shape[2]:]
+                if self._Y is not None:
+                    self._Y = self._Y[:,-reflected_orig_shape[1]:,-reflected_orig_shape[2]:]
+                if self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
+                    pred_mask = pred_mask[:,-reflected_orig_shape[1]:,-reflected_orig_shape[2]:]
+                    pred_visi = pred_visi[:,-reflected_orig_shape[1]:,-reflected_orig_shape[2]:]    
+            else:
+                pred = pred[:,-reflected_orig_shape[1]:,-reflected_orig_shape[2]:,-reflected_orig_shape[3]:]
+                if self._Y is not None:
+                    self._Y = self._Y[:,-reflected_orig_shape[1]:,-reflected_orig_shape[2]:,-reflected_orig_shape[3]:]
+                if self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
+                    pred_mask = pred_mask[:,-reflected_orig_shape[1]:,-reflected_orig_shape[2]:,-reflected_orig_shape[3]:]
+                    pred_visi = pred_visi[:,-reflected_orig_shape[1]:,-reflected_orig_shape[2]:,-reflected_orig_shape[3]:]
+            
         # Undo normalization
         x_norm = norm[0]
         if x_norm['type'] == 'div':
@@ -233,10 +259,10 @@ class Self_supervised_Workflow(Base_Workflow):
         # Save image
         if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
             fname, fext = os.path.splitext(self.processing_filenames[0])
-            save_tif(np.expand_dims(pred,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, self.processing_filenames, verbose=self.cfg.TEST.VERBOSE)
+            save_tif(pred, self.cfg.PATHS.RESULT_DIR.PER_IMAGE, self.processing_filenames, verbose=self.cfg.TEST.VERBOSE)
             if self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
-                save_tif(np.expand_dims(pred_mask,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, [fname+"_masked.tif"], verbose=self.cfg.TEST.VERBOSE)
-                save_tif(np.expand_dims(pred_visi,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, [fname+"_reconstruction_and_visible.tif"], verbose=self.cfg.TEST.VERBOSE)    
+                save_tif(pred_mask, self.cfg.PATHS.RESULT_DIR.PER_IMAGE, [fname+"_masked.tif"], verbose=self.cfg.TEST.VERBOSE)
+                save_tif(pred_visi, self.cfg.PATHS.RESULT_DIR.PER_IMAGE, [fname+"_reconstruction_and_visible.tif"], verbose=self.cfg.TEST.VERBOSE)    
 
     def torchvision_model_call(self, in_img, is_train=False):
         """
@@ -330,63 +356,67 @@ class Self_supervised_Workflow(Base_Workflow):
             print("No SSL data needs to be prepared for masking, as it will be generated on the fly")
             return
 
-        print("############################")
-        print("#  PREPARE DETECTION DATA  #")
-        print("############################")
+        if is_main_process():
+            print("############################")
+            print("#  PREPARE DETECTION DATA  #")
+            print("############################")
 
-        # Create selected channels for train data
-        if self.cfg.TRAIN.ENABLE:
-            create_mask = False
-            if not os.path.isdir(self.cfg.DATA.TRAIN.SSL_SOURCE_DIR):
-                print("You select to create detection masks from given .csv files but no file is detected in {}. "
-                    "So let's prepare the data. Notice that, if you do not modify 'DATA.TRAIN.SSL_SOURCE_DIR' "
-                    "path, this process will be done just once!".format(self.cfg.DATA.TRAIN.SSL_SOURCE_DIR))
-                create_mask = True
-            else:
-                if len(next(os.walk(self.cfg.DATA.TRAIN.SSL_SOURCE_DIR))[2]) != len(next(os.walk(self.cfg.DATA.TRAIN.PATH))[2]):
-                    print("Different number of files found in {} and {}. Trying to create the the rest again"
-                        .format(self.cfg.DATA.TRAIN.GT_PATH, self.cfg.DATA.TRAIN.SSL_SOURCE_DIR))
-                    create_mask = True 
+            # Create selected channels for train data
+            if self.cfg.TRAIN.ENABLE:
+                create_mask = False
+                if not os.path.isdir(self.cfg.DATA.TRAIN.SSL_SOURCE_DIR):
+                    print("You select to create detection masks from given .csv files but no file is detected in {}. "
+                        "So let's prepare the data. Notice that, if you do not modify 'DATA.TRAIN.SSL_SOURCE_DIR' "
+                        "path, this process will be done just once!".format(self.cfg.DATA.TRAIN.SSL_SOURCE_DIR))
+                    create_mask = True
                 else:
-                    print("Train source data found in {}".format(self.cfg.DATA.TRAIN.SSL_SOURCE_DIR))   
-            if create_mask:
-                create_ssl_source_data_masks(self.cfg, data_type='train')
+                    if len(next(os.walk(self.cfg.DATA.TRAIN.SSL_SOURCE_DIR))[2]) != len(next(os.walk(self.cfg.DATA.TRAIN.PATH))[2]):
+                        print("Different number of files found in {} and {}. Trying to create the the rest again"
+                            .format(self.cfg.DATA.TRAIN.GT_PATH, self.cfg.DATA.TRAIN.SSL_SOURCE_DIR))
+                        create_mask = True 
+                    else:
+                        print("Train source data found in {}".format(self.cfg.DATA.TRAIN.SSL_SOURCE_DIR))   
+                if create_mask:
+                    create_ssl_source_data_masks(self.cfg, data_type='train')
 
-        # Create selected channels for val data
-        if self.cfg.TRAIN.ENABLE and not self.cfg.DATA.VAL.FROM_TRAIN:
-            create_mask = False
-            if not os.path.isdir(self.cfg.DATA.VAL.SSL_SOURCE_DIR):
-                print("You select to create detection masks from given .csv files but no file is detected in {}. "
-                    "So let's prepare the data. Notice that, if you do not modify 'DATA.VAL.SSL_SOURCE_DIR' "
-                    "path, this process will be done just once!".format(self.cfg.DATA.VAL.SSL_SOURCE_DIR))
-                create_mask = True
-            else:
-                if len(next(os.walk(self.cfg.DATA.VAL.SSL_SOURCE_DIR))[2]) != len(next(os.walk(self.cfg.DATA.VAL.PATH))[2]):
-                    print("Different number of files found in {} and {}. Trying to create the the rest again"
-                        .format(self.cfg.DATA.VAL.GT_PATH, self.cfg.DATA.VAL.SSL_SOURCE_DIR))
-                    create_mask = True   
+            # Create selected channels for val data
+            if self.cfg.TRAIN.ENABLE and not self.cfg.DATA.VAL.FROM_TRAIN:
+                create_mask = False
+                if not os.path.isdir(self.cfg.DATA.VAL.SSL_SOURCE_DIR):
+                    print("You select to create detection masks from given .csv files but no file is detected in {}. "
+                        "So let's prepare the data. Notice that, if you do not modify 'DATA.VAL.SSL_SOURCE_DIR' "
+                        "path, this process will be done just once!".format(self.cfg.DATA.VAL.SSL_SOURCE_DIR))
+                    create_mask = True
                 else:
-                    print("Validation source data found in {}".format(self.cfg.DATA.VAL.SSL_SOURCE_DIR)) 
-            if create_mask:         
-                create_ssl_source_data_masks(self.cfg, data_type='val')
+                    if len(next(os.walk(self.cfg.DATA.VAL.SSL_SOURCE_DIR))[2]) != len(next(os.walk(self.cfg.DATA.VAL.PATH))[2]):
+                        print("Different number of files found in {} and {}. Trying to create the the rest again"
+                            .format(self.cfg.DATA.VAL.GT_PATH, self.cfg.DATA.VAL.SSL_SOURCE_DIR))
+                        create_mask = True   
+                    else:
+                        print("Validation source data found in {}".format(self.cfg.DATA.VAL.SSL_SOURCE_DIR)) 
+                if create_mask:         
+                    create_ssl_source_data_masks(self.cfg, data_type='val')
 
-        # Create selected channels for test data
-        if self.cfg.TEST.ENABLE:
-            create_mask = False
-            if not os.path.isdir(self.cfg.DATA.TEST.SSL_SOURCE_DIR):
-                print("You select to create detection masks from given .csv files but no file is detected in {}. "
-                    "So let's prepare the data. Notice that, if you do not modify 'DATA.TEST.SSL_SOURCE_DIR' "
-                    "path, this process will be done just once!".format(self.cfg.DATA.TEST.SSL_SOURCE_DIR))
-                create_mask = True
-            else:
-                if len(next(os.walk(self.cfg.DATA.TEST.SSL_SOURCE_DIR))[2]) != len(next(os.walk(self.cfg.DATA.TEST.PATH))[2]):
-                    print("Different number of files found in {} and {}. Trying to create the the rest again"
-                        .format(self.cfg.DATA.TEST.GT_PATH, self.cfg.DATA.TEST.SSL_SOURCE_DIR))
-                    create_mask = True    
+            # Create selected channels for test data
+            if self.cfg.TEST.ENABLE:
+                create_mask = False
+                if not os.path.isdir(self.cfg.DATA.TEST.SSL_SOURCE_DIR):
+                    print("You select to create detection masks from given .csv files but no file is detected in {}. "
+                        "So let's prepare the data. Notice that, if you do not modify 'DATA.TEST.SSL_SOURCE_DIR' "
+                        "path, this process will be done just once!".format(self.cfg.DATA.TEST.SSL_SOURCE_DIR))
+                    create_mask = True
                 else:
-                    print("Test source data found in {}".format(self.cfg.DATA.TEST.SSL_SOURCE_DIR))
-            if create_mask:
-                create_ssl_source_data_masks(self.cfg, data_type='test')
+                    if len(next(os.walk(self.cfg.DATA.TEST.SSL_SOURCE_DIR))[2]) != len(next(os.walk(self.cfg.DATA.TEST.PATH))[2]):
+                        print("Different number of files found in {} and {}. Trying to create the the rest again"
+                            .format(self.cfg.DATA.TEST.GT_PATH, self.cfg.DATA.TEST.SSL_SOURCE_DIR))
+                        create_mask = True    
+                    else:
+                        print("Test source data found in {}".format(self.cfg.DATA.TEST.SSL_SOURCE_DIR))
+                if create_mask:
+                    create_ssl_source_data_masks(self.cfg, data_type='test')
+
+        if is_dist_avail_and_initialized():
+            dist.barrier()
 
         opts = []
         if self.cfg.TRAIN.ENABLE:

@@ -15,6 +15,7 @@ from skimage import measure
 from collections import namedtuple
 
 from biapy.engine.metrics import jaccard_index_numpy, voc_calculation
+from biapy.utils.misc import is_main_process
 
 def create_plots(results, metrics, job_id, chartOutDir):
     """Create loss and main metric plots with the given results.
@@ -221,7 +222,7 @@ def save_tif(X, data_dir=None, filenames=None, verbose=True):
         ndims = X[0].ndim
 
     d = len(str(len(X)))
-    for i in tqdm(range(len(X)), leave=False):
+    for i in tqdm(range(len(X)), leave=False, disable=not is_main_process()):
         if filenames is None:
             f = os.path.join(data_dir, str(i).zfill(d)+'.tif')
         else:
@@ -240,7 +241,6 @@ def save_tif(X, data_dir=None, filenames=None, verbose=True):
             imsave(f, np.expand_dims(aux, 0), imagej=True, metadata={'axes': 'TZCYXS'}, check_contrast=False, compression=('zlib', 1))
         except:
             imsave(f, np.expand_dims(aux, 0), imagej=True, metadata={'axes': 'TZCYXS'}, check_contrast=False)
-
 
 def save_tif_pair_discard(X, Y, data_dir=None, suffix="", filenames=None, discard=True, verbose=True):
     """Save images in the given directory.
@@ -283,7 +283,7 @@ def save_tif_pair_discard(X, Y, data_dir=None, suffix="", filenames=None, discar
 
     _dtype = X.dtype if X.dtype in [np.uint8, np.uint16, np.float32] else np.float32
     d = len(str(len(X)))
-    for i in tqdm(range(X.shape[0]), leave=False):
+    for i in tqdm(range(X.shape[0]), leave=False, disable=not is_main_process()):
         if len(np.unique(Y[i])) >= 2 or not discard:
             if filenames is None:
                 f1 = os.path.join(data_dir, 'x'+suffix, str(i).zfill(d)+'.tif')
@@ -353,7 +353,7 @@ def save_img(X=None, data_dir=None, Y=None, mask_dir=None, scale_mask=True,
         v = 1 if np.max(X) > 2 else 255
         if X.ndim > 4:
             d = len(str(X.shape[0]*X.shape[3]))
-            for i in tqdm(range(X.shape[0])):
+            for i in tqdm(range(X.shape[0]), disable=not is_main_process()):
                 for j in range(X.shape[3]):
                     if X.shape[-1] == 1:
                         im = Image.fromarray((X[i,:,:,j,0]*v).astype(np.uint8))
@@ -368,7 +368,7 @@ def save_img(X=None, data_dir=None, Y=None, mask_dir=None, scale_mask=True,
                     im.save(f)
         else:
             d = len(str(X.shape[0]))
-            for i in tqdm(range(X.shape[0])):
+            for i in tqdm(range(X.shape[0]), disable=not is_main_process()):
                 if X.shape[-1] == 1:
                     im = Image.fromarray((X[i,:,:,0]*v).astype(np.uint8))
                     im = im.convert('L')
@@ -393,7 +393,7 @@ def save_img(X=None, data_dir=None, Y=None, mask_dir=None, scale_mask=True,
         v = 1 if np.max(Y) > 2 or not scale_mask else 255
         if Y.ndim > 4:
             d = len(str(Y.shape[0]*Y.shape[3]))
-            for i in tqdm(range(Y.shape[0])):
+            for i in tqdm(range(Y.shape[0]), disable=not is_main_process()):
                 for j in range(Y.shape[3]):
                     for k in range(Y.shape[-1]):
                         im = Image.fromarray((Y[i,:,:,j,k]*v).astype(np.uint8))
@@ -407,7 +407,7 @@ def save_img(X=None, data_dir=None, Y=None, mask_dir=None, scale_mask=True,
                         im.save(f)
         else:
             d = len(str(Y.shape[0]))
-            for i in tqdm(range(0, Y.shape[0])):
+            for i in tqdm(range(0, Y.shape[0]), disable=not is_main_process()):
                 for j in range(Y.shape[-1]):
                     im = Image.fromarray((Y[i,:,:,j]*v).astype(np.uint8))
                     im = im.convert('L')
@@ -635,7 +635,7 @@ def divide_images_on_classes(data, data_mask, out_dir, num_classes=2, th=0.8):
 
     print("Dividing provided data into {} classes . . .".format(num_classes))
     d = len(str(data.shape[0]))
-    for i in tqdm(range(data.shape[0])):
+    for i in tqdm(range(data.shape[0]), disable=not is_main_process()):
         # Assign the image to a class if it has, in percentage, more pixels of
         # that class than the given threshold
         for j in range(num_classes):
@@ -923,22 +923,31 @@ def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), pad
 
     print("Loading data from {}".format(data_dir))
     ids = sorted(next(os.walk(data_dir))[2])
+    fids = sorted(next(os.walk(data_dir))[1])
     data = []
     data_shape = []
     c_shape = []
     filenames = []
 
     if len(ids) == 0:
-        raise ValueError("No images found in dir {}".format(data_dir))
+        if len(fids) == 0: # Trying Zarr
+            raise ValueError("No images found in dir {}".format(data_dir))
+        _ids = fids
+    else:
+        _ids = ids
 
-    for n, id_ in tqdm(enumerate(ids), total=len(ids)):
+    for n, id_ in tqdm(enumerate(_ids), total=len(_ids), disable=not is_main_process()):
         if id_.endswith('.npy'):
             img = np.load(os.path.join(data_dir, id_))
         elif id_.endswith('.hdf5') or id_.endswith('.h5'):
             img = h5py.File(os.path.join(data_dir, id_),'r')
             img = np.array(img[list(img)[0]])
         else:
-            img = imread(os.path.join(data_dir, id_))
+            if len(ids) > 0:
+                img = imread(os.path.join(data_dir, id_))
+            else: # Working with Zarr 
+                _, img = read_chunked_data(os.path.join(data_dir, fids[n]))
+                img = np.array(img)
         img = np.squeeze(img)
 
         if img.ndim > 3:
@@ -1058,7 +1067,7 @@ def load_ct_data_from_dir(data_dir, shape=None):
         max_x = 0
         max_y = 0
         max_z = 0
-        for n, id_ in tqdm(enumerate(ids), total=len(ids)):
+        for n, id_ in tqdm(enumerate(ids), total=len(ids), disable=not is_main_process()):
             img = nib.load(os.path.join(data_dir, id_))
             img = np.array(img.dataobj)
 
@@ -1071,7 +1080,7 @@ def load_ct_data_from_dir(data_dir, shape=None):
 
     # Create the array
     data = np.zeros((len(ids), ) + _shape, dtype=np.float32)
-    for n, id_ in tqdm(enumerate(ids), total=len(ids)):
+    for n, id_ in tqdm(enumerate(ids), total=len(ids), disable=not is_main_process()):
         img = nib.load(os.path.join(data_dir, id_))
         img = np.array(img.dataobj)
         data[n,0:img.shape[0],0:img.shape[1],0:img.shape[2]] = img
@@ -1188,9 +1197,14 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
 
     print("Loading data from {}".format(data_dir))
     ids = sorted(next(os.walk(data_dir))[2])
+    fids = sorted(next(os.walk(data_dir))[1])
 
     if len(ids) == 0:
-        raise ValueError("No images found in dir {}".format(data_dir))
+        if len(fids) == 0: # Trying Zarr
+            raise ValueError("No images found in dir {}".format(data_dir))
+        _ids = fids
+    else:
+        _ids = ids
 
     if crop:
         from biapy.data.data_3D_manipulation import crop_3D_data_with_overlap
@@ -1202,14 +1216,18 @@ def load_3d_images_from_dir(data_dir, crop=False, crop_shape=None, verbose=False
     ax = None
 
     # Read images
-    for n, id_ in tqdm(enumerate(ids), total=len(ids)):
+    for n, id_ in tqdm(enumerate(_ids), total=len(_ids), disable=not is_main_process()):
         if id_.endswith('.npy'):
             img = np.load(os.path.join(data_dir, id_))
         elif id_.endswith('.hdf5') or id_.endswith('.h5'):
             img = h5py.File(os.path.join(data_dir, id_),'r')
             img = np.array(img[list(img)[0]])
         else:
-            img = imread(os.path.join(data_dir, id_))
+            if len(ids) > 0:
+                img = imread(os.path.join(data_dir, id_))
+            else: # Working with Zarr 
+                _, img = read_chunked_data(os.path.join(data_dir, fids[n]))
+                img = np.array(img)
         img = np.squeeze(img)
 
         if img.ndim < 3:
@@ -1350,7 +1368,7 @@ def save_npy_files(X, data_dir=None, filenames=None, verbose=True):
             raise ValueError("Filenames array and length of X have different shapes: {} vs {}".format(len(filenames),len(X)))
 
     d = len(str(len(X)))
-    for i in tqdm(range(len(X)), leave=False):
+    for i in tqdm(range(len(X)), leave=False, disable=not is_main_process()):
         if filenames is None:
             f = os.path.join(data_dir, str(i).zfill(d)+'.npy')
         else:
@@ -1463,7 +1481,7 @@ def read_chunked_data(filename):
             else: 
                 data = fid
         else:
-            raise ValueError(f"File extension {os.path.splitext(fid)[1]} not recognized")
+            raise ValueError(f"File extension {filename} not recognized")
 
         return fid, data
 
@@ -1473,8 +1491,8 @@ def write_chunked_data(data, data_dir, filename, dtype_str="float32", verbose=Tr
 
     Parameters
     ----------
-    X : 4D numpy array
-        Data to save. E.g. ``(z, y, x, channels)``.
+    data : 5D numpy array
+        Data to save. E.g. ``(1, z, y, x, channels)``.
 
     data_dir : str
         Path to store X images.
@@ -1488,8 +1506,11 @@ def write_chunked_data(data, data_dir, filename, dtype_str="float32", verbose=Tr
     verbose : bool, optional
         To print saving information.
     """
-    if data.ndim != 4:
-        raise ValueError(f"Expected data needs to have 4 dimensions. Given data shape: {data.shape}")
+    if data.ndim != 5:
+        raise ValueError(f"Expected data needs to have 5 dimensions (in 'TZYXC' order). Given data shape: {data.shape}")
+
+    # Change to TZCYX
+    data = data.transpose((0,1,4,2,3))
 
     ext = os.path.splitext(filename)[1]
     if verbose:
@@ -1499,11 +1520,11 @@ def write_chunked_data(data, data_dir, filename, dtype_str="float32", verbose=Tr
 
     if ext in ['.hdf5', '.h5']:
         fid = h5py.File(os.path.join(data_dir, filename), "w") 
-        data = fid.create_dataset("data", data.shape, dtype=dtype_str, compression="gzip")
+        data = fid.create_dataset("data", data=data, dtype=dtype_str, compression="gzip")
     # Zarr
     else:
         fid = zarr.open_group(os.path.join(data_dir, filename), mode="w")
-        data = fid.create_dataset("data", shape=data.shape, dtype=dtype_str)
+        data = fid.create_dataset("data", data=data, dtype=dtype_str)
 
 def order_dimensions(data, input_order, output_order='TZCYX', default_value=1):
     """

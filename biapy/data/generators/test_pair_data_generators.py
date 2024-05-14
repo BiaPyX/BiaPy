@@ -8,7 +8,7 @@ from skimage.io import imread
 from PIL import Image
 from PIL.TiffTags import TAGS
 
-from biapy.data.pre_processing import normalize, norm_range01
+from biapy.data.pre_processing import normalize, norm_range01, percentile_clip
 
 
 class test_pair_data_generator(Dataset):
@@ -44,17 +44,8 @@ class test_pair_data_generator(Dataset):
     instance_problem : bool, optional
         To not divide the labels if being in an instance segmenation problem.
 
-    norm_type : str, optional
-        Type of normalization to be made. Options available: ``div`` or ``custom``.
-
-    not_normalize : bool, optional
-        Whether to normalize the data or not. Useful in BMZ model as the normalization is made during the inference. 
-
-    norm_custom_mean : float, optional
-        Mean of the data used to normalize.
-
-    norm_custom_std : float, optional
-        Std of the data used to normalize.
+    norm_dict : str, optional
+        Normalization instructions. 
 
     reduce_mem : bool, optional
         To reduce the dtype from float32 to float16. 
@@ -65,18 +56,24 @@ class test_pair_data_generator(Dataset):
     convert_to_rgb : bool, optional
         In case RGB images are expected, e.g. if ``crop_shape`` channel is 3, those images that are grayscale are 
         converted into RGB.
+    
+    multiple_raw_images : bool, optional
+        Whether to consider more than one raw images or not. In this case, a folder per each sample is expected. Visit
+        `LightMyCells challenge approach <https://biapy.readthedocs.io/en/latest/tutorials/image-to-image/lightmycells.html>`_ 
+        for a real use case.  
     """
     def __init__(self, ndim, X=None, d_path=None, test_by_chunks=False, provide_Y=False, Y=None, dm_path=None, seed=42,
-                 instance_problem=False, normalizeY='as_mask', norm_type='div', not_normalize=False,
-                 norm_custom_mean=None, norm_custom_std=None, reduce_mem=False, sample_ids=None, convert_to_rgb=False):
+                 instance_problem=False, norm_dict=None, reduce_mem=False, sample_ids=None, convert_to_rgb=False,
+                 multiple_raw_images=False):
 
         if X is None and d_path is None:
             raise ValueError("One between 'X' or 'd_path' must be provided")
         if provide_Y:
             if Y is None and dm_path is None:
                 raise ValueError("One between 'Y' or 'dm_path' must be provided")
-        assert normalizeY in ['as_mask', 'as_image', 'none']
-        
+        assert norm_dict['mask_norm'] in ['as_mask', 'as_image', 'none']
+        assert norm_dict != None, "Normalization instructions must be provided with 'norm_dict'"
+
         self.X = X
         self.Y = Y
         self.d_path = d_path
@@ -84,6 +81,8 @@ class test_pair_data_generator(Dataset):
         self.test_by_chunks = test_by_chunks
         self.provide_Y = provide_Y
         self.convert_to_rgb = convert_to_rgb
+        self.norm_dict = norm_dict
+        self.multiple_raw_images = multiple_raw_images
 
         if not reduce_mem:
             self.dtype = np.float32  
@@ -91,62 +90,110 @@ class test_pair_data_generator(Dataset):
         else:
             self.dtype = np.float16
             self.dtype_str = "float16"
-        self.data_path = sorted(next(os.walk(d_path))[2]) if X is None else None
-        if sample_ids is not None and self.data_path is not None:
-            self.data_path = [x for i, x in enumerate(self.data_path) if i in sample_ids]
-        if provide_Y:
-            self.data_mask_path = sorted(next(os.walk(dm_path))[2]) if Y is None else None
-            if sample_ids is not None and self.data_mask_path is not None:
-                self.data_mask_path = [x for i, x in enumerate(self.data_mask_path) if i in sample_ids]
-                
-            if self.data_path is not None and self.data_mask_path is not None:
-                if len(self.data_path) != len(self.data_mask_path):
-                    raise ValueError("Different number of raw and ground truth items ({} vs {}). "
-                        "Please check the data!".format(len(self.data_path), len(self.data_mask_path)))
+
+        self.all_files_in_same_folder = not self.multiple_raw_images
+        if self.multiple_raw_images:
+            self.data_paths = sorted(next(os.walk(d_path))[1])
+            if len(self.data_paths) == 0:
+                self.all_files_in_same_folder = True
+                print("Seems that even 'PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER' was selected the test "
+                    "data is not organized in a folder each sample, so BiaPy is trying to load the data as all files"
+                    "are within the same directory.")
+
+        if self.all_files_in_same_folder:
+            self.data_path = sorted(next(os.walk(d_path))[2]) if X is None else None
+            if self.data_path is not None and len(self.data_path) == 0:
+                self.data_path = sorted(next(os.walk(d_path))[1])
+            if sample_ids is not None and self.data_path is not None:
+                self.data_path = [x for i, x in enumerate(self.data_path) if i in sample_ids]
+            if provide_Y:
+                self.data_mask_path = sorted(next(os.walk(dm_path))[2]) if Y is None else None
+                if self.data_mask_path is not None and len(self.data_mask_path) == 0:
+                    self.data_mask_path = sorted(next(os.walk(dm_path))[1])
+                if sample_ids is not None and self.data_mask_path is not None:
+                    self.data_mask_path = [x for i, x in enumerate(self.data_mask_path) if i in sample_ids]
+                    
+                if self.data_path is not None and self.data_mask_path is not None:
+                    if len(self.data_path) != len(self.data_mask_path):
+                        raise ValueError("Different number of raw and ground truth items ({} vs {}). "
+                            "Please check the data!".format(len(self.data_path), len(self.data_mask_path)))
         self.seed = seed
         self.ndim = ndim
         if X is None:
-            self.len = len(self.data_path)
-            if len(self.data_path) == 0:
-                if test_by_chunks:
-                    print("No image found in {} folder. Assumming that files are zarr directories.")
-                    self.data_path = sorted(next(os.walk(d_path))[1])
-                    if provide_Y:
-                        self.data_mask_path = sorted(next(os.walk(dm_path))[1])
-                    if len(self.data_path) == 0:
-                        raise ValueError("No zarr files found in {}".format(d_path))
-                else:
-                    raise ValueError("No test image found in {}".format(d_path))
+            if not self.all_files_in_same_folder:
+                self.data = {}
+                self.data_paths = sorted(next(os.walk(d_path))[1])
+                if self.provide_Y:
+                    self.data_mask_path = sorted(next(os.walk(dm_path))[1])
+                    if len(self.data_paths) != len(self.data_mask_path):
+                        raise ValueError("Different number of raw and ground truth items ({} vs {}). "
+                            "Please check the data!".format(len(self.data_path), len(self.data_mask_path)))
+                c = 0
+                for i in range(len(self.data_paths)):
+                    if self.provide_Y:
+                        gt_image_path = next(os.walk(os.path.join(dm_path,self.data_mask_path[i])))[2][0]
+                    associated_raw_image_dir = os.path.join(d_path, self.data_paths[i]) 
+                    
+                    samples = sorted(next(os.walk(associated_raw_image_dir))[2])
+                    for j in range(len(samples)):
+                        self.data[f"sample_{c}"] = {}
+                        self.data[f"sample_{c}"]["raw"] = os.path.join(associated_raw_image_dir,samples[j])
+                        if self.provide_Y:
+                            self.data[f"sample_{c}"]["gt"] = os.path.join(dm_path,self.data_mask_path[i],gt_image_path)
+                        c += 1
+
+                self.sample_list = list(self.data.keys())
+                self.len = len(self.sample_list)
+                if self.len == 0:
+                    raise ValueError("No image found in {}".format(d_path))
+            else:
+                self.len = len(self.data_path)
+                if len(self.data_path) == 0:
+                    if test_by_chunks:
+                        print("No image found in {} folder. Assumming that files are zarr directories.")
+                        self.data_path = sorted(next(os.walk(d_path))[1])
+                        if provide_Y:
+                            self.data_mask_path = sorted(next(os.walk(dm_path))[1])
+                        if len(self.data_path) == 0:
+                            raise ValueError("No zarr files found in {}".format(d_path))
+                    else:
+                        raise ValueError("No test image found in {}".format(d_path))
         else:
             self.len = len(X)
-        self.o_indexes = np.arange(self.len)
-        self.normalizeY = normalizeY
         
-        self.not_normalize = not_normalize
         # Check if a division is required
         self.X_norm = {}
         self.X_norm['type'] = 'div'
         if provide_Y:
             self.Y_norm = {}
             self.Y_norm['type'] = 'div'
-        img, mask, xnorm = self.load_sample(0)
+        img, mask, xnorm, _, _ = self.load_sample(0)
 
-        if norm_type == 'custom' and not not_normalize:
-            if norm_custom_mean is not None and norm_custom_std is not None:
-                self.X_norm['mean'] = norm_custom_mean
-                self.X_norm['std'] = norm_custom_std
-            self.X_norm['orig_dtype'] = img.dtype
-            self.X_norm['type'] = 'custom'
+        if norm_dict['enable']:
+            self.X_norm['orig_dtype'] = img.dtype if isinstance(img, np.ndarray) else "Zarr"
+            self.X_norm['application_mode'] = norm_dict['application_mode'] 
+            if norm_dict['type'] == 'custom':
+                self.X_norm['type'] = 'custom' 
+                if 'mean' in norm_dict and 'std' in norm_dict:
+                    self.X_norm['mean'] = norm_dict['mean']
+                    self.X_norm['std'] = norm_dict['std']
+            elif norm_dict['type'] == "percentile":
+                self.X_norm['type'] = 'percentile'
+                self.X_norm['lower_bound'] = norm_dict['lower_bound']
+                self.X_norm['upper_bound'] = norm_dict['upper_bound'] 
+                self.X_norm['lower_value'] = norm_dict['lower_value']
+                self.X_norm['upper_value'] = norm_dict['upper_value'] 
+
         if xnorm:
             self.X_norm.update(xnorm)
 
-        if mask is not None:
+        if mask is not None and not test_by_chunks:
             self.Y_norm = {}
-            if normalizeY == 'as_mask':
+            if norm_dict['mask_norm'] == 'as_mask':
                 self.Y_norm['type'] = 'div'
                 if (np.max(mask) > 30 and not instance_problem):
                     self.Y_norm['div'] = 1   
-            elif normalizeY == 'as_image':
+            elif norm_dict['mask_norm'] == 'as_image':
                 self.Y_norm.update(self.X_norm)
 
     def norm_X(self, img):
@@ -167,11 +214,25 @@ class test_pair_data_generator(Dataset):
             Normalization info. 
         """
         xnorm = None
-        if not self.not_normalize:
+        if self.norm_dict['enable']:
+            # Percentile clipping
+            if 'lower_bound' in self.norm_dict:
+                if self.norm_dict['application_mode'] == "image":
+                    img, _, _ = percentile_clip(img, lower=self.norm_dict['lower_bound'],                                     
+                        upper=self.norm_dict['upper_bound'])
+                elif self.norm_dict['application_mode'] == "dataset" and not self.norm_dict['clipped']:
+                    img, _, _ = percentile_clip(img, lwr_perc_val=self.norm_dict['dataset_X_lower_value'],                                     
+                        uppr_perc_val=self.norm_dict['dataset_X_upper_value'])
             if self.X_norm['type'] == 'div':
                 img, xnorm = norm_range01(img, dtype=self.dtype)
             elif self.X_norm['type'] == 'custom':
-                img = normalize(img, self.X_norm['mean'], self.X_norm['std'], out_type=self.dtype_str)
+                if self.norm_dict['application_mode'] == "image":
+                    xnorm = {}
+                    xnorm['mean'] = img.mean()
+                    xnorm['std'] = img.std()
+                    img = normalize(img, img.mean(), img.std(), out_type=self.dtype_str)
+                else:
+                    img = normalize(img, self.X_norm['mean'], self.X_norm['std'], out_type=self.dtype_str)
         return img, xnorm
 
     def norm_Y(self, mask):   
@@ -193,50 +254,77 @@ class test_pair_data_generator(Dataset):
             Normalization info.
         """
         ynorm = None
-        if self.normalizeY == 'as_mask':
+        if self.norm_dict['mask_norm'] == 'as_mask':
             if 'div' in self.Y_norm:
                 mask = mask/255
-        elif self.normalizeY == 'as_image':
+        elif self.norm_dict['mask_norm'] == 'as_image':
+            # Percentile clipping
+            if 'lower_bound' in self.norm_dict:
+                if self.norm_dict['application_mode'] == "image":
+                    mask, _, _ = percentile_clip(mask, lower=self.norm_dict['lower_bound'],                                     
+                        upper=self.norm_dict['upper_bound'])
+                elif self.norm_dict['application_mode'] == "dataset" and not self.norm_dict['clipped']:
+                    mask, _, _ = percentile_clip(mask, lower=self.norm_dict['dataset_X_lower_value'],                                     
+                        upper=self.norm_dict['dataset_X_upper_value'])
+                        
             if self.X_norm['type'] == 'div':
                 mask, ynorm = norm_range01(mask, dtype=self.dtype)
             elif self.X_norm['type'] == 'custom':
-                mask = normalize(mask, self.X_norm['mean'], self.X_norm['std'], out_type=self.dtype_str)
+                if self.norm_dict['application_mode'] == "image":
+                    ynorm = {}
+                    ynorm['mean'] = mask.mean()
+                    ynorm['std'] = mask.std()
+                    mask = normalize(mask, mask.mean(), mask.std(), out_type=self.dtype_str)
+                else:
+                    mask = normalize(mask, self.X_norm['mean'], self.X_norm['std'], out_type=self.dtype_str)
         return mask, ynorm
 
     def load_sample(self, idx):
         """Load one data sample given its corresponding index."""
-        mask = None
+        mask, ynorm, filename = None, None, None
         # Choose the data source
         if self.X is None:
-            if self.data_path[idx].endswith('.npy'):
-                img = np.load(os.path.join(self.d_path, self.data_path[idx]))
-                if self.provide_Y:
-                    mask = np.load(os.path.join(self.dm_path, self.data_mask_path[idx]))
-            elif self.data_path[idx].endswith('.hdf5') or self.data_path[idx].endswith('.h5'):
-                if not self.test_by_chunks:
-                    img = h5py.File(os.path.join(self.d_path, self.data_path[idx]),'r')
-                    img = img[list(img)[0]]
-                    if self.provide_Y:
-                        mask = h5py.File(os.path.join(self.dm_path, self.data_mask_path[idx]),'r')
-                        mask = mask[list(mask)[0]]
-                else:
-                    img = os.path.join(self.d_path, self.data_path[idx])
-                    if self.provide_Y:
-                        mask = os.path.join(self.dm_path, self.data_mask_path[idx])
-            elif self.data_path[idx].endswith('.zarr'):
-                if self.test_by_chunks:
-                    img = os.path.join(self.d_path, self.data_path[idx])
-                    if self.provide_Y:
-                        mask = os.path.join(self.dm_path, self.data_mask_path[idx])
-                else:
-                   raise NotImplementedError
-            else:
-                img = imread(os.path.join(self.d_path, self.data_path[idx]))
+            if not self.all_files_in_same_folder:
+                k = self.sample_list[idx]
+                img = imread(self.data[k]["raw"])
                 img = np.squeeze(img)
+                filename = self.data[k]["raw"]
                 if self.provide_Y:
-                    mask = imread(os.path.join(self.dm_path, self.data_mask_path[idx]))
-                    mask = np.squeeze(mask)  
+                    mask = imread(self.data[k]["gt"])
+                    mask = np.squeeze(mask)   
+            else:
+                filename = os.path.join(self.d_path, self.data_path[idx])
+                if self.data_path[idx].endswith('.npy'):
+                    img = np.load(os.path.join(self.d_path, self.data_path[idx]))
+                    if self.provide_Y:
+                        mask = np.load(os.path.join(self.dm_path, self.data_mask_path[idx]))
+                elif self.data_path[idx].endswith('.hdf5') or self.data_path[idx].endswith('.h5'):
+                    if not self.test_by_chunks:
+                        img = h5py.File(os.path.join(self.d_path, self.data_path[idx]),'r')
+                        img = img[list(img)[0]]
+                        if self.provide_Y:
+                            mask = h5py.File(os.path.join(self.dm_path, self.data_mask_path[idx]),'r')
+                            mask = mask[list(mask)[0]]
+                    else:
+                        img = os.path.join(self.d_path, self.data_path[idx])
+                        if self.provide_Y:
+                            mask = os.path.join(self.dm_path, self.data_mask_path[idx])
+                elif self.data_path[idx].endswith('.zarr'):
+                    if self.test_by_chunks:
+                        img = os.path.join(self.d_path, self.data_path[idx])
+                        if self.provide_Y:
+                            mask = os.path.join(self.dm_path, self.data_mask_path[idx])
+                    else:
+                        raise ValueError("If you are using Zarr images please set 'TEST.BY_CHUNKS.ENABLE' and configure "
+                            "its options.")
+                else:
+                    img = imread(os.path.join(self.d_path, self.data_path[idx]))
+                    img = np.squeeze(img)
+                    if self.provide_Y:
+                        mask = imread(os.path.join(self.dm_path, self.data_mask_path[idx]))
+                        mask = np.squeeze(mask)  
         else:
+            filename = idx
             img = self.X[idx]
             img = np.squeeze(img)
 
@@ -281,18 +369,18 @@ class test_pair_data_generator(Dataset):
             # Normalization
             img, xnorm = self.norm_X(img)
             if self.provide_Y:
-                mask, _ = self.norm_Y(mask)
+                mask, ynorm = self.norm_Y(mask)
 
             img = np.expand_dims(img, 0).astype(self.dtype)
             if self.provide_Y:
                 mask = np.expand_dims(mask, 0)
-                if self.normalizeY == 'as_mask':
+                if self.norm_dict['mask_norm'] == 'as_mask':
                     mask = mask.astype(np.uint8)
 
         if self.convert_to_rgb and img.shape[-1] == 1:
             img = np.repeat(img, 3, axis=-1)
             
-        return img, mask, xnorm
+        return img, mask, xnorm, ynorm, filename
 
 
     def __len__(self):
@@ -301,32 +389,47 @@ class test_pair_data_generator(Dataset):
 
 
     def __getitem__(self, index):
-        """Generation of one pair of data.
-
-           Parameters
-           ----------
-           index : int
-               Sample index counter.
-
-           Returns
-           -------
-           img : 3D/4D Numpy array
-               X element, for instance, an image. E.g. ``(z, y, x, channels)`` if ``2D`` or 
-               ``(y, x, channels)`` if ``3D``. 
-               
-           mask : 3D/4D Numpy array
-               Y element, for instance, a mask. E.g. ``(z, y, x, channels)`` if ``2D`` or 
-               ``(y, x, channels)`` if ``3D``.
         """
-        img, mask, norm = self.load_sample(index)
+        Generation of one pair of data.
+
+        Parameters
+        ----------
+        index : int
+            Sample index counter.
+
+        Returns
+        -------
+        dict : dict
+            Dictionary containing:
+
+            img : 4D/5D Numpy array
+                X element, for instance, an image. E.g. ``(1, z, y, x, channels)`` if ``2D`` or 
+                ``(1, y, x, channels)`` if ``3D``. 
+                
+            X_norm : dict
+                X element normalization steps.
+
+            file : str or int
+                Processed image file path or integer position in loaded data.
+            
+            mask : 4D/5D Numpy array, optional
+                Y element, for instance, a mask. E.g. ``(1, z, y, x, channels)`` if ``2D`` or 
+                    ``(1, y, x, channels)`` if ``3D``.
+            
+            Y_norm : dict, optional
+                Y element normalization steps.
+        """
+        img, mask, xnorm, ynorm, filename = self.load_sample(index)
         
-        if norm is not None:
-            self.X_norm.update(norm)
-                    
+        if xnorm is not None:
+            self.X_norm.update(xnorm)
+        if ynorm is not None:
+            self.Y_norm.update(ynorm)
+
         if self.provide_Y:
-            return img, self.X_norm, mask, self.Y_norm
+            return {"X": img, "X_norm": self.X_norm, "Y": mask, "Y_norm": self.Y_norm, "file": filename}
         else:
-            return img, self.X_norm
+            return {"X": img, "X_norm": self.X_norm, "file": filename}
 
     def get_data_normalization(self):
         return self.X_norm

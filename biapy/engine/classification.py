@@ -6,11 +6,14 @@ import pandas as pd
 from tqdm import tqdm
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 from torchmetrics import Accuracy
+from sklearn.model_selection import StratifiedKFold
 
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.data.pre_processing import norm_range01
 from biapy.data.data_2D_manipulation import load_data_classification
 from biapy.data.data_3D_manipulation import load_3d_data_classification
+from biapy.utils.misc import is_main_process
+from biapy.data.pre_processing import preprocess_data
 
 class Classification_Workflow(Base_Workflow):
     """
@@ -127,11 +130,14 @@ class Classification_Workflow(Base_Workflow):
             if self.cfg.DATA.TRAIN.IN_MEMORY:
                 val_split = self.cfg.DATA.VAL.SPLIT_TRAIN if self.cfg.DATA.VAL.FROM_TRAIN else 0.
                 f_name = load_data_classification if self.cfg.PROBLEM.NDIM == '2D' else load_3d_data_classification
+                preprocess_cfg = self.cfg.DATA.PREPROCESS if self.cfg.DATA.PREPROCESS.TRAIN else None
+                preprocess_fn = preprocess_data if self.cfg.DATA.PREPROCESS.TRAIN else None
                 print("0) Loading train images . . .")
                 objs = f_name(self.cfg.DATA.TRAIN.PATH, self.cfg.DATA.PATCH_SIZE, convert_to_rgb=self.cfg.DATA.FORCE_RGB,
                     expected_classes=self.cfg.MODEL.N_CLASSES, cross_val=self.cfg.DATA.VAL.CROSS_VAL, 
                     cross_val_nsplits=self.cfg.DATA.VAL.CROSS_VAL_NFOLD, cross_val_fold=self.cfg.DATA.VAL.CROSS_VAL_FOLD, 
-                    val_split=val_split, seed=self.cfg.SYSTEM.SEED, shuffle_val=self.cfg.DATA.VAL.RANDOM)
+                    val_split=val_split, seed=self.cfg.SYSTEM.SEED, shuffle_val=self.cfg.DATA.VAL.RANDOM, 
+                    preprocess_cfg=preprocess_cfg, preprocess_f=preprocess_fn)
             
                 if self.cfg.DATA.VAL.FROM_TRAIN:
                     if self.cfg.DATA.VAL.CROSS_VAL:
@@ -151,9 +157,11 @@ class Classification_Workflow(Base_Workflow):
                 if self.cfg.DATA.VAL.IN_MEMORY:
                     print("1) Loading validation images . . .")
                     f_name = load_data_classification if self.cfg.PROBLEM.NDIM == '2D' else load_3d_data_classification
+                    preprocess_cfg = self.cfg.DATA.PREPROCESS if self.cfg.DATA.PREPROCESS.VAL else None
+                    preprocess_fn = preprocess_data if self.cfg.DATA.PREPROCESS.VAL else None
                     self.X_val, self.Y_val, _ = f_name(self.cfg.DATA.VAL.PATH, self.cfg.DATA.PATCH_SIZE, 
                         convert_to_rgb=self.cfg.DATA.FORCE_RGB, expected_classes=self.cfg.MODEL.N_CLASSES, 
-                        val_split=0)
+                        val_split=0, preprocess_cfg=preprocess_cfg, preprocess_f=preprocess_fn)
 
                     if self.Y_val is not None and len(self.X_val) != len(self.Y_val):
                         raise ValueError("Different number of raw and ground truth items ({} vs {}). "
@@ -173,8 +181,10 @@ class Classification_Workflow(Base_Workflow):
                 if self.cfg.DATA.TEST.IN_MEMORY:
                     print("2) Loading test images . . .")
                     f_name = load_data_classification if self.cfg.PROBLEM.NDIM == '2D' else load_3d_data_classification
+                    preprocess_cfg = self.cfg.DATA.PREPROCESS if self.cfg.DATA.PREPROCESS.TEST else None
+                    preprocess_fn = preprocess_data if self.cfg.DATA.PREPROCESS.TEST else None
                     self.X_test, self.Y_test, self.test_filenames = f_name(self.cfg.DATA.TEST.PATH, self.cfg.DATA.PATCH_SIZE,
-                        convert_to_rgb=self.cfg.DATA.FORCE_RGB, 
+                        convert_to_rgb=self.cfg.DATA.FORCE_RGB, preprocess_cfg=preprocess_cfg, preprocess_f=preprocess_fn,
                         expected_classes=self.cfg.MODEL.N_CLASSES if self.cfg.DATA.TEST.LOAD_GT else None, val_split=0)
                     self.class_names = sorted(next(os.walk(self.cfg.DATA.TEST.PATH))[1])
                 else:
@@ -189,17 +199,17 @@ class Classification_Workflow(Base_Workflow):
                 # The test is the validation, and as it is only available when validation is obtained from train and when 
                 # cross validation is enabled, the test set files reside in the train folder
                 self.X_test, self.Y_test = None, None
+                self.class_names = sorted(next(os.walk(self.cfg.DATA.TRAIN.PATH))[1])
                 if self.cross_val_samples_ids is None:                      
                     # Split the test as it was the validation when train is not enabled 
                     skf = StratifiedKFold(n_splits=self.cfg.DATA.VAL.CROSS_VAL_NFOLD, shuffle=self.cfg.DATA.VAL.RANDOM,
                         random_state=self.cfg.SYSTEM.SEED)
                     fold = 1
                     test_index = None
-                    self.class_names = sorted(next(os.walk(self.cfg.DATA.TRAIN.PATH))[2])
                     self.test_filenames = []
                     B = []
                     for c_num, folder in enumerate(self.class_names):
-                        ids += sorted(next(os.walk(os.path.join(self.cfg.DATA.TRAIN.PATH,folder)))[2])
+                        ids = sorted(next(os.walk(os.path.join(self.cfg.DATA.TRAIN.PATH,folder)))[2])
                         B.append((c_num,)*len(ids))
                         self.test_filenames += ids
                     A = np.zeros(len(self.test_filenames)) 
@@ -215,6 +225,12 @@ class Classification_Workflow(Base_Workflow):
                     else:
                         print("Fold number {}. Indexes used in cross validation: {}".format(fold, self.cross_val_samples_ids))
                 
+                if self.test_filenames is None:
+                    self.test_filenames = []
+                    for c_num, folder in enumerate(self.class_names):
+                        f = os.path.join(self.cfg.DATA.TRAIN.PATH, folder)
+                        ids = sorted(next(os.walk(f))[2])
+                        self.test_filenames += ids
                 self.test_filenames = [x for i, x in enumerate(self.test_filenames) if i in self.cross_val_samples_ids]
                 self.original_test_path = self.orig_train_path
                 self.original_test_mask_path = self.orig_train_mask_path  
@@ -232,7 +248,7 @@ class Classification_Workflow(Base_Workflow):
 
         # Predict each patch
         l = int(math.ceil(self._X.shape[0]/self.cfg.TRAIN.BATCH_SIZE))
-        for k in tqdm(range(l), leave=False):
+        for k in tqdm(range(l), leave=False, disable=not is_main_process()):
             top = (k+1)*self.cfg.TRAIN.BATCH_SIZE if (k+1)*self.cfg.TRAIN.BATCH_SIZE < self._X.shape[0] else self._X.shape[0]
             with torch.cuda.amp.autocast():
                 p = self.model_call_func(self._X[k*self.cfg.TRAIN.BATCH_SIZE:top]).cpu().numpy()

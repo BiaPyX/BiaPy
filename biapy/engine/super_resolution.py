@@ -8,7 +8,7 @@ from biapy.data.data_2D_manipulation import crop_data_with_overlap, merge_data_w
 from biapy.data.data_3D_manipulation import crop_3D_data_with_overlap, merge_3D_data_with_overlap
 from biapy.data.post_processing.post_processing import ensemble8_2d_predictions, ensemble16_3d_predictions
 from biapy.utils.util import save_tif
-from biapy.utils.misc import to_pytorch_format, to_numpy_format
+from biapy.utils.misc import to_pytorch_format, to_numpy_format, is_main_process
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.engine.metrics import dfcan_loss
 from biapy.data.pre_processing import normalize, denormalize, undo_norm_range01
@@ -140,7 +140,7 @@ class Super_resolution_Workflow(Base_Workflow):
 
         # Predict each patch
         if self.cfg.TEST.AUGMENTATION:
-            for k in tqdm(range(self._X.shape[0]), leave=False):
+            for k in tqdm(range(self._X.shape[0]), leave=False, disable=not is_main_process()):
                 if self.cfg.PROBLEM.NDIM == '2D':
                     p = ensemble8_2d_predictions(self._X[k], axis_order_back=self.axis_order_back,
                             pred_func=self.model_call_func, axis_order=self.axis_order, device=self.device)
@@ -156,7 +156,7 @@ class Super_resolution_Workflow(Base_Workflow):
         else:
             self._X = to_pytorch_format(self._X, self.axis_order, self.device)
             l = int(math.ceil(self._X.shape[0]/self.cfg.TRAIN.BATCH_SIZE))
-            for k in tqdm(range(l), leave=False):
+            for k in tqdm(range(l), leave=False, disable=not is_main_process()):
                 top = (k+1)*self.cfg.TRAIN.BATCH_SIZE if (k+1)*self.cfg.TRAIN.BATCH_SIZE < self._X.shape[0] else self._X.shape[0]
                 with torch.cuda.amp.autocast():
                     p = self.model(self._X[k*self.cfg.TRAIN.BATCH_SIZE:top])
@@ -182,8 +182,10 @@ class Super_resolution_Workflow(Base_Workflow):
                       self.cfg.DATA.TEST.OVERLAP[2]*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[2])
             pred = f_name(pred, original_data_shape[:-1]+(pred.shape[-1],), padding=pad, 
                 overlap=ov, verbose=self.cfg.TEST.VERBOSE)
-        else:
-            pred = pred[0]
+
+            if self.cfg.PROBLEM.NDIM == '3D': 
+                pred = np.expand_dims(pred,0)
+                if self._Y is not None:  self._Y = np.expand_dims(self._Y,0)
 
         # Undo normalization
         x_norm = norm[0]
@@ -201,7 +203,7 @@ class Super_resolution_Workflow(Base_Workflow):
 
         # Save image
         if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
-            save_tif(np.expand_dims(pred,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, self.processing_filenames, 
+            save_tif(pred, self.cfg.PATHS.RESULT_DIR.PER_IMAGE, self.processing_filenames, 
                 verbose=self.cfg.TEST.VERBOSE)
     
         # Calculate PSNR

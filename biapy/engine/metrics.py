@@ -12,6 +12,7 @@ from torchmetrics import JaccardIndex
 from torchmetrics.image import StructuralSimilarityIndexMeasure
 from torchvision.transforms.functional import resize
 import torchvision.transforms as T
+from pytorch_msssim import ssim, ms_ssim, SSIM, MS_SSIM
 
 def jaccard_index_numpy(y_true, y_pred):
     """Define Jaccard index.
@@ -177,16 +178,16 @@ class instance_metrics():
         self.multihead = False
         self.metric_func = []
         for i in range(len(metric_names)):
-            if metric_names[i] == "jaccard_index" and self.jaccard is None:
+            if "jaccard_index_classes" in metric_names[i] and self.jaccard_multi is None: 
+                self.jaccard_multi = JaccardIndex(task="multiclass", threshold=0.5, num_classes=self.num_classes).to(self.device, non_blocking=True)
+                self.multihead = True 
+                loss_func = self.jaccard_multi
+            elif "jaccard_index" in metric_names[i] and self.jaccard is None:
                 self.jaccard = JaccardIndex(task="binary", threshold=0.5, num_classes=2).to(self.device, non_blocking=True)
                 loss_func = self.jaccard
             elif metric_names[i] == "L1_distance_channel" and self.l1loss is None:   
                 self.l1loss = torch.nn.L1Loss()
                 loss_func = self.l1loss
-            elif metric_names[i] == "jaccard_index_classes" and self.jaccard_multi is None: 
-                self.jaccard_multi = JaccardIndex(task="multiclass", threshold=0.5, num_classes=self.num_classes).to(self.device, non_blocking=True)
-                self.multihead = True 
-                loss_func = self.jaccard_multi
 
             self.metric_func.append(loss_func)
 
@@ -552,39 +553,41 @@ def detection_metrics(true, pred, tolerance=10, voxel_size=(1,1,1), return_assoc
 
     _true = np.array(true, dtype=np.float32)
     _pred = np.array(pred, dtype=np.float32)
-    
-    # Multiply each axis for the its real value
-    for i in range(len(voxel_size)):
-        _true[:,i] *= voxel_size[i]
-        _pred[:,i] *= voxel_size[i]
-
-    # Create cost matrix
-    distances = distance_matrix(_pred, _true)
-    n_matched = min(len(_true), len(_pred))
-    costs = -(distances >= tolerance).astype(float) - distances / (2*n_matched)
-    pred_ind, true_ind = linear_sum_assignment(-costs)
 
     TP, FP, FN = 0, 0, 0
     tag = ["FN" for x in _true]
     fp_preds = list(range(1,len(_pred)+1))
     dis = [-1 for x in _true]
-    pred_id_assoc = [-1 for x in _true]
+    pred_id_assoc = [-1 for x in _true]    
 
-    # Analyse which associations are below the tolerance to consider them TP
-    for i in range(len(pred_ind)):
-        if distances[pred_ind[i],true_ind[i]] < tolerance:
-            TP += 1
-            tag[true_ind[i]] = "TP"
-            fp_preds.remove(pred_ind[i]+1)
+    if len(_true) > 0:
+        # Multiply each axis for the its real value
+        for i in range(len(voxel_size)):
+            _true[:,i] *= voxel_size[i]
+            _pred[:,i] *= voxel_size[i]
 
-        dis[true_ind[i]] = distances[pred_ind[i],true_ind[i]]
-        pred_id_assoc[true_ind[i]] = pred_ind[i]+1
+        # Create cost matrix
+        distances = distance_matrix(_pred, _true)
+        n_matched = min(len(_true), len(_pred))
+        costs = -(distances >= tolerance).astype(float) - distances / (2*n_matched)
+        pred_ind, true_ind = linear_sum_assignment(-costs)
 
-    FN = len(_true) - TP
+        # Analyse which associations are below the tolerance to consider them TP
+        for i in range(len(pred_ind)):
+            if distances[pred_ind[i],true_ind[i]] < tolerance:
+                TP += 1
+                tag[true_ind[i]] = "TP"
+                fp_preds.remove(pred_ind[i]+1)
+
+            dis[true_ind[i]] = distances[pred_ind[i],true_ind[i]]
+            pred_id_assoc[true_ind[i]] = pred_ind[i]+1
+
+        FN = len(_true) - TP
     FP = len(_pred) - TP
 
     # Create tow dataframes with the GT and prediction points association made and another one with the FPs
-    if return_assoc:
+    df, df_fp = None, None
+    if return_assoc and len(_true) > 0:
         _true = np.array(true, dtype=np.float32)
         _pred = np.array(pred, dtype=np.float32)
 
@@ -625,10 +628,11 @@ def detection_metrics(true, pred, tolerance=10, voxel_size=(1,1,1), return_assoc
     	print("Points in ground truth: {}, Points in prediction: {}".format(len(_true), len(_pred)))
     	print("True positives: {}, False positives: {}, False negatives: {}".format(TP, FP, FN))
     
+    r_dict = {"Precision": precision, "Recall": recall, "F1": F1, "TP": TP, "FP": FP, "FN": FN}
     if return_assoc:
-        return ["Precision", precision, "Recall", recall, "F1", F1], df, df_fp
+        return r_dict, df, df_fp
     else:
-        return ["Precision", precision, "Recall", recall, "F1", F1]
+        return r_dict
 
 ## Loss function definition used in the paper from nature methods:
 ### [Chang Qiao](https://github.com/qc17-THU/DL-SR/tree/main/src) (MIT license).
@@ -665,3 +669,82 @@ def MaskedAutoencoderViT_loss(y_pred, y_true, model):
 
     loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
     return loss
+
+
+class L1_wrapper():
+    def __init__(self):
+        """
+        Wrapper to L1 loss function. 
+        """
+        self.loss = torch.nn.L1Loss(reduction='mean')
+
+    def __call__(self, y_pred, y_true):
+        """
+        Calculate instance segmentation loss.
+
+        Parameters
+        ----------
+        y_true : Tensor
+            Ground truth masks.
+
+        y_pred : Tensor or list of Tensors
+            Predictions.
+
+        Returns
+        -------
+        loss : Tensor
+            Loss value.
+        """
+        return self.loss(y_pred, y_true) 
+
+class MSE_wrapper():
+    def __init__(self):
+        """
+        Wrapper to MSE loss function. 
+        """
+        self.loss = torch.nn.MSELoss(reduction='mean')
+
+    def __call__(self, y_pred, y_true):
+        """
+        Calculate instance segmentation loss.
+
+        Parameters
+        ----------
+        y_true : Tensor
+            Ground truth masks.
+
+        y_pred : Tensor or list of Tensors
+            Predictions.
+
+        Returns
+        -------
+        loss : Tensor
+            Loss value.
+        """
+        return self.loss(y_pred, y_true) 
+
+class SSIM_wrapper():
+    def __init__(self):
+        """
+        Wrapper to SSIM loss function. 
+        """
+        self.loss = SSIM(data_range=1, size_average=True, channel=1)
+
+    def __call__(self, y_pred, y_true):
+        """
+        Calculate instance segmentation loss.
+
+        Parameters
+        ----------
+        y_true : Tensor
+            Ground truth masks.
+
+        y_pred : Tensor or list of Tensors
+            Predictions.
+
+        Returns
+        -------
+        loss : Tensor
+            Loss value.
+        """
+        return 1-self.loss(y_pred, y_true)

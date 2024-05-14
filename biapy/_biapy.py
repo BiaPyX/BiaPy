@@ -11,7 +11,7 @@ import numpy as np
 import importlib
 import multiprocessing
 
-from biapy.utils.misc import init_devices, is_dist_avail_and_initialized, set_seed
+from biapy.utils.misc import init_devices, is_dist_avail_and_initialized, set_seed, get_rank, setup_for_distributed
 from biapy.config.config import Config
 from biapy.engine.check_configuration import check_configuration
 
@@ -411,10 +411,16 @@ class BiaPy():
         if self.cfg.TRAIN.ENABLE:
             self.train()
 
+        if is_dist_avail_and_initialized():
+            print(f"[Rank {get_rank()} ({os.getpid()})] Process waiting (train finished) . . . ")
+            dist.barrier()
+
         if self.cfg.TEST.ENABLE:
             self.test()
 
         if is_dist_avail_and_initialized():
+            print(f"[Rank {get_rank()} ({os.getpid()})] Process waiting (test finished) . . . ")
+            setup_for_distributed(self.args.rank == 0)
             dist.barrier()
             dist.destroy_process_group()
 

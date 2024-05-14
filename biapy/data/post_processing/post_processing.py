@@ -1529,8 +1529,9 @@ def measure_morphological_props_and_filter(img, resolution, filter_instances=Fal
     label_list, npixels = np.unique(img, return_counts=True)
     
     # Delete background instance '0'
-    label_list = label_list[1:] 
-    npixels = npixels[1:]
+    if label_list[0] == 0:
+        label_list = label_list[1:] 
+        npixels = npixels[1:]
 
     total_labels = len(label_list)
     comment = ['none' for i in range(total_labels)]
@@ -1599,7 +1600,7 @@ def measure_morphological_props_and_filter(img, resolution, filter_instances=Fal
                 # Check each list of conditions
                 comps = []
                 for j, prop in enumerate(list_of_conditions):
-                    if prop == "circularity":
+                    if prop in ["circularity", "sphericity"]:
                         value_to_compare = circularities[i]
                     elif prop == "npixels":
                         value_to_compare = npixels[i]
@@ -1646,13 +1647,13 @@ def measure_morphological_props_and_filter(img, resolution, filter_instances=Fal
             labels_removed += 1
         else:
             comment[i] = correct_str
-
+    cir_name = 'sphericities' if image3d else 'circularities'
     d_result = {
         'labels': label_list,
         'centers': centers,
         'npixels': npixels,
         'areas': areas,
-        'circularities': circularities,
+        cir_name: circularities,
         'diameters': diameters,
         'perimeters': perimeters,
         'comment': comment,

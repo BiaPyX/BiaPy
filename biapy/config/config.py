@@ -155,6 +155,15 @@ class Config:
         # Number between [0, 1] indicating the std of the Gaussian noise N(0,std).
         _C.PROBLEM.SELF_SUPERVISED.NOISE = 0.2
 
+        ### IMAGE_TO_IMAGE
+        _C.PROBLEM.IMAGE_TO_IMAGE = CN()
+        # To use a custom data loader to load a random image from each image sample folder. The data needs to be structured
+        # in an special way, that is, instead of having images in the training/val folder a folder for each sample is expected, 
+        # where in each of those different versions of the same data sample will be placed. Visit the following tutorial
+        # for a real use case and a more detailed description:
+        #   - https://biapy.readthedocs.io/en/latest/tutorials/image-to-image/lightmycells.html 
+        _C.PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER = False
+
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Dataset
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -175,18 +184,28 @@ class Config:
         _C.DATA.W_FOREGROUND = 0.94 # Used when _C.DATA.PROBABILITY_MAP=True
         _C.DATA.W_BACKGROUND = 0.06 # Used when _C.DATA.PROBABILITY_MAP=True
 
-        # Whether to reshape the dimensions that does not satisfy the patch shape selected by padding it with reflect.
+        # Whether to reshape the dimensions that does not satisfy the patch shape selected by padding it with reflect. It's not
+        # implemented in super-resolution inference phase workflow (as usually the patch size is small).
         _C.DATA.REFLECT_TO_COMPLETE_SHAPE = False
 
         _C.DATA.NORMALIZATION = CN()
+        # Whether to apply or not a percentile clipping before normalizing the data
+        _C.DATA.NORMALIZATION.PERC_CLIP = False
+        # Lower and upper bound for percentile clip. Must be set when DATA.NORMALIZATION.PERC_CLIP = 'True'
+        _C.DATA.NORMALIZATION.PERC_LOWER = -1.0
+        _C.DATA.NORMALIZATION.PERC_UPPER = -1.0
         # Normalization type to use. Possible options:
         #   'div' to divide values from 0/255 (or 0/65535 if uint16) in [0,1] range
         #   'custom' to use DATA.NORMALIZATION.CUSTOM_MEAN and DATA.NORMALIZATION.CUSTOM_STD to normalize
-        #   '' if no normalization to be applied 
         _C.DATA.NORMALIZATION.TYPE = 'div'
+        # Whether to apply the normalization by sample ("image") or by all dataset statistics ("dataset"). 
+        # Used with 'DATA.NORMALIZATION.PERC_CLIP' == 'True' and/or when 'DATA.NORMALIZATION.TYPE' == 'custom'. 
+        # Options: ["image", "dataset"]  
+        _C.DATA.NORMALIZATION.APPLICATION_MODE = "image"
+        # Custom normalization variables: mean and std (they are calculated if not provided)
         _C.DATA.NORMALIZATION.CUSTOM_MEAN = -1.0
         _C.DATA.NORMALIZATION.CUSTOM_STD = -1.0
-        
+
         # If 'DATA.PATCH_SIZE' selected has 3 channels, e.g. RGB images are expected, so will force grayscale images to be
         # converted into RGB (e.g. in ImageNet some of the images are grayscale)
         _C.DATA.FORCE_RGB = False
@@ -219,9 +238,13 @@ class Config:
         # performing some augmentations, e.g. cutout. If defined it need to be (y,x)/(z,y,x) and needs to be to be a 2D
         # tuple when using _C.PROBLEM.NDIM='2D' and 3D tuple when using _C.PROBLEM.NDIM='3D'
         _C.DATA.TRAIN.RESOLUTION = (-1,)
-        # Minimum foreground percentage that each image loaded need to have to not discard it. This option is only valid for SEMANTIC_SEG, 
-        # INSTANCE_SEG and DETECTION. 
+        # Minimum foreground percentage that each image loaded need to have to not discard it (only used when TRAIN.IN_MEMORY == True). 
+        # This option is only valid for SEMANTIC_SEG, INSTANCE_SEG and DETECTION. 
         _C.DATA.TRAIN.MINIMUM_FOREGROUND_PER = -1.
+        # Order of the axes of the image when using Zarr/H5 images to train
+        _C.DATA.TRAIN.INPUT_IMG_AXES_ORDER = 'TZCYX'
+        # Order of the axes of the mask when using Zarr/H5 images to train
+        _C.DATA.TRAIN.INPUT_MASK_AXES_ORDER = 'TZCYX'
 
         # PREPROCESSING
         # Same preprocessing will be applied to all selected datasets
@@ -364,12 +387,13 @@ class Config:
         # Padding to be done in (y,x)/(z,y,x) when cropping validation data. Useful to avoid patch 'border effect'. This 
         # is only used when the validation is loaded from disk, and thus, not extracted from training. 
         _C.DATA.VAL.PADDING = (0,0)
-        # Directory where validation binary masks should be located. This binary mask will be applied only when MW_TH*
-        # optimized values are find, that is, when _C.PROBLEM.INSTANCE_SEG.DATA_MW_OPTIMIZE_THS = True and _C.TEST.POST_PROCESSING.APPLY_MASK = True
-        _C.DATA.VAL.BINARY_MASKS = os.path.join("user_data", 'val', 'bin_mask')
         # Not used yet.
         _C.DATA.VAL.RESOLUTION = (-1,)
-
+        # Order of the axes of the image when using Zarr/H5 images to train
+        _C.DATA.VAL.INPUT_IMG_AXES_ORDER = 'TZCYX'
+        # Order of the axes of the mask when using Zarr/H5 images to train. 
+        # detection the mask
+        _C.DATA.VAL.INPUT_MASK_AXES_ORDER = 'TZCYX'
 
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Data augmentation (DA)
@@ -411,7 +435,7 @@ class Config:
         # How to fill up the new values created with affine transformations (rotations, shear, shift and zoom).
         # Same meaning as in scipy: 'reflect', grid-'mirror', 'constant', 'grid-constant', 'nearest', 'mirror', 
         # 'grid-wrap' and 'wrap'. 
-        _C.AUGMENTOR.AFFINE_MODE = 'constant'
+        _C.AUGMENTOR.AFFINE_MODE = 'reflect'
         # Make vertical flips
         _C.AUGMENTOR.VFLIP = False
         # Make horizontal flips
@@ -701,6 +725,8 @@ class Config:
         _C.MODEL.UNETR_VIT_NUM_FILTERS = 16
         # Decoder activation
         _C.MODEL.UNETR_DEC_ACTIVATION = 'relu'
+        # Decoder convolutions' kernel size 
+        _C.MODEL.UNETR_DEC_KERNEL_SIZE = 3
 
         # Specific for SR models based on U-Net architectures. Options are ["pre", "post"]
         _C.MODEL.UNET_SR_UPSAMPLE_POSITION = "pre"
@@ -823,7 +849,7 @@ class Config:
         _C.TEST.REUSE_PREDICTIONS = False
 
         # If PROBLEM.NDIM = '2D' this can be activated to process each image entirely instead of patch by patch. Only can be done 
-        # if the neural network is fully convolutional
+        # if the neural network is fully convolutional. It's not implemented in super-resolution workflow. 
         _C.TEST.FULL_IMG = False 
 
         ### Instance segmentation
@@ -871,9 +897,12 @@ class Config:
         _C.TEST.POST_PROCESSING.YZ_FILTERING_SIZE = 5
         _C.TEST.POST_PROCESSING.Z_FILTERING = False
         _C.TEST.POST_PROCESSING.Z_FILTERING_SIZE = 5
-        # Apply a binary mask to remove possible segmentation outside it
+        # Apply a binary mask to remove possible segmentation outside it (you need to provide the mask and it must 
+        # contain two values: '1' -> preserve the pixel ; '0' discard pixel ). A mask for each test sample must be 
+        # provided and it will be loaded using 'DATA.TEST.BINARY_MASKS' variable.
         _C.TEST.POST_PROCESSING.APPLY_MASK = False
 
+        ### Instance segmentation
         # Whether to measure morphological features on each instances, i.e. 'circularity' (2D), 'elongation' (2D), 'npixels', 'area', 'diameter', 
         # 'perimeter', 'sphericity' (3D)
         _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES = CN() 
@@ -944,7 +973,6 @@ class Config:
         # "greather equal", e.g. ">=", "less than", e.g. "<", and "less equal" e.g. "<=" comparisons.
         _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGN = []
 
-        ### Instance segmentation
         # Whether to apply Voronoi using 'BC' or 'M' channels need to be present
         _C.TEST.POST_PROCESSING.VORONOI_ON_MASK = False
         # Threshold to be applied to the 'M' channel when expanding the instances with Voronoi. Need to be in [0,1] range.
@@ -966,7 +994,8 @@ class Config:
         _C.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS = [-1.0]
         # Whether to apply a watershed to grow the points detected 
         _C.TEST.POST_PROCESSING.DET_WATERSHED = False
-        # Structure per each class to dilate the initial seeds before watershed
+        # Structure per each class to dilate the initial seeds before watershed. For instance, with two classes in a 3D problem:
+        # [ [2,2,1], [10,10,4] ]
         _C.TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION = [[-1,-1],]
         # List of classes to be consider as 'donuts'. For those class points, the 'donuts' type cell means that their nucleus is 
         # to big and that the seeds need to be dilated more so the watershed can grow the instances properly.
@@ -994,6 +1023,7 @@ class Config:
         _C.PATHS.RESULT_DIR.FULL_IMAGE_INSTANCES = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'full_image_instances')
         _C.PATHS.RESULT_DIR.FULL_IMAGE_POST_PROCESSING = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'full_image_post_processing')
         _C.PATHS.RESULT_DIR.AS_3D_STACK = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'as_3d_stack')
+        _C.PATHS.RESULT_DIR.AS_3D_STACK_BIN = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'as_3d_stack_binarized')
         _C.PATHS.RESULT_DIR.AS_3D_STACK_POST_PROCESSING = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'as_3d_stack_post_processing')
         _C.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'per_image_local_max_check')
         _C.PATHS.RESULT_DIR.DET_ASSOC_POINTS = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'point_associations')
@@ -1003,7 +1033,6 @@ class Config:
         _C.PATHS.PROFILER = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'profiler')
 
         # Name of the folder where the charts of the loss and metrics values while training the network are stored.
-        # Additionally, MW_TH* variable charts are stored if _C.PROBLEM.INSTANCE_SEG.DATA_MW_OPTIMIZE_THS = True
         _C.PATHS.CHARTS = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'charts')
         # Folder where samples of DA will be stored
         _C.PATHS.DA_SAMPLES = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'aug')
@@ -1024,8 +1053,14 @@ class Config:
         _C.PATHS.PROB_MAP_FILENAME = 'prob_map.npy'
         # Watershed debugging folder
         _C.PATHS.WATERSHED_DIR = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'watershed')
+        # Custom mean normalization paths
         _C.PATHS.MEAN_INFO_FILE = os.path.join(_C.PATHS.CHECKPOINT, 'normalization_mean_value.npy')
         _C.PATHS.STD_INFO_FILE = os.path.join(_C.PATHS.CHECKPOINT, 'normalization_std_value.npy')
+        # Percentile normalization paths
+        _C.PATHS.LWR_X_FILE = os.path.join(_C.PATHS.CHECKPOINT, 'lower_bound_X_perc.npy')
+        _C.PATHS.UPR_X_FILE = os.path.join(_C.PATHS.CHECKPOINT, 'upper_bound_X_perc.npy')
+        _C.PATHS.LWR_Y_FILE = os.path.join(_C.PATHS.CHECKPOINT, 'lower_bound_Y_perc.npy')
+        _C.PATHS.UPR_Y_FILE = os.path.join(_C.PATHS.CHECKPOINT, 'upper_bound_Y_perc.npy')
         # Path where the images used in MAE will be saved suring inference
         _C.PATHS.MAE_OUT_DIR = os.path.join(_C.PATHS.RESULT_DIR.PATH, 'MAE_checks')
         
@@ -1065,8 +1100,6 @@ class Config:
         self._C.DATA.VAL.INSTANCE_CHANNELS_DIR = self._C.DATA.VAL.PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         self._C.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR = self._C.DATA.VAL.GT_PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         # If value is not the default
-        if self._C.DATA.VAL.BINARY_MASKS == os.path.join("user_data", 'val', 'bin_mask'):
-            self._C.DATA.VAL.BINARY_MASKS = os.path.join(self._C.DATA.VAL.PATH, '..', 'bin_mask')
         self._C.DATA.VAL.DETECTION_MASK_DIR = self._C.DATA.VAL.GT_PATH+'_detection_masks'
         self._C.DATA.VAL.SSL_SOURCE_DIR = self._C.DATA.VAL.PATH+'_ssl_source'
         self._C.DATA.TEST.INSTANCE_CHANNELS_DIR = self._C.DATA.TEST.PATH+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE

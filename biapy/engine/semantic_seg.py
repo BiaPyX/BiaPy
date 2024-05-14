@@ -229,13 +229,10 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         """
         # Save simple binarization of predictions
         if self.cfg.MODEL.N_CLASSES > 2:
-            pred = np.expand_dims(np.argmax(pred, axis=-1),-1).astype(np.uint8)        
+            _type = np.uint8 if self.cfg.MODEL.N_CLASSES < 255 else np.uint16
+            pred = np.expand_dims(np.argmax(pred, axis=-1),-1).astype(_type)        
         else:
             pred = (pred>0.5).astype(np.uint8)        
-        if pred.ndim == 4 and self.cfg.PROBLEM.NDIM == '3D':
-            pred = np.expand_dims(pred,0)
-        if pred.ndim == 3 and self.cfg.PROBLEM.NDIM == '2D':
-            pred = np.expand_dims(pred,0)
         save_tif(pred, self.cfg.PATHS.RESULT_DIR.PER_IMAGE_BIN, self.processing_filenames, verbose=self.cfg.TEST.VERBOSE)
 
     def after_merge_patches_by_chunks_proccess_patch(self, filename):
@@ -261,12 +258,8 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
             Model prediction. 
         """
         # Save simple binarization of predictions
-        if pred.ndim == 4 and self.cfg.PROBLEM.NDIM == '3D':
-            save_tif(np.expand_dims((pred>0.5).astype(np.uint8),0), self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_BIN,
-                self.processing_filenames, verbose=self.cfg.TEST.VERBOSE)
-        else:
-            save_tif((pred>0.5).astype(np.uint8), self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_BIN, self.processing_filenames,
-                verbose=self.cfg.TEST.VERBOSE)
+        save_tif((pred>0.5).astype(np.uint8), self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_BIN, self.processing_filenames,
+            verbose=self.cfg.TEST.VERBOSE)
 
     def after_all_images(self):
         """

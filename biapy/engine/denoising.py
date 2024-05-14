@@ -8,8 +8,8 @@ from biapy.data.data_2D_manipulation import crop_data_with_overlap, merge_data_w
 from biapy.data.data_3D_manipulation import crop_3D_data_with_overlap, merge_3D_data_with_overlap
 from biapy.data.post_processing.post_processing import ensemble8_2d_predictions, ensemble16_3d_predictions
 from biapy.engine.base_workflow import Base_Workflow
-from biapy.utils.util import save_tif
-from biapy.utils.misc import to_pytorch_format, to_numpy_format
+from biapy.utils.util import save_tif, pad_and_reflect
+from biapy.utils.misc import to_pytorch_format, to_numpy_format, is_main_process
 from biapy.data.pre_processing import denormalize, undo_norm_range01
 from biapy.engine.metrics import n2v_loss_mse
 
@@ -92,6 +92,13 @@ class Denoising_Workflow(Base_Workflow):
         norm : List of dicts
             Normalization used during training. Required to denormalize the predictions of the model.
         """
+        # Reflect data to complete the needed shape
+        if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE:
+            reflected_orig_shape = self._X.shape
+            self._X = np.expand_dims(pad_and_reflect(self._X[0], self.cfg.DATA.PATCH_SIZE, verbose=self.cfg.TEST.VERBOSE),0)
+            if self.cfg.DATA.TEST.LOAD_GT:
+                self._Y = np.expand_dims(pad_and_reflect(self._Y[0], self.cfg.DATA.PATCH_SIZE, verbose=self.cfg.TEST.VERBOSE),0)
+        
         original_data_shape = self._X.shape
     
         # Crop if necessary
@@ -125,7 +132,7 @@ class Denoising_Workflow(Base_Workflow):
 
         # Predict each patch
         if self.cfg.TEST.AUGMENTATION:
-            for k in tqdm(range(self._X.shape[0]), leave=False):
+            for k in tqdm(range(self._X.shape[0]), leave=False, disable=not is_main_process()):
                 if self.cfg.PROBLEM.NDIM == '2D':
                     p = ensemble8_2d_predictions(self._X[k], axis_order_back=self.axis_order_back,
                             pred_func=self.model_call_func, axis_order=self.axis_order, device=self.device)
@@ -141,7 +148,7 @@ class Denoising_Workflow(Base_Workflow):
         else:
             self._X = to_pytorch_format(self._X, self.axis_order, self.device)
             l = int(math.ceil(self._X.shape[0]/self.cfg.TRAIN.BATCH_SIZE))
-            for k in tqdm(range(l), leave=False):
+            for k in tqdm(range(l), leave=False, disable=not is_main_process()):
                 top = (k+1)*self.cfg.TRAIN.BATCH_SIZE if (k+1)*self.cfg.TRAIN.BATCH_SIZE < self._X.shape[0] else self._X.shape[0]
                 with torch.cuda.amp.autocast():
                     p = self.model(self._X[k*self.cfg.TRAIN.BATCH_SIZE:top])
@@ -170,8 +177,20 @@ class Denoising_Workflow(Base_Workflow):
                 else:
                     pred = obj
                 del obj
-        else:
-            pred = pred[0]
+
+            if self.cfg.PROBLEM.NDIM == '3D': 
+                pred = np.expand_dims(pred,0)
+                if self._Y is not None:  self._Y = np.expand_dims(self._Y,0)
+
+        if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE: 
+            if self.cfg.PROBLEM.NDIM == '2D':
+                pred = pred[:,-reflected_orig_shape[1]:,-reflected_orig_shape[2]:]
+                if self._Y is not None:
+                    self._Y = self._Y[:,-reflected_orig_shape[1]:,-reflected_orig_shape[2]:]
+            else:
+                pred = pred[:,-reflected_orig_shape[1]:,-reflected_orig_shape[2]:,-reflected_orig_shape[3]:]
+                if self._Y is not None:
+                    self._Y = self._Y[:,-reflected_orig_shape[1]:,-reflected_orig_shape[2]:,-reflected_orig_shape[3]:]
 
         # Undo normalization
         x_norm = norm[0]
@@ -189,7 +208,7 @@ class Denoising_Workflow(Base_Workflow):
 
         # Save image
         if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
-            save_tif(np.expand_dims(pred,0), self.cfg.PATHS.RESULT_DIR.PER_IMAGE, self.processing_filenames, 
+            save_tif(pred, self.cfg.PATHS.RESULT_DIR.PER_IMAGE, self.processing_filenames, 
                 verbose=self.cfg.TEST.VERBOSE)
 
     def torchvision_model_call(self, in_img, is_train=False):
@@ -511,7 +530,7 @@ def manipulate_val_data(X_val, Y_val, perc_pix=0.198, shape=(64, 64), value_mani
     n_chan = X_val.shape[-1]
 
     Y_val *= 0
-    for j in tqdm(range(X_val.shape[0]), desc='Preparing validation data: '):
+    for j in tqdm(range(X_val.shape[0]), desc='Preparing validation data: ', disable=not is_main_process()):
         coords = get_stratified_coords(box_size=box_size,
                                        shape=np.array(X_val.shape)[1:-1])
         for c in range(n_chan):

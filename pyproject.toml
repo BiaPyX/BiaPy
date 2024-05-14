@@ -1,14 +1,16 @@
 [build-system]
-requires = ["setuptools>=45", "wheel", "setuptools_scm>=6.2", "numpy>=1.24.3"]
+requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "biapy"
-version = "3.3.8"
+version = "3.4.2"
 description = "BiaPy: Bioimage analysis pipelines in Python"
 readme = "README.md"
+requires-python = ">=3.10"
 authors = [{ name = "Daniel Franco-Barranco", email = "daniel.franco@dipc.org" }]
-license = { file = "LICENSE" }
+maintainers = [{ name = "Daniel Franco-Barranco", email = "daniel.franco@dipc.org" }]
+license = { file = "LICENSE.md" }
 classifiers = [
     "License :: OSI Approved :: MIT License",
     "Environment :: GPU :: NVIDIA CUDA :: 11.8",
@@ -16,13 +18,15 @@ classifiers = [
 ]
 keywords = ["feed", "reader", "tutorial"]
 dependencies = [
-    "imgaug>=0.4.0",
     "matplotlib>=3.7.1",
     "scikit-learn>=1.4.0",
     "pydot>=1.4.2",
     "yacs>=0.1.8",
     "tqdm>=4.66.1",
-    "scikit-image>=0.22.0",
+# "scikit-image>=0.21.0" forces the installation of its latest version in Colab (as there 0.19.3 version is installed).
+# This leads to install a higher imageio library version (higher than the 2.31.6 installed in Colab) and force to reload 
+# the kernel, which is tedious for end users
+    "scikit-image<=0.21.0,>=0.19.3",
     "edt>=2.3.2",
     "fill-voids>=2.0.6",
     "opencv-python>=4.8.0.76",
@@ -33,8 +37,22 @@ dependencies = [
     "zarr>=2.16.1",
     "bioimageio.core==0.5.9",
     "imagecodecs>=2024.1.1",
+    "pytorch-msssim>=1.0.0",
+    "numpy>=1.25.2",
+    "imageio>=2.31.6",
+    "imgaug>=0.4.0",
 ]
-requires-python = ">=3.10"
+
+[project.scripts]
+biapy = "biapy:main"
 
 [project.urls]
-Homepage = "https://github.com/BiaPyX/BiaPy"
+"Homepage" = "https://biapyx.github.io"
+"Source" = "https://github.com/BiaPyX/BiaPy"
+"Forum" = "https://forum.image.sc/tag/biapy"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ['biapy*']

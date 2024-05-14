@@ -61,7 +61,8 @@ class Pair2DImageDataGenerator(PairBaseDataGenerator):
         # the crop
         if self.random_crops_in_DA and self.prob_map is not None:
             img, mask = self.load_sample(pos)
-
+            if img.max() < 1: img *= 255 
+            if mask.max() == 1: mask *= 255
             img, mask = (img).astype(np.uint8), mask.astype(np.uint8)
 
             if self.shape[-1] == 1:
@@ -86,7 +87,7 @@ class Pair2DImageDataGenerator(PairBaseDataGenerator):
                 px[point_dict['s_x'], col] = (0, 0, 255)
                 px[point_dict['s_x']+self.shape[0]-1, col] = (0, 0, 255)
 
-            im.save(os.path.join(out_dir, str(i)+"_"+str(pos)+'_mark_x'+self.trans_made+'.png'))
+            im.save(os.path.join(out_dir, str(i)+"_"+str(pos)+'_mark_x'+self.trans_made+'.tif'))
 
             if mask.shape[-1] == 1:
                 m = Image.fromarray(np.repeat(mask, 3, axis=2), 'RGB')
@@ -109,4 +110,4 @@ class Pair2DImageDataGenerator(PairBaseDataGenerator):
                 px[point_dict['s_x'], col] = (0, 0, 255)
                 px[point_dict['s_x']+self.shape[0]-1, col] = (0, 0, 255)
 
-            m.save(os.path.join(out_dir, str(i)+"_"+str(pos)+'_mark_y'+self.trans_made+'.png'))
+            m.save(os.path.join(out_dir, str(i)+"_"+str(pos)+'_mark_y'+self.trans_made+'.tif'))

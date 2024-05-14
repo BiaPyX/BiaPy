@@ -10,8 +10,9 @@ import imgaug as ia
 from skimage.io import imsave, imread
 from imgaug import augmenters as iaa
 
-from biapy.data.pre_processing import normalize, norm_range01
+from biapy.data.pre_processing import normalize, norm_range01, percentile_clip
 from biapy.data.generators.augmentors import random_crop_single, random_3D_crop_single, resize_img, rotation
+from biapy.utils.misc import is_main_process
 
 class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
     """
@@ -34,7 +35,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         Image class. ``(num_of_images, class)``.
 
     data_path : List of str, optional
-        If ``in_memory`` is ``True`` this should contain the path to load images.
+        If the data is in memory (``data_mode`` == ``'in_memory'``) this should contain the path to load images.
 
     ptype : str
         Problem type. Options ['mae','classification'].
@@ -45,9 +46,8 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
     seed : int, optional
         Seed for random functions.
 
-    in_memory : bool, optional
-        If ``True`` data used will be ``X`` and ``Y``. If ``False`` it will be loaded directly from disk using
-        ``data_path``.
+    data_mode : str, optional
+        Information about how the data needs to be managed. Options: ['in_memory', 'not_in_memory', 'chunked_data']
 
     da : bool, optional
         To activate the data augmentation.
@@ -142,55 +142,48 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
     resize_shape : tuple of ints, optional
         If defined the input samples will be scaled into that shape.
 
-    not_normalize : bool, optional
-        Whether to normalize the data or not. Useful in BMZ model as the normalization is made during the inference. 
-        
-    norm_type : str, optional
-        Type of normalization to be made. Options available: ``div`` or ``custom``.
-
-    norm_custom_mean : float, optional
-        Mean of the data used to normalize.
-
-    norm_custom_std : float, optional
-        Std of the data used to normalize.
+    norm_dict : dict, optional
+        Normalization instructions. 
 
     convert_to_rgb : bool, optional
         In case RGB images are expected, e.g. if ``crop_shape`` channel is 3, those images that are grayscale are 
         converted into RGB.
     """
-    def __init__(self, ndim, X, Y, data_path, ptype, n_classes, seed=0, in_memory=False, da=True, da_prob=0.5, rotation90=False, 
+    def __init__(self, ndim, X, Y, data_path, ptype, n_classes, seed=0, data_mode="", da=True, da_prob=0.5, rotation90=False, 
                  rand_rot=False, rnd_rot_range=(-180,180), shear=False, shear_range=(-20,20), zoom=False, zoom_range=(0.8,1.2), 
                  shift=False, shift_range=(0.1,0.2), affine_mode='constant', vflip=False, hflip=False, elastic=False, e_alpha=(240,250), 
                  e_sigma=25, e_mode='constant', g_blur=False, g_sigma=(1.0,2.0), median_blur=False, mb_kernel=(3,7), 
                  motion_blur=False, motb_k_range=(3,8), gamma_contrast=False, gc_gamma=(1.25,1.75), dropout=False, 
-                 drop_range=(0, 0.2), val=False, resize_shape=None, not_normalize=False, norm_type='div', norm_custom_mean=None, 
-                 norm_custom_std=None, convert_to_rgb=False):
+                 drop_range=(0, 0.2), val=False, resize_shape=None, norm_dict=None, convert_to_rgb=False):
 
-        if in_memory:
+        assert norm_dict != None, "Normalization instructions must be provided with 'norm_dict'"
+        assert norm_dict['mask_norm'] in ['as_mask', 'as_image', 'none']
+        assert data_mode in ['in_memory', 'not_in_memory', 'chunked_data']
+        assert ptype in ['mae', 'classification']
+
+        if data_mode == "in_memory":
             if X.ndim != (ndim+2):
                 raise ValueError("X must be a {}D Numpy array".format((ndim+1)))
         
-        assert ptype in ['mae', 'classification']
-
         if ptype == "classification":
-            if in_memory and (X is None or Y is None):
-                raise ValueError("'X' and 'Y' need to be provided together with 'in_memory'")
+            if data_mode == "in_memory" and (X is None or Y is None):
+                raise ValueError("'X' and 'Y' need to be provided together with data_mode == 'in_memory'")
         else:
-            if in_memory and X is None:
-                raise ValueError("'X' needs to be provided together with 'in_memory'")
+            if data_mode == "in_memory" and X is None:
+                raise ValueError("'X' needs to be provided together with data_mode == 'in_memory'")
 
         if resize_shape is None:
             raise ValueError("'resize_shape' must be provided")   
 
         self.ptype = ptype
         self.ndim = ndim
-        self.in_memory = in_memory
         self.z_size = -1 
         self.convert_to_rgb = convert_to_rgb
-        self.not_normalize = not_normalize
-
+        self.data_mode = data_mode
+        self.norm_dict = norm_dict
+        
         # Save paths where the data is stored
-        if not in_memory:
+        if data_mode == "not_in_memory":
             self.data_path = data_path
             if ptype == "mae":
                 self.all_samples = sorted(next(os.walk(data_path))[2])
@@ -238,39 +231,20 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         # X data analysis
         self.X_norm = {}
         self.X_norm['type'] = 'none'
-        if self.not_normalize:
-            img, _ = self.load_sample(0)
-        else:
-            if norm_type == 'custom':
-                if norm_custom_mean is not None and norm_custom_std is not None:
-                    img, _ = self.load_sample(0)
-                    self.X_norm['mean'] = norm_custom_mean
-                    self.X_norm['std'] = norm_custom_std  
-                    self.X_norm['orig_dtype'] = img.dtype
-                else:
-                    if not in_memory:
-                        sam = []
-                        for i in range(len(self.data_path)):
-                            img, _ = self.load_sample(i)
-                            sam.append(img)
-                            if resize_shape[-1] != img.shape[-1]:
-                                raise ValueError("Channel of the patch size given {} does not correspond with the loaded image {}. "
-                                    "Please, check the channels of the images!".format(resize_shape[-1], img.shape[-1]))
-                        sam = np.array(sam)
-                        
-                        self.X_norm['mean'] = np.mean(sam)
-                        self.X_norm['std'] = np.std(sam)
-                        self.X_norm['orig_dtype'] = sam.dtype
-                        del sam
+        img, _ = self.load_sample(0)
+        if norm_dict['enable']:
+            self.X_norm['application_mode'] = norm_dict['application_mode']
+            self.X_norm['orig_dtype'] = img.dtype
+            if norm_dict['type'] == "custom":
+                self.X_norm['type'] = 'custom'    
+                if norm_dict['application_mode'] == "dataset":    
+                    if 'mean' in norm_dict and 'std' in norm_dict:    
+                        self.X_norm['mean'] = norm_dict['mean']
+                        self.X_norm['std'] = norm_dict['std']  
                     else:
-                        img, _ = self.load_sample(0)
                         self.X_norm['mean'] = np.mean(self.X)
-                        self.X_norm['std'] = np.std(self.X)    
-                        self.X_norm['orig_dtype'] = img.dtype
-                        
-                self.X_norm['type'] = 'custom'
-            else:                
-                img, _ = self.load_sample(0)
+                        self.X_norm['std'] = np.std(self.X)
+            else: # norm_dict['type'] == "div"                
                 img, nsteps = norm_range01(img)
                 self.X_norm.update(nsteps)
                 if resize_shape[-1] != img.shape[-1]:
@@ -375,7 +349,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
             Y element. 
         """
         # Choose the data source
-        if self.in_memory:
+        if self.data_mode == "in_memory":
             img = np.squeeze(self.X[idx].copy())
             img_class = self.Y[idx] if self.ptype == "classification" else 0
         else:
@@ -392,10 +366,18 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
             
         # X normalization
         if self.X_norm['type'] != "none":
+            # Percentile clipping
+            if 'lower_bound' in self.norm_dict and self.norm_dict['application_mode'] == "image":
+                img, _, _ = percentile_clip(img, lower=self.norm_dict['lower_bound'],                                     
+                    upper=self.norm_dict['upper_bound'])
+
             if self.X_norm['type'] == 'div':
                 img, _ = norm_range01(img)
             elif self.X_norm['type'] == 'custom':
-                img = normalize(img, self.X_norm['mean'], self.X_norm['std'])
+                if self.norm_dict['application_mode'] == "image":
+                    img = normalize(img, img.mean(), img.std())
+                else:
+                    img = normalize(img, self.X_norm['mean'], self.X_norm['std'])
 
         img = self.ensure_shape(img)
 
@@ -489,7 +471,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         return image
 
-    def draw_grid(self, im, grid_width=50):
+    def draw_grid(self, im, grid_width=None):
         """
         Draw grid of the specified size on an image.
 
@@ -501,15 +483,27 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         grid_width : int, optional
             Grid's width.
         """
-        v = 1 if int(np.max(im)) == 0 else int(np.max(im))
+        v = np.max(im)
+        if grid_width is not None:
+            grid_y = grid_width
+            grid_x = grid_width
+        else:
+            grid_y = im.shape[self.ndim-2]//5
+            grid_x = im.shape[self.ndim-2]//5
 
-        for i in range(0, im.shape[0], grid_width):
-            im[i] = v
-        for j in range(0, im.shape[1], grid_width):
-            im[:, j] = v
+        if self.ndim == 2:
+            for i in range(0, im.shape[0], grid_y):
+                im[i] = [v]*im.shape[-1]
+            for j in range(0, im.shape[1], grid_x):
+                im[:, j] = [v]*im.shape[-1]
+        else:
+            for k in range(0, im.shape[0]):
+                for i in range(0, im.shape[2], grid_x):
+                    im[k,:,i] = [v]*im.shape[-1]
+                for j in range(0, im.shape[1], grid_y):
+                    im[k,j] = [v]*im.shape[-1]
+        return im
         
-        return im 
-
     def get_transformed_samples(self, num_examples, random_images=True, save_to_dir=True, out_dir='aug', train=False,
                                 draw_grid=True):
         """
@@ -552,8 +546,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         sample_x = []
 
         # Generate the examples
-        print("0) Creating the examples of data augmentation . . .")
-        for i in tqdm(range(num_examples)):
+        for i in tqdm(range(num_examples), disable=not is_main_process()):
             if random_images:
                 pos = random.randint(0,self.length-1) if self.length > 2 else 0
             else:
