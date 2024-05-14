@@ -167,7 +167,7 @@ classification_3d_data_outpath = os.path.join(classification_folder, "DermaMNIST
 image_to_image_folder = os.path.join(data_folder, "image_to_image")
 
 # 2D
-image_to_image_2d_template = "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/image-to-image/lightmycells_actin.yaml"
+image_to_image_2d_template = "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/image-to-image/lightmycells/lightmycells_actin.yaml"
 image_to_image_2d_template_local = os.path.join(image_to_image_folder, "2d_image_to_image.yaml")
 image_to_image_2d_data_drive_link = "https://drive.google.com/uc?id=1L8AXNjh0_updVI3-v1duf6CbcZb8uZK7"
 image_to_image_2d_data_filename = "Dapi_dataset.zip"
