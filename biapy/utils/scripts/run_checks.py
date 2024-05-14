@@ -13,6 +13,8 @@ from time import sleep
 import numpy as np
 
 gpu = "0"
+gpus = "0,1" # For those tests that use more than one 
+
 data_folder = "/data/dfranco/biapy_checks"
 results_folder = os.path.join(data_folder,  "output")
 biapy_folder = "/data/dfranco/BiaPy"
@@ -115,14 +117,74 @@ super_resolution_3d_data_drive_link = "https://drive.google.com/uc?id=1TfQVK7arJ
 super_resolution_3d_data_filename = "sr_data_3D.zip"
 super_resolution_3d_data_outpath = os.path.join(super_resolution_folder, "sr_data_3D")
 
+###########
+# SSL
+###########
+self_supervision_folder = os.path.join(data_folder, "ssl")
+
+# 2D
+self_supervision_2d_template = "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/self-supervised/2d_self-supervised.yaml"
+self_supervision_2d_template_local = os.path.join(self_supervision_folder, "2d_self_supervision.yaml")
+self_supervision_2d_data_drive_link = semantic_2d_data_drive_link
+self_supervision_2d_data_filename = "fibsem_epfl_2D.zip"
+self_supervision_2d_data_outpath = os.path.join(self_supervision_folder, "fibsem_epfl_2D")
+# 3D
+self_supervision_3d_template = "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/self-supervised/3d_self-supervised.yaml"
+self_supervision_3d_template_local = os.path.join(self_supervision_folder, "3d_self_supervision.yaml")
+self_supervision_3d_data_drive_link = semantic_3d_data_drive_link
+self_supervision_3d_data_filename = "fibsem_epfl_3D.zip"
+self_supervision_3d_data_outpath = os.path.join(self_supervision_folder, "fibsem_epfl_3D")
+
+
+###########
+# Classification
+###########
+classification_folder = os.path.join(data_folder, "classification")
+
+# 2D
+classification_2d_template = "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/classification/2d_classification.yaml"
+classification_2d_template_local = os.path.join(classification_folder, "2d_classification.yaml")
+classification_2d_data_drive_link = "https://drive.google.com/uc?id=15_pnH4_tJcwhOhNqFsm26NQuJbNbFSIN"
+classification_2d_data_filename = "DermaMNIST_2D.zip"
+classification_2d_data_outpath = os.path.join(classification_folder, "DermaMNIST_2D")
+
+# 2D (natural images)
+classification_butterfly_2d_data_drive_link = "https://drive.google.com/uc?id=1m4_3UAgUsZ8FDjB4HyfA50Sht7_XkfdB"
+classification_butterfly_2d_data_filename = "butterfly_data.zip"
+classification_butterfly_2d_data_outpath = os.path.join(classification_folder, "butterfly_data")
+
+# 3D
+classification_3d_template = "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/classification/3d_classification.yaml"
+classification_3d_template_local = os.path.join(classification_folder, "3d_classification.yaml")
+classification_3d_data_drive_link = "https://drive.google.com/uc?id=1pypWJ4Z9sRLPlVHbG6zpwmS6COkm3wUg"
+classification_3d_data_filename = "DermaMNIST_3D.zip"
+classification_3d_data_outpath = os.path.join(classification_folder, "DermaMNIST_3D")
+
+
+###########
+# I2I
+###########
+image_to_image_folder = os.path.join(data_folder, "image_to_image")
+
+# 2D
+image_to_image_2d_template = "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/image-to-image/lightmycells_actin.yaml"
+image_to_image_2d_template_local = os.path.join(image_to_image_folder, "2d_image_to_image.yaml")
+image_to_image_2d_data_drive_link = "https://drive.google.com/uc?id=1L8AXNjh0_updVI3-v1duf6CbcZb8uZK7"
+image_to_image_2d_data_filename = "Dapi_dataset.zip"
+image_to_image_2d_data_outpath = os.path.join(image_to_image_folder, "Dapi_dataset")
+
+# 2D ligthmycells
+image_to_image_light_2d_data_drive_link = "https://drive.google.com/uc?id=1SU4u-bcM1ZaDzEYg-d8W3zP6Yq2o8eKV"
+image_to_image_light_2d_data_filename = "reduced_actin_lightmycells.zip"
+image_to_image_light_2d_data_outpath = os.path.join(classification_folder, "reduced_actin_lightmycells")
 
 if not os.path.exists(biapy_folder): 
     raise ValueError(f"BiaPy not found in: {biapy_folder}")
 
 all_test_info = {}
 all_test_info["Test1"] = {
-    "enable": False,
-    "run_experiment": False,
+    "enable": True,
+    "run_experiment": True,
     "jobname": "test1",
     "description": "2D Semantic seg. Lucchi++. Basic DA. Extract random crops (probability map). unet. 2D stack as 3D. Post-proc: z-filtering.",
     "yaml": "test_1.yaml",
@@ -133,8 +195,8 @@ all_test_info["Test1"] = {
 }
 
 all_test_info["Test2"] = {
-    "enable": False,
-    "run_experiment": False,
+    "enable": True,
+    "run_experiment": True,
     "jobname": "test2",
     "description": "3D Semantic seg. Lucchi++. attention_unet. Basic DA.",
     "yaml": "test_2.yaml",
@@ -144,7 +206,7 @@ all_test_info["Test2"] = {
 }
 
 all_test_info["Test3"] = {
-    "enable": False,
+    "enable": True,
     "run_experiment": True,
     "jobname": "test3",
     "description": "2D Semantic seg. Lucchi++. Basic DA. 5 epochs. seunet. FULL_IMG False",
@@ -155,8 +217,8 @@ all_test_info["Test3"] = {
 }
 
 all_test_info["Test4"] = {
-    "enable": False,
-    "run_experiment": False,
+    "enable": True,
+    "run_experiment": True,
     "jobname": "test4",
     "description": "2D Instance seg. Stardist 2D data. Basic DA. BC (auto). Replicate 2. resunet++. "
         "Post-proc: Clear border + remove instances by properties",
@@ -171,8 +233,8 @@ all_test_info["Test4"] = {
 }
 
 all_test_info["Test5"] = {
-    "enable": False,
-    "run_experiment": False,
+    "enable": True,
+    "run_experiment": True,
     "jobname": "test5",
     "description": "3D Instance seg. Demo 3D data. Basic DA. BCD (manual). resunet. Watershed multiple options. Post-proc: Clear border",
     "yaml": "test_5.yaml",
@@ -185,8 +247,8 @@ all_test_info["Test5"] = {
 }
 
 all_test_info["Test6"] = {
-    "enable": False,
-    "run_experiment": False,
+    "enable": True,
+    "run_experiment": True,
     "jobname": "test6",
     "description": "3D Instance seg. Cyst data. Basic DA. BCM (auto). resunet. Post-proc: Clear border + Voronoi + remove by props",
     "yaml": "test_6.yaml",
@@ -199,8 +261,8 @@ all_test_info["Test6"] = {
 }
 
 all_test_info["Test7"] = {
-    "enable": False,
-    "run_experiment": False,
+    "enable": True,
+    "run_experiment": True,
     "jobname": "test7",
     "description": "2D Detection. Stardist v2 2D data. custom norm, dataset, percentile clip. Basic DA. "
         "multiresunet. Post-proc: remove close points + det weatershed",
@@ -212,8 +274,8 @@ all_test_info["Test7"] = {
 }
 
 all_test_info["Test8"] = {
-    "enable": False,
-    "run_experiment": False,
+    "enable": True,
+    "run_experiment": True,
     "jobname": "test8",
     "description": "3D Detection. NucMM-Z 3D data. custom norm, dataset, percentile clip. Basic DA. "
         "unetr. Post-proc: remove close points + det weatershed",
@@ -225,7 +287,7 @@ all_test_info["Test8"] = {
 
 all_test_info["Test11"] = {
     "enable": True,
-    "run_experiment": False,
+    "run_experiment": True,
     "jobname": "test11",
     "description": "3D Detection. Zarr 3D data (Brainglobe). custom norm, percentile norm, per image. "
         "MINIMUM_FOREGROUND_PER. warmupcosine. Basic DA. resunet. test by chunks: Zarr. Post-proc: remove close points",
@@ -236,8 +298,8 @@ all_test_info["Test11"] = {
 }
 
 all_test_info["Test9"] = {
-    "enable": False,
-    "run_experiment": False,
+    "enable": True,
+    "run_experiment": True,
     "jobname": "test9",
     "description": "2D Denoising. Convallaria data. custom norm, dataset. Basic DA."
         "unetr. Post-proc: remove close points + det weatershed",
@@ -248,8 +310,8 @@ all_test_info["Test9"] = {
 }
 
 all_test_info["Test10"] = {
-    "enable": False,
-    "run_experiment": False,
+    "enable": True,
+    "run_experiment": True,
     "jobname": "test10",
     "description": "3D Denoising. Flywing 3D data. custom norm, dataset. Basic DA. "
         "resunet. Post-proc: remove close points + det weatershed",
@@ -260,8 +322,8 @@ all_test_info["Test10"] = {
 }
 
 all_test_info["Test12"] = {
-    "enable": False,
-    "run_experiment": False,
+    "enable": True,
+    "run_experiment": True,
     "jobname": "test12",
     "description": "2D super-resolution. SR 2D data. Cross-val. Basic DA. DFCAN",
     "yaml": "test_12.yaml",
@@ -273,13 +335,147 @@ all_test_info["Test12"] = {
 
 all_test_info["Test13"] = {
     "enable": True,
-    "run_experiment": False,
+    "run_experiment": True,
     "jobname": "test13",
-    "description": "3D super-resolution. SR 3D data. Cross-val. Basic DA. DFCAN",
+    "description": "3D super-resolution. SR 3D data. Cross-val. extract random patch. Basic DA. resunet++",
     "yaml": "test_13.yaml",
     "internal_checks": [
         {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 13.0},
         {"type": "regular", "pattern": "Test PSNR (merge patches)", "gt": True, "value": 13.0},
+    ]
+}
+
+all_test_info["Test14"] = {
+    "enable": True,
+    "run_experiment": True,
+    "jobname": "test14",
+    "description": "2D self-supervision. Lucchi data. Cross-val. Basic DA. rcan",
+    "yaml": "test_14.yaml",
+    "internal_checks": [
+        {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 22.0},
+        {"type": "regular", "pattern": "Test PSNR (merge patches)", "gt": True, "value": 22.0},
+    ]
+}
+
+all_test_info["Test15"] = {
+    "enable": True,
+    "run_experiment": True,
+    "jobname": "test15",
+    "description": "2D self-supervision. Lucchi data. Cross-val. Basic DA. mae, masking: random",
+    "yaml": "test_15.yaml",
+    "internal_checks": [
+        {"type": "regular", "pattern": "Validation PSNR:", "gt": False, "value": -10.0},
+    ]
+}
+
+all_test_info["Test16"] = {
+    "enable": True,
+    "run_experiment": True,
+    "jobname": "test16",
+    "description": "2D self-supervision. Lucchi data. Cross-val. Basic DA. mae, masking: grid",
+    "yaml": "test16.yaml",
+    "internal_checks": [
+        {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": -10.0},
+    ]
+}
+
+all_test_info["Test17"] = {
+    "enable": True,
+    "run_experiment": True,
+    "jobname": "test17",
+    "description": "3D self-supervision. Lucchi data. Basic DA. resunet++",
+    "yaml": "test17.yaml",
+    "internal_checks": [
+        {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 22.0},
+        {"type": "regular", "pattern": "Test PSNR (merge patches)", "gt": True, "value": 22.0},
+    ]
+}
+
+all_test_info["Test18"] = {
+    "enable": True,
+    "run_experiment": True,
+    "jobname": "test18",
+    "description": "3D self-supervision. Lucchi data. Cross-val. Basic DA. mae, masking: random",
+    "yaml": "test18.yaml",
+    "internal_checks": [
+        {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": -5.0},
+    ]
+}
+
+all_test_info["Test19"] = {
+    "enable": False,
+    "run_experiment": False,
+    "jobname": "test19",
+    "description": "3D self-supervision. Lucchi data. Cross-val. Basic DA. mae, masking: grid",
+    "yaml": "test19.yaml",
+    "internal_checks": [
+        {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": -5.0},
+    ]
+}
+
+all_test_info["Test20"] = {
+    "enable": False,
+    "run_experiment": False,
+    "jobname": "test20",
+    "description": "2D classification. DermaMNIST 2D data. preprocess: resize, Cross-val. Basic DA. ViT",
+    "yaml": "test20.yaml",
+    "internal_checks": [
+        {"type": "regular", "pattern": "Validation top-5-accuracy:", "gt": True, "value": 0.9},
+    ]
+}
+
+all_test_info["Test21"] = {
+    "enable": True,
+    "run_experiment": True,
+    "jobname": "test21",
+    "description": "2D classification. butterfly data. preprocess: resize. Basic DA. efficientnet_b1",
+    "yaml": "test21.yaml",
+    "internal_checks": [
+        {"type": "regular", "pattern": "Validation top-5-accuracy:", "gt": True, "value": 0.7},
+    ]
+}
+
+all_test_info["Test22"] = {
+    "enable": True,
+    "run_experiment": True,
+    "jobname": "test22",
+    "description": "3D classification. DermaMNIST 3D data. preprocess: resize, Cross-val. Basic DA. ViT",
+    "yaml": "test22.yaml",
+    "internal_checks": [
+        {"type": "regular", "pattern": "Validation top-5-accuracy:", "gt": True, "value": 0.7},
+    ]
+}
+
+all_test_info["Test23"] = {
+    "enable": True,
+    "run_experiment": True,
+    "jobname": "test23",
+    "description": "2D image to image. DermaMNIST 3D data. preprocess: resize, Cross-val. Basic DA. ViT",
+    "yaml": "test23.yaml",
+    "internal_checks": [
+        {"type": "regular", "pattern": "Validation top-5-accuracy:", "gt": True, "value": 0.7},
+    ]
+}
+
+all_test_info["Test24"] = {
+    "enable": True,
+    "run_experiment": True,
+    "jobname": "test24",
+    "description": "2D image to image. Dapi 2D data. preprocess: resize, Cross-val. Basic DA. multiresunet",
+    "yaml": "test24.yaml",
+    "internal_checks": [
+        {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 19.0},
+    ]
+}
+
+all_test_info["Test25"] = {
+    "enable": True,
+    "run_experiment": True,
+    "jobname": "test25",
+    "description": "2D image to image. lighmycells 2D data. preprocess: resize, Cross-val. Basic DA. ViT",
+    "yaml": "test25.yaml",
+    "internal_checks": [
+        {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 22.0},
     ]
 }
 
@@ -484,6 +680,111 @@ if not os.path.exists(super_resolution_3d_data_outpath) and all_test_info["Test1
         print("Downloading super_resolution YAML . . .") 
         _, _ = urllib.request.urlretrieve(super_resolution_3d_template, filename=super_resolution_3d_template_local)
 
+###########
+# SSl
+###########
+
+# General things: 2D Data + YAML donwload
+if not os.path.exists(self_supervision_2d_data_outpath) and (all_test_info["Test14"]["enable"] \
+    or all_test_info["Test15"]["enable"] or all_test_info["Test16"]["enable"]):
+    print("Downloading 2D self_supervision data . . .")
+    
+    os.makedirs(self_supervision_folder, exist_ok=True)
+    os.chdir(self_supervision_folder)
+    gdown.download(self_supervision_2d_data_drive_link, self_supervision_2d_data_filename, quiet=True)
+
+    with ZipFile(os.path.join(self_supervision_folder, self_supervision_2d_data_filename), 'r') as zObject: 
+        zObject.extractall(path=self_supervision_2d_data_outpath) 
+
+    if not os.path.exists(self_supervision_2d_template_local):
+        print("Downloading self_supervision YAML . . .") 
+        _, _ = urllib.request.urlretrieve(self_supervision_2d_template, filename=self_supervision_2d_template_local)
+
+# General things: 3D Data + YAML donwload
+if not os.path.exists(self_supervision_3d_data_outpath) and (all_test_info["Test17"]["enable"] \
+    or all_test_info["Test18"]["enable"] or all_test_info["Test19"]["enable"]):
+    print("Downloading 3D self_supervision data . . .")
+    
+    os.makedirs(self_supervision_folder, exist_ok=True)
+    os.chdir(self_supervision_folder)
+    gdown.download(self_supervision_3d_data_drive_link, self_supervision_3d_data_filename, quiet=True)
+
+    with ZipFile(os.path.join(self_supervision_folder, self_supervision_3d_data_filename), 'r') as zObject: 
+        zObject.extractall(path=self_supervision_3d_data_outpath) 
+
+    if not os.path.exists(self_supervision_3d_template_local):
+        print("Downloading self_supervision YAML . . .") 
+        _, _ = urllib.request.urlretrieve(self_supervision_3d_template, filename=self_supervision_3d_template_local)
+
+###########
+# Classification
+###########
+
+# General things: 2D Data + YAML donwload
+if not os.path.exists(classification_2d_data_outpath) and (all_test_info["Test20"]["enable"] \
+    or all_test_info["Test21"]["enable"]):
+    print("Downloading 2D classification data . . .")
+    
+    os.makedirs(classification_folder, exist_ok=True)
+    os.chdir(classification_folder)
+    gdown.download(classification_2d_data_drive_link, classification_2d_data_filename, quiet=True)
+
+    with ZipFile(os.path.join(classification_folder, classification_2d_data_filename), 'r') as zObject: 
+        zObject.extractall(path=classification_2d_data_outpath) 
+
+    # Butterfly data
+    os.chdir(classification_folder)
+    gdown.download(classification_butterfly_2d_data_drive_link, classification_butterfly_2d_data_filename, quiet=True)
+
+    with ZipFile(os.path.join(classification_folder, classification_butterfly_2d_data_filename), 'r') as zObject: 
+        zObject.extractall(path=classification_butterfly_2d_data_outpath) 
+
+    if not os.path.exists(classification_2d_template_local):
+        print("Downloading classification YAML . . .") 
+        _, _ = urllib.request.urlretrieve(classification_2d_template, filename=classification_2d_template_local)
+
+# General things: 3D Data + YAML donwload
+if not os.path.exists(classification_3d_data_outpath) and all_test_info["Test22"]["enable"]:
+    print("Downloading 3D classification data . . .")
+    
+    os.makedirs(classification_folder, exist_ok=True)
+    os.chdir(classification_folder)
+    gdown.download(classification_3d_data_drive_link, classification_3d_data_filename, quiet=True)
+
+    with ZipFile(os.path.join(classification_folder, classification_3d_data_filename), 'r') as zObject: 
+        zObject.extractall(path=classification_3d_data_outpath) 
+
+    if not os.path.exists(classification_3d_template_local):
+        print("Downloading classification YAML . . .") 
+        _, _ = urllib.request.urlretrieve(classification_3d_template, filename=classification_3d_template_local)
+
+###########
+# I2I
+###########
+
+# General things: 2D Data + YAML donwload
+if not os.path.exists(image_to_image_2d_data_outpath) and (all_test_info["Test24"]["enable"] \
+    or all_test_info["Test25"]["enable"]):
+    print("Downloading 2D image_to_image data . . .")
+    
+    os.makedirs(image_to_image_folder, exist_ok=True)
+    os.chdir(image_to_image_folder)
+    gdown.download(image_to_image_2d_data_drive_link, image_to_image_2d_data_filename, quiet=True)
+
+    with ZipFile(os.path.join(image_to_image_folder, image_to_image_2d_data_filename), 'r') as zObject: 
+        zObject.extractall(path=image_to_image_2d_data_outpath) 
+
+    # Lightmycells data
+    os.chdir(image_to_image_folder)
+    gdown.download(image_to_image_light_2d_data_drive_link, image_to_image_light_2d_data_filename, quiet=True)
+
+    with ZipFile(os.path.join(image_to_image_folder, image_to_image_light_2d_data_filename), 'r') as zObject: 
+        zObject.extractall(path=image_to_image_light_2d_data_outpath) 
+
+    if not os.path.exists(image_to_image_2d_template_local):
+        print("Downloading image_to_image YAML . . .") 
+        _, _ = urllib.request.urlretrieve(image_to_image_2d_template, filename=image_to_image_2d_template_local)
+
 
 def print_inventory(dct): 
     for item, amount in dct.items():  # dct.iteritems() in Python 2
@@ -500,7 +801,7 @@ def check_finished(test_info, jobname):
     jobout_file = os.path.join(jobdir, test_info["jobname"]+"_1")
     logfile = open(jobout_file, 'r')
     last_lines = logfile.readlines()
-    last_lines = last_lines[-min(50,len(last_lines)):]
+    last_lines = last_lines[-min(110,len(last_lines)):]
 
     # Check if the final message appears there 
     finished_good = False 
@@ -575,7 +876,7 @@ def runjob(test_info, results_folder, yaml_file, biapy_folder, multigpu=False):
         cmd = ["python", "-u", "-m", "torch.distributed.run", "--nproc_per_node=2", 
             f"--master-port={np.random.randint(low=1500, high=7000, size=1)[0]}", "main.py", 
             "--config", yaml_file, "--result_dir", results_folder, "--name", test_info["jobname"], "--run_id", "1", 
-            "--gpu", "0,1"]
+            "--gpu", gpus]
     else:
         cmd = ["python", "-u", "main.py", "--config", yaml_file, "--result_dir", results_folder, "--name", 
             test_info["jobname"], "--run_id", "1", "--gpu", gpu]
@@ -1612,4 +1913,878 @@ if all_test_info["Test13"]["enable"]:
     # Test result  
     print_result(results, all_test_info["Test13"]["jobname"], int_checks)
 
-import pdb; pdb.set_trace()
+#~~~~~~~~~~~~
+# Test 14 
+#~~~~~~~~~~~~
+if all_test_info["Test14"]["enable"]:
+    print("######")
+    print("Running Test 14")
+    print_inventory(all_test_info["Test14"])
+
+    #*******************
+    # File preparation 
+    #*******************
+    # Open config file
+    with open(self_supervision_2d_template_local, 'r') as stream:
+        try:
+            biapy_config = yaml.safe_load(stream)
+        except yaml.YAMLError as exc:
+            raise ValueError(exc)
+
+    biapy_config['DATA']['EXTRACT_RANDOM_PATCH'] = False
+
+    biapy_config['DATA']['PATCH_SIZE'] = "(256,256,1)"
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(self_supervision_2d_data_outpath, "data", "train", "x")
+    biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
+    biapy_config['DATA']['VAL']['CROSS_VAL'] = True
+    biapy_config['DATA']['VAL']['CROSS_VAL_NFOLD'] = 5
+    biapy_config['DATA']['VAL']['CROSS_VAL_FOLD'] = 1
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(self_supervision_2d_data_outpath, "data", "test", "x")
+    biapy_config['DATA']['TEST']['IN_MEMORY'] = False
+    biapy_config['DATA']['TEST']['USE_VAL_AS_TEST'] = True
+ 
+    biapy_config['TRAIN']['ENABLE'] = True
+    biapy_config['TRAIN']['EPOCHS'] = 20
+    biapy_config['TRAIN']['PATIENCE'] = -1 
+
+    biapy_config['MODEL']['ARCHITECTURE'] = 'rcan'
+    biapy_config['MODEL']['LOAD_CHECKPOINT'] = False
+
+    biapy_config['TEST']['ENABLE'] = True
+
+    # Save file
+    test_file = os.path.join(self_supervision_folder, all_test_info["Test14"]["yaml"])
+    with open(test_file, 'w') as outfile:
+        yaml.dump(biapy_config, outfile, default_flow_style=False)
+
+    # Run  
+    if all_test_info["Test14"]["run_experiment"]:
+        runjob(all_test_info["Test14"], results_folder, test_file, biapy_folder)
+
+    # Check  
+    results = []
+    res, last_lines = check_finished(all_test_info["Test14"], "Test 14")
+    if not res:
+        print("Internal check not passed: seems that it didn't finish")
+    results.append(res)
+    int_checks = 1
+    for checks in all_test_info["Test14"]["internal_checks"]: 
+        if checks["type"] == "regular":
+            results.append(check_value(last_lines, checks["pattern"], checks["value"], checks["gt"]))
+        else:
+            results.append(check_DatasetMatching(last_lines, checks["pattern"], checks["value"], gt=checks["gt"], 
+                value_to_check=checks["nApparition"], metric=checks["metric"]))
+        int_checks += 1
+        if not results[-1]:
+            print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
+
+    # Test result  
+    print_result(results, all_test_info["Test14"]["jobname"], int_checks)
+
+
+#~~~~~~~~~~~~
+# Test 15 
+#~~~~~~~~~~~~
+if all_test_info["Test15"]["enable"]:
+    print("######")
+    print("Running Test 15")
+    print_inventory(all_test_info["Test15"])
+
+    #*******************
+    # File preparation 
+    #*******************
+    # Open config file
+    with open(self_supervision_2d_template_local, 'r') as stream:
+        try:
+            biapy_config = yaml.safe_load(stream)
+        except yaml.YAMLError as exc:
+            raise ValueError(exc)
+
+    biapy_config['PROBLEM']['SELF_SUPERVISED']['PRETEXT_TASK'] = 'masking'
+
+    biapy_config['DATA']['PATCH_SIZE'] = "(128,128,1)"
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(self_supervision_2d_data_outpath, "data", "train", "x")
+    biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
+    biapy_config['DATA']['VAL']['CROSS_VAL'] = True
+    biapy_config['DATA']['VAL']['CROSS_VAL_NFOLD'] = 5
+    biapy_config['DATA']['VAL']['CROSS_VAL_FOLD'] = 1
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(self_supervision_2d_data_outpath, "data", "test", "x")
+    biapy_config['DATA']['TEST']['IN_MEMORY'] = False
+    biapy_config['DATA']['TEST']['USE_VAL_AS_TEST'] = True
+ 
+    biapy_config['TRAIN']['ENABLE'] = True
+    biapy_config['TRAIN']['EPOCHS'] = 20
+    biapy_config['TRAIN']['PATIENCE'] = -1 
+    
+    biapy_config['MODEL']['ARCHITECTURE'] = 'mae'
+    biapy_config['MODEL']['MAE_MASK_TYPE'] = "random"
+    biapy_config['MODEL']['LOAD_CHECKPOINT'] = False
+
+    biapy_config['TEST']['ENABLE'] = True
+
+    # Save file
+    test_file = os.path.join(self_supervision_folder, all_test_info["Test15"]["yaml"])
+    with open(test_file, 'w') as outfile:
+        yaml.dump(biapy_config, outfile, default_flow_style=False)
+
+    # Run  
+    if all_test_info["Test15"]["run_experiment"]:
+        runjob(all_test_info["Test15"], results_folder, test_file, biapy_folder)
+
+    # Check  
+    results = []
+    res, last_lines = check_finished(all_test_info["Test15"], "Test 15")
+    if not res:
+        print("Internal check not passed: seems that it didn't finish")
+    results.append(res)
+    int_checks = 1
+    for checks in all_test_info["Test15"]["internal_checks"]: 
+        if checks["type"] == "regular":
+            results.append(check_value(last_lines, checks["pattern"], checks["value"], checks["gt"]))
+        else:
+            results.append(check_DatasetMatching(last_lines, checks["pattern"], checks["value"], gt=checks["gt"], 
+                value_to_check=checks["nApparition"], metric=checks["metric"]))
+        int_checks += 1
+        if not results[-1]:
+            print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
+
+    # Test result  
+    print_result(results, all_test_info["Test15"]["jobname"], int_checks)
+
+#~~~~~~~~~~~~
+# Test 16 
+#~~~~~~~~~~~~
+if all_test_info["Test16"]["enable"]:
+    print("######")
+    print("Running Test 16")
+    print_inventory(all_test_info["Test16"])
+
+    #*******************
+    # File preparation 
+    #*******************
+    # Open config file
+    with open(self_supervision_2d_template_local, 'r') as stream:
+        try:
+            biapy_config = yaml.safe_load(stream)
+        except yaml.YAMLError as exc:
+            raise ValueError(exc)
+
+    biapy_config['PROBLEM']['SELF_SUPERVISED']['PRETEXT_TASK'] = 'masking'
+
+    biapy_config['DATA']['PATCH_SIZE'] = "(128,128,1)"
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(self_supervision_2d_data_outpath, "data", "train", "x")
+    biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
+    biapy_config['DATA']['VAL']['CROSS_VAL'] = True
+    biapy_config['DATA']['VAL']['CROSS_VAL_NFOLD'] = 5
+    biapy_config['DATA']['VAL']['CROSS_VAL_FOLD'] = 1
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(self_supervision_2d_data_outpath, "data", "test", "x")
+    biapy_config['DATA']['TEST']['IN_MEMORY'] = False
+    biapy_config['DATA']['TEST']['USE_VAL_AS_TEST'] = True
+ 
+    biapy_config['TRAIN']['ENABLE'] = True
+    biapy_config['TRAIN']['EPOCHS'] = 20
+    biapy_config['TRAIN']['PATIENCE'] = -1 
+    
+    biapy_config['MODEL']['ARCHITECTURE'] = 'mae'
+    biapy_config['MODEL']['MAE_MASK_TYPE'] = "grid"
+    biapy_config['MODEL']['LOAD_CHECKPOINT'] = False
+
+    biapy_config['TEST']['ENABLE'] = True
+
+    # Save file
+    test_file = os.path.join(self_supervision_folder, all_test_info["Test16"]["yaml"])
+    with open(test_file, 'w') as outfile:
+        yaml.dump(biapy_config, outfile, default_flow_style=False)
+
+    # Run  
+    if all_test_info["Test16"]["run_experiment"]:
+        runjob(all_test_info["Test16"], results_folder, test_file, biapy_folder)
+
+    # Check  
+    results = []
+    res, last_lines = check_finished(all_test_info["Test16"], "Test 16")
+    if not res:
+        print("Internal check not passed: seems that it didn't finish")
+    results.append(res)
+    int_checks = 1
+    for checks in all_test_info["Test16"]["internal_checks"]: 
+        if checks["type"] == "regular":
+            results.append(check_value(last_lines, checks["pattern"], checks["value"], checks["gt"]))
+        else:
+            results.append(check_DatasetMatching(last_lines, checks["pattern"], checks["value"], gt=checks["gt"], 
+                value_to_check=checks["nApparition"], metric=checks["metric"]))
+        int_checks += 1
+        if not results[-1]:
+            print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
+
+    # Test result  
+    print_result(results, all_test_info["Test16"]["jobname"], int_checks)
+
+
+#~~~~~~~~~~~~
+# Test 17 
+#~~~~~~~~~~~~
+if all_test_info["Test17"]["enable"]:
+    print("######")
+    print("Running Test 17")
+    print_inventory(all_test_info["Test17"])
+
+    #*******************
+    # File preparation 
+    #*******************
+    # Open config file
+    with open(self_supervision_3d_template_local, 'r') as stream:
+        try:
+            biapy_config = yaml.safe_load(stream)
+        except yaml.YAMLError as exc:
+            raise ValueError(exc)
+
+    biapy_config['PROBLEM']['SELF_SUPERVISED']['PRETEXT_TASK'] = 'crappify'
+
+    biapy_config['DATA']['PATCH_SIZE'] = "(20,128,128,1)"
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(self_supervision_3d_data_outpath, "data", "train", "x")
+    biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(self_supervision_3d_data_outpath, "data", "test", "x")
+    biapy_config['DATA']['TEST']['IN_MEMORY'] = False
+ 
+    biapy_config['TRAIN']['ENABLE'] = True
+    biapy_config['TRAIN']['EPOCHS'] = 20
+    biapy_config['TRAIN']['BATCH_SIZE'] = 1
+    biapy_config['TRAIN']['PATIENCE'] = -1 
+    
+    biapy_config['MODEL']['ARCHITECTURE'] = 'resunet++'
+    biapy_config['MODEL']['LOAD_CHECKPOINT'] = False
+
+    biapy_config['TEST']['ENABLE'] = True
+
+    # Save file
+    test_file = os.path.join(self_supervision_folder, all_test_info["Test17"]["yaml"])
+    with open(test_file, 'w') as outfile:
+        yaml.dump(biapy_config, outfile, default_flow_style=False)
+
+    # Run  
+    if all_test_info["Test17"]["run_experiment"]:
+        runjob(all_test_info["Test17"], results_folder, test_file, biapy_folder)
+
+    # Check  
+    results = []
+    res, last_lines = check_finished(all_test_info["Test17"], "Test 17")
+    if not res:
+        print("Internal check not passed: seems that it didn't finish")
+    results.append(res)
+    int_checks = 1
+    for checks in all_test_info["Test17"]["internal_checks"]: 
+        if checks["type"] == "regular":
+            results.append(check_value(last_lines, checks["pattern"], checks["value"], checks["gt"]))
+        else:
+            results.append(check_DatasetMatching(last_lines, checks["pattern"], checks["value"], gt=checks["gt"], 
+                value_to_check=checks["nApparition"], metric=checks["metric"]))
+        int_checks += 1
+        if not results[-1]:
+            print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
+
+    # Test result  
+    print_result(results, all_test_info["Test17"]["jobname"], int_checks)
+
+
+#~~~~~~~~~~~~
+# Test 18 
+#~~~~~~~~~~~~
+if all_test_info["Test18"]["enable"]:
+    print("######")
+    print("Running Test 18")
+    print_inventory(all_test_info["Test18"])
+
+    #*******************
+    # File preparation 
+    #*******************
+    # Open config file
+    with open(self_supervision_3d_template_local, 'r') as stream:
+        try:
+            biapy_config = yaml.safe_load(stream)
+        except yaml.YAMLError as exc:
+            raise ValueError(exc)
+
+    biapy_config['PROBLEM']['SELF_SUPERVISED']['PRETEXT_TASK'] = 'masking'
+
+    biapy_config['DATA']['PATCH_SIZE'] = "(80,80,80,1)"
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(self_supervision_3d_data_outpath, "data", "train", "x")
+    biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(self_supervision_3d_data_outpath, "data", "test", "x")
+    biapy_config['DATA']['TEST']['IN_MEMORY'] = False
+    biapy_config['DATA']['TEST']['PADDING'] = "(0,0,0)"
+
+    biapy_config['TRAIN']['ENABLE'] = True
+    biapy_config['TRAIN']['EPOCHS'] = 20
+    biapy_config['TRAIN']['PATIENCE'] = -1 
+    
+    biapy_config['MODEL']['ARCHITECTURE'] = 'mae'
+    biapy_config['MODEL']['MAE_MASK_TYPE'] = "random"
+    biapy_config['MODEL']['LOAD_CHECKPOINT'] = False
+    
+    biapy_config['AUGMENTOR']['ENABLE'] = True
+    biapy_config['AUGMENTOR']['RANDOM_ROT'] = True
+
+    biapy_config['TEST']['ENABLE'] = True
+
+
+    # Save file
+    test_file = os.path.join(self_supervision_folder, all_test_info["Test18"]["yaml"])
+    with open(test_file, 'w') as outfile:
+        yaml.dump(biapy_config, outfile, default_flow_style=False)
+
+    # Run  
+    if all_test_info["Test18"]["run_experiment"]:
+        runjob(all_test_info["Test18"], results_folder, test_file, biapy_folder)
+
+    # Check  
+    results = []
+    res, last_lines = check_finished(all_test_info["Test18"], "Test 18")
+    if not res:
+        print("Internal check not passed: seems that it didn't finish")
+    results.append(res)
+    int_checks = 1
+    for checks in all_test_info["Test18"]["internal_checks"]: 
+        if checks["type"] == "regular":
+            results.append(check_value(last_lines, checks["pattern"], checks["value"], checks["gt"]))
+        else:
+            results.append(check_DatasetMatching(last_lines, checks["pattern"], checks["value"], gt=checks["gt"], 
+                value_to_check=checks["nApparition"], metric=checks["metric"]))
+        int_checks += 1
+        if not results[-1]:
+            print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
+
+    # Test result  
+    print_result(results, all_test_info["Test18"]["jobname"], int_checks)
+
+
+#~~~~~~~~~~~~
+# Test 19 
+#~~~~~~~~~~~~
+if all_test_info["Test19"]["enable"]:
+    print("######")
+    print("Running Test 19")
+    print_inventory(all_test_info["Test19"])
+
+    #*******************
+    # File preparation 
+    #*******************
+    # Open config file
+    with open(self_supervision_3d_template_local, 'r') as stream:
+        try:
+            biapy_config = yaml.safe_load(stream)
+        except yaml.YAMLError as exc:
+            raise ValueError(exc)
+
+    biapy_config['PROBLEM']['SELF_SUPERVISED']['PRETEXT_TASK'] = 'masking'
+
+    biapy_config['DATA']['PATCH_SIZE'] = "(80,80,80,1)"
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(self_supervision_3d_data_outpath, "data", "train", "x")
+    biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(self_supervision_3d_data_outpath, "data", "test", "x")
+    biapy_config['DATA']['TEST']['IN_MEMORY'] = False
+    biapy_config['DATA']['TEST']['PADDING'] = "(0,0,0)"
+
+    biapy_config['TRAIN']['ENABLE'] = True
+    biapy_config['TRAIN']['EPOCHS'] = 20
+    biapy_config['TRAIN']['PATIENCE'] = -1 
+    
+    biapy_config['MODEL']['ARCHITECTURE'] = 'mae'
+    biapy_config['MODEL']['MAE_MASK_TYPE'] = "grid"
+    biapy_config['MODEL']['LOAD_CHECKPOINT'] = False
+
+    biapy_config['TEST']['ENABLE'] = True
+
+    # Save file
+    test_file = os.path.join(self_supervision_folder, all_test_info["Test19"]["yaml"])
+    with open(test_file, 'w') as outfile:
+        yaml.dump(biapy_config, outfile, default_flow_style=False)
+
+    # Run  
+    if all_test_info["Test19"]["run_experiment"]:
+        runjob(all_test_info["Test19"], results_folder, test_file, biapy_folder)
+
+    # Check  
+    results = []
+    res, last_lines = check_finished(all_test_info["Test19"], "Test 19")
+    if not res:
+        print("Internal check not passed: seems that it didn't finish")
+    results.append(res)
+    int_checks = 1
+    for checks in all_test_info["Test19"]["internal_checks"]: 
+        if checks["type"] == "regular":
+            results.append(check_value(last_lines, checks["pattern"], checks["value"], checks["gt"]))
+        else:
+            results.append(check_DatasetMatching(last_lines, checks["pattern"], checks["value"], gt=checks["gt"], 
+                value_to_check=checks["nApparition"], metric=checks["metric"]))
+        int_checks += 1
+        if not results[-1]:
+            print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
+
+    # Test result  
+    print_result(results, all_test_info["Test19"]["jobname"], int_checks)
+
+
+#~~~~~~~~~~~~
+# Test 20 
+#~~~~~~~~~~~~
+if all_test_info["Test20"]["enable"]:
+    print("######")
+    print("Running Test 20")
+    print_inventory(all_test_info["Test20"])
+
+    #*******************
+    # File preparation 
+    #*******************
+    # Open config file
+    with open(classification_2d_template_local, 'r') as stream:
+        try:
+            biapy_config = yaml.safe_load(stream)
+        except yaml.YAMLError as exc:
+            raise ValueError(exc)
+    
+    biapy_config['DATA']['PREPROCESS'] = {}
+    biapy_config['DATA']['PREPROCESS']['TRAIN'] = True
+    biapy_config['DATA']['PREPROCESS']['VAL'] = True
+    biapy_config['DATA']['PREPROCESS']['TEST'] = True
+    biapy_config['DATA']['PREPROCESS']['RESIZE'] = {}
+    biapy_config['DATA']['PREPROCESS']['RESIZE']['ENABLE'] = True
+    biapy_config['DATA']['PREPROCESS']['RESIZE']['OUTPUT_SHAPE'] = "(56,56)"
+
+    biapy_config['DATA']['PATCH_SIZE'] = "(56,56,3)"
+    
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(classification_2d_data_outpath, "data", "train")
+    biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
+    biapy_config['DATA']['VAL']['FROM_TRAIN'] = True
+    biapy_config['DATA']['VAL']['CROSS_VAL'] = True
+    biapy_config['DATA']['VAL']['CROSS_VAL_NFOLD'] = 5
+    biapy_config['DATA']['VAL']['CROSS_VAL_FOLD'] = 1
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(classification_2d_data_outpath, "data", "test")
+    biapy_config['DATA']['TEST']['IN_MEMORY'] = True
+    biapy_config['DATA']['TEST']['USE_VAL_AS_TEST'] = True
+
+    biapy_config['TRAIN']['ENABLE'] = True
+    biapy_config['TRAIN']['EPOCHS'] = 5
+    biapy_config['TRAIN']['PATIENCE'] = -1 
+    
+    biapy_config['MODEL']['ARCHITECTURE'] = 'vit'
+    biapy_config['MODEL']['LOAD_CHECKPOINT'] = False
+    biapy_config['MODEL']['N_CLASSES'] = 7
+
+    biapy_config['TEST']['ENABLE'] = True
+
+    # Save file
+    test_file = os.path.join(classification_folder, all_test_info["Test20"]["yaml"])
+    with open(test_file, 'w') as outfile:
+        yaml.dump(biapy_config, outfile, default_flow_style=False)
+
+    # Run  
+    if all_test_info["Test20"]["run_experiment"]:
+        runjob(all_test_info["Test20"], results_folder, test_file, biapy_folder)
+
+    # Check  
+    results = []
+    res, last_lines = check_finished(all_test_info["Test20"], "Test 20")
+    if not res:
+        print("Internal check not passed: seems that it didn't finish")
+    results.append(res)
+    int_checks = 1
+    for checks in all_test_info["Test20"]["internal_checks"]: 
+        if checks["type"] == "regular":
+            results.append(check_value(last_lines, checks["pattern"], checks["value"], checks["gt"]))
+        else:
+            results.append(check_DatasetMatching(last_lines, checks["pattern"], checks["value"], gt=checks["gt"], 
+                value_to_check=checks["nApparition"], metric=checks["metric"]))
+        int_checks += 1
+        if not results[-1]:
+            print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
+
+    # Test result  
+    print_result(results, all_test_info["Test20"]["jobname"], int_checks)
+
+
+#~~~~~~~~~~~~
+# Test 21 
+#~~~~~~~~~~~~
+if all_test_info["Test21"]["enable"]:
+    print("######")
+    print("Running Test 21")
+    print_inventory(all_test_info["Test21"])
+
+    #*******************
+    # File preparation 
+    #*******************
+    # Open config file
+    with open(classification_2d_template_local, 'r') as stream:
+        try:
+            biapy_config = yaml.safe_load(stream)
+        except yaml.YAMLError as exc:
+            raise ValueError(exc)
+    
+    biapy_config['DATA']['PREPROCESS'] = {}
+    biapy_config['DATA']['PREPROCESS']['TRAIN'] = True
+    biapy_config['DATA']['PREPROCESS']['VAL'] = True
+    biapy_config['DATA']['PREPROCESS']['TEST'] = True
+    biapy_config['DATA']['PREPROCESS']['RESIZE'] = {}
+    biapy_config['DATA']['PREPROCESS']['RESIZE']['ENABLE'] = True
+    biapy_config['DATA']['PREPROCESS']['RESIZE']['OUTPUT_SHAPE'] = "(56,56)"
+
+    biapy_config['DATA']['PATCH_SIZE'] = "(56,56,3)"
+    
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(classification_butterfly_2d_data_outpath, "data", "train")
+    biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
+    biapy_config['DATA']['VAL']['FROM_TRAIN'] = True
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(classification_butterfly_2d_data_outpath, "data", "test")
+    biapy_config['DATA']['TEST']['IN_MEMORY'] = True
+
+    biapy_config['TRAIN']['ENABLE'] = True
+    biapy_config['TRAIN']['EPOCHS'] = 5
+    biapy_config['TRAIN']['PATIENCE'] = -1 
+    
+    biapy_config['MODEL']['ARCHITECTURE'] = 'efficientnet_b1'
+    biapy_config['MODEL']['N_CLASSES'] = 75
+    biapy_config['MODEL']['LOAD_CHECKPOINT'] = False
+
+    biapy_config['TEST']['ENABLE'] = True
+
+    # Save file
+    test_file = os.path.join(classification_folder, all_test_info["Test21"]["yaml"])
+    with open(test_file, 'w') as outfile:
+        yaml.dump(biapy_config, outfile, default_flow_style=False)
+
+    # Run  
+    if all_test_info["Test21"]["run_experiment"]:
+        runjob(all_test_info["Test21"], results_folder, test_file, biapy_folder)
+
+    # Check  
+    results = []
+    res, last_lines = check_finished(all_test_info["Test21"], "Test 21")
+    if not res:
+        print("Internal check not passed: seems that it didn't finish")
+    results.append(res)
+    int_checks = 1
+    for checks in all_test_info["Test21"]["internal_checks"]: 
+        if checks["type"] == "regular":
+            results.append(check_value(last_lines, checks["pattern"], checks["value"], checks["gt"]))
+        else:
+            results.append(check_DatasetMatching(last_lines, checks["pattern"], checks["value"], gt=checks["gt"], 
+                value_to_check=checks["nApparition"], metric=checks["metric"]))
+        int_checks += 1
+        if not results[-1]:
+            print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
+
+    # Test result  
+    print_result(results, all_test_info["Test21"]["jobname"], int_checks)
+
+
+#~~~~~~~~~~~~
+# Test 22 
+#~~~~~~~~~~~~
+if all_test_info["Test22"]["enable"]:
+    print("######")
+    print("Running Test 22")
+    print_inventory(all_test_info["Test22"])
+
+    #*******************
+    # File preparation 
+    #*******************
+    # Open config file
+    with open(classification_3d_template_local, 'r') as stream:
+        try:
+            biapy_config = yaml.safe_load(stream)
+        except yaml.YAMLError as exc:
+            raise ValueError(exc)
+    
+    biapy_config['DATA']['PREPROCESS'] = {}
+    biapy_config['DATA']['PREPROCESS']['TRAIN'] = True
+    biapy_config['DATA']['PREPROCESS']['VAL'] = True
+    biapy_config['DATA']['PREPROCESS']['TEST'] = True
+    biapy_config['DATA']['PREPROCESS']['RESIZE'] = {}
+    biapy_config['DATA']['PREPROCESS']['RESIZE']['ENABLE'] = True
+    biapy_config['DATA']['PREPROCESS']['RESIZE']['OUTPUT_SHAPE'] = "(56,56,56)"
+
+    biapy_config['DATA']['PATCH_SIZE'] = "(56,56,56,1)"
+    
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(classification_3d_data_outpath, "data", "train")
+    biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
+    biapy_config['DATA']['VAL']['FROM_TRAIN'] = True
+    biapy_config['DATA']['VAL']['CROSS_VAL'] = True
+    biapy_config['DATA']['VAL']['CROSS_VAL_NFOLD'] = 5
+    biapy_config['DATA']['VAL']['CROSS_VAL_FOLD'] = 3
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(classification_3d_data_outpath, "data", "test")
+    biapy_config['DATA']['TEST']['IN_MEMORY'] = True
+    biapy_config['DATA']['TEST']['USE_VAL_AS_TEST'] = True
+
+    biapy_config['TRAIN']['ENABLE'] = True
+    biapy_config['TRAIN']['EPOCHS'] = 5
+    biapy_config['TRAIN']['PATIENCE'] = -1 
+    
+    biapy_config['MODEL']['ARCHITECTURE'] = 'simple_cnn'
+    biapy_config['MODEL']['LOAD_CHECKPOINT'] = False
+    biapy_config['MODEL']['N_CLASSES'] = 11
+
+    biapy_config['TEST']['ENABLE'] = True
+
+    # Save file
+    test_file = os.path.join(classification_folder, all_test_info["Test22"]["yaml"])
+    with open(test_file, 'w') as outfile:
+        yaml.dump(biapy_config, outfile, default_flow_style=False)
+
+    # Run  
+    if all_test_info["Test22"]["run_experiment"]:
+        runjob(all_test_info["Test22"], results_folder, test_file, biapy_folder)
+
+    # Check  
+    results = []
+    res, last_lines = check_finished(all_test_info["Test22"], "Test 22")
+    if not res:
+        print("Internal check not passed: seems that it didn't finish")
+    results.append(res)
+    int_checks = 1
+    for checks in all_test_info["Test22"]["internal_checks"]: 
+        if checks["type"] == "regular":
+            results.append(check_value(last_lines, checks["pattern"], checks["value"], checks["gt"]))
+        else:
+            results.append(check_DatasetMatching(last_lines, checks["pattern"], checks["value"], gt=checks["gt"], 
+                value_to_check=checks["nApparition"], metric=checks["metric"]))
+        int_checks += 1
+        if not results[-1]:
+            print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
+
+    # Test result  
+    print_result(results, all_test_info["Test22"]["jobname"], int_checks)
+
+#~~~~~~~~~~~~
+# Test 23 
+#~~~~~~~~~~~~
+if all_test_info["Test23"]["enable"]:
+    print("######")
+    print("Running Test 23")
+    print_inventory(all_test_info["Test23"])
+
+    #*******************
+    # File preparation 
+    #*******************
+    # Open config file
+    with open(image_to_image_3d_template_local, 'r') as stream:
+        try:
+            biapy_config = yaml.safe_load(stream)
+        except yaml.YAMLError as exc:
+            raise ValueError(exc)
+    
+    biapy_config['DATA']['PREPROCESS'] = {}
+    biapy_config['DATA']['PREPROCESS']['TRAIN'] = True
+    biapy_config['DATA']['PREPROCESS']['VAL'] = True
+    biapy_config['DATA']['PREPROCESS']['TEST'] = True
+    biapy_config['DATA']['PREPROCESS']['RESIZE'] = {}
+    biapy_config['DATA']['PREPROCESS']['RESIZE']['ENABLE'] = True
+    biapy_config['DATA']['PREPROCESS']['RESIZE']['OUTPUT_SHAPE'] = "(56,56,56)"
+
+    biapy_config['DATA']['PATCH_SIZE'] = "(56,56,56,1)"
+    
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(image_to_image_3d_data_outpath, "data", "train")
+    biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
+    biapy_config['DATA']['VAL']['FROM_TRAIN'] = True
+    biapy_config['DATA']['VAL']['CROSS_VAL'] = True
+    biapy_config['DATA']['VAL']['CROSS_VAL_NFOLD'] = 5
+    biapy_config['DATA']['VAL']['CROSS_VAL_FOLD'] = 3
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(image_to_image_3d_data_outpath, "data", "test")
+    biapy_config['DATA']['TEST']['IN_MEMORY'] = True
+    biapy_config['DATA']['TEST']['USE_VAL_AS_TEST'] = True
+
+    biapy_config['TRAIN']['ENABLE'] = True
+    biapy_config['TRAIN']['EPOCHS'] = 5
+    biapy_config['TRAIN']['PATIENCE'] = -1 
+    
+    biapy_config['MODEL']['ARCHITECTURE'] = 'simple_cnn'
+    biapy_config['MODEL']['LOAD_CHECKPOINT'] = False
+    biapy_config['MODEL']['N_CLASSES'] = 11
+
+    biapy_config['TEST']['ENABLE'] = True
+
+    # Save file
+    test_file = os.path.join(image_to_image_folder, all_test_info["Test23"]["yaml"])
+    with open(test_file, 'w') as outfile:
+        yaml.dump(biapy_config, outfile, default_flow_style=False)
+
+    # Run  
+    if all_test_info["Test23"]["run_experiment"]:
+        runjob(all_test_info["Test23"], results_folder, test_file, biapy_folder)
+
+    # Check  
+    results = []
+    res, last_lines = check_finished(all_test_info["Test23"], "Test 23")
+    if not res:
+        print("Internal check not passed: seems that it didn't finish")
+    results.append(res)
+    int_checks = 1
+    for checks in all_test_info["Test23"]["internal_checks"]: 
+        if checks["type"] == "regular":
+            results.append(check_value(last_lines, checks["pattern"], checks["value"], checks["gt"]))
+        else:
+            results.append(check_DatasetMatching(last_lines, checks["pattern"], checks["value"], gt=checks["gt"], 
+                value_to_check=checks["nApparition"], metric=checks["metric"]))
+        int_checks += 1
+        if not results[-1]:
+            print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
+
+    # Test result  
+    print_result(results, all_test_info["Test23"]["jobname"], int_checks)
+
+
+#~~~~~~~~~~~~
+# Test 24 
+#~~~~~~~~~~~~
+if all_test_info["Test24"]["enable"]:
+    print("######")
+    print("Running Test 24")
+    print_inventory(all_test_info["Test24"])
+
+    #*******************
+    # File preparation 
+    #*******************
+    # Open config file
+    with open(image_to_image_2d_template_local, 'r') as stream:
+        try:
+            biapy_config = yaml.safe_load(stream)
+        except yaml.YAMLError as exc:
+            raise ValueError(exc)
+    
+    del biapy_config['PROBLEM']['IMAGE_TO_IMAGE']
+
+    biapy_config['DATA']['NORMALIZATION']['TYPE']: 'div'
+    biapy_config['DATA']['REFLECT_TO_COMPLETE_SHAPE'] = False
+    biapy_config['DATA']['PATCH_SIZE'] = "(256, 256, 1)"
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(image_to_image_2d_data_outpath, "data", "train", "x")
+    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(image_to_image_2d_data_outpath, "data", "train", "y")
+    biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
+    biapy_config['DATA']['VAL']['FROM_TRAIN'] = True
+    biapy_config['DATA']['VAL']['CROSS_VAL'] = False
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(image_to_image_2d_data_outpath, "data", "test", "x")
+    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(image_to_image_2d_data_outpath, "data", "test", "y")
+    biapy_config['DATA']['TEST']['IN_MEMORY'] = True
+    biapy_config['DATA']['TEST']['PADDING'] = "(40,40)"
+
+    biapy_config['TRAIN']['ENABLE'] = True
+    biapy_config['TRAIN']['EPOCHS'] = 10
+    biapy_config['TRAIN']['PATIENCE'] = -1 
+    del biapy_config['TRAIN']['LR_SCHEDULER']
+
+    biapy_config['AUGMENTOR']['GRIDMASK'] = False
+    biapy_config['AUGMENTOR']['ROT90'] = False
+
+    biapy_config['MODEL']['ARCHITECTURE'] = 'multiresunet'
+    biapy_config['MODEL']['LOAD_CHECKPOINT'] = False
+
+    biapy_config['TEST']['ENABLE'] = True
+
+    del biapy_config['PATHS']
+
+    # Save file
+    test_file = os.path.join(image_to_image_folder, all_test_info["Test24"]["yaml"])
+    with open(test_file, 'w') as outfile:
+        yaml.dump(biapy_config, outfile, default_flow_style=False)
+
+    # Run  
+    if all_test_info["Test24"]["run_experiment"]:
+        runjob(all_test_info["Test24"], results_folder, test_file, biapy_folder)
+
+    # Check  
+    results = []
+    res, last_lines = check_finished(all_test_info["Test24"], "Test 24")
+    if not res:
+        print("Internal check not passed: seems that it didn't finish")
+    results.append(res)
+    int_checks = 1
+    for checks in all_test_info["Test24"]["internal_checks"]: 
+        if checks["type"] == "regular":
+            results.append(check_value(last_lines, checks["pattern"], checks["value"], checks["gt"]))
+        else:
+            results.append(check_DatasetMatching(last_lines, checks["pattern"], checks["value"], gt=checks["gt"], 
+                value_to_check=checks["nApparition"], metric=checks["metric"]))
+        int_checks += 1
+        if not results[-1]:
+            print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
+
+    # Test result  
+    print_result(results, all_test_info["Test24"]["jobname"], int_checks)
+
+
+#~~~~~~~~~~~~
+# Test 25 
+#~~~~~~~~~~~~
+if all_test_info["Test25"]["enable"]:
+    print("######")
+    print("Running Test 25")
+    print_inventory(all_test_info["Test25"])
+
+    #*******************
+    # File preparation 
+    #*******************
+    # Open config file
+    with open(image_to_image_2d_template_local, 'r') as stream:
+        try:
+            biapy_config = yaml.safe_load(stream)
+        except yaml.YAMLError as exc:
+            raise ValueError(exc)
+    
+    biapy_config['DATA']['EXTRACT_RANDOM_PATCH'] = True
+    biapy_config['DATA']['REFLECT_TO_COMPLETE_SHAPE'] = True
+    biapy_config['DATA']['PATCH_SIZE'] = "(1024, 1024, 1)"
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "x")
+    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "y")
+    biapy_config['DATA']['TRAIN']['IN_MEMORY'] = False
+    biapy_config['DATA']['VAL']['FROM_TRAIN'] = False
+    biapy_config['DATA']['VAL']['PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "x")
+    biapy_config['DATA']['VAL']['GT_PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "y")
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "x")
+    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "y")
+    biapy_config['DATA']['TEST']['IN_MEMORY'] = False
+    biapy_config['DATA']['TEST']['PADDING'] = "(200,200)"
+
+    biapy_config['TRAIN']['ENABLE'] = True
+    biapy_config['TRAIN']['EPOCHS'] = 10
+    biapy_config['TRAIN']['PATIENCE'] = -1 
+    biapy_config['TRAIN']['LR_SCHEDULER']['WARMUP_COSINE_DECAY_EPOCHS'] = 5
+
+    biapy_config['AUGMENTOR']['GRIDMASK'] = False
+    biapy_config['AUGMENTOR']['ROT90'] = True
+
+    biapy_config['MODEL']['ARCHITECTURE'] = 'unetr'
+    biapy_config['MODEL']['LOAD_CHECKPOINT'] = False
+
+    biapy_config['TEST']['ENABLE'] = True
+
+    del biapy_config['PATHS']
+
+    # Save file
+    test_file = os.path.join(image_to_image_folder, all_test_info["Test25"]["yaml"])
+    with open(test_file, 'w') as outfile:
+        yaml.dump(biapy_config, outfile, default_flow_style=False)
+
+    # Run  
+    if all_test_info["Test25"]["run_experiment"]:
+        runjob(all_test_info["Test25"], results_folder, test_file, biapy_folder)
+
+    # Check  
+    results = []
+    res, last_lines = check_finished(all_test_info["Test25"], "Test 25")
+    if not res:
+        print("Internal check not passed: seems that it didn't finish")
+    results.append(res)
+    int_checks = 1
+    for checks in all_test_info["Test25"]["internal_checks"]: 
+        if checks["type"] == "regular":
+            results.append(check_value(last_lines, checks["pattern"], checks["value"], checks["gt"]))
+        else:
+            results.append(check_DatasetMatching(last_lines, checks["pattern"], checks["value"], gt=checks["gt"], 
+                value_to_check=checks["nApparition"], metric=checks["metric"]))
+        int_checks += 1
+        if not results[-1]:
+            print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
+
+    # Test result  
+    print_result(results, all_test_info["Test25"]["jobname"], int_checks)
+
+
+print("Finish tests!!")
