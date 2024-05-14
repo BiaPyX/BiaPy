@@ -40,7 +40,7 @@ def build_model(cfg, job_identifier, device):
     ndim = 3 if cfg.PROBLEM.NDIM == "3D" else 2
 
     # Model building
-    if modelname in ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet']:
+    if modelname in ['unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet']:
         args = dict(image_shape=cfg.DATA.PATCH_SIZE, activation=cfg.MODEL.ACTIVATION.lower(), feature_maps=cfg.MODEL.FEATURE_MAPS, 
             drop_values=cfg.MODEL.DROPOUT_VALUES, normalization=cfg.MODEL.NORMALIZATION, k_size=cfg.MODEL.KERNEL_SIZE,
             upsample_layer=cfg.MODEL.UPSAMPLE_LAYER, z_down=cfg.MODEL.Z_DOWN)
@@ -56,6 +56,10 @@ def build_model(cfg, job_identifier, device):
             f_name = Attention_U_Net
         elif modelname == 'seunet':
             f_name = SE_U_Net
+            args['isotropy'] = cfg.MODEL.ISOTROPY
+            args['larger_io'] = cfg.MODEL.LARGER_IO
+        elif modelname == 'resunet_se':
+            f_name = ResUNet_SE
             args['isotropy'] = cfg.MODEL.ISOTROPY
             args['larger_io'] = cfg.MODEL.LARGER_IO
 

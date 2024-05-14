@@ -270,7 +270,7 @@ class SqExBlock(nn.Module):
 
 class ResConvBlock(nn.Module):
     def __init__(self, conv, in_size, out_size, k_size, act=None, norm='none', dropout=0, skip_k_size=1,
-        skip_norm='none', first_block=False):
+        skip_norm='none', first_block=False, se_block=False, extra_conv=False):
         """
         Residual block.
 
@@ -308,18 +308,40 @@ class ResConvBlock(nn.Module):
             To advice the function that it is the first residual block of the network, which avoids Full Pre-Activation
             layers (more info of Full Pre-Activation in `Identity Mappings in Deep Residual Networks
             <https://arxiv.org/pdf/1603.05027.pdf>`_).
+
+        se_block : boolean, optional
+            Whether to add Squeeze-and-Excitation blocks or not. 
+        
+        extra_conv : bool, optional
+            Whether To add a convolutional layer before the residual block (as in Kisuk et al, 2017, https://arxiv.org/pdf/1706.00120)
         """
         super(ResConvBlock, self).__init__()
         block = []
-
+        pre_conv = []
         if not first_block:
-            if norm != 'none':
-                if conv == nn.Conv2d:
-                    block.append(get_norm_2d(norm, in_size))
-                else:
-                    block.append(get_norm_3d(norm, in_size))
-            if act is not None:
-                block.append(get_activation(act))
+            if not extra_conv:
+                if norm != 'none':
+                    if conv == nn.Conv2d:
+                        block.append(get_norm_2d(norm, in_size))
+                    else:
+                        block.append(get_norm_3d(norm, in_size))
+                if act is not None:
+                    block.append(get_activation(act))
+            else:
+                if norm != 'none':
+                    if conv == nn.Conv2d:
+                        pre_conv.append(get_norm_2d(norm, in_size))
+                    else:
+                        pre_conv.append(get_norm_3d(norm, in_size))
+                if act is not None:
+                    pre_conv.append(get_activation(act))
+        if extra_conv:
+            pre_conv.append(ConvBlock(conv=conv, in_size=in_size, out_size=out_size, k_size=k_size, 
+                act=act, norm=norm, dropout=dropout))
+            in_size = out_size
+            self.pre_conv = nn.Sequential(*pre_conv)
+        else:
+            self.pre_conv = None
 
         block.append(ConvBlock(conv=conv, in_size=in_size, out_size=out_size, k_size=k_size, 
             act=act, norm=norm, dropout=dropout))
@@ -327,21 +349,34 @@ class ResConvBlock(nn.Module):
 
         self.block = nn.Sequential(*block)
 
-        block = []
-        block.append(conv(in_size, out_size, kernel_size=skip_k_size, padding='same'))
-        if skip_norm != 'none':
-            if conv == nn.Conv2d:
-                block.append(get_norm_2d(skip_norm, out_size))
-            else:
-                block.append(get_norm_3d(skip_norm, out_size))
-        self.shortcut = nn.Sequential(*block)
+        if not extra_conv:
+            block = []
+            block.append(conv(in_size, out_size, kernel_size=skip_k_size, padding='same'))
+            if skip_norm != 'none':
+                if conv == nn.Conv2d:
+                    block.append(get_norm_2d(skip_norm, out_size))
+                else:
+                    block.append(get_norm_3d(skip_norm, out_size))
+            self.shortcut = nn.Sequential(*block)
+        else:
+            self.shortcut = nn.Identity()
+
+        if se_block:
+            # add the Squeeze-and-Excitation block at the end of the full block (as in PyTC)
+            # (https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/model/block/residual.py#L147-L155)
+            self.se_block = SqExBlock(out_size, ndim=2 if conv == nn.Conv2d else 3)
+        else:
+            self.se_block = nn.Identity()
+        
     def forward(self, x):
+        if self.pre_conv is not None:
+            x = self.pre_conv( x )
         out = self.block(x) + self.shortcut(x)
         return out
 
 class ResUpBlock(nn.Module):
     def __init__(self, ndim, convtranspose, in_size, out_size, in_size_bridge, z_down, up_mode, conv, k_size, 
-        act=None, norm='none', skip_k_size=1, skip_norm='none', dropout=0):
+        act=None, norm='none', skip_k_size=1, skip_norm='none', dropout=0, se_block=False, extra_conv=False):
         """
         Residual upsampling block.
 
@@ -391,6 +426,12 @@ class ResUpBlock(nn.Module):
 
         drop_value : float, optional
             Dropout value to be fixed.
+        
+        se_block : boolean, optional
+            Whether to add Squeeze-and-Excitation blocks or not. 
+
+        extra_conv : bool, optional
+            To add a convolutional layer before the residual block (as in Kisuk et al, 2017, https://arxiv.org/pdf/1706.00120)
         """
         super(ResUpBlock, self).__init__()
         self.ndim = ndim
@@ -402,7 +443,7 @@ class ResUpBlock(nn.Module):
             
         self.conv_block = ResConvBlock(conv=conv, in_size=in_size+in_size_bridge, out_size=out_size, 
             k_size=k_size, act=act, norm=norm, dropout=dropout, skip_k_size=skip_k_size,
-            skip_norm=skip_norm)
+            skip_norm=skip_norm, se_block=se_block, extra_conv=extra_conv)
 
     def forward(self, x, bridge):
         up = self.up(x)
