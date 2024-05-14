@@ -1312,7 +1312,7 @@ def extract_3D_patch_with_overlap_yield(data, vol_shape, axis_order, overlap=(0,
 
 
 def load_3d_data_classification(data_dir, patch_shape, convert_to_rgb=False, expected_classes=None, cross_val=False, cross_val_nsplits=5, 
-    cross_val_fold=1, val_split=0.1, seed=0, shuffle_val=True):
+    cross_val_fold=1, val_split=0.1, seed=0, shuffle_val=True, preprocess_cfg=None, preprocess_f=None):
     """
     Load 3D data to train classification methods.
 
@@ -1348,6 +1348,12 @@ def load_3d_data_classification(data_dir, patch_shape, convert_to_rgb=False, exp
 
     shuffle_val : bool, optional
         Take random training examples to create validation data.
+
+    preprocess_cfg : dict, optional
+        Configuration parameters for preprocessing, is necessary in case you want to apply any preprocessing.
+    
+    preprocess_f : function, optional
+        The preprocessing function, is necessary in case you want to apply any preprocessing.
 
     Returns
     -------
@@ -1401,7 +1407,8 @@ def load_3d_data_classification(data_dir, patch_shape, convert_to_rgb=False, exp
 
         # Loading images 
         images, _, _, image_ids = load_3d_images_from_dir(f, return_filenames=True, crop_shape=patch_shape, 
-            convert_to_rgb=convert_to_rgb)
+            convert_to_rgb=convert_to_rgb, preprocess_cfg=preprocess_cfg, is_mask=False, 
+            preprocess_f=preprocess_f)
 
         X_data.append(images)
         Y_data.append((c_num,)*len(ids))

@@ -59,7 +59,7 @@ class test_single_data_generator(Dataset):
     crop_center : bool, optional
         Whether to extract a
 
-    sample_ids :  List of ints, optional
+    sample_ids : List of ints, optional
         When cross validation is used specific training samples are passed to the generator. 
         Not used in this generator. 
 
@@ -112,6 +112,15 @@ class test_single_data_generator(Dataset):
                     for i in range(len(ids)):
                         self.classes[ids[i]] = folder
                         self.data_path.append(ids[i])
+                
+                if sample_ids is not None:
+                    self.data_path = [x for i, x in enumerate(self.data_path) if i in sample_ids]
+                    old_classes = self.classes.copy()
+                    for i, key in enumerate(old_classes.keys()):
+                        if i not in sample_ids:
+                            del self.classes[key]
+                    del old_classes
+                    
                 self.len = len(self.data_path)
                 if self.len == 0:
                     raise ValueError("No image found in {}".format(d_path))
