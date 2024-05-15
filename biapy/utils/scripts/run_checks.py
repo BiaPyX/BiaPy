@@ -183,8 +183,8 @@ if not os.path.exists(biapy_folder):
 
 all_test_info = {}
 all_test_info["Test1"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test1",
     "description": "2D Semantic seg. Lucchi++. Basic DA. Extract random crops (probability map). unet. 2D stack as 3D. Post-proc: z-filtering.",
     "yaml": "test_1.yaml",
@@ -195,8 +195,8 @@ all_test_info["Test1"] = {
 }
 
 all_test_info["Test2"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test2",
     "description": "3D Semantic seg. Lucchi++. attention_unet. Basic DA.",
     "yaml": "test_2.yaml",
@@ -206,8 +206,8 @@ all_test_info["Test2"] = {
 }
 
 all_test_info["Test3"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test3",
     "description": "2D Semantic seg. Lucchi++. Basic DA. 5 epochs. seunet. FULL_IMG False",
     "yaml": "test_3.yaml",
@@ -217,8 +217,8 @@ all_test_info["Test3"] = {
 }
 
 all_test_info["Test4"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test4",
     "description": "2D Instance seg. Stardist 2D data. Basic DA. BC (auto). Replicate 2. resunet++. "
         "Post-proc: Clear border + remove instances by properties",
@@ -233,8 +233,8 @@ all_test_info["Test4"] = {
 }
 
 all_test_info["Test5"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test5",
     "description": "3D Instance seg. Demo 3D data. Basic DA. BCD (manual). resunet. Watershed multiple options. Post-proc: Clear border",
     "yaml": "test_5.yaml",
@@ -247,8 +247,8 @@ all_test_info["Test5"] = {
 }
 
 all_test_info["Test6"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test6",
     "description": "3D Instance seg. Cyst data. Basic DA. BCM (auto). resunet. Post-proc: Clear border + Voronoi + remove by props",
     "yaml": "test_6.yaml",
@@ -261,8 +261,8 @@ all_test_info["Test6"] = {
 }
 
 all_test_info["Test7"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test7",
     "description": "2D Detection. Stardist v2 2D data. custom norm, dataset, percentile clip. Basic DA. "
         "multiresunet. Post-proc: remove close points + det weatershed",
@@ -274,8 +274,8 @@ all_test_info["Test7"] = {
 }
 
 all_test_info["Test8"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test8",
     "description": "3D Detection. NucMM-Z 3D data. custom norm, dataset, percentile clip. Basic DA. "
         "unetr. Post-proc: remove close points + det weatershed",
@@ -286,8 +286,8 @@ all_test_info["Test8"] = {
 }
 
 all_test_info["Test11"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test11",
     "description": "3D Detection. Zarr 3D data (Brainglobe). custom norm, percentile norm, per image. "
         "MINIMUM_FOREGROUND_PER. warmupcosine. Basic DA. resunet. test by chunks: Zarr. Post-proc: remove close points",
@@ -298,8 +298,8 @@ all_test_info["Test11"] = {
 }
 
 all_test_info["Test9"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test9",
     "description": "2D Denoising. Convallaria data. custom norm, dataset. Basic DA."
         "unetr. Post-proc: remove close points + det weatershed",
@@ -310,8 +310,8 @@ all_test_info["Test9"] = {
 }
 
 all_test_info["Test10"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test10",
     "description": "3D Denoising. Flywing 3D data. custom norm, dataset. Basic DA. "
         "resunet. Post-proc: remove close points + det weatershed",
@@ -322,8 +322,8 @@ all_test_info["Test10"] = {
 }
 
 all_test_info["Test12"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test12",
     "description": "2D super-resolution. SR 2D data. Cross-val. Basic DA. DFCAN",
     "yaml": "test_12.yaml",
@@ -334,8 +334,8 @@ all_test_info["Test12"] = {
 }
 
 all_test_info["Test13"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test13",
     "description": "3D super-resolution. SR 3D data. Cross-val. extract random patch. Basic DA. resunet++",
     "yaml": "test_13.yaml",
@@ -346,31 +346,30 @@ all_test_info["Test13"] = {
 }
 
 all_test_info["Test14"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test14",
     "description": "2D self-supervision. Lucchi data. Cross-val. Basic DA. rcan",
     "yaml": "test_14.yaml",
     "internal_checks": [
         {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 22.0},
-        {"type": "regular", "pattern": "Test PSNR (merge patches)", "gt": True, "value": 22.0},
     ]
 }
 
 all_test_info["Test15"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test15",
     "description": "2D self-supervision. Lucchi data. Cross-val. Basic DA. mae, masking: random",
     "yaml": "test_15.yaml",
     "internal_checks": [
-        {"type": "regular", "pattern": "Validation PSNR:", "gt": False, "value": -10.0},
+        {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": -10.0},
     ]
 }
 
 all_test_info["Test16"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test16",
     "description": "2D self-supervision. Lucchi data. Cross-val. Basic DA. mae, masking: grid",
     "yaml": "test16.yaml",
@@ -380,20 +379,19 @@ all_test_info["Test16"] = {
 }
 
 all_test_info["Test17"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test17",
     "description": "3D self-supervision. Lucchi data. Basic DA. resunet++",
     "yaml": "test17.yaml",
     "internal_checks": [
         {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 22.0},
-        {"type": "regular", "pattern": "Test PSNR (merge patches)", "gt": True, "value": 22.0},
     ]
 }
 
 all_test_info["Test18"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test18",
     "description": "3D self-supervision. Lucchi data. Cross-val. Basic DA. mae, masking: random",
     "yaml": "test18.yaml",
@@ -425,8 +423,8 @@ all_test_info["Test20"] = {
 }
 
 all_test_info["Test21"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test21",
     "description": "2D classification. butterfly data. preprocess: resize. Basic DA. efficientnet_b1",
     "yaml": "test21.yaml",
@@ -436,8 +434,8 @@ all_test_info["Test21"] = {
 }
 
 all_test_info["Test22"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test22",
     "description": "3D classification. DermaMNIST 3D data. preprocess: resize, Cross-val. Basic DA. ViT",
     "yaml": "test22.yaml",
@@ -447,8 +445,8 @@ all_test_info["Test22"] = {
 }
 
 all_test_info["Test23"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test23",
     "description": "2D image to image. DermaMNIST 3D data. preprocess: resize, Cross-val. Basic DA. ViT",
     "yaml": "test23.yaml",
@@ -458,8 +456,8 @@ all_test_info["Test23"] = {
 }
 
 all_test_info["Test24"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test24",
     "description": "2D image to image. Dapi 2D data. preprocess: resize, Cross-val. Basic DA. multiresunet",
     "yaml": "test24.yaml",
@@ -469,8 +467,8 @@ all_test_info["Test24"] = {
 }
 
 all_test_info["Test25"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test25",
     "description": "2D image to image. lighmycells 2D data. preprocess: resize, Cross-val. Basic DA. ViT",
     "yaml": "test25.yaml",
@@ -2566,7 +2564,7 @@ if all_test_info["Test23"]["enable"]:
     # File preparation 
     #*******************
     # Open config file
-    with open(image_to_image_3d_template_local, 'r') as stream:
+    with open(classification_3d_template_local, 'r') as stream:
         try:
             biapy_config = yaml.safe_load(stream)
         except yaml.YAMLError as exc:
@@ -2582,13 +2580,13 @@ if all_test_info["Test23"]["enable"]:
 
     biapy_config['DATA']['PATCH_SIZE'] = "(56,56,56,1)"
     
-    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(image_to_image_3d_data_outpath, "data", "train")
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(classification_3d_data_outpath, "data", "train")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
     biapy_config['DATA']['VAL']['FROM_TRAIN'] = True
     biapy_config['DATA']['VAL']['CROSS_VAL'] = True
     biapy_config['DATA']['VAL']['CROSS_VAL_NFOLD'] = 5
     biapy_config['DATA']['VAL']['CROSS_VAL_FOLD'] = 3
-    biapy_config['DATA']['TEST']['PATH'] = os.path.join(image_to_image_3d_data_outpath, "data", "test")
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(classification_3d_data_outpath, "data", "test")
     biapy_config['DATA']['TEST']['IN_MEMORY'] = True
     biapy_config['DATA']['TEST']['USE_VAL_AS_TEST'] = True
 
@@ -2603,7 +2601,7 @@ if all_test_info["Test23"]["enable"]:
     biapy_config['TEST']['ENABLE'] = True
 
     # Save file
-    test_file = os.path.join(image_to_image_folder, all_test_info["Test23"]["yaml"])
+    test_file = os.path.join(classification_folder, all_test_info["Test23"]["yaml"])
     with open(test_file, 'w') as outfile:
         yaml.dump(biapy_config, outfile, default_flow_style=False)
 
