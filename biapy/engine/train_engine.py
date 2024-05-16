@@ -33,6 +33,10 @@ def train_one_epoch(cfg, model, model_call_func, loss_function, activations, met
         # Gather inputs
         targets = prepare_targets(targets, batch)
 
+        if batch.shape[1:-1] != cfg.DATA.PATCH_SIZE[:-1]:
+            raise ValueError("Trying to input data with different shape than 'DATA.PATCH_SIZE'. Check your configuration."
+                f" Input: {batch.shape[1:-1]} vs PATCH_SIZE: {cfg.DATA.PATCH_SIZE[:-1]}")
+                
         # Pass the images through the model
         # TODO: control autocast and mixed precision
         with torch.cuda.amp.autocast(enabled=False):

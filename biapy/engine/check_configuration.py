@@ -397,7 +397,9 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 raise ValueError("'PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER' can only be used if 'DATA.VAL.IN_MEMORY' == 'False'")
             if cfg.DATA.TEST.IN_MEMORY:
                 raise ValueError("'PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER' can only be used if 'DATA.TEST.IN_MEMORY' == 'False'")
-
+        if cfg.PROBLEM.NDIM == '3D':
+            raise ValueError("3D workflow not available for 'IMAGE_TO_IMAGE' yet")
+            
     if cfg.DATA.EXTRACT_RANDOM_PATCH and cfg.DATA.PROBABILITY_MAP:
         if cfg.DATA.W_FOREGROUND+cfg.DATA.W_BACKGROUND != 1:
             raise ValueError("cfg.DATA.W_FOREGROUND+cfg.DATA.W_BACKGROUND need to sum 1. E.g. 0.94 and 0.06 respectively.")
@@ -627,23 +629,26 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         if cfg.MODEL.UPSAMPLE_LAYER.lower() not in ["upsampling", "convtranspose"]:
             raise ValueError("cfg.MODEL.UPSAMPLE_LAYER' needs to be one between ['upsampling', 'convtranspose']. Provided {}"
                             .format(cfg.MODEL.UPSAMPLE_LAYER))
-        if cfg.PROBLEM.TYPE in ["SEMANTIC_SEG", "INSTANCE_SEG", "DETECTION", "DENOISING"] and \
-            model_arch not in ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'resunet_se', 'unetr', 'multiresunet']:
-            raise ValueError("Architectures available for {} are: ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'resunet_se', 'unetr', 'multiresunet']"
-                            .format(cfg.PROBLEM.TYPE))
-        if cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
+        if cfg.PROBLEM.TYPE in ["SEMANTIC_SEG", "INSTANCE_SEG", "DETECTION", "DENOISING"]:
+            if model_arch not in ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'resunet_se', 'unetr', 'multiresunet']:
+                raise ValueError("Architectures available for {} are: ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'resunet_se', 'unetr', 'multiresunet']"
+                                .format(cfg.PROBLEM.TYPE))
+        elif cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
             if cfg.PROBLEM.NDIM == '2D' and model_arch not in ['edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'multiresunet']:
                 raise ValueError("Architectures available for 2D 'SUPER_RESOLUTION' are: ['edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'multiresunet']")
             elif cfg.PROBLEM.NDIM == '3D':
                 if model_arch not in ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'multiresunet']:
                     raise ValueError("Architectures available for 3D 'SUPER_RESOLUTION' are: ['unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'multiresunet']")
                 assert cfg.MODEL.UNET_SR_UPSAMPLE_POSITION in ["pre", "post"], "'MODEL.UNET_SR_UPSAMPLE_POSITION' not in ['pre', 'post']"
-        if cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
+        elif cfg.PROBLEM.TYPE == 'IMAGE_TO_IMAGE':
+            if model_arch not in ['edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'unetr', 'multiresunet']:
+                raise ValueError("Architectures available for 2D 'SUPER_RESOLUTION' are: ['edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'unetr', 'multiresunet']")
+        elif cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
             if model_arch not in ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet',  
                 'resunet_se', 'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae']:
                 raise ValueError("'SELF_SUPERVISED' models available are these: ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'resunet_se', " 
                     "'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae']")
-        if cfg.PROBLEM.TYPE == 'CLASSIFICATION':
+        elif cfg.PROBLEM.TYPE == 'CLASSIFICATION':
             if model_arch not in ['simple_cnn', 'vit'] and 'efficientnet' not in model_arch:
                 raise ValueError("Architectures available for 'CLASSIFICATION' are: ['simple_cnn', 'efficientnet_b[0-7]', 'vit']")
             if cfg.PROBLEM.NDIM == '3D' and 'efficientnet' in model_arch:

@@ -32,14 +32,14 @@ RUN conda update -qy conda \
 SHELL ["conda", "run", "-n", "BiaPy_env", "/bin/bash", "-c"]
 
 # Install BiaPy
-RUN pip install biapy==3.3.4.2
+RUN pip install biapy==3.4.3
 
 # Install Pytorch 1.12.1 + CUDA 10.2
 RUN conda install pytorch==1.12.1 torchvision==0.13.1 torchaudio==0.12.1 cudatoolkit=10.2 -c pytorch
 RUN pip install timm torchmetrics
 
 # Clone BiaPy, as running it with python -c "" stops the container with no error after a few seconds running
-RUN git clone --depth 1 https://github.com/BiaPyX/BiaPy.git  --branch v3.3.4 /installations/BiaPy
+RUN git clone --depth 1 https://github.com/BiaPyX/BiaPy.git  --branch v3.4.3 /installations/BiaPy
 
 # To remove CuDNN issue 
 WORKDIR /installations/miniconda3/envs/BiaPy_env/lib/python3.10/site-packages/nvidia/cuda_nvrtc/lib/

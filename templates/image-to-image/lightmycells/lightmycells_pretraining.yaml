@@ -1,0 +1,65 @@
+# BiaPy version: 3.4.3
+
+SYSTEM:
+    NUM_CPUS: -1
+    NUM_WORKERS: 5
+
+PROBLEM:
+    TYPE: SELF_SUPERVISED
+    NDIM: 2D
+    SELF_SUPERVISED:
+        PRETEXT_TASK: 'masking'
+  
+DATA: 
+    PATCH_SIZE: (1024, 1024, 1)
+    REFLECT_TO_COMPLETE_SHAPE: True
+    NORMALIZATION:
+        TYPE: 'custom'
+        CUSTOM_MODE: 'image'
+    TRAIN:                                                                                                              
+        PATH: /path/all_lightmycells_data
+        IN_MEMORY: True
+    VAL:
+        FROM_TRAIN: False
+        PATH: /path/all_lightmycells_fake_val_data
+
+AUGMENTOR:
+    ENABLE: True
+    DA_PROB: 0.5
+    ROT90: True
+    VFLIP: True
+    HFLIP: True
+    
+MODEL:
+    ARCHITECTURE: mae                                                                                                   
+    MAE_MASK_TYPE: "grid"
+    VIT_TOKEN_SIZE: 32                                                                                                  
+    VIT_EMBED_DIM: 768                                                                                                  
+    VIT_NUM_LAYERS: 12                                                                                                  
+    VIT_NUM_HEADS: 12                                                                                                   
+    VIT_MLP_RATIO: 4.                                                                                                   
+    VIT_NORM_EPS: 1.E-6                                                                                                 
+    MAE_DEC_HIDDEN_SIZE: 512                                                                                            
+    MAE_DEC_NUM_LAYERS: 8                                                                                               
+    MAE_DEC_NUM_HEADS: 12                                                                                               
+    MAE_DEC_MLP_DIMS: 1024
+    LOAD_CHECKPOINT: False
+    SAVE_CKPT_FREQ: 100   
+
+TRAIN:
+    VERBOSE: True
+    ENABLE: True
+    OPTIMIZER: ADAMW
+    OPT_BETAS: (0.9, 0.95)
+    W_DECAY: 0.05
+    LR: 1.E-4
+    BATCH_SIZE: 4
+    EPOCHS: 2000
+    PATIENCE: -1
+    LR_SCHEDULER:
+        NAME: 'warmupcosine'
+        MIN_LR: 1.E-5
+        WARMUP_COSINE_DECAY_EPOCHS: 100
+  
+TEST:
+    ENABLE: False
