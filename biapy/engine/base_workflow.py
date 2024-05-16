@@ -1379,8 +1379,14 @@ class Base_Workflow(metaclass=ABCMeta):
                 f = self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING if self.post_processing['per_image'] else self.cfg.PATHS.RESULT_DIR.PER_IMAGE
                 f_name = load_data_from_dir if self.cfg.PROBLEM.NDIM == '2D' else load_3d_images_from_dir
                 pred, _, _ = f_name(f)
-                if pred.ndim == 5:
-                    pred = np.squeeze( pred, 0 )
+
+                if type( pred ) is list:
+                    for i in range(len(pred)):
+                        if pred[i].ndim == 5:
+                            pred[i] = np.squeeze( pred[i], 0 )
+                else:
+                    if pred.ndim == 5:
+                        pred = np.squeeze( pred, 0 )
 
             self.after_merge_patches(pred)
             
