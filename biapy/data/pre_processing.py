@@ -2,6 +2,7 @@ import os
 import torch
 import scipy
 import h5py
+import zarr
 import numpy as np
 from tqdm import tqdm
 import pandas as pd
@@ -17,8 +18,10 @@ from skimage.exposure import equalize_adapthist
 from skimage.color import rgb2gray
 from skimage.filters import gaussian, median
 
-from biapy.utils.util import load_data_from_dir, load_3d_images_from_dir, save_tif, write_chunked_data, read_chunked_data
+from biapy.utils.util import (load_data_from_dir, load_3d_images_from_dir, save_tif, write_chunked_data, read_chunked_data,
+    order_dimensions)
 from biapy.utils.misc import is_main_process
+from biapy.data.data_3D_manipulation import load_3D_efficient_files, load_img_part_from_efficient_file
 
 #########################
 # INSTANCE SEGMENTATION #
@@ -42,10 +45,41 @@ def create_instance_channels(cfg, data_type='train'):
     """
 
     assert data_type in ['train', 'val']
-
-    f_name = load_data_from_dir if cfg.PROBLEM.NDIM == '2D' else load_3d_images_from_dir
     tag = "TRAIN" if data_type == "train" else "VAL"
-    Y, _, _, filenames = f_name(getattr(cfg.DATA, tag).GT_PATH, check_drange=False, return_filenames=True)
+
+    # Checking if the user inputted Zarr/H5 files 
+    if getattr(cfg.DATA, tag).INPUT_ZARR_MULTIPLE_DATA:
+        zarr_files = sorted(next(os.walk(getattr(cfg.DATA, tag).PATH))[1])
+        h5_files = sorted(next(os.walk(getattr(cfg.DATA, tag).PATH))[2])
+    else:
+        zarr_files = sorted(next(os.walk(getattr(cfg.DATA, tag).GT_PATH))[1])
+        h5_files = sorted(next(os.walk(getattr(cfg.DATA, tag).GT_PATH))[2])
+    
+    # Find patches info so we can iterate over them to create the instance mask
+    working_with_zarr_h5_files = False
+    if cfg.PROBLEM.NDIM == '3D' and (len(zarr_files) > 0 and '.zarr' in zarr_files[0]) or \
+        (len(h5_files) > 0 and '.h5' in h5_files[0]):
+        working_with_zarr_h5_files = True
+        # Check if the raw images and labels are within the same file 
+        mult_dat = None
+        data_path = getattr(cfg.DATA, tag).GT_PATH
+        if getattr(cfg.DATA, tag).INPUT_ZARR_MULTIPLE_DATA:
+            data_path = getattr(cfg.DATA, tag).PATH
+        
+        if len(zarr_files) > 0 and '.zarr' in zarr_files[0]:
+            print("Working with Zarr files . . .")
+            img_files = [os.path.join(data_path, x) for x in zarr_files]
+        elif len(h5_files) > 0 and '.h5' in h5_files[0]:
+            print("Working with H5 files . . .")
+            img_files = [os.path.join(data_path, x) for x in h5_files]
+        
+        Y, Y_total_patches = load_3D_efficient_files(img_files, input_axes=getattr(cfg.DATA, tag).INPUT_IMG_AXES_ORDER, 
+            crop_shape=cfg.DATA.PATCH_SIZE, overlap=getattr(cfg.DATA, tag).OVERLAP, padding=getattr(cfg.DATA, tag).PADDING)
+    else:
+        f_name = load_data_from_dir if cfg.PROBLEM.NDIM == '2D' else load_3d_images_from_dir
+        Y, _, _, filenames = f_name(getattr(cfg.DATA, tag).GT_PATH, check_drange=False, return_filenames=True)
+    del zarr_files, h5_files
+
     print("Creating Y_{} channels . . .".format(data_type))
     if isinstance(Y, list):
         for i in tqdm(range(len(Y)), disable=not is_main_process()):
@@ -61,6 +95,78 @@ def create_instance_channels(cfg, data_type='train'):
             else:
                 Y[i] = labels_into_channels(Y[i], mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, save_dir=getattr(cfg.PATHS, tag+'_INSTANCE_CHANNELS_CHECK'),
                     fb_mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE)
+    # Create the mask patch by patch (Zarr/H5)
+    elif working_with_zarr_h5_files and isinstance(Y, dict):
+        savepath = data_path+'_'+cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
+        if 'D' in cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE:
+            dtype_str = "float32"
+            raise ValueError("Currently distance creation using Zarr by chunks is not implemented.")
+        else:
+            dtype_str = "uint8"  
+            
+        mask = None
+        last_zarr_file = None 
+        for i in tqdm(range(len(Y.keys())), disable=not is_main_process()):
+            # Extract the patch to process
+            patch_coords = Y[i]['patch_coords']
+            img = load_img_part_from_efficient_file(Y[i]['filepath'], patch_coords, 
+                data_axis_order=getattr(cfg.DATA, tag).INPUT_IMG_AXES_ORDER,
+                data_path=getattr(cfg.DATA, tag).INPUT_ZARR_MULTIPLE_DATA_GT_PATH)
+            if img.ndim == 3: img = np.expand_dims(img,-1)
+            if img.ndim == 4: img = np.expand_dims(img,0)
+
+            # Create the instance mask
+            if cfg.MODEL.N_CLASSES > 2:
+                if img.shape[-1] != 2:
+                    raise ValueError("In instance segmentation, when 'MODEL.N_CLASSES' are more than 2 labels need to have two channels, "
+                        "e.g. (256,256,2), containing the instance segmentation map (first channel) and classification map (second channel).")
+                else:
+                    class_channel = np.expand_dims(img[...,1].copy(),-1)
+                    img = labels_into_channels(img, mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, save_dir=getattr(cfg.PATHS, tag+'_INSTANCE_CHANNELS_CHECK'),
+                        fb_mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE)
+                    img = np.concatenate([img,class_channel],axis=-1)
+            else:
+                img = labels_into_channels(img, mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, save_dir=getattr(cfg.PATHS, tag+'_INSTANCE_CHANNELS_CHECK'),
+                    fb_mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE)
+            img = img[0]
+
+            # Create the Zarr file where the mask will be placed 
+            if mask is None or os.path.basename(Y[i]['filepath']) != last_zarr_file: 
+                last_zarr_file = os.path.basename(Y[i]['filepath'])
+                imgfile, data = read_chunked_data(Y[i]['filepath'])
+                fname = os.path.join(savepath, os.path.basename(Y[i]['filepath']))
+                fid_mask = zarr.open_group(fname, mode="w")
+
+                # Determine data shape
+                out_data_shape = np.array(data.shape)
+                if "C" not in getattr(cfg.DATA, tag).INPUT_IMG_AXES_ORDER:
+                    out_data_shape = tuple(out_data_shape) + (img.shape[-1],)
+                    out_data_order = getattr(cfg.DATA, tag).INPUT_IMG_AXES_ORDER + "C"
+                    channel_pos = -1
+                else:
+                    out_data_shape[getattr(cfg.DATA, tag).INPUT_IMG_AXES_ORDER.index("C")] = 1
+                    out_data_shape = tuple(out_data_shape)
+                    out_data_order = getattr(cfg.DATA, tag).INPUT_IMG_AXES_ORDER
+                    channel_pos = getattr(cfg.DATA, tag).INPUT_IMG_AXES_ORDER.index("C")
+
+                mask = fid_mask.create_dataset("data", shape=out_data_shape, dtype=dtype_str)
+                del data, imgfile, fname
+            
+            # Adjust slices to calculate where to insert the predicted patch. This slice does not have into account the 
+            # channel so any of them can be inserted 
+            slices = (slice(patch_coords[0][0],patch_coords[0][1]), slice(patch_coords[1][0],patch_coords[1][1]),
+                slice(patch_coords[2][0],patch_coords[2][1]), slice(0,out_data_shape[channel_pos]))
+            data_ordered_slices = tuple(order_dimensions(slices, input_order="ZYXC", 
+                output_order=out_data_order, default_value=0))
+
+            # Adjust patch slice to transpose it before inserting intop the final data 
+            current_order = np.array(range(len(img.shape)))
+            transpose_order = order_dimensions(current_order, input_order="ZYXC", output_order=out_data_order,
+                default_value=np.nan)
+            transpose_order = [x for x in transpose_order if not np.isnan(x)]
+
+            # Place the patch into the Zarr
+            mask[data_ordered_slices] = img.transpose(transpose_order)        
     else:
         if cfg.MODEL.N_CLASSES > 2:
             if Y.shape[-1] != 2:
@@ -75,17 +181,18 @@ def create_instance_channels(cfg, data_type='train'):
             Y = labels_into_channels(Y, mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, save_dir=getattr(cfg.PATHS, tag+'_INSTANCE_CHANNELS_CHECK'),
                 fb_mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE)
     
-    save_tif(Y, data_dir=getattr(cfg.DATA, tag).INSTANCE_CHANNELS_MASK_DIR, filenames=filenames, verbose=cfg.TEST.VERBOSE)
-    X, _, _, filenames = f_name(getattr(cfg.DATA, tag).PATH, return_filenames=True)
-    print("Creating X_{} channels . . .".format(data_type))
-    save_tif(X, data_dir=getattr(cfg.DATA, tag).INSTANCE_CHANNELS_DIR, filenames=filenames, verbose=cfg.TEST.VERBOSE)
-    
-    # Save original X data with the labels 
-    for i in range(min(3,len(X))):
-        if isinstance(X, list):
-            save_tif(X[i], getattr(cfg.PATHS, tag+'_INSTANCE_CHANNELS_CHECK'), filenames=['vol'+str(i)+".tif"], verbose=False)
-        else:
-            save_tif(np.expand_dims(X[i],0), getattr(cfg.PATHS, tag+'_INSTANCE_CHANNELS_CHECK'), filenames=['vol'+str(i)+".tif"], verbose=False)
+    if not working_with_zarr_h5_files:
+        save_tif(Y, data_dir=getattr(cfg.DATA, tag).INSTANCE_CHANNELS_MASK_DIR, filenames=filenames, verbose=cfg.TEST.VERBOSE)
+        X, _, _, filenames = f_name(getattr(cfg.DATA, tag).PATH, return_filenames=True)
+        print("Creating X_{} channels . . .".format(data_type))
+        save_tif(X, data_dir=getattr(cfg.DATA, tag).INSTANCE_CHANNELS_DIR, filenames=filenames, verbose=cfg.TEST.VERBOSE)
+
+        # Save original X data with the labels 
+        for i in range(min(3,len(X))):
+            if isinstance(X, list):
+                save_tif(X[i], getattr(cfg.PATHS, tag+'_INSTANCE_CHANNELS_CHECK'), filenames=['vol'+str(i)+".tif"], verbose=False)
+            else:
+                save_tif(np.expand_dims(X[i],0), getattr(cfg.PATHS, tag+'_INSTANCE_CHANNELS_CHECK'), filenames=['vol'+str(i)+".tif"], verbose=False)
 
 def create_test_instance_channels(cfg):
     """Create test new data with appropiate channels based on ``PROBLEM.INSTANCE_SEG.DATA_CHANNELS`` for instance segmentation.

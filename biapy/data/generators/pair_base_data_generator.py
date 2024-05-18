@@ -18,6 +18,7 @@ from biapy.utils.util import img_to_onehot_encoding, pad_and_reflect, read_chunk
 from biapy.data.generators.augmentors import *
 from biapy.data.pre_processing import normalize, norm_range01, percentile_clip
 from biapy.utils.misc import is_main_process
+from biapy.data.data_3D_manipulation import load_img_part_from_efficient_file 
 
 class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
     """
@@ -832,39 +833,9 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 if self.Y_provided:
                     mask = np.squeeze(mask)
         else: # self.data_mode == "chunked_data"
-            imgfile, img = read_chunked_data(self.X[idx]['filepath'])
-
-            # Prepare slices to extract the patch
-            slices = []
-            for j in range(len(self.X[idx]['patch_coords'])):
-                if isinstance(self.X[idx]['patch_coords'][j], int):
-                    # +1 to prevent 0 length axes that can not be removed with np.squeeze later
-                    slices.append(slice(0,self.X[idx]['patch_coords'][j]+1)) 
-                else:
-                    slices.append(slice(self.X[idx]['patch_coords'][j][0],self.X[idx]['patch_coords'][j][1]))
-
-            img = np.squeeze(np.array(img[tuple(slices)]))
-            
-            if isinstance(imgfile, h5py.File):
-                imgfile.close()
-
+            img = load_img_part_from_efficient_file(self.X[idx]['filepath'], self.X[idx]['patch_coords'])
             if self.Y_provided:
-                maskfile, mask = read_chunked_data(self.Y[idx]['filepath'])
-
-                # Prepare slices to extract the patch
-                slices = []
-                for j in range(len(self.Y[idx]['patch_coords'])):
-                    if isinstance(self.Y[idx]['patch_coords'][j], int):
-                        # +1 to prevent 0 length axes that can not be removed with np.squeeze later
-                        slices.append(slice(0,self.Y[idx]['patch_coords'][j]+1)) 
-                    else:
-                        slices.append(slice(self.Y[idx]['patch_coords'][j][0],self.Y[idx]['patch_coords'][j][1]))
-
-                mask = np.squeeze(np.array(mask[tuple(slices)]))
-
-                if isinstance(maskfile, h5py.File):
-                    maskfile.close()
-                
+                mask = load_img_part_from_efficient_file(self.Y[idx]['filepath'], self.Y[idx]['patch_coords'])
         if self.Y_provided:
             img, mask = self.ensure_shape(img, mask)
         else:

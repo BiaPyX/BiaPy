@@ -6,7 +6,7 @@ from skimage.io import imread
 from tqdm import tqdm
 from sklearn.model_selection import train_test_split, StratifiedKFold
 
-from biapy.utils.util import load_3d_images_from_dir, order_dimensions, read_chunked_data
+from biapy.utils.util import load_3d_images_from_dir, order_dimensions, read_chunked_data, read_chunked_nested_data
 from biapy.utils.misc import is_main_process
 
 def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross_val_nsplits=5, cross_val_fold=1, 
@@ -381,7 +381,7 @@ def load_and_prepare_3D_data(train_path, train_mask_path, cross_val=False, cross
 
 def load_and_prepare_3D_efficient_format_data(train_path, train_mask_path, input_img_axes, input_mask_axes=None, cross_val=False, 
     cross_val_nsplits=5, cross_val_fold=1, val_split=0.1, seed=0, shuffle_val=True, crop_shape=(80, 80, 80, 1), y_upscaling=(1,1,1), 
-    ov=(0,0,0), padding=(0,0,0), minimum_foreground_perc=-1):
+    ov=(0,0,0), padding=(0,0,0), minimum_foreground_perc=-1, multiple_data_within_zarr=None):
     """
     Load train and validation images from the given paths to create 3D data.
 
@@ -433,6 +433,9 @@ def load_and_prepare_3D_efficient_format_data(train_path, train_mask_path, input
     minimum_foreground_perc : float, optional
         Minimum percetnage of foreground that a sample need to have no not be discarded. 
 
+    multiple_data_within_zarr : dict, optional
+        Additional information of where to find the data within the Zarr files.
+
     Returns
     -------
     X_train : 5D Numpy array
@@ -457,7 +460,9 @@ def load_and_prepare_3D_efficient_format_data(train_path, train_mask_path, input
         create_val = False
 
     print("0) Loading train image information . . .")
-    X_train, X_train_total_patches = load_3D_efficient_files(train_path, input_img_axes, crop_shape, ov, padding)
+    data_within_zarr_path = multiple_data_within_zarr['raw_path'] if multiple_data_within_zarr is not None else None
+    X_train, X_train_total_patches = load_3D_efficient_files(train_path, input_img_axes, crop_shape, ov, padding,
+        data_within_zarr_path=data_within_zarr_path)
 
     if train_mask_path is not None:
         if input_mask_axes is None:
@@ -465,8 +470,11 @@ def load_and_prepare_3D_efficient_format_data(train_path, train_mask_path, input
 
         print("0) Loading train GT information . . .")
         scrop = (crop_shape[0]*y_upscaling[0], crop_shape[1]*y_upscaling[1], crop_shape[2]*y_upscaling[2], crop_shape[3])
+        data_within_zarr_path = None
+        if multiple_data_within_zarr is not None and multiple_data_within_zarr['use_gt_path']:
+            data_within_zarr_path = multiple_data_within_zarr['gt_path']
         Y_train, Y_train_total_patches = load_3D_efficient_files(train_mask_path, input_mask_axes, scrop, ov, padding, 
-            check_channel=False)
+            check_channel=False, data_within_zarr_path=data_within_zarr_path)
 
         for i in range(len(Y_train_total_patches)):
             if Y_train_total_patches[i] != X_train_total_patches[i]:
@@ -629,7 +637,8 @@ def load_and_prepare_3D_efficient_format_data(train_path, train_mask_path, input
             print("*** Loaded train GT shape is: {}".format(yshape))
         return X_train, Y_train
 
-def load_3D_efficient_files(data_path, input_axes, crop_shape, overlap, padding, check_channel=True):
+def load_3D_efficient_files(data_path, input_axes, crop_shape, overlap, padding, check_channel=True, 
+    data_within_zarr_path=None):
     """
     Load information of all patches that can be extracted from all the Zarr/H5 samples in ``data_path``.
 
@@ -654,6 +663,9 @@ def load_3D_efficient_files(data_path, input_axes, crop_shape, overlap, padding,
     check_channel : bool, optional
         Whether to check if the crop_shape channel matches with the loaded images' one. 
         
+    data_within_zarr_path : str, optional
+        Path to find the data within the Zarr file. E.g. 'volumes.labels.neuron_ids'.
+
     Returns
     -------
     data_info : dict
@@ -669,8 +681,11 @@ def load_3D_efficient_files(data_path, input_axes, crop_shape, overlap, padding,
 
     for i, filename in enumerate(data_path):
         print(f"Reading Zarr/H5 file: {filename}")
-        file, data = read_chunked_data(filename)
-
+        if data_within_zarr_path:
+            file, data = read_chunked_nested_data(filename, data_within_zarr_path)
+        else:
+            file, data = read_chunked_data(filename)
+        
         # Modify crop_shape with the channel
         c_index = -1
         try:
@@ -713,6 +728,53 @@ def load_3D_efficient_files(data_path, input_axes, crop_shape, overlap, padding,
         data_total_patches.append(total_patches)
     
     return data_info, data_total_patches
+
+def load_img_part_from_efficient_file(filepath, patch_coords, data_axis_order="ZYXC", data_path=None):
+    """
+    Loads from ``filepath`` the patch determined by ``patch_coords``.
+
+    Parameters
+    ----------
+    filepath : str
+        Path to the Zarr/H5 file to read the patch from. 
+
+    patch_coords : Tuple of tuples of ints
+        Coordinates of patch to extract. 
+        
+    data_axis_order : str
+        Order of axes of ``data``. E.g. 'TZCYX', 'TZYXC', 'ZCYX', 'ZYXC'. 
+
+    data_path : str, optional
+        Path to find the data within the Zarr file. E.g. 'volumes.labels.neuron_ids'.
+        
+    Returns
+    -------
+    img : Numpy array
+        Extracted patch. E.g. ``(z, y, x, channels)``.
+    """
+    if data_path is not None:
+        imgfile, img = read_chunked_nested_data(filepath, data_path)
+    else:
+        imgfile, img = read_chunked_data(filepath)
+
+    # Prepare slices to extract the patch
+    slices = []
+    for j in range(len(patch_coords)):
+        if isinstance(patch_coords[j], int):
+            # +1 to prevent 0 length axes that can not be removed with np.squeeze later
+            slices.append(slice(0,patch_coords[j]+1)) 
+        else:
+            slices.append(slice(patch_coords[j][0],patch_coords[j][1]))
+
+    slices = tuple(slices)
+    data_ordered_slices = tuple(order_dimensions(slices, input_order="ZYXC", output_order=data_axis_order,
+            default_value=0))
+    img = np.squeeze(np.array(img[data_ordered_slices]))
+    
+    if isinstance(imgfile, h5py.File):
+        imgfile.close()
+
+    return img 
 
 def crop_3D_data_with_overlap(data, vol_shape, data_mask=None, overlap=(0,0,0), padding=(0,0,0), verbose=True,
     median_padding=False):

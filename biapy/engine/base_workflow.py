@@ -260,6 +260,15 @@ class Base_Workflow(metaclass=ABCMeta):
                     if self.cfg.DATA.FORCE_RGB:
                         print("WARNING: 'DATA.FORCE_RGB' not taken into account when working with Zarr/H5 images")
 
+                    # When the labels and raw images are within the same Zarr file
+                    mult_dat = None
+                    if self.cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA:
+                        mult_dat = {
+                            'raw_path': self.cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH,
+                            'gt_path': self.cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_GT_PATH,
+                            'use_gt_path': self.cfg.PROBLEM.TYPE != 'INSTANCE_SEG'
+                        }
+
                     objs = load_and_prepare_3D_efficient_format_data(
                         img_files, mask_files, input_img_axes=self.cfg.DATA.TRAIN.INPUT_IMG_AXES_ORDER, 
                         input_mask_axes=self.cfg.DATA.TRAIN.INPUT_MASK_AXES_ORDER, 
@@ -268,7 +277,8 @@ class Base_Workflow(metaclass=ABCMeta):
                         shuffle_val=self.cfg.DATA.VAL.RANDOM, crop_shape=self.cfg.DATA.PATCH_SIZE, 
                         y_upscaling=self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, 
                         ov=self.cfg.DATA.TRAIN.OVERLAP, padding=self.cfg.DATA.TRAIN.PADDING, 
-                        minimum_foreground_perc=self.cfg.DATA.TRAIN.MINIMUM_FOREGROUND_PER)
+                        minimum_foreground_perc=self.cfg.DATA.TRAIN.MINIMUM_FOREGROUND_PER,
+                        multiple_data_within_zarr=mult_dat)
                     
                     if self.cfg.DATA.VAL.FROM_TRAIN:
                         if self.cfg.DATA.VAL.CROSS_VAL:
@@ -334,8 +344,15 @@ class Base_Workflow(metaclass=ABCMeta):
                         if self.cfg.DATA.FORCE_RGB:
                             print("WARNING: 'DATA.FORCE_RGB' not taken into account when working with Zarr/H5 images")
 
+                        data_within_zarr_path, data_within_zarr_mask_path = None, None
+                        if self.cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA:
+                            data_within_zarr_path = self.cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH
+                            if self.cfg.PROBLEM.TYPE != 'INSTANCE_SEG':
+                                data_within_zarr_mask_path = self.cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH
+
                         self.X_val, _ = load_3D_efficient_files(data_path=img_files, input_axes=self.cfg.DATA.VAL.INPUT_IMG_AXES_ORDER,
-                            crop_shape=self.cfg.DATA.PATCH_SIZE, overlap=self.cfg.DATA.VAL.OVERLAP, padding=self.cfg.DATA.VAL.PADDING)
+                            crop_shape=self.cfg.DATA.PATCH_SIZE, overlap=self.cfg.DATA.VAL.OVERLAP, padding=self.cfg.DATA.VAL.PADDING,
+                            data_within_zarr_path=data_within_zarr_path)
 
                         if self.cfg.PROBLEM.NDIM == '2D':
                             crop_shape = (self.cfg.DATA.PATCH_SIZE[0]*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[0],
@@ -347,8 +364,9 @@ class Base_Workflow(metaclass=ABCMeta):
 
                         if self.load_Y_val:
                             print("1) Loading validation GT information . . .")
-                            self.Y_val, _ = load_3D_efficient_files(data_path=img_files, input_axes=self.cfg.DATA.VAL.INPUT_IMG_AXES_ORDER,
-                                crop_shape=crop_shape, overlap=self.cfg.DATA.VAL.OVERLAP, padding=self.cfg.DATA.VAL.PADDING, check_channel=False)                          
+                            self.Y_val, _ = load_3D_efficient_files(data_path=mask_files, input_axes=self.cfg.DATA.VAL.INPUT_MASK_AXES_ORDER,
+                                crop_shape=crop_shape, overlap=self.cfg.DATA.VAL.OVERLAP, padding=self.cfg.DATA.VAL.PADDING, check_channel=False,
+                                data_within_zarr_path=data_within_zarr_mask_path)                          
                         else:
                             self.Y_val = None
                         if self.Y_val is not None and len(self.X_val) != len(self.Y_val):
@@ -725,8 +743,12 @@ class Base_Workflow(metaclass=ABCMeta):
 
                 if self.original_test_path is None:
                     self.test_filenames = sorted(next(os.walk(self.cfg.DATA.TEST.PATH))[2])
+                    if len(self.test_filenames) == 0:
+                        self.test_filenames = sorted(next(os.walk(self.cfg.DATA.TEST.PATH))[1]) 
                 else:
                     self.test_filenames = sorted(next(os.walk(self.original_test_path))[2])
+                    if len(self.test_filenames) == 0:
+                        self.test_filenames = sorted(next(os.walk(self.original_test_path))[1])    
             else:
                 # The test is the validation, and as it is only available when validation is obtained from train and when 
                 # cross validation is enabled, the test set files reside in the train folder
@@ -912,97 +934,99 @@ class Base_Workflow(metaclass=ABCMeta):
             Filenames fo the samples to process. 
         """
         filename, file_extension = os.path.splitext(filenames)
-        if file_extension not in ['.hdf5', '.h5', ".zarr"]:
-            print("WARNING: you could have saved more memory by converting input test images into H5 file format (.h5) "
-                  "or Zarr (.zarr) as with 'TEST.BY_CHUNKS.ENABLE' option enabled H5/Zarr files will be processed by chunks")
-        # Load data
-        if file_extension in ['.hdf5', '.h5', ".zarr"]:
-            self._X_file, self._X = read_chunked_data(self._X)
-        else: # Numpy array
-            if self._X.ndim == 3:
-                c_pos = -1 if self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER[-1] == 'C' else 1
-                self._X = np.expand_dims(self._X, c_pos)
-
-        if is_main_process():
-            print(f"Loaded image shape is {self._X.shape}")
-
-        data_shape = self._X.shape
-
-        if self._X.ndim < 3:
-            raise ValueError("Loaded image need to have at least 3 dimensions: {} (ndim: {})".format(self._X.shape, self._X.ndim))
-        
-        if len(self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER) != self._X.ndim:
-            raise ValueError("'TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER' value {} does not match the number of dimensions of the loaded H5/Zarr "
-                "file {} (ndim: {})".format(self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER, self._X.shape, self._X.ndim))
-
-        # Data paths
-        os.makedirs(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, exist_ok=True)
         ext = ".h5" if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5" else ".zarr"
-        if self.cfg.SYSTEM.NUM_GPUS > 1:
-            out_data_filename = os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename+"_part"+str(get_rank())+ext)
-            out_data_mask_filename = os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename+"_part"+str(get_rank())+"_mask"+ext)
-        else:
-            out_data_filename = os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename+"_nodiv"+ext)
-            out_data_mask_filename = os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename+"_mask"+ext)
         out_data_div_filename = os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename+ext)
-        in_data = self._X
 
-        # Process in charge of processing one predicted patch
-        output_handle_proc = mp.Process(target=insert_patch_into_dataset, args=(out_data_filename, out_data_mask_filename, 
-            data_shape, self.output_queue, self.extract_info_queue, self.cfg, self.dtype_str, self.dtype, 
-            self.cfg.TEST.BY_CHUNKS.FORMAT, self.cfg.TEST.VERBOSE))
-        output_handle_proc.daemon=True
-        output_handle_proc.start()
-        
-        # Process in charge of loading part of the data 
-        load_data_process = mp.Process(target=extract_patch_from_dataset, args=(in_data, self.cfg, self.input_queue, 
-            self.extract_info_queue, self.cfg.TEST.VERBOSE))
-        load_data_process.daemon=True
-        load_data_process.start()
+        if not self.cfg.TEST.REUSE_PREDICTIONS:    
+            if file_extension not in ['.hdf5', '.h5', ".zarr"]:
+                print("WARNING: you could have saved more memory by converting input test images into H5 file format (.h5) "
+                    "or Zarr (.zarr) as with 'TEST.BY_CHUNKS.ENABLE' option enabled H5/Zarr files will be processed by chunks")
+            # Load data
+            if file_extension in ['.hdf5', '.h5', ".zarr"]:
+                self._X_file, self._X = read_chunked_data(self._X)
+            else: # Numpy array
+                if self._X.ndim == 3:
+                    c_pos = -1 if self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER[-1] == 'C' else 1
+                    self._X = np.expand_dims(self._X, c_pos)
 
-        if '_X_file' in locals() and isinstance(self._X_file, h5py.File):
-            self._X_file.close()
-        del self._X, in_data
- 
-        # Lock the thread inferring until no more patches 
-        if self.cfg.TEST.VERBOSE and self.cfg.SYSTEM.NUM_GPUS > 1:
-            print(f"[Rank {get_rank()} ({os.getpid()})] Doing inference ")
-        while True:
-            obj = self.input_queue.get(timeout=60)
-            if obj == None: break
+            if is_main_process():
+                print(f"Loaded image shape is {self._X.shape}")
 
-            img, patch_coords = obj
-            img, _ = self.test_generator.norm_X(img)
-            if self.cfg.TEST.AUGMENTATION:
-                p = ensemble16_3d_predictions(img[0], batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
-                    axis_order_back=self.axis_order_back, pred_func=self.model_call_func, 
-                    axis_order=self.axis_order, device=self.device)
+            data_shape = self._X.shape
+
+            if self._X.ndim < 3:
+                raise ValueError("Loaded image need to have at least 3 dimensions: {} (ndim: {})".format(self._X.shape, self._X.ndim))
+            
+            if len(self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER) != self._X.ndim:
+                raise ValueError("'TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER' value {} does not match the number of dimensions of the loaded H5/Zarr "
+                    "file {} (ndim: {})".format(self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER, self._X.shape, self._X.ndim))
+
+            # Data paths
+            os.makedirs(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, exist_ok=True)
+            if self.cfg.SYSTEM.NUM_GPUS > 1:
+                out_data_filename = os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename+"_part"+str(get_rank())+ext)
+                out_data_mask_filename = os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename+"_part"+str(get_rank())+"_mask"+ext)
             else:
-                with torch.cuda.amp.autocast():
-                    p = self.model_call_func(img)
-            p = self.apply_model_activations(p)
-            # Multi-head concatenation
-            if isinstance(p, list):
-                p = torch.cat((p[0], torch.argmax(p[1], axis=1).unsqueeze(1)), dim=1)
-            p = to_numpy_format(p, self.axis_order_back)
+                out_data_filename = os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename+"_nodiv"+ext)
+                out_data_mask_filename = os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename+"_mask"+ext)
+            in_data = self._X
 
-            # Create a mask with the overlap. Calculate the exact part of the patch that will be inserted in the 
-            # final H5/Zarr file
-            p = p[0, self.cfg.DATA.TEST.PADDING[0]:p.shape[1]-self.cfg.DATA.TEST.PADDING[0],
-                self.cfg.DATA.TEST.PADDING[1]:p.shape[2]-self.cfg.DATA.TEST.PADDING[1],
-                self.cfg.DATA.TEST.PADDING[2]:p.shape[3]-self.cfg.DATA.TEST.PADDING[2]]
-            m = np.ones(p.shape, dtype=np.uint8)
+            # Process in charge of processing one predicted patch
+            output_handle_proc = mp.Process(target=insert_patch_into_dataset, args=(out_data_filename, out_data_mask_filename, 
+                data_shape, self.output_queue, self.extract_info_queue, self.cfg, self.dtype_str, self.dtype, 
+                self.cfg.TEST.BY_CHUNKS.FORMAT, self.cfg.TEST.VERBOSE))
+            output_handle_proc.daemon=True
+            output_handle_proc.start()
+            
+            # Process in charge of loading part of the data 
+            load_data_process = mp.Process(target=extract_patch_from_dataset, args=(in_data, self.cfg, self.input_queue, 
+                self.extract_info_queue, self.cfg.TEST.VERBOSE))
+            load_data_process.daemon=True
+            load_data_process.start()
 
-            # Put the prediction into queue
-            self.output_queue.put([p, m, patch_coords])         
+            if '_X_file' in locals() and isinstance(self._X_file, h5py.File):
+                self._X_file.close()
+            del self._X, in_data
+    
+            # Lock the thread inferring until no more patches 
+            if self.cfg.TEST.VERBOSE and self.cfg.SYSTEM.NUM_GPUS > 1:
+                print(f"[Rank {get_rank()} ({os.getpid()})] Doing inference ")
+            while True:
+                obj = self.input_queue.get(timeout=60)
+                if obj == None: break
 
-        # Get some auxiliar variables
-        self.stats['patch_counter'] = self.extract_info_queue.get(timeout=60)
-        if is_main_process():
-            z_vol_info = self.extract_info_queue.get(timeout=60)
-            list_of_vols_in_z  = self.extract_info_queue.get(timeout=60)
-        load_data_process.join()
-        output_handle_proc.join()
+                img, patch_coords = obj
+                img, _ = self.test_generator.norm_X(img)
+                if self.cfg.TEST.AUGMENTATION:
+                    p = ensemble16_3d_predictions(img[0], batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
+                        axis_order_back=self.axis_order_back, pred_func=self.model_call_func, 
+                        axis_order=self.axis_order, device=self.device)
+                else:
+                    with torch.cuda.amp.autocast():
+                        p = self.model_call_func(img)
+                p = self.apply_model_activations(p)
+                # Multi-head concatenation
+                if isinstance(p, list):
+                    p = torch.cat((p[0], torch.argmax(p[1], axis=1).unsqueeze(1)), dim=1)
+                p = to_numpy_format(p, self.axis_order_back)
+
+                # Create a mask with the overlap. Calculate the exact part of the patch that will be inserted in the 
+                # final H5/Zarr file
+                p = p[0, self.cfg.DATA.TEST.PADDING[0]:p.shape[1]-self.cfg.DATA.TEST.PADDING[0],
+                    self.cfg.DATA.TEST.PADDING[1]:p.shape[2]-self.cfg.DATA.TEST.PADDING[1],
+                    self.cfg.DATA.TEST.PADDING[2]:p.shape[3]-self.cfg.DATA.TEST.PADDING[2]]
+                m = np.ones(p.shape, dtype=np.uint8)
+
+                # Put the prediction into queue
+                self.output_queue.put([p, m, patch_coords])         
+
+            # Get some auxiliar variables
+            self.stats['patch_counter'] = self.extract_info_queue.get(timeout=60)
+            if is_main_process():
+                z_vol_info = self.extract_info_queue.get(timeout=60)
+                list_of_vols_in_z  = self.extract_info_queue.get(timeout=60)
+            load_data_process.join()
+            output_handle_proc.join()
 
         # Wait until all threads are done so the main thread can create the full size image 
         if self.cfg.SYSTEM.NUM_GPUS > 1 :
@@ -1013,150 +1037,151 @@ class Base_Workflow(metaclass=ABCMeta):
 
         # Create the final H5/Zarr file that contains all the individual parts 
         if is_main_process():
-            if "C" not in self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER:
-                out_data_order = self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER + "C"
-                c_index = -1
-            else:
-                out_data_order = self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER
-                c_index = out_data_order.index("C")
-                
-            if self.cfg.SYSTEM.NUM_GPUS > 1:
-                # Obtain parts of the data created by all GPUs
-                if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
-                    data_parts_filenames = sorted(next(os.walk(self.cfg.PATHS.RESULT_DIR.PER_IMAGE))[2])
-                else: 
-                    data_parts_filenames = sorted(next(os.walk(self.cfg.PATHS.RESULT_DIR.PER_IMAGE))[1])
-                parts = []
-                mask_parts = []
-                for x in data_parts_filenames:
-                    if filename+"_part" in x and x.endswith(self.cfg.TEST.BY_CHUNKS.FORMAT):
-                        if "_mask" not in x:
-                            parts.append(x)
-                        else:
-                            mask_parts.append(x)
-                data_parts_filenames = parts 
-                data_parts_mask_filenames = mask_parts
-                del parts, mask_parts
-
-                if max(1,self.cfg.SYSTEM.NUM_GPUS) != len(data_parts_filenames) != len(list_of_vols_in_z):
-                    raise ValueError("Number of data parts is not the same as number of GPUs")
-
-                # Compose the large image 
-                for i, data_part_fname in enumerate(data_parts_filenames):
-                    print("Reading {}".format(os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, data_part_fname)))
-                    data_part_file, data_part = read_chunked_data(os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, data_part_fname))
-                    data_mask_part_file, data_mask_part = read_chunked_data(os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, data_parts_mask_filenames[i]))
-
-                    if 'data' not in locals():
-                        all_data_filename = os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename+ext)
-                        if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
-                            allfile = h5py.File(all_data_filename,'w')
-                            data = allfile.create_dataset("data", data_part.shape, dtype=self.dtype_str, compression="gzip")
-                        else:
-                            allfile = zarr.open_group(all_data_filename, mode="w")
-                            data = allfile.create_dataset("data", shape=data_part.shape, dtype=self.dtype_str, compression="gzip")
-
-                    for j, k in enumerate(list_of_vols_in_z[i]):
-                        
-                        slices = (
-                            slice(z_vol_info[k][0],z_vol_info[k][1]), # z (only z axis is distributed across GPUs)
-                            slice(None), # y
-                            slice(None), # x
-                            slice(None), # Channel
-                        )
-                        
-                        data_ordered_slices = order_dimensions(
-                            slices,
-                            input_order="ZYXC",
-                            output_order=out_data_order,
-                            default_value=0)
-
-                        if self.cfg.TEST.VERBOSE:
-                            print(f"Filling {k} [{z_vol_info[k][0]}:{z_vol_info[k][1]}]")
-                        data[data_ordered_slices] = data_part[data_ordered_slices] / data_mask_part[data_ordered_slices]
-
-                        if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
-                            allfile.flush() 
-
-                    if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
-                        data_part_file.close()
-                        data_mask_part_file.close()
-
-                # Save image
-                if self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF and self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
-                    current_order = np.array(range(len(data.shape)))
-                    transpose_order = order_dimensions(current_order, input_order=out_data_order,
-                        output_order="TZYXC", default_value=np.nan)
-                    transpose_order = [x for x in transpose_order if not np.isnan(x)]
-                    data = np.array(data, dtype=self.dtype).transpose(transpose_order)
-                    if "T" not in out_data_order:
-                        data = np.expand_dims(data,0)
-
-                    save_tif(data, self.cfg.PATHS.RESULT_DIR.PER_IMAGE, [filename+".tif"], verbose=self.cfg.TEST.VERBOSE)
-
-                if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
-                    allfile.close()      
-
-            # Just make the division with the overlap
-            else:
-                # Load predictions and overlapping mask
-                pred_file, pred = read_chunked_data(out_data_filename)
-                mask_file, mask = read_chunked_data(out_data_mask_filename)
-
-                # Create new file
-                if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
-                    fid_div = h5py.File(out_data_div_filename,'w')
-                    pred_div = fid_div.create_dataset("data", pred.shape, dtype=pred.dtype, compression="gzip")
+            if not self.cfg.TEST.REUSE_PREDICTIONS:
+                if "C" not in self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER:
+                    out_data_order = self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER + "C"
+                    c_index = -1
                 else:
-                    fid_div = zarr.open_group(out_data_div_filename, mode="w")
-                    pred_div = fid_div.create_dataset("data", shape=pred.shape, dtype=pred.dtype)
+                    out_data_order = self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER
+                    c_index = out_data_order.index("C")
                     
-                t_dim, z_dim, c_dim, y_dim, x_dim = order_dimensions(
-                    data_shape, self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER)
-                
-                # Fill the new data
-                z_vols = math.ceil(z_dim/self.cfg.DATA.PATCH_SIZE[0])
-                y_vols = math.ceil(y_dim/self.cfg.DATA.PATCH_SIZE[1])
-                x_vols = math.ceil(x_dim/self.cfg.DATA.PATCH_SIZE[2])
-                for z in tqdm(range(z_vols), disable=not is_main_process()):
-                    for y in range(y_vols):
-                        for x in range(x_vols):
+                if self.cfg.SYSTEM.NUM_GPUS > 1:
+                    # Obtain parts of the data created by all GPUs
+                    if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
+                        data_parts_filenames = sorted(next(os.walk(self.cfg.PATHS.RESULT_DIR.PER_IMAGE))[2])
+                    else: 
+                        data_parts_filenames = sorted(next(os.walk(self.cfg.PATHS.RESULT_DIR.PER_IMAGE))[1])
+                    parts = []
+                    mask_parts = []
+                    for x in data_parts_filenames:
+                        if filename+"_part" in x and x.endswith(self.cfg.TEST.BY_CHUNKS.FORMAT):
+                            if "_mask" not in x:
+                                parts.append(x)
+                            else:
+                                mask_parts.append(x)
+                    data_parts_filenames = parts 
+                    data_parts_mask_filenames = mask_parts
+                    del parts, mask_parts
 
+                    if max(1,self.cfg.SYSTEM.NUM_GPUS) != len(data_parts_filenames) != len(list_of_vols_in_z):
+                        raise ValueError("Number of data parts is not the same as number of GPUs")
+
+                    # Compose the large image 
+                    for i, data_part_fname in enumerate(data_parts_filenames):
+                        print("Reading {}".format(os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, data_part_fname)))
+                        data_part_file, data_part = read_chunked_data(os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, data_part_fname))
+                        data_mask_part_file, data_mask_part = read_chunked_data(os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, data_parts_mask_filenames[i]))
+
+                        if 'data' not in locals():
+                            all_data_filename = os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename+ext)
+                            if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
+                                allfile = h5py.File(all_data_filename,'w')
+                                data = allfile.create_dataset("data", data_part.shape, dtype=self.dtype_str, compression="gzip")
+                            else:
+                                allfile = zarr.open_group(all_data_filename, mode="w")
+                                data = allfile.create_dataset("data", shape=data_part.shape, dtype=self.dtype_str, compression="gzip")
+
+                        for j, k in enumerate(list_of_vols_in_z[i]):
+                            
                             slices = (
-                                slice(z*self.cfg.DATA.PATCH_SIZE[0], min(z_dim,self.cfg.DATA.PATCH_SIZE[0]*(z+1))),
-                                slice(y*self.cfg.DATA.PATCH_SIZE[1], min(y_dim,self.cfg.DATA.PATCH_SIZE[1]*(y+1))),
-                                slice(x*self.cfg.DATA.PATCH_SIZE[2], min(x_dim,self.cfg.DATA.PATCH_SIZE[2]*(x+1))),
-                                slice(0,pred.shape[c_index]), # Channel
+                                slice(z_vol_info[k][0],z_vol_info[k][1]), # z (only z axis is distributed across GPUs)
+                                slice(None), # y
+                                slice(None), # x
+                                slice(None), # Channel
                             )
-
+                            
                             data_ordered_slices = order_dimensions(
                                 slices,
-                                input_order = "ZYXC",
-                                output_order = out_data_order,
-                                default_value = 0,
-                                )
-                            pred_div[data_ordered_slices] = pred[data_ordered_slices] / mask[data_ordered_slices]
+                                input_order="ZYXC",
+                                output_order=out_data_order,
+                                default_value=0)
+
+                            if self.cfg.TEST.VERBOSE:
+                                print(f"Filling {k} [{z_vol_info[k][0]}:{z_vol_info[k][1]}]")
+                            data[data_ordered_slices] = data_part[data_ordered_slices] / data_mask_part[data_ordered_slices]
+
+                            if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
+                                allfile.flush() 
+
+                        if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
+                            data_part_file.close()
+                            data_mask_part_file.close()
+
+                    # Save image
+                    if self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF and self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
+                        current_order = np.array(range(len(data.shape)))
+                        transpose_order = order_dimensions(current_order, input_order=out_data_order,
+                            output_order="TZYXC", default_value=np.nan)
+                        transpose_order = [x for x in transpose_order if not np.isnan(x)]
+                        data = np.array(data, dtype=self.dtype).transpose(transpose_order)
+                        if "T" not in out_data_order:
+                            data = np.expand_dims(data,0)
+
+                        save_tif(data, self.cfg.PATHS.RESULT_DIR.PER_IMAGE, [filename+".tif"], verbose=self.cfg.TEST.VERBOSE)
 
                     if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
-                        fid_div.flush()
+                        allfile.close()      
 
-                # Save image
-                if self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF and self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
-                    current_order = np.array(range(len(pred_div.shape)))
-                    transpose_order = order_dimensions(current_order, input_order=out_data_order,
-                        output_order="TZYXC", default_value=np.nan)
-                    transpose_order = [x for x in transpose_order if not np.isnan(x)]
-                    pred_div = np.array(pred_div, dtype=self.dtype).transpose(transpose_order)
-                    if "T" not in out_data_order:
-                        pred_div = np.expand_dims(pred_div,0)
+                # Just make the division with the overlap
+                else:
+                    # Load predictions and overlapping mask
+                    pred_file, pred = read_chunked_data(out_data_filename)
+                    mask_file, mask = read_chunked_data(out_data_mask_filename)
 
-                    save_tif(pred_div, self.cfg.PATHS.RESULT_DIR.PER_IMAGE, [os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename+".tif")],
-                        verbose=self.cfg.TEST.VERBOSE)
+                    # Create new file
+                    if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
+                        fid_div = h5py.File(out_data_div_filename,'w')
+                        pred_div = fid_div.create_dataset("data", pred.shape, dtype=pred.dtype, compression="gzip")
+                    else:
+                        fid_div = zarr.open_group(out_data_div_filename, mode="w")
+                        pred_div = fid_div.create_dataset("data", shape=pred.shape, dtype=pred.dtype)
+                        
+                    t_dim, z_dim, c_dim, y_dim, x_dim = order_dimensions(
+                        data_shape, self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER)
+                    
+                    # Fill the new data
+                    z_vols = math.ceil(z_dim/self.cfg.DATA.PATCH_SIZE[0])
+                    y_vols = math.ceil(y_dim/self.cfg.DATA.PATCH_SIZE[1])
+                    x_vols = math.ceil(x_dim/self.cfg.DATA.PATCH_SIZE[2])
+                    for z in tqdm(range(z_vols), disable=not is_main_process()):
+                        for y in range(y_vols):
+                            for x in range(x_vols):
 
-                if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
-                    pred_file.close()
-                    mask_file.close()
-                    fid_div.close()
+                                slices = (
+                                    slice(z*self.cfg.DATA.PATCH_SIZE[0], min(z_dim,self.cfg.DATA.PATCH_SIZE[0]*(z+1))),
+                                    slice(y*self.cfg.DATA.PATCH_SIZE[1], min(y_dim,self.cfg.DATA.PATCH_SIZE[1]*(y+1))),
+                                    slice(x*self.cfg.DATA.PATCH_SIZE[2], min(x_dim,self.cfg.DATA.PATCH_SIZE[2]*(x+1))),
+                                    slice(0,pred.shape[c_index]), # Channel
+                                )
+
+                                data_ordered_slices = order_dimensions(
+                                    slices,
+                                    input_order = "ZYXC",
+                                    output_order = out_data_order,
+                                    default_value = 0,
+                                    )
+                                pred_div[data_ordered_slices] = pred[data_ordered_slices] / mask[data_ordered_slices]
+
+                        if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
+                            fid_div.flush()
+
+                    # Save image
+                    if self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF and self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
+                        current_order = np.array(range(len(pred_div.shape)))
+                        transpose_order = order_dimensions(current_order, input_order=out_data_order,
+                            output_order="TZYXC", default_value=np.nan)
+                        transpose_order = [x for x in transpose_order if not np.isnan(x)]
+                        pred_div = np.array(pred_div, dtype=self.dtype).transpose(transpose_order)
+                        if "T" not in out_data_order:
+                            pred_div = np.expand_dims(pred_div,0)
+
+                        save_tif(pred_div, self.cfg.PATHS.RESULT_DIR.PER_IMAGE, [os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename+".tif")],
+                            verbose=self.cfg.TEST.VERBOSE)
+
+                    if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
+                        pred_file.close()
+                        mask_file.close()
+                        fid_div.close()
 
             if self.cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS:
                 if self.cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE == "chunk_by_chunk":
@@ -1554,6 +1579,9 @@ class Base_Workflow(metaclass=ABCMeta):
             if channel_pos != 3 and pred.shape[channel_pos] <= 4:
                 new_pos = [x for x in range(4) if x != channel_pos]+[channel_pos,]
                 pred = pred.transpose(new_pos)
+
+        if pred.ndim == 4: 
+            pred = np.expand_dims(pred, 0)
 
         fname, file_extension = os.path.splitext(os.path.basename(filename))
         self.processing_filenames = [fname+".tif"]

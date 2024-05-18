@@ -216,6 +216,13 @@ class Config:
         _C.DATA.TRAIN.IN_MEMORY = True
         _C.DATA.TRAIN.PATH = os.path.join("user_data", 'train', 'x')
         _C.DATA.TRAIN.GT_PATH = os.path.join("user_data", 'train', 'y')
+        # Whether if your input Zarr contains the raw images and labels together or not. Use 'DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH'
+        # and 'DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_GT_PATH' to determine the tag to find within the Zarr
+        _C.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA = False
+        # Paths to the raw and gt within the Zarr file. Only used when 'DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA' is True.
+        # E.g. 'volumes.raw' for raw and 'volumes.labels.neuron_ids' for GT path. 
+        _C.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH = ''
+        _C.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_GT_PATH = ''
         # File to load/save data prepared with the appropiate channels in a instance segmentation problem.
         # E.g. _C.PROBLEM.TYPE ='INSTANCE_SEG' and _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS != 'B'
         _C.DATA.TRAIN.INSTANCE_CHANNELS_DIR = os.path.join("user_data", 'train', 'x_'+_C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
@@ -240,9 +247,9 @@ class Config:
         # Minimum foreground percentage that each image loaded need to have to not discard it (only used when TRAIN.IN_MEMORY == True). 
         # This option is only valid for SEMANTIC_SEG, INSTANCE_SEG and DETECTION. 
         _C.DATA.TRAIN.MINIMUM_FOREGROUND_PER = -1.
-        # Order of the axes of the image when using Zarr/H5 images to train
+        # Order of the axes of the image when using Zarr/H5 images in train data.
         _C.DATA.TRAIN.INPUT_IMG_AXES_ORDER = 'TZCYX'
-        # Order of the axes of the mask when using Zarr/H5 images to train
+        # Order of the axes of the mask when using Zarr/H5 images in train data.
         _C.DATA.TRAIN.INPUT_MASK_AXES_ORDER = 'TZCYX'
 
         # PREPROCESSING
@@ -370,6 +377,13 @@ class Config:
         _C.DATA.VAL.PATH = os.path.join("user_data", 'val', 'x')
         # Path to the validation data mask. Used when _C.DATA.VAL.FROM_TRAIN = False
         _C.DATA.VAL.GT_PATH = os.path.join("user_data", 'val', 'y')
+        # Whether if your input Zarr contains the raw images and labels together or not. Use 'DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH'
+        # and 'DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_GT_PATH' to determine the tag to find within the Zarr
+        _C.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA = False
+        # Paths to the raw and gt within the Zarr file. Only used when 'DATA.VAL.INPUT_ZARR_MULTIPLE_DATA' is True.
+        # E.g. 'volumes.raw' for raw and 'volumes.labels.neuron_ids' for GT path. 
+        _C.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH = ''
+        _C.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_GT_PATH = ''
         # File to load/save data prepared with the appropiate channels in a instance segmentation problem.
         # E.g. _C.PROBLEM.TYPE ='INSTANCE_SEG' and _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS != 'B'
         _C.DATA.VAL.INSTANCE_CHANNELS_DIR = os.path.join("user_data", 'val', 'x_'+_C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
@@ -388,10 +402,9 @@ class Config:
         _C.DATA.VAL.PADDING = (0,0)
         # Not used yet.
         _C.DATA.VAL.RESOLUTION = (-1,)
-        # Order of the axes of the image when using Zarr/H5 images to train
+        # Order of the axes of the image when using Zarr/H5 images in validation data.
         _C.DATA.VAL.INPUT_IMG_AXES_ORDER = 'TZCYX'
-        # Order of the axes of the mask when using Zarr/H5 images to train. 
-        # detection the mask
+        # Order of the axes of the mask when using Zarr/H5 images in validation data.
         _C.DATA.VAL.INPUT_MASK_AXES_ORDER = 'TZCYX'
 
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -820,6 +833,16 @@ class Config:
         _C.TEST.BY_CHUNKS.FLUSH_EACH = 100
         # Input Numpy/Zarr/H5 image's axes order. Options: ['TZCYX', 'TZYXC', 'ZCYX', 'ZYXC']
         _C.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER = 'TZCYX'
+        # Input Numpy/Zarr/H5 image's axes order. Options: ['TZCYX', 'TZYXC', 'ZCYX', 'ZYXC']
+        _C.TEST.BY_CHUNKS.INPUT_MASK_AXES_ORDER = 'TZCYX'
+        # Whether if your input Zarr contains the raw images and labels together or not. Use 'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH'
+        # and 'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_GT_PATH' to determine the tag to find within the Zarr
+        _C.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA = False
+        # Paths to the raw and gt within the Zarr file. Only used when 'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA' is True.
+        # E.g. 'volumes.raw' for raw and 'volumes.labels.neuron_ids' for GT path. 
+        _C.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH = ''
+        _C.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_GT_PATH = ''
+        
         # Whether if after reconstructing the prediction the pipeline will continue each workflow specific steps. For this process
         # the prediction image needs to be loaded into memory so be sure that it can fit in you memory. E.g. in instance 
         # segmentation the instances will be created from the prediction.
