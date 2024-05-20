@@ -500,7 +500,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             zarr_files = sorted(next(os.walk(cfg.DATA.TRAIN.PATH))[1])
             if len(zarr_files) == 0:
                 raise ValueError("Validation can only be extracted from train, when 'DATA.TRAIN.IN_MEMORY' == False, if 'DATA.TRAIN.PATH' "
-                    " contain Zarr files. If it's not your case, please, set 'DATA.VAL.FROM_TRAIN' to False and configure "
+                    "contains Zarr files. If it's not your case, please, set 'DATA.VAL.FROM_TRAIN' to False and configure "
                     "'DATA.VAL.PATH'/'DATA.VAL.GT_PATH'")
         if cfg.PROBLEM.NDIM == '2D' and cfg.DATA.TRAIN.INPUT_IMG_AXES_ORDER != 'TZCYX':
             raise ValueError("'DATA.TRAIN.INPUT_IMG_AXES_ORDER' can not be set in 2D problems")
