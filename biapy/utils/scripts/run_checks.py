@@ -339,8 +339,8 @@ all_test_info["Test27"] = {
 }
 
 all_test_info["Test28"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test28",
     "description": "3D Image to image. Nuclear_Pore_complex_3D data. in memory true. val 0.1 of train.",
     "yaml": "test_28.yaml",

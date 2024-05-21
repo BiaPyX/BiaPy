@@ -195,7 +195,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
     if cfg.MODEL.N_CLASSES > 2 and cfg.PROBLEM.TYPE not in ['SEMANTIC_SEG','INSTANCE_SEG','DETECTION','CLASSIFICATION',"IMAGE_TO_IMAGE"]:
         raise ValueError("'MODEL.N_CLASSES' can only be greater than 2 in the following workflows: 'SEMANTIC_SEG', "
-            "'INSTANCE_SEG', 'DETECTION' and 'CLASSIFICATION'")
+            "'INSTANCE_SEG', 'DETECTION', 'CLASSIFICATION' and 'IMAGE_TO_IMAGE'")
 
     model_arch = cfg.MODEL.ARCHITECTURE.lower()
     #### Semantic segmentation ####
@@ -661,7 +661,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 assert cfg.MODEL.UNET_SR_UPSAMPLE_POSITION in ["pre", "post"], "'MODEL.UNET_SR_UPSAMPLE_POSITION' not in ['pre', 'post']"
         elif cfg.PROBLEM.TYPE == 'IMAGE_TO_IMAGE':
             if model_arch not in ['edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'unetr', 'multiresunet']:
-                raise ValueError("Architectures available for 2D 'IMAGE_TO_IMAGE' are: ['edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'unetr', 'multiresunet']")
+                raise ValueError("Architectures available for 'IMAGE_TO_IMAGE' are: ['edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'unetr', 'multiresunet']")
         elif cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
             if model_arch not in ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet',  
                 'resunet_se', 'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae']:
