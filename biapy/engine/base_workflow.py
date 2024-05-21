@@ -85,7 +85,7 @@ class Base_Workflow(metaclass=ABCMeta):
         # Per crop
         self.stats['loss_per_crop'] = 0
         self.stats['iou_per_crop'] = 0
-        self.stats['patch_counter'] = 0
+        self.stats['patch_by_batch_counter'] = 0
 
         # Merging the image
         self.stats['iou_merge_patches'] = 0
@@ -1021,7 +1021,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.output_queue.put([p, m, patch_coords])         
 
             # Get some auxiliar variables
-            self.stats['patch_counter'] = self.extract_info_queue.get(timeout=60)
+            self.stats['patch_by_batch_counter'] = self.extract_info_queue.get(timeout=60)
             if is_main_process():
                 z_vol_info = self.extract_info_queue.get(timeout=60)
                 list_of_vols_in_z  = self.extract_info_queue.get(timeout=60)
@@ -1278,10 +1278,9 @@ class Base_Workflow(metaclass=ABCMeta):
                         
                         self.stats['loss_per_crop'] += loss.item()
                         self.stats['iou_per_crop'] += train_iou
-                        
-                    del output    
+                        self.stats['patch_by_batch_counter'] += 1
 
-                self.stats['patch_counter'] += self._X.shape[0]
+                    del output    
 
                 # Predict each patch
                 if self.cfg.TEST.AUGMENTATION:
@@ -1486,8 +1485,8 @@ class Base_Workflow(metaclass=ABCMeta):
             Number of images to average the metrics.
         """
         # Per crop
-        self.stats['loss_per_crop'] = self.stats['loss_per_crop'] / self.stats['patch_counter'] if self.stats['patch_counter'] != 0 else 0
-        self.stats['iou_per_crop'] = self.stats['iou_per_crop'] / self.stats['patch_counter'] if self.stats['patch_counter'] != 0 else 0
+        self.stats['loss_per_crop'] = self.stats['loss_per_crop'] / self.stats['patch_by_batch_counter'] if self.stats['patch_by_batch_counter'] != 0 else 0
+        self.stats['iou_per_crop'] = self.stats['iou_per_crop'] / self.stats['patch_by_batch_counter'] if self.stats['patch_by_batch_counter'] != 0 else 0
 
         # Merge patches
         self.stats['iou_merge_patches'] = self.stats['iou_merge_patches'] / image_counter

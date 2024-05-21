@@ -244,8 +244,6 @@ class Classification_Workflow(Base_Workflow):
         norm : List of dicts
             Normalization used during training. Required to denormalize the predictions of the model.
         """
-        self.stats['patch_counter'] += self._X.shape[0]
-
         # Predict each patch
         l = int(math.ceil(self._X.shape[0]/self.cfg.TRAIN.BATCH_SIZE))
         for k in tqdm(range(l), leave=False, disable=not is_main_process()):
@@ -254,6 +252,7 @@ class Classification_Workflow(Base_Workflow):
                 p = self.model_call_func(self._X[k*self.cfg.TRAIN.BATCH_SIZE:top]).cpu().numpy()
             p = np.argmax(p, axis=1)
             self.all_pred.append(p)
+            self.stats['patch_by_batch_counter'] += 1 
 
         if self.cfg.DATA.TEST.LOAD_GT: 
             self.all_gt.append(self._Y)
