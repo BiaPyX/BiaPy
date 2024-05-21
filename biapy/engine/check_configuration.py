@@ -397,8 +397,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 raise ValueError("'PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER' can only be used if 'DATA.VAL.IN_MEMORY' == 'False'")
             if cfg.DATA.TEST.IN_MEMORY:
                 raise ValueError("'PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER' can only be used if 'DATA.TEST.IN_MEMORY' == 'False'")
-        if cfg.PROBLEM.NDIM == '3D':
-            raise ValueError("3D workflow not available for 'IMAGE_TO_IMAGE' yet")
             
     if cfg.DATA.EXTRACT_RANDOM_PATCH and cfg.DATA.PROBABILITY_MAP:
         if cfg.DATA.W_FOREGROUND+cfg.DATA.W_BACKGROUND != 1:
@@ -439,22 +437,39 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 raise ValueError(f"Path pointed by 'DATA.PREPROCESS.MATCH_HISTOGRAM.REFERENCE_PATH' does not exist: {cfg.DATA.PREPROCESS.MATCH_HISTOGRAM.REFERENCE_PATH}")
 
     #### Data #### 
-    if cfg.TRAIN.ENABLE and check_data_paths:
-        if not os.path.exists(cfg.DATA.TRAIN.PATH):
-            raise ValueError("Train data dir not found: {}".format(cfg.DATA.TRAIN.PATH))
-        if not os.path.exists(cfg.DATA.TRAIN.GT_PATH) and cfg.PROBLEM.TYPE not in ['DENOISING', "CLASSIFICATION", "SELF_SUPERVISED"]:
-            raise ValueError("Train mask data dir not found: {}".format(cfg.DATA.TRAIN.GT_PATH))
-        if not cfg.DATA.VAL.FROM_TRAIN and not cfg.DATA.VAL.IN_MEMORY:
-            if not os.path.exists(cfg.DATA.VAL.PATH):
-                raise ValueError("Validation data dir not found: {}".format(cfg.DATA.VAL.PATH))
-            if not os.path.exists(cfg.DATA.VAL.GT_PATH) and cfg.PROBLEM.TYPE not in ['DENOISING', "CLASSIFICATION", "SELF_SUPERVISED"]:
-                raise ValueError("Validation mask data dir not found: {}".format(cfg.DATA.VAL.GT_PATH))
+    if cfg.TRAIN.ENABLE:
+        if check_data_paths:
+            if not os.path.exists(cfg.DATA.TRAIN.PATH):
+                raise ValueError("Train data dir not found: {}".format(cfg.DATA.TRAIN.PATH))
+            if not os.path.exists(cfg.DATA.TRAIN.GT_PATH) and cfg.PROBLEM.TYPE not in ['DENOISING', "CLASSIFICATION", "SELF_SUPERVISED"] and\
+            not cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA:
+                raise ValueError("Train mask data dir not found: {}".format(cfg.DATA.TRAIN.GT_PATH))
+            if not cfg.DATA.VAL.FROM_TRAIN and not cfg.DATA.VAL.IN_MEMORY:
+                if not os.path.exists(cfg.DATA.VAL.PATH):
+                    raise ValueError("Validation data dir not found: {}".format(cfg.DATA.VAL.PATH))
+                if not os.path.exists(cfg.DATA.VAL.GT_PATH) and cfg.PROBLEM.TYPE not in ['DENOISING', "CLASSIFICATION", "SELF_SUPERVISED"] and\
+                not cfg.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA:
+                    raise ValueError("Validation mask data dir not found: {}".format(cfg.DATA.VAL.GT_PATH))
+        if cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA:
+            if cfg.PROBLEM.NDIM != '3D':
+                raise ValueError("'DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA' to True is only implemented in 3D workflows")
+            if cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH == '' or cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_GT_PATH == '':
+                raise ValueError("'DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH' and 'DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_GT_PATH' "
+                    "need to be set when 'DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA' is used.")
+        if cfg.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA:
+            if cfg.PROBLEM.NDIM != '3D':
+                raise ValueError("'DATA.VAL.INPUT_ZARR_MULTIPLE_DATA' to True is only implemented in 3D workflows")
+            if cfg.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH == '' or cfg.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_GT_PATH == '':
+                raise ValueError("'DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH' and 'DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_GT_PATH' "
+                    "need to be set when 'DATA.VAL.INPUT_ZARR_MULTIPLE_DATA' is used.")
+
     if cfg.TEST.ENABLE and not cfg.DATA.TEST.USE_VAL_AS_TEST and check_data_paths:
         if not os.path.exists(cfg.DATA.TEST.PATH):
             raise ValueError("Test data not found: {}".format(cfg.DATA.TEST.PATH))
-        if cfg.DATA.TEST.LOAD_GT and not os.path.exists(cfg.DATA.TEST.GT_PATH) and cfg.PROBLEM.TYPE not in ["CLASSIFICATION", "SELF_SUPERVISED"]:
+        if cfg.DATA.TEST.LOAD_GT and not os.path.exists(cfg.DATA.TEST.GT_PATH) and cfg.PROBLEM.TYPE not in ["CLASSIFICATION", "SELF_SUPERVISED"] and\
+        not cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA:
             raise ValueError("Test data mask not found: {}".format(cfg.DATA.TEST.GT_PATH))
-    if cfg.TEST.BY_CHUNKS.ENABLE:
+    if cfg.TEST.ENABLE and cfg.TEST.BY_CHUNKS.ENABLE:
         if cfg.PROBLEM.NDIM == '2D':
             raise ValueError("'TEST.BY_CHUNKS' can not be activated when 'PROBLEM.NDIM' is 2D")
         assert cfg.TEST.BY_CHUNKS.FORMAT.lower() in ["h5", "zarr"], "'TEST.BY_CHUNKS.FORMAT' needs to be one between ['H5', 'Zarr']"
@@ -466,6 +481,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             raise ValueError("'TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER' needs to be at least of length 3, e.g., 'ZYX'")
         if cfg.MODEL.N_CLASSES > 2:
             raise ValueError("Not implemented pipeline option: 'MODEL.N_CLASSES' > 2 and 'TEST.BY_CHUNKS'")
+        if cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA and (cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH == '' or \
+            cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_GT_PATH == ''):
+            raise ValueError("'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH' and 'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_GT_PATH' "
+                "need to be set when 'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA' is used.")
 
     if cfg.TRAIN.ENABLE:
         if cfg.DATA.EXTRACT_RANDOM_PATCH and cfg.DATA.PROBABILITY_MAP:
@@ -479,7 +498,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             zarr_files = sorted(next(os.walk(cfg.DATA.TRAIN.PATH))[1])
             if len(zarr_files) == 0:
                 raise ValueError("Validation can only be extracted from train, when 'DATA.TRAIN.IN_MEMORY' == False, if 'DATA.TRAIN.PATH' "
-                    " contain Zarr files. If it's not your case, please, set 'DATA.VAL.FROM_TRAIN' to False and configure "
+                    "contains Zarr files. If it's not your case, please, set 'DATA.VAL.FROM_TRAIN' to False and configure "
                     "'DATA.VAL.PATH'/'DATA.VAL.GT_PATH'")
         if cfg.PROBLEM.NDIM == '2D' and cfg.DATA.TRAIN.INPUT_IMG_AXES_ORDER != 'TZCYX':
             raise ValueError("'DATA.TRAIN.INPUT_IMG_AXES_ORDER' can not be set in 2D problems")
@@ -624,7 +643,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
     if cfg.MODEL.SOURCE == "biapy":
         assert cfg.MODEL.LAST_ACTIVATION.lower() in ["relu", "tanh", "leaky_relu", "elu", "gelu", "silu", "sigmoid","softmax", "linear", "none"], \
-            "Get unknown activation key {}".format(activation)
+            "Get unknown activation key {}".format(cfg.MODEL.LAST_ACTIVATION.lower())
     
         if cfg.MODEL.UPSAMPLE_LAYER.lower() not in ["upsampling", "convtranspose"]:
             raise ValueError("cfg.MODEL.UPSAMPLE_LAYER' needs to be one between ['upsampling', 'convtranspose']. Provided {}"
@@ -642,7 +661,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 assert cfg.MODEL.UNET_SR_UPSAMPLE_POSITION in ["pre", "post"], "'MODEL.UNET_SR_UPSAMPLE_POSITION' not in ['pre', 'post']"
         elif cfg.PROBLEM.TYPE == 'IMAGE_TO_IMAGE':
             if model_arch not in ['edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'unetr', 'multiresunet']:
-                raise ValueError("Architectures available for 2D 'SUPER_RESOLUTION' are: ['edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'unetr', 'multiresunet']")
+                raise ValueError("Architectures available for 2D 'IMAGE_TO_IMAGE' are: ['edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'unetr', 'multiresunet']")
         elif cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
             if model_arch not in ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet',  
                 'resunet_se', 'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae']:
@@ -664,9 +683,9 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         # will throw an error not very clear for users
         if model_arch in ['unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'multiresunet']:
             z_size = cfg.DATA.PATCH_SIZE[0]
+            sizes = cfg.DATA.PATCH_SIZE[1:-1]
             for i in range(len(cfg.MODEL.FEATURE_MAPS)-1):
-                sizes = cfg.DATA.PATCH_SIZE[:-1]
-                if not all([False for x in sizes if x%(np.power(2,(i+1))) != 0 and z_size % cfg.MODEL.Z_DOWN[i] != 0 or x == 0]):
+                if not all([False for x in sizes if x%(np.power(2,(i+1))) != 0 or z_size % cfg.MODEL.Z_DOWN[i] != 0]):
                     m = "The 'DATA.PATCH_SIZE' provided is not divisible by 2 in each of the U-Net's levels. You can:\n 1) Reduce the number " + \
                             "of levels (by reducing 'cfg.MODEL.FEATURE_MAPS' array's length)\n 2) Increase 'DATA.PATCH_SIZE'"
                     if cfg.PROBLEM.NDIM == '3D':

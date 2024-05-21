@@ -9,7 +9,7 @@ from PIL import ImageEnhance, Image
 from os import path
 
 img_shape = (4096, 4096)
-nput_dir = "/home/user/input"
+input_dir = "/home/user/input"
 output_dir = "/home/user/output"
 h5_filename = '0_human_instance_seg_pred.h5'
 #h5_filename = '1_rat_instance_seg_pred.h5'

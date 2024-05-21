@@ -121,8 +121,9 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
     if cfg.DATA.TRAIN.IN_MEMORY:
         data_mode = "in_memory"
     else:
-        if cfg.PROBLEM.NDIM == '3D' and X_train is not None and isinstance(X_train, list) and isinstance(X_train[0], dict) and \
-            'filepath' in X_train[0] and ('.zarr' in X_train[0]['filepath'] or '.h5' in X_train[0]['filepath']):
+        if cfg.PROBLEM.NDIM == '3D' and X_train is not None and (isinstance(X_train, list) or isinstance(X_train, dict)) and \
+            isinstance(X_train[0], dict) and 'filepath' in X_train[0] and ('.zarr' in X_train[0]['filepath'] or \
+            '.h5' in X_train[0]['filepath']):
             data_mode = "chunked_data"
         else:
             data_mode = "not_in_memory"
@@ -226,8 +227,9 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
         if cfg.DATA.VAL.IN_MEMORY:
             val_data_mode = "in_memory"
         else:
-            if cfg.PROBLEM.NDIM == '3D' and X_val is not None and isinstance(X_val, list) and isinstance(X_val[0], dict) and \
-                'filepath' in X_val[0] and ('.zarr' in X_val[0]['filepath'] or '.h5' in X_val[0]['filepath']):
+            if cfg.PROBLEM.NDIM == '3D' and X_val is not None and (isinstance(X_val, list) or isinstance(X_val, dict)) and \
+                isinstance(X_val[0], dict) and 'filepath' in X_val[0] and ('.zarr' in X_val[0]['filepath'] or \
+                '.h5' in X_val[0]['filepath']):
                 val_data_mode = "chunked_data"
             else:
                 val_data_mode = "not_in_memory"

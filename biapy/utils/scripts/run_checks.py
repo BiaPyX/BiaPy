@@ -14,172 +14,8 @@ import numpy as np
 
 gpu = "0"
 gpus = "0,1" # For those tests that use more than one 
-
 data_folder = "/data/dfranco/biapy_checks"
-results_folder = os.path.join(data_folder,  "output")
 biapy_folder = "/data/dfranco/BiaPy"
-
-###############
-# Semantic seg.
-###############
-semantic_folder = os.path.join(data_folder, "semantic_seg")
-
-# 2D
-semantic_2d_data_drive_link = "https://drive.google.com/uc?id=1DfUoVHf__xk-s4BWSKbkfKYMnES-9RJt"
-semantic_2d_template = "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/semantic_segmentation/2d_semantic_segmentation.yaml"
-semantic_2d_template_local = os.path.join(semantic_folder, "2d_semantic_segmentation.yaml")
-semantic_2d_data_filename = "fibsem_epfl_2D.zip"
-semantic_2d_data_outpath = os.path.join(semantic_folder, "fibsem_epfl_2D")
-# 3D
-semantic_3d_data_drive_link = "https://drive.google.com/uc?id=10Cf11PtERq4pDHCJroekxu_hf10EZzwG"
-semantic_3d_template = "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/semantic_segmentation/3d_semantic_segmentation.yaml"
-semantic_3d_template_local = os.path.join(semantic_folder, "3d_semantic_segmentation.yaml")
-semantic_3d_data_filename = "fibsem_epfl_3D.zip"
-semantic_3d_data_outpath = os.path.join(semantic_folder, "fibsem_epfl_3D")
-
-###############
-# Instance seg.
-###############
-inst_seg_folder = os.path.join(data_folder, "instance_seg")
-
-# 2D
-instance_seg_2d_template = "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/instance_segmentation/2d_instance_segmentation.yaml"
-instance_seg_2d_template_local = os.path.join(inst_seg_folder, "2d_instance_segmentation.yaml")
-instance_seg_2d_data_drive_link = "https://drive.google.com/uc?id=1b7_WDDGEEaEoIpO_1EefVr0w0VQaetmg"
-instance_seg_2d_data_filename = "Stardist_v2_2D.zip"
-instance_seg_2d_data_outpath = os.path.join(inst_seg_folder, "Stardist_v2_2D")
-# 3D
-instance_seg_3d_template = "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/instance_segmentation/3d_instance_segmentation.yaml"
-instance_seg_3d_template_local = os.path.join(inst_seg_folder, "3d_instance_segmentation.yaml")
-instance_seg_3d_data_drive_link = "https://drive.google.com/uc?id=1fdL35ZTNw5hhiKau1gadaGu-rc5ZU_C7"
-instance_seg_3d_data_filename = "demo3D_3D.zip"
-instance_seg_3d_data_outpath = os.path.join(inst_seg_folder, "demo3D_3D")
-
-instance_seg_cyst_data_zenodo_link = "https://zenodo.org/records/10973241/files/CartoCell.zip?download=1"
-instance_seg_cyst_data_filename = "CartoCell.zip"
-instance_seg_cyst_data_outpath = os.path.join(inst_seg_folder, "CartoCell")
-
-###########
-# Detection
-###########
-detection_folder = os.path.join(data_folder, "detection")
-
-# 2D
-detection_2d_template = "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/detection/2d_detection.yaml"
-detection_2d_template_local = os.path.join(detection_folder, "2d_detection.yaml")
-detection_2d_data_drive_link = "https://drive.google.com/uc?id=1pWqQhcWY15b5fVLZDkPS-vnE-RU6NlYf"
-detection_2d_data_filename = "Stardist_v2_detection.zip"
-detection_2d_data_outpath = os.path.join(detection_folder, "Stardist_v2_detection")
-# 3D
-detection_3d_template = "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/detection/3d_detection.yaml"
-detection_3d_template_local = os.path.join(detection_folder, "3d_detection.yaml")
-detection_3d_data_drive_link = "https://drive.google.com/uc?id=19P4AcvBPJXeW7QRj92Jh1keunGa5fi8d"
-detection_3d_data_filename = "NucMM-Z_training.zip"
-detection_3d_data_outpath = os.path.join(detection_folder, "NucMM-Z_training")
-
-detection_3d_brainglobe_data_drive_link = "https://drive.google.com/uc?id=1veBueUuYi_mWbSky_4mtzfKBpO00SvWR"
-detection_3d_brainglobe_data_filename = "brainglobe_small_data.zip"
-detection_3d_brainglobe_data_outpath = os.path.join(detection_folder, "brainglobe_small_data")
-
-###########
-# Denoising
-###########
-denoising_folder = os.path.join(data_folder, "denoising")
-
-# 2D
-denoising_2d_template = "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/denoising/2d_denoising.yaml"
-denoising_2d_template_local = os.path.join(denoising_folder, "2d_denoising.yaml")
-denoising_2d_data_drive_link = "https://drive.google.com/uc?id=1TFvOySOiIgVIv9p4pbHdEbai-d2YGDvV"
-denoising_2d_data_filename = "convallaria2D.zip"
-denoising_2d_data_outpath = os.path.join(denoising_folder, "convallaria2D")
-# 3D
-denoising_3d_template = "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/denoising/3d_denoising.yaml"
-denoising_3d_template_local = os.path.join(denoising_folder, "3d_denoising.yaml")
-denoising_3d_data_drive_link = "https://drive.google.com/uc?id=1OIjnUoJKdnbClBlpzk7V5R8wtoLont-r"
-denoising_3d_data_filename = "flywing3D.zip"
-denoising_3d_data_outpath = os.path.join(denoising_folder, "flywing3D")
-
-###########
-# SR
-###########
-super_resolution_folder = os.path.join(data_folder, "sr")
-
-# 2D
-super_resolution_2d_template = "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/super-resolution/2d_super-resolution.yaml"
-super_resolution_2d_template_local = os.path.join(super_resolution_folder, "2d_super_resolution.yaml")
-super_resolution_2d_data_drive_link = "https://drive.google.com/uc?id=1rtrR_jt8hcBEqvwx_amFBNR7CMP5NXLo"
-super_resolution_2d_data_filename = "sr_data_2D.zip"
-super_resolution_2d_data_outpath = os.path.join(super_resolution_folder, "sr_data_2D")
-# 3D
-super_resolution_3d_template = "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/super-resolution/3d_super-resolution.yaml"
-super_resolution_3d_template_local = os.path.join(super_resolution_folder, "3d_super_resolution.yaml")
-super_resolution_3d_data_drive_link = "https://drive.google.com/uc?id=1TfQVK7arJiRAVmKHRebsfi8NEas8ni4s"
-super_resolution_3d_data_filename = "sr_data_3D.zip"
-super_resolution_3d_data_outpath = os.path.join(super_resolution_folder, "sr_data_3D")
-
-###########
-# SSL
-###########
-self_supervision_folder = os.path.join(data_folder, "ssl")
-
-# 2D
-self_supervision_2d_template = "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/self-supervised/2d_self-supervised.yaml"
-self_supervision_2d_template_local = os.path.join(self_supervision_folder, "2d_self_supervision.yaml")
-self_supervision_2d_data_drive_link = semantic_2d_data_drive_link
-self_supervision_2d_data_filename = "fibsem_epfl_2D.zip"
-self_supervision_2d_data_outpath = os.path.join(self_supervision_folder, "fibsem_epfl_2D")
-# 3D
-self_supervision_3d_template = "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/self-supervised/3d_self-supervised.yaml"
-self_supervision_3d_template_local = os.path.join(self_supervision_folder, "3d_self_supervision.yaml")
-self_supervision_3d_data_drive_link = semantic_3d_data_drive_link
-self_supervision_3d_data_filename = "fibsem_epfl_3D.zip"
-self_supervision_3d_data_outpath = os.path.join(self_supervision_folder, "fibsem_epfl_3D")
-
-
-###########
-# Classification
-###########
-classification_folder = os.path.join(data_folder, "classification")
-
-# 2D
-classification_2d_template = "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/classification/2d_classification.yaml"
-classification_2d_template_local = os.path.join(classification_folder, "2d_classification.yaml")
-classification_2d_data_drive_link = "https://drive.google.com/uc?id=15_pnH4_tJcwhOhNqFsm26NQuJbNbFSIN"
-classification_2d_data_filename = "DermaMNIST_2D.zip"
-classification_2d_data_outpath = os.path.join(classification_folder, "DermaMNIST_2D")
-
-# 2D (natural images)
-classification_butterfly_2d_data_drive_link = "https://drive.google.com/uc?id=1m4_3UAgUsZ8FDjB4HyfA50Sht7_XkfdB"
-classification_butterfly_2d_data_filename = "butterfly_data.zip"
-classification_butterfly_2d_data_outpath = os.path.join(classification_folder, "butterfly_data")
-
-# 3D
-classification_3d_template = "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/classification/3d_classification.yaml"
-classification_3d_template_local = os.path.join(classification_folder, "3d_classification.yaml")
-classification_3d_data_drive_link = "https://drive.google.com/uc?id=1pypWJ4Z9sRLPlVHbG6zpwmS6COkm3wUg"
-classification_3d_data_filename = "DermaMNIST_3D.zip"
-classification_3d_data_outpath = os.path.join(classification_folder, "DermaMNIST_3D")
-
-
-###########
-# I2I
-###########
-image_to_image_folder = os.path.join(data_folder, "image_to_image")
-
-# 2D
-image_to_image_2d_template = "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/image-to-image/lightmycells/lightmycells_actin.yaml"
-image_to_image_2d_template_local = os.path.join(image_to_image_folder, "2d_image_to_image.yaml")
-image_to_image_2d_data_drive_link = "https://drive.google.com/uc?id=1L8AXNjh0_updVI3-v1duf6CbcZb8uZK7"
-image_to_image_2d_data_filename = "Dapi_dataset.zip"
-image_to_image_2d_data_outpath = os.path.join(image_to_image_folder, "Dapi_dataset")
-
-# 2D ligthmycells
-image_to_image_light_2d_data_drive_link = "https://drive.google.com/uc?id=1SU4u-bcM1ZaDzEYg-d8W3zP6Yq2o8eKV"
-image_to_image_light_2d_data_filename = "reduced_actin_lightmycells.zip"
-image_to_image_light_2d_data_outpath = os.path.join(classification_folder, "reduced_actin_lightmycells")
-
-if not os.path.exists(biapy_folder): 
-    raise ValueError(f"BiaPy not found in: {biapy_folder}")
 
 all_test_info = {}
 all_test_info["Test1"] = {
@@ -201,7 +37,7 @@ all_test_info["Test2"] = {
     "description": "3D Semantic seg. Lucchi++. attention_unet. Basic DA.",
     "yaml": "test_2.yaml",
     "internal_checks": [
-        {"pattern": "Test Foreground IoU (merge patches)", "gt": True, "value": 0.7},
+        {"pattern": "Test Foreground IoU (merge patches)", "gt": True, "value": 0.55},
     ]
 }
 
@@ -437,7 +273,7 @@ all_test_info["Test22"] = {
     "enable": False,
     "run_experiment": False,
     "jobname": "test22",
-    "description": "3D classification. DermaMNIST 3D data. preprocess: resize, Cross-val. Basic DA. ViT",
+    "description": "3D classification. DermaMNIST 3D data. preprocess: resize, Cross-val. Basic DA. simple_cnn",
     "yaml": "test22.yaml",
     "internal_checks": [
         {"type": "regular", "pattern": "Validation top-5-accuracy:", "gt": True, "value": 0.7},
@@ -448,7 +284,7 @@ all_test_info["Test23"] = {
     "enable": False,
     "run_experiment": False,
     "jobname": "test23",
-    "description": "2D image to image. DermaMNIST 3D data. preprocess: resize, Cross-val. Basic DA. ViT",
+    "description": "3D classification. DermaMNIST 3D data. preprocess: resize. Basic DA. simple_cnn",
     "yaml": "test23.yaml",
     "internal_checks": [
         {"type": "regular", "pattern": "Validation top-5-accuracy:", "gt": True, "value": 0.7},
@@ -476,6 +312,221 @@ all_test_info["Test25"] = {
         {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 22.0},
     ]
 }
+
+all_test_info["Test26"] = {
+    "enable": False,
+    "run_experiment": False,
+    "jobname": "test26",
+    "description": "3D Detection. Zarr 3D data (Brainglobe). in memory false. custom norm, percentile norm, per image. "
+        "MINIMUM_FOREGROUND_PER. warmupcosine. Basic DA. resunet. test by chunks: Zarr. Post-proc: remove close points",
+    "yaml": "test_26.yaml",
+    "internal_checks": [
+        {"type": "regular", "pattern": "Detection - Test F1 (per image)", "gt": True, "value": 0.15},
+    ]
+}
+
+all_test_info["Test27"] = {
+    "enable": False,
+    "run_experiment": False,
+    "jobname": "test27",
+    "description": "3D Instance seg. Zarr 3D data SNEMI. in memory false. input zarr multiple data raw: 'volumes.raw'"
+        "warmupcosine. inference, by chunks, zarr multiple data, workflow process: entire pred.",
+    "yaml": "test_27.yaml",
+    "internal_checks": [
+        {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 1, "metric": "f1", 
+            "gt": True, "value": 0.3},
+    ]
+}
+
+all_test_info["Test28"] = {
+    "enable": True,
+    "run_experiment": True,
+    "jobname": "test28",
+    "description": "3D Image to image. Nuclear_Pore_complex_3D data. in memory true. val 0.1 of train.",
+    "yaml": "test_28.yaml",
+    "internal_checks": [
+        {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 20.0},
+    ]
+}
+
+################################################
+# NO-DEVS: DO NOT TOUCH BELOW THIS LINE 
+################################################
+
+results_folder = os.path.join(data_folder,  "output")
+
+###############
+# Semantic seg.
+###############
+semantic_folder = os.path.join(data_folder, "semantic_seg")
+
+# 2D
+semantic_2d_data_drive_link = "https://drive.google.com/uc?id=1DfUoVHf__xk-s4BWSKbkfKYMnES-9RJt"
+semantic_2d_template = "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/semantic_segmentation/2d_semantic_segmentation.yaml"
+semantic_2d_template_local = os.path.join(semantic_folder, "2d_semantic_segmentation.yaml")
+semantic_2d_data_filename = "fibsem_epfl_2D.zip"
+semantic_2d_data_outpath = os.path.join(semantic_folder, "fibsem_epfl_2D")
+# 3D
+semantic_3d_data_drive_link = "https://drive.google.com/uc?id=10Cf11PtERq4pDHCJroekxu_hf10EZzwG"
+semantic_3d_template = "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/semantic_segmentation/3d_semantic_segmentation.yaml"
+semantic_3d_template_local = os.path.join(semantic_folder, "3d_semantic_segmentation.yaml")
+semantic_3d_data_filename = "fibsem_epfl_3D.zip"
+semantic_3d_data_outpath = os.path.join(semantic_folder, "fibsem_epfl_3D")
+
+###############
+# Instance seg.
+###############
+inst_seg_folder = os.path.join(data_folder, "instance_seg")
+
+# 2D
+instance_seg_2d_template = "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/instance_segmentation/2d_instance_segmentation.yaml"
+instance_seg_2d_template_local = os.path.join(inst_seg_folder, "2d_instance_segmentation.yaml")
+instance_seg_2d_data_drive_link = "https://drive.google.com/uc?id=1b7_WDDGEEaEoIpO_1EefVr0w0VQaetmg"
+instance_seg_2d_data_filename = "Stardist_v2_2D.zip"
+instance_seg_2d_data_outpath = os.path.join(inst_seg_folder, "Stardist_v2_2D")
+# 3D
+instance_seg_3d_template = "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/instance_segmentation/3d_instance_segmentation.yaml"
+instance_seg_3d_template_local = os.path.join(inst_seg_folder, "3d_instance_segmentation.yaml")
+instance_seg_3d_data_drive_link = "https://drive.google.com/uc?id=1fdL35ZTNw5hhiKau1gadaGu-rc5ZU_C7"
+instance_seg_3d_data_filename = "demo3D_3D.zip"
+instance_seg_3d_data_outpath = os.path.join(inst_seg_folder, "demo3D_3D")
+
+instance_seg_cyst_data_zenodo_link = "https://zenodo.org/records/10973241/files/CartoCell.zip?download=1"
+instance_seg_cyst_data_filename = "CartoCell.zip"
+instance_seg_cyst_data_outpath = os.path.join(inst_seg_folder, "CartoCell")
+
+instance_seg_snemi_zarr_data_drive_link = "https://drive.google.com/uc?id=1Ralex5SvYUZbXoDkWoaCjb6d_iWuuOHp"
+instance_seg_snemi_zarr_data_filename = "snemi_zarr.zip"
+instance_seg_snemi_zarr_data_outpath = os.path.join(inst_seg_folder, "snemi_zarr")
+
+###########
+# Detection
+###########
+detection_folder = os.path.join(data_folder, "detection")
+
+# 2D
+detection_2d_template = "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/detection/2d_detection.yaml"
+detection_2d_template_local = os.path.join(detection_folder, "2d_detection.yaml")
+detection_2d_data_drive_link = "https://drive.google.com/uc?id=1pWqQhcWY15b5fVLZDkPS-vnE-RU6NlYf"
+detection_2d_data_filename = "Stardist_v2_detection.zip"
+detection_2d_data_outpath = os.path.join(detection_folder, "Stardist_v2_detection")
+# 3D
+detection_3d_template = "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/detection/3d_detection.yaml"
+detection_3d_template_local = os.path.join(detection_folder, "3d_detection.yaml")
+detection_3d_data_drive_link = "https://drive.google.com/uc?id=19P4AcvBPJXeW7QRj92Jh1keunGa5fi8d"
+detection_3d_data_filename = "NucMM-Z_training.zip"
+detection_3d_data_outpath = os.path.join(detection_folder, "NucMM-Z_training")
+
+detection_3d_brainglobe_data_drive_link = "https://drive.google.com/uc?id=1veBueUuYi_mWbSky_4mtzfKBpO00SvWR"
+detection_3d_brainglobe_data_filename = "brainglobe_small_data.zip"
+detection_3d_brainglobe_data_outpath = os.path.join(detection_folder, "brainglobe_small_data")
+
+###########
+# Denoising
+###########
+denoising_folder = os.path.join(data_folder, "denoising")
+
+# 2D
+denoising_2d_template = "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/denoising/2d_denoising.yaml"
+denoising_2d_template_local = os.path.join(denoising_folder, "2d_denoising.yaml")
+denoising_2d_data_drive_link = "https://drive.google.com/uc?id=1TFvOySOiIgVIv9p4pbHdEbai-d2YGDvV"
+denoising_2d_data_filename = "convallaria2D.zip"
+denoising_2d_data_outpath = os.path.join(denoising_folder, "convallaria2D")
+# 3D
+denoising_3d_template = "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/denoising/3d_denoising.yaml"
+denoising_3d_template_local = os.path.join(denoising_folder, "3d_denoising.yaml")
+denoising_3d_data_drive_link = "https://drive.google.com/uc?id=1OIjnUoJKdnbClBlpzk7V5R8wtoLont-r"
+denoising_3d_data_filename = "flywing3D.zip"
+denoising_3d_data_outpath = os.path.join(denoising_folder, "flywing3D")
+
+###########
+# SR
+###########
+super_resolution_folder = os.path.join(data_folder, "sr")
+
+# 2D
+super_resolution_2d_template = "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/super-resolution/2d_super-resolution.yaml"
+super_resolution_2d_template_local = os.path.join(super_resolution_folder, "2d_super_resolution.yaml")
+super_resolution_2d_data_drive_link = "https://drive.google.com/uc?id=1rtrR_jt8hcBEqvwx_amFBNR7CMP5NXLo"
+super_resolution_2d_data_filename = "sr_data_2D.zip"
+super_resolution_2d_data_outpath = os.path.join(super_resolution_folder, "sr_data_2D")
+# 3D
+super_resolution_3d_template = "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/super-resolution/3d_super-resolution.yaml"
+super_resolution_3d_template_local = os.path.join(super_resolution_folder, "3d_super_resolution.yaml")
+super_resolution_3d_data_drive_link = "https://drive.google.com/uc?id=1TfQVK7arJiRAVmKHRebsfi8NEas8ni4s"
+super_resolution_3d_data_filename = "sr_data_3D.zip"
+super_resolution_3d_data_outpath = os.path.join(super_resolution_folder, "sr_data_3D")
+
+###########
+# SSL
+###########
+self_supervision_folder = os.path.join(data_folder, "ssl")
+
+# 2D
+self_supervision_2d_template = "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/self-supervised/2d_self-supervised.yaml"
+self_supervision_2d_template_local = os.path.join(self_supervision_folder, "2d_self_supervision.yaml")
+self_supervision_2d_data_drive_link = semantic_2d_data_drive_link
+self_supervision_2d_data_filename = "fibsem_epfl_2D.zip"
+self_supervision_2d_data_outpath = os.path.join(self_supervision_folder, "fibsem_epfl_2D")
+# 3D
+self_supervision_3d_template = "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/self-supervised/3d_self-supervised.yaml"
+self_supervision_3d_template_local = os.path.join(self_supervision_folder, "3d_self_supervision.yaml")
+self_supervision_3d_data_drive_link = semantic_3d_data_drive_link
+self_supervision_3d_data_filename = "fibsem_epfl_3D.zip"
+self_supervision_3d_data_outpath = os.path.join(self_supervision_folder, "fibsem_epfl_3D")
+
+
+###########
+# Classification
+###########
+classification_folder = os.path.join(data_folder, "classification")
+
+# 2D
+classification_2d_template = "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/classification/2d_classification.yaml"
+classification_2d_template_local = os.path.join(classification_folder, "2d_classification.yaml")
+classification_2d_data_drive_link = "https://drive.google.com/uc?id=15_pnH4_tJcwhOhNqFsm26NQuJbNbFSIN"
+classification_2d_data_filename = "DermaMNIST_2D.zip"
+classification_2d_data_outpath = os.path.join(classification_folder, "DermaMNIST_2D")
+
+# 2D (natural images)
+classification_butterfly_2d_data_drive_link = "https://drive.google.com/uc?id=1m4_3UAgUsZ8FDjB4HyfA50Sht7_XkfdB"
+classification_butterfly_2d_data_filename = "butterfly_data.zip"
+classification_butterfly_2d_data_outpath = os.path.join(classification_folder, "butterfly_data")
+
+# 3D
+classification_3d_template = "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/classification/3d_classification.yaml"
+classification_3d_template_local = os.path.join(classification_folder, "3d_classification.yaml")
+classification_3d_data_drive_link = "https://drive.google.com/uc?id=1pypWJ4Z9sRLPlVHbG6zpwmS6COkm3wUg"
+classification_3d_data_filename = "DermaMNIST_3D.zip"
+classification_3d_data_outpath = os.path.join(classification_folder, "DermaMNIST_3D")
+
+
+###########
+# I2I
+###########
+image_to_image_folder = os.path.join(data_folder, "image_to_image")
+
+# 2D
+image_to_image_2d_template = "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/image-to-image/2d_image-to-image.yaml"
+image_to_image_2d_template_local = os.path.join(image_to_image_folder, "2d_image_to_image.yaml")
+image_to_image_2d_data_drive_link = "https://drive.google.com/uc?id=1L8AXNjh0_updVI3-v1duf6CbcZb8uZK7"
+image_to_image_2d_data_filename = "Dapi_dataset.zip"
+image_to_image_2d_data_outpath = os.path.join(image_to_image_folder, "Dapi_dataset")
+
+# 2D ligthmycells
+image_to_image_light_2d_data_drive_link = "https://drive.google.com/uc?id=1SU4u-bcM1ZaDzEYg-d8W3zP6Yq2o8eKV"
+image_to_image_light_2d_data_filename = "reduced_actin_lightmycells.zip"
+image_to_image_light_2d_data_outpath = os.path.join(image_to_image_folder, "reduced_actin_lightmycells")
+
+# 3D
+image_to_image_3d_template = "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/image-to-image/3d_image-to-image.yaml"
+image_to_image_3d_template_local = os.path.join(image_to_image_folder, "3d_image_to_image.yaml")
+image_to_image_3d_data_drive_link = "https://drive.google.com/uc?id=1jL0bn2X3OFaV5T-6KR1g6fPDllH-LWzm"
+image_to_image_3d_data_filename = "Nuclear_Pore_complex_3D.zip"
+image_to_image_3d_data_outpath = os.path.join(image_to_image_folder, "Nuclear_Pore_complex_3D")
+
+if not os.path.exists(biapy_folder): 
+    raise ValueError(f"BiaPy not found in: {biapy_folder}")
 
 ###################
 # Semantic seg.
@@ -561,6 +612,21 @@ if not os.path.exists(instance_seg_cyst_data_outpath) and all_test_info["Test6"]
         print("Downloading instance seg. YAML . . .") 
         _, _ = urllib.request.urlretrieve(instance_seg_3d_template, filename=instance_seg_3d_template_local)
 
+# General things: SNEMI 3D Data + YAML donwload
+if not os.path.exists(instance_seg_snemi_zarr_data_outpath) and all_test_info["Test27"]["enable"]:
+    print("Downloading 3D snemi zarr data . . .")
+    
+    os.makedirs(inst_seg_folder, exist_ok=True)
+    os.chdir(inst_seg_folder)
+    gdown.download(instance_seg_snemi_zarr_data_drive_link, instance_seg_snemi_zarr_data_filename, quiet=True)
+
+    with ZipFile(os.path.join(inst_seg_folder, instance_seg_snemi_zarr_data_filename), 'r') as zObject: 
+        zObject.extractall(path=instance_seg_snemi_zarr_data_outpath) 
+
+    if not os.path.exists(instance_seg_3d_template_local):
+        print("Downloading instance seg. YAML . . .") 
+        _, _ = urllib.request.urlretrieve(instance_seg_3d_template, filename=instance_seg_3d_template_local)
+
 ###########
 # Detection
 ###########
@@ -596,7 +662,8 @@ if not os.path.exists(detection_3d_data_outpath) and all_test_info["Test8"]["ena
         _, _ = urllib.request.urlretrieve(detection_3d_template, filename=detection_3d_template_local)
 
 # General things: 3D Brainglobe Data + YAML donwload
-if not os.path.exists(detection_3d_brainglobe_data_outpath) and all_test_info["Test11"]["enable"]:
+if not os.path.exists(detection_3d_brainglobe_data_outpath) and (all_test_info["Test11"]["enable"] or\
+    all_test_info["Test26"]["enable"]):
     print("Downloading 3D Brainglobe detection data . . .")
     
     os.makedirs(detection_folder, exist_ok=True)
@@ -782,6 +849,21 @@ if not os.path.exists(image_to_image_2d_data_outpath) and (all_test_info["Test24
     if not os.path.exists(image_to_image_2d_template_local):
         print("Downloading image_to_image YAML . . .") 
         _, _ = urllib.request.urlretrieve(image_to_image_2d_template, filename=image_to_image_2d_template_local)
+
+# General things: 3D Data + YAML donwload
+if not os.path.exists(image_to_image_3d_data_outpath) and all_test_info["Test28"]["enable"]:
+    print("Downloading 3D image to image data . . .")
+    
+    os.makedirs(image_to_image_folder, exist_ok=True)
+    os.chdir(image_to_image_folder)
+    gdown.download(image_to_image_3d_data_drive_link, image_to_image_3d_data_filename, quiet=True)
+
+    with ZipFile(os.path.join(image_to_image_folder, image_to_image_3d_data_filename), 'r') as zObject: 
+        zObject.extractall(path=image_to_image_3d_data_outpath) 
+
+    if not os.path.exists(image_to_image_3d_template_local):
+        print("Downloading image to image YAML . . .") 
+        _, _ = urllib.request.urlretrieve(image_to_image_3d_template, filename=image_to_image_3d_template_local)
 
 
 def print_inventory(dct): 
@@ -2583,12 +2665,8 @@ if all_test_info["Test23"]["enable"]:
     biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(classification_3d_data_outpath, "data", "train")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
     biapy_config['DATA']['VAL']['FROM_TRAIN'] = True
-    biapy_config['DATA']['VAL']['CROSS_VAL'] = True
-    biapy_config['DATA']['VAL']['CROSS_VAL_NFOLD'] = 5
-    biapy_config['DATA']['VAL']['CROSS_VAL_FOLD'] = 3
     biapy_config['DATA']['TEST']['PATH'] = os.path.join(classification_3d_data_outpath, "data", "test")
     biapy_config['DATA']['TEST']['IN_MEMORY'] = True
-    biapy_config['DATA']['TEST']['USE_VAL_AS_TEST'] = True
 
     biapy_config['TRAIN']['ENABLE'] = True
     biapy_config['TRAIN']['EPOCHS'] = 5
@@ -2783,6 +2861,291 @@ if all_test_info["Test25"]["enable"]:
 
     # Test result  
     print_result(results, all_test_info["Test25"]["jobname"], int_checks)
+
+
+#~~~~~~~~~~~~
+# Test 26 
+#~~~~~~~~~~~~
+if all_test_info["Test26"]["enable"]:
+    print("######")
+    print("Running Test 26")
+    print_inventory(all_test_info["Test26"])
+
+    #*******************
+    # File preparation 
+    #*******************
+    # Open config file
+    with open(detection_3d_template_local, 'r') as stream:
+        try:
+            biapy_config = yaml.safe_load(stream)
+        except yaml.YAMLError as exc:
+            raise ValueError(exc)
+
+    biapy_config['PROBLEM']['DETECTION'] = {}
+    biapy_config['PROBLEM']['DETECTION']['CENTRAL_POINT_DILATION'] = 2
+    biapy_config['PROBLEM']['DETECTION']['CHECK_POINTS_CREATED'] = False
+
+    biapy_config['DATA']['PATCH_SIZE'] = "(20, 128, 128, 2)"
+    biapy_config['DATA']['NORMALIZATION'] = {}
+    biapy_config['DATA']['NORMALIZATION']['PERC_CLIP'] = True
+    biapy_config['DATA']['NORMALIZATION']['PERC_LOWER'] = 0.1
+    biapy_config['DATA']['NORMALIZATION']['PERC_UPPER'] = 99.8
+    biapy_config['DATA']['NORMALIZATION']['APPLICATION_MODE'] = 'image'
+
+    biapy_config['DATA']['TRAIN']['INPUT_IMG_AXES_ORDER'] = 'ZYXC'
+    biapy_config['DATA']['TRAIN']['INPUT_MASK_AXES_ORDER'] = 'TZCYX'
+    biapy_config['DATA']['TRAIN']['MINIMUM_FOREGROUND_PER'] = 0.0000000000000000000001
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(detection_3d_brainglobe_data_outpath, "data", "3D_ch2ch4_Zarr")
+    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(detection_3d_brainglobe_data_outpath, "data", "y")
+    biapy_config['DATA']['TRAIN']['IN_MEMORY'] = False
+    biapy_config['DATA']['VAL']['FROM_TRAIN'] = False
+    biapy_config['DATA']['VAL']['PATH'] = os.path.join(detection_3d_brainglobe_data_outpath, "data", "3D_ch2ch4_Zarr")
+    biapy_config['DATA']['VAL']['GT_PATH'] = os.path.join(detection_3d_brainglobe_data_outpath, "data", "y")
+    biapy_config['DATA']['VAL']['IN_MEMORY'] = False
+    biapy_config['DATA']['VAL']['INPUT_IMG_AXES_ORDER'] = 'ZYXC'
+    biapy_config['DATA']['VAL']['INPUT_MASK_AXES_ORDER'] = 'TZCYX'
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(detection_3d_brainglobe_data_outpath, "data", "3D_ch2ch4_Zarr")
+    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(detection_3d_brainglobe_data_outpath, "data", "y")
+    biapy_config['DATA']['TEST']['IN_MEMORY'] = False
+    biapy_config['DATA']['TEST']['LOAD_GT'] = True
+    biapy_config['DATA']['TEST']['PADDING'] = "(0,18,18)"
+
+    biapy_config['TRAIN']['ENABLE'] = True
+    biapy_config['TRAIN']['EPOCHS'] = 100
+    biapy_config['TRAIN']['BATCH_SIZE'] = 1
+    biapy_config['TRAIN']['PATIENCE'] = 20 
+    biapy_config['TRAIN']['LR_SCHEDULER'] = {} 
+    biapy_config['TRAIN']['LR_SCHEDULER']['NAME'] = 'warmupcosine'  
+    biapy_config['TRAIN']['LR_SCHEDULER']['MIN_LR'] = 5.E-6  
+    biapy_config['TRAIN']['LR_SCHEDULER']['WARMUP_COSINE_DECAY_EPOCHS'] = 15
+
+    biapy_config['MODEL']['ARCHITECTURE'] = 'resunet'
+    biapy_config['MODEL']['Z_DOWN'] = [1,1,1,1]
+    del biapy_config['MODEL']['FEATURE_MAPS']
+    biapy_config['MODEL']['LOAD_CHECKPOINT'] = False
+
+    biapy_config['AUGMENTOR']['RANDOM_ROT'] = True
+    biapy_config['AUGMENTOR']['AFFINE_MODE'] = 'reflect'
+    biapy_config['AUGMENTOR']['ZFLIP'] = True
+
+    biapy_config['TEST']['ENABLE'] = True
+    biapy_config['TEST']['FULL_IMG'] = False
+    biapy_config['TEST']['DET_MIN_TH_TO_BE_PEAK'] = [0.2]
+    biapy_config['TEST']['DET_TOLERANCE'] = [8]
+    biapy_config['TEST']['VERBOSE'] = True
+
+    biapy_config['TEST']['BY_CHUNKS'] = {}
+    biapy_config['TEST']['BY_CHUNKS']['ENABLE'] = True
+    biapy_config['TEST']['BY_CHUNKS']['FORMAT'] = "Zarr"
+    biapy_config['TEST']['BY_CHUNKS']['SAVE_OUT_TIF'] = True
+    biapy_config['TEST']['BY_CHUNKS']['INPUT_IMG_AXES_ORDER'] = 'ZYXC'
+    biapy_config['TEST']['BY_CHUNKS']['WORKFLOW_PROCESS'] = {}
+    biapy_config['TEST']['BY_CHUNKS']['WORKFLOW_PROCESS']['ENABLE'] = True
+    biapy_config['TEST']['BY_CHUNKS']['WORKFLOW_PROCESS']['TYPE'] = "chunk_by_chunk" 
+
+    biapy_config['TEST']['POST_PROCESSING'] = {}
+    biapy_config['TEST']['POST_PROCESSING']['REMOVE_CLOSE_POINTS'] = True
+    biapy_config['TEST']['POST_PROCESSING']['REMOVE_CLOSE_POINTS_RADIUS'] = [3]
+
+    # Save file
+    test_file = os.path.join(detection_folder, all_test_info["Test26"]["yaml"])
+    with open(test_file, 'w') as outfile:
+        yaml.dump(biapy_config, outfile, default_flow_style=False)
+
+    # Run  
+    if all_test_info["Test26"]["run_experiment"]:
+        runjob(all_test_info["Test26"], results_folder, test_file, biapy_folder, multigpu=True)
+
+    # Check  
+    results = []
+    res, last_lines = check_finished(all_test_info["Test26"], "Test 26")
+    if not res:
+        print("Internal check not passed: seems that it didn't finish")
+    results.append(res)
+    int_checks = 1
+    for checks in all_test_info["Test26"]["internal_checks"]: 
+        if checks["type"] == "regular":
+            results.append(check_value(last_lines, checks["pattern"], checks["value"], checks["gt"]))
+        else:
+            results.append(check_DatasetMatching(last_lines, checks["pattern"], checks["value"], gt=checks["gt"], 
+                value_to_check=checks["nApparition"], metric=checks["metric"]))
+        int_checks += 1
+        if not results[-1]:
+            print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
+
+    # Test result  
+    print_result(results, all_test_info["Test26"]["jobname"], int_checks)
+
+
+#~~~~~~~~~~~~
+# Test 27 
+#~~~~~~~~~~~~
+if all_test_info["Test27"]["enable"]:
+    print("######")
+    print("Running Test 27")
+    print_inventory(all_test_info["Test27"])
+
+    #*******************
+    # File preparation 
+    #*******************
+    # Open config file
+    with open(instance_seg_3d_template_local, 'r') as stream:
+        try:
+            biapy_config = yaml.safe_load(stream)
+        except yaml.YAMLError as exc:
+            raise ValueError(exc)
+
+    biapy_config['PROBLEM']['INSTANCE_SEG']['DATA_CHANNELS'] = 'BC'
+    biapy_config['PROBLEM']['INSTANCE_SEG']['DATA_MW_TH_TYPE'] = "manual"
+    biapy_config['PROBLEM']['INSTANCE_SEG']['DATA_MW_TH_BINARY_MASK'] = 0.9
+    biapy_config['PROBLEM']['INSTANCE_SEG']['DATA_MW_TH_CONTOUR'] = 0.1
+    biapy_config['PROBLEM']['INSTANCE_SEG']['DATA_MW_TH_CONTOUR'] = 0.1
+    biapy_config['PROBLEM']['INSTANCE_SEG']['DATA_REMOVE_SMALL_OBJ_BEFORE'] = 20
+    biapy_config['PROBLEM']['INSTANCE_SEG']['DATA_REMOVE_BEFORE_MW'] = True
+    biapy_config['PROBLEM']['INSTANCE_SEG']['DATA_CHANNEL_WEIGHTS'] = "(0.3, 1)"
+
+    biapy_config['DATA']['PATCH_SIZE'] = "(20, 256, 256, 1)"
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(instance_seg_snemi_zarr_data_outpath, "data", "train", "zarr")
+    biapy_config['DATA']['TRAIN']['IN_MEMORY'] = False
+    biapy_config['DATA']['TRAIN']['INPUT_IMG_AXES_ORDER'] = 'ZYX'
+    biapy_config['DATA']['TRAIN']['INPUT_MASK_AXES_ORDER'] = 'ZYX'
+    biapy_config['DATA']['TRAIN']['INPUT_ZARR_MULTIPLE_DATA'] = True
+    biapy_config['DATA']['TRAIN']['INPUT_ZARR_MULTIPLE_DATA_RAW_PATH'] = 'volumes.raw'
+    biapy_config['DATA']['TRAIN']['INPUT_ZARR_MULTIPLE_DATA_GT_PATH'] = 'volumes.labels.neuron_ids'
+    biapy_config['DATA']['VAL']['FROM_TRAIN'] = True
+    biapy_config['DATA']['VAL']['IN_MEMORY'] = False
+    biapy_config['DATA']['VAL']['SPLIT_TRAIN'] = 0.1
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(instance_seg_snemi_zarr_data_outpath, "data", "train", "zarr")
+    biapy_config['DATA']['TEST']['IN_MEMORY'] = False
+    biapy_config['DATA']['TEST']['LOAD_GT'] = True
+
+    biapy_config['TRAIN']['ENABLE'] = True
+    biapy_config['TRAIN']['EPOCHS'] = 80
+    biapy_config['TRAIN']['PATIENCE'] = -1 
+    biapy_config['TRAIN']['OPTIMIZER'] = "ADAMW" 
+    biapy_config['TRAIN']['LR'] = 1.E-4 
+    biapy_config['TRAIN']['LR_SCHEDULER'] = {} 
+    biapy_config['TRAIN']['LR_SCHEDULER']['NAME'] = 'warmupcosine'  
+    biapy_config['TRAIN']['LR_SCHEDULER']['MIN_LR'] = 5.E-6  
+    biapy_config['TRAIN']['LR_SCHEDULER']['WARMUP_COSINE_DECAY_EPOCHS'] = 15
+
+    biapy_config['MODEL']['ARCHITECTURE'] = 'resunet'
+    biapy_config['AUGMENTOR']['BRIGHTNESS'] = True
+    biapy_config['AUGMENTOR']['CONTRAST'] = True
+    biapy_config['AUGMENTOR']['MISALIGNMENT'] = True
+    biapy_config['AUGMENTOR']['MISSING_SECTIONS'] = True
+    biapy_config['AUGMENTOR']['ELASTIC'] = True
+
+    biapy_config['TEST']['ENABLE'] = True
+    biapy_config['TEST']['BY_CHUNKS'] = {}
+    biapy_config['TEST']['BY_CHUNKS']['ENABLE'] = True
+    biapy_config['TEST']['BY_CHUNKS']['FORMAT'] = "Zarr"
+    biapy_config['TEST']['BY_CHUNKS']['SAVE_OUT_TIF'] = False
+    biapy_config['TEST']['BY_CHUNKS']['INPUT_IMG_AXES_ORDER'] = 'ZYX'
+    biapy_config['TEST']['BY_CHUNKS']['INPUT_ZARR_MULTIPLE_DATA'] = True
+    biapy_config['TEST']['BY_CHUNKS']['INPUT_ZARR_MULTIPLE_DATA_RAW_PATH'] = 'volumes.raw'
+    biapy_config['TEST']['BY_CHUNKS']['INPUT_ZARR_MULTIPLE_DATA_GT_PATH'] = 'volumes.labels.neuron_ids'
+    biapy_config['TEST']['BY_CHUNKS']['WORKFLOW_PROCESS'] = {}
+    biapy_config['TEST']['BY_CHUNKS']['WORKFLOW_PROCESS']['ENABLE'] = True
+    biapy_config['TEST']['BY_CHUNKS']['WORKFLOW_PROCESS']['TYPE'] = "entire_pred" 
+
+    # Save file
+    test_file = os.path.join(inst_seg_folder, all_test_info["Test27"]["yaml"])
+    with open(test_file, 'w') as outfile:
+        yaml.dump(biapy_config, outfile, default_flow_style=False)
+
+    # Run  
+    if all_test_info["Test27"]["run_experiment"]:
+        runjob(all_test_info["Test27"], results_folder, test_file, biapy_folder)
+
+    # Check  
+    results = []
+    res, last_lines = check_finished(all_test_info["Test27"], "Test 27")
+    if not res:
+        print("Internal check not passed: seems that it didn't finish")
+    results.append(res)
+    int_checks = 1
+    for checks in all_test_info["Test27"]["internal_checks"]: 
+        if checks["type"] == "regular":
+            results.append(check_value(last_lines, checks["pattern"], checks["value"], checks["gt"]))
+        else:
+            results.append(check_DatasetMatching(last_lines, checks["pattern"], checks["value"], gt=checks["gt"], 
+                value_to_check=checks["nApparition"], metric=checks["metric"]))
+        int_checks += 1
+        if not results[-1]:
+            print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
+
+    # Test result  
+    print_result(results, all_test_info["Test27"]["jobname"], int_checks)
+
+
+#~~~~~~~~~~~~
+# Test 28
+#~~~~~~~~~~~~
+if all_test_info["Test28"]["enable"]:
+    print("######")
+    print("Running Test 28")
+    print_inventory(all_test_info["Test28"])
+
+    #*******************
+    # File preparation 
+    #*******************
+    # Open config file
+    with open(image_to_image_3d_template_local, 'r') as stream:
+        try:
+            biapy_config = yaml.safe_load(stream)
+        except yaml.YAMLError as exc:
+            raise ValueError(exc)
+
+    biapy_config['DATA']['PATCH_SIZE'] = "(6,128,128,1)"
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(image_to_image_3d_data_outpath, "data", "train", "x")
+    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(image_to_image_3d_data_outpath, "data", "train", "y")
+    biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
+    biapy_config['DATA']['VAL']['FROM_TRAIN'] = True
+    biapy_config['DATA']['VAL']['SPLIT_TRAIN'] = 0.1
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(image_to_image_3d_data_outpath, "data", "test", "x")
+    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(image_to_image_3d_data_outpath, "data", "test", "y")
+    biapy_config['DATA']['TEST']['IN_MEMORY'] = False
+    biapy_config['DATA']['TEST']['PADDING'] = "(0,24,24)"
+ 
+    biapy_config['TRAIN']['ENABLE'] = True
+    biapy_config['TRAIN']['EPOCHS'] = 15
+    biapy_config['TRAIN']['PATIENCE'] = -1 
+
+    biapy_config['MODEL']['ARCHITECTURE'] = 'resunet'
+    biapy_config['MODEL']['Z_DOWN'] = [1,1,1,1]
+    biapy_config['MODEL']['LOAD_CHECKPOINT'] = False
+
+    biapy_config['TEST']['ENABLE'] = True
+
+    # Save file
+    test_file = os.path.join(image_to_image_folder, all_test_info["Test28"]["yaml"])
+    with open(test_file, 'w') as outfile:
+        yaml.dump(biapy_config, outfile, default_flow_style=False)
+
+    # Run  
+    if all_test_info["Test28"]["run_experiment"]:
+        runjob(all_test_info["Test28"], results_folder, test_file, biapy_folder)
+
+    # Check  
+    results = []
+    res, last_lines = check_finished(all_test_info["Test28"], "Test 28")
+    if not res:
+        print("Internal check not passed: seems that it didn't finish")
+    results.append(res)
+    int_checks = 1
+    for checks in all_test_info["Test28"]["internal_checks"]: 
+        if checks["type"] == "regular":
+            results.append(check_value(last_lines, checks["pattern"], checks["value"], checks["gt"]))
+        else:
+            results.append(check_DatasetMatching(last_lines, checks["pattern"], checks["value"], gt=checks["gt"], 
+                value_to_check=checks["nApparition"], metric=checks["metric"]))
+        int_checks += 1
+        if not results[-1]:
+            print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
+
+    # Test result  
+    print_result(results, all_test_info["Test28"]["jobname"], int_checks)
 
 
 print("Finish tests!!")

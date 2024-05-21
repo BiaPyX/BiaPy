@@ -1,0 +1,46 @@
+# BiaPy version: 3.4.3
+
+SYSTEM:
+    NUM_CPUS: -1
+    NUM_WORKERS: 5
+
+PROBLEM:
+    TYPE: IMAGE_TO_IMAGE
+    NDIM: 2D
+
+DATA: 
+    PATCH_SIZE: (256, 256, 1)
+    TRAIN:
+        PATH: /path/to/data
+        GT_PATH: /path/to/data
+        IN_MEMORY: True
+    VAL:
+        FROM_TRAIN: True
+        SPLIT_TRAIN: 0.1
+    TEST:                                                                                                               
+        PATH: /path/to/data
+        GT_PATH: /path/to/data
+        IN_MEMORY: False
+        LOAD_GT: True
+        PADDING: (40,40)
+
+AUGMENTOR:
+    ENABLE: True
+    VFLIP: True
+    HFLIP: True
+
+MODEL:
+    ARCHITECTURE: attention_unet
+    LOAD_CHECKPOINT: False
+
+TRAIN:
+    ENABLE: True
+    OPTIMIZER: ADAMW
+    LR: 1.E-4
+    BATCH_SIZE: 6
+    EPOCHS: 360
+    PATIENCE: 50
+
+TEST:
+    ENABLE: True
+    FULL_IMG: False

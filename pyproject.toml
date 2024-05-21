@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "biapy"
-version = "3.4.2"
+version = "3.4.4"
 description = "BiaPy: Bioimage analysis pipelines in Python"
 readme = "README.md"
 requires-python = ">=3.10"

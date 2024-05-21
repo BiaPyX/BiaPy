@@ -1485,6 +1485,39 @@ def read_chunked_data(filename):
 
         return fid, data
 
+def read_chunked_nested_data(zarrfile, data_path=""):
+    """
+    Find recursively raw and ground truth data within a Zarr file.
+    """
+    if not zarrfile.endswith('.zarr'):
+        raise ValueError("Not implemented for other filetypes than Zarr")
+    fid = zarr.open(zarrfile,'r')
+
+    def find_obj(path, fid):
+        obj = None
+        rpath = path.split('.')
+        if len(rpath) == 0: 
+            return None
+        else:
+            if len(rpath) > 1:
+                groups = list(fid.group_keys())
+                if rpath[0] not in groups:
+                    return None
+                obj = find_obj('.'.join(rpath[1:]), fid[rpath[0]])
+            else:
+                arrays = list(fid.array_keys())
+                if rpath[0] not in arrays:
+                    return None
+                return fid[rpath[0]]
+        return obj
+
+    data = find_obj(data_path, fid)
+
+    if data is None:
+        raise ValueError(f"No data found within the Zarr file in the path: '{data_path}'.")
+
+    return fid, data
+
 def write_chunked_data(data, data_dir, filename, dtype_str="float32", verbose=True):
     """
     Save images in the given directory.

@@ -11,7 +11,7 @@ import torch.distributed as dist
 from biapy.data.post_processing.post_processing import (watershed_by_channels, voronoi_on_mask, 
     measure_morphological_props_and_filter, repare_large_blobs, apply_binary_mask)
 from biapy.data.pre_processing import create_instance_channels, create_test_instance_channels, norm_range01
-from biapy.utils.util import save_tif
+from biapy.utils.util import save_tif, read_chunked_data, read_chunked_nested_data
 from biapy.utils.matching import matching, wrapper_matching_dataset_lazy
 from biapy.engine.metrics import jaccard_index, instance_segmentation_loss, instance_metrics
 from biapy.engine.base_workflow import Base_Workflow
@@ -224,7 +224,6 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         ### INSTANCE SEGMENTATION ###
         #############################
         if not self.instances_already_created: 
-
             # Multi-head: instances + classification
             if self.cfg.MODEL.N_CLASSES > 2:
                 class_channel = np.expand_dims(pred[...,-1], -1)
@@ -291,7 +290,14 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     _Y[i] = imread(test_file).squeeze()
             else:
                 test_file = os.path.join(self.original_test_mask_path, self.test_filenames[self.f_numbers[0]])
-                _Y = imread(test_file).squeeze()
+                if test_file.endswith('.zarr'):
+                    if self.cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA:
+                        _, _Y = read_chunked_nested_data(test_file, self.cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_GT_PATH)
+                    else:
+                        _, _Y = read_chunked_data(test_file)
+                    _Y = np.squeeze(np.array(_Y))
+                else:
+                    _Y = imread(test_file).squeeze()
 
             # Multi-head: instances + classification
             if self.cfg.MODEL.N_CLASSES > 2:
@@ -765,61 +771,120 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         They will be saved in a separate folder in the root path of the ground truth. 
         """
         original_test_path, original_test_mask_path = None, None
+        train_channel_dir = self.cfg.DATA.TRAIN.INSTANCE_CHANNELS_DIR
+        train_channel_mask_dir = self.cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR
+        val_channel_dir = self.cfg.DATA.VAL.INSTANCE_CHANNELS_DIR
+        val_channel_mask_dir = self.cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR
+        test_channel_dir = self.cfg.DATA.TEST.INSTANCE_CHANNELS_DIR
+        test_channel_mask_dir = self.cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR
+        test_instance_mask_dir = self.cfg.DATA.TEST.GT_PATH
+        opts = []
 
-        if is_main_process():
-            print("###########################")
-            print("#  PREPARE INSTANCE DATA  #")
-            print("###########################")
+        print("###########################")
+        print("#  PREPARE INSTANCE DATA  #")
+        print("###########################")
 
-            # Create selected channels for train data
-            if (self.cfg.TRAIN.ENABLE or self.cfg.DATA.TEST.USE_VAL_AS_TEST) and (not os.path.isdir(self.cfg.DATA.TRAIN.INSTANCE_CHANNELS_DIR) or \
-                not os.path.isdir(self.cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR)):
+        # Create selected channels for train data
+        if (self.cfg.TRAIN.ENABLE or self.cfg.DATA.TEST.USE_VAL_AS_TEST) and (not os.path.isdir(self.cfg.DATA.TRAIN.INSTANCE_CHANNELS_DIR) or \
+            not os.path.isdir(self.cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR)):
+            do_mask = True
+            if self.cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA:
+                do_mask = not os.path.isdir(self.cfg.DATA.TRAIN.INSTANCE_CHANNELS_DIR)
+                train_channel_dir = self.cfg.DATA.TRAIN.PATH
+                train_channel_mask_dir = self.cfg.DATA.TRAIN.INSTANCE_CHANNELS_DIR
+            
+            if do_mask and is_main_process():
                 print("You select to create {} channels from given instance labels and no file is detected in {}. "
                         "So let's prepare the data. Notice that, if you do not modify 'DATA.TRAIN.INSTANCE_CHANNELS_DIR' "
                         "path, this process will be done just once!".format(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
                         self.cfg.DATA.TRAIN.INSTANCE_CHANNELS_DIR))
                 create_instance_channels(self.cfg)
+            
+            # Change the value of DATA.TRAIN.INPUT_MASK_AXES_ORDER as we have created the instance mask and maybe the user doesn't 
+            # know the data order that is created.
+            if self.cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA:
+                out_data_order = self.cfg.DATA.TRAIN.INPUT_IMG_AXES_ORDER
+                if "C" not in self.cfg.DATA.TRAIN.INPUT_IMG_AXES_ORDER:
+                    out_data_order += "C"
+                print("DATA.TRAIN.INPUT_MASK_AXES_ORDER changed from {} to {}".format(self.cfg.DATA.TRAIN.INPUT_MASK_AXES_ORDER, out_data_order))
+                opts.extend([f"DATA.TRAIN.INPUT_MASK_AXES_ORDER", out_data_order])
 
-            # Create selected channels for val data
-            if self.cfg.TRAIN.ENABLE and not self.cfg.DATA.VAL.FROM_TRAIN and (not os.path.isdir(self.cfg.DATA.VAL.INSTANCE_CHANNELS_DIR) or \
-                not os.path.isdir(self.cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR)):
+        # Create selected channels for val data
+        if self.cfg.TRAIN.ENABLE and not self.cfg.DATA.VAL.FROM_TRAIN and (not os.path.isdir(self.cfg.DATA.VAL.INSTANCE_CHANNELS_DIR) or \
+            not os.path.isdir(self.cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR)):
+            do_mask = True
+            if self.cfg.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA:
+                do_mask = not os.path.isdir(self.cfg.DATA.VAL.INSTANCE_CHANNELS_DIR)
+                val_channel_dir = self.cfg.DATA.VAL.PATH
+                val_channel_mask_dir = self.cfg.DATA.VAL.INSTANCE_CHANNELS_DIR
+            
+            if do_mask and is_main_process():
                 print("You select to create {} channels from given instance labels and no file is detected in {}. "
                         "So let's prepare the data. Notice that, if you do not modify 'DATA.VAL.INSTANCE_CHANNELS_DIR' "
                         "path, this process will be done just once!".format(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
                         self.cfg.DATA.VAL.INSTANCE_CHANNELS_DIR))
                 create_instance_channels(self.cfg, data_type='val')
 
-            # Create selected channels for test data once
-            if self.cfg.TEST.ENABLE and not self.cfg.DATA.TEST.USE_VAL_AS_TEST and (not os.path.isdir(self.cfg.DATA.TEST.INSTANCE_CHANNELS_DIR) or \
-                (not os.path.isdir(self.cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR) and self.cfg.DATA.TEST.LOAD_GT)) and not self.cfg.TEST.BY_CHUNKS.ENABLE:
+            # Change the value of DATA.VAL.INPUT_MASK_AXES_ORDER as we have created the instance mask and maybe the user doesn't 
+            # know the data order that is created.
+            if self.cfg.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA:
+                out_data_order = self.cfg.DATA.VAL.INPUT_IMG_AXES_ORDER
+                if "C" not in self.cfg.DATA.VAL.INPUT_IMG_AXES_ORDER:
+                    out_data_order += "C"
+                print("DATA.VAL.INPUT_MASK_AXES_ORDER changed from {} to {}".format(self.cfg.DATA.VAL.INPUT_MASK_AXES_ORDER, out_data_order))
+                opts.extend([f"DATA.VAL.INPUT_MASK_AXES_ORDER", out_data_order])
+
+        # Create selected channels for test data once
+        if self.cfg.TEST.ENABLE and not self.cfg.DATA.TEST.USE_VAL_AS_TEST and (not os.path.isdir(self.cfg.DATA.TEST.INSTANCE_CHANNELS_DIR) or \
+            (not os.path.isdir(self.cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR) and self.cfg.DATA.TEST.LOAD_GT)):
+            do_mask = True
+            if self.cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA:
+                do_mask = not os.path.isdir(self.cfg.DATA.TEST.INSTANCE_CHANNELS_DIR)                    
+                test_channel_dir = self.cfg.DATA.TEST.PATH
+                test_channel_mask_dir = self.cfg.DATA.TEST.INSTANCE_CHANNELS_DIR
+                test_instance_mask_dir = self.cfg.DATA.TEST.PATH
+                
+            if do_mask and is_main_process():
                 print("You select to create {} channels from given instance labels and no file is detected in {}. "
                         "So let's prepare the data. Notice that, if you do not modify 'DATA.TEST.INSTANCE_CHANNELS_DIR' "
                         "path, this process will be done just once!".format(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
                         self.cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR))
                 create_test_instance_channels(self.cfg)
 
+            # Change the value of TEST.BY_CHUNKS.INPUT_MASK_AXES_ORDER as we have created the instance mask and maybe the user doesn't 
+            # know the data order that is created.
+            if self.cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA:
+                out_data_order = self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER
+                if "C" not in self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER:
+                    out_data_order += "C"
+                print("TEST.BY_CHUNKS.INPUT_MASK_AXES_ORDER changed from {} to {}".format(self.cfg.TEST.BY_CHUNKS.INPUT_MASK_AXES_ORDER, out_data_order))
+                opts.extend([f"TEST.BY_CHUNKS.INPUT_MASK_AXES_ORDER", out_data_order])
+
         if is_dist_avail_and_initialized():
             dist.barrier()
 
-        opts = []
         if self.cfg.TRAIN.ENABLE:
-            print("DATA.TRAIN.PATH changed from {} to {}".format(self.cfg.DATA.TRAIN.PATH, self.cfg.DATA.TRAIN.INSTANCE_CHANNELS_DIR))
-            print("DATA.TRAIN.GT_PATH changed from {} to {}".format(self.cfg.DATA.TRAIN.GT_PATH, self.cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR))
-            opts.extend(['DATA.TRAIN.PATH', self.cfg.DATA.TRAIN.INSTANCE_CHANNELS_DIR,
-                        'DATA.TRAIN.GT_PATH', self.cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR])
+            if self.cfg.DATA.TRAIN.PATH != train_channel_dir:
+                print("DATA.TRAIN.PATH changed from {} to {}".format(self.cfg.DATA.TRAIN.PATH, train_channel_dir))
+            if self.cfg.DATA.TRAIN.GT_PATH != train_channel_mask_dir:
+                print("DATA.TRAIN.GT_PATH changed from {} to {}".format(self.cfg.DATA.TRAIN.GT_PATH, train_channel_mask_dir))
+            opts.extend(['DATA.TRAIN.PATH', train_channel_dir, 'DATA.TRAIN.GT_PATH', train_channel_mask_dir])
         if not self.cfg.DATA.VAL.FROM_TRAIN:
-            print("DATA.VAL.PATH changed from {} to {}".format(self.cfg.DATA.VAL.PATH, self.cfg.DATA.VAL.INSTANCE_CHANNELS_DIR))
-            print("DATA.VAL.GT_PATH changed from {} to {}".format(self.cfg.DATA.VAL.GT_PATH, self.cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR))
-            opts.extend(['DATA.VAL.PATH', self.cfg.DATA.VAL.INSTANCE_CHANNELS_DIR,
-                        'DATA.VAL.GT_PATH', self.cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR])
-        if self.cfg.TEST.ENABLE and not self.cfg.DATA.TEST.USE_VAL_AS_TEST and not self.cfg.TEST.BY_CHUNKS.ENABLE:
-            print("DATA.TEST.PATH changed from {} to {}".format(self.cfg.DATA.TEST.PATH, self.cfg.DATA.TEST.INSTANCE_CHANNELS_DIR))
-            opts.extend(['DATA.TEST.PATH', self.cfg.DATA.TEST.INSTANCE_CHANNELS_DIR])
+            if self.cfg.DATA.VAL.PATH != val_channel_dir:
+                print("DATA.VAL.PATH changed from {} to {}".format(self.cfg.DATA.VAL.PATH, val_channel_dir))
+            if self.cfg.DATA.VAL.GT_PATH != val_channel_mask_dir:
+                print("DATA.VAL.GT_PATH changed from {} to {}".format(self.cfg.DATA.VAL.GT_PATH, val_channel_mask_dir))
+            opts.extend(['DATA.VAL.PATH', val_channel_dir, 'DATA.VAL.GT_PATH', val_channel_mask_dir])
+        if self.cfg.TEST.ENABLE and not self.cfg.DATA.TEST.USE_VAL_AS_TEST:
+            if self.cfg.DATA.TEST.PATH != test_channel_dir:
+                print("DATA.TEST.PATH changed from {} to {}".format(self.cfg.DATA.TEST.PATH, test_channel_dir))
+                opts.extend(['DATA.TEST.PATH', test_channel_dir])
             if self.cfg.DATA.TEST.LOAD_GT:
-                print("DATA.TEST.GT_PATH changed from {} to {}".format(self.cfg.DATA.TEST.GT_PATH, self.cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR))
-                opts.extend(['DATA.TEST.GT_PATH', self.cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR])
+                if self.cfg.DATA.TEST.GT_PATH != test_channel_mask_dir:
+                    print("DATA.TEST.GT_PATH changed from {} to {}".format(self.cfg.DATA.TEST.GT_PATH, test_channel_mask_dir))
+                    opts.extend(['DATA.TEST.GT_PATH', test_channel_mask_dir])
         original_test_path = self.cfg.DATA.TEST.PATH
-        original_test_mask_path = self.cfg.DATA.TEST.GT_PATH
+        original_test_mask_path = test_instance_mask_dir
         self.cfg.merge_from_list(opts)
 
         return original_test_path, original_test_mask_path
