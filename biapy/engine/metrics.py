@@ -509,9 +509,7 @@ class instance_segmentation_loss():
         elif self.out_channels == "C":
             loss = self.binary_channels_loss(_y_pred, y_true)
         elif self.out_channels in ["A"]:
-            loss = self.binary_channels_loss(_y_pred[:,0], y_true[:,0])+\
-                   self.binary_channels_loss(_y_pred[:,1], y_true[:,1])+\
-                   self.binary_channels_loss(_y_pred[:,2], y_true[:,2])
+            loss = self.binary_channels_loss(_y_pred, y_true)
         # Dv2
         else:
             loss = self.weights[0]*self.distance_channels_loss(_y_pred, y_true)
