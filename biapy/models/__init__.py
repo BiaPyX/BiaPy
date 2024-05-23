@@ -22,7 +22,8 @@ def build_model(cfg, job_identifier, device):
         Job name.
 
     device : Torch device
-        Using device ("cpu" or "cuda" for GPU). 
+        Using device. Most commonly "cpu" or "cuda" for GPU, but also potentially "mps", 
+        "xpu", "xla" or "meta". 
     Returns
     -------
     model : Keras model
@@ -124,8 +125,7 @@ def build_model(cfg, job_identifier, device):
         sample_size = (1,cfg.DATA.PATCH_SIZE[2], cfg.DATA.PATCH_SIZE[0], cfg.DATA.PATCH_SIZE[1])
     else:
         sample_size = (1,cfg.DATA.PATCH_SIZE[3], cfg.DATA.PATCH_SIZE[0], cfg.DATA.PATCH_SIZE[1], cfg.DATA.PATCH_SIZE[2])
-    summary(model, input_size=sample_size, col_names=("input_size", "output_size", "num_params"), depth=10,
-        device="cpu" if "cuda" not in device.type else "cuda")
+    summary(model, input_size=sample_size, col_names=("input_size", "output_size", "num_params"), depth=10, device=device.type)
     return model
 
 
@@ -213,7 +213,6 @@ def build_torchvision_model(cfg, device):
         else:
             sample_size = (1,cfg.DATA.PATCH_SIZE[3], cfg.DATA.PATCH_SIZE[0], cfg.DATA.PATCH_SIZE[1], cfg.DATA.PATCH_SIZE[2])
 
-    summary(model, input_size=sample_size, col_names=("input_size", "output_size", "num_params"), depth=10,
-        device="cpu" if "cuda" not in device.type else "cuda")
+    summary(model, input_size=sample_size, col_names=("input_size", "output_size", "num_params"), depth=10, device=device.type)
 
     return model, model_torchvision_weights.transforms()

@@ -85,7 +85,7 @@ def init_devices(args, cfg):
         if torch.cuda.is_available() and args.gpu is not None:
             device = torch.device("cuda")
         else:
-            device = torch.device("cpu")
+            device = torch.device(cfg.SYSTEM.DEVICE)
         return device
 
     args.distributed = True
@@ -103,7 +103,7 @@ def init_devices(args, cfg):
         world_size=args.world_size, rank=args.rank, timeout=timedelta(seconds=timeout_ms))
     dist.barrier()
     setup_for_distributed(args.rank == 0)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else cfg.SYSTEM.DEVICE)
     return device
 
 def set_seed(seed=42):

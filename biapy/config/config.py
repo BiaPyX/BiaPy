@@ -24,6 +24,9 @@ class Config:
         _C.SYSTEM.NUM_WORKERS = 5
         # Do not set it as its value will be calculated based in --gpu input arg
         _C.SYSTEM.NUM_GPUS = 0
+        # Device to be used when GPU is NOT selected. Most commonly "cpu", but also potentially "mps", 
+        # "xpu", "xla" or "meta".
+        _C.SYSTEM.DEVICE = "cpu"
 
         # Math seed to generate random numbers. Used to ensure reproducibility in the results. 
         _C.SYSTEM.SEED = 0
@@ -831,9 +834,9 @@ class Config:
         _C.TEST.BY_CHUNKS.SAVE_OUT_TIF = False
         # In how many iterations the H5 writer needs to flush the data. No need to do so with Zarr files.
         _C.TEST.BY_CHUNKS.FLUSH_EACH = 100
-        # Input Numpy/Zarr/H5 image's axes order. Options: ['TZCYX', 'TZYXC', 'ZCYX', 'ZYXC']
+        # Order of the axes of the image when using Zarr/H5 images in test data.
         _C.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER = 'TZCYX'
-        # Input Numpy/Zarr/H5 image's axes order. Options: ['TZCYX', 'TZYXC', 'ZCYX', 'ZYXC']
+        # Order of the axes of the mask when using Zarr/H5 images in test data.
         _C.TEST.BY_CHUNKS.INPUT_MASK_AXES_ORDER = 'TZCYX'
         # Whether if your input Zarr contains the raw images and labels together or not. Use 'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH'
         # and 'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_GT_PATH' to determine the tag to find within the Zarr

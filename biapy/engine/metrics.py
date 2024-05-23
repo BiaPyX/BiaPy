@@ -93,7 +93,8 @@ class jaccard_index():
             Number of classes.
 
         device : Torch device
-            Using device ("cpu" or "cuda" for GPU). 
+            Using device. Most commonly "cpu" or "cuda" for GPU, but also potentially "mps", 
+            "xpu", "xla" or "meta". 
 
         t : float, optional
             Threshold to be applied.
@@ -157,7 +158,8 @@ class instance_metrics():
             Non-binary channels to not apply IoU on them. 
         
         device : Torch device
-            Using device ("cpu" or "cuda" for GPU). 
+            Using device. Most commonly "cpu" or "cuda" for GPU, but also potentially "mps", 
+            "xpu", "xla" or "meta". 
 
         t : float, optional
             Threshold to be applied.
