@@ -481,10 +481,13 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             raise ValueError("'TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER' needs to be at least of length 3, e.g., 'ZYX'")
         if cfg.MODEL.N_CLASSES > 2:
             raise ValueError("Not implemented pipeline option: 'MODEL.N_CLASSES' > 2 and 'TEST.BY_CHUNKS'")
-        if cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA and (cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH == '' or \
-            cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_GT_PATH == ''):
-            raise ValueError("'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH' and 'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_GT_PATH' "
-                "need to be set when 'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA' is used.")
+        if cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA:
+            if cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH == '':
+                raise ValueError("'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH' needs to be set when "
+                    "'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA' is used.")
+            if cfg.DATA.TEST.LOAD_GT and cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_GT_PATH == '':
+                raise ValueError("'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_GT_PATH' needs to be set when "
+                    "'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA' is used.")
 
     if cfg.TRAIN.ENABLE:
         if cfg.DATA.EXTRACT_RANDOM_PATCH and cfg.DATA.PROBABILITY_MAP:
