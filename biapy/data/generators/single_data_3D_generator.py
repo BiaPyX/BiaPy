@@ -39,7 +39,10 @@ class Single3DImageDataGenerator(SingleBaseDataGenerator):
             if channel_pos != 3 and img.shape[channel_pos] <= 4:
                 new_pos = [x for x in range(4) if x != channel_pos]+[channel_pos,]
                 img = img.transpose(new_pos)
-        
+
+        if img.ndim != 4:
+            raise ValueError(f"Image loaded seems to not be 3D: {img.shape}")
+
         if self.convert_to_rgb and self.shape[-1] == 3 and img.shape[-1] == 1:
             img = np.repeat(img, 3, axis=-1)
             

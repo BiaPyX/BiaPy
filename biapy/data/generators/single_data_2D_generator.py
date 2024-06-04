@@ -21,7 +21,10 @@ class Single2DImageDataGenerator(SingleBaseDataGenerator):
             img = np.expand_dims(img, -1)
         else:
             if img.shape[0] <= 3: img = img.transpose((1,2,0))   
-        
+
+        if img.ndim != 3:
+            raise ValueError(f"Image loaded seems to not be 2D: {img.shape}")
+                    
         if self.convert_to_rgb and self.shape[-1] == 3 and img.shape[-1] == 1:
             img = np.repeat(img, 3, axis=-1)
 
