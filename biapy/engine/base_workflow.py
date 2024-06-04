@@ -12,6 +12,8 @@ from abc import ABCMeta, abstractmethod
 from sklearn.model_selection import StratifiedKFold
 import torch.multiprocessing as mp
 import torch.distributed as dist
+import xarray as xr
+import bioimageio.core
 
 from biapy.models import build_model, build_torchvision_model
 from biapy.engine import prepare_optimizer, build_callbacks
@@ -131,20 +133,26 @@ class Base_Workflow(metaclass=ABCMeta):
         self.bmz_test_output = None
         self.bmz_model_resource = None
         if self.cfg.MODEL.SOURCE == "bmz":
-            import bioimageio.core
-            import xarray as xr
-
             print("Loading Bioimage Model Zoo pretrained model . . .")
             self.bmz_model_resource = bioimageio.core.load_resource_description(self.cfg.MODEL.BMZ.SOURCE_MODEL_DOI)
         
+            # Temporal adjust until we find a solution with the BMZ team
+            bs = self.cfg.TRAIN.BATCH_SIZE
+            if self.cfg.MODEL.BMZ.SOURCE_MODEL_DOI == "10.5281/zenodo.5874841":
+                bs = 2
+            elif self.cfg.MODEL.BMZ.SOURCE_MODEL_DOI == "10.5281/zenodo.6028097":
+                bs = 4
+
             # Change PATCH_SIZE with the one stored in the RDF
             input_image = np.load(self.bmz_model_resource.test_inputs[0])
-            opts = ["DATA.PATCH_SIZE", input_image.shape[2:]+(input_image.shape[1],)]
+            opts = ["DATA.PATCH_SIZE", input_image.shape[2:]+(input_image.shape[1],),
+                "TRAIN.BATCH_SIZE", bs]
             print("[BMZ] Changed 'DATA.PATCH_SIZE' from {} to {} as defined in the RDF"
-                  .format(self.cfg.DATA.PATCH_SIZE,opts[1]))
+                .format(self.cfg.DATA.PATCH_SIZE,opts[1]))
+            print("[BMZ] Changed 'TRAIN.BATCH_SIZE' from {} to {} as defined in the RDF"
+                .format(self.cfg.TRAIN.BATCH_SIZE,opts[3]))
             self.cfg.merge_from_list(opts)
 
-            
     @abstractmethod
     def define_metrics(self):
         """
@@ -450,12 +458,16 @@ class Base_Workflow(metaclass=ABCMeta):
         # Predict
         prediction_tensors = self.model.predict(*list(in_img.values()))
 
-        # Apply post-processing
-        prediction = dict(zip([out.name for out in self.model.output_specs], prediction_tensors))
-        self.model.apply_postprocessing(prediction, self.bmz_computed_measures)
+        # Apply post-processing (if any)
+        if bool(self.model.output_specs[0].postprocessing):
+            prediction = dict(zip([out.name for out in self.model.output_specs], prediction_tensors))
+            self.model.apply_postprocessing(prediction, self.bmz_computed_measures)
 
-        # Convert back to Tensor 
-        prediction = torch.from_numpy(prediction['output0'].to_numpy())
+            # Convert back to Tensor 
+            prediction = torch.from_numpy(prediction['output0'].to_numpy())
+        else:
+            # Convert back to Tensor 
+            prediction = torch.from_numpy(np.array(prediction_tensors[0]))
 
         return prediction
 
@@ -822,6 +834,10 @@ class Base_Workflow(metaclass=ABCMeta):
         pred : Torch tensor
             Resulting predictions after applying last activation(s). 
         """
+        # Not apply the activation, as it will be done in the BMZ model
+        if self.cfg.MODEL.SOURCE == "bmz":
+            return pred 
+
         if not isinstance(pred, list):
             multiple_heads = False
             pred = [pred]

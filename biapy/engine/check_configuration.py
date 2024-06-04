@@ -170,8 +170,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         raise ValueError("'MODEL.SOURCE' needs to be one between ['biapy', 'bmz', 'torchvision']")
 
     if cfg.MODEL.SOURCE == "bmz":
-        if cfg.TRAIN.ENABLE:
-            raise ValueError("Currently not supported to train a BMZ model")
         if cfg.MODEL.BMZ.SOURCE_MODEL_DOI == "":
             raise ValueError("'MODEL.BMZ.SOURCE_MODEL_DOI' needs to be configured when 'MODEL.SOURCE' is 'bmz'")
 
@@ -572,8 +570,13 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         raise ValueError("When PROBLEM.NDIM == {} DATA.TEST.PADDING tuple must be length {}, given {}."
                          .format(cfg.PROBLEM.NDIM, dim_count, cfg.DATA.TEST.PADDING))
     if len(cfg.DATA.PATCH_SIZE) != dim_count+1:
-        raise ValueError("When PROBLEM.NDIM == {} DATA.PATCH_SIZE tuple must be length {}, given {}."
-                         .format(cfg.PROBLEM.NDIM, dim_count+1, cfg.DATA.PATCH_SIZE))
+        if cfg.MODEL.SOURCE != "bmz":
+            raise ValueError("When PROBLEM.NDIM == {} DATA.PATCH_SIZE tuple must be length {}, given {}."
+                            .format(cfg.PROBLEM.NDIM, dim_count+1, cfg.DATA.PATCH_SIZE))
+        else:
+            print("WARNING: when PROBLEM.NDIM == {} DATA.PATCH_SIZE tuple must be length {}, given {}. Not an error "
+                "because you are using a model from Bioimage Model Zoo (BMZ) and the patch size will be determined by the model."
+                " However, this message is printed so you are aware of this. ")
     assert cfg.DATA.NORMALIZATION.TYPE in ['div', 'custom'], "DATA.NORMALIZATION.TYPE not in ['div', 'custom']"
     assert cfg.DATA.NORMALIZATION.APPLICATION_MODE in ["image", "dataset"], "'DATA.NORMALIZATION.APPLICATION_MODE' needs to be one between ['image', 'dataset']"
     if not cfg.DATA.TRAIN.IN_MEMORY and cfg.DATA.NORMALIZATION.APPLICATION_MODE == "dataset":
