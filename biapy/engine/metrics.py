@@ -488,24 +488,30 @@ class instance_segmentation_loss():
 
         loss = 0
         if self.out_channels == "BC":
+            assert y_true.shape[1] == 2, f"Seems that the GT loaded doesn't have 2 channels as expected in BC. GT shape: {y_true.shape}"
             loss = self.weights[0]*self.binary_channels_loss(_y_pred[:,0], y_true[:,0])+\
                    self.weights[1]*self.binary_channels_loss(_y_pred[:,1], y_true[:,1])
         elif self.out_channels == "BCM":
+            assert y_true.shape[1] == 3, f"Seems that the GT loaded doesn't have 3 channels as expected in BCM. GT shape: {y_true.shape}"
             loss = self.weights[0]*self.binary_channels_loss(_y_pred[:,0], y_true[:,0])+\
                    self.weights[1]*self.binary_channels_loss(_y_pred[:,1], y_true[:,1])+\
                    self.weights[2]*self.binary_channels_loss(_y_pred[:,2], y_true[:,2])   
         elif self.out_channels == "BCD":
+            assert y_true.shape[1] == 3, f"Seems that the GT loaded doesn't have 3 channels as expected in BCD. GT shape: {y_true.shape}"
             loss = self.weights[0]*self.binary_channels_loss(_y_pred[:,0], y_true[:,0])+\
                    self.weights[1]*self.binary_channels_loss(_y_pred[:,1], y_true[:,1])+\
                    self.weights[2]*self.distance_channels_loss(D, y_true[:,2]) 
         elif self.out_channels == "BCDv2":
+            assert y_true.shape[1] == 3, f"Seems that the GT loaded doesn't have 3 channels as expected in BCDv2. GT shape: {y_true.shape}"
             loss = self.weights[0]*self.binary_channels_loss(_y_pred[:,0], y_true[:,0])+\
                    self.weights[1]*self.binary_channels_loss(_y_pred[:,1], y_true[:,1])+\
                    self.weights[2]*self.distance_channels_loss(D, y_true[:,2]) 
         elif self.out_channels in ["BDv2", "BD"]:
+            assert y_true.shape[1] == 2, f"Seems that the GT loaded doesn't have 2 channels as expected in BD/BDv2. GT shape: {y_true.shape}"
             loss = self.weights[0]*self.binary_channels_loss(_y_pred[:,0], y_true[:,0])+\
                    self.weights[1]*self.distance_channels_loss(D, y_true[:,1])
         elif self.out_channels == "BP":
+            assert y_true.shape[1] == 2, f"Seems that the GT loaded doesn't have 2 channels as expected in BP. GT shape: {y_true.shape}"
             loss = self.weights[0]*self.binary_channels_loss(_y_pred[:,0], y_true[:,0])+\
                    self.weights[1]*self.binary_channels_loss(_y_pred[:,1], y_true[:,1])
         # Dv2
