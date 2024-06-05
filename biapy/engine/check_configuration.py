@@ -174,7 +174,11 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             raise ValueError("'MODEL.BMZ.SOURCE_MODEL_DOI' needs to be configured when 'MODEL.SOURCE' is 'bmz'")
 
         # Check if the model exists
-        url = 'http://www.doi.org/'+cfg.MODEL.BMZ.SOURCE_MODEL_DOI
+        doi_to_find = str(cfg.MODEL.BMZ.SOURCE_MODEL_DOI).strip()
+        # In case newer version of the models are available
+        if len(doi_to_find.split("/")) > 2:
+            doi_to_find = '/'.join(doi_to_find.split("/")[:2])
+        url = 'http://www.doi.org/'+doi_to_find
         r = requests.get(url, stream=True, verify=True)
         if r.status_code >= 200 and r.status_code < 400:
             print(f'BMZ model DOI: {cfg.MODEL.BMZ.SOURCE_MODEL_DOI} found')
@@ -311,8 +315,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             raise ValueError(f"'PROBLEM.SUPER_RESOLUTION.UPSCALING' needs to be a tuple of {dim_count} integers")
         if cfg.MODEL.SOURCE == "torchvision":
             raise ValueError("'MODEL.SOURCE' as 'torchvision' is not available in super-resolution workflow")
-        if cfg.DATA.NORMALIZATION.TYPE != "div":
-            raise ValueError("'DATA.NORMALIZATION.TYPE' can only be set to 'div' in SR workflow")
+        if cfg.DATA.NORMALIZATION.TYPE not in ["div","scale_range"]:
+            raise ValueError("'DATA.NORMALIZATION.TYPE' in SR workflow needs to be one between ['div','scale_range']")
 
     #### Self-supervision ####
     elif cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
@@ -332,7 +336,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         else:
             raise ValueError("'PROBLEM.SELF_SUPERVISED.PRETEXT_TASK' needs to be among these options: ['crappify', 'masking']")
         if cfg.MODEL.SOURCE == "torchvision":
-            raise ValueError("'MODEL.SOURCE' as 'torchvision' is not available in super-resolution workflow")
+            raise ValueError("'MODEL.SOURCE' as 'torchvision' is not available in self-supervised workflow")
 
     #### Denoising ####
     elif cfg.PROBLEM.TYPE == 'DENOISING':
@@ -341,7 +345,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         if not check_value(cfg.PROBLEM.DENOISING.N2V_PERC_PIX):
             raise ValueError("PROBLEM.DENOISING.N2V_PERC_PIX not in [0, 1] range")
         if cfg.MODEL.SOURCE == "torchvision":
-            raise ValueError("'MODEL.SOURCE' as 'torchvision' is not available in super-resolution workflow")
+            raise ValueError("'MODEL.SOURCE' as 'torchvision' is not available in denoising workflow")
             
     #### Classification ####
     elif cfg.PROBLEM.TYPE == 'CLASSIFICATION':
@@ -577,9 +581,9 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             print("WARNING: when PROBLEM.NDIM == {} DATA.PATCH_SIZE tuple must be length {}, given {}. Not an error "
                 "because you are using a model from Bioimage Model Zoo (BMZ) and the patch size will be determined by the model."
                 " However, this message is printed so you are aware of this. ")
-    assert cfg.DATA.NORMALIZATION.TYPE in ['div', 'custom'], "DATA.NORMALIZATION.TYPE not in ['div', 'custom']"
+    assert cfg.DATA.NORMALIZATION.TYPE in ['div', 'scale_range', 'custom'], "DATA.NORMALIZATION.TYPE not in ['div', 'scale_range', 'custom']"
     assert cfg.DATA.NORMALIZATION.APPLICATION_MODE in ["image", "dataset"], "'DATA.NORMALIZATION.APPLICATION_MODE' needs to be one between ['image', 'dataset']"
-    if not cfg.DATA.TRAIN.IN_MEMORY and cfg.DATA.NORMALIZATION.APPLICATION_MODE == "dataset":
+    if cfg.TRAIN.ENABLE and not cfg.DATA.TRAIN.IN_MEMORY and cfg.DATA.NORMALIZATION.APPLICATION_MODE == "dataset":
         raise ValueError("'DATA.NORMALIZATION.APPLICATION_MODE' == 'dataset' can only be applied if 'DATA.TRAIN.IN_MEMORY' == True")            
     if cfg.DATA.NORMALIZATION.PERC_CLIP:
         if cfg.DATA.NORMALIZATION.PERC_LOWER == -1:

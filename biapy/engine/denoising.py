@@ -196,6 +196,8 @@ class Denoising_Workflow(Base_Workflow):
         x_norm = norm[0]
         if x_norm['type'] == 'div':
             pred = undo_norm_range01(pred, x_norm)
+        elif x_norm['type'] == 'scale_range':
+            pred = undo_norm_range01(pred, x_norm, x_norm['min_val_scale'], x_norm['max_val_scale'])
         else:
             pred = denormalize(pred, x_norm['mean'], x_norm['std'])  
             

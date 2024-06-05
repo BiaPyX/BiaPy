@@ -198,6 +198,8 @@ class Config:
         _C.DATA.NORMALIZATION.PERC_UPPER = -1.0
         # Normalization type to use. Possible options:
         #   'div' to divide values from 0/255 (or 0/65535 if uint16) in [0,1] range
+        #   'scale_range' same as 'div' but scaling the range to [0-max] and then dividing by the maximum value of the data 
+        #    and not by 255 or 65535
         #   'custom' to use DATA.NORMALIZATION.CUSTOM_MEAN and DATA.NORMALIZATION.CUSTOM_STD to normalize
         _C.DATA.NORMALIZATION.TYPE = 'div'
         # Whether to apply the normalization by sample ("image") or by all dataset statistics ("dataset"). 

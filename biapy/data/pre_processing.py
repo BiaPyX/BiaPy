@@ -3,6 +3,7 @@ import torch
 import scipy
 import h5py
 import zarr
+import sys
 import numpy as np
 from tqdm import tqdm
 import pandas as pd
@@ -982,21 +983,27 @@ def calculate_3D_volume_prob_map(Y, Y_path=None, w_foreground=0.94, w_background
 ###########
 # GENERAL #
 ###########
-def norm_range01(x, dtype=np.float32):
+def norm_range01(x, dtype=np.float32, div_using_max_and_scale=False):
     norm_steps = {}
     norm_steps['orig_dtype'] = x.dtype
 
+    if div_using_max_and_scale:
+        norm_steps['min_val_scale'] = x.min()
+        norm_steps['max_val_scale'] = x.max()
+
     if x.dtype in [np.uint8, torch.uint8]:
-        x = x/255
+        x = x/255 if not div_using_max_and_scale else (x-x.min())/(x.max()-x.min()+sys.float_info.epsilon)
         norm_steps['div'] = 1
     else:
         if (isinstance(x, np.ndarray) and np.max(x) > 255) or \
             (torch.is_tensor(x) and torch.max(x) > 255):
             norm_steps['reduced_{}'.format(x.dtype)] = 1
-            x = reduce_dtype(x, 0, 65535, out_min=0, out_max=1, out_type=dtype)
+            x = reduce_dtype(x, 0 if not div_using_max_and_scale else x.min(), 
+                65535 if not div_using_max_and_scale else x.max(), 
+                out_min=0, out_max=1, out_type=dtype)
         elif (isinstance(x, np.ndarray) and np.max(x) > 2) or \
             (torch.is_tensor(x) and torch.max(x) > 2):
-            x = x/255
+            x = x/255 if not div_using_max_and_scale else (x-x.min())/(x.max()-x.min()+sys.float_info.epsilon)
             norm_steps['div'] = 1
 
     if torch.is_tensor(x):
@@ -1005,7 +1012,12 @@ def norm_range01(x, dtype=np.float32):
         x = x.astype(dtype)
     return x, norm_steps
 
-def undo_norm_range01(x, xnorm):
+def undo_norm_range01(x, xnorm, min_val_scale=None, max_val_scale=None):
+    if min_val_scale is not None and max_val_scale is None:
+        raise ValueError("max_val_scale can not be None when min_val_scale is provided") 
+    if max_val_scale is not None and min_val_scale is None:
+        raise ValueError("min_val_scale can not be None when max_val_scale is provided")
+
     if 'div' == xnorm['type']:
         # Prevent values go outside expected range 
         if isinstance(x, np.ndarray):
@@ -1013,7 +1025,7 @@ def undo_norm_range01(x, xnorm):
         else:
             x = torch.clamp(x, 0, 1)
         if 'div' in xnorm:
-            x = (x*255)
+            x = (x*255) if max_val_scale is None else (x*max_val_scale)+min_val_scale
             if isinstance(x, np.ndarray): 
                 x = x.astype(np.uint8)
             else:
@@ -1023,7 +1035,7 @@ def undo_norm_range01(x, xnorm):
             if len(reductions)>0:
                 reductions = reductions[0]
                 reductions = reductions.replace('reduced_','')
-                x = (x*65535)
+                x = (x*65535) if max_val_scale is None else (x*max_val_scale)+min_val_scale
                 if isinstance(x, np.ndarray): 
                     x = x.astype(eval("np.{}".format(reductions) ))
                 else:
