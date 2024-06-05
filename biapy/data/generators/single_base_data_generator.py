@@ -229,30 +229,20 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.shape = resize_shape
 
         # X data analysis
-        self.X_norm = {}
-        self.X_norm['type'] = 'none'
-        img, _ = self.load_sample(0)
+        img, _ = self.load_sample(0, first_load=True)
         if norm_dict['enable']:
-            self.X_norm['application_mode'] = norm_dict['application_mode']
-            self.X_norm['orig_dtype'] = img.dtype
-            if norm_dict['type'] == "custom":
-                self.X_norm['type'] = 'custom'    
-                if norm_dict['application_mode'] == "dataset":    
-                    if 'mean' in norm_dict and 'std' in norm_dict:    
-                        self.X_norm['mean'] = norm_dict['mean']
-                        self.X_norm['std'] = norm_dict['std']  
-                    else:
-                        self.X_norm['mean'] = np.mean(self.X)
-                        self.X_norm['std'] = np.std(self.X)
-            else: # norm_dict['type'] == "div"                
-                img, nsteps = norm_range01(img)
-                self.X_norm.update(nsteps)
+            self.norm_dict['orig_dtype'] = img.dtype
+            if norm_dict['type'] in ["div", "scale_range"]:
+                if norm_dict['type'] == "div":
+                    img, nsteps = norm_range01(img)
+                else:
+                    img, nsteps = norm_range01(img, div_using_max_and_scale=True)
+                self.norm_dict.update(nsteps)
                 if resize_shape[-1] != img.shape[-1]:
                     raise ValueError("Channel of the patch size given {} does not correspond with the loaded image {}. "
                         "Please, check the channels of the images!".format(resize_shape[-1], img.shape[-1]))
-                self.X_norm['type'] = 'div'            
 
-        print("Normalization config used for X: {}".format(self.X_norm))
+        print("Normalization config used for X: {}".format(self.norm_dict))
 
         self.shape = resize_shape if resize_shape is not None else img.shape
 
@@ -331,7 +321,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         """Defines the number of samples per epoch."""
         return self.length
 
-    def load_sample(self, idx):
+    def load_sample(self, idx, first_load=False):
         """
         Load one data sample given its corresponding index.
 
@@ -340,6 +330,9 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         idx : int
             Sample index counter.
 
+        first_load : bool, optional
+            Whether its the first time a sample is loaded to prevent normalizing it. 
+            
         Returns
         -------
         img : 3D/4D Numpy array
@@ -365,19 +358,21 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
             img = np.squeeze(img)
             
         # X normalization
-        if self.X_norm['type'] != "none":
+        if self.norm_dict['enable'] and not first_load:
             # Percentile clipping
             if 'lower_bound' in self.norm_dict and self.norm_dict['application_mode'] == "image":
                 img, _, _ = percentile_clip(img, lower=self.norm_dict['lower_bound'],                                     
                     upper=self.norm_dict['upper_bound'])
 
-            if self.X_norm['type'] == 'div':
+            if self.norm_dict['type'] == 'div':
                 img, _ = norm_range01(img)
-            elif self.X_norm['type'] == 'custom':
+            elif self.norm_dict['type'] == 'scale_range':
+                img, _ = norm_range01(img, div_using_max_and_scale=True)
+            elif self.norm_dict['type'] == 'custom':
                 if self.norm_dict['application_mode'] == "image":
                     img = normalize(img, img.mean(), img.std())
                 else:
-                    img = normalize(img, self.X_norm['mean'], self.X_norm['std'])
+                    img = normalize(img, self.norm_dict['mean'], self.norm_dict['std'])
 
         img = self.ensure_shape(img)
 
@@ -574,4 +569,4 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         return sample_x
 
     def get_data_normalization(self):
-        return self.X_norm
+        return self.norm_dict

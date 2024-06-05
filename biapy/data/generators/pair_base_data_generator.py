@@ -507,24 +507,15 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.shape = shape
 
         # X data analysis
-        self.X_norm = {}
-        self.X_norm['type'] = 'none'
-        img, _ = self.load_sample(0)
+        img, _ = self.load_sample(0, first_load=True)
         if norm_dict['enable']:
-            self.X_norm['application_mode'] = norm_dict['application_mode']
-            self.X_norm['orig_dtype'] = img.dtype
-            if norm_dict['type'] == "custom":
-                self.X_norm['type'] = 'custom'    
-                if norm_dict['application_mode'] == "dataset":    
-                    if 'mean' in norm_dict and 'std' in norm_dict:    
-                        self.X_norm['mean'] = norm_dict['mean']
-                        self.X_norm['std'] = norm_dict['std']  
-                    else:
-                        self.X_norm['mean'] = np.mean(self.X)
-                        self.X_norm['std'] = np.std(self.X)                            
-            else: # norm_dict['type'] == "div"
-                img, nsteps = norm_range01(img)
-                self.X_norm.update(nsteps)
+            self.norm_dict['orig_dtype'] = img.dtype                    
+            if norm_dict['type'] in ["div", "scale_range"]:
+                if norm_dict['type'] == 'div':
+                    img, nsteps = norm_range01(img)
+                else:
+                    img, nsteps = norm_range01(img, div_using_max_and_scale=True)
+                self.norm_dict.update(nsteps)
                 if shape[-1] != img.shape[-1]:
                     raise ValueError("Channel of the patch size given {} does not correspond with the loaded image {}. "
                         "Please, check the channels of the images!".format(shape[-1], img.shape[-1]))
@@ -533,7 +524,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                         "that PATCH_SIZE you have two options: 1) Set IN_MEMORY = True (as the images will be cropped "
                         "automatically to that DATA.PATCH_SIZE) ; 2) Set DATA.EXTRACT_RANDOM_PATCH = True to extract a patch "
                         "(if possible) from loaded image".format(img.shape, shape))
-                self.X_norm['type'] = 'div'                
 
         self.X_channels = img.shape[-1]
         self.Y_channels = img.shape[-1]
@@ -589,7 +579,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             self.Y_dtype = mask.dtype
             del mask
             
-        print("Normalization config used for X: {}".format(self.X_norm))
+        print("Normalization config used for X: {}".format(self.norm_dict))
         if self.Y_provided:
             print("Normalization config used for Y: {}".format(norm_dict['mask_norm']))
 
@@ -783,7 +773,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         """Defines the number of samples per epoch."""
         return self.length
 
-    def load_sample(self, _idx):
+    def load_sample(self, _idx, first_load=False):
         """
         Load one data sample given its corresponding index.
 
@@ -792,6 +782,9 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         _idx : int
             Sample index counter.
 
+        first_load : bool, optional
+            Whether its the first time a sample is loaded to prevent normalizing it. 
+            
         Returns
         -------
         img : 3D/4D Numpy array
@@ -841,9 +834,11 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         else:
             img = self.ensure_shape(img, None)
 
-        img = self.norm_X(img)
+        if self.norm_dict['enable'] and not first_load:
+            img = self.norm_X(img)
         if self.Y_provided:
-            mask = self.norm_Y(mask)
+            if self.norm_dict['enable'] and not first_load:
+                mask = self.norm_Y(mask)
             return img, mask
         else:
             return img, np.zeros(img.shape, dtype=np.float32)
@@ -862,20 +857,20 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         img : 3D/4D Numpy array
             X element normalized. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
         """
-        # X normalization
-        if self.X_norm['type'] != "none":
-            # Percentile clipping
-            if 'lower_bound' in self.norm_dict and self.norm_dict['application_mode'] == "image":
-                img, _, _ = percentile_clip(img, lower=self.norm_dict['lower_bound'],                                     
-                    upper=self.norm_dict['upper_bound'])
+        # Percentile clipping
+        if 'lower_bound' in self.norm_dict and self.norm_dict['application_mode'] == "image":
+            img, _, _ = percentile_clip(img, lower=self.norm_dict['lower_bound'],                                     
+                upper=self.norm_dict['upper_bound'])
 
-            if self.X_norm['type'] == 'div':
-                img, _ = norm_range01(img)
-            elif self.X_norm['type'] == 'custom':
-                if self.norm_dict['application_mode'] == "image":
-                    img = normalize(img, img.mean(), img.std())
-                else:
-                    img = normalize(img, self.X_norm['mean'], self.X_norm['std'])
+        if self.norm_dict['type'] == 'div':
+            img, _ = norm_range01(img)
+        elif self.norm_dict['type'] == 'scale_range':
+            img, _ = norm_range01(img, div_using_max_and_scale=True)
+        elif self.norm_dict['type'] == 'custom':
+            if self.norm_dict['application_mode'] == "image":
+                img = normalize(img, img.mean(), img.std())
+            else:
+                img = normalize(img, self.norm_dict['mean'], self.norm_dict['std'])
         return img 
 
     def norm_Y(self, mask):   
@@ -893,25 +888,25 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         mask : 3D/4D Numpy array
             Y element normalized. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
         """
-        # Y normalization
-        if self.X_norm['type'] != "none":
-            if self.norm_dict['mask_norm'] == 'as_mask' and self.Y_provided: 
-                for j in range(self.channels_to_analize):
-                    if self.channel_info[j]['div']:
-                        mask[...,j] = mask[...,j]/255
-            elif self.norm_dict['mask_norm'] == 'as_image' and self.Y_provided: 
-                # Percentile clipping
-                if 'lower_bound' in self.norm_dict and self.norm_dict['application_mode'] == "image":
-                    mask, _, _ = percentile_clip(mask, lower=self.norm_dict['lower_bound'],                                     
-                        upper=self.norm_dict['upper_bound'])
+        if self.norm_dict['mask_norm'] == 'as_mask' and self.Y_provided: 
+            for j in range(self.channels_to_analize):
+                if self.channel_info[j]['div']:
+                    mask[...,j] = mask[...,j]/255
+        elif self.norm_dict['mask_norm'] == 'as_image' and self.Y_provided: 
+            # Percentile clipping
+            if 'lower_bound' in self.norm_dict and self.norm_dict['application_mode'] == "image":
+                mask, _, _ = percentile_clip(mask, lower=self.norm_dict['lower_bound'],                                     
+                    upper=self.norm_dict['upper_bound'])
 
-                if self.X_norm['type'] == 'div':
-                    mask, _ = norm_range01(mask)
-                elif self.X_norm['type'] == 'custom':
-                    if self.norm_dict['application_mode'] == "image":
-                        mask = normalize(mask, mask.mean(), mask.std())
-                    else:
-                        mask = normalize(mask, self.X_norm['mean'], self.X_norm['std'])
+            if self.norm_dict['type'] == 'div':
+                mask, _ = norm_range01(mask)
+            elif self.norm_dict['type'] == 'scale_range':
+                mask, _ = norm_range01(mask, div_using_max_and_scale=True)
+            elif self.norm_dict['type'] == 'custom':
+                if self.norm_dict['application_mode'] == "image":
+                    mask = normalize(mask, mask.mean(), mask.std())
+                else:
+                    mask = normalize(mask, self.norm_dict['mean'], self.norm_dict['std'])
         return mask 
 
     def getitem(self, index):
@@ -1439,4 +1434,4 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
     def get_data_normalization(self):
         """Get data normalization."""
-        return self.X_norm
+        return self.norm_dict

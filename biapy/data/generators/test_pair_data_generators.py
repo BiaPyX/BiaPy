@@ -162,30 +162,16 @@ class test_pair_data_generator(Dataset):
             self.len = len(X)
         
         # Check if a division is required
-        self.X_norm = {}
-        self.X_norm['type'] = 'div'
         if provide_Y:
             self.Y_norm = {}
             self.Y_norm['type'] = 'div'
         img, mask, xnorm, _, _ = self.load_sample(0)
 
         if norm_dict['enable']:
-            self.X_norm['orig_dtype'] = img.dtype if isinstance(img, np.ndarray) else "Zarr"
-            self.X_norm['application_mode'] = norm_dict['application_mode'] 
-            if norm_dict['type'] == 'custom':
-                self.X_norm['type'] = 'custom' 
-                if 'mean' in norm_dict and 'std' in norm_dict:
-                    self.X_norm['mean'] = norm_dict['mean']
-                    self.X_norm['std'] = norm_dict['std']
-            elif norm_dict['type'] == "percentile":
-                self.X_norm['type'] = 'percentile'
-                self.X_norm['lower_bound'] = norm_dict['lower_bound']
-                self.X_norm['upper_bound'] = norm_dict['upper_bound'] 
-                self.X_norm['lower_value'] = norm_dict['lower_value']
-                self.X_norm['upper_value'] = norm_dict['upper_value'] 
+            self.norm_dict['orig_dtype'] = img.dtype if isinstance(img, np.ndarray) else "Zarr"
 
         if xnorm:
-            self.X_norm.update(xnorm)
+            self.norm_dict.update(xnorm)
 
         if mask is not None and not test_by_chunks:
             self.Y_norm = {}
@@ -194,7 +180,7 @@ class test_pair_data_generator(Dataset):
                 if (np.max(mask) > 30 and not instance_problem):
                     self.Y_norm['div'] = 1   
             elif norm_dict['mask_norm'] == 'as_image':
-                self.Y_norm.update(self.X_norm)
+                self.Y_norm.update(self.norm_dict)
 
     def norm_X(self, img):
         """
@@ -214,25 +200,26 @@ class test_pair_data_generator(Dataset):
             Normalization info. 
         """
         xnorm = None
-        if self.norm_dict['enable']:
-            # Percentile clipping
-            if 'lower_bound' in self.norm_dict:
-                if self.norm_dict['application_mode'] == "image":
-                    img, _, _ = percentile_clip(img, lower=self.norm_dict['lower_bound'],                                     
-                        upper=self.norm_dict['upper_bound'])
-                elif self.norm_dict['application_mode'] == "dataset" and not self.norm_dict['clipped']:
-                    img, _, _ = percentile_clip(img, lwr_perc_val=self.norm_dict['dataset_X_lower_value'],                                     
-                        uppr_perc_val=self.norm_dict['dataset_X_upper_value'])
-            if self.X_norm['type'] == 'div':
-                img, xnorm = norm_range01(img, dtype=self.dtype)
-            elif self.X_norm['type'] == 'custom':
-                if self.norm_dict['application_mode'] == "image":
-                    xnorm = {}
-                    xnorm['mean'] = img.mean()
-                    xnorm['std'] = img.std()
-                    img = normalize(img, img.mean(), img.std(), out_type=self.dtype_str)
-                else:
-                    img = normalize(img, self.X_norm['mean'], self.X_norm['std'], out_type=self.dtype_str)
+        # Percentile clipping
+        if 'lower_bound' in self.norm_dict:
+            if self.norm_dict['application_mode'] == "image":
+                img, _, _ = percentile_clip(img, lower=self.norm_dict['lower_bound'],                                     
+                    upper=self.norm_dict['upper_bound'])
+            elif self.norm_dict['application_mode'] == "dataset" and not self.norm_dict['clipped']:
+                img, _, _ = percentile_clip(img, lwr_perc_val=self.norm_dict['dataset_X_lower_value'],                                     
+                    uppr_perc_val=self.norm_dict['dataset_X_upper_value'])
+        if self.norm_dict['type'] == 'div':
+            img, xnorm = norm_range01(img, dtype=self.dtype)
+        elif self.norm_dict['type'] == 'scale_range':
+            img, xnorm = norm_range01(img, dtype=self.dtype, div_using_max_and_scale=True)
+        elif self.norm_dict['type'] == 'custom':
+            if self.norm_dict['application_mode'] == "image":
+                xnorm = {}
+                xnorm['mean'] = img.mean()
+                xnorm['std'] = img.std()
+                img = normalize(img, img.mean(), img.std(), out_type=self.dtype_str)
+            else:
+                img = normalize(img, self.norm_dict['mean'], self.norm_dict['std'], out_type=self.dtype_str)
         return img, xnorm
 
     def norm_Y(self, mask):   
@@ -267,16 +254,18 @@ class test_pair_data_generator(Dataset):
                     mask, _, _ = percentile_clip(mask, lower=self.norm_dict['dataset_X_lower_value'],                                     
                         upper=self.norm_dict['dataset_X_upper_value'])
                         
-            if self.X_norm['type'] == 'div':
+            if self.norm_dict['type'] == 'div':
                 mask, ynorm = norm_range01(mask, dtype=self.dtype)
-            elif self.X_norm['type'] == 'custom':
+            elif self.norm_dict['type'] == 'scale_range':
+                mask, xnorm = norm_range01(mask, dtype=self.dtype, div_using_max_and_scale=True)
+            elif self.norm_dict['type'] == 'custom':
                 if self.norm_dict['application_mode'] == "image":
                     ynorm = {}
                     ynorm['mean'] = mask.mean()
                     ynorm['std'] = mask.std()
                     mask = normalize(mask, mask.mean(), mask.std(), out_type=self.dtype_str)
                 else:
-                    mask = normalize(mask, self.X_norm['mean'], self.X_norm['std'], out_type=self.dtype_str)
+                    mask = normalize(mask, self.norm_dict['mean'], self.norm_dict['std'], out_type=self.dtype_str)
         return mask, ynorm
 
     def load_sample(self, idx):
@@ -364,11 +353,12 @@ class test_pair_data_generator(Dataset):
                     else:
                         if mask.shape[0] <= 3: mask = mask.transpose((1,2,0))
 
-        xnorm = self.X_norm 
+        xnorm = self.norm_dict 
         if not self.test_by_chunks:
             # Normalization
-            img, xnorm = self.norm_X(img)
-            if self.provide_Y:
+            if self.norm_dict['enable']:
+                img, xnorm = self.norm_X(img)
+            if self.provide_Y and self.norm_dict['enable']:
                 mask, ynorm = self.norm_Y(mask)
 
             img = np.expand_dims(img, 0).astype(self.dtype)
@@ -422,14 +412,14 @@ class test_pair_data_generator(Dataset):
         img, mask, xnorm, ynorm, filename = self.load_sample(index)
         
         if xnorm is not None:
-            self.X_norm.update(xnorm)
+            self.norm_dict.update(xnorm)
         if ynorm is not None:
             self.Y_norm.update(ynorm)
 
         if self.provide_Y:
-            return {"X": img, "X_norm": self.X_norm, "Y": mask, "Y_norm": self.Y_norm, "file": filename}
+            return {"X": img, "X_norm": self.norm_dict, "Y": mask, "Y_norm": self.Y_norm, "file": filename}
         else:
-            return {"X": img, "X_norm": self.X_norm, "file": filename}
+            return {"X": img, "X_norm": self.norm_dict, "file": filename}
 
     def get_data_normalization(self):
-        return self.X_norm
+        return self.norm_dict

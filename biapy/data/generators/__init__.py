@@ -13,7 +13,7 @@ from biapy.data.generators.test_pair_data_generators import test_pair_data_gener
 from biapy.data.generators.test_single_data_generator import test_single_data_generator
 
 
-def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size, global_rank, dist=False):
+def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size, global_rank):
     """
     Create training and validation generators.
 
@@ -63,6 +63,7 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
     norm_dict['type'] = cfg.DATA.NORMALIZATION.TYPE
     norm_dict['mask_norm'] = 'as_mask'
     norm_dict['application_mode'] = cfg.DATA.NORMALIZATION.APPLICATION_MODE
+    norm_dict['enable'] = True
 
     # Percentile clipping
     if cfg.DATA.NORMALIZATION.PERC_CLIP:
@@ -74,8 +75,7 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
             os.makedirs(os.path.dirname(cfg.PATHS.LWR_X_FILE), exist_ok=True)
             np.save(cfg.PATHS.LWR_X_FILE, norm_dict['dataset_X_lower_value'])
             np.save(cfg.PATHS.UPR_X_FILE, norm_dict['dataset_X_upper_value'])
-
-        print(f"X_train clipped using the following values: {norm_dict}")
+            print(f"X_train clipped using the following values: {norm_dict}")
 
     if cfg.DATA.NORMALIZATION.TYPE == 'custom':    
         if cfg.DATA.NORMALIZATION.APPLICATION_MODE == "dataset":
@@ -127,7 +127,7 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
             data_mode = "chunked_data"
         else:
             data_mode = "not_in_memory"
-    norm_dict['enable'] = False if cfg.MODEL.SOURCE in ["bmz", "torchvision"] else True
+
     if cfg.PROBLEM.TYPE == 'CLASSIFICATION' or \
         (cfg.PROBLEM.TYPE == 'SELF_SUPERVISED' and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"):
         r_shape = cfg.DATA.PATCH_SIZE
@@ -344,26 +344,31 @@ def create_test_augmentor(cfg, X_test, Y_test, cross_val_samples_ids):
     norm_dict['type'] = cfg.DATA.NORMALIZATION.TYPE
     norm_dict['mask_norm'] = 'as_mask'
     norm_dict['application_mode'] = cfg.DATA.NORMALIZATION.APPLICATION_MODE
+    norm_dict['enable'] = True 
 
     # Percentile clipping
     if cfg.DATA.NORMALIZATION.PERC_CLIP:
         norm_dict['lower_bound'] = cfg.DATA.NORMALIZATION.PERC_LOWER
         norm_dict['upper_bound'] = cfg.DATA.NORMALIZATION.PERC_UPPER
         norm_dict['clipped'] = X_test is not None
+        bmz_clip = False
         if cfg.DATA.NORMALIZATION.APPLICATION_MODE == "dataset":
             if not os.path.exists(cfg.PATHS.LWR_X_FILE) or not os.path.exists(cfg.PATHS.UPR_X_FILE):
+                if cfg.MODEL.SOURCE == "bmz" and X_test is not None:
+                    X_test, norm_dict['dataset_X_lower_value'], \
+                        norm_dict['dataset_X_upper_value'] = percentile_clip(X_test, norm_dict['lower_bound'], norm_dict['upper_bound'])
+                    bmz_clip = True
+                else:
                     raise FileNotFoundError("Lower/uper percentile files not found in {} and {}"
                         .format(cfg.PATHS.LWR_X_FILE, cfg.PATHS.UPR_X_FILE))
             else:
                 norm_dict['dataset_X_lower_value'] = float(np.load(cfg.PATHS.LWR_X_FILE))
                 norm_dict['dataset_X_upper_value'] = float(np.load(cfg.PATHS.UPR_X_FILE))
 
-            if X_test is not None:
+            if X_test is not None and not bmz_clip:
                 X_test, _, _ = percentile_clip(X_test, lwr_perc_val=norm_dict['dataset_X_lower_value'],
                     uppr_perc_val=norm_dict['dataset_X_upper_value'])
-                
-        if X_test is not None:        
-            print(f"X_test clipped using the following values: {norm_dict}")
+                print(f"X_test clipped using the following values: {norm_dict}")
 
     if cfg.DATA.NORMALIZATION.TYPE == 'custom':    
         if cfg.DATA.NORMALIZATION.APPLICATION_MODE == "dataset":
@@ -371,14 +376,18 @@ def create_test_augmentor(cfg, X_test, Y_test, cross_val_samples_ids):
                 print("Test normalization: trying to load mean from {}".format(cfg.PATHS.MEAN_INFO_FILE))
                 print("Test normalization: trying to load std from {}".format(cfg.PATHS.STD_INFO_FILE))
                 if not os.path.exists(cfg.PATHS.MEAN_INFO_FILE) or not os.path.exists(cfg.PATHS.STD_INFO_FILE):
-                    raise FileNotFoundError("Mean/std files not found in {} and {}"
-                        .format(cfg.PATHS.MEAN_INFO_FILE, cfg.PATHS.STD_INFO_FILE))
-                norm_dict['mean'] = float(np.load(cfg.PATHS.MEAN_INFO_FILE))
-                norm_dict['std'] = float(np.load(cfg.PATHS.STD_INFO_FILE))
+                    if cfg.MODEL.SOURCE == "bmz" and X_test is not None:
+                        norm_dict['mean'] = np.mean(X_test)
+                        norm_dict['std'] = np.std(X_test)
+                    else:
+                        raise FileNotFoundError("Mean/std files not found in {} and {}"
+                            .format(cfg.PATHS.MEAN_INFO_FILE, cfg.PATHS.STD_INFO_FILE))
+                else:
+                    norm_dict['mean'] = float(np.load(cfg.PATHS.MEAN_INFO_FILE))
+                    norm_dict['std'] = float(np.load(cfg.PATHS.STD_INFO_FILE))
             else:
                 norm_dict['mean'] = cfg.DATA.NORMALIZATION.CUSTOM_MEAN
                 norm_dict['std'] = cfg.DATA.NORMALIZATION.CUSTOM_STD
-        if 'mean' in norm_dict:
             print("Test normalization: using mean {} and std: {}".format(norm_dict['mean'], norm_dict['std']))
 
     instance_problem = True if cfg.PROBLEM.TYPE == 'INSTANCE_SEG' else False
@@ -389,7 +398,6 @@ def create_test_augmentor(cfg, X_test, Y_test, cross_val_samples_ids):
     if cfg.PROBLEM.TYPE in ['SUPER_RESOLUTION', "IMAGE_TO_IMAGE"]:
         norm_dict['mask_norm'] = 'none'
     
-    norm_dict['enable'] = False if cfg.MODEL.SOURCE in ["bmz", "torchvision"] else True
     ndim = 3 if cfg.PROBLEM.NDIM == "3D" else 2
     dic = dict(ndim=ndim, X=X_test, d_path=cfg.DATA.TEST.PATH if cross_val_samples_ids is None else cfg.DATA.TRAIN.PATH, 
         test_by_chunks=cfg.TEST.BY_CHUNKS.ENABLE, provide_Y=provide_Y, Y=Y_test, dm_path=cfg.DATA.TEST.GT_PATH if cross_val_samples_ids is None else cfg.DATA.TRAIN.GT_PATH,

@@ -135,27 +135,9 @@ class test_single_data_generator(Dataset):
         
         self.norm_dict = norm_dict
         # Check if a division is required
-        self.X_norm = {}
-        self.X_norm['type'] = 'none'
         if norm_dict['enable']:
-            self.X_norm['type'] = 'div'
             img, _, xnorm, _ = self.load_sample(0)
-            self.X_norm['application_mode'] = norm_dict['application_mode']
-            self.X_norm['orig_dtype'] = img.dtype
-            if norm_dict['type'] == 'custom':
-                self.X_norm['type'] = 'custom'
-                if 'mean' in norm_dict and 'std' in norm_dict:
-                    self.X_norm['mean'] = norm_dict['mean']
-                    self.X_norm['std'] = norm_dict['std'] 
-            elif norm_dict['type'] == "percentile":
-                self.X_norm['type'] = 'percentile'
-                self.X_norm['lower_bound'] = norm_dict['lower_bound']
-                self.X_norm['upper_bound'] = norm_dict['upper_bound'] 
-                self.X_norm['lower_value'] = norm_dict['lower_value']
-                self.X_norm['upper_value'] = norm_dict['upper_value'] 
-
-            if xnorm is not None:
-                self.X_norm.update(xnorm)
+            self.norm_dict['orig_dtype'] = img.dtype
             
     def load_sample(self, idx):
         """Load one data sample given its corresponding index."""
@@ -209,16 +191,18 @@ class test_single_data_generator(Dataset):
                     img, _, _ = percentile_clip(img, lwr_perc_val=self.norm_dict['dataset_X_lower_value'],                                     
                         uppr_perc_val=self.norm_dict['dataset_X_upper_value'])
 
-            if self.X_norm['type'] == 'div':
+            if self.norm_dict['type'] == 'div':
                 img, xnorm = norm_range01(img, dtype=self.dtype)
-            elif self.X_norm['type'] == 'custom':
+            elif self.norm_dict['type'] == 'scale_range':
+                img, xnorm = norm_range01(img, dtype=self.dtype, div_using_max_and_scale=True)
+            elif self.norm_dict['type'] == 'custom':
                 if self.norm_dict['application_mode'] == "image":
                     xnorm = {}
                     xnorm['mean'] = img.mean()
                     xnorm['std'] = img.std()
                     img = normalize(img, img.mean(), img.std(), out_type=self.dtype_str)
                 else:
-                    img = normalize(img, self.X_norm['mean'], self.X_norm['std'], out_type=self.dtype_str)
+                    img = normalize(img, self.norm_dict['mean'], self.norm_dict['std'], out_type=self.dtype_str)
 
         img = np.expand_dims(img, 0).astype(self.dtype)
         img_class = np.expand_dims(img_class, 0)
@@ -269,15 +253,15 @@ class test_single_data_generator(Dataset):
             img = np.expand_dims(img,0)
 
         if norm is not None:
-            self.X_norm.update(norm)           
+            self.norm_dict.update(norm)           
 
         if self.ptype == "classification":
             if self.provide_Y:
-                return {"X": img, "X_norm": self.X_norm, "Y": img_class, "file": filename}
+                return {"X": img, "X_norm": self.norm_dict, "Y": img_class, "file": filename}
             else:
-                return {"X": img, "X_norm": self.X_norm, "file": filename}
+                return {"X": img, "X_norm": self.norm_dict, "file": filename}
         else: # SSL - MAE
-            return {"X": img, "X_norm": self.X_norm, "file": filename}
+            return {"X": img, "X_norm": self.norm_dict, "file": filename}
 
     def get_data_normalization(self):
-        return self.X_norm
+        return self.norm_dict
