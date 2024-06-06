@@ -15,7 +15,7 @@ import torch.distributed as dist
 import xarray as xr
 import bioimageio.core
 
-from biapy.models import build_model, build_torchvision_model
+from biapy.models import build_model, build_torchvision_model, build_bmz_model, check_bmz_model_compatibility
 from biapy.engine import prepare_optimizer, build_callbacks
 from biapy.data.generators import create_train_val_augmentors, create_test_augmentor, check_generator_consistence
 from biapy.utils.misc import (get_world_size, get_rank, is_main_process, save_model, time_text, load_model_checkpoint, TensorboardLogger,
@@ -127,30 +127,89 @@ class Base_Workflow(metaclass=ABCMeta):
         # Define metrics
         self.define_metrics()
 
-        # Load Bioimage model Zoo pretrained model information
+        # Tochvision variables
         self.torchvision_preprocessing = None
-        self.bmz_test_input = None
-        self.bmz_test_output = None
-        self.bmz_model_resource = None
-        if self.cfg.MODEL.SOURCE == "bmz":
-            print("Loading Bioimage Model Zoo pretrained model . . .")
-            self.bmz_model_resource = bioimageio.core.load_resource_description(self.cfg.MODEL.BMZ.SOURCE_MODEL_DOI)
-        
-            # Temporal adjust until we find a solution with the BMZ team
-            bs = self.cfg.TRAIN.BATCH_SIZE
-            if self.cfg.MODEL.BMZ.SOURCE_MODEL_DOI == "10.5281/zenodo.5874841":
-                bs = 2
-            elif self.cfg.MODEL.BMZ.SOURCE_MODEL_DOI == "10.5281/zenodo.6028097":
-                bs = 4
 
-            # Change PATCH_SIZE with the one stored in the RDF
-            input_image = np.load(self.bmz_model_resource.test_inputs[0])
-            opts = ["DATA.PATCH_SIZE", input_image.shape[2:]+(input_image.shape[1],),
-                "TRAIN.BATCH_SIZE", bs]
-            print("[BMZ] Changed 'DATA.PATCH_SIZE' from {} to {} as defined in the RDF"
-                .format(self.cfg.DATA.PATCH_SIZE,opts[1]))
-            print("[BMZ] Changed 'TRAIN.BATCH_SIZE' from {} to {} as defined in the RDF"
-                .format(self.cfg.TRAIN.BATCH_SIZE,opts[3]))
+        # Load Bioimage model zoo pretrained model information
+        self.bmz_config = {}
+        self.bmz_pipeline = None        
+        if self.cfg.MODEL.SOURCE == "bmz":
+            self.bmz_config['preprocessing'] = check_bmz_model_compatibility(self.cfg)
+
+            print("Loading Bioimage Model Zoo pretrained model . . .")
+            self.bmz_config['original_bmz_config'] = bioimageio.core.load_resource_description(self.cfg.MODEL.BMZ.SOURCE_MODEL_DOI)
+
+            # 1) Change PATCH_SIZE with the one stored in the RDF
+            input_image = np.load(self.bmz_config['original_bmz_config'].test_inputs[0])
+            opts = []
+            if self.cfg.DATA.PATCH_SIZE != input_image.shape[2:]+(input_image.shape[1],):
+                opts += ["DATA.PATCH_SIZE", input_image.shape[2:]+(input_image.shape[1],)]
+                print("[BMZ] Changed 'DATA.PATCH_SIZE' from {} to {} as defined in the RDF"
+                    .format(self.cfg.DATA.PATCH_SIZE, opts[1]))
+
+            # 2) Change preprocessing to the one stablished by BMZ 
+            print(f"[BMZ] Overriding preprocessing steps to the ones fixed in BMZ model: {self.bmz_config['preprocessing']}")
+            if isinstance(self.bmz_config['preprocessing'], list) and len(self.bmz_config['preprocessing']) > 1:
+                raise ValueError("More than one preprocessing from BMZ not implemented yet")
+
+            # Translate BMZ keywords into BiaPy's
+            app_mode = "dataset" if self.bmz_config['preprocessing']['kwargs']['mode'] == 'per_dataset' else "image"
+            if app_mode != self.cfg.DATA.NORMALIZATION.APPLICATION_MODE:
+                opts += ["DATA.NORMALIZATION.APPLICATION_MODE", app_mode]
+                print("[BMZ] Changed 'DATA.NORMALIZATION.APPLICATION_MODE' from {} to {} as defined in the RDF"
+                    .format(self.cfg.DATA.NORMALIZATION.APPLICATION_MODE, app_mode))
+
+            if self.cfg.TRAIN.ENABLE and not self.cfg.DATA.TRAIN.IN_MEMORY and app_mode == "dataset":
+                raise ValueError("The Bioimage model zoo model selected changed your normalization settings. Due to that the following error "
+                    "appear:\n'DATA.NORMALIZATION.APPLICATION_MODE' == 'dataset' can only be applied if 'DATA.TRAIN.IN_MEMORY' == True")
+            if self.cfg.TEST.ENABLE and not self.cfg.DATA.TEST.IN_MEMORY and app_mode == "dataset":
+                raise ValueError("The Bioimage model zoo model selected changed your normalization settings. Due to that the following error "
+                    "appear:\n'DATA.NORMALIZATION.APPLICATION_MODE' == 'dataset' can only be applied if 'DATA.TEST.IN_MEMORY' == True")
+
+            # 'zero_mean_unit_variance' norm of BMZ is as our 'custom' norm without providing mean/std 
+            if self.bmz_config['preprocessing']['name'] == 'zero_mean_unit_variance':
+                opts += [
+                    "DATA.NORMALIZATION.TYPE", "custom",
+                    "DATA.NORMALIZATION.CUSTOM_MEAN", -1.0,
+                    "DATA.NORMALIZATION.CUSTOM_STD", -1.0,
+                ]
+                if self.cfg.DATA.NORMALIZATION.TYPE != "custom":
+                    print("[BMZ] Changed 'DATA.NORMALIZATION.TYPE' from {} to {} as defined in the RDF"
+                        .format(self.cfg.DATA.NORMALIZATION.TYPE, "custom"))
+                if self.cfg.DATA.NORMALIZATION.CUSTOM_MEAN != -1:
+                    print("[BMZ] Changed 'DATA.NORMALIZATION.CUSTOM_MEAN' from {} to {} as defined in the RDF"
+                        .format(self.cfg.DATA.NORMALIZATION.CUSTOM_MEAN, -1))
+                if self.cfg.DATA.NORMALIZATION.CUSTOM_STD != -1:
+                    print("[BMZ] Changed 'DATA.NORMALIZATION.CUSTOM_STD' from {} to {} as defined in the RDF"
+                        .format(self.cfg.DATA.NORMALIZATION.CUSTOM_STD, -1))
+            # 'scale_linear' norm of BMZ is close to our 'div' norm (TODO: we need to control the "gain" arg)
+            elif self.bmz_config['preprocessing']['name'] == 'scale_linear':
+                opts += ["DATA.NORMALIZATION.TYPE", "div"]
+                if self.cfg.DATA.NORMALIZATION.TYPE != "div":
+                    print("[BMZ] Changed 'DATA.NORMALIZATION.TYPE' from {} to {} as defined in the RDF"
+                        .format(self.cfg.DATA.NORMALIZATION.TYPE, "div"))
+            # 'scale_range' norm of BMZ is as our PERC_CLIP + 'scale_range' norm
+            elif self.bmz_config['preprocessing']['name'] == 'scale_range':
+                opts += ["DATA.NORMALIZATION.TYPE", "scale_range"]
+                if self.cfg.DATA.NORMALIZATION.TYPE != "scale_range":
+                    print("[BMZ] Changed 'DATA.NORMALIZATION.TYPE' from {} to {} as defined in the RDF"
+                        .format(self.cfg.DATA.NORMALIZATION.TYPE, "scale_range"))
+                if float(self.bmz_config['preprocessing']['kwargs']['min_percentile']) != 0 or \
+                    float(self.bmz_config['preprocessing']['kwargs']['max_percentile']) != 100:
+                    opts += [
+                        "DATA.NORMALIZATION.PERC_CLIP", True,
+                        "DATA.NORMALIZATION.PERC_LOWER", float(self.bmz_config['preprocessing']['kwargs']['min_percentile']),
+                        "DATA.NORMALIZATION.PERC_UPPER", float(self.bmz_config['preprocessing']['kwargs']['max_percentile']),
+                    ]    
+                    if not self.cfg.DATA.NORMALIZATION.PERC_CLIP:
+                        print("[BMZ] Changed 'DATA.NORMALIZATION.PERC_CLIP' from {} to {} as defined in the RDF"
+                            .format(self.cfg.DATA.NORMALIZATION.PERC_CLIP, True))   
+                    if self.cfg.DATA.NORMALIZATION.PERC_LOWER != self.bmz_config['preprocessing']['kwargs']['min_percentile']:
+                        print("[BMZ] Changed 'DATA.NORMALIZATION.PERC_LOWER' from {} to {} as defined in the RDF"
+                            .format(self.cfg.DATA.NORMALIZATION.PERC_LOWER, self.bmz_config['preprocessing']['kwargs']['min_percentile']))   
+                    if self.cfg.DATA.NORMALIZATION.PERC_UPPER != self.bmz_config['preprocessing']['kwargs']['max_percentile']:
+                        print("[BMZ] Changed 'DATA.NORMALIZATION.PERC_UPPER' from {} to {} as defined in the RDF"
+                            .format(self.cfg.DATA.NORMALIZATION.PERC_UPPER, self.bmz_config['preprocessing']['kwargs']['max_percentile']))           
             self.cfg.merge_from_list(opts)
 
     @abstractmethod
@@ -419,7 +478,7 @@ class Base_Workflow(metaclass=ABCMeta):
             self.val_generator, \
             self.data_norm, \
             self.num_training_steps_per_epoch = create_train_val_augmentors(self.cfg, self.X_train, self.Y_train, 
-                self.X_val, self.Y_val, self.world_size, self.global_rank, self.args.distributed)
+                self.X_val, self.Y_val, self.world_size, self.global_rank)
             if self.cfg.DATA.CHECK_GENERATORS and self.cfg.PROBLEM.TYPE != 'CLASSIFICATION':
                 check_generator_consistence(
                     self.train_generator, self.cfg.PATHS.GEN_CHECKS+"_train", self.cfg.PATHS.GEN_MASK_CHECKS+"_train")
@@ -443,31 +502,32 @@ class Base_Workflow(metaclass=ABCMeta):
         prediction : Tensor 
             Image prediction. 
         """
-        # Convert from Numpy to xarray.DataArray
-        if self.cfg.PROBLEM.NDIM == '2D': 
-            self.bmz_axes = ('b', 'c', 'y', 'x')
-        else:
-            self.bmz_axes = ('b', 'c', 'z', 'y', 'x')
-        in_img = xr.DataArray(in_img.cpu().numpy(), dims=tuple(self.bmz_axes))
+        # ##### OPTION 1: we need batch size information as apply_preprocessing fails if the batch is not the same as the
+        # ##### one fixed for the model. Last batch of the epoch can have less samples than batch size. 
+        # ##### Check torch.utils.data.DataLoader() drop last arg.
+        # # Convert from Numpy to xarray.DataArray
+        # self.bmz_axes = self.bmz_config['original_bmz_config'].inputs[0].axes
+        # in_img = xr.DataArray(in_img.cpu().numpy(), dims=tuple(self.bmz_axes))
 
-        # Apply pre-processing
-        in_img = dict(zip([ipt.name for ipt in self.model.input_specs], (in_img,)))
-        self.bmz_computed_measures = {}
-        self.model.apply_preprocessing(in_img, self.bmz_computed_measures)
+        # # Apply pre-processing
+        # in_img = dict(zip([ipt.name for ipt in self.bmz_pipeline.input_specs], (in_img,)))
+        # self.bmz_computed_measures = {}
+        # self.bmz_pipeline.apply_preprocessing(in_img, self.bmz_computed_measures)
+        # # print(f"in_img: {in_img['input0'].shape} {in_img['input0'].min()} {in_img['input0'].max()}")
+        # # Predict
+        # prediction = self.model(torch.from_numpy(np.array(in_img['input0'])).to(self.device))
 
-        # Predict
-        prediction_tensors = self.model.predict(*list(in_img.values()))
+        # # Apply post-processing (if any)
+        # if bool(self.bmz_pipeline.output_specs[0].postprocessing):
+        #     prediction = xr.DataArray(prediction.cpu().numpy(), dims=tuple(self.bmz_axes))
+        #     prediction = dict(zip([out.name for out in self.bmz_pipeline.output_specs], prediction))
+        #     self.bmz_pipeline.apply_postprocessing(prediction, self.bmz_computed_measures)
 
-        # Apply post-processing (if any)
-        if bool(self.model.output_specs[0].postprocessing):
-            prediction = dict(zip([out.name for out in self.model.output_specs], prediction_tensors))
-            self.model.apply_postprocessing(prediction, self.bmz_computed_measures)
+        #     # Convert back to Tensor 
+        #     prediction = torch.from_numpy(np.array(prediction)).to(self.device)
 
-            # Convert back to Tensor 
-            prediction = torch.from_numpy(prediction['output0'].to_numpy())
-        else:
-            # Convert back to Tensor 
-            prediction = torch.from_numpy(np.array(prediction_tensors[0]))
+        ##### OPTION 2: Just a normal model call, but the pre and post need to be done in BiaPy
+        prediction = self.model(in_img)
 
         return prediction
 
@@ -533,15 +593,15 @@ class Base_Workflow(metaclass=ABCMeta):
         print("# Build model #")
         print("###############")
         if self.cfg.MODEL.SOURCE == "biapy":
-            self.model = build_model(self.cfg, self.job_identifier, self.device)
+            self.model, self.bmz_config['model_file'] = build_model(self.cfg, self.job_identifier, self.device)
         elif self.cfg.MODEL.SOURCE == "torchvision":
             self.model, self.torchvision_preprocessing = build_torchvision_model(self.cfg, self.device)
         # Bioimage Model Zoo pretrained models
         elif self.cfg.MODEL.SOURCE == "bmz":
             # Create a bioimage pipeline to create predictions
             try:
-                self.model = bioimageio.core.create_prediction_pipeline(
-                    self.bmz_model_resource, devices=None, 
+                self.bmz_pipeline = bioimageio.core.create_prediction_pipeline(
+                    self.bmz_config['original_bmz_config'], devices=None, 
                     weight_format="torchscript",
                 )
             except Exception as e:
@@ -551,6 +611,8 @@ class Base_Workflow(metaclass=ABCMeta):
 
             if self.args.distributed:
                 raise ValueError("DDP can not be activated when loading a BMZ pretrained model")
+
+            self.model = build_bmz_model(self.cfg, self.bmz_config['original_bmz_config'], self.device)
 
         self.model_without_ddp = self.model
         if self.args.distributed:
@@ -715,12 +777,12 @@ class Base_Workflow(metaclass=ABCMeta):
         print('Finished Training')
 
         # Save two samples to export the model to BMZ 
-        if self.bmz_test_input is None:
+        if 'test_input' not in self.bmz_config:
             sample = next(enumerate(self.train_generator))
-            self.bmz_test_input = sample[1][0][0]
-            self.bmz_test_output = sample[1][1]
-            if not isinstance(self.bmz_test_output, int):
-                self.bmz_test_output = self.bmz_test_output[0]
+            self.bmz_config['test_input'] = sample[1][0][0]
+            self.bmz_config['test_output'] = sample[1][1]
+            if not isinstance(self.bmz_config['test_output'], int):
+                self.bmz_config['test_output'] = self.bmz_config['test_output'][0]
 
         self.destroy_train_data()
 
