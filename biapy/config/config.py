@@ -596,7 +596,7 @@ class Config:
         # Model definition
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         _C.MODEL = CN()
-        # Whether to define manually the model ('biapy'), load a pretrained one from Bioimage Model Zoo ('bmz') or use one 
+        # Whether to define manually the model ('biapy'), load a pretrained one from BioImage Model Zoo ('bmz') or use one 
         # available in TorchVision ('torchvision'). 
         # Options: ["biapy", "bmz", "torchvision"]
         _C.MODEL.SOURCE = "biapy"

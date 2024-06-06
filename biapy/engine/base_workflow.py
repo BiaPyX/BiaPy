@@ -130,13 +130,13 @@ class Base_Workflow(metaclass=ABCMeta):
         # Tochvision variables
         self.torchvision_preprocessing = None
 
-        # Load Bioimage model zoo pretrained model information
+        # Load BioImage Model Zoo pretrained model information
         self.bmz_config = {}
         self.bmz_pipeline = None        
         if self.cfg.MODEL.SOURCE == "bmz":
             self.bmz_config['preprocessing'] = check_bmz_model_compatibility(self.cfg)
 
-            print("Loading Bioimage Model Zoo pretrained model . . .")
+            print("Loading BioImage Model Zoo pretrained model . . .")
             self.bmz_config['original_bmz_config'] = bioimageio.core.load_resource_description(self.cfg.MODEL.BMZ.SOURCE_MODEL_DOI)
 
             # 1) Change PATCH_SIZE with the one stored in the RDF
@@ -160,10 +160,10 @@ class Base_Workflow(metaclass=ABCMeta):
                     .format(self.cfg.DATA.NORMALIZATION.APPLICATION_MODE, app_mode))
 
             if self.cfg.TRAIN.ENABLE and not self.cfg.DATA.TRAIN.IN_MEMORY and app_mode == "dataset":
-                raise ValueError("The Bioimage model zoo model selected changed your normalization settings. Due to that the following error "
+                raise ValueError("The BioImage Model Zoo model selected changed your normalization settings. Due to that the following error "
                     "appear:\n'DATA.NORMALIZATION.APPLICATION_MODE' == 'dataset' can only be applied if 'DATA.TRAIN.IN_MEMORY' == True")
             if self.cfg.TEST.ENABLE and not self.cfg.DATA.TEST.IN_MEMORY and app_mode == "dataset":
-                raise ValueError("The Bioimage model zoo model selected changed your normalization settings. Due to that the following error "
+                raise ValueError("The BioImage Model Zoo model selected changed your normalization settings. Due to that the following error "
                     "appear:\n'DATA.NORMALIZATION.APPLICATION_MODE' == 'dataset' can only be applied if 'DATA.TEST.IN_MEMORY' == True")
 
             # 'zero_mean_unit_variance' norm of BMZ is as our 'custom' norm without providing mean/std 
@@ -487,7 +487,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
     def bmz_model_call(self, in_img, is_train=False):
         """
-        Call Bioimage model zoo model.
+        Call BioImage Model Zoo model.
 
         Parameters
         ----------
@@ -596,7 +596,7 @@ class Base_Workflow(metaclass=ABCMeta):
             self.model, self.bmz_config['model_file'] = build_model(self.cfg, self.job_identifier, self.device)
         elif self.cfg.MODEL.SOURCE == "torchvision":
             self.model, self.torchvision_preprocessing = build_torchvision_model(self.cfg, self.device)
-        # Bioimage Model Zoo pretrained models
+        # BioImage Model Zoo pretrained models
         elif self.cfg.MODEL.SOURCE == "bmz":
             # Create a bioimage pipeline to create predictions
             try:

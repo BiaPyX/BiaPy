@@ -190,6 +190,32 @@ def check_bmz_model_compatibility(cfg):
     reason_message = ""
     preproc_names = []
     if "pytorch_state_dict" in model_rdf["weights"] and len(model_rdf['inputs']) == 1:
+        # Check problem type 
+        model_problem_match = False
+        if cfg.PROBLEM.TYPE == 'SEMANTIC_SEG' and \
+            ('semantic-segmentation' in model_rdf['tags'] or 'segmentation' in model_rdf['tags']): 
+            model_problem_match = True
+        elif cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and 'instance-segmentation' in model_rdf['tags']:
+            model_problem_match = True
+        elif cfg.PROBLEM.TYPE == 'DETECTION' and 'detection' in model_rdf['tags']:
+            model_problem_match = True
+        elif cfg.PROBLEM.TYPE == 'DENOISING' and 'denoising' in model_rdf['tags']:
+            model_problem_match = True
+        elif cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION' and 'super-resolution' in model_rdf['tags']:
+            model_problem_match = True
+        elif cfg.PROBLEM.TYPE == 'SELF_SUPERVISED' and 'self-supervision' in model_rdf['tags']:
+            model_problem_match = True
+        elif cfg.PROBLEM.TYPE == 'CLASSIFICATION' and 'classification' in model_rdf['tags']:
+            model_problem_match = True
+        elif cfg.PROBLEM.TYPE == 'IMAGE_TO_IMAGE' and \
+            ('pix2pix' in model_rdf['tags'] or "image-reconstruction" in model_rdf['tags'] or \
+                "image-to-image" in model_rdf['tags'] or 'label-free' in model_rdf['tags']):
+            model_problem_match = True
+
+        if not model_problem_match:
+            implemented = False
+            reason_message = f"Selected model is not for {cfg.PROBLEM.TYPE} problem"
+
         # Check axes and dimension
         if cfg.PROBLEM.NDIM == '2D':
             if model_rdf['inputs'][0]['axes'] != "bcyx":
