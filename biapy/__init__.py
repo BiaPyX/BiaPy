@@ -35,7 +35,7 @@ def main():
                         default=os.getenv('HOME'))
     parser.add_argument("--name", help="Job name", default="unknown_job")
     parser.add_argument("--run_id", help="Run number of the same job", type=int, default=1)
-    parser.add_argument("--gpu", help="GPU number according to 'nvidia-smi' command", type=str)
+    parser.add_argument("--gpu", help="GPU number according to 'nvidia-smi' command / MPS device (Apple Silicon)", type=str)
 
     # Distributed training parameters
     parser.add_argument('--world_size', default=1, type=int,
