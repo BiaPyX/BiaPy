@@ -167,6 +167,7 @@ def build_bmz_model(cfg, model, device):
 
 def check_bmz_model_compatibility(cfg):
     # Checking BMZ model compatibility using the available model list provided by BMZ
+    # COLLECTION_URL = "https://uk1s3.embassy.ebi.ac.uk/public-datasets/bioimage.io/collection.json"
     COLLECTION_URL = "https://raw.githubusercontent.com/bioimage-io/collection-bioimage-io/gh-pages/collection.json"
     collection_path = Path(pooch.retrieve(COLLECTION_URL, known_hash=None))
     with collection_path.open() as f:

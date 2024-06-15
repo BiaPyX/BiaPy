@@ -153,63 +153,65 @@ class Base_Workflow(metaclass=ABCMeta):
                 raise ValueError("More than one preprocessing from BMZ not implemented yet")
 
             # Translate BMZ keywords into BiaPy's
-            app_mode = "dataset" if self.bmz_config['preprocessing']['kwargs']['mode'] == 'per_dataset' else "image"
-            if app_mode != self.cfg.DATA.NORMALIZATION.APPLICATION_MODE:
-                opts += ["DATA.NORMALIZATION.APPLICATION_MODE", app_mode]
-                print("[BMZ] Changed 'DATA.NORMALIZATION.APPLICATION_MODE' from {} to {} as defined in the RDF"
-                    .format(self.cfg.DATA.NORMALIZATION.APPLICATION_MODE, app_mode))
+            if len(self.bmz_config['preprocessing']) > 0:
+                app_mode = "dataset" if self.bmz_config['preprocessing']['kwargs']['mode'] == 'per_dataset' else "image"
+                if app_mode != self.cfg.DATA.NORMALIZATION.APPLICATION_MODE:
+                    opts += ["DATA.NORMALIZATION.APPLICATION_MODE", app_mode]
+                    print("[BMZ] Changed 'DATA.NORMALIZATION.APPLICATION_MODE' from {} to {} as defined in the RDF"
+                        .format(self.cfg.DATA.NORMALIZATION.APPLICATION_MODE, app_mode))
 
-            if self.cfg.TRAIN.ENABLE and not self.cfg.DATA.TRAIN.IN_MEMORY and app_mode == "dataset":
-                raise ValueError("The BioImage Model Zoo model selected changed your normalization settings. Due to that the following error "
-                    "appear:\n'DATA.NORMALIZATION.APPLICATION_MODE' == 'dataset' can only be applied if 'DATA.TRAIN.IN_MEMORY' == True")
-            if self.cfg.TEST.ENABLE and not self.cfg.DATA.TEST.IN_MEMORY and app_mode == "dataset":
-                raise ValueError("The BioImage Model Zoo model selected changed your normalization settings. Due to that the following error "
-                    "appear:\n'DATA.NORMALIZATION.APPLICATION_MODE' == 'dataset' can only be applied if 'DATA.TEST.IN_MEMORY' == True")
+                if self.cfg.TRAIN.ENABLE and not self.cfg.DATA.TRAIN.IN_MEMORY and app_mode == "dataset":
+                    raise ValueError("The BioImage Model Zoo model selected changed your normalization settings. Due to that the following error "
+                        "appear:\n'DATA.NORMALIZATION.APPLICATION_MODE' == 'dataset' can only be applied if 'DATA.TRAIN.IN_MEMORY' == True")
+                if self.cfg.TEST.ENABLE and not self.cfg.DATA.TEST.IN_MEMORY and app_mode == "dataset":
+                    raise ValueError("The BioImage Model Zoo model selected changed your normalization settings. Due to that the following error "
+                        "appear:\n'DATA.NORMALIZATION.APPLICATION_MODE' == 'dataset' can only be applied if 'DATA.TEST.IN_MEMORY' == True")
 
-            # 'zero_mean_unit_variance' norm of BMZ is as our 'custom' norm without providing mean/std 
-            if self.bmz_config['preprocessing']['name'] == 'zero_mean_unit_variance':
-                opts += [
-                    "DATA.NORMALIZATION.TYPE", "custom",
-                    "DATA.NORMALIZATION.CUSTOM_MEAN", -1.0,
-                    "DATA.NORMALIZATION.CUSTOM_STD", -1.0,
-                ]
-                if self.cfg.DATA.NORMALIZATION.TYPE != "custom":
-                    print("[BMZ] Changed 'DATA.NORMALIZATION.TYPE' from {} to {} as defined in the RDF"
-                        .format(self.cfg.DATA.NORMALIZATION.TYPE, "custom"))
-                if self.cfg.DATA.NORMALIZATION.CUSTOM_MEAN != -1:
-                    print("[BMZ] Changed 'DATA.NORMALIZATION.CUSTOM_MEAN' from {} to {} as defined in the RDF"
-                        .format(self.cfg.DATA.NORMALIZATION.CUSTOM_MEAN, -1))
-                if self.cfg.DATA.NORMALIZATION.CUSTOM_STD != -1:
-                    print("[BMZ] Changed 'DATA.NORMALIZATION.CUSTOM_STD' from {} to {} as defined in the RDF"
-                        .format(self.cfg.DATA.NORMALIZATION.CUSTOM_STD, -1))
-            # 'scale_linear' norm of BMZ is close to our 'div' norm (TODO: we need to control the "gain" arg)
-            elif self.bmz_config['preprocessing']['name'] == 'scale_linear':
-                opts += ["DATA.NORMALIZATION.TYPE", "div"]
-                if self.cfg.DATA.NORMALIZATION.TYPE != "div":
-                    print("[BMZ] Changed 'DATA.NORMALIZATION.TYPE' from {} to {} as defined in the RDF"
-                        .format(self.cfg.DATA.NORMALIZATION.TYPE, "div"))
-            # 'scale_range' norm of BMZ is as our PERC_CLIP + 'scale_range' norm
-            elif self.bmz_config['preprocessing']['name'] == 'scale_range':
-                opts += ["DATA.NORMALIZATION.TYPE", "scale_range"]
-                if self.cfg.DATA.NORMALIZATION.TYPE != "scale_range":
-                    print("[BMZ] Changed 'DATA.NORMALIZATION.TYPE' from {} to {} as defined in the RDF"
-                        .format(self.cfg.DATA.NORMALIZATION.TYPE, "scale_range"))
-                if float(self.bmz_config['preprocessing']['kwargs']['min_percentile']) != 0 or \
-                    float(self.bmz_config['preprocessing']['kwargs']['max_percentile']) != 100:
+                # 'zero_mean_unit_variance' norm of BMZ is as our 'custom' norm without providing mean/std 
+                if self.bmz_config['preprocessing']['name'] == 'zero_mean_unit_variance':
                     opts += [
-                        "DATA.NORMALIZATION.PERC_CLIP", True,
-                        "DATA.NORMALIZATION.PERC_LOWER", float(self.bmz_config['preprocessing']['kwargs']['min_percentile']),
-                        "DATA.NORMALIZATION.PERC_UPPER", float(self.bmz_config['preprocessing']['kwargs']['max_percentile']),
-                    ]    
-                    if not self.cfg.DATA.NORMALIZATION.PERC_CLIP:
-                        print("[BMZ] Changed 'DATA.NORMALIZATION.PERC_CLIP' from {} to {} as defined in the RDF"
-                            .format(self.cfg.DATA.NORMALIZATION.PERC_CLIP, True))   
-                    if self.cfg.DATA.NORMALIZATION.PERC_LOWER != self.bmz_config['preprocessing']['kwargs']['min_percentile']:
-                        print("[BMZ] Changed 'DATA.NORMALIZATION.PERC_LOWER' from {} to {} as defined in the RDF"
-                            .format(self.cfg.DATA.NORMALIZATION.PERC_LOWER, self.bmz_config['preprocessing']['kwargs']['min_percentile']))   
-                    if self.cfg.DATA.NORMALIZATION.PERC_UPPER != self.bmz_config['preprocessing']['kwargs']['max_percentile']:
-                        print("[BMZ] Changed 'DATA.NORMALIZATION.PERC_UPPER' from {} to {} as defined in the RDF"
-                            .format(self.cfg.DATA.NORMALIZATION.PERC_UPPER, self.bmz_config['preprocessing']['kwargs']['max_percentile']))           
+                        "DATA.NORMALIZATION.TYPE", "custom",
+                        "DATA.NORMALIZATION.CUSTOM_MEAN", -1.0,
+                        "DATA.NORMALIZATION.CUSTOM_STD", -1.0,
+                    ]
+                    if self.cfg.DATA.NORMALIZATION.TYPE != "custom":
+                        print("[BMZ] Changed 'DATA.NORMALIZATION.TYPE' from {} to {} as defined in the RDF"
+                            .format(self.cfg.DATA.NORMALIZATION.TYPE, "custom"))
+                    if self.cfg.DATA.NORMALIZATION.CUSTOM_MEAN != -1:
+                        print("[BMZ] Changed 'DATA.NORMALIZATION.CUSTOM_MEAN' from {} to {} as defined in the RDF"
+                            .format(self.cfg.DATA.NORMALIZATION.CUSTOM_MEAN, -1))
+                    if self.cfg.DATA.NORMALIZATION.CUSTOM_STD != -1:
+                        print("[BMZ] Changed 'DATA.NORMALIZATION.CUSTOM_STD' from {} to {} as defined in the RDF"
+                            .format(self.cfg.DATA.NORMALIZATION.CUSTOM_STD, -1))
+                # 'scale_linear' norm of BMZ is close to our 'div' norm (TODO: we need to control the "gain" arg)
+                elif self.bmz_config['preprocessing']['name'] == 'scale_linear':
+                    opts += ["DATA.NORMALIZATION.TYPE", "div"]
+                    if self.cfg.DATA.NORMALIZATION.TYPE != "div":
+                        print("[BMZ] Changed 'DATA.NORMALIZATION.TYPE' from {} to {} as defined in the RDF"
+                            .format(self.cfg.DATA.NORMALIZATION.TYPE, "div"))
+                # 'scale_range' norm of BMZ is as our PERC_CLIP + 'scale_range' norm
+                elif self.bmz_config['preprocessing']['name'] == 'scale_range':
+                    opts += ["DATA.NORMALIZATION.TYPE", "scale_range"]
+                    if self.cfg.DATA.NORMALIZATION.TYPE != "scale_range":
+                        print("[BMZ] Changed 'DATA.NORMALIZATION.TYPE' from {} to {} as defined in the RDF"
+                            .format(self.cfg.DATA.NORMALIZATION.TYPE, "scale_range"))
+                    if float(self.bmz_config['preprocessing']['kwargs']['min_percentile']) != 0 or \
+                        float(self.bmz_config['preprocessing']['kwargs']['max_percentile']) != 100:
+                        opts += [
+                            "DATA.NORMALIZATION.PERC_CLIP", True,
+                            "DATA.NORMALIZATION.PERC_LOWER", float(self.bmz_config['preprocessing']['kwargs']['min_percentile']),
+                            "DATA.NORMALIZATION.PERC_UPPER", float(self.bmz_config['preprocessing']['kwargs']['max_percentile']),
+                        ]    
+                        if not self.cfg.DATA.NORMALIZATION.PERC_CLIP:
+                            print("[BMZ] Changed 'DATA.NORMALIZATION.PERC_CLIP' from {} to {} as defined in the RDF"
+                                .format(self.cfg.DATA.NORMALIZATION.PERC_CLIP, True))   
+                        if self.cfg.DATA.NORMALIZATION.PERC_LOWER != self.bmz_config['preprocessing']['kwargs']['min_percentile']:
+                            print("[BMZ] Changed 'DATA.NORMALIZATION.PERC_LOWER' from {} to {} as defined in the RDF"
+                                .format(self.cfg.DATA.NORMALIZATION.PERC_LOWER, self.bmz_config['preprocessing']['kwargs']['min_percentile']))   
+                        if self.cfg.DATA.NORMALIZATION.PERC_UPPER != self.bmz_config['preprocessing']['kwargs']['max_percentile']:
+                            print("[BMZ] Changed 'DATA.NORMALIZATION.PERC_UPPER' from {} to {} as defined in the RDF"
+                                .format(self.cfg.DATA.NORMALIZATION.PERC_UPPER, self.bmz_config['preprocessing']['kwargs']['max_percentile']))           
+                                
             self.cfg.merge_from_list(opts)
 
     @abstractmethod

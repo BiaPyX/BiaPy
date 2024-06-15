@@ -363,7 +363,8 @@ class BiaPy():
         # Preprocessing
         # Actually Torchvision has its own preprocessing but it can not be adapted to BMZ easily, so for now
         # we set it like we were using BiaPy backend
-        if self.cfg.MODEL.SOURCE in ["biapy", "torchvision"]:
+        if self.cfg.MODEL.SOURCE in ["biapy", "torchvision"] or \
+            self.cfg.MODEL.SOURCE == "bmz" and len(self.workflow.bmz_config['preprocessing']) == 0:
             if self.cfg.DATA.NORMALIZATION.TYPE == 'div':
                 preprocessing = [[{"name": "scale_linear", "kwargs": {"gain": 1/255, "offset": 0}}]]
             elif self.cfg.DATA.NORMALIZATION.TYPE == 'scale_range':
