@@ -106,6 +106,7 @@ class BiaPy():
         os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
         opts = []
         if self.args.gpu:
+            print(f"CUDA available: {torch.cuda.is_available()}")
             os.environ["CUDA_VISIBLE_DEVICES"] = self.args.gpu
             self.num_gpus = len(np.unique(np.array(self.args.gpu.strip().split(','))))
             opts.extend(["SYSTEM.NUM_GPUS", self.num_gpus])

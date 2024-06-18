@@ -423,19 +423,16 @@ def create_detection_masks(cfg, data_type='train'):
         raise ValueError(f"No data found in folder {img_dir}")
     ids = sorted(next(os.walk(label_dir))[2])
 
+    classes = cfg.MODEL.N_CLASSES if cfg.MODEL.N_CLASSES > 2 else 1
     if len(img_ids) != len(ids):
         raise ValueError("Different number of CSV files and images found ({} vs {}). "
             "Please check that every image has one and only one CSV file".format(len(ids), len(img_ids)))
     if cfg.PROBLEM.NDIM == '2D':
-        req_dim = 2 
-        req_columns = ['axis-0', 'axis-1']
-        req_columns_class = ['axis-0', 'axis-1', 'class']
+        req_columns = ['axis-0', 'axis-1'] if classes == 1 else ['axis-0', 'axis-1', 'class']
     else:
-        req_dim = 3
-        req_columns = ['axis-0', 'axis-1', 'axis-2']
-        req_columns_class = ['axis-0', 'axis-1', 'axis-2', 'class']
+        req_columns = ['axis-0', 'axis-1', 'axis-2'] if classes == 1 else ['axis-0', 'axis-1', 'axis-2', 'class']
+    req_dim = len(req_columns)
 
-    classes = cfg.MODEL.N_CLASSES if cfg.MODEL.N_CLASSES > 2 else 1
     print("Creating {} detection masks . . .".format(data_type))
     for i in range(len(ids)):
         img_filename = os.path.splitext(ids[i])[0]+img_ext
@@ -448,6 +445,7 @@ def create_detection_masks(cfg, data_type='train'):
             print("Its respective image seems to be: {}".format(os.path.join(img_dir, img_filename)))
             
             df = pd.read_csv(os.path.join(label_dir, ids[i]))  
+            df = df.dropna()
             if '.zarr' != img_ext:
                 img = imread(os.path.join(img_dir, img_filename))
 
@@ -476,18 +474,16 @@ def create_detection_masks(cfg, data_type='train'):
             
             # Discard first index column to not have error if it is not sorted 
             p_number=df.iloc[: , 0].to_list()
-            df = df.iloc[: , 1:]
             df = df.rename(columns=lambda x: x.strip()) # trim spaces in column names
-            if len(df.columns) == req_dim+1:
-                if not all(df.columns == req_columns_class):
-                    raise ValueError("CSV columns need to be {}".format(req_columns_class))
-            elif len(df.columns) == req_dim:
-                if not all(df.columns == req_columns):
-                    raise ValueError("CSV columns need to be {}".format(req_columns))
-            else:
-                raise ValueError("CSV file {} need to have {} or {} columns. Found {}"
-                                .format(os.path.join(label_dir, ids[i]), req_dim, req_dim+1, len(df.columns)))
-
+            cols_not_in_file = [x for x in req_columns if x not in df.columns]
+            if len(cols_not_in_file) > 0:
+                print(df)
+                if len(cols_not_in_file) == 1:
+                    m = f"'{cols_not_in_file[0]}' column is not present in CSV file: {os.path.join(label_dir, ids[i])}" 
+                else:
+                    m = f"{cols_not_in_file} columns are not present in CSV file: {os.path.join(label_dir, ids[i])}" 
+                raise ValueError(m)
+        
             # Convert them to int in case they are floats
             df['axis-0'] = df['axis-0'].astype('int')
             df['axis-1'] = df['axis-1'].astype('int')
@@ -503,7 +499,7 @@ def create_detection_masks(cfg, data_type='train'):
                 x_axis_point = df['axis-2']
             
             # Class column present
-            if len(df.columns) == req_dim+1:
+            if "class" in req_columns:
                 df['class'] = df['class'].astype('int')
                 class_point = np.array(df['class']) 
 
