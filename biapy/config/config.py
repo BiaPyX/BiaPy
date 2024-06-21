@@ -444,14 +444,15 @@ class Config:
         _C.AUGMENTOR.ZOOM = False
         # Zoom range. Scaling factor to use, where 1.0 denotes “no change” and 0.5 is zoomed out to 50 percent of the original size.
         _C.AUGMENTOR.ZOOM_RANGE = (0.8, 1.2)
+        # Whether to apply or not zoom in Z axis (for 3D volumes). 
+        _C.AUGMENTOR.ZOOM_IN_Z = False
         # Apply shift
         _C.AUGMENTOR.SHIFT = False
         # Shift range. Translation as a fraction of the image height/width (x-translation, y-translation), where 0 denotes 
         # “no change” and 0.5 denotes “half of the axis size”.
         _C.AUGMENTOR.SHIFT_RANGE = (0.1, 0.2)
         # How to fill up the new values created with affine transformations (rotations, shear, shift and zoom).
-        # Same meaning as in scipy: 'reflect', grid-'mirror', 'constant', 'grid-constant', 'nearest', 'mirror', 
-        # 'grid-wrap' and 'wrap'. 
+        # Same meaning as in numpy.pad() : 'constant', 'reflect', 'wrap', 'symmetric'
         _C.AUGMENTOR.AFFINE_MODE = 'reflect'
         # Make vertical flips
         _C.AUGMENTOR.VFLIP = False

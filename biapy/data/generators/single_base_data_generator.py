@@ -76,6 +76,9 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
     zoom_range : tuple of floats, optional
         Zoom range to apply. E. g. ``(0.8, 1.2)``.
 
+    zoom_in_z: bool, optional
+        Whether to apply or not zoom in Z axis. 
+
     shift : float, optional
         To make shifts.
 
@@ -149,12 +152,48 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         In case RGB images are expected, e.g. if ``crop_shape`` channel is 3, those images that are grayscale are 
         converted into RGB.
     """
-    def __init__(self, ndim, X, Y, data_path, ptype, n_classes, seed=0, data_mode="", da=True, da_prob=0.5, rotation90=False, 
-                 rand_rot=False, rnd_rot_range=(-180,180), shear=False, shear_range=(-20,20), zoom=False, zoom_range=(0.8,1.2), 
-                 shift=False, shift_range=(0.1,0.2), affine_mode='constant', vflip=False, hflip=False, elastic=False, e_alpha=(240,250), 
-                 e_sigma=25, e_mode='constant', g_blur=False, g_sigma=(1.0,2.0), median_blur=False, mb_kernel=(3,7), 
-                 motion_blur=False, motb_k_range=(3,8), gamma_contrast=False, gc_gamma=(1.25,1.75), dropout=False, 
-                 drop_range=(0, 0.2), val=False, resize_shape=None, norm_dict=None, convert_to_rgb=False):
+    def __init__(
+        self, 
+        ndim, 
+        X, 
+        Y, 
+        data_path, 
+        ptype, 
+        n_classes, 
+        seed=0, 
+        data_mode="", 
+        da=True, 
+        da_prob=0.5, 
+        rotation90=False, 
+        rand_rot=False, 
+        rnd_rot_range=(-180,180), 
+        shear=False, 
+        shear_range=(-20,20), 
+        zoom=False, 
+        zoom_range=(0.8,1.2), 
+        shift=False, 
+        shift_range=(0.1,0.2), 
+        affine_mode='constant', 
+        vflip=False, 
+        hflip=False, 
+        elastic=False, 
+        e_alpha=(240,250), 
+        e_sigma=25, 
+        e_mode='constant', 
+        g_blur=False, 
+        g_sigma=(1.0,2.0), 
+        median_blur=False, 
+        mb_kernel=(3,7), 
+        motion_blur=False, 
+        motb_k_range=(3,8), 
+        gamma_contrast=False, 
+        gc_gamma=(1.25,1.75), 
+        dropout=False, 
+        drop_range=(0, 0.2), 
+        val=False, 
+        resize_shape=None, 
+        norm_dict=None, 
+        convert_to_rgb=False):
 
         assert norm_dict != None, "Normalization instructions must be provided with 'norm_dict'"
         assert norm_dict['mask_norm'] in ['as_mask', 'as_image', 'none']
@@ -251,7 +290,9 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.da = da
         self.da_prob = da_prob
         self.val = val
-        
+        self.zoom = zoom
+        self.zoom_range = zoom_range
+        self.zoom_in_z = zoom_in_z
         self.rand_rot = rand_rot
         self.rnd_rot_range = rnd_rot_range
         self.rotation90 = rotation90
@@ -267,8 +308,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
             self.da_options.append(iaa.Sometimes(da_prob, iaa.Affine(rotate=shear_range, mode=affine_mode)))
             self.trans_made += '_shear'+str(shear_range)
         if zoom:
-            self.da_options.append(iaa.Sometimes(da_prob, iaa.Affine(scale={"x": zoom_range, "y": zoom_range}, mode=affine_mode)))
-            self.trans_made += '_zoom'+str(zoom_range)
+            self.trans_made += '_zoom'+str(zoom_range)+"+"+str(zoom_in_z)
         if shift:
             self.da_options.append(iaa.Sometimes(da_prob, iaa.Affine(translate_percent=shift_range, mode=affine_mode)))
             self.trans_made += '_shift'+str(shift_range)
@@ -445,6 +485,11 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         """
         # Save shape
         o_img_shape = image.shape
+
+        # Apply zoom
+        if self.zoom and random.uniform(0, 1) < self.da_prob:
+            image = zoom(image, zoom_range=self.zoom_range, zoom_in_z=self.zoom_in_z, 
+                mode=self.affine_mode, mask_type=self.norm_dict['mask_norm'])
 
         # Apply random rotations
         if self.rand_rot and random.uniform(0, 1) < self.da_prob:

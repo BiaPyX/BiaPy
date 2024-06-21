@@ -779,7 +779,14 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 raise ValueError("cfg.AUGMENTOR.GRID_D_RANGE values not in [0, 1] range")
             if not check_value(cfg.AUGMENTOR.GRID_ROTATE):
                 raise ValueError("AUGMENTOR.GRID_ROTATE not in [0, 1] range")
-                             
+        if cfg.AUGMENTOR.ZOOM:
+            if not check_value(cfg.AUGMENTOR.ZOOM_RANGE, (0.1,10)):
+                raise ValueError("AUGMENTOR.ZOOM_RANGE values needs to be between [0.1,10]")
+            if cfg.AUGMENTOR.ZOOM_IN_Z and dim_count == 2:
+                print("WARNING: Ignoring AUGMENTOR.ZOOM_IN_Z in 2D problem")
+        assert cfg.AUGMENTOR.AFFINE_MODE in ['constant', 'reflect', 'wrap', 'symmetric'], \
+            "'AUGMENTOR.AFFINE_MODE' needs to be one between ['constant', 'reflect', 'wrap', 'symmetric']"  
+
     #### Post-processing ####
     if cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS:
         if len(cfg.DATA.TEST.RESOLUTION) == 1:

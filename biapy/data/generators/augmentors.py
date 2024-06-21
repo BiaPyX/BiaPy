@@ -866,12 +866,12 @@ def shuffle_channels(img):
        Parameters
        ----------
        img : 3D/4D Numpy array
-           Image to transform. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
+           Image to transform. E.g. ``(y, x, channels)`` or ``(y, x, z, channels)``.
 
        Returns
        -------
        out : 3D/4D Numpy array
-           Transformed image. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
+           Transformed image. E.g. ``(y, x, channels)`` or ``(y, x, z, channels)``.
 
        Examples
        --------
@@ -900,12 +900,12 @@ def grayscale(img):
        Parameters
        ----------
        img : 3D/4D Numpy array
-           Image to transform. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
+           Image to transform. E.g. ``(y, x, channels)`` or ``(y, x, z, channels)``.
 
        Returns
        -------
        out : 3D/4D Numpy array
-           Transformed image. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
+           Transformed image. E.g. ``(y, x, channels)`` or ``(y, x, z, channels)``.
 
        Examples
        --------
@@ -1508,20 +1508,19 @@ def rotation(img, mask=None, heat=None, angles=[], mode="reflect", mask_type='as
     Parameters
     ----------
     img : 3D/4D Numpy array
-        Image to rotate. E.g. ``(y, x, channels)`` for ``2D`` or  ``(z, y, x, channels)`` for ``3D``.
+        Image to rotate. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
 
     mask : 3D/4D Numpy array, optional
-        Mask to rotate. E.g. ``(y, x, channels)`` for ``2D`` or  ``(z, y, x, channels)`` for ``3D``.
+        Mask to rotate. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
 
     heat : 3D/4D Numpy array, optional
-        Heatmap (float mask) to rotate. E.g. ``(y, x, channels)`` for ``2D`` or  ``(z, y, x, channels)`` for ``3D``.
+        Heatmap (float mask) to rotate. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
 
     angles : List of ints, optional
         List of angles to choose the rotation to be made. E.g. [90,180,360].
 
     mode : str, optional
-        How to fill up the new values created. Options: ``reflect``, ``grid-mirror``,
-        ``constant``, ``grid-constant``, ``nearest``, ``mirror``, ``grid-wrap``, ``wrap``.
+        How to fill up the new values created. Options: ``constant``, ``reflect``, ``wrap``, ``symmetric``.
 
     mask_type : str, optional
         How ``mask`` is going to be treated. Options: ``as_mask``, ``as_image``. With ``as_mask`` 
@@ -1530,14 +1529,14 @@ def rotation(img, mask=None, heat=None, angles=[], mode="reflect", mask_type='as
     Returns
     -------
     img : 3D/4D Numpy array
-        Rotated image. E.g. ``(y, x, channels)`` for ``2D`` or  ``(z, y, x, channels)`` for ``3D``.
+        Rotated image. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
 
     mask : 3D/4D Numpy array, optional
-        Rotated mask. E.g. ``(y, x, channels)`` for ``2D`` or  ``(z, y, x, channels)`` for ``3D``.
+        Rotated mask. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
     
     heat : 3D/4D Numpy array, optional
         Rotated heatmap. Returned if ``mask`` is provided. E.g. ``(y, x, channels)`` for ``2D`` or  
-        ``(z, y, x, channels)`` for ``3D``.
+        ``(y, x, z, channels)`` for ``3D``.
     """
 
     if len(angles) == 0:
@@ -1550,13 +1549,144 @@ def rotation(img, mask=None, heat=None, angles=[], mode="reflect", mask_type='as
     else:
         raise ValueError("Not a list/tuple provided in 'angles'")
 
-    img = rotate(img, angle=angle, mode=mode, reshape=False)
+    _mode = mode if mode != 'symmetric' else 'mirror'
+    img = rotate(img, angle=angle, mode=_mode, reshape=False)
 
     if mask is not None:
         mask_order = 0 if mask_type == 'as_mask' else 1
-        mask = rotate(mask, angle=angle, order=mask_order, mode=mode, reshape=False)
+        mask = rotate(mask, angle=angle, order=mask_order, mode=_mode, reshape=False)
     if heat is not None:
-        heat = rotate(heat, angle=angle, mode=mode, reshape=False)
+        heat = rotate(heat, angle=angle, mode=_mode, reshape=False)
+    if mask is None:
+        return img
+    else:
+        return img, mask, heat
+            
+
+def zoom(img, mask=None, heat=None, zoom_range=[], zoom_in_z=False, mode="reflect", mask_type='as_mask'):
+    """
+    Apply zoom to input ``image`` and ``mask`` (if provided). 
+
+    Parameters
+    ----------
+    img : 3D/4D Numpy array
+        Image to rotate. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+
+    mask : 3D/4D Numpy array, optional
+        Mask to rotate. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+
+    heat : 3D/4D Numpy array, optional
+        Heatmap (float mask) to rotate. E.g. ``(y, x, channels)`` for ``2D`` or  
+        ``(y, x, z, channels)`` for ``3D``.
+
+    zoom_range : tuple of floats, optional
+        Defines minimum and maximum factors to scale the images. E.g. (0.8, 1.2).
+
+    zoom_in_z: bool, optional
+        Whether to apply or not zoom in Z axis. 
+
+    mode : str, optional
+        How to fill up the new values created. Options: ``constant``, ``reflect``, ``wrap``, ``symmetric``.
+
+    mask_type : str, optional
+        How ``mask`` is going to be treated. Options: ``as_mask``, ``as_image``. With ``as_mask`` 
+        the interpolation order will be 0 (nearest).
+
+    Returns
+    -------
+    img : 3D/4D Numpy array
+        Zoomed image. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+
+    mask : 3D/4D Numpy array, optional
+        Zoomed mask. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+    
+    heat : 3D/4D Numpy array, optional
+        Zoomed heatmap. Returned if ``mask`` is provided. E.g. ``(y, x, channels)`` for ``2D`` or  
+        ``(y, x, z, channels)`` for ``3D``.
+    """
+    assert isinstance(zoom_range, tuple)
+    assert len(zoom_range) == 2, "zoom_range must be a tuple with two floats"
+
+    zoom_selected = random.uniform(zoom_range[0], zoom_range[1])
+    mask_order = 0 if mask_type == 'as_mask' else 1
+    if img.ndim == 4:
+        z_zoom = zoom_selected if zoom_in_z else 1
+        img_shape = [
+            int(img.shape[0]*zoom_selected), 
+            int(img.shape[1]*zoom_selected), 
+            int(img.shape[2]*z_zoom), 
+            img.shape[3],
+        ]
+        if mask is not None:
+            mask_shape = [
+                int(mask.shape[0]*zoom_selected), 
+                int(mask.shape[1]*zoom_selected), 
+                int(mask.shape[2]*z_zoom), 
+                mask.shape[3],
+            ]
+    else:
+        img_shape = [
+            int(img.shape[0]*zoom_selected), 
+            int(img.shape[1]*zoom_selected), 
+            img.shape[2],
+        ]
+        if mask is not None:
+            mask_shape = [
+                int(mask.shape[0]*zoom_selected), 
+                int(mask.shape[1]*zoom_selected), 
+                mask.shape[2],
+            ]
+    if img_shape != img.shape:
+        img_orig_shape = img.shape
+        img = resize(img, img_shape, order=1, mode=mode, clip=True, preserve_range=True, anti_aliasing=True) 
+        if mask is not None:
+            mask_orig_shape = mask.shape
+            mask = resize(mask, mask_shape, order=mask_order, mode=mode, clip=True, preserve_range=True, 
+                anti_aliasing=True) 
+        if heat is not None:
+            heat = resize(heat, img_shape, order=1, mode=mode, clip=True, preserve_range=True, 
+                anti_aliasing=True) 
+
+        if zoom_selected >= 1:
+            img = center_crop_single(img, img_orig_shape)
+            if mask is not None:
+                mask = center_crop_single(mask, mask_orig_shape) 
+            if heat is not None:
+                heat = center_crop_single(heat, img_orig_shape) 
+        else:
+            if img.ndim == 4:
+                img_pad_tup = (
+                    ( int((img_orig_shape[0]-img_shape[0])//2), math.ceil((img_orig_shape[0]-img_shape[0])/2) ),
+                    ( int((img_orig_shape[1]-img_shape[1])//2), math.ceil((img_orig_shape[1]-img_shape[1])/2) ),
+                    ( int((img_orig_shape[2]-img_shape[2])//2), math.ceil((img_orig_shape[2]-img_shape[2])/2) ),
+                    (0,0),
+                    )
+                if mask is not None:
+                    mask_pad_tup = (
+                        ( int((mask_orig_shape[0]-mask_shape[0])//2), math.ceil((mask_orig_shape[0]-mask_shape[0])/2) ),
+                        ( int((mask_orig_shape[1]-mask_shape[1])//2), math.ceil((mask_orig_shape[1]-mask_shape[1])/2) ),
+                        ( int((mask_orig_shape[2]-mask_shape[2])//2), math.ceil((mask_orig_shape[2]-mask_shape[2])/2) ),
+                        (0,0),
+                        )
+            else:  
+                img_pad_tup = (
+                    ( int((img_orig_shape[0]-img_shape[0])//2), math.ceil((img_orig_shape[0]-img_shape[0])/2) ),
+                    ( int((img_orig_shape[1]-img_shape[1])//2), math.ceil((img_orig_shape[1]-img_shape[1])/2) ),
+                    (0,0),
+                    )
+                if mask is not None:
+                    mask_pad_tup = (
+                        ( int((mask_orig_shape[0]-mask_shape[0])//2), math.ceil((mask_orig_shape[0]-mask_shape[0])/2) ),
+                        ( int((mask_orig_shape[1]-mask_shape[1])//2), math.ceil((mask_orig_shape[1]-mask_shape[1])/2) ),
+                        (0,0),
+                        )
+
+            img = np.pad(img, img_pad_tup, mode)
+            if mask is not None:
+                mask = np.pad(mask, mask_pad_tup, mode) 
+            if heat is not None:
+                heat = np.pad(heat, img_pad_tup, mode)
+            
     if mask is None:
         return img
     else:

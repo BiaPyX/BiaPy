@@ -77,6 +77,9 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
     zoom_range : tuple of floats, optional
         Zoom range to apply. E. g. ``(0.8, 1.2)``.
 
+    zoom_in_z: bool, optional
+        Whether to apply or not zoom in Z axis. 
+
     shift : float, optional
         To make shifts.
 
@@ -363,27 +366,112 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         `LightMyCells challenge approach <https://biapy.readthedocs.io/en/latest/tutorials/image-to-image/lightmycells.html>`_ 
         for a real use case.  
     """
-    def __init__(self, ndim, X, Y, seed=0, data_mode="", data_paths=None, da=True, da_prob=0.5, rotation90=False, 
-                 rand_rot=False, rnd_rot_range=(-180,180), shear=False, shear_range=(-20,20), zoom=False, zoom_range=(0.8,1.2), 
-                 shift=False, shift_range=(0.1,0.2), affine_mode='constant', vflip=False, hflip=False, elastic=False, 
-                 e_alpha=(240,250), e_sigma=25, e_mode='constant', g_blur=False, g_sigma=(1.0,2.0), median_blur=False, 
-                 mb_kernel=(3,7), motion_blur=False, motb_k_range=(3,8), gamma_contrast=False, gc_gamma=(1.25,1.75), 
-                 brightness=False, brightness_factor=(1,3), brightness_mode='2D', contrast=False, contrast_factor=(1,3), 
-                 contrast_mode='2D', brightness_em=False, brightness_em_factor=(1,3), brightness_em_mode='2D', contrast_em=False, 
-                 contrast_em_factor=(1,3), contrast_em_mode='2D', dropout=False, drop_range=(0, 0.2), cutout=False, 
-                 cout_nb_iterations=(1,3), cout_size=(0.2,0.4), cout_cval=0, cout_apply_to_mask=False, cutblur=False, 
-                 cblur_size=(0.1,0.5), cblur_down_range=(2,8), cblur_inside=True, cutmix=False, cmix_size=(0.2,0.4), 
-                 cutnoise=False, cnoise_scale=(0.1,0.2), cnoise_nb_iterations=(1,3), cnoise_size=(0.2,0.4), misalignment=False,
-                 ms_displacement=16, ms_rotate_ratio=0.0, missing_sections=False, missp_iterations=(30, 40),
-                 grayscale=False, channel_shuffle=False, gridmask=False, grid_ratio=0.6, grid_d_range=(0.4,1),
-                 grid_rotate=1, grid_invert=False, gaussian_noise=False, gaussian_noise_mean=0, gaussian_noise_var=0.01,
-                 gaussian_noise_use_input_img_mean_and_var=False, poisson_noise=False, salt=False, salt_amount=0.05, 
-                 pepper=False, pepper_amount=0.05, salt_and_pepper=False, salt_pep_amount=0.05, salt_pep_proportion=0.5, 
-                 random_crops_in_DA=False, shape=(256,256,1), resolution=(-1,), prob_map=None, val=False, n_classes=1, 
-                 extra_data_factor=1, n2v=False, n2v_perc_pix=0.198, n2v_manipulator='uniform_withCP', 
-                 n2v_neighborhood_radius=5, n2v_structMask=np.array([[0,1,1,1,1,1,1,1,1,1,0]]), norm_dict=None, 
-                 instance_problem=False, random_crop_scale=(1,1), convert_to_rgb=False, multiple_raw_images=False):
-        
+    def __init__(
+        self, 
+        ndim, 
+        X, 
+        Y, 
+        seed=0, 
+        data_mode="", 
+        data_paths=None, 
+        da=True, 
+        da_prob=0.5, 
+        rotation90=False, 
+        rand_rot=False, 
+        rnd_rot_range=(-180,180), 
+        shear=False, 
+        shear_range=(-20,20), 
+        zoom=False, 
+        zoom_range=(0.8,1.2),
+        zoom_in_z=False, 
+        shift=False,
+        shift_range=(0.1,0.2),
+        affine_mode='constant',
+        vflip=False,
+        hflip=False,
+        elastic=False, 
+        e_alpha=(240,250), 
+        e_sigma=25, 
+        e_mode='constant', 
+        g_blur=False, 
+        g_sigma=(1.0,2.0), 
+        median_blur=False, 
+        mb_kernel=(3,7), 
+        motion_blur=False, 
+        motb_k_range=(3,8), 
+        gamma_contrast=False, 
+        gc_gamma=(1.25,1.75), 
+        brightness=False, 
+        brightness_factor=(1,3), 
+        brightness_mode='2D', 
+        contrast=False, 
+        contrast_factor=(1,3), 
+        contrast_mode='2D', 
+        brightness_em=False, 
+        brightness_em_factor=(1,3), 
+        brightness_em_mode='2D', 
+        contrast_em=False, 
+        contrast_em_factor=(1,3), 
+        contrast_em_mode='2D', 
+        dropout=False, 
+        drop_range=(0, 0.2), 
+        cutout=False, 
+        cout_nb_iterations=(1,3), 
+        cout_size=(0.2,0.4), 
+        cout_cval=0, 
+        cout_apply_to_mask=False, 
+        cutblur=False, 
+        cblur_size=(0.1,0.5), 
+        cblur_down_range=(2,8), 
+        cblur_inside=True, 
+        cutmix=False, 
+        cmix_size=(0.2,0.4), 
+        cutnoise=False, 
+        cnoise_scale=(0.1,0.2), 
+        cnoise_nb_iterations=(1,3), 
+        cnoise_size=(0.2,0.4), 
+        misalignment=False,
+        ms_displacement=16, 
+        ms_rotate_ratio=0.0, 
+        missing_sections=False, 
+        missp_iterations=(30, 40),
+        grayscale=False, 
+        channel_shuffle=False, 
+        gridmask=False, 
+        grid_ratio=0.6, 
+        grid_d_range=(0.4,1),
+        grid_rotate=1, 
+        grid_invert=False, 
+        gaussian_noise=False, 
+        gaussian_noise_mean=0, 
+        gaussian_noise_var=0.01,
+        gaussian_noise_use_input_img_mean_and_var=False, 
+        poisson_noise=False, 
+        salt=False, 
+        salt_amount=0.05, 
+        pepper=False, 
+        pepper_amount=0.05, 
+        salt_and_pepper=False, 
+        salt_pep_amount=0.05, 
+        salt_pep_proportion=0.5, 
+        random_crops_in_DA=False, 
+        shape=(256,256,1), 
+        resolution=(-1,), 
+        prob_map=None, 
+        val=False, 
+        n_classes=1, 
+        extra_data_factor=1, 
+        n2v=False, 
+        n2v_perc_pix=0.198, 
+        n2v_manipulator='uniform_withCP', 
+        n2v_neighborhood_radius=5, 
+        n2v_structMask=np.array([[0,1,1,1,1,1,1,1,1,1,0]]), 
+        norm_dict=None, 
+        instance_problem=False, 
+        random_crop_scale=(1,1), 
+        convert_to_rgb=False, 
+        multiple_raw_images=False):
+
         assert norm_dict != None, "Normalization instructions must be provided with 'norm_dict'"
         assert norm_dict['mask_norm'] in ['as_mask', 'as_image', 'none']
         assert data_mode in ['in_memory', 'not_in_memory', 'chunked_data']
@@ -642,6 +730,9 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.rnd_rot_range = rnd_rot_range
         self.rotation90 = rotation90
         self.affine_mode = affine_mode
+        self.zoom = zoom
+        self.zoom_range = zoom_range
+        self.zoom_in_z = zoom_in_z
 
         # Instance segmentation options
         self.instance_problem = instance_problem
@@ -692,8 +783,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             self.da_options.append(iaa.Sometimes(da_prob, iaa.Affine(rotate=shear_range, mode=affine_mode)))
             self.trans_made += '_shear'+str(shear_range)
         if zoom:
-            self.da_options.append(iaa.Sometimes(da_prob, iaa.Affine(scale={"x": zoom_range, "y": zoom_range}, mode=affine_mode)))
-            self.trans_made += '_zoom'+str(zoom_range)
+            self.trans_made += '_zoom'+str(zoom_range)+"+"+str(zoom_in_z)
         if shift:
             self.da_options.append(iaa.Sometimes(da_prob, iaa.Affine(translate_percent=shift_range, mode=affine_mode)))
             self.trans_made += '_shift'+str(shift_range)
@@ -994,18 +1084,18 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         Parameters
         ----------
         image : 3D/4D Numpy array
-            Image to transform. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
+            Image to transform. E.g. ``(y, x, channels)`` in ``2D`` and ``(y, x, z, channels)`` in ``3D``.
 
         mask : 3D/4D Numpy array
-            Mask to transform. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
+            Mask to transform. E.g. ``(y, x, channels)`` in ``2D`` and ``(y, x, z, channels)`` in ``3D``.
 
         e_img : 3D/4D Numpy array
             Extra image to help transforming ``image``. E.g. ``(y, x, channels)`` in ``2D`` or 
-            ``(z, y, x, channels)`` in ``3D``.
+            ``(y, x, z, channels)`` in ``3D``.
 
         e_mask : 3D/4D Numpy array
             Extra mask to help transforming ``mask``. E.g. ``(y, x, channels)`` in ``2D`` or 
-            ``(z, y, x, channels)`` in ``3D``.
+            ``(y, x, z, channels)`` in ``3D``.
 
         Returns
         -------
@@ -1048,6 +1138,11 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         # Apply channel shuffle
         if self.channel_shuffle and random.uniform(0, 1) < self.da_prob:
             image = shuffle_channels(image)
+
+        # Apply zoom
+        if self.zoom and random.uniform(0, 1) < self.da_prob:
+            image, mask, heat = zoom(image, mask, heat=heat, zoom_range=self.zoom_range, zoom_in_z=self.zoom_in_z, 
+                mode=self.affine_mode, mask_type=self.norm_dict['mask_norm'])
 
         # Apply random rotations
         if self.rand_rot and random.uniform(0, 1) < self.da_prob:
