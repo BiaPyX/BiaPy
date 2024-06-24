@@ -704,6 +704,8 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.zoom = zoom
         self.zoom_range = zoom_range
         self.zoom_in_z = zoom_in_z
+        self.gamma_contrast = gamma_contrast
+        self.gc_gamma = gc_gamma
 
         # Instance segmentation options
         self.instance_problem = instance_problem
@@ -777,7 +779,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             self.da_options.append(iaa.Sometimes(da_prob,iaa.MotionBlur(k=motb_k_range)))
             self.trans_made += '_motb'+str(motb_k_range)
         if gamma_contrast:
-            self.da_options.append(iaa.Sometimes(da_prob,iaa.GammaContrast(gc_gamma)))
             self.trans_made += '_gcontrast'+str(gc_gamma)
         if brightness:
             self.brightness_factor = brightness_factor
@@ -1129,11 +1130,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         if heat is not None:
             heat = HeatmapsOnImage(heat, shape=heat.shape, min_value=0.0, max_value=np.max(heat)+sys.float_info.epsilon)
 
-        # Apply cutout
-        if self.cutout and random.uniform(0, 1) < self.da_prob:
-            image, mask = cutout(image, mask, self.X_channels, self.z_size, self.cout_nb_iterations, self.cout_size,
-                                 self.cout_cval, self.res_relation, self.cout_apply_to_mask)
-
         # Apply cblur
         if self.cutblur and random.uniform(0, 1) < self.da_prob:
             image = cutblur(image, self.cblur_size, self.cblur_down_range, self.cblur_inside)
@@ -1163,14 +1159,9 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             image = contrast(image, contrast_factor=self.contrast_factor, mode=self.contrast_mode,
                 min_max_vals=min_max_vals)
 
-        # Apply missing parts
-        if self.missing_sections and random.uniform(0, 1) < self.da_prob:
-            image = missing_sections(image, self.missp_iterations)
-
-        # Apply GridMask
-        if self.gridmask and random.uniform(0, 1) < self.da_prob:
-            image = GridMask(image, self.X_channels, self.z_size, self.grid_ratio, self.grid_d_size, self.grid_rotate,
-                             self.grid_invert)
+        # Apply gamma contrast
+        if self.gamma_contrast and random.uniform(0, 1) < self.da_prob:
+            image = gamma_contrast(image, gamma=self.gc_gamma)
 
         if self.gaussian_noise and random.uniform(0, 1) < self.da_prob:
             mean = np.mean(image) if self.gaussian_noise_use_input_img_mean_and_var else self.gaussian_noise_mean
@@ -1188,6 +1179,20 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         if self.salt_and_pepper and random.uniform(0, 1) < self.da_prob:
             image = random_noise(image, mode='s&p', amount=self.salt_pep_amount, salt_vs_pepper=self.salt_pep_proportion)
+
+        # Apply missing parts
+        if self.missing_sections and random.uniform(0, 1) < self.da_prob:
+            image = missing_sections(image, self.missp_iterations)
+
+        # Apply GridMask
+        if self.gridmask and random.uniform(0, 1) < self.da_prob:
+            image = GridMask(image, self.X_channels, self.z_size, self.grid_ratio, self.grid_d_size, self.grid_rotate,
+                             self.grid_invert)
+        
+        # Apply cutout
+        if self.cutout and random.uniform(0, 1) < self.da_prob:
+            image, mask = cutout(image, mask, self.X_channels, self.z_size, self.cout_nb_iterations, self.cout_size,
+                                 self.cout_cval, self.res_relation, self.cout_apply_to_mask)
 
         # Apply transformations to the volume and its mask
         if self.norm_dict['mask_norm'] == 'as_mask':  

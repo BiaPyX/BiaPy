@@ -297,6 +297,8 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.rnd_rot_range = rnd_rot_range
         self.rotation90 = rotation90
         self.affine_mode = affine_mode
+        self.gamma_contrast = gamma_contrast
+        self.gc_gamma = gc_gamma
 
         self.da_options = []
         self.trans_made = ''
@@ -331,7 +333,6 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
             self.da_options.append(iaa.Sometimes(da_prob,iaa.MotionBlur(k=motb_k_range)))
             self.trans_made += '_motb'+str(motb_k_range)
         if gamma_contrast:
-            self.da_options.append(iaa.Sometimes(da_prob,iaa.GammaContrast(gc_gamma)))
             self.trans_made += '_gcontrast'+str(gc_gamma)
         if dropout:
             self.da_options.append(iaa.Sometimes(da_prob, iaa.Dropout(p=drop_range)))
@@ -502,6 +503,10 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         # Reshape 3D volumes to 2D image type with multiple channels to pass through imgaug lib
         if self.ndim == 3:
             image = image.reshape(image.shape[:2]+(image.shape[2]*image.shape[3],))
+
+        # Apply gamma contrast
+        if self.gamma_contrast and random.uniform(0, 1) < self.da_prob:
+            image = gamma_contrast(image, gamma=self.gc_gamma)
 
         # Apply transformations to the image
         image = self.seq(image=image)

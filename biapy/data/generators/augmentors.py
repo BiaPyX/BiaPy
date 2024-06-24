@@ -5,6 +5,7 @@ import numpy as np
 from PIL import Image
 from skimage.transform import resize
 from skimage.draw import line
+from skimage.exposure import adjust_gamma
 from scipy.ndimage.measurements import label
 from scipy.ndimage.morphology import binary_dilation
 from scipy.ndimage import rotate
@@ -1570,3 +1571,23 @@ def zoom(img, mask=None, heat=None, zoom_range=[], zoom_in_z=False, mode="reflec
     else:
         return img, mask, heat
             
+def gamma_contrast(img, gamma=(0,1)):
+    """
+    Apply gamma contrast to input ``image``. 
+
+    Parameters
+    ----------
+    img : 3D Numpy array
+        Image to transform. E.g. ``(y, x, channels)``.
+
+    gamma : tuple of 2 floats, optional
+        Range of gamma intensity. E.g. ``(0.8, 1.3)``.
+
+    Returns
+    -------
+    img : 3D Numpy array
+        Transformed image. E.g. ``(y, x, channels)``.
+    """
+    _gamma = random.uniform(gamma[0], gamma[1])
+
+    return adjust_gamma(np.clip(img,0,1), gamma=_gamma)
