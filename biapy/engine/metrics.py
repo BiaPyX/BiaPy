@@ -13,6 +13,7 @@ from torchmetrics.image import StructuralSimilarityIndexMeasure
 from torchvision.transforms.functional import resize
 import torchvision.transforms as T
 from pytorch_msssim import ssim, ms_ssim, SSIM, MS_SSIM
+import torch.nn.functional as F
 
 def jaccard_index_numpy(y_true, y_pred):
     """Define Jaccard index.
@@ -80,6 +81,38 @@ def jaccard_index_numpy_without_background(y_true, y_pred):
         jac = TP / (TP + FP + FN)
 
     return jac
+
+
+def weight_binary_ratio(target):
+    if torch.max(target) == torch.min(target):
+        return torch.ones_like(target, dtype=torch.float32)
+    
+    # Generate weight map by balancing the foreground and background.
+    min_ratio = 5e-2
+    label = target.clone() # copy of target label
+
+    label = (label != 0).double()  # foreground
+
+    ww = label.sum() / torch.prod(torch.tensor(label.shape, dtype=torch.double))
+    
+    ww = torch.clamp(ww, min=min_ratio, max=1-min_ratio)
+    
+    weight_factor = max(ww, 1-ww) / min(ww, 1-ww)
+        
+    # Case 1 -- Affinity Map
+    # In that case, ww is large (i.e., ww > 1 - ww), which means the high weight
+    # factor should be applied to background pixels.
+
+    # Case 2 -- Contour Map
+    # In that case, ww is small (i.e., ww < 1 - ww), which means the high weight
+    # factor should be applied to foreground pixels.
+
+    if ww > 1 - ww:
+        # Switch when foreground is the dominant class.
+        label = 1 - label
+    weight = weight_factor * label + (1 - label)
+
+    return weight.float()
 
 
 class jaccard_index():
@@ -428,7 +461,7 @@ def binary_crossentropy_weighted(weights):
 
 
 class instance_segmentation_loss():
-    def __init__(self, weights=(1,0.2), out_channels="BC", mask_distance_channel=True, n_classes=2):
+    def __init__(self, weights=(1,0.2), out_channels="BC", mask_distance_channel=True, n_classes=2, class_rebalance=True):
         """
         Custom loss that mixed BCE and MSE depending on the ``out_channels`` variable.
 
@@ -450,6 +483,7 @@ class instance_segmentation_loss():
         self.mask_distance_channel = mask_distance_channel 
         self.n_classes = n_classes
         self.d_channel = -2 if n_classes > 2 else -1 
+        self.class_rebalance = class_rebalance
 
         self.binary_channels_loss = torch.nn.BCEWithLogitsLoss()
         self.distance_channels_loss = torch.nn.L1Loss()
@@ -509,7 +543,12 @@ class instance_segmentation_loss():
         elif self.out_channels == "C":
             loss = self.binary_channels_loss(_y_pred, y_true)
         elif self.out_channels in ["A"]:
-            loss = self.binary_channels_loss(_y_pred, y_true)
+            if self.class_rebalance:
+                weight_mask = weight_binary_ratio(y_true)
+                loss_fn = torch.nn.BCEWithLogitsLoss(weight=weight_mask)
+                loss = loss_fn(y_pred, y_true)
+            else:
+                loss = self.binary_channels_loss(_y_pred, y_true)
         # Dv2
         else:
             loss = self.weights[0]*self.distance_channels_loss(_y_pred, y_true)
