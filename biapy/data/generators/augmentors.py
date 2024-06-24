@@ -5,75 +5,77 @@ import numpy as np
 from PIL import Image
 from skimage.transform import resize
 from skimage.draw import line
+from skimage.exposure import adjust_gamma
 from scipy.ndimage.measurements import label
 from scipy.ndimage.morphology import binary_dilation
 from scipy.ndimage import rotate
 
 
 def cutout(img, mask, channels, z_size, nb_iterations=(1,3), size=(0.2,0.4), cval=0, res_relation=(1,1), apply_to_mask=False):
-    """Cutout data augmentation presented in `Improved Regularization of Convolutional Neural Networks with Cutout
-       <https://arxiv.org/pdf/1708.04552.pdf>`_.
+    """
+    Cutout data augmentation presented in `Improved Regularization of Convolutional Neural Networks with Cutout
+    <https://arxiv.org/pdf/1708.04552.pdf>`_.
 
-       Parameters
-       ----------
-       img : 3D Numpy array
-           Image to transform. E.g. ``(y, x, channels)``.
+    Parameters
+    ----------
+    img : 3D Numpy array
+        Image to transform. E.g. ``(y, x, channels)``.
 
-       mask : 3D Numpy array
-           Mask to transform. E.g. ``(y, x, channels)``.
+    mask : 3D Numpy array
+        Mask to transform. E.g. ``(y, x, channels)``.
 
-       channels : int
-           Size of channel dimension. Used for 3D images as the channels have been merged with the z axis.
+    channels : int
+        Size of channel dimension. Used for 3D images as the channels have been merged with the z axis.
 
-       z_size : int
-           Size of z dimension. Used for 3D images as the z axis has been merged with the channels. Set to -1 to when
-           do not want to be applied.
+    z_size : int
+        Size of z dimension. Used for 3D images as the z axis has been merged with the channels. Set to -1 to when
+        do not want to be applied.
 
-       nb_iterations : tuple of ints, optional
-           Number of areas to fill the image with. E.g. ``(1, 3)``.
+    nb_iterations : tuple of ints, optional
+        Number of areas to fill the image with. E.g. ``(1, 3)``.
 
-       size : tuple of floats, optional
-           Range to choose the size of the areas to create.
+    size : tuple of floats, optional
+        Range to choose the size of the areas to create.
 
-       cval : int, optional
-           Value to fill the area with.
+    cval : int, optional
+        Value to fill the area with.
 
-       res_relation: tuple of ints/floats, optional
-           Relation between axis resolution in ``(x,y,z)``. E.g. ``(1,1,0.27)`` for anisotropic data of 
-           8umx8umx30um resolution.
+    res_relation: tuple of ints/floats, optional
+        Relation between axis resolution in ``(x,y,z)``. E.g. ``(1,1,0.27)`` for anisotropic data of 
+        8umx8umx30um resolution.
 
-       apply_to_mask : boolean, optional
-           To apply cutout to the mask.
+    apply_to_mask : boolean, optional
+        To apply cutout to the mask.
 
-       Returns
-       -------
-       out : 3D Numpy array
-           Transformed image. E.g. ``(y, x, channels)``.
+    Returns
+    -------
+    out : 3D Numpy array
+        Transformed image. E.g. ``(y, x, channels)``.
 
-       mask : 3D Numpy array
-           Transformed mask. E.g. ``(y, x, channels)``.
+    mask : 3D Numpy array
+        Transformed mask. E.g. ``(y, x, channels)``.
 
-       Examples
-       --------
+    Examples
+    --------
 
-       Calling this function with ``nb_iterations=(1,3)``, ``size=(0.05,0.3)``,
-       ``apply_to_mask=False`` may result in:
+    Calling this function with ``nb_iterations=(1,3)``, ``size=(0.05,0.3)``,
+    ``apply_to_mask=False`` may result in:
 
-       +----------------------------------------------+----------------------------------------------+
-       | .. figure:: ../../../img/orig_cutout.png     | .. figure:: ../../../img/orig_cutout_mask.png|
-       |   :width: 80%                                |   :width: 80%                                |
-       |   :align: center                             |   :align: center                             |
-       |                                              |                                              |
-       |   Input image                                |   Corresponding mask                         |
-       +----------------------------------------------+----------------------------------------------+
-       | .. figure:: ../../../img/cutout.png          | .. figure:: ../../../img/cutout_mask.png     |
-       |   :width: 80%                                |   :width: 80%                                |
-       |   :align: center                             |   :align: center                             |
-       |                                              |                                              |
-       |   Augmented image                            |   Augmented mask                             |
-       +----------------------------------------------+----------------------------------------------+
+    +----------------------------------------------+----------------------------------------------+
+    | .. figure:: ../../../img/orig_cutout.png     | .. figure:: ../../../img/orig_cutout_mask.png|
+    |   :width: 80%                                |   :width: 80%                                |
+    |   :align: center                             |   :align: center                             |
+    |                                              |                                              |
+    |   Input image                                |   Corresponding mask                         |
+    +----------------------------------------------+----------------------------------------------+
+    | .. figure:: ../../../img/cutout.png          | .. figure:: ../../../img/cutout_mask.png     |
+    |   :width: 80%                                |   :width: 80%                                |
+    |   :align: center                             |   :align: center                             |
+    |                                              |                                              |
+    |   Augmented image                            |   Augmented mask                             |
+    +----------------------------------------------+----------------------------------------------+
 
-       The grid is painted for visualization purposes.
+    The grid is painted for visualization purposes.
     """
 
     it = np.random.randint(nb_iterations[0], nb_iterations[1])
@@ -104,53 +106,54 @@ def cutout(img, mask, channels, z_size, nb_iterations=(1,3), size=(0.2,0.4), cva
 
 
 def cutblur(img, size=(0.2,0.4), down_ratio_range=(2,8), only_inside=True):
-    """CutBlur data augmentation introduced in `Rethinking Data Augmentation for Image Super-resolution: A Comprehensive
-       Analysis and a New Strategy <https://arxiv.org/pdf/2004.00448.pdf>`_ and adapted from
-       https://github.com/clovaai/cutblur .
+    """
+    CutBlur data augmentation introduced in `Rethinking Data Augmentation for Image Super-resolution: A Comprehensive
+    Analysis and a New Strategy <https://arxiv.org/pdf/2004.00448.pdf>`_ and adapted from
+    https://github.com/clovaai/cutblur .
 
 
-       Parameters
-       ----------
-       img : 3D Numpy array
-           Image to transform. E.g. ``(y, x, channels)``.
+    Parameters
+    ----------
+    img : 3D Numpy array
+        Image to transform. E.g. ``(y, x, channels)``.
 
-       size : float, optional
-           Size of the region to transform.
+    size : float, optional
+        Size of the region to transform.
 
-       down_ratio_range : tuple of ints, optional
-           Downsampling ratio range to be applied. E.g. ``(2, 8)``.
+    down_ratio_range : tuple of ints, optional
+        Downsampling ratio range to be applied. E.g. ``(2, 8)``.
 
-       only_inside : bool, optional
-           If ``True`` only the region inside will be modified (cut LR into HR image). If ``False`` the ``50%`` of the
-           times the region inside will be modified (cut LR into HR image) and the other ``50%`` the inverse will be
-           done (cut HR into LR image). See Figure 1 of the official `paper <https://arxiv.org/pdf/2004.00448.pdf>`_.
+    only_inside : bool, optional
+        If ``True`` only the region inside will be modified (cut LR into HR image). If ``False`` the ``50%`` of the
+        times the region inside will be modified (cut LR into HR image) and the other ``50%`` the inverse will be
+        done (cut HR into LR image). See Figure 1 of the official `paper <https://arxiv.org/pdf/2004.00448.pdf>`_.
 
-       Returns
-       -------
-       out : 3D Numpy array
-           Transformed image. E.g. ``(y, x, channels)``.
+    Returns
+    -------
+    out : 3D Numpy array
+        Transformed image. E.g. ``(y, x, channels)``.
 
-       Examples
-       --------
+    Examples
+    --------
 
-       Calling this function with ``size=(0.2,0.4)``, ``down_ratio_range=(2,8)``,
-       ``only_inside=True`` may result in:
+    Calling this function with ``size=(0.2,0.4)``, ``down_ratio_range=(2,8)``,
+    ``only_inside=True`` may result in:
 
-       +--------------------------------------------+--------------------------------------------+
-       | .. figure:: ../../../img/orig_cutblur.png  | .. figure:: ../../../img/cutblur.png       |
-       |   :width: 80%                              |   :width: 80%                              |
-       |   :align: center                           |   :align: center                           |
-       |                                            |                                            |
-       |   Input image                              |   Augmented image                          |
-       +--------------------------------------------+--------------------------------------------+
-       | .. figure:: ../../../img/orig_cutblur2.png | .. figure:: ../../../img/cutblur2.png      |
-       |   :width: 80%                              |   :width: 80%                              |
-       |   :align: center                           |   :align: center                           |
-       |                                            |                                            |
-       |   Input image                              |   Augmented image                          |
-       +--------------------------------------------+--------------------------------------------+
+    +--------------------------------------------+--------------------------------------------+
+    | .. figure:: ../../../img/orig_cutblur.png  | .. figure:: ../../../img/cutblur.png       |
+    |   :width: 80%                              |   :width: 80%                              |
+    |   :align: center                           |   :align: center                           |
+    |                                            |                                            |
+    |   Input image                              |   Augmented image                          |
+    +--------------------------------------------+--------------------------------------------+
+    | .. figure:: ../../../img/orig_cutblur2.png | .. figure:: ../../../img/cutblur2.png      |
+    |   :width: 80%                              |   :width: 80%                              |
+    |   :align: center                           |   :align: center                           |
+    |                                            |                                            |
+    |   Input image                              |   Augmented image                          |
+    +--------------------------------------------+--------------------------------------------+
 
-       The grid and the red square are painted for visualization purposes.
+    The grid and the red square are painted for visualization purposes.
     """
 
     _size = random.uniform(size[0], size[1])
@@ -181,9 +184,9 @@ def cutblur(img, size=(0.2,0.4), down_ratio_range=(2,8), only_inside=True):
             temp = img[..., i].copy()
 
         downsampled = resize(temp, out_shape, order=1, mode='reflect',
-                             clip=True, preserve_range=True, anti_aliasing=True)
+            clip=True, preserve_range=True, anti_aliasing=True)
         upsampled = resize(downsampled, temp.shape, order=0, mode='reflect',
-                           clip=True, preserve_range=True, anti_aliasing=False)
+            clip=True, preserve_range=True, anti_aliasing=False)
         if inside:
             out[cy:cy+y_size, cx:cx+x_size, i] = upsampled
         else:
@@ -194,56 +197,57 @@ def cutblur(img, size=(0.2,0.4), down_ratio_range=(2,8), only_inside=True):
 
 
 def cutmix(im1, im2, mask1, mask2, size=(0.2,0.4)):
-    """Cutmix augmentation introduced in `CutMix: Regularization Strategy to Train Strong Classifiers with Localizable
-       Features <https://arxiv.org/abs/1905.04899>`_. With this augmentation a region of the image sample is filled
-       with a given second image. This implementation is used for semantic segmentation so the masks of the images are
-       also needed. It assumes that the images are of the same shape.
+    """
+    Cutmix augmentation introduced in `CutMix: Regularization Strategy to Train Strong Classifiers with Localizable
+    Features <https://arxiv.org/abs/1905.04899>`_. With this augmentation a region of the image sample is filled
+    with a given second image. This implementation is used for semantic segmentation so the masks of the images are
+    also needed. It assumes that the images are of the same shape.
 
-       Parameters
-       ----------
-       im1 : 3D Numpy array
-           Image to transform. E.g. ``(y, x, channels)``.
+    Parameters
+    ----------
+    im1 : 3D Numpy array
+        Image to transform. E.g. ``(y, x, channels)``.
 
-       im2 : 3D Numpy array
-           Image to paste into the region of ``im1``. E.g. ``(y, x, channels)``.
+    im2 : 3D Numpy array
+        Image to paste into the region of ``im1``. E.g. ``(y, x, channels)``.
 
-       mask1 : 3D Numpy array
-           Mask to transform (belongs to ``im1``). E.g. ``(y, x, channels)``.
+    mask1 : 3D Numpy array
+        Mask to transform (belongs to ``im1``). E.g. ``(y, x, channels)``.
 
-       mask2 : 3D Numpy array
-           Mask to paste into the region of ``mask1``. E.g. ``(y, x, channels)``.
+    mask2 : 3D Numpy array
+        Mask to paste into the region of ``mask1``. E.g. ``(y, x, channels)``.
 
-       size : tuple of floats, optional
-           Range to choose the size of the areas to transform. E.g. ``(0.2, 0.4)``.
+    size : tuple of floats, optional
+        Range to choose the size of the areas to transform. E.g. ``(0.2, 0.4)``.
 
-       Returns
-       -------
-       out : 3D Numpy array
-           Transformed image. E.g. ``(y, x, channels)``.
+    Returns
+    -------
+    out : 3D Numpy array
+        Transformed image. E.g. ``(y, x, channels)``.
 
-       m_out : 3D Numpy array
-           Transformed mask. E.g. ``(y, x, channels)``.
+    m_out : 3D Numpy array
+        Transformed mask. E.g. ``(y, x, channels)``.
 
-       Examples
-       --------
+    Examples
+    --------
 
-       Calling this function with ``size=(0.2,0.4)`` may result in:
+    Calling this function with ``size=(0.2,0.4)`` may result in:
 
-       +----------------------------------------------+----------------------------------------------+
-       | .. figure:: ../../../img/orig_cutmix.png     | .. figure:: ../../../img/orig_cutmix_mask.png|
-       |   :width: 80%                                |   :width: 80%                                |
-       |   :align: center                             |   :align: center                             |
-       |                                              |                                              |
-       |   Input image                                |   Corresponding mask                         |
-       +----------------------------------------------+----------------------------------------------+
-       | .. figure:: ../../../img/cutmix.png          | .. figure:: ../../../img/cutmix_mask.png     |
-       |   :width: 80%                                |   :width: 80%                                |
-       |   :align: center                             |   :align: center                             |
-       |                                              |                                              |
-       |   Augmented image                            |   Augmented mask                             |
-       +----------------------------------------------+----------------------------------------------+
+    +----------------------------------------------+----------------------------------------------+
+    | .. figure:: ../../../img/orig_cutmix.png     | .. figure:: ../../../img/orig_cutmix_mask.png|
+    |   :width: 80%                                |   :width: 80%                                |
+    |   :align: center                             |   :align: center                             |
+    |                                              |                                              |
+    |   Input image                                |   Corresponding mask                         |
+    +----------------------------------------------+----------------------------------------------+
+    | .. figure:: ../../../img/cutmix.png          | .. figure:: ../../../img/cutmix_mask.png     |
+    |   :width: 80%                                |   :width: 80%                                |
+    |   :align: center                             |   :align: center                             |
+    |                                              |                                              |
+    |   Augmented image                            |   Augmented mask                             |
+    +----------------------------------------------+----------------------------------------------+
 
-       The grid is painted for visualization purposes.
+    The grid is painted for visualization purposes.
     """
 
     _size = random.uniform(size[0], size[1])
@@ -269,52 +273,56 @@ def cutmix(im1, im2, mask1, mask2, size=(0.2,0.4)):
     return out, m_out
 
 
-def cutnoise(img, scale=(0.1,0.2), nb_iterations=(1,3), size=(0.2,0.4)):
-    """Cutnoise data augmentation. Randomly add noise to a cuboid region in the image to force the model to learn
-       denoising when making predictions.
-
-       Parameters
-       ----------
-       img : 3D Numpy array
-           Image to transform. E.g. ``(y, x, channels)``.
-
-       scale : tuple of floats, optional
-           Scale of the random noise. E.g. ``(0.1, 0.2)``.
-
-       nb_iterations : tuple of ints, optional
-           Number of areas with noise to create. E.g. ``(1, 3)``.
-
-       size : boolean, optional
-           Range to choose the size of the areas to transform. E.g. ``(0.2, 0.4)``.
-
-       Returns
-       -------
-       out : 3D Numpy array
-           Transformed image. E.g. ``(y, x, channels)``.
-
-       Examples
-       --------
-
-       Calling this function with ``scale=(0.1,0.2)``, ``nb_iterations=(1,3)`` and
-       ``size=(0.2,0.4)`` may result in:
-
-       +---------------------------------------------+---------------------------------------------+
-       | .. figure:: ../../../img/orig_cutnoise.png  | .. figure:: ../../../img/cutnoise.png       |
-       |   :width: 80%                               |   :width: 80%                               |
-       |   :align: center                            |   :align: center                            |
-       |                                             |                                             |
-       |   Input image                               |   Augmented image                           |
-       +---------------------------------------------+---------------------------------------------+
-       | .. figure:: ../../../img/orig_cutnoise2.png | .. figure:: ../../../img/cutnoise2.png      |
-       |   :width: 80%                               |   :width: 80%                               |
-       |   :align: center                            |   :align: center                            |
-       |                                             |                                             |
-       |   Input image                               |   Augmented image                           |
-       +---------------------------------------------+---------------------------------------------+
-
-       The grid and the red squares are painted for visualization purposes.
+def cutnoise(img, scale=(0.1,0.2), nb_iterations=(1,3), size=(0.2,0.4), min_max_vals=(0.,1.)):
     """
+    Cutnoise data augmentation. Randomly add noise to a cuboid region in the image to force the model to learn
+    denoising when making predictions.
 
+    Parameters
+    ----------
+    img : 3D Numpy array
+        Image to transform. E.g. ``(y, x, channels)``.
+
+    scale : tuple of floats, optional
+        Scale of the random noise. E.g. ``(0.1, 0.2)``.
+
+    nb_iterations : tuple of ints, optional
+        Number of areas with noise to create. E.g. ``(1, 3)``.
+
+    size : boolean, optional
+        Range to choose the size of the areas to transform. E.g. ``(0.2, 0.4)``.
+
+    min_max_vals : tuple of two floats, optional
+        To clip the output to the range defined. The output values will be in this range: 
+        ``min_max_vals[0] <= output <= min_max_vals[1]``. 
+
+    Returns
+    -------
+    out : 3D Numpy array
+        Transformed image. E.g. ``(y, x, channels)``.
+
+    Examples
+    --------
+
+    Calling this function with ``scale=(0.1,0.2)``, ``nb_iterations=(1,3)`` and
+    ``size=(0.2,0.4)`` may result in:
+
+    +---------------------------------------------+---------------------------------------------+
+    | .. figure:: ../../../img/orig_cutnoise.png  | .. figure:: ../../../img/cutnoise.png       |
+    |   :width: 80%                               |   :width: 80%                               |
+    |   :align: center                            |   :align: center                            |
+    |                                             |                                             |
+    |   Input image                               |   Augmented image                           |
+    +---------------------------------------------+---------------------------------------------+
+    | .. figure:: ../../../img/orig_cutnoise2.png | .. figure:: ../../../img/cutnoise2.png      |
+    |   :width: 80%                               |   :width: 80%                               |
+    |   :align: center                            |   :align: center                            |
+    |                                             |                                             |
+    |   Input image                               |   Augmented image                           |
+    +---------------------------------------------+---------------------------------------------+
+
+    The grid and the red squares are painted for visualization purposes.
+    """
     it = np.random.randint(nb_iterations[0], nb_iterations[1])
 
     out = img.copy()
@@ -327,61 +335,65 @@ def cutnoise(img, scale=(0.1,0.2), nb_iterations=(1,3), size=(0.2,0.4)):
         cy = np.random.randint(0, img.shape[0]-(y_size))
         cx = np.random.randint(0, img.shape[1]-(x_size))
 
-        max_value = np.max(out)
-        _scale = random.uniform(scale[0], scale[1])*max_value
+        _scale = random.uniform(scale[0], scale[1])*min_max_vals[1]
         noise = np.random.normal(loc=0, scale=_scale, size=(y_size, x_size))
         out[cy:cy+y_size, cx:cx+x_size, :] += np.stack((noise,)*out.shape[-1], axis=-1)
-    return np.clip(out, 0, max_value)
+    return np.clip(out, min_max_vals[0], min_max_vals[1])
 
 
-def misalignment(img, mask, displacement=16, rotate_ratio=0.0, c_relation="1_1"):
-    """Mis-alignment data augmentation of image stacks. This augmentation is applied to both images and masks.
+def misalignment(img, mask, displacement=16, rotate_ratio=0.0, c_relation="1_1", min_max_vals=(0.,1.)):
+    """
+    Mis-alignment data augmentation of image stacks. This augmentation is applied to both images and masks.
 
-       Implementation based on `PyTorch Connectomics' misalign.py
-       <https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/data/augmentation/misalign.py>`_.
+    Implementation based on `PyTorch Connectomics' misalign.py
+    <https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/data/augmentation/misalign.py>`_.
 
-       Parameters
-       ----------
-       img : 3D Numpy array
-           Image to transform. E.g. ``(y, x, channels)``.
+    Parameters
+    ----------
+    img : 3D Numpy array
+        Image to transform. E.g. ``(y, x, channels)``.
 
-       mask : 3D Numpy array
-           Mask to transform. E.g. ``(y, x, channels)``
+    mask : 3D Numpy array
+        Mask to transform. E.g. ``(y, x, channels)``
 
-       displacement : int, optional
-           Maximum pixel displacement in ``xy``-plane.
+    displacement : int, optional
+        Maximum pixel displacement in ``xy``-plane.
 
-       rotate_ratio : float, optional
-           Ratio of rotation-based mis-alignment.
+    rotate_ratio : float, optional
+        Ratio of rotation-based mis-alignment.
 
-       Returns
-       -------
-       out : 3D Numpy array
-           Transformed image. E.g. ``(y, x, channels)``.
+    min_max_vals : tuple of two floats, optional
+        To clip the output to the range defined. The output values will be in this range: 
+        ``min_max_vals[0] <= output <= min_max_vals[1]``. 
 
-       m_out : 3D Numpy array
-           Transformed mask. E.g. ``(y, x, channels)``.
+    Returns
+    -------
+    out : 3D Numpy array
+        Transformed image. E.g. ``(y, x, channels)``.
 
-       Examples
-       --------
+    m_out : 3D Numpy array
+        Transformed mask. E.g. ``(y, x, channels)``.
 
-       Calling this function with ``displacement=16`` and ``rotate_ratio=0.5`` may result in:
+    Examples
+    --------
 
-       +---------------------------------------------+---------------------------------------------+
-       | .. figure:: ../../../img/orig_miss.png      | .. figure:: ../../../img/orig_miss_mask.png |
-       |   :width: 80%                               |   :width: 80%                               |
-       |   :align: center                            |   :align: center                            |
-       |                                             |                                             |
-       |   Input image                               |   Corresponding mask                        |
-       +---------------------------------------------+---------------------------------------------+
-       | .. figure:: ../../../img/miss.png           | .. figure:: ../../../img/miss_mask.png      |
-       |   :width: 80%                               |   :width: 80%                               |
-       |   :align: center                            |   :align: center                            |
-       |                                             |                                             |
-       |   Augmented image                           |   Augmented mask                            |
-       +---------------------------------------------+---------------------------------------------+
+    Calling this function with ``displacement=16`` and ``rotate_ratio=0.5`` may result in:
 
-       The grid is painted for visualization purposes.
+    +---------------------------------------------+---------------------------------------------+
+    | .. figure:: ../../../img/orig_miss.png      | .. figure:: ../../../img/orig_miss_mask.png |
+    |   :width: 80%                               |   :width: 80%                               |
+    |   :align: center                            |   :align: center                            |
+    |                                             |                                             |
+    |   Input image                               |   Corresponding mask                        |
+    +---------------------------------------------+---------------------------------------------+
+    | .. figure:: ../../../img/miss.png           | .. figure:: ../../../img/miss_mask.png      |
+    |   :width: 80%                               |   :width: 80%                               |
+    |   :align: center                            |   :align: center                            |
+    |                                             |                                             |
+    |   Augmented image                           |   Augmented mask                            |
+    +---------------------------------------------+---------------------------------------------+
+
+    The grid is painted for visualization purposes.
     """
 
     out = np.zeros(img.shape, img.dtype)
@@ -473,7 +485,7 @@ def misalignment(img, mask, displacement=16, rotate_ratio=0.0, c_relation="1_1")
                 m_out[y0:y0+out_shape[0],x0:x0+out_shape[1],:idx_mask] = mask[y0:y0+out_shape[0],x0:x0+out_shape[1],:idx_mask]
                 m_out[y1:y1+out_shape[0],x1:x1+out_shape[1],idx_mask:] = mask[y1:y1+out_shape[0],x1:x1+out_shape[1],idx_mask:]
 
-    return out, m_out
+    return np.clip(out, min_max_vals[0], min_max_vals[1]), m_out
 
 
 def random_rotate_matrix(height, displacement):
@@ -485,46 +497,51 @@ def random_rotate_matrix(height, displacement):
     M = cv2.getRotationMatrix2D((height/2, height/2), rand_angle, 1)
     return M
 
-def brightness(image, brightness_factor=(0,0),  mode='2D'):
-    """Randomly adjust brightness between a range.
+def brightness(image, brightness_factor=(0,0), mode='2D', min_max_vals=(0.,1.)):
+    """
+    Randomly adjust brightness between a range.
 
-       Parameters
-       ----------
-       image : 3D Numpy array
-           Image to transform. E.g. ``(y, x, channels)``.
+    Parameters
+    ----------
+    image : 3D Numpy array
+        Image to transform. E.g. ``(y, x, channels)``.
 
-       brightness_factor : tuple of 2 floats, optional
-           Range of brightness' intensity. E.g. ``(0.1, 0.3)``.
+    brightness_factor : tuple of 2 floats, optional
+        Range of brightness' intensity. E.g. ``(0.1, 0.3)``.
 
-       mode : str, optional
-           One of ``2D`` or ``3D``.
+    mode : str, optional
+        One of ``2D`` or ``3D``.
 
-       Returns
-       -------
-       image : 3D Numpy array
-           Transformed image. E.g. ``(y, x, channels)``.
+    min_max_vals : tuple of two floats, optional
+        To clip the output to the range defined. The output values will be in this range: 
+        ``min_max_vals[0] <= output <= min_max_vals[1]``. 
 
-       Examples
-       --------
+    Returns
+    -------
+    image : 3D Numpy array
+        Transformed image. E.g. ``(y, x, channels)``.
 
-       Calling this function with ``brightness_factor=(0.1,0.3)``, ``mode='mix'``, ``invert=False`` and ``invert_p=0``
-       may result in:
+    Examples
+    --------
 
-       +---------------------------------------------+---------------------------------------------+
-       | .. figure:: ../../../img/orig_bright.png    | .. figure:: ../../../img/bright.png         |
-       |   :width: 80%                               |   :width: 80%                               |
-       |   :align: center                            |   :align: center                            |
-       |                                             |                                             |
-       |   Input image                               |   Augmented image                           |
-       +---------------------------------------------+---------------------------------------------+
-       | .. figure:: ../../../img/orig_bright2.png   | .. figure:: ../../../img/bright2.png        |
-       |   :width: 80%                               |   :width: 80%                               |
-       |   :align: center                            |   :align: center                            |
-       |                                             |                                             |
-       |   Input image                               |   Augmented image                           |
-       +---------------------------------------------+---------------------------------------------+
+    Calling this function with ``brightness_factor=(0.1,0.3)``, ``mode='mix'``, ``invert=False`` and ``invert_p=0``
+    may result in:
 
-       The grid is painted for visualization purposes.
+    +---------------------------------------------+---------------------------------------------+
+    | .. figure:: ../../../img/orig_bright.png    | .. figure:: ../../../img/bright.png         |
+    |   :width: 80%                               |   :width: 80%                               |
+    |   :align: center                            |   :align: center                            |
+    |                                             |                                             |
+    |   Input image                               |   Augmented image                           |
+    +---------------------------------------------+---------------------------------------------+
+    | .. figure:: ../../../img/orig_bright2.png   | .. figure:: ../../../img/bright2.png        |
+    |   :width: 80%                               |   :width: 80%                               |
+    |   :align: center                            |   :align: center                            |
+    |                                             |                                             |
+    |   Input image                               |   Augmented image                           |
+    +---------------------------------------------+---------------------------------------------+
+
+    The grid is painted for visualization purposes.
     """
 
     if brightness_factor[0] == 0 and brightness_factor[1] == 0: return image
@@ -536,54 +553,59 @@ def brightness(image, brightness_factor=(0,0),  mode='2D'):
         b_factor = np.random.uniform(brightness_factor[0], brightness_factor[1], image.shape[-1]*3)
         for z in range(image.shape[2]):
             image[:, :, z] += b_factor[z*3]
-            image[:, :, z] = np.clip(image[:, :, z], 0, 1)
+            image[:, :, z] = np.clip(image[:, :, z], min_max_vals[0], min_max_vals[1])
     else:
         b_factor = np.random.uniform(brightness_factor[0], brightness_factor[1])
         image += b_factor
-        image = np.clip(image, 0, 1)
+        image = np.clip(image, min_max_vals[0], min_max_vals[1])
 
     return image
 
-def contrast(image, contrast_factor=(0,0), mode='2D'):
-    """Contrast augmentation.
+def contrast(image, contrast_factor=(0,0), mode='2D', min_max_vals=(0.,1.)):
+    """
+    Contrast augmentation.
 
-       Parameters
-       ----------
-       image : 3D Numpy array
-           Image to transform. E.g. ``(y, x, channels)``.
+    Parameters
+    ----------
+    image : 3D Numpy array
+        Image to transform. E.g. ``(y, x, channels)``.
 
-       contrast_factor : tuple of 2 floats, optional
-           Range of contrast's intensity. E.g. ``(0.1, 0.3)``.
+    contrast_factor : tuple of 2 floats, optional
+        Range of contrast's intensity. E.g. ``(0.1, 0.3)``.
 
-       mode : str, optional
-           One of ``2D`` or ``3D``.
+    mode : str, optional
+        One of ``2D`` or ``3D``.
 
-       Returns
-       -------
-       image : 3D Numpy array
-           Transformed image. E.g. ``(y, x, channels)``.
+    min_max_vals : tuple of two floats, optional
+        To clip the output to the range defined. The output values will be in this range: 
+        ``min_max_vals[0] <= output <= min_max_vals[1]``. 
 
-       Examples
-       --------
+    Returns
+    -------
+    image : 3D Numpy array
+        Transformed image. E.g. ``(y, x, channels)``.
 
-       Calling this function with ``contrast_factor=(0.1,0.3)``, ``mode='mix'``, ``invert=False`` and ``invert_p=0``
-       may result in:
+    Examples
+    --------
 
-       +---------------------------------------------+---------------------------------------------+
-       | .. figure:: ../../../img/orig_contrast.png  | .. figure:: ../../../img/contrast.png       |
-       |   :width: 80%                               |   :width: 80%                               |
-       |   :align: center                            |   :align: center                            |
-       |                                             |                                             |
-       |   Input image                               |   Augmented image                           |
-       +---------------------------------------------+---------------------------------------------+
-       | .. figure:: ../../../img/orig_contrast2.png | .. figure:: ../../../img/contrast2.png      |
-       |   :width: 80%                               |   :width: 80%                               |
-       |   :align: center                            |   :align: center                            |
-       |                                             |                                             |
-       |   Input image                               |   Augmented image                           |
-       +---------------------------------------------+---------------------------------------------+
+    Calling this function with ``contrast_factor=(0.1,0.3)``, ``mode='mix'``, ``invert=False`` and ``invert_p=0``
+    may result in:
 
-       The grid is painted for visualization purposes.
+    +---------------------------------------------+---------------------------------------------+
+    | .. figure:: ../../../img/orig_contrast.png  | .. figure:: ../../../img/contrast.png       |
+    |   :width: 80%                               |   :width: 80%                               |
+    |   :align: center                            |   :align: center                            |
+    |                                             |                                             |
+    |   Input image                               |   Augmented image                           |
+    +---------------------------------------------+---------------------------------------------+
+    | .. figure:: ../../../img/orig_contrast2.png | .. figure:: ../../../img/contrast2.png      |
+    |   :width: 80%                               |   :width: 80%                               |
+    |   :align: center                            |   :align: center                            |
+    |                                             |                                             |
+    |   Input image                               |   Augmented image                           |
+    +---------------------------------------------+---------------------------------------------+
+
+    The grid is painted for visualization purposes.
     """
 
     if contrast_factor[0] == 0 and contrast_factor[1] == 0: return image
@@ -595,207 +617,55 @@ def contrast(image, contrast_factor=(0,0), mode='2D'):
         c_factor = np.random.uniform(contrast_factor[0], contrast_factor[1], image.shape[-1]*3)
         for z in range(image.shape[2]):
             image[:, :, z] *= 1 + c_factor[z*3]
-            image[:, :, z] = np.clip(image[:, :, z], 0, 1)
+            image[:, :, z] = np.clip(image[:, :, z], min_max_vals[0], min_max_vals[1])
     else:
         c_factor = np.random.uniform(contrast_factor[0], contrast_factor[1])
         image *= 1 + c_factor
-        image = np.clip(image, 0, 1)
-
-    return image
-
-
-def brightness_em(image, brightness_factor=(0,0),  mode='2D', invert=False, invert_p=0):
-    """Randomly adjust brightness, randomly invert the color space and apply gamma correction. 
-
-       Implementation based on `PyTorch Connectomics' grayscale.py
-       <https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/data/augmentation/grayscale.py>`_.
-
-       Parameters
-       ----------
-       image : 3D Numpy array
-           Image to transform. E.g. ``(y, x, channels)``.
-
-       brightness_factor : tuple of 2 floats, optional
-           Range of brightness' intensity. E.g. ``(0.1, 0.3)``.
-
-       mode : str, optional
-           One of ``2D`` or ``3D``.
-
-       invert : bool, optional
-           Whether to invert the images.
-
-       invert_p : float, optional
-           Probability of inverting the images.
-
-       Returns
-       -------
-       image : 3D Numpy array
-           Transformed image. E.g. ``(y, x, channels)``.
-
-       Examples
-       --------
-
-       Calling this function with ``brightness_factor=(0.1,0.3)``, ``mode='mix'``, ``invert=False`` and ``invert_p=0``
-       may result in:
-
-       +---------------------------------------------+---------------------------------------------+
-       | .. figure:: ../../../img/orig_bright.png    | .. figure:: ../../../img/bright.png         |
-       |   :width: 80%                               |   :width: 80%                               |
-       |   :align: center                            |   :align: center                            |
-       |                                             |                                             |
-       |   Input image                               |   Augmented image                           |
-       +---------------------------------------------+---------------------------------------------+
-       | .. figure:: ../../../img/orig_bright2.png   | .. figure:: ../../../img/bright2.png        |
-       |   :width: 80%                               |   :width: 80%                               |
-       |   :align: center                            |   :align: center                            |
-       |                                             |                                             |
-       |   Input image                               |   Augmented image                           |
-       +---------------------------------------------+---------------------------------------------+
-
-       The grid is painted for visualization purposes.
-    """
-
-    if brightness_factor[0] == 0 and brightness_factor[1] == 0: return image
-
-    # Force mode if 2D
-    if image.ndim == 3: mode == '3D'
-
-    b_factor = random.uniform(brightness_factor[0], brightness_factor[1])
-    if mode == '2D':
-        ran = np.random.rand(image.shape[-1]*3)
-        for z in range(image.shape[2]):
-            img = image[:, :, z]
-            image[:, :, z] += (ran[z*3+1] - 0.5)*b_factor
-            image[:, :, z] = np.clip(image[:, :, z], 0, 1)
-            image[:, :, z] **= 2.0**(ran[z*3+2]*2 - 1)
-    else:
-        ran = np.random.rand(3)
-        image += (ran[1] - 0.5)*b_factor
-        image = np.clip(image, 0, 1)
-        image **= 2.0**(ran[2]*2 - 1)
-
-    if invert and random.uniform(0, 1) < invert_p:
-        image = 1.0-image
-        image = np.clip(image, 0, 1)
-
-    return image
-
-
-def contrast_em(image, contrast_factor=(0,0), mode='2D', invert=False, invert_p=0):
-    """Contrast augmentation. Randomly invert the color space and apply gamma correction. 
-
-       Implementation based on `PyTorch Connectomics' grayscale.py
-       <https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/data/augmentation/grayscale.py>`_.
-
-       Parameters
-       ----------
-       image : 3D Numpy array
-           Image to transform. E.g. ``(y, x, channels)``.
-
-       contrast_factor : tuple of 2 floats, optional
-           Range of contrast's intensity. E.g. ``(0.1, 0.3)``.
-
-       mode : str, optional
-           One of ``2D`` or ``3D``.
-
-       invert : bool, optional
-           Whether to invert the image.
-
-       invert_p : float, optional
-           Probability of inverting the image.
-
-       Returns
-       -------
-       image : 3D Numpy array
-           Transformed image. E.g. ``(y, x, channels)``.
-
-       Examples
-       --------
-
-       Calling this function with ``contrast_factor=(0.1,0.3)``, ``mode='mix'``, ``invert=False`` and ``invert_p=0``
-       may result in:
-
-       +---------------------------------------------+---------------------------------------------+
-       | .. figure:: ../../../img/orig_contrast.png  | .. figure:: ../../../img/contrast.png       |
-       |   :width: 80%                               |   :width: 80%                               |
-       |   :align: center                            |   :align: center                            |
-       |                                             |                                             |
-       |   Input image                               |   Augmented image                           |
-       +---------------------------------------------+---------------------------------------------+
-       | .. figure:: ../../../img/orig_contrast2.png | .. figure:: ../../../img/contrast2.png      |
-       |   :width: 80%                               |   :width: 80%                               |
-       |   :align: center                            |   :align: center                            |
-       |                                             |                                             |
-       |   Input image                               |   Augmented image                           |
-       +---------------------------------------------+---------------------------------------------+
-
-       The grid is painted for visualization purposes.
-    """
-    if contrast_factor[0] == 0 and contrast_factor[1] == 0: return image
-
-    # Force mode if 2D
-    if image.ndim == 3: mode == '3D'
-
-    c_factor = random.uniform(contrast_factor[0], contrast_factor[1])
-    if mode == '2D':
-        ran = np.random.rand(image.shape[-1]*3)
-        for z in range(image.shape[2]):
-            img = image[:, :, z]
-            image[:, :, z] *= 1 + (ran[z*3] - 0.5)*c_factor
-            image[:, :, z] = np.clip(image[:, :, z], 0, 1)
-            image[:, :, z] **= 2.0**(ran[z*3+2]*2 - 1)
-    else:
-        ran = np.random.rand(3)
-        image *= 1 + (ran[0] - 0.5)*c_factor
-        image = np.clip(image, 0, 1)
-        image **= 2.0**(ran[2]*2 - 1)
-
-    if invert and random.uniform(0, 1) < invert_p:
-        image = 1.0-image
-        image = np.clip(image, 0, 1)
+        image = np.clip(image, min_max_vals[0], min_max_vals[1])
 
     return image
 
 
 def missing_sections(img, iterations=(30,40)):
-    """Augment the image by creating a black line in a random position.
+    """
+    Augment the image by creating a black line in a random position.
 
-       Implementation based on `PyTorch Connectomics' missing_parts.py
-       <https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/data/augmentation/missing_parts.py>`_.
+    Implementation based on `PyTorch Connectomics' missing_parts.py
+    <https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/data/augmentation/missing_parts.py>`_.
 
-       Parameters
-       ----------
-       img : 3D Numpy array
-           Image to transform. E.g. ``(y, x, channels)``.
+    Parameters
+    ----------
+    img : 3D Numpy array
+        Image to transform. E.g. ``(y, x, channels)``.
 
-       iterations : tuple of 2 ints, optional
-           Iterations to dilate the missing line with. E.g. ``(30, 40)``.
+    iterations : tuple of 2 ints, optional
+        Iterations to dilate the missing line with. E.g. ``(30, 40)``.
 
-       Returns
-       -------
-       out : 3D Numpy array
-           Transformed image. E.g. ``(y, x, channels)``.
+    Returns
+    -------
+    out : 3D Numpy array
+        Transformed image. E.g. ``(y, x, channels)``.
 
-       Examples
-       --------
+    Examples
+    --------
 
-       Calling this function with ``iterations=(30,40)`` may result in:
+    Calling this function with ``iterations=(30,40)`` may result in:
 
-       +---------------------------------------------+---------------------------------------------+
-       | .. figure:: ../../../img/orig_missing.png   | .. figure:: ../../../img/missing.png        |
-       |   :width: 80%                               |   :width: 80%                               |
-       |   :align: center                            |   :align: center                            |
-       |                                             |                                             |
-       |   Input image                               |   Augmented image                           |
-       +---------------------------------------------+---------------------------------------------+
-       | .. figure:: ../../../img/orig_missing2.png  | .. figure:: ../../../img/missing2.png       |
-       |   :width: 80%                               |   :width: 80%                               |
-       |   :align: center                            |   :align: center                            |
-       |                                             |                                             |
-       |   Input image                               |   Augmented image                           |
-       +---------------------------------------------+---------------------------------------------+
+    +---------------------------------------------+---------------------------------------------+
+    | .. figure:: ../../../img/orig_missing.png   | .. figure:: ../../../img/missing.png        |
+    |   :width: 80%                               |   :width: 80%                               |
+    |   :align: center                            |   :align: center                            |
+    |                                             |                                             |
+    |   Input image                               |   Augmented image                           |
+    +---------------------------------------------+---------------------------------------------+
+    | .. figure:: ../../../img/orig_missing2.png  | .. figure:: ../../../img/missing2.png       |
+    |   :width: 80%                               |   :width: 80%                               |
+    |   :align: center                            |   :align: center                            |
+    |                                             |                                             |
+    |   Input image                               |   Augmented image                           |
+    +---------------------------------------------+---------------------------------------------+
 
-       The grid is painted for visualization purposes.
+    The grid is painted for visualization purposes.
     """
 
     it = np.random.randint(iterations[0], iterations[1])
@@ -861,30 +731,31 @@ def _prepare_deform_slice(slice_shape, iterations):
 
 
 def shuffle_channels(img):
-    """Augment the image by shuffling its channels.
+    """
+    Augment the image by shuffling its channels.
 
-       Parameters
-       ----------
-       img : 3D/4D Numpy array
-           Image to transform. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
+    Parameters
+    ----------
+    img : 3D/4D Numpy array
+        Image to transform. E.g. ``(y, x, channels)`` or ``(y, x, z, channels)``.
 
-       Returns
-       -------
-       out : 3D/4D Numpy array
-           Transformed image. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
+    Returns
+    -------
+    out : 3D/4D Numpy array
+        Transformed image. E.g. ``(y, x, channels)`` or ``(y, x, z, channels)``.
 
-       Examples
-       --------
+    Examples
+    --------
 
-       +-----------------------------------------------+-----------------------------------------------+
-       | .. figure:: ../../../img/orig_chshuffle.png   | .. figure:: ../../../img/chshuffle.png        |
-       |   :width: 80%                                 |   :width: 80%                                 |
-       |   :align: center                              |   :align: center                              |
-       |                                               |                                               |
-       |   Input image                                 |   Augmented image                             |
-       +-----------------------------------------------+-----------------------------------------------+
+    +-----------------------------------------------+-----------------------------------------------+
+    | .. figure:: ../../../img/orig_chshuffle.png   | .. figure:: ../../../img/chshuffle.png        |
+    |   :width: 80%                                 |   :width: 80%                                 |
+    |   :align: center                              |   :align: center                              |
+    |                                               |                                               |
+    |   Input image                                 |   Augmented image                             |
+    +-----------------------------------------------+-----------------------------------------------+
 
-       The grid is painted for visualization purposes.
+    The grid is painted for visualization purposes.
     """
 
     if img.ndim != 3 and img.ndim != 4:
@@ -895,30 +766,31 @@ def shuffle_channels(img):
 
 
 def grayscale(img):
-    """Augment the image by converting it into grayscale.
+    """
+    Augment the image by converting it into grayscale.
 
-       Parameters
-       ----------
-       img : 3D/4D Numpy array
-           Image to transform. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
+    Parameters
+    ----------
+    img : 3D/4D Numpy array
+        Image to transform. E.g. ``(y, x, channels)`` or ``(y, x, z, channels)``.
 
-       Returns
-       -------
-       out : 3D/4D Numpy array
-           Transformed image. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
+    Returns
+    -------
+    out : 3D/4D Numpy array
+        Transformed image. E.g. ``(y, x, channels)`` or ``(y, x, z, channels)``.
 
-       Examples
-       --------
+    Examples
+    --------
 
-       +-----------------------------------------------+-----------------------------------------------+
-       | .. figure:: ../../../img/orig_grayscale.png   | .. figure:: ../../../img/grayscale.png        |
-       |   :width: 80%                                 |   :width: 80%                                 |
-       |   :align: center                              |   :align: center                              |
-       |                                               |                                               |
-       |   Input image                                 |   Augmented image                             |
-       +-----------------------------------------------+-----------------------------------------------+
+    +-----------------------------------------------+-----------------------------------------------+
+    | .. figure:: ../../../img/orig_grayscale.png   | .. figure:: ../../../img/grayscale.png        |
+    |   :width: 80%                                 |   :width: 80%                                 |
+    |   :align: center                              |   :align: center                              |
+    |                                               |                                               |
+    |   Input image                                 |   Augmented image                             |
+    +-----------------------------------------------+-----------------------------------------------+
 
-       The grid is painted for visualization purposes.
+    The grid is painted for visualization purposes.
     """
 
     if img.shape[-1] != 3:
@@ -928,52 +800,53 @@ def grayscale(img):
 
 
 def GridMask(img, channels, z_size, ratio=0.6, d_range=(30,60), rotate=1, invert=False):
-    """GridMask data augmentation presented in `GridMask Data Augmentation <https://arxiv.org/abs/2001.04086v1>`_.
-       Code adapted from `<https://github.com/dvlab-research/GridMask/blob/master/imagenet_grid/utils/grid.py>`_.
+    """
+    GridMask data augmentation presented in `GridMask Data Augmentation <https://arxiv.org/abs/2001.04086v1>`_.
+    Code adapted from `<https://github.com/dvlab-research/GridMask/blob/master/imagenet_grid/utils/grid.py>`_.
 
-       Parameters
-       ----------
-       img : 3D Numpy array
-           Image to transform. E.g. ``(y, x, channels)``.
+    Parameters
+    ----------
+    img : 3D Numpy array
+        Image to transform. E.g. ``(y, x, channels)``.
 
-       channels : int
-           Size of channel dimension. Used for 3D images as the channels have been merged with the z axis.
+    channels : int
+        Size of channel dimension. Used for 3D images as the channels have been merged with the z axis.
 
-       z_size : int
-           Size of z dimension. Used for 3D images as the z axis has been merged with the channels. Set to -1 to when
-           do not want to be applied.
+    z_size : int
+        Size of z dimension. Used for 3D images as the z axis has been merged with the channels. Set to -1 to when
+        do not want to be applied.
 
-       ratio : tuple of floats, optional
-           Range to choose the size of the areas to create.
+    ratio : tuple of floats, optional
+        Range to choose the size of the areas to create.
 
-       d_range : tuple of ints, optional
-           Range to choose the ``d`` value in the original paper.
+    d_range : tuple of ints, optional
+        Range to choose the ``d`` value in the original paper.
 
-       rotate : float, optional
-           Rotation of the mask in GridMask. Needs to be between ``[0,1]`` where 1 is 360 degrees.
+    rotate : float, optional
+        Rotation of the mask in GridMask. Needs to be between ``[0,1]`` where 1 is 360 degrees.
 
-       invert : bool, optional
-           Whether to invert the mask.
+    invert : bool, optional
+        Whether to invert the mask.
 
-       Returns
-       -------
-       out : 3D Numpy array
-           Transformed image. E.g. ``(y, x, channels)``.
+    Returns
+    -------
+    out : 3D Numpy array
+        Transformed image. E.g. ``(y, x, channels)``.
 
-       Examples
-       --------
+    Examples
+    --------
 
-       Calling this function with the default settings may result in:
+    Calling this function with the default settings may result in:
 
-       +----------------------------------------------+----------------------------------------------+
-       | .. figure:: ../../../img/orig_GridMask.png   | .. figure:: ../../../img/GridMask.png        |
-       |   :width: 80%                                |   :width: 80%                                |
-       |   :align: center                             |   :align: center                             |
-       |                                              |                                              |
-       |   Input image                                |   Augmented image                            |
-       +----------------------------------------------+----------------------------------------------+
+    +----------------------------------------------+----------------------------------------------+
+    | .. figure:: ../../../img/orig_GridMask.png   | .. figure:: ../../../img/GridMask.png        |
+    |   :width: 80%                                |   :width: 80%                                |
+    |   :align: center                             |   :align: center                             |
+    |                                              |                                              |
+    |   Input image                                |   Augmented image                            |
+    +----------------------------------------------+----------------------------------------------+
 
-       The grid is painted for visualization purposes.
+    The grid is painted for visualization purposes.
     """
 
     h,w,c = img.shape
@@ -1021,56 +894,57 @@ def GridMask(img, channels, z_size, ratio=0.6, d_range=(30,60), rotate=1, invert
 
 def random_crop_pair(image, mask, random_crop_size, val=False, draw_prob_map_points=False, img_prob=None, weight_map=None,
         scale=(1,1)):
-    """Random crop for an image and its mask. No crop is done in those dimensions that ``random_crop_size`` is greater than
-       the input image shape in those dimensions. For instance, if an input image is ``400x150`` and ``random_crop_size``
-       is ``224x224`` the resulting image will be ``224x150``.
+    """
+    Random crop for an image and its mask. No crop is done in those dimensions that ``random_crop_size`` is greater than
+    the input image shape in those dimensions. For instance, if an input image is ``400x150`` and ``random_crop_size``
+    is ``224x224`` the resulting image will be ``224x150``.
 
-       Parameters
-       ----------
-       image : Numpy 3D array
-           Image. E.g. ``(y, x, channels)``.
+    Parameters
+    ----------
+    image : Numpy 3D array
+        Image. E.g. ``(y, x, channels)``.
 
-       mask : Numpy 3D array
-           Image mask. E.g. ``(y, x, channels)``.
+    mask : Numpy 3D array
+        Image mask. E.g. ``(y, x, channels)``.
 
-       random_crop_size : 2 int tuple
-           Size of the crop. E.g. ``(height, width)``.
+    random_crop_size : 2 int tuple
+        Size of the crop. E.g. ``(height, width)``.
 
-       val : bool, optional
-           If the image provided is going to be used in the validation data. This forces to crop from the origin,
-           e. g. ``(0, 0)`` point.
+    val : bool, optional
+        If the image provided is going to be used in the validation data. This forces to crop from the origin,
+        e. g. ``(0, 0)`` point.
 
-       draw_prob_map_points : bool, optional
-           To return the pixel chosen to be the center of the crop.
+    draw_prob_map_points : bool, optional
+        To return the pixel chosen to be the center of the crop.
 
-       img_prob : Numpy 3D array, optional
-           Probability of each pixel to be chosen as the center of the crop. E. .g. ``(y, x, channels)``.
+    img_prob : Numpy 3D array, optional
+        Probability of each pixel to be chosen as the center of the crop. E. .g. ``(y, x, channels)``.
 
-       weight_map : bool, optional
-           Weight map of the given image. E.g. ``(y, x, channels)``.
+    weight_map : bool, optional
+        Weight map of the given image. E.g. ``(y, x, channels)``.
 
-       scale : tuple of 2 ints, optional
-           Scale factor the second image given. E.g. ``(2,2)``.
+    scale : tuple of 2 ints, optional
+        Scale factor the second image given. E.g. ``(2,2)``.
 
-       Returns
-       -------
-       img : 2D Numpy array
-           Crop of the given image. E.g. ``(y, x)``.
+    Returns
+    -------
+    img : 2D Numpy array
+        Crop of the given image. E.g. ``(y, x)``.
 
-       weight_map : 2D Numpy array, optional
-           Crop of the given image's weigth map. E.g. ``(y, x)``.
+    weight_map : 2D Numpy array, optional
+        Crop of the given image's weigth map. E.g. ``(y, x)``.
 
-       ox : int, optional
-           X coordinate in the complete image of the chose central pixel to make the crop.
+    ox : int, optional
+        X coordinate in the complete image of the chose central pixel to make the crop.
 
-       oy : int, optional
-           Y coordinate in the complete image of the chose central pixel to make the crop.
+    oy : int, optional
+        Y coordinate in the complete image of the chose central pixel to make the crop.
 
-       x : int, optional
-           X coordinate in the complete image where the crop starts.
+    x : int, optional
+        X coordinate in the complete image where the crop starts.
 
-       y : int, optional
-           Y coordinate in the complete image where the crop starts.
+    y : int, optional
+        Y coordinate in the complete image where the crop starts.
     """
 
     if weight_map is not None:
@@ -1136,65 +1010,66 @@ def random_crop_pair(image, mask, random_crop_size, val=False, draw_prob_map_poi
 
 def random_3D_crop_pair(image, mask, random_crop_size, val=False, img_prob=None, weight_map=None, draw_prob_map_points=False,
         scale=(1,1,1)):
-    """Extracts a random 3D patch from the given image and mask. No crop is done in those dimensions that ``random_crop_size`` is 
-       greater than the input image shape in those dimensions. For instance, if an input image is ``10x400x150`` and ``random_crop_size``
-       is ``10x224x224`` the resulting image will be ``10x224x150``.
+    """
+    Extracts a random 3D patch from the given image and mask. No crop is done in those dimensions that ``random_crop_size`` is 
+    greater than the input image shape in those dimensions. For instance, if an input image is ``10x400x150`` and ``random_crop_size``
+    is ``10x224x224`` the resulting image will be ``10x224x150``.
 
-       Parameters
-       ----------
-       image : 4D Numpy array
-           Data to extract the patch from. E.g. ``(z, y, x, channels)``.
+    Parameters
+    ----------
+    image : 4D Numpy array
+        Data to extract the patch from. E.g. ``(z, y, x, channels)``.
 
-       mask : 4D Numpy array
-           Data mask to extract the patch from. E.g. ``(z, y, x, channels)``.
+    mask : 4D Numpy array
+        Data mask to extract the patch from. E.g. ``(z, y, x, channels)``.
 
-       random_crop_size : 3D int tuple
-           Shape of the patches to create. E.g. ``(z, y, x)``.
+    random_crop_size : 3D int tuple
+        Shape of the patches to create. E.g. ``(z, y, x)``.
 
-       val : bool, optional
-           If the image provided is going to be used in the validation data. This forces to crop from the origin, e.g.
-           ``(0, 0)`` point.
+    val : bool, optional
+        If the image provided is going to be used in the validation data. This forces to crop from the origin, e.g.
+        ``(0, 0)`` point.
 
-       img_prob : Numpy 4D array, optional
-           Probability of each pixel to be chosen as the center of the crop. E. g. ``(z, y, x, channels)``.
+    img_prob : Numpy 4D array, optional
+        Probability of each pixel to be chosen as the center of the crop. E. g. ``(z, y, x, channels)``.
 
-       weight_map : bool, optional
-           Weight map of the given image. E.g. ``(y, x, channels)``.
+    weight_map : bool, optional
+        Weight map of the given image. E.g. ``(y, x, channels)``.
 
-       draw_prob_map_points : bool, optional
-           To return the voxel chosen to be the center of the crop.
+    draw_prob_map_points : bool, optional
+        To return the voxel chosen to be the center of the crop.
 
-       scale : tuple of 3 ints, optional
-           Scale factor the second image given. E.g. ``(2,4,4)``.
+    scale : tuple of 3 ints, optional
+        Scale factor the second image given. E.g. ``(2,4,4)``.
 
-       Returns
-       -------
-       img : 4D Numpy array
-           Crop of the given image. E.g. ``(z, y, x, channels)``.
+    Returns
+    -------
+    img : 4D Numpy array
+        Crop of the given image. E.g. ``(z, y, x, channels)``.
 
-       weight_map : 4D Numpy array, optional
-           Crop of the given image's weigth map. E.g. ``(z, y, x, channels)``.
-    
-       oz : int, optional
-           Z coordinate in the complete image of the chose central pixel to
-           make the crop.
+    weight_map : 4D Numpy array, optional
+        Crop of the given image's weigth map. E.g. ``(z, y, x, channels)``.
 
-       oy : int, optional
-           Y coordinate in the complete image of the chose central pixel to
-           make the crop.
+    oz : int, optional
+        Z coordinate in the complete image of the chose central pixel to
+        make the crop.
 
-       ox : int, optional
-           X coordinate in the complete image of the chose central pixel to
-           make the crop.
+    oy : int, optional
+        Y coordinate in the complete image of the chose central pixel to
+        make the crop.
 
-       z : int, optional
-           Z coordinate in the complete image where the crop starts.
+    ox : int, optional
+        X coordinate in the complete image of the chose central pixel to
+        make the crop.
 
-       y : int, optional
-           Y coordinate in the complete image where the crop starts.
+    z : int, optional
+        Z coordinate in the complete image where the crop starts.
 
-       x : int, optional
-           X coordinate in the complete image where the crop starts.
+    y : int, optional
+        Y coordinate in the complete image where the crop starts.
+
+    x : int, optional
+        X coordinate in the complete image where the crop starts.
     """
 
     if weight_map is not None:
@@ -1273,47 +1148,48 @@ def random_3D_crop_pair(image, mask, random_crop_size, val=False, img_prob=None,
 
 
 def random_crop_single(image, random_crop_size, val=False, draw_prob_map_points=False, weight_map=None):
-    """Random crop for a single image. No crop is done in those dimensions that ``random_crop_size`` is greater than
-       the input image shape in those dimensions. For instance, if an input image is ``400x150`` and ``random_crop_size``
-       is ``224x224`` the resulting image will be ``224x150``.
+    """
+    Random crop for a single image. No crop is done in those dimensions that ``random_crop_size`` is greater than
+    the input image shape in those dimensions. For instance, if an input image is ``400x150`` and ``random_crop_size``
+    is ``224x224`` the resulting image will be ``224x150``.
 
-       Parameters
-       ----------
-       image : Numpy 3D array
-           Image. E.g. ``(y, x, channels)``.
+    Parameters
+    ----------
+    image : Numpy 3D array
+        Image. E.g. ``(y, x, channels)``.
 
-       random_crop_size : 2 int tuple
-           Size of the crop. E.g. ``(y, x)``.
+    random_crop_size : 2 int tuple
+        Size of the crop. E.g. ``(y, x)``.
 
-       val : bool, optional
-           If the image provided is going to be used in the validation data. This forces to crop from the origin,
-           e. g. ``(0, 0)`` point.
+    val : bool, optional
+        If the image provided is going to be used in the validation data. This forces to crop from the origin,
+        e. g. ``(0, 0)`` point.
 
-       draw_prob_map_points : bool, optional
-           To return the pixel chosen to be the center of the crop.
+    draw_prob_map_points : bool, optional
+        To return the pixel chosen to be the center of the crop.
 
-       weight_map : bool, optional
-           Weight map of the given image. E.g. ``(y, x, channels)``.
+    weight_map : bool, optional
+        Weight map of the given image. E.g. ``(y, x, channels)``.
 
-       Returns
-       -------
-       img : 2D Numpy array
-           Crop of the given image. E.g. ``(y, x)``.
+    Returns
+    -------
+    img : 2D Numpy array
+        Crop of the given image. E.g. ``(y, x)``.
 
-       weight_map : 2D Numpy array, optional
-           Crop of the given image's weigth map. E.g. ``(y, x)``.
+    weight_map : 2D Numpy array, optional
+        Crop of the given image's weigth map. E.g. ``(y, x)``.
 
-       oy : int, optional
-           Y coordinate in the complete image of the chose central pixel to make the crop.
+    oy : int, optional
+        Y coordinate in the complete image of the chose central pixel to make the crop.
 
-       ox : int, optional
-           X coordinate in the complete image of the chose central pixel to make the crop.
+    ox : int, optional
+        X coordinate in the complete image of the chose central pixel to make the crop.
 
-       y : int, optional
-           Y coordinate in the complete image where the crop starts.
+    y : int, optional
+        Y coordinate in the complete image where the crop starts.
 
-       y : int, optional
-           X coordinate in the complete image where the crop starts.
+    y : int, optional
+        X coordinate in the complete image where the crop starts.
     """
 
     if weight_map is not None:
@@ -1340,53 +1216,54 @@ def random_crop_single(image, random_crop_size, val=False, draw_prob_map_points=
 
 
 def random_3D_crop_single(image, random_crop_size, val=False, draw_prob_map_points=False, weight_map=None):
-    """Random crop for a single image. No crop is done in those dimensions that ``random_crop_size`` is greater than
-       the input image shape in those dimensions. For instance, if an input image is ``50x400x150`` and ``random_crop_size``
-       is ``30x224x224`` the resulting image will be ``30x224x150``.
+    """
+    Random crop for a single image. No crop is done in those dimensions that ``random_crop_size`` is greater than
+    the input image shape in those dimensions. For instance, if an input image is ``50x400x150`` and ``random_crop_size``
+    is ``30x224x224`` the resulting image will be ``30x224x150``.
 
-       Parameters
-       ----------
-       image : Numpy 3D array
-           Image. E.g. ``(z, y, x, channels)``.
+    Parameters
+    ----------
+    image : Numpy 3D array
+        Image. E.g. ``(z, y, x, channels)``.
 
-       random_crop_size : 2 int tuple
-           Size of the crop. E.g. ``(z, y, x)``.
+    random_crop_size : 2 int tuple
+        Size of the crop. E.g. ``(z, y, x)``.
 
-       val : bool, optional
-           If the image provided is going to be used in the validation data. This forces to crop from the origin,
-           e. g. ``(0, 0)`` point.
+    val : bool, optional
+        If the image provided is going to be used in the validation data. This forces to crop from the origin,
+        e. g. ``(0, 0)`` point.
 
-       draw_prob_map_points : bool, optional
-           To return the pixel chosen to be the center of the crop.
+    draw_prob_map_points : bool, optional
+        To return the pixel chosen to be the center of the crop.
 
-       weight_map : bool, optional
-           Weight map of the given image. E.g. ``(z, y, x, channels)``.
+    weight_map : bool, optional
+        Weight map of the given image. E.g. ``(z, y, x, channels)``.
 
-       Returns
-       -------
-       img : 2D Numpy array
-           Crop of the given image. E.g. ``(z, y, x)``.
+    Returns
+    -------
+    img : 2D Numpy array
+        Crop of the given image. E.g. ``(z, y, x)``.
 
-       weight_map : 2D Numpy array, optional
-           Crop of the given image's weigth map. E.g. ``(z, y, x)``.
+    weight_map : 2D Numpy array, optional
+        Crop of the given image's weigth map. E.g. ``(z, y, x)``.
 
-       ox : int, optional
-           Z coordinate in the complete image of the chose central pixel to make the crop.
+    ox : int, optional
+        Z coordinate in the complete image of the chose central pixel to make the crop.
 
-       oy : int, optional
-           Y coordinate in the complete image of the chose central pixel to make the crop.
+    oy : int, optional
+        Y coordinate in the complete image of the chose central pixel to make the crop.
 
-       ox : int, optional
-           X coordinate in the complete image of the chose central pixel to make the crop.
+    ox : int, optional
+        X coordinate in the complete image of the chose central pixel to make the crop.
 
-       z : int, optional
-           Z coordinate in the complete image where the crop starts.
+    z : int, optional
+        Z coordinate in the complete image where the crop starts.
 
-       y : int, optional
-           Y coordinate in the complete image where the crop starts.
+    y : int, optional
+        Y coordinate in the complete image where the crop starts.
 
-       x : int, optional
-           X coordinate in the complete image where the crop starts.
+    x : int, optional
+        X coordinate in the complete image where the crop starts.
     """
 
     if weight_map is not None:
@@ -1454,20 +1331,21 @@ def random_3D_crop_single(image, random_crop_size, val=False, draw_prob_map_poin
 
 
 def center_crop_single(img, crop_shape):
-    """Extract the central patch from a single image.
+    """
+    Extract the central patch from a single image.
 
-       Parameters
-       ----------
-       img : 3D/4D array
-           Image. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
+    Parameters
+    ----------
+    img : 3D/4D array
+        Image. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
 
-       crop_shape : 2/3 int tuple
-           Size of the crop. E.g. ``(y, x)`` or ``(z, y, x)``.
+    crop_shape : 2/3 int tuple
+        Size of the crop. E.g. ``(y, x)`` or ``(z, y, x)``.
 
-       Returns
-       -------
-       img : 3D/4D Numpy array
-           Center crop of the given image. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
+    Returns
+    -------
+    img : 3D/4D Numpy array
+        Center crop of the given image. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
     """
     if img.ndim == 4:
         z,y,x,c = img.shape
@@ -1482,20 +1360,21 @@ def center_crop_single(img, crop_shape):
         return img[starty:starty+crop_shape[0], startx:startx+crop_shape[1]]
 
 def resize_img(img, shape):
-    """Resizes input image to given shape.
+    """
+    Resizes input image to given shape.
 
-       Parameters
-       ----------
-       img : 3D/4D Numpy array
-           Data to extract the patch from. E.g. ``(y, x, channels)`` for ``2D`` or  ``(z, y, x, channels)`` for ``3D``.
+    Parameters
+    ----------
+    img : 3D/4D Numpy array
+        Data to extract the patch from. E.g. ``(y, x, channels)`` for ``2D`` or  ``(z, y, x, channels)`` for ``3D``.
 
-       crop_shape : 2D/3D int tuple
-           Shape of the patches to create. E.g.  ``(y, x)`` for ``2D`` ``(z, y, x)`` for ``3D``.
+    crop_shape : 2D/3D int tuple
+        Shape of the patches to create. E.g.  ``(y, x)`` for ``2D`` ``(z, y, x)`` for ``3D``.
 
-       Returns
-       -------
-       img : 3D/4D Numpy array
-           Resized image. E.g. ``(y, x, channels)`` for ``2D`` or  ``(z, y, x, channels)`` for ``3D``.
+    Returns
+    -------
+    img : 3D/4D Numpy array
+        Resized image. E.g. ``(y, x, channels)`` for ``2D`` or  ``(z, y, x, channels)`` for ``3D``.
     """
 
     return resize(img, shape, order=1, mode='reflect', clip=True, preserve_range=True, anti_aliasing=True) 
@@ -1508,20 +1387,19 @@ def rotation(img, mask=None, heat=None, angles=[], mode="reflect", mask_type='as
     Parameters
     ----------
     img : 3D/4D Numpy array
-        Image to rotate. E.g. ``(y, x, channels)`` for ``2D`` or  ``(z, y, x, channels)`` for ``3D``.
+        Image to rotate. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
 
     mask : 3D/4D Numpy array, optional
-        Mask to rotate. E.g. ``(y, x, channels)`` for ``2D`` or  ``(z, y, x, channels)`` for ``3D``.
+        Mask to rotate. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
 
     heat : 3D/4D Numpy array, optional
-        Heatmap (float mask) to rotate. E.g. ``(y, x, channels)`` for ``2D`` or  ``(z, y, x, channels)`` for ``3D``.
+        Heatmap (float mask) to rotate. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
 
     angles : List of ints, optional
         List of angles to choose the rotation to be made. E.g. [90,180,360].
 
     mode : str, optional
-        How to fill up the new values created. Options: ``reflect``, ``grid-mirror``,
-        ``constant``, ``grid-constant``, ``nearest``, ``mirror``, ``grid-wrap``, ``wrap``.
+        How to fill up the new values created. Options: ``constant``, ``reflect``, ``wrap``, ``symmetric``.
 
     mask_type : str, optional
         How ``mask`` is going to be treated. Options: ``as_mask``, ``as_image``. With ``as_mask`` 
@@ -1530,14 +1408,14 @@ def rotation(img, mask=None, heat=None, angles=[], mode="reflect", mask_type='as
     Returns
     -------
     img : 3D/4D Numpy array
-        Rotated image. E.g. ``(y, x, channels)`` for ``2D`` or  ``(z, y, x, channels)`` for ``3D``.
+        Rotated image. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
 
     mask : 3D/4D Numpy array, optional
-        Rotated mask. E.g. ``(y, x, channels)`` for ``2D`` or  ``(z, y, x, channels)`` for ``3D``.
+        Rotated mask. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
     
     heat : 3D/4D Numpy array, optional
         Rotated heatmap. Returned if ``mask`` is provided. E.g. ``(y, x, channels)`` for ``2D`` or  
-        ``(z, y, x, channels)`` for ``3D``.
+        ``(y, x, z, channels)`` for ``3D``.
     """
 
     if len(angles) == 0:
@@ -1550,15 +1428,166 @@ def rotation(img, mask=None, heat=None, angles=[], mode="reflect", mask_type='as
     else:
         raise ValueError("Not a list/tuple provided in 'angles'")
 
-    img = rotate(img, angle=angle, mode=mode, reshape=False)
+    _mode = mode if mode != 'symmetric' else 'mirror'
+    img = rotate(img, angle=angle, mode=_mode, reshape=False)
 
     if mask is not None:
         mask_order = 0 if mask_type == 'as_mask' else 1
-        mask = rotate(mask, angle=angle, order=mask_order, mode=mode, reshape=False)
+        mask = rotate(mask, angle=angle, order=mask_order, mode=_mode, reshape=False)
     if heat is not None:
-        heat = rotate(heat, angle=angle, mode=mode, reshape=False)
+        heat = rotate(heat, angle=angle, mode=_mode, reshape=False)
     if mask is None:
         return img
     else:
         return img, mask, heat
             
+
+def zoom(img, mask=None, heat=None, zoom_range=[], zoom_in_z=False, mode="reflect", mask_type='as_mask'):
+    """
+    Apply zoom to input ``image`` and ``mask`` (if provided). 
+
+    Parameters
+    ----------
+    img : 3D/4D Numpy array
+        Image to rotate. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+
+    mask : 3D/4D Numpy array, optional
+        Mask to rotate. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+
+    heat : 3D/4D Numpy array, optional
+        Heatmap (float mask) to rotate. E.g. ``(y, x, channels)`` for ``2D`` or  
+        ``(y, x, z, channels)`` for ``3D``.
+
+    zoom_range : tuple of floats, optional
+        Defines minimum and maximum factors to scale the images. E.g. (0.8, 1.2).
+
+    zoom_in_z: bool, optional
+        Whether to apply or not zoom in Z axis. 
+
+    mode : str, optional
+        How to fill up the new values created. Options: ``constant``, ``reflect``, ``wrap``, ``symmetric``.
+
+    mask_type : str, optional
+        How ``mask`` is going to be treated. Options: ``as_mask``, ``as_image``. With ``as_mask`` 
+        the interpolation order will be 0 (nearest).
+
+    Returns
+    -------
+    img : 3D/4D Numpy array
+        Zoomed image. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+
+    mask : 3D/4D Numpy array, optional
+        Zoomed mask. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+    
+    heat : 3D/4D Numpy array, optional
+        Zoomed heatmap. Returned if ``mask`` is provided. E.g. ``(y, x, channels)`` for ``2D`` or  
+        ``(y, x, z, channels)`` for ``3D``.
+    """
+    assert isinstance(zoom_range, tuple)
+    assert len(zoom_range) == 2, "zoom_range must be a tuple with two floats"
+
+    zoom_selected = random.uniform(zoom_range[0], zoom_range[1])
+    mask_order = 0 if mask_type == 'as_mask' else 1
+    if img.ndim == 4:
+        z_zoom = zoom_selected if zoom_in_z else 1
+        img_shape = [
+            int(img.shape[0]*zoom_selected), 
+            int(img.shape[1]*zoom_selected), 
+            int(img.shape[2]*z_zoom), 
+            img.shape[3],
+        ]
+        if mask is not None:
+            mask_shape = [
+                int(mask.shape[0]*zoom_selected), 
+                int(mask.shape[1]*zoom_selected), 
+                int(mask.shape[2]*z_zoom), 
+                mask.shape[3],
+            ]
+    else:
+        img_shape = [
+            int(img.shape[0]*zoom_selected), 
+            int(img.shape[1]*zoom_selected), 
+            img.shape[2],
+        ]
+        if mask is not None:
+            mask_shape = [
+                int(mask.shape[0]*zoom_selected), 
+                int(mask.shape[1]*zoom_selected), 
+                mask.shape[2],
+            ]
+    if img_shape != img.shape:
+        img_orig_shape = img.shape
+        img = resize(img, img_shape, order=1, mode=mode, clip=True, preserve_range=True, anti_aliasing=True) 
+        if mask is not None:
+            mask_orig_shape = mask.shape
+            mask = resize(mask, mask_shape, order=mask_order, mode=mode, clip=True, preserve_range=True, 
+                anti_aliasing=True) 
+        if heat is not None:
+            heat = resize(heat, img_shape, order=1, mode=mode, clip=True, preserve_range=True, 
+                anti_aliasing=True) 
+
+        if zoom_selected >= 1:
+            img = center_crop_single(img, img_orig_shape)
+            if mask is not None:
+                mask = center_crop_single(mask, mask_orig_shape) 
+            if heat is not None:
+                heat = center_crop_single(heat, img_orig_shape) 
+        else:
+            if img.ndim == 4:
+                img_pad_tup = (
+                    ( int((img_orig_shape[0]-img_shape[0])//2), math.ceil((img_orig_shape[0]-img_shape[0])/2) ),
+                    ( int((img_orig_shape[1]-img_shape[1])//2), math.ceil((img_orig_shape[1]-img_shape[1])/2) ),
+                    ( int((img_orig_shape[2]-img_shape[2])//2), math.ceil((img_orig_shape[2]-img_shape[2])/2) ),
+                    (0,0),
+                    )
+                if mask is not None:
+                    mask_pad_tup = (
+                        ( int((mask_orig_shape[0]-mask_shape[0])//2), math.ceil((mask_orig_shape[0]-mask_shape[0])/2) ),
+                        ( int((mask_orig_shape[1]-mask_shape[1])//2), math.ceil((mask_orig_shape[1]-mask_shape[1])/2) ),
+                        ( int((mask_orig_shape[2]-mask_shape[2])//2), math.ceil((mask_orig_shape[2]-mask_shape[2])/2) ),
+                        (0,0),
+                        )
+            else:  
+                img_pad_tup = (
+                    ( int((img_orig_shape[0]-img_shape[0])//2), math.ceil((img_orig_shape[0]-img_shape[0])/2) ),
+                    ( int((img_orig_shape[1]-img_shape[1])//2), math.ceil((img_orig_shape[1]-img_shape[1])/2) ),
+                    (0,0),
+                    )
+                if mask is not None:
+                    mask_pad_tup = (
+                        ( int((mask_orig_shape[0]-mask_shape[0])//2), math.ceil((mask_orig_shape[0]-mask_shape[0])/2) ),
+                        ( int((mask_orig_shape[1]-mask_shape[1])//2), math.ceil((mask_orig_shape[1]-mask_shape[1])/2) ),
+                        (0,0),
+                        )
+
+            img = np.pad(img, img_pad_tup, mode)
+            if mask is not None:
+                mask = np.pad(mask, mask_pad_tup, mode) 
+            if heat is not None:
+                heat = np.pad(heat, img_pad_tup, mode)
+            
+    if mask is None:
+        return img
+    else:
+        return img, mask, heat
+            
+def gamma_contrast(img, gamma=(0,1)):
+    """
+    Apply gamma contrast to input ``image``. 
+
+    Parameters
+    ----------
+    img : 3D Numpy array
+        Image to transform. E.g. ``(y, x, channels)``.
+
+    gamma : tuple of 2 floats, optional
+        Range of gamma intensity. E.g. ``(0.8, 1.3)``.
+
+    Returns
+    -------
+    img : 3D Numpy array
+        Transformed image. E.g. ``(y, x, channels)``.
+    """
+    _gamma = random.uniform(gamma[0], gamma[1])
+
+    return adjust_gamma(np.clip(img,0,1), gamma=_gamma)

@@ -110,6 +110,10 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         # Workflow specific training variables
         self.mask_path = cfg.DATA.TRAIN.GT_PATH
         self.load_Y_val = True
+        if self.cfg.DATA.TEST.LOAD_GT:
+            self.test_gt_filenames = sorted(next(os.walk(self.original_test_mask_path))[2])
+            if len(self.test_gt_filenames) == 0:
+                self.test_gt_filenames = sorted(next(os.walk(self.original_test_mask_path))[1]) 
 
         # Specific instance segmentation post-processing
         if self.cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK or \
@@ -290,6 +294,12 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     _Y[i] = imread(test_file).squeeze()
             else:
                 test_file = os.path.join(self.original_test_mask_path, self.test_filenames[self.f_numbers[0]])
+                if not os.path.exists(test_file):
+                    print("WARNING: The image seems to have different name than its mask file. Using the mask file that's "
+                        "in the same spot (within the mask files list) where the image is in its own list of images. Check if it is correct!")
+                    test_file = os.path.join(self.original_test_mask_path, self.test_gt_filenames[self.f_numbers[0]])
+                print(f"Its respective image seems to be: {test_file}")
+
                 if test_file.endswith('.zarr'):
                     if self.cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA:
                         _, _Y = read_chunked_nested_data(test_file, self.cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_GT_PATH)

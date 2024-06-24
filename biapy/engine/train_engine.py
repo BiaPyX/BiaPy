@@ -61,7 +61,7 @@ def train_one_epoch(cfg, model, model_call_func, loss_function, activations, met
                 lr_scheduler.step() 
 
         if device.type != 'cpu':
-            torch.cuda.synchronize()
+            getattr(torch, device.type).synchronize()
 
         # Update loss in loggers
         metric_logger.update(loss=loss_value)

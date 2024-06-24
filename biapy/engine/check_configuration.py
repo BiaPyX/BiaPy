@@ -170,13 +170,15 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         raise ValueError("'MODEL.SOURCE' needs to be one between ['biapy', 'bmz', 'torchvision']")
 
     if cfg.MODEL.SOURCE == "bmz":
-        if cfg.TRAIN.ENABLE:
-            raise ValueError("Currently not supported to train a BMZ model")
         if cfg.MODEL.BMZ.SOURCE_MODEL_DOI == "":
             raise ValueError("'MODEL.BMZ.SOURCE_MODEL_DOI' needs to be configured when 'MODEL.SOURCE' is 'bmz'")
 
         # Check if the model exists
-        url = 'http://www.doi.org/'+cfg.MODEL.BMZ.SOURCE_MODEL_DOI
+        doi_to_find = str(cfg.MODEL.BMZ.SOURCE_MODEL_DOI).strip()
+        # In case newer version of the models are available
+        if len(doi_to_find.split("/")) > 2:
+            doi_to_find = '/'.join(doi_to_find.split("/")[:2])
+        url = 'http://www.doi.org/'+doi_to_find
         r = requests.get(url, stream=True, verify=True)
         if r.status_code >= 200 and r.status_code < 400:
             print(f'BMZ model DOI: {cfg.MODEL.BMZ.SOURCE_MODEL_DOI} found')
@@ -313,8 +315,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             raise ValueError(f"'PROBLEM.SUPER_RESOLUTION.UPSCALING' needs to be a tuple of {dim_count} integers")
         if cfg.MODEL.SOURCE == "torchvision":
             raise ValueError("'MODEL.SOURCE' as 'torchvision' is not available in super-resolution workflow")
-        if cfg.DATA.NORMALIZATION.TYPE != "div":
-            raise ValueError("'DATA.NORMALIZATION.TYPE' can only be set to 'div' in SR workflow")
+        if cfg.DATA.NORMALIZATION.TYPE not in ["div","scale_range"]:
+            raise ValueError("'DATA.NORMALIZATION.TYPE' in SR workflow needs to be one between ['div','scale_range']")
 
     #### Self-supervision ####
     elif cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
@@ -334,7 +336,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         else:
             raise ValueError("'PROBLEM.SELF_SUPERVISED.PRETEXT_TASK' needs to be among these options: ['crappify', 'masking']")
         if cfg.MODEL.SOURCE == "torchvision":
-            raise ValueError("'MODEL.SOURCE' as 'torchvision' is not available in super-resolution workflow")
+            raise ValueError("'MODEL.SOURCE' as 'torchvision' is not available in self-supervised workflow")
 
     #### Denoising ####
     elif cfg.PROBLEM.TYPE == 'DENOISING':
@@ -343,7 +345,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         if not check_value(cfg.PROBLEM.DENOISING.N2V_PERC_PIX):
             raise ValueError("PROBLEM.DENOISING.N2V_PERC_PIX not in [0, 1] range")
         if cfg.MODEL.SOURCE == "torchvision":
-            raise ValueError("'MODEL.SOURCE' as 'torchvision' is not available in super-resolution workflow")
+            raise ValueError("'MODEL.SOURCE' as 'torchvision' is not available in denoising workflow")
             
     #### Classification ####
     elif cfg.PROBLEM.TYPE == 'CLASSIFICATION':
@@ -481,10 +483,13 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             raise ValueError("'TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER' needs to be at least of length 3, e.g., 'ZYX'")
         if cfg.MODEL.N_CLASSES > 2:
             raise ValueError("Not implemented pipeline option: 'MODEL.N_CLASSES' > 2 and 'TEST.BY_CHUNKS'")
-        if cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA and (cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH == '' or \
-            cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_GT_PATH == ''):
-            raise ValueError("'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH' and 'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_GT_PATH' "
-                "need to be set when 'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA' is used.")
+        if cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA:
+            if cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH == '':
+                raise ValueError("'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH' needs to be set when "
+                    "'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA' is used.")
+            if cfg.DATA.TEST.LOAD_GT and cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_GT_PATH == '':
+                raise ValueError("'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_GT_PATH' needs to be set when "
+                    "'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA' is used.")
 
     if cfg.TRAIN.ENABLE:
         if cfg.DATA.EXTRACT_RANDOM_PATCH and cfg.DATA.PROBABILITY_MAP:
@@ -569,11 +574,16 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         raise ValueError("When PROBLEM.NDIM == {} DATA.TEST.PADDING tuple must be length {}, given {}."
                          .format(cfg.PROBLEM.NDIM, dim_count, cfg.DATA.TEST.PADDING))
     if len(cfg.DATA.PATCH_SIZE) != dim_count+1:
-        raise ValueError("When PROBLEM.NDIM == {} DATA.PATCH_SIZE tuple must be length {}, given {}."
-                         .format(cfg.PROBLEM.NDIM, dim_count+1, cfg.DATA.PATCH_SIZE))
-    assert cfg.DATA.NORMALIZATION.TYPE in ['div', 'custom'], "DATA.NORMALIZATION.TYPE not in ['div', 'custom']"
+        if cfg.MODEL.SOURCE != "bmz":
+            raise ValueError("When PROBLEM.NDIM == {} DATA.PATCH_SIZE tuple must be length {}, given {}."
+                            .format(cfg.PROBLEM.NDIM, dim_count+1, cfg.DATA.PATCH_SIZE))
+        else:
+            print("WARNING: when PROBLEM.NDIM == {} DATA.PATCH_SIZE tuple must be length {}, given {}. Not an error "
+                "because you are using a model from BioImage Model Zoo (BMZ) and the patch size will be determined by the model."
+                " However, this message is printed so you are aware of this. ")
+    assert cfg.DATA.NORMALIZATION.TYPE in ['div', 'scale_range', 'custom'], "DATA.NORMALIZATION.TYPE not in ['div', 'scale_range', 'custom']"
     assert cfg.DATA.NORMALIZATION.APPLICATION_MODE in ["image", "dataset"], "'DATA.NORMALIZATION.APPLICATION_MODE' needs to be one between ['image', 'dataset']"
-    if not cfg.DATA.TRAIN.IN_MEMORY and cfg.DATA.NORMALIZATION.APPLICATION_MODE == "dataset":
+    if cfg.TRAIN.ENABLE and not cfg.DATA.TRAIN.IN_MEMORY and cfg.DATA.NORMALIZATION.APPLICATION_MODE == "dataset":
         raise ValueError("'DATA.NORMALIZATION.APPLICATION_MODE' == 'dataset' can only be applied if 'DATA.TRAIN.IN_MEMORY' == True")            
     if cfg.DATA.NORMALIZATION.PERC_CLIP:
         if cfg.DATA.NORMALIZATION.PERC_LOWER == -1:
@@ -738,12 +748,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         if cfg.AUGMENTOR.CONTRAST:
             if cfg.AUGMENTOR.CONTRAST_MODE not in ['2D', '3D'] and cfg.PROBLEM.NDIM == "3D":
                 raise ValueError("AUGMENTOR.CONTRAST_MODE not in ['2D', '3D']")
-        if cfg.AUGMENTOR.BRIGHTNESS_EM:
-            if cfg.AUGMENTOR.BRIGHTNESS_EM_MODE not in ['2D', '3D'] and cfg.PROBLEM.NDIM == "3D":
-                raise ValueError("AUGMENTOR.BRIGHTNESS_EM_MODE not in ['2D', '3D']")
-        if cfg.AUGMENTOR.CONTRAST_EM:
-            if cfg.AUGMENTOR.CONTRAST_EM_MODE not in ['2D', '3D'] and cfg.PROBLEM.NDIM == "3D":
-                raise ValueError("AUGMENTOR.CONTRAST_EM_MODE not in ['2D', '3D']")
         if cfg.AUGMENTOR.DROPOUT:
             if not check_value(cfg.AUGMENTOR.DROP_RANGE):
                 raise ValueError("AUGMENTOR.DROP_RANGE values not in [0, 1] range")
@@ -773,7 +777,17 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 raise ValueError("cfg.AUGMENTOR.GRID_D_RANGE values not in [0, 1] range")
             if not check_value(cfg.AUGMENTOR.GRID_ROTATE):
                 raise ValueError("AUGMENTOR.GRID_ROTATE not in [0, 1] range")
-                             
+        if cfg.AUGMENTOR.ZOOM:
+            if not check_value(cfg.AUGMENTOR.ZOOM_RANGE, (0.1,10)):
+                raise ValueError("AUGMENTOR.ZOOM_RANGE values needs to be between [0.1,10]")
+            if cfg.AUGMENTOR.ZOOM_IN_Z and dim_count == 2:
+                print("WARNING: Ignoring AUGMENTOR.ZOOM_IN_Z in 2D problem")
+        assert cfg.AUGMENTOR.AFFINE_MODE in ['constant', 'reflect', 'wrap', 'symmetric'], \
+            "'AUGMENTOR.AFFINE_MODE' needs to be one between ['constant', 'reflect', 'wrap', 'symmetric']"  
+        if cfg.AUGMENTOR.GAMMA_CONTRAST and cfg.DATA.NORMALIZATION.TYPE == 'custom':
+            raise ValueError("'AUGMENTOR.GAMMA_CONTRAST' doesn't work correctly on images with negative values, which 'custom' "
+                "normalization will lead to")
+
     #### Post-processing ####
     if cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS:
         if len(cfg.DATA.TEST.RESOLUTION) == 1:

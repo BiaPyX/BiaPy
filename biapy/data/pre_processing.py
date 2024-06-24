@@ -3,6 +3,7 @@ import torch
 import scipy
 import h5py
 import zarr
+import sys
 import numpy as np
 from tqdm import tqdm
 import pandas as pd
@@ -452,19 +453,16 @@ def create_detection_masks(cfg, data_type='train'):
         raise ValueError(f"No data found in folder {img_dir}")
     ids = sorted(next(os.walk(label_dir))[2])
 
+    classes = cfg.MODEL.N_CLASSES if cfg.MODEL.N_CLASSES > 2 else 1
     if len(img_ids) != len(ids):
         raise ValueError("Different number of CSV files and images found ({} vs {}). "
             "Please check that every image has one and only one CSV file".format(len(ids), len(img_ids)))
     if cfg.PROBLEM.NDIM == '2D':
-        req_dim = 2 
-        req_columns = ['axis-0', 'axis-1']
-        req_columns_class = ['axis-0', 'axis-1', 'class']
+        req_columns = ['axis-0', 'axis-1'] if classes == 1 else ['axis-0', 'axis-1', 'class']
     else:
-        req_dim = 3
-        req_columns = ['axis-0', 'axis-1', 'axis-2']
-        req_columns_class = ['axis-0', 'axis-1', 'axis-2', 'class']
+        req_columns = ['axis-0', 'axis-1', 'axis-2'] if classes == 1 else ['axis-0', 'axis-1', 'axis-2', 'class']
+    req_dim = len(req_columns)
 
-    classes = cfg.MODEL.N_CLASSES if cfg.MODEL.N_CLASSES > 2 else 1
     print("Creating {} detection masks . . .".format(data_type))
     for i in range(len(ids)):
         img_filename = os.path.splitext(ids[i])[0]+img_ext
@@ -477,6 +475,7 @@ def create_detection_masks(cfg, data_type='train'):
             print("Its respective image seems to be: {}".format(os.path.join(img_dir, img_filename)))
             
             df = pd.read_csv(os.path.join(label_dir, ids[i]))  
+            df = df.dropna()
             if '.zarr' != img_ext:
                 img = imread(os.path.join(img_dir, img_filename))
 
@@ -505,18 +504,16 @@ def create_detection_masks(cfg, data_type='train'):
             
             # Discard first index column to not have error if it is not sorted 
             p_number=df.iloc[: , 0].to_list()
-            df = df.iloc[: , 1:]
             df = df.rename(columns=lambda x: x.strip()) # trim spaces in column names
-            if len(df.columns) == req_dim+1:
-                if not all(df.columns == req_columns_class):
-                    raise ValueError("CSV columns need to be {}".format(req_columns_class))
-            elif len(df.columns) == req_dim:
-                if not all(df.columns == req_columns):
-                    raise ValueError("CSV columns need to be {}".format(req_columns))
-            else:
-                raise ValueError("CSV file {} need to have {} or {} columns. Found {}"
-                                .format(os.path.join(label_dir, ids[i]), req_dim, req_dim+1, len(df.columns)))
-
+            cols_not_in_file = [x for x in req_columns if x not in df.columns]
+            if len(cols_not_in_file) > 0:
+                print(df)
+                if len(cols_not_in_file) == 1:
+                    m = f"'{cols_not_in_file[0]}' column is not present in CSV file: {os.path.join(label_dir, ids[i])}" 
+                else:
+                    m = f"{cols_not_in_file} columns are not present in CSV file: {os.path.join(label_dir, ids[i])}" 
+                raise ValueError(m)
+        
             # Convert them to int in case they are floats
             df['axis-0'] = df['axis-0'].astype('int')
             df['axis-1'] = df['axis-1'].astype('int')
@@ -532,7 +529,7 @@ def create_detection_masks(cfg, data_type='train'):
                 x_axis_point = df['axis-2']
             
             # Class column present
-            if len(df.columns) == req_dim+1:
+            if "class" in req_columns:
                 df['class'] = df['class'].astype('int')
                 class_point = np.array(df['class']) 
 
@@ -1012,21 +1009,27 @@ def calculate_3D_volume_prob_map(Y, Y_path=None, w_foreground=0.94, w_background
 ###########
 # GENERAL #
 ###########
-def norm_range01(x, dtype=np.float32):
+def norm_range01(x, dtype=np.float32, div_using_max_and_scale=False):
     norm_steps = {}
     norm_steps['orig_dtype'] = x.dtype
 
+    if div_using_max_and_scale:
+        norm_steps['min_val_scale'] = x.min()
+        norm_steps['max_val_scale'] = x.max()
+
     if x.dtype in [np.uint8, torch.uint8]:
-        x = x/255
+        x = x/255 if not div_using_max_and_scale else (x-x.min())/(x.max()-x.min()+sys.float_info.epsilon)
         norm_steps['div'] = 1
     else:
         if (isinstance(x, np.ndarray) and np.max(x) > 255) or \
             (torch.is_tensor(x) and torch.max(x) > 255):
             norm_steps['reduced_{}'.format(x.dtype)] = 1
-            x = reduce_dtype(x, 0, 65535, out_min=0, out_max=1, out_type=dtype)
+            x = reduce_dtype(x, 0 if not div_using_max_and_scale else x.min(), 
+                65535 if not div_using_max_and_scale else x.max(), 
+                out_min=0, out_max=1, out_type=dtype)
         elif (isinstance(x, np.ndarray) and np.max(x) > 2) or \
             (torch.is_tensor(x) and torch.max(x) > 2):
-            x = x/255
+            x = x/255 if not div_using_max_and_scale else (x-x.min())/(x.max()-x.min()+sys.float_info.epsilon)
             norm_steps['div'] = 1
 
     if torch.is_tensor(x):
@@ -1035,7 +1038,12 @@ def norm_range01(x, dtype=np.float32):
         x = x.astype(dtype)
     return x, norm_steps
 
-def undo_norm_range01(x, xnorm):
+def undo_norm_range01(x, xnorm, min_val_scale=None, max_val_scale=None):
+    if min_val_scale is not None and max_val_scale is None:
+        raise ValueError("max_val_scale can not be None when min_val_scale is provided") 
+    if max_val_scale is not None and min_val_scale is None:
+        raise ValueError("min_val_scale can not be None when max_val_scale is provided")
+
     if 'div' == xnorm['type']:
         # Prevent values go outside expected range 
         if isinstance(x, np.ndarray):
@@ -1043,7 +1051,7 @@ def undo_norm_range01(x, xnorm):
         else:
             x = torch.clamp(x, 0, 1)
         if 'div' in xnorm:
-            x = (x*255)
+            x = (x*255) if max_val_scale is None else (x*max_val_scale)+min_val_scale
             if isinstance(x, np.ndarray): 
                 x = x.astype(np.uint8)
             else:
@@ -1053,7 +1061,7 @@ def undo_norm_range01(x, xnorm):
             if len(reductions)>0:
                 reductions = reductions[0]
                 reductions = reductions.replace('reduced_','')
-                x = (x*65535)
+                x = (x*65535) if max_val_scale is None else (x*max_val_scale)+min_val_scale
                 if isinstance(x, np.ndarray): 
                     x = x.astype(eval("np.{}".format(reductions) ))
                 else:

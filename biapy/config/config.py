@@ -24,6 +24,9 @@ class Config:
         _C.SYSTEM.NUM_WORKERS = 5
         # Do not set it as its value will be calculated based in --gpu input arg
         _C.SYSTEM.NUM_GPUS = 0
+        # Device to be used when GPU is NOT selected. Most commonly "cpu", but also potentially "mps", 
+        # "xpu", "xla" or "meta".
+        _C.SYSTEM.DEVICE = "cpu"
 
         # Math seed to generate random numbers. Used to ensure reproducibility in the results. 
         _C.SYSTEM.SEED = 0
@@ -196,6 +199,8 @@ class Config:
         _C.DATA.NORMALIZATION.PERC_UPPER = -1.0
         # Normalization type to use. Possible options:
         #   'div' to divide values from 0/255 (or 0/65535 if uint16) in [0,1] range
+        #   'scale_range' same as 'div' but scaling the range to [0-max] and then dividing by the maximum value of the data 
+        #    and not by 255 or 65535
         #   'custom' to use DATA.NORMALIZATION.CUSTOM_MEAN and DATA.NORMALIZATION.CUSTOM_STD to normalize
         _C.DATA.NORMALIZATION.TYPE = 'div'
         # Whether to apply the normalization by sample ("image") or by all dataset statistics ("dataset"). 
@@ -440,14 +445,15 @@ class Config:
         _C.AUGMENTOR.ZOOM = False
         # Zoom range. Scaling factor to use, where 1.0 denotes “no change” and 0.5 is zoomed out to 50 percent of the original size.
         _C.AUGMENTOR.ZOOM_RANGE = (0.8, 1.2)
+        # Whether to apply or not zoom in Z axis (for 3D volumes). 
+        _C.AUGMENTOR.ZOOM_IN_Z = False
         # Apply shift
         _C.AUGMENTOR.SHIFT = False
         # Shift range. Translation as a fraction of the image height/width (x-translation, y-translation), where 0 denotes 
         # “no change” and 0.5 denotes “half of the axis size”.
         _C.AUGMENTOR.SHIFT_RANGE = (0.1, 0.2)
         # How to fill up the new values created with affine transformations (rotations, shear, shift and zoom).
-        # Same meaning as in scipy: 'reflect', grid-'mirror', 'constant', 'grid-constant', 'nearest', 'mirror', 
-        # 'grid-wrap' and 'wrap'. 
+        # Same meaning as in numpy.pad() : 'constant', 'reflect', 'wrap', 'symmetric'
         _C.AUGMENTOR.AFFINE_MODE = 'reflect'
         # Make vertical flips
         _C.AUGMENTOR.VFLIP = False
@@ -496,20 +502,6 @@ class Config:
         # If apply same contrast to the entire image or select one for each slice. For 2D does not matter but yes for
         # 3D images. Possible values: '2D' or '3D'. Used when '_C.PROBLEM.NDIM' = '3D'.
         _C.AUGMENTOR.CONTRAST_MODE = '3D'
-        # To apply brightness changes to images based on Pytorch Connectomics library.
-        _C.AUGMENTOR.BRIGHTNESS_EM = False
-        # Strength of the brightness range
-        _C.AUGMENTOR.BRIGHTNESS_EM_FACTOR = (-0.1, 0.1)
-        # If apply same contrast to the entire image or select one for each slice. For 2D does not matter but yes for
-        # 3D images. Possible values: '2D' or '3D'. Used when '_C.PROBLEM.NDIM' = '3D'.
-        _C.AUGMENTOR.BRIGHTNESS_EM_MODE = '3D'
-        # To apply contrast changes to images based on Pytorch Connectomics library.
-        _C.AUGMENTOR.CONTRAST_EM = False
-        # Strength of the contrast change range, with valid values being 0 <= contrast_em_factor <= 1
-        _C.AUGMENTOR.CONTRAST_EM_FACTOR = (-0.1, 0.1)
-        # If apply same contrast to the entire image or select one for each slice. For 2D does not matter but yes for
-        # 3D images. Possible values: '2D' or '3D'. Used when '_C.PROBLEM.NDIM' = '3D'.
-        _C.AUGMENTOR.CONTRAST_EM_MODE = '3D'
         # Set a certain fraction of pixels in images to zero (not get confused with the dropout concept of neural networks)
         _C.AUGMENTOR.DROPOUT = False
         # Range to take the probability to drop a pixel
@@ -592,7 +584,7 @@ class Config:
         # Model definition
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         _C.MODEL = CN()
-        # Whether to define manually the model ('biapy'), load a pretrained one from Bioimage Model Zoo ('bmz') or use one 
+        # Whether to define manually the model ('biapy'), load a pretrained one from BioImage Model Zoo ('bmz') or use one 
         # available in TorchVision ('torchvision'). 
         # Options: ["biapy", "bmz", "torchvision"]
         _C.MODEL.SOURCE = "biapy"
@@ -836,9 +828,9 @@ class Config:
         _C.TEST.BY_CHUNKS.SAVE_OUT_TIF = False
         # In how many iterations the H5 writer needs to flush the data. No need to do so with Zarr files.
         _C.TEST.BY_CHUNKS.FLUSH_EACH = 100
-        # Input Numpy/Zarr/H5 image's axes order. Options: ['TZCYX', 'TZYXC', 'ZCYX', 'ZYXC']
+        # Order of the axes of the image when using Zarr/H5 images in test data.
         _C.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER = 'TZCYX'
-        # Input Numpy/Zarr/H5 image's axes order. Options: ['TZCYX', 'TZYXC', 'ZCYX', 'ZYXC']
+        # Order of the axes of the mask when using Zarr/H5 images in test data.
         _C.TEST.BY_CHUNKS.INPUT_MASK_AXES_ORDER = 'TZCYX'
         # Whether if your input Zarr contains the raw images and labels together or not. Use 'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH'
         # and 'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_GT_PATH' to determine the tag to find within the Zarr

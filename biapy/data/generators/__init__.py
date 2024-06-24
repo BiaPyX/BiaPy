@@ -13,7 +13,7 @@ from biapy.data.generators.test_pair_data_generators import test_pair_data_gener
 from biapy.data.generators.test_single_data_generator import test_single_data_generator
 
 
-def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size, global_rank, dist=False):
+def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size, global_rank):
     """
     Create training and validation generators.
 
@@ -63,6 +63,7 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
     norm_dict['type'] = cfg.DATA.NORMALIZATION.TYPE
     norm_dict['mask_norm'] = 'as_mask'
     norm_dict['application_mode'] = cfg.DATA.NORMALIZATION.APPLICATION_MODE
+    norm_dict['enable'] = True
 
     # Percentile clipping
     if cfg.DATA.NORMALIZATION.PERC_CLIP:
@@ -74,8 +75,7 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
             os.makedirs(os.path.dirname(cfg.PATHS.LWR_X_FILE), exist_ok=True)
             np.save(cfg.PATHS.LWR_X_FILE, norm_dict['dataset_X_lower_value'])
             np.save(cfg.PATHS.UPR_X_FILE, norm_dict['dataset_X_upper_value'])
-
-        print(f"X_train clipped using the following values: {norm_dict}")
+            print(f"X_train clipped using the following values: {norm_dict}")
 
     if cfg.DATA.NORMALIZATION.TYPE == 'custom':    
         if cfg.DATA.NORMALIZATION.APPLICATION_MODE == "dataset":
@@ -127,7 +127,7 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
             data_mode = "chunked_data"
         else:
             data_mode = "not_in_memory"
-    norm_dict['enable'] = False if cfg.MODEL.SOURCE in ["bmz", "torchvision"] else True
+
     if cfg.PROBLEM.TYPE == 'CLASSIFICATION' or \
         (cfg.PROBLEM.TYPE == 'SELF_SUPERVISED' and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"):
         r_shape = cfg.DATA.PATCH_SIZE
@@ -135,57 +135,138 @@ def create_train_val_augmentors(cfg, X_train, Y_train, X_val, Y_val, world_size,
             r_shape = (224,224)+(cfg.DATA.PATCH_SIZE[-1],) 
             print("Changing patch size from {} to {} to use efficientnet_b0".format(cfg.DATA.PATCH_SIZE[:-1], r_shape))
         ptype = "classification" if cfg.PROBLEM.TYPE == 'CLASSIFICATION' else "mae"
-        dic = dict(ndim=ndim, X=X_train, Y=Y_train, data_path=cfg.DATA.TRAIN.PATH, ptype=ptype, n_classes=cfg.MODEL.N_CLASSES,
-            seed=cfg.SYSTEM.SEED, da=cfg.AUGMENTOR.ENABLE, data_mode=data_mode, da_prob=cfg.AUGMENTOR.DA_PROB,
-            rotation90=cfg.AUGMENTOR.ROT90, rand_rot=cfg.AUGMENTOR.RANDOM_ROT, rnd_rot_range=cfg.AUGMENTOR.RANDOM_ROT_RANGE,
-            shear=cfg.AUGMENTOR.SHEAR, shear_range=cfg.AUGMENTOR.SHEAR_RANGE, zoom=cfg.AUGMENTOR.ZOOM,
-            zoom_range=cfg.AUGMENTOR.ZOOM_RANGE, shift=cfg.AUGMENTOR.SHIFT, shift_range=cfg.AUGMENTOR.SHIFT_RANGE,
-            affine_mode=cfg.AUGMENTOR.AFFINE_MODE, vflip=cfg.AUGMENTOR.VFLIP, hflip=cfg.AUGMENTOR.HFLIP,
-            elastic=cfg.AUGMENTOR.ELASTIC, e_alpha=cfg.AUGMENTOR.E_ALPHA, e_sigma=cfg.AUGMENTOR.E_SIGMA,
-            e_mode=cfg.AUGMENTOR.E_MODE, g_blur=cfg.AUGMENTOR.G_BLUR, g_sigma=cfg.AUGMENTOR.G_SIGMA,
-            median_blur=cfg.AUGMENTOR.MEDIAN_BLUR, mb_kernel=cfg.AUGMENTOR.MB_KERNEL, motion_blur=cfg.AUGMENTOR.MOTION_BLUR,
-            motb_k_range=cfg.AUGMENTOR.MOTB_K_RANGE, gamma_contrast=cfg.AUGMENTOR.GAMMA_CONTRAST,
-            gc_gamma=cfg.AUGMENTOR.GC_GAMMA, dropout=cfg.AUGMENTOR.DROPOUT, drop_range=cfg.AUGMENTOR.DROP_RANGE,
-            resize_shape=r_shape, norm_dict=norm_dict, convert_to_rgb=cfg.DATA.FORCE_RGB)
+        dic = dict(
+            ndim=ndim, 
+            X=X_train, 
+            Y=Y_train, 
+            data_path=cfg.DATA.TRAIN.PATH, 
+            ptype=ptype, 
+            n_classes=cfg.MODEL.N_CLASSES,
+            seed=cfg.SYSTEM.SEED, 
+            da=cfg.AUGMENTOR.ENABLE, 
+            data_mode=data_mode, 
+            da_prob=cfg.AUGMENTOR.DA_PROB,
+            rotation90=cfg.AUGMENTOR.ROT90, 
+            rand_rot=cfg.AUGMENTOR.RANDOM_ROT, 
+            rnd_rot_range=cfg.AUGMENTOR.RANDOM_ROT_RANGE,
+            shear=cfg.AUGMENTOR.SHEAR, 
+            shear_range=cfg.AUGMENTOR.SHEAR_RANGE, 
+            zoom=cfg.AUGMENTOR.ZOOM,
+            zoom_range=cfg.AUGMENTOR.ZOOM_RANGE, 
+            zoom_in_z=cfg.AUGMENTOR.ZOOM_IN_Z,
+            shift=cfg.AUGMENTOR.SHIFT, 
+            shift_range=cfg.AUGMENTOR.SHIFT_RANGE,
+            affine_mode=cfg.AUGMENTOR.AFFINE_MODE, 
+            vflip=cfg.AUGMENTOR.VFLIP, 
+            hflip=cfg.AUGMENTOR.HFLIP,
+            elastic=cfg.AUGMENTOR.ELASTIC, 
+            e_alpha=cfg.AUGMENTOR.E_ALPHA, 
+            e_sigma=cfg.AUGMENTOR.E_SIGMA,
+            e_mode=cfg.AUGMENTOR.E_MODE, 
+            g_blur=cfg.AUGMENTOR.G_BLUR, 
+            g_sigma=cfg.AUGMENTOR.G_SIGMA,
+            median_blur=cfg.AUGMENTOR.MEDIAN_BLUR, 
+            mb_kernel=cfg.AUGMENTOR.MB_KERNEL, 
+            motion_blur=cfg.AUGMENTOR.MOTION_BLUR,
+            motb_k_range=cfg.AUGMENTOR.MOTB_K_RANGE, 
+            gamma_contrast=cfg.AUGMENTOR.GAMMA_CONTRAST,
+            gc_gamma=cfg.AUGMENTOR.GC_GAMMA, 
+            dropout=cfg.AUGMENTOR.DROPOUT, 
+            drop_range=cfg.AUGMENTOR.DROP_RANGE,
+            resize_shape=r_shape, 
+            norm_dict=norm_dict, 
+            convert_to_rgb=cfg.DATA.FORCE_RGB
+        )
     else:
-        dic = dict(ndim=ndim, X=X_train, Y=Y_train, seed=cfg.SYSTEM.SEED, data_mode=data_mode, 
-            data_paths=data_paths, da=cfg.AUGMENTOR.ENABLE,
-            da_prob=cfg.AUGMENTOR.DA_PROB, rotation90=cfg.AUGMENTOR.ROT90, rand_rot=cfg.AUGMENTOR.RANDOM_ROT,
-            rnd_rot_range=cfg.AUGMENTOR.RANDOM_ROT_RANGE, shear=cfg.AUGMENTOR.SHEAR, shear_range=cfg.AUGMENTOR.SHEAR_RANGE,
-            zoom=cfg.AUGMENTOR.ZOOM, zoom_range=cfg.AUGMENTOR.ZOOM_RANGE, shift=cfg.AUGMENTOR.SHIFT,
-            affine_mode=cfg.AUGMENTOR.AFFINE_MODE, shift_range=cfg.AUGMENTOR.SHIFT_RANGE, vflip=cfg.AUGMENTOR.VFLIP,
-            hflip=cfg.AUGMENTOR.HFLIP, elastic=cfg.AUGMENTOR.ELASTIC, e_alpha=cfg.AUGMENTOR.E_ALPHA,
-            e_sigma=cfg.AUGMENTOR.E_SIGMA, e_mode=cfg.AUGMENTOR.E_MODE, g_blur=cfg.AUGMENTOR.G_BLUR,
-            g_sigma=cfg.AUGMENTOR.G_SIGMA, median_blur=cfg.AUGMENTOR.MEDIAN_BLUR, mb_kernel=cfg.AUGMENTOR.MB_KERNEL,
-            motion_blur=cfg.AUGMENTOR.MOTION_BLUR, motb_k_range=cfg.AUGMENTOR.MOTB_K_RANGE,
-            gamma_contrast=cfg.AUGMENTOR.GAMMA_CONTRAST, gc_gamma=cfg.AUGMENTOR.GC_GAMMA, brightness=cfg.AUGMENTOR.BRIGHTNESS,
-            brightness_factor=cfg.AUGMENTOR.BRIGHTNESS_FACTOR, brightness_mode=cfg.AUGMENTOR.BRIGHTNESS_MODE,
-            contrast=cfg.AUGMENTOR.CONTRAST, contrast_factor=cfg.AUGMENTOR.CONTRAST_FACTOR,
-            contrast_mode=cfg.AUGMENTOR.CONTRAST_MODE, brightness_em=cfg.AUGMENTOR.BRIGHTNESS_EM,
-            brightness_em_factor=cfg.AUGMENTOR.BRIGHTNESS_EM_FACTOR, brightness_em_mode=cfg.AUGMENTOR.BRIGHTNESS_EM_MODE,
-            contrast_em=cfg.AUGMENTOR.CONTRAST_EM, contrast_em_factor=cfg.AUGMENTOR.CONTRAST_EM_FACTOR,
-            contrast_em_mode=cfg.AUGMENTOR.CONTRAST_EM_MODE, dropout=cfg.AUGMENTOR.DROPOUT,
-            drop_range=cfg.AUGMENTOR.DROP_RANGE, cutout=cfg.AUGMENTOR.CUTOUT,
-            cout_nb_iterations=cfg.AUGMENTOR.COUT_NB_ITERATIONS, cout_size=cfg.AUGMENTOR.COUT_SIZE,
-            cout_cval=cfg.AUGMENTOR.COUT_CVAL, cout_apply_to_mask=cfg.AUGMENTOR.COUT_APPLY_TO_MASK,
-            cutblur=cfg.AUGMENTOR.CUTBLUR, cblur_size=cfg.AUGMENTOR.CBLUR_SIZE, cblur_down_range=cfg.AUGMENTOR.CBLUR_DOWN_RANGE,
-            cblur_inside=cfg.AUGMENTOR.CBLUR_INSIDE, cutmix=cfg.AUGMENTOR.CUTMIX, cmix_size=cfg.AUGMENTOR.CMIX_SIZE,
-            cutnoise=cfg.AUGMENTOR.CUTNOISE, cnoise_size=cfg.AUGMENTOR.CNOISE_SIZE,
-            cnoise_nb_iterations=cfg.AUGMENTOR.CNOISE_NB_ITERATIONS, cnoise_scale=cfg.AUGMENTOR.CNOISE_SCALE,
-            misalignment=cfg.AUGMENTOR.MISALIGNMENT, ms_displacement=cfg.AUGMENTOR.MS_DISPLACEMENT,
-            ms_rotate_ratio=cfg.AUGMENTOR.MS_ROTATE_RATIO, missing_sections=cfg.AUGMENTOR.MISSING_SECTIONS,
-            missp_iterations=cfg.AUGMENTOR.MISSP_ITERATIONS, grayscale=cfg.AUGMENTOR.GRAYSCALE,
-            channel_shuffle=cfg.AUGMENTOR.CHANNEL_SHUFFLE, gridmask=cfg.AUGMENTOR.GRIDMASK,
-            grid_ratio=cfg.AUGMENTOR.GRID_RATIO, grid_d_range=cfg.AUGMENTOR.GRID_D_RANGE, grid_rotate=cfg.AUGMENTOR.GRID_ROTATE,
-            grid_invert=cfg.AUGMENTOR.GRID_INVERT, gaussian_noise=cfg.AUGMENTOR.GAUSSIAN_NOISE, 
-            gaussian_noise_mean=cfg.AUGMENTOR.GAUSSIAN_NOISE_MEAN, gaussian_noise_var=cfg.AUGMENTOR.GAUSSIAN_NOISE_VAR,
+        dic = dict(
+            ndim=ndim, 
+            X=X_train, 
+            Y=Y_train, 
+            seed=cfg.SYSTEM.SEED, 
+            data_mode=data_mode, 
+            data_paths=data_paths, 
+            da=cfg.AUGMENTOR.ENABLE,
+            da_prob=cfg.AUGMENTOR.DA_PROB, 
+            rotation90=cfg.AUGMENTOR.ROT90, 
+            rand_rot=cfg.AUGMENTOR.RANDOM_ROT,
+            rnd_rot_range=cfg.AUGMENTOR.RANDOM_ROT_RANGE, 
+            shear=cfg.AUGMENTOR.SHEAR, 
+            shear_range=cfg.AUGMENTOR.SHEAR_RANGE,
+            zoom=cfg.AUGMENTOR.ZOOM, 
+            zoom_range=cfg.AUGMENTOR.ZOOM_RANGE, 
+            zoom_in_z=cfg.AUGMENTOR.ZOOM_IN_Z, 
+            shift=cfg.AUGMENTOR.SHIFT,
+            affine_mode=cfg.AUGMENTOR.AFFINE_MODE, 
+            shift_range=cfg.AUGMENTOR.SHIFT_RANGE, 
+            vflip=cfg.AUGMENTOR.VFLIP,
+            hflip=cfg.AUGMENTOR.HFLIP, 
+            elastic=cfg.AUGMENTOR.ELASTIC, 
+            e_alpha=cfg.AUGMENTOR.E_ALPHA,
+            e_sigma=cfg.AUGMENTOR.E_SIGMA, 
+            e_mode=cfg.AUGMENTOR.E_MODE, 
+            g_blur=cfg.AUGMENTOR.G_BLUR,
+            g_sigma=cfg.AUGMENTOR.G_SIGMA, 
+            median_blur=cfg.AUGMENTOR.MEDIAN_BLUR, 
+            mb_kernel=cfg.AUGMENTOR.MB_KERNEL,
+            motion_blur=cfg.AUGMENTOR.MOTION_BLUR, 
+            motb_k_range=cfg.AUGMENTOR.MOTB_K_RANGE,
+            gamma_contrast=cfg.AUGMENTOR.GAMMA_CONTRAST, 
+            gc_gamma=cfg.AUGMENTOR.GC_GAMMA, 
+            brightness=cfg.AUGMENTOR.BRIGHTNESS,
+            brightness_factor=cfg.AUGMENTOR.BRIGHTNESS_FACTOR, 
+            brightness_mode=cfg.AUGMENTOR.BRIGHTNESS_MODE,
+            contrast=cfg.AUGMENTOR.CONTRAST, 
+            contrast_factor=cfg.AUGMENTOR.CONTRAST_FACTOR,
+            contrast_mode=cfg.AUGMENTOR.CONTRAST_MODE, 
+            dropout=cfg.AUGMENTOR.DROPOUT,
+            drop_range=cfg.AUGMENTOR.DROP_RANGE, 
+            cutout=cfg.AUGMENTOR.CUTOUT,
+            cout_nb_iterations=cfg.AUGMENTOR.COUT_NB_ITERATIONS, 
+            cout_size=cfg.AUGMENTOR.COUT_SIZE,
+            cout_cval=cfg.AUGMENTOR.COUT_CVAL, 
+            cout_apply_to_mask=cfg.AUGMENTOR.COUT_APPLY_TO_MASK,
+            cutblur=cfg.AUGMENTOR.CUTBLUR, 
+            cblur_size=cfg.AUGMENTOR.CBLUR_SIZE, 
+            cblur_down_range=cfg.AUGMENTOR.CBLUR_DOWN_RANGE,
+            cblur_inside=cfg.AUGMENTOR.CBLUR_INSIDE, 
+            cutmix=cfg.AUGMENTOR.CUTMIX, 
+            cmix_size=cfg.AUGMENTOR.CMIX_SIZE,
+            cutnoise=cfg.AUGMENTOR.CUTNOISE, 
+            cnoise_size=cfg.AUGMENTOR.CNOISE_SIZE,
+            cnoise_nb_iterations=cfg.AUGMENTOR.CNOISE_NB_ITERATIONS, 
+            cnoise_scale=cfg.AUGMENTOR.CNOISE_SCALE,
+            misalignment=cfg.AUGMENTOR.MISALIGNMENT, 
+            ms_displacement=cfg.AUGMENTOR.MS_DISPLACEMENT,
+            ms_rotate_ratio=cfg.AUGMENTOR.MS_ROTATE_RATIO, 
+            missing_sections=cfg.AUGMENTOR.MISSING_SECTIONS,
+            missp_iterations=cfg.AUGMENTOR.MISSP_ITERATIONS, 
+            grayscale=cfg.AUGMENTOR.GRAYSCALE,
+            channel_shuffle=cfg.AUGMENTOR.CHANNEL_SHUFFLE, 
+            gridmask=cfg.AUGMENTOR.GRIDMASK,
+            grid_ratio=cfg.AUGMENTOR.GRID_RATIO, 
+            grid_d_range=cfg.AUGMENTOR.GRID_D_RANGE, 
+            grid_rotate=cfg.AUGMENTOR.GRID_ROTATE,
+            grid_invert=cfg.AUGMENTOR.GRID_INVERT, 
+            gaussian_noise=cfg.AUGMENTOR.GAUSSIAN_NOISE, 
+            gaussian_noise_mean=cfg.AUGMENTOR.GAUSSIAN_NOISE_MEAN, 
+            gaussian_noise_var=cfg.AUGMENTOR.GAUSSIAN_NOISE_VAR,
             gaussian_noise_use_input_img_mean_and_var=cfg.AUGMENTOR.GAUSSIAN_NOISE_USE_INPUT_IMG_MEAN_AND_VAR, 
-            poisson_noise=cfg.AUGMENTOR.POISSON_NOISE, salt=cfg.AUGMENTOR.SALT, salt_amount=cfg.AUGMENTOR.SALT_AMOUNT,
-            pepper=cfg.AUGMENTOR.PEPPER, pepper_amount=cfg.AUGMENTOR.PEPPER_AMOUNT, salt_and_pepper=cfg.AUGMENTOR.SALT_AND_PEPPER, 
-            salt_pep_amount=cfg.AUGMENTOR.SALT_AND_PEPPER_AMOUNT, salt_pep_proportion=cfg.AUGMENTOR.SALT_AND_PEPPER_PROP,
-            shape=cfg.DATA.PATCH_SIZE, resolution=cfg.DATA.TRAIN.RESOLUTION, random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, 
-            prob_map=prob_map, n_classes=cfg.MODEL.N_CLASSES, extra_data_factor=cfg.DATA.TRAIN.REPLICATE, 
-            norm_dict=norm_dict, random_crop_scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
+            poisson_noise=cfg.AUGMENTOR.POISSON_NOISE, 
+            salt=cfg.AUGMENTOR.SALT, 
+            salt_amount=cfg.AUGMENTOR.SALT_AMOUNT,
+            pepper=cfg.AUGMENTOR.PEPPER, 
+            pepper_amount=cfg.AUGMENTOR.PEPPER_AMOUNT, 
+            salt_and_pepper=cfg.AUGMENTOR.SALT_AND_PEPPER, 
+            salt_pep_amount=cfg.AUGMENTOR.SALT_AND_PEPPER_AMOUNT, 
+            salt_pep_proportion=cfg.AUGMENTOR.SALT_AND_PEPPER_PROP,
+            shape=cfg.DATA.PATCH_SIZE, 
+            resolution=cfg.DATA.TRAIN.RESOLUTION, 
+            random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH, 
+            prob_map=prob_map, 
+            n_classes=cfg.MODEL.N_CLASSES, 
+            extra_data_factor=cfg.DATA.TRAIN.REPLICATE, 
+            norm_dict=norm_dict, 
+            random_crop_scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
             convert_to_rgb=cfg.DATA.FORCE_RGB)
 
         if cfg.PROBLEM.NDIM == '3D':
@@ -344,26 +425,31 @@ def create_test_augmentor(cfg, X_test, Y_test, cross_val_samples_ids):
     norm_dict['type'] = cfg.DATA.NORMALIZATION.TYPE
     norm_dict['mask_norm'] = 'as_mask'
     norm_dict['application_mode'] = cfg.DATA.NORMALIZATION.APPLICATION_MODE
+    norm_dict['enable'] = True 
 
     # Percentile clipping
     if cfg.DATA.NORMALIZATION.PERC_CLIP:
         norm_dict['lower_bound'] = cfg.DATA.NORMALIZATION.PERC_LOWER
         norm_dict['upper_bound'] = cfg.DATA.NORMALIZATION.PERC_UPPER
         norm_dict['clipped'] = X_test is not None
+        bmz_clip = False
         if cfg.DATA.NORMALIZATION.APPLICATION_MODE == "dataset":
             if not os.path.exists(cfg.PATHS.LWR_X_FILE) or not os.path.exists(cfg.PATHS.UPR_X_FILE):
+                if cfg.MODEL.SOURCE == "bmz" and X_test is not None:
+                    X_test, norm_dict['dataset_X_lower_value'], \
+                        norm_dict['dataset_X_upper_value'] = percentile_clip(X_test, norm_dict['lower_bound'], norm_dict['upper_bound'])
+                    bmz_clip = True
+                else:
                     raise FileNotFoundError("Lower/uper percentile files not found in {} and {}"
                         .format(cfg.PATHS.LWR_X_FILE, cfg.PATHS.UPR_X_FILE))
             else:
                 norm_dict['dataset_X_lower_value'] = float(np.load(cfg.PATHS.LWR_X_FILE))
                 norm_dict['dataset_X_upper_value'] = float(np.load(cfg.PATHS.UPR_X_FILE))
 
-            if X_test is not None:
+            if X_test is not None and not bmz_clip:
                 X_test, _, _ = percentile_clip(X_test, lwr_perc_val=norm_dict['dataset_X_lower_value'],
                     uppr_perc_val=norm_dict['dataset_X_upper_value'])
-                
-        if X_test is not None:        
-            print(f"X_test clipped using the following values: {norm_dict}")
+                print(f"X_test clipped using the following values: {norm_dict}")
 
     if cfg.DATA.NORMALIZATION.TYPE == 'custom':    
         if cfg.DATA.NORMALIZATION.APPLICATION_MODE == "dataset":
@@ -371,14 +457,18 @@ def create_test_augmentor(cfg, X_test, Y_test, cross_val_samples_ids):
                 print("Test normalization: trying to load mean from {}".format(cfg.PATHS.MEAN_INFO_FILE))
                 print("Test normalization: trying to load std from {}".format(cfg.PATHS.STD_INFO_FILE))
                 if not os.path.exists(cfg.PATHS.MEAN_INFO_FILE) or not os.path.exists(cfg.PATHS.STD_INFO_FILE):
-                    raise FileNotFoundError("Mean/std files not found in {} and {}"
-                        .format(cfg.PATHS.MEAN_INFO_FILE, cfg.PATHS.STD_INFO_FILE))
-                norm_dict['mean'] = float(np.load(cfg.PATHS.MEAN_INFO_FILE))
-                norm_dict['std'] = float(np.load(cfg.PATHS.STD_INFO_FILE))
+                    if cfg.MODEL.SOURCE == "bmz" and X_test is not None:
+                        norm_dict['mean'] = np.mean(X_test)
+                        norm_dict['std'] = np.std(X_test)
+                    else:
+                        raise FileNotFoundError("Mean/std files not found in {} and {}"
+                            .format(cfg.PATHS.MEAN_INFO_FILE, cfg.PATHS.STD_INFO_FILE))
+                else:
+                    norm_dict['mean'] = float(np.load(cfg.PATHS.MEAN_INFO_FILE))
+                    norm_dict['std'] = float(np.load(cfg.PATHS.STD_INFO_FILE))
             else:
                 norm_dict['mean'] = cfg.DATA.NORMALIZATION.CUSTOM_MEAN
                 norm_dict['std'] = cfg.DATA.NORMALIZATION.CUSTOM_STD
-        if 'mean' in norm_dict:
             print("Test normalization: using mean {} and std: {}".format(norm_dict['mean'], norm_dict['std']))
 
     instance_problem = True if cfg.PROBLEM.TYPE == 'INSTANCE_SEG' else False
@@ -389,7 +479,6 @@ def create_test_augmentor(cfg, X_test, Y_test, cross_val_samples_ids):
     if cfg.PROBLEM.TYPE in ['SUPER_RESOLUTION', "IMAGE_TO_IMAGE"]:
         norm_dict['mask_norm'] = 'none'
     
-    norm_dict['enable'] = False if cfg.MODEL.SOURCE in ["bmz", "torchvision"] else True
     ndim = 3 if cfg.PROBLEM.NDIM == "3D" else 2
     dic = dict(ndim=ndim, X=X_test, d_path=cfg.DATA.TEST.PATH if cross_val_samples_ids is None else cfg.DATA.TRAIN.PATH, 
         test_by_chunks=cfg.TEST.BY_CHUNKS.ENABLE, provide_Y=provide_Y, Y=Y_test, dm_path=cfg.DATA.TEST.GT_PATH if cross_val_samples_ids is None else cfg.DATA.TRAIN.GT_PATH,

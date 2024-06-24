@@ -49,7 +49,10 @@ class Pair3DImageDataGenerator(PairBaseDataGenerator):
                 if channel_pos != 3 and mask.shape[channel_pos] <= 4:
                     new_pos = [x for x in range(4) if x != channel_pos]+[channel_pos,]
                     mask = mask.transpose(new_pos)
-            
+                    
+        if img.ndim != 4:
+            raise ValueError(f"Image loaded seems to not be 3D: {img.shape}")
+
         # Super-resolution check. if random_crops_in_DA is activated the images have not been cropped yet,
         # so this check can not be done and it will be done in the random crop
         if not self.random_crops_in_DA and self.Y_provided and any([x != 1 for x in self.random_crop_scale]):

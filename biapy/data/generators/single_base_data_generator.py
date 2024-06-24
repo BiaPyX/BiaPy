@@ -76,6 +76,9 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
     zoom_range : tuple of floats, optional
         Zoom range to apply. E. g. ``(0.8, 1.2)``.
 
+    zoom_in_z: bool, optional
+        Whether to apply or not zoom in Z axis. 
+
     shift : float, optional
         To make shifts.
 
@@ -149,12 +152,48 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         In case RGB images are expected, e.g. if ``crop_shape`` channel is 3, those images that are grayscale are 
         converted into RGB.
     """
-    def __init__(self, ndim, X, Y, data_path, ptype, n_classes, seed=0, data_mode="", da=True, da_prob=0.5, rotation90=False, 
-                 rand_rot=False, rnd_rot_range=(-180,180), shear=False, shear_range=(-20,20), zoom=False, zoom_range=(0.8,1.2), 
-                 shift=False, shift_range=(0.1,0.2), affine_mode='constant', vflip=False, hflip=False, elastic=False, e_alpha=(240,250), 
-                 e_sigma=25, e_mode='constant', g_blur=False, g_sigma=(1.0,2.0), median_blur=False, mb_kernel=(3,7), 
-                 motion_blur=False, motb_k_range=(3,8), gamma_contrast=False, gc_gamma=(1.25,1.75), dropout=False, 
-                 drop_range=(0, 0.2), val=False, resize_shape=None, norm_dict=None, convert_to_rgb=False):
+    def __init__(
+        self, 
+        ndim, 
+        X, 
+        Y, 
+        data_path, 
+        ptype, 
+        n_classes, 
+        seed=0, 
+        data_mode="", 
+        da=True, 
+        da_prob=0.5, 
+        rotation90=False, 
+        rand_rot=False, 
+        rnd_rot_range=(-180,180), 
+        shear=False, 
+        shear_range=(-20,20), 
+        zoom=False, 
+        zoom_range=(0.8,1.2), 
+        shift=False, 
+        shift_range=(0.1,0.2), 
+        affine_mode='constant', 
+        vflip=False, 
+        hflip=False, 
+        elastic=False, 
+        e_alpha=(240,250), 
+        e_sigma=25, 
+        e_mode='constant', 
+        g_blur=False, 
+        g_sigma=(1.0,2.0), 
+        median_blur=False, 
+        mb_kernel=(3,7), 
+        motion_blur=False, 
+        motb_k_range=(3,8), 
+        gamma_contrast=False, 
+        gc_gamma=(1.25,1.75), 
+        dropout=False, 
+        drop_range=(0, 0.2), 
+        val=False, 
+        resize_shape=None, 
+        norm_dict=None, 
+        convert_to_rgb=False):
 
         assert norm_dict != None, "Normalization instructions must be provided with 'norm_dict'"
         assert norm_dict['mask_norm'] in ['as_mask', 'as_image', 'none']
@@ -229,30 +268,20 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.shape = resize_shape
 
         # X data analysis
-        self.X_norm = {}
-        self.X_norm['type'] = 'none'
-        img, _ = self.load_sample(0)
+        img, _ = self.load_sample(0, first_load=True)
         if norm_dict['enable']:
-            self.X_norm['application_mode'] = norm_dict['application_mode']
-            self.X_norm['orig_dtype'] = img.dtype
-            if norm_dict['type'] == "custom":
-                self.X_norm['type'] = 'custom'    
-                if norm_dict['application_mode'] == "dataset":    
-                    if 'mean' in norm_dict and 'std' in norm_dict:    
-                        self.X_norm['mean'] = norm_dict['mean']
-                        self.X_norm['std'] = norm_dict['std']  
-                    else:
-                        self.X_norm['mean'] = np.mean(self.X)
-                        self.X_norm['std'] = np.std(self.X)
-            else: # norm_dict['type'] == "div"                
-                img, nsteps = norm_range01(img)
-                self.X_norm.update(nsteps)
+            self.norm_dict['orig_dtype'] = img.dtype
+            if norm_dict['type'] in ["div", "scale_range"]:
+                if norm_dict['type'] == "div":
+                    img, nsteps = norm_range01(img)
+                else:
+                    img, nsteps = norm_range01(img, div_using_max_and_scale=True)
+                self.norm_dict.update(nsteps)
                 if resize_shape[-1] != img.shape[-1]:
                     raise ValueError("Channel of the patch size given {} does not correspond with the loaded image {}. "
                         "Please, check the channels of the images!".format(resize_shape[-1], img.shape[-1]))
-                self.X_norm['type'] = 'div'            
 
-        print("Normalization config used for X: {}".format(self.X_norm))
+        print("Normalization config used for X: {}".format(self.norm_dict))
 
         self.shape = resize_shape if resize_shape is not None else img.shape
 
@@ -261,11 +290,15 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.da = da
         self.da_prob = da_prob
         self.val = val
-        
+        self.zoom = zoom
+        self.zoom_range = zoom_range
+        self.zoom_in_z = zoom_in_z
         self.rand_rot = rand_rot
         self.rnd_rot_range = rnd_rot_range
         self.rotation90 = rotation90
         self.affine_mode = affine_mode
+        self.gamma_contrast = gamma_contrast
+        self.gc_gamma = gc_gamma
 
         self.da_options = []
         self.trans_made = ''
@@ -277,8 +310,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
             self.da_options.append(iaa.Sometimes(da_prob, iaa.Affine(rotate=shear_range, mode=affine_mode)))
             self.trans_made += '_shear'+str(shear_range)
         if zoom:
-            self.da_options.append(iaa.Sometimes(da_prob, iaa.Affine(scale={"x": zoom_range, "y": zoom_range}, mode=affine_mode)))
-            self.trans_made += '_zoom'+str(zoom_range)
+            self.trans_made += '_zoom'+str(zoom_range)+"+"+str(zoom_in_z)
         if shift:
             self.da_options.append(iaa.Sometimes(da_prob, iaa.Affine(translate_percent=shift_range, mode=affine_mode)))
             self.trans_made += '_shift'+str(shift_range)
@@ -301,7 +333,6 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
             self.da_options.append(iaa.Sometimes(da_prob,iaa.MotionBlur(k=motb_k_range)))
             self.trans_made += '_motb'+str(motb_k_range)
         if gamma_contrast:
-            self.da_options.append(iaa.Sometimes(da_prob,iaa.GammaContrast(gc_gamma)))
             self.trans_made += '_gcontrast'+str(gc_gamma)
         if dropout:
             self.da_options.append(iaa.Sometimes(da_prob, iaa.Dropout(p=drop_range)))
@@ -331,7 +362,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         """Defines the number of samples per epoch."""
         return self.length
 
-    def load_sample(self, idx):
+    def load_sample(self, idx, first_load=False):
         """
         Load one data sample given its corresponding index.
 
@@ -340,6 +371,9 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         idx : int
             Sample index counter.
 
+        first_load : bool, optional
+            Whether its the first time a sample is loaded to prevent normalizing it. 
+            
         Returns
         -------
         img : 3D/4D Numpy array
@@ -365,19 +399,21 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
             img = np.squeeze(img)
             
         # X normalization
-        if self.X_norm['type'] != "none":
+        if self.norm_dict['enable'] and not first_load:
             # Percentile clipping
             if 'lower_bound' in self.norm_dict and self.norm_dict['application_mode'] == "image":
                 img, _, _ = percentile_clip(img, lower=self.norm_dict['lower_bound'],                                     
                     upper=self.norm_dict['upper_bound'])
 
-            if self.X_norm['type'] == 'div':
+            if self.norm_dict['type'] == 'div':
                 img, _ = norm_range01(img)
-            elif self.X_norm['type'] == 'custom':
+            elif self.norm_dict['type'] == 'scale_range':
+                img, _ = norm_range01(img, div_using_max_and_scale=True)
+            elif self.norm_dict['type'] == 'custom':
                 if self.norm_dict['application_mode'] == "image":
                     img = normalize(img, img.mean(), img.std())
                 else:
-                    img = normalize(img, self.X_norm['mean'], self.X_norm['std'])
+                    img = normalize(img, self.norm_dict['mean'], self.norm_dict['std'])
 
         img = self.ensure_shape(img)
 
@@ -451,6 +487,11 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         # Save shape
         o_img_shape = image.shape
 
+        # Apply zoom
+        if self.zoom and random.uniform(0, 1) < self.da_prob:
+            image = zoom(image, zoom_range=self.zoom_range, zoom_in_z=self.zoom_in_z, 
+                mode=self.affine_mode, mask_type=self.norm_dict['mask_norm'])
+
         # Apply random rotations
         if self.rand_rot and random.uniform(0, 1) < self.da_prob:
             image = rotation(image, angles=self.rnd_rot_range, mode=self.affine_mode)
@@ -462,6 +503,10 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         # Reshape 3D volumes to 2D image type with multiple channels to pass through imgaug lib
         if self.ndim == 3:
             image = image.reshape(image.shape[:2]+(image.shape[2]*image.shape[3],))
+
+        # Apply gamma contrast
+        if self.gamma_contrast and random.uniform(0, 1) < self.da_prob:
+            image = gamma_contrast(image, gamma=self.gc_gamma)
 
         # Apply transformations to the image
         image = self.seq(image=image)
@@ -574,4 +619,4 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         return sample_x
 
     def get_data_normalization(self):
-        return self.X_norm
+        return self.norm_dict

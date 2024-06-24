@@ -28,6 +28,9 @@ class Pair2DImageDataGenerator(PairBaseDataGenerator):
             else:
                 if mask.shape[0] <= 3: mask = mask.transpose((1,2,0))
 
+        if img.ndim != 3:
+            raise ValueError(f"Image loaded seems to not be 2D: {img.shape}")
+
         # Super-resolution check. if random_crops_in_DA is activated the images have not been cropped yet,
         # so this check can not be done and it will be done in the random crop
         if not self.random_crops_in_DA and self.Y_provided and any([x != 1 for x in self.random_crop_scale]):
