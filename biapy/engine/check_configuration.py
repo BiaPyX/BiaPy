@@ -744,12 +744,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         if cfg.AUGMENTOR.CONTRAST:
             if cfg.AUGMENTOR.CONTRAST_MODE not in ['2D', '3D'] and cfg.PROBLEM.NDIM == "3D":
                 raise ValueError("AUGMENTOR.CONTRAST_MODE not in ['2D', '3D']")
-        if cfg.AUGMENTOR.BRIGHTNESS_EM:
-            if cfg.AUGMENTOR.BRIGHTNESS_EM_MODE not in ['2D', '3D'] and cfg.PROBLEM.NDIM == "3D":
-                raise ValueError("AUGMENTOR.BRIGHTNESS_EM_MODE not in ['2D', '3D']")
-        if cfg.AUGMENTOR.CONTRAST_EM:
-            if cfg.AUGMENTOR.CONTRAST_EM_MODE not in ['2D', '3D'] and cfg.PROBLEM.NDIM == "3D":
-                raise ValueError("AUGMENTOR.CONTRAST_EM_MODE not in ['2D', '3D']")
         if cfg.AUGMENTOR.DROPOUT:
             if not check_value(cfg.AUGMENTOR.DROP_RANGE):
                 raise ValueError("AUGMENTOR.DROP_RANGE values not in [0, 1] range")
@@ -786,6 +780,9 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 print("WARNING: Ignoring AUGMENTOR.ZOOM_IN_Z in 2D problem")
         assert cfg.AUGMENTOR.AFFINE_MODE in ['constant', 'reflect', 'wrap', 'symmetric'], \
             "'AUGMENTOR.AFFINE_MODE' needs to be one between ['constant', 'reflect', 'wrap', 'symmetric']"  
+        if cfg.AUGMENTOR.GAMMA_CONTRAST and cfg.DATA.NORMALIZATION.TYPE == 'custom':
+            raise ValueError("'AUGMENTOR.GAMMA_CONTRAST' doesn't work correctly on images with negative values, which 'custom' "
+                "normalization will lead to")
 
     #### Post-processing ####
     if cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS:

@@ -153,27 +153,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
     contrast_mode : str, optional
         Apply same contrast change to the whole image or diffent to slice by slice.
 
-    brightness_em : bool, optional
-        To aply brightness to the images as `PyTorch Connectomics
-        <https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/data/augmentation/grayscale.py>`_.
-
-    brightness_em_factor : tuple of 2 floats, optional
-        Strength of the brightness range, with valid values being ``0 <= brightness_em_factor <= 1``. E.g. ``(0.1, 0.3)``.
-
-    brightness_em_mode : str, optional
-        Apply same brightness change to the whole image or diffent to slice by slice.
-
-    contrast_em : boolen, optional
-        To apply contrast changes to the images as `PyTorch Connectomics
-        <https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/data/augmentation/grayscale.py>`_.
-
-    contrast_em_factor : tuple of 2 floats, optional
-        Strength of the contrast change range, with valid values being ``0 <= contrast_em_factor <= 1``.
-        E.g. ``(0.1, 0.3)``.
-
-    contrast_em_mode : str, optional
-        Apply same contrast change to the whole image or diffent to slice by slice.
-
     dropout : bool, optional
         To set a certain fraction of pixels in images to zero.
 
@@ -407,12 +386,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         contrast=False, 
         contrast_factor=(1,3), 
         contrast_mode='2D', 
-        brightness_em=False, 
-        brightness_em_factor=(1,3), 
-        brightness_em_mode='2D', 
-        contrast_em=False, 
-        contrast_em_factor=(1,3), 
-        contrast_em_mode='2D', 
         dropout=False, 
         drop_range=(0, 0.2), 
         cutout=False, 
@@ -702,8 +675,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.ms_rotate_ratio = ms_rotate_ratio
         self.brightness = brightness
         self.contrast = contrast
-        self.brightness_em = brightness_em
-        self.contrast_em = contrast_em
         self.missing_sections = missing_sections
         self.missp_iterations = missp_iterations
         self.grayscale = grayscale
@@ -816,14 +787,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             self.contrast_factor = contrast_factor
             self.contrast_mode = contrast_mode # Not used
             self.trans_made += '_contrast'+str(contrast_factor)
-        if brightness_em:
-            self.brightness_em_factor = brightness_em_factor
-            self.brightness_em_mode = brightness_em_mode # Not used
-            self.trans_made += '_brightness_em'+str(brightness_em_factor)
-        if contrast_em:
-            self.contrast_em_factor = contrast_em_factor
-            self.contrast_em_mode = contrast_em_mode # Not used
-            self.trans_made += '_contrast_em'+str(contrast_em_factor)
         if dropout:
             self.da_options.append(iaa.Sometimes(da_prob, iaa.Dropout(p=drop_range)))
             self.trans_made += '_drop'+str(drop_range)
@@ -1130,6 +1093,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         # Save shape
         o_img_shape = image.shape
         o_mask_shape = mask.shape
+        min_max_vals = (image.min(),image.max())
 
         # Convert to grayscale
         if self.grayscale and random.uniform(0, 1) < self.da_prob:
@@ -1180,28 +1144,24 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         # Apply cutnoise
         if self.cutnoise and random.uniform(0, 1) < self.da_prob:
-            image = cutnoise(image, self.cnoise_scale, self.cnoise_nb_iterations, self.cnoise_size)
+            image = cutnoise(image, self.cnoise_scale, self.cnoise_nb_iterations, self.cnoise_size, 
+                min_max_vals=min_max_vals)
 
         # Apply misalignment
         if self.misalignment and random.uniform(0, 1) < self.da_prob:
             rel = str(o_img_shape[-1])+"_"+str(o_mask_shape[-1])
-            image, mask = misalignment(image, mask, self.ms_displacement, self.ms_rotate_ratio, c_relation=rel)
+            image, mask = misalignment(image, mask, self.ms_displacement, self.ms_rotate_ratio, c_relation=rel,
+                min_max_vals=min_max_vals)
 
         # Apply brightness
         if self.brightness and random.uniform(0, 1) < self.da_prob:
-            image = brightness(image, brightness_factor=self.brightness_factor, mode=self.brightness_mode)
+            image = brightness(image, brightness_factor=self.brightness_factor, mode=self.brightness_mode,
+                min_max_vals=min_max_vals)
 
         # Apply contrast
         if self.contrast and random.uniform(0, 1) < self.da_prob:
-            image = contrast(image, contrast_factor=self.contrast_factor, mode=self.contrast_mode)
-
-        # Apply brightness (EM)
-        if self.brightness_em and random.uniform(0, 1) < self.da_prob:
-            image = brightness_em(image, brightness_factor=self.brightness_em_factor, mode=self.brightness_em_mode)
-
-        # Apply contrast (EM)
-        if self.contrast_em and random.uniform(0, 1) < self.da_prob:
-            image = contrast_em(image, contrast_factor=self.contrast_em_factor, mode=self.contrast_em_mode)
+            image = contrast(image, contrast_factor=self.contrast_factor, mode=self.contrast_mode,
+                min_max_vals=min_max_vals)
 
         # Apply missing parts
         if self.missing_sections and random.uniform(0, 1) < self.da_prob:
