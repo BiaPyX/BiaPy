@@ -507,7 +507,6 @@ def create_detection_masks(cfg, data_type='train'):
             df = df.rename(columns=lambda x: x.strip()) # trim spaces in column names
             cols_not_in_file = [x for x in req_columns if x not in df.columns]
             if len(cols_not_in_file) > 0:
-                print(df)
                 if len(cols_not_in_file) == 1:
                     m = f"'{cols_not_in_file[0]}' column is not present in CSV file: {os.path.join(label_dir, ids[i])}" 
                 else:
@@ -540,7 +539,7 @@ def create_detection_masks(cfg, data_type='train'):
                     raise ValueError("Classes must be consecutive, e.g [1,2,3,4..]. Given {}".format(uniq))   
             else:
                 if classes > 1:
-                    raise ValueError("MODEL.N_CLASSES > 1 but no class specified in CSV files (4th column must have class info)")
+                    raise ValueError("MODEL.N_CLASSES > 1 but no class specified in CSV file")
                 class_point = [1] * len(z_axis_point)
 
             # Create masks

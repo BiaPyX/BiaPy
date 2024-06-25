@@ -361,7 +361,7 @@ class Detection_Workflow(Base_Workflow):
                     print("Its respective CSV file seems to be: {}".format(csv_filename))
             if self.cfg.TEST.VERBOSE:
                 print("Reading GT data from: {}".format(csv_filename))
-            df_gt = pd.read_csv(csv_filename, index_col=0)     
+            df_gt = pd.read_csv(csv_filename)     
             df_gt = df_gt.rename(columns=lambda x: x.strip())
             zcoords = df_gt['axis-0'].tolist()
             ycoords = df_gt['axis-1'].tolist()
@@ -372,9 +372,9 @@ class Detection_Workflow(Base_Workflow):
             else:
                 gt_coordinates = [[0,y,x] for y,x in zip(zcoords,ycoords)]
 
-            if len(df_gt.columns) == ndim+1:
+            if classes > 1:
                 if 'class' not in df_gt:
-                    raise ValueError(f"The column number {ndim+1}, if provided, must be 'class' (representing each point class)")
+                    raise ValueError("MODEL.N_CLASSES > 1 but no class specified in CSV file")
                 else:
                     class_info = df_gt['class'].tolist()
 
@@ -784,7 +784,7 @@ class Detection_Workflow(Base_Workflow):
                     print("Its respective CSV file seems to be: {}".format(csv_filename))
             if self.cfg.TEST.VERBOSE:
                 print("Reading GT data from: {}".format(csv_filename))
-            df_gt = pd.read_csv(csv_filename, index_col=0)   
+            df_gt = pd.read_csv(csv_filename)   
             df_gt = df_gt.rename(columns=lambda x: x.strip())
             gt_coordinates = [[z,y,x] for z,y,x in zip(df_gt['axis-0'].tolist(),df_gt['axis-1'].tolist(),df_gt['axis-2'].tolist())]
 
