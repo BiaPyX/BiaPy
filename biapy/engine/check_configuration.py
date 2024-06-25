@@ -641,8 +641,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 raise ValueError("'MODEL.FEATURE_MAPS' length minus one and 'MODEL.Z_DOWN' length must be equal")
         
         # Adjust ISOTROPY values to feature maps
-        if all(x == False for x in cfg.MODEL.ISOTROPY):
-            opts.extend(['MODEL.ISOTROPY', (False,)*(len(cfg.MODEL.FEATURE_MAPS))])
+        if all(x == True for x in cfg.MODEL.ISOTROPY):
+            opts.extend(['MODEL.ISOTROPY', (True,)*(len(cfg.MODEL.FEATURE_MAPS))])
 
     # Correct UPSCALING for other workflows than SR
     if len(cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING) == 0:
