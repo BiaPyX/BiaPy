@@ -1088,6 +1088,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             del new_mask
 
             o_heat_shape = heat.shape
+            heat_min_max_vals = (heat.min(),heat.max()+sys.float_info.epsilon)
             if self.ndim == 3:
                 heat = heat.reshape(heat.shape[:(self.ndim-1)]+(heat.shape[2]*heat.shape[3],))
 
@@ -1128,7 +1129,8 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             #if e_heat is not None: e_heat = e_heat.reshape(e_heat.shape[:2]+(e_heat.shape[2]*e_heat.shape[3],))
         # Convert heatmap into imgaug object
         if heat is not None:
-            heat = HeatmapsOnImage(heat, shape=heat.shape, min_value=0.0, max_value=np.max(heat)+sys.float_info.epsilon)
+            heat = HeatmapsOnImage(heat, shape=heat.shape, min_value=heat_min_max_vals[0], 
+                max_value=heat_min_max_vals[1])
 
         # Apply cblur
         if self.cutblur and random.uniform(0, 1) < self.da_prob:
