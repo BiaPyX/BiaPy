@@ -1523,7 +1523,7 @@ def zoom(img, mask=None, heat=None, zoom_range=[], zoom_in_z=False, mode="reflec
             mask = resize(mask, mask_shape, order=mask_order, mode=mode, clip=True, preserve_range=True, 
                 anti_aliasing=True) 
         if heat is not None:
-            heat = resize(heat, img_shape, order=1, mode=mode, clip=True, preserve_range=True, 
+            heat = resize(heat, img_shape[:-1], order=1, mode=mode, clip=True, preserve_range=True, 
                 anti_aliasing=True) 
 
         if zoom_selected >= 1:
@@ -1531,7 +1531,7 @@ def zoom(img, mask=None, heat=None, zoom_range=[], zoom_in_z=False, mode="reflec
             if mask is not None:
                 mask = center_crop_single(mask, mask_orig_shape) 
             if heat is not None:
-                heat = center_crop_single(heat, img_orig_shape) 
+                heat = center_crop_single(heat, img_orig_shape[:-1]) 
         else:
             if img.ndim == 4:
                 img_pad_tup = (
@@ -1564,7 +1564,7 @@ def zoom(img, mask=None, heat=None, zoom_range=[], zoom_in_z=False, mode="reflec
             if mask is not None:
                 mask = np.pad(mask, mask_pad_tup, mode) 
             if heat is not None:
-                heat = np.pad(heat, img_pad_tup, mode)
+                heat = np.pad(heat, img_pad_tup[:-1], mode)
             
     if mask is None:
         return img
