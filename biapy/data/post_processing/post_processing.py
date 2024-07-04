@@ -304,8 +304,8 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
         if len(seed_morph_sequence) != 0 or erode_and_dilate_foreground:
             erode_seed_and_foreground()
         
-        res = (1,)+resolution if len(resolution) == 2 else resolution
-        semantic = edt.edt(foreground, anisotropy=res, black_border=False, order='C')
+        semantic = data[...,0]
+        # semantic = edt.edt(foreground*(1-seed_map), anisotropy=res[::-1], black_border=False, order='F')
         seed_map = label(seed_map, connectivity=1)
     elif channels in ["C"]:
         if ths['TYPE'] == "auto":
@@ -318,8 +318,8 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
         if len(seed_morph_sequence) != 0 or erode_and_dilate_foreground:
             erode_seed_and_foreground()
         
-        res = (1,)+resolution if len(resolution) == 2 else resolution
-        #semantic = edt.edt(foreground, anisotropy=res, black_border=False, order='C')
+        # res = (1,)+resolution if len(resolution) == 2 else resolution
+        #semantic = edt.edt(foreground, anisotropy=res[::-1], black_border=False, order='F')
         # use contour channel as input to watershed
         semantic = data[...,0]
         seed_map = label(seed_map, connectivity=1)
@@ -365,7 +365,7 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
             seed_map[z,y,x] = 1
 
         res = (1,)+resolution if len(resolution) == 2 else resolution
-        semantic = -edt.edt(1 - seed_map, anisotropy=res, black_border=False, order='C')
+        semantic = -edt.edt(1 - seed_map, anisotropy=res[::-1], black_border=False, order='F')
 
         if len(seed_morph_sequence) != 0 or erode_and_dilate_foreground:
             erode_seed_and_foreground()
