@@ -135,7 +135,8 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS,
             self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, 
             self.cfg.PROBLEM.INSTANCE_SEG.DISTANCE_CHANNEL_MASK,
-            self.cfg.MODEL.N_CLASSES
+            self.cfg.MODEL.N_CLASSES,
+            class_rebalance=self.cfg.LOSS.CLASS_REBALANCE,
         )
 
         if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BC":

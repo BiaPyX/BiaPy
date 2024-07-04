@@ -743,7 +743,9 @@ class Config:
         # Loss type, two options: "CE" -> cross entropy ; "W_CE_DICE", CE and Dice (with a weight term on each one
         # (that must sum 1) to calculate the total loss value.
         _C.LOSS.TYPE = 'CE'
-
+        # To adjust the loss function based on the imbalance between classes. Used when LOSS.TYPE == "CE" in detection and
+        # semantic segmentation and if using B,C,M,P or A channels in instance segmentation.
+        _C.LOSS.CLASS_REBALANCE = False
 
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Training phase
