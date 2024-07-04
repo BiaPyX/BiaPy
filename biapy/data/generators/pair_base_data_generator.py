@@ -1088,14 +1088,12 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             del new_mask
 
             o_heat_shape = heat.shape
-            heat_min_max_vals = (heat.min(),heat.max()+sys.float_info.epsilon)
             if self.ndim == 3:
                 heat = heat.reshape(heat.shape[:(self.ndim-1)]+(heat.shape[2]*heat.shape[3],))
 
         # Save shape
         o_img_shape = image.shape
         o_mask_shape = mask.shape
-        min_max_vals = (image.min(),image.max())
 
         # Convert to grayscale
         if self.grayscale and random.uniform(0, 1) < self.da_prob:
@@ -1129,8 +1127,8 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             #if e_heat is not None: e_heat = e_heat.reshape(e_heat.shape[:2]+(e_heat.shape[2]*e_heat.shape[3],))
         # Convert heatmap into imgaug object
         if heat is not None:
-            heat = HeatmapsOnImage(heat, shape=heat.shape, min_value=heat_min_max_vals[0], 
-                max_value=heat_min_max_vals[1])
+            heat = HeatmapsOnImage(heat, shape=heat.shape, min_value=heat.min(), 
+                max_value=heat.max()+sys.float_info.epsilon)
 
         # Apply cblur
         if self.cutblur and random.uniform(0, 1) < self.da_prob:
@@ -1142,24 +1140,20 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         # Apply cutnoise
         if self.cutnoise and random.uniform(0, 1) < self.da_prob:
-            image = cutnoise(image, self.cnoise_scale, self.cnoise_nb_iterations, self.cnoise_size, 
-                min_max_vals=min_max_vals)
+            image = cutnoise(image, self.cnoise_scale, self.cnoise_nb_iterations, self.cnoise_size)
 
         # Apply misalignment
         if self.misalignment and random.uniform(0, 1) < self.da_prob:
             rel = str(o_img_shape[-1])+"_"+str(o_mask_shape[-1])
-            image, mask = misalignment(image, mask, self.ms_displacement, self.ms_rotate_ratio, c_relation=rel,
-                min_max_vals=min_max_vals)
+            image, mask = misalignment(image, mask, self.ms_displacement, self.ms_rotate_ratio, c_relation=rel)
 
         # Apply brightness
         if self.brightness and random.uniform(0, 1) < self.da_prob:
-            image = brightness(image, brightness_factor=self.brightness_factor, mode=self.brightness_mode,
-                min_max_vals=min_max_vals)
+            image = brightness(image, brightness_factor=self.brightness_factor, mode=self.brightness_mode)
 
         # Apply contrast
         if self.contrast and random.uniform(0, 1) < self.da_prob:
-            image = contrast(image, contrast_factor=self.contrast_factor, mode=self.contrast_mode,
-                min_max_vals=min_max_vals)
+            image = contrast(image, contrast_factor=self.contrast_factor, mode=self.contrast_mode)
 
         # Apply gamma contrast
         if self.gamma_contrast and random.uniform(0, 1) < self.da_prob:

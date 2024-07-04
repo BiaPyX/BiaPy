@@ -273,7 +273,7 @@ def cutmix(im1, im2, mask1, mask2, size=(0.2,0.4)):
     return out, m_out
 
 
-def cutnoise(img, scale=(0.1,0.2), nb_iterations=(1,3), size=(0.2,0.4), min_max_vals=(0.,1.)):
+def cutnoise(img, scale=(0.1,0.2), nb_iterations=(1,3), size=(0.2,0.4)):
     """
     Cutnoise data augmentation. Randomly add noise to a cuboid region in the image to force the model to learn
     denoising when making predictions.
@@ -291,10 +291,6 @@ def cutnoise(img, scale=(0.1,0.2), nb_iterations=(1,3), size=(0.2,0.4), min_max_
 
     size : boolean, optional
         Range to choose the size of the areas to transform. E.g. ``(0.2, 0.4)``.
-
-    min_max_vals : tuple of two floats, optional
-        To clip the output to the range defined. The output values will be in this range: 
-        ``min_max_vals[0] <= output <= min_max_vals[1]``. 
 
     Returns
     -------
@@ -335,13 +331,13 @@ def cutnoise(img, scale=(0.1,0.2), nb_iterations=(1,3), size=(0.2,0.4), min_max_
         cy = np.random.randint(0, img.shape[0]-(y_size))
         cx = np.random.randint(0, img.shape[1]-(x_size))
 
-        _scale = random.uniform(scale[0], scale[1])*min_max_vals[1]
+        _scale = random.uniform(scale[0], scale[1])*img.max()
         noise = np.random.normal(loc=0, scale=_scale, size=(y_size, x_size))
         out[cy:cy+y_size, cx:cx+x_size, :] += np.stack((noise,)*out.shape[-1], axis=-1)
-    return np.clip(out, min_max_vals[0], min_max_vals[1])
+    return o_heat_shapeut
 
 
-def misalignment(img, mask, displacement=16, rotate_ratio=0.0, c_relation="1_1", min_max_vals=(0.,1.)):
+def misalignment(img, mask, displacement=16, rotate_ratio=0.0, c_relation="1_1"):
     """
     Mis-alignment data augmentation of image stacks. This augmentation is applied to both images and masks.
 
@@ -361,10 +357,6 @@ def misalignment(img, mask, displacement=16, rotate_ratio=0.0, c_relation="1_1",
 
     rotate_ratio : float, optional
         Ratio of rotation-based mis-alignment.
-
-    min_max_vals : tuple of two floats, optional
-        To clip the output to the range defined. The output values will be in this range: 
-        ``min_max_vals[0] <= output <= min_max_vals[1]``. 
 
     Returns
     -------
@@ -485,7 +477,7 @@ def misalignment(img, mask, displacement=16, rotate_ratio=0.0, c_relation="1_1",
                 m_out[y0:y0+out_shape[0],x0:x0+out_shape[1],:idx_mask] = mask[y0:y0+out_shape[0],x0:x0+out_shape[1],:idx_mask]
                 m_out[y1:y1+out_shape[0],x1:x1+out_shape[1],idx_mask:] = mask[y1:y1+out_shape[0],x1:x1+out_shape[1],idx_mask:]
 
-    return np.clip(out, min_max_vals[0], min_max_vals[1]), m_out
+    return out, m_out
 
 
 def random_rotate_matrix(height, displacement):
@@ -497,7 +489,7 @@ def random_rotate_matrix(height, displacement):
     M = cv2.getRotationMatrix2D((height/2, height/2), rand_angle, 1)
     return M
 
-def brightness(image, brightness_factor=(0,0), mode='2D', min_max_vals=(0.,1.)):
+def brightness(image, brightness_factor=(0,0), mode='2D'):
     """
     Randomly adjust brightness between a range.
 
@@ -511,10 +503,6 @@ def brightness(image, brightness_factor=(0,0), mode='2D', min_max_vals=(0.,1.)):
 
     mode : str, optional
         One of ``2D`` or ``3D``.
-
-    min_max_vals : tuple of two floats, optional
-        To clip the output to the range defined. The output values will be in this range: 
-        ``min_max_vals[0] <= output <= min_max_vals[1]``. 
 
     Returns
     -------
@@ -553,15 +541,13 @@ def brightness(image, brightness_factor=(0,0), mode='2D', min_max_vals=(0.,1.)):
         b_factor = np.random.uniform(brightness_factor[0], brightness_factor[1], image.shape[-1]*3)
         for z in range(image.shape[2]):
             image[:, :, z] += b_factor[z*3]
-            image[:, :, z] = np.clip(image[:, :, z], min_max_vals[0], min_max_vals[1])
     else:
         b_factor = np.random.uniform(brightness_factor[0], brightness_factor[1])
         image += b_factor
-        image = np.clip(image, min_max_vals[0], min_max_vals[1])
 
     return image
 
-def contrast(image, contrast_factor=(0,0), mode='2D', min_max_vals=(0.,1.)):
+def contrast(image, contrast_factor=(0,0), mode='2D'):
     """
     Contrast augmentation.
 
@@ -575,10 +561,6 @@ def contrast(image, contrast_factor=(0,0), mode='2D', min_max_vals=(0.,1.)):
 
     mode : str, optional
         One of ``2D`` or ``3D``.
-
-    min_max_vals : tuple of two floats, optional
-        To clip the output to the range defined. The output values will be in this range: 
-        ``min_max_vals[0] <= output <= min_max_vals[1]``. 
 
     Returns
     -------
@@ -617,11 +599,9 @@ def contrast(image, contrast_factor=(0,0), mode='2D', min_max_vals=(0.,1.)):
         c_factor = np.random.uniform(contrast_factor[0], contrast_factor[1], image.shape[-1]*3)
         for z in range(image.shape[2]):
             image[:, :, z] *= 1 + c_factor[z*3]
-            image[:, :, z] = np.clip(image[:, :, z], min_max_vals[0], min_max_vals[1])
     else:
         c_factor = np.random.uniform(contrast_factor[0], contrast_factor[1])
         image *= 1 + c_factor
-        image = np.clip(image, min_max_vals[0], min_max_vals[1])
 
     return image
 
