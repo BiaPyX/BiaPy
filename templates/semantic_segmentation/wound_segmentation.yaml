@@ -5,14 +5,12 @@ SYSTEM:
     NUM_WORKERS: 5
 
 PROBLEM:
-    TYPE: INSTANCE_SEG
-    NDIM: 3D
-    INSTANCE_SEG:
-        DATA_CHANNELS: BC
-        DATA_MW_TH_TYPE: "auto"
+    TYPE: SEMANTIC_SEG
+    NDIM: 2D
   
 DATA: 
-    PATCH_SIZE: (20, 128, 128, 1)
+    PATCH_SIZE: (256, 256, 1)
+    REFLECT_TO_COMPLETE_SHAPE: True
     TRAIN:                                                                                                              
         PATH: /path/to/data
         GT_PATH: /path/to/data
@@ -24,30 +22,33 @@ DATA:
         GT_PATH: /path/to/data
         IN_MEMORY: True
         LOAD_GT: True
-        PADDING: (4,16,16)
+        PADDING: (32,32)
 
 AUGMENTOR:
     ENABLE: True
-    RANDOM_ROT: True
-    VFLIP: True
-    HFLIP: True
-    ZFLIP: True
+    HFLIP: true
+    RANDOM_ROT: true
+    VFLIP: true
+    BRIGHTNESS: True
+    BRIGHTNESS_FACTOR: (-0.1, 0.1)
+    CONTRAST: True
+    CONTRAST_FACTOR: (-0.1, 0.1)
+    ELASTIC: True
 
 MODEL:
-    ARCHITECTURE: unet
-    FEATURE_MAPS: [16, 32, 64, 128, 256]
-    Z_DOWN: [1,1,1,1]
+    ARCHITECTURE: attention_unet
     LOAD_CHECKPOINT: False
 
+LOSS:
+  CLASS_REBALANCE: True
+
 TRAIN:
-    ENABLE: True
-    OPTIMIZER: ADAMW
-    LR: 1.E-4
-    BATCH_SIZE: 6
-    EPOCHS: 360
-    PATIENCE: 50
+  BATCH_SIZE: 6
+  ENABLE: true
+  EPOCHS: 360
+  LR: 0.0001
+  OPTIMIZER: ADAMW
+  PATIENCE: 50
   
 TEST:
     ENABLE: True
-    AUGMENTATION: False
-    FULL_IMG: False

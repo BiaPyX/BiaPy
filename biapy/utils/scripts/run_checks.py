@@ -1009,7 +1009,9 @@ if all_test_info["Test1"]["enable"]:
     biapy_config['TEST']['FULL_IMG'] = True
     biapy_config['TEST']['ANALIZE_2D_IMGS_AS_3D_STACK'] = True
     biapy_config['TEST']['POST_PROCESSING'] = {}
-    biapy_config['TEST']['POST_PROCESSING']['YZ_FILTERING'] = True
+    biapy_config['TEST']['POST_PROCESSING']['MEDIAN_FILTER'] = True
+    biapy_config['TEST']['POST_PROCESSING']['MEDIAN_FILTER_AXIS'] = ["z"]
+    biapy_config['TEST']['POST_PROCESSING']['MEDIAN_FILTER_SIZE'] = [5]
 
     # Save file
     test_file = os.path.join(semantic_folder, all_test_info["Test1"]["yaml"])

@@ -2,6 +2,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from torchvision.ops.stochastic_depth import StochasticDepth
+from torchvision.ops.misc import Permute
+
 class ConvBlock(nn.Module):
     def __init__(self, conv, in_size, out_size, k_size, act=None, norm='none', dropout=0, se_block=False):
         """
@@ -99,7 +102,64 @@ class DoubleConvBlock(nn.Module):
     def forward(self, x):
         out = self.block(x)
         return out
+    
+class ConvNeXtBlock_V1(nn.Module):
+    """
+    ConvNext block.
 
+    Parameters
+    ----------
+    ndim : Torch convolutional layer
+        Number of dimensions of the input data. 
+
+    conv : Torch convolutional layer
+        Convolutional layer to use in the residual block. 
+
+    dim: int
+        Input feature maps of the ConvNext block. The same value will be used as output feature maps.
+
+    layer_scale: float, optional
+        Layer scale parameter.
+
+    stochastic_depth_prob: float, optional
+        Stochastic depth probability.
+
+    layer_norm : nn.LayerNorm Torch layer, optional
+        Layer normalization layer to use. 
+    """
+    def __init__(self, ndim, conv, dim, layer_scale=1e-6, stochastic_depth_prob=0.0, layer_norm=None):
+        super().__init__()
+
+        if layer_norm is None:
+            layer_norm = nn.LayerNorm
+        
+        if ndim ==3:
+            pre_ln_permutation = Permute([0,2,3,4,1])
+            post_ln_permutation = Permute([0,4,1,2,3])
+            layer_scale_dim = (dim, 1, 1, 1)
+        elif ndim==2:
+            pre_ln_permutation = Permute([0,2,3,1])
+            post_ln_permutation = Permute([0,3,1,2])
+            layer_scale_dim = (dim, 1, 1)
+
+        self.block = nn.Sequential(
+            conv(dim, dim, kernel_size=7, padding=3, groups=dim, bias=True),
+            pre_ln_permutation,
+            layer_norm(dim),
+            nn.Linear(in_features=dim, out_features=4*dim, bias=True),
+            nn.GELU(),
+            nn.Linear(in_features=4*dim, out_features=dim, bias=True),
+            post_ln_permutation
+        )
+        self.layer_scale = nn.Parameter(torch.ones(layer_scale_dim) * layer_scale)
+        self.stochastic_depth = StochasticDepth(stochastic_depth_prob, "row")
+
+    def forward(self, x):
+        result = self.layer_scale * self.block(x)
+        result = self.stochastic_depth(result)
+        result += x
+        return result
+    
 class UpBlock(nn.Module):
     def __init__(self, ndim, convtranspose, in_size, out_size, z_down, up_mode, conv, k_size, 
         act=None, norm='none', dropout=0, attention_gate=False, se_block=False):
@@ -142,6 +202,9 @@ class UpBlock(nn.Module):
 
         drop_value : float, optional
             Dropout value to be fixed.
+        
+        attention_gate: boolean, optional
+            Whether to use an attention gate when concatenating residual.
 
         se_block : boolean, optional
             Whether to add Squeeze-and-Excitation blocks or not. 
@@ -179,6 +242,122 @@ class UpBlock(nn.Module):
         else:
             out = torch.cat([up, bridge], 1)
         out = self.conv_block(out)
+        return out
+    
+class UpConvNeXtBlock_V1(nn.Module):
+    def __init__(self, ndim, convtranspose, in_size, out_size, z_down, up_mode, conv,
+        attention_gate=False, se_block=False,
+        cn_layers=1, sd_probs=[0.0], layer_scale=1e-6, layer_norm=None):
+        """
+        Convolutional ConvNext upsampling block.
+
+        Parameters
+        ----------
+        ndim : Torch convolutional layer
+            Number of dimensions of the input data. 
+
+        convtranspose : Torch convolutional layer
+            Transpose convolutional layer to use. Only used if ``up_mode`` is ``'convtranspose'``. 
+
+        in_size : array of ints
+            Input feature maps of the convolutional layers.
+
+        out_size : str, optional
+            Output feature maps of the convolutional layers.
+
+        z_down : int, optional
+            Downsampling used in z dimension. 
+
+        up_mode : str, optional
+            Upsampling mode between ``'convtranspose'`` and ``'upsampling'``, which refers respectively
+            to make an upsampling by appliying a transpose convolution (nn.ConvTranspose) or 
+            upsampling layer (nn.Upsample). 
+
+        conv : Torch convolutional layer
+            Convolutional layer to use in the residual block. 
+
+        attention_gate: boolean, optional
+            Whether to use an attention gate when concatenating residual.
+
+        se_block : boolean, optional
+            Whether to add Squeeze-and-Excitation blocks or not. 
+        
+        cn_layers: int
+            Number of ConvNext block layers.
+        
+        sd_probs: array of floats, optional
+            Stochastic depth probabilities for each layer.
+
+        layer_scale: float, optional
+            Layer scale parameter.
+        
+        layer_norm : nn.LayerNorm Torch layer, optional
+            Layer normalization layer to use.
+        """
+        super(UpConvNeXtBlock_V1, self).__init__()
+        self.ndim = ndim
+        block = []
+        mpool = (z_down, 2, 2) if ndim == 3 else (2, 2)
+
+        if ndim ==3:
+            pre_ln_permutation = Permute([0,2,3,4,1])
+            post_ln_permutation = Permute([0,4,1,2,3])
+        else:
+            pre_ln_permutation = Permute([0,2,3,1])
+            post_ln_permutation = Permute([0,3,1,2])
+
+        if layer_norm is not None:
+            block.append(
+                nn.Sequential(
+                    pre_ln_permutation,
+                    layer_norm(in_size),
+                    post_ln_permutation
+                )
+            )
+        else:
+            layer_norm = nn.LayerNorm
+            block.append(
+                nn.Sequential(
+                    pre_ln_permutation,
+                    layer_norm(in_size),
+                    post_ln_permutation
+                )
+            )
+
+        # Upsampling
+        if up_mode == 'convtranspose':
+            block.append(convtranspose(in_size, out_size, kernel_size=mpool, stride=mpool))
+        elif up_mode == 'upsampling':
+            block.append(nn.Upsample(mode='bilinear' if ndim==2 else 'trilinear', scale_factor=mpool))
+            block.append(conv(in_size, out_size, kernel_size=1))
+
+        self.up = nn.Sequential(*block)
+
+        # Define attention gate
+        if attention_gate:
+            self.attention_gate = AttentionBlock(conv=conv, in_size=out_size, out_size=out_size//2) 
+        else:
+            self.attention_gate = None
+
+        # Convolution block to change dimensions of concatenated tensor
+        self.conv_block = ConvBlock(conv, in_size=out_size*2, out_size=out_size, k_size=1, se_block=se_block)
+        
+        # ConvNeXtBlock
+        stage = nn.ModuleList()
+        for i in reversed(range(cn_layers)):
+            stage.append(ConvNeXtBlock_V1(ndim, conv, out_size, layer_scale, sd_probs[i], layer_norm=layer_norm))
+        self.cn_block = nn.Sequential(*stage)
+
+    def forward(self, x, bridge):
+        up = self.up(x)
+        if self.attention_gate is not None:
+            attn = self.attention_gate(up, bridge)
+            out = torch.cat([up, attn], 1)
+        else:
+            out = torch.cat([up, bridge], 1)
+
+        out = self.conv_block(out)
+        out = self.cn_block(out)
         return out
 
 class AttentionBlock(nn.Module):
