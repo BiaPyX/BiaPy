@@ -226,21 +226,21 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
     #### Instance segmentation ####
     if cfg.PROBLEM.TYPE == 'INSTANCE_SEG':
-        assert cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ['BC', 'BCM', 'BCD', 'BCDv2', 'Dv2', 'BDv2', 'BP', 'BD'],\
-            "PROBLEM.INSTANCE_SEG.DATA_CHANNELS not in ['BC', 'BCM', 'BCD', 'BCDv2', 'Dv2', 'BDv2', 'BP', 'BD']"
+        assert cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ['A','C', 'BC', 'BCM', 'BCD', 'BCDv2', 'Dv2', 'BDv2', 'BP', 'BD'],\
+            "PROBLEM.INSTANCE_SEG.DATA_CHANNELS not in ['A','C', 'BC', 'BCM', 'BCD', 'BCDv2', 'Dv2', 'BDv2', 'BP', 'BD']"
         if len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS) != channels_provided:
             raise ValueError("'PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS' needs to be of the same length as the channels selected in 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'. "
                             "E.g. 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'='BC' 'PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS'=[1,0.5]. "
                             "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'='BCD' 'PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS'=[0.5,0.5,1]. "
                             "If 'MODEL.N_CLASSES' > 2 one more weigth need to be provided.")
         if cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK:
-            if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS not in ['BC', 'BCM', 'BCD', 'BCDv2']:
-                raise ValueError("'PROBLEM.INSTANCE_SEG.DATA_CHANNELS' needs to be one between ['BC', 'BCM', 'BCD', 'BCDv2'] "
+            if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS not in ['C', 'BC', 'BCM', 'BCD', 'BCDv2']:
+                raise ValueError("'PROBLEM.INSTANCE_SEG.DATA_CHANNELS' needs to be one between ['C', 'BC', 'BCM', 'BCD', 'BCDv2'] "
                                 "when 'TEST.POST_PROCESSING.VORONOI_ON_MASK' is enabled")
             if not check_value(cfg.TEST.POST_PROCESSING.VORONOI_TH):
                 raise ValueError("'TEST.POST_PROCESSING.VORONOI_TH' not in [0, 1] range")   
-        if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS not in ["BC", "BCM", "BCD", "BP"] and cfg.PROBLEM.INSTANCE_SEG.ERODE_AND_DILATE_FOREGROUND:
-            raise ValueError("'PROBLEM.INSTANCE_SEG.ERODE_AND_DILATE_FOREGROUND' can only be used with 'BC', 'BCM', 'BP' or 'BCD' channels")
+        if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS not in ['C', "BC", "BCM", "BCD", "BP"] and cfg.PROBLEM.INSTANCE_SEG.ERODE_AND_DILATE_FOREGROUND:
+            raise ValueError("'PROBLEM.INSTANCE_SEG.ERODE_AND_DILATE_FOREGROUND' can only be used with 'C', 'BC', 'BCM', 'BP' or 'BCD' channels")
         for morph_operation in cfg.PROBLEM.INSTANCE_SEG.SEED_MORPH_SEQUENCE:
             if morph_operation != "dilate" and morph_operation != "erode":
                 raise ValueError("'PROBLEM.INSTANCE_SEG.SEED_MORPH_SEQUENCE' can only be a sequence with 'dilate' or 'erode' operations. "
@@ -601,14 +601,14 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
     ### Model ###
     if cfg.MODEL.SOURCE == "biapy":
-        assert model_arch in ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'simple_cnn', 'efficientnet_b0', 
+        assert model_arch in ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'resunet_se', 'simple_cnn', 'efficientnet_b0', 
             'efficientnet_b1', 'efficientnet_b2', 'efficientnet_b3', 'efficientnet_b4','efficientnet_b5','efficientnet_b6','efficientnet_b7',
             'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae', 'unext_v1'],\
             "MODEL.ARCHITECTURE not in ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'simple_cnn', 'efficientnet_b[0-7]', 'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae', 'unext_v1']"
-        if model_arch not in ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'multiresunet', 'unetr', 'vit', 'mae', 'unext_v1'] and cfg.PROBLEM.NDIM == '3D' and cfg.PROBLEM.TYPE != "CLASSIFICATION":
-            raise ValueError("For 3D these models are available: {}".format(['unet', 'resunet', 'resunet++', 'seunet', 'multiresunet', 'attention_unet', 'unetr', 'vit', 'mae', 'unext_v1']))
-        if cfg.MODEL.N_CLASSES > 2 and cfg.PROBLEM.TYPE != "CLASSIFICATION" and model_arch not in ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'multiresunet', 'unetr', 'unext_v1']:
-            raise ValueError("'MODEL.N_CLASSES' > 2 can only be used with 'MODEL.ARCHITECTURE' in ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'multiresunet', 'unetr', 'unext_v1']")
+        if model_arch not in ['unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'multiresunet', 'unetr', 'vit', 'mae', 'unext_v1'] and cfg.PROBLEM.NDIM == '3D' and cfg.PROBLEM.TYPE != "CLASSIFICATION":
+            raise ValueError("For 3D these models are available: {}".format(['unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'multiresunet', 'attention_unet', 'unetr', 'vit', 'mae', 'unext_v1']))
+        if cfg.MODEL.N_CLASSES > 2 and cfg.PROBLEM.TYPE != "CLASSIFICATION" and model_arch not in ['unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'multiresunet', 'unetr', 'unext_v1']:
+            raise ValueError("'MODEL.N_CLASSES' > 2 can only be used with 'MODEL.ARCHITECTURE' in ['unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'multiresunet', 'unetr', 'unext_v1']")
         
         assert len(cfg.MODEL.FEATURE_MAPS) > 2, "'MODEL.FEATURE_MAPS' needs to have at least 3 values"
         
@@ -639,6 +639,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 raise ValueError("'MODEL.Z_DOWN' length must be 4 when using 'multiresunet'")
             elif len(cfg.MODEL.FEATURE_MAPS)-1 != len(cfg.MODEL.Z_DOWN):
                 raise ValueError("'MODEL.FEATURE_MAPS' length minus one and 'MODEL.Z_DOWN' length must be equal")
+        
+        # Adjust ISOTROPY values to feature maps
+        if all(x == True for x in cfg.MODEL.ISOTROPY):
+            opts.extend(['MODEL.ISOTROPY', (True,)*(len(cfg.MODEL.FEATURE_MAPS))])
 
     # Correct UPSCALING for other workflows than SR
     if len(cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING) == 0:
@@ -655,23 +659,23 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             raise ValueError("cfg.MODEL.UPSAMPLE_LAYER' needs to be one between ['upsampling', 'convtranspose']. Provided {}"
                             .format(cfg.MODEL.UPSAMPLE_LAYER))
         if cfg.PROBLEM.TYPE in ["SEMANTIC_SEG", "INSTANCE_SEG", "DETECTION", "DENOISING"]:
-            if model_arch not in ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'unetr', 'multiresunet', 'unext_v1']:
-                raise ValueError("Architectures available for {} are: ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'unetr', 'multiresunet', 'unext_v1']"
+            if model_arch not in ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'resunet_se', 'unetr', 'multiresunet', 'unext_v1']:
+                raise ValueError("Architectures available for {} are: ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'resunet_se', 'unetr', 'multiresunet', 'unext_v1']"
                                 .format(cfg.PROBLEM.TYPE))
         elif cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
-            if cfg.PROBLEM.NDIM == '2D' and model_arch not in ['edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'multiresunet', 'unext_v1']:
-                raise ValueError("Architectures available for 2D 'SUPER_RESOLUTION' are: ['edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'multiresunet', 'unext_v1']")
+            if cfg.PROBLEM.NDIM == '2D' and model_arch not in ['edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'multiresunet', 'unext_v1']:
+                raise ValueError("Architectures available for 2D 'SUPER_RESOLUTION' are: ['edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'multiresunet', 'unext_v1']")
             elif cfg.PROBLEM.NDIM == '3D':
                 if model_arch not in ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'multiresunet', 'unext_v1']:
-                    raise ValueError("Architectures available for 3D 'SUPER_RESOLUTION' are: ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'multiresunet', 'unext_v1']")
+                    raise ValueError("Architectures available for 3D 'SUPER_RESOLUTION' are: ['unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'multiresunet', 'unext_v1']")
                 assert cfg.MODEL.UNET_SR_UPSAMPLE_POSITION in ["pre", "post"], "'MODEL.UNET_SR_UPSAMPLE_POSITION' not in ['pre', 'post']"
         elif cfg.PROBLEM.TYPE == 'IMAGE_TO_IMAGE':
             if model_arch not in ['edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'unetr', 'multiresunet', 'unext_v1']:
                 raise ValueError("Architectures available for 'IMAGE_TO_IMAGE' are: ['edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'unetr', 'multiresunet', 'unext_v1']")
         elif cfg.PROBLEM.TYPE == 'SELF_SUPERVISED':
             if model_arch not in ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet',  
-                'unetr', 'unext_v1', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae']:
-                raise ValueError("'SELF_SUPERVISED' models available are these: ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', " 
+                'resunet_se', 'unetr', 'unext_v1', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae']:
+                raise ValueError("'SELF_SUPERVISED' models available are these: ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'resunet_se', " 
                     "'unetr', 'unext_v1', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae']")
         elif cfg.PROBLEM.TYPE == 'CLASSIFICATION':
             if model_arch not in ['simple_cnn', 'vit'] and 'efficientnet' not in model_arch:
@@ -687,7 +691,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 raise ValueError("'unetr', 'vit' 'mae' models need to have same shape in all dimensions (e.g. DATA.PATCH_SIZE = (80,80,80,1) )")
         # Check that the input patch size is divisible in every level of the U-Net's like architectures, as the model
         # will throw an error not very clear for users
-        if model_arch in ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'multiresunet', 'unext_v1']:
+        if model_arch in ['unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'multiresunet', 'unext_v1']:
             z_size = cfg.DATA.PATCH_SIZE[0]
             sizes = cfg.DATA.PATCH_SIZE[1:-1]
             for i in range(len(cfg.MODEL.FEATURE_MAPS)-1):
@@ -744,12 +748,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         if cfg.AUGMENTOR.CONTRAST:
             if cfg.AUGMENTOR.CONTRAST_MODE not in ['2D', '3D'] and cfg.PROBLEM.NDIM == "3D":
                 raise ValueError("AUGMENTOR.CONTRAST_MODE not in ['2D', '3D']")
-        if cfg.AUGMENTOR.BRIGHTNESS_EM:
-            if cfg.AUGMENTOR.BRIGHTNESS_EM_MODE not in ['2D', '3D'] and cfg.PROBLEM.NDIM == "3D":
-                raise ValueError("AUGMENTOR.BRIGHTNESS_EM_MODE not in ['2D', '3D']")
-        if cfg.AUGMENTOR.CONTRAST_EM:
-            if cfg.AUGMENTOR.CONTRAST_EM_MODE not in ['2D', '3D'] and cfg.PROBLEM.NDIM == "3D":
-                raise ValueError("AUGMENTOR.CONTRAST_EM_MODE not in ['2D', '3D']")
         if cfg.AUGMENTOR.DROPOUT:
             if not check_value(cfg.AUGMENTOR.DROP_RANGE):
                 raise ValueError("AUGMENTOR.DROP_RANGE values not in [0, 1] range")
@@ -779,7 +777,17 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 raise ValueError("cfg.AUGMENTOR.GRID_D_RANGE values not in [0, 1] range")
             if not check_value(cfg.AUGMENTOR.GRID_ROTATE):
                 raise ValueError("AUGMENTOR.GRID_ROTATE not in [0, 1] range")
-                             
+        if cfg.AUGMENTOR.ZOOM:
+            if not check_value(cfg.AUGMENTOR.ZOOM_RANGE, (0.1,10)):
+                raise ValueError("AUGMENTOR.ZOOM_RANGE values needs to be between [0.1,10]")
+            if cfg.AUGMENTOR.ZOOM_IN_Z and dim_count == 2:
+                print("WARNING: Ignoring AUGMENTOR.ZOOM_IN_Z in 2D problem")
+        assert cfg.AUGMENTOR.AFFINE_MODE in ['constant', 'reflect', 'wrap', 'symmetric'], \
+            "'AUGMENTOR.AFFINE_MODE' needs to be one between ['constant', 'reflect', 'wrap', 'symmetric']"  
+        if cfg.AUGMENTOR.GAMMA_CONTRAST and cfg.DATA.NORMALIZATION.TYPE == 'custom':
+            raise ValueError("'AUGMENTOR.GAMMA_CONTRAST' doesn't work correctly on images with negative values, which 'custom' "
+                "normalization will lead to")
+
     #### Post-processing ####
     if cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS:
         if len(cfg.DATA.TEST.RESOLUTION) == 1:

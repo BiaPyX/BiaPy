@@ -1075,30 +1075,30 @@ class Base_Workflow(metaclass=ABCMeta):
                 obj = self.input_queue.get(timeout=60)
                 if obj == None: break
 
-                img, patch_coords = obj
-                img, _ = self.test_generator.norm_X(img)
-                if self.cfg.TEST.AUGMENTATION:
-                    p = ensemble16_3d_predictions(img[0], batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
-                        axis_order_back=self.axis_order_back, pred_func=self.model_call_func, 
-                        axis_order=self.axis_order, device=self.device)
-                else:
-                    with torch.cuda.amp.autocast():
-                        p = self.model_call_func(img)
-                p = self.apply_model_activations(p)
-                # Multi-head concatenation
-                if isinstance(p, list):
-                    p = torch.cat((p[0], torch.argmax(p[1], axis=1).unsqueeze(1)), dim=1)
-                p = to_numpy_format(p, self.axis_order_back)
+            img, patch_coords = obj
+            img, _ = self.test_generator.norm_X(img)
+            if self.cfg.TEST.AUGMENTATION:
+                p = ensemble16_3d_predictions(img[0], batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
+                    axis_order_back=self.axis_order_back, pred_func=self.model_call_func, 
+                    axis_order=self.axis_order, device=self.device, mode=self.cfg.TEST.AUGMENTATION_MODE)
+            else:
+                with torch.cuda.amp.autocast():
+                    p = self.model_call_func(img)
+            p = self.apply_model_activations(p)
+            # Multi-head concatenation
+            if isinstance(p, list):
+                p = torch.cat((p[0], torch.argmax(p[1], axis=1).unsqueeze(1)), dim=1)
+            p = to_numpy_format(p, self.axis_order_back)
 
-                # Create a mask with the overlap. Calculate the exact part of the patch that will be inserted in the 
-                # final H5/Zarr file
-                p = p[0, self.cfg.DATA.TEST.PADDING[0]:p.shape[1]-self.cfg.DATA.TEST.PADDING[0],
-                    self.cfg.DATA.TEST.PADDING[1]:p.shape[2]-self.cfg.DATA.TEST.PADDING[1],
-                    self.cfg.DATA.TEST.PADDING[2]:p.shape[3]-self.cfg.DATA.TEST.PADDING[2]]
-                m = np.ones(p.shape, dtype=np.uint8)
+            # Create a mask with the overlap. Calculate the exact part of the patch that will be inserted in the 
+            # final H5/Zarr file
+            p = p[0, self.cfg.DATA.TEST.PADDING[0]:p.shape[1]-self.cfg.DATA.TEST.PADDING[0],
+                self.cfg.DATA.TEST.PADDING[1]:p.shape[2]-self.cfg.DATA.TEST.PADDING[1],
+                self.cfg.DATA.TEST.PADDING[2]:p.shape[3]-self.cfg.DATA.TEST.PADDING[2]]
+            m = np.ones(p.shape, dtype=np.uint8)
 
-                # Put the prediction into queue
-                self.output_queue.put([p, m, patch_coords])         
+            # Put the prediction into queue
+            self.output_queue.put([p, m, patch_coords])         
 
             # Get some auxiliar variables
             self.stats['patch_by_batch_counter'] = self.extract_info_queue.get(timeout=60)
@@ -1367,11 +1367,12 @@ class Base_Workflow(metaclass=ABCMeta):
                     for k in tqdm(range(self._X.shape[0]), leave=False):
                         if self.cfg.PROBLEM.NDIM == '2D':
                             p = ensemble8_2d_predictions(self._X[k], axis_order_back=self.axis_order_back,
-                                pred_func=self.model_call_func, axis_order=self.axis_order, device=self.device)
+                                pred_func=self.model_call_func, axis_order=self.axis_order, device=self.device,
+                                mode=self.cfg.TEST.AUGMENTATION_MODE)
                         else:
                             p = ensemble16_3d_predictions(self._X[k], batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
                                 axis_order_back=self.axis_order_back, pred_func=self.model_call_func, 
-                                axis_order=self.axis_order, device=self.device)
+                                axis_order=self.axis_order, device=self.device, mode=self.cfg.TEST.AUGMENTATION_MODE)
                         p = self.apply_model_activations(p)
                         # Multi-head concatenation
                         if isinstance(p, list):
@@ -1483,6 +1484,14 @@ class Base_Workflow(metaclass=ABCMeta):
                 f_name = load_data_from_dir if self.cfg.PROBLEM.NDIM == '2D' else load_3d_images_from_dir
                 pred, _, _ = f_name(f)
 
+                if type( pred ) is list:
+                    for i in range(len(pred)):
+                        if pred[i].ndim == 5:
+                            pred[i] = np.squeeze( pred[i], 0 )
+                else:
+                    if pred.ndim == 5:
+                        pred = np.squeeze( pred, 0 )
+
             self.after_merge_patches(pred)
             
             if self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
@@ -1509,7 +1518,8 @@ class Base_Workflow(metaclass=ABCMeta):
                 # Make the prediction
                 if self.cfg.TEST.AUGMENTATION:
                     pred = ensemble8_2d_predictions(self._X[0], axis_order_back=self.axis_order_back, 
-                        pred_func=self.model_call_func, axis_order=self.axis_order, device=self.device)
+                        pred_func=self.model_call_func, axis_order=self.axis_order, device=self.device,
+                        mode=self.cfg.TEST.AUGMENTATION_MODE)
                 else:
                     with torch.cuda.amp.autocast():
                         pred = self.model_call_func(self._X)
@@ -1547,7 +1557,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 # load predictions from file
                 pred, _, _ = load_data_from_dir( self.cfg.PATHS.RESULT_DIR.FULL_IMAGE )
                 if pred.ndim == 5:
-                    pred = np.squeeze( pred )
+                    pred = np.squeeze( pred, 0 )
 
             if self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
                 self.all_pred.append(pred)

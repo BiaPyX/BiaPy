@@ -6,7 +6,7 @@ from torchvision.ops.stochastic_depth import StochasticDepth
 from torchvision.ops.misc import Permute
 
 class ConvBlock(nn.Module):
-    def __init__(self, conv, in_size, out_size, k_size, act=None, batch_norm=None, dropout=0, se_block=False):
+    def __init__(self, conv, in_size, out_size, k_size, act=None, norm='none', dropout=0, se_block=False):
         """
         Convolutional block.
 
@@ -27,8 +27,8 @@ class ConvBlock(nn.Module):
         act : str, optional
             Activation layer to use. 
 
-        batch_norm : nn.BatchNorm Torch layer, optional
-            Batch normalization layer to use. 
+        norm : str, optional
+            Normalization layer (one of ``'bn'``, ``'sync_bn'`` ``'in'``, ``'gn'`` or ``'none'``).
 
         drop_value : float, optional
             Dropout value to be fixed.
@@ -41,8 +41,11 @@ class ConvBlock(nn.Module):
         block = []
 
         block.append(conv(in_size, out_size, kernel_size=k_size, padding="same"))
-        if batch_norm is not None:
-            block.append(batch_norm(out_size))
+        if norm != 'none':
+            if conv == nn.Conv2d:
+                block.append(get_norm_2d(norm, out_size))
+            else:
+                block.append(get_norm_3d(norm, out_size))
         if act is not None:
             block.append(get_activation(act))
         if dropout > 0:
@@ -57,7 +60,7 @@ class ConvBlock(nn.Module):
         return out
 
 class DoubleConvBlock(nn.Module):
-    def __init__(self, conv, in_size, out_size, k_size, act=None, batch_norm=None, dropout=0, se_block=False):
+    def __init__(self, conv, in_size, out_size, k_size, act=None, norm='none', dropout=0, se_block=False):
         """
         Convolutional block.
 
@@ -78,8 +81,8 @@ class DoubleConvBlock(nn.Module):
         act : str, optional
             Activation layer to use. 
 
-        batch_norm : nn.BatchNorm Torch layer, optional
-            Batch normalization layer to use. 
+        norm : str, optional
+            Normalization layer (one of ``'bn'``, ``'sync_bn'`` ``'in'``, ``'gn'`` or ``'none'``).
 
         drop_value : float, optional
             Dropout value to be fixed.
@@ -91,9 +94,9 @@ class DoubleConvBlock(nn.Module):
         super(DoubleConvBlock, self).__init__()
         block = []
         block.append(ConvBlock(conv=conv, in_size=in_size, out_size=out_size, k_size=k_size, act=act, 
-            batch_norm=batch_norm, dropout=dropout, se_block=se_block))
+            norm=norm, dropout=dropout, se_block=se_block))
         block.append(ConvBlock(conv=conv, in_size=out_size, out_size=out_size, k_size=k_size, act=act, 
-            batch_norm=batch_norm, dropout=dropout, se_block=se_block))
+            norm=norm, dropout=dropout, se_block=se_block))
         self.block = nn.Sequential(*block)
         
     def forward(self, x):
@@ -159,7 +162,7 @@ class ConvNeXtBlock_V1(nn.Module):
     
 class UpBlock(nn.Module):
     def __init__(self, ndim, convtranspose, in_size, out_size, z_down, up_mode, conv, k_size, 
-        act=None, batch_norm=None, dropout=0, attention_gate=False, se_block=False):
+        act=None, norm='none', dropout=0, attention_gate=False, se_block=False):
         """
         Convolutional upsampling block.
 
@@ -194,8 +197,8 @@ class UpBlock(nn.Module):
         act : str, optional
             Activation layer to use. 
 
-        batch_norm : nn.BatchNorm Torch layer, optional
-            Batch normalization layer to use. 
+        norm : str, optional
+            Normalization layer (one of ``'bn'``, ``'sync_bn'`` ``'in'``, ``'gn'`` or ``'none'``).
 
         drop_value : float, optional
             Dropout value to be fixed.
@@ -215,18 +218,21 @@ class UpBlock(nn.Module):
         elif up_mode == 'upsampling':
             block.append(nn.Upsample(mode='bilinear' if ndim==2 else 'trilinear', scale_factor=mpool))
             block.append(conv(in_size, out_size, kernel_size=1))
-        if batch_norm is not None:
-            block.append(batch_norm(out_size))
+        if norm != 'none':
+            if conv == nn.Conv2d:
+                block.append(get_norm_2d(norm, out_size))
+            else:
+                block.append(get_norm_3d(norm, out_size))
         if act is not None:
             block.append(get_activation(act))
         self.up = nn.Sequential(*block)
 
         if attention_gate:
-            self.attention_gate = AttentionBlock(conv=conv, in_size=out_size, out_size=out_size//2, batch_norm=batch_norm)
+            self.attention_gate = AttentionBlock(conv=conv, in_size=out_size, out_size=out_size//2, norm=norm)
         else:
             self.attention_gate = None
         self.conv_block = DoubleConvBlock(conv=conv, in_size=out_size*2, out_size=out_size, k_size=k_size, 
-            act=act, batch_norm=batch_norm, dropout=dropout, se_block=se_block)
+            act=act, norm=norm, dropout=dropout, se_block=se_block)
 
     def forward(self, x, bridge):
         up = self.up(x)
@@ -355,7 +361,7 @@ class UpConvNeXtBlock_V1(nn.Module):
         return out
 
 class AttentionBlock(nn.Module):
-    def __init__(self, conv, in_size, out_size, batch_norm=None):
+    def __init__(self, conv, in_size, out_size, norm='none'):
         """
         Attention block.
 
@@ -372,26 +378,35 @@ class AttentionBlock(nn.Module):
         out_size : str, optional
             Output feature maps of the convolutional layers.
 
-        batch_norm : bool, optional
-            To use batch normalization.
+        norm : str, optional
+            Normalization layer (one of ``'bn'``, ``'sync_bn'`` ``'in'``, ``'gn'`` or ``'none'``).
         """
         super(AttentionBlock, self).__init__()
         w_g = []
         w_g.append(conv(in_size, out_size, kernel_size=1, stride=1, padding=0, bias=True))
-        if batch_norm is not None:
-            w_g.append(batch_norm(out_size)) 
+        if norm != 'none':
+            if conv == nn.Conv2d:
+                w_g.append(get_norm_2d(norm, out_size))
+            else:
+                w_g.append(get_norm_3d(norm, out_size)) 
         self.w_g = nn.Sequential(*w_g)
         
         w_x = []
         w_x.append(conv(in_size, out_size, kernel_size=1, stride=1, padding=0, bias=True))
-        if batch_norm is not None:
-            w_x.append(batch_norm(out_size))
+        if norm != 'none':
+            if conv == nn.Conv2d:
+                w_g.append(get_norm_2d(norm, out_size))
+            else:
+                w_g.append(get_norm_3d(norm, out_size))
         self.w_x = nn.Sequential(*w_x)
 
         psi = []
         psi.append(conv(out_size, 1, kernel_size=1, stride=1, padding=0, bias=True))
-        if batch_norm is not None:
-            psi.append(batch_norm(1))
+        if norm != 'none':
+            if conv == nn.Conv2d:
+                psi.append(get_norm_2d(norm, 1))
+            else:
+                psi.append(get_norm_3d(norm, 1))
         psi.append(nn.Sigmoid())
         self.psi = nn.Sequential(*psi)
 
@@ -433,8 +448,8 @@ class SqExBlock(nn.Module):
         return x * y.expand_as(x)
 
 class ResConvBlock(nn.Module):
-    def __init__(self, conv, in_size, out_size, k_size, act=None, batch_norm=None, dropout=0, skip_k_size=1,
-        skip_batch_norm=None, first_block=False):
+    def __init__(self, conv, in_size, out_size, k_size, act=None, norm='none', dropout=0, skip_k_size=1,
+        skip_norm='none', first_block=False, se_block=False, extra_conv=False):
         """
         Residual block.
 
@@ -455,8 +470,8 @@ class ResConvBlock(nn.Module):
         act : str, optional
             Activation layer to use. 
 
-        batch_norm : nn.BatchNorm Torch layer, optional
-            Batch normalization layer to use. 
+        norm : str, optional
+            Normalization layer (one of ``'bn'``, ``'sync_bn'`` ``'in'``, ``'gn'`` or ``'none'``).
 
         drop_value : float, optional
             Dropout value to be fixed.
@@ -464,41 +479,83 @@ class ResConvBlock(nn.Module):
         skip_k_size : int, optional
             Kernel size for the skip connection convolution. Used in resunet++.
         
-        skip_batch_norm : nn.BatchNorm Torch layer, optional
-            Batch normalization layer to use in the skip connection. Used in resunet++.
+        skip_norm : str, optional
+            Normalization layer to use in the skip connection (one of ``'bn'``,``'sync_bn'``,
+            ``'in'``, ``'gn'`` or ``'none'``). Used in resunet++.
 
         first_block : float, optional
             To advice the function that it is the first residual block of the network, which avoids Full Pre-Activation
             layers (more info of Full Pre-Activation in `Identity Mappings in Deep Residual Networks
             <https://arxiv.org/pdf/1603.05027.pdf>`_).
+
+        se_block : boolean, optional
+            Whether to add Squeeze-and-Excitation blocks or not. 
+        
+        extra_conv : bool, optional
+            Whether To add a convolutional layer before the residual block (as in Kisuk et al, 2017, https://arxiv.org/pdf/1706.00120)
         """
         super(ResConvBlock, self).__init__()
         block = []
-
+        pre_conv = []
         if not first_block:
-            if batch_norm is not None:
-                block.append(batch_norm(in_size))
-            if act is not None:
-                block.append(get_activation(act))
+            if not extra_conv:
+                if norm != 'none':
+                    if conv == nn.Conv2d:
+                        block.append(get_norm_2d(norm, in_size))
+                    else:
+                        block.append(get_norm_3d(norm, in_size))
+                if act is not None:
+                    block.append(get_activation(act))
+            else:
+                if norm != 'none':
+                    if conv == nn.Conv2d:
+                        pre_conv.append(get_norm_2d(norm, in_size))
+                    else:
+                        pre_conv.append(get_norm_3d(norm, in_size))
+                if act is not None:
+                    pre_conv.append(get_activation(act))
+        if extra_conv:
+            pre_conv.append(ConvBlock(conv=conv, in_size=in_size, out_size=out_size, k_size=k_size, 
+                act=act, norm=norm, dropout=dropout))
+            in_size = out_size
+            self.pre_conv = nn.Sequential(*pre_conv)
+        else:
+            self.pre_conv = None
 
         block.append(ConvBlock(conv=conv, in_size=in_size, out_size=out_size, k_size=k_size, 
-            act=act, batch_norm=batch_norm, dropout=dropout))
+            act=act, norm=norm, dropout=dropout))
         block.append(ConvBlock(conv=conv, in_size=out_size, out_size=out_size, k_size=k_size))
 
         self.block = nn.Sequential(*block)
 
-        block = []
-        block.append(conv(in_size, out_size, kernel_size=skip_k_size, padding='same'))
-        if skip_batch_norm is not None:
-            block.append(skip_batch_norm(out_size))
-        self.shortcut = nn.Sequential(*block)
+        if not extra_conv:
+            block = []
+            block.append(conv(in_size, out_size, kernel_size=skip_k_size, padding='same'))
+            if skip_norm != 'none':
+                if conv == nn.Conv2d:
+                    block.append(get_norm_2d(skip_norm, out_size))
+                else:
+                    block.append(get_norm_3d(skip_norm, out_size))
+            self.shortcut = nn.Sequential(*block)
+        else:
+            self.shortcut = nn.Identity()
+
+        if se_block:
+            # add the Squeeze-and-Excitation block at the end of the full block (as in PyTC)
+            # (https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/model/block/residual.py#L147-L155)
+            self.se_block = SqExBlock(out_size, ndim=2 if conv == nn.Conv2d else 3)
+        else:
+            self.se_block = nn.Identity()
+        
     def forward(self, x):
+        if self.pre_conv is not None:
+            x = self.pre_conv( x )
         out = self.block(x) + self.shortcut(x)
         return out
 
 class ResUpBlock(nn.Module):
     def __init__(self, ndim, convtranspose, in_size, out_size, in_size_bridge, z_down, up_mode, conv, k_size, 
-        act=None, batch_norm=None, skip_k_size=1, skip_batch_norm=None, dropout=0):
+        act=None, norm='none', skip_k_size=1, skip_norm='none', dropout=0, se_block=False, extra_conv=False):
         """
         Residual upsampling block.
 
@@ -536,17 +593,24 @@ class ResUpBlock(nn.Module):
         act : str, optional
             Activation layer to use. 
 
-        batch_norm : nn.BatchNorm Torch layer, optional
-            Batch normalization layer to use. 
+        norm : str, optional
+            Normalization layer (one of ``'bn'``, ``'sync_bn'`` ``'in'``, ``'gn'`` or ``'none'``).
 
         skip_k_size : int, optional
             Kernel size for the skip connection convolution. Used in resunet++.
         
-        skip_batch_norm : nn.BatchNorm Torch layer, optional
-            Batch normalization layer to use in the skip connection. Used in resunet++.
+        skip_norm : str, optional
+            Normalization layer to use in the skip connection (one of ``'bn'``, ``'sync_bn'`` ``'in'``,
+            ``'gn'`` or ``'none'``). Used in resunet++.
 
         drop_value : float, optional
             Dropout value to be fixed.
+        
+        se_block : boolean, optional
+            Whether to add Squeeze-and-Excitation blocks or not. 
+
+        extra_conv : bool, optional
+            To add a convolutional layer before the residual block (as in Kisuk et al, 2017, https://arxiv.org/pdf/1706.00120)
         """
         super(ResUpBlock, self).__init__()
         self.ndim = ndim
@@ -557,8 +621,8 @@ class ResUpBlock(nn.Module):
             self.up = nn.Upsample(mode='bilinear' if ndim==2 else 'trilinear', scale_factor=mpool)
             
         self.conv_block = ResConvBlock(conv=conv, in_size=in_size+in_size_bridge, out_size=out_size, 
-            k_size=k_size, act=act, batch_norm=batch_norm, dropout=dropout, skip_k_size=skip_k_size,
-            skip_batch_norm=skip_batch_norm)
+            k_size=k_size, act=act, norm=norm, dropout=dropout, skip_k_size=skip_k_size,
+            skip_norm=skip_norm, se_block=se_block, extra_conv=extra_conv)
 
     def forward(self, x, bridge):
         up = self.up(x)
@@ -593,6 +657,86 @@ def get_activation(activation: str = 'relu') -> nn.Module:
     }
     return activation_dict[activation]
 
+# ----------------------
+# Normalization Layers
+# Code from Pytorch for Connectomics:
+# https://github.com/zudi-lin/pytorch_connectomics/blob/6fbd5457463ae178ecd93b2946212871e9c617ee/connectomics/model/utils/misc.py#L330-L408
+# ----------------------
+
+def get_norm_3d(norm: str, out_channels: int, bn_momentum: float = 0.1) -> nn.Module:
+    """Get the specified normalization layer for a 3D model.
+
+    Args:
+        norm (str): one of ``'bn'``, ``'sync_bn'`` ``'in'``, ``'gn'`` or ``'none'``.
+        out_channels (int): channel number.
+        bn_momentum (float): the momentum of normalization layers.
+    Returns:
+        nn.Module: the normalization layer
+    """
+    assert norm in ["bn", "sync_bn", "gn", "in", "none"], \
+        "Get unknown normalization layer key {}".format(norm)
+    if norm == "gn": assert out_channels%8 == 0, "GN requires channels to separable into 8 groups"
+    norm = {
+        "bn": nn.BatchNorm3d,
+        "sync_bn": nn.SyncBatchNorm,
+        "in": nn.InstanceNorm3d,
+        "gn": lambda channels: nn.GroupNorm(8, channels),
+        "none": nn.Identity,
+    }[norm]
+    if norm in ["bn", "sync_bn", "in"]:
+        return norm(out_channels, momentum=bn_momentum)
+    else:
+        return norm(out_channels)
+
+
+def get_norm_2d(norm: str, out_channels: int, bn_momentum: float = 0.1) -> nn.Module:
+    """Get the specified normalization layer for a 2D model.
+
+    Args:
+        norm (str): one of ``'bn'``, ``'sync_bn'`` ``'in'``, ``'gn'`` or ``'none'``.
+        out_channels (int): channel number.
+        bn_momentum (float): the momentum of normalization layers.
+    Returns:
+        nn.Module: the normalization layer
+    """
+    assert norm in ["bn", "sync_bn", "gn", "in", "none"], \
+        "Get unknown normalization layer key {}".format(norm)
+    norm = {
+        "bn": nn.BatchNorm2d,
+        "sync_bn": nn.SyncBatchNorm,
+        "in": nn.InstanceNorm2d,
+        "gn": lambda channels: nn.GroupNorm(16, channels),
+        "none": nn.Identity,
+    }[norm]
+    if norm in ["bn", "sync_bn", "in"]:
+        return norm(out_channels, momentum=bn_momentum)
+    else:
+        return norm(out_channels)
+
+
+def get_norm_1d(norm: str, out_channels: int, bn_momentum: float = 0.1) -> nn.Module:
+    """Get the specified normalization layer for a 1D model.
+
+    Args:
+        norm (str): one of ``'bn'``, ``'sync_bn'`` ``'in'``, ``'gn'`` or ``'none'``.
+        out_channels (int): channel number.
+        bn_momentum (float): the momentum of normalization layers.
+    Returns:
+        nn.Module: the normalization layer
+    """
+    assert norm in ["bn", "sync_bn", "gn", "in", "none"], \
+        "Get unknown normalization layer key {}".format(norm)
+    norm = {
+        "bn": nn.BatchNorm1d,
+        "sync_bn": nn.BatchNorm1d,
+        "in": nn.InstanceNorm1d,
+        "gn": lambda channels: nn.GroupNorm(16, channels),
+        "none": nn.Identity,
+    }[norm]
+    if norm in ["bn", "sync_bn", "in"]:
+        return norm(out_channels, momentum=bn_momentum)
+    else:
+        return norm(out_channels)
 
 class ResUNetPlusPlus_AttentionBlock(nn.Module):
     """ Adapted from `here <https://github.com/rishikksh20/ResUnet/blob/master/core/modules.py>`_.

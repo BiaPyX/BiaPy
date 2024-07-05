@@ -4,7 +4,7 @@ import torch.nn as nn
 from timm.models.vision_transformer import Block
 from typing import List
 
-from biapy.models.blocks import DoubleConvBlock, ConvBlock
+from biapy.models.blocks import DoubleConvBlock, ConvBlock, get_norm_2d, get_norm_3d
 from biapy.models.tr_layers import PatchEmbed
 
 class UNETR(nn.Module):
@@ -41,7 +41,7 @@ class UNETR(nn.Module):
         doubled.
 
     norm_layer : Torch layer, optional
-        Nomarlization layer to use in ViT backbone.
+        Normalization layer to use in ViT backbone.
 
     n_classes : int, optional
         Number of classes to predict. Is the number of channels in the output tensor.
@@ -54,8 +54,8 @@ class UNETR(nn.Module):
         E.g. if we have ``12`` transformer encoder layers, and we set ``ViT_hidd_mult = 3``, we are going to take
         ``[1*ViT_hidd_mult, 2*ViT_hidd_mult, 3*ViT_hidd_mult]`` -> ``[Z3, Z6, Z9]`` encoder's signals. 
 
-    batch_norm : bool, optional
-        Whether to use batch normalization or not.
+    normalization : str, optional
+        Normalization layer (one of ``'bn'``, ``'sync_bn'`` ``'in'``, ``'gn'`` or ``'none'``).
 
     dropout : bool, optional
         Dropout rate for the decoder (can be a list of dropout rates for each layer).
@@ -73,7 +73,7 @@ class UNETR(nn.Module):
         UNETR model.
     """
     def __init__(self, input_shape, patch_size, embed_dim, depth, num_heads, mlp_ratio=4., num_filters = 16, 
-        norm_layer=nn.LayerNorm, n_classes = 1, decoder_activation = 'relu', ViT_hidd_mult = 3, batch_norm = True, 
+        norm_layer=nn.LayerNorm, n_classes = 1, decoder_activation = 'relu', ViT_hidd_mult = 3, normalization = 'bn', 
         dropout = 0.0, k_size=3, output_channels="BC"):
         super().__init__()
         
@@ -89,7 +89,6 @@ class UNETR(nn.Module):
         if self.ndim == 3:
             conv = nn.Conv3d
             convtranspose = nn.ConvTranspose3d
-            batchnorm_layer = nn.BatchNorm3d if batch_norm else None
             self.reshape_shape = (
                 self.input_shape[0]//self.patch_size, 
                 self.input_shape[1]//self.patch_size,
@@ -100,7 +99,6 @@ class UNETR(nn.Module):
         else:
             conv = nn.Conv2d
             convtranspose = nn.ConvTranspose2d
-            batchnorm_layer = nn.BatchNorm2d if batch_norm else None
             self.reshape_shape = (
                 self.input_shape[0]//self.patch_size, 
                 self.input_shape[1]//self.patch_size,
@@ -141,29 +139,29 @@ class UNETR(nn.Module):
                 )
                 block.append(
                     ConvBlock(conv, in_size=num_filters * (2**layer), out_size=num_filters * (2**layer), k_size=k_size, 
-                        act=decoder_activation, batch_norm=batchnorm_layer, dropout=dropout[layer])
+                        act=decoder_activation, norm=normalization, dropout=dropout[layer])
                 )
                 in_size = num_filters * (2**layer)
             self.mid_blue_block.append(nn.Sequential(*block))
             self.two_yellow_layers.append(
-                DoubleConvBlock(conv, in_size*2, in_size, k_size=k_size, act=decoder_activation, batch_norm=batchnorm_layer,
+                DoubleConvBlock(conv, in_size*2, in_size, k_size=k_size, act=decoder_activation, norm=normalization,
                     dropout=dropout[layer]))
             self.up_green_layers.append(
                 convtranspose(in_size, num_filters * (2**(layer-1)), kernel_size=2, stride=2, bias=False))
         
         # Last two yellow block for the first skip connection 
         self.two_yellow_layers.append(
-            DoubleConvBlock(conv, input_shape[-1], num_filters, k_size=k_size, act=decoder_activation, batch_norm=batchnorm_layer,
+            DoubleConvBlock(conv, input_shape[-1], num_filters, k_size=k_size, act=decoder_activation, norm=normalization,
                 dropout=dropout[0]))
 
         # Last convolutions 
         self.two_yellow_layers.append(
-            DoubleConvBlock(conv, num_filters*2, num_filters, k_size=k_size, act=decoder_activation, batch_norm=batchnorm_layer,
+            DoubleConvBlock(conv, num_filters*2, num_filters, k_size=k_size, act=decoder_activation, norm=normalization,
                 dropout=dropout[0]))
 
         # Instance segmentation
         if output_channels is not None:
-            if output_channels == "Dv2":
+            if output_channels in ["C", "Dv2"]:
                 self.last_block = conv(num_filters, 1, kernel_size=1, padding='same')
             elif output_channels in ["BC", "BP"]:
                 self.last_block = conv(num_filters, 2, kernel_size=1, padding='same')
@@ -171,6 +169,8 @@ class UNETR(nn.Module):
                 self.last_block = conv(num_filters, 2, kernel_size=1, padding='same')
             elif output_channels in ["BCM", "BCD", "BCDv2"]:
                 self.last_block = conv(num_filters, 3, kernel_size=1, padding='same')
+            elif output_channels in ["A"]:
+                self.last_block = conv(num_filters, self.ndim, kernel_size=1, padding='same')
         # Other
         else:
             self.last_block = conv(num_filters, self.n_classes, kernel_size=1, padding='same')

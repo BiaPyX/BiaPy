@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from typing import List
 
-from biapy.models.blocks import DoubleConvBlock, UpBlock, get_activation
+from biapy.models.blocks import DoubleConvBlock, UpBlock, get_activation, get_norm_2d, get_norm_3d
 
 class U_Net(nn.Module):
     """
@@ -24,8 +24,8 @@ class U_Net(nn.Module):
     drop_values : float, optional
         Dropout value to be fixed.
 
-    batch_norm : bool, optional
-        Make batch normalization.
+    normalization : str, optional
+        Normalization layer (one of ``'bn'``, ``'sync_bn'`` ``'in'``, ``'gn'`` or ``'none'``).
 
     k_size : int, optional
         Kernel size.
@@ -66,7 +66,7 @@ class U_Net(nn.Module):
     """
 
     def __init__(self, image_shape=(256, 256, 1), activation="ELU", feature_maps=[32, 64, 128, 256], drop_values=[0.1,0.1,0.1,0.1],
-        batch_norm=False, k_size=3, upsample_layer="convtranspose", z_down=[2,2,2,2], n_classes=1, 
+        normalization='none', k_size=3, upsample_layer="convtranspose", z_down=[2,2,2,2], n_classes=1, 
         output_channels="BC", upsampling_factor=(), upsampling_position="pre"):
         super(U_Net, self).__init__()
 
@@ -78,12 +78,10 @@ class U_Net(nn.Module):
         if self.ndim == 3:
             conv = nn.Conv3d
             convtranspose = nn.ConvTranspose3d
-            batchnorm_layer = nn.BatchNorm3d if batch_norm else None
             pooling = nn.MaxPool3d
         else:
             conv = nn.Conv2d
             convtranspose = nn.ConvTranspose2d
-            batchnorm_layer = nn.BatchNorm2d if batch_norm else None
             pooling = nn.MaxPool2d
             
         # Super-resolution
@@ -97,14 +95,14 @@ class U_Net(nn.Module):
         in_channels = image_shape[-1]
         for i in range(self.depth):
             self.down_path.append( 
-                DoubleConvBlock(conv, in_channels, feature_maps[i], k_size, activation, batchnorm_layer,
+                DoubleConvBlock(conv, in_channels, feature_maps[i], k_size, activation, normalization,
                     drop_values[i])
             )
             mpool = (z_down[i], 2, 2) if self.ndim == 3 else (2, 2)
             self.mpooling_layers.append(pooling(mpool))
             in_channels = feature_maps[i]
 
-        self.bottleneck = DoubleConvBlock(conv, in_channels, feature_maps[-1], k_size, activation, batchnorm_layer,
+        self.bottleneck = DoubleConvBlock(conv, in_channels, feature_maps[-1], k_size, activation, normalization,
             drop_values[-1])
 
         # DECODER
@@ -113,7 +111,7 @@ class U_Net(nn.Module):
         for i in range(self.depth-1, -1, -1):
             self.up_path.append( 
                 UpBlock(self.ndim, convtranspose, in_channels, feature_maps[i], z_down[i], upsample_layer, 
-                    conv, k_size, activation, batchnorm_layer, drop_values[i])
+                    conv, k_size, activation, normalization, drop_values[i])
             )
             in_channels = feature_maps[i]
         
@@ -124,7 +122,7 @@ class U_Net(nn.Module):
 
         # Instance segmentation
         if output_channels is not None:
-            if output_channels == "Dv2":
+            if output_channels in ["C", "Dv2"]:
                 self.last_block = conv(feature_maps[0], 1, kernel_size=1, padding='same')
             elif output_channels in ["BC", "BP"]:
                 self.last_block = conv(feature_maps[0], 2, kernel_size=1, padding='same')
@@ -132,6 +130,8 @@ class U_Net(nn.Module):
                 self.last_block = conv(feature_maps[0], 2, kernel_size=1, padding='same')
             elif output_channels in ["BCM", "BCD", "BCDv2"]:
                 self.last_block = conv(feature_maps[0], 3, kernel_size=1, padding='same')
+            elif output_channels in ["A"]:
+                self.last_block = conv(feature_maps[0], self.ndim, kernel_size=1, padding='same')
         # Other
         else:
             self.last_block = conv(feature_maps[0], self.n_classes, kernel_size=1, padding='same')

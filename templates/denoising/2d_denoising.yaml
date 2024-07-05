@@ -38,7 +38,7 @@ MODEL:
     DROPOUT_VALUES: [0, 0, 0]
     ACTIVATION: 'relu'
     LAST_ACTIVATION: 'linear'
-    BATCH_NORMALIZATION: True
+    NORMALIZATION: 'bn'
     LOAD_CHECKPOINT: False
   
 TRAIN:

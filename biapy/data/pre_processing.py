@@ -19,7 +19,7 @@ from skimage.exposure import equalize_adapthist
 from skimage.color import rgb2gray
 from skimage.filters import gaussian, median
 
-from biapy.utils.util import (load_data_from_dir, load_3d_images_from_dir, save_tif, write_chunked_data, read_chunked_data,
+from biapy.utils.util import (load_data_from_dir, load_3d_images_from_dir, save_tif, seg2aff_pni, seg_widen_border, write_chunked_data, read_chunked_data,
     order_dimensions)
 from biapy.utils.misc import is_main_process
 from biapy.data.data_3D_manipulation import load_3D_efficient_files, load_img_part_from_efficient_file
@@ -239,8 +239,15 @@ def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
            Data mask to create the new array from. It is expected to have just one channel. E.g. ``(10, 200, 1000, 1000, 1)``
 
        mode : str, optional
-           Operation mode. Possible values: ``BC`` and ``BCD``.  ``BC`` corresponds to use binary segmentation+contour.
-           ``BCD`` stands for binary segmentation+contour+distances.
+           Operation mode. Possible values: ``C``, ``BC``, ``BCM``, ``BCD``, ``BD``, ``BCDv2``, ``Dv2``, ``BDv2`` and ``BP``.
+            - 'B' stands for 'Binary segmentation', containing each instance region without the contour. 
+            - 'C' stands for 'Contour', containing each instance contour. 
+            - 'D' stands for 'Distance', each pixel containing the distance of it to the center of the object. 
+            - 'M' stands for 'Mask', contains the B and the C channels, i.e. the foreground mask. 
+              Is simply achieved by binarizing input instance masks. 
+            - 'Dv2' stands for 'Distance V2', which is an updated version of 'D' channel calculating background distance as well.
+            - 'P' stands for 'Points' and contains the central points of an instance (as in Detection workflow)
+            - 'A' stands for 'Affinities" and contains the affinity values for each dimension
 
        fb_mode : str, optional
           Mode of the find_boundaries function from ``scikit-image`` or "dense". More info in:
@@ -257,7 +264,7 @@ def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
     """
 
     assert data_mask.ndim in [5, 4]
-    assert mode in ['BC', 'BCM', 'BCD', 'BD', 'BCDv2', 'Dv2', 'BDv2', 'BP']
+    assert mode in ['C', 'BC', 'BCM', 'BCD', 'BD', 'BCDv2', 'Dv2', 'BDv2', 'BP', 'A']
 
     d_shape = 4 if data_mask.ndim == 5 else 3
     if mode in ['BCDv2', 'Dv2', 'BDv2']:
@@ -266,6 +273,11 @@ def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
         c_number = 3
     elif mode in ['BC', 'BP', 'BD']:
         c_number = 2
+    elif mode in ['C']:
+        c_number = 1
+    elif mode in ['A']:
+        # the number of affinity channels depends on the dimensions of the input image
+        c_number = 3 if data_mask.ndim == 5 else 2
 
     if 'D' in mode:
         dtype = np.float32  
@@ -285,7 +297,22 @@ def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
             vol_b_dist= scipy.ndimage.distance_transform_edt(vol_b_dist)
             vol_b_dist = np.max(vol_b_dist)-vol_b_dist
             new_mask[img,...,3] = vol_b_dist.copy()
-
+        # Affinities
+        if 'A' in mode:
+            #import pdb; pdb.set_trace()
+            ins_vol = np.copy(vol)
+            if fb_mode == "dense":
+                ins_vol = seg_widen_border( vol )
+                #if ins_vol.ndim == 3:
+                #    for i in range(ins_vol.shape[0]):                                                                                  
+                #        ins_vol[i,...] = erosion(vol[i,...], disk(1)) 
+                #else:
+                #    ins_vol = erosion(vol, disk(1)) 
+            affs = seg2aff_pni( ins_vol, dtype=dtype )
+            affs = np.transpose( affs, (1,2,3,0))
+            if c_number == 2:
+                affs = np.squeeze( affs, 0)
+            new_mask[img] = affs
         # Semantic mask
         if 'B' in mode and instance_count != 1:
             new_mask[img,...,0] = (vol>0).copy().astype(np.uint8)
@@ -309,16 +336,17 @@ def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
                 new_mask[img,...,1] = dilation(new_mask[img,...,1], disk(3))  
 
         # Contour
-        if ('C' in mode or 'Dv2' in mode) and instance_count != 1: 
+        if ('C' in mode or 'Dv2' in mode) and instance_count != 1:
+            c_channel = 0 if mode == 'C' else 1
             f = "thick" if fb_mode == "dense" else fb_mode
-            new_mask[img,...,1] = find_boundaries(vol, mode=f).astype(np.uint8)
+            new_mask[img,...,c_channel] = find_boundaries(vol, mode=f).astype(np.uint8)
             if fb_mode == "dense" and mode != "BCM":
-                if new_mask[img,...,1].ndim == 2:
-                    new_mask[img,...,1] = 1 - binary_dilation(new_mask[img,...,1], disk(1))
+                if new_mask[img,...,c_channel].ndim == 2:
+                    new_mask[img,...,c_channel] = 1 - binary_dilation(new_mask[img,...,c_channel], disk(1))
                 else:
-                    for j in range(new_mask[img,...,1].shape[0]):
-                        new_mask[img,j,...,1] = 1 - binary_dilation(new_mask[img,j,...,1], disk(1))
-                new_mask[img,...,1] = 1 - ( (vol>0) * new_mask[img,...,1])
+                    for j in range(new_mask[img,...,c_channel].shape[0]):
+                        new_mask[img,j,...,c_channel] = 1 - binary_dilation(new_mask[img,j,...,c_channel], disk(1))
+                new_mask[img,...,c_channel] = 1 - ( (vol>0) * new_mask[img,...,c_channel])
             if 'B' in mode:
                 # Remove contours from segmentation maps
                 new_mask[img,...,0][np.where(new_mask[img,...,1] == 1)] = 0
@@ -364,9 +392,9 @@ def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
         suffix = []
         if mode == "Dv2":
             suffix.append('_distance.tif')
-        else:
+        elif mode != "C":
             suffix.append('_semantic.tif')
-        if mode in ["BC", "BCM", "BCD", "BCDv2"]:
+        if mode in ["C", "BC", "BCM", "BCD", "BCDv2"]:
             suffix.append('_contour.tif')
             if mode in ["BCD", "BCDv2"]:
                 suffix.append('_distance.tif')
@@ -376,6 +404,8 @@ def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
             suffix.append('_points.tif')
         elif mode in ["BDv2", "BD"]:
             suffix.append('_distance.tif')
+        elif mode == "A":
+            suffix.append('_affinity.tif')
 
         for i in range(min(3,len(new_mask))):
             for j in range(len(suffix)):
@@ -477,7 +507,6 @@ def create_detection_masks(cfg, data_type='train'):
             df = df.rename(columns=lambda x: x.strip()) # trim spaces in column names
             cols_not_in_file = [x for x in req_columns if x not in df.columns]
             if len(cols_not_in_file) > 0:
-                print(df)
                 if len(cols_not_in_file) == 1:
                     m = f"'{cols_not_in_file[0]}' column is not present in CSV file: {os.path.join(label_dir, ids[i])}" 
                 else:
@@ -510,7 +539,7 @@ def create_detection_masks(cfg, data_type='train'):
                     raise ValueError("Classes must be consecutive, e.g [1,2,3,4..]. Given {}".format(uniq))   
             else:
                 if classes > 1:
-                    raise ValueError("MODEL.N_CLASSES > 1 but no class specified in CSV files (4th column must have class info)")
+                    raise ValueError("MODEL.N_CLASSES > 1 but no class specified in CSV file")
                 class_point = [1] * len(z_axis_point)
 
             # Create masks

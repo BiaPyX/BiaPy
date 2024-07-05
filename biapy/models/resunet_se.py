@@ -2,11 +2,11 @@ import torch
 import torch.nn as nn
 from typing import List
 
-from biapy.models.blocks import DoubleConvBlock, UpBlock, ConvBlock, get_norm_2d, get_norm_3d
+from biapy.models.blocks import ResConvBlock, ResUpBlock, ConvBlock, get_norm_2d, get_norm_3d
 
-class SE_U_Net(nn.Module):
+class ResUNet_SE(nn.Module):
     """
-    Create 2D/3D U-Net with squeeze-excite blocks. 
+    Create Residual 2D/3D U-Net with squeeze-excite blocks. 
     
     Reference: `Squeeze and Excitation Networks <https://arxiv.org/abs/1709.01507>`_.
 
@@ -55,6 +55,9 @@ class SE_U_Net(nn.Module):
 
     larger_io : bool, optional
         Whether to use extra and larger kernels in the input and output layers.
+    
+    extra_conv : bool, optional
+            To add a convolutional layer before the residual blocks (as in Kisuk et al, 2017, https://arxiv.org/pdf/1706.00120)
 
     Returns
     -------
@@ -71,8 +74,8 @@ class SE_U_Net(nn.Module):
     """
     def __init__(self, image_shape=(256, 256, 1), activation="ELU", feature_maps=[32, 64, 128, 256], drop_values=[0.1,0.1,0.1,0.1],
         normalization='none', k_size=3, upsample_layer="convtranspose", z_down=[2,2,2,2], n_classes=1, 
-        output_channels="BC", upsampling_factor=(), upsampling_position="pre", isotropy=False, larger_io=True):
-        super(SE_U_Net, self).__init__()
+        output_channels="BC", upsampling_factor=(), upsampling_position="pre", isotropy=False, larger_io=True, extra_conv=True):
+        super(ResUNet_SE, self).__init__()
 
         self.depth = len(feature_maps)-1
         self.ndim = 3 if len(image_shape) == 4 else 2 
@@ -116,8 +119,8 @@ class SE_U_Net(nn.Module):
             if isotropy[i] is False and self.ndim == 3:
                 kernel_size = (1, k_size, k_size)
             self.down_path.append( 
-                DoubleConvBlock(conv, in_channels, feature_maps[i], kernel_size, activation, normalization,
-                    drop_values[i], se_block=True)
+                ResConvBlock(conv, in_channels, feature_maps[i], kernel_size, activation, norm=normalization,
+                    dropout=drop_values[i], se_block=True, first_block=True if i==0 else False, extra_conv=extra_conv)
             )
             mpool = (z_down[i], 2, 2) if self.ndim == 3 else (2, 2)
             self.mpooling_layers.append(pooling(mpool))
@@ -126,8 +129,8 @@ class SE_U_Net(nn.Module):
         kernel_size = (k_size, k_size) if self.ndim == 2 else (k_size, k_size, k_size)
         if isotropy[-1] is False and self.ndim == 3:
             kernel_size = (1, k_size, k_size)
-        self.bottleneck = DoubleConvBlock(conv, in_channels, feature_maps[-1], kernel_size, activation, normalization,
-            drop_values[-1])
+        self.bottleneck = ResConvBlock(conv, in_channels, feature_maps[-1], kernel_size, activation, norm=normalization,
+                    dropout=drop_values[-1], se_block=True, extra_conv=extra_conv)
 
         # DECODER
         self.up_path = nn.ModuleList()
@@ -137,8 +140,10 @@ class SE_U_Net(nn.Module):
             if isotropy[i] is False and self.ndim == 3:
                 kernel_size = (1, k_size, k_size)
             self.up_path.append( 
-                UpBlock(self.ndim, convtranspose, in_channels, feature_maps[i], z_down[i], upsample_layer, 
-                    conv, kernel_size, activation, normalization, drop_values[i], se_block=True)
+                ResUpBlock(ndim=self.ndim, convtranspose=convtranspose, in_size=in_channels, out_size=feature_maps[i], 
+                    in_size_bridge=feature_maps[i], z_down=z_down[i], up_mode=upsample_layer, conv=conv,
+                    k_size=kernel_size, act=activation, norm=normalization, dropout=drop_values[i],
+                    se_block=True, extra_conv=extra_conv)
             )
             in_channels = feature_maps[i]
         

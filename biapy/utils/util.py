@@ -1594,3 +1594,99 @@ def order_dimensions(data, input_order, output_order='TZCYX', default_value=1):
         else:
             output_data.append(default_value)
     return tuple(output_data)
+
+def seg2aff_pni(img, dz=1, dy=1, dx=1, dtype='float32'):
+    # Adapted from PyTorch for Connectomics:
+    # https://github.com/zudi-lin/pytorch_connectomics/commit/6fbd5457463ae178ecd93b2946212871e9c617ee
+    """
+    Transform segmentation to 3D affinity graph.
+    Args:
+        img: 3D indexed image, with each index corresponding to each segment.
+    Returns:
+        ret: 3D affinity graph (4D tensor), 3 channels for z, y, x direction.
+    """
+    img = check_volume(img)
+    ret = np.zeros((3,) + img.shape, dtype=dtype)
+
+
+    # z-affinity.
+    assert dz and abs(dz) < img.shape[-3]
+    if dz > 0:
+        ret[0,dz:,:,:] = (img[dz:,:,:]==img[:-dz,:,:]) & (img[dz:,:,:]>0)
+    else:
+        dz = abs(dz)
+        ret[0,:-dz,:,:] = (img[dz:,:,:]==img[:-dz,:,:]) & (img[dz:,:,:]>0)
+
+    # y-affinity.
+    assert dy and abs(dy) < img.shape[-2]
+    if dy > 0:
+        ret[1,:,dy:,:] = (img[:,dy:,:]==img[:,:-dy,:]) & (img[:,dy:,:]>0)
+    else:
+        dy = abs(dy)
+        ret[1,:,:-dy,:] = (img[:,dy:,:]==img[:,:-dy,:]) & (img[:,dy:,:]>0)
+
+    # x-affinity.
+    assert dx and abs(dx) < img.shape[-1]
+    if dx > 0:
+        ret[2,:,:,dx:] = (img[:,:,dx:]==img[:,:,:-dx]) & (img[:,:,dx:]>0)
+    else:
+        dx = abs(dx)
+        ret[2,:,:,:-dx] = (img[:,:,dx:]==img[:,:,:-dx]) & (img[:,:,dx:]>0)
+
+    return ret
+
+
+def check_volume(data):
+    # Original code: https://github.com/torms3/DataProvider/blob/master/python/utils.py#L11
+    """Ensure that data is numpy 3D array."""
+    assert isinstance(data, np.ndarray)
+
+    if data.ndim == 2:
+        data = data[np.newaxis,...]
+    elif data.ndim == 3:
+        pass
+    elif data.ndim == 4:
+        assert data.shape[0]==1
+        data = np.reshape(data, data.shape[-3:])
+    else:
+        raise RuntimeError('data must be a numpy 3D array')
+
+    assert data.ndim==3
+    return data
+
+def im2col(A, BSZ, stepsize=1):
+    # Parameters
+    M, N = A.shape
+    # Get Starting block indices
+    start_idx = np.arange(
+        0, M-BSZ[0]+1, stepsize)[:, None]*N + np.arange(0, N-BSZ[1]+1, stepsize)
+    # Get offsetted indices across the height and width of input array
+    offset_idx = np.arange(BSZ[0])[:, None]*N + np.arange(BSZ[1])
+    # Get all actual indices & index into input array for final output
+    return np.take(A, start_idx.ravel()[:, None] + offset_idx.ravel())
+
+def seg_widen_border(seg, tsz_h=1):
+    # Kisuk Lee's thesis (A.1.4):
+    # "we preprocessed the ground truth seg such that any voxel centered on a 3 × 3 × 1 window containing
+    # more than one positive segment ID (zero is reserved for background) is marked as background."
+    # seg=0: background
+    tsz = 2*tsz_h+1
+    sz = seg.shape
+    if len(sz) == 3:
+        for z in range(sz[0]):
+            mm = seg[z].max()
+            patch = im2col(
+                np.pad(seg[z], ((tsz_h, tsz_h), (tsz_h, tsz_h)), 'reflect'), [tsz, tsz])
+            p0 = patch.max(axis=1)
+            patch[patch == 0] = mm+1
+            p1 = patch.min(axis=1)
+            seg[z] = seg[z]*((p0 == p1).reshape(sz[1:]))
+    else:
+        mm = seg.max()
+        patch = im2col(
+            np.pad(seg, ((tsz_h, tsz_h), (tsz_h, tsz_h)), 'reflect'), [tsz, tsz])
+        p0 = patch.max(axis=1)
+        patch[patch == 0] = mm + 1
+        p1 = patch.min(axis=1)
+        seg = seg * ((p0 == p1).reshape(sz))
+    return seg

@@ -50,7 +50,7 @@ class Config:
 
         ### INSTANCE_SEG
         _C.PROBLEM.INSTANCE_SEG = CN()
-        # Possible options: 'BC', 'BP', 'BD', 'BCM', 'BCD', 'BCDv2', 'Dv2' and 'BDv2'. This variable determines the channels to be created 
+        # Possible options: 'C', 'BC', 'BP', 'BD', 'BCM', 'BCD', 'BCDv2', 'Dv2', 'BDv2' and 'A'. This variable determines the channels to be created 
         # based on input instance masks. These option are composed from these individual options:
         #   - 'B' stands for 'Binary segmentation', containing each instance region without the contour. 
         #   - 'C' stands for 'Contour', containing each instance contour. 
@@ -59,6 +59,7 @@ class Config:
         #     Is simply achieved by binarizing input instance masks. 
         #   - 'Dv2' stands for 'Distance V2', which is an updated version of 'D' channel calculating background distance as well.
         #   - 'P' stands for 'Points' and contains the central points of an instance (as in Detection workflow) 
+        #   - 'A' stands for 'Affinities" and contains the affinity values for each dimension.
         _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS = 'BC'
         # Whether to mask the distance channel to only calculate the loss in those regions where the binary mask
         # defined by B channel is present
@@ -444,14 +445,15 @@ class Config:
         _C.AUGMENTOR.ZOOM = False
         # Zoom range. Scaling factor to use, where 1.0 denotes “no change” and 0.5 is zoomed out to 50 percent of the original size.
         _C.AUGMENTOR.ZOOM_RANGE = (0.8, 1.2)
+        # Whether to apply or not zoom in Z axis (for 3D volumes). 
+        _C.AUGMENTOR.ZOOM_IN_Z = False
         # Apply shift
         _C.AUGMENTOR.SHIFT = False
         # Shift range. Translation as a fraction of the image height/width (x-translation, y-translation), where 0 denotes 
         # “no change” and 0.5 denotes “half of the axis size”.
         _C.AUGMENTOR.SHIFT_RANGE = (0.1, 0.2)
         # How to fill up the new values created with affine transformations (rotations, shear, shift and zoom).
-        # Same meaning as in scipy: 'reflect', grid-'mirror', 'constant', 'grid-constant', 'nearest', 'mirror', 
-        # 'grid-wrap' and 'wrap'. 
+        # Same meaning as in numpy.pad() : 'constant', 'reflect', 'wrap', 'symmetric'
         _C.AUGMENTOR.AFFINE_MODE = 'reflect'
         # Make vertical flips
         _C.AUGMENTOR.VFLIP = False
@@ -500,20 +502,6 @@ class Config:
         # If apply same contrast to the entire image or select one for each slice. For 2D does not matter but yes for
         # 3D images. Possible values: '2D' or '3D'. Used when '_C.PROBLEM.NDIM' = '3D'.
         _C.AUGMENTOR.CONTRAST_MODE = '3D'
-        # To apply brightness changes to images based on Pytorch Connectomics library.
-        _C.AUGMENTOR.BRIGHTNESS_EM = False
-        # Strength of the brightness range
-        _C.AUGMENTOR.BRIGHTNESS_EM_FACTOR = (-0.1, 0.1)
-        # If apply same contrast to the entire image or select one for each slice. For 2D does not matter but yes for
-        # 3D images. Possible values: '2D' or '3D'. Used when '_C.PROBLEM.NDIM' = '3D'.
-        _C.AUGMENTOR.BRIGHTNESS_EM_MODE = '3D'
-        # To apply contrast changes to images based on Pytorch Connectomics library.
-        _C.AUGMENTOR.CONTRAST_EM = False
-        # Strength of the contrast change range, with valid values being 0 <= contrast_em_factor <= 1
-        _C.AUGMENTOR.CONTRAST_EM_FACTOR = (-0.1, 0.1)
-        # If apply same contrast to the entire image or select one for each slice. For 2D does not matter but yes for
-        # 3D images. Possible values: '2D' or '3D'. Used when '_C.PROBLEM.NDIM' = '3D'.
-        _C.AUGMENTOR.CONTRAST_EM_MODE = '3D'
         # Set a certain fraction of pixels in images to zero (not get confused with the dropout concept of neural networks)
         _C.AUGMENTOR.DROPOUT = False
         # Range to take the probability to drop a pixel
@@ -662,12 +650,12 @@ class Config:
         # BIAPY BACKEND MODELS
         #
         # Architecture of the network. Possible values are: 
-        #   * Semantic segmentation: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'unetr', 'unext_v1'
-        #   * Instance segmentation: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'unetr', 'unext_v1'
-        #   * Detection: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'unetr', 'unext_v1'
-        #   * Denoising: 'unet', 'resunet', 'resunet++', 'attention_unet', 'seunet', 'unext_v1'
-        #   * Super-resolution: 'edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'multiresunet', 'unext_v1'
-        #   * Self-supervision: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae', 'unext_v1' 
+        #   * Semantic segmentation: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'resunet_se', 'unetr', 'unext_v1'
+        #   * Instance segmentation: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'resunet_se', 'unetr', 'unext_v1'
+        #   * Detection: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'resunet_se', 'unetr', 'unext_v1'
+        #   * Denoising: 'unet', 'resunet', 'resunet++', 'attention_unet', 'seunet', 'resunet_se',, 'unext_v1'
+        #   * Super-resolution: 'edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'multiresunet', 'unext_v1'
+        #   * Self-supervision: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'resunet_se', 'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae', 'unext_v1' 
         #   * Classification: 'simple_cnn', 'vit', 'efficientnet_b[0-7]' (only 2D)
         _C.MODEL.ARCHITECTURE = 'unet'
         # Number of feature maps on each level of the network.
@@ -675,8 +663,8 @@ class Config:
         # Values to make the dropout with. Set to 0 to prevent dropout. When using it with 'ViT' or 'unetr' 
         # a list with just one number must be provided 
         _C.MODEL.DROPOUT_VALUES = [0., 0., 0., 0., 0.]
-        # To active batch normalization
-        _C.MODEL.BATCH_NORMALIZATION = True
+        # Normalization layer (one of ``'bn'``, ``'sync_bn'`` ``'in'``, ``'gn'`` or ``'none'``).
+        _C.MODEL.NORMALIZATION = 'bn'
         # Kernel size
         _C.MODEL.KERNEL_SIZE = 3
         # Upsampling layer to use in the model. Options: ["upsampling", "convtranspose"]
@@ -690,6 +678,10 @@ class Config:
         # Downsampling to be made in Z. This value will be the third integer of the MaxPooling operation. When facing
         # anysotropic datasets set it to get better performance
         _C.MODEL.Z_DOWN = [0, 0, 0, 0]
+        # For each level of the model (U-Net levels), set to true or false if the dimensions of the feature maps are isotropic.
+        _C.MODEL.ISOTROPY = [True, True, True, True, True]
+        # Include extra convolutional layers with larger kernel at the beginning and end of the U-Net-like model.
+        _C.MODEL.LARGER_IO = False
         # Checkpoint: set to True to load previous training weigths (needed for inference or to make fine-tunning)
         _C.MODEL.LOAD_CHECKPOINT = False
         # When loading checkpoints whether if only model's weights are going to be loaded or optimizer, epochs and loss_scaler. 
@@ -757,7 +749,9 @@ class Config:
         # Loss type, two options: "CE" -> cross entropy ; "W_CE_DICE", CE and Dice (with a weight term on each one
         # (that must sum 1) to calculate the total loss value.
         _C.LOSS.TYPE = 'CE'
-
+        # To adjust the loss function based on the imbalance between classes. Used when LOSS.TYPE == "CE" in detection and
+        # semantic segmentation and if using B,C,M,P or A channels in instance segmentation.
+        _C.LOSS.CLASS_REBALANCE = False
 
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Training phase
@@ -868,6 +862,8 @@ class Config:
         _C.TEST.VERBOSE = True
         # Make test-time augmentation. Infer over 8 possible rotations for 2D img and 16 when 3D
         _C.TEST.AUGMENTATION = False
+        # Select test-time augmentation mode. Options: "mean" (default), "min", "max".
+        _C.TEST.AUGMENTATION_MODE = "mean"
         # Whether to evaluate or not
         _C.TEST.EVALUATE = True
         # Stack 2D images into a 3D image and then process it entirely instead of going image per image

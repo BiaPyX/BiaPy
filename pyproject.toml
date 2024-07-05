@@ -37,11 +37,11 @@ dependencies = [
     "zarr>=2.16.1",
     "bioimageio.core==0.5.9",
     "imagecodecs>=2024.1.1",
-    "pytorch-msssim>=1.0.0",
-    "numpy>=1.25.2",
+    "numpy<2",
     "imageio>=2.31.6",
     "imgaug>=0.4.0",
     "pooch>=1.8.1",
+    "marshmallow>=3.21.3",
 ]
 
 [project.scripts]

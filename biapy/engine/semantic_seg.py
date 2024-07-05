@@ -71,7 +71,8 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         self.metric_names = ["jaccard_index"]
         if self.cfg.LOSS.TYPE == "CE":    
             self.loss = CrossEntropyLoss_wrapper(num_classes=self.cfg.MODEL.N_CLASSES,
-                torchvision_models=True if self.cfg.MODEL.SOURCE == "torchvision" else False)
+                torchvision_models=True if self.cfg.MODEL.SOURCE == "torchvision" else False,
+                class_rebalance=self.cfg.LOSS.CLASS_REBALANCE)
         elif self.cfg.LOSS.TYPE == "W_CE_DICE":
             self.loss = weighted_bce_dice_loss(w_dice=0.66, w_bce=0.33)
 

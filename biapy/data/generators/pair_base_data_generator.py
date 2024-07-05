@@ -77,6 +77,9 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
     zoom_range : tuple of floats, optional
         Zoom range to apply. E. g. ``(0.8, 1.2)``.
 
+    zoom_in_z: bool, optional
+        Whether to apply or not zoom in Z axis. 
+
     shift : float, optional
         To make shifts.
 
@@ -148,27 +151,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         E.g. ``(0.1, 0.3)``.
 
     contrast_mode : str, optional
-        Apply same contrast change to the whole image or diffent to slice by slice.
-
-    brightness_em : bool, optional
-        To aply brightness to the images as `PyTorch Connectomics
-        <https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/data/augmentation/grayscale.py>`_.
-
-    brightness_em_factor : tuple of 2 floats, optional
-        Strength of the brightness range, with valid values being ``0 <= brightness_em_factor <= 1``. E.g. ``(0.1, 0.3)``.
-
-    brightness_em_mode : str, optional
-        Apply same brightness change to the whole image or diffent to slice by slice.
-
-    contrast_em : boolen, optional
-        To apply contrast changes to the images as `PyTorch Connectomics
-        <https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/data/augmentation/grayscale.py>`_.
-
-    contrast_em_factor : tuple of 2 floats, optional
-        Strength of the contrast change range, with valid values being ``0 <= contrast_em_factor <= 1``.
-        E.g. ``(0.1, 0.3)``.
-
-    contrast_em_mode : str, optional
         Apply same contrast change to the whole image or diffent to slice by slice.
 
     dropout : bool, optional
@@ -363,27 +345,106 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         `LightMyCells challenge approach <https://biapy.readthedocs.io/en/latest/tutorials/image-to-image/lightmycells.html>`_ 
         for a real use case.  
     """
-    def __init__(self, ndim, X, Y, seed=0, data_mode="", data_paths=None, da=True, da_prob=0.5, rotation90=False, 
-                 rand_rot=False, rnd_rot_range=(-180,180), shear=False, shear_range=(-20,20), zoom=False, zoom_range=(0.8,1.2), 
-                 shift=False, shift_range=(0.1,0.2), affine_mode='constant', vflip=False, hflip=False, elastic=False, 
-                 e_alpha=(240,250), e_sigma=25, e_mode='constant', g_blur=False, g_sigma=(1.0,2.0), median_blur=False, 
-                 mb_kernel=(3,7), motion_blur=False, motb_k_range=(3,8), gamma_contrast=False, gc_gamma=(1.25,1.75), 
-                 brightness=False, brightness_factor=(1,3), brightness_mode='2D', contrast=False, contrast_factor=(1,3), 
-                 contrast_mode='2D', brightness_em=False, brightness_em_factor=(1,3), brightness_em_mode='2D', contrast_em=False, 
-                 contrast_em_factor=(1,3), contrast_em_mode='2D', dropout=False, drop_range=(0, 0.2), cutout=False, 
-                 cout_nb_iterations=(1,3), cout_size=(0.2,0.4), cout_cval=0, cout_apply_to_mask=False, cutblur=False, 
-                 cblur_size=(0.1,0.5), cblur_down_range=(2,8), cblur_inside=True, cutmix=False, cmix_size=(0.2,0.4), 
-                 cutnoise=False, cnoise_scale=(0.1,0.2), cnoise_nb_iterations=(1,3), cnoise_size=(0.2,0.4), misalignment=False,
-                 ms_displacement=16, ms_rotate_ratio=0.0, missing_sections=False, missp_iterations=(30, 40),
-                 grayscale=False, channel_shuffle=False, gridmask=False, grid_ratio=0.6, grid_d_range=(0.4,1),
-                 grid_rotate=1, grid_invert=False, gaussian_noise=False, gaussian_noise_mean=0, gaussian_noise_var=0.01,
-                 gaussian_noise_use_input_img_mean_and_var=False, poisson_noise=False, salt=False, salt_amount=0.05, 
-                 pepper=False, pepper_amount=0.05, salt_and_pepper=False, salt_pep_amount=0.05, salt_pep_proportion=0.5, 
-                 random_crops_in_DA=False, shape=(256,256,1), resolution=(-1,), prob_map=None, val=False, n_classes=1, 
-                 extra_data_factor=1, n2v=False, n2v_perc_pix=0.198, n2v_manipulator='uniform_withCP', 
-                 n2v_neighborhood_radius=5, n2v_structMask=np.array([[0,1,1,1,1,1,1,1,1,1,0]]), norm_dict=None, 
-                 instance_problem=False, random_crop_scale=(1,1), convert_to_rgb=False, multiple_raw_images=False):
-        
+    def __init__(
+        self, 
+        ndim, 
+        X, 
+        Y, 
+        seed=0, 
+        data_mode="", 
+        data_paths=None, 
+        da=True, 
+        da_prob=0.5, 
+        rotation90=False, 
+        rand_rot=False, 
+        rnd_rot_range=(-180,180), 
+        shear=False, 
+        shear_range=(-20,20), 
+        zoom=False, 
+        zoom_range=(0.8,1.2),
+        zoom_in_z=False, 
+        shift=False,
+        shift_range=(0.1,0.2),
+        affine_mode='constant',
+        vflip=False,
+        hflip=False,
+        elastic=False, 
+        e_alpha=(240,250), 
+        e_sigma=25, 
+        e_mode='constant', 
+        g_blur=False, 
+        g_sigma=(1.0,2.0), 
+        median_blur=False, 
+        mb_kernel=(3,7), 
+        motion_blur=False, 
+        motb_k_range=(3,8), 
+        gamma_contrast=False, 
+        gc_gamma=(1.25,1.75), 
+        brightness=False, 
+        brightness_factor=(1,3), 
+        brightness_mode='2D', 
+        contrast=False, 
+        contrast_factor=(1,3), 
+        contrast_mode='2D', 
+        dropout=False, 
+        drop_range=(0, 0.2), 
+        cutout=False, 
+        cout_nb_iterations=(1,3), 
+        cout_size=(0.2,0.4), 
+        cout_cval=0, 
+        cout_apply_to_mask=False, 
+        cutblur=False, 
+        cblur_size=(0.1,0.5), 
+        cblur_down_range=(2,8), 
+        cblur_inside=True, 
+        cutmix=False, 
+        cmix_size=(0.2,0.4), 
+        cutnoise=False, 
+        cnoise_scale=(0.1,0.2), 
+        cnoise_nb_iterations=(1,3), 
+        cnoise_size=(0.2,0.4), 
+        misalignment=False,
+        ms_displacement=16, 
+        ms_rotate_ratio=0.0, 
+        missing_sections=False, 
+        missp_iterations=(30, 40),
+        grayscale=False, 
+        channel_shuffle=False, 
+        gridmask=False, 
+        grid_ratio=0.6, 
+        grid_d_range=(0.4,1),
+        grid_rotate=1, 
+        grid_invert=False, 
+        gaussian_noise=False, 
+        gaussian_noise_mean=0, 
+        gaussian_noise_var=0.01,
+        gaussian_noise_use_input_img_mean_and_var=False, 
+        poisson_noise=False, 
+        salt=False, 
+        salt_amount=0.05, 
+        pepper=False, 
+        pepper_amount=0.05, 
+        salt_and_pepper=False, 
+        salt_pep_amount=0.05, 
+        salt_pep_proportion=0.5, 
+        random_crops_in_DA=False, 
+        shape=(256,256,1), 
+        resolution=(-1,), 
+        prob_map=None, 
+        val=False, 
+        n_classes=1, 
+        extra_data_factor=1, 
+        n2v=False, 
+        n2v_perc_pix=0.198, 
+        n2v_manipulator='uniform_withCP', 
+        n2v_neighborhood_radius=5, 
+        n2v_structMask=np.array([[0,1,1,1,1,1,1,1,1,1,0]]), 
+        norm_dict=None, 
+        instance_problem=False, 
+        random_crop_scale=(1,1), 
+        convert_to_rgb=False, 
+        multiple_raw_images=False):
+
         assert norm_dict != None, "Normalization instructions must be provided with 'norm_dict'"
         assert norm_dict['mask_norm'] in ['as_mask', 'as_image', 'none']
         assert data_mode in ['in_memory', 'not_in_memory', 'chunked_data']
@@ -614,8 +675,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.ms_rotate_ratio = ms_rotate_ratio
         self.brightness = brightness
         self.contrast = contrast
-        self.brightness_em = brightness_em
-        self.contrast_em = contrast_em
         self.missing_sections = missing_sections
         self.missp_iterations = missp_iterations
         self.grayscale = grayscale
@@ -642,6 +701,11 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.rnd_rot_range = rnd_rot_range
         self.rotation90 = rotation90
         self.affine_mode = affine_mode
+        self.zoom = zoom
+        self.zoom_range = zoom_range
+        self.zoom_in_z = zoom_in_z
+        self.gamma_contrast = gamma_contrast
+        self.gc_gamma = gc_gamma
 
         # Instance segmentation options
         self.instance_problem = instance_problem
@@ -692,8 +756,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             self.da_options.append(iaa.Sometimes(da_prob, iaa.Affine(rotate=shear_range, mode=affine_mode)))
             self.trans_made += '_shear'+str(shear_range)
         if zoom:
-            self.da_options.append(iaa.Sometimes(da_prob, iaa.Affine(scale={"x": zoom_range, "y": zoom_range}, mode=affine_mode)))
-            self.trans_made += '_zoom'+str(zoom_range)
+            self.trans_made += '_zoom'+str(zoom_range)+"+"+str(zoom_in_z)
         if shift:
             self.da_options.append(iaa.Sometimes(da_prob, iaa.Affine(translate_percent=shift_range, mode=affine_mode)))
             self.trans_made += '_shift'+str(shift_range)
@@ -716,7 +779,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             self.da_options.append(iaa.Sometimes(da_prob,iaa.MotionBlur(k=motb_k_range)))
             self.trans_made += '_motb'+str(motb_k_range)
         if gamma_contrast:
-            self.da_options.append(iaa.Sometimes(da_prob,iaa.GammaContrast(gc_gamma)))
             self.trans_made += '_gcontrast'+str(gc_gamma)
         if brightness:
             self.brightness_factor = brightness_factor
@@ -726,14 +788,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             self.contrast_factor = contrast_factor
             self.contrast_mode = contrast_mode # Not used
             self.trans_made += '_contrast'+str(contrast_factor)
-        if brightness_em:
-            self.brightness_em_factor = brightness_em_factor
-            self.brightness_em_mode = brightness_em_mode # Not used
-            self.trans_made += '_brightness_em'+str(brightness_em_factor)
-        if contrast_em:
-            self.contrast_em_factor = contrast_em_factor
-            self.contrast_em_mode = contrast_em_mode # Not used
-            self.trans_made += '_contrast_em'+str(contrast_em_factor)
         if dropout:
             self.da_options.append(iaa.Sometimes(da_prob, iaa.Dropout(p=drop_range)))
             self.trans_made += '_drop'+str(drop_range)
@@ -994,18 +1048,18 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         Parameters
         ----------
         image : 3D/4D Numpy array
-            Image to transform. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
+            Image to transform. E.g. ``(y, x, channels)`` in ``2D`` and ``(y, x, z, channels)`` in ``3D``.
 
         mask : 3D/4D Numpy array
-            Mask to transform. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
+            Mask to transform. E.g. ``(y, x, channels)`` in ``2D`` and ``(y, x, z, channels)`` in ``3D``.
 
         e_img : 3D/4D Numpy array
             Extra image to help transforming ``image``. E.g. ``(y, x, channels)`` in ``2D`` or 
-            ``(z, y, x, channels)`` in ``3D``.
+            ``(y, x, z, channels)`` in ``3D``.
 
         e_mask : 3D/4D Numpy array
             Extra mask to help transforming ``mask``. E.g. ``(y, x, channels)`` in ``2D`` or 
-            ``(z, y, x, channels)`` in ``3D``.
+            ``(y, x, z, channels)`` in ``3D``.
 
         Returns
         -------
@@ -1049,6 +1103,11 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         if self.channel_shuffle and random.uniform(0, 1) < self.da_prob:
             image = shuffle_channels(image)
 
+        # Apply zoom
+        if self.zoom and random.uniform(0, 1) < self.da_prob:
+            image, mask, heat = zoom(image, mask, heat=heat, zoom_range=self.zoom_range, zoom_in_z=self.zoom_in_z, 
+                mode=self.affine_mode, mask_type=self.norm_dict['mask_norm'])
+
         # Apply random rotations
         if self.rand_rot and random.uniform(0, 1) < self.da_prob:
             image, mask, heat = rotation(image, mask, heat=heat, angles=self.rnd_rot_range, mode=self.affine_mode, 
@@ -1068,12 +1127,8 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             #if e_heat is not None: e_heat = e_heat.reshape(e_heat.shape[:2]+(e_heat.shape[2]*e_heat.shape[3],))
         # Convert heatmap into imgaug object
         if heat is not None:
-            heat = HeatmapsOnImage(heat, shape=heat.shape, min_value=0.0, max_value=np.max(heat)+sys.float_info.epsilon)
-
-        # Apply cutout
-        if self.cutout and random.uniform(0, 1) < self.da_prob:
-            image, mask = cutout(image, mask, self.X_channels, self.z_size, self.cout_nb_iterations, self.cout_size,
-                                 self.cout_cval, self.res_relation, self.cout_apply_to_mask)
+            heat = HeatmapsOnImage(heat, shape=heat.shape, min_value=heat.min(), 
+                max_value=heat.max()+sys.float_info.epsilon)
 
         # Apply cblur
         if self.cutblur and random.uniform(0, 1) < self.da_prob:
@@ -1100,22 +1155,9 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         if self.contrast and random.uniform(0, 1) < self.da_prob:
             image = contrast(image, contrast_factor=self.contrast_factor, mode=self.contrast_mode)
 
-        # Apply brightness (EM)
-        if self.brightness_em and random.uniform(0, 1) < self.da_prob:
-            image = brightness_em(image, brightness_factor=self.brightness_em_factor, mode=self.brightness_em_mode)
-
-        # Apply contrast (EM)
-        if self.contrast_em and random.uniform(0, 1) < self.da_prob:
-            image = contrast_em(image, contrast_factor=self.contrast_em_factor, mode=self.contrast_em_mode)
-
-        # Apply missing parts
-        if self.missing_sections and random.uniform(0, 1) < self.da_prob:
-            image = missing_sections(image, self.missp_iterations)
-
-        # Apply GridMask
-        if self.gridmask and random.uniform(0, 1) < self.da_prob:
-            image = GridMask(image, self.X_channels, self.z_size, self.grid_ratio, self.grid_d_size, self.grid_rotate,
-                             self.grid_invert)
+        # Apply gamma contrast
+        if self.gamma_contrast and random.uniform(0, 1) < self.da_prob:
+            image = gamma_contrast(image, gamma=self.gc_gamma)
 
         if self.gaussian_noise and random.uniform(0, 1) < self.da_prob:
             mean = np.mean(image) if self.gaussian_noise_use_input_img_mean_and_var else self.gaussian_noise_mean
@@ -1133,6 +1175,20 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         if self.salt_and_pepper and random.uniform(0, 1) < self.da_prob:
             image = random_noise(image, mode='s&p', amount=self.salt_pep_amount, salt_vs_pepper=self.salt_pep_proportion)
+
+        # Apply missing parts
+        if self.missing_sections and random.uniform(0, 1) < self.da_prob:
+            image = missing_sections(image, self.missp_iterations)
+
+        # Apply GridMask
+        if self.gridmask and random.uniform(0, 1) < self.da_prob:
+            image = GridMask(image, self.X_channels, self.z_size, self.grid_ratio, self.grid_d_size, self.grid_rotate,
+                             self.grid_invert)
+        
+        # Apply cutout
+        if self.cutout and random.uniform(0, 1) < self.da_prob:
+            image, mask = cutout(image, mask, self.X_channels, self.z_size, self.cout_nb_iterations, self.cout_size,
+                                 self.cout_cval, self.res_relation, self.cout_apply_to_mask)
 
         # Apply transformations to the volume and its mask
         if self.norm_dict['mask_norm'] == 'as_mask':  
