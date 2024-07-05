@@ -10,8 +10,8 @@ class U_NeXt_V1(nn.Module):
     """
     Create 2D/3D U-NeXt.
 
-    Reference: `U-Net: Convolutional Networks for Biomedical Image Segmentation <https://arxiv.org/abs/1505.04597>`,
-    `A ConvNet for the 2020s <https://arxiv.org/abs/2201.03545>`.
+    Reference: `U-Net: Convolutional Networks for Biomedical Image Segmentation <https://arxiv.org/abs/1505.04597>`_,
+    `A ConvNet for the 2020s <https://arxiv.org/abs/2201.03545>`_.
 
     Parameters
     ----------
@@ -64,11 +64,11 @@ class U_NeXt_V1(nn.Module):
 
     Calling this function with its default parameters returns the following network:
 
-    .. image:: ../../img/models/uneXt.png
+    .. image:: ../../img/models/unext.png
         :width: 100%
         :align: center
 
-    Image created with `PlotNeuralNet <https://github.com/HarisIqbal88/PlotNeuralNet>`_.
+    
     """
 
     def __init__(self, image_shape=(256, 256, 1), feature_maps=[32,64,128,256], upsample_layer="convtranspose", z_down=[2,2,2,2], 
@@ -103,7 +103,7 @@ class U_NeXt_V1(nn.Module):
         in_channels = image_shape[-1]
 
         # STEM
-        mpool = (z_down[0], 4, 4) if self.ndim == 3 else (4, 4)
+        mpool = (z_down[0], 2, 2) if self.ndim == 3 else (2, 2)
         self.down_path.append(
             nn.Sequential(
                 conv(in_channels, feature_maps[0], kernel_size=mpool, stride=mpool),
@@ -161,7 +161,7 @@ class U_NeXt_V1(nn.Module):
             in_channels = feature_maps[i]
 
         # Inverted Stem
-        mpool = (z_down[0], 4, 4) if self.ndim == 3 else (4, 4)
+        mpool = (z_down[0], 2, 2) if self.ndim == 3 else (2, 2)
         self.up_path.append(
             nn.Sequential(
                 convtranspose(feature_maps[0], feature_maps[0], kernel_size = mpool, stride = mpool),
