@@ -1075,30 +1075,30 @@ class Base_Workflow(metaclass=ABCMeta):
                 obj = self.input_queue.get(timeout=60)
                 if obj == None: break
 
-            img, patch_coords = obj
-            img, _ = self.test_generator.norm_X(img)
-            if self.cfg.TEST.AUGMENTATION:
-                p = ensemble16_3d_predictions(img[0], batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
-                    axis_order_back=self.axis_order_back, pred_func=self.model_call_func, 
-                    axis_order=self.axis_order, device=self.device, mode=self.cfg.TEST.AUGMENTATION_MODE)
-            else:
-                with torch.cuda.amp.autocast():
-                    p = self.model_call_func(img)
-            p = self.apply_model_activations(p)
-            # Multi-head concatenation
-            if isinstance(p, list):
-                p = torch.cat((p[0], torch.argmax(p[1], axis=1).unsqueeze(1)), dim=1)
-            p = to_numpy_format(p, self.axis_order_back)
+                img, patch_coords = obj
+                img, _ = self.test_generator.norm_X(img)
+                if self.cfg.TEST.AUGMENTATION:
+                    p = ensemble16_3d_predictions(img[0], batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
+                        axis_order_back=self.axis_order_back, pred_func=self.model_call_func, 
+                        axis_order=self.axis_order, device=self.device, mode=self.cfg.TEST.AUGMENTATION_MODE)
+                else:
+                    with torch.cuda.amp.autocast():
+                        p = self.model_call_func(img)
+                p = self.apply_model_activations(p)
+                # Multi-head concatenation
+                if isinstance(p, list):
+                    p = torch.cat((p[0], torch.argmax(p[1], axis=1).unsqueeze(1)), dim=1)
+                p = to_numpy_format(p, self.axis_order_back)
 
-            # Create a mask with the overlap. Calculate the exact part of the patch that will be inserted in the 
-            # final H5/Zarr file
-            p = p[0, self.cfg.DATA.TEST.PADDING[0]:p.shape[1]-self.cfg.DATA.TEST.PADDING[0],
-                self.cfg.DATA.TEST.PADDING[1]:p.shape[2]-self.cfg.DATA.TEST.PADDING[1],
-                self.cfg.DATA.TEST.PADDING[2]:p.shape[3]-self.cfg.DATA.TEST.PADDING[2]]
-            m = np.ones(p.shape, dtype=np.uint8)
+                # Create a mask with the overlap. Calculate the exact part of the patch that will be inserted in the 
+                # final H5/Zarr file
+                p = p[0, self.cfg.DATA.TEST.PADDING[0]:p.shape[1]-self.cfg.DATA.TEST.PADDING[0],
+                    self.cfg.DATA.TEST.PADDING[1]:p.shape[2]-self.cfg.DATA.TEST.PADDING[1],
+                    self.cfg.DATA.TEST.PADDING[2]:p.shape[3]-self.cfg.DATA.TEST.PADDING[2]]
+                m = np.ones(p.shape, dtype=np.uint8)
 
-            # Put the prediction into queue
-            self.output_queue.put([p, m, patch_coords])         
+                # Put the prediction into queue
+                self.output_queue.put([p, m, patch_coords])         
 
             # Get some auxiliar variables
             self.stats['patch_by_batch_counter'] = self.extract_info_queue.get(timeout=60)
