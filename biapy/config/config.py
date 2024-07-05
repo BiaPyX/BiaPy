@@ -662,12 +662,12 @@ class Config:
         # BIAPY BACKEND MODELS
         #
         # Architecture of the network. Possible values are: 
-        #   * Semantic segmentation: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'unetr'
-        #   * Instance segmentation: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'unetr'
-        #   * Detection: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'unetr' 
-        #   * Denoising: 'unet', 'resunet', 'resunet++', 'attention_unet', 'seunet' 
-        #   * Super-resolution: 'edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'multiresunet' 
-        #   * Self-supervision: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae' 
+        #   * Semantic segmentation: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'unetr', 'unext_v1'
+        #   * Instance segmentation: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'unetr', 'unext_v1'
+        #   * Detection: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'unetr', 'unext_v1'
+        #   * Denoising: 'unet', 'resunet', 'resunet++', 'attention_unet', 'seunet', 'unext_v1'
+        #   * Super-resolution: 'edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'multiresunet', 'unext_v1'
+        #   * Self-supervision: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae', 'unext_v1' 
         #   * Classification: 'simple_cnn', 'vit', 'efficientnet_b[0-7]' (only 2D)
         _C.MODEL.ARCHITECTURE = 'unet'
         # Number of feature maps on each level of the network.
@@ -700,6 +700,12 @@ class Config:
         # Epochs to save a checkpoint of the model apart from the ones saved with LOAD_CHECKPOINT_ONLY_WEIGHTS. Set it to -1 to 
         # not do it.
         _C.MODEL.SAVE_CKPT_FREQ = -1
+        # Number of ConvNeXtBlocks in each level.
+        _C.MODEL.CONVNEXT_LAYERS=[2,2,2,2,2] # CONVNEXT_LAYERS
+        # Maximum Stochastic Depth probability for the U-NeXt model.
+        _C.MODEL.CONVNEXT_SD_PROB=0.1
+        # Layer Scale parameter for the U-NeXt model.
+        _C.MODEL.CONVNEXT_LAYER_SCALE=1e-6
 
         # TRANSFORMERS MODELS
         # Type of model. Options are "custom", "vit_base_patch16", "vit_large_patch16" and "vit_huge_patch16". On custom setting 

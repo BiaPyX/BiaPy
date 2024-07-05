@@ -47,7 +47,7 @@ def build_model(cfg, job_identifier, device):
     ndim = 3 if cfg.PROBLEM.NDIM == "3D" else 2
 
     # Model building
-    if modelname in ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet']:
+    if modelname in ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'unext_v1']:
         args = dict(image_shape=cfg.DATA.PATCH_SIZE, activation=cfg.MODEL.ACTIVATION.lower(), feature_maps=cfg.MODEL.FEATURE_MAPS, 
             drop_values=cfg.MODEL.DROPOUT_VALUES, batch_norm=cfg.MODEL.BATCH_NORMALIZATION, k_size=cfg.MODEL.KERNEL_SIZE,
             upsample_layer=cfg.MODEL.UPSAMPLE_LAYER, z_down=cfg.MODEL.Z_DOWN)
@@ -61,6 +61,11 @@ def build_model(cfg, job_identifier, device):
             callable_model = Attention_U_Net
         elif modelname == 'seunet':
             callable_model = SE_U_Net
+        elif modelname == 'unext_v1':
+            args = dict(image_shape=cfg.DATA.PATCH_SIZE, feature_maps=cfg.MODEL.FEATURE_MAPS, 
+            upsample_layer=cfg.MODEL.UPSAMPLE_LAYER, z_down=cfg.MODEL.Z_DOWN, cn_layers=cfg.MODEL.CONVNEXT_LAYERS,
+            layer_scale=cfg.MODEL.CONVNEXT_LAYER_SCALE, stochastic_depth_prob=cfg.MODEL.CONVNEXT_SD_PROB)
+            callable_model = U_NeXt_V1
         args['output_channels'] = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS if cfg.PROBLEM.TYPE == 'INSTANCE_SEG' else None        
         if cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
             args['upsampling_factor'] = cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING
@@ -133,7 +138,7 @@ def build_model(cfg, job_identifier, device):
                 depth=cfg.MODEL.VIT_NUM_LAYERS, num_heads=cfg.MODEL.VIT_NUM_HEADS, decoder_embed_dim=512, decoder_depth=8, 
                 decoder_num_heads=16, mlp_ratio=cfg.MODEL.VIT_MLP_RATIO, masking_type=cfg.MODEL.MAE_MASK_TYPE, 
                 mask_ratio=cfg.MODEL.MAE_MASK_RATIO, device=device)
-            callable_model = MaskedAutoencoderViT      
+            callable_model = MaskedAutoencoderViT
     # Check the network created
     model.to(device)
     if cfg.PROBLEM.NDIM == '2D':
