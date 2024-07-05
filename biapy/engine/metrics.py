@@ -325,7 +325,7 @@ class CrossEntropyLoss_wrapper():
 
         if self.class_rebalance:
             weight_mask = weight_binary_ratio(y_true)
-            if num_classes <= 2:
+            if self.num_classes <= 2:
                 loss_fn = torch.nn.BCEWithLogitsLoss(weight=weight_mask)
             else:
                 loss_fn = torch.nn.CrossEntropyLoss(weight=weight_mask)
