@@ -66,7 +66,7 @@ def build_model(cfg, job_identifier, device):
             args['isotropy'] = cfg.MODEL.ISOTROPY
             args['larger_io'] = cfg.MODEL.LARGER_IO
         elif modelname == 'resunet_se':
-            callable_name = ResUNet_SE
+            callable_model = ResUNet_SE
             args['isotropy'] = cfg.MODEL.ISOTROPY
             args['larger_io'] = cfg.MODEL.LARGER_IO
         args['output_channels'] = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS if cfg.PROBLEM.TYPE == 'INSTANCE_SEG' else None        
