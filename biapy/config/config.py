@@ -914,12 +914,21 @@ class Config:
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Post-processing
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # When PROBLEM.NDIM = '2D' only applies when _C.TEST.ANALIZE_2D_IMGS_AS_3D_STACK = True
+        
         _C.TEST.POST_PROCESSING = CN()
-        _C.TEST.POST_PROCESSING.YZ_FILTERING = False
-        _C.TEST.POST_PROCESSING.YZ_FILTERING_SIZE = 5
-        _C.TEST.POST_PROCESSING.Z_FILTERING = False
-        _C.TEST.POST_PROCESSING.Z_FILTERING_SIZE = 5
+        
+        # To apply median filtering to the data
+        _C.TEST.POST_PROCESSING.MEDIAN_FILTER = False
+        # List of median filters to apply. They are going to be applied in the list order. This can only be used in 
+        # 'SEMANTIC_SEG', 'INSTANCE_SEG' and 'DETECTION' workflows. There are multiple options to compose the list:
+        #   * 'xy' or 'yx': to apply the filter in x and y axes together 
+        #   * 'zy' or 'yz': to apply the filter in y and z axes together
+        #   * 'zx' or 'xz': to apply the filter in x and z axes together 
+        #   * 'z': to apply the filter only in z axis 
+        # Those filter that imply 'z' axis are going to be applied only in 3D or in 2D if TEST.ANALIZE_2D_IMGS_AS_3D_STACK is selected
+        _C.TEST.POST_PROCESSING.MEDIAN_FILTER_AXIS = []
+        _C.TEST.POST_PROCESSING.MEDIAN_FILTER_SIZE = []
+        
         # Apply a binary mask to remove possible segmentation outside it (you need to provide the mask and it must 
         # contain two values: '1' -> preserve the pixel ; '0' discard pixel ). A mask for each test sample must be 
         # provided and it will be loaded using 'DATA.TEST.BINARY_MASKS' variable.

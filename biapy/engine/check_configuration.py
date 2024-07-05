@@ -135,16 +135,26 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     if cfg.TEST.POST_PROCESSING.DET_WATERSHED and cfg.PROBLEM.TYPE != 'DETECTION':
         raise ValueError("'TEST.POST_PROCESSING.DET_WATERSHED' can only be set when 'PROBLEM.TYPE' is 'DETECTION'")
 
-    if cfg.PROBLEM.NDIM == "2D":
-        if (cfg.TEST.POST_PROCESSING.YZ_FILTERING or cfg.TEST.POST_PROCESSING.Z_FILTERING) \
-            and not cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
-            raise ValueError("'TEST.POST_PROCESSING.YZ_FILTERING' and 'TEST.POST_PROCESSING.Z_FILTERING' is done only if"
-                " 'TEST.ANALIZE_2D_IMGS_AS_3D_STACK' is enabled. Enable this last or disable those post-processing methods "
-                "because it can not be applied to 2D images")
-    if (cfg.TEST.POST_PROCESSING.YZ_FILTERING or cfg.TEST.POST_PROCESSING.Z_FILTERING) \
-        and cfg.PROBLEM.TYPE not in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION']:
-        raise ValueError("'TEST.POST_PROCESSING.YZ_FILTERING' or 'TEST.POST_PROCESSING.Z_FILTERING' can only be enabled "
-            "when 'PROBLEM.TYPE' is among ['SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION']")
+    if cfg.TEST.POST_PROCESSING.MEDIAN_FILTER:
+        if len(cfg.TEST.POST_PROCESSING.MEDIAN_FILTER_AXIS) == 0:
+            raise ValueError("Configure 'TEST.POST_PROCESSING.MEDIAN_FILTER_AXIS' as 'TEST.POST_PROCESSING.MEDIAN_FILTER' is enabled")
+
+        if len(cfg.TEST.POST_PROCESSING.MEDIAN_FILTER_SIZE) == 0:
+            raise ValueError("Configure 'TEST.POST_PROCESSING.MEDIAN_FILTER_SIZE' as 'TEST.POST_PROCESSING.MEDIAN_FILTER' is enabled")
+            
+        assert len(cfg.TEST.POST_PROCESSING.MEDIAN_FILTER_AXIS) == len(cfg.TEST.POST_PROCESSING.MEDIAN_FILTER_SIZE), \
+            "'TEST.POST_PROCESSING.MEDIAN_FILTER_AXIS' and 'TEST.POST_PROCESSING.MEDIAN_FILTER_SIZE' lenght must be the same"
+
+        if len(cfg.TEST.POST_PROCESSING.MEDIAN_FILTER_AXIS) > 0 and cfg.PROBLEM.TYPE not in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION']:
+            raise ValueError("'TEST.POST_PROCESSING.MEDIAN_FILTER_AXIS' can only be used when 'PROBLEM.TYPE' is among "
+                "['SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION']")
+
+        for f in cfg.TEST.POST_PROCESSING.MEDIAN_FILTER_AXIS:
+            if cfg.PROBLEM.NDIM == "2D" and "z" in f and not cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
+                raise ValueError("In 2D z axis filtering can not be done unless 'TEST.ANALIZE_2D_IMGS_AS_3D_STACK' is selected. "
+                    "So, please, remove it from 'TEST.POST_PROCESSING.MEDIAN_FILTER_AXIS'")
+            if f not in ["xy", "yx", "zy", "yz", "zx", "xz", "z"]:
+                raise ValueError("'TEST.POST_PROCESSING.MEDIAN_FILTER_AXIS' options are ['xy', 'yx', 'zy', 'yz', 'zx', 'xz', 'z']")
 
     # First update is done here as some checks from this point need to have those updates 
     if len(opts) > 0:

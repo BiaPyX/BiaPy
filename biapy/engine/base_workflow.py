@@ -113,11 +113,13 @@ class Base_Workflow(metaclass=ABCMeta):
             self.extract_info_queue = mp.Queue()
 
         # Test variables
-        if self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK and self.cfg.PROBLEM.NDIM == "2D":
-            if self.cfg.TEST.POST_PROCESSING.YZ_FILTERING or self.cfg.TEST.POST_PROCESSING.Z_FILTERING:
-                self.post_processing['as_3D_stack'] = True
-        elif self.cfg.PROBLEM.NDIM == "3D":
-            if self.cfg.TEST.POST_PROCESSING.YZ_FILTERING or self.cfg.TEST.POST_PROCESSING.Z_FILTERING:
+        if self.cfg.TEST.POST_PROCESSING.MEDIAN_FILTER:
+            if self.cfg.PROBLEM.NDIM == "2D":
+                if self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
+                    self.post_processing['as_3D_stack'] = True
+                else:
+                    self.post_processing['per_image'] = True
+            else:
                 self.post_processing['per_image'] = True
 
         # Define permute shapes to pass from Numpy axis order (Y,X,C) to Pytorch's (C,Y,X)
@@ -1619,14 +1621,15 @@ class Base_Workflow(metaclass=ABCMeta):
         """
         Print post-processing statistics.
         """
-        if self.post_processing['per_image']:
-            print("Test Foreground IoU (merge patches - post-processing): {}".format(self.stats['iou_merge_patches_post']))
-            print("Test Overall IoU (merge patches - post-processing): {}".format(self.stats['ov_iou_merge_patches_post']))
-            print(" ")
-        if self.post_processing['as_3D_stack']:
-            print("Test Foreground IoU (as 3D stack - post-processing): {}".format(self.stats['iou_as_3D_stack_post']))
-            print("Test Overall IoU (as 3D stack - post-processing): {}".format(self.stats['ov_iou_as_3D_stack_post']))
-            print(" ")     
+        if self.cfg.DATA.TEST.LOAD_GT:
+            if self.post_processing['per_image']:
+                print("Test Foreground IoU (merge patches - post-processing): {}".format(self.stats['iou_merge_patches_post']))
+                print("Test Overall IoU (merge patches - post-processing): {}".format(self.stats['ov_iou_merge_patches_post']))
+                print(" ")
+            if self.post_processing['as_3D_stack']:
+                print("Test Foreground IoU (as 3D stack - post-processing): {}".format(self.stats['iou_as_3D_stack_post']))
+                print("Test Overall IoU (as 3D stack - post-processing): {}".format(self.stats['ov_iou_as_3D_stack_post']))
+                print(" ")     
 
     @abstractmethod
     def after_merge_patches(self, pred):
