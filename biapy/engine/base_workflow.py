@@ -942,6 +942,11 @@ class Base_Workflow(metaclass=ABCMeta):
         if self.cfg.MODEL.SOURCE != "bmz":
             self.model_without_ddp.eval()    
 
+        # Load best checkpoint on validation
+        if self.cfg.TRAIN.ENABLE and self.cfg.MODEL.SOURCE == "biapy":
+            self.start_epoch = load_model_checkpoint(cfg=self.cfg, jobname=self.job_identifier, 
+                model_without_ddp=self.model_without_ddp, device=self.device)
+
         # Check possible checkpoint problems
         if self.start_epoch == -1:
             raise ValueError("There was a problem loading the checkpoint. Test phase aborted!")
