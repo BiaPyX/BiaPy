@@ -1,0 +1,87 @@
+# BiaPy version: 3.4.3                                                                                                  
+
+SYSTEM:
+    NUM_CPUS: -1
+    NUM_WORKERS: 5
+
+PROBLEM:
+    TYPE: DETECTION
+    NDIM: 3D
+    DETECTION: 
+        CENTRAL_POINT_DILATION: 1
+        CHECK_POINTS_CREATED: False
+DATA: 
+    PATCH_SIZE: (20, 128, 128, 2)
+    NORMALIZATION:
+      PERC_CLIP: True
+      PERC_LOWER: 0.1
+      PERC_UPPER: 99.5
+    TRAIN:
+        INPUT_IMG_AXES_ORDER: 'ZYXC'
+        MINIMUM_FOREGROUND_PER: 0.000000000000001
+        PATH: /path/to/data
+        GT_PATH: /path/to/data
+        IN_MEMORY: False
+    VAL:
+        FROM_TRAIN: True
+        IN_MEMORY: False
+        SPLIT_TRAIN: 0.1
+    TEST:
+        RESOLUTION: (1,1,1)
+        PATH: /path/to/data
+        GT_PATH: /path/to/data
+        IN_MEMORY: False
+        LOAD_GT: True
+        PADDING: (4,32,32)
+                
+AUGMENTOR:
+    DA_PROB: 0.5
+    ENABLE: True
+    RANDOM_ROT: True
+    AFFINE_MODE: 'reflect'
+    VFLIP: True
+    HFLIP: True
+    ZFLIP: True
+    BRIGHTNESS: True
+    BRIGHTNESS_FACTOR: (-0.1, 0.1)
+    CONTRAST: False
+    CONTRAST_FACTOR: (-0.1, 0.1)
+    ELASTIC: True
+
+MODEL:
+    ARCHITECTURE: resunet
+    Z_DOWN: [1,1,1,1]
+    LOAD_CHECKPOINT: False
+
+LOSS:
+  CLASS_REBALANCE: True
+
+TRAIN:
+    ENABLE: True
+    OPTIMIZER: ADAMW
+    LR: 1.E-4
+    BATCH_SIZE: 2
+    EPOCHS: 1000
+    PATIENCE: 100
+    LR_SCHEDULER:
+        NAME: 'warmupcosine'
+        MIN_LR: 5.E-6
+        WARMUP_COSINE_DECAY_EPOCHS: 30
+  
+TEST:
+    ENABLE: True
+    BY_CHUNKS:
+      FORMAT: "Zarr"
+      ENABLE: True
+      SAVE_OUT_TIF: False
+      INPUT_IMG_AXES_ORDER: 'ZYXC'
+      WORKFLOW_PROCESS:
+        ENABLE: True
+        TYPE: "chunk_by_chunk"
+    VERBOSE: True
+    AUGMENTATION: False
+    DET_TOLERANCE: [5]
+    DET_MIN_TH_TO_BE_PEAK: [0.20]
+    POST_PROCESSING:
+        REMOVE_CLOSE_POINTS: True
+        REMOVE_CLOSE_POINTS_RADIUS: [4.0]
