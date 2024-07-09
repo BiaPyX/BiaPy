@@ -115,7 +115,7 @@ def weight_binary_ratio(target):
 
 
 class jaccard_index():
-    def __init__(self,  num_classes, device, t=0.5, torchvision_models=False):
+    def __init__(self,  num_classes, device, t=0.5, model_source="biapy"):
         """
         Define Jaccard index.
 
@@ -131,11 +131,10 @@ class jaccard_index():
         t : float, optional
             Threshold to be applied.
 
-        torchvision_models : bool, optional
-            Whether the workflow is using a TorchVision model or not. In that case the GT could be 
-            resized and normalized, as it was done so with TorchVision preprocessing for the X data.
+        model_source : str, optional
+            Source of the model. It can be "biapy", "bmz" or "torchvision".
         """
-        self.torchvision_models = torchvision_models
+        self.model_source = model_source
         self.loss = torch.nn.CrossEntropyLoss()
         self.device = device 
         self.num_classes = num_classes
@@ -165,19 +164,23 @@ class jaccard_index():
         """
         # If image shape has changed due to TorchVision or BMZ preprocessing then the mask needs
         # to be resized too
-        if self.torchvision_models:
+        if self.model_source == "torchvision":
             if y_pred.shape[-2:] != y_true.shape[-2:]:    
                 y_true = resize(y_true, size=y_pred.shape[-2:], interpolation=T.InterpolationMode("nearest"))
             if torch.max(y_true) > 1 and self.num_classes <= 2: 
                 y_true = (y_true/255).type(torch.long)
-        
+        # For those cases that are predicting 2 channels (binary case) we adapt the GT to match.
+        # It's supposed to have 0 value as background and 1 as foreground 
+        elif self.model_source == "bmz" and self.num_classes <= 2 and y_pred.shape[1] != y_true.shape[1]:
+            y_true = torch.cat((1-y_true, y_true), 1)   
+
         if self.num_classes > 2:
             return self.jaccard(y_pred, y_true.squeeze() if y_true.shape[0] > 1 else y_true.squeeze().unsqueeze(0))
         else:
             return self.jaccard(y_pred, y_true)
 
 class instance_metrics():
-    def __init__(self, num_classes, metric_names, device, torchvision_models=False):
+    def __init__(self, num_classes, metric_names, device, model_source="biapy"):
         """
         Define instance segmentation workflow metrics.
 
@@ -193,15 +196,14 @@ class instance_metrics():
             Using device. Most commonly "cpu" or "cuda" for GPU, but also potentially "mps", 
             "xpu", "xla" or "meta". 
 
-        torchvision_models : bool, optional
-            Whether the workflow is using a TorchVision model or not. In that case the GT could be 
-            resized and normalized, as it was done so with TorchVision preprocessing for the X data.
+        model_source : str, optional
+            Source of the model. It can be "biapy", "bmz" or "torchvision".
         """
 
         self.num_classes = num_classes
         self.metric_names = metric_names
         self.device = device 
-        self.torchvision_models = torchvision_models
+        self.model_source = model_source
         
         self.jaccard = None
         self.jaccard_multi = None
@@ -251,7 +253,7 @@ class instance_metrics():
 
         # If image shape has changed due to TorchVision or BMZ preprocessing then the mask needs
         # to be resized too
-        if self.torchvision_models:
+        if self.model_source == "torchvision":
             if _y_pred.shape[-2:] != y_true.shape[-2:]:    
                 y_true = resize(y_true, size=_y_pred.shape[-2:], interpolation=T.InterpolationMode("nearest"))
             if torch.max(y_true) > 1 and self.num_classes <= 2: 
@@ -277,20 +279,19 @@ class instance_metrics():
 
 
 class CrossEntropyLoss_wrapper():
-    def __init__(self, num_classes, torchvision_models=False, class_rebalance=False):
+    def __init__(self, num_classes, model_source="biapy", class_rebalance=False):
         """
         Wrapper to Pytorch's CrossEntropyLoss. 
 
         Parameters
         ----------
-        torchvision_models : bool, optional
-            Whether the workflow is using a TorchVision model or not. In that case the GT could be 
-            resized and normalized, as it was done so with TorchVision preprocessing for the X data.
+        model_source : str, optional
+            Source of the model. It can be "biapy", "bmz" or "torchvision". 
 
         class_rebalance: bool, optional
             Whether to reweight classes (inside loss function) or not.
         """
-        self.torchvision_models = torchvision_models
+        self.model_source = model_source
         self.num_classes = num_classes
         self.class_rebalance = class_rebalance
         if num_classes <= 2:
@@ -317,11 +318,15 @@ class CrossEntropyLoss_wrapper():
         """
         # If image shape has changed due to TorchVision or BMZ preprocessing then the mask needs
         # to be resized too
-        if self.torchvision_models:
+        if self.model_source == "torchvision":
             if y_pred.shape[-2:] != y_true.shape[-2:]:    
                 y_true = resize(y_true, size=y_pred.shape[-2:], interpolation=T.InterpolationMode("nearest"))
             if torch.max(y_true) > 1 and self.num_classes <= 2: 
                 y_true = (y_true/255).type(torch.float32)
+        # For those cases that are predicting 2 channels (binary case) we adapt the GT to match.
+        # It's supposed to have 0 value as background and 1 as foreground 
+        elif self.model_source == "bmz" and self.num_classes <= 2 and y_pred.shape[1] != y_true.shape[1]:
+            y_true = torch.cat((1-y_true, y_true), 1)    
 
         if self.class_rebalance:
             weight_mask = weight_binary_ratio(y_true)

@@ -13,7 +13,12 @@ from sklearn.model_selection import StratifiedKFold
 import torch.multiprocessing as mp
 import torch.distributed as dist
 import xarray as xr
-import bioimageio.core
+
+from bioimageio.core import create_prediction_pipeline
+from bioimageio.spec import load_description, InvalidDescr
+from bioimageio.spec.utils import download
+from bioimageio.spec.model.v0_5 import ModelDescr
+from bioimageio.core.digest_spec import get_test_inputs
 
 from biapy.models import build_model, build_torchvision_model, build_bmz_model, check_bmz_model_compatibility
 from biapy.engine import prepare_optimizer, build_callbacks
@@ -139,13 +144,32 @@ class Base_Workflow(metaclass=ABCMeta):
             self.bmz_config['preprocessing'] = check_bmz_model_compatibility(self.cfg)
 
             print("Loading BioImage Model Zoo pretrained model . . .")
-            self.bmz_config['original_bmz_config'] = bioimageio.core.load_resource_description(self.cfg.MODEL.BMZ.SOURCE_MODEL_DOI)
+            self.bmz_config['original_bmz_config'] = load_description(self.cfg.MODEL.BMZ.SOURCE_MODEL_DOI)
+
+            # let's make sure we have a valid model...
+            if isinstance(self.bmz_config['original_bmz_config'], InvalidDescr):
+                raise ValueError(f"Failed to load {source}")
+
+            self.bmz_model_with_new_descrition = False            
+            if isinstance(self.bmz_config['original_bmz_config'], ModelDescr):
+                self.bmz_model_with_new_descrition = True
 
             # 1) Change PATCH_SIZE with the one stored in the RDF
-            input_image = np.load(self.bmz_config['original_bmz_config'].test_inputs[0])
+            inputs = get_test_inputs(self.bmz_config['original_bmz_config'])
+            if 'input0' in inputs.members:
+                input_image_shape = inputs.members['input0']._data.shape
+            elif 'raw' in inputs.members:
+                input_image_shape = inputs.members['raw']._data.shape
+            else:
+                raise ValueError(f"Couldn't load input info from BMZ model's RDF: {inputs}")
+            # if not self.bmz_model_with_new_descrition:
+            #     input_image = np.load(download(self.bmz_config['original_bmz_config'].test_inputs[0]).path)
+            # else:
+            #     input_image = np.load(download(self.bmz_config['original_bmz_config'].inputs[0].test_tensor.source.absolute()).path)
+
             opts = []
-            if self.cfg.DATA.PATCH_SIZE != input_image.shape[2:]+(input_image.shape[1],):
-                opts += ["DATA.PATCH_SIZE", input_image.shape[2:]+(input_image.shape[1],)]
+            if self.cfg.DATA.PATCH_SIZE != input_image_shape[2:]+(input_image_shape[1],):
+                opts += ["DATA.PATCH_SIZE", input_image_shape[2:]+(input_image_shape[1],)]
                 print("[BMZ] Changed 'DATA.PATCH_SIZE' from {} to {} as defined in the RDF"
                     .format(self.cfg.DATA.PATCH_SIZE, opts[1]))
 
@@ -604,7 +628,7 @@ class Base_Workflow(metaclass=ABCMeta):
         elif self.cfg.MODEL.SOURCE == "bmz":
             # Create a bioimage pipeline to create predictions
             try:
-                self.bmz_pipeline = bioimageio.core.create_prediction_pipeline(
+                self.bmz_pipeline = create_prediction_pipeline(
                     self.bmz_config['original_bmz_config'], devices=None, 
                     weight_format="torchscript",
                 )
@@ -616,7 +640,8 @@ class Base_Workflow(metaclass=ABCMeta):
             if self.args.distributed:
                 raise ValueError("DDP can not be activated when loading a BMZ pretrained model")
 
-            self.model = build_bmz_model(self.cfg, self.bmz_config['original_bmz_config'], self.device)
+            self.model = build_bmz_model(self.cfg, self.bmz_config['original_bmz_config'], self.bmz_model_with_new_descrition,
+                self.device)
 
         self.model_without_ddp = self.model
         if self.args.distributed:

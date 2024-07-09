@@ -170,7 +170,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
         self.metrics = instance_metrics(num_classes=self.cfg.MODEL.N_CLASSES,
             metric_names=self.metric_names, device=self.device, 
-            torchvision_models=True if self.cfg.MODEL.SOURCE == "torchvision" else False)
+            model_source=self.cfg.MODEL.SOURCE)
 
     def metric_calculation(self, output, targets, metric_logger=None):
         """

@@ -9,6 +9,8 @@ import numpy as np
 import torch.nn as nn
 from torchinfo import summary 
 from marshmallow import missing
+from bioimageio.spec.utils import download
+from bioimageio.core.model_adapters._pytorch_model_adapter import PytorchModelAdapter
 
 from biapy.utils.misc import is_main_process
 from biapy.engine import prepare_optimizer
@@ -158,24 +160,18 @@ def build_model(cfg, job_identifier, device):
     model_file += ":"+str(callable_model.__name__)
     return model, model_file
 
-def build_bmz_model(cfg, model, device):
-    weight_spec = model.weights.get("pytorch_state_dict")
-    model_kwargs = weight_spec.kwargs
-    joined_kwargs = {} if model_kwargs is missing else dict(model_kwargs)
-    model_instance = weight_spec.architecture(**joined_kwargs)
-
-    weights = model.weights.get("pytorch_state_dict")
-    if weights is not None and weights.source:
-        state = torch.load(weights.source)
-        model_instance.load_state_dict(state)
+def build_bmz_model(cfg, model, model_with_new_description, device):
+    model_instance = PytorchModelAdapter.get_network(model.weights.pytorch_state_dict)
+    model_instance = model_instance.to(device)
+    state = torch.load(download(model.weights.pytorch_state_dict).path, map_location=device)
+    model_instance.load_state_dict(state)
 
     # Check the network created
-    model_instance.to(device)
     if cfg.PROBLEM.NDIM == '2D':
         sample_size = (1,cfg.DATA.PATCH_SIZE[2], cfg.DATA.PATCH_SIZE[0], cfg.DATA.PATCH_SIZE[1])
     else:
         sample_size = (1,cfg.DATA.PATCH_SIZE[3], cfg.DATA.PATCH_SIZE[0], cfg.DATA.PATCH_SIZE[1], cfg.DATA.PATCH_SIZE[2])
-    summary(model_instance, input_size=sample_size, col_names=("input_size", "output_size", "num_params"), depth=10, device=device.type)
+    summary(model_instance, input_size=sample_size, col_names=("input_size", "output_size", "num_params"), depth=10, device=device.type)    
     return model_instance
 
 def check_bmz_model_compatibility(cfg):
@@ -209,6 +205,25 @@ def check_bmz_model_compatibility(cfg):
         if cfg.PROBLEM.TYPE == 'SEMANTIC_SEG' and \
             ('semantic-segmentation' in model_rdf['tags'] or 'segmentation' in model_rdf['tags']): 
             model_problem_match = True
+
+            # Check number of classes
+            classes = -1
+            if 'kwargs' in model_rdf['weights']['pytorch_state_dict']:
+                if 'out_channels' in model_rdf['weights']['pytorch_state_dict']['kwargs']:
+                    classes = model_rdf['weights']['pytorch_state_dict']['kwargs']['out_channels']
+                elif 'classes' in model_rdf['weights']['pytorch_state_dict']['kwargs']:
+                    classes = model_rdf['weights']['pytorch_state_dict']['kwargs']['classes']
+                elif 'n_classes' in model_rdf['weights']['pytorch_state_dict']['kwargs']:
+                    classes = model_rdf['weights']['pytorch_state_dict']['kwargs']['n_classes']
+            if classes != -1:
+                if classes > 2 and cfg.MODEL.N_CLASSES != classes:
+                    raise ValueError("'MODEL.N_CLASSES' does not match network's output classes. Please check it!")
+                else:
+                    print("BiaPy works only with one channel for the binary case (classes <= 2) so will adapt the output to match "
+                        "the ground truth data")
+            else:
+                print("WARNING: couldn't find the classes this model is returning so please be aware to match it")
+
         elif cfg.PROBLEM.TYPE == 'INSTANCE_SEG' and 'instance-segmentation' in model_rdf['tags']:
             model_problem_match = True
         elif cfg.PROBLEM.TYPE == 'DETECTION' and 'detection' in model_rdf['tags']:
@@ -223,7 +238,8 @@ def check_bmz_model_compatibility(cfg):
             model_problem_match = True
         elif cfg.PROBLEM.TYPE == 'IMAGE_TO_IMAGE' and \
             ('pix2pix' in model_rdf['tags'] or "image-reconstruction" in model_rdf['tags'] or \
-                "image-to-image" in model_rdf['tags'] or 'label-free' in model_rdf['tags']):
+                "image-to-image" in model_rdf['tags'] or 'label-free' in model_rdf['tags'] or \
+                'image-restoration' in model_rdf['tags']):
             model_problem_match = True
 
         if not model_problem_match:
