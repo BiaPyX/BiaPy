@@ -1600,10 +1600,22 @@ def seg2aff_pni(img, dz=1, dy=1, dx=1, dtype='float32'):
     # https://github.com/zudi-lin/pytorch_connectomics/commit/6fbd5457463ae178ecd93b2946212871e9c617ee
     """
     Transform segmentation to 3D affinity graph.
-    Args:
-        img: 3D indexed image, with each index corresponding to each segment.
-    Returns:
-        ret: 3D affinity graph (4D tensor), 3 channels for z, y, x direction.
+    
+    Parameters
+    ----------
+    img : Numpy array like
+        3D indexed image, with each index corresponding to each segment.
+    dz : int, optional
+        Distance in voxels in the z direction to calculate affinity from.
+    dy : int, optional
+        Distance in voxels in the y direction to calculate affinity from.
+    dx : int, optional
+        Distance in voxels in the x direction to calculate affinity from.
+    
+    Returns
+    -------
+    ret : 4D Numpy array
+        3D affinity graph (4D tensor), 3 channels for z, y, x direction.
     """
     img = check_volume(img)
     ret = np.zeros((3,) + img.shape, dtype=dtype)
