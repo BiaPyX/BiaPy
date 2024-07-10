@@ -66,8 +66,6 @@ class Detection_Workflow(Base_Workflow):
 
         if self.use_gt:
             self.csv_files = sorted(next(os.walk(self.original_test_mask_path))[2])
-        self.cell_count_file = os.path.join(self.cfg.PATHS.RESULT_DIR.PATH, 'cell_counter.csv')
-        self.cell_count_lines = []
 
         # From now on, no modification of the cfg will be allowed
         self.cfg.freeze()
@@ -252,8 +250,6 @@ class Detection_Workflow(Base_Workflow):
                         save_tif(np.expand_dims(np.expand_dims(pred_id_img,0),-1), self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
                             [os.path.splitext(filenames[0])[0]+'_class'+str(n+1)+'_pred_ids.tif'], verbose=self.cfg.TEST.VERBOSE)
 
-                self.cell_count_lines.append([filenames, len(pred_coordinates)])
-
             if self.use_gt: del pred_id_img
 
             # Dilate and save the detected point image
@@ -334,16 +330,7 @@ class Detection_Workflow(Base_Workflow):
 
             # Save just the points and their probabilities 
             os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, exist_ok=True)
-            df.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, os.path.splitext(filenames[0])[0]+'_full_info.csv'))
-            if self.cfg.TEST.POST_PROCESSING.DET_WATERSHED:
-                if ndim == 2:
-                    cols = ['class', 'pred_id', 'npixels', 'area', 'circularity', 'perimeter', 'elongation', 'comment', 'conditions']
-                else:
-                    cols = ['class', 'pred_id', 'npixels', 'volume', 'sphericity', 'perimeter (surface area)', 'comment', 'conditions']
-                df = df.drop(columns=cols)
-            else:
-                df = df.drop(columns=['class'])
-            df.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, os.path.splitext(filenames[0])[0]+'_prob.csv'))
+            df.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, os.path.splitext(filenames[0])[0]+'_points.csv'))
 
         # Calculate detection metrics
         if self.use_gt:
@@ -535,11 +522,6 @@ class Detection_Workflow(Base_Workflow):
         """
         super().normalize_stats(image_counter)
 
-        with open(self.cell_count_file, 'w', newline="") as file:
-            csvwriter = csv.writer(file)
-            csvwriter.writerow(['filename', 'cells'])
-            for nr in range(len(self.cell_count_lines)):
-                csvwriter.writerow([nr+1] + self.cell_count_lines[nr])
         if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
             if self.by_chunks:
                 self.stats['d_precision_by_chunks'] = self.stats['d_precision_by_chunks'] / image_counter
