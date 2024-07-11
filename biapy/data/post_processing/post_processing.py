@@ -304,8 +304,8 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
         if len(seed_morph_sequence) != 0 or erode_and_dilate_foreground:
             erode_seed_and_foreground()
         
-        res = (1,)+resolution if len(resolution) == 2 else resolution
-        semantic = edt.edt(foreground, anisotropy=res, black_border=False, order='C')
+        semantic = data[...,0]
+        # semantic = edt.edt(foreground*(1-seed_map), anisotropy=res[::-1], black_border=False, order='F')
         seed_map = label(seed_map, connectivity=1)
     elif channels in ["C"]:
         if ths['TYPE'] == "auto":
@@ -318,8 +318,8 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
         if len(seed_morph_sequence) != 0 or erode_and_dilate_foreground:
             erode_seed_and_foreground()
         
-        res = (1,)+resolution if len(resolution) == 2 else resolution
-        #semantic = edt.edt(foreground, anisotropy=res, black_border=False, order='C')
+        # res = (1,)+resolution if len(resolution) == 2 else resolution
+        #semantic = edt.edt(foreground, anisotropy=res[::-1], black_border=False, order='F')
         # use contour channel as input to watershed
         semantic = data[...,0]
         seed_map = label(seed_map, connectivity=1)
@@ -365,7 +365,7 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
             seed_map[z,y,x] = 1
 
         res = (1,)+resolution if len(resolution) == 2 else resolution
-        semantic = -edt.edt(1 - seed_map, anisotropy=res, black_border=False, order='C')
+        semantic = -edt.edt(1 - seed_map, anisotropy=res[::-1], black_border=False, order='F')
 
         if len(seed_morph_sequence) != 0 or erode_and_dilate_foreground:
             erode_seed_and_foreground()
@@ -464,65 +464,52 @@ def watershed_by_channels(data, channels, ths={}, remove_before=False, thres_sma
             save_tif(np.expand_dims(np.expand_dims(foreground,-1),0).astype(np.uint8), save_dir, ["foreground.tif"], verbose=False)
     return segm
 
-
-def calculate_zy_filtering(data, mf_size=5):
-    """Applies a median filtering in the z and y axes of the provided data.
-
-       Parameters
-       ----------
-       data : 4D Numpy array
-           Data to apply the filter to. E.g. ``(num_of_images, y, x, channels)``.
-
-       mf_size : int, optional
-           Size of the median filter. Must be an odd number.
-
-       Returns
-       -------
-       Array : 4D Numpy array
-           Filtered data. E.g. ``(num_of_images, y, x, channels)``.
+def apply_median_filtering(data, axes="xy", mf_size=5):
     """
+    Applies a median filtering to the specified axes of the provided data.
 
-    out_data = np.copy(data)
+    Parameters
+    ----------
+    data : 4D/5D Numpy array
+        Data to apply the filter to. E.g. ``(num_of_images, y, x, channels)`` for 2D and 
+        ``(num_of_images, z, y, x, channels)`` for 3D.  
+
+    axes : str, optional
+        Median filters to apply. There are multiple options: ``'xy'`` or ``'yx'`` to apply the filter in ``x`` 
+        and ``y`` axes together; ``'zy'`` or ``'yz'`` to apply the filter in ``y`` and ``z`` axes 
+        together; ``'zx'`` or ``'xz'``: to apply the filter in ``x`` and ``z`` axes together; 
+        ``'z'``: to apply the filter only in ``z`` axis.
+
+    mf_size : int, optional
+        Size of the median filter. If an odd number is not provided, ``1`` will be added to ensure it remains odd.
+
+    Returns
+    -------
+    Array : 4D/5D Numpy array
+        Filtered data. E.g. ``(num_of_images, y, x, channels)`` for 2D and 
+        ``(num_of_images, z, y, x, channels)`` for 3D.
+    """
+    assert axes in ["xy", "yx", "zy", "yz", "zx", "xz", "z"]
+    
+    is_3d = True if data.ndim == 5 else False
 
     # Must be odd
     if mf_size % 2 == 0:
-       mf_size += 1
+        mf_size += 1
 
     for i in range(data.shape[0]):
         for c in range(data.shape[-1]):
-            sl = (data[i,...,c]).astype(np.float32)
-            sl = cv2.medianBlur(sl, mf_size)
-            out_data[i,...,c] = sl
-
-    return out_data
-
-def calculate_z_filtering(data, mf_size=5):
-    """Applies a median filtering in the z dimension of the provided data.
-
-       Parameters
-       ----------
-       data : 4D Numpy array
-           Data to apply the filter to. E.g. ``(num_of_images, y, x, channels)``.
-
-       mf_size : int, optional
-           Size of the median filter. Must be an odd number.
-
-       Returns
-       -------
-       Array : 4D Numpy array
-           Filtered data. E.g. ``(num_of_images, y, x, channels)``.
-    """
-
-    out_data = np.copy(data)
-
-    # Must be odd
-    if mf_size % 2 == 0:
-       mf_size += 1
-
-    for c in range(out_data.shape[-1]):
-        out_data[...,c] = median_filter(data[...,c], size=(mf_size,1,1,1))
-
-    return out_data 
+            s = None
+            if axes in ["xy", "yx"]:
+                s = (1, mf_size, mf_size) if is_3d else (mf_size, mf_size)
+            elif axes in ["zy", "yz"]:
+                s = (mf_size, mf_size, 1)
+            elif axes in ["zx", "xz"]:
+                s = (mf_size, 1, mf_size)
+            else: # "z"
+                s = (mf_size, 1, 1)
+            data[i,...,c] = median_filter(data[i,...,c], size=s)
+    return data
 
 def ensemble8_2d_predictions(o_img, pred_func, axis_order_back, axis_order, device, batch_size_value=1, mode='mean'):
     """

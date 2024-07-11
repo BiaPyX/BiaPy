@@ -650,13 +650,14 @@ class Config:
         # BIAPY BACKEND MODELS
         #
         # Architecture of the network. Possible values are: 
-        #   * Semantic segmentation: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'resunet_se', 'unetr'
-        #   * Instance segmentation: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'resunet_se', 'unetr'
-        #   * Detection: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'resunet_se', 'unetr' 
-        #   * Denoising: 'unet', 'resunet', 'resunet++', 'attention_unet', 'seunet', 'resunet_se', 
-        #   * Super-resolution: 'edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'multiresunet' 
-        #   * Self-supervision: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'resunet_se', 'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae' 
+        #   * Semantic segmentation: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'resunet_se', 'unetr', 'unext_v1'
+        #   * Instance segmentation: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'resunet_se', 'unetr', 'unext_v1'
+        #   * Detection: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'resunet_se', 'unetr', 'unext_v1'
+        #   * Denoising: 'unet', 'resunet', 'resunet++', 'attention_unet', 'seunet', 'resunet_se',, 'unext_v1'
+        #   * Super-resolution: 'edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'multiresunet', 'unext_v1'
+        #   * Self-supervision: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'resunet_se', 'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae', 'unext_v1' 
         #   * Classification: 'simple_cnn', 'vit', 'efficientnet_b[0-7]' (only 2D)
+        #   * Image to image: 'edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'unetr', 'multiresunet', 'unext_v1'
         _C.MODEL.ARCHITECTURE = 'unet'
         # Number of feature maps on each level of the network.
         _C.MODEL.FEATURE_MAPS = [16, 32, 64, 128, 256]
@@ -692,6 +693,12 @@ class Config:
         # Epochs to save a checkpoint of the model apart from the ones saved with LOAD_CHECKPOINT_ONLY_WEIGHTS. Set it to -1 to 
         # not do it.
         _C.MODEL.SAVE_CKPT_FREQ = -1
+        # Number of ConvNeXtBlocks in each level.
+        _C.MODEL.CONVNEXT_LAYERS=[2,2,2,2,2] # CONVNEXT_LAYERS
+        # Maximum Stochastic Depth probability for the U-NeXt model.
+        _C.MODEL.CONVNEXT_SD_PROB=0.1
+        # Layer Scale parameter for the U-NeXt model.
+        _C.MODEL.CONVNEXT_LAYER_SCALE=1e-6
 
         # TRANSFORMERS MODELS
         # Type of model. Options are "custom", "vit_base_patch16", "vit_large_patch16" and "vit_huge_patch16". On custom setting 
@@ -743,7 +750,9 @@ class Config:
         # Loss type, two options: "CE" -> cross entropy ; "W_CE_DICE", CE and Dice (with a weight term on each one
         # (that must sum 1) to calculate the total loss value.
         _C.LOSS.TYPE = 'CE'
-
+        # To adjust the loss function based on the imbalance between classes. Used when LOSS.TYPE == "CE" in detection and
+        # semantic segmentation and if using B,C,M,P or A channels in instance segmentation.
+        _C.LOSS.CLASS_REBALANCE = False
 
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Training phase
@@ -910,12 +919,21 @@ class Config:
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Post-processing
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # When PROBLEM.NDIM = '2D' only applies when _C.TEST.ANALIZE_2D_IMGS_AS_3D_STACK = True
+        
         _C.TEST.POST_PROCESSING = CN()
-        _C.TEST.POST_PROCESSING.YZ_FILTERING = False
-        _C.TEST.POST_PROCESSING.YZ_FILTERING_SIZE = 5
-        _C.TEST.POST_PROCESSING.Z_FILTERING = False
-        _C.TEST.POST_PROCESSING.Z_FILTERING_SIZE = 5
+        
+        # To apply median filtering to the data
+        _C.TEST.POST_PROCESSING.MEDIAN_FILTER = False
+        # List of median filters to apply. They are going to be applied in the list order. This can only be used in 
+        # 'SEMANTIC_SEG', 'INSTANCE_SEG' and 'DETECTION' workflows. There are multiple options to compose the list:
+        #   * 'xy' or 'yx': to apply the filter in x and y axes together 
+        #   * 'zy' or 'yz': to apply the filter in y and z axes together
+        #   * 'zx' or 'xz': to apply the filter in x and z axes together 
+        #   * 'z': to apply the filter only in z axis 
+        # Those filter that imply 'z' axis are going to be applied only in 3D or in 2D if TEST.ANALIZE_2D_IMGS_AS_3D_STACK is selected
+        _C.TEST.POST_PROCESSING.MEDIAN_FILTER_AXIS = []
+        _C.TEST.POST_PROCESSING.MEDIAN_FILTER_SIZE = []
+        
         # Apply a binary mask to remove possible segmentation outside it (you need to provide the mask and it must 
         # contain two values: '1' -> preserve the pixel ; '0' discard pixel ). A mask for each test sample must be 
         # provided and it will be loaded using 'DATA.TEST.BINARY_MASKS' variable.

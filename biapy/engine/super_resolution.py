@@ -3,6 +3,12 @@ import torch
 import numpy as np
 from tqdm import tqdm
 from torchmetrics.image import PeakSignalNoiseRatio
+from torchmetrics.regression import MeanSquaredError, MeanAbsoluteError
+from torchmetrics.image import PeakSignalNoiseRatio, StructuralSimilarityIndexMeasure
+from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
+from torchmetrics.image.fid import FrechetInceptionDistance 
+from torchmetrics.image.inception import InceptionScore
+
 
 from biapy.data.data_2D_manipulation import crop_data_with_overlap, merge_data_with_overlap
 from biapy.data.data_3D_manipulation import crop_3D_data_with_overlap, merge_3D_data_with_overlap
@@ -11,7 +17,7 @@ from biapy.utils.util import save_tif
 from biapy.utils.misc import to_pytorch_format, to_numpy_format, is_main_process
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.engine.metrics import dfcan_loss
-from biapy.data.pre_processing import normalize, denormalize, undo_norm_range01
+from biapy.data.pre_processing import normalize, denormalize, norm_range01, undo_norm_range01
 
 class Super_resolution_Workflow(Base_Workflow):
     """
@@ -34,7 +40,15 @@ class Super_resolution_Workflow(Base_Workflow):
     """
     def __init__(self, cfg, job_identifier, device, args, **kwargs):
         super(Super_resolution_Workflow, self).__init__(cfg, job_identifier, device, args, **kwargs)
+        
         self.stats['psnr_merge_patches'] = 0
+        self.stats['mse_merge_patches'] = 0
+        self.stats['mae_merge_patches'] = 0
+        self.stats['ssim_merge_patches'] = 0
+
+        self.stats['fid_merge_patches'] = 0
+        self.stats['iscore_merge_patches'] = 0
+        self.stats['lpips_merge_patches'] = 0
 
         # From now on, no modification of the cfg will be allowed
         self.cfg.freeze()
@@ -49,10 +63,26 @@ class Super_resolution_Workflow(Base_Workflow):
 
     def define_metrics(self):
         """
-        Definition of self.metrics, self.metric_names and self.loss variables.
+        Definition of self.metrics, self.metric_names, self.test_metrics, self.test_metric_names and self.loss variables.
         """
-        self.metrics = [PeakSignalNoiseRatio()]
-        self.metric_names = ["PSNR"]
+        self.metrics = [PeakSignalNoiseRatio(), 
+                        MeanSquaredError(),
+                        MeanAbsoluteError(),
+                        StructuralSimilarityIndexMeasure()]
+        
+        self.metric_names = ["PSNR", 
+                             "MSE",
+                             "MAE",
+                             "SSIM"]
+        
+        self.test_metrics = [FrechetInceptionDistance(normalize=True),
+                             InceptionScore(normalize=True),
+                             LearnedPerceptualImagePatchSimilarity(net_type='squeeze', normalize=True)]
+        
+        self.test_metric_names = ["FID",
+                                  "IS",
+                                  "LPIPS"]
+        
         if self.cfg.MODEL.ARCHITECTURE == 'dfcan':
             print("Overriding 'LOSS.TYPE' to set it to DFCAN loss")
             self.loss = dfcan_loss(self.device)
@@ -100,13 +130,56 @@ class Super_resolution_Workflow(Base_Workflow):
             targets = torch.round(targets)                                                                 
             targets = targets+abs(torch.min(targets))
 
+        # Reshape (in case its necessary) to follow PyTorch format (B, C, H, W)
+        if output.shape[-1] == self.cfg.DATA.PATCH_SIZE[-1]:
+            output = output.permute(0, 3, 1, 2)
+        if targets.shape[-1] == self.cfg.DATA.PATCH_SIZE[-1]:
+            targets = targets.permute(0, 3, 1, 2)
+
         with torch.no_grad():
+            # Calculate PSNR
             train_psnr = self.metrics[0](output, targets)
             train_psnr = train_psnr.item() if not torch.isnan(train_psnr) else 0
+
+            # Calculate MSE
+            train_mse = self.metrics[1](output, targets)
+            train_mse = train_mse.item() if not torch.isnan(train_mse) else 0
+
+            # Calculate MAE
+            train_mae = self.metrics[2](output, targets)
+            train_mae = train_mae.item() if not torch.isnan(train_mae) else 0
+
+            # Calculate SSIM
+            train_ssim = self.metrics[3](output, targets)
+            train_ssim = train_ssim.item() if not torch.isnan(train_ssim) else 0
+
             if metric_logger is not None:
+                # Metrics computed here, will only be calculated during training
+
                 metric_logger.meters[self.metric_names[0]].update(train_psnr)
+                metric_logger.meters[self.metric_names[1]].update(train_mse)
+                metric_logger.meters[self.metric_names[2]].update(train_mae)
+                metric_logger.meters[self.metric_names[3]].update(train_ssim)
             else:
-                return train_psnr
+                # Metrics computed here, will only be calculated during testing
+
+                # The metrcis below need to have normalized (between 0 and 1) images with 3 channels
+                norm_output = (output - torch.min(output))/(torch.max(output) - torch.min(output) + 1e-8)
+                norm_targets = (targets - torch.min(targets))/(torch.max(targets) - torch.min(targets) + 1e-8)
+                norm_3c_output = torch.cat([norm_output, norm_output, norm_output], dim=1)
+                norm_3c_targets = torch.cat([norm_targets, norm_targets, norm_targets], dim=1)
+
+                # Update FID (it will be computed on self.after_all_images())
+                self.test_metrics[0].update(norm_3c_output, real=True)
+                self.test_metrics[0].update(norm_3c_targets, real=False)
+
+                # Update IS (it will be computed on self.after_all_images())
+                self.test_metrics[1].update(norm_3c_targets)
+
+                # Update LPIPS (it will be computed on self.after_all_images())
+                self.test_metrics[2].update(norm_3c_output, norm_3c_targets)
+                
+                return train_psnr, train_mse, train_mae, train_ssim
 
     def process_sample(self, norm): 
         """
@@ -208,16 +281,23 @@ class Super_resolution_Workflow(Base_Workflow):
             save_tif(pred, self.cfg.PATHS.RESULT_DIR.PER_IMAGE, self.processing_filenames, 
                 verbose=self.cfg.TEST.VERBOSE)
     
-        # Calculate PSNR
+        # Calculate metrics
         if pred.dtype == np.dtype('uint16'):
             pred = pred.astype(np.float32)
         
         if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
             if self._Y.dtype == np.dtype('uint16'):
                 self._Y = self._Y.astype(np.float32)
-            psnr_merge_patches = self.metrics[0](torch.from_numpy(pred), torch.from_numpy(self._Y))
-            self.stats['psnr_merge_patches'] += psnr_merge_patches
+                
+            psnr, mse, mae, ssim = self.metric_calculation(torch.from_numpy(self._Y), 
+                                                            torch.from_numpy(pred), 
+                                                            metric_logger=None)
 
+            self.stats['psnr_merge_patches'] += psnr
+            self.stats['mse_merge_patches'] += mse
+            self.stats['mae_merge_patches'] += mae
+            self.stats['ssim_merge_patches'] += ssim
+            
     def torchvision_model_call(self, in_img, is_train=False):
         """
         Call a regular Pytorch model.
@@ -276,7 +356,20 @@ class Super_resolution_Workflow(Base_Workflow):
         """
         Steps that must be done after predicting all images. 
         """
-        pass
+        # FID, IS and LPIPS need to be computed for all the images
+        train_fid = self.test_metrics[0].compute()
+        train_fid = train_fid.item() if not torch.isnan(train_fid) else 0
+        self.stats['fid_merge_patches'] = train_fid
+        
+        train_is =  self.test_metrics[1].compute()[0] # It returns a the mean and the std, we only need the mean
+        train_is = train_is.item() if not torch.isnan(train_is) else 0
+        self.stats['iscore_merge_patches'] = train_is
+        
+        train_lpips = self.test_metrics[2].compute()
+        train_lpips = train_lpips.item() if not torch.isnan(train_lpips) else 0
+        self.stats['lpips_merge_patches'] = train_lpips
+
+        super(Super_resolution_Workflow, self)
 
     def normalize_stats(self, image_counter):
         """
@@ -288,6 +381,11 @@ class Super_resolution_Workflow(Base_Workflow):
             Number of images to average the metrics.
         """
         self.stats['psnr_merge_patches'] = self.stats['psnr_merge_patches'] / image_counter
+        self.stats['mse_merge_patches'] = self.stats['mse_merge_patches'] / image_counter
+        self.stats['mae_merge_patches'] = self.stats['mae_merge_patches'] / image_counter
+        self.stats['ssim_merge_patches'] = self.stats['ssim_merge_patches'] / image_counter
+
+        # FID, IS and LPIPS are already normalized
 
     def print_stats(self, image_counter):
         """
@@ -302,5 +400,10 @@ class Super_resolution_Workflow(Base_Workflow):
 
         if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
             print("Test PSNR (merge patches): {}".format(self.stats['psnr_merge_patches']))
+            print("Test MSE (merge patches): {}".format(self.stats['mse_merge_patches']))
+            print("Test MAE (merge patches): {}".format(self.stats['mae_merge_patches']))
+            print("Test SSIM (merge patches): {}".format(self.stats['ssim_merge_patches']))
+            print("Test FID (merge patches): {}".format(self.stats['fid_merge_patches']))
+            print("Test IS (merge patches): {}".format(self.stats['iscore_merge_patches']))
+            print("Test LPIPS (merge patches): {}".format(self.stats['lpips_merge_patches']))
             print(" ")
-

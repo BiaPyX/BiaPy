@@ -49,5 +49,5 @@ TRAIN:
   
 TEST:
     ENABLE: True
-    AUGMENTATION: True
+    AUGMENTATION: False
     FULL_IMG: False

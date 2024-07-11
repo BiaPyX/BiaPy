@@ -13,8 +13,13 @@ from sklearn.model_selection import StratifiedKFold
 import torch.multiprocessing as mp
 import torch.distributed as dist
 import xarray as xr
-import bioimageio.core
 from scipy.ndimage import zoom
+
+from bioimageio.core import create_prediction_pipeline
+from bioimageio.spec import load_description, InvalidDescr
+from bioimageio.spec.utils import download
+from bioimageio.spec.model.v0_5 import ModelDescr
+from bioimageio.core.digest_spec import get_test_inputs
 
 from biapy.models import build_model, build_torchvision_model, build_bmz_model, check_bmz_model_compatibility
 from biapy.engine import prepare_optimizer, build_callbacks
@@ -114,11 +119,13 @@ class Base_Workflow(metaclass=ABCMeta):
             self.extract_info_queue = mp.Queue()
 
         # Test variables
-        if self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK and self.cfg.PROBLEM.NDIM == "2D":
-            if self.cfg.TEST.POST_PROCESSING.YZ_FILTERING or self.cfg.TEST.POST_PROCESSING.Z_FILTERING:
-                self.post_processing['as_3D_stack'] = True
-        elif self.cfg.PROBLEM.NDIM == "3D":
-            if self.cfg.TEST.POST_PROCESSING.YZ_FILTERING or self.cfg.TEST.POST_PROCESSING.Z_FILTERING:
+        if self.cfg.TEST.POST_PROCESSING.MEDIAN_FILTER:
+            if self.cfg.PROBLEM.NDIM == "2D":
+                if self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
+                    self.post_processing['as_3D_stack'] = True
+                else:
+                    self.post_processing['per_image'] = True
+            else:
                 self.post_processing['per_image'] = True
 
         # Define permute shapes to pass from Numpy axis order (Y,X,C) to Pytorch's (C,Y,X)
@@ -138,13 +145,32 @@ class Base_Workflow(metaclass=ABCMeta):
             self.bmz_config['preprocessing'] = check_bmz_model_compatibility(self.cfg)
 
             print("Loading BioImage Model Zoo pretrained model . . .")
-            self.bmz_config['original_bmz_config'] = bioimageio.core.load_resource_description(self.cfg.MODEL.BMZ.SOURCE_MODEL_DOI)
+            self.bmz_config['original_bmz_config'] = load_description(self.cfg.MODEL.BMZ.SOURCE_MODEL_DOI)
+
+            # let's make sure we have a valid model...
+            if isinstance(self.bmz_config['original_bmz_config'], InvalidDescr):
+                raise ValueError(f"Failed to load {source}")
+
+            self.bmz_model_with_new_descrition = False            
+            if isinstance(self.bmz_config['original_bmz_config'], ModelDescr):
+                self.bmz_model_with_new_descrition = True
 
             # 1) Change PATCH_SIZE with the one stored in the RDF
-            input_image = np.load(self.bmz_config['original_bmz_config'].test_inputs[0])
+            inputs = get_test_inputs(self.bmz_config['original_bmz_config'])
+            if 'input0' in inputs.members:
+                input_image_shape = inputs.members['input0']._data.shape
+            elif 'raw' in inputs.members:
+                input_image_shape = inputs.members['raw']._data.shape
+            else:
+                raise ValueError(f"Couldn't load input info from BMZ model's RDF: {inputs}")
+            # if not self.bmz_model_with_new_descrition:
+            #     input_image = np.load(download(self.bmz_config['original_bmz_config'].test_inputs[0]).path)
+            # else:
+            #     input_image = np.load(download(self.bmz_config['original_bmz_config'].inputs[0].test_tensor.source.absolute()).path)
+
             opts = []
-            if self.cfg.DATA.PATCH_SIZE != input_image.shape[2:]+(input_image.shape[1],):
-                opts += ["DATA.PATCH_SIZE", input_image.shape[2:]+(input_image.shape[1],)]
+            if self.cfg.DATA.PATCH_SIZE != input_image_shape[2:]+(input_image_shape[1],):
+                opts += ["DATA.PATCH_SIZE", input_image_shape[2:]+(input_image_shape[1],)]
                 print("[BMZ] Changed 'DATA.PATCH_SIZE' from {} to {} as defined in the RDF"
                     .format(self.cfg.DATA.PATCH_SIZE, opts[1]))
 
@@ -603,7 +629,7 @@ class Base_Workflow(metaclass=ABCMeta):
         elif self.cfg.MODEL.SOURCE == "bmz":
             # Create a bioimage pipeline to create predictions
             try:
-                self.bmz_pipeline = bioimageio.core.create_prediction_pipeline(
+                self.bmz_pipeline = create_prediction_pipeline(
                     self.bmz_config['original_bmz_config'], devices=None, 
                     weight_format="torchscript",
                 )
@@ -615,7 +641,8 @@ class Base_Workflow(metaclass=ABCMeta):
             if self.args.distributed:
                 raise ValueError("DDP can not be activated when loading a BMZ pretrained model")
 
-            self.model = build_bmz_model(self.cfg, self.bmz_config['original_bmz_config'], self.device)
+            self.model = build_bmz_model(self.cfg, self.bmz_config['original_bmz_config'], self.bmz_model_with_new_descrition,
+                self.device)
 
         self.model_without_ddp = self.model
         if self.args.distributed:
@@ -941,6 +968,11 @@ class Base_Workflow(metaclass=ABCMeta):
         if self.cfg.MODEL.SOURCE != "bmz":
             self.model_without_ddp.eval()    
 
+        # Load best checkpoint on validation
+        if self.cfg.TRAIN.ENABLE and self.cfg.MODEL.SOURCE == "biapy":
+            self.start_epoch = load_model_checkpoint(cfg=self.cfg, jobname=self.job_identifier, 
+                model_without_ddp=self.model_without_ddp, device=self.device)
+
         # Check possible checkpoint problems
         if self.start_epoch == -1:
             raise ValueError("There was a problem loading the checkpoint. Test phase aborted!")
@@ -1077,36 +1109,36 @@ class Base_Workflow(metaclass=ABCMeta):
                 obj = self.input_queue.get(timeout=60)
                 if obj == None: break
 
-            img, patch_coords = obj
-            img, _ = self.test_generator.norm_X(img)
-            if self.cfg.TEST.AUGMENTATION:
-                p = ensemble16_3d_predictions(img[0], batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
-                    axis_order_back=self.axis_order_back, pred_func=self.model_call_func, 
-                    axis_order=self.axis_order, device=self.device, mode=self.cfg.TEST.AUGMENTATION_MODE)
-            else:
-                with torch.cuda.amp.autocast():
-                    p = self.model_call_func(img)
-            p = self.apply_model_activations(p)
-            # Multi-head concatenation
-            if isinstance(p, list):
-                p = torch.cat((p[0], torch.argmax(p[1], axis=1).unsqueeze(1)), dim=1)
-            p = to_numpy_format(p, self.axis_order_back)
+                img, patch_coords = obj
+                img, _ = self.test_generator.norm_X(img)
+                if self.cfg.TEST.AUGMENTATION:
+                    p = ensemble16_3d_predictions(img[0], batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
+                        axis_order_back=self.axis_order_back, pred_func=self.model_call_func, 
+                        axis_order=self.axis_order, device=self.device, mode=self.cfg.TEST.AUGMENTATION_MODE)
+                else:
+                    with torch.cuda.amp.autocast():
+                        p = self.model_call_func(img)
+                p = self.apply_model_activations(p)
+                # Multi-head concatenation
+                if isinstance(p, list):
+                    p = torch.cat((p[0], torch.argmax(p[1], axis=1).unsqueeze(1)), dim=1)
+                p = to_numpy_format(p, self.axis_order_back)
 
-            t_dim, z_dim, y_dim, x_dim, c_dim = order_dimensions(
-                self.cfg.TEST.BY_CHUNKS.PREPROCESSING.ZOOM,
-                input_order=self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
-                output_order="TZYXC", default_value=1)
-            
-            # Create a mask with the overlap. Calculate the exact part of the patch that will be inserted in the 
-            # final H5/Zarr file
-            p = p[0, z_dim*self.cfg.DATA.TEST.PADDING[0]:p.shape[1]-z_dim*self.cfg.DATA.TEST.PADDING[0],
-                y_dim*self.cfg.DATA.TEST.PADDING[1]:p.shape[2]-y_dim*self.cfg.DATA.TEST.PADDING[1],
-                x_dim*self.cfg.DATA.TEST.PADDING[2]:p.shape[3]-x_dim*self.cfg.DATA.TEST.PADDING[2]]
-            m = np.ones(p.shape, dtype=np.uint8)
-            patch_coords = np.array([patch_coords[:,0], patch_coords[:,0] + np.array(p.shape)[:-1]]).T # should not be necessary?
+                t_dim, z_dim, y_dim, x_dim, c_dim = order_dimensions(
+                    self.cfg.TEST.BY_CHUNKS.PREPROCESSING.ZOOM,
+                    input_order=self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
+                    output_order="TZYXC", default_value=1)
+                
+                # Create a mask with the overlap. Calculate the exact part of the patch that will be inserted in the 
+                # final H5/Zarr file
+                p = p[0, z_dim*self.cfg.DATA.TEST.PADDING[0]:p.shape[1]-z_dim*self.cfg.DATA.TEST.PADDING[0],
+                    y_dim*self.cfg.DATA.TEST.PADDING[1]:p.shape[2]-y_dim*self.cfg.DATA.TEST.PADDING[1],
+                    x_dim*self.cfg.DATA.TEST.PADDING[2]:p.shape[3]-x_dim*self.cfg.DATA.TEST.PADDING[2]]
+                m = np.ones(p.shape, dtype=np.uint8)
+                patch_coords = np.array([patch_coords[:,0], patch_coords[:,0] + np.array(p.shape)[:-1]]).T # should not be necessary?
 
-            # Put the prediction into queue
-            self.output_queue.put([p, m, patch_coords])         
+                # Put the prediction into queue
+                self.output_queue.put([p, m, patch_coords])         
 
             # Get some auxiliar variables
             self.stats['patch_by_batch_counter'] = self.extract_info_queue.get(timeout=60)
@@ -1627,14 +1659,15 @@ class Base_Workflow(metaclass=ABCMeta):
         """
         Print post-processing statistics.
         """
-        if self.post_processing['per_image']:
-            print("Test Foreground IoU (merge patches - post-processing): {}".format(self.stats['iou_merge_patches_post']))
-            print("Test Overall IoU (merge patches - post-processing): {}".format(self.stats['ov_iou_merge_patches_post']))
-            print(" ")
-        if self.post_processing['as_3D_stack']:
-            print("Test Foreground IoU (as 3D stack - post-processing): {}".format(self.stats['iou_as_3D_stack_post']))
-            print("Test Overall IoU (as 3D stack - post-processing): {}".format(self.stats['ov_iou_as_3D_stack_post']))
-            print(" ")     
+        if self.cfg.DATA.TEST.LOAD_GT:
+            if self.post_processing['per_image']:
+                print("Test Foreground IoU (merge patches - post-processing): {}".format(self.stats['iou_merge_patches_post']))
+                print("Test Overall IoU (merge patches - post-processing): {}".format(self.stats['ov_iou_merge_patches_post']))
+                print(" ")
+            if self.post_processing['as_3D_stack']:
+                print("Test Foreground IoU (as 3D stack - post-processing): {}".format(self.stats['iou_as_3D_stack_post']))
+                print("Test Overall IoU (as 3D stack - post-processing): {}".format(self.stats['ov_iou_as_3D_stack_post']))
+                print(" ")     
 
     @abstractmethod
     def after_merge_patches(self, pred):

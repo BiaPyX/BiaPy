@@ -13,7 +13,6 @@ from torchmetrics.image import StructuralSimilarityIndexMeasure
 from torchvision.transforms.functional import resize
 import torchvision.transforms as T
 from pytorch_msssim import ssim, ms_ssim, SSIM, MS_SSIM
-import torch.nn.functional as F
 
 def jaccard_index_numpy(y_true, y_pred):
     """Define Jaccard index.
@@ -116,7 +115,7 @@ def weight_binary_ratio(target):
 
 
 class jaccard_index():
-    def __init__(self,  num_classes, device, t=0.5, torchvision_models=False):
+    def __init__(self,  num_classes, device, t=0.5, model_source="biapy"):
         """
         Define Jaccard index.
 
@@ -132,11 +131,10 @@ class jaccard_index():
         t : float, optional
             Threshold to be applied.
 
-        torchvision_models : bool, optional
-            Whether the workflow is using a TorchVision model or not. In that case the GT could be 
-            resized and normalized, as it was done so with TorchVision preprocessing for the X data.
+        model_source : str, optional
+            Source of the model. It can be "biapy", "bmz" or "torchvision".
         """
-        self.torchvision_models = torchvision_models
+        self.model_source = model_source
         self.loss = torch.nn.CrossEntropyLoss()
         self.device = device 
         self.num_classes = num_classes
@@ -166,46 +164,46 @@ class jaccard_index():
         """
         # If image shape has changed due to TorchVision or BMZ preprocessing then the mask needs
         # to be resized too
-        if self.torchvision_models:
+        if self.model_source == "torchvision":
             if y_pred.shape[-2:] != y_true.shape[-2:]:    
                 y_true = resize(y_true, size=y_pred.shape[-2:], interpolation=T.InterpolationMode("nearest"))
             if torch.max(y_true) > 1 and self.num_classes <= 2: 
                 y_true = (y_true/255).type(torch.long)
-        
+        # For those cases that are predicting 2 channels (binary case) we adapt the GT to match.
+        # It's supposed to have 0 value as background and 1 as foreground 
+        elif self.model_source == "bmz" and self.num_classes <= 2 and y_pred.shape[1] != y_true.shape[1]:
+            y_true = torch.cat((1-y_true, y_true), 1)   
+
         if self.num_classes > 2:
             return self.jaccard(y_pred, y_true.squeeze() if y_true.shape[0] > 1 else y_true.squeeze().unsqueeze(0))
         else:
             return self.jaccard(y_pred, y_true)
 
 class instance_metrics():
-    def __init__(self, num_classes, metric_names, device, torchvision_models=False):
+    def __init__(self, num_classes, metric_names, device, model_source="biapy"):
         """
-        Define Jaccard index.
+        Define instance segmentation workflow metrics.
 
         Parameters
         ---------- 
         num_classes : int
             Number of classes.
 
-        channels_to_not_process : list of ints
-            Non-binary channels to not apply IoU on them. 
+        metric_names : list of str
+            Names of the metrics to use.  
         
         device : Torch device
             Using device. Most commonly "cpu" or "cuda" for GPU, but also potentially "mps", 
             "xpu", "xla" or "meta". 
 
-        t : float, optional
-            Threshold to be applied.
-
-        torchvision_models : bool, optional
-            Whether the workflow is using a TorchVision model or not. In that case the GT could be 
-            resized and normalized, as it was done so with TorchVision preprocessing for the X data.
+        model_source : str, optional
+            Source of the model. It can be "biapy", "bmz" or "torchvision".
         """
 
         self.num_classes = num_classes
         self.metric_names = metric_names
         self.device = device 
-        self.torchvision_models = torchvision_models
+        self.model_source = model_source
         
         self.jaccard = None
         self.jaccard_multi = None
@@ -228,7 +226,7 @@ class instance_metrics():
 
     def __call__(self, y_pred, y_true):
         """
-        Calculate CrossEntropyLoss.
+        Calculate metrics.
 
         Parameters
         ----------
@@ -255,7 +253,7 @@ class instance_metrics():
 
         # If image shape has changed due to TorchVision or BMZ preprocessing then the mask needs
         # to be resized too
-        if self.torchvision_models:
+        if self.model_source == "torchvision":
             if _y_pred.shape[-2:] != y_true.shape[-2:]:    
                 y_true = resize(y_true, size=_y_pred.shape[-2:], interpolation=T.InterpolationMode("nearest"))
             if torch.max(y_true) > 1 and self.num_classes <= 2: 
@@ -281,18 +279,21 @@ class instance_metrics():
 
 
 class CrossEntropyLoss_wrapper():
-    def __init__(self, num_classes, torchvision_models=False):
+    def __init__(self, num_classes, model_source="biapy", class_rebalance=False):
         """
         Wrapper to Pytorch's CrossEntropyLoss. 
 
         Parameters
         ----------
-        torchvision_models : bool, optional
-            Whether the workflow is using a TorchVision model or not. In that case the GT could be 
-            resized and normalized, as it was done so with TorchVision preprocessing for the X data.
+        model_source : str, optional
+            Source of the model. It can be "biapy", "bmz" or "torchvision". 
+
+        class_rebalance: bool, optional
+            Whether to reweight classes (inside loss function) or not.
         """
-        self.torchvision_models = torchvision_models
+        self.model_source = model_source
         self.num_classes = num_classes
+        self.class_rebalance = class_rebalance
         if num_classes <= 2:
             self.loss = torch.nn.BCEWithLogitsLoss()
         else:
@@ -317,16 +318,29 @@ class CrossEntropyLoss_wrapper():
         """
         # If image shape has changed due to TorchVision or BMZ preprocessing then the mask needs
         # to be resized too
-        if self.torchvision_models:
+        if self.model_source == "torchvision":
             if y_pred.shape[-2:] != y_true.shape[-2:]:    
                 y_true = resize(y_true, size=y_pred.shape[-2:], interpolation=T.InterpolationMode("nearest"))
             if torch.max(y_true) > 1 and self.num_classes <= 2: 
                 y_true = (y_true/255).type(torch.float32)
+        # For those cases that are predicting 2 channels (binary case) we adapt the GT to match.
+        # It's supposed to have 0 value as background and 1 as foreground 
+        elif self.model_source == "bmz" and self.num_classes <= 2 and y_pred.shape[1] != y_true.shape[1]:
+            y_true = torch.cat((1-y_true, y_true), 1)    
+
+        if self.class_rebalance:
+            weight_mask = weight_binary_ratio(y_true)
+            if self.num_classes <= 2:
+                loss_fn = torch.nn.BCEWithLogitsLoss(weight=weight_mask)
+            else:
+                loss_fn = torch.nn.CrossEntropyLoss(weight=weight_mask)
+        else:
+            loss_fn = self.loss 
 
         if self.num_classes <= 2:
-            return self.loss(y_pred, y_true)
+            return loss_fn(y_pred, y_true)
         else:
-            return self.loss(y_pred, y_true[:,0].type(torch.long))
+            return loss_fn(y_pred, y_true[:,0].type(torch.long))
 
 def dice_loss(y_true, y_pred):
     """Dice loss.
@@ -463,7 +477,7 @@ def binary_crossentropy_weighted(weights):
 
 
 class instance_segmentation_loss():
-    def __init__(self, weights=(1,0.2), out_channels="BC", mask_distance_channel=True, n_classes=2, class_rebalance=True):
+    def __init__(self, weights=(1,0.2), out_channels="BC", mask_distance_channel=True, n_classes=2, class_rebalance=False):
         """
         Custom loss that mixed BCE and MSE depending on the ``out_channels`` variable.
 
@@ -479,6 +493,9 @@ class instance_segmentation_loss():
         mask_distance_channel : bool, optional
             Whether to mask the distance channel to only calculate the loss in those regions where the binary mask
             defined by B channel is present. 
+
+        class_rebalance: bool, optional
+            Whether to reweight classes (inside loss function) or not.
         """
         self.weights = weights
         self.out_channels = out_channels
@@ -523,40 +540,93 @@ class instance_segmentation_loss():
         loss = 0
         if self.out_channels == "BC":
             assert y_true.shape[1] == 2, f"Seems that the GT loaded doesn't have 2 channels as expected in BC. GT shape: {y_true.shape}"
-            loss = self.weights[0]*self.binary_channels_loss(_y_pred[:,0], y_true[:,0])+\
-                   self.weights[1]*self.binary_channels_loss(_y_pred[:,1], y_true[:,1])
+            if self.class_rebalance:
+                B_weight_mask = weight_binary_ratio(y_true[:,0])
+                B_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=B_weight_mask)
+                C_weight_mask = weight_binary_ratio(y_true[:,1])
+                C_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=C_weight_mask)
+            else:
+                B_binary_channels_loss = self.binary_channels_loss
+                C_binary_channels_loss = self.binary_channels_loss
+            loss = self.weights[0]*B_binary_channels_loss(_y_pred[:,0], y_true[:,0])+\
+                   self.weights[1]*C_binary_channels_loss(_y_pred[:,1], y_true[:,1])
         elif self.out_channels == "BCM":
             assert y_true.shape[1] == 3, f"Seems that the GT loaded doesn't have 3 channels as expected in BCM. GT shape: {y_true.shape}"
-            loss = self.weights[0]*self.binary_channels_loss(_y_pred[:,0], y_true[:,0])+\
-                   self.weights[1]*self.binary_channels_loss(_y_pred[:,1], y_true[:,1])+\
-                   self.weights[2]*self.binary_channels_loss(_y_pred[:,2], y_true[:,2])   
+            if self.class_rebalance:
+                B_weight_mask = weight_binary_ratio(y_true[:,0])
+                B_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=B_weight_mask)
+                C_weight_mask = weight_binary_ratio(y_true[:,1])
+                C_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=C_weight_mask)
+                M_weight_mask = weight_binary_ratio(y_true[:,2])
+                M_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=M_weight_mask)
+            else:
+                B_binary_channels_loss = self.binary_channels_loss
+                C_binary_channels_loss = self.binary_channels_loss
+                M_binary_channels_loss = self.binary_channels_loss
+            loss = self.weights[0]*B_binary_channels_loss(_y_pred[:,0], y_true[:,0])+\
+                   self.weights[1]*C_binary_channels_loss(_y_pred[:,1], y_true[:,1])+\
+                   self.weights[2]*M_binary_channels_loss(_y_pred[:,2], y_true[:,2])   
         elif self.out_channels == "BCD":
             assert y_true.shape[1] == 3, f"Seems that the GT loaded doesn't have 3 channels as expected in BCD. GT shape: {y_true.shape}"
-            loss = self.weights[0]*self.binary_channels_loss(_y_pred[:,0], y_true[:,0])+\
-                   self.weights[1]*self.binary_channels_loss(_y_pred[:,1], y_true[:,1])+\
+            if self.class_rebalance:
+                B_weight_mask = weight_binary_ratio(y_true[:,0])
+                B_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=B_weight_mask)
+                C_weight_mask = weight_binary_ratio(y_true[:,1])
+                C_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=C_weight_mask)
+            else:
+                B_binary_channels_loss = self.binary_channels_loss
+                C_binary_channels_loss = self.binary_channels_loss
+            loss = self.weights[0]*B_binary_channels_loss(_y_pred[:,0], y_true[:,0])+\
+                   self.weights[1]*C_binary_channels_loss(_y_pred[:,1], y_true[:,1])+\
                    self.weights[2]*self.distance_channels_loss(D, y_true[:,2]) 
         elif self.out_channels == "BCDv2":
             assert y_true.shape[1] == 3, f"Seems that the GT loaded doesn't have 3 channels as expected in BCDv2. GT shape: {y_true.shape}"
-            loss = self.weights[0]*self.binary_channels_loss(_y_pred[:,0], y_true[:,0])+\
-                   self.weights[1]*self.binary_channels_loss(_y_pred[:,1], y_true[:,1])+\
+            if self.class_rebalance:
+                B_weight_mask = weight_binary_ratio(y_true[:,0])
+                B_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=B_weight_mask)
+                C_weight_mask = weight_binary_ratio(y_true[:,1])
+                C_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=C_weight_mask)
+            else:
+                B_binary_channels_loss = self.binary_channels_loss
+                C_binary_channels_loss = self.binary_channels_loss
+            loss = self.weights[0]*B_binary_channels_loss(_y_pred[:,0], y_true[:,0])+\
+                   self.weights[1]*C_binary_channels_loss(_y_pred[:,1], y_true[:,1])+\
                    self.weights[2]*self.distance_channels_loss(D, y_true[:,2]) 
         elif self.out_channels in ["BDv2", "BD"]:
             assert y_true.shape[1] == 2, f"Seems that the GT loaded doesn't have 2 channels as expected in BD/BDv2. GT shape: {y_true.shape}"
-            loss = self.weights[0]*self.binary_channels_loss(_y_pred[:,0], y_true[:,0])+\
+            if self.class_rebalance:
+                B_weight_mask = weight_binary_ratio(y_true[:,0])
+                B_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=B_weight_mask)
+            else:
+                B_binary_channels_loss = self.binary_channels_loss
+            loss = self.weights[0]*B_binary_channels_loss(_y_pred[:,0], y_true[:,0])+\
                    self.weights[1]*self.distance_channels_loss(D, y_true[:,1])
         elif self.out_channels == "BP":
             assert y_true.shape[1] == 2, f"Seems that the GT loaded doesn't have 2 channels as expected in BP. GT shape: {y_true.shape}"
-            loss = self.weights[0]*self.binary_channels_loss(_y_pred[:,0], y_true[:,0])+\
-                   self.weights[1]*self.binary_channels_loss(_y_pred[:,1], y_true[:,1])
+            if self.class_rebalance:
+                B_weight_mask = weight_binary_ratio(y_true[:,0])
+                B_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=B_weight_mask)
+                P_weight_mask = weight_binary_ratio(y_true[:,1])
+                P_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=P_weight_mask)
+            else:
+                B_binary_channels_loss = self.binary_channels_loss
+                P_binary_channels_loss = self.binary_channels_loss
+            loss = self.weights[0]*B_binary_channels_loss(_y_pred[:,0], y_true[:,0])+\
+                   self.weights[1]*P_binary_channels_loss(_y_pred[:,1], y_true[:,1])
         elif self.out_channels == "C":
-            loss = self.binary_channels_loss(_y_pred, y_true)
+            if self.class_rebalance:
+                C_weight_mask = weight_binary_ratio(y_true)
+                C_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=C_weight_mask)
+            else:
+                C_binary_channels_loss = self.binary_channels_loss
+            loss = C_binary_channels_loss(_y_pred, y_true)
         elif self.out_channels in ["A"]:
             if self.class_rebalance:
-                weight_mask = weight_binary_ratio(y_true)
-                loss_fn = torch.nn.BCEWithLogitsLoss(weight=weight_mask)
-                loss = loss_fn(y_pred, y_true)
+                A_weight_mask = weight_binary_ratio(y_true)
+                A_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=A_weight_mask)
             else:
-                loss = self.binary_channels_loss(_y_pred, y_true)
+                A_binary_channels_loss = self.binary_channels_loss
+            loss = A_binary_channels_loss(_y_pred, y_true)
         # Dv2
         else:
             loss = self.weights[0]*self.distance_channels_loss(_y_pred, y_true)

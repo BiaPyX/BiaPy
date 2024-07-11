@@ -349,7 +349,7 @@ def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
                 new_mask[img,...,c_channel] = 1 - ( (vol>0) * new_mask[img,...,c_channel])
             if 'B' in mode:
                 # Remove contours from segmentation maps
-                new_mask[img,...,0][np.where(new_mask[img,...,] == 1)] = 0
+                new_mask[img,...,0][np.where(new_mask[img,...,1] == 1)] = 0
             if mode == "BCM":
                 new_mask[img,...,2] = (vol>0).astype(np.uint8)
 
