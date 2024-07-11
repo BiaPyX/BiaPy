@@ -669,15 +669,9 @@ class Detection_Workflow(Base_Workflow):
             # add the patch shift to the detected coordinates
             shift = np.array([z*self.cfg.DATA.PATCH_SIZE[0], y*self.cfg.DATA.PATCH_SIZE[1], x*self.cfg.DATA.PATCH_SIZE[2]])
 
-            
-            t_dim, z_dim, y_dim, x_dim, c_dim = order_dimensions(
-                self.cfg.TEST.BY_CHUNKS.PREPROCESSING.ZOOM,
-                input_order=self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
-                output_order="TZYXC", default_value=1)
-
-            df_patch['axis-0'] = (df_patch['axis-0'] + shift[0]) / z_dim
-            df_patch['axis-1'] = (df_patch['axis-1'] + shift[1]) / y_dim
-            df_patch['axis-2'] = (df_patch['axis-2'] + shift[2]) / x_dim
+            df_patch['axis-0'] = (df_patch['axis-0'] + shift[0])
+            df_patch['axis-1'] = (df_patch['axis-1'] + shift[1])
+            df_patch['axis-2'] = (df_patch['axis-2'] + shift[2])
 
             return df_patch, fname
         
@@ -753,6 +747,17 @@ class Detection_Workflow(Base_Workflow):
 
         # Save large csv with all point of all patches
         df = df.sort_values(by=['file'])
+            
+        t_dim, z_dim, y_dim, x_dim, c_dim = order_dimensions(
+            self.cfg.TEST.BY_CHUNKS.PREPROCESSING.ZOOM,
+            input_order=self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
+            output_order="TZYXC", default_value=1)
+        
+        print("remove zomm from inference", "Z_dim: ", z_dim, "Y_dim: ", y_dim, "X_dim: ", x_dim)
+
+        df['axis-0'] = df['axis-0'] / z_dim
+        df['axis-1'] = df['axis-1'] / y_dim
+        df['axis-2'] = df['axis-2'] / x_dim
         df.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, _filename+'_all_points.csv'))
 
         if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
