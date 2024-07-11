@@ -14,6 +14,7 @@ import torch.multiprocessing as mp
 import torch.distributed as dist
 import xarray as xr
 import bioimageio.core
+from scipy.ndimage import zoom
 
 from biapy.models import build_model, build_torchvision_model, build_bmz_model, check_bmz_model_compatibility
 from biapy.engine import prepare_optimizer, build_callbacks
@@ -1033,6 +1034,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 print(f"Loaded image shape is {self._X.shape}")
 
             data_shape = self._X.shape
+            out_data_shape = data_shape * self.cfg.TEST.BY_CHUNKS.PREPROCESSING.ZOOM
 
             if self._X.ndim < 3:
                 raise ValueError("Loaded image need to have at least 3 dimensions: {} (ndim: {})".format(self._X.shape, self._X.ndim))
@@ -1053,7 +1055,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
             # Process in charge of processing one predicted patch
             output_handle_proc = mp.Process(target=insert_patch_into_dataset, args=(out_data_filename, out_data_mask_filename, 
-                data_shape, self.output_queue, self.extract_info_queue, self.cfg, self.dtype_str, self.dtype, 
+                out_data_shape, self.output_queue, self.extract_info_queue, self.cfg, self.dtype_str, self.dtype, 
                 self.cfg.TEST.BY_CHUNKS.FORMAT, self.cfg.TEST.VERBOSE))
             output_handle_proc.daemon=True
             output_handle_proc.start()
@@ -1090,12 +1092,18 @@ class Base_Workflow(metaclass=ABCMeta):
                 p = torch.cat((p[0], torch.argmax(p[1], axis=1).unsqueeze(1)), dim=1)
             p = to_numpy_format(p, self.axis_order_back)
 
+            t_dim, z_dim, y_dim, x_dim, c_dim = order_dimensions(
+                self.cfg.TEST.BY_CHUNKS.PREPROCESSING.ZOOM,
+                input_order=self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
+                output_order="TZYXC", default_value=1)
+            
             # Create a mask with the overlap. Calculate the exact part of the patch that will be inserted in the 
             # final H5/Zarr file
-            p = p[0, self.cfg.DATA.TEST.PADDING[0]:p.shape[1]-self.cfg.DATA.TEST.PADDING[0],
-                self.cfg.DATA.TEST.PADDING[1]:p.shape[2]-self.cfg.DATA.TEST.PADDING[1],
-                self.cfg.DATA.TEST.PADDING[2]:p.shape[3]-self.cfg.DATA.TEST.PADDING[2]]
+            p = p[0, z_dim*self.cfg.DATA.TEST.PADDING[0]:p.shape[1]-z_dim*self.cfg.DATA.TEST.PADDING[0],
+                y_dim*self.cfg.DATA.TEST.PADDING[1]:p.shape[2]-y_dim*self.cfg.DATA.TEST.PADDING[1],
+                x_dim*self.cfg.DATA.TEST.PADDING[2]:p.shape[3]-x_dim*self.cfg.DATA.TEST.PADDING[2]]
             m = np.ones(p.shape, dtype=np.uint8)
+            patch_coords = np.array([patch_coords[:,0], patch_coords[:,0] + np.array(p.shape)[:-1]]).T # should not be necessary?
 
             # Put the prediction into queue
             self.output_queue.put([p, m, patch_coords])         
@@ -1217,7 +1225,7 @@ class Base_Workflow(metaclass=ABCMeta):
                         pred_div = fid_div.create_dataset("data", shape=pred.shape, dtype=pred.dtype)
                         
                     t_dim, z_dim, c_dim, y_dim, x_dim = order_dimensions(
-                        data_shape, self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER)
+                        out_data_shape, self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER)
                     
                     # Fill the new data
                     z_vols = math.ceil(z_dim/self.cfg.DATA.PATCH_SIZE[0])
@@ -1751,7 +1759,6 @@ def extract_patch_from_dataset(data, cfg, input_queue, extract_info_queue, verbo
     # Load H5/Zarr in case we need it
     if isinstance(data, str):
         data_file, data = read_chunked_data(data)
-
     # Process of extracting each patch
     patch_counter = 0
     for obj in extract_3D_patch_with_overlap_yield(data, cfg.DATA.PATCH_SIZE, cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
@@ -1764,6 +1771,14 @@ def extract_patch_from_dataset(data, cfg, input_queue, extract_info_queue, verbo
             img, patch_coords, total_vol = obj
 
         img = np.expand_dims(img,0)
+
+        t_dim, z_dim, y_dim, x_dim, c_dim = order_dimensions(
+            cfg.TEST.BY_CHUNKS.PREPROCESSING.ZOOM,
+            output_order="TZYXC", default_value=np.nan)
+
+        patch_coords = (np.array([z_dim, y_dim, x_dim]) * np.array(patch_coords).T).T
+        img = zoom(img, (t_dim, z_dim, y_dim, x_dim, c_dim), order=0, mode='nearest')
+
         input_queue.put([img, patch_coords])
 
         if patch_counter == 0:

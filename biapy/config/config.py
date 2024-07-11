@@ -832,6 +832,10 @@ class Config:
         _C.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER = 'TZCYX'
         # Order of the axes of the mask when using Zarr/H5 images in test data.
         _C.TEST.BY_CHUNKS.INPUT_MASK_AXES_ORDER = 'TZCYX'
+        # Change the zoom of each patch individually. This is useful when the input image has a different resolution than the
+        # one used in the training. The value is the zoom factor to be applied to each patch using scipy.ndimage.zoom.
+        _C.TEST.BY_CHUNKS.PREPROCESSING = CN()
+        _C.TEST.BY_CHUNKS.PREPROCESSING.ZOOM = (1, 1, 1, 1, 1)
         # Whether if your input Zarr contains the raw images and labels together or not. Use 'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH'
         # and 'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_GT_PATH' to determine the tag to find within the Zarr
         _C.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA = False

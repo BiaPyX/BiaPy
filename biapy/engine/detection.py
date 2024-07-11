@@ -685,9 +685,16 @@ class Detection_Workflow(Base_Workflow):
             
             # add the patch shift to the detected coordinates
             shift = np.array([z*self.cfg.DATA.PATCH_SIZE[0], y*self.cfg.DATA.PATCH_SIZE[1], x*self.cfg.DATA.PATCH_SIZE[2]])
-            df_patch['axis-0'] = df_patch['axis-0'] + shift[0]
-            df_patch['axis-1'] = df_patch['axis-1'] + shift[1]
-            df_patch['axis-2'] = df_patch['axis-2'] + shift[2]
+
+            
+            t_dim, z_dim, y_dim, x_dim, c_dim = order_dimensions(
+                self.cfg.TEST.BY_CHUNKS.PREPROCESSING.ZOOM,
+                input_order=self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
+                output_order="TZYXC", default_value=1)
+
+            df_patch['axis-0'] = (df_patch['axis-0'] + shift[0]) / z_dim
+            df_patch['axis-1'] = (df_patch['axis-1'] + shift[1]) / y_dim
+            df_patch['axis-2'] = (df_patch['axis-2'] + shift[2]) / x_dim
 
             return df_patch, fname
         
