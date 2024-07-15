@@ -334,7 +334,7 @@ def cutnoise(img, scale=(0.1,0.2), nb_iterations=(1,3), size=(0.2,0.4)):
         _scale = random.uniform(scale[0], scale[1])*img.max()
         noise = np.random.normal(loc=0, scale=_scale, size=(y_size, x_size))
         out[cy:cy+y_size, cx:cx+x_size, :] += np.stack((noise,)*out.shape[-1], axis=-1)
-    return o_heat_shapeut
+    return out
 
 
 def misalignment(img, mask, displacement=16, rotate_ratio=0.0, c_relation="1_1"):
