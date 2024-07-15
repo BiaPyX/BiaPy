@@ -753,7 +753,6 @@ class Detection_Workflow(Base_Workflow):
             input_order=self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
             output_order="TZYXC", default_value=1)
 
-        print("remove zomm from inference", "Z_dim: ", z_dim, "Y_dim: ", y_dim, "X_dim: ", x_dim)
 
         df['axis-0'] = df['axis-0'] / z_dim
         df['axis-1'] = df['axis-1'] / y_dim
