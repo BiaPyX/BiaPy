@@ -1066,7 +1066,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 print(f"Loaded image shape is {self._X.shape}")
 
             data_shape = self._X.shape
-            out_data_shape = data_shape * self.cfg.TEST.BY_CHUNKS.PREPROCESSING.ZOOM
+            out_data_shape = data_shape * self.DATA.PREPROCESS.ZOOM.ZOOM_FACTOR
 
             if self._X.ndim < 3:
                 raise ValueError("Loaded image need to have at least 3 dimensions: {} (ndim: {})".format(self._X.shape, self._X.ndim))
@@ -1125,7 +1125,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 p = to_numpy_format(p, self.axis_order_back)
 
                 t_dim, z_dim, y_dim, x_dim, c_dim = order_dimensions(
-                    self.cfg.TEST.BY_CHUNKS.PREPROCESSING.ZOOM,
+                    self.DATA.PREPROCESS.ZOOM.ZOOM_FACTOR,
                     input_order=self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
                     output_order="TZYXC", default_value=1)
                 
@@ -1806,7 +1806,7 @@ def extract_patch_from_dataset(data, cfg, input_queue, extract_info_queue, verbo
         img = np.expand_dims(img,0)
 
         t_dim, z_dim, y_dim, x_dim, c_dim = order_dimensions(
-            cfg.TEST.BY_CHUNKS.PREPROCESSING.ZOOM,
+            DATA.PREPROCESS.ZOOM.ZOOM_FACTOR,
             output_order="TZYXC", default_value=np.nan)
 
         patch_coords = (np.array([z_dim, y_dim, x_dim]) * np.array(patch_coords).T).T
