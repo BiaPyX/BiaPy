@@ -447,6 +447,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         if cfg.DATA.PREPROCESS.MATCH_HISTOGRAM.ENABLE:
             if not os.path.exists(cfg.DATA.PREPROCESS.MATCH_HISTOGRAM.REFERENCE_PATH):
                 raise ValueError(f"Path pointed by 'DATA.PREPROCESS.MATCH_HISTOGRAM.REFERENCE_PATH' does not exist: {cfg.DATA.PREPROCESS.MATCH_HISTOGRAM.REFERENCE_PATH}")
+        if cfg.DATA.PREPROCESS.ZOOM.ENABLE and not cfg.TEST.BY_CHUNKS.ENABLE:
+            raise ValueError("'DATA.PREPROCESS.ZOOM.ENABLE' can only be activated when 'TEST.BY_CHUNKS.ENABLE' is True")
+        if cfg.DATA.PREPROCESS.ZOOM.ENABLE and len(cfg.DATA.PREPROCESS.ZOOM.ZOOM_FACTOR) != len(cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER):
+            raise ValueError("'DATA.PREPROCESS.ZOOM.ZOOM_FACTOR' needs to have the same length as 'TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER'")
 
     #### Data #### 
     if cfg.TRAIN.ENABLE:
