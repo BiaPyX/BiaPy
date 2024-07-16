@@ -223,7 +223,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         out_dir_post_proc : path
             Output directory to save the post-processed instances.
         """
-        assert pred.ndim == 4, "Prediction doesn't have 4 dim: {pred.shape}"
+        assert pred.ndim == 4, f"Prediction doesn't have 4 dim: {pred.shape}"
 
         #############################
         ### INSTANCE SEGMENTATION ###
