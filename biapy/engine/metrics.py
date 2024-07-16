@@ -636,35 +636,46 @@ class instance_segmentation_loss():
         
         return loss
 
-def detection_metrics(true, pred, tolerance=10, voxel_size=(1,1,1), return_assoc=False, verbose=False):
-    """Calculate detection metrics based on
-
-       Parameters
-       ----------
-       true : List of list
-           List containing coordinates of ground truth points. E.g. ``[[5,3,2], [4,6,7]]``.
-
-       pred : 4D Tensor
-           List containing coordinates of predicted points. E.g. ``[[5,3,2], [4,6,7]]``.
-
-       tolerance : optional, int
-           Maximum distance far away from a GT point to consider a point as a true positive.
-
-       voxel_size : List of floats
-           Weights to be multiply by each axis. Useful when dealing with anysotropic data to reduce the distance value
-           on the axis with less resolution. E.g. ``(1,1,0.5)``.
-
-       return_assoc : bool, optional
-           To return two dataframes containing the gt points association and the FP. 
-
-       verbose : bool, optional
-            To print extra information.
-
-       Returns
-       -------
-       metrics : List of strings
-           List containing precision, accuracy and F1 between the predicted points and ground truth.
+def detection_metrics(true, pred, tolerance=10, voxel_size=(1,1,1), return_assoc=False, bbox_to_consider=[], verbose=False):
     """
+    Calculate detection metrics based on
+
+    Parameters
+    ----------
+    true : List of list
+        List containing coordinates of ground truth points. E.g. ``[[5,3,2], [4,6,7]]``.
+
+    pred : 4D Tensor
+        List containing coordinates of predicted points. E.g. ``[[5,3,2], [4,6,7]]``.
+
+    tolerance : optional, int
+        Maximum distance far away from a GT point to consider a point as a true positive.
+
+    voxel_size : List of floats
+        Weights to be multiply by each axis. Useful when dealing with anysotropic data to reduce the distance value
+        on the axis with less resolution. E.g. ``(1,1,0.5)``.
+
+    return_assoc : bool, optional
+        To return two dataframes containing the gt points association and the FP. 
+
+    bbox_to_consider : List of tuple/list, optional
+        To not take into account during metric calculation to those points outside the bounding box defined with 
+        this variable. Order is: ``[[z_min, z_max], [y_min, y_max], [x_min, x_max]]``. For example, using an image 
+        of ``10x100x200`` to not take into account points on the first/last slices and with a border of ``15`` pixel 
+        for ``x`` and ``y`` axes, this variable could be defined as follows: ``[[1, 9], [15, 85], [15, 185]]``.
+
+    verbose : bool, optional
+        To print extra information.
+
+    Returns
+    -------
+    metrics : List of strings
+        List containing precision, accuracy and F1 between the predicted points and ground truth.
+    """
+    if len(bbox_to_consider) > 0:
+        assert len(bbox_to_consider) == 3, "'bbox_to_consider' need to be of length 3"
+        assert [len(x) == 2 for x in bbox_to_consider], "'bbox_to_consider' needs to be a list of "\
+            "two element array/tuple. E.g. [[1,1],[15,100],[10,200]]"
 
     _true = np.array(true, dtype=np.float32)
     _pred = np.array(pred, dtype=np.float32)
@@ -675,6 +686,7 @@ def detection_metrics(true, pred, tolerance=10, voxel_size=(1,1,1), return_assoc
     dis = [-1 for x in _true]
     pred_id_assoc = [-1 for x in _true]    
 
+    TP_not_considered = 0
     if len(_true) > 0:
         # Multiply each axis for the its real value
         for i in range(len(voxel_size)):
@@ -689,18 +701,49 @@ def detection_metrics(true, pred, tolerance=10, voxel_size=(1,1,1), return_assoc
 
         # Analyse which associations are below the tolerance to consider them TP
         for i in range(len(pred_ind)):
+            # Filter out those point outside the defined bounding box 
+            consider_point = False
+            if len(bbox_to_consider) > 0:
+                point = true[true_ind[i]]
+                if bbox_to_consider[0][0] <= point[0] <= bbox_to_consider[0][1] and \
+                    bbox_to_consider[1][0] <= point[1] <= bbox_to_consider[1][1] and \
+                    bbox_to_consider[2][0] <= point[2] <= bbox_to_consider[2][1]:
+                    consider_point = True
+            else:
+                consider_point = True
+            
             if distances[pred_ind[i],true_ind[i]] < tolerance:
-                TP += 1
-                tag[true_ind[i]] = "TP"
+                if consider_point:
+                    TP += 1    
+                    tag[true_ind[i]] = "TP"    
+                else:
+                    tag[true_ind[i]] = "NC"
+                    TP_not_considered += 1
                 fp_preds.remove(pred_ind[i]+1)
 
             dis[true_ind[i]] = distances[pred_ind[i],true_ind[i]]
             pred_id_assoc[true_ind[i]] = pred_ind[i]+1
 
-        FN = len(_true) - TP
-    FP = len(_pred) - TP
+        if TP_not_considered > 0:
+            print(f"{TP_not_considered} TPs not considered due to filtering")
+        FN = len(_true) - TP - TP_not_considered
 
-    # Create tow dataframes with the GT and prediction points association made and another one with the FPs
+    # FP filtering
+    FP_not_considered = 0
+    fp_tags = ["FP" for x in fp_preds]
+    if len(bbox_to_consider) > 0:
+        for i in range(len(fp_preds)):
+            point = pred[fp_preds[i]-1]
+            if not (bbox_to_consider[0][0] <= point[0] <= bbox_to_consider[0][1] and \
+                bbox_to_consider[1][0] <= point[1] <= bbox_to_consider[1][1] and \
+                bbox_to_consider[2][0] <= point[2] <= bbox_to_consider[2][1]):
+                FP_not_considered += 1
+                fp_tags[i] = "NC"
+
+        print(f"{FP_not_considered} FPs not considered due to filtering")
+    FP = len(fp_preds) - FP_not_considered
+
+    # Create two dataframes with the GT and prediction points association made and another one with the FPs
     df, df_fp = None, None
     if return_assoc and len(_true) > 0:
         _true = np.array(true, dtype=np.float32)
@@ -723,8 +766,8 @@ def detection_metrics(true, pred, tolerance=10, voxel_size=(1,1,1), return_assoc
             _true[...,1], _true[...,2], pred_coords[...,0], pred_coords[...,1], pred_coords[...,2]), 
             columns =['gt_id', 'pred_id', 'distance', 'tag', 'axis-0', 'axis-1', 'axis-2', 'pred_axis-0', 
             'pred_axis-1', 'pred_axis-2'])
-        df_fp = pd.DataFrame(zip(fp_preds, fp_coords[...,0], fp_coords[...,1], fp_coords[...,2]), 
-            columns =['pred_id', 'axis-0', 'axis-1', 'axis-2'])
+        df_fp = pd.DataFrame(zip(fp_preds, fp_coords[...,0], fp_coords[...,1], fp_coords[...,2], fp_tags), 
+            columns =['pred_id', 'axis-0', 'axis-1', 'axis-2', 'tag'])
 
     try:
         precision = TP/(TP+FP)
@@ -740,9 +783,14 @@ def detection_metrics(true, pred, tolerance=10, voxel_size=(1,1,1), return_assoc
         F1 = 0
 
     if verbose:
-    	print("Points in ground truth: {}, Points in prediction: {}".format(len(_true), len(_pred)))
-    	print("True positives: {}, False positives: {}, False negatives: {}".format(TP, FP, FN))
-    
+        if len(bbox_to_consider) > 0:
+            print("Points in ground truth: {} ({} total but {} not considered), Points in prediction: {} "
+                "({} total but {} not considered)".format(len(_true), len(true), TP_not_considered, len(_pred),
+                len(pred),FP_not_considered))
+        else:
+            print("Points in ground truth: {}, Points in prediction: {}".format(len(_true), len(_pred)))
+        print("True positives: {}, False positives: {}, False negatives: {}".format(TP, FP, FN))
+
     r_dict = {"Precision": precision, "Recall": recall, "F1": F1, "TP": TP, "FP": FP, "FN": FN}
     if return_assoc:
         return r_dict, df, df_fp

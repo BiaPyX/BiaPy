@@ -383,7 +383,20 @@ class Detection_Workflow(Base_Workflow):
                             raise ValueError(f"Point [{z},{y},{x}] outside image with shape {pred_shape}")                           
                 gt_coordinates = patch_gt_coordinates.copy()
             gt_all_coords.append(gt_coordinates)
-
+            
+            roi_to_consider = []
+            if self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX:
+                if self.cfg.PROBLEM.NDIM == "2D":
+                    roi_to_consider = [
+                        [self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[0],max(pred_shape[0]-self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[0],0)],
+                        [self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[1],max(pred_shape[1]-self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[1],0)],
+                    ]
+                else:     
+                    roi_to_consider = [
+                        [self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[0],max(pred_shape[0]-self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[0],0)],
+                        [self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[1],max(pred_shape[1]-self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[1],0)],
+                        [self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[2],max(pred_shape[2]-self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[2],0)],
+                    ]
             for ch, pred_coordinates in enumerate(all_points):
                 # If there was class info take only the points related to the class at hand
                 if class_info is not None:
@@ -398,8 +411,15 @@ class Detection_Workflow(Base_Workflow):
                 if len(pred_coordinates) > 0:
                     if self.cfg.TEST.VERBOSE:
                         print("Detection (class "+str(ch+1)+")")
-                    d_metrics, gt_assoc, fp = detection_metrics(gt_coordinates, pred_coordinates, tolerance=self.cfg.TEST.DET_TOLERANCE[ch],
-                        voxel_size=self.v_size, return_assoc=True, verbose=self.cfg.TEST.VERBOSE)
+                    d_metrics, gt_assoc, fp = detection_metrics(
+                        gt_coordinates, 
+                        pred_coordinates, 
+                        tolerance=self.cfg.TEST.DET_TOLERANCE[ch],
+                        voxel_size=self.v_size, 
+                        return_assoc=True, 
+                        bbox_to_consider=roi_to_consider,
+                        verbose=self.cfg.TEST.VERBOSE
+                        )
                     if self.cfg.TEST.VERBOSE:
                         print("Detection metrics: {}".format(d_metrics))
                     all_channel_d_metrics[0] += d_metrics["Precision"]
@@ -473,7 +493,9 @@ class Detection_Workflow(Base_Workflow):
                         if gt_assoc is not None:
                             if gt_assoc[gt_assoc['gt_id'] == j+1]["tag"].iloc[0] == "TP":
                                 points_pred[z,y,x] = (0,255,0)# Green
-                            else:   
+                            elif gt_assoc[gt_assoc['gt_id'] == j+1]["tag"].iloc[0] == "NC":   
+                                points_pred[z,y,x] = (150,150,150)# Gray
+                            else:
                                 points_pred[z,y,x] = (255,0,0)# Red
                         else:                           
                             points_pred[z,y,x] = (255,0,0)# Red
@@ -772,8 +794,22 @@ class Detection_Workflow(Base_Workflow):
             gt_coordinates = [[z,y,x] for z,y,x in zip(df_gt['axis-0'].tolist(),df_gt['axis-1'].tolist(),df_gt['axis-2'].tolist())]
 
             # Measure metrics
-            d_metrics, gt_assoc, fp = detection_metrics(gt_coordinates, pred_coordinates, tolerance=self.cfg.TEST.DET_TOLERANCE[0],
-                voxel_size=self.v_size, return_assoc=True, verbose=self.cfg.TEST.VERBOSE)
+            roi_to_consider = []
+            if self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX:
+                roi_to_consider = [
+                    [self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[0],max(pred_shape[0]-self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[0],0)],
+                    [self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[1],max(pred_shape[1]-self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[1],0)],
+                    [self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[2],max(pred_shape[2]-self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[2],0)],
+                ]
+            d_metrics, gt_assoc, fp = detection_metrics(
+                gt_coordinates, 
+                pred_coordinates, 
+                tolerance=self.cfg.TEST.DET_TOLERANCE[0],
+                voxel_size=self.v_size, 
+                return_assoc=True, 
+                bbox_to_consider=roi_to_consider,
+                verbose=self.cfg.TEST.VERBOSE
+            )
             print("Detection metrics: {}".format(d_metrics))
 
             self.stats['d_precision_by_chunks'] += d_metrics["Precision"]
