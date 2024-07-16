@@ -315,6 +315,11 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             if not cfg.TEST.FULL_IMG:
                 raise ValueError("With TorchVision models for detection workflow only 'TEST.FULL_IMG' setting is available, so "
                     "please set it.")
+        if cfg.TEST.ENABLE and len(cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX)>0:
+            assert [x>0 for x in cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX], "'TEST.DET_IGNORE_POINTS_OUTSIDE_BOX' needs to be a list "\
+                "of positive integers"
+            assert len(cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX) == dim_count, "'TEST.DET_IGNORE_POINTS_OUTSIDE_BOX' needs to be of "\
+                f"{dim_count} dimension"
 
     #### Super-resolution ####
     elif cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':

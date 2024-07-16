@@ -911,6 +911,11 @@ class Config:
         _C.TEST.DET_BLOB_LOG_NUM_SIGMA = 2
         # Maximum distance far away from a GT point to consider a point as a true positive
         _C.TEST.DET_TOLERANCE = [10]
+        # To not take into account during detection metrics calculation to those points outside the bounding box defined with 
+        # this variable. Order is: [z, y, x] (3D) and [y, x] (2D). For example, using an image of 10x100x200 to not take into 
+        # account points on the first/last slices and with a border of 15 pixel for x and y axes, this variable could be defined 
+        # as [1, 15, 15].
+        _C.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX = []
 
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Post-processing
