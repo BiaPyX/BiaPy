@@ -286,6 +286,15 @@ class Config:
         # Whether to apply a Gaussian filter to smooth the image prior to downsampling.
         _C.DATA.PREPROCESS.RESIZE.ANTI_ALIASING = False
 
+        # Zoom datasets.
+        _C.DATA.PREPROCESS.ZOOM = CN()
+        _C.DATA.PREPROCESS.ZOOM.ENABLE = False
+        # WARNING: Only implemented for _C.TEST.BY_CHUNKS = True. It will change the zoom of each patch individually.
+        # This is useful when the input image has a different resolution than the one used in the training. The value
+        # is the zoom factor to be applied to each patch using scipy.ndimage.zoom.
+        # "E.g. [1,2,1,3,3] that needs to match _C.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER axes"
+        _C.DATA.PREPROCESS.ZOOM.ZOOM_FACTOR = [1, 1, 1, 1, 1]
+
         # Gaussian blur
         _C.DATA.PREPROCESS.GAUSSIAN_BLUR = CN()
         _C.DATA.PREPROCESS.GAUSSIAN_BLUR.ENABLE = False

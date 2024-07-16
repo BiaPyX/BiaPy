@@ -637,6 +637,7 @@ class Detection_Workflow(Base_Workflow):
         fname = _filename+"_patch"+str(c).zfill(d)+file_ext
         
         slices = (
+            slice(None),
             slice(max(0,z*self.cfg.DATA.PATCH_SIZE[0]-self.cfg.DATA.TEST.PADDING[0]),min(z_dim,self.cfg.DATA.PATCH_SIZE[0]*(z+1)+self.cfg.DATA.TEST.PADDING[0])),
             slice(max(0,y*self.cfg.DATA.PATCH_SIZE[1]-self.cfg.DATA.TEST.PADDING[1]),min(y_dim,self.cfg.DATA.PATCH_SIZE[1]*(y+1)+self.cfg.DATA.TEST.PADDING[1])),
             slice(max(0,x*self.cfg.DATA.PATCH_SIZE[2]-self.cfg.DATA.TEST.PADDING[2]),min(x_dim,self.cfg.DATA.PATCH_SIZE[2]*(x+1)+self.cfg.DATA.TEST.PADDING[2])),
@@ -645,32 +646,30 @@ class Detection_Workflow(Base_Workflow):
         
         data_ordered_slices = order_dimensions(
             slices,
-            input_order = "ZYXC",
+            input_order = "TZYXC",
             output_order = self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
             default_value = 0,
             )
 
-        raw_patch = pred[data_ordered_slices]
-
         if "C" not in self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER:                                                     
             expected_out_data_order = self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER + "C"                                
-        else:                                                                                                           
+        else:
             expected_out_data_order = self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER
 
         current_order = np.array(range(len(pred.shape)))
         transpose_order = order_dimensions(
                     current_order,
                     input_order= expected_out_data_order,
-                    output_order= "ZYXC",
+                    output_order= "TZYXC",
                     default_value= np.nan)
 
-        transpose_order = [x for x in transpose_order if not np.isnan(x)]
-        transpose_order = current_order[transpose_order]
+        transpose_order = current_order[np.array(transpose_order)]
+        raw_patch = pred[data_ordered_slices]
         patch = raw_patch.transpose(transpose_order)
+        patch = patch[0] # remove the z dimension
 
         patch_pos = [(k.start,k.stop) for k in slices]
         df_patch = self.detection_process(patch, [fname], patch_pos=patch_pos)
-        
         if df_patch is not None: # if there is at least one point detected
             
             if z*self.cfg.DATA.PATCH_SIZE[0]-self.cfg.DATA.TEST.PADDING[0] >=0: # if a patch was added
@@ -691,9 +690,10 @@ class Detection_Workflow(Base_Workflow):
             
             # add the patch shift to the detected coordinates
             shift = np.array([z*self.cfg.DATA.PATCH_SIZE[0], y*self.cfg.DATA.PATCH_SIZE[1], x*self.cfg.DATA.PATCH_SIZE[2]])
-            df_patch['axis-0'] = df_patch['axis-0'] + shift[0]
-            df_patch['axis-1'] = df_patch['axis-1'] + shift[1]
-            df_patch['axis-2'] = df_patch['axis-2'] + shift[2]
+
+            df_patch['axis-0'] = (df_patch['axis-0'] + shift[0])
+            df_patch['axis-1'] = (df_patch['axis-1'] + shift[1])
+            df_patch['axis-2'] = (df_patch['axis-2'] + shift[2])
 
             return df_patch, fname
         
@@ -772,6 +772,16 @@ class Detection_Workflow(Base_Workflow):
 
         # Save large csv with all point of all patches
         df = df.sort_values(by=['file'])
+
+        t_dim, z_dim, y_dim, x_dim, c_dim = order_dimensions(
+            self.DATA.PREPROCESS.ZOOM.ZOOM_FACTOR,
+            input_order=self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
+            output_order="TZYXC", default_value=1)
+
+
+        df['axis-0'] = df['axis-0'] / z_dim
+        df['axis-1'] = df['axis-1'] / y_dim
+        df['axis-2'] = df['axis-2'] / x_dim
         df.to_csv(os.path.join(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, _filename+'_all_points.csv'))
 
         if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
