@@ -36,6 +36,7 @@ from biapy.engine.metrics import jaccard_index_numpy, voc_calculation
 from biapy.data.post_processing import apply_post_processing
 from biapy.data.pre_processing import preprocess_data
 
+from skimage.io import imread
 
 class Base_Workflow(metaclass=ABCMeta):
     """
@@ -1511,18 +1512,13 @@ class Base_Workflow(metaclass=ABCMeta):
                     save_tif(pred, self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING, self.processing_filenames,
                         verbose=self.cfg.TEST.VERBOSE)
             else:
-                # Load predictions from file
-                f = self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING if self.post_processing['per_image'] else self.cfg.PATHS.RESULT_DIR.PER_IMAGE
-                f_name = load_data_from_dir if self.cfg.PROBLEM.NDIM == '2D' else load_3d_images_from_dir
-                pred, _, _ = f_name(f)
-
-                if type( pred ) is list:
-                    for i in range(len(pred)):
-                        if pred[i].ndim == 5:
-                            pred[i] = np.squeeze( pred[i], 0 )
-                else:
-                    if pred.ndim == 5:
-                        pred = np.squeeze( pred, 0 )
+                # Load prediction from file
+                folder = self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING if self.post_processing['per_image'] else self.cfg.PATHS.RESULT_DIR.PER_IMAGE
+                test_file = os.path.join( folder, self.test_filenames[self.f_numbers[0]] )
+                pred = imread(test_file)
+                pred = np.expand_dims(pred,0) # expand dimensions to include "batch"
+                if self.cfg.PROBLEM.NDIM == "3D":
+                    pred = np.expand_dims(pred,0)
 
             self.after_merge_patches(pred)
             
@@ -1586,10 +1582,12 @@ class Base_Workflow(metaclass=ABCMeta):
                     self.stats['iou'] += score
                     self.stats['ov_iou'] += voc_calculation((self._Y>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8), score)
             else:
-                # load predictions from file
-                pred, _, _ = load_data_from_dir( self.cfg.PATHS.RESULT_DIR.FULL_IMAGE )
-                if pred.ndim == 5:
-                    pred = np.squeeze( pred, 0 )
+                # load prediction from file
+                test_file = os.path.join( self.cfg.PATHS.RESULT_DIR.FULL_IMAGE, self.test_filenames[self.f_numbers[0]] )
+                pred = imread(test_file)
+                pred = np.expand_dims(pred,0) # expand dimensions to include "batch"
+                if self.cfg.PROBLEM.NDIM == "3D":
+                    pred = np.expand_dims(pred,0)
 
             if self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
                 self.all_pred.append(pred)
@@ -1633,7 +1631,7 @@ class Base_Workflow(metaclass=ABCMeta):
             Number of images to call ``normalize_stats``.
         """
         self.normalize_stats(image_counter)
-        if self.cfg.DATA.TEST.LOAD_GT:
+        if self.cfg.DATA.TEST.LOAD_GT and not self.cfg.TEST.REUSE_PREDICTIONS:
             if not self.cfg.TEST.FULL_IMG:
                 print("Loss (per patch): {}".format(self.stats['loss_per_crop']))
                 print("Test Foreground IoU (per patch): {}".format(self.stats['iou_per_crop']))
