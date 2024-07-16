@@ -3,7 +3,6 @@ import numpy as np
 import os
 import math
 from tqdm import tqdm
-from skimage.io import imread
 from sklearn.model_selection import train_test_split, StratifiedKFold
 from PIL import Image
 

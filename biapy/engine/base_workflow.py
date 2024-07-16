@@ -27,7 +27,7 @@ from biapy.data.generators import create_train_val_augmentors, create_test_augme
 from biapy.utils.misc import (get_world_size, get_rank, is_main_process, save_model, time_text, load_model_checkpoint, TensorboardLogger,
     to_pytorch_format, to_numpy_format, is_dist_avail_and_initialized, setup_for_distributed)
 from biapy.utils.util import (load_data_from_dir, load_3d_images_from_dir, create_plots, pad_and_reflect, save_tif, check_downsample_division,
-    read_chunked_data, order_dimensions)
+    read_chunked_data, order_dimensions, read_img)
 from biapy.engine.train_engine import train_one_epoch, evaluate
 from biapy.data.data_2D_manipulation import crop_data_with_overlap, merge_data_with_overlap, load_and_prepare_2D_train_data
 from biapy.data.data_3D_manipulation import (crop_3D_data_with_overlap, merge_3D_data_with_overlap, load_and_prepare_3D_data, 
@@ -36,8 +36,6 @@ from biapy.data.post_processing.post_processing import ensemble8_2d_predictions,
 from biapy.engine.metrics import jaccard_index_numpy, voc_calculation
 from biapy.data.post_processing import apply_post_processing
 from biapy.data.pre_processing import preprocess_data
-
-from skimage.io import imread
 
 class Base_Workflow(metaclass=ABCMeta):
     """
@@ -1523,10 +1521,8 @@ class Base_Workflow(metaclass=ABCMeta):
                 # Load prediction from file
                 folder = self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING if self.post_processing['per_image'] else self.cfg.PATHS.RESULT_DIR.PER_IMAGE
                 test_file = os.path.join( folder, self.test_filenames[self.f_numbers[0]] )
-                pred = imread(test_file)
-                pred = np.expand_dims(pred,0) # expand dimensions to include "batch"
-                if self.cfg.PROBLEM.NDIM == "3D":
-                    pred = np.expand_dims(pred,0)
+                pred = read_img(test_file, is_3d=self.cfg.PROBLEM.NDIM == "3D")
+                pred = np.expand_dims(pred,0) # expand dimensions to include "batch" 
 
             self.after_merge_patches(pred)
             
@@ -1592,10 +1588,8 @@ class Base_Workflow(metaclass=ABCMeta):
             else:
                 # load prediction from file
                 test_file = os.path.join( self.cfg.PATHS.RESULT_DIR.FULL_IMAGE, self.test_filenames[self.f_numbers[0]] )
-                pred = imread(test_file)
+                pred = read_img(test_file, is_3d=self.cfg.PROBLEM.NDIM == "3D")
                 pred = np.expand_dims(pred,0) # expand dimensions to include "batch"
-                if self.cfg.PROBLEM.NDIM == "3D":
-                    pred = np.expand_dims(pred,0)
 
             if self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
                 self.all_pred.append(pred)

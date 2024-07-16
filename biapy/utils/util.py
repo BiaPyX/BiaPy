@@ -797,19 +797,20 @@ def img_to_onehot_encoding(img, num_classes=2):
 
 
 def onehot_encoding_to_img(encoded_image):
-    """Converts one-hot encode image into an image with jus tone channel and all the classes represented by an integer.
+    """
+    Converts one-hot encode image into an image with jus tone channel and all the classes represented by an integer.
 
-       The opposite function is :func:`~img_to_onehot_encoding`.
+    The opposite function is :func:`~img_to_onehot_encoding`.
 
-       Parameters
-       ----------
-       encoded_image : Numpy 3D/4D array
-           Image. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
+    Parameters
+    ----------
+    encoded_image : Numpy 3D/4D array
+        Image. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
 
-       Returns
-       -------
-       img : Numpy 3D/4D array
-           Data one-hot encoded. E.g. ``(z, y, x, num_classes)``.
+    Returns
+    -------
+    img : Numpy 3D/4D array
+        Data one-hot encoded. E.g. ``(z, y, x, num_classes)``.
     """
 
     if encoded_image.ndim == 4:
@@ -823,6 +824,50 @@ def onehot_encoding_to_img(encoded_image):
 
     return img
 
+def read_img(path, is_3d=False):
+    """
+    Read an image form a given path. 
+
+    Parameters
+    ----------
+    path : str
+        Path to the image to read. 
+
+    is_3d : bool, optional
+        Whether if the expected image to read is 3D or not. 
+
+    Returns
+    -------
+    img : Numpy 3D/4D array
+        Data one-hot encoded. E.g. ``(z, y, x, num_classes)`` for 3D or 
+        ``(y, x, num_classes)`` for 2D.
+    """
+    img = np.squeeze(imread(path))
+    
+    # 2D
+    if not is_3d:
+        if img.ndim > 3:
+            raise ValueError("Read image seems to be 3D: {}. Path: {}".format(img.shape, path))
+
+        if img.ndim == 2:
+            img = np.expand_dims(img, -1)
+        else:
+            if img.shape[0] <= 3: img = img.transpose((1,2,0))  
+    # 3D
+    else:
+        if img.ndim < 3:
+            raise ValueError("Read image seems to be 2D: {}. Path: {}".format(img.shape, path))
+
+        if img.ndim == 3: 
+            img = np.expand_dims(img, -1)
+        else:
+            min_val = min(img.shape)
+            channel_pos = img.shape.index(min_val)
+            if channel_pos != 3 and img.shape[channel_pos] <= 4:
+                new_pos = [x for x in range(4) if x != channel_pos]+[channel_pos,]
+                img = img.transpose(new_pos)
+
+    return img 
 
 def load_data_from_dir(data_dir, crop=False, crop_shape=None, overlap=(0,0), padding=(0,0), return_filenames=False,
                        reflect_to_complete_shape=False, check_channel=True, convert_to_rgb=False, check_drange=True,

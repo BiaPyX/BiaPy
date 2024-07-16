@@ -29,7 +29,7 @@ from skimage.io import imread
 from skimage.exposure import equalize_adapthist
 
 from biapy.engine.metrics import jaccard_index_numpy
-from biapy.utils.util import pad_and_reflect, save_tif
+from biapy.utils.util import pad_and_reflect, save_tif, read_img
 from biapy.data.pre_processing import normalize
 from biapy.data.data_3D_manipulation import crop_3D_data_with_overlap
 from biapy.data.pre_processing import reduce_dtype
@@ -1140,22 +1140,8 @@ def detection_watershed(seeds, coords, data_filename, first_dilation, nclasses=1
     print("Applying detection watershed . . .")
     
     # Read the test image
-    img = imread(data_filename)
+    img = read_img(data_filename, is_3d=ndim==3)
     img = reduce_dtype(img, np.min(img), np.max(img), out_min=0, out_max=255, out_type=np.uint8)
-
-    # Adjust shape
-    img = np.squeeze(img)
-    if ndim == 2:
-        if img.ndim == 3:
-            if img.shape[0] <= 3: 
-                img = img.transpose((1,2,0))  
-                img = np.mean(img, -1)
-    else: 
-        if img.ndim == 4: 
-            if img.shape[0] <= 3: 
-                img = img.transpose((1,2,3,0))
-                img = np.mean(img, -1)
-
     img = equalize_adapthist(img)
     
     # Dilate first the seeds if needed 

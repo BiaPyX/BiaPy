@@ -8,7 +8,6 @@ import numpy as np
 from tqdm import tqdm
 import pandas as pd
 from skimage.segmentation import clear_border, find_boundaries
-from skimage.io import imread
 from scipy.ndimage.morphology import binary_dilation  as binary_dilation_scipy
 from scipy.ndimage.measurements import center_of_mass                                                  
 from skimage.morphology import disk, dilation, erosion, binary_erosion, binary_dilation
@@ -19,30 +18,34 @@ from skimage.exposure import equalize_adapthist
 from skimage.color import rgb2gray
 from skimage.filters import gaussian, median
 
-from biapy.utils.util import (load_data_from_dir, load_3d_images_from_dir, save_tif, seg2aff_pni, seg_widen_border, write_chunked_data, read_chunked_data,
-    order_dimensions)
+from biapy.utils.util import (load_data_from_dir, load_3d_images_from_dir, save_tif, seg2aff_pni, seg_widen_border, 
+    write_chunked_data, read_chunked_data, order_dimensions, read_img)
 from biapy.utils.misc import is_main_process
 from biapy.data.data_3D_manipulation import load_3D_efficient_files, load_img_part_from_efficient_file
 
 #########################
 # INSTANCE SEGMENTATION #
 #########################
-def create_instance_channels(cfg, data_type='train'):
-    """Create training and validation new data with appropiate channels based on ``PROBLEM.INSTANCE_SEG.DATA_CHANNELS`` for instance
-       segmentation.
+def create_instance_channels(
+    cfg,
+    data_type='train'
+    ):
+    """
+    Create training and validation new data with appropiate channels based on ``PROBLEM.INSTANCE_SEG.DATA_CHANNELS`` 
+    for instance segmentation.
 
-       Parameters
-       ----------
-       cfg : YACS CN object
-           Configuration.
+    Parameters
+    ----------
+    cfg : YACS CN object
+        Configuration.
 
-	   data_type: str, optional
-		   Wheter to create training or validation instance channels.
+    data_type: str, optional
+        Wheter to create training or validation instance channels.
 
-       Returns
-       -------
-       filenames: List of str
-           Image paths.
+    Returns
+    -------
+    filenames: List of str
+        Image paths.
     """
 
     assert data_type in ['train', 'val']
@@ -74,30 +77,20 @@ def create_instance_channels(cfg, data_type='train'):
             print("Working with H5 files . . .")
             img_files = [os.path.join(data_path, x) for x in h5_files]
         
-        Y, Y_total_patches = load_3D_efficient_files(img_files, input_axes=getattr(cfg.DATA, tag).INPUT_IMG_AXES_ORDER, 
-            crop_shape=cfg.DATA.PATCH_SIZE, overlap=getattr(cfg.DATA, tag).OVERLAP, padding=getattr(cfg.DATA, tag).PADDING)
+        Y, Y_total_patches = load_3D_efficient_files(
+            img_files, 
+            input_axes=getattr(cfg.DATA, tag).INPUT_IMG_AXES_ORDER, 
+            crop_shape=cfg.DATA.PATCH_SIZE, 
+            overlap=getattr(cfg.DATA, tag).OVERLAP, 
+            padding=getattr(cfg.DATA, tag).PADDING
+        )
     else:
-        f_name = load_data_from_dir if cfg.PROBLEM.NDIM == '2D' else load_3d_images_from_dir
-        Y, _, _, filenames = f_name(getattr(cfg.DATA, tag).GT_PATH, check_drange=False, return_filenames=True)
+        Y = sorted(next(os.walk(getattr(cfg.DATA, tag).GT_PATH))[2])
     del zarr_files, h5_files
 
     print("Creating Y_{} channels . . .".format(data_type))
-    if isinstance(Y, list):
-        for i in tqdm(range(len(Y)), disable=not is_main_process()):
-            if cfg.MODEL.N_CLASSES > 2:
-                if Y[i].shape[-1] != 2:
-                    raise ValueError("In instance segmentation, when 'MODEL.N_CLASSES' are more than 2 labels need to have two channels, "
-                        "e.g. (256,256,2), containing the instance segmentation map (first channel) and classification map (second channel).")
-                else:
-                    class_channel = np.expand_dims(Y[i,...,1].copy(),-1)
-                    Y[i] = labels_into_channels(Y[i], mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, save_dir=getattr(cfg.PATHS, tag+'_INSTANCE_CHANNELS_CHECK'),
-                        fb_mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE)
-                    Y[i] = np.concatenate([Y[i],class_channel],axis=-1)
-            else:
-                Y[i] = labels_into_channels(Y[i], mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, save_dir=getattr(cfg.PATHS, tag+'_INSTANCE_CHANNELS_CHECK'),
-                    fb_mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE)
     # Create the mask patch by patch (Zarr/H5)
-    elif working_with_zarr_h5_files and isinstance(Y, dict):
+    if working_with_zarr_h5_files and isinstance(Y, dict):
         savepath = data_path+'_'+cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS+'_'+cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         if 'D' in cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE:
             dtype_str = "float32"
@@ -110,9 +103,12 @@ def create_instance_channels(cfg, data_type='train'):
         for i in tqdm(range(len(Y.keys())), disable=not is_main_process()):
             # Extract the patch to process
             patch_coords = Y[i]['patch_coords']
-            img = load_img_part_from_efficient_file(Y[i]['filepath'], patch_coords, 
+            img = load_img_part_from_efficient_file(
+                Y[i]['filepath'], 
+                patch_coords, 
                 data_axis_order=getattr(cfg.DATA, tag).INPUT_IMG_AXES_ORDER,
-                data_path=getattr(cfg.DATA, tag).INPUT_ZARR_MULTIPLE_DATA_GT_PATH)
+                data_path=getattr(cfg.DATA, tag).INPUT_ZARR_MULTIPLE_DATA_GT_PATH
+            )
             if img.ndim == 3: img = np.expand_dims(img,-1)
             if img.ndim == 4: img = np.expand_dims(img,0)
 
@@ -123,12 +119,20 @@ def create_instance_channels(cfg, data_type='train'):
                         "e.g. (256,256,2), containing the instance segmentation map (first channel) and classification map (second channel).")
                 else:
                     class_channel = np.expand_dims(img[...,1].copy(),-1)
-                    img = labels_into_channels(img, mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, save_dir=getattr(cfg.PATHS, tag+'_INSTANCE_CHANNELS_CHECK'),
-                        fb_mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE)
+                    img = labels_into_channels(
+                        img, 
+                        mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, 
+                        save_dir=getattr(cfg.PATHS, tag+'_INSTANCE_CHANNELS_CHECK'),
+                        fb_mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
+                    )
                     img = np.concatenate([img,class_channel],axis=-1)
             else:
-                img = labels_into_channels(img, mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, save_dir=getattr(cfg.PATHS, tag+'_INSTANCE_CHANNELS_CHECK'),
-                    fb_mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE)
+                img = labels_into_channels(
+                    img, 
+                    mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, 
+                    save_dir=getattr(cfg.PATHS, tag+'_INSTANCE_CHANNELS_CHECK'),
+                    fb_mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
+                )
             img = img[0]
 
             # Create the Zarr file where the mask will be placed 
@@ -155,80 +159,131 @@ def create_instance_channels(cfg, data_type='train'):
             
             # Adjust slices to calculate where to insert the predicted patch. This slice does not have into account the 
             # channel so any of them can be inserted 
-            slices = (slice(patch_coords[0][0],patch_coords[0][1]), slice(patch_coords[1][0],patch_coords[1][1]),
-                slice(patch_coords[2][0],patch_coords[2][1]), slice(0,out_data_shape[channel_pos]))
-            data_ordered_slices = tuple(order_dimensions(slices, input_order="ZYXC", 
-                output_order=out_data_order, default_value=0))
+            slices = (
+                slice(patch_coords[0][0],patch_coords[0][1]), 
+                slice(patch_coords[1][0],patch_coords[1][1]),
+                slice(patch_coords[2][0],patch_coords[2][1]), 
+                slice(0,out_data_shape[channel_pos])
+            )
+            data_ordered_slices = tuple(
+                order_dimensions(
+                    slices, 
+                    input_order="ZYXC", 
+                    output_order=out_data_order, 
+                    default_value=0
+                )
+            )
 
             # Adjust patch slice to transpose it before inserting intop the final data 
             current_order = np.array(range(len(img.shape)))
-            transpose_order = order_dimensions(current_order, input_order="ZYXC", output_order=out_data_order,
-                default_value=np.nan)
+            transpose_order = order_dimensions(
+                current_order, 
+                input_order="ZYXC", 
+                output_order=out_data_order,
+                default_value=np.nan
+            )
             transpose_order = [x for x in transpose_order if not np.isnan(x)]
 
             # Place the patch into the Zarr
             mask[data_ordered_slices] = img.transpose(transpose_order)        
     else:
-        if cfg.MODEL.N_CLASSES > 2:
-            if Y.shape[-1] != 2:
-                raise ValueError("In instance segmentation, when 'MODEL.N_CLASSES' are more than 2 labels need to have two channels, "
-                    "e.g. (256,256,2), containing the instance segmentation map (first channel) and classification map (second channel).")
-            else:
-                class_channel = np.expand_dims(Y[...,1].copy(),-1)
-                Y = labels_into_channels(Y, mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, save_dir=getattr(cfg.PATHS, tag+'_INSTANCE_CHANNELS_CHECK'),
-                    fb_mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE)
-                Y = np.concatenate([Y, class_channel], axis=-1)
-        else:
-            Y = labels_into_channels(Y, mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, save_dir=getattr(cfg.PATHS, tag+'_INSTANCE_CHANNELS_CHECK'),
-                fb_mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE)
-    
-    if not working_with_zarr_h5_files:
-        save_tif(Y, data_dir=getattr(cfg.DATA, tag).INSTANCE_CHANNELS_MASK_DIR, filenames=filenames, verbose=cfg.TEST.VERBOSE)
-        X, _, _, filenames = f_name(getattr(cfg.DATA, tag).PATH, return_filenames=True)
+        for i in tqdm(range(len(Y)), disable=not is_main_process()):
+            img = read_img(os.path.join(getattr(cfg.DATA, tag).GT_PATH, Y[i]), is_3d=not cfg.PROBLEM.NDIM == '2D')
+            if cfg.MODEL.N_CLASSES > 2:
+                if img.shape[-1] != 2:
+                    raise ValueError(
+                        "In instance segmentation, when 'MODEL.N_CLASSES' are more than 2 labels need to have two channels, "
+                        "e.g. (256,256,2), containing the instance segmentation map (first channel) and classification map "
+                        "(second channel)."
+                    )
+                class_channel = np.expand_dims(img[...,1].copy(),-1)
+
+            img = labels_into_channels(
+                np.expand_dims(img,0), 
+                mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, 
+                save_dir=getattr(cfg.PATHS, tag+'_INSTANCE_CHANNELS_CHECK'),
+                fb_mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
+            )[0]
+
+            if cfg.MODEL.N_CLASSES > 2:
+                img = np.concatenate([img,class_channel],axis=-1)
+
+            save_tif(
+                np.expand_dims(img,0), 
+                data_dir=getattr(cfg.DATA, tag).INSTANCE_CHANNELS_MASK_DIR, 
+                filenames=[Y[i]], 
+                verbose=False
+            )
+
+        X = sorted(next(os.walk(getattr(cfg.DATA, tag).PATH))[2])
         print("Creating X_{} channels . . .".format(data_type))
-        save_tif(X, data_dir=getattr(cfg.DATA, tag).INSTANCE_CHANNELS_DIR, filenames=filenames, verbose=cfg.TEST.VERBOSE)
+        for i in tqdm(range(len(X)), disable=not is_main_process()):
+            img = read_img(os.path.join(getattr(cfg.DATA, tag).PATH, X[i]), is_3d=not cfg.PROBLEM.NDIM == '2D')
+            save_tif(
+                np.expand_dims(img,0), 
+                data_dir=getattr(cfg.DATA, tag).INSTANCE_CHANNELS_DIR, 
+                filenames=[X[i]], 
+                verbose=False
+            )
 
-        # Save original X data with the labels 
-        for i in range(min(3,len(X))):
-            if isinstance(X, list):
-                save_tif(X[i], getattr(cfg.PATHS, tag+'_INSTANCE_CHANNELS_CHECK'), filenames=['vol'+str(i)+".tif"], verbose=False)
-            else:
-                save_tif(np.expand_dims(X[i],0), getattr(cfg.PATHS, tag+'_INSTANCE_CHANNELS_CHECK'), filenames=['vol'+str(i)+".tif"], verbose=False)
+            # Save just three images to check everything was generated correctly
+            if i < 3:
+                save_tif(
+                    np.expand_dims(img,0), 
+                    getattr(cfg.PATHS, tag+'_INSTANCE_CHANNELS_CHECK'), 
+                    filenames=['vol'+str(i)+".tif"], 
+                    verbose=False
+                )
 
-def create_test_instance_channels(cfg):
-    """Create test new data with appropiate channels based on ``PROBLEM.INSTANCE_SEG.DATA_CHANNELS`` for instance segmentation.
-
-       Parameters
-       ----------
-       cfg : YACS CN object
-           Configuration.
+def create_test_instance_channels(
+    cfg
+    ):
     """
+    Create test new data with appropiate channels based on ``PROBLEM.INSTANCE_SEG.DATA_CHANNELS`` for instance segmentation.
 
-    f_name = load_data_from_dir if cfg.PROBLEM.NDIM == '2D' else load_3d_images_from_dir
-
+    Parameters
+    ----------
+    cfg : YACS CN object
+        Configuration.
+    """
     if cfg.DATA.TEST.LOAD_GT:
-        Y_test, _, _, test_filenames = f_name(cfg.DATA.TEST.GT_PATH, check_drange=False, return_filenames=True)
+        Y = sorted(next(os.walk(cfg.DATA.TEST.GT_PATH)[2]))
         print("Creating Y_test channels . . .")
-        if isinstance(Y_test, list):
-            for i in tqdm(range(len(Y_test)), disable=not is_main_process()):
-                Y_test[i] = labels_into_channels(Y_test[i], mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, save_dir=cfg.PATHS.TEST_INSTANCE_CHANNELS_CHECK,
-                                            fb_mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE)
-        else:
-            Y_test = labels_into_channels(Y_test, mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, save_dir=cfg.PATHS.TEST_INSTANCE_CHANNELS_CHECK,
-                                     fb_mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE)
-        save_tif(Y_test, data_dir=cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR, filenames=test_filenames, verbose=cfg.TEST.VERBOSE)
+        for i in tqdm(range(len(Y)), disable=not is_main_process()):
+            img = read_img(os.path.join(cfg.DATA.TEST.GT_PATH, Y[i]), is_3d=not cfg.PROBLEM.NDIM == '2D')
+            img = labels_into_channels(
+                np.expand_dims(img,0), 
+                mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, 
+                save_dir=cfg.PATHS.TEST_INSTANCE_CHANNELS_CHECK,
+                fb_mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
+            )[0]
+            save_tif(
+                np.expand_dims(img,0), 
+                data_dir=cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR, 
+                filenames=[Y[i]], 
+                verbose=False
+            )
 
+    X = sorted(next(os.walk(cfg.DATA.TEST.PATH)[2]))
     print("Creating X_test channels . . .")
-    X_test, _, _, test_filenames = f_name(cfg.DATA.TEST.PATH, return_filenames=True)
-    save_tif(X_test, data_dir=cfg.DATA.TEST.INSTANCE_CHANNELS_DIR, filenames=test_filenames, verbose=cfg.TEST.VERBOSE)
-    
-    # Save original X data with the labels 
-    for i in range(min(3,len(X_test))):
-        if isinstance(X_test, list):
-            save_tif(X_test[i], cfg.PATHS.TEST_INSTANCE_CHANNELS_CHECK, filenames=['vol'+str(i)+".tif"], verbose=True)
-        else:
-            save_tif(np.expand_dims(X_test[i],0), cfg.PATHS.TEST_INSTANCE_CHANNELS_CHECK, filenames=['vol'+str(i)+".tif"], verbose=True)
+    for i in tqdm(range(len(X)), disable=not is_main_process()):
+        img = read_img(os.path.join(cfg.DATA.TEST.PATH, X[i]), is_3d=not cfg.PROBLEM.NDIM == '2D')
+        save_tif(
+            np.expand_dims(img,0), 
+            data_dir=cfg.DATA.TEST.INSTANCE_CHANNELS_DIR, 
+            filenames=[X[i]], 
+            verbose=False
+        )
 
+        # Save just three images to check everything was generated correctly
+        if i < 3:
+            save_tif(
+                np.expand_dims(img,0), 
+                cfg.PATHS.TEST_INSTANCE_CHANNELS_CHECK, 
+                filenames=['vol'+str(i)+".tif"], 
+                verbose=False
+            )
+  
 def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
     """Converts input semantic or instance segmentation data masks into different binary channels to train an instance segmentation
        problem. 
@@ -477,20 +532,7 @@ def create_detection_masks(cfg, data_type='train'):
             df = pd.read_csv(os.path.join(label_dir, ids[i]))  
             df = df.dropna()
             if '.zarr' != img_ext:
-                img = imread(os.path.join(img_dir, img_filename))
-
-                # Adjust shape
-                img = np.squeeze(img)
-                if cfg.PROBLEM.NDIM == '2D':
-                    if img.ndim == 2:
-                        img = np.expand_dims(img, -1)
-                    else:
-                        if img.shape[0] <= 3: img = img.transpose((1,2,0))   
-                else: 
-                    if img.ndim == 3: 
-                        img = np.expand_dims(img, -1)
-                    else:
-                        if img.shape[0] <= 3: img = img.transpose((1,2,3,0))
+                img = read_img(os.path.join(img_dir, img_filename), is_3d=not cfg.PROBLEM.NDIM == '2D')
                 shape = img.shape[:-1]
             else:
                 img_zarr_file, img = read_chunked_data(os.path.join(img_dir, img_filename))
@@ -665,26 +707,7 @@ def create_ssl_source_data_masks(cfg, data_type='train'):
     for i in range(len(ids)):
         if not os.path.exists(os.path.join(out_dir, ids[i])):
             print("Crappifying file {} to create SSL source".format(os.path.join(img_dir, ids[i])))
-
-            img = imread(os.path.join(img_dir, ids[i]))
-            
-            # Adjust shape
-            img = np.squeeze(img)
-            if cfg.PROBLEM.NDIM == '2D':
-                if img.ndim == 2:
-                    img = np.expand_dims(img, -1)
-                else:
-                    if img.shape[0] <= 3: img = img.transpose((1,2,0))   
-            else: 
-                if img.ndim == 3: 
-                    img = np.expand_dims(img, -1)
-                else:
-                    min_val = min(img.shape)
-                    channel_pos = img.shape.index(min_val)
-                    if channel_pos != 3 and img.shape[channel_pos] <= 4:
-                        new_pos = [x for x in range(4) if x != channel_pos]+[channel_pos,]
-                        img = img.transpose(new_pos)
-
+            img = read_img(os.path.join(img_dir, ids[i]), is_3d=not cfg.PROBLEM.NDIM == '2D')
             img = crappify(img, resizing_factor=cfg.PROBLEM.SELF_SUPERVISED.RESIZING_FACTOR, 
                 add_noise=add_noise, noise_level=cfg.PROBLEM.SELF_SUPERVISED.NOISE)
 

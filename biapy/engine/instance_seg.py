@@ -2,7 +2,6 @@ import os
 import torch
 import numpy as np
 import pandas as pd
-from skimage.io import imread
 from tqdm import tqdm
 from skimage.segmentation import clear_border
 from skimage.transform import resize
@@ -11,7 +10,7 @@ import torch.distributed as dist
 from biapy.data.post_processing.post_processing import (watershed_by_channels, voronoi_on_mask, 
     measure_morphological_props_and_filter, repare_large_blobs, apply_binary_mask)
 from biapy.data.pre_processing import create_instance_channels, create_test_instance_channels, norm_range01
-from biapy.utils.util import save_tif, read_chunked_data, read_chunked_nested_data
+from biapy.utils.util import save_tif, read_chunked_data, read_chunked_nested_data, read_img
 from biapy.utils.matching import matching, wrapper_matching_dataset_lazy
 from biapy.engine.metrics import jaccard_index, instance_segmentation_loss, instance_metrics
 from biapy.engine.base_workflow import Base_Workflow
@@ -292,7 +291,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 _Y = np.zeros(w_pred.shape, dtype=w_pred.dtype)
                 for i in range(len(self.test_filenames)):
                     test_file = os.path.join(self.original_test_mask_path, self.test_filenames[i])
-                    _Y[i] = imread(test_file).squeeze()
+                    _Y[i] = read_img(test_file, is_3d=False).squeeze()                     
             else:
                 test_file = os.path.join(self.original_test_mask_path, self.test_filenames[self.f_numbers[0]])
                 if not os.path.exists(test_file):
@@ -306,9 +305,9 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         _, _Y = read_chunked_nested_data(test_file, self.cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_GT_PATH)
                     else:
                         _, _Y = read_chunked_data(test_file)
-                    _Y = np.squeeze(np.array(_Y))
+                    _Y = np.array(_Y).squeeze() 
                 else:
-                    _Y = imread(test_file).squeeze()
+                    _Y = read_img(test_file, is_3d=self.cfg.PROBLEM.NDIM == "3D").squeeze() 
 
             # Multi-head: instances + classification
             if self.cfg.MODEL.N_CLASSES > 2:
@@ -322,16 +321,6 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     raise ValueError(f"Image {test_file} wrong dimension. In instance segmentation, when 'MODEL.N_CLASSES' are "
                         f"more than 2 labels need to have two channels, e.g. {error_shape}, containing the instance "
                         "segmentation map (first channel) and classification map (second channel).")
-                
-                # Ensure channel position
-                if self.cfg.PROBLEM.NDIM == "2D":
-                    if _Y.shape[0] <= 3: _Y = _Y.transpose((1,2,0)) 
-                else:    
-                    min_val = min(_Y.shape)
-                    channel_pos = _Y.shape.index(min_val)
-                    if channel_pos != 3 and _Y.shape[channel_pos] <= 4:
-                        new_pos = [x for x in range(4) if x != channel_pos]+[channel_pos,]
-                        _Y = _Y.transpose(new_pos)
 
                 # Separate instance and classification channels
                 _Y_classes = _Y[...,1] # Classes 
