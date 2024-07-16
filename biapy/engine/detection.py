@@ -717,8 +717,11 @@ class Detection_Workflow(Base_Workflow):
         # Load H5/Zarr
         pred_file, pred = read_chunked_data(filename)
 
-        t_dim, z_dim, c_dim, y_dim, x_dim = order_dimensions(pred.shape,
-                        self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER)
+        t_dim, z_dim, c_dim, y_dim, x_dim = order_dimensions(
+            pred.shape,
+            self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER
+        )
+        pred_shape = [z_dim, y_dim, x_dim]
 
         # Fill the new data
         z_vols = math.ceil(z_dim/self.cfg.DATA.PATCH_SIZE[0])
