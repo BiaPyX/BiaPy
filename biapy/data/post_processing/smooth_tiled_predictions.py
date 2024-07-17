@@ -12,10 +12,10 @@ import numpy as np
 import scipy.signal
 from tqdm import tqdm
 import gc
-import math
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import matplotlib.pyplot as plt
+
     PLOT_PROGRESS = True
     # See end of file for the rest of the __main__.
 else:
@@ -27,11 +27,11 @@ def _spline_window(window_size, power=2):
     Squared spline (power=2) window function:
     https://www.wolframalpha.com/input/?i=y%3Dx**2,+y%3D-(x-2)**2+%2B2,+y%3D(x-4)**2,+from+y+%3D+0+to+2
     """
-    intersection = int(window_size/4)
-    wind_outer = (abs(2*(scipy.signal.triang(window_size))) ** power)/2
+    intersection = int(window_size / 4)
+    wind_outer = (abs(2 * (scipy.signal.triang(window_size))) ** power) / 2
     wind_outer[intersection:-intersection] = 0
 
-    wind_inner = 1 - (abs(2*(scipy.signal.triang(window_size) - 1)) ** power)/2
+    wind_inner = 1 - (abs(2 * (scipy.signal.triang(window_size) - 1)) ** power) / 2
     wind_inner[:intersection] = 0
     wind_inner[-intersection:] = 0
 
@@ -41,6 +41,8 @@ def _spline_window(window_size, power=2):
 
 
 cached_2d_windows = dict()
+
+
 def _window_2D(window_size, power=2):
     """
     Make a 1D window function, then infer and return a 2D window function.
@@ -53,14 +55,15 @@ def _window_2D(window_size, power=2):
     if key in cached_2d_windows:
         wind = cached_2d_windows[key]
     else:
-        wind = _spline_window(window_size, power)   
+        wind = _spline_window(window_size, power)
         wind = np.expand_dims(np.expand_dims(wind, -1), -1)
         wind = wind * wind.transpose(1, 0, 2)
         if PLOT_PROGRESS:
             # For demo purpose, let's look once at the window:
             plt.imshow(wind[:, :, 0], cmap="viridis")
-            plt.title("2D Windowing Function for a Smooth Blending of "
-                      "Overlapping Patches")
+            plt.title(
+                "2D Windowing Function for a Smooth Blending of " "Overlapping Patches"
+            )
             plt.show()
         cached_2d_windows[key] = wind
     return wind
@@ -72,16 +75,18 @@ def _pad_img(img, window_size, subdivisions):
     "subdivisions".
     Image is an np array of shape (y, x, nb_channels).
     """
-    aug = int(round(window_size * (1 - 1.0/subdivisions)))
+    aug = int(round(window_size * (1 - 1.0 / subdivisions)))
     more_borders = ((aug, aug), (aug, aug), (0, 0))
-    ret = np.pad(img, pad_width=more_borders, mode='reflect')
+    ret = np.pad(img, pad_width=more_borders, mode="reflect")
     # gc.collect()
 
     if PLOT_PROGRESS:
         # For demo purpose, let's look once at the window:
         plt.imshow(ret)
-        plt.title("Padded Image for Using Tiled Prediction Patches\n"
-                  "(notice the reflection effect on the padded borders)")
+        plt.title(
+            "Padded Image for Using Tiled Prediction Patches\n"
+            "(notice the reflection effect on the padded borders)"
+        )
         plt.show()
     return ret
 
@@ -91,14 +96,11 @@ def _unpad_img(padded_img, window_size, subdivisions):
     Undo what's done in the `_pad_img` function.
     Image is an np array of shape (y, x, nb_channels).
     """
-    aug = int(round(window_size * (1 - 1.0/subdivisions)))
-    ret = padded_img[
-        aug:-aug,
-        aug:-aug,
-        :
-    ]
+    aug = int(round(window_size * (1 - 1.0 / subdivisions)))
+    ret = padded_img[aug:-aug, aug:-aug, :]
     # gc.collect()
     return ret
+
 
 def _rotate_mirror_do(im):
     """
@@ -161,15 +163,15 @@ def _windowed_subdivs(padded_img, window_size, subdivisions, n_classes, pred_fun
     """
     WINDOW_SPLINE_2D = _window_2D(window_size=window_size, power=2)
 
-    step = int(window_size/subdivisions)
+    step = int(window_size / subdivisions)
     padx_len = padded_img.shape[0]
     pady_len = padded_img.shape[1]
     subdivs = []
 
-    for i in range(0, padx_len-window_size+1, step):
+    for i in range(0, padx_len - window_size + 1, step):
         subdivs.append([])
-        for j in range(0, pady_len-window_size+1, step):
-            patch = padded_img[i:i+window_size, j:j+window_size, :]
+        for j in range(0, pady_len - window_size + 1, step):
+            patch = padded_img[i : i + window_size, j : j + window_size, :]
             subdivs[-1].append(patch)
 
     # Here, `gc.collect()` clears RAM between operations.
@@ -182,7 +184,7 @@ def _windowed_subdivs(padded_img, window_size, subdivisions, n_classes, pred_fun
     gc.collect()
 
     subdivs = pred_func(subdivs)
-    if isinstance(subdivs, list):                                             
+    if isinstance(subdivs, list):
         subdivs = subdivs[-1]
     gc.collect()
     subdivs = np.array([patch * WINDOW_SPLINE_2D for patch in subdivs])
@@ -194,32 +196,39 @@ def _windowed_subdivs(padded_img, window_size, subdivisions, n_classes, pred_fun
 
     return subdivs
 
+
 def create_gen(subdivs, subdivs_m, subdivs_w):
     gen = zip(subdivs, subdivs_m, subdivs_w)
-    for (img, label, weights) in gen:
+    for img, label, weights in gen:
         yield ([img, weights], label)
+
 
 def _recreate_from_subdivs(subdivs, window_size, subdivisions, padded_out_shape):
     """
     Merge tiled overlapping patches smoothly.
     """
-    step = int(window_size/subdivisions)
+    step = int(window_size / subdivisions)
     padx_len = padded_out_shape[0]
     pady_len = padded_out_shape[1]
 
     y = np.zeros(padded_out_shape)
 
     a = 0
-    for i in range(0, padx_len-window_size+1, step):
+    for i in range(0, padx_len - window_size + 1, step):
         b = 0
-        for j in range(0, pady_len-window_size+1, step):
+        for j in range(0, pady_len - window_size + 1, step):
             windowed_patch = subdivs[a, b]
-            y[i:i+window_size, j:j+window_size] = y[i:i+window_size, j:j+window_size] + windowed_patch
+            y[i : i + window_size, j : j + window_size] = (
+                y[i : i + window_size, j : j + window_size] + windowed_patch
+            )
             b += 1
         a += 1
-    return y / (subdivisions ** 2)
+    return y / (subdivisions**2)
 
-def predict_img_with_smooth_windowing(input_img, window_size, subdivisions, n_classes, pred_func):
+
+def predict_img_with_smooth_windowing(
+    input_img, window_size, subdivisions, n_classes, pred_func
+):
     """
     Apply the `pred_func` function to square patches of the image, and overlap
     the predictions to merge them smoothly.
@@ -253,8 +262,11 @@ def predict_img_with_smooth_windowing(input_img, window_size, subdivisions, n_cl
         # For every rotation:
         sd = _windowed_subdivs(pad, window_size, subdivisions, n_classes, pred_func)
         one_padded_result = _recreate_from_subdivs(
-            sd, window_size, subdivisions,
-            padded_out_shape=list(pad.shape[:-1])+[n_classes])
+            sd,
+            window_size,
+            subdivisions,
+            padded_out_shape=list(pad.shape[:-1]) + [n_classes],
+        )
 
         res.append(one_padded_result)
 
@@ -263,7 +275,7 @@ def predict_img_with_smooth_windowing(input_img, window_size, subdivisions, n_cl
 
     prd = _unpad_img(padded_results, window_size, subdivisions)
 
-    prd = prd[:input_img.shape[0], :input_img.shape[1], :]
+    prd = prd[: input_img.shape[0], : input_img.shape[1], :]
 
     if PLOT_PROGRESS:
         plt.imshow(prd)
@@ -271,19 +283,26 @@ def predict_img_with_smooth_windowing(input_img, window_size, subdivisions, n_cl
         plt.show()
     return prd
 
-def predict_img_with_overlap(input_img, window_size, subdivisions, n_classes, pred_func):
-    """Based on predict_img_with_smooth_windowing but works just with the 
-       original image instead of creating 8 new ones.
+
+def predict_img_with_overlap(
+    input_img, window_size, subdivisions, n_classes, pred_func
+):
+    """Based on predict_img_with_smooth_windowing but works just with the
+    original image instead of creating 8 new ones.
     """
     pad = _pad_img(input_img, window_size, subdivisions)
 
     sd = _windowed_subdivs(pad, window_size, subdivisions, n_classes, pred_func)
-    one_padded_result = _recreate_from_subdivs(sd, window_size, subdivisions,
-                                               padded_out_shape=list(pad.shape[:-1])+[n_classes])
+    one_padded_result = _recreate_from_subdivs(
+        sd,
+        window_size,
+        subdivisions,
+        padded_out_shape=list(pad.shape[:-1]) + [n_classes],
+    )
 
     prd = _unpad_img(one_padded_result, window_size, subdivisions)
 
-    prd = prd[:input_img.shape[0], :input_img.shape[1], :]
+    prd = prd[: input_img.shape[0], : input_img.shape[1], :]
 
     if PLOT_PROGRESS:
         plt.imshow(prd)

@@ -1,19 +1,12 @@
-import os
-import time
-import warnings
 import numpy as np
-import math
-import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
-from skimage.io import imsave, imread
 
-import numpy as np
-import torch
 
 class EarlyStopping:
-    """Early stops the training if validation loss doesn't improve after a given patience.
-       Copied from: https://github.com/Bjarten/early-stopping-pytorch/blob/master/pytorchtools.py
     """
+    Early stops the training if validation loss doesn't improve after a given patience.
+    Copied from: https://github.com/Bjarten/early-stopping-pytorch/blob/master/pytorchtools.py
+    """
+
     def __init__(self, patience=7, delta=0, trace_func=print):
         """
         Parameters
@@ -43,13 +36,16 @@ class EarlyStopping:
             self.best_score = score
         elif score < self.best_score + self.delta:
             self.counter += 1
-            self.trace_func(f'EarlyStopping counter: {self.counter} out of {self.patience}')
+            self.trace_func(
+                f"EarlyStopping counter: {self.counter} out of {self.patience}"
+            )
             if self.counter >= self.patience:
                 self.early_stop = True
         else:
             self.best_score = score
             self.val_loss_min = val_loss
             self.counter = 0
+
 
 # class MAE_callback():
 #     """ Save MAE process in selected epochs. """
@@ -67,9 +63,9 @@ class EarlyStopping:
 #             test_images_patches = self.model.patchify(test_images)[idx]
 
 #             latent, mask, ids_restore, unmasked_ids, masked_ids = self.model.encoder(test_images, training=False)
-#             reconstructed = self.model.decoder(latent, training=False, ids_restore=ids_restore)[idx] 
+#             reconstructed = self.model.decoder(latent, training=False, ids_restore=ids_restore)[idx]
 #             masked_img = self.model.generate_masked_image(test_images_patches, unmasked_ids[idx])
-            
+
 #             fig = plt.figure(figsize=(30, 5), constrained_layout=True)
 #             grid = gridspec.GridSpec(1, 5, figure=fig)
 
@@ -98,10 +94,9 @@ class EarlyStopping:
 #             ax5 = fig.add_subplot(grid[4])
 #             ax5.imshow(self.model.unpatchify(reconstructed), cmap=cmap)
 #             ax5.set_title(f"Reconstructed: {epoch:03d}")
-            
+
 #             os.makedirs(self.out_dir, exist_ok=True)
 #             f = os.path.join(self.out_dir, "img_{}.png".format(epoch))
 #             plt.savefig(f)
 #             plt.close()
 #             print("Saving MAE callback image . . .")
-           

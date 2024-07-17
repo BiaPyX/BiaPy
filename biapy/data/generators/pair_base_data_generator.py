@@ -3,7 +3,6 @@ import random
 import torch
 import os
 import sys
-import h5py
 import imgaug as ia
 from tqdm import tqdm
 from imgaug import augmenters as iaa
@@ -12,19 +11,20 @@ from skimage.util import random_noise
 from imgaug.augmentables.heatmaps import HeatmapsOnImage
 from imgaug.augmentables.segmaps import SegmentationMapsOnImage
 from abc import ABCMeta, abstractmethod
-from torch.utils.data import Dataset                 
+from torch.utils.data import Dataset
 
-from biapy.utils.util import img_to_onehot_encoding, pad_and_reflect, read_chunked_data
+from biapy.utils.util import pad_and_reflect, read_chunked_data
 from biapy.data.generators.augmentors import *
 from biapy.data.pre_processing import normalize, norm_range01, percentile_clip
 from biapy.utils.misc import is_main_process
-from biapy.data.data_3D_manipulation import load_img_part_from_efficient_file 
+from biapy.data.data_3D_manipulation import load_img_part_from_efficient_file
+
 
 class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
     """
     Custom BaseDataGenerator based on `imgaug <https://github.com/aleju/imgaug-doc>`_
     and our own `augmentors.py <https://github.com/BiaPyX/BiaPy/blob/master/biapy/data/generators/augmentors.py>`_
-    transformations. 
+    transformations.
 
     Based on `microDL <https://github.com/czbiohub/microDL>`_ and
     `Shervine's blog <https://stanford.edu/~shervine/blog/keras-how-to-generate-data-on-the-fly>`_.
@@ -47,7 +47,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         Information about how the data needs to be managed. Options: ['in_memory', 'not_in_memory', 'chunked_data']
 
     data_paths : List of str, optional
-        If the data is in memory (``data_mode`` == ``'in_memory'``), this list should contain the paths to load data and 
+        If the data is in memory (``data_mode`` == ``'in_memory'``), this list should contain the paths to load data and
         masks. ``data_paths[0]`` should be data path and ``data_paths[1]`` masks path.
 
     da : bool, optional
@@ -78,7 +78,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         Zoom range to apply. E. g. ``(0.8, 1.2)``.
 
     zoom_in_z: bool, optional
-        Whether to apply or not zoom in Z axis. 
+        Whether to apply or not zoom in Z axis.
 
     shift : float, optional
         To make shifts.
@@ -242,7 +242,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
     channel_shuffle : bool, optional
         Whether to shuflle the channels of the images.
-    
+
     gaussian_noise : bool, optional
         To apply Gaussian noise to the images.
 
@@ -254,7 +254,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
     gaussian_noise_use_input_img_mean_and_var : bool, optional
         Whether to use the mean and variance of the input image instead of ``gaussian_noise_mean``
-        and ``gaussian_noise_var``. 
+        and ``gaussian_noise_var``.
 
     poisson_noise : bool, optional
         To apply Poisson noise to the images.
@@ -298,7 +298,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         data must be the same on each epoch). Valid when ``random_crops_in_DA`` is set.
 
     n_classes : int, optional
-        Number of classes. 
+        Number of classes.
 
     extra_data_factor : int, optional
         Factor to multiply the batches yielded in a epoch. It acts as if ``X`` and ``Y``` where concatenated
@@ -306,151 +306,155 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
     n2v : bool, optional
         Whether to create `Noise2Void <https://openaccess.thecvf.com/content_CVPR_2019/papers/Krull_Noise2Void_-_Learning_Denoising_From_Single_Noisy_Images_CVPR_2019_paper.pdf>`__
-        mask. Used in DENOISING problem type. 
-    
+        mask. Used in DENOISING problem type.
+
     n2v_perc_pix : float, optional
-        Input image pixels to be manipulated. 
+        Input image pixels to be manipulated.
 
     n2v_manipulator : str, optional
         How to manipulate the input pixels. Most pixel manipulators will compute the replacement value based on a neighborhood.
-        Possible options: `normal_withoutCP`: samples the neighborhood according to a normal gaussian distribution, but without 
-        the center pixel; `normal_additive`: adds a random number to the original pixel value. The random number is sampled from 
-        a gaussian distribution with zero-mean and sigma = `n2v_neighborhood_radius` ; `normal_fitted`: uses a random value from 
-        a gaussian normal distribution with mean equal to the mean of the neighborhood and standard deviation equal to the 
+        Possible options: `normal_withoutCP`: samples the neighborhood according to a normal gaussian distribution, but without
+        the center pixel; `normal_additive`: adds a random number to the original pixel value. The random number is sampled from
+        a gaussian distribution with zero-mean and sigma = `n2v_neighborhood_radius` ; `normal_fitted`: uses a random value from
+        a gaussian normal distribution with mean equal to the mean of the neighborhood and standard deviation equal to the
         standard deviation of the neighborhood ; `identity`: performs no pixel manipulation.
 
     n2v_neighborhood_radius : int, optional
-        Neighborhood size to use when manipulating the values. 
+        Neighborhood size to use when manipulating the values.
 
     n2v_structMask : Array of ints, optional
-        Masking kernel for StructN2V to hide pixels adjacent to main blind spot. Value 1 = 'hidden', Value 0 = 'non hidden'. 
-        Nested lists equivalent to ndarray. Must have odd length in each dimension (center pixel is blind spot). ``None`` 
+        Masking kernel for StructN2V to hide pixels adjacent to main blind spot. Value 1 = 'hidden', Value 0 = 'non hidden'.
+        Nested lists equivalent to ndarray. Must have odd length in each dimension (center pixel is blind spot). ``None``
         implies normal N2V masking.
-    
+
     norm_dict : dict, optional
         Normalization instructions.
 
     instance_problem : bool, optional
         Advice the class that the workflow is of instance segmentation to divide the labels by channels.
-    
+
     random_crop_scale : tuple of ints, optional
         Scale factor the mask used in super-resolution workflow. E.g. ``(2,2)``.
 
     convert_to_rgb : bool, optional
-        In case RGB images are expected, e.g. if ``crop_shape`` channel is 3, those images that are grayscale are 
+        In case RGB images are expected, e.g. if ``crop_shape`` channel is 3, those images that are grayscale are
         converted into RGB.
-    
+
     multiple_raw_images : bool, optional
         Whether to consider more than one raw images or not. In this case, a folder per each sample is expected. Visit
-        `LightMyCells challenge approach <https://biapy.readthedocs.io/en/latest/tutorials/image-to-image/lightmycells.html>`_ 
-        for a real use case.  
+        `LightMyCells challenge approach <https://biapy.readthedocs.io/en/latest/tutorials/image-to-image/lightmycells.html>`_
+        for a real use case.
     """
+
     def __init__(
-        self, 
-        ndim, 
-        X, 
-        Y, 
-        seed=0, 
-        data_mode="", 
-        data_paths=None, 
-        da=True, 
-        da_prob=0.5, 
-        rotation90=False, 
-        rand_rot=False, 
-        rnd_rot_range=(-180,180), 
-        shear=False, 
-        shear_range=(-20,20), 
-        zoom=False, 
-        zoom_range=(0.8,1.2),
-        zoom_in_z=False, 
+        self,
+        ndim,
+        X,
+        Y,
+        seed=0,
+        data_mode="",
+        data_paths=None,
+        da=True,
+        da_prob=0.5,
+        rotation90=False,
+        rand_rot=False,
+        rnd_rot_range=(-180, 180),
+        shear=False,
+        shear_range=(-20, 20),
+        zoom=False,
+        zoom_range=(0.8, 1.2),
+        zoom_in_z=False,
         shift=False,
-        shift_range=(0.1,0.2),
-        affine_mode='constant',
+        shift_range=(0.1, 0.2),
+        affine_mode="constant",
         vflip=False,
         hflip=False,
-        elastic=False, 
-        e_alpha=(240,250), 
-        e_sigma=25, 
-        e_mode='constant', 
-        g_blur=False, 
-        g_sigma=(1.0,2.0), 
-        median_blur=False, 
-        mb_kernel=(3,7), 
-        motion_blur=False, 
-        motb_k_range=(3,8), 
-        gamma_contrast=False, 
-        gc_gamma=(1.25,1.75), 
-        brightness=False, 
-        brightness_factor=(1,3), 
-        brightness_mode='2D', 
-        contrast=False, 
-        contrast_factor=(1,3), 
-        contrast_mode='2D', 
-        dropout=False, 
-        drop_range=(0, 0.2), 
-        cutout=False, 
-        cout_nb_iterations=(1,3), 
-        cout_size=(0.2,0.4), 
-        cout_cval=0, 
-        cout_apply_to_mask=False, 
-        cutblur=False, 
-        cblur_size=(0.1,0.5), 
-        cblur_down_range=(2,8), 
-        cblur_inside=True, 
-        cutmix=False, 
-        cmix_size=(0.2,0.4), 
-        cutnoise=False, 
-        cnoise_scale=(0.1,0.2), 
-        cnoise_nb_iterations=(1,3), 
-        cnoise_size=(0.2,0.4), 
+        elastic=False,
+        e_alpha=(240, 250),
+        e_sigma=25,
+        e_mode="constant",
+        g_blur=False,
+        g_sigma=(1.0, 2.0),
+        median_blur=False,
+        mb_kernel=(3, 7),
+        motion_blur=False,
+        motb_k_range=(3, 8),
+        gamma_contrast=False,
+        gc_gamma=(1.25, 1.75),
+        brightness=False,
+        brightness_factor=(1, 3),
+        brightness_mode="2D",
+        contrast=False,
+        contrast_factor=(1, 3),
+        contrast_mode="2D",
+        dropout=False,
+        drop_range=(0, 0.2),
+        cutout=False,
+        cout_nb_iterations=(1, 3),
+        cout_size=(0.2, 0.4),
+        cout_cval=0,
+        cout_apply_to_mask=False,
+        cutblur=False,
+        cblur_size=(0.1, 0.5),
+        cblur_down_range=(2, 8),
+        cblur_inside=True,
+        cutmix=False,
+        cmix_size=(0.2, 0.4),
+        cutnoise=False,
+        cnoise_scale=(0.1, 0.2),
+        cnoise_nb_iterations=(1, 3),
+        cnoise_size=(0.2, 0.4),
         misalignment=False,
-        ms_displacement=16, 
-        ms_rotate_ratio=0.0, 
-        missing_sections=False, 
+        ms_displacement=16,
+        ms_rotate_ratio=0.0,
+        missing_sections=False,
         missp_iterations=(30, 40),
-        grayscale=False, 
-        channel_shuffle=False, 
-        gridmask=False, 
-        grid_ratio=0.6, 
-        grid_d_range=(0.4,1),
-        grid_rotate=1, 
-        grid_invert=False, 
-        gaussian_noise=False, 
-        gaussian_noise_mean=0, 
+        grayscale=False,
+        channel_shuffle=False,
+        gridmask=False,
+        grid_ratio=0.6,
+        grid_d_range=(0.4, 1),
+        grid_rotate=1,
+        grid_invert=False,
+        gaussian_noise=False,
+        gaussian_noise_mean=0,
         gaussian_noise_var=0.01,
-        gaussian_noise_use_input_img_mean_and_var=False, 
-        poisson_noise=False, 
-        salt=False, 
-        salt_amount=0.05, 
-        pepper=False, 
-        pepper_amount=0.05, 
-        salt_and_pepper=False, 
-        salt_pep_amount=0.05, 
-        salt_pep_proportion=0.5, 
-        random_crops_in_DA=False, 
-        shape=(256,256,1), 
-        resolution=(-1,), 
-        prob_map=None, 
-        val=False, 
-        n_classes=1, 
-        extra_data_factor=1, 
-        n2v=False, 
-        n2v_perc_pix=0.198, 
-        n2v_manipulator='uniform_withCP', 
-        n2v_neighborhood_radius=5, 
-        n2v_structMask=np.array([[0,1,1,1,1,1,1,1,1,1,0]]), 
-        norm_dict=None, 
-        instance_problem=False, 
-        random_crop_scale=(1,1), 
-        convert_to_rgb=False, 
-        multiple_raw_images=False):
+        gaussian_noise_use_input_img_mean_and_var=False,
+        poisson_noise=False,
+        salt=False,
+        salt_amount=0.05,
+        pepper=False,
+        pepper_amount=0.05,
+        salt_and_pepper=False,
+        salt_pep_amount=0.05,
+        salt_pep_proportion=0.5,
+        random_crops_in_DA=False,
+        shape=(256, 256, 1),
+        resolution=(-1,),
+        prob_map=None,
+        val=False,
+        n_classes=1,
+        extra_data_factor=1,
+        n2v=False,
+        n2v_perc_pix=0.198,
+        n2v_manipulator="uniform_withCP",
+        n2v_neighborhood_radius=5,
+        n2v_structMask=np.array([[0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0]]),
+        norm_dict=None,
+        instance_problem=False,
+        random_crop_scale=(1, 1),
+        convert_to_rgb=False,
+        multiple_raw_images=False,
+    ):
 
-        assert norm_dict != None, "Normalization instructions must be provided with 'norm_dict'"
-        assert norm_dict['mask_norm'] in ['as_mask', 'as_image', 'none']
-        assert data_mode in ['in_memory', 'not_in_memory', 'chunked_data']
+        assert (
+            norm_dict != None
+        ), "Normalization instructions must be provided with 'norm_dict'"
+        assert norm_dict["mask_norm"] in ["as_mask", "as_image", "none"]
+        assert data_mode in ["in_memory", "not_in_memory", "chunked_data"]
 
         self.ndim = ndim
-        self.z_size = -1 
+        self.z_size = -1
         self.val = val
         self.convert_to_rgb = convert_to_rgb
         self.norm_dict = norm_dict
@@ -458,56 +462,80 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.multiple_raw_images = multiple_raw_images
 
         if data_mode == "in_memory":
-            # If not Y was provided and this generator was still selected means that we need to generate it. 
+            # If not Y was provided and this generator was still selected means that we need to generate it.
             # This workflow type is common in Denoising.
-            self.Y_provided = Y is not None 
+            self.Y_provided = Y is not None
 
             _X = X if type(X) != list else X[0]
             if self.Y_provided:
                 _Y = Y if type(Y) != list else Y[0]
 
-            if _X.ndim != (self.ndim+2): 
-                raise ValueError("X must be a {}D Numpy array".format((self.ndim+1)))
-            if self.Y_provided and _Y.ndim != (self.ndim+2):
-                raise ValueError("Y must be a {}D Numpy array".format((self.ndim+1)))
+            if _X.ndim != (self.ndim + 2):
+                raise ValueError("X must be a {}D Numpy array".format((self.ndim + 1)))
+            if self.Y_provided and _Y.ndim != (self.ndim + 2):
+                raise ValueError("Y must be a {}D Numpy array".format((self.ndim + 1)))
 
-            if type(X) != list and all([x == 1 for x in random_crop_scale]) and self.Y_provided:
-                if X.shape[:(self.ndim+1)] != Y.shape[:(self.ndim+1)]:
-                    raise ValueError("The shape of X and Y must be the same. {} != {}".format(X.shape[:(self.ndim+1)], Y.shape[:(self.ndim+1)]))
+            if (
+                type(X) != list
+                and all([x == 1 for x in random_crop_scale])
+                and self.Y_provided
+            ):
+                if X.shape[: (self.ndim + 1)] != Y.shape[: (self.ndim + 1)]:
+                    raise ValueError(
+                        "The shape of X and Y must be the same. {} != {}".format(
+                            X.shape[: (self.ndim + 1)], Y.shape[: (self.ndim + 1)]
+                        )
+                    )
 
         if data_mode == "in_memory" and X is None:
-            raise ValueError("'X' need to be provided together with data_mode == 'in_memory'")
+            raise ValueError(
+                "'X' need to be provided together with data_mode == 'in_memory'"
+            )
 
-        if data_mode == "not_in_memory" :
+        if data_mode == "not_in_memory":
             if len(data_paths) == 2:
                 self.Y_provided = True
             elif len(data_paths) == 1:
                 self.Y_provided = False
             else:
-                raise ValueError("'data_paths' must contain one or two paths: 1) data path ; 2) data masks path (optional)")
+                raise ValueError(
+                    "'data_paths' must contain one or two paths: 1) data path ; 2) data masks path (optional)"
+                )
         elif data_mode == "chunked_data":
-            self.Y_provided = Y is not None 
+            self.Y_provided = Y is not None
 
         if shape is None:
-            raise ValueError("'shape' must be provided")   
+            raise ValueError("'shape' must be provided")
 
         if random_crops_in_DA and data_mode == "in_memory":
             if ndim == 3:
-                if shape[0] > _X.shape[1] or shape[1] > _X.shape[2] or shape[2] > _X.shape[3]:
+                if (
+                    shape[0] > _X.shape[1]
+                    or shape[1] > _X.shape[2]
+                    or shape[2] > _X.shape[3]
+                ):
                     raise ValueError("Given 'shape' is bigger than the data provided")
             else:
                 if shape[0] > _X.shape[1] or shape[1] > _X.shape[2]:
                     raise ValueError("Given 'shape' is bigger than the data provided")
                 if shape[0] != shape[1]:
-                    raise ValueError("When 'random_crops_in_DA' is selected the shape given must be square, e.g. (256, 256, 1)")
+                    raise ValueError(
+                        "When 'random_crops_in_DA' is selected the shape given must be square, e.g. (256, 256, 1)"
+                    )
 
         if data_mode == "not_in_memory" and not random_crops_in_DA:
             m = "TRAIN" if not val else "VAL"
-            print("WARNING: you are going to load samples from disk (as 'DATA.{}.IN_MEMORY' = False) and "
-                  "'DATA.EXTRACT_RANDOM_PATCH' = False so all samples are expected to have the same shape".format(m))
+            print(
+                "WARNING: you are going to load samples from disk (as 'DATA.{}.IN_MEMORY' = False) and "
+                "'DATA.EXTRACT_RANDOM_PATCH' = False so all samples are expected to have the same shape".format(
+                    m
+                )
+            )
 
         if rotation90 and rand_rot:
-            print("Warning: you selected double rotation type. Maybe you should set only 'rand_rot'?")
+            print(
+                "Warning: you selected double rotation type. Maybe you should set only 'rand_rot'?"
+            )
 
         # Super-resolution options
         self.random_crop_scale = random_crop_scale
@@ -525,22 +553,34 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                     self.data_mask_path = sorted(next(os.walk(data_paths[1]))[1])
                     c = 0
                     for i in range(len(self.data_mask_path)):
-                        gt_image_path = next(os.walk(os.path.join(data_paths[1],self.data_mask_path[i])))[2][0]
-                        associated_raw_image_dir = os.path.join(data_paths[0], self.data_mask_path[i])
-                        
+                        gt_image_path = next(
+                            os.walk(os.path.join(data_paths[1], self.data_mask_path[i]))
+                        )[2][0]
+                        associated_raw_image_dir = os.path.join(
+                            data_paths[0], self.data_mask_path[i]
+                        )
+
                         samples = sorted(next(os.walk(associated_raw_image_dir))[2])
-                        if self.val:    
+                        if self.val:
                             for j in range(len(samples)):
                                 self.data[f"sample_{c}"] = {}
-                                self.data[f"sample_{c}"]["raw"] = os.path.join(associated_raw_image_dir,samples[j])
-                                self.data[f"sample_{c}"]["gt"] = os.path.join(data_paths[1],self.data_mask_path[i],gt_image_path)
+                                self.data[f"sample_{c}"]["raw"] = os.path.join(
+                                    associated_raw_image_dir, samples[j]
+                                )
+                                self.data[f"sample_{c}"]["gt"] = os.path.join(
+                                    data_paths[1], self.data_mask_path[i], gt_image_path
+                                )
                                 c += 1
                         else:
                             self.data[f"sample_{c}"] = {}
                             self.data[f"sample_{c}"]["raw"] = []
                             for j in range(len(samples)):
-                                self.data[f"sample_{c}"]["raw"].append(os.path.join(associated_raw_image_dir,samples[j]))
-                            self.data[f"sample_{c}"]["gt"] = os.path.join(data_paths[1],self.data_mask_path[i],gt_image_path)
+                                self.data[f"sample_{c}"]["raw"].append(
+                                    os.path.join(associated_raw_image_dir, samples[j])
+                                )
+                            self.data[f"sample_{c}"]["gt"] = os.path.join(
+                                data_paths[1], self.data_mask_path[i], gt_image_path
+                            )
                             c += 1
 
                 self.length = len(self.data)
@@ -551,17 +591,21 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 if self.Y_provided:
                     self.data_mask_path = sorted(next(os.walk(data_paths[1]))[2])
                     if len(self.data_paths) != len(self.data_mask_path):
-                        raise ValueError("Different number of raw and ground truth images ({} vs {}). "
-                            "Please check the data!".format(len(self.data_paths), len(self.data_mask_path)))
+                        raise ValueError(
+                            "Different number of raw and ground truth images ({} vs {}). "
+                            "Please check the data!".format(
+                                len(self.data_paths), len(self.data_mask_path)
+                            )
+                        )
                 self.length = len(self.data_paths)
                 if self.length == 0:
                     raise ValueError("No image found in {}".format(data_paths))
-        else: # data_mode in ["in_memory", "chunked_data"]
+        else:  # data_mode in ["in_memory", "chunked_data"]
             self.X = X
             if self.Y_provided:
                 self.Y = Y
             self.length = len(self.X)
-        
+
         self.real_length = self.length
         self.channel_info = {}
         self.no_bin_channel_found = False
@@ -569,22 +613,28 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         # X data analysis
         img, _ = self.load_sample(0, first_load=True)
-        if norm_dict['enable']:
-            self.norm_dict['orig_dtype'] = img.dtype                    
-            if norm_dict['type'] in ["div", "scale_range"]:
-                if norm_dict['type'] == 'div':
+        if norm_dict["enable"]:
+            self.norm_dict["orig_dtype"] = img.dtype
+            if norm_dict["type"] in ["div", "scale_range"]:
+                if norm_dict["type"] == "div":
                     img, nsteps = norm_range01(img)
                 else:
                     img, nsteps = norm_range01(img, div_using_max_and_scale=True)
                 self.norm_dict.update(nsteps)
                 if shape[-1] != img.shape[-1]:
-                    raise ValueError("Channel of the patch size given {} does not correspond with the loaded image {}. "
-                        "Please, check the channels of the images!".format(shape[-1], img.shape[-1]))
+                    raise ValueError(
+                        "Channel of the patch size given {} does not correspond with the loaded image {}. "
+                        "Please, check the channels of the images!".format(
+                            shape[-1], img.shape[-1]
+                        )
+                    )
                 if not random_crops_in_DA and shape != img.shape:
-                    raise ValueError("Image shape {} does not match provided DATA.PATCH_SIZE {}. If you want to ensure "
+                    raise ValueError(
+                        "Image shape {} does not match provided DATA.PATCH_SIZE {}. If you want to ensure "
                         "that PATCH_SIZE you have two options: 1) Set IN_MEMORY = True (as the images will be cropped "
                         "automatically to that DATA.PATCH_SIZE) ; 2) Set DATA.EXTRACT_RANDOM_PATCH = True to extract a patch "
-                        "(if possible) from loaded image".format(img.shape, shape))
+                        "(if possible) from loaded image".format(img.shape, shape)
+                    )
 
         self.X_channels = img.shape[-1]
         self.Y_channels = img.shape[-1]
@@ -594,15 +644,15 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         # Y data analysis
         if self.Y_provided:
             self.channels_to_analize = -1
-            
+
             # Loop over a few masks to ensure foreground class is present to decide normalization
-            if self.norm_dict['mask_norm'] == 'as_mask':
+            if self.norm_dict["mask_norm"] == "as_mask":
                 print("Checking which channel of the mask needs normalization . . .")
                 if data_mode == "not_in_memory":
-                    n_samples = len(self.data_mask_path) 
+                    n_samples = len(self.data_mask_path)
                 elif data_mode == "in_memory":
                     n_samples = len(self.Y)
-                else: # data_mode == "chunked_data":                
+                else:  # data_mode == "chunked_data":
                     n_samples = 1000 if len(self.Y) > 1000 else len(self.Y)
                 analized = False
                 for i in range(n_samples):
@@ -610,46 +660,52 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                     # Store which channels are binary or not (e.g. distance transform channel is not binary)
                     if not analized:
                         if n_classes > 2 and instance_problem:
-                            self.channels_to_analize = mask.shape[-1]-1  
-                            self.channel_info[self.channels_to_analize] = {'type': 'classes'}
-                            self.channel_info[self.channels_to_analize]['div'] = False
+                            self.channels_to_analize = mask.shape[-1] - 1
+                            self.channel_info[self.channels_to_analize] = {
+                                "type": "classes"
+                            }
+                            self.channel_info[self.channels_to_analize]["div"] = False
                         else:
                             self.channels_to_analize = mask.shape[-1]
                         analized = True
 
                     for j in range(self.channels_to_analize):
                         if j not in self.channel_info:
-                            self.channel_info[j] = {'type': 'bin'}
-                            self.channel_info[j]['div'] = False
+                            self.channel_info[j] = {"type": "bin"}
+                            self.channel_info[j]["div"] = False
 
                         if instance_problem:
-                            if len(np.unique(mask[...,j])) > 2:
-                                self.channel_info[j]['type'] = 'no_bin'
-                                self.no_bin_channel_found = True  
-                            if np.max(mask[...,j]) > 30:
-                                self.channel_info[j]['div'] = True
-                        else: # In semantic seg, maybe the mask are in 255
-                            if np.max(mask[...,j]) > n_classes:
-                                self.channel_info[j]['div'] = True
+                            if len(np.unique(mask[..., j])) > 2:
+                                self.channel_info[j]["type"] = "no_bin"
+                                self.no_bin_channel_found = True
+                            if np.max(mask[..., j]) > 30:
+                                self.channel_info[j]["div"] = True
+                        else:  # In semantic seg, maybe the mask are in 255
+                            if np.max(mask[..., j]) > n_classes:
+                                self.channel_info[j]["div"] = True
 
             _, mask = self.load_sample(0)
 
-            if self.channels_to_analize == -1: 
-                self.channels_to_analize = mask.shape[-1]  
+            if self.channels_to_analize == -1:
+                self.channels_to_analize = mask.shape[-1]
             self.Y_channels = mask.shape[-1]
             self.Y_dtype = mask.dtype
             del mask
-            
+
         print("Normalization config used for X: {}".format(self.norm_dict))
         if self.Y_provided:
-            print("Normalization config used for Y: {}".format(norm_dict['mask_norm']))
+            print("Normalization config used for Y: {}".format(norm_dict["mask_norm"]))
 
         if self.ndim == 2:
-            resolution = tuple(resolution[i] for i in [1, 0]) # y, x -> x, y
-            self.res_relation = (1.0,resolution[0]/resolution[1])
+            resolution = tuple(resolution[i] for i in [1, 0])  # y, x -> x, y
+            self.res_relation = (1.0, resolution[0] / resolution[1])
         else:
-            resolution = tuple(resolution[i] for i in [2, 1, 0]) # z, y, x -> x, y, z
-            self.res_relation = (1.0,resolution[0]/resolution[1],resolution[0]/resolution[2])
+            resolution = tuple(resolution[i] for i in [2, 1, 0])  # z, y, x -> x, y, z
+            self.res_relation = (
+                1.0,
+                resolution[0] / resolution[1],
+                resolution[0] / resolution[2],
+            )
         self.resolution = resolution
         self.o_indexes = np.arange(self.length)
         self.n_classes = n_classes
@@ -683,12 +739,17 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.grid_d_range = grid_d_range
         self.grid_rotate = grid_rotate
         self.grid_invert = grid_invert
-        self.grid_d_size = (self.shape[0]*grid_d_range[0], self.shape[1]*grid_d_range[1])
+        self.grid_d_size = (
+            self.shape[0] * grid_d_range[0],
+            self.shape[1] * grid_d_range[1],
+        )
         self.channel_shuffle = channel_shuffle
         self.gaussian_noise = gaussian_noise
         self.gaussian_noise_mean = gaussian_noise_mean
         self.gaussian_noise_var = gaussian_noise_var
-        self.gaussian_noise_use_input_img_mean_and_var = gaussian_noise_use_input_img_mean_and_var
+        self.gaussian_noise_use_input_img_mean_and_var = (
+            gaussian_noise_use_input_img_mean_and_var
+        )
         self.poisson_noise = poisson_noise
         self.salt = salt
         self.salt_amount = salt_amount
@@ -714,14 +775,26 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.n2v = n2v
         self.val = val
         if self.n2v:
-            from biapy.engine.denoising import (get_stratified_coords2D, get_stratified_coords3D, get_value_manipulation,                         
-                apply_structN2Vmask, apply_structN2Vmask3D)   
-            self.box_size = int(np.round(np.sqrt(100/n2v_perc_pix)))
-            self.get_stratified_coords = get_stratified_coords2D if self.ndim == 2 else get_stratified_coords3D
-            self.value_manipulation = get_value_manipulation(n2v_manipulator, n2v_neighborhood_radius)
-            self.n2v_structMask = n2v_structMask 
-            self.apply_structN2Vmask_func = apply_structN2Vmask if self.ndim == 2 else apply_structN2Vmask3D
-        if data_mode == "in_memory": 
+            from biapy.engine.denoising import (
+                get_stratified_coords2D,
+                get_stratified_coords3D,
+                get_value_manipulation,
+                apply_structN2Vmask,
+                apply_structN2Vmask3D,
+            )
+
+            self.box_size = int(np.round(np.sqrt(100 / n2v_perc_pix)))
+            self.get_stratified_coords = (
+                get_stratified_coords2D if self.ndim == 2 else get_stratified_coords3D
+            )
+            self.value_manipulation = get_value_manipulation(
+                n2v_manipulator, n2v_neighborhood_radius
+            )
+            self.n2v_structMask = n2v_structMask
+            self.apply_structN2Vmask_func = (
+                apply_structN2Vmask if self.ndim == 2 else apply_structN2Vmask3D
+            )
+        if data_mode == "in_memory":
             del _X
             if self.Y_provided:
                 del _Y
@@ -738,81 +811,160 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         if extra_data_factor > 1:
             self.extra_data_factor = extra_data_factor
-            self.o_indexes = np.concatenate([self.o_indexes]*extra_data_factor)
-            self.length = self.length*extra_data_factor
+            self.o_indexes = np.concatenate([self.o_indexes] * extra_data_factor)
+            self.length = self.length * extra_data_factor
             if self.data_paths is not None:
-                self.data_paths = self.data_paths*extra_data_factor
-                self.data_mask_path = self.data_mask_path*extra_data_factor
+                self.data_paths = self.data_paths * extra_data_factor
+                self.data_mask_path = self.data_mask_path * extra_data_factor
         else:
             self.extra_data_factor = 1
 
         self.da_options = []
-        self.trans_made = ''
+        self.trans_made = ""
         if rotation90:
-            self.trans_made += '_rot[90,180,270]'
+            self.trans_made += "_rot[90,180,270]"
         if rand_rot:
-            self.trans_made += '_rrot'+str(rnd_rot_range)
+            self.trans_made += "_rrot" + str(rnd_rot_range)
         if shear:
-            self.da_options.append(iaa.Sometimes(da_prob, iaa.Affine(rotate=shear_range, mode=affine_mode)))
-            self.trans_made += '_shear'+str(shear_range)
+            self.da_options.append(
+                iaa.Sometimes(da_prob, iaa.Affine(rotate=shear_range, mode=affine_mode))
+            )
+            self.trans_made += "_shear" + str(shear_range)
         if zoom:
-            self.trans_made += '_zoom'+str(zoom_range)+"+"+str(zoom_in_z)
+            self.trans_made += "_zoom" + str(zoom_range) + "+" + str(zoom_in_z)
         if shift:
-            self.da_options.append(iaa.Sometimes(da_prob, iaa.Affine(translate_percent=shift_range, mode=affine_mode)))
-            self.trans_made += '_shift'+str(shift_range)
+            self.da_options.append(
+                iaa.Sometimes(
+                    da_prob, iaa.Affine(translate_percent=shift_range, mode=affine_mode)
+                )
+            )
+            self.trans_made += "_shift" + str(shift_range)
         if vflip:
             self.da_options.append(iaa.Flipud(da_prob))
-            self.trans_made += '_vflip'
+            self.trans_made += "_vflip"
         if hflip:
             self.da_options.append(iaa.Fliplr(da_prob))
-            self.trans_made += '_hflip'
+            self.trans_made += "_hflip"
         if elastic:
-            self.da_options.append(iaa.Sometimes(da_prob,iaa.ElasticTransformation(alpha=e_alpha, sigma=e_sigma, mode=e_mode)))
-            self.trans_made += '_elastic'+str(e_alpha)+'+'+str(e_sigma)+'+'+str(e_mode)
+            self.da_options.append(
+                iaa.Sometimes(
+                    da_prob,
+                    iaa.ElasticTransformation(
+                        alpha=e_alpha, sigma=e_sigma, mode=e_mode
+                    ),
+                )
+            )
+            self.trans_made += (
+                "_elastic" + str(e_alpha) + "+" + str(e_sigma) + "+" + str(e_mode)
+            )
         if g_blur:
-            self.da_options.append(iaa.Sometimes(da_prob,iaa.GaussianBlur(g_sigma)))
-            self.trans_made += '_gblur'+str(g_sigma)
+            self.da_options.append(iaa.Sometimes(da_prob, iaa.GaussianBlur(g_sigma)))
+            self.trans_made += "_gblur" + str(g_sigma)
         if median_blur:
-            self.da_options.append(iaa.Sometimes(da_prob,iaa.MedianBlur(k=mb_kernel)))
-            self.trans_made += '_mblur'+str(mb_kernel)
+            self.da_options.append(iaa.Sometimes(da_prob, iaa.MedianBlur(k=mb_kernel)))
+            self.trans_made += "_mblur" + str(mb_kernel)
         if motion_blur:
-            self.da_options.append(iaa.Sometimes(da_prob,iaa.MotionBlur(k=motb_k_range)))
-            self.trans_made += '_motb'+str(motb_k_range)
+            self.da_options.append(
+                iaa.Sometimes(da_prob, iaa.MotionBlur(k=motb_k_range))
+            )
+            self.trans_made += "_motb" + str(motb_k_range)
         if gamma_contrast:
-            self.trans_made += '_gcontrast'+str(gc_gamma)
+            self.trans_made += "_gcontrast" + str(gc_gamma)
         if brightness:
             self.brightness_factor = brightness_factor
-            self.brightness_mode = brightness_mode # Not used
-            self.trans_made += '_brightness'+str(brightness_factor)
+            self.brightness_mode = brightness_mode  # Not used
+            self.trans_made += "_brightness" + str(brightness_factor)
         if contrast:
             self.contrast_factor = contrast_factor
-            self.contrast_mode = contrast_mode # Not used
-            self.trans_made += '_contrast'+str(contrast_factor)
+            self.contrast_mode = contrast_mode  # Not used
+            self.trans_made += "_contrast" + str(contrast_factor)
         if dropout:
             self.da_options.append(iaa.Sometimes(da_prob, iaa.Dropout(p=drop_range)))
-            self.trans_made += '_drop'+str(drop_range)
+            self.trans_made += "_drop" + str(drop_range)
 
-        if grayscale: self.trans_made += '_gray'
-        if gridmask: self.trans_made += '_gridmask'+str(self.grid_ratio)+'+'+str(self.grid_d_range)+'+'+str(self.grid_rotate)+'+'+str(self.grid_invert)
-        if channel_shuffle: self.trans_made += '_chshuffle'
-        if cutout: self.trans_made += '_cout'+str(cout_nb_iterations)+'+'+str(cout_size)+'+'+str(cout_cval)+'+'+str(cout_apply_to_mask)
-        if cutblur: self.trans_made += '_cblur'+str(cblur_size)+'+'+str(cblur_down_range)+'+'+str(cblur_inside)
-        if cutmix: self.trans_made += '_cmix'+str(cmix_size)
-        if cutnoise: self.trans_made += '_cnoi'+str(cnoise_scale)+'+'+str(cnoise_nb_iterations)+'+'+str(cnoise_size)
-        if misalignment: self.trans_made += '_msalg'+str(ms_displacement)+'+'+str(ms_rotate_ratio)
-        if missing_sections: self.trans_made += '_missp'+'+'+str(missp_iterations)
-        if gaussian_noise: self.trans_made += '_gausnoise'+'+'+str(gaussian_noise_mean)+'+'+str(gaussian_noise_var)
-        if poisson_noise: self.trans_made += '_poisnoise'
-        if salt: self.trans_made += '_salt'+'+'+str(salt_amount)
-        if pepper: self.trans_made += '_pepper'+'+'+str(pepper_amount)
-        if salt_and_pepper: self.trans_made += '_salt_and_pepper'+'+'+str(salt_pep_amount)+'+'+str(salt_pep_proportion)
+        if grayscale:
+            self.trans_made += "_gray"
+        if gridmask:
+            self.trans_made += (
+                "_gridmask"
+                + str(self.grid_ratio)
+                + "+"
+                + str(self.grid_d_range)
+                + "+"
+                + str(self.grid_rotate)
+                + "+"
+                + str(self.grid_invert)
+            )
+        if channel_shuffle:
+            self.trans_made += "_chshuffle"
+        if cutout:
+            self.trans_made += (
+                "_cout"
+                + str(cout_nb_iterations)
+                + "+"
+                + str(cout_size)
+                + "+"
+                + str(cout_cval)
+                + "+"
+                + str(cout_apply_to_mask)
+            )
+        if cutblur:
+            self.trans_made += (
+                "_cblur"
+                + str(cblur_size)
+                + "+"
+                + str(cblur_down_range)
+                + "+"
+                + str(cblur_inside)
+            )
+        if cutmix:
+            self.trans_made += "_cmix" + str(cmix_size)
+        if cutnoise:
+            self.trans_made += (
+                "_cnoi"
+                + str(cnoise_scale)
+                + "+"
+                + str(cnoise_nb_iterations)
+                + "+"
+                + str(cnoise_size)
+            )
+        if misalignment:
+            self.trans_made += (
+                "_msalg" + str(ms_displacement) + "+" + str(ms_rotate_ratio)
+            )
+        if missing_sections:
+            self.trans_made += "_missp" + "+" + str(missp_iterations)
+        if gaussian_noise:
+            self.trans_made += (
+                "_gausnoise"
+                + "+"
+                + str(gaussian_noise_mean)
+                + "+"
+                + str(gaussian_noise_var)
+            )
+        if poisson_noise:
+            self.trans_made += "_poisnoise"
+        if salt:
+            self.trans_made += "_salt" + "+" + str(salt_amount)
+        if pepper:
+            self.trans_made += "_pepper" + "+" + str(pepper_amount)
+        if salt_and_pepper:
+            self.trans_made += (
+                "_salt_and_pepper"
+                + "+"
+                + str(salt_pep_amount)
+                + "+"
+                + str(salt_pep_proportion)
+            )
 
         self.trans_made = self.trans_made.replace(" ", "")
         self.seq = iaa.Sequential(self.da_options)
         self.seed = seed
         ia.seed(seed)
-        
-        self.random_crop_func = random_3D_crop_pair if self.ndim == 3 else random_crop_pair
+
+        self.random_crop_func = (
+            random_3D_crop_pair if self.ndim == 3 else random_crop_pair
+        )
         self.indexes = self.o_indexes.copy()
 
     @abstractmethod
@@ -837,8 +989,8 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             Sample index counter.
 
         first_load : bool, optional
-            Whether its the first time a sample is loaded to prevent normalizing it. 
-            
+            Whether its the first time a sample is loaded to prevent normalizing it.
+
         Returns
         -------
         img : 3D/4D Numpy array
@@ -849,49 +1001,59 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         """
         # Choose the data source
         idx = _idx % self.real_length
-        if self.data_mode == "in_memory": 
+        if self.data_mode == "in_memory":
             img = np.squeeze(self.X[idx].copy())
             if self.Y_provided:
                 mask = np.squeeze(self.Y[idx].copy())
-        elif self.data_mode == "not_in_memory": 
+        elif self.data_mode == "not_in_memory":
             if self.multiple_raw_images:
                 if not self.val:
-                    random_raw_image = np.random.randint(0, len(self.data[f"sample_{idx}"]["raw"]))
+                    random_raw_image = np.random.randint(
+                        0, len(self.data[f"sample_{idx}"]["raw"])
+                    )
                     img = imread(self.data[f"sample_{idx}"]["raw"][random_raw_image])
                 else:
                     img = imread(self.data[f"sample_{idx}"]["raw"])
                 mask = imread(self.data[f"sample_{idx}"]["gt"])
-                
+
                 img = np.squeeze(img)
-                mask = np.squeeze(mask)   
+                mask = np.squeeze(mask)
             else:
-                if self.data_paths[idx].endswith('.npy'):
+                if self.data_paths[idx].endswith(".npy"):
                     img = np.load(os.path.join(self.paths[0], self.data_paths[idx]))
                     if self.Y_provided:
-                        mask = np.load(os.path.join(self.paths[1], self.data_mask_path[idx]))
-                elif self.data_paths[idx].endswith('.zarr'):       
-                    _, img = read_chunked_data(os.path.join(data_dir, fids[n]))
+                        mask = np.load(
+                            os.path.join(self.paths[1], self.data_mask_path[idx])
+                        )
+                elif self.data_paths[idx].endswith(".zarr"):
+                    _, img = read_chunked_data(os.path.join(self.paths[0], self.data_paths[idx]))
                     img = np.array(img)
                 else:
                     img = imread(os.path.join(self.paths[0], self.data_paths[idx]))
                     if self.Y_provided:
-                        mask = imread(os.path.join(self.paths[1], self.data_mask_path[idx]))
+                        mask = imread(
+                            os.path.join(self.paths[1], self.data_mask_path[idx])
+                        )
                 img = np.squeeze(img)
                 if self.Y_provided:
                     mask = np.squeeze(mask)
-        else: # self.data_mode == "chunked_data"
-            img = load_img_part_from_efficient_file(self.X[idx]['filepath'], self.X[idx]['patch_coords'])
+        else:  # self.data_mode == "chunked_data"
+            img = load_img_part_from_efficient_file(
+                self.X[idx]["filepath"], self.X[idx]["patch_coords"]
+            )
             if self.Y_provided:
-                mask = load_img_part_from_efficient_file(self.Y[idx]['filepath'], self.Y[idx]['patch_coords'])
+                mask = load_img_part_from_efficient_file(
+                    self.Y[idx]["filepath"], self.Y[idx]["patch_coords"]
+                )
         if self.Y_provided:
             img, mask = self.ensure_shape(img, mask)
         else:
             img = self.ensure_shape(img, None)
 
-        if self.norm_dict['enable'] and not first_load:
+        if self.norm_dict["enable"] and not first_load:
             img = self.norm_X(img)
         if self.Y_provided:
-            if self.norm_dict['enable'] and not first_load:
+            if self.norm_dict["enable"] and not first_load:
                 mask = self.norm_Y(mask)
             return img, mask
         else:
@@ -912,29 +1074,35 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             X element normalized. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
         """
         # Percentile clipping
-        if 'lower_bound' in self.norm_dict and self.norm_dict['application_mode'] == "image":
-            img, _, _ = percentile_clip(img, lower=self.norm_dict['lower_bound'],                                     
-                upper=self.norm_dict['upper_bound'])
+        if (
+            "lower_bound" in self.norm_dict
+            and self.norm_dict["application_mode"] == "image"
+        ):
+            img, _, _ = percentile_clip(
+                img,
+                lower=self.norm_dict["lower_bound"],
+                upper=self.norm_dict["upper_bound"],
+            )
 
-        if self.norm_dict['type'] == 'div':
+        if self.norm_dict["type"] == "div":
             img, _ = norm_range01(img)
-        elif self.norm_dict['type'] == 'scale_range':
+        elif self.norm_dict["type"] == "scale_range":
             img, _ = norm_range01(img, div_using_max_and_scale=True)
-        elif self.norm_dict['type'] == 'custom':
-            if self.norm_dict['application_mode'] == "image":
+        elif self.norm_dict["type"] == "custom":
+            if self.norm_dict["application_mode"] == "image":
                 img = normalize(img, img.mean(), img.std())
             else:
-                img = normalize(img, self.norm_dict['mean'], self.norm_dict['std'])
-        return img 
+                img = normalize(img, self.norm_dict["mean"], self.norm_dict["std"])
+        return img
 
-    def norm_Y(self, mask):   
+    def norm_Y(self, mask):
         """
         Y data normalization.
 
         Parameters
         ----------
         mask : 3D/4D Numpy array
-            Y element, for instance, an image's mask. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in 
+            Y element, for instance, an image's mask. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in
             ``3D``.
 
         Returns
@@ -942,26 +1110,34 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         mask : 3D/4D Numpy array
             Y element normalized. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
         """
-        if self.norm_dict['mask_norm'] == 'as_mask' and self.Y_provided: 
+        if self.norm_dict["mask_norm"] == "as_mask" and self.Y_provided:
             for j in range(self.channels_to_analize):
-                if self.channel_info[j]['div']:
-                    mask[...,j] = mask[...,j]/255
-        elif self.norm_dict['mask_norm'] == 'as_image' and self.Y_provided: 
+                if self.channel_info[j]["div"]:
+                    mask[..., j] = mask[..., j] / 255
+        elif self.norm_dict["mask_norm"] == "as_image" and self.Y_provided:
             # Percentile clipping
-            if 'lower_bound' in self.norm_dict and self.norm_dict['application_mode'] == "image":
-                mask, _, _ = percentile_clip(mask, lower=self.norm_dict['lower_bound'],                                     
-                    upper=self.norm_dict['upper_bound'])
+            if (
+                "lower_bound" in self.norm_dict
+                and self.norm_dict["application_mode"] == "image"
+            ):
+                mask, _, _ = percentile_clip(
+                    mask,
+                    lower=self.norm_dict["lower_bound"],
+                    upper=self.norm_dict["upper_bound"],
+                )
 
-            if self.norm_dict['type'] == 'div':
+            if self.norm_dict["type"] == "div":
                 mask, _ = norm_range01(mask)
-            elif self.norm_dict['type'] == 'scale_range':
+            elif self.norm_dict["type"] == "scale_range":
                 mask, _ = norm_range01(mask, div_using_max_and_scale=True)
-            elif self.norm_dict['type'] == 'custom':
-                if self.norm_dict['application_mode'] == "image":
+            elif self.norm_dict["type"] == "custom":
+                if self.norm_dict["application_mode"] == "image":
                     mask = normalize(mask, mask.mean(), mask.std())
                 else:
-                    mask = normalize(mask, self.norm_dict['mean'], self.norm_dict['std'])
-        return mask 
+                    mask = normalize(
+                        mask, self.norm_dict["mean"], self.norm_dict["std"]
+                    )
+        return mask
 
     def getitem(self, index):
         """
@@ -974,9 +1150,9 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         Returns
         -------
-        item : tuple of 3D/4D Numpy arrays 
-            X and Y (if avail) elements. Each one shape is ``(z, y, x, channels)`` if ``2D`` or ``(y, x, channels)`` 
-            if ``3D``. 
+        item : tuple of 3D/4D Numpy arrays
+            X and Y (if avail) elements. Each one shape is ``(z, y, x, channels)`` if ``2D`` or ``(y, x, channels)``
+            if ``3D``.
         """
         return self.__getitem__(index)
 
@@ -993,11 +1169,11 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         -------
         img : 3D/4D Numpy array
             X element, for instance, an image. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
-            
+
         mask : 3D/4D Numpy array
             Y element, for instance, a mask. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
         """
-        img, mask =  self.load_sample(index)
+        img, mask = self.load_sample(index)
 
         # Apply random crops if it is selected
         if self.random_crops_in_DA:
@@ -1009,28 +1185,36 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                     img_prob = self.prob_map[index]
             else:
                 img_prob = None
-            
+
             # Pad and reflect img/mask if necessary
             img = pad_and_reflect(img, self.shape, verbose=False)
             mask = pad_and_reflect(mask, self.shape, verbose=False)
 
-            img, mask = self.random_crop_func(img, mask, self.shape[:self.ndim], self.val, img_prob=img_prob,
-                scale=self.random_crop_scale)
+            img, mask = self.random_crop_func(
+                img,
+                mask,
+                self.shape[: self.ndim],
+                self.val,
+                img_prob=img_prob,
+                scale=self.random_crop_scale,
+            )
 
         # Apply transformations
         if self.da:
             e_img, e_mask = None, None
             if self.cutmix:
-                extra_img = np.random.randint(0, self.length-1) if self.length > 2 else 0
-                e_img, e_mask =  self.load_sample(extra_img)
+                extra_img = (
+                    np.random.randint(0, self.length - 1) if self.length > 2 else 0
+                )
+                e_img, e_mask = self.load_sample(extra_img)
 
             img, mask = self.apply_transform(img, mask, e_im=e_img, e_mask=e_mask)
 
         # Prepare mask when denoising with Noise2Void
         if self.n2v:
             img, mask = self.prepare_n2v(img)
-            
-        # If no normalization was applied, as is done with torchvision models, it can be an image of uint16 
+
+        # If no normalization was applied, as is done with torchvision models, it can be an image of uint16
         # so we need to convert it to
         if img.dtype == np.uint16:
             img = torch.from_numpy(img.copy().astype(np.float32))
@@ -1054,11 +1238,11 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             Mask to transform. E.g. ``(y, x, channels)`` in ``2D`` and ``(y, x, z, channels)`` in ``3D``.
 
         e_img : 3D/4D Numpy array
-            Extra image to help transforming ``image``. E.g. ``(y, x, channels)`` in ``2D`` or 
+            Extra image to help transforming ``image``. E.g. ``(y, x, channels)`` in ``2D`` or
             ``(y, x, z, channels)`` in ``3D``.
 
         e_mask : 3D/4D Numpy array
-            Extra mask to help transforming ``mask``. E.g. ``(y, x, channels)`` in ``2D`` or 
+            Extra mask to help transforming ``mask``. E.g. ``(y, x, channels)`` in ``2D`` or
             ``(y, x, z, channels)`` in ``3D``.
 
         Returns
@@ -1075,21 +1259,23 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             heat = []
             new_mask = []
             for j in range(mask.shape[-1]):
-                if self.channel_info[j]['type'] == "no_bin":
-                    heat.append(np.expand_dims(mask[...,j],-1))
+                if self.channel_info[j]["type"] == "no_bin":
+                    heat.append(np.expand_dims(mask[..., j], -1))
                 else:
-                    new_mask.append(np.expand_dims(mask[...,j],-1))
-                        
+                    new_mask.append(np.expand_dims(mask[..., j], -1))
+
             heat = np.concatenate(heat, axis=-1)
             if len(new_mask) == 0:
-                mask = np.zeros(mask.shape) # Fake mask   
+                mask = np.zeros(mask.shape)  # Fake mask
             else:
                 mask = np.concatenate(new_mask, axis=-1)
             del new_mask
 
             o_heat_shape = heat.shape
             if self.ndim == 3:
-                heat = heat.reshape(heat.shape[:(self.ndim-1)]+(heat.shape[2]*heat.shape[3],))
+                heat = heat.reshape(
+                    heat.shape[: (self.ndim - 1)] + (heat.shape[2] * heat.shape[3],)
+                )
 
         # Save shape
         o_img_shape = image.shape
@@ -1105,34 +1291,63 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         # Apply zoom
         if self.zoom and random.uniform(0, 1) < self.da_prob:
-            image, mask, heat = zoom(image, mask, heat=heat, zoom_range=self.zoom_range, zoom_in_z=self.zoom_in_z, 
-                mode=self.affine_mode, mask_type=self.norm_dict['mask_norm'])
+            image, mask, heat = zoom(
+                image,
+                mask,
+                heat=heat,
+                zoom_range=self.zoom_range,
+                zoom_in_z=self.zoom_in_z,
+                mode=self.affine_mode,
+                mask_type=self.norm_dict["mask_norm"],
+            )
 
         # Apply random rotations
         if self.rand_rot and random.uniform(0, 1) < self.da_prob:
-            image, mask, heat = rotation(image, mask, heat=heat, angles=self.rnd_rot_range, mode=self.affine_mode, 
-                mask_type=self.norm_dict['mask_norm'])
+            image, mask, heat = rotation(
+                image,
+                mask,
+                heat=heat,
+                angles=self.rnd_rot_range,
+                mode=self.affine_mode,
+                mask_type=self.norm_dict["mask_norm"],
+            )
 
         # Apply square rotations
         if self.rotation90 and random.uniform(0, 1) < self.da_prob:
-            image, mask, heat = rotation(image, mask, heat=heat, angles=[90, 180, 270], mode=self.affine_mode, 
-                mask_type=self.norm_dict['mask_norm'])
+            image, mask, heat = rotation(
+                image,
+                mask,
+                heat=heat,
+                angles=[90, 180, 270],
+                mode=self.affine_mode,
+                mask_type=self.norm_dict["mask_norm"],
+            )
 
         # Reshape 3D volumes to 2D image type with multiple channels to pass through imgaug lib
         if self.ndim == 3:
-            image = image.reshape(image.shape[:2]+(image.shape[2]*image.shape[3],))
-            mask = mask.reshape(mask.shape[:2]+(mask.shape[2]*mask.shape[3],))
-            if e_im is not None: e_im = e_im.reshape(e_im.shape[:2]+(e_im.shape[2]*e_im.shape[3],))
-            if e_mask is not None: e_mask = e_mask.reshape(e_mask.shape[:2]+(e_mask.shape[2]*e_mask.shape[3],))
-            #if e_heat is not None: e_heat = e_heat.reshape(e_heat.shape[:2]+(e_heat.shape[2]*e_heat.shape[3],))
+            image = image.reshape(image.shape[:2] + (image.shape[2] * image.shape[3],))
+            mask = mask.reshape(mask.shape[:2] + (mask.shape[2] * mask.shape[3],))
+            if e_im is not None:
+                e_im = e_im.reshape(e_im.shape[:2] + (e_im.shape[2] * e_im.shape[3],))
+            if e_mask is not None:
+                e_mask = e_mask.reshape(
+                    e_mask.shape[:2] + (e_mask.shape[2] * e_mask.shape[3],)
+                )
+            # if e_heat is not None: e_heat = e_heat.reshape(e_heat.shape[:2]+(e_heat.shape[2]*e_heat.shape[3],))
         # Convert heatmap into imgaug object
         if heat is not None:
-            heat = HeatmapsOnImage(heat, shape=heat.shape, min_value=heat.min(), 
-                max_value=heat.max()+sys.float_info.epsilon)
+            heat = HeatmapsOnImage(
+                heat,
+                shape=heat.shape,
+                min_value=heat.min(),
+                max_value=heat.max() + sys.float_info.epsilon,
+            )
 
         # Apply cblur
         if self.cutblur and random.uniform(0, 1) < self.da_prob:
-            image = cutblur(image, self.cblur_size, self.cblur_down_range, self.cblur_inside)
+            image = cutblur(
+                image, self.cblur_size, self.cblur_down_range, self.cblur_inside
+            )
 
         # Apply cutmix
         if self.cutmix and random.uniform(0, 1) < self.da_prob:
@@ -1140,41 +1355,64 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         # Apply cutnoise
         if self.cutnoise and random.uniform(0, 1) < self.da_prob:
-            image = cutnoise(image, self.cnoise_scale, self.cnoise_nb_iterations, self.cnoise_size)
+            image = cutnoise(
+                image, self.cnoise_scale, self.cnoise_nb_iterations, self.cnoise_size
+            )
 
         # Apply misalignment
         if self.misalignment and random.uniform(0, 1) < self.da_prob:
-            rel = str(o_img_shape[-1])+"_"+str(o_mask_shape[-1])
-            image, mask = misalignment(image, mask, self.ms_displacement, self.ms_rotate_ratio, c_relation=rel)
+            rel = str(o_img_shape[-1]) + "_" + str(o_mask_shape[-1])
+            image, mask = misalignment(
+                image, mask, self.ms_displacement, self.ms_rotate_ratio, c_relation=rel
+            )
 
         # Apply brightness
         if self.brightness and random.uniform(0, 1) < self.da_prob:
-            image = brightness(image, brightness_factor=self.brightness_factor, mode=self.brightness_mode)
+            image = brightness(
+                image,
+                brightness_factor=self.brightness_factor,
+                mode=self.brightness_mode,
+            )
 
         # Apply contrast
         if self.contrast and random.uniform(0, 1) < self.da_prob:
-            image = contrast(image, contrast_factor=self.contrast_factor, mode=self.contrast_mode)
+            image = contrast(
+                image, contrast_factor=self.contrast_factor, mode=self.contrast_mode
+            )
 
         # Apply gamma contrast
         if self.gamma_contrast and random.uniform(0, 1) < self.da_prob:
             image = gamma_contrast(image, gamma=self.gc_gamma)
 
         if self.gaussian_noise and random.uniform(0, 1) < self.da_prob:
-            mean = np.mean(image) if self.gaussian_noise_use_input_img_mean_and_var else self.gaussian_noise_mean
-            var = np.var(image)*random.uniform(0.9, 1.1) if self.gaussian_noise_use_input_img_mean_and_var else self.gaussian_noise_var
-            image = random_noise(image, mode='gaussian', mean=mean, var=var)
+            mean = (
+                np.mean(image)
+                if self.gaussian_noise_use_input_img_mean_and_var
+                else self.gaussian_noise_mean
+            )
+            var = (
+                np.var(image) * random.uniform(0.9, 1.1)
+                if self.gaussian_noise_use_input_img_mean_and_var
+                else self.gaussian_noise_var
+            )
+            image = random_noise(image, mode="gaussian", mean=mean, var=var)
 
         if self.poisson_noise and random.uniform(0, 1) < self.da_prob:
-            image = random_noise(image, mode='poisson')
+            image = random_noise(image, mode="poisson")
 
         if self.salt and random.uniform(0, 1) < self.da_prob:
-            image = random_noise(image, mode='salt', amount=self.salt_amount)
+            image = random_noise(image, mode="salt", amount=self.salt_amount)
 
         if self.pepper and random.uniform(0, 1) < self.da_prob:
-            image = random_noise(image, mode='pepper', amount=self.pepper_amount)
+            image = random_noise(image, mode="pepper", amount=self.pepper_amount)
 
         if self.salt_and_pepper and random.uniform(0, 1) < self.da_prob:
-            image = random_noise(image, mode='s&p', amount=self.salt_pep_amount, salt_vs_pepper=self.salt_pep_proportion)
+            image = random_noise(
+                image,
+                mode="s&p",
+                amount=self.salt_pep_amount,
+                salt_vs_pepper=self.salt_pep_proportion,
+            )
 
         # Apply missing parts
         if self.missing_sections and random.uniform(0, 1) < self.da_prob:
@@ -1182,21 +1420,39 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         # Apply GridMask
         if self.gridmask and random.uniform(0, 1) < self.da_prob:
-            image = GridMask(image, self.X_channels, self.z_size, self.grid_ratio, self.grid_d_size, self.grid_rotate,
-                             self.grid_invert)
-        
+            image = GridMask(
+                image,
+                self.X_channels,
+                self.z_size,
+                self.grid_ratio,
+                self.grid_d_size,
+                self.grid_rotate,
+                self.grid_invert,
+            )
+
         # Apply cutout
         if self.cutout and random.uniform(0, 1) < self.da_prob:
-            image, mask = cutout(image, mask, self.X_channels, self.z_size, self.cout_nb_iterations, self.cout_size,
-                                 self.cout_cval, self.res_relation, self.cout_apply_to_mask)
+            image, mask = cutout(
+                image,
+                mask,
+                self.X_channels,
+                self.z_size,
+                self.cout_nb_iterations,
+                self.cout_size,
+                self.cout_cval,
+                self.res_relation,
+                self.cout_apply_to_mask,
+            )
 
         # Apply transformations to the volume and its mask
-        if self.norm_dict['mask_norm'] == 'as_mask':  
+        if self.norm_dict["mask_norm"] == "as_mask":
             # Change dtype to supported one by imgaug
             mask = mask.astype(np.uint8)
-            
+
             segmap = SegmentationMapsOnImage(mask, shape=mask.shape)
-            image, vol_mask, heat_out = self.seq(image=image, segmentation_maps=segmap, heatmaps=heat)
+            image, vol_mask, heat_out = self.seq(
+                image=image, segmentation_maps=segmap, heatmaps=heat
+            )
             mask = vol_mask.get_arr()
         else:
             # Apply transformations to both images
@@ -1217,18 +1473,25 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             new_mask = []
             hi, mi = 0, 0
             for j in range(len(self.channel_info)):
-                if self.channel_info[j]['type'] == "no_bin":
-                    new_mask.append(np.expand_dims(heat[...,hi],-1))
+                if self.channel_info[j]["type"] == "no_bin":
+                    new_mask.append(np.expand_dims(heat[..., hi], -1))
                     hi += 1
                 else:
-                    new_mask.append(np.expand_dims(mask[...,mi],-1))
+                    new_mask.append(np.expand_dims(mask[..., mi], -1))
                     mi += 1
             mask = np.concatenate(new_mask, axis=-1)
 
         return image, mask
 
-    def get_transformed_samples(self, num_examples, random_images=True, save_to_dir=True, out_dir='aug', train=False,
-                                draw_grid=True):
+    def get_transformed_samples(
+        self,
+        num_examples,
+        random_images=True,
+        save_to_dir=True,
+        out_dir="aug",
+        train=False,
+        draw_grid=True,
+    ):
         """
         Apply selected transformations to a defined number of images from the dataset.
 
@@ -1341,7 +1604,11 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         """
         if random_images == False and num_examples > self.length:
             num_examples = self.length
-            print("WARNING: More samples requested than the ones available. 'num_examples' fixed to {}".format(num_examples))
+            print(
+                "WARNING: More samples requested than the ones available. 'num_examples' fixed to {}".format(
+                    num_examples
+                )
+            )
 
         sample_x = []
         sample_y = []
@@ -1352,18 +1619,18 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         print("0) Creating samples of data augmentation . . .")
         for i in tqdm(range(num_examples), disable=not is_main_process()):
             if random_images:
-                pos = random.randint(0,self.length-1) if self.length > 2 else 0
+                pos = random.randint(0, self.length - 1) if self.length > 2 else 0
             else:
                 pos = i
 
             img, mask = self.load_sample(pos)
             if save_to_dir:
                 orig_images = {}
-                orig_images['o_x'] = np.copy(img) 
-                orig_images['o_y'] = np.copy(mask) 
+                orig_images["o_x"] = np.copy(img)
+                orig_images["o_y"] = np.copy(mask)
                 if draw_grid:
-                    self.draw_grid(orig_images['o_x'])
-                    self.draw_grid(orig_images['o_y'])
+                    self.draw_grid(orig_images["o_x"])
+                    self.draw_grid(orig_images["o_y"])
 
             # Apply random crops if it is selected
             if self.random_crops_in_DA:
@@ -1377,17 +1644,34 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                     img_prob = None
 
                 if self.ndim == 2:
-                    img, mask, oy, ox,\
-                    s_y, s_x = random_crop_pair(img, mask, self.shape[:2], self.val, img_prob=img_prob, draw_prob_map_points=True, 
-                        scale=self.random_crop_scale)
+                    img, mask, oy, ox, s_y, s_x = random_crop_pair(
+                        img,
+                        mask,
+                        self.shape[:2],
+                        self.val,
+                        img_prob=img_prob,
+                        draw_prob_map_points=True,
+                        scale=self.random_crop_scale,
+                    )
                 else:
-                    img, mask, oz, oy, ox,\
-                    s_z, s_y, s_x = random_3D_crop_pair(img, mask, self.shape[:3], self.val, img_prob=img_prob, draw_prob_map_points=True)
+                    img, mask, oz, oy, ox, s_z, s_y, s_x = random_3D_crop_pair(
+                        img,
+                        mask,
+                        self.shape[:3],
+                        self.val,
+                        img_prob=img_prob,
+                        draw_prob_map_points=True,
+                    )
                 if save_to_dir:
                     point_dict = {}
-                    point_dict['oy'], point_dict['ox'], point_dict['s_y'], point_dict['s_x'] = oy, ox, s_y, s_x
+                    (
+                        point_dict["oy"],
+                        point_dict["ox"],
+                        point_dict["s_y"],
+                        point_dict["s_x"],
+                    ) = (oy, ox, s_y, s_x)
                 if self.ndim == 3:
-                    point_dict['oz'], point_dict['s_z'] = oz, s_z
+                    point_dict["oz"], point_dict["s_z"] = oz, s_z
 
                 sample_x.append(img)
                 sample_y.append(mask)
@@ -1403,19 +1687,23 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
                 e_img, e_mask = None, None
                 if self.cutmix:
-                    extra_img = np.random.randint(0, self.length-1) if self.length > 2 else 0
+                    extra_img = (
+                        np.random.randint(0, self.length - 1) if self.length > 2 else 0
+                    )
                     e_img, e_mask = self.load_sample(extra_img)
-                
+
                 sample_x[i], sample_y[i] = self.apply_transform(
-                    sample_x[i], sample_y[i], e_im=e_img, e_mask=e_mask)
+                    sample_x[i], sample_y[i], e_im=e_img, e_mask=e_mask
+                )
 
             if self.n2v and not self.val:
                 img, mask = self.prepare_n2v(img)
                 sample_y[i] = mask
 
             if save_to_dir:
-                self.save_aug_samples(sample_x[i], sample_y[i], orig_images, i, pos, out_dir, point_dict)
-
+                self.save_aug_samples(
+                    sample_x[i], sample_y[i], orig_images, i, pos, out_dir, point_dict
+                )
 
     def draw_grid(self, im, grid_width=None):
         """
@@ -1434,22 +1722,22 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             grid_y = grid_width
             grid_x = grid_width
         else:
-            grid_y = im.shape[self.ndim-2]//5
-            grid_x = im.shape[self.ndim-2]//5
+            grid_y = im.shape[self.ndim - 2] // 5
+            grid_x = im.shape[self.ndim - 2] // 5
 
         if self.ndim == 2:
             for i in range(0, im.shape[0], grid_y):
-                im[i] = [v]*im.shape[-1]
+                im[i] = [v] * im.shape[-1]
             for j in range(0, im.shape[1], grid_x):
-                im[:, j] = [v]*im.shape[-1]
+                im[:, j] = [v] * im.shape[-1]
         else:
             for k in range(0, im.shape[0]):
                 for i in range(0, im.shape[2], grid_x):
-                    im[k,:,i] = [v]*im.shape[-1]
+                    im[k, :, i] = [v] * im.shape[-1]
                 for j in range(0, im.shape[1], grid_y):
-                    im[k,j] = [v]*im.shape[-1]
+                    im[k, j] = [v] * im.shape[-1]
         return im
-        
+
     def prepare_n2v(self, _img):
         """
         Creates Noise2Void mask.
@@ -1468,25 +1756,29 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             Noise2Void mask created. E.g. ``(y, x, channels)`` in ``2D`` or ``(y, x, z, channels)`` in ``3D``.
         """
         img = _img.copy()
-        mask = np.zeros(img.shape[:-1] + (img.shape[-1]*2,), dtype=np.float32)
+        mask = np.zeros(img.shape[:-1] + (img.shape[-1] * 2,), dtype=np.float32)
 
         if self.val:
-            np.random.seed(0) 
+            np.random.seed(0)
 
         for c in range(self.Y_channels):
-            coords = self.get_stratified_coords(box_size=self.box_size, shape=self.shape)                             
+            coords = self.get_stratified_coords(
+                box_size=self.box_size, shape=self.shape
+            )
             indexing = coords + (c,)
-            indexing_mask = coords + (c + self.Y_channels, )
+            indexing_mask = coords + (c + self.Y_channels,)
             y_val = img[indexing]
-            x_val = self.value_manipulation(img[..., c], coords, self.ndim, self.n2v_structMask)
-            
+            x_val = self.value_manipulation(
+                img[..., c], coords, self.ndim, self.n2v_structMask
+            )
+
             mask[indexing] = y_val
             mask[indexing_mask] = 1
             img[indexing] = x_val
 
             if self.n2v_structMask is not None:
                 self.apply_structN2Vmask_func(img[..., c], coords, self.n2v_structMask)
-        return img, mask 
+        return img, mask
 
     def get_data_normalization(self):
         """Get data normalization."""

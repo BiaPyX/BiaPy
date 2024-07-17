@@ -43,6 +43,7 @@ from skimage.segmentation import relabel_sequential
 
 matching_criteria = dict()
 
+
 # Copied from https://github.com/CSBDeep/CSBDeep/blob/master/csbdeep/utils/utils.py
 def _raise(e):
     if isinstance(e, BaseException):
@@ -50,21 +51,25 @@ def _raise(e):
     else:
         raise ValueError(e)
 
+
 def label_are_sequential(y):
-    """ returns true if y has only sequential labels from 1... """
+    """returns true if y has only sequential labels from 1..."""
     labels = np.unique(y)
-    return (set(labels)-{0}) == set(range(1,1+labels.max()))
+    return (set(labels) - {0}) == set(range(1, 1 + labels.max()))
 
 
 def is_array_of_integers(y):
-    return isinstance(y,np.ndarray) and np.issubdtype(y.dtype, np.integer)
+    return isinstance(y, np.ndarray) and np.issubdtype(y.dtype, np.integer)
 
 
 def _check_label_array(y, name=None, check_sequential=False):
-    err = ValueError("{label} must be an array of {integers}.".format(
-        label = 'labels' if name is None else name,
-        integers = ('sequential ' if check_sequential else '') + 'non-negative integers',
-    ))
+    err = ValueError(
+        "{label} must be an array of {integers}.".format(
+            label="labels" if name is None else name,
+            integers=("sequential " if check_sequential else "")
+            + "non-negative integers",
+        )
+    )
     is_array_of_integers(y) or _raise(err)
     if len(y) == 0:
         return True
@@ -77,75 +82,87 @@ def _check_label_array(y, name=None, check_sequential=False):
 
 def label_overlap(x, y, check=True):
     if check:
-        _check_label_array(x,'x',True)
-        _check_label_array(y,'y',True)
+        _check_label_array(x, "x", True)
+        _check_label_array(y, "y", True)
         x.shape == y.shape or _raise(ValueError("x and y must have the same shape"))
     return _label_overlap(x, y)
+
 
 def _label_overlap(x, y):
     x = x.ravel()
     y = y.ravel()
-    overlap = np.zeros((1+x.max(),1+y.max()), dtype=np.uint)
+    overlap = np.zeros((1 + x.max(), 1 + y.max()), dtype=np.uint)
     for i in range(len(x)):
-        overlap[x[i],y[i]] += 1
+        overlap[x[i], y[i]] += 1
     return overlap
 
-def _safe_divide(x,y, eps=1e-10):
+
+def _safe_divide(x, y, eps=1e-10):
     """computes a safe divide which returns 0 if y is zero"""
     if np.isscalar(x) and np.isscalar(y):
-        return x/y if np.abs(y)>eps else 0.0
+        return x / y if np.abs(y) > eps else 0.0
     else:
-        out = np.zeros(np.broadcast(x,y).shape, np.float32)
-        np.divide(x,y, out=out, where=np.abs(y)>eps)
+        out = np.zeros(np.broadcast(x, y).shape, np.float32)
+        np.divide(x, y, out=out, where=np.abs(y) > eps)
         return out
 
 
 def intersection_over_union(overlap):
-    _check_label_array(overlap,'overlap')
+    _check_label_array(overlap, "overlap")
     if np.sum(overlap) == 0:
         return overlap
     n_pixels_pred = np.sum(overlap, axis=0, keepdims=True)
     n_pixels_true = np.sum(overlap, axis=1, keepdims=True)
     return _safe_divide(overlap, (n_pixels_pred + n_pixels_true - overlap))
 
-matching_criteria['iou'] = intersection_over_union
+
+matching_criteria["iou"] = intersection_over_union
 
 
 def intersection_over_true(overlap):
-    _check_label_array(overlap,'overlap')
+    _check_label_array(overlap, "overlap")
     if np.sum(overlap) == 0:
         return overlap
     n_pixels_true = np.sum(overlap, axis=1, keepdims=True)
     return _safe_divide(overlap, n_pixels_true)
 
-matching_criteria['iot'] = intersection_over_true
+
+matching_criteria["iot"] = intersection_over_true
 
 
 def intersection_over_pred(overlap):
-    _check_label_array(overlap,'overlap')
+    _check_label_array(overlap, "overlap")
     if np.sum(overlap) == 0:
         return overlap
     n_pixels_pred = np.sum(overlap, axis=0, keepdims=True)
     return _safe_divide(overlap, n_pixels_pred)
 
-matching_criteria['iop'] = intersection_over_pred
+
+matching_criteria["iop"] = intersection_over_pred
 
 
-def precision(tp,fp,fn):
-    return tp/(tp+fp) if tp > 0 else 0
-def recall(tp,fp,fn):
-    return tp/(tp+fn) if tp > 0 else 0
-def accuracy(tp,fp,fn):
+def precision(tp, fp, fn):
+    return tp / (tp + fp) if tp > 0 else 0
+
+
+def recall(tp, fp, fn):
+    return tp / (tp + fn) if tp > 0 else 0
+
+
+def accuracy(tp, fp, fn):
     # also known as "average precision" (?)
     # -> https://www.kaggle.com/c/data-science-bowl-2018#evaluation
-    return tp/(tp+fp+fn) if tp > 0 else 0
-def f1(tp,fp,fn):
+    return tp / (tp + fp + fn) if tp > 0 else 0
+
+
+def f1(tp, fp, fn):
     # also known as "dice coefficient"
-    return (2*tp)/(2*tp+fp+fn) if tp > 0 else 0
+    return (2 * tp) / (2 * tp + fp + fn) if tp > 0 else 0
 
 
-def matching(y_true, y_pred, thresh=0.5, criterion='iou', report_matches=False):
-    """Calculate detection/instance segmentation metrics between ground truth and predicted label images.
+def matching(y_true, y_pred, thresh=0.5, criterion="iou", report_matches=False):
+    """
+    Calculate detection/instance segmentation metrics between ground truth and predicted label images.
 
     Currently, the following metrics are implemented:
 
@@ -188,16 +205,25 @@ def matching(y_true, y_pred, thresh=0.5, criterion='iou', report_matches=False):
     Matching(criterion='iou', thresh=0.5, fp=1, tp=0, fn=1, precision=0, recall=0, accuracy=0, f1=0, n_true=1, n_pred=1, mean_true_score=0.0, mean_matched_score=0.0, panoptic_quality=0.0)
 
     """
-    _check_label_array(y_true,'y_true')
-    _check_label_array(y_pred,'y_pred')
-    y_true.shape == y_pred.shape or _raise(ValueError("y_true ({y_true.shape}) and y_pred ({y_pred.shape}) have different shapes".format(y_true=y_true, y_pred=y_pred)))
-    criterion in matching_criteria or _raise(ValueError("Matching criterion '%s' not supported." % criterion))
-    if thresh is None: thresh = 0
-    thresh = float(thresh) if np.isscalar(thresh) else map(float,thresh)
+    _check_label_array(y_true, "y_true")
+    _check_label_array(y_pred, "y_pred")
+    y_true.shape == y_pred.shape or _raise(
+        ValueError(
+            "y_true ({y_true.shape}) and y_pred ({y_pred.shape}) have different shapes".format(
+                y_true=y_true, y_pred=y_pred
+            )
+        )
+    )
+    criterion in matching_criteria or _raise(
+        ValueError("Matching criterion '%s' not supported." % criterion)
+    )
+    if thresh is None:
+        thresh = 0
+    thresh = float(thresh) if np.isscalar(thresh) else map(float, thresh)
 
     y_true, _, map_rev_true = relabel_sequential(y_true)
     y_pred, _, map_rev_pred = relabel_sequential(y_pred)
-    
+
     map_rev_true = np.array(map_rev_true)
     map_rev_pred = np.array(map_rev_pred)
 
@@ -206,7 +232,7 @@ def matching(y_true, y_pred, thresh=0.5, criterion='iou', report_matches=False):
     assert 0 <= np.min(scores) <= np.max(scores) <= 1
 
     # ignoring background
-    scores = scores[1:,1:]
+    scores = scores[1:, 1:]
     n_true, n_pred = scores.shape
     n_matched = min(n_true, n_pred)
 
@@ -214,10 +240,10 @@ def matching(y_true, y_pred, thresh=0.5, criterion='iou', report_matches=False):
         not_trivial = n_matched > 0 and np.any(scores >= thr)
         if not_trivial:
             # compute optimal matching with scores as tie-breaker
-            costs = -(scores >= thr).astype(float) - scores / (2*n_matched)
+            costs = -(scores >= thr).astype(float) - scores / (2 * n_matched)
             true_ind, pred_ind = linear_sum_assignment(costs)
             assert n_matched == len(true_ind) == len(pred_ind)
-            match_ok = scores[true_ind,pred_ind] >= thr
+            match_ok = scores[true_ind, pred_ind] >= thr
             tp = np.count_nonzero(match_ok)
         else:
             tp = 0
@@ -227,56 +253,78 @@ def matching(y_true, y_pred, thresh=0.5, criterion='iou', report_matches=False):
         # assert tp+fn == n_true
 
         # the score sum over all matched objects (tp)
-        sum_matched_score = np.sum(scores[true_ind,pred_ind][match_ok]) if not_trivial else 0.0
+        sum_matched_score = (
+            np.sum(scores[true_ind, pred_ind][match_ok]) if not_trivial else 0.0
+        )
 
         # the score average over all matched objects (tp)
         mean_matched_score = _safe_divide(sum_matched_score, tp)
         # the score average over all gt/true objects
-        mean_true_score    = _safe_divide(sum_matched_score, n_true)
-        panoptic_quality   = _safe_divide(sum_matched_score, tp+fp/2+fn/2)
+        mean_true_score = _safe_divide(sum_matched_score, n_true)
+        panoptic_quality = _safe_divide(sum_matched_score, tp + fp / 2 + fn / 2)
 
-        stats_dict = dict (
-            criterion          = criterion,
-            thresh             = thr,
-            fp                 = fp,
-            tp                 = tp,
-            fn                 = fn,
-            precision          = precision(tp,fp,fn),
-            recall             = recall(tp,fp,fn),
-            accuracy           = accuracy(tp,fp,fn),
-            f1                 = f1(tp,fp,fn),
-            n_true             = n_true,
-            n_pred             = n_pred,
-            mean_true_score    = mean_true_score,
-            mean_matched_score = mean_matched_score,
-            panoptic_quality   = panoptic_quality,
+        stats_dict = dict(
+            criterion=criterion,
+            thresh=thr,
+            fp=fp,
+            tp=tp,
+            fn=fn,
+            precision=precision(tp, fp, fn),
+            recall=recall(tp, fp, fn),
+            accuracy=accuracy(tp, fp, fn),
+            f1=f1(tp, fp, fn),
+            n_true=n_true,
+            n_pred=n_pred,
+            mean_true_score=mean_true_score,
+            mean_matched_score=mean_matched_score,
+            panoptic_quality=panoptic_quality,
         )
         if bool(report_matches):
             if not_trivial:
-                stats_dict.update (
+                stats_dict.update(
                     # int() to be json serializable
-                    matched_pairs  = tuple((int(map_rev_true[i]),int(map_rev_pred[j])) for i,j in zip(1+true_ind,1+pred_ind)),
-                    matched_scores = tuple(scores[true_ind,pred_ind]),
-                    matched_tps    = tuple(map(int,np.flatnonzero(match_ok))),
-                    pred_ids       = tuple(map_rev_pred),        
-                    gt_ids         = tuple(map_rev_true),
+                    matched_pairs=tuple(
+                        (int(map_rev_true[i]), int(map_rev_pred[j]))
+                        for i, j in zip(1 + true_ind, 1 + pred_ind)
+                    ),
+                    matched_scores=tuple(scores[true_ind, pred_ind]),
+                    matched_tps=tuple(map(int, np.flatnonzero(match_ok))),
+                    pred_ids=tuple(map_rev_pred),
+                    gt_ids=tuple(map_rev_true),
                 )
             else:
-                stats_dict.update (
-                    matched_pairs  = (),
-                    matched_scores = (),
-                    matched_tps    = (),
-                    pred_ids       = (), 
-                    gt_ids         = (),
+                stats_dict.update(
+                    matched_pairs=(),
+                    matched_scores=(),
+                    matched_tps=(),
+                    pred_ids=(),
+                    gt_ids=(),
                 )
         return stats_dict
 
-    return _single(thresh) if np.isscalar(thresh) else tuple(map(_single,thresh))
+    return _single(thresh) if np.isscalar(thresh) else tuple(map(_single, thresh))
 
 
-def wrapper_matching_dataset_lazy(stats_all, thresh, criterion='iou', by_image=False):
+def wrapper_matching_dataset_lazy(stats_all, thresh, criterion="iou", by_image=False):
 
-    expected_keys = set(('fp', 'tp', 'fn', 'precision', 'recall', 'accuracy', 'f1', 'criterion', 'thresh', 'n_true', 'n_pred', 'mean_true_score', 'mean_matched_score', 'panoptic_quality'))
+    expected_keys = set(
+        (
+            "fp",
+            "tp",
+            "fn",
+            "precision",
+            "recall",
+            "accuracy",
+            "f1",
+            "criterion",
+            "thresh",
+            "n_true",
+            "n_pred",
+            "mean_true_score",
+            "mean_matched_score",
+            "panoptic_quality",
+        )
+    )
 
     # accumulate results over all images for each threshold separately
     n_images, n_threshs = len(stats_all), len(thresh)
@@ -287,40 +335,50 @@ def wrapper_matching_dataset_lazy(stats_all, thresh, criterion='iou', by_image=F
             acc = accumulate[i]
             for item in s.items():
                 k, v = item
-                if k == 'mean_true_score' and not bool(by_image):
+                if k == "mean_true_score" and not bool(by_image):
                     # convert mean_true_score to "sum_matched_score"
-                    acc[k] = acc.setdefault(k,0) + v * s['n_true']
+                    acc[k] = acc.setdefault(k, 0) + v * s["n_true"]
                 else:
                     try:
-                        acc[k] = acc.setdefault(k,0) + v
+                        acc[k] = acc.setdefault(k, 0) + v
                     except TypeError:
                         pass
 
     # normalize/compute 'precision', 'recall', 'accuracy', 'f1'
-    for thr,acc in zip(thresh,accumulate):
-        acc['criterion'] = criterion
-        acc['thresh'] = thr
-        acc['by_image'] = bool(by_image)
+    for thr, acc in zip(thresh, accumulate):
+        acc["criterion"] = criterion
+        acc["thresh"] = thr
+        acc["by_image"] = bool(by_image)
         if bool(by_image):
-            for k in ('precision', 'recall', 'accuracy', 'f1', 'mean_true_score', 'mean_matched_score', 'panoptic_quality'):
+            for k in (
+                "precision",
+                "recall",
+                "accuracy",
+                "f1",
+                "mean_true_score",
+                "mean_matched_score",
+                "panoptic_quality",
+            ):
                 acc[k] /= n_images
         else:
-            tp, fp, fn, n_true = acc['tp'], acc['fp'], acc['fn'], acc['n_true']
-            sum_matched_score = acc['mean_true_score']
+            tp, fp, fn, n_true = acc["tp"], acc["fp"], acc["fn"], acc["n_true"]
+            sum_matched_score = acc["mean_true_score"]
 
             mean_matched_score = _safe_divide(sum_matched_score, tp)
-            mean_true_score    = _safe_divide(sum_matched_score, n_true)
-            panoptic_quality   = _safe_divide(sum_matched_score, tp+fp/2+fn/2)
+            mean_true_score = _safe_divide(sum_matched_score, n_true)
+            panoptic_quality = _safe_divide(sum_matched_score, tp + fp / 2 + fn / 2)
 
             acc.update(
-                precision          = precision(tp,fp,fn),
-                recall             = recall(tp,fp,fn),
-                accuracy           = accuracy(tp,fp,fn),
-                f1                 = f1(tp,fp,fn),
-                mean_true_score    = mean_true_score,
-                mean_matched_score = mean_matched_score,
-                panoptic_quality   = panoptic_quality,
+                precision=precision(tp, fp, fn),
+                recall=recall(tp, fp, fn),
+                accuracy=accuracy(tp, fp, fn),
+                f1=f1(tp, fp, fn),
+                mean_true_score=mean_true_score,
+                mean_matched_score=mean_matched_score,
+                panoptic_quality=panoptic_quality,
             )
 
-    accumulate = tuple(namedtuple('DatasetMatching',acc.keys())(*acc.values()) for acc in accumulate)
+    accumulate = tuple(
+        namedtuple("DatasetMatching", acc.keys())(*acc.values()) for acc in accumulate
+    )
     return accumulate[0] if single_thresh else accumulate

@@ -4,15 +4,15 @@ from torch.utils.data import Dataset
 import numpy as np
 import random
 import os
-import cv2
 from tqdm import tqdm
 import imgaug as ia
-from skimage.io import imsave, imread
+from skimage.io import imread
 from imgaug import augmenters as iaa
 
 from biapy.data.pre_processing import normalize, norm_range01, percentile_clip
-from biapy.data.generators.augmentors import random_crop_single, random_3D_crop_single, resize_img, rotation
+from biapy.data.generators.augmentors import *
 from biapy.utils.misc import is_main_process
+
 
 class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
     """
@@ -77,7 +77,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         Zoom range to apply. E. g. ``(0.8, 1.2)``.
 
     zoom_in_z: bool, optional
-        Whether to apply or not zoom in Z axis. 
+        Whether to apply or not zoom in Z axis.
 
     shift : float, optional
         To make shifts.
@@ -146,87 +146,96 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         If defined the input samples will be scaled into that shape.
 
     norm_dict : dict, optional
-        Normalization instructions. 
+        Normalization instructions.
 
     convert_to_rgb : bool, optional
-        In case RGB images are expected, e.g. if ``crop_shape`` channel is 3, those images that are grayscale are 
+        In case RGB images are expected, e.g. if ``crop_shape`` channel is 3, those images that are grayscale are
         converted into RGB.
     """
-    def __init__(
-        self, 
-        ndim, 
-        X, 
-        Y, 
-        data_path, 
-        ptype, 
-        n_classes, 
-        seed=0, 
-        data_mode="", 
-        da=True, 
-        da_prob=0.5, 
-        rotation90=False, 
-        rand_rot=False, 
-        rnd_rot_range=(-180,180), 
-        shear=False, 
-        shear_range=(-20,20), 
-        zoom=False, 
-        zoom_range=(0.8,1.2), 
-        shift=False, 
-        shift_range=(0.1,0.2), 
-        affine_mode='constant', 
-        vflip=False, 
-        hflip=False, 
-        elastic=False, 
-        e_alpha=(240,250), 
-        e_sigma=25, 
-        e_mode='constant', 
-        g_blur=False, 
-        g_sigma=(1.0,2.0), 
-        median_blur=False, 
-        mb_kernel=(3,7), 
-        motion_blur=False, 
-        motb_k_range=(3,8), 
-        gamma_contrast=False, 
-        gc_gamma=(1.25,1.75), 
-        dropout=False, 
-        drop_range=(0, 0.2), 
-        val=False, 
-        resize_shape=None, 
-        norm_dict=None, 
-        convert_to_rgb=False):
 
-        assert norm_dict != None, "Normalization instructions must be provided with 'norm_dict'"
-        assert norm_dict['mask_norm'] in ['as_mask', 'as_image', 'none']
-        assert data_mode in ['in_memory', 'not_in_memory', 'chunked_data']
-        assert ptype in ['mae', 'classification']
+    def __init__(
+        self,
+        ndim,
+        X,
+        Y,
+        data_path,
+        ptype,
+        n_classes,
+        seed=0,
+        data_mode="",
+        da=True,
+        da_prob=0.5,
+        rotation90=False,
+        rand_rot=False,
+        rnd_rot_range=(-180, 180),
+        shear=False,
+        shear_range=(-20, 20),
+        zoom=False,
+        zoom_range=(0.8, 1.2),
+        zoom_in_z=False,
+        shift=False,
+        shift_range=(0.1, 0.2),
+        affine_mode="constant",
+        vflip=False,
+        hflip=False,
+        elastic=False,
+        e_alpha=(240, 250),
+        e_sigma=25,
+        e_mode="constant",
+        g_blur=False,
+        g_sigma=(1.0, 2.0),
+        median_blur=False,
+        mb_kernel=(3, 7),
+        motion_blur=False,
+        motb_k_range=(3, 8),
+        gamma_contrast=False,
+        gc_gamma=(1.25, 1.75),
+        dropout=False,
+        drop_range=(0, 0.2),
+        val=False,
+        resize_shape=None,
+        norm_dict=None,
+        convert_to_rgb=False,
+    ):
+
+        assert (
+            norm_dict != None
+        ), "Normalization instructions must be provided with 'norm_dict'"
+        assert norm_dict["mask_norm"] in ["as_mask", "as_image", "none"]
+        assert data_mode in ["in_memory", "not_in_memory", "chunked_data"]
+        assert ptype in ["mae", "classification"]
 
         if data_mode == "in_memory":
-            if X.ndim != (ndim+2):
-                raise ValueError("X must be a {}D Numpy array".format((ndim+1)))
-        
+            if X.ndim != (ndim + 2):
+                raise ValueError("X must be a {}D Numpy array".format((ndim + 1)))
+
         if ptype == "classification":
             if data_mode == "in_memory" and (X is None or Y is None):
-                raise ValueError("'X' and 'Y' need to be provided together with data_mode == 'in_memory'")
+                raise ValueError(
+                    "'X' and 'Y' need to be provided together with data_mode == 'in_memory'"
+                )
         else:
             if data_mode == "in_memory" and X is None:
-                raise ValueError("'X' needs to be provided together with data_mode == 'in_memory'")
+                raise ValueError(
+                    "'X' needs to be provided together with data_mode == 'in_memory'"
+                )
 
         if resize_shape is None:
-            raise ValueError("'resize_shape' must be provided")   
+            raise ValueError("'resize_shape' must be provided")
 
         self.ptype = ptype
         self.ndim = ndim
-        self.z_size = -1 
+        self.z_size = -1
         self.convert_to_rgb = convert_to_rgb
         self.data_mode = data_mode
         self.norm_dict = norm_dict
-        
+
         # Save paths where the data is stored
         if data_mode == "not_in_memory":
             self.data_path = data_path
             if ptype == "mae":
                 self.all_samples = sorted(next(os.walk(data_path))[2])
-            else:    
+            else:
                 self.class_names = sorted(next(os.walk(data_path))[1])
                 self.class_numbers = {}
                 for i, c_name in enumerate(self.class_names):
@@ -235,8 +244,8 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 self.all_samples = []
                 print("Collecting data ids . . .")
                 for folder in self.class_names:
-                    print("Analizing folder {}".format(os.path.join(data_path,folder)))
-                    ids = sorted(next(os.walk(os.path.join(data_path,folder)))[2])
+                    print("Analizing folder {}".format(os.path.join(data_path, folder)))
+                    ids = sorted(next(os.walk(os.path.join(data_path, folder)))[2])
                     print("Found {} samples".format(len(ids)))
                     for i in range(len(ids)):
                         self.classes.append(folder)
@@ -247,8 +256,11 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 del temp
                 present_classes = np.unique(np.array(self.classes))
                 if len(present_classes) != n_classes:
-                    raise ValueError("MODEL.N_CLASSES is {} but {} classes found: {}"
-                        .format(n_classes, len(present_classes),present_classes))
+                    raise ValueError(
+                        "MODEL.N_CLASSES is {} but {} classes found: {}".format(
+                            n_classes, len(present_classes), present_classes
+                        )
+                    )
 
             self.length = len(self.all_samples)
             if self.length == 0:
@@ -260,8 +272,11 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
                 present_classes = np.unique(np.array(self.Y))
                 if len(present_classes) != n_classes:
-                    raise ValueError("MODEL.N_CLASSES is {} but {} classes found: {}"
-                        .format(n_classes, len(present_classes), present_classes))
+                    raise ValueError(
+                        "MODEL.N_CLASSES is {} but {} classes found: {}".format(
+                            n_classes, len(present_classes), present_classes
+                        )
+                    )
 
             self.length = len(self.X)
 
@@ -269,17 +284,21 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         # X data analysis
         img, _ = self.load_sample(0, first_load=True)
-        if norm_dict['enable']:
-            self.norm_dict['orig_dtype'] = img.dtype
-            if norm_dict['type'] in ["div", "scale_range"]:
-                if norm_dict['type'] == "div":
+        if norm_dict["enable"]:
+            self.norm_dict["orig_dtype"] = img.dtype
+            if norm_dict["type"] in ["div", "scale_range"]:
+                if norm_dict["type"] == "div":
                     img, nsteps = norm_range01(img)
                 else:
                     img, nsteps = norm_range01(img, div_using_max_and_scale=True)
                 self.norm_dict.update(nsteps)
                 if resize_shape[-1] != img.shape[-1]:
-                    raise ValueError("Channel of the patch size given {} does not correspond with the loaded image {}. "
-                        "Please, check the channels of the images!".format(resize_shape[-1], img.shape[-1]))
+                    raise ValueError(
+                        "Channel of the patch size given {} does not correspond with the loaded image {}. "
+                        "Please, check the channels of the images!".format(
+                            resize_shape[-1], img.shape[-1]
+                        )
+                    )
 
         print("Normalization config used for X: {}".format(self.norm_dict))
 
@@ -301,53 +320,79 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.gc_gamma = gc_gamma
 
         self.da_options = []
-        self.trans_made = ''
+        self.trans_made = ""
         if rotation90:
-            self.trans_made += '_rot[90,180,270]'
+            self.trans_made += "_rot[90,180,270]"
         if rand_rot:
-            self.trans_made += '_rrot'+str(rnd_rot_range)
+            self.trans_made += "_rrot" + str(rnd_rot_range)
         if shear:
-            self.da_options.append(iaa.Sometimes(da_prob, iaa.Affine(rotate=shear_range, mode=affine_mode)))
-            self.trans_made += '_shear'+str(shear_range)
+            self.da_options.append(
+                iaa.Sometimes(da_prob, iaa.Affine(rotate=shear_range, mode=affine_mode))
+            )
+            self.trans_made += "_shear" + str(shear_range)
         if zoom:
-            self.trans_made += '_zoom'+str(zoom_range)+"+"+str(zoom_in_z)
+            self.trans_made += "_zoom" + str(zoom_range) + "+" + str(zoom_in_z)
         if shift:
-            self.da_options.append(iaa.Sometimes(da_prob, iaa.Affine(translate_percent=shift_range, mode=affine_mode)))
-            self.trans_made += '_shift'+str(shift_range)
+            self.da_options.append(
+                iaa.Sometimes(
+                    da_prob, iaa.Affine(translate_percent=shift_range, mode=affine_mode)
+                )
+            )
+            self.trans_made += "_shift" + str(shift_range)
         if vflip:
             self.da_options.append(iaa.Flipud(da_prob))
-            self.trans_made += '_vflip'
+            self.trans_made += "_vflip"
         if hflip:
             self.da_options.append(iaa.Fliplr(da_prob))
-            self.trans_made += '_hflip'
+            self.trans_made += "_hflip"
         if elastic:
-            self.da_options.append(iaa.Sometimes(da_prob,iaa.ElasticTransformation(alpha=e_alpha, sigma=e_sigma, mode=e_mode)))
-            self.trans_made += '_elastic'+str(e_alpha)+'+'+str(e_sigma)+'+'+str(e_mode)
+            self.da_options.append(
+                iaa.Sometimes(
+                    da_prob,
+                    iaa.ElasticTransformation(
+                        alpha=e_alpha, sigma=e_sigma, mode=e_mode
+                    ),
+                )
+            )
+            self.trans_made += (
+                "_elastic" + str(e_alpha) + "+" + str(e_sigma) + "+" + str(e_mode)
+            )
         if g_blur:
-            self.da_options.append(iaa.Sometimes(da_prob,iaa.GaussianBlur(g_sigma)))
-            self.trans_made += '_gblur'+str(g_sigma)
+            self.da_options.append(iaa.Sometimes(da_prob, iaa.GaussianBlur(g_sigma)))
+            self.trans_made += "_gblur" + str(g_sigma)
         if median_blur:
-            self.da_options.append(iaa.Sometimes(da_prob,iaa.MedianBlur(k=mb_kernel)))
-            self.trans_made += '_mblur'+str(mb_kernel)
+            self.da_options.append(iaa.Sometimes(da_prob, iaa.MedianBlur(k=mb_kernel)))
+            self.trans_made += "_mblur" + str(mb_kernel)
         if motion_blur:
-            self.da_options.append(iaa.Sometimes(da_prob,iaa.MotionBlur(k=motb_k_range)))
-            self.trans_made += '_motb'+str(motb_k_range)
+            self.da_options.append(
+                iaa.Sometimes(da_prob, iaa.MotionBlur(k=motb_k_range))
+            )
+            self.trans_made += "_motb" + str(motb_k_range)
         if gamma_contrast:
-            self.trans_made += '_gcontrast'+str(gc_gamma)
+            self.trans_made += "_gcontrast" + str(gc_gamma)
         if dropout:
             self.da_options.append(iaa.Sometimes(da_prob, iaa.Dropout(p=drop_range)))
-            self.trans_made += '_drop'+str(drop_range)
+            self.trans_made += "_drop" + str(drop_range)
 
         self.trans_made = self.trans_made.replace(" ", "")
         self.seq = iaa.Sequential(self.da_options)
         self.seed = seed
         ia.seed(seed)
         self.indexes = self.o_indexes.copy()
-        self.random_crop_func = random_3D_crop_single if self.ndim == 3 else random_crop_single
+        self.random_crop_func = (
+            random_3D_crop_single if self.ndim == 3 else random_crop_single
+        )
 
     @abstractmethod
-    def get_transformed_samples(self, num_examples, save_to_dir=False, out_dir='aug', 
-        train=True, random_images=True, draw_grid=True):
+    def get_transformed_samples(
+        self,
+        num_examples,
+        save_to_dir=False,
+        out_dir="aug",
+        train=True,
+        random_images=True,
+        draw_grid=True,
+    ):
         NotImplementedError
 
     @abstractmethod
@@ -372,15 +417,15 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
             Sample index counter.
 
         first_load : bool, optional
-            Whether its the first time a sample is loaded to prevent normalizing it. 
-            
+            Whether its the first time a sample is loaded to prevent normalizing it.
+
         Returns
         -------
         img : 3D/4D Numpy array
             X element. E.g. ``(y, x, channels)`` in  ``2D`` and ``(z, y, x, channels)`` in ``3D``.
 
         class : int
-            Y element. 
+            Y element.
         """
         # Choose the data source
         if self.data_mode == "in_memory":
@@ -389,36 +434,42 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         else:
             sample_id = self.all_samples[idx]
             if self.ptype == "classification":
-                sample_class_dir = self.classes[idx] 
-                f = os.path.join(self.data_path, sample_class_dir, sample_id) 
+                sample_class_dir = self.classes[idx]
+                f = os.path.join(self.data_path, sample_class_dir, sample_id)
                 img_class = self.class_numbers[sample_class_dir]
-            else:            
+            else:
                 f = os.path.join(self.data_path, sample_id)
                 img_class = 0
-            img = np.load(f) if sample_id.endswith('.npy') else imread(f)
+            img = np.load(f) if sample_id.endswith(".npy") else imread(f)
             img = np.squeeze(img)
-            
-        # X normalization
-        if self.norm_dict['enable'] and not first_load:
-            # Percentile clipping
-            if 'lower_bound' in self.norm_dict and self.norm_dict['application_mode'] == "image":
-                img, _, _ = percentile_clip(img, lower=self.norm_dict['lower_bound'],                                     
-                    upper=self.norm_dict['upper_bound'])
 
-            if self.norm_dict['type'] == 'div':
+        # X normalization
+        if self.norm_dict["enable"] and not first_load:
+            # Percentile clipping
+            if (
+                "lower_bound" in self.norm_dict
+                and self.norm_dict["application_mode"] == "image"
+            ):
+                img, _, _ = percentile_clip(
+                    img,
+                    lower=self.norm_dict["lower_bound"],
+                    upper=self.norm_dict["upper_bound"],
+                )
+
+            if self.norm_dict["type"] == "div":
                 img, _ = norm_range01(img)
-            elif self.norm_dict['type'] == 'scale_range':
+            elif self.norm_dict["type"] == "scale_range":
                 img, _ = norm_range01(img, div_using_max_and_scale=True)
-            elif self.norm_dict['type'] == 'custom':
-                if self.norm_dict['application_mode'] == "image":
+            elif self.norm_dict["type"] == "custom":
+                if self.norm_dict["application_mode"] == "image":
                     img = normalize(img, img.mean(), img.std())
                 else:
-                    img = normalize(img, self.norm_dict['mean'], self.norm_dict['std'])
+                    img = normalize(img, self.norm_dict["mean"], self.norm_dict["std"])
 
         img = self.ensure_shape(img)
 
         return img, img_class
-        
+
     def getitem(self, index):
         """
         Generation of one pair of data.
@@ -430,9 +481,9 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         Returns
         -------
-        item : tuple of 3D/4D Numpy arrays 
-            X and Y (if avail) elements. X is ``(z, y, x, channels)`` if ``3D`` or 
-            ``(y, x, channels)`` if ``2D``. Y is an integer. 
+        item : tuple of 3D/4D Numpy arrays
+            X and Y (if avail) elements. X is ``(z, y, x, channels)`` if ``3D`` or
+            ``(y, x, channels)`` if ``2D``. Y is an integer.
         """
         return self.__getitem__(index)
 
@@ -448,10 +499,10 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         Returns
         -------
         img : 3D/4D Numpy array
-            X element, for instance, an image. E.g. ``(y, x, channels)`` in ``2D`` or 
+            X element, for instance, an image. E.g. ``(y, x, channels)`` in ``2D`` or
             ``(z, y, x, channels)`` in ``3D``.
         """
-        img, img_class =  self.load_sample(index)
+        img, img_class = self.load_sample(index)
 
         if img.shape[:-1] != self.shape[:-1]:
             img = self.random_crop_func(img, self.shape[:-1], self.val)
@@ -461,7 +512,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         if self.da:
             img = self.apply_transform(img)
 
-        # If no normalization was applied, as is done with torchvision models, it can be an image of uint16 
+        # If no normalization was applied, as is done with torchvision models, it can be an image of uint16
         # so we need to convert it to
         if img.dtype == np.uint16:
             img = torch.from_numpy(img.copy().astype(np.float32))
@@ -489,8 +540,13 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         # Apply zoom
         if self.zoom and random.uniform(0, 1) < self.da_prob:
-            image = zoom(image, zoom_range=self.zoom_range, zoom_in_z=self.zoom_in_z, 
-                mode=self.affine_mode, mask_type=self.norm_dict['mask_norm'])
+            image = zoom(
+                image,
+                zoom_range=self.zoom_range,
+                zoom_in_z=self.zoom_in_z,
+                mode=self.affine_mode,
+                mask_type=self.norm_dict["mask_norm"],
+            )
 
         # Apply random rotations
         if self.rand_rot and random.uniform(0, 1) < self.da_prob:
@@ -502,7 +558,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         # Reshape 3D volumes to 2D image type with multiple channels to pass through imgaug lib
         if self.ndim == 3:
-            image = image.reshape(image.shape[:2]+(image.shape[2]*image.shape[3],))
+            image = image.reshape(image.shape[:2] + (image.shape[2] * image.shape[3],))
 
         # Apply gamma contrast
         if self.gamma_contrast and random.uniform(0, 1) < self.da_prob:
@@ -533,24 +589,31 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
             grid_y = grid_width
             grid_x = grid_width
         else:
-            grid_y = im.shape[self.ndim-2]//5
-            grid_x = im.shape[self.ndim-2]//5
+            grid_y = im.shape[self.ndim - 2] // 5
+            grid_x = im.shape[self.ndim - 2] // 5
 
         if self.ndim == 2:
             for i in range(0, im.shape[0], grid_y):
-                im[i] = [v]*im.shape[-1]
+                im[i] = [v] * im.shape[-1]
             for j in range(0, im.shape[1], grid_x):
-                im[:, j] = [v]*im.shape[-1]
+                im[:, j] = [v] * im.shape[-1]
         else:
             for k in range(0, im.shape[0]):
                 for i in range(0, im.shape[2], grid_x):
-                    im[k,:,i] = [v]*im.shape[-1]
+                    im[k, :, i] = [v] * im.shape[-1]
                 for j in range(0, im.shape[1], grid_y):
-                    im[k,j] = [v]*im.shape[-1]
+                    im[k, j] = [v] * im.shape[-1]
         return im
-        
-    def get_transformed_samples(self, num_examples, random_images=True, save_to_dir=True, out_dir='aug', train=False,
-                                draw_grid=True):
+
+    def get_transformed_samples(
+        self,
+        num_examples,
+        random_images=True,
+        save_to_dir=True,
+        out_dir="aug",
+        train=False,
+        draw_grid=True,
+    ):
         """
         Apply selected transformations to a defined number of images from the dataset.
 
@@ -573,27 +636,31 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         train : bool, optional
             To avoid drawing a grid on the generated images. This should be set when the samples will be used for
             training.
-            
+
         draw_grid : bool, optional
             Draw a grid in the generated samples. Useful to see some types of deformations.
 
         Returns
         -------
         sample_x : 4D/5D Numpy array
-            Batch of data. E.g. ``(num_examples, y, x, channels)`` in ``2D`` or ``(num_examples, z, y, x, channels)`` 
+            Batch of data. E.g. ``(num_examples, y, x, channels)`` in ``2D`` or ``(num_examples, z, y, x, channels)``
             in ``3D``.
         """
 
         if random_images == False and num_examples > self.length:
             num_examples = self.length
-            print("WARNING: More samples requested than the ones available. 'num_examples' fixed to {}".format(num_examples))
+            print(
+                "WARNING: More samples requested than the ones available. 'num_examples' fixed to {}".format(
+                    num_examples
+                )
+            )
 
         sample_x = []
 
         # Generate the examples
         for i in tqdm(range(num_examples), disable=not is_main_process()):
             if random_images:
-                pos = random.randint(0,self.length-1) if self.length > 2 else 0
+                pos = random.randint(0, self.length - 1) if self.length > 2 else 0
             else:
                 pos = i
 
@@ -601,7 +668,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
             if save_to_dir:
                 orig_images = {}
-                orig_images['o_x'] = np.copy(img)
+                orig_images["o_x"] = np.copy(img)
 
             # Apply transformations
             if self.da:
@@ -613,7 +680,9 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
             sample_x.append(img)
 
             if save_to_dir:
-                self.save_aug_samples(sample_x[i], orig_images, i, pos, out_dir, draw_grid)
+                self.save_aug_samples(
+                    sample_x[i], orig_images, i, pos, out_dir, draw_grid
+                )
 
         print("### END TR-SAMPLES ###")
         return sample_x
