@@ -150,9 +150,9 @@ class Base_Workflow(metaclass=ABCMeta):
             if isinstance(self.bmz_config['original_bmz_config'], InvalidDescr):
                 raise ValueError(f"Failed to load {source}")
 
-            self.bmz_model_with_new_descrition = False            
+            self.bmz_config['original_model_spec_version'] = "v0_4"         
             if isinstance(self.bmz_config['original_bmz_config'], ModelDescr):
-                self.bmz_model_with_new_descrition = True
+                self.bmz_config['original_model_spec_version'] = "v0_5"
 
             # 1) Change PATCH_SIZE with the one stored in the RDF
             inputs = get_test_inputs(self.bmz_config['original_bmz_config'])
@@ -162,7 +162,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 input_image_shape = inputs.members['raw']._data.shape
             else:
                 raise ValueError(f"Couldn't load input info from BMZ model's RDF: {inputs}")
-            # if not self.bmz_model_with_new_descrition:
+            # if not self.bmz_config['original_model_spec_version']:
             #     input_image = np.load(download(self.bmz_config['original_bmz_config'].test_inputs[0]).path)
             # else:
             #     input_image = np.load(download(self.bmz_config['original_bmz_config'].inputs[0].test_tensor.source.absolute()).path)
@@ -621,7 +621,8 @@ class Base_Workflow(metaclass=ABCMeta):
         print("# Build model #")
         print("###############")
         if self.cfg.MODEL.SOURCE == "biapy":
-            self.model, self.bmz_config['model_file'] = build_model(self.cfg, self.job_identifier, self.device)
+            self.model, self.bmz_config['model_file'], self.bmz_config['model_name'], \
+                self.bmz_config['model_build_kwargs'] = build_model(self.cfg, self.job_identifier, self.device)
         elif self.cfg.MODEL.SOURCE == "torchvision":
             self.model, self.torchvision_preprocessing = build_torchvision_model(self.cfg, self.device)
         # BioImage Model Zoo pretrained models
@@ -640,8 +641,7 @@ class Base_Workflow(metaclass=ABCMeta):
             if self.args.distributed:
                 raise ValueError("DDP can not be activated when loading a BMZ pretrained model")
 
-            self.model = build_bmz_model(self.cfg, self.bmz_config['original_bmz_config'], self.bmz_model_with_new_descrition,
-                self.device)
+            self.model = build_bmz_model(self.cfg, self.bmz_config['original_bmz_config'], self.device)
 
         self.model_without_ddp = self.model
         if self.args.distributed:
@@ -1330,7 +1330,11 @@ class Base_Workflow(metaclass=ABCMeta):
         if self.cfg.DATA.PATCH_SIZE[-1] != self._X.shape[-1]:
             raise ValueError("Channel of the DATA.PATCH_SIZE given {} does not correspond with the loaded image {}. "
                 "Please, check the channels of the images!".format(self.cfg.DATA.PATCH_SIZE[-1], self._X.shape[-1]))
-                
+
+        # Save test_output if the user wants to export the model to BMZ later
+        if 'test_input' not in self.bmz_config:
+            self.bmz_config['test_input'] = self._X[0].copy()
+
         #################
         ### PER PATCH ###
         #################
@@ -1597,6 +1601,10 @@ class Base_Workflow(metaclass=ABCMeta):
 
             self.after_full_image(pred)
 
+        # Save test_output if the user wants to export the model to BMZ later
+        if 'test_output' not in self.bmz_config:
+            self.bmz_config['test_output'] = pred[0].copy()
+                
     def normalize_stats(self, image_counter):
         """
         Normalize statistics.  

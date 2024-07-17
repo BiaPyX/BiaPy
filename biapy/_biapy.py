@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import argparse
 import datetime
@@ -10,10 +11,21 @@ from shutil import copyfile
 import numpy as np
 import importlib
 import multiprocessing
+from hashlib import sha256
+
+from bioimageio.spec.model.v0_5 import (
+    Author, CiteEntry, Doi, HttpUrl, LicenseId, PytorchStateDictWeightsDescr, TorchscriptWeightsDescr, AxisId, BatchAxis, ChannelAxis,
+    FileDescr,Identifier,InputTensorDescr,IntervalOrRatioDataDescr,ParameterizedSize,SpaceInputAxis,SpaceOutputAxis,TensorId,
+    WeightsDescr, ArchitectureFromFileDescr, ArchitectureFromLibraryDescr, Version, EnvironmentFileDescr)
+from bioimageio.spec import save_bioimageio_package
+from bioimageio.core import test_model
+from bioimageio.spec.utils import download
 
 from biapy.utils.misc import init_devices, is_dist_avail_and_initialized, set_seed, get_rank, setup_for_distributed
 from biapy.config.config import Config
 from biapy.engine.check_configuration import check_configuration
+from biapy.models import get_bmz_model_info
+from biapy.utils.util import create_file_sha256sum
 
 class BiaPy():
     def __init__(self, config, result_dir=os.getenv('HOME'), name="unknown_job", run_id=1, gpu=None, world_size=1, 
@@ -186,18 +198,16 @@ class BiaPy():
                 Authors of the model. Need to be a list of dicts. E.g. ``[{"name": "Gizmo"}]``. 
 
             license : str
-                License of the model. E.g. "CC-BY-4.0"
+                A `SPDX license identifier <https://spdx.org/licenses/>`__. E.g. "CC-BY-4.0", "MIT", 
+                "BSD-2-Clause".
 
             tags : List of dicts
                 Tags to make models more findable on the website. 
                 E.g. ``[{'modality': 'electron-microscopy', 'content': 'mitochondria'}]``.
 
-            cite : List of dicts 
+            cite : List of dicts, optional 
                 List of dictionaries of citations associated. E.g. 
-                ``[{"text": "Gizmo et al.", "doi": "doi:10.1002/xyzacab123"}]``
-
-            doc : path
-                Path to a file with a documentation of the model in markdown. E.g. "my-model/doc.md"
+                ``[{"text": "Gizmo et al.", "doi": "10.1002/xyzacab123"}]``
                 
             model_name : str, optional
                 Name of the model. If not set a name based on the selected configuration
@@ -215,6 +225,11 @@ class BiaPy():
             test_output : 3D/4D Torch tensor, optional
                 Test output image sample. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
 
+            covers : List of str, optional
+                A list of cover images provided by either a relative path to the model folder, or 
+                a hyperlink starting with 'http[s]'. Please use an image smaller than 500KB and an 
+                aspect ratio width to height of 2:1. The supported image formats are: 'jpg', 'png', 'gif'.
+
         reuse_original_bmz_config : bool, optional
             Whether to reuse the original BMZ fields. This option can only be used if the model to export
             was previously loaded from BMZ.
@@ -227,7 +242,7 @@ class BiaPy():
 
         # Check keys
         if not reuse_original_bmz_config:
-            need_info = ['description', 'authors', 'license', 'tags', 'cite', 'doc']
+            need_info = ['description', 'authors', 'license', 'tags']
             for x in need_info:
                 if x not in bmz_cfg:
                     raise ValueError(f"'{x}' property must be declared in 'bmz_cfg'")
@@ -266,6 +281,13 @@ class BiaPy():
                 for d in bmz_cfg['authors']:
                     if not isinstance(d, dict):
                         raise ValueError("'bmz_cfg['authors']' must be a list of dicts. E.g. [{'name': 'Daniel'}]")
+                    else:
+                        if len(d.keys()) < 2 or 'name' not in d or 'github_user' not in d:
+                            raise ValueError("Author dictionary must have at least 'name' and 'github_user' keys")
+                        for k in d.keys():
+                            if k not in ['name', 'affiliation', 'email', 'github_user', 'orcid']:
+                                raise ValueError("Author dictionary available keys are: ['name', 'affiliation', 'email', "
+                                    f"'github_user', 'orcid']. Provided {k}")
             if bmz_cfg['license'] == "":
                     raise ValueError("'bmz_cfg['license']' can not be empty. E.g. 'CC-BY-4.0'")
             if not isinstance(bmz_cfg['tags'], list):
@@ -276,17 +298,19 @@ class BiaPy():
                 for d in bmz_cfg['tags']:
                     if not isinstance(d, dict):
                         raise ValueError("'bmz_cfg['tags']' must be a list of dicts. E.g. [{'modality': 'electron-microscopy', 'content': 'mitochondria'}]")                    
-            if not isinstance(bmz_cfg['cite'], list):
-                raise ValueError("'bmz_cfg['cite']' needs to be a list of dicts. E.g. [{'text': 'Gizmo et al.', 'doi': 'doi:10.1002/xyzacab123'}]")
-            else:
-                for d in bmz_cfg['cite']:
-                    if not isinstance(d, dict):
-                        raise ValueError("'bmz_cfg['cite']' needs to be a list of dicts. E.g. [{'text': 'Gizmo et al.', 'doi': 'doi:10.1002/xyzacab123'}]")
-            if bmz_cfg['doc'] == "":
-                raise ValueError("'bmz_cfg['doc']' can not be empty. E.g. '/home/user/my-model/doc.md'")
-            else:
-                if not os.path.exists(bmz_cfg['doc']):
-                    raise ValueError("'bmz_cfg['doc']' file does not exist!")
+            if 'cite' in bmz_cfg:
+                if not isinstance(bmz_cfg['cite'], list):
+                    raise ValueError("'bmz_cfg['cite']' needs to be a list of dicts. E.g. [{'text': 'Gizmo et al.', 'doi': '10.1002/xyzacab123'}]")
+                else:
+                    for d in bmz_cfg['cite']:
+                        if not isinstance(d, dict):
+                            raise ValueError("'bmz_cfg['cite']' needs to be a list of dicts. E.g. [{'text': 'Gizmo et al.', 'doi': '10.1002/xyzacab123'}]")
+                        else:
+                            if len(d.keys()) < 2 or 'text' not in d:
+                                raise ValueError("Cite dictionary must have at least 'text' key")
+                            for k in d.keys():
+                                if k not in ['text', 'doi', 'url']:
+                                    raise ValueError(f"Cite dictionary available keys are: ['text', 'doi', 'url']. Provided {k}")
 
             if 'input_axes' in bmz_cfg:
                 if not isinstance(bmz_cfg['input_axes'], list):
@@ -306,45 +330,89 @@ class BiaPy():
                 raise ValueError("'bmz_cfg['test_input']' needs to be a Tensor") 
             if 'test_output' in bmz_cfg and not torch.is_tensor(bmz_cfg['test_output']):
                 raise ValueError("'bmz_cfg['test_output']' needs to be a Tensor") 
-
-        from bioimageio.core.build_spec import build_model
-        from bioimageio.core.resource_tests import test_model
-        from bioimageio.core import load_resource_description
+            if 'covers' in bmz_cfg:
+                if not isinstance(bmz_cfg['covers'], list):
+                    raise ValueError("'bmz_cfg['covers']' needs to be a list containing strings.")
 
         # Save input/output samples
         os.makedirs(building_dir, exist_ok=True)
-        input_sample_path = os.path.join(building_dir, "test-input.npy")
-        output_sample_path = os.path.join(building_dir, "test-output.npy")
+        test_input_path = os.path.join(building_dir, "test-input.npy")
+        test_output_path = os.path.join(building_dir, "test-output.npy")
         if not reuse_original_bmz_config:
             test_input = self.workflow.bmz_config['test_input'] if 'test_input' not in bmz_cfg else bmz_cfg['test_input']
-            test_output = self.workflow.bmz_config['test_output'] if 'test_output' not in bmz_cfg else bmz_cfg['test_output']
+            input_axes = [
+                BatchAxis(),
+                ChannelAxis(channel_names=[Identifier("raw"+str(i)) for i in range(test_input.shape[-1])])
+            ]
             if test_input.ndim == 3:
-                np.save(input_sample_path, test_input.permute((2, 0 ,1)).unsqueeze(0))
+                np.save(
+                    test_input_path, 
+                    test_input.permute((2, 0, 1)).unsqueeze(0) if torch.is_tensor(test_input) else np.expand_dims(test_input.transpose((2, 0, 1)),0)
+                )
+                input_axes += [
+                    SpaceInputAxis(id=AxisId('y'), size=ParameterizedSize(min=256, step=8)),
+                    SpaceInputAxis(id=AxisId('x'), size=ParameterizedSize(min=256, step=8)),
+                ]
                 in_axes = ["bcyx"]
             else:
-                np.save(input_sample_path, test_input.permute((3, 0 ,1, 2)).unsqueeze(0))
-                in_axes = ["bczyx"]
-            in_axes = in_axes if 'input_axes' not in bmz_cfg else bmz_cfg['input_axes']
+                np.save(
+                    test_input_path, 
+                    test_input.permute((3, 0, 1, 2)).unsqueeze(0) if torch.is_tensor(test_input) else np.expand_dims(test_input.transpose((3, 0, 1, 2)),0)
+                )
+                input_axes += [
+                    SpaceInputAxis(id=AxisId("z"), size=ParameterizedSize(min=16, step=8)),
+                    SpaceInputAxis(id=AxisId('y'), size=ParameterizedSize(min=144, step=72)),
+                    SpaceInputAxis(id=AxisId('x'), size=ParameterizedSize(min=144, step=72)),
+                ]
+                in_axes = ["bczyx"]   
+            data_descr = IntervalOrRatioDataDescr(type="float32")
 
+            input_descr = InputTensorDescr(
+                id=TensorId("raw"), 
+                axes=input_axes, 
+                test_tensor=FileDescr(source=test_input_path), 
+                data=data_descr
+                )
+            inputs = [input_descr]
+
+            test_output = self.workflow.bmz_config['test_output'] if 'test_output' not in bmz_cfg else bmz_cfg['test_output']
+            output_axes = [
+                BatchAxis(),
+                ChannelAxis(channel_names=[Identifier("raw"+str(i)) for i in range(test_output.shape[-1])])
+            ]
             if test_output.ndim == 3:
-                np.save(output_sample_path, test_output.permute((2, 0 ,1)).unsqueeze(0))
-                out_axes = ["bcyx"]
-            elif test_output.ndim == 4:
-                np.save(output_sample_path, test_output.permute((3, 0 ,1, 2)).unsqueeze(0))
-                out_axes = ["bczyx"]
+                np.save(
+                    test_output_path, 
+                    test_output.permute((2, 0 ,1)).unsqueeze(0) if torch.is_tensor(test_output) else np.expand_dims(test_output.transpose((2, 0, 1)),0)
+                )
+                output_axes += [
+                    SpaceInputAxis(id=AxisId('y'), size=ParameterizedSize(min=256, step=8)),
+                    SpaceInputAxis(id=AxisId('x'), size=ParameterizedSize(min=256, step=8)),
+                ]
+                in_axes = ["bcyx"]
             else:
-                np.save(output_sample_path, test_output.unsqueeze(0))
-                out_axes = ["bc"]  
-            out_axes = out_axes if 'input_axes' not in bmz_cfg else bmz_cfg['input_axes']
+                np.save(
+                    test_output_path, 
+                    test_output.permute((3, 0 ,1, 2)).unsqueeze(0) if torch.is_tensor(test_output) else np.expand_dims(test_output.transpose((3, 0, 1, 2)),0)
+                )
+                output_axes += [
+                    SpaceInputAxis(id=AxisId("z"), size=ParameterizedSize(min=16, step=8)),
+                    SpaceInputAxis(id=AxisId('y'), size=ParameterizedSize(min=144, step=72)),
+                    SpaceInputAxis(id=AxisId('x'), size=ParameterizedSize(min=144, step=72)),
+                ]
+                in_axes = ["bczyx"]   
+            data_descr = IntervalOrRatioDataDescr(type="float32")
+
+            output_descr = InputTensorDescr(
+                id=TensorId("raw"), 
+                axes=output_axes, 
+                test_tensor=FileDescr(source=test_output_path), 
+                data=data_descr
+                )
+            outputs = [output_descr]
         else:
-            test_input = self.workflow.bmz_config['original_bmz_config'].test_inputs
-            test_output = self.workflow.bmz_config['original_bmz_config'].test_outputs
-            in_axes = self.workflow.bmz_config['original_bmz_config'].inputs[0].axes
-            out_axes = self.workflow.bmz_config['original_bmz_config'].outputs[0].axes
-            if isinstance(in_axes, tuple): in_axes = ''.join(in_axes)
-            if isinstance(out_axes, tuple): out_axes = ''.join(out_axes)
-            in_axes = [in_axes]
-            out_axes = [out_axes]
+            inputs = self.workflow.bmz_config['original_bmz_config'].inputs
+            outputs = self.workflow.bmz_config['original_bmz_config'].outputs
             
         # Name of the model
         if not reuse_original_bmz_config:
@@ -420,115 +488,151 @@ class BiaPy():
         else:
             tags = [self.workflow.bmz_config['original_bmz_config'].tags]
 
-        # Architecture
-        if 'original_bmz_config' in self.workflow.bmz_config:
-            from bioimageio.core.resource_io.utils import resolve_source
-            model_source = self.workflow.bmz_config['original_bmz_config'].weights["pytorch_state_dict"].architecture
-            # download the source file if necessary
-            modelname = str(self.workflow.bmz_config['original_bmz_config'].weights["pytorch_state_dict"].architecture).split('.')[-2]
-            callable_func = str(self.workflow.bmz_config['original_bmz_config'].weights["pytorch_state_dict"].architecture).split('.')[-1]
-            callable_func = callable_func.replace('\'','').replace('>','').replace(')','')
-            file_root_dir = os.path.dirname(self.workflow.bmz_config['original_bmz_config'].test_inputs[0])
-            files_in_path = next(os.walk(file_root_dir))[2]
-            source_file = [x for x in files_in_path if modelname+".py" in x]
-            if len(source_file) == 0:
-                raise ValueError("No architecture file found")
-            source_file = os.path.join(file_root_dir,source_file[0])
-            model_source = str(source_file)+":"+callable_func
-        else:
-            model_source = self.workflow.bmz_config['model_file']
-
         # Description 
         if not reuse_original_bmz_config:
             description = bmz_cfg['description']
         else:
             description = self.workflow.bmz_config['original_bmz_config'].description
 
-        # Authors 
+        # Authors
+        authors = [] 
         if not reuse_original_bmz_config:
-            authors = bmz_cfg['authors']
+            for author in bmz_cfg['authors']:
+                affiliation = author['affiliation'] if 'affiliation' in author else None
+                orcid = author['orcid'] if 'orcid' in author else None
+                email = author['email'] if 'email' in author else None
+                a = Author(
+                    name = author['name'], 
+                    affiliation = affiliation, 
+                    github_user = author['github_user'],
+                    orcid = orcid,
+                    email = email
+                )
+                authors.append(a)
         else:
-            authors = []
-            for author in self.workflow.bmz_config['original_bmz_config'].authors:
-                author_info = {}
-                attributes = [a for a in dir(author) if not a.startswith('__') and not a.startswith('_')]
-                for att in attributes:
-                    if bool(getattr(author, att)):
-                        author_info[att] = getattr(author, att)
-                authors.append(author_info)  
+            authors = self.workflow.bmz_config['original_bmz_config'].authors 
 
         # License 
         if not reuse_original_bmz_config:
-            license = bmz_cfg['license']
+            license = LicenseId(bmz_cfg['license']),
         else:
             license = self.workflow.bmz_config['original_bmz_config'].license
 
         # Doc 
         if not reuse_original_bmz_config:
-            doc = bmz_cfg['doc']
+            if str(bmz_cfg['doc']).startswith("http"):
+                doc = HttpUrl("https://biapy.readthedocs.io/en/latest/")
+            else:
+                doc = bmz_cfg['doc']
         else:
             doc = str(self.workflow.bmz_config['original_bmz_config'].documentation)
 
         # Cite 
+        citations = []
         if not reuse_original_bmz_config:
-            cite = bmz_cfg['cite']
+            for cite in bmz_cfg['cite']:
+                url = cite['url'] if 'url' in cite else None
+                doi = Doi(re.sub(r'^.*?10', '10', cite['doi'])) if 'doi' in cite else None
+                c = CiteEntry(
+                    text = cite['text'], 
+                    doi = doi,
+                    url = url
+                )
+                citations.append(c)
+
+            # Add BiaPy citation
+            citations.append(
+                CiteEntry(
+                    text = "BiaPy: A unified framework for versatile bioimage analysis with deep learning", 
+                    doi = "10.1101/2024.02.03.576026",
+                    url = "https://www.biorxiv.org/content/10.1101/2024.02.03.576026.abstract"
+                )
+            )
         else:
-            cite = self.workflow.bmz_config['original_bmz_config'].cite
-            cite = []
-            for citation in self.workflow.bmz_config['original_bmz_config'].cite:
-                cite_info = {}
-                attributes = [a for a in dir(citation) if not a.startswith('__') and not a.startswith('_')]
-                for att in attributes:
-                    if bool(getattr(citation, att)):
-                        cite_info[att] = getattr(citation, att)
-                cite.append(cite_info)  
+            citations = self.workflow.bmz_config['original_bmz_config'].cite
+
+        # Cover 
+        covers = None
+        if not reuse_original_bmz_config and 'covers' in bmz_cfg:
+            covers = bmz_cfg['covers']
+        elif 'original_bmz_config' in self.workflow.bmz_config and 'covers' in self.workflow.bmz_config['original_bmz_config']:
+            covers = self.workflow.bmz_config['original_bmz_config'].covers
 
         # Change dir as the building process copies to the current directory the files used to create the BMZ model
         cwd = os.getcwd()
         os.chdir(building_dir)
 
-        # Save model's weights 
-        # torchscript_model = torch.jit.script(self.workflow.model)
-        weight_file = os.path.join(building_dir, "weights.pt")
-        to_save = {
-            'model': self.workflow.model.state_dict(),
-            # 'biapy_cfg': self.cfg,
-        }
-        torch.save(to_save, weight_file)
+        # Weights + architecture        
+        # If it's a BiaPy model
+        if not reuse_original_bmz_config and 'model_file' in self.workflow.bmz_config:    
+            arch_file_path = re.sub(r':.*', '', self.workflow.bmz_config['model_file'])
+            arch_file_sha256 = create_file_sha256sum(arch_file_path)
+            pytorch_architecture = ArchitectureFromFileDescr(
+                source=arch_file_path,
+                sha256=arch_file_sha256,
+                callable=self.workflow.bmz_config['model_name'],
+                kwargs=self.workflow.bmz_config['model_build_kwargs']
+            )
+            state_dict_source = "/data/dfranco/exp_results/2d_instance_segmentation/checkpoints/2d_instance_segmentation_1-checkpoint-best.pth"
+            # state_dict_sha256 = sha256(str(self.workflow.model.state_dict()).encode('utf-8')).hexdigest()
+            state_dict_sha256 = None
+        else:
+            state_dict_source, state_dict_sha256, \
+            pytorch_architecture = get_bmz_model_info(
+                self.workflow.bmz_config['original_bmz_config'], 
+                self.workflow.bmz_config['original_model_spec_version']
+            )                    
+
+        pytorch_state_dict = PytorchStateDictWeightsDescr(
+            source = state_dict_source,
+            sha256 = state_dict_sha256,
+            architecture = pytorch_architecture,
+            pytorch_version = Version(torch.__version__),
+            dependencies=EnvironmentFileDescr(source="/data/dfranco/BiaPy/environment.yml")
+        ),
+        # torchscript = TorchscriptWeightsDescr(
+        #     source=self.workflow.bmz_config['original_bmz_config'].weights.torchscript.source,
+        #     sha256=self.workflow.bmz_config['original_bmz_config'].weights.torchscript.sha256,
+        #     pytorch_version=Version(torch.__version__),
+        #     parent="pytorch_state_dict", # these weights were converted from the pytorch_state_dict weights ones.
+        # ),
+
+        weights_descr = WeightsDescr(
+            pytorch_state_dict=pytorch_state_dict,
+            # torchscript,
+        )
 
         # Export model to BMZ format 
         args = dict(
-            # the weight file and the type of the weights
-            weight_uri=weight_file,
-            weight_type="pytorch_state_dict",
-            architecture=model_source,
-            pytorch_version=str(torch.__version__),
-            # the test input and output data as well as the description of the tensors
-            # these are passed as list because we support multiple inputs / outputs per model
-            test_inputs=[input_sample_path],
-            test_outputs=[output_sample_path],
-            input_axes=in_axes,
-            output_axes=out_axes,
-            # where to save the model zip, how to call the model and a short description of it
-            output_path=os.path.join(building_dir, "model.zip"),
             name=model_name,
             description=description,
-            # additional metadata about authors, licenses, citation etc.
             authors=authors,
+            cite=citations,
             license=license,
             documentation=doc,
+            git_repo = HttpUrl("https://github.com/BiaPyX/BiaPy"),
+            inputs=inputs,
+            outputs=outputs,
+            weights=weights_descr,
             tags=tags,
-            cite=cite,
+            covers=covers,
+            maintainers=authors,
             preprocessing=preprocessing,
             postprocessing=postprocessing,
         )
+
         print(f"Building BMZ package: {args}")
-        build_model(**args)
+        model_descr = ModelDescr(**args)
+        print(f"Created '{model_descr.name}'")
 
         # Checking model consistency
-        my_model = load_resource_description(os.path.join(building_dir, "model.zip") )
-        test_model(my_model)
+        summary = test_model(model_descr)
+        summary.display()
 
+        # Saving the model into BMZ format
+        model_path = os.path.join(building_dir, model_name+".zip")
+        print("Package path:", save_bioimageio_package(model_descr, output_path=Path(model_path)))
+        
         # Recover the original working path
         os.chdir(cwd)
 

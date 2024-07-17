@@ -536,6 +536,10 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             self.instances_already_created = False
             super().process_sample(norm)
         else:
+            # Save test_input if the user wants to export the model to BMZ later
+            if 'test_input' not in self.bmz_config:
+                self.bmz_config['test_input'] = self._X[0].copy()
+                
             self.instances_already_created = True
             # Data channel check
             if self.cfg.DATA.PATCH_SIZE[-1] != self._X.shape[-1]:
@@ -545,17 +549,20 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             ##################
             ### FULL IMAGE ###
             ##################
-            if self.cfg.TEST.FULL_IMG:
-                # Make the prediction
-                with torch.cuda.amp.autocast():
-                    pred = self.model_call_func(self._X)
-                del self._X 
+            # Make the prediction
+            with torch.cuda.amp.autocast():
+                pred = self.model_call_func(self._X)
+            del self._X 
 
-                if self.cfg.TEST.POST_PROCESSING.APPLY_MASK:
-                    pred = apply_binary_mask(pred, self.cfg.DATA.TEST.BINARY_MASKS)
-    
-                self.after_full_image(pred)
+            if self.cfg.TEST.POST_PROCESSING.APPLY_MASK:
+                pred = apply_binary_mask(pred, self.cfg.DATA.TEST.BINARY_MASKS)
 
+            self.after_full_image(pred)
+
+            # Save test_output if the user wants to export the model to BMZ later
+            if 'test_output' not in self.bmz_config:
+                self.bmz_config['test_output'] = pred[0].copy()
+                
     def after_merge_patches(self, pred):
         """
         Steps need to be done after merging all predicted patches into the original image.

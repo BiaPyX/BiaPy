@@ -97,7 +97,10 @@ class Image_to_Image_Workflow(Base_Workflow):
         norm : List of dicts
             Normalization used during training. Required to denormalize the predictions of the model.
         """
-
+        # Save test_input if the user wants to export the model to BMZ later
+        if 'test_input' not in self.bmz_config:
+            self.bmz_config['test_input'] = self._X[0].copy()
+            
         # Reflect data to complete the needed shape
         if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE:
             reflected_orig_shape = self._X.shape
@@ -228,6 +231,10 @@ class Image_to_Image_Workflow(Base_Workflow):
             psnr_merge_patches = self.metrics[0](torch.from_numpy(pred), torch.from_numpy(self._Y))
             self.stats['psnr_merge_patches'] += psnr_merge_patches
         
+        # Save test_output if the user wants to export the model to BMZ later
+        if 'test_output' not in self.bmz_config:
+            self.bmz_config['test_output'] = pred[0].copy()
+            
     def torchvision_model_call(self, in_img, is_train=False):
         """
         Call a regular Pytorch model.

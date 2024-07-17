@@ -190,6 +190,10 @@ class Super_resolution_Workflow(Base_Workflow):
         norm : List of dicts
             Normalization used during training. Required to denormalize the predictions of the model.
         """
+        # Save test_input if the user wants to export the model to BMZ later
+        if 'test_input' not in self.bmz_config:
+            self.bmz_config['test_input'] = self._X[0].copy()
+
         if self.cfg.PROBLEM.NDIM == '2D':
             original_data_shape = (self._X.shape[0],
                                    self._X.shape[1]*self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[0],
@@ -297,7 +301,11 @@ class Super_resolution_Workflow(Base_Workflow):
             self.stats['mse_merge_patches'] += mse
             self.stats['mae_merge_patches'] += mae
             self.stats['ssim_merge_patches'] += ssim
-            
+        
+        # Save test_output if the user wants to export the model to BMZ later
+        if 'test_output' not in self.bmz_config:
+            self.bmz_config['test_output'] = pred[0].copy()
+                
     def torchvision_model_call(self, in_img, is_train=False):
         """
         Call a regular Pytorch model.

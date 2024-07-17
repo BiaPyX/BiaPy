@@ -11,6 +11,7 @@ from torchinfo import summary
 from marshmallow import missing
 from bioimageio.spec.utils import download
 from bioimageio.core.model_adapters._pytorch_model_adapter import PytorchModelAdapter
+from bioimageio.spec._internal.io import RelativePath
 
 from biapy.utils.misc import is_main_process
 from biapy.engine import prepare_optimizer
@@ -73,8 +74,8 @@ def build_model(cfg, job_identifier, device):
             args['larger_io'] = cfg.MODEL.LARGER_IO
         elif modelname == 'unext_v1':
             args = dict(image_shape=cfg.DATA.PATCH_SIZE, feature_maps=cfg.MODEL.FEATURE_MAPS, 
-            upsample_layer=cfg.MODEL.UPSAMPLE_LAYER, z_down=cfg.MODEL.Z_DOWN, cn_layers=cfg.MODEL.CONVNEXT_LAYERS,
-            layer_scale=cfg.MODEL.CONVNEXT_LAYER_SCALE, stochastic_depth_prob=cfg.MODEL.CONVNEXT_SD_PROB)
+                upsample_layer=cfg.MODEL.UPSAMPLE_LAYER, z_down=cfg.MODEL.Z_DOWN, cn_layers=cfg.MODEL.CONVNEXT_LAYERS,
+                layer_scale=cfg.MODEL.CONVNEXT_LAYER_SCALE, stochastic_depth_prob=cfg.MODEL.CONVNEXT_SD_PROB)
             callable_model = U_NeXt_V1
         args['output_channels'] = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS if cfg.PROBLEM.TYPE == 'INSTANCE_SEG' else None        
         if cfg.PROBLEM.TYPE == 'SUPER_RESOLUTION':
@@ -86,11 +87,13 @@ def build_model(cfg, job_identifier, device):
         model = callable_model(**args)
     else:
         if modelname == 'simple_cnn':
-            model = simple_CNN(image_shape=cfg.DATA.PATCH_SIZE, activation=cfg.MODEL.ACTIVATION.lower(), n_classes=cfg.MODEL.N_CLASSES)
+            args = dict(image_shape=cfg.DATA.PATCH_SIZE, activation=cfg.MODEL.ACTIVATION.lower(), n_classes=cfg.MODEL.N_CLASSES)
+            model = simple_CNN(**args)
             callable_model = simple_CNN
         elif 'efficientnet' in modelname:
             shape = (224, 224)+(cfg.DATA.PATCH_SIZE[-1],) if cfg.DATA.PATCH_SIZE[:-1] != (224, 224) else cfg.DATA.PATCH_SIZE
-            model = efficientnet(cfg.MODEL.ARCHITECTURE.lower(), shape, n_classes=cfg.MODEL.N_CLASSES)
+            args = dict(cfg.MODEL.ARCHITECTURE.lower(), shape, n_classes=cfg.MODEL.N_CLASSES)
+            model = efficientnet(**args)
             callable_model = efficientnet
         elif modelname == 'vit':
             args = dict(img_size=cfg.DATA.PATCH_SIZE[0], patch_size=cfg.MODEL.VIT_TOKEN_SIZE, in_chans=cfg.DATA.PATCH_SIZE[-1],  
@@ -125,29 +128,33 @@ def build_model(cfg, job_identifier, device):
             model = UNETR(**args)
             callable_model = UNETR
         elif modelname == 'edsr':
-            model = EDSR(ndim=ndim, num_filters=64, num_of_residual_blocks=16, upsampling_factor=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, 
+            args = dict(ndim=ndim, num_filters=64, num_of_residual_blocks=16, upsampling_factor=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, 
                 num_channels=cfg.DATA.PATCH_SIZE[-1])
+            model = EDSR(args)
             callable_model = EDSR
         elif modelname == 'rcan':
             scale = cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING
             if type(scale) is tuple:
                 scale = scale[0]
-            model = rcan(ndim=ndim, filters=16, scale=scale, n_sub_block=int(np.log2(scale)), num_channels=cfg.DATA.PATCH_SIZE[-1])
+            args = dict(ndim=ndim, filters=16, scale=scale, n_sub_block=int(np.log2(scale)), num_channels=cfg.DATA.PATCH_SIZE[-1])
+            model = rcan(**args)
             callable_model = rcan
         elif modelname == 'dfcan':
-            model = DFCAN(ndim=ndim, input_shape=cfg.DATA.PATCH_SIZE, scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, n_ResGroup = 4, n_RCAB = 4)
+            args = dict(ndim=ndim, input_shape=cfg.DATA.PATCH_SIZE, scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, n_ResGroup = 4, n_RCAB = 4)
+            model = DFCAN(**args)
             callable_model = DFCAN
         elif modelname == 'wdsr':
-            model = wdsr(scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, num_filters=32, num_res_blocks=8, res_block_expansion=6, 
+            args = dict(scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING, num_filters=32, num_res_blocks=8, res_block_expansion=6, 
                 num_channels=cfg.DATA.PATCH_SIZE[-1])
+            model = wdsr(**args)
             callable_model = wdsr
         elif modelname == 'mae':
-            model = MaskedAutoencoderViT(
-                img_size=cfg.DATA.PATCH_SIZE[0], patch_size=cfg.MODEL.VIT_TOKEN_SIZE, in_chans=cfg.DATA.PATCH_SIZE[-1],  
+            args = dict(img_size=cfg.DATA.PATCH_SIZE[0], patch_size=cfg.MODEL.VIT_TOKEN_SIZE, in_chans=cfg.DATA.PATCH_SIZE[-1],  
                 ndim=ndim, norm_layer=partial(nn.LayerNorm, eps=1e-6), embed_dim=cfg.MODEL.VIT_EMBED_DIM, 
                 depth=cfg.MODEL.VIT_NUM_LAYERS, num_heads=cfg.MODEL.VIT_NUM_HEADS, decoder_embed_dim=512, decoder_depth=8, 
                 decoder_num_heads=16, mlp_ratio=cfg.MODEL.VIT_MLP_RATIO, masking_type=cfg.MODEL.MAE_MASK_TYPE, 
                 mask_ratio=cfg.MODEL.MAE_MASK_RATIO, device=device)
+            model = MaskedAutoencoderViT(**args)
             callable_model = MaskedAutoencoderViT
     # Check the network created
     model.to(device)
@@ -158,9 +165,10 @@ def build_model(cfg, job_identifier, device):
     summary(model, input_size=sample_size, col_names=("input_size", "output_size", "num_params"), depth=10, device=device.type)
     
     model_file += ":"+str(callable_model.__name__)
-    return model, model_file
+    model_name = model_file.rsplit(':', 1)[-1]
+    return model, model_file, model_name, args
 
-def build_bmz_model(cfg, model, model_with_new_description, device):
+def build_bmz_model(cfg, model, device):
     model_instance = PytorchModelAdapter.get_network(model.weights.pytorch_state_dict)
     model_instance = model_instance.to(device)
     state = torch.load(download(model.weights.pytorch_state_dict).path, map_location=device)
@@ -173,6 +181,55 @@ def build_bmz_model(cfg, model, model_with_new_description, device):
         sample_size = (1,cfg.DATA.PATCH_SIZE[3], cfg.DATA.PATCH_SIZE[0], cfg.DATA.PATCH_SIZE[1], cfg.DATA.PATCH_SIZE[2])
     summary(model_instance, input_size=sample_size, col_names=("input_size", "output_size", "num_params"), depth=10, device=device.type)    
     return model_instance
+
+def get_bmz_model_info(model, spec_version="v0_4"):
+    """
+    Gather model info depending on its spec version.
+    """
+    assert model.weights.pytorch_state_dict is not None, \
+        "Seems that the original BMZ model has no pytorch_state_dict object. Aborting"
+    
+    if spec_version == "v0_5":
+        arch = model.weights.pytorch_state_dict.architecture
+        if isinstance(arch, ArchitectureFromFileDescr):
+            arch_file_path = download(arch.source, sha256=arch.sha256).path
+            arch_file_sha256 = arch.sha256
+            arch_name = arch.callable
+            arch_kwargs = arch.kwargs
+
+            pytorch_architecture = ArchitectureFromFileDescr(
+                source=arch_file_path,
+                sha256=arch_file_sha256,
+                callable=arch_name,
+                kwargs=arch_kwargs
+            )
+        else:
+            # For a model architecture that is published in a Python package
+            # Make sure to include the Python library referenced in `import_from` in the weights entry's `dependencies`
+            pytorch_architecture = ArchitectureFromLibraryDescr(
+                callable=arch.callable,
+                kwargs=arch.kwargs,
+                import_from=arch.import_from,
+            )
+        state_dict_source = model.weights.pytorch_state_dict.source
+        state_dict_sha256 = model.weights.pytorch_state_dict.sha256
+    else: #v0_4
+        weights = model.weights.pytorch_state_dict
+        arch_file_sha256 = weights.architecture_sha256
+        
+        arch_file_path = download(RelativePath("unet.py"), sha256=arch_file_sha256).path
+        # arch_file_path = download(weights.architecture, sha256=arch_file_sha256).path
+        arch_name = weights.architecture # 'unet.py:UNet2d'
+        pytorch_architecture = ArchitectureFromFileDescr(
+            source=arch_file_path,
+            sha256=arch_file_sha256,
+            callable=arch_name,
+            kwargs=weights.kwargs,
+        )
+        state_dict_source = model.weights.pytorch_state_dict.source
+        state_dict_sha256 = model.weights.pytorch_state_dict.sha256
+
+    return state_dict_source, state_dict_sha256, pytorch_architecture
 
 def check_bmz_model_compatibility(cfg):
     # Checking BMZ model compatibility using the available model list provided by BMZ
@@ -238,8 +295,7 @@ def check_bmz_model_compatibility(cfg):
             model_problem_match = True
         elif cfg.PROBLEM.TYPE == 'IMAGE_TO_IMAGE' and \
             ('pix2pix' in model_rdf['tags'] or "image-reconstruction" in model_rdf['tags'] or \
-                "image-to-image" in model_rdf['tags'] or 'label-free' in model_rdf['tags'] or \
-                'image-restoration' in model_rdf['tags']):
+                "image-to-image" in model_rdf['tags'] or 'image-restoration' in model_rdf['tags']):
             model_problem_match = True
 
         if not model_problem_match:

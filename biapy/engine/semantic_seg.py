@@ -88,6 +88,10 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         if self.cfg.MODEL.SOURCE != "torchvision":
             super().process_sample(norm)
         else:
+            # Save test_input if the user wants to export the model to BMZ later
+            if 'test_input' not in self.bmz_config:
+                self.bmz_config['test_input'] = self._X[0].copy()
+
             # Data channel check
             if self.cfg.DATA.PATCH_SIZE[-1] != self._X.shape[-1]:
                 raise ValueError("Channel of the DATA.PATCH_SIZE given {} does not correspond with the loaded image {}. "
@@ -96,43 +100,45 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
             ##################
             ### FULL IMAGE ###
             ##################
-            if self.cfg.TEST.FULL_IMG:
-                resized_Y = False
-                # Evaluate each img
-                if self.cfg.DATA.TEST.LOAD_GT:
-                    with torch.cuda.amp.autocast():
-                        output = self.model_call_func(self._X)
-
-                        # Resize target if it was done due to model restrictions (applied with TorchVision preprocessing provided)
-                        if output.shape != self._Y.shape:
-                            self._Y = self._Y.transpose((self.axis_order))
-                            s = list(output.shape)
-                            s[1] = self._Y.shape[1]
-                            self._Y = resize(self._Y, s, order=0)
-                            self._Y = self._Y.transpose((self.axis_order_back))
-                            resized_Y = True
-
-                        loss = self.loss(output, to_pytorch_format(self._Y, self.axis_order, self.device, dtype=self.loss_dtype))
-                    self.stats['loss'] += loss.item()
-                    del output
-
-                # Make the prediction
+            resized_Y = False
+            # Evaluate each img
+            if self.cfg.DATA.TEST.LOAD_GT:
                 with torch.cuda.amp.autocast():
-                    pred = self.model_call_func(self._X)
-                pred = to_numpy_format(pred, self.axis_order_back)
-                del self._X 
+                    output = self.model_call_func(self._X)
 
-                if self.cfg.TEST.POST_PROCESSING.APPLY_MASK:
-                    pred = apply_binary_mask(pred, self.cfg.DATA.TEST.BINARY_MASKS)
-                    
-                if self.cfg.DATA.TEST.LOAD_GT:
-                    if not resized_Y and pred.shape != self._Y.shape:
-                        self._Y = resize(self._Y, pred.shape, order=0)
-                    score = jaccard_index_numpy((self._Y>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8))
-                    self.stats['iou'] += score
-                    self.stats['ov_iou'] += voc_calculation((self._Y>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8), score)
+                    # Resize target if it was done due to model restrictions (applied with TorchVision preprocessing provided)
+                    if output.shape != self._Y.shape:
+                        self._Y = self._Y.transpose((self.axis_order))
+                        s = list(output.shape)
+                        s[1] = self._Y.shape[1]
+                        self._Y = resize(self._Y, s, order=0)
+                        self._Y = self._Y.transpose((self.axis_order_back))
+                        resized_Y = True
 
+                    loss = self.loss(output, to_pytorch_format(self._Y, self.axis_order, self.device, dtype=self.loss_dtype))
+                self.stats['loss'] += loss.item()
+                del output
+
+            # Make the prediction
+            with torch.cuda.amp.autocast():
+                pred = self.model_call_func(self._X)
+            pred = to_numpy_format(pred, self.axis_order_back)
+            del self._X 
+
+            if self.cfg.TEST.POST_PROCESSING.APPLY_MASK:
+                pred = apply_binary_mask(pred, self.cfg.DATA.TEST.BINARY_MASKS)
                 
+            if self.cfg.DATA.TEST.LOAD_GT:
+                if not resized_Y and pred.shape != self._Y.shape:
+                    self._Y = resize(self._Y, pred.shape, order=0)
+                score = jaccard_index_numpy((self._Y>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8))
+                self.stats['iou'] += score
+                self.stats['ov_iou'] += voc_calculation((self._Y>0.5).astype(np.uint8), (pred>0.5).astype(np.uint8), score)
+
+            # Save test_output if the user wants to export the model to BMZ later
+            if 'test_output' not in self.bmz_config:
+                self.bmz_config['test_output'] = pred[0].copy()
+
     def torchvision_model_call(self, in_img, is_train=False):
         """
         Call a regular Pytorch model.

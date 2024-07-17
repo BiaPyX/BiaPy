@@ -244,6 +244,10 @@ class Classification_Workflow(Base_Workflow):
         norm : List of dicts
             Normalization used during training. Required to denormalize the predictions of the model.
         """
+        # Save test_input if the user wants to export the model to BMZ later
+        if 'test_input' not in self.bmz_config:
+            self.bmz_config['test_input'] = self._X[0].copy()
+
         # Predict each patch
         l = int(math.ceil(self._X.shape[0]/self.cfg.TRAIN.BATCH_SIZE))
         for k in tqdm(range(l), leave=False, disable=not is_main_process()):
@@ -256,6 +260,10 @@ class Classification_Workflow(Base_Workflow):
 
         if self.cfg.DATA.TEST.LOAD_GT: 
             self.all_gt.append(self._Y)
+        
+        # Save test_output if the user wants to export the model to BMZ later
+        if 'test_output' not in self.bmz_config:
+            self.bmz_config['test_output'] = p.copy()
 
     def torchvision_model_call(self, in_img, is_train=False):
         """

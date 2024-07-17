@@ -844,6 +844,10 @@ class Detection_Workflow(Base_Workflow):
         if self.cfg.MODEL.SOURCE != "torchvision":
             super().process_sample(norm)
         else:
+            # Save test_input if the user wants to export the model to BMZ later
+            if 'test_input' not in self.bmz_config:
+                self.bmz_config['test_input'] = self._X[0].copy()
+           
             # Data channel check
             if self.cfg.DATA.PATCH_SIZE[-1] != self._X.shape[-1]:
                 raise ValueError("Channel of the DATA.PATCH_SIZE given {} does not correspond with the loaded image {}. "
@@ -852,12 +856,15 @@ class Detection_Workflow(Base_Workflow):
             ##################
             ### FULL IMAGE ###
             ##################
-            if self.cfg.TEST.FULL_IMG:
-                # Make the prediction
-                with torch.cuda.amp.autocast():
-                    pred = self.model_call_func(self._X)
-                del self._X 
+            # Make the prediction
+            with torch.cuda.amp.autocast():
+                pred = self.model_call_func(self._X)
+            del self._X 
 
+            # Save test_output if the user wants to export the model to BMZ later
+            if 'test_output' not in self.bmz_config:
+                self.bmz_config['test_output'] = pred[0].copy()
+                
     def torchvision_model_call(self, in_img, is_train=False):
         """
         Call a regular Pytorch model.

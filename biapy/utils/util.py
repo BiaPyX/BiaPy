@@ -13,6 +13,7 @@ from tqdm import tqdm
 from skimage.io import imsave, imread
 from skimage import measure
 from collections import namedtuple
+from hashlib import sha256
 
 from biapy.engine.metrics import jaccard_index_numpy, voc_calculation
 from biapy.utils.misc import is_main_process
@@ -1747,3 +1748,12 @@ def seg_widen_border(seg, tsz_h=1):
         p1 = patch.min(axis=1)
         seg = seg * ((p0 == p1).reshape(sz))
     return seg
+
+def create_file_sha256sum(filename):
+    h  = sha256()
+    b  = bytearray(128*1024)
+    mv = memoryview(b)
+    with open(filename, 'rb', buffering=0) as f:
+        while n := f.readinto(mv):
+            h.update(mv[:n])
+    return h.hexdigest()

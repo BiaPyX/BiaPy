@@ -354,7 +354,6 @@ def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
             new_mask[img,...,3] = vol_b_dist.copy()
         # Affinities
         if 'A' in mode:
-            #import pdb; pdb.set_trace()
             ins_vol = np.copy(vol)
             if fb_mode == "dense":
                 ins_vol = seg_widen_border( vol )
