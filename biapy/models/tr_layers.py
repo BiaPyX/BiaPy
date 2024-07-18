@@ -53,12 +53,8 @@ class PatchEmbed(nn.Module):
         else:
             B, C, Z, H, W = x.shape
         if self.strict_img_size:
-            assert (
-                H == self.img_size
-            ), f"Input height ({H}) doesn't match model ({self.img_size})."
-            assert (
-                W == self.img_size
-            ), f"Input width ({W}) doesn't match model ({self.img_size})."
+            assert H == self.img_size, f"Input height ({H}) doesn't match model ({self.img_size})."
+            assert W == self.img_size, f"Input width ({W}) doesn't match model ({self.img_size})."
 
         x = self.proj(x)
         if self.flatten:

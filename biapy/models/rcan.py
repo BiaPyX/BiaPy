@@ -34,9 +34,7 @@ class RG(nn.Module):
     def __init__(self, num_features, num_rcab, reduction):
         super(RG, self).__init__()
         self.module = [RCAB(num_features, reduction) for _ in range(num_rcab)]
-        self.module.append(
-            nn.Conv2d(num_features, num_features, kernel_size=3, padding="same")
-        )
+        self.module.append(nn.Conv2d(num_features, num_features, kernel_size=3, padding="same"))
         self.module = nn.Sequential(*self.module)
 
     def forward(self, x):
@@ -68,9 +66,7 @@ class rcan(nn.Module):
             scale = scale[0]
         self.ndim = ndim
         self.sf = nn.Conv2d(num_channels, filters, kernel_size=3, padding="same")
-        self.rgs = nn.Sequential(
-            *[RG(filters, num_rcab, reduction) for _ in range(n_sub_block)]
-        )
+        self.rgs = nn.Sequential(*[RG(filters, num_rcab, reduction) for _ in range(n_sub_block)])
         self.conv1 = nn.Conv2d(filters, filters, kernel_size=3, padding="same")
         self.upscale = nn.Sequential(
             nn.Conv2d(filters, filters * (scale**2), kernel_size=3, padding="same"),

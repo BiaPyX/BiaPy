@@ -43,9 +43,7 @@ class Image_to_Image_Workflow(Base_Workflow):
     """
 
     def __init__(self, cfg, job_identifier, device, args, **kwargs):
-        super(Image_to_Image_Workflow, self).__init__(
-            cfg, job_identifier, device, args, **kwargs
-        )
+        super(Image_to_Image_Workflow, self).__init__(cfg, job_identifier, device, args, **kwargs)
         self.stats["psnr_merge_patches"] = 0
 
         # From now on, no modification of the cfg will be allowed
@@ -116,9 +114,7 @@ class Image_to_Image_Workflow(Base_Workflow):
         if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE:
             reflected_orig_shape = self._X.shape
             self._X = np.expand_dims(
-                pad_and_reflect(
-                    self._X[0], self.cfg.DATA.PATCH_SIZE, verbose=self.cfg.TEST.VERBOSE
-                ),
+                pad_and_reflect(self._X[0], self.cfg.DATA.PATCH_SIZE, verbose=self.cfg.TEST.VERBOSE),
                 0,
             )
             if self.cfg.DATA.TEST.LOAD_GT:
@@ -221,9 +217,7 @@ class Image_to_Image_Workflow(Base_Workflow):
                 )
                 with torch.cuda.amp.autocast():
                     p = self.model(self._X[k * self.cfg.TRAIN.BATCH_SIZE : top])
-                p = to_numpy_format(
-                    self.apply_model_activations(p), self.axis_order_back
-                )
+                p = to_numpy_format(self.apply_model_activations(p), self.axis_order_back)
                 if "pred" not in locals():
                     pred = np.zeros((self._X.shape[0],) + p.shape[1:], dtype=self.dtype)
                 pred[k * self.cfg.TRAIN.BATCH_SIZE : top] = p
@@ -233,11 +227,7 @@ class Image_to_Image_Workflow(Base_Workflow):
         if original_data_shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
             if self.cfg.PROBLEM.NDIM == "3D":
                 original_data_shape = original_data_shape[1:]
-            f_name = (
-                merge_data_with_overlap
-                if self.cfg.PROBLEM.NDIM == "2D"
-                else merge_3D_data_with_overlap
-            )
+            f_name = merge_data_with_overlap if self.cfg.PROBLEM.NDIM == "2D" else merge_3D_data_with_overlap
 
             if self.cfg.TEST.REDUCE_MEMORY:
                 pred = f_name(
@@ -278,9 +268,7 @@ class Image_to_Image_Workflow(Base_Workflow):
             if self.cfg.PROBLEM.NDIM == "2D":
                 pred = pred[:, -reflected_orig_shape[1] :, -reflected_orig_shape[2] :]
                 if self._Y is not None:
-                    self._Y = self._Y[
-                        :, -reflected_orig_shape[1] :, -reflected_orig_shape[2] :
-                    ]
+                    self._Y = self._Y[:, -reflected_orig_shape[1] :, -reflected_orig_shape[2] :]
             else:
                 pred = pred[
                     :,
@@ -301,9 +289,7 @@ class Image_to_Image_Workflow(Base_Workflow):
         if x_norm["type"] == "div":
             pred = undo_norm_range01(pred, x_norm)
         elif x_norm["type"] == "scale_range":
-            pred = undo_norm_range01(
-                pred, x_norm, x_norm["min_val_scale"], x_norm["max_val_scale"]
-            )
+            pred = undo_norm_range01(pred, x_norm, x_norm["min_val_scale"], x_norm["max_val_scale"])
         else:
             pred = denormalize(pred, x_norm["mean"], x_norm["std"])
 
@@ -333,9 +319,7 @@ class Image_to_Image_Workflow(Base_Workflow):
                 pred = pred.astype(np.float32)
             if self._Y.dtype == np.dtype("uint16"):
                 self._Y = self._Y.astype(np.float32)
-            psnr_merge_patches = self.metrics[0](
-                torch.from_numpy(pred), torch.from_numpy(self._Y)
-            )
+            psnr_merge_patches = self.metrics[0](torch.from_numpy(pred), torch.from_numpy(self._Y))
             self.stats["psnr_merge_patches"] += psnr_merge_patches
 
         # Save test_output if the user wants to export the model to BMZ later
@@ -411,9 +395,7 @@ class Image_to_Image_Workflow(Base_Workflow):
         image_counter : int
             Number of images to average the metrics.
         """
-        self.stats["psnr_merge_patches"] = (
-            self.stats["psnr_merge_patches"] / image_counter
-        )
+        self.stats["psnr_merge_patches"] = self.stats["psnr_merge_patches"] / image_counter
 
     def print_stats(self, image_counter):
         """
@@ -427,7 +409,5 @@ class Image_to_Image_Workflow(Base_Workflow):
         self.normalize_stats(image_counter)
 
         if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
-            print(
-                "Test PSNR (merge patches): {}".format(self.stats["psnr_merge_patches"])
-            )
+            print("Test PSNR (merge patches): {}".format(self.stats["psnr_merge_patches"]))
             print(" ")

@@ -6,11 +6,7 @@ class Config:
     def __init__(self, job_dir: str, job_identifier: str):
 
         if "/" in job_identifier:
-            raise ValueError(
-                "Job name can not contain / character. Provided: {}".format(
-                    job_identifier
-                )
-            )
+            raise ValueError("Job name can not contain / character. Provided: {}".format(job_identifier))
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Config definition
@@ -241,13 +237,9 @@ class Config:
             "user_data", "train", "y_" + _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
         )
         # Path to load/save detection masks prepared.
-        _C.DATA.TRAIN.DETECTION_MASK_DIR = os.path.join(
-            "user_data", "train", "y_detection_masks"
-        )
+        _C.DATA.TRAIN.DETECTION_MASK_DIR = os.path.join("user_data", "train", "y_detection_masks")
         # Path to load/save SSL target prepared.
-        _C.DATA.TRAIN.SSL_SOURCE_DIR = os.path.join(
-            "user_data", "train", "x_ssl_source"
-        )
+        _C.DATA.TRAIN.SSL_SOURCE_DIR = os.path.join("user_data", "train", "x_ssl_source")
         # Extra train data generation: number of times to duplicate the train data. Useful when
         # _C.DATA.EXTRACT_RANDOM_PATCH=True is made, as more original train data can be cover on each epoch
         _C.DATA.TRAIN.REPLICATE = 0
@@ -325,9 +317,7 @@ class Config:
         _C.DATA.PREPROCESS.MATCH_HISTOGRAM = CN()
         _C.DATA.PREPROCESS.MATCH_HISTOGRAM.ENABLE = False
         # the path of the reference images, from which the reference histogram will be extracted
-        _C.DATA.PREPROCESS.MATCH_HISTOGRAM.REFERENCE_PATH = os.path.join(
-            "user_data", "test", "x"
-        )
+        _C.DATA.PREPROCESS.MATCH_HISTOGRAM.REFERENCE_PATH = os.path.join("user_data", "test", "x")
 
         # Contrast Limited Adaptive Histogram Equalization. More info at: https://en.wikipedia.org/wiki/Adaptive_histogram_equalization#Contrast_Limited_AHE
         _C.DATA.PREPROCESS.CLAHE = CN()
@@ -369,9 +359,7 @@ class Config:
             "user_data", "test", "y_" + _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
         )
         # Path to load/save detection masks prepared.
-        _C.DATA.TEST.DETECTION_MASK_DIR = os.path.join(
-            "user_data", "test", "y_detection_masks"
-        )
+        _C.DATA.TEST.DETECTION_MASK_DIR = os.path.join("user_data", "test", "y_detection_masks")
         # Path to load/save SSL target prepared.
         _C.DATA.TEST.SSL_SOURCE_DIR = os.path.join("user_data", "test", "x_ssl_source")
         # Percentage of overlap in (y,x)/(z,y,x) when cropping validation. Set to 0 to calculate  the minimun overlap.
@@ -427,9 +415,7 @@ class Config:
             "user_data", "val", "y_" + _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
         )
         # Path to load/save detection masks prepared.
-        _C.DATA.VAL.DETECTION_MASK_DIR = os.path.join(
-            "user_data", "val", "y_detection_masks"
-        )
+        _C.DATA.VAL.DETECTION_MASK_DIR = os.path.join("user_data", "val", "y_detection_masks")
         # Path to load/save SSL target prepared.
         _C.DATA.VAL.SSL_SOURCE_DIR = os.path.join("user_data", "val", "x_ssl_source")
         # Percentage of overlap in (y,x)/(z,y,x) when cropping validation. Set to 0 to calculate  the minimun overlap.
@@ -820,9 +806,7 @@ class Config:
 
         # LR Scheduler
         _C.TRAIN.LR_SCHEDULER = CN()
-        _C.TRAIN.LR_SCHEDULER.NAME = (
-            ""  # Possible options: 'warmupcosine', 'reduceonplateau', 'onecycle'
-        )
+        _C.TRAIN.LR_SCHEDULER.NAME = ""  # Possible options: 'warmupcosine', 'reduceonplateau', 'onecycle'
         # Lower bound on the learning rate used in 'warmupcosine' and 'reduceonplateau'
         _C.TRAIN.LR_SCHEDULER.MIN_LR = -1.0
         # Factor by which the learning rate will be reduced
@@ -1095,48 +1079,28 @@ class Config:
         # Directories to store the results
         _C.PATHS.RESULT_DIR = CN()
         _C.PATHS.RESULT_DIR.PATH = os.path.join(job_dir, "results", job_identifier)
-        _C.PATHS.RESULT_DIR.PER_IMAGE = os.path.join(
-            _C.PATHS.RESULT_DIR.PATH, "per_image"
-        )
-        _C.PATHS.RESULT_DIR.PER_IMAGE_BIN = os.path.join(
-            _C.PATHS.RESULT_DIR.PATH, "per_image_binarized"
-        )
-        _C.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES = os.path.join(
-            _C.PATHS.RESULT_DIR.PATH, "per_image_instances"
-        )
+        _C.PATHS.RESULT_DIR.PER_IMAGE = os.path.join(_C.PATHS.RESULT_DIR.PATH, "per_image")
+        _C.PATHS.RESULT_DIR.PER_IMAGE_BIN = os.path.join(_C.PATHS.RESULT_DIR.PATH, "per_image_binarized")
+        _C.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES = os.path.join(_C.PATHS.RESULT_DIR.PATH, "per_image_instances")
         _C.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING = os.path.join(
             _C.PATHS.RESULT_DIR.PATH, "per_image_post_processing"
         )
-        _C.PATHS.RESULT_DIR.FULL_IMAGE = os.path.join(
-            _C.PATHS.RESULT_DIR.PATH, "full_image"
-        )
-        _C.PATHS.RESULT_DIR.FULL_IMAGE_BIN = os.path.join(
-            _C.PATHS.RESULT_DIR.PATH, "full_image_binarized"
-        )
-        _C.PATHS.RESULT_DIR.FULL_IMAGE_INSTANCES = os.path.join(
-            _C.PATHS.RESULT_DIR.PATH, "full_image_instances"
-        )
+        _C.PATHS.RESULT_DIR.FULL_IMAGE = os.path.join(_C.PATHS.RESULT_DIR.PATH, "full_image")
+        _C.PATHS.RESULT_DIR.FULL_IMAGE_BIN = os.path.join(_C.PATHS.RESULT_DIR.PATH, "full_image_binarized")
+        _C.PATHS.RESULT_DIR.FULL_IMAGE_INSTANCES = os.path.join(_C.PATHS.RESULT_DIR.PATH, "full_image_instances")
         _C.PATHS.RESULT_DIR.FULL_IMAGE_POST_PROCESSING = os.path.join(
             _C.PATHS.RESULT_DIR.PATH, "full_image_post_processing"
         )
-        _C.PATHS.RESULT_DIR.AS_3D_STACK = os.path.join(
-            _C.PATHS.RESULT_DIR.PATH, "as_3d_stack"
-        )
-        _C.PATHS.RESULT_DIR.AS_3D_STACK_BIN = os.path.join(
-            _C.PATHS.RESULT_DIR.PATH, "as_3d_stack_binarized"
-        )
+        _C.PATHS.RESULT_DIR.AS_3D_STACK = os.path.join(_C.PATHS.RESULT_DIR.PATH, "as_3d_stack")
+        _C.PATHS.RESULT_DIR.AS_3D_STACK_BIN = os.path.join(_C.PATHS.RESULT_DIR.PATH, "as_3d_stack_binarized")
         _C.PATHS.RESULT_DIR.AS_3D_STACK_POST_PROCESSING = os.path.join(
             _C.PATHS.RESULT_DIR.PATH, "as_3d_stack_post_processing"
         )
         _C.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK = os.path.join(
             _C.PATHS.RESULT_DIR.PATH, "per_image_local_max_check"
         )
-        _C.PATHS.RESULT_DIR.DET_ASSOC_POINTS = os.path.join(
-            _C.PATHS.RESULT_DIR.PATH, "point_associations"
-        )
-        _C.PATHS.RESULT_DIR.INST_ASSOC_POINTS = os.path.join(
-            _C.PATHS.RESULT_DIR.PATH, "instance_associations"
-        )
+        _C.PATHS.RESULT_DIR.DET_ASSOC_POINTS = os.path.join(_C.PATHS.RESULT_DIR.PATH, "point_associations")
+        _C.PATHS.RESULT_DIR.INST_ASSOC_POINTS = os.path.join(_C.PATHS.RESULT_DIR.PATH, "instance_associations")
 
         # Path to store profiler files
         _C.PATHS.PROFILER = os.path.join(_C.PATHS.RESULT_DIR.PATH, "profiler")
@@ -1148,9 +1112,7 @@ class Config:
         # Folder where generator samples (X) will be stored
         _C.PATHS.GEN_CHECKS = os.path.join(_C.PATHS.RESULT_DIR.PATH, "gen_check")
         # Folder where generator samples (Y) will be stored
-        _C.PATHS.GEN_MASK_CHECKS = os.path.join(
-            _C.PATHS.RESULT_DIR.PATH, "gen_mask_check"
-        )
+        _C.PATHS.GEN_MASK_CHECKS = os.path.join(_C.PATHS.RESULT_DIR.PATH, "gen_mask_check")
         # Paths where a few samples of instance channels created will be stored just to check id there is any problem
         _C.PATHS.TRAIN_INSTANCE_CHANNELS_CHECK = os.path.join(
             _C.PATHS.RESULT_DIR.PATH,
@@ -1174,25 +1136,13 @@ class Config:
         # Watershed debugging folder
         _C.PATHS.WATERSHED_DIR = os.path.join(_C.PATHS.RESULT_DIR.PATH, "watershed")
         # Custom mean normalization paths
-        _C.PATHS.MEAN_INFO_FILE = os.path.join(
-            _C.PATHS.CHECKPOINT, "normalization_mean_value.npy"
-        )
-        _C.PATHS.STD_INFO_FILE = os.path.join(
-            _C.PATHS.CHECKPOINT, "normalization_std_value.npy"
-        )
+        _C.PATHS.MEAN_INFO_FILE = os.path.join(_C.PATHS.CHECKPOINT, "normalization_mean_value.npy")
+        _C.PATHS.STD_INFO_FILE = os.path.join(_C.PATHS.CHECKPOINT, "normalization_std_value.npy")
         # Percentile normalization paths
-        _C.PATHS.LWR_X_FILE = os.path.join(
-            _C.PATHS.CHECKPOINT, "lower_bound_X_perc.npy"
-        )
-        _C.PATHS.UPR_X_FILE = os.path.join(
-            _C.PATHS.CHECKPOINT, "upper_bound_X_perc.npy"
-        )
-        _C.PATHS.LWR_Y_FILE = os.path.join(
-            _C.PATHS.CHECKPOINT, "lower_bound_Y_perc.npy"
-        )
-        _C.PATHS.UPR_Y_FILE = os.path.join(
-            _C.PATHS.CHECKPOINT, "upper_bound_Y_perc.npy"
-        )
+        _C.PATHS.LWR_X_FILE = os.path.join(_C.PATHS.CHECKPOINT, "lower_bound_X_perc.npy")
+        _C.PATHS.UPR_X_FILE = os.path.join(_C.PATHS.CHECKPOINT, "upper_bound_X_perc.npy")
+        _C.PATHS.LWR_Y_FILE = os.path.join(_C.PATHS.CHECKPOINT, "lower_bound_Y_perc.npy")
+        _C.PATHS.UPR_Y_FILE = os.path.join(_C.PATHS.CHECKPOINT, "upper_bound_Y_perc.npy")
         # Path where the images used in MAE will be saved suring inference
         _C.PATHS.MAE_OUT_DIR = os.path.join(_C.PATHS.RESULT_DIR.PATH, "MAE_checks")
 
@@ -1201,9 +1151,7 @@ class Config:
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         _C.LOG = CN()
         _C.LOG.LOG_DIR = os.path.join(job_dir, "train_logs")
-        _C.LOG.TENSORBOARD_LOG_DIR = os.path.join(
-            _C.PATHS.RESULT_DIR.PATH, "tensorboard"
-        )
+        _C.LOG.TENSORBOARD_LOG_DIR = os.path.join(_C.PATHS.RESULT_DIR.PATH, "tensorboard")
         _C.LOG.LOG_FILE_PREFIX = job_identifier
         _C.LOG.CHART_CREATION_FREQ = 5
 
@@ -1221,34 +1169,22 @@ class Config:
         """
         # Remove possible / characters at the end of the paths
         self._C.DATA.TRAIN.PATH = (
-            self._C.DATA.TRAIN.PATH
-            if self._C.DATA.TRAIN.PATH[-1] != "/"
-            else self._C.DATA.TRAIN.PATH[:-1]
+            self._C.DATA.TRAIN.PATH if self._C.DATA.TRAIN.PATH[-1] != "/" else self._C.DATA.TRAIN.PATH[:-1]
         )
         self._C.DATA.TRAIN.GT_PATH = (
-            self._C.DATA.TRAIN.GT_PATH
-            if self._C.DATA.TRAIN.GT_PATH[-1] != "/"
-            else self._C.DATA.TRAIN.GT_PATH[:-1]
+            self._C.DATA.TRAIN.GT_PATH if self._C.DATA.TRAIN.GT_PATH[-1] != "/" else self._C.DATA.TRAIN.GT_PATH[:-1]
         )
         self._C.DATA.VAL.PATH = (
-            self._C.DATA.VAL.PATH
-            if self._C.DATA.VAL.PATH[-1] != "/"
-            else self._C.DATA.VAL.PATH[:-1]
+            self._C.DATA.VAL.PATH if self._C.DATA.VAL.PATH[-1] != "/" else self._C.DATA.VAL.PATH[:-1]
         )
         self._C.DATA.VAL.GT_PATH = (
-            self._C.DATA.VAL.GT_PATH
-            if self._C.DATA.VAL.GT_PATH[-1] != "/"
-            else self._C.DATA.VAL.GT_PATH[:-1]
+            self._C.DATA.VAL.GT_PATH if self._C.DATA.VAL.GT_PATH[-1] != "/" else self._C.DATA.VAL.GT_PATH[:-1]
         )
         self._C.DATA.TEST.PATH = (
-            self._C.DATA.TEST.PATH
-            if self._C.DATA.TEST.PATH[-1] != "/"
-            else self._C.DATA.TEST.PATH[:-1]
+            self._C.DATA.TEST.PATH if self._C.DATA.TEST.PATH[-1] != "/" else self._C.DATA.TEST.PATH[:-1]
         )
         self._C.DATA.TEST.GT_PATH = (
-            self._C.DATA.TEST.GT_PATH
-            if self._C.DATA.TEST.GT_PATH[-1] != "/"
-            else self._C.DATA.TEST.GT_PATH[:-1]
+            self._C.DATA.TEST.GT_PATH if self._C.DATA.TEST.GT_PATH[-1] != "/" else self._C.DATA.TEST.GT_PATH[:-1]
         )
 
         self._C.DATA.TRAIN.INSTANCE_CHANNELS_DIR = (
@@ -1265,9 +1201,7 @@ class Config:
             + "_"
             + self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         )
-        self._C.DATA.TRAIN.DETECTION_MASK_DIR = (
-            self._C.DATA.TRAIN.GT_PATH + "_detection_masks"
-        )
+        self._C.DATA.TRAIN.DETECTION_MASK_DIR = self._C.DATA.TRAIN.GT_PATH + "_detection_masks"
         self._C.DATA.TRAIN.SSL_SOURCE_DIR = self._C.DATA.TRAIN.PATH + "_ssl_source"
         self._C.DATA.VAL.INSTANCE_CHANNELS_DIR = (
             self._C.DATA.VAL.PATH
@@ -1284,9 +1218,7 @@ class Config:
             + self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         )
         # If value is not the default
-        self._C.DATA.VAL.DETECTION_MASK_DIR = (
-            self._C.DATA.VAL.GT_PATH + "_detection_masks"
-        )
+        self._C.DATA.VAL.DETECTION_MASK_DIR = self._C.DATA.VAL.GT_PATH + "_detection_masks"
         self._C.DATA.VAL.SSL_SOURCE_DIR = self._C.DATA.VAL.PATH + "_ssl_source"
         self._C.DATA.TEST.INSTANCE_CHANNELS_DIR = (
             self._C.DATA.TEST.PATH
@@ -1303,23 +1235,15 @@ class Config:
             + self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         )
         # If value is not the default
-        if self._C.DATA.TEST.BINARY_MASKS == os.path.join(
-            "user_data", "test", "bin_mask"
-        ):
-            self._C.DATA.TEST.BINARY_MASKS = os.path.join(
-                self._C.DATA.TEST.PATH, "..", "bin_mask"
-            )
-        self._C.DATA.TEST.DETECTION_MASK_DIR = (
-            self._C.DATA.TEST.GT_PATH + "_detection_masks"
-        )
+        if self._C.DATA.TEST.BINARY_MASKS == os.path.join("user_data", "test", "bin_mask"):
+            self._C.DATA.TEST.BINARY_MASKS = os.path.join(self._C.DATA.TEST.PATH, "..", "bin_mask")
+        self._C.DATA.TEST.DETECTION_MASK_DIR = self._C.DATA.TEST.GT_PATH + "_detection_masks"
         self._C.DATA.TEST.SSL_SOURCE_DIR = self._C.DATA.TEST.PATH + "_ssl_source"
         self._C.PATHS.TEST_FULL_GT_H5 = os.path.join(self._C.DATA.TEST.GT_PATH, "h5")
 
         self._C.PATHS.TRAIN_INSTANCE_CHANNELS_CHECK = os.path.join(
             self._C.PATHS.RESULT_DIR.PATH,
-            "train_"
-            + self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
-            + "_instance_channels",
+            "train_" + self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS + "_instance_channels",
         )
         self._C.PATHS.VAL_INSTANCE_CHANNELS_CHECK = os.path.join(
             self._C.PATHS.RESULT_DIR.PATH,

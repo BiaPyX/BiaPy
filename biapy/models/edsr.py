@@ -29,18 +29,14 @@ class EDSR(nn.Module):
         else:
             conv = nn.Conv2d
 
-        self.first_conv_of_block = conv(
-            num_channels, num_filters, kernel_size=3, padding="same"
-        )
+        self.first_conv_of_block = conv(num_channels, num_filters, kernel_size=3, padding="same")
 
         self.resblock = nn.Sequential()
         # 16 residual blocks
         for i in range(num_of_residual_blocks):
             self.resblock.append(SR_convblock(conv, num_filters))
 
-        self.last_conv_of_block = conv(
-            num_filters, num_filters, kernel_size=3, padding="same"
-        )
+        self.last_conv_of_block = conv(num_filters, num_filters, kernel_size=3, padding="same")
         self.last_block = nn.Sequential(
             SR_upsampling(conv, num_filters, upsampling_factor),
             conv(num_filters, num_channels, kernel_size=3, padding="same"),
@@ -99,14 +95,10 @@ class SR_upsampling(nn.Module):
     def __init__(self, conv, num_filters, factor=2):
         super(SR_upsampling, self).__init__()
         self.f = 2 if factor == 4 else factor
-        self.conv1 = conv(
-            num_filters, num_filters * (self.f**2), kernel_size=3, padding="same"
-        )
+        self.conv1 = conv(num_filters, num_filters * (self.f**2), kernel_size=3, padding="same")
         self.conv2 = None
         if factor == 4:
-            self.conv2 = conv(
-                num_filters, num_filters * (self.f**2), kernel_size=3, padding="same"
-            )
+            self.conv2 = conv(num_filters, num_filters * (self.f**2), kernel_size=3, padding="same")
 
     def forward(self, x):
         out = self.conv1(x)

@@ -16,12 +16,7 @@ class WarmUpCosineDecayScheduler:
             lr = self.lr * epoch / self.warmup_epochs
         else:
             lr = self.min_lr + (self.lr - self.min_lr) * 0.5 * (
-                1.0
-                + math.cos(
-                    math.pi
-                    * (epoch - self.warmup_epochs)
-                    / (self.epochs - self.warmup_epochs)
-                )
+                1.0 + math.cos(math.pi * (epoch - self.warmup_epochs) / (self.epochs - self.warmup_epochs))
             )
         for param_group in optimizer.param_groups:
             if "lr_scale" in param_group:

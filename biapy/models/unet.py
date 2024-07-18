@@ -87,9 +87,7 @@ class U_Net(nn.Module):
         self.ndim = 3 if len(image_shape) == 4 else 2
         self.z_down = z_down
         self.n_classes = 1 if n_classes <= 2 else n_classes
-        self.multiclass = (
-            True if n_classes > 2 and output_channels is not None else False
-        )
+        self.multiclass = True if n_classes > 2 and output_channels is not None else False
         if self.ndim == 3:
             conv = nn.Conv3d
             convtranspose = nn.ConvTranspose3d
@@ -173,37 +171,23 @@ class U_Net(nn.Module):
         # Instance segmentation
         if output_channels is not None:
             if output_channels in ["C", "Dv2"]:
-                self.last_block = conv(
-                    feature_maps[0], 1, kernel_size=1, padding="same"
-                )
+                self.last_block = conv(feature_maps[0], 1, kernel_size=1, padding="same")
             elif output_channels in ["BC", "BP"]:
-                self.last_block = conv(
-                    feature_maps[0], 2, kernel_size=1, padding="same"
-                )
+                self.last_block = conv(feature_maps[0], 2, kernel_size=1, padding="same")
             elif output_channels in ["BDv2", "BD"]:
-                self.last_block = conv(
-                    feature_maps[0], 2, kernel_size=1, padding="same"
-                )
+                self.last_block = conv(feature_maps[0], 2, kernel_size=1, padding="same")
             elif output_channels in ["BCM", "BCD", "BCDv2"]:
-                self.last_block = conv(
-                    feature_maps[0], 3, kernel_size=1, padding="same"
-                )
+                self.last_block = conv(feature_maps[0], 3, kernel_size=1, padding="same")
             elif output_channels in ["A"]:
-                self.last_block = conv(
-                    feature_maps[0], self.ndim, kernel_size=1, padding="same"
-                )
+                self.last_block = conv(feature_maps[0], self.ndim, kernel_size=1, padding="same")
         # Other
         else:
-            self.last_block = conv(
-                feature_maps[0], self.n_classes, kernel_size=1, padding="same"
-            )
+            self.last_block = conv(feature_maps[0], self.n_classes, kernel_size=1, padding="same")
 
         # Multi-head: instances + classification
         self.last_class_head = None
         if self.multiclass:
-            self.last_class_head = conv(
-                feature_maps[0], self.n_classes, kernel_size=1, padding="same"
-            )
+            self.last_class_head = conv(feature_maps[0], self.n_classes, kernel_size=1, padding="same")
 
         self.apply(self._init_weights)
 

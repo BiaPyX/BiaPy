@@ -18,6 +18,19 @@ class Single2DImageDataGenerator(SingleBaseDataGenerator):
         super().__init__(**kwars)
 
     def ensure_shape(self, img):
+        """
+        Ensures ``img`` correct axis number and their order.
+
+        Parameters
+        ----------
+        img : Numpy array representing a ``2D``
+            Image to use as sample.
+
+        Returns
+        -------
+        img : 3D Numpy array
+            Image to use as sample. E.g. ``(y, x, channels)``.
+        """
         # Shape adjustment
         if img.ndim == 2:
             img = np.expand_dims(img, -1)
@@ -34,6 +47,29 @@ class Single2DImageDataGenerator(SingleBaseDataGenerator):
         return img
 
     def save_aug_samples(self, img, orig_image, i, pos, out_dir, draw_grid):
+        """
+        Save transformed samples in order to check the generator.
+
+        Parameters
+        ----------
+        img : 3D Numpy array
+            Image to use as sample. E.g. ``(y, x, channels)```.
+
+        orig_images : dict
+            Dict where the original image is saved in "o_x".
+
+        i : int
+            Number of the sample within the transformed ones.
+
+        pos : int
+            Number of the sample within the dataset.
+
+        out_dir : str
+            Directory to save the images.
+
+        draw_grid : bool
+            Whether to draw a grid or not.
+        """
         if draw_grid:
             self.draw_grid(orig_image["o_x"])
         aux = np.expand_dims(orig_image["o_x"], 0).astype(np.float32)

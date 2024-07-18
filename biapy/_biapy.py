@@ -36,7 +36,6 @@ from bioimageio.spec.model.v0_5 import (
     WeightsDescr,
     ArchitectureFromFileDescr,
     Version,
-    EnvironmentFileDescr,
     ModelDescr,
 )
 from bioimageio.spec._internal.io_basics import Sha256
@@ -107,9 +106,7 @@ class BiaPy:
         result_dir = result_dir if result_dir != "" else str(os.getenv("HOME"))
 
         if dist_backend not in ["nccl", "gloo"]:
-            raise ValueError(
-                "Invalid value for 'dist_backend'. Should be either 'nccl' or 'gloo'."
-            )
+            raise ValueError("Invalid value for 'dist_backend'. Should be either 'nccl' or 'gloo'.")
 
         self.args = argparse.Namespace(
             config=config,
@@ -140,11 +137,7 @@ class BiaPy:
         self.cfg_file = os.path.join(self.cfg_bck_dir, self.cfg_filename)
 
         if not os.path.exists(self.args.config):
-            raise FileNotFoundError(
-                "Provided {} config file does not exist".format(
-                    self.args.config
-                )
-            )
+            raise FileNotFoundError("Provided {} config file does not exist".format(self.args.config))
         copyfile(self.args.config, self.cfg_file)
 
         # Merge conf file with the default settings
@@ -165,9 +158,7 @@ class BiaPy:
         opts = []
         if self.args.gpu:
             os.environ["CUDA_VISIBLE_DEVICES"] = self.args.gpu
-            self.num_gpus = len(
-                np.unique(np.array(self.args.gpu.strip().split(",")))
-            )
+            self.num_gpus = len(np.unique(np.array(self.args.gpu.strip().split(","))))
             opts.extend(["SYSTEM.NUM_GPUS", self.num_gpus])
 
         # GPU management
@@ -205,9 +196,7 @@ class BiaPy:
         print("*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*")
         print(f"Initializing {name}")
         print("*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*\n")
-        self.workflow = getattr(mdl, name)(
-            self.cfg, self.job_identifier, self.device, self.args
-        )
+        self.workflow = getattr(mdl, name)(self.cfg, self.job_identifier, self.device, self.args)
 
     def train(self):
         """Call training phase."""
@@ -299,17 +288,10 @@ class BiaPy:
         """
         if bmz_cfg is None:
             bmz_cfg = {}
-        if (
-            reuse_original_bmz_config
-            and "original_bmz_config" not in self.workflow.bmz_config
-        ):
-            raise ValueError(
-                "The model to export was not previously loaded from BMZ, so there is no config to reuse."
-            )
+        if reuse_original_bmz_config and "original_bmz_config" not in self.workflow.bmz_config:
+            raise ValueError("The model to export was not previously loaded from BMZ, so there is no config to reuse.")
         if not reuse_original_bmz_config and len(bmz_cfg) == 0:
-            raise ValueError(
-                "'bmz_cfg' arg must be provided if 'reuse_original_bmz_config' is False."
-            )
+            raise ValueError("'bmz_cfg' arg must be provided if 'reuse_original_bmz_config' is False.")
 
         # Check keys
         if not reuse_original_bmz_config:
@@ -322,16 +304,18 @@ class BiaPy:
             ]
             for x in need_info:
                 if x not in bmz_cfg:
-                    raise ValueError(
-                        f"'{x}' property must be declared in 'bmz_cfg'"
-                    )
+                    raise ValueError(f"'{x}' property must be declared in 'bmz_cfg'")
 
         # Check if BiaPy has been run so some of the variables have been created
         if not self.workflow.model_prepared:
             raise ValueError(
                 "You need first to call prepare_model(), train(), test() or run_job() functions so the model can be built"
             )
-        if not reuse_original_bmz_config and "model_file" in self.workflow.bmz_config and self.workflow.checkpoint_path is None:
+        if (
+            not reuse_original_bmz_config
+            and "model_file" in self.workflow.bmz_config
+            and self.workflow.checkpoint_path is None
+        ):
             raise ValueError(
                 "You need first to call prepare_model(), train(), test() or run_job() functions so the model can be built"
             )
@@ -363,26 +347,16 @@ class BiaPy:
             if bmz_cfg["description"] == "":
                 raise ValueError("'bmz_cfg['description']' can not be empty.")
             if not isinstance(bmz_cfg["authors"], list):
-                raise ValueError(
-                    "'bmz_cfg['authors']' needs to be a list of dicts. E.g. [{'name': 'Daniel'}]"
-                )
+                raise ValueError("'bmz_cfg['authors']' needs to be a list of dicts. E.g. [{'name': 'Daniel'}]")
             else:
                 if len(bmz_cfg["authors"]) == 0:
                     raise ValueError("'bmz_cfg['authors']' can not be empty.")
                 for d in bmz_cfg["authors"]:
                     if not isinstance(d, dict):
-                        raise ValueError(
-                            "'bmz_cfg['authors']' must be a list of dicts. E.g. [{'name': 'Daniel'}]"
-                        )
+                        raise ValueError("'bmz_cfg['authors']' must be a list of dicts. E.g. [{'name': 'Daniel'}]")
                     else:
-                        if (
-                            len(d.keys()) < 2
-                            or "name" not in d
-                            or "github_user" not in d
-                        ):
-                            raise ValueError(
-                                "Author dictionary must have at least 'name' and 'github_user' keys"
-                            )
+                        if len(d.keys()) < 2 or "name" not in d or "github_user" not in d:
+                            raise ValueError("Author dictionary must have at least 'name' and 'github_user' keys")
                         for k in d.keys():
                             if k not in [
                                 "name",
@@ -396,9 +370,7 @@ class BiaPy:
                                     f"'github_user', 'orcid']. Provided {k}"
                                 )
             if bmz_cfg["license"] == "":
-                raise ValueError(
-                    "'bmz_cfg['license']' can not be empty. E.g. 'CC-BY-4.0'"
-                )
+                raise ValueError("'bmz_cfg['license']' can not be empty. E.g. 'CC-BY-4.0'")
             if not isinstance(bmz_cfg["tags"], list):
                 raise ValueError(
                     "'bmz_cfg['tags']' needs to be a list of str. E.g. ['electron-microscopy', 'mitochondria']"
@@ -413,23 +385,13 @@ class BiaPy:
                         )
             if "maintainers" in bmz_cfg:
                 if len(bmz_cfg["maintainers"]) == 0:
-                    raise ValueError(
-                        "'bmz_cfg['maintainers']' can not be empty."
-                    )
+                    raise ValueError("'bmz_cfg['maintainers']' can not be empty.")
                 for d in bmz_cfg["maintainers"]:
                     if not isinstance(d, dict):
-                        raise ValueError(
-                            "'bmz_cfg['maintainers']' must be a list of dicts. E.g. [{'name': 'Daniel'}]"
-                        )
+                        raise ValueError("'bmz_cfg['maintainers']' must be a list of dicts. E.g. [{'name': 'Daniel'}]")
                     else:
-                        if (
-                            len(d.keys()) < 2
-                            or "name" not in d
-                            or "github_user" not in d
-                        ):
-                            raise ValueError(
-                                "Author dictionary must have at least 'name' and 'github_user' keys"
-                            )
+                        if len(d.keys()) < 2 or "name" not in d or "github_user" not in d:
+                            raise ValueError("Author dictionary must have at least 'name' and 'github_user' keys")
                         for k in d.keys():
                             if k not in [
                                 "name",
@@ -458,9 +420,7 @@ class BiaPy:
                             )
                         else:
                             if len(d.keys()) < 2 or "text" not in d:
-                                raise ValueError(
-                                    "Cite dictionary must have at least 'text' key"
-                                )
+                                raise ValueError("Cite dictionary must have at least 'text' key")
                             for k in d.keys():
                                 if k not in ["text", "doi", "url"]:
                                     raise ValueError(
@@ -493,21 +453,13 @@ class BiaPy:
                     raise ValueError(
                         "'bmz_cfg['output_axes']' needs to be a list containing just one str. E.g. ['bcyx']."
                     )
-            if "test_input" in bmz_cfg and not torch.is_tensor(
-                bmz_cfg["test_input"]
-            ):
+            if "test_input" in bmz_cfg and not torch.is_tensor(bmz_cfg["test_input"]):
                 raise ValueError("'bmz_cfg['test_input']' needs to be a Tensor")
-            if "test_output" in bmz_cfg and not torch.is_tensor(
-                bmz_cfg["test_output"]
-            ):
-                raise ValueError(
-                    "'bmz_cfg['test_output']' needs to be a Tensor"
-                )
+            if "test_output" in bmz_cfg and not torch.is_tensor(bmz_cfg["test_output"]):
+                raise ValueError("'bmz_cfg['test_output']' needs to be a Tensor")
             if "covers" in bmz_cfg:
                 if not isinstance(bmz_cfg["covers"], list):
-                    raise ValueError(
-                        "'bmz_cfg['covers']' needs to be a list containing strings."
-                    )
+                    raise ValueError("'bmz_cfg['covers']' needs to be a list containing strings.")
 
         # Preprocessing
         # Actually Torchvision has its own preprocessing but it can not be adapted to BMZ easily, so for now
@@ -528,9 +480,9 @@ class BiaPy:
                 preprocessing = [{"id": "scale_range"}]
             else:  # custom
                 if self.cfg.DATA.NORMALIZATION.APPLICATION_MODE == "dataset":
-                    if not os.path.exists(
-                        self.cfg.PATHS.MEAN_INFO_FILE
-                    ) or not os.path.exists(self.cfg.PATHS.STD_INFO_FILE):
+                    if not os.path.exists(self.cfg.PATHS.MEAN_INFO_FILE) or not os.path.exists(
+                        self.cfg.PATHS.STD_INFO_FILE
+                    ):
                         raise FileNotFoundError(
                             "Not mean/std files found in {} and {}".format(
                                 self.cfg.PATHS.MEAN_INFO_FILE,
@@ -552,11 +504,7 @@ class BiaPy:
 
                 else:
                     axes = ["channel"]
-                    axes += (
-                        list("zyx")
-                        if self.cfg.PROBLEM.NDIM == "3D"
-                        else list("yx")
-                    )
+                    axes += list("zyx") if self.cfg.PROBLEM.NDIM == "3D" else list("yx")
                     preprocessing = [
                         {
                             "id": "zero_mean_unit_variance",
@@ -572,9 +520,7 @@ class BiaPy:
                     min_percentile = self.cfg.DATA.NORMALIZATION.PERC_LOWER
                     max_percentile = self.cfg.DATA.NORMALIZATION.PERC_UPPER
                 axes = ["channel"]
-                axes += (
-                    list("zyx") if self.cfg.PROBLEM.NDIM == "3D" else list("yx")
-                )
+                axes += list("zyx") if self.cfg.PROBLEM.NDIM == "3D" else list("yx")
                 perc_instructions = {
                     "axes": axes,
                     "max_percentile": max_percentile,
@@ -584,22 +530,11 @@ class BiaPy:
                 preprocessing[0]["kwargs"].update(perc_instructions)
         # BMZ, reusing the preprocessing
         else:
-            if (
-                self.workflow.bmz_config["original_model_spec_version"]
-                == "v0_5"
-            ):
-                preprocessing = (
-                    self.workflow.bmz_config["original_bmz_config"]
-                    .inputs[0]
-                    .preprocessing
-                )
+            if self.workflow.bmz_config["original_model_spec_version"] == "v0_5":
+                preprocessing = self.workflow.bmz_config["original_bmz_config"].inputs[0].preprocessing
             else:
                 preprocessing = []
-                for prep in (
-                    self.workflow.bmz_config["original_bmz_config"]
-                    .inputs[0]
-                    .preprocessing
-                ):
+                for prep in self.workflow.bmz_config["original_bmz_config"].inputs[0].preprocessing:
                     p = {}
                     p["id"] = prep.name
                     if "ScaleRangeDescr" in str(type(prep)):
@@ -607,12 +542,8 @@ class BiaPy:
                         axes = list(prep.kwargs.axes)
                         axes[axes.index("c")] = "channel"
                         p["kwargs"]["axes"] = axes
-                        p["kwargs"][
-                            "min_percentile"
-                        ] = prep.kwargs.min_percentile
-                        p["kwargs"][
-                            "max_percentile"
-                        ] = prep.kwargs.max_percentile
+                        p["kwargs"]["min_percentile"] = prep.kwargs.min_percentile
+                        p["kwargs"]["max_percentile"] = prep.kwargs.max_percentile
                     preprocessing.append(p)
 
         # Post-processing (not clear for now so just output the raw output of the model)
@@ -626,18 +557,11 @@ class BiaPy:
         test_output_path = os.path.join(building_dir, "test-output.npy")
         if not reuse_original_bmz_config:
             test_input = (
-                self.workflow.bmz_config["test_input"]
-                if "test_input" not in bmz_cfg
-                else bmz_cfg["test_input"]
+                self.workflow.bmz_config["test_input"] if "test_input" not in bmz_cfg else bmz_cfg["test_input"]
             )
             input_axes = [
                 BatchAxis(),
-                ChannelAxis(
-                    channel_names=[
-                        Identifier("channel" + str(i))
-                        for i in range(test_input.shape[-1])
-                    ]
-                ),
+                ChannelAxis(channel_names=[Identifier("channel" + str(i)) for i in range(test_input.shape[-1])]),
             ]
             if test_input.ndim == 3:
                 np.save(
@@ -649,12 +573,8 @@ class BiaPy:
                     ),
                 )
                 input_axes += [
-                    SpaceInputAxis(
-                        id=AxisId("y"), size=self.cfg.DATA.PATCH_SIZE[0]
-                    ),
-                    SpaceInputAxis(
-                        id=AxisId("x"), size=self.cfg.DATA.PATCH_SIZE[1]
-                    ),
+                    SpaceInputAxis(id=AxisId("y"), size=self.cfg.DATA.PATCH_SIZE[0]),
+                    SpaceInputAxis(id=AxisId("x"), size=self.cfg.DATA.PATCH_SIZE[1]),
                 ]
             else:
                 np.save(
@@ -662,21 +582,13 @@ class BiaPy:
                     (
                         test_input.permute((3, 0, 1, 2)).unsqueeze(0)
                         if torch.is_tensor(test_input)
-                        else np.expand_dims(
-                            test_input.transpose((3, 0, 1, 2)), 0
-                        )
+                        else np.expand_dims(test_input.transpose((3, 0, 1, 2)), 0)
                     ),
                 )
                 input_axes += [
-                    SpaceInputAxis(
-                        id=AxisId("z"), size=self.cfg.DATA.PATCH_SIZE[0]
-                    ),
-                    SpaceInputAxis(
-                        id=AxisId("y"), size=self.cfg.DATA.PATCH_SIZE[1]
-                    ),
-                    SpaceInputAxis(
-                        id=AxisId("x"), size=self.cfg.DATA.PATCH_SIZE[2]
-                    ),
+                    SpaceInputAxis(id=AxisId("z"), size=self.cfg.DATA.PATCH_SIZE[0]),
+                    SpaceInputAxis(id=AxisId("y"), size=self.cfg.DATA.PATCH_SIZE[1]),
+                    SpaceInputAxis(id=AxisId("x"), size=self.cfg.DATA.PATCH_SIZE[2]),
                 ]
             data_descr = IntervalOrRatioDataDescr(type="float32")
             input_descr = InputTensorDescr(
@@ -689,18 +601,11 @@ class BiaPy:
             inputs = [input_descr]
 
             test_output = (
-                self.workflow.bmz_config["test_output"]
-                if "test_output" not in bmz_cfg
-                else bmz_cfg["test_output"]
+                self.workflow.bmz_config["test_output"] if "test_output" not in bmz_cfg else bmz_cfg["test_output"]
             )
             output_axes = [
                 BatchAxis(),
-                ChannelAxis(
-                    channel_names=[
-                        Identifier("channel" + str(i))
-                        for i in range(test_output.shape[-1])
-                    ]
-                ),
+                ChannelAxis(channel_names=[Identifier("channel" + str(i)) for i in range(test_output.shape[-1])]),
             ]
             if test_output.ndim == 3:
                 np.save(
@@ -712,12 +617,8 @@ class BiaPy:
                     ),
                 )
                 output_axes += [
-                    SpaceOutputAxis(
-                        id=AxisId("y"), size=self.cfg.DATA.PATCH_SIZE[0]
-                    ),
-                    SpaceOutputAxis(
-                        id=AxisId("x"), size=self.cfg.DATA.PATCH_SIZE[1]
-                    ),
+                    SpaceOutputAxis(id=AxisId("y"), size=self.cfg.DATA.PATCH_SIZE[0]),
+                    SpaceOutputAxis(id=AxisId("x"), size=self.cfg.DATA.PATCH_SIZE[1]),
                 ]
             else:
                 np.save(
@@ -725,21 +626,13 @@ class BiaPy:
                     (
                         test_output.permute((3, 0, 1, 2)).unsqueeze(0)
                         if torch.is_tensor(test_output)
-                        else np.expand_dims(
-                            test_output.transpose((3, 0, 1, 2)), 0
-                        )
+                        else np.expand_dims(test_output.transpose((3, 0, 1, 2)), 0)
                     ),
                 )
                 output_axes += [
-                    SpaceOutputAxis(
-                        id=AxisId("z"), size=self.cfg.DATA.PATCH_SIZE[0]
-                    ),
-                    SpaceOutputAxis(
-                        id=AxisId("y"), size=self.cfg.DATA.PATCH_SIZE[1]
-                    ),
-                    SpaceOutputAxis(
-                        id=AxisId("x"), size=self.cfg.DATA.PATCH_SIZE[2]
-                    ),
+                    SpaceOutputAxis(id=AxisId("z"), size=self.cfg.DATA.PATCH_SIZE[0]),
+                    SpaceOutputAxis(id=AxisId("y"), size=self.cfg.DATA.PATCH_SIZE[1]),
+                    SpaceOutputAxis(id=AxisId("x"), size=self.cfg.DATA.PATCH_SIZE[2]),
                 ]
             data_descr = IntervalOrRatioDataDescr(type="float32")
             output_descr = OutputTensorDescr(
@@ -779,17 +672,13 @@ class BiaPy:
         if not reuse_original_bmz_config:
             description = bmz_cfg["description"]
         else:
-            description = self.workflow.bmz_config[
-                "original_bmz_config"
-            ].description
+            description = self.workflow.bmz_config["original_bmz_config"].description
 
         # Authors & maintainers
         authors, maintainers = [], []
         if not reuse_original_bmz_config:
             for author in bmz_cfg["authors"]:
-                affiliation = (
-                    author["affiliation"] if "affiliation" in author else None
-                )
+                affiliation = author["affiliation"] if "affiliation" in author else None
                 orcid = author["orcid"] if "orcid" in author else None
                 email = author["email"] if "email" in author else None
                 a = Author(
@@ -802,9 +691,7 @@ class BiaPy:
                 authors.append(a)
 
             for author in bmz_cfg["maintainers"]:
-                affiliation = (
-                    author["affiliation"] if "affiliation" in author else None
-                )
+                affiliation = author["affiliation"] if "affiliation" in author else None
                 orcid = author["orcid"] if "orcid" in author else None
                 email = author["email"] if "email" in author else None
                 a = Maintainer(
@@ -817,9 +704,7 @@ class BiaPy:
                 maintainers.append(a)
         else:
             authors = self.workflow.bmz_config["original_bmz_config"].authors
-            maintainers = self.workflow.bmz_config[
-                "original_bmz_config"
-            ].maintainers
+            maintainers = self.workflow.bmz_config["original_bmz_config"].maintainers
 
         # License
         if not reuse_original_bmz_config:
@@ -841,11 +726,7 @@ class BiaPy:
         if not reuse_original_bmz_config:
             for cite in bmz_cfg["cite"]:
                 url = cite["url"] if "url" in cite else None
-                doi = (
-                    Doi(re.sub(r"^.*?10", "10", cite["doi"]))
-                    if "doi" in cite
-                    else None
-                )
+                doi = Doi(re.sub(r"^.*?10", "10", cite["doi"])) if "doi" in cite else None
                 c = CiteEntry(text=cite["text"], doi=doi, url=url)
                 citations.append(c)
 
@@ -854,9 +735,7 @@ class BiaPy:
                 CiteEntry(
                     text="BiaPy: A unified framework for versatile bioimage analysis with deep learning",
                     doi=Doi("10.1101/2024.02.03.576026"),
-                    url=HttpUrl(
-                        "https://www.biorxiv.org/content/10.1101/2024.02.03.576026.abstract"
-                    ),
+                    url=HttpUrl("https://www.biorxiv.org/content/10.1101/2024.02.03.576026.abstract"),
                 )
             )
         else:
@@ -878,13 +757,8 @@ class BiaPy:
 
         # Weights + architecture
         # If it's a BiaPy model
-        if (
-            not reuse_original_bmz_config
-            and "model_file" in self.workflow.bmz_config
-        ):
-            arch_file_path = re.sub(
-                r":.*", "", self.workflow.bmz_config["model_file"]
-            )
+        if not reuse_original_bmz_config and "model_file" in self.workflow.bmz_config:
+            arch_file_path = re.sub(r":.*", "", self.workflow.bmz_config["model_file"])
             arch_file_sha256 = create_file_sha256sum(arch_file_path)
             pytorch_architecture = ArchitectureFromFileDescr(
                 source=Path(arch_file_path),
@@ -895,11 +769,9 @@ class BiaPy:
             state_dict_source = Path(self.workflow.checkpoint_path)
             state_dict_sha256 = None
         else:
-            state_dict_source, state_dict_sha256, pytorch_architecture = (
-                get_bmz_model_info(
-                    self.workflow.bmz_config["original_bmz_config"],
-                    self.workflow.bmz_config["original_model_spec_version"],
-                )
+            state_dict_source, state_dict_sha256, pytorch_architecture = get_bmz_model_info(
+                self.workflow.bmz_config["original_bmz_config"],
+                self.workflow.bmz_config["original_model_spec_version"],
             )
 
         # Only exporting in pytorch_state_dict
@@ -959,18 +831,14 @@ class BiaPy:
             self.train()
 
         if is_dist_avail_and_initialized():
-            print(
-                f"[Rank {get_rank()} ({os.getpid()})] Process waiting (train finished) . . . "
-            )
+            print(f"[Rank {get_rank()} ({os.getpid()})] Process waiting (train finished) . . . ")
             dist.barrier()
 
         if self.cfg.TEST.ENABLE:
             self.test()
 
         if is_dist_avail_and_initialized():
-            print(
-                f"[Rank {get_rank()} ({os.getpid()})] Process waiting (test finished) . . . "
-            )
+            print(f"[Rank {get_rank()} ({os.getpid()})] Process waiting (test finished) . . . ")
             setup_for_distributed(self.args.rank == 0)
             dist.barrier()
             dist.destroy_process_group()

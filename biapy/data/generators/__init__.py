@@ -1,5 +1,11 @@
 import os
-import torch
+from typing import List, Dict, Any, Optional, Tuple, Union
+from torch.utils.data import (
+    DistributedSampler,
+    DataLoader,
+    DistributedSampler,
+    SequentialSampler,
+)
 import numpy as np
 from tqdm import tqdm
 
@@ -16,18 +22,25 @@ from biapy.data.generators.single_data_2D_generator import Single2DImageDataGene
 from biapy.data.generators.single_data_3D_generator import Single3DImageDataGenerator
 from biapy.data.generators.test_pair_data_generators import test_pair_data_generator
 from biapy.data.generators.test_single_data_generator import test_single_data_generator
+from biapy.config.config import Config
 
 
 def create_train_val_augmentors(
-    cfg, X_train, Y_train, X_val, Y_val, world_size, global_rank
-):
+    cfg: type[Config],
+    X_train: np.ndarray | None,
+    Y_train: np.ndarray | None,
+    X_val: Any,
+    Y_val: Any,
+    world_size: int,
+    global_rank: int,
+) -> Tuple[DataLoader, DataLoader, Dict, int]:
     """
     Create training and validation generators.
 
     Parameters
     ----------
-    cfg : YACS CN object
-        Configuration.
+    cfg : Config
+        BiaPy configuration.
 
     X_train : 4D/5D Numpy array
         Training data. E.g. ``(num_of_images, y, x, channels)`` for ``2D`` or ``(num_of_images, z, y, x, channels)`` for ``3D``.
@@ -43,13 +56,25 @@ def create_train_val_augmentors(
         Validation data mask/class. E.g. ``(num_of_images, y, x, channels)`` for ``2D`` or ``(num_of_images, z, y, x, channels)`` for ``3D``
         in all the workflows except classification. For this last the shape is ``(num_of_images, class)`` for both ``2D`` and ``3D``.
 
+    world_size: int
+        Number of processes participating in the training.
+
+    global_rank: int
+        Rank of the current process.
+
     Returns
     -------
-    train_generator : Pair2DImageDataGenerator/Single2DImageDataGenerator (2D) or Pair3DImageDataGenerator/Single3DImageDataGenerator (3D)
+    train_generator : DataLoader
         Training data generator.
 
-    val_generator : Pair2DImageDataGenerator/Single2DImageDataGenerator (2D) or Pair3DImageDataGenerator/Single3DImageDataGenerator (3D)
+    val_generator : DataLoader
         Validation data generator.
+
+    data_norm: dict
+        Normalization of the data.
+
+    num_training_steps_per_epoch: int
+        Number of training steps per epoch.
     """
 
     # Calculate the probability map per image
@@ -57,19 +82,11 @@ def create_train_val_augmentors(
     if cfg.DATA.PROBABILITY_MAP and cfg.DATA.EXTRACT_RANDOM_PATCH:
         if os.path.exists(cfg.PATHS.PROB_MAP_DIR):
             print("Loading probability map")
-            prob_map_file = os.path.join(
-                cfg.PATHS.PROB_MAP_DIR, cfg.PATHS.PROB_MAP_FILENAME
-            )
+            prob_map_file = os.path.join(cfg.PATHS.PROB_MAP_DIR, cfg.PATHS.PROB_MAP_FILENAME)
             num_files = len(next(os.walk(cfg.PATHS.PROB_MAP_DIR))[2])
-            prob_map = (
-                cfg.PATHS.PROB_MAP_DIR if num_files > 1 else np.load(prob_map_file)
-            )
+            prob_map = cfg.PATHS.PROB_MAP_DIR if num_files > 1 else np.load(prob_map_file)
         else:
-            f_name = (
-                calculate_2D_volume_prob_map
-                if cfg.PROBLEM.NDIM == "2D"
-                else calculate_3D_volume_prob_map
-            )
+            f_name = calculate_2D_volume_prob_map if cfg.PROBLEM.NDIM == "2D" else calculate_3D_volume_prob_map
             prob_map = f_name(
                 Y_train,
                 cfg.DATA.TRAIN.GT_PATH,
@@ -94,9 +111,7 @@ def create_train_val_augmentors(
                 X_train,
                 norm_dict["dataset_X_lower_value"],
                 norm_dict["dataset_X_upper_value"],
-            ) = percentile_clip(
-                X_train, norm_dict["lower_bound"], norm_dict["upper_bound"]
-            )
+            ) = percentile_clip(X_train, norm_dict["lower_bound"], norm_dict["upper_bound"])
             os.makedirs(os.path.dirname(cfg.PATHS.LWR_X_FILE), exist_ok=True)
             np.save(cfg.PATHS.LWR_X_FILE, norm_dict["dataset_X_lower_value"])
             np.save(cfg.PATHS.UPR_X_FILE, norm_dict["dataset_X_upper_value"])
@@ -104,31 +119,15 @@ def create_train_val_augmentors(
 
     if cfg.DATA.NORMALIZATION.TYPE == "custom":
         if cfg.DATA.NORMALIZATION.APPLICATION_MODE == "dataset":
-            if (
-                cfg.DATA.NORMALIZATION.CUSTOM_MEAN == -1
-                and cfg.DATA.NORMALIZATION.CUSTOM_STD == -1
-            ):
-                print(
-                    "Train/Val normalization: trying to load mean from {}".format(
-                        cfg.PATHS.MEAN_INFO_FILE
-                    )
-                )
-                print(
-                    "Train/Val normalization: trying to load std from {}".format(
-                        cfg.PATHS.STD_INFO_FILE
-                    )
-                )
-                if not os.path.exists(cfg.PATHS.MEAN_INFO_FILE) or not os.path.exists(
-                    cfg.PATHS.STD_INFO_FILE
-                ):
-                    print(
-                        "Train/Val normalization: mean and/or std files not found. Calculating it for the first time"
-                    )
-                    norm_dict["mean"] = np.mean(X_train)
-                    norm_dict["std"] = np.std(X_train)
-                    os.makedirs(
-                        os.path.dirname(cfg.PATHS.MEAN_INFO_FILE), exist_ok=True
-                    )
+            if cfg.DATA.NORMALIZATION.CUSTOM_MEAN == -1 and cfg.DATA.NORMALIZATION.CUSTOM_STD == -1:
+                print("Train/Val normalization: trying to load mean from {}".format(cfg.PATHS.MEAN_INFO_FILE))
+                print("Train/Val normalization: trying to load std from {}".format(cfg.PATHS.STD_INFO_FILE))
+                if not os.path.exists(cfg.PATHS.MEAN_INFO_FILE) or not os.path.exists(cfg.PATHS.STD_INFO_FILE):
+                    print("Train/Val normalization: mean and/or std files not found. Calculating it for the first time")
+                    if isinstance(X_train, np.ndarray):
+                        norm_dict["mean"] = np.mean(X_train)
+                        norm_dict["std"] = np.std(X_train)
+                    os.makedirs(os.path.dirname(cfg.PATHS.MEAN_INFO_FILE), exist_ok=True)
                     np.save(cfg.PATHS.MEAN_INFO_FILE, norm_dict["mean"])
                     np.save(cfg.PATHS.STD_INFO_FILE, norm_dict["std"])
                 else:
@@ -139,24 +138,18 @@ def create_train_val_augmentors(
                 norm_dict["mean"] = cfg.DATA.NORMALIZATION.CUSTOM_MEAN
                 norm_dict["std"] = cfg.DATA.NORMALIZATION.CUSTOM_STD
         if "mean" in norm_dict:
-            print(
-                "Train/Val normalization: using mean {} and std: {}".format(
-                    norm_dict["mean"], norm_dict["std"]
-                )
-            )
+            print("Train/Val normalization: using mean {} and std: {}".format(norm_dict["mean"], norm_dict["std"]))
 
     if cfg.PROBLEM.NDIM == "2D":
         if cfg.PROBLEM.TYPE == "CLASSIFICATION" or (
-            cfg.PROBLEM.TYPE == "SELF_SUPERVISED"
-            and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"
+            cfg.PROBLEM.TYPE == "SELF_SUPERVISED" and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"
         ):
             f_name = Single2DImageDataGenerator
         else:
             f_name = Pair2DImageDataGenerator
     else:
         if cfg.PROBLEM.TYPE == "CLASSIFICATION" or (
-            cfg.PROBLEM.TYPE == "SELF_SUPERVISED"
-            and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"
+            cfg.PROBLEM.TYPE == "SELF_SUPERVISED" and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"
         ):
             f_name = Single3DImageDataGenerator
         else:
@@ -184,8 +177,7 @@ def create_train_val_augmentors(
             data_mode = "not_in_memory"
 
     if cfg.PROBLEM.TYPE == "CLASSIFICATION" or (
-        cfg.PROBLEM.TYPE == "SELF_SUPERVISED"
-        and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"
+        cfg.PROBLEM.TYPE == "SELF_SUPERVISED" and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"
     ):
         r_shape = cfg.DATA.PATCH_SIZE
         if cfg.MODEL.ARCHITECTURE == "efficientnet_b0" and cfg.DATA.PATCH_SIZE[:-1] != (
@@ -193,11 +185,7 @@ def create_train_val_augmentors(
             224,
         ):
             r_shape = (224, 224) + (cfg.DATA.PATCH_SIZE[-1],)
-            print(
-                "Changing patch size from {} to {} to use efficientnet_b0".format(
-                    cfg.DATA.PATCH_SIZE[:-1], r_shape
-                )
-            )
+            print("Changing patch size from {} to {} to use efficientnet_b0".format(cfg.DATA.PATCH_SIZE[:-1], r_shape))
         ptype = "classification" if cfg.PROBLEM.TYPE == "CLASSIFICATION" else "mae"
         dic = dict(
             ndim=ndim,
@@ -348,13 +336,9 @@ def create_train_val_augmentors(
             dic["n2v"] = True
             dic["n2v_perc_pix"] = cfg.PROBLEM.DENOISING.N2V_PERC_PIX
             dic["n2v_manipulator"] = cfg.PROBLEM.DENOISING.N2V_MANIPULATOR
-            dic["n2v_neighborhood_radius"] = (
-                cfg.PROBLEM.DENOISING.N2V_NEIGHBORHOOD_RADIUS
-            )
+            dic["n2v_neighborhood_radius"] = cfg.PROBLEM.DENOISING.N2V_NEIGHBORHOOD_RADIUS
             dic["n2v_structMask"] = (
-                np.array([[0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0]])
-                if cfg.PROBLEM.DENOISING.N2V_STRUCTMASK
-                else None
+                np.array([[0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0]]) if cfg.PROBLEM.DENOISING.N2V_STRUCTMASK else None
             )
 
     if (
@@ -372,7 +356,7 @@ def create_train_val_augmentors(
         print(f"Y_train clipped using the following values: {norm_dict}")
 
     print("Initializing train data generator . . .")
-    train_generator = f_name(**dic)
+    train_generator = f_name(**dic)  # type: ignore
     data_norm = train_generator.get_data_normalization()
 
     print("Initializing val data generator . . .")
@@ -416,8 +400,7 @@ def create_train_val_augmentors(
         print(f"Y_val clipped using the following values: {norm_dict}")
 
     if cfg.PROBLEM.TYPE == "CLASSIFICATION" or (
-        cfg.PROBLEM.TYPE == "SELF_SUPERVISED"
-        and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"
+        cfg.PROBLEM.TYPE == "SELF_SUPERVISED" and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"
     ):
         ptype = "classification" if cfg.PROBLEM.TYPE == "CLASSIFICATION" else "mae"
         val_generator = f_name(
@@ -466,11 +449,9 @@ def create_train_val_augmentors(
             dic["n2v"] = True
             dic["n2v_perc_pix"] = cfg.PROBLEM.DENOISING.N2V_PERC_PIX
             dic["n2v_manipulator"] = cfg.PROBLEM.DENOISING.N2V_MANIPULATOR
-            dic["n2v_neighborhood_radius"] = (
-                cfg.PROBLEM.DENOISING.N2V_NEIGHBORHOOD_RADIUS
-            )
+            dic["n2v_neighborhood_radius"] = cfg.PROBLEM.DENOISING.N2V_NEIGHBORHOOD_RADIUS
 
-        val_generator = f_name(**dic)
+        val_generator = f_name(**dic)  # type: ignore
 
     # Generate examples of data augmentation
     if cfg.AUGMENTOR.AUG_SAMPLES and cfg.AUGMENTOR.ENABLE:
@@ -495,11 +476,9 @@ def create_train_val_augmentors(
     print(f"Number of workers: {num_workers}")
     print("Accumulate grad iterations: %d" % cfg.TRAIN.ACCUM_ITER)
     print("Effective batch size: %d" % total_batch_size)
-    sampler_train = torch.utils.data.DistributedSampler(
-        train_generator, num_replicas=world_size, rank=global_rank, shuffle=True
-    )
+    sampler_train = DistributedSampler(train_generator, num_replicas=world_size, rank=global_rank, shuffle=True)
     print("Sampler_train = %s" % str(sampler_train))
-    train_dataset = torch.utils.data.DataLoader(
+    train_dataset = DataLoader(
         train_generator,
         sampler=sampler_train,
         batch_size=cfg.TRAIN.BATCH_SIZE,
@@ -517,13 +496,11 @@ def create_train_val_augmentors(
                 "This will slightly alter validation results as extra duplicate entries are added to achieve "
                 "equal num of samples per-process."
             )
-        sampler_val = torch.utils.data.DistributedSampler(
-            val_generator, num_replicas=world_size, rank=global_rank, shuffle=False
-        )
+        sampler_val = DistributedSampler(val_generator, num_replicas=world_size, rank=global_rank, shuffle=False)
     else:
-        sampler_val = torch.utils.data.SequentialSampler(val_generator)
+        sampler_val = SequentialSampler(val_generator)
 
-    val_dataset = torch.utils.data.DataLoader(
+    val_dataset = DataLoader(
         val_generator,
         sampler=sampler_val,
         batch_size=cfg.TRAIN.BATCH_SIZE,
@@ -535,14 +512,19 @@ def create_train_val_augmentors(
     return train_dataset, val_dataset, data_norm, num_training_steps_per_epoch
 
 
-def create_test_augmentor(cfg, X_test, Y_test, cross_val_samples_ids):
+def create_test_augmentor(
+    cfg: type[Config],
+    X_test: Any,
+    Y_test: Any,
+    cross_val_samples_ids: Optional[List[int] | None] = None,
+) -> Tuple[Union[test_pair_data_generator, test_single_data_generator], Dict]:
     """
     Create test data generator.
 
     Parameters
     ----------
-    cfg : YACS CN object
-        Configuration.
+    cfg : Config
+        BiaPy configuration.
 
     X_test : 4D Numpy array
         Test data. E.g. ``(num_of_images, y, x, channels)`` for ``2D`` or ``(num_of_images, z, y, x, channels)`` for ``3D``.
@@ -556,8 +538,11 @@ def create_test_augmentor(cfg, X_test, Y_test, cross_val_samples_ids):
 
     Returns
     -------
-    test_generator : test_pair_data_generator
+    test_generator : test_pair_data_generator/test_single_data_generator
         Test data generator.
+
+    data_norm : dict
+        Normalization of the data.
     """
     norm_dict = {}
     norm_dict["type"] = cfg.DATA.NORMALIZATION.TYPE
@@ -572,17 +557,13 @@ def create_test_augmentor(cfg, X_test, Y_test, cross_val_samples_ids):
         norm_dict["clipped"] = X_test is not None
         bmz_clip = False
         if cfg.DATA.NORMALIZATION.APPLICATION_MODE == "dataset":
-            if not os.path.exists(cfg.PATHS.LWR_X_FILE) or not os.path.exists(
-                cfg.PATHS.UPR_X_FILE
-            ):
+            if not os.path.exists(cfg.PATHS.LWR_X_FILE) or not os.path.exists(cfg.PATHS.UPR_X_FILE):
                 if cfg.MODEL.SOURCE == "bmz" and X_test is not None:
                     (
                         X_test,
                         norm_dict["dataset_X_lower_value"],
                         norm_dict["dataset_X_upper_value"],
-                    ) = percentile_clip(
-                        X_test, norm_dict["lower_bound"], norm_dict["upper_bound"]
-                    )
+                    ) = percentile_clip(X_test, norm_dict["lower_bound"], norm_dict["upper_bound"])
                     bmz_clip = True
                 else:
                     raise FileNotFoundError(
@@ -591,12 +572,8 @@ def create_test_augmentor(cfg, X_test, Y_test, cross_val_samples_ids):
                         )
                     )
             else:
-                norm_dict["dataset_X_lower_value"] = float(
-                    np.load(cfg.PATHS.LWR_X_FILE)
-                )
-                norm_dict["dataset_X_upper_value"] = float(
-                    np.load(cfg.PATHS.UPR_X_FILE)
-                )
+                norm_dict["dataset_X_lower_value"] = float(np.load(cfg.PATHS.LWR_X_FILE))
+                norm_dict["dataset_X_upper_value"] = float(np.load(cfg.PATHS.UPR_X_FILE))
 
             if X_test is not None and not bmz_clip:
                 X_test, _, _ = percentile_clip(
@@ -608,23 +585,10 @@ def create_test_augmentor(cfg, X_test, Y_test, cross_val_samples_ids):
 
     if cfg.DATA.NORMALIZATION.TYPE == "custom":
         if cfg.DATA.NORMALIZATION.APPLICATION_MODE == "dataset":
-            if (
-                cfg.DATA.NORMALIZATION.CUSTOM_MEAN == -1
-                and cfg.DATA.NORMALIZATION.CUSTOM_STD == -1
-            ):
-                print(
-                    "Test normalization: trying to load mean from {}".format(
-                        cfg.PATHS.MEAN_INFO_FILE
-                    )
-                )
-                print(
-                    "Test normalization: trying to load std from {}".format(
-                        cfg.PATHS.STD_INFO_FILE
-                    )
-                )
-                if not os.path.exists(cfg.PATHS.MEAN_INFO_FILE) or not os.path.exists(
-                    cfg.PATHS.STD_INFO_FILE
-                ):
+            if cfg.DATA.NORMALIZATION.CUSTOM_MEAN == -1 and cfg.DATA.NORMALIZATION.CUSTOM_STD == -1:
+                print("Test normalization: trying to load mean from {}".format(cfg.PATHS.MEAN_INFO_FILE))
+                print("Test normalization: trying to load std from {}".format(cfg.PATHS.STD_INFO_FILE))
+                if not os.path.exists(cfg.PATHS.MEAN_INFO_FILE) or not os.path.exists(cfg.PATHS.STD_INFO_FILE):
                     if cfg.MODEL.SOURCE == "bmz" and X_test is not None:
                         norm_dict["mean"] = np.mean(X_test)
                         norm_dict["std"] = np.std(X_test)
@@ -640,11 +604,7 @@ def create_test_augmentor(cfg, X_test, Y_test, cross_val_samples_ids):
             else:
                 norm_dict["mean"] = cfg.DATA.NORMALIZATION.CUSTOM_MEAN
                 norm_dict["std"] = cfg.DATA.NORMALIZATION.CUSTOM_STD
-            print(
-                "Test normalization: using mean {} and std: {}".format(
-                    norm_dict["mean"], norm_dict["std"]
-                )
-            )
+            print("Test normalization: using mean {} and std: {}".format(norm_dict["mean"], norm_dict["std"]))
 
     instance_problem = True if cfg.PROBLEM.TYPE == "INSTANCE_SEG" else False
     if cfg.PROBLEM.TYPE in ["SELF_SUPERVISED"]:
@@ -654,21 +614,15 @@ def create_test_augmentor(cfg, X_test, Y_test, cross_val_samples_ids):
     if cfg.PROBLEM.TYPE in ["SUPER_RESOLUTION", "IMAGE_TO_IMAGE"]:
         norm_dict["mask_norm"] = "none"
 
-    ndim = 3 if cfg.PROBLEM.NDIM == "3D" else 2
+    ndim: int = 3 if cfg.PROBLEM.NDIM == "3D" else 2
     dic = dict(
         ndim=ndim,
         X=X_test,
-        d_path=(
-            cfg.DATA.TEST.PATH if cross_val_samples_ids is None else cfg.DATA.TRAIN.PATH
-        ),
+        d_path=(cfg.DATA.TEST.PATH if cross_val_samples_ids is None else cfg.DATA.TRAIN.PATH),
         test_by_chunks=cfg.TEST.BY_CHUNKS.ENABLE,
         provide_Y=provide_Y,
         Y=Y_test,
-        dm_path=(
-            cfg.DATA.TEST.GT_PATH
-            if cross_val_samples_ids is None
-            else cfg.DATA.TRAIN.GT_PATH
-        ),
+        dm_path=(cfg.DATA.TEST.GT_PATH if cross_val_samples_ids is None else cfg.DATA.TRAIN.GT_PATH),
         seed=cfg.SYSTEM.SEED,
         instance_problem=instance_problem,
         norm_dict=norm_dict,
@@ -685,11 +639,7 @@ def create_test_augmentor(cfg, X_test, Y_test, cross_val_samples_ids):
             224,
         ):
             r_shape = (224, 224) + (cfg.DATA.PATCH_SIZE[-1],)
-            print(
-                "Changing patch size from {} to {} to use efficientnet_b0".format(
-                    cfg.DATA.PATCH_SIZE[:-1], r_shape
-                )
-            )
+            print("Changing patch size from {} to {} to use efficientnet_b0".format(cfg.DATA.PATCH_SIZE[:-1], r_shape))
         if cfg.PROBLEM.TYPE == "CLASSIFICATION":
             dic["crop_center"] = True
             dic["resize_shape"] = r_shape
@@ -699,10 +649,7 @@ def create_test_augmentor(cfg, X_test, Y_test, cross_val_samples_ids):
     else:
         gen_name = test_pair_data_generator
 
-    if (
-        cfg.PROBLEM.TYPE == "IMAGE_TO_IMAGE"
-        and cfg.PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER
-    ):
+    if cfg.PROBLEM.TYPE == "IMAGE_TO_IMAGE" and cfg.PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER:
         dic["multiple_raw_images"] = True
 
     test_generator = gen_name(**dic)
@@ -710,7 +657,9 @@ def create_test_augmentor(cfg, X_test, Y_test, cross_val_samples_ids):
     return test_generator, data_norm
 
 
-def check_generator_consistence(gen, data_out_dir, mask_out_dir, filenames=None):
+def check_generator_consistence(
+    gen: DataLoader, data_out_dir: str, mask_out_dir: str, filenames: List[str] | None = None
+):
     """
     Save all data of a generator in the given path.
 
@@ -738,9 +687,7 @@ def check_generator_consistence(gen, data_out_dir, mask_out_dir, filenames=None)
         X_test, Y_test = sample
 
         for k in range(len(X_test)):
-            fil = (
-                filenames[c] if filenames is not None else ["sample_" + str(c) + ".tif"]
-            )
+            fil = filenames[c] if filenames is not None else ["sample_" + str(c) + ".tif"]
             save_tif(np.expand_dims(X_test[k], 0), data_out_dir, fil, verbose=False)
             save_tif(np.expand_dims(Y_test[k], 0), mask_out_dir, fil, verbose=False)
             c += 1
@@ -756,8 +703,7 @@ def check_generator_consistence(gen, data_out_dir, mask_out_dir, filenames=None)
 # first initialization of the the dataloader at the first epoch takes time, but for the next
 # epochs, the first iteration of every new epoch is as fast as the iterations in the middle
 # of an epoch.
-class MultiEpochsDataLoader(torch.utils.data.DataLoader):
-
+class MultiEpochsDataLoader(DataLoader):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._DataLoader__initialized = False
@@ -766,7 +712,7 @@ class MultiEpochsDataLoader(torch.utils.data.DataLoader):
         self.iterator = super().__iter__()
 
     def __len__(self):
-        return len(self.batch_sampler.sampler)
+        return len(self.batch_sampler.sampler)  # type: ignore
 
     def __iter__(self):
         for i in range(len(self)):

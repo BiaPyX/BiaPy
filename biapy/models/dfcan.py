@@ -11,9 +11,7 @@ def fftshift2d(img, size_psc=128):
     fs12 = img[:, :, h // 2 :, : w // 2]
     fs21 = img[:, :, : h // 2, w // 2 :]
     fs22 = img[:, :, : h // 2, : w // 2]
-    output = torch.cat(
-        [torch.cat([fs11, fs21], dim=2), torch.cat([fs12, fs22], dim=2)], dim=3
-    )
+    output = torch.cat([torch.cat([fs11, fs21], dim=2), torch.cat([fs12, fs22], dim=2)], dim=3)
     return output
 
 
@@ -21,22 +19,12 @@ class RCAB(nn.Module):
     def __init__(self, size_psc=128):  # size_psc：crop_size input_shape：depth
         super().__init__()
         self.size_psc = size_psc
-        self.conv_gelu1 = nn.Sequential(
-            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding="same"), nn.GELU()
-        )
-        self.conv_gelu2 = nn.Sequential(
-            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding="same"), nn.GELU()
-        )
-        self.conv_relu1 = nn.Sequential(
-            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding="same"), nn.ReLU()
-        )
+        self.conv_gelu1 = nn.Sequential(nn.Conv2d(64, 64, kernel_size=3, stride=1, padding="same"), nn.GELU())
+        self.conv_gelu2 = nn.Sequential(nn.Conv2d(64, 64, kernel_size=3, stride=1, padding="same"), nn.GELU())
+        self.conv_relu1 = nn.Sequential(nn.Conv2d(64, 64, kernel_size=3, stride=1, padding="same"), nn.ReLU())
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
-        self.conv_relu2 = nn.Sequential(
-            nn.Conv2d(64, 4, kernel_size=1, stride=1, padding=0), nn.ReLU()
-        )
-        self.conv_sigmoid = nn.Sequential(
-            nn.Conv2d(4, 64, kernel_size=1, stride=1, padding=0), nn.Sigmoid()
-        )
+        self.conv_relu2 = nn.Sequential(nn.Conv2d(64, 4, kernel_size=1, stride=1, padding=0), nn.ReLU())
+        self.conv_sigmoid = nn.Sequential(nn.Conv2d(4, 64, kernel_size=1, stride=1, padding=0), nn.Sigmoid())
 
     def forward(self, x, gamma=0.8):
         x0 = x.to(torch.float32)
@@ -56,9 +44,7 @@ class RCAB(nn.Module):
 
 
 class ResGroup(nn.Module):
-    def __init__(
-        self, n_RCAB=4, size_psc=128
-    ):  # size_psc：crop_size input_shape：depth
+    def __init__(self, n_RCAB=4, size_psc=128):  # size_psc：crop_size input_shape：depth
         super().__init__()
         RCABs = []
         for _ in range(n_RCAB):

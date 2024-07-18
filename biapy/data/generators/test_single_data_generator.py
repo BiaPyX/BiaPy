@@ -6,6 +6,13 @@ from skimage.io import imread
 from biapy.data.pre_processing import normalize, norm_range01, percentile_clip
 from biapy.data.generators.augmentors import center_crop_single, resize_img
 
+from typing import (
+    List,
+    Tuple,
+    Dict,
+    Any,
+)
+
 
 class test_single_data_generator(Dataset):
     """
@@ -22,7 +29,7 @@ class test_single_data_generator(Dataset):
     X : Numpy 5D/4D array, optional
         Data. E.g. ``(num_of_images, z, y, x, channels)``  for ``3D`` or ``(num_of_images, y, x, channels)`` for ``2D``.
 
-    d_path : Str, optional
+    d_path : str, optional
         Path to load the data from.
 
     test_by_chunks : bool, optional
@@ -34,7 +41,7 @@ class test_single_data_generator(Dataset):
     Y : Numpy 2D array, optional
         Image classes. E.g. ``(num_of_images, class)``.
 
-    dm_path : Str, optional
+    dm_path : str, optional
         Not used here.
 
     dims: str, optional
@@ -51,6 +58,9 @@ class test_single_data_generator(Dataset):
 
     reduce_mem : bool, optional
         To reduce the dtype from float32 to float16.
+
+    resize_shape : tuple of ints, optional
+        Shape to resize the images into.
 
     crop_center : bool, optional
         Whether to extract a
@@ -69,34 +79,26 @@ class test_single_data_generator(Dataset):
 
     def __init__(
         self,
-        ndim,
-        ptype,
-        X=None,
-        d_path=None,
-        test_by_chunks=False,
-        provide_Y=False,
-        Y=None,
-        dm_path=None,
-        seed=42,
-        instance_problem=False,
-        norm_dict=None,
-        crop_center=False,
-        reduce_mem=False,
-        resize_shape=None,
-        sample_ids=None,
-        convert_to_rgb=False,
-        multiple_raw_images=False,
+        ndim: int,
+        ptype: str,
+        X: np.ndarray | None = None,
+        d_path: str = "",
+        test_by_chunks: bool = False,
+        provide_Y: bool = False,
+        Y: np.ndarray | None = None,
+        dm_path: str = "",
+        seed: int = 42,
+        instance_problem: bool = False,
+        norm_dict: Dict | None = None,
+        crop_center: bool = False,
+        reduce_mem: bool = False,
+        resize_shape: Tuple[int, ...] = (256, 256, 1),
+        sample_ids: List[int] | None = None,
+        convert_to_rgb: bool = False,
+        multiple_raw_images: bool = False,
     ):
-        if X is None and d_path is None:
-            raise ValueError("One between 'X' or 'd_path' must be provided")
-        if crop_center and resize_shape is None:
-            raise ValueError(
-                "'resize_shape' need to be provided if 'crop_center' is enabled"
-            )
         assert ptype in ["ssl", "classification"]
-        assert (
-            norm_dict != None
-        ), "Normalization instructions must be provided with 'norm_dict'"
+        assert norm_dict != None, "Normalization instructions must be provided with 'norm_dict'"
 
         self.ptype = ptype
         self.X = X
@@ -132,9 +134,7 @@ class test_single_data_generator(Dataset):
                         self.data_path.append(ids[i])
 
                 if sample_ids is not None:
-                    self.data_path = [
-                        x for i, x in enumerate(self.data_path) if i in sample_ids
-                    ]
+                    self.data_path = [x for i, x in enumerate(self.data_path) if i in sample_ids]
                     old_classes = self.classes.copy()
                     for i, key in enumerate(old_classes.keys()):
                         if i not in sample_ids:
@@ -145,6 +145,7 @@ class test_single_data_generator(Dataset):
                 if self.len == 0:
                     raise ValueError("No image found in {}".format(d_path))
             else:
+                assert X is not None
                 self.len = len(X)
         else:
             self.data_path = sorted(next(os.walk(d_path))[2])
@@ -159,7 +160,8 @@ class test_single_data_generator(Dataset):
             img, _, xnorm, _ = self.load_sample(0)
             self.norm_dict["orig_dtype"] = img.dtype
 
-    def load_sample(self, idx):
+    # img, img_class, xnorm, filename
+    def load_sample(self, idx: int) -> Tuple[np.ndarray, Any, Dict | None, Any]:
         """Load one data sample given its corresponding index."""
         img_class, filename = None, None
 
@@ -168,7 +170,7 @@ class test_single_data_generator(Dataset):
             img = self.X[idx]
             img = np.squeeze(img)
             filename = idx
-            if self.provide_Y:
+            if self.provide_Y and self.Y is not None:
                 img_class = self.Y[idx] if self.ptype == "classification" else 0
         else:
             sample_id = self.data_path[idx]
@@ -213,10 +215,7 @@ class test_single_data_generator(Dataset):
                         lower=self.norm_dict["lower_bound"],
                         upper=self.norm_dict["upper_bound"],
                     )
-                elif (
-                    self.norm_dict["application_mode"] == "dataset"
-                    and not self.norm_dict["clipped"]
-                ):
+                elif self.norm_dict["application_mode"] == "dataset" and not self.norm_dict["clipped"]:
                     img, _, _ = percentile_clip(
                         img,
                         lwr_perc_val=self.norm_dict["dataset_X_lower_value"],
@@ -224,11 +223,9 @@ class test_single_data_generator(Dataset):
                     )
 
             if self.norm_dict["type"] == "div":
-                img, xnorm = norm_range01(img, dtype=self.dtype)
+                img, xnorm = norm_range01(img, dtype=self.dtype)  # type: ignore
             elif self.norm_dict["type"] == "scale_range":
-                img, xnorm = norm_range01(
-                    img, dtype=self.dtype, div_using_max_and_scale=True
-                )
+                img, xnorm = norm_range01(img, dtype=self.dtype, div_using_max_and_scale=True)  # type: ignore
             elif self.norm_dict["type"] == "custom":
                 if self.norm_dict["application_mode"] == "image":
                     xnorm = {}
@@ -244,18 +241,18 @@ class test_single_data_generator(Dataset):
                     )
 
         img = np.expand_dims(img, 0).astype(self.dtype)
-        img_class = np.expand_dims(img_class, 0)
+        img_class = np.expand_dims(np.array(img_class), 0)
 
         if self.convert_to_rgb and img.shape[-1] == 1:
             img = np.repeat(img, 3, axis=-1)
 
         return img, img_class, xnorm, filename
 
-    def __len__(self):
+    def __len__(self) -> int:
         """Defines the length of the generator"""
         return self.len
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: int) -> Dict:
         """
         Generation of one sample of data.
 
@@ -305,5 +302,5 @@ class test_single_data_generator(Dataset):
         else:  # SSL - MAE
             return {"X": img, "X_norm": self.norm_dict, "file": filename}
 
-    def get_data_normalization(self):
+    def get_data_normalization(self) -> Dict:
         return self.norm_dict

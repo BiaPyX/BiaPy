@@ -74,9 +74,7 @@ def init_devices(args, cfg):
         os.environ["WORLD_SIZE"] = str(args.world_size)
         # ["RANK", "WORLD_SIZE", "MASTER_ADDR", "MASTER_PORT", "LOCAL_RANK"]
     elif "RANK" in os.environ and "WORLD_SIZE" in os.environ:
-        assert (
-            torch.cuda.is_available()
-        ), "Distributed training without GPUs is not supported!"
+        assert torch.cuda.is_available(), "Distributed training without GPUs is not supported!"
 
         env_dict = {
             key: os.environ[key]
@@ -113,9 +111,7 @@ def init_devices(args, cfg):
 
     torch.cuda.set_device(args.gpu)
     print(
-        "| distributed init (rank {}): {}, gpu {}".format(
-            args.rank, args.dist_url, args.gpu
-        ),
+        "| distributed init (rank {}): {}, gpu {}".format(args.rank, args.dist_url, args.gpu),
         flush=True,
     )
     if cfg.TEST.BY_CHUNKS.ENABLE and cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.ENABLE:
@@ -164,9 +160,7 @@ def get_grad_norm_(parameters, norm_type: float = 2.0) -> torch.Tensor:
         total_norm = max(p.grad.detach().abs().max().to(device) for p in parameters)
     else:
         total_norm = torch.norm(
-            torch.stack(
-                [torch.norm(p.grad.detach(), norm_type).to(device) for p in parameters]
-            ),
+            torch.stack([torch.norm(p.grad.detach(), norm_type).to(device) for p in parameters]),
             norm_type,
         )
     return total_norm
@@ -186,7 +180,7 @@ def save_model(cfg, jobname, epoch, model, model_without_ddp, optimizer, loss_sc
         }
 
         save_on_master(to_save, checkpoint_path)
-    if len(checkpoint_paths)>0:
+    if len(checkpoint_paths) > 0:
         return checkpoint_paths[0]
 
 
@@ -203,31 +197,23 @@ def get_checkpoint_path(cfg, jobname):
         resume = cfg.PATHS.CHECKPOINT_FILE
     else:
         if cfg.MODEL.LOAD_CHECKPOINT_EPOCH == "last_on_train":
-            all_checkpoints = glob.glob(
-                os.path.join(checkpoint_dir, "{}-checkpoint-*.pth".format(jobname))
-            )
+            all_checkpoints = glob.glob(os.path.join(checkpoint_dir, "{}-checkpoint-*.pth".format(jobname)))
             latest_ckpt = -1
             for ckpt in all_checkpoints:
                 t = ckpt.split("-")[-1].split(".")[0]
                 if t.isdigit():
                     latest_ckpt = max(int(t), latest_ckpt)
             if latest_ckpt >= 0:
-                resume = os.path.join(
-                    checkpoint_dir, "{}-checkpoint-{}.pth".format(jobname, latest_ckpt)
-                )
+                resume = os.path.join(checkpoint_dir, "{}-checkpoint-{}.pth".format(jobname, latest_ckpt))
         elif cfg.MODEL.LOAD_CHECKPOINT_EPOCH == "best_on_val":
-            resume = os.path.join(
-                checkpoint_dir, "{}-checkpoint-best.pth".format(jobname)
-            )
+            resume = os.path.join(checkpoint_dir, "{}-checkpoint-best.pth".format(jobname))
         else:
             raise NotImplementedError
 
     return resume
 
 
-def load_model_checkpoint(
-    cfg, jobname, model_without_ddp, device, optimizer=None, loss_scaler=None
-):
+def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=None, loss_scaler=None):
     start_epoch = 0
 
     resume = get_checkpoint_path(cfg, jobname)
@@ -239,9 +225,7 @@ def load_model_checkpoint(
 
     # Load checkpoint file
     if resume.startswith("https"):
-        checkpoint = torch.hub.load_state_dict_from_url(
-            resume, map_location=device, check_hash=True
-        )
+        checkpoint = torch.hub.load_state_dict_from_url(resume, map_location=device, check_hash=True)
     else:
         checkpoint = torch.load(resume, map_location=device)
 
@@ -283,12 +267,7 @@ def to_pytorch_format(x, axis_order, device, dtype=torch.float32):
     if torch.is_tensor(x):
         return x.to(dtype).permute(axis_order).to(device, non_blocking=True)
     else:
-        return (
-            torch.from_numpy(x)
-            .to(dtype)
-            .permute(axis_order)
-            .to(device, non_blocking=True)
-        )
+        return torch.from_numpy(x).to(dtype).permute(axis_order).to(device, non_blocking=True)
 
 
 def to_numpy_format(x, axis_order_back):
@@ -323,9 +302,7 @@ class NativeScalerWithGradNormCount:
         if update_grad:
             if clip_grad is not None:
                 assert parameters is not None
-                self._scaler.unscale_(
-                    optimizer
-                )  # unscale the gradients of optimizer's assigned params in-place
+                self._scaler.unscale_(optimizer)  # unscale the gradients of optimizer's assigned params in-place
                 norm = torch.nn.utils.clip_grad_norm_(parameters, clip_grad)
             else:
                 self._scaler.unscale_(optimizer)
@@ -361,9 +338,7 @@ class TensorboardLogger(object):
             if isinstance(v, torch.Tensor):
                 v = v.item()
             assert isinstance(v, (float, int))
-            self.writer.add_scalar(
-                head + "/" + k, v, self.step if step is None else step
-            )
+            self.writer.add_scalar(head + "/" + k, v, self.step if step is None else step)
 
     def flush(self):
         self.writer.flush()
@@ -453,9 +428,7 @@ class MetricLogger(object):
             return self.meters[attr]
         if attr in self.__dict__:
             return self.__dict__[attr]
-        raise AttributeError(
-            "'{}' object has no attribute '{}'".format(type(self).__name__, attr)
-        )
+        raise AttributeError("'{}' object has no attribute '{}'".format(type(self).__name__, attr))
 
     def __str__(self):
         loss_str = []
@@ -520,8 +493,4 @@ class MetricLogger(object):
             end = time.time()
         total_time = time.time() - start_time
         total_time_str = str(datetime.timedelta(seconds=int(total_time)))
-        print(
-            "{} Total time: {} ({:.4f} s / it)".format(
-                header, total_time_str, total_time / len(iterable)
-            )
-        )
+        print("{} Total time: {} ({:.4f} s / it)".format(header, total_time_str, total_time / len(iterable)))

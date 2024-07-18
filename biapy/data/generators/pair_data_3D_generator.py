@@ -1,8 +1,7 @@
 import numpy as np
 import random
-import os
 from PIL import Image
-from skimage.io import imread
+from typing import Union, Tuple
 
 from biapy.utils.util import save_tif
 from biapy.data.generators.pair_base_data_generator import PairBaseDataGenerator
@@ -22,7 +21,7 @@ class Pair3DImageDataGenerator(PairBaseDataGenerator):
         To activate flips in z dimension.
     """
 
-    def __init__(self, zflip=False, **kwars):
+    def __init__(self, zflip: bool = False, **kwars):
         super().__init__(**kwars)
         if self.random_crops_in_DA or self.data_mode == "chunked_data":
             self.z_size = self.shape[0]
@@ -36,7 +35,28 @@ class Pair3DImageDataGenerator(PairBaseDataGenerator):
             self.shape[0] * self.grid_d_range[1],
         )
 
-    def ensure_shape(self, img, mask):
+    def ensure_shape(
+        self, img: np.ndarray, mask: np.ndarray | None
+    ) -> Union[Tuple[np.ndarray, Union[np.ndarray, None]], np.ndarray]:
+        """
+        Ensures ``img`` and ``mask`` correct axis number and their order.
+
+        Parameters
+        ----------
+        img : Numpy array representing a 3D image
+            Image to use as sample.
+
+        mask : Numpy array representing a 3D image
+            Mask to use as sample.
+
+        Returns
+        -------
+        img : 4D Numpy array
+            Image to use as sample. E.g. ``(z, y, x, channels)``.
+
+        mask : 4D Numpy array
+            Mask to use as sample. E.g. ``(z, y, x, channels)``.
+        """
         # Shape adjustment
         if img.ndim == 3:
             img = np.expand_dims(img, -1)
@@ -48,7 +68,7 @@ class Pair3DImageDataGenerator(PairBaseDataGenerator):
                     channel_pos,
                 ]
                 img = img.transpose(new_pos)
-        if self.Y_provided:
+        if self.Y_provided and mask is not None:
             if mask.ndim == 3:
                 mask = np.expand_dims(mask, -1)
             else:
@@ -65,17 +85,13 @@ class Pair3DImageDataGenerator(PairBaseDataGenerator):
 
         # Super-resolution check. if random_crops_in_DA is activated the images have not been cropped yet,
         # so this check can not be done and it will be done in the random crop
-        if (
-            not self.random_crops_in_DA
-            and self.Y_provided
-            and any([x != 1 for x in self.random_crop_scale])
-        ):
+        if not self.random_crops_in_DA and self.Y_provided and any([x != 1 for x in self.random_crop_scale]):
             s = [
                 img.shape[0] * self.random_crop_scale[0],
                 img.shape[1] * self.random_crop_scale[1],
                 img.shape[2] * self.random_crop_scale[2],
             ]
-            if all(x != y for x, y in zip(s, mask.shape[0:-1])):
+            if mask is not None and all(x != y for x, y in zip(s, mask.shape[0:-1])):
                 raise ValueError(
                     "Images loaded need to be LR and its HR version. LR shape:"
                     " {} vs HR shape {} is not x{} larger".format(
@@ -88,7 +104,39 @@ class Pair3DImageDataGenerator(PairBaseDataGenerator):
         else:
             return img
 
-    def apply_transform(self, image, mask, e_im=None, e_mask=None):
+    def apply_transform(
+        self,
+        image: np.ndarray,
+        mask: np.ndarray,
+        e_im: np.ndarray | None = None,
+        e_mask: np.ndarray | None = None,
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Transform the input image and its mask at the same time with one of the selected choices based on a
+        probability.
+
+        Parameters
+        ----------
+        image : 4D Numpy array
+            Image to transform. E.g. ``(y, x, z, channels)``.
+
+        mask : 4D Numpy array
+            Mask to transform. E.g.  ``(y, x, z, channels)``.
+
+        e_im : 4D Numpy array
+            Extra image to help transforming ``image``. E.g. ``(y, x, z, channels)``.
+
+        e_mask : 4D Numpy array
+            Extra mask to help transforming ``mask``. E.g. ``(y, x, z, channels)``.
+
+        Returns
+        -------
+        image : 4D Numpy array
+            Transformed image. E.g. ``(y, x, z, channels)```.
+
+        mask : 4D Numpy array
+            Transformed image mask. E.g.``(y, x, z, channels)``.
+        """
         # Transpose them so we can merge the z and c channels easily.
         # z, y, x, c --> x, y, z, c
         image = image.transpose((2, 1, 0, 3))
@@ -170,22 +218,21 @@ class Pair3DImageDataGenerator(PairBaseDataGenerator):
                     im = Image.fromarray(aux[s, ..., 0])
                     im = im.convert("RGB")
                     px = im.load()
+                    assert px is not None
+
                     m = Image.fromarray(auxm[s, ..., 0])
                     m = m.convert("RGB")
                     py = m.load()
+                    assert py is not None
 
                     # Paint a blue square that represents the crop made.
                     # Here the axis are x, y and not y, x (numpy)
-                    for row in range(
-                        point_dict["s_x"], point_dict["s_x"] + self.shape[2]
-                    ):
+                    for row in range(point_dict["s_x"], point_dict["s_x"] + self.shape[2]):
                         px[row, point_dict["s_y"]] = (0, 0, 255)
                         px[row, point_dict["s_y"] + self.shape[1] - 1] = (0, 0, 255)
                         py[row, point_dict["s_y"]] = (0, 0, 255)
                         py[row, point_dict["s_y"] + self.shape[1] - 1] = (0, 0, 255)
-                    for col in range(
-                        point_dict["s_y"], point_dict["s_y"] + self.shape[1]
-                    ):
+                    for col in range(point_dict["s_y"], point_dict["s_y"] + self.shape[1]):
                         px[point_dict["s_x"], col] = (0, 0, 255)
                         px[point_dict["s_x"] + self.shape[2] - 1, col] = (0, 0, 255)
                         py[point_dict["s_x"], col] = (0, 0, 255)
@@ -194,18 +241,9 @@ class Pair3DImageDataGenerator(PairBaseDataGenerator):
                     # Paint the selected point in red
                     if s == point_dict["oz"]:
                         p_size = 6
-                        for row in range(
-                            point_dict["ox"] - p_size, point_dict["ox"] + p_size
-                        ):
-                            for col in range(
-                                point_dict["oy"] - p_size, point_dict["oy"] + p_size
-                            ):
-                                if (
-                                    col >= 0
-                                    and col < aux.shape[1]
-                                    and row >= 0
-                                    and row < aux.shape[2]
-                                ):
+                        for row in range(point_dict["ox"] - p_size, point_dict["ox"] + p_size):
+                            for col in range(point_dict["oy"] - p_size, point_dict["oy"] + p_size):
+                                if col >= 0 and col < aux.shape[1] and row >= 0 and row < aux.shape[2]:
                                     px[row, col] = (255, 0, 0)
                                     py[row, col] = (255, 0, 0)
 

@@ -280,15 +280,9 @@ class UpBlock(nn.Module):
         block = []
         mpool = (z_down, 2, 2) if ndim == 3 else (2, 2)
         if up_mode == "convtranspose":
-            block.append(
-                convtranspose(in_size, out_size, kernel_size=mpool, stride=mpool)
-            )
+            block.append(convtranspose(in_size, out_size, kernel_size=mpool, stride=mpool))
         elif up_mode == "upsampling":
-            block.append(
-                nn.Upsample(
-                    mode="bilinear" if ndim == 2 else "trilinear", scale_factor=mpool
-                )
-            )
+            block.append(nn.Upsample(mode="bilinear" if ndim == 2 else "trilinear", scale_factor=mpool))
             block.append(conv(in_size, out_size, kernel_size=1))
         if norm != "none":
             if conv == nn.Conv2d:
@@ -300,9 +294,7 @@ class UpBlock(nn.Module):
         self.up = nn.Sequential(*block)
 
         if attention_gate:
-            self.attention_gate = AttentionBlock(
-                conv=conv, in_size=out_size, out_size=out_size // 2, norm=norm
-            )
+            self.attention_gate = AttentionBlock(conv=conv, in_size=out_size, out_size=out_size // 2, norm=norm)
         else:
             self.attention_gate = None
         self.conv_block = DoubleConvBlock(
@@ -403,46 +395,28 @@ class UpConvNeXtBlock_V1(nn.Module):
             post_ln_permutation = Permute([0, 3, 1, 2])
 
         if layer_norm is not None:
-            block.append(
-                nn.Sequential(
-                    pre_ln_permutation, layer_norm(in_size), post_ln_permutation
-                )
-            )
+            block.append(nn.Sequential(pre_ln_permutation, layer_norm(in_size), post_ln_permutation))
         else:
             layer_norm = nn.LayerNorm
-            block.append(
-                nn.Sequential(
-                    pre_ln_permutation, layer_norm(in_size), post_ln_permutation
-                )
-            )
+            block.append(nn.Sequential(pre_ln_permutation, layer_norm(in_size), post_ln_permutation))
 
         # Upsampling
         if up_mode == "convtranspose":
-            block.append(
-                convtranspose(in_size, out_size, kernel_size=mpool, stride=mpool)
-            )
+            block.append(convtranspose(in_size, out_size, kernel_size=mpool, stride=mpool))
         elif up_mode == "upsampling":
-            block.append(
-                nn.Upsample(
-                    mode="bilinear" if ndim == 2 else "trilinear", scale_factor=mpool
-                )
-            )
+            block.append(nn.Upsample(mode="bilinear" if ndim == 2 else "trilinear", scale_factor=mpool))
             block.append(conv(in_size, out_size, kernel_size=1))
 
         self.up = nn.Sequential(*block)
 
         # Define attention gate
         if attention_gate:
-            self.attention_gate = AttentionBlock(
-                conv=conv, in_size=out_size, out_size=out_size // 2
-            )
+            self.attention_gate = AttentionBlock(conv=conv, in_size=out_size, out_size=out_size // 2)
         else:
             self.attention_gate = None
 
         # Convolution block to change dimensions of concatenated tensor
-        self.conv_block = ConvBlock(
-            conv, in_size=out_size * 2, out_size=out_size, k_size=1, se_block=se_block
-        )
+        self.conv_block = ConvBlock(conv, in_size=out_size * 2, out_size=out_size, k_size=1, se_block=se_block)
 
         # ConvNeXtBlock
         stage = nn.ModuleList()
@@ -495,9 +469,7 @@ class AttentionBlock(nn.Module):
         """
         super(AttentionBlock, self).__init__()
         w_g = []
-        w_g.append(
-            conv(in_size, out_size, kernel_size=1, stride=1, padding=0, bias=True)
-        )
+        w_g.append(conv(in_size, out_size, kernel_size=1, stride=1, padding=0, bias=True))
         if norm != "none":
             if conv == nn.Conv2d:
                 w_g.append(get_norm_2d(norm, out_size))
@@ -506,9 +478,7 @@ class AttentionBlock(nn.Module):
         self.w_g = nn.Sequential(*w_g)
 
         w_x = []
-        w_x.append(
-            conv(in_size, out_size, kernel_size=1, stride=1, padding=0, bias=True)
-        )
+        w_x.append(conv(in_size, out_size, kernel_size=1, stride=1, padding=0, bias=True))
         if norm != "none":
             if conv == nn.Conv2d:
                 w_g.append(get_norm_2d(norm, out_size))
@@ -674,17 +644,13 @@ class ResConvBlock(nn.Module):
                 dropout=dropout,
             )
         )
-        block.append(
-            ConvBlock(conv=conv, in_size=out_size, out_size=out_size, k_size=k_size)
-        )
+        block.append(ConvBlock(conv=conv, in_size=out_size, out_size=out_size, k_size=k_size))
 
         self.block = nn.Sequential(*block)
 
         if not extra_conv:
             block = []
-            block.append(
-                conv(in_size, out_size, kernel_size=skip_k_size, padding="same")
-            )
+            block.append(conv(in_size, out_size, kernel_size=skip_k_size, padding="same"))
             if skip_norm != "none":
                 if conv == nn.Conv2d:
                     block.append(get_norm_2d(skip_norm, out_size))
@@ -790,9 +756,7 @@ class ResUpBlock(nn.Module):
         if up_mode == "convtranspose":
             self.up = convtranspose(in_size, in_size, kernel_size=mpool, stride=mpool)
         elif up_mode == "upsampling":
-            self.up = nn.Upsample(
-                mode="bilinear" if ndim == 2 else "trilinear", scale_factor=mpool
-            )
+            self.up = nn.Upsample(mode="bilinear" if ndim == 2 else "trilinear", scale_factor=mpool)
 
         self.conv_block = ResConvBlock(
             conv=conv,

@@ -90,9 +90,7 @@ class U_NeXt_V1(nn.Module):
         self.ndim = 3 if len(image_shape) == 4 else 2
         self.z_down = z_down
         self.n_classes = 1 if n_classes <= 2 else n_classes
-        self.multiclass = (
-            True if n_classes > 2 and output_channels is not None else False
-        )
+        self.multiclass = True if n_classes > 2 and output_channels is not None else False
         layer_norm = nn.LayerNorm
 
         if self.ndim == 3:
@@ -141,9 +139,7 @@ class U_NeXt_V1(nn.Module):
 
             # ConvNeXtBlocks
             for _ in range(cn_layers[i]):
-                sd_prob = (
-                    stochastic_depth_prob * stage_block_id / (total_stage_blocks - 1.0)
-                )
+                sd_prob = stochastic_depth_prob * stage_block_id / (total_stage_blocks - 1.0)
                 stage.append(
                     ConvNeXtBlock_V1(
                         self.ndim,
@@ -178,14 +174,8 @@ class U_NeXt_V1(nn.Module):
         # BOTTLENECK
         stage = nn.ModuleList()
         for _ in range(cn_layers[-1]):
-            sd_prob = (
-                stochastic_depth_prob * stage_block_id / (total_stage_blocks - 1.0)
-            )
-            stage.append(
-                ConvNeXtBlock_V1(
-                    self.ndim, conv, feature_maps[-1], layer_scale, sd_prob, layer_norm
-                )
-            )
+            sd_prob = stochastic_depth_prob * stage_block_id / (total_stage_blocks - 1.0)
+            stage.append(ConvNeXtBlock_V1(self.ndim, conv, feature_maps[-1], layer_scale, sd_prob, layer_norm))
             stage_block_id += 1
         self.bottleneck = nn.Sequential(*stage)
 
@@ -216,9 +206,7 @@ class U_NeXt_V1(nn.Module):
         mpool = (z_down[0], 2, 2) if self.ndim == 3 else (2, 2)
         self.up_path.append(
             nn.Sequential(
-                convtranspose(
-                    feature_maps[0], feature_maps[0], kernel_size=mpool, stride=mpool
-                ),
+                convtranspose(feature_maps[0], feature_maps[0], kernel_size=mpool, stride=mpool),
                 pre_ln_permutation,
                 layer_norm(feature_maps[0]),
                 post_ln_permutation,
@@ -238,33 +226,21 @@ class U_NeXt_V1(nn.Module):
         # Instance segmentation
         if output_channels is not None:
             if output_channels == "Dv2":
-                self.last_block = conv(
-                    feature_maps[0], 1, kernel_size=1, padding="same"
-                )
+                self.last_block = conv(feature_maps[0], 1, kernel_size=1, padding="same")
             elif output_channels in ["BC", "BP"]:
-                self.last_block = conv(
-                    feature_maps[0], 2, kernel_size=1, padding="same"
-                )
+                self.last_block = conv(feature_maps[0], 2, kernel_size=1, padding="same")
             elif output_channels in ["BDv2", "BD"]:
-                self.last_block = conv(
-                    feature_maps[0], 2, kernel_size=1, padding="same"
-                )
+                self.last_block = conv(feature_maps[0], 2, kernel_size=1, padding="same")
             elif output_channels in ["BCM", "BCD", "BCDv2"]:
-                self.last_block = conv(
-                    feature_maps[0], 3, kernel_size=1, padding="same"
-                )
+                self.last_block = conv(feature_maps[0], 3, kernel_size=1, padding="same")
         # Other
         else:
-            self.last_block = conv(
-                feature_maps[0], self.n_classes, kernel_size=1, padding="same"
-            )
+            self.last_block = conv(feature_maps[0], self.n_classes, kernel_size=1, padding="same")
 
         # Multi-head: instances + classification
         self.last_class_head = None
         if self.multiclass:
-            self.last_class_head = conv(
-                feature_maps[0], self.n_classes, kernel_size=1, padding="same"
-            )
+            self.last_class_head = conv(feature_maps[0], self.n_classes, kernel_size=1, padding="same")
 
         self.apply(self._init_weights)
 

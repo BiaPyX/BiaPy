@@ -105,17 +105,11 @@ def create_instance_channels(cfg, data_type="train"):
     # Create the mask patch by patch (Zarr/H5)
     if working_with_zarr_h5_files and isinstance(Y, dict):
         savepath = (
-            data_path
-            + "_"
-            + cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
-            + "_"
-            + cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
+            data_path + "_" + cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS + "_" + cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         )
         if "D" in cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE:
             dtype_str = "float32"
-            raise ValueError(
-                "Currently distance creation using Zarr by chunks is not implemented."
-            )
+            raise ValueError("Currently distance creation using Zarr by chunks is not implemented.")
         else:
             dtype_str = "uint8"
 
@@ -174,16 +168,12 @@ def create_instance_channels(cfg, data_type="train"):
                     out_data_order = getattr(cfg.DATA, tag).INPUT_IMG_AXES_ORDER + "C"
                     channel_pos = -1
                 else:
-                    out_data_shape[
-                        getattr(cfg.DATA, tag).INPUT_IMG_AXES_ORDER.index("C")
-                    ] = 1
+                    out_data_shape[getattr(cfg.DATA, tag).INPUT_IMG_AXES_ORDER.index("C")] = 1
                     out_data_shape = tuple(out_data_shape)
                     out_data_order = getattr(cfg.DATA, tag).INPUT_IMG_AXES_ORDER
                     channel_pos = getattr(cfg.DATA, tag).INPUT_IMG_AXES_ORDER.index("C")
 
-                mask = fid_mask.create_dataset(
-                    "data", shape=out_data_shape, dtype=dtype_str
-                )
+                mask = fid_mask.create_dataset("data", shape=out_data_shape, dtype=dtype_str)
                 del data, imgfile, fname
 
             # Adjust slices to calculate where to insert the predicted patch. This slice does not have into account the
@@ -304,9 +294,7 @@ def create_test_instance_channels(cfg):
     X = sorted(next(os.walk(cfg.DATA.TEST.PATH)[2]))
     print("Creating X_test channels . . .")
     for i in tqdm(range(len(X)), disable=not is_main_process()):
-        img = read_img(
-            os.path.join(cfg.DATA.TEST.PATH, X[i]), is_3d=not cfg.PROBLEM.NDIM == "2D"
-        )
+        img = read_img(os.path.join(cfg.DATA.TEST.PATH, X[i]), is_3d=not cfg.PROBLEM.NDIM == "2D")
         save_tif(
             np.expand_dims(img, 0),
             data_dir=cfg.DATA.TEST.INSTANCE_CHANNELS_DIR,
@@ -426,9 +414,7 @@ def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
 
             if data_mask.ndim == 5:
                 for i in range(new_mask.shape[1]):
-                    new_mask[img, i, ..., 1] = dilation(
-                        new_mask[img, i, ..., 1], disk(3)
-                    )
+                    new_mask[img, i, ..., 1] = dilation(new_mask[img, i, ..., 1], disk(3))
             else:
                 new_mask[img, ..., 1] = dilation(new_mask[img, ..., 1], disk(3))
 
@@ -436,22 +422,16 @@ def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
         if ("C" in mode or "Dv2" in mode) and instance_count != 1:
             c_channel = 0 if mode == "C" else 1
             f = "thick" if fb_mode == "dense" else fb_mode
-            new_mask[img, ..., c_channel] = find_boundaries(vol, mode=f).astype(
-                np.uint8
-            )
+            new_mask[img, ..., c_channel] = find_boundaries(vol, mode=f).astype(np.uint8)
             if fb_mode == "dense" and mode != "BCM":
                 if new_mask[img, ..., c_channel].ndim == 2:
-                    new_mask[img, ..., c_channel] = 1 - binary_dilation(
-                        new_mask[img, ..., c_channel], disk(1)
-                    )
+                    new_mask[img, ..., c_channel] = 1 - binary_dilation(new_mask[img, ..., c_channel], disk(1))
                 else:
                     for j in range(new_mask[img, ..., c_channel].shape[0]):
                         new_mask[img, j, ..., c_channel] = 1 - binary_dilation(
                             new_mask[img, j, ..., c_channel], disk(1)
                         )
-                new_mask[img, ..., c_channel] = 1 - (
-                    (vol > 0) * new_mask[img, ..., c_channel]
-                )
+                new_mask[img, ..., c_channel] = 1 - ((vol > 0) * new_mask[img, ..., c_channel])
             if "B" in mode:
                 # Remove contours from segmentation maps
                 new_mask[img, ..., 0][np.where(new_mask[img, ..., 1] == 1)] = 0
@@ -460,15 +440,11 @@ def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
 
         if ("D" in mode or "Dv2" in mode) and instance_count != 1:
             # Foreground distance
-            new_mask[img, ..., -1] = scipy.ndimage.distance_transform_edt(
-                new_mask[img, ..., 0]
-            )
+            new_mask[img, ..., -1] = scipy.ndimage.distance_transform_edt(new_mask[img, ..., 0])
             props = regionprops(vol, new_mask[img, ..., -1])
             max_values = np.zeros(vol.shape)
             for i in range(len(props)):
-                max_values = np.where(
-                    vol == props[i].label, props[i].intensity_max, max_values
-                )
+                max_values = np.where(vol == props[i].label, props[i].intensity_max, max_values)
             new_mask[img, ..., -1] = max_values - new_mask[img, ..., -1]
 
     # Normalize and merge distance channels
@@ -520,9 +496,7 @@ def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
             for j in range(len(suffix)):
                 aux = new_mask[i, ..., j]
                 aux = np.expand_dims(np.expand_dims(aux, -1), 0)
-                save_tif(
-                    aux, save_dir, filenames=["vol" + str(i) + suffix[j]], verbose=False
-                )
+                save_tif(aux, save_dir, filenames=["vol" + str(i) + suffix[j]], verbose=False)
                 save_tif(
                     np.expand_dims(data_mask[i], 0),
                     save_dir,
@@ -575,44 +549,28 @@ def create_detection_masks(cfg, data_type="train"):
     if len(img_ids) != len(ids):
         raise ValueError(
             "Different number of CSV files and images found ({} vs {}). "
-            "Please check that every image has one and only one CSV file".format(
-                len(ids), len(img_ids)
-            )
+            "Please check that every image has one and only one CSV file".format(len(ids), len(img_ids))
         )
     if cfg.PROBLEM.NDIM == "2D":
-        req_columns = (
-            ["axis-0", "axis-1"] if classes == 1 else ["axis-0", "axis-1", "class"]
-        )
+        req_columns = ["axis-0", "axis-1"] if classes == 1 else ["axis-0", "axis-1", "class"]
     else:
-        req_columns = (
-            ["axis-0", "axis-1", "axis-2"]
-            if classes == 1
-            else ["axis-0", "axis-1", "axis-2", "class"]
-        )
+        req_columns = ["axis-0", "axis-1", "axis-2"] if classes == 1 else ["axis-0", "axis-1", "axis-2", "class"]
     req_dim = len(req_columns)
 
     print("Creating {} detection masks . . .".format(data_type))
     for i in range(len(ids)):
         img_filename = os.path.splitext(ids[i])[0] + img_ext
-        if not os.path.exists(
-            os.path.join(out_dir, img_filename)
-        ) and not os.path.exists(os.path.join(out_dir, img_ids[i])):
-            print(
-                "Attempting to create mask from CSV file: {}".format(
-                    os.path.join(label_dir, ids[i])
-                )
-            )
+        if not os.path.exists(os.path.join(out_dir, img_filename)) and not os.path.exists(
+            os.path.join(out_dir, img_ids[i])
+        ):
+            print("Attempting to create mask from CSV file: {}".format(os.path.join(label_dir, ids[i])))
             if not os.path.exists(os.path.join(img_dir, img_filename)):
                 print(
                     "WARNING: The image seems to have different name than its CSV file. Using the CSV file that's "
                     "in the same spot (within the CSV files list) where the image is in its own list of images. Check if it is correct!"
                 )
                 img_filename = img_ids[i]
-            print(
-                "Its respective image seems to be: {}".format(
-                    os.path.join(img_dir, img_filename)
-                )
-            )
+            print("Its respective image seems to be: {}".format(os.path.join(img_dir, img_filename)))
 
             df = pd.read_csv(os.path.join(label_dir, ids[i]))
             df = df.dropna()
@@ -623,9 +581,7 @@ def create_detection_masks(cfg, data_type="train"):
                 )
                 shape = img.shape[:-1]
             else:
-                img_zarr_file, img = read_chunked_data(
-                    os.path.join(img_dir, img_filename)
-                )
+                img_zarr_file, img = read_chunked_data(os.path.join(img_dir, img_filename))
                 shape = img.shape if img.ndim == 3 else img.shape[:-1]
 
                 if isinstance(img_zarr_file, h5py.File):
@@ -668,16 +624,10 @@ def create_detection_masks(cfg, data_type="train"):
                 if uniq[0] != 1:
                     raise ValueError("Class number must start with 1")
                 if not all(uniq == np.array(range(1, classes + 1))):
-                    raise ValueError(
-                        "Classes must be consecutive, e.g [1,2,3,4..]. Given {}".format(
-                            uniq
-                        )
-                    )
+                    raise ValueError("Classes must be consecutive, e.g [1,2,3,4..]. Given {}".format(uniq))
             else:
                 if classes > 1:
-                    raise ValueError(
-                        "MODEL.N_CLASSES > 1 but no class specified in CSV file"
-                    )
+                    raise ValueError("MODEL.N_CLASSES > 1 but no class specified in CSV file")
                 class_point = [1] * len(z_axis_point)
 
             # Create masks
@@ -704,30 +654,20 @@ def create_detection_masks(cfg, data_type="train"):
 
                 # Paint the point
                 if cfg.PROBLEM.NDIM == "3D":
-                    if (
-                        a0_coord < mask.shape[0]
-                        and a1_coord < mask.shape[1]
-                        and a2_coord < mask.shape[2]
-                    ):
+                    if a0_coord < mask.shape[0] and a1_coord < mask.shape[1] and a2_coord < mask.shape[2]:
                         cpd = cfg.PROBLEM.DETECTION.CENTRAL_POINT_DILATION
                         if (
                             1
                             in mask[
                                 max(0, a0_coord - 1) : min(mask.shape[0], a0_coord + 2),
-                                max(0, a1_coord - 1 - cpd) : min(
-                                    mask.shape[1], a1_coord + 2 + cpd
-                                ),
-                                max(0, a2_coord - 1 - cpd) : min(
-                                    mask.shape[2], a2_coord + 2 + cpd
-                                ),
+                                max(0, a1_coord - 1 - cpd) : min(mask.shape[1], a1_coord + 2 + cpd),
+                                max(0, a2_coord - 1 - cpd) : min(mask.shape[2], a2_coord + 2 + cpd),
                                 c_point,
                             ]
                         ):
                             print(
                                 "WARNING: possible duplicated point in (3,9,9) neighborhood: coords {} , class {} "
-                                "(point number {} in CSV)".format(
-                                    (a0_coord, a1_coord, a2_coord), c_point, p_number[j]
-                                )
+                                "(point number {} in CSV)".format((a0_coord, a1_coord, a2_coord), c_point, p_number[j])
                             )
 
                         mask[a0_coord, a1_coord, a2_coord, c_point] = 1
@@ -740,10 +680,7 @@ def create_detection_masks(cfg, data_type="train"):
                         if a2_coord - 1 > 0:
                             mask[a0_coord, a1_coord, a2_coord - 1, c_point] = 1
                         if cfg.PROBLEM.DETECTION.CENTRAL_POINT_DILATION == 0:
-                            if (
-                                a1_coord + 1 < mask.shape[1]
-                                and a2_coord + 1 < mask.shape[2]
-                            ):
+                            if a1_coord + 1 < mask.shape[1] and a2_coord + 1 < mask.shape[2]:
                                 mask[a0_coord, a1_coord + 1, a2_coord + 1, c_point] = 1
                             if a1_coord - 1 > 0 and a2_coord - 1 > 0:
                                 mask[a0_coord, a1_coord - 1, a2_coord - 1, c_point] = 1
@@ -769,9 +706,7 @@ def create_detection_masks(cfg, data_type="train"):
                         ):
                             print(
                                 "WARNING: possible duplicated point in (9,9) neighborhood: coords {} , class {} "
-                                "(point number {} in CSV)".format(
-                                    (a0_coord, a1_coord), c_point, p_number[j]
-                                )
+                                "(point number {} in CSV)".format((a0_coord, a1_coord), c_point, p_number[j])
                             )
 
                         mask[a0_coord, a1_coord, c_point] = 1
@@ -801,17 +736,13 @@ def create_detection_masks(cfg, data_type="train"):
                         mask[k, ..., ch] = binary_dilation_scipy(
                             mask[k, ..., ch],
                             iterations=1,
-                            structure=disk(
-                                cfg.PROBLEM.DETECTION.CENTRAL_POINT_DILATION
-                            ),
+                            structure=disk(cfg.PROBLEM.DETECTION.CENTRAL_POINT_DILATION),
                         )
                 if cfg.PROBLEM.NDIM == "2D":
                     mask = mask[0]
 
             if cfg.PROBLEM.DETECTION.CHECK_POINTS_CREATED:
-                print(
-                    "Check points created to see if some of them are very close that create a large label"
-                )
+                print("Check points created to see if some of them are very close that create a large label")
                 error_found = False
                 for ch in tqdm(
                     range(mask.shape[-1]),
@@ -832,9 +763,7 @@ def create_detection_masks(cfg, data_type="train"):
                             print(
                                 "WARNING: There is a point (coords {}) with size very different from "
                                 "the rest. Maybe that cell has several labels: please check it! Normally all point "
-                                "have {} pixels but this one has {}.".format(
-                                    point, ref_value, counts[k]
-                                )
+                                "have {} pixels but this one has {}.".format(point, ref_value, counts[k])
                             )
                             error_found = True
 
@@ -898,14 +827,8 @@ def create_ssl_source_data_masks(cfg, data_type="train"):
     print("Creating {} SSL source. . .".format(data_type))
     for i in range(len(ids)):
         if not os.path.exists(os.path.join(out_dir, ids[i])):
-            print(
-                "Crappifying file {} to create SSL source".format(
-                    os.path.join(img_dir, ids[i])
-                )
-            )
-            img = read_img(
-                os.path.join(img_dir, ids[i]), is_3d=not cfg.PROBLEM.NDIM == "2D"
-            )
+            print("Crappifying file {} to create SSL source".format(os.path.join(img_dir, ids[i])))
+            img = read_img(os.path.join(img_dir, ids[i]), is_3d=not cfg.PROBLEM.NDIM == "2D")
             img = crappify(
                 img,
                 resizing_factor=cfg.PROBLEM.SELF_SUPERVISED.RESIZING_FACTOR,
@@ -918,9 +841,7 @@ def create_ssl_source_data_masks(cfg, data_type="train"):
             print("Source file {} found".format(os.path.join(img_dir, ids[i])))
 
 
-def crappify(
-    input_img, resizing_factor, add_noise=True, noise_level=None, Down_up=True
-):
+def crappify(input_img, resizing_factor, add_noise=True, noise_level=None, Down_up=True):
     """
     Crappifies input image by adding Gaussian noise and downsampling and upsampling it so the resolution
     gets worsen.
@@ -1021,9 +942,7 @@ def add_gaussian_noise(image, percentage_of_noise):
 ################
 # SEMANTIC SEG #
 ################
-def calculate_2D_volume_prob_map(
-    Y, Y_path=None, w_foreground=0.94, w_background=0.06, save_dir=None
-):
+def calculate_2D_volume_prob_map(Y, Y_path=None, w_foreground=0.94, w_background=0.06, save_dir=None):
     """
     Calculate the probability map of the given 2D data.
 
@@ -1102,15 +1021,11 @@ def calculate_2D_volume_prob_map(
             if foreground_pixels == 0:
                 _map[:, :, k][np.where(_map[:, :, k] == v)] = 0
             else:
-                _map[:, :, k][np.where(_map[:, :, k] == v)] = (
-                    w_foreground / foreground_pixels
-                )
+                _map[:, :, k][np.where(_map[:, :, k] == v)] = w_foreground / foreground_pixels
             if background_pixels == 0:
                 _map[:, :, k][np.where(_map[:, :, k] == 0)] = 0
             else:
-                _map[:, :, k][np.where(_map[:, :, k] == 0)] = (
-                    w_background / background_pixels
-                )
+                _map[:, :, k][np.where(_map[:, :, k] == 0)] = w_background / background_pixels
 
             # Necessary to get all probs sum 1
             s = _map[:, :, k].sum()
@@ -1148,9 +1063,7 @@ def calculate_2D_volume_prob_map(
             return save_dir
 
 
-def calculate_3D_volume_prob_map(
-    Y, Y_path=None, w_foreground=0.94, w_background=0.06, save_dir=None
-):
+def calculate_3D_volume_prob_map(Y, Y_path=None, w_foreground=0.94, w_background=0.06, save_dir=None):
     """
     Calculate the probability map of the given 3D data.
 
@@ -1228,15 +1141,11 @@ def calculate_3D_volume_prob_map(
             if foreground_pixels == 0:
                 _map[:, :, :, k][np.where(_map[:, :, :, k] == v)] = 0
             else:
-                _map[:, :, :, k][np.where(_map[:, :, :, k] == v)] = (
-                    w_foreground / foreground_pixels
-                )
+                _map[:, :, :, k][np.where(_map[:, :, :, k] == v)] = w_foreground / foreground_pixels
             if background_pixels == 0:
                 _map[:, :, :, k][np.where(_map[:, :, :, k] == 0)] = 0
             else:
-                _map[:, :, :, k][np.where(_map[:, :, :, k] == 0)] = (
-                    w_background / background_pixels
-                )
+                _map[:, :, :, k][np.where(_map[:, :, :, k] == 0)] = w_background / background_pixels
 
             # Necessary to get all probs sum 1
             s = _map[:, :, :, k].sum()
@@ -1285,16 +1194,10 @@ def norm_range01(x, dtype=np.float32, div_using_max_and_scale=False):
         norm_steps["max_val_scale"] = x.max()
 
     if x.dtype in [np.uint8, torch.uint8]:
-        x = (
-            x / 255
-            if not div_using_max_and_scale
-            else (x - x.min()) / (x.max() - x.min() + sys.float_info.epsilon)
-        )
+        x = x / 255 if not div_using_max_and_scale else (x - x.min()) / (x.max() - x.min() + sys.float_info.epsilon)
         norm_steps["div"] = 1
     else:
-        if (isinstance(x, np.ndarray) and np.max(x) > 255) or (
-            torch.is_tensor(x) and torch.max(x) > 255
-        ):
+        if (isinstance(x, np.ndarray) and np.max(x) > 255) or (torch.is_tensor(x) and torch.max(x) > 255):
             norm_steps["reduced_{}".format(x.dtype)] = 1
             x = reduce_dtype(
                 x,
@@ -1304,14 +1207,8 @@ def norm_range01(x, dtype=np.float32, div_using_max_and_scale=False):
                 out_max=1,
                 out_type=dtype,
             )
-        elif (isinstance(x, np.ndarray) and np.max(x) > 2) or (
-            torch.is_tensor(x) and torch.max(x) > 2
-        ):
-            x = (
-                x / 255
-                if not div_using_max_and_scale
-                else (x - x.min()) / (x.max() - x.min() + sys.float_info.epsilon)
-            )
+        elif (isinstance(x, np.ndarray) and np.max(x) > 2) or (torch.is_tensor(x) and torch.max(x) > 2):
+            x = x / 255 if not div_using_max_and_scale else (x - x.min()) / (x.max() - x.min() + sys.float_info.epsilon)
             norm_steps["div"] = 1
 
     if torch.is_tensor(x):
@@ -1334,27 +1231,17 @@ def undo_norm_range01(x, xnorm, min_val_scale=None, max_val_scale=None):
         else:
             x = torch.clamp(x, 0, 1)
         if "div" in xnorm:
-            x = (
-                (x * 255)
-                if max_val_scale is None
-                else (x * max_val_scale) + min_val_scale
-            )
+            x = (x * 255) if max_val_scale is None else (x * max_val_scale) + min_val_scale
             if isinstance(x, np.ndarray):
                 x = x.astype(np.uint8)
             else:
                 x = x.to(torch.uint8)
         else:
-            reductions = [
-                key for key, value in xnorm.items() if "reduced" in key.lower()
-            ]
+            reductions = [key for key, value in xnorm.items() if "reduced" in key.lower()]
             if len(reductions) > 0:
                 reductions = reductions[0]
                 reductions = reductions.replace("reduced_", "")
-                x = (
-                    (x * 65535)
-                    if max_val_scale is None
-                    else (x * max_val_scale) + min_val_scale
-                )
+                x = (x * 65535) if max_val_scale is None else (x * max_val_scale) + min_val_scale
                 if isinstance(x, np.ndarray):
                     x = x.astype(eval("np.{}".format(reductions)))
                 else:
@@ -1364,13 +1251,9 @@ def undo_norm_range01(x, xnorm, min_val_scale=None, max_val_scale=None):
 
 def reduce_dtype(x, x_min, x_max, out_min=0, out_max=1, out_type=np.float32):
     if isinstance(x, np.ndarray):
-        return (
-            (np.array((x - x_min) / (x_max - x_min)) * (out_max - out_min)) + out_min
-        ).astype(out_type)
+        return ((np.array((x - x_min) / (x_max - x_min)) * (out_max - out_min)) + out_min).astype(out_type)
     else:  # Tensor considered
-        return ((((x - x_min) / (x_max - x_min)) * (out_max - out_min)) + out_min).to(
-            out_type
-        )
+        return ((((x - x_min) / (x_max - x_min)) * (out_max - out_min)) + out_min).to(out_type)
 
 
 def normalize(data, means, stds, out_type="float32"):
@@ -1583,9 +1466,7 @@ def _histogram_matching(source_imgs, target_imgs):
         A set of source images with target's histogram
     """
 
-    hist_mean, _ = np.histogram(
-        target_imgs.ravel(), bins=np.arange(np.iinfo(target_imgs.dtype).max + 1)
-    )
+    hist_mean, _ = np.histogram(target_imgs.ravel(), bins=np.arange(np.iinfo(target_imgs.dtype).max + 1))
     hist_mean = hist_mean / target_imgs.shape[0]  # number of images
 
     # calculate normalized quantiles
@@ -1597,24 +1478,17 @@ def _histogram_matching(source_imgs, target_imgs):
     # based on scikit implementation.
     # source: https://github.com/scikit-image/scikit-image/blob/v0.18.0/skimage/exposure/histogram_matching.py#L22-L70
     def _match_cumulative_cdf(source, tmpl_quantiles):
-        src_values, src_unique_indices, src_counts = np.unique(
-            source.ravel(), return_inverse=True, return_counts=True
-        )
+        src_values, src_unique_indices, src_counts = np.unique(source.ravel(), return_inverse=True, return_counts=True)
 
         # calculate normalized quantiles
         src_size = source.size  # number of pixels
         src_quantiles = np.cumsum(src_counts) / src_size  # normalize
-        interp_a_values = np.interp(
-            src_quantiles, tmpl_quantiles, np.arange(len(tmpl_quantiles))
-        )
+        interp_a_values = np.interp(src_quantiles, tmpl_quantiles, np.arange(len(tmpl_quantiles)))
 
         return interp_a_values[src_unique_indices].reshape(source.shape)
 
     # apply histogram matching
-    results = [
-        _match_cumulative_cdf(image, tmpl_quantiles).astype(image.dtype)
-        for image in source_imgs
-    ]
+    results = [_match_cumulative_cdf(image, tmpl_quantiles).astype(image.dtype) for image in source_imgs]
     return results
 
 

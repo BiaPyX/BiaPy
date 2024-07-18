@@ -15,11 +15,7 @@ def prepare_optimizer(cfg, model_without_ddp, steps_per_epoch):
     cfg : YACS CN object
         Configuration.
     """
-    lr = (
-        cfg.TRAIN.LR
-        if cfg.TRAIN.LR_SCHEDULER.NAME != "warmupcosine"
-        else cfg.TRAIN.LR_SCHEDULER.MIN_LR
-    )
+    lr = cfg.TRAIN.LR if cfg.TRAIN.LR_SCHEDULER.NAME != "warmupcosine" else cfg.TRAIN.LR_SCHEDULER.MIN_LR
     opt_args = {}
     if cfg.TRAIN.OPTIMIZER in ["ADAM", "ADAMW"]:
         opt_args["betas"] = cfg.TRAIN.OPT_BETAS

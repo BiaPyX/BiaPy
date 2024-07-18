@@ -174,9 +174,7 @@ class Respath(torch.nn.Module):
         length of ResPath.
     """
 
-    def __init__(
-        self, conv, batchnorm, num_in_filters, num_out_filters, respath_length
-    ):
+    def __init__(self, conv, batchnorm, num_in_filters, num_out_filters, respath_length):
         super().__init__()
 
         self.respath_length = respath_length
@@ -297,9 +295,7 @@ class MultiResUnet(torch.nn.Module):
         self.ndim = ndim
         self.alpha = alpha
         self.n_classes = 1 if n_classes <= 2 else n_classes
-        self.multiclass = (
-            True if n_classes > 2 and output_channels is not None else False
-        )
+        self.multiclass = True if n_classes > 2 and output_channels is not None else False
 
         if self.ndim == 3:
             conv = nn.Conv3d
@@ -324,124 +320,70 @@ class MultiResUnet(torch.nn.Module):
 
         # Encoder Path
         self.multiresblock1 = Multiresblock(conv, batchnorm_layer, input_channels, 32)
-        self.in_filters1 = (
-            int(32 * self.alpha * 0.167)
-            + int(32 * self.alpha * 0.333)
-            + int(32 * self.alpha * 0.5)
-        )
+        self.in_filters1 = int(32 * self.alpha * 0.167) + int(32 * self.alpha * 0.333) + int(32 * self.alpha * 0.5)
         mpool = (z_down[0], 2, 2) if self.ndim == 3 else (2, 2)
         self.pool1 = pooling(mpool)
-        self.respath1 = Respath(
-            conv, batchnorm_layer, self.in_filters1, 32, respath_length=4
-        )
+        self.respath1 = Respath(conv, batchnorm_layer, self.in_filters1, 32, respath_length=4)
 
-        self.multiresblock2 = Multiresblock(
-            conv, batchnorm_layer, self.in_filters1, 32 * 2
-        )
+        self.multiresblock2 = Multiresblock(conv, batchnorm_layer, self.in_filters1, 32 * 2)
         self.in_filters2 = (
-            int(32 * 2 * self.alpha * 0.167)
-            + int(32 * 2 * self.alpha * 0.333)
-            + int(32 * 2 * self.alpha * 0.5)
+            int(32 * 2 * self.alpha * 0.167) + int(32 * 2 * self.alpha * 0.333) + int(32 * 2 * self.alpha * 0.5)
         )
         mpool = (z_down[1], 2, 2) if self.ndim == 3 else (2, 2)
         self.pool2 = pooling(mpool)
-        self.respath2 = Respath(
-            conv, batchnorm_layer, self.in_filters2, 32 * 2, respath_length=3
-        )
+        self.respath2 = Respath(conv, batchnorm_layer, self.in_filters2, 32 * 2, respath_length=3)
 
-        self.multiresblock3 = Multiresblock(
-            conv, batchnorm_layer, self.in_filters2, 32 * 4
-        )
+        self.multiresblock3 = Multiresblock(conv, batchnorm_layer, self.in_filters2, 32 * 4)
         self.in_filters3 = (
-            int(32 * 4 * self.alpha * 0.167)
-            + int(32 * 4 * self.alpha * 0.333)
-            + int(32 * 4 * self.alpha * 0.5)
+            int(32 * 4 * self.alpha * 0.167) + int(32 * 4 * self.alpha * 0.333) + int(32 * 4 * self.alpha * 0.5)
         )
         mpool = (z_down[2], 2, 2) if self.ndim == 3 else (2, 2)
         self.pool3 = pooling(mpool)
-        self.respath3 = Respath(
-            conv, batchnorm_layer, self.in_filters3, 32 * 4, respath_length=2
-        )
+        self.respath3 = Respath(conv, batchnorm_layer, self.in_filters3, 32 * 4, respath_length=2)
 
-        self.multiresblock4 = Multiresblock(
-            conv, batchnorm_layer, self.in_filters3, 32 * 8
-        )
+        self.multiresblock4 = Multiresblock(conv, batchnorm_layer, self.in_filters3, 32 * 8)
         self.in_filters4 = (
-            int(32 * 8 * self.alpha * 0.167)
-            + int(32 * 8 * self.alpha * 0.333)
-            + int(32 * 8 * self.alpha * 0.5)
+            int(32 * 8 * self.alpha * 0.167) + int(32 * 8 * self.alpha * 0.333) + int(32 * 8 * self.alpha * 0.5)
         )
         mpool = (z_down[3], 2, 2) if self.ndim == 3 else (2, 2)
         self.pool4 = pooling(mpool)
-        self.respath4 = Respath(
-            conv, batchnorm_layer, self.in_filters4, 32 * 8, respath_length=1
-        )
+        self.respath4 = Respath(conv, batchnorm_layer, self.in_filters4, 32 * 8, respath_length=1)
 
-        self.multiresblock5 = Multiresblock(
-            conv, batchnorm_layer, self.in_filters4, 32 * 16
-        )
+        self.multiresblock5 = Multiresblock(conv, batchnorm_layer, self.in_filters4, 32 * 16)
         self.in_filters5 = (
-            int(32 * 16 * self.alpha * 0.167)
-            + int(32 * 16 * self.alpha * 0.333)
-            + int(32 * 16 * self.alpha * 0.5)
+            int(32 * 16 * self.alpha * 0.167) + int(32 * 16 * self.alpha * 0.333) + int(32 * 16 * self.alpha * 0.5)
         )
 
         # Decoder path
         mpool = (z_down[3], 2, 2) if self.ndim == 3 else (2, 2)
-        self.upsample6 = convtranspose(
-            self.in_filters5, 32 * 8, kernel_size=mpool, stride=mpool
-        )
+        self.upsample6 = convtranspose(self.in_filters5, 32 * 8, kernel_size=mpool, stride=mpool)
         self.concat_filters1 = 32 * 8 * 2
-        self.multiresblock6 = Multiresblock(
-            conv, batchnorm_layer, self.concat_filters1, 32 * 8
-        )
+        self.multiresblock6 = Multiresblock(conv, batchnorm_layer, self.concat_filters1, 32 * 8)
         self.in_filters6 = (
-            int(32 * 8 * self.alpha * 0.167)
-            + int(32 * 8 * self.alpha * 0.333)
-            + int(32 * 8 * self.alpha * 0.5)
+            int(32 * 8 * self.alpha * 0.167) + int(32 * 8 * self.alpha * 0.333) + int(32 * 8 * self.alpha * 0.5)
         )
 
         mpool = (z_down[2], 2, 2) if self.ndim == 3 else (2, 2)
-        self.upsample7 = convtranspose(
-            self.in_filters6, 32 * 4, kernel_size=mpool, stride=mpool
-        )
+        self.upsample7 = convtranspose(self.in_filters6, 32 * 4, kernel_size=mpool, stride=mpool)
         self.concat_filters2 = 32 * 4 * 2
-        self.multiresblock7 = Multiresblock(
-            conv, batchnorm_layer, self.concat_filters2, 32 * 4
-        )
+        self.multiresblock7 = Multiresblock(conv, batchnorm_layer, self.concat_filters2, 32 * 4)
         self.in_filters7 = (
-            int(32 * 4 * self.alpha * 0.167)
-            + int(32 * 4 * self.alpha * 0.333)
-            + int(32 * 4 * self.alpha * 0.5)
+            int(32 * 4 * self.alpha * 0.167) + int(32 * 4 * self.alpha * 0.333) + int(32 * 4 * self.alpha * 0.5)
         )
 
         mpool = (z_down[1], 2, 2) if self.ndim == 3 else (2, 2)
-        self.upsample8 = convtranspose(
-            self.in_filters7, 32 * 2, kernel_size=mpool, stride=mpool
-        )
+        self.upsample8 = convtranspose(self.in_filters7, 32 * 2, kernel_size=mpool, stride=mpool)
         self.concat_filters3 = 32 * 2 * 2
-        self.multiresblock8 = Multiresblock(
-            conv, batchnorm_layer, self.concat_filters3, 32 * 2
-        )
+        self.multiresblock8 = Multiresblock(conv, batchnorm_layer, self.concat_filters3, 32 * 2)
         self.in_filters8 = (
-            int(32 * 2 * self.alpha * 0.167)
-            + int(32 * 2 * self.alpha * 0.333)
-            + int(32 * 2 * self.alpha * 0.5)
+            int(32 * 2 * self.alpha * 0.167) + int(32 * 2 * self.alpha * 0.333) + int(32 * 2 * self.alpha * 0.5)
         )
 
         mpool = (z_down[0], 2, 2) if self.ndim == 3 else (2, 2)
-        self.upsample9 = convtranspose(
-            self.in_filters8, 32, kernel_size=mpool, stride=mpool
-        )
+        self.upsample9 = convtranspose(self.in_filters8, 32, kernel_size=mpool, stride=mpool)
         self.concat_filters4 = 32 * 2
-        self.multiresblock9 = Multiresblock(
-            conv, batchnorm_layer, self.concat_filters4, 32
-        )
-        self.in_filters9 = (
-            int(32 * self.alpha * 0.167)
-            + int(32 * self.alpha * 0.333)
-            + int(32 * self.alpha * 0.5)
-        )
+        self.multiresblock9 = Multiresblock(conv, batchnorm_layer, self.concat_filters4, 32)
+        self.in_filters9 = int(32 * self.alpha * 0.167) + int(32 * self.alpha * 0.333) + int(32 * self.alpha * 0.5)
 
         # Super-resolution
         self.post_upsampling = None
@@ -456,25 +398,15 @@ class MultiResUnet(torch.nn.Module):
         # Instance segmentation
         if output_channels is not None:
             if output_channels in ["C", "Dv2"]:
-                self.last_block = conv(
-                    self.in_filters9, 1, kernel_size=1, padding="same"
-                )
+                self.last_block = conv(self.in_filters9, 1, kernel_size=1, padding="same")
             elif output_channels in ["BC", "BP"]:
-                self.last_block = conv(
-                    self.in_filters9, 2, kernel_size=1, padding="same"
-                )
+                self.last_block = conv(self.in_filters9, 2, kernel_size=1, padding="same")
             elif output_channels in ["BDv2", "BD"]:
-                self.last_block = conv(
-                    self.in_filters9, 2, kernel_size=1, padding="same"
-                )
+                self.last_block = conv(self.in_filters9, 2, kernel_size=1, padding="same")
             elif output_channels in ["BCM", "BCD", "BCDv2"]:
-                self.last_block = conv(
-                    self.in_filters9, 3, kernel_size=1, padding="same"
-                )
+                self.last_block = conv(self.in_filters9, 3, kernel_size=1, padding="same")
             elif output_channels in ["A"]:
-                self.last_block = conv(
-                    self.in_filters9, self.ndim, kernel_size=1, padding="same"
-                )
+                self.last_block = conv(self.in_filters9, self.ndim, kernel_size=1, padding="same")
         # Other
         else:
             self.last_block = Conv_batchnorm(
@@ -489,9 +421,7 @@ class MultiResUnet(torch.nn.Module):
         # Multi-head: instances + classification
         self.last_class_head = None
         if self.multiclass:
-            self.last_class_head = conv(
-                self.in_filters9, self.n_classes, kernel_size=1, padding="same"
-            )
+            self.last_class_head = conv(self.in_filters9, self.n_classes, kernel_size=1, padding="same")
 
     def forward(self, x: torch.Tensor) -> torch.Tensor | List[torch.Tensor]:
         # Super-resolution

@@ -97,21 +97,13 @@ def build_model(cfg, job_identifier, device):
                 stochastic_depth_prob=cfg.MODEL.CONVNEXT_SD_PROB,
             )
             callable_model = U_NeXt_V1
-        args["output_channels"] = (
-            cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
-            if cfg.PROBLEM.TYPE == "INSTANCE_SEG"
-            else None
-        )
+        args["output_channels"] = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS if cfg.PROBLEM.TYPE == "INSTANCE_SEG" else None
         if cfg.PROBLEM.TYPE == "SUPER_RESOLUTION":
             args["upsampling_factor"] = cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING
             args["upsampling_position"] = cfg.MODEL.UNET_SR_UPSAMPLE_POSITION
             args["n_classes"] = cfg.DATA.PATCH_SIZE[-1]
         else:
-            args["n_classes"] = (
-                cfg.MODEL.N_CLASSES
-                if cfg.PROBLEM.TYPE != "DENOISING"
-                else cfg.DATA.PATCH_SIZE[-1]
-            )
+            args["n_classes"] = cfg.MODEL.N_CLASSES if cfg.PROBLEM.TYPE != "DENOISING" else cfg.DATA.PATCH_SIZE[-1]
         model = callable_model(**args)
     else:
         if modelname == "simple_cnn":
@@ -128,9 +120,7 @@ def build_model(cfg, job_identifier, device):
                 if cfg.DATA.PATCH_SIZE[:-1] != (224, 224)
                 else cfg.DATA.PATCH_SIZE
             )
-            args = dict(
-                cfg.MODEL.ARCHITECTURE.lower(), shape, n_classes=cfg.MODEL.N_CLASSES
-            )
+            args = dict(cfg.MODEL.ARCHITECTURE.lower(), shape, n_classes=cfg.MODEL.N_CLASSES)
             model = efficientnet(**args)
             callable_model = efficientnet
         elif modelname == "vit":
@@ -164,20 +154,14 @@ def build_model(cfg, job_identifier, device):
                 z_down=cfg.MODEL.Z_DOWN,
             )
             args["output_channels"] = (
-                cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
-                if cfg.PROBLEM.TYPE == "INSTANCE_SEG"
-                else None
+                cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS if cfg.PROBLEM.TYPE == "INSTANCE_SEG" else None
             )
             if cfg.PROBLEM.TYPE == "SUPER_RESOLUTION":
                 args["upsampling_factor"] = cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING
                 args["upsampling_position"] = cfg.MODEL.UNET_SR_UPSAMPLE_POSITION
                 args["n_classes"] = cfg.DATA.PATCH_SIZE[-1]
             else:
-                args["n_classes"] = (
-                    cfg.MODEL.N_CLASSES
-                    if cfg.PROBLEM.TYPE != "DENOISING"
-                    else cfg.DATA.PATCH_SIZE[-1]
-                )
+                args["n_classes"] = cfg.MODEL.N_CLASSES if cfg.PROBLEM.TYPE != "DENOISING" else cfg.DATA.PATCH_SIZE[-1]
             model = MultiResUnet(**args)
             callable_model = MultiResUnet
         elif modelname == "unetr":
@@ -197,9 +181,7 @@ def build_model(cfg, job_identifier, device):
                 k_size=cfg.MODEL.UNETR_DEC_KERNEL_SIZE,
             )
             args["output_channels"] = (
-                cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
-                if cfg.PROBLEM.TYPE == "INSTANCE_SEG"
-                else None
+                cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS if cfg.PROBLEM.TYPE == "INSTANCE_SEG" else None
             )
             model = UNETR(**args)
             callable_model = UNETR
@@ -299,9 +281,7 @@ def build_model(cfg, job_identifier, device):
 def build_bmz_model(cfg, model, device):
     model_instance = PytorchModelAdapter.get_network(model.weights.pytorch_state_dict)
     model_instance = model_instance.to(device)
-    state = torch.load(
-        download(model.weights.pytorch_state_dict).path, map_location=device
-    )
+    state = torch.load(download(model.weights.pytorch_state_dict).path, map_location=device)
     model_instance.load_state_dict(state)
 
     # Check the network created
@@ -365,8 +345,10 @@ def get_bmz_model_info(model, spec_version="v0_4"):
     else:  # v0_4
         arch_file_sha256 = model.weights.pytorch_state_dict.architecture_sha256
 
-        arch_file_path = download(model.weights.pytorch_state_dict.architecture.source_file, sha256=arch_file_sha256).path
-        arch_name = model.weights.pytorch_state_dict.architecture.callable_name  
+        arch_file_path = download(
+            model.weights.pytorch_state_dict.architecture.source_file, sha256=arch_file_sha256
+        ).path
+        arch_name = model.weights.pytorch_state_dict.architecture.callable_name
         pytorch_architecture = ArchitectureFromFileDescr(
             source=arch_file_path,
             sha256=arch_file_sha256,
@@ -394,13 +376,11 @@ def check_bmz_model_compatibility(cfg):
         for entry in collection["collection"]
         if entry["type"] == "model" and (model_doi in entry["nickname"] or model_doi in entry["rdf_source"])
     ]
-    
+
     if len(model_urls) == 0:
         raise ValueError(f"No model found with the provided DOI: {model_doi}")
     if len(model_urls) > 1:
-        raise ValueError(
-            "More than one model found with the provided DOI. Contact BiaPy team."
-        )
+        raise ValueError("More than one model found with the provided DOI. Contact BiaPy team.")
     with open(Path(pooch.retrieve(model_urls[0]["rdf_source"], known_hash=None))) as stream:
         try:
             model_rdf = yaml.safe_load(stream)
@@ -415,69 +395,41 @@ def check_bmz_model_compatibility(cfg):
         # Check problem type
         model_problem_match = False
         if cfg.PROBLEM.TYPE == "SEMANTIC_SEG" and (
-            "semantic-segmentation" in model_rdf["tags"]
-            or "segmentation" in model_rdf["tags"]
+            "semantic-segmentation" in model_rdf["tags"] or "segmentation" in model_rdf["tags"]
         ):
             model_problem_match = True
 
             # Check number of classes
             classes = -1
             if "kwargs" in model_rdf["weights"]["pytorch_state_dict"]:
-                if (
-                    "out_channels"
-                    in model_rdf["weights"]["pytorch_state_dict"]["kwargs"]
-                ):
-                    classes = model_rdf["weights"]["pytorch_state_dict"]["kwargs"][
-                        "out_channels"
-                    ]
+                if "out_channels" in model_rdf["weights"]["pytorch_state_dict"]["kwargs"]:
+                    classes = model_rdf["weights"]["pytorch_state_dict"]["kwargs"]["out_channels"]
                 elif "classes" in model_rdf["weights"]["pytorch_state_dict"]["kwargs"]:
-                    classes = model_rdf["weights"]["pytorch_state_dict"]["kwargs"][
-                        "classes"
-                    ]
-                elif (
-                    "n_classes" in model_rdf["weights"]["pytorch_state_dict"]["kwargs"]
-                ):
-                    classes = model_rdf["weights"]["pytorch_state_dict"]["kwargs"][
-                        "n_classes"
-                    ]
+                    classes = model_rdf["weights"]["pytorch_state_dict"]["kwargs"]["classes"]
+                elif "n_classes" in model_rdf["weights"]["pytorch_state_dict"]["kwargs"]:
+                    classes = model_rdf["weights"]["pytorch_state_dict"]["kwargs"]["n_classes"]
             if classes != -1:
                 if classes > 2 and cfg.MODEL.N_CLASSES != classes:
-                    raise ValueError(
-                        "'MODEL.N_CLASSES' does not match network's output classes. Please check it!"
-                    )
+                    raise ValueError("'MODEL.N_CLASSES' does not match network's output classes. Please check it!")
                 else:
                     print(
                         "BiaPy works only with one channel for the binary case (classes <= 2) so will adapt the output to match "
                         "the ground truth data"
                     )
             else:
-                print(
-                    "WARNING: couldn't find the classes this model is returning so please be aware to match it"
-                )
+                print("WARNING: couldn't find the classes this model is returning so please be aware to match it")
 
-        elif (
-            cfg.PROBLEM.TYPE == "INSTANCE_SEG"
-            and "instance-segmentation" in model_rdf["tags"]
-        ):
+        elif cfg.PROBLEM.TYPE == "INSTANCE_SEG" and "instance-segmentation" in model_rdf["tags"]:
             model_problem_match = True
         elif cfg.PROBLEM.TYPE == "DETECTION" and "detection" in model_rdf["tags"]:
             model_problem_match = True
         elif cfg.PROBLEM.TYPE == "DENOISING" and "denoising" in model_rdf["tags"]:
             model_problem_match = True
-        elif (
-            cfg.PROBLEM.TYPE == "SUPER_RESOLUTION"
-            and "super-resolution" in model_rdf["tags"]
-        ):
+        elif cfg.PROBLEM.TYPE == "SUPER_RESOLUTION" and "super-resolution" in model_rdf["tags"]:
             model_problem_match = True
-        elif (
-            cfg.PROBLEM.TYPE == "SELF_SUPERVISED"
-            and "self-supervision" in model_rdf["tags"]
-        ):
+        elif cfg.PROBLEM.TYPE == "SELF_SUPERVISED" and "self-supervision" in model_rdf["tags"]:
             model_problem_match = True
-        elif (
-            cfg.PROBLEM.TYPE == "CLASSIFICATION"
-            and "classification" in model_rdf["tags"]
-        ):
+        elif cfg.PROBLEM.TYPE == "CLASSIFICATION" and "classification" in model_rdf["tags"]:
             model_problem_match = True
         elif cfg.PROBLEM.TYPE == "IMAGE_TO_IMAGE" and (
             "pix2pix" in model_rdf["tags"]
@@ -515,9 +467,7 @@ def check_bmz_model_compatibility(cfg):
                     "scale_range",
                 ]:  # TODO: scale_linear
                     implemented = False
-                    reason_message = (
-                        f"Not recognized preprocessing found: {preprocs['name']}"
-                    )
+                    reason_message = f"Not recognized preprocessing found: {preprocs['name']}"
                     break
                 preproc_names = preprocs
 
@@ -525,8 +475,7 @@ def check_bmz_model_compatibility(cfg):
         if (
             implemented
             and "postprocessing" in model_rdf["weights"]["pytorch_state_dict"]["kwargs"]
-            and model_rdf["weights"]["pytorch_state_dict"]["kwargs"]["postprocessing"]
-            is not None
+            and model_rdf["weights"]["pytorch_state_dict"]["kwargs"]["postprocessing"] is not None
         ):
             implemented = False
             reason_message = f"Currently no postprocessing is supported. Found: {model_rdf['weights']['pytorch_state_dict']['kwargs']['postprocessing']}"
@@ -535,9 +484,7 @@ def check_bmz_model_compatibility(cfg):
         reason_message = "pytorch_state_dict not found in model RDF"
 
     if not implemented:
-        raise ValueError(
-            f"Model {model_doi} can not be used in BiaPy. Message: {reason_message}"
-        )
+        raise ValueError(f"Model {model_doi} can not be used in BiaPy. Message: {reason_message}")
 
     return preproc_names
 
@@ -545,29 +492,19 @@ def check_bmz_model_compatibility(cfg):
 def build_torchvision_model(cfg, device):
     # Find model in TorchVision
     if "quantized_" in cfg.MODEL.TORCHVISION_MODEL_NAME:
-        mdl = importlib.import_module(
-            "torchvision.models.quantization", cfg.MODEL.TORCHVISION_MODEL_NAME
-        )
+        mdl = importlib.import_module("torchvision.models.quantization", cfg.MODEL.TORCHVISION_MODEL_NAME)
         w_prefix = "_quantizedweights"
         tc_model_name = cfg.MODEL.TORCHVISION_MODEL_NAME.replace("quantized_", "")
-        mdl_weigths = importlib.import_module(
-            "torchvision.models", cfg.MODEL.TORCHVISION_MODEL_NAME
-        )
+        mdl_weigths = importlib.import_module("torchvision.models", cfg.MODEL.TORCHVISION_MODEL_NAME)
     else:
         w_prefix = "_weights"
         tc_model_name = cfg.MODEL.TORCHVISION_MODEL_NAME
         if cfg.PROBLEM.TYPE == "CLASSIFICATION":
-            mdl = importlib.import_module(
-                "torchvision.models", cfg.MODEL.TORCHVISION_MODEL_NAME
-            )
+            mdl = importlib.import_module("torchvision.models", cfg.MODEL.TORCHVISION_MODEL_NAME)
         elif cfg.PROBLEM.TYPE == "SEMANTIC_SEG":
-            mdl = importlib.import_module(
-                "torchvision.models.segmentation", cfg.MODEL.TORCHVISION_MODEL_NAME
-            )
+            mdl = importlib.import_module("torchvision.models.segmentation", cfg.MODEL.TORCHVISION_MODEL_NAME)
         elif cfg.PROBLEM.TYPE in ["INSTANCE_SEG", "DETECTION"]:
-            mdl = importlib.import_module(
-                "torchvision.models.detection", cfg.MODEL.TORCHVISION_MODEL_NAME
-            )
+            mdl = importlib.import_module("torchvision.models.detection", cfg.MODEL.TORCHVISION_MODEL_NAME)
         mdl_weigths = mdl
 
     # Import model and weights
@@ -617,34 +554,24 @@ def build_torchvision_model(cfg, device):
                 if isinstance(getattr(model, layer), list) or isinstance(
                     getattr(model, layer), torch.nn.modules.container.Sequential
                 ):
-                    head = torch.nn.Linear(
-                        getattr(model, layer)[-1].in_features, out_classes, bias=True
-                    )
+                    head = torch.nn.Linear(getattr(model, layer)[-1].in_features, out_classes, bias=True)
                     getattr(model, layer)[-1] = head
                 else:
-                    head = torch.nn.Linear(
-                        getattr(model, layer).in_features, out_classes, bias=True
-                    )
+                    head = torch.nn.Linear(getattr(model, layer).in_features, out_classes, bias=True)
                     setattr(model, layer, head)
 
             # Fix sample input shape as required by some models
             if cfg.MODEL.TORCHVISION_MODEL_NAME in ["maxvit_t"]:
                 sample_size = (1, 3, 224, 224)
     elif cfg.PROBLEM.TYPE == "SEMANTIC_SEG":
-        head = torch.nn.Conv2d(
-            model.classifier[-1].in_channels, out_classes, kernel_size=1, stride=1
-        )
+        head = torch.nn.Conv2d(model.classifier[-1].in_channels, out_classes, kernel_size=1, stride=1)
         model.classifier[-1] = head
-        head = torch.nn.Conv2d(
-            model.aux_classifier[-1].in_channels, out_classes, kernel_size=1, stride=1
-        )
+        head = torch.nn.Conv2d(model.aux_classifier[-1].in_channels, out_classes, kernel_size=1, stride=1)
         model.aux_classifier[-1] = head
     elif cfg.PROBLEM.TYPE == "INSTANCE_SEG":
         # MaskRCNN
         if cfg.MODEL.N_CLASSES != 91:  # 91 classes are the ones by default in MaskRCNN
-            cls_score = torch.nn.Linear(
-                in_features=1024, out_features=out_classes, bias=True
-            )
+            cls_score = torch.nn.Linear(in_features=1024, out_features=out_classes, bias=True)
             model.roi_heads.box_predictor.cls_score = cls_score
             mask_fcn_logits = torch.nn.Conv2d(
                 model.roi_heads.mask_predictor.mask_fcn_logits.in_channels,
@@ -653,9 +580,7 @@ def build_torchvision_model(cfg, device):
                 stride=1,
             )
             model.roi_heads.mask_predictor.mask_fcn_logits = mask_fcn_logits
-            print(
-                f"Model's head changed from 91 to {out_classes} so a finetunning is required"
-            )
+            print(f"Model's head changed from 91 to {out_classes} so a finetunning is required")
 
     # Check the network created
     model.to(device)

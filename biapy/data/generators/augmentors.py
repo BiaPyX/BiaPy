@@ -9,19 +9,20 @@ from skimage.exposure import adjust_gamma
 from scipy.ndimage.measurements import label
 from scipy.ndimage.morphology import binary_dilation
 from scipy.ndimage import rotate
+from typing import Tuple, Any, Union, Optional, List
 
 
 def cutout(
-    img,
-    mask,
-    channels,
-    z_size,
-    nb_iterations=(1, 3),
-    size=(0.2, 0.4),
-    cval=0,
-    res_relation=(1, 1),
-    apply_to_mask=False,
-):
+    img: np.ndarray,
+    mask: np.ndarray,
+    channels: int,
+    z_size: int,
+    nb_iterations: Tuple[int, int] = (1, 3),
+    size: Tuple[float, float] = (0.2, 0.4),
+    cval: int = 0,
+    res_relation: Tuple[float, ...] = (1.0, 1.0),
+    apply_to_mask: bool = False,
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     Cutout data augmentation presented in `Improved Regularization of Convolutional Neural Networks with Cutout
     <https://arxiv.org/pdf/1708.04552.pdf>`_.
@@ -50,7 +51,7 @@ def cutout(
     cval : int, optional
         Value to fill the area with.
 
-    res_relation: tuple of ints/floats, optional
+    res_relation: tuple of floats, optional
         Relation between axis resolution in ``(x,y,z)``. E.g. ``(1,1,0.27)`` for anisotropic data of
         8umx8umx30um resolution.
 
@@ -123,7 +124,12 @@ def cutout(
     return out, m_out
 
 
-def cutblur(img, size=(0.2, 0.4), down_ratio_range=(2, 8), only_inside=True):
+def cutblur(
+    img: np.ndarray,
+    size: Tuple[float, float] = (0.2, 0.4),
+    down_ratio_range: Tuple[int, int] = (2, 8),
+    only_inside: bool = True,
+) -> np.ndarray:
     """
     CutBlur data augmentation introduced in `Rethinking Data Augmentation for Image Super-resolution: A Comprehensive
     Analysis and a New Strategy <https://arxiv.org/pdf/2004.00448.pdf>`_ and adapted from
@@ -222,15 +228,19 @@ def cutblur(img, size=(0.2, 0.4), down_ratio_range=(2, 8), only_inside=True):
         if inside:
             out[cy : cy + y_size, cx : cx + x_size, i] = upsampled
         else:
-            temp[cy : cy + y_size, cx : cx + x_size] = img[
-                cy : cy + y_size, cx : cx + x_size, i
-            ]
+            temp[cy : cy + y_size, cx : cx + x_size] = img[cy : cy + y_size, cx : cx + x_size, i]
             out[..., i] = temp
 
     return out
 
 
-def cutmix(im1, im2, mask1, mask2, size=(0.2, 0.4)):
+def cutmix(
+    im1: np.ndarray,
+    im2: np.ndarray,
+    mask1: np.ndarray,
+    mask2: np.ndarray,
+    size: Tuple[float, float] = (0.2, 0.4),
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     Cutmix augmentation introduced in `CutMix: Regularization Strategy to Train Strong Classifiers with Localizable
     Features <https://arxiv.org/abs/1905.04899>`_. With this augmentation a region of the image sample is filled
@@ -301,9 +311,7 @@ def cutmix(im1, im2, mask1, mask2, size=(0.2, 0.4)):
 
     # Apply cutblur to all channels
     for i in range(im1.shape[-1]):
-        out[im1cy : im1cy + y_size, im1cx : im1cx + x_size, i] = im2[
-            im2cy : im2cy + y_size, im2cx : im2cx + x_size, i
-        ]
+        out[im1cy : im1cy + y_size, im1cx : im1cx + x_size, i] = im2[im2cy : im2cy + y_size, im2cx : im2cx + x_size, i]
         m_out[im1cy : im1cy + y_size, im1cx : im1cx + x_size, i] = mask2[
             im2cy : im2cy + y_size, im2cx : im2cx + x_size, i
         ]
@@ -311,7 +319,12 @@ def cutmix(im1, im2, mask1, mask2, size=(0.2, 0.4)):
     return out, m_out
 
 
-def cutnoise(img, scale=(0.1, 0.2), nb_iterations=(1, 3), size=(0.2, 0.4)):
+def cutnoise(
+    img: np.ndarray,
+    scale: Tuple[float, float] = (0.1, 0.2),
+    nb_iterations: Tuple[int, int] = (1, 3),
+    size: Tuple[float, float] = (0.2, 0.4),
+) -> np.ndarray:
     """
     Cutnoise data augmentation. Randomly add noise to a cuboid region in the image to force the model to learn
     denoising when making predictions.
@@ -371,13 +384,17 @@ def cutnoise(img, scale=(0.1, 0.2), nb_iterations=(1, 3), size=(0.2, 0.4)):
 
         _scale = random.uniform(scale[0], scale[1]) * img.max()
         noise = np.random.normal(loc=0, scale=_scale, size=(y_size, x_size))
-        out[cy : cy + y_size, cx : cx + x_size, :] += np.stack(
-            (noise,) * out.shape[-1], axis=-1
-        )
+        out[cy : cy + y_size, cx : cx + x_size, :] += np.stack((noise,) * out.shape[-1], axis=-1)
     return out
 
 
-def misalignment(img, mask, displacement=16, rotate_ratio=0.0, c_relation="1_1"):
+def misalignment(
+    img: np.ndarray,
+    mask: np.ndarray,
+    displacement: int = 16,
+    rotate_ratio: float = 0.0,
+    c_relation: str = "1_1",
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     Mis-alignment data augmentation of image stacks. This augmentation is applied to both images and masks.
 
@@ -453,7 +470,7 @@ def misalignment(img, mask, displacement=16, rotate_ratio=0.0, c_relation="1_1")
                     img[oy:, :, i],
                     M,
                     (W, H),
-                    1.0,
+                    1.0,  # type: ignore
                     flags=cv2.INTER_LINEAR,
                     borderMode=cv2.BORDER_CONSTANT,
                 )
@@ -462,7 +479,7 @@ def misalignment(img, mask, displacement=16, rotate_ratio=0.0, c_relation="1_1")
                     mask[oy:, :, i],
                     M,
                     (W, H),
-                    1.0,
+                    1.0,  # type: ignore
                     flags=cv2.INTER_NEAREST,
                     borderMode=cv2.BORDER_CONSTANT,
                 )
@@ -499,7 +516,7 @@ def misalignment(img, mask, displacement=16, rotate_ratio=0.0, c_relation="1_1")
                         img[..., idx + k],
                         M,
                         (H, W),
-                        1.0,
+                        1.0,  # type: ignore
                         flags=cv2.INTER_LINEAR,
                         borderMode=cv2.BORDER_CONSTANT,
                     )
@@ -509,7 +526,7 @@ def misalignment(img, mask, displacement=16, rotate_ratio=0.0, c_relation="1_1")
                         mask[..., idx_mask + k],
                         M,
                         (H, W),
-                        1.0,
+                        1.0,  # type: ignore
                         flags=cv2.INTER_NEAREST,
                         borderMode=cv2.BORDER_CONSTANT,
                     )
@@ -520,7 +537,7 @@ def misalignment(img, mask, displacement=16, rotate_ratio=0.0, c_relation="1_1")
                         img[..., i],
                         M,
                         (H, W),
-                        1.0,
+                        1.0,  # type: ignore
                         flags=cv2.INTER_LINEAR,
                         borderMode=cv2.BORDER_CONSTANT,
                     )
@@ -530,7 +547,7 @@ def misalignment(img, mask, displacement=16, rotate_ratio=0.0, c_relation="1_1")
                         mask[..., i],
                         M,
                         (H, W),
-                        1.0,
+                        1.0,  # type: ignore
                         flags=cv2.INTER_NEAREST,
                         borderMode=cv2.BORDER_CONSTANT,
                     )
@@ -555,9 +572,7 @@ def misalignment(img, mask, displacement=16, rotate_ratio=0.0, c_relation="1_1")
                 ]
                 for k in range(mask_rel):
                     m_out[..., idx_mask + k] = 0
-                    m_out[
-                        y1 : y1 + out_shape[0], x1 : x1 + out_shape[1], idx_mask + k
-                    ] = mask[
+                    m_out[y1 : y1 + out_shape[0], x1 : x1 + out_shape[1], idx_mask + k] = mask[
                         y1 : y1 + out_shape[0], x1 : x1 + out_shape[1], idx_mask + k
                     ]
             else:
@@ -577,7 +592,7 @@ def misalignment(img, mask, displacement=16, rotate_ratio=0.0, c_relation="1_1")
     return out, m_out
 
 
-def random_rotate_matrix(height, displacement):
+def random_rotate_matrix(height: int, displacement: int):
     """Auxiliary function for missaligmnet."""
     x = displacement / 2.0
     y = ((height - displacement) / 2.0) * 1.42
@@ -587,7 +602,11 @@ def random_rotate_matrix(height, displacement):
     return M
 
 
-def brightness(image, brightness_factor=(0, 0), mode="2D"):
+def brightness(
+    image: np.ndarray,
+    brightness_factor: Tuple[float, float] = (0, 0),
+    mode: str = "2D",
+) -> np.ndarray:
     """
     Randomly adjust brightness between a range.
 
@@ -596,7 +615,7 @@ def brightness(image, brightness_factor=(0, 0), mode="2D"):
     image : 3D Numpy array
         Image to transform. E.g. ``(y, x, channels)``.
 
-    brightness_factor : tuple of 2 floats, optional
+    brightness_factor : tuple of 2 floats
         Range of brightness' intensity. E.g. ``(0.1, 0.3)``.
 
     mode : str, optional
@@ -635,12 +654,10 @@ def brightness(image, brightness_factor=(0, 0), mode="2D"):
 
     # Force mode if 2D
     if image.ndim == 3:
-        mode == "3D"
+        mode = "3D"
 
     if mode == "2D":
-        b_factor = np.random.uniform(
-            brightness_factor[0], brightness_factor[1], image.shape[-1] * 3
-        )
+        b_factor = np.random.uniform(brightness_factor[0], brightness_factor[1], image.shape[-1] * 3)
         for z in range(image.shape[2]):
             image[:, :, z] += b_factor[z * 3]
     else:
@@ -650,7 +667,7 @@ def brightness(image, brightness_factor=(0, 0), mode="2D"):
     return image
 
 
-def contrast(image, contrast_factor=(0, 0), mode="2D"):
+def contrast(image: np.ndarray, contrast_factor: Tuple[float, float] = (0, 0), mode: str = "2D") -> np.ndarray:
     """
     Contrast augmentation.
 
@@ -659,7 +676,7 @@ def contrast(image, contrast_factor=(0, 0), mode="2D"):
     image : 3D Numpy array
         Image to transform. E.g. ``(y, x, channels)``.
 
-    contrast_factor : tuple of 2 floats, optional
+    contrast_factor : tuple of 2 floats
         Range of contrast's intensity. E.g. ``(0.1, 0.3)``.
 
     mode : str, optional
@@ -698,12 +715,10 @@ def contrast(image, contrast_factor=(0, 0), mode="2D"):
 
     # Force mode if 2D
     if image.ndim == 3:
-        mode == "3D"
+        mode = "3D"
 
     if mode == "2D":
-        c_factor = np.random.uniform(
-            contrast_factor[0], contrast_factor[1], image.shape[-1] * 3
-        )
+        c_factor = np.random.uniform(contrast_factor[0], contrast_factor[1], image.shape[-1] * 3)
         for z in range(image.shape[2]):
             image[:, :, z] *= 1 + c_factor[z * 3]
     else:
@@ -713,7 +728,7 @@ def contrast(image, contrast_factor=(0, 0), mode="2D"):
     return image
 
 
-def missing_sections(img, iterations=(30, 40)):
+def missing_sections(img: np.ndarray, iterations: Tuple[int, int] = (30, 40)) -> np.ndarray:
     """
     Augment the image by creating a black line in a random position.
 
@@ -780,7 +795,7 @@ def missing_sections(img, iterations=(30, 40)):
     return out
 
 
-def _prepare_deform_slice(slice_shape, iterations):
+def _prepare_deform_slice(slice_shape: Tuple[int, ...], iterations: int) -> np.ndarray:
     """Auxiliary function for missing_sections."""
     shape = (slice_shape[0], slice_shape[1])
     # randomly choose fixed x or fixed y with p = 1/2
@@ -808,16 +823,16 @@ def _prepare_deform_slice(slice_shape, iterations):
 
     # find the 2 components where coordinates are bigger / smaller than the line
     # to apply normal vector in the correct direction
-    components, n_components = label(np.logical_not(line_mask).view("uint8"))
+    components, n_components = label(np.logical_not(line_mask).view("uint8"))  # type: ignore
     assert n_components == 2, "%i" % n_components
 
     # dilate the line mask
-    line_mask = binary_dilation(line_mask, iterations=iterations)
+    line_mask = binary_dilation(line_mask, iterations=iterations)  # type: ignore
 
     return line_mask
 
 
-def shuffle_channels(img):
+def shuffle_channels(img: np.ndarray) -> np.ndarray:
     """
     Augment the image by shuffling its channels.
 
@@ -847,16 +862,14 @@ def shuffle_channels(img):
 
     if img.ndim != 3 and img.ndim != 4:
         raise ValueError(
-            "Image is supposed to be 3 or 4 dimensions but provided {} image shape instead".format(
-                img.shape
-            )
+            "Image is supposed to be 3 or 4 dimensions but provided {} image shape instead".format(img.shape)
         )
 
     new_channel_order = np.random.permutation(img.shape[-1])
     return img[..., new_channel_order]
 
 
-def grayscale(img):
+def grayscale(img: np.ndarray) -> np.ndarray:
     """
     Augment the image by converting it into grayscale.
 
@@ -886,17 +899,21 @@ def grayscale(img):
 
     if img.shape[-1] != 3:
         raise ValueError(
-            "Image is supposed to have 3 channels (RGB). Provided {} image shape instead".format(
-                img.shape
-            )
+            "Image is supposed to have 3 channels (RGB). Provided {} image shape instead".format(img.shape)
         )
 
     return np.tile(np.expand_dims(np.mean(img, -1), -1), 3)
 
 
 def GridMask(
-    img, channels, z_size, ratio=0.6, d_range=(30, 60), rotate=1, invert=False
-):
+    img: np.ndarray,
+    channels: int,
+    z_size: int,
+    ratio: float = 0.6,
+    d_range: Tuple[float, ...] = (30.0, 60.0),
+    rotate: int = 1,
+    invert: bool = False,
+) -> np.ndarray:
     """
     GridMask data augmentation presented in `GridMask Data Augmentation <https://arxiv.org/abs/2001.04086v1>`_.
     Code adapted from `<https://github.com/dvlab-research/GridMask/blob/master/imagenet_grid/utils/grid.py>`_.
@@ -916,7 +933,7 @@ def GridMask(
     ratio : tuple of floats, optional
         Range to choose the size of the areas to create.
 
-    d_range : tuple of ints, optional
+    d_range : tuple of floats, optional
         Range to choose the ``d`` value in the original paper.
 
     rotate : float, optional
@@ -954,7 +971,7 @@ def GridMask(
     # will be able to cover all the image spot after the rotation. This is also the minimum square.
     hh = math.ceil((math.sqrt(h * h + w * w)))
 
-    d = np.random.randint(d_range[0], d_range[1])
+    d = np.random.randint(int(d_range[0]), int(d_range[1]))
 
     l = math.ceil(d * ratio)
 
@@ -982,7 +999,7 @@ def GridMask(
     if not invert:
         mask = 1 - mask
     if z_size != -1:
-        _z_size = np.random.randint(d_range[2], d_range[3])
+        _z_size = np.random.randint(int(d_range[2]), int(d_range[3]))
         cz = np.random.randint(0, z_size - _z_size)
         img[..., cz * channels : (cz * channels) + (_z_size * channels)] *= np.stack(
             (mask,) * (_z_size * channels), axis=-1
@@ -993,15 +1010,19 @@ def GridMask(
 
 
 def random_crop_pair(
-    image,
-    mask,
-    random_crop_size,
-    val=False,
-    draw_prob_map_points=False,
-    img_prob=None,
-    weight_map=None,
-    scale=(1, 1),
-):
+    image: np.ndarray,
+    mask: np.ndarray,
+    random_crop_size: Tuple[int, ...],
+    val: bool = False,
+    draw_prob_map_points: bool = False,
+    img_prob: Optional[np.ndarray] = None,
+    weight_map: Optional[np.ndarray] = None,
+    scale: Tuple[int, ...] = (1, 1),
+) -> Union[
+    Tuple[np.ndarray, np.ndarray],
+    Tuple[np.ndarray, np.ndarray, np.ndarray],
+    Tuple[np.ndarray, np.ndarray, int, int, int, int],
+]:
     """
     Random crop for an image and its mask. No crop is done in those dimensions that ``random_crop_size`` is greater than
     the input image shape in those dimensions. For instance, if an input image is ``400x150`` and ``random_crop_size``
@@ -1100,9 +1121,7 @@ def random_crop_pair(
     # Super-resolution check
     if any([x != 1 for x in scale]):
         img_out_shape = img[y : (y + dy), x : (x + dx)].shape
-        mask_out_shape = mask[
-            y * scale[0] : (y + dy) * scale[0], x * scale[1] : (x + dx) * scale[1]
-        ].shape
+        mask_out_shape = mask[y * scale[0] : (y + dy) * scale[0], x * scale[1] : (x + dx) * scale[1]].shape
         s = [img_out_shape[0] * scale[0], img_out_shape[1] * scale[1]]
         if all(x != y for x, y in zip(s, mask_out_shape)):
             raise ValueError(
@@ -1120,9 +1139,7 @@ def random_crop_pair(
     if draw_prob_map_points == True:
         return (
             img[y : (y + dy), x : (x + dx)],
-            mask[
-                y * scale[0] : (y + dy) * scale[0], x * scale[1] : (x + dx) * scale[1]
-            ],
+            mask[y * scale[0] : (y + dy) * scale[0], x * scale[1] : (x + dx) * scale[1]],
             oy,
             ox,
             y,
@@ -1149,15 +1166,19 @@ def random_crop_pair(
 
 
 def random_3D_crop_pair(
-    image,
-    mask,
-    random_crop_size,
-    val=False,
-    img_prob=None,
-    weight_map=None,
-    draw_prob_map_points=False,
-    scale=(1, 1, 1),
-):
+    image: np.ndarray,
+    mask: np.ndarray,
+    random_crop_size: Tuple[int, ...],
+    val: bool = False,
+    img_prob: Optional[np.ndarray] = None,
+    weight_map: Optional[np.ndarray] = None,
+    draw_prob_map_points: bool = False,
+    scale: Tuple[int, ...] = (1, 1, 1),
+) -> Union[
+    Tuple[np.ndarray, np.ndarray],
+    Tuple[np.ndarray, np.ndarray, np.ndarray],
+    Tuple[np.ndarray, np.ndarray, int, int, int, int, int, int],
+]:
     """
     Extracts a random 3D patch from the given image and mask. No crop is done in those dimensions that ``random_crop_size`` is
     greater than the input image shape in those dimensions. For instance, if an input image is ``10x400x150`` and ``random_crop_size``
@@ -1334,8 +1355,16 @@ def random_3D_crop_pair(
 
 
 def random_crop_single(
-    image, random_crop_size, val=False, draw_prob_map_points=False, weight_map=None
-):
+    image: np.ndarray,
+    random_crop_size: Tuple[int, ...],
+    val: bool = False,
+    draw_prob_map_points: bool = False,
+    weight_map: Optional[np.ndarray] = None,
+) -> Union[
+    np.ndarray,
+    Tuple[np.ndarray, np.ndarray],
+    Tuple[np.ndarray, int, int, int, int],
+]:
     """
     Random crop for a single image. No crop is done in those dimensions that ``random_crop_size`` is greater than
     the input image shape in those dimensions. For instance, if an input image is ``400x150`` and ``random_crop_size``
@@ -1407,8 +1436,16 @@ def random_crop_single(
 
 
 def random_3D_crop_single(
-    image, random_crop_size, val=False, draw_prob_map_points=False, weight_map=None
-):
+    image: np.ndarray,
+    random_crop_size: Tuple[int, ...],
+    val: bool = False,
+    draw_prob_map_points: bool = False,
+    weight_map: Optional[np.ndarray] = None,
+) -> Union[
+    np.ndarray,
+    Tuple[np.ndarray, np.ndarray],
+    Tuple[np.ndarray, int, int, int, int, int, int],
+]:
     """
     Random crop for a single image. No crop is done in those dimensions that ``random_crop_size`` is greater than
     the input image shape in those dimensions. For instance, if an input image is ``50x400x150`` and ``random_crop_size``
@@ -1488,7 +1525,10 @@ def random_3D_crop_single(
             return img[z : (z + dz), y : (y + dy), x : (x + dx)]
 
 
-def center_crop_single(img, crop_shape):
+def center_crop_single(
+    img: np.ndarray,
+    crop_shape: Tuple[int, ...],
+) -> np.ndarray:
     """
     Extract the central patch from a single image.
 
@@ -1522,7 +1562,7 @@ def center_crop_single(img, crop_shape):
         return img[starty : starty + crop_shape[0], startx : startx + crop_shape[1]]
 
 
-def resize_img(img, shape):
+def resize_img(img: np.ndarray, shape: Tuple[int, ...]) -> np.ndarray:
     """
     Resizes input image to given shape.
 
@@ -1531,8 +1571,8 @@ def resize_img(img, shape):
     img : 3D/4D Numpy array
         Data to extract the patch from. E.g. ``(y, x, channels)`` for ``2D`` or  ``(z, y, x, channels)`` for ``3D``.
 
-    crop_shape : 2D/3D int tuple
-        Shape of the patches to create. E.g.  ``(y, x)`` for ``2D`` ``(z, y, x)`` for ``3D``.
+    shape : 2D/3D int tuple
+        Shape to resize the image to. E.g.  ``(y, x)`` for ``2D`` ``(z, y, x)`` for ``3D``.
 
     Returns
     -------
@@ -1551,7 +1591,17 @@ def resize_img(img, shape):
     )
 
 
-def rotation(img, mask=None, heat=None, angles=[], mode="reflect", mask_type="as_mask"):
+def rotation(
+    img: np.ndarray,
+    mask: Optional[np.ndarray] = None,
+    heat: Optional[np.ndarray] = None,
+    angles: Union[Tuple[int, int], List[int]] = [],
+    mode: str = "reflect",
+    mask_type: str = "as_mask",
+) -> Union[
+    np.ndarray,
+    Tuple[np.ndarray, Union[np.ndarray, None], Union[np.ndarray, None]],
+]:
     """
     Apply a rotation to input ``image`` and ``mask`` (if provided).
 
@@ -1614,14 +1664,17 @@ def rotation(img, mask=None, heat=None, angles=[], mode="reflect", mask_type="as
 
 
 def zoom(
-    img,
-    mask=None,
-    heat=None,
-    zoom_range=[],
-    zoom_in_z=False,
-    mode="reflect",
-    mask_type="as_mask",
-):
+    img: np.ndarray,
+    zoom_range: Tuple[float, ...],
+    mask: Optional[np.ndarray] = None,
+    heat: Optional[np.ndarray] = None,
+    zoom_in_z: bool = False,
+    mode: str = "reflect",
+    mask_type: str = "as_mask",
+) -> Union[
+    np.ndarray,
+    Tuple[np.ndarray, Union[np.ndarray, None], Union[np.ndarray, None]],
+]:
     """
     Apply zoom to input ``image`` and ``mask`` (if provided).
 
@@ -1630,15 +1683,15 @@ def zoom(
     img : 3D/4D Numpy array
         Image to rotate. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
 
+    zoom_range : tuple of floats
+        Defines minimum and maximum factors to scale the images. E.g. (0.8, 1.2).
+
     mask : 3D/4D Numpy array, optional
         Mask to rotate. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
 
     heat : 3D/4D Numpy array, optional
         Heatmap (float mask) to rotate. E.g. ``(y, x, channels)`` for ``2D`` or
         ``(y, x, z, channels)`` for ``3D``.
-
-    zoom_range : tuple of floats, optional
-        Defines minimum and maximum factors to scale the images. E.g. (0.8, 1.2).
 
     zoom_in_z: bool, optional
         Whether to apply or not zoom in Z axis.
@@ -1662,9 +1715,6 @@ def zoom(
         Zoomed heatmap. Returned if ``mask`` is provided. E.g. ``(y, x, channels)`` for ``2D`` or
         ``(y, x, z, channels)`` for ``3D``.
     """
-    assert isinstance(zoom_range, tuple)
-    assert len(zoom_range) == 2, "zoom_range must be a tuple with two floats"
-
     zoom_selected = random.uniform(zoom_range[0], zoom_range[1])
     mask_order = 0 if mask_type == "as_mask" else 1
     if img.ndim == 4:
@@ -1791,11 +1841,11 @@ def zoom(
                         (0, 0),
                     )
 
-            img = np.pad(img, img_pad_tup, mode)
+            img = np.pad(img, img_pad_tup, mode)  # type: ignore
             if mask is not None:
-                mask = np.pad(mask, mask_pad_tup, mode)
+                mask = np.pad(mask, mask_pad_tup, mode)  # type: ignore
             if heat is not None:
-                heat = np.pad(heat, img_pad_tup[:-1], mode)
+                heat = np.pad(heat, img_pad_tup[:-1], mode)  # type: ignore
 
     if mask is None:
         return img
@@ -1803,7 +1853,7 @@ def zoom(
         return img, mask, heat
 
 
-def gamma_contrast(img, gamma=(0, 1)):
+def gamma_contrast(img: np.ndarray, gamma: Tuple[float, float] = (0, 1)) -> np.ndarray:
     """
     Apply gamma contrast to input ``image``.
 
@@ -1822,4 +1872,4 @@ def gamma_contrast(img, gamma=(0, 1)):
     """
     _gamma = random.uniform(gamma[0], gamma[1])
 
-    return adjust_gamma(np.clip(img, 0, 1), gamma=_gamma)
+    return adjust_gamma(np.clip(img, 0, 1), gamma=_gamma)  # type: ignore

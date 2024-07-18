@@ -216,20 +216,14 @@ def save_tif(X, data_dir=None, filenames=None, verbose=True):
     if filenames is not None:
         if len(filenames) != len(X):
             raise ValueError(
-                "Filenames array and length of X have different shapes: {} vs {}".format(
-                    len(filenames), len(X)
-                )
+                "Filenames array and length of X have different shapes: {} vs {}".format(len(filenames), len(X))
             )
 
     if not isinstance(X, list):
         _dtype = X.dtype if X.dtype in [np.uint8, np.uint16, np.float32] else np.float32
         ndims = X.ndim
     else:
-        _dtype = (
-            X[0].dtype
-            if X[0].dtype in [np.uint8, np.uint16, np.float32]
-            else np.float32
-        )
+        _dtype = X[0].dtype if X[0].dtype in [np.uint8, np.uint16, np.float32] else np.float32
         ndims = X[0].ndim
 
     d = len(str(len(X)))
@@ -240,13 +234,9 @@ def save_tif(X, data_dir=None, filenames=None, verbose=True):
             f = os.path.join(data_dir, os.path.splitext(filenames[i])[0] + ".tif")
         if ndims == 4:
             if not isinstance(X, list):
-                aux = np.expand_dims(
-                    np.expand_dims(X[i], 0).transpose((0, 3, 1, 2)), -1
-                ).astype(_dtype)
+                aux = np.expand_dims(np.expand_dims(X[i], 0).transpose((0, 3, 1, 2)), -1).astype(_dtype)
             else:
-                aux = np.expand_dims(
-                    np.expand_dims(X[i][0], 0).transpose((0, 3, 1, 2)), -1
-                ).astype(_dtype)
+                aux = np.expand_dims(np.expand_dims(X[i][0], 0).transpose((0, 3, 1, 2)), -1).astype(_dtype)
         else:
             if not isinstance(X, list):
                 aux = np.expand_dims(X[i].transpose((0, 3, 1, 2)), -1).astype(_dtype)
@@ -271,9 +261,7 @@ def save_tif(X, data_dir=None, filenames=None, verbose=True):
             )
 
 
-def save_tif_pair_discard(
-    X, Y, data_dir=None, suffix="", filenames=None, discard=True, verbose=True
-):
+def save_tif_pair_discard(X, Y, data_dir=None, suffix="", filenames=None, discard=True, verbose=True):
     """
     Save images in the given directory.
 
@@ -312,9 +300,7 @@ def save_tif_pair_discard(
     if filenames is not None:
         if len(filenames) != len(X):
             raise ValueError(
-                "Filenames array and length of X have different shapes: {} vs {}".format(
-                    len(filenames), len(X)
-                )
+                "Filenames array and length of X have different shapes: {} vs {}".format(len(filenames), len(X))
             )
 
     _dtype = X.dtype if X.dtype in [np.uint8, np.uint16, np.float32] else np.float32
@@ -325,16 +311,10 @@ def save_tif_pair_discard(
                 f1 = os.path.join(data_dir, "x" + suffix, str(i).zfill(d) + ".tif")
                 f2 = os.path.join(data_dir, "y" + suffix, str(i).zfill(d) + ".tif")
             else:
-                f1 = os.path.join(
-                    data_dir, "x" + suffix, os.path.splitext(filenames[i])[0] + ".tif"
-                )
-                f2 = os.path.join(
-                    data_dir, "y" + suffix, os.path.splitext(filenames[i])[0] + ".tif"
-                )
+                f1 = os.path.join(data_dir, "x" + suffix, os.path.splitext(filenames[i])[0] + ".tif")
+                f2 = os.path.join(data_dir, "y" + suffix, os.path.splitext(filenames[i])[0] + ".tif")
             if X.ndim == 4:
-                aux = np.expand_dims(
-                    np.expand_dims(X[i], 0).transpose((0, 3, 1, 2)), -1
-                ).astype(_dtype)
+                aux = np.expand_dims(np.expand_dims(X[i], 0).transpose((0, 3, 1, 2)), -1).astype(_dtype)
             else:
                 aux = np.expand_dims(X[i].transpose((0, 3, 1, 2)), -1).astype(_dtype)
             imsave(
@@ -346,9 +326,7 @@ def save_tif_pair_discard(
                 compression=("zlib", 1),
             )
             if Y.ndim == 4:
-                aux = np.expand_dims(
-                    np.expand_dims(Y[i], 0).transpose((0, 3, 1, 2)), -1
-                ).astype(_dtype)
+                aux = np.expand_dims(np.expand_dims(Y[i], 0).transpose((0, 3, 1, 2)), -1).astype(_dtype)
             else:
                 aux = np.expand_dims(Y[i].transpose((0, 3, 1, 2)), -1).astype(_dtype)
             imsave(
@@ -426,9 +404,7 @@ def save_img(
                         im = Image.fromarray((X[i, :, :, j, 0] * v).astype(np.uint8))
                         im = im.convert("L")
                     else:
-                        im = Image.fromarray(
-                            (X[i, :, :, j] * v).astype(np.uint8), "RGB"
-                        )
+                        im = Image.fromarray((X[i, :, :, j] * v).astype(np.uint8), "RGB")
 
                     if filenames is None:
                         f = os.path.join(
@@ -474,17 +450,10 @@ def save_img(
                             c = "" if Y.shape[-1] == 1 else "_c" + str(j)
                             f = os.path.join(
                                 mask_dir,
-                                p_y
-                                + str(i).zfill(d)
-                                + "_"
-                                + str(j).zfill(d)
-                                + c
-                                + extension,
+                                p_y + str(i).zfill(d) + "_" + str(j).zfill(d) + c + extension,
                             )
                         else:
-                            f = os.path.join(
-                                data_dir, filenames[(i * j) + j] + extension
-                            )
+                            f = os.path.join(data_dir, filenames[(i * j) + j] + extension)
 
                         im.save(f)
         else:
@@ -496,9 +465,7 @@ def save_img(
 
                     if filenames is None:
                         c = "" if Y.shape[-1] == 1 else "_c" + str(j)
-                        f = os.path.join(
-                            mask_dir, p_y + str(i).zfill(d) + c + extension
-                        )
+                        f = os.path.join(mask_dir, p_y + str(i).zfill(d) + c + extension)
                     else:
                         f = os.path.join(mask_dir, filenames[i] + extension)
 
@@ -604,9 +571,7 @@ def make_weight_map(label, binary=True, w0=10, sigma=5):
         d1 = maps[0][:][:]
         d2 = maps[1][:][:]
 
-        map_weight = (
-            w0 * np.exp(-((d1 + d2) ** 2) / (2 * (sigma**2))) * (lab == 0).astype(int)
-        )
+        map_weight = w0 * np.exp(-((d1 + d2) ** 2) / (2 * (sigma**2))) * (lab == 0).astype(int)
 
     map_weight += w_c
 
@@ -749,9 +714,7 @@ def divide_images_on_classes(data, data_mask, out_dir, num_classes=2, th=0.8):
                 )
 
 
-def save_filters_of_convlayer(
-    model, out_dir, l_num=None, name=None, prefix="", img_per_row=8
-):
+def save_filters_of_convlayer(model, out_dir, l_num=None, name=None, prefix="", img_per_row=8):
     """
     Create an image of the filters learned by a convolutional layer. One can identify the layer with ``l_num`` or
     ``name`` args. If both are passed ``name`` will be prioritized.
@@ -897,13 +860,9 @@ def img_to_onehot_encoding(img, num_classes=2):
 
     for i in range(num_classes):
         if img.ndim == 4:
-            encoded_image[:, :, :, i] = np.all(
-                img.reshape((-1, 1)) == i, axis=1
-            ).reshape(shape[:3])
+            encoded_image[:, :, :, i] = np.all(img.reshape((-1, 1)) == i, axis=1).reshape(shape[:3])
         else:
-            encoded_image[:, :, i] = np.all(img.reshape((-1, 1)) == i, axis=1).reshape(
-                shape[:2]
-            )
+            encoded_image[:, :, i] = np.all(img.reshape((-1, 1)) == i, axis=1).reshape(shape[:2])
 
     return encoded_image
 
@@ -960,9 +919,7 @@ def read_img(path, is_3d=False):
     # 2D
     if not is_3d:
         if img.ndim > 3:
-            raise ValueError(
-                "Read image seems to be 3D: {}. Path: {}".format(img.shape, path)
-            )
+            raise ValueError("Read image seems to be 3D: {}. Path: {}".format(img.shape, path))
 
         if img.ndim == 2:
             img = np.expand_dims(img, -1)
@@ -972,9 +929,7 @@ def read_img(path, is_3d=False):
     # 3D
     else:
         if img.ndim < 3:
-            raise ValueError(
-                "Read image seems to be 2D: {}. Path: {}".format(img.shape, path)
-            )
+            raise ValueError("Read image seems to be 2D: {}. Path: {}".format(img.shape, path))
 
         if img.ndim == 3:
             img = np.expand_dims(img, -1)
@@ -1095,9 +1050,7 @@ def load_data_from_dir(
     """
 
     if preprocess_f != None and preprocess_cfg == None:
-        raise ValueError(
-            "The preprocessing configuration ('preprocess_cfg') is missing."
-        )
+        raise ValueError("The preprocessing configuration ('preprocess_cfg') is missing.")
 
     if crop:
         from biapy.data.data_2D_manipulation import crop_data_with_overlap
@@ -1132,11 +1085,7 @@ def load_data_from_dir(
         img = np.squeeze(img)
 
         if img.ndim > 3:
-            raise ValueError(
-                "Read image seems to be 3D: {}. Path: {}".format(
-                    img.shape, os.path.join(data_dir, id_)
-                )
-            )
+            raise ValueError("Read image seems to be 3D: {}. Path: {}".format(img.shape, os.path.join(data_dir, id_)))
 
         filenames.append(id_)
 
@@ -1156,9 +1105,7 @@ def load_data_from_dir(
                 else:
                     raise ValueError(
                         "Channel of the patch size given {} does not correspond with the loaded image {}. "
-                        "Please, check the channels of the images!".format(
-                            crop_shape[-1], img.shape[-1]
-                        )
+                        "Please, check the channels of the images!".format(crop_shape[-1], img.shape[-1])
                     )
 
         if preprocess_f == None:
@@ -1178,9 +1125,7 @@ def load_data_from_dir(
     if preprocess_f != None:
         if is_mask:
             # data contains masks
-            data = preprocess_f(
-                preprocess_cfg, y_data=data, is_2d=True, is_y_mask=is_mask
-            )
+            data = preprocess_f(preprocess_cfg, y_data=data, is_2d=True, is_y_mask=is_mask)
         else:
             data = preprocess_f(preprocess_cfg, x_data=data, is_2d=True)
 
@@ -1221,11 +1166,7 @@ def load_data_from_dir(
         data = np.concatenate(data)
         print("*** Loaded data shape is {}".format(data.shape))
     else:
-        print(
-            "Not all samples seem to have the same shape. Number of samples: {}".format(
-                len(data)
-            )
-        )
+        print("Not all samples seem to have the same shape. Number of samples: {}".format(len(data)))
         print("*** First sample shape is {}".format(data[0].shape[1:]))
 
     if return_filenames:
@@ -1421,9 +1362,7 @@ def load_3d_images_from_dir(
         raise ValueError("'crop_shape' must be provided when 'crop' is True")
 
     if preprocess_f != None and preprocess_cfg == None:
-        raise ValueError(
-            "The preprocessing configuration ('preprocess_cfg') is missing."
-        )
+        raise ValueError("The preprocessing configuration ('preprocess_cfg') is missing.")
 
     print("Loading data from {}".format(data_dir))
     ids = sorted(next(os.walk(data_dir))[2])
@@ -1461,11 +1400,7 @@ def load_3d_images_from_dir(
         img = np.squeeze(img)
 
         if img.ndim < 3:
-            raise ValueError(
-                "Read image seems to be 2D: {}. Path: {}".format(
-                    img.shape, os.path.join(data_dir, id_)
-                )
-            )
+            raise ValueError("Read image seems to be 2D: {}. Path: {}".format(img.shape, os.path.join(data_dir, id_)))
 
         if img.ndim == 3:
             img = np.expand_dims(img, -1)
@@ -1489,9 +1424,7 @@ def load_3d_images_from_dir(
                 else:
                     raise ValueError(
                         "Channel of the patch size given {} does not correspond with the loaded image {}. "
-                        "Please, check the channels of the images!".format(
-                            crop_shape[-1], img.shape[-1]
-                        )
+                        "Please, check the channels of the images!".format(crop_shape[-1], img.shape[-1])
                     )
 
         if preprocess_f == None:
@@ -1513,9 +1446,7 @@ def load_3d_images_from_dir(
     if preprocess_f != None:
         if is_mask:
             # data contains masks
-            data = preprocess_f(
-                preprocess_cfg, y_data=data, is_2d=False, is_y_mask=is_mask
-            )
+            data = preprocess_f(preprocess_cfg, y_data=data, is_2d=False, is_y_mask=is_mask)
         else:
             data = preprocess_f(preprocess_cfg, x_data=data, is_2d=False)
 
@@ -1558,11 +1489,7 @@ def load_3d_images_from_dir(
         data = np.concatenate(data)
         print("*** Loaded data shape is {}".format(data.shape))
     else:
-        print(
-            "Not all samples seem to have the same shape. Number of samples: {}".format(
-                len(data)
-            )
-        )
+        print("Not all samples seem to have the same shape. Number of samples: {}".format(len(data)))
         print("*** First sample shape is {}".format(data[0].shape))
 
     if return_filenames:
@@ -1606,11 +1533,7 @@ def check_downsample_division(X, d_levels):
                 (0, 0),
             ),
         )
-        print(
-            "Data has been padded to be downsampled {} times. Its shape now is: {}".format(
-                d_levels, X.shape
-            )
-        )
+        print("Data has been padded to be downsampled {} times. Its shape now is: {}".format(d_levels, X.shape))
     return X, o_shape
 
 
@@ -1642,9 +1565,7 @@ def save_npy_files(X, data_dir=None, filenames=None, verbose=True):
     if filenames is not None:
         if len(filenames) != len(X):
             raise ValueError(
-                "Filenames array and length of X have different shapes: {} vs {}".format(
-                    len(filenames), len(X)
-                )
+                "Filenames array and length of X have different shapes: {} vs {}".format(len(filenames), len(X))
             )
 
     d = len(str(len(X)))
@@ -1680,13 +1601,9 @@ def pad_and_reflect(img, crop_shape, verbose=False):
         Image padded. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
     """
     if img.ndim == 4 and len(crop_shape) != 4:
-        raise ValueError(
-            "'crop_shape' needs to have 4 values as the input array has 4 dims"
-        )
+        raise ValueError("'crop_shape' needs to have 4 values as the input array has 4 dims")
     if img.ndim == 3 and len(crop_shape) != 3:
-        raise ValueError(
-            "'crop_shape' needs to have 3 values as the input array has 3 dims"
-        )
+        raise ValueError("'crop_shape' needs to have 3 values as the input array has 3 dims")
 
     if img.ndim == 4:
         if img.shape[0] < crop_shape[0]:
@@ -1733,10 +1650,7 @@ def check_value(value, value_range=(0, 1)):
     if isinstance(value, list) or isinstance(value, tuple):
         for i in range(len(value)):
             if isinstance(value[i], np.ndarray):
-                if (
-                    value_range[0] <= np.min(value[i])
-                    or np.max(value[i]) <= value_range[1]
-                ):
+                if value_range[0] <= np.min(value[i]) or np.max(value[i]) <= value_range[1]:
                     return False
             else:
                 if not (value_range[0] <= value[i] <= value_range[1]):
@@ -1813,9 +1727,7 @@ def read_chunked_nested_data(zarrfile, data_path=""):
     data = find_obj(data_path, fid)
 
     if data is None:
-        raise ValueError(
-            f"No data found within the Zarr file in the path: '{data_path}'."
-        )
+        raise ValueError(f"No data found within the Zarr file in the path: '{data_path}'.")
 
     return fid, data
 
@@ -1842,9 +1754,7 @@ def write_chunked_data(data, data_dir, filename, dtype_str="float32", verbose=Tr
         To print saving information.
     """
     if data.ndim != 5:
-        raise ValueError(
-            f"Expected data needs to have 5 dimensions (in 'TZYXC' order). Given data shape: {data.shape}"
-        )
+        raise ValueError(f"Expected data needs to have 5 dimensions (in 'TZYXC' order). Given data shape: {data.shape}")
 
     # Change to TZCYX
     data = data.transpose((0, 1, 4, 2, 3))
@@ -1857,9 +1767,7 @@ def write_chunked_data(data, data_dir, filename, dtype_str="float32", verbose=Tr
 
     if ext in [".hdf5", ".h5"]:
         fid = h5py.File(os.path.join(data_dir, filename), "w")
-        data = fid.create_dataset(
-            "data", data=data, dtype=dtype_str, compression="gzip"
-        )
+        data = fid.create_dataset("data", data=data, dtype=dtype_str, compression="gzip")
     # Zarr
     else:
         fid = zarr.open_group(os.path.join(data_dir, filename), mode="w")
@@ -1978,9 +1886,7 @@ def im2col(A, BSZ, stepsize=1):
     # Parameters
     M, N = A.shape
     # Get Starting block indices
-    start_idx = np.arange(0, M - BSZ[0] + 1, stepsize)[:, None] * N + np.arange(
-        0, N - BSZ[1] + 1, stepsize
-    )
+    start_idx = np.arange(0, M - BSZ[0] + 1, stepsize)[:, None] * N + np.arange(0, N - BSZ[1] + 1, stepsize)
     # Get offsetted indices across the height and width of input array
     offset_idx = np.arange(BSZ[0])[:, None] * N + np.arange(BSZ[1])
     # Get all actual indices & index into input array for final output
@@ -1997,18 +1903,14 @@ def seg_widen_border(seg, tsz_h=1):
     if len(sz) == 3:
         for z in range(sz[0]):
             mm = seg[z].max()
-            patch = im2col(
-                np.pad(seg[z], ((tsz_h, tsz_h), (tsz_h, tsz_h)), "reflect"), [tsz, tsz]
-            )
+            patch = im2col(np.pad(seg[z], ((tsz_h, tsz_h), (tsz_h, tsz_h)), "reflect"), [tsz, tsz])
             p0 = patch.max(axis=1)
             patch[patch == 0] = mm + 1
             p1 = patch.min(axis=1)
             seg[z] = seg[z] * ((p0 == p1).reshape(sz[1:]))
     else:
         mm = seg.max()
-        patch = im2col(
-            np.pad(seg, ((tsz_h, tsz_h), (tsz_h, tsz_h)), "reflect"), [tsz, tsz]
-        )
+        patch = im2col(np.pad(seg, ((tsz_h, tsz_h), (tsz_h, tsz_h)), "reflect"), [tsz, tsz])
         p0 = patch.max(axis=1)
         patch[patch == 0] = mm + 1
         p1 = patch.min(axis=1)

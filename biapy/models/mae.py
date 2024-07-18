@@ -170,9 +170,7 @@ class MaskedAutoencoderViT(nn.Module):
             # Define grid mask, as it doesn't change over epochs
             D, L = embed_dim, self.patch_embed.num_patches
             if self.ndim == 2:
-                self.mask = torch.zeros(
-                    [img_size // patch_size, img_size // patch_size], device=device
-                )
+                self.mask = torch.zeros([img_size // patch_size, img_size // patch_size], device=device)
                 self.mask[::2, ::2] = 1
                 self.mask[1::2, 1::2] = 1
             else:
@@ -187,9 +185,7 @@ class MaskedAutoencoderViT(nn.Module):
                 self.mask[::2, ::2, ::2] = 1
                 self.mask[1::2, 1::2, 1::2] = 1
             self.mask = self.mask.flatten()
-            self.ids_keep = (
-                torch.argsort(self.mask)[: L // 2].unsqueeze(-1).repeat(1, 1, D)
-            )
+            self.ids_keep = torch.argsort(self.mask)[: L // 2].unsqueeze(-1).repeat(1, 1, D)
             self.mask = self.mask.unsqueeze(0)
             self.ids_restore = torch.argsort(torch.argsort(self.mask))
 
@@ -255,10 +251,7 @@ class MaskedAutoencoderViT(nn.Module):
             x = torch.einsum("nchpwq->nhwpqc", x)
             x = x.reshape(shape=(imgs.shape[0], h * w, p**2 * self.in_chans))
         else:
-            assert (
-                imgs.shape[2] == imgs.shape[3] == imgs.shape[4]
-                and imgs.shape[2] % p == 0
-            )
+            assert imgs.shape[2] == imgs.shape[3] == imgs.shape[4] and imgs.shape[2] % p == 0
             d = h = w = imgs.shape[2] // p
             x = imgs.reshape(shape=(imgs.shape[0], self.in_chans, d, p, h, p, w, p))
             x = torch.einsum("ncdahpwq->ndhwapqc", x)
@@ -316,9 +309,7 @@ class MaskedAutoencoderViT(nn.Module):
         noise = torch.rand(N, L, device=x.device)  # noise in [0, 1]
 
         # sort noise for each sample
-        ids_shuffle = torch.argsort(
-            noise, dim=1
-        )  # ascend: small is keep, large is remove
+        ids_shuffle = torch.argsort(noise, dim=1)  # ascend: small is keep, large is remove
         ids_restore = torch.argsort(ids_shuffle, dim=1)
 
         # keep the first subset
@@ -382,13 +373,9 @@ class MaskedAutoencoderViT(nn.Module):
         x = self.decoder_embed(x)
 
         # append mask tokens to sequence
-        mask_tokens = self.mask_token.repeat(
-            x.shape[0], ids_restore.shape[1] + 1 - x.shape[1], 1
-        )
+        mask_tokens = self.mask_token.repeat(x.shape[0], ids_restore.shape[1] + 1 - x.shape[1], 1)
         x_ = torch.cat([x[:, 1:, :], mask_tokens], dim=1)  # no cls token
-        x_ = torch.gather(
-            x_, dim=1, index=ids_restore.unsqueeze(-1).repeat(1, 1, x.shape[2])
-        )  # unshuffle
+        x_ = torch.gather(x_, dim=1, index=ids_restore.unsqueeze(-1).repeat(1, 1, x.shape[2]))  # unshuffle
         x = torch.cat([x[:, :1, :], x_], dim=1)  # append cls token
 
         # add pos embed

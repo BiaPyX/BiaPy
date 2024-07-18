@@ -232,11 +232,7 @@ def load_and_prepare_3D_data(
 
     # Discard images that do not surpass the foreground percentage threshold imposed
     if minimum_foreground_perc != -1 and Y_train is not None:
-        print(
-            "Data that do not have {}% of foreground is discarded".format(
-                minimum_foreground_perc
-            )
-        )
+        print("Data that do not have {}% of foreground is discarded".format(minimum_foreground_perc))
 
         X_train_keep = []
         Y_train_keep = []
@@ -244,9 +240,7 @@ def load_and_prepare_3D_data(
 
         samples_discarded = 0
         for i in tqdm(range(len(Y_train)), leave=False, disable=not is_main_process()):
-            labels, npixels = np.unique(
-                (Y_train[i] > 0).astype(np.uint8), return_counts=True
-            )
+            labels, npixels = np.unique((Y_train[i] > 0).astype(np.uint8), return_counts=True)
 
             discard = False
             if len(labels) == 1:
@@ -293,11 +287,7 @@ def load_and_prepare_3D_data(
                     "Please, decrease the percentage to be more permissive"
                 )
         else:
-            print(
-                "*** Remaining data shape is {}".format(
-                    (len(X_train),) + X_train[0].shape[1:]
-                )
-            )
+            print("*** Remaining data shape is {}".format((len(X_train),) + X_train[0].shape[1:]))
             if len(X_train) <= 1 and create_val:
                 raise ValueError(
                     "0 or 1 sample left to train, which is insufficent. "
@@ -328,18 +318,14 @@ def load_and_prepare_3D_data(
                     random_state=seed,
                 )
             else:
-                X_train, X_val = train_test_split(
-                    X_train, test_size=val_split, shuffle=shuffle_val, random_state=seed
-                )
+                X_train, X_val = train_test_split(X_train, test_size=val_split, shuffle=shuffle_val, random_state=seed)
         else:
             if len(X_train) < cross_val_nsplits:
                 raise ValueError(
                     f"Validation data can not be extracted from training data as the number of splits ({cross_val_nsplits}) "
                     f"is greater than the number of samples {len(X_train)}. Please check the data."
                 )
-            skf = StratifiedKFold(
-                n_splits=cross_val_nsplits, shuffle=shuffle_val, random_state=seed
-            )
+            skf = StratifiedKFold(n_splits=cross_val_nsplits, shuffle=shuffle_val, random_state=seed)
             fold = 1
             train_index, test_index = None, None
             y_len = len(Y_train) if Y_train is not None else len(X_train)
@@ -367,32 +353,18 @@ def load_and_prepare_3D_data(
                 fold += 1
 
             if len(test_index) > 5:
-                print(
-                    "Fold number {}. Printing the first 5 ids: {}".format(
-                        fold, test_index[:5]
-                    )
-                )
+                print("Fold number {}. Printing the first 5 ids: {}".format(fold, test_index[:5]))
             else:
-                print(
-                    "Fold number {}. Indexes used in cross validation: {}".format(
-                        fold, test_index
-                    )
-                )
+                print("Fold number {}. Indexes used in cross validation: {}".format(fold, test_index))
 
             # Then crop after cross validation
             if delay_crop:
                 # X_train
                 data = []
                 for img_num in range(len(X_train)):
-                    if X_train[img_num].shape != crop_shape[:3] + (
-                        X_train[img_num].shape[-1],
-                    ):
+                    if X_train[img_num].shape != crop_shape[:3] + (X_train[img_num].shape[-1],):
                         img = crop_3D_data_with_overlap(
-                            (
-                                X_train[img_num][0]
-                                if isinstance(X_train, list)
-                                else X_train[img_num]
-                            ),
+                            (X_train[img_num][0] if isinstance(X_train, list) else X_train[img_num]),
                             crop_shape[:3] + (X_train[img_num].shape[-1],),
                             overlap=ov,
                             padding=padding,
@@ -412,15 +384,9 @@ def load_and_prepare_3D_data(
                         crop_shape[3],
                     )
                     for img_num in range(len(Y_train)):
-                        if Y_train[img_num].shape != scrop[:3] + (
-                            Y_train[img_num].shape[-1],
-                        ):
+                        if Y_train[img_num].shape != scrop[:3] + (Y_train[img_num].shape[-1],):
                             img = crop_3D_data_with_overlap(
-                                (
-                                    Y_train[img_num][0]
-                                    if isinstance(Y_train, list)
-                                    else Y_train[img_num]
-                                ),
+                                (Y_train[img_num][0] if isinstance(Y_train, list) else Y_train[img_num]),
                                 scrop[:3] + (Y_train[img_num].shape[-1],),
                                 overlap=ov,
                                 padding=padding,
@@ -433,15 +399,9 @@ def load_and_prepare_3D_data(
                 # X_val
                 data = []
                 for img_num in range(len(X_val)):
-                    if X_val[img_num].shape != crop_shape[:3] + (
-                        X_val[img_num].shape[-1],
-                    ):
+                    if X_val[img_num].shape != crop_shape[:3] + (X_val[img_num].shape[-1],):
                         img = crop_3D_data_with_overlap(
-                            (
-                                X_val[img_num][0]
-                                if isinstance(X_val, list)
-                                else X_val[img_num]
-                            ),
+                            (X_val[img_num][0] if isinstance(X_val, list) else X_val[img_num]),
                             crop_shape[:3] + (X_val[img_num].shape[-1],),
                             overlap=ov,
                             padding=padding,
@@ -461,15 +421,9 @@ def load_and_prepare_3D_data(
                         crop_shape[3],
                     )
                     for img_num in range(len(Y_val)):
-                        if Y_val[img_num].shape != scrop[:3] + (
-                            Y_val[img_num].shape[-1],
-                        ):
+                        if Y_val[img_num].shape != scrop[:3] + (Y_val[img_num].shape[-1],):
                             img = crop_3D_data_with_overlap(
-                                (
-                                    Y_val[img_num][0]
-                                    if isinstance(Y_val, list)
-                                    else Y_val[img_num]
-                                ),
+                                (Y_val[img_num][0] if isinstance(Y_val, list) else Y_val[img_num]),
                                 scrop[:3] + (Y_val[img_num].shape[-1],),
                                 overlap=ov,
                                 padding=padding,
@@ -506,35 +460,15 @@ def load_and_prepare_3D_data(
                     "configured properly 'PROBLEM.SUPER_RESOLUTION.UPSCALING' variable"
                 )
 
-    s = (
-        X_train.shape
-        if not isinstance(X_train, list)
-        else (len(X_train),) + X_train[0].shape[1:]
-    )
+    s = X_train.shape if not isinstance(X_train, list) else (len(X_train),) + X_train[0].shape[1:]
     if Y_train is not None:
-        sm = (
-            Y_train.shape
-            if not isinstance(Y_train, list)
-            else (len(Y_train),) + Y_train[0].shape[1:]
-        )
+        sm = Y_train.shape if not isinstance(Y_train, list) else (len(Y_train),) + Y_train[0].shape[1:]
     if create_val:
-        sv = (
-            X_val.shape
-            if not isinstance(X_val, list)
-            else (len(X_val),) + X_val[0].shape[1:]
-        )
+        sv = X_val.shape if not isinstance(X_val, list) else (len(X_val),) + X_val[0].shape[1:]
         if Y_val is not None:
-            svm = (
-                Y_val.shape
-                if not isinstance(Y_val, list)
-                else (len(Y_val),) + Y_val[0].shape[1:]
-            )
+            svm = Y_val.shape if not isinstance(Y_val, list) else (len(Y_val),) + Y_val[0].shape[1:]
         if not isinstance(X_train, list):
-            print(
-                "Not all samples seem to have the same shape. Number of samples: {}".format(
-                    len(X_train)
-                )
-            )
+            print("Not all samples seem to have the same shape. Number of samples: {}".format(len(X_train)))
         print("*** Loaded train data shape is: {}".format(s))
         if Y_train is not None:
             print("*** Loaded train GT shape is: {}".format(sm))
@@ -649,11 +583,7 @@ def load_and_prepare_3D_efficient_format_data(
         create_val = False
 
     print("0) Loading train image information . . .")
-    data_within_zarr_path = (
-        multiple_data_within_zarr["raw_path"]
-        if multiple_data_within_zarr is not None
-        else None
-    )
+    data_within_zarr_path = multiple_data_within_zarr["raw_path"] if multiple_data_within_zarr is not None else None
     X_train, X_train_total_patches = load_3D_efficient_files(
         train_path,
         input_img_axes,
@@ -675,10 +605,7 @@ def load_and_prepare_3D_efficient_format_data(
             crop_shape[3],
         )
         data_within_zarr_path = None
-        if (
-            multiple_data_within_zarr is not None
-            and multiple_data_within_zarr["use_gt_path"]
-        ):
+        if multiple_data_within_zarr is not None and multiple_data_within_zarr["use_gt_path"]:
             data_within_zarr_path = multiple_data_within_zarr["gt_path"]
         Y_train, Y_train_total_patches = load_3D_efficient_files(
             train_mask_path,
@@ -699,11 +626,7 @@ def load_and_prepare_3D_efficient_format_data(
 
     # Discard images that do not surpass the foreground percentage threshold imposed
     if minimum_foreground_perc != -1 and Y_train is not None:
-        print(
-            "Data that do not have {}% of foreground is discarded".format(
-                minimum_foreground_perc
-            )
-        )
+        print("Data that do not have {}% of foreground is discarded".format(minimum_foreground_perc))
 
         X_train_remove = []
         samples_discarded = 0
@@ -712,10 +635,7 @@ def load_and_prepare_3D_efficient_format_data(
         for i in tqdm(range(len(Y_train)), leave=False, disable=not is_main_process()):
             data_info = Y_train[i]
 
-            if (
-                "filepath" not in last_data_file
-                or last_data_file["filepath"] != data_info["filepath"]
-            ):
+            if "filepath" not in last_data_file or last_data_file["filepath"] != data_info["filepath"]:
                 if "filepath" in last_data_file and isinstance(file, h5py.File):
                     file.close()
                 file, data = read_chunked_data(data_info["filepath"])
@@ -790,13 +710,9 @@ def load_and_prepare_3D_efficient_format_data(
                     random_state=seed,
                 )
             else:
-                X_train, X_val = train_test_split(
-                    X_train, test_size=val_split, shuffle=shuffle_val, random_state=seed
-                )
+                X_train, X_val = train_test_split(X_train, test_size=val_split, shuffle=shuffle_val, random_state=seed)
         else:
-            skf = StratifiedKFold(
-                n_splits=cross_val_nsplits, shuffle=shuffle_val, random_state=seed
-            )
+            skf = StratifiedKFold(n_splits=cross_val_nsplits, shuffle=shuffle_val, random_state=seed)
             fold = 1
             train_index, test_index = None, None
 
@@ -825,17 +741,9 @@ def load_and_prepare_3D_efficient_format_data(
                 fold += 1
 
             if len(test_index) > 5:
-                print(
-                    "Fold number {}. Printing the first 5 ids: {}".format(
-                        fold, test_index[:5]
-                    )
-                )
+                print("Fold number {}. Printing the first 5 ids: {}".format(fold, test_index[:5]))
             else:
-                print(
-                    "Fold number {}. Indexes used in cross validation: {}".format(
-                        fold, test_index
-                    )
-                )
+                print("Fold number {}. Indexes used in cross validation: {}".format(fold, test_index))
 
     patch_coords = order_dimensions(
         X_train[0]["patch_coords"],
@@ -1021,9 +929,7 @@ def load_3D_efficient_files(
             if check_channel and crop_shape[-1] != img.shape[-1]:
                 raise ValueError(
                     "Channel of the patch size given {} does not correspond with the loaded image {}. "
-                    "Please, check the channels of the images!".format(
-                        crop_shape[-1], img.shape[-1]
-                    )
+                    "Please, check the channels of the images!".format(crop_shape[-1], img.shape[-1])
                 )
 
         if isinstance(file, h5py.File):
@@ -1034,9 +940,7 @@ def load_3D_efficient_files(
     return data_info, data_total_patches
 
 
-def load_img_part_from_efficient_file(
-    filepath, patch_coords, data_axis_order="ZYXC", data_path=None
-):
+def load_img_part_from_efficient_file(filepath, patch_coords, data_axis_order="ZYXC", data_path=None):
     """
     Loads from ``filepath`` the patch determined by ``patch_coords``.
 
@@ -1075,9 +979,7 @@ def load_img_part_from_efficient_file(
 
     slices = tuple(slices)
     data_ordered_slices = tuple(
-        order_dimensions(
-            slices, input_order="ZYXC", output_order=data_axis_order, default_value=0
-        )
+        order_dimensions(slices, input_order="ZYXC", output_order=data_axis_order, default_value=0)
     )
     img = np.squeeze(np.array(img[data_ordered_slices]))
 
@@ -1172,35 +1074,21 @@ def crop_3D_data_with_overlap(
 
     if verbose:
         print("### 3D-OV-CROP ###")
-        print(
-            "Cropping {} images into {} with overlapping . . .".format(
-                data.shape, vol_shape
-            )
-        )
+        print("Cropping {} images into {} with overlapping . . .".format(data.shape, vol_shape))
         print("Minimum overlap selected: {}".format(overlap))
         print("Padding: {}".format(padding))
 
     if data.ndim != 4:
-        raise ValueError(
-            "data expected to be 4 dimensional, given {}".format(data.shape)
-        )
+        raise ValueError("data expected to be 4 dimensional, given {}".format(data.shape))
     if data_mask is not None:
         if data_mask.ndim != 4:
-            raise ValueError(
-                "data_mask expected to be 4 dimensional, given {}".format(
-                    data_mask.shape
-                )
-            )
+            raise ValueError("data_mask expected to be 4 dimensional, given {}".format(data_mask.shape))
         if data.shape[:-1] != data_mask.shape[:-1]:
             raise ValueError(
-                "data and data_mask shapes mismatch: {} vs {}".format(
-                    data.shape[:-1], data_mask.shape[:-1]
-                )
+                "data and data_mask shapes mismatch: {} vs {}".format(data.shape[:-1], data_mask.shape[:-1])
             )
     if len(vol_shape) != 4:
-        raise ValueError(
-            "vol_shape expected to be of length 4, given {}".format(vol_shape)
-        )
+        raise ValueError("vol_shape expected to be of length 4, given {}".format(vol_shape))
     if vol_shape[0] > data.shape[0]:
         raise ValueError(
             "'vol_shape[0]' {} greater than {} (you can reduce 'DATA.PATCH_SIZE' or use 'DATA.REFLECT_TO_COMPLETE_SHAPE')".format(
@@ -1261,17 +1149,11 @@ def crop_3D_data_with_overlap(
         )
     if median_padding:
         padded_data[0 : padding[0], :, :, :] = np.median(data[0, :, :, :])
-        padded_data[
-            padding[0] + data.shape[0] : 2 * padding[0] + data.shape[0], :, :, :
-        ] = np.median(data[-1, :, :, :])
+        padded_data[padding[0] + data.shape[0] : 2 * padding[0] + data.shape[0], :, :, :] = np.median(data[-1, :, :, :])
         padded_data[:, 0 : padding[1], :, :] = np.median(data[:, 0, :, :])
-        padded_data[
-            :, padding[1] + data.shape[1] : 2 * padding[1] + data.shape[0], :, :
-        ] = np.median(data[:, -1, :, :])
+        padded_data[:, padding[1] + data.shape[1] : 2 * padding[1] + data.shape[0], :, :] = np.median(data[:, -1, :, :])
         padded_data[:, :, 0 : padding[2], :] = np.median(data[:, :, 0, :])
-        padded_data[
-            :, :, padding[2] + data.shape[2] : 2 * padding[2] + data.shape[2], :
-        ] = np.median(data[:, :, -1, :])
+        padded_data[:, :, padding[2] + data.shape[2] : 2 * padding[2] + data.shape[2], :] = np.median(data[:, :, -1, :])
     padded_vol_shape = vol_shape
 
     # Calculate overlapping variables
@@ -1282,11 +1164,7 @@ def crop_3D_data_with_overlap(
     # Z
     step_z = int((vol_shape[0] - padding[0] * 2) * overlap_z)
     vols_per_z = math.ceil(data.shape[0] / step_z)
-    last_z = (
-        0
-        if vols_per_z == 1
-        else (((vols_per_z - 1) * step_z) + vol_shape[0]) - padded_data.shape[0]
-    )
+    last_z = 0 if vols_per_z == 1 else (((vols_per_z - 1) * step_z) + vol_shape[0]) - padded_data.shape[0]
     ovz_per_block = last_z // (vols_per_z - 1) if vols_per_z > 1 else 0
     step_z -= ovz_per_block
     last_z -= ovz_per_block * (vols_per_z - 1)
@@ -1294,11 +1172,7 @@ def crop_3D_data_with_overlap(
     # Y
     step_y = int((vol_shape[1] - padding[1] * 2) * overlap_y)
     vols_per_y = math.ceil(data.shape[1] / step_y)
-    last_y = (
-        0
-        if vols_per_y == 1
-        else (((vols_per_y - 1) * step_y) + vol_shape[1]) - padded_data.shape[1]
-    )
+    last_y = 0 if vols_per_y == 1 else (((vols_per_y - 1) * step_y) + vol_shape[1]) - padded_data.shape[1]
     ovy_per_block = last_y // (vols_per_y - 1) if vols_per_y > 1 else 0
     step_y -= ovy_per_block
     last_y -= ovy_per_block * (vols_per_y - 1)
@@ -1306,11 +1180,7 @@ def crop_3D_data_with_overlap(
     # X
     step_x = int((vol_shape[2] - padding[2] * 2) * overlap_x)
     vols_per_x = math.ceil(data.shape[2] / step_x)
-    last_x = (
-        0
-        if vols_per_x == 1
-        else (((vols_per_x - 1) * step_x) + vol_shape[2]) - padded_data.shape[2]
-    )
+    last_x = 0 if vols_per_x == 1 else (((vols_per_x - 1) * step_x) + vol_shape[2]) - padded_data.shape[2]
     ovx_per_block = last_x // (vols_per_x - 1) if vols_per_x > 1 else 0
     step_x -= ovx_per_block
     last_x -= ovx_per_block * (vols_per_x - 1)
@@ -1330,9 +1200,7 @@ def crop_3D_data_with_overlap(
                 )
             )
         )
-        print(
-            "{} patches per (z,y,x) axis".format((vols_per_z, vols_per_x, vols_per_y))
-        )
+        print("{} patches per (z,y,x) axis".format((vols_per_z, vols_per_x, vols_per_y)))
 
     total_vol = vols_per_z * vols_per_y * vols_per_x
     cropped_data = np.zeros((total_vol,) + padded_vol_shape, dtype=data.dtype)
@@ -1346,15 +1214,9 @@ def crop_3D_data_with_overlap(
     for z in range(vols_per_z):
         for y in range(vols_per_y):
             for x in range(vols_per_x):
-                d_z = (
-                    0 if (z * step_z + vol_shape[0]) < padded_data.shape[0] else last_z
-                )
-                d_y = (
-                    0 if (y * step_y + vol_shape[1]) < padded_data.shape[1] else last_y
-                )
-                d_x = (
-                    0 if (x * step_x + vol_shape[2]) < padded_data.shape[2] else last_x
-                )
+                d_z = 0 if (z * step_z + vol_shape[0]) < padded_data.shape[0] else last_z
+                d_y = 0 if (y * step_y + vol_shape[1]) < padded_data.shape[1] else last_y
+                d_x = 0 if (x * step_x + vol_shape[2]) < padded_data.shape[2] else last_x
 
                 cropped_data[c] = padded_data[
                     z * step_z - d_z : z * step_z + vol_shape[0] - d_z,
@@ -1461,9 +1323,7 @@ def merge_3D_data_with_overlap(
     if data_mask is not None:
         if data.shape[:-1] != data_mask.shape[:-1]:
             raise ValueError(
-                "data and data_mask shapes mismatch: {} vs {}".format(
-                    data.shape[:-1], data_mask.shape[:-1]
-                )
+                "data and data_mask shapes mismatch: {} vs {}".format(data.shape[:-1], data_mask.shape[:-1])
             )
 
     if (
@@ -1475,11 +1335,7 @@ def merge_3D_data_with_overlap(
 
     if verbose:
         print("### MERGE-3D-OV-CROP ###")
-        print(
-            "Merging {} images into {} with overlapping . . .".format(
-                data.shape, orig_vol_shape
-            )
-        )
+        print("Merging {} images into {} with overlapping . . .".format(data.shape, orig_vol_shape))
         print("Minimum overlap selected: {}".format(overlap))
         print("Padding: {}".format(padding))
 
@@ -1502,9 +1358,7 @@ def merge_3D_data_with_overlap(
             padding[2] : data_mask.shape[3] - padding[2],
             :,
         ]
-        merged_data_mask = np.zeros(
-            orig_vol_shape[:3] + (data_mask.shape[-1],), dtype=np.float32
-        )
+        merged_data_mask = np.zeros(orig_vol_shape[:3] + (data_mask.shape[-1],), dtype=np.float32)
     ov_map_counter = np.zeros((orig_vol_shape[:-1] + (1,)), dtype=np.uint16)
 
     # Calculate overlapping variables
@@ -1521,11 +1375,7 @@ def merge_3D_data_with_overlap(
     # Z
     step_z = int((pad_input_shape[1] - padding[0] * 2) * overlap_z)
     vols_per_z = math.ceil(orig_vol_shape[0] / step_z)
-    last_z = (
-        0
-        if vols_per_z == 1
-        else (((vols_per_z - 1) * step_z) + pad_input_shape[1]) - padded_vol_shape[0]
-    )
+    last_z = 0 if vols_per_z == 1 else (((vols_per_z - 1) * step_z) + pad_input_shape[1]) - padded_vol_shape[0]
     ovz_per_block = last_z // (vols_per_z - 1) if vols_per_z > 1 else 0
     step_z -= ovz_per_block
     last_z -= ovz_per_block * (vols_per_z - 1)
@@ -1533,11 +1383,7 @@ def merge_3D_data_with_overlap(
     # Y
     step_y = int((pad_input_shape[2] - padding[1] * 2) * overlap_y)
     vols_per_y = math.ceil(orig_vol_shape[1] / step_y)
-    last_y = (
-        0
-        if vols_per_y == 1
-        else (((vols_per_y - 1) * step_y) + pad_input_shape[2]) - padded_vol_shape[1]
-    )
+    last_y = 0 if vols_per_y == 1 else (((vols_per_y - 1) * step_y) + pad_input_shape[2]) - padded_vol_shape[1]
     ovy_per_block = last_y // (vols_per_y - 1) if vols_per_y > 1 else 0
     step_y -= ovy_per_block
     last_y -= ovy_per_block * (vols_per_y - 1)
@@ -1545,11 +1391,7 @@ def merge_3D_data_with_overlap(
     # X
     step_x = int((pad_input_shape[3] - padding[2] * 2) * overlap_x)
     vols_per_x = math.ceil(orig_vol_shape[2] / step_x)
-    last_x = (
-        0
-        if vols_per_x == 1
-        else (((vols_per_x - 1) * step_x) + pad_input_shape[3]) - padded_vol_shape[2]
-    )
+    last_x = 0 if vols_per_x == 1 else (((vols_per_x - 1) * step_x) + pad_input_shape[3]) - padded_vol_shape[2]
     ovx_per_block = last_x // (vols_per_x - 1) if vols_per_x > 1 else 0
     step_x -= ovx_per_block
     last_x -= ovx_per_block * (vols_per_x - 1)
@@ -1570,9 +1412,7 @@ def merge_3D_data_with_overlap(
                 )
             )
         )
-        print(
-            "{} patches per (z,y,x) axis".format((vols_per_z, vols_per_x, vols_per_y))
-        )
+        print("{} patches per (z,y,x) axis".format((vols_per_z, vols_per_x, vols_per_y)))
 
     c = 0
     for z in range(vols_per_z):
@@ -1609,9 +1449,7 @@ def merge_3D_data_with_overlap(
         print("### END MERGE-3D-OV-CROP ###")
 
     if data_mask is not None:
-        merged_data_mask = np.true_divide(merged_data_mask, ov_map_counter).astype(
-            data_mask.dtype
-        )
+        merged_data_mask = np.true_divide(merged_data_mask, ov_map_counter).astype(data_mask.dtype)
         return merged_data, merged_data_mask
     else:
         return merged_data
@@ -1702,29 +1540,21 @@ def extract_3D_patch_with_overlap_yield(
         print("Padding: {}".format(padding))
 
     if len(vol_shape) != 4:
-        raise ValueError(
-            "vol_shape expected to be of length 4, given {}".format(vol_shape)
-        )
+        raise ValueError("vol_shape expected to be of length 4, given {}".format(vol_shape))
 
     t_dim, z_dim, c_dim, y_dim, x_dim = order_dimensions(data.shape, axis_order)
 
     if vol_shape[0] > z_dim:
         raise ValueError(
-            "'vol_shape[0]' {} greater than {} (you can reduce 'DATA.PATCH_SIZE')".format(
-                vol_shape[0], z_dim
-            )
+            "'vol_shape[0]' {} greater than {} (you can reduce 'DATA.PATCH_SIZE')".format(vol_shape[0], z_dim)
         )
     if vol_shape[1] > y_dim:
         raise ValueError(
-            "'vol_shape[1]' {} greater than {} (you can reduce 'DATA.PATCH_SIZE')".format(
-                vol_shape[1], y_dim
-            )
+            "'vol_shape[1]' {} greater than {} (you can reduce 'DATA.PATCH_SIZE')".format(vol_shape[1], y_dim)
         )
     if vol_shape[2] > x_dim:
         raise ValueError(
-            "'vol_shape[2]' {} greater than {} (you can reduce 'DATA.PATCH_SIZE')".format(
-                vol_shape[2], x_dim
-            )
+            "'vol_shape[2]' {} greater than {} (you can reduce 'DATA.PATCH_SIZE')".format(vol_shape[2], x_dim)
         )
     if (
         (overlap[0] >= 1 or overlap[0] < 0)
@@ -1761,11 +1591,7 @@ def extract_3D_patch_with_overlap_yield(
     # Z
     step_z = int((vol_shape[0] - padding[0] * 2) * overlap_z)
     vols_per_z = math.ceil(z_dim / step_z)
-    last_z = (
-        0
-        if vols_per_z == 1
-        else (((vols_per_z - 1) * step_z) + vol_shape[0]) - padded_data_shape[0]
-    )
+    last_z = 0 if vols_per_z == 1 else (((vols_per_z - 1) * step_z) + vol_shape[0]) - padded_data_shape[0]
     ovz_per_block = last_z // (vols_per_z - 1) if vols_per_z > 1 else 0
     step_z -= ovz_per_block
     last_z -= ovz_per_block * (vols_per_z - 1)
@@ -1773,11 +1599,7 @@ def extract_3D_patch_with_overlap_yield(
     # Y
     step_y = int((vol_shape[1] - padding[1] * 2) * overlap_y)
     vols_per_y = math.ceil(y_dim / step_y)
-    last_y = (
-        0
-        if vols_per_y == 1
-        else (((vols_per_y - 1) * step_y) + vol_shape[1]) - padded_data_shape[1]
-    )
+    last_y = 0 if vols_per_y == 1 else (((vols_per_y - 1) * step_y) + vol_shape[1]) - padded_data_shape[1]
     ovy_per_block = last_y // (vols_per_y - 1) if vols_per_y > 1 else 0
     step_y -= ovy_per_block
     last_y -= ovy_per_block * (vols_per_y - 1)
@@ -1785,11 +1607,7 @@ def extract_3D_patch_with_overlap_yield(
     # X
     step_x = int((vol_shape[2] - padding[2] * 2) * overlap_x)
     vols_per_x = math.ceil(x_dim / step_x)
-    last_x = (
-        0
-        if vols_per_x == 1
-        else (((vols_per_x - 1) * step_x) + vol_shape[2]) - padded_data_shape[2]
-    )
+    last_x = 0 if vols_per_x == 1 else (((vols_per_x - 1) * step_x) + vol_shape[2]) - padded_data_shape[2]
     ovx_per_block = last_x // (vols_per_x - 1) if vols_per_x > 1 else 0
     step_x -= ovx_per_block
     last_x -= ovx_per_block * (vols_per_x - 1)
@@ -1809,9 +1627,7 @@ def extract_3D_patch_with_overlap_yield(
                 )
             )
         )
-        print(
-            "{} patches per (z,y,x) axis".format((vols_per_z, vols_per_x, vols_per_y))
-        )
+        print("{} patches per (z,y,x) axis".format((vols_per_z, vols_per_x, vols_per_y)))
 
     vols_in_z = vols_per_z // total_ranks
     vols_per_z_per_rank = vols_in_z
@@ -1823,11 +1639,7 @@ def extract_3D_patch_with_overlap_yield(
     list_of_vols_in_z = []
     z_vol_info = {}
     for i in range(total_ranks):
-        vols = (
-            (vols_per_z // total_ranks) + 1
-            if vols_per_z % total_ranks > i
-            else vols_in_z
-        )
+        vols = (vols_per_z // total_ranks) + 1 if vols_per_z % total_ranks > i else vols_in_z
         for j in range(vols):
             z = c + j
             real_start_z = z * step_z
@@ -1852,15 +1664,9 @@ def extract_3D_patch_with_overlap_yield(
         z = list_of_vols_in_z[rank][0] + _z
         for y in range(vols_per_y):
             for x in range(vols_per_x):
-                d_z = (
-                    0 if (z * step_z + vol_shape[0]) < padded_data_shape[0] else last_z
-                )
-                d_y = (
-                    0 if (y * step_y + vol_shape[1]) < padded_data_shape[1] else last_y
-                )
-                d_x = (
-                    0 if (x * step_x + vol_shape[2]) < padded_data_shape[2] else last_x
-                )
+                d_z = 0 if (z * step_z + vol_shape[0]) < padded_data_shape[0] else last_z
+                d_y = 0 if (y * step_y + vol_shape[1]) < padded_data_shape[1] else last_y
+                d_x = 0 if (x * step_x + vol_shape[2]) < padded_data_shape[2] else last_x
 
                 start_z = max(0, z * step_z - d_z - padding[0])
                 finish_z = min(z * step_z + vol_shape[0] - d_z - padding[0], z_dim)
@@ -1899,23 +1705,11 @@ def extract_3D_patch_with_overlap_yield(
                 img = np.transpose(img, transpose_order)
 
                 pad_z_left = padding[0] - z * step_z - d_z if start_z <= 0 else 0
-                pad_z_right = (
-                    (start_z + vol_shape[0]) - z_dim
-                    if start_z + vol_shape[0] > z_dim
-                    else 0
-                )
+                pad_z_right = (start_z + vol_shape[0]) - z_dim if start_z + vol_shape[0] > z_dim else 0
                 pad_y_left = padding[1] - y * step_y - d_y if start_y <= 0 else 0
-                pad_y_right = (
-                    (start_y + vol_shape[1]) - y_dim
-                    if start_y + vol_shape[1] > y_dim
-                    else 0
-                )
+                pad_y_right = (start_y + vol_shape[1]) - y_dim if start_y + vol_shape[1] > y_dim else 0
                 pad_x_left = padding[2] - x * step_x - d_x if start_x <= 0 else 0
-                pad_x_right = (
-                    (start_x + vol_shape[2]) - x_dim
-                    if start_x + vol_shape[2] > x_dim
-                    else 0
-                )
+                pad_x_right = (start_x + vol_shape[2]) - x_dim if start_x + vol_shape[2] > x_dim else 0
 
                 if img.ndim == 3:
                     img = np.pad(
@@ -2106,9 +1900,7 @@ def load_3d_data_classification(
                 random_state=seed,
             )
         else:
-            skf = StratifiedKFold(
-                n_splits=cross_val_nsplits, shuffle=shuffle_val, random_state=seed
-            )
+            skf = StratifiedKFold(n_splits=cross_val_nsplits, shuffle=shuffle_val, random_state=seed)
             fold = 1
             train_index, test_index = None, None
 
@@ -2130,17 +1922,9 @@ def load_3d_data_classification(
                     break
                 fold += 1
             if len(test_index) > 5:
-                print(
-                    "Fold number {}. Printing the first 5 ids: {}".format(
-                        fold, test_index[:5]
-                    )
-                )
+                print("Fold number {}. Printing the first 5 ids: {}".format(fold, test_index[:5]))
             else:
-                print(
-                    "Fold number {}. Indexes used in cross validation: {}".format(
-                        fold, test_index
-                    )
-                )
+                print("Fold number {}. Indexes used in cross validation: {}".format(fold, test_index))
 
     if create_val:
         print("*** Loaded train data shape is: {}".format(X_data.shape))

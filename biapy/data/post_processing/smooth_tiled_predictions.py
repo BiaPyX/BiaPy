@@ -61,9 +61,7 @@ def _window_2D(window_size, power=2):
         if PLOT_PROGRESS:
             # For demo purpose, let's look once at the window:
             plt.imshow(wind[:, :, 0], cmap="viridis")
-            plt.title(
-                "2D Windowing Function for a Smooth Blending of " "Overlapping Patches"
-            )
+            plt.title("2D Windowing Function for a Smooth Blending of " "Overlapping Patches")
             plt.show()
         cached_2d_windows[key] = wind
     return wind
@@ -84,8 +82,7 @@ def _pad_img(img, window_size, subdivisions):
         # For demo purpose, let's look once at the window:
         plt.imshow(ret)
         plt.title(
-            "Padded Image for Using Tiled Prediction Patches\n"
-            "(notice the reflection effect on the padded borders)"
+            "Padded Image for Using Tiled Prediction Patches\n" "(notice the reflection effect on the padded borders)"
         )
         plt.show()
     return ret
@@ -218,17 +215,13 @@ def _recreate_from_subdivs(subdivs, window_size, subdivisions, padded_out_shape)
         b = 0
         for j in range(0, pady_len - window_size + 1, step):
             windowed_patch = subdivs[a, b]
-            y[i : i + window_size, j : j + window_size] = (
-                y[i : i + window_size, j : j + window_size] + windowed_patch
-            )
+            y[i : i + window_size, j : j + window_size] = y[i : i + window_size, j : j + window_size] + windowed_patch
             b += 1
         a += 1
     return y / (subdivisions**2)
 
 
-def predict_img_with_smooth_windowing(
-    input_img, window_size, subdivisions, n_classes, pred_func
-):
+def predict_img_with_smooth_windowing(input_img, window_size, subdivisions, n_classes, pred_func):
     """
     Apply the `pred_func` function to square patches of the image, and overlap
     the predictions to merge them smoothly.
@@ -284,9 +277,7 @@ def predict_img_with_smooth_windowing(
     return prd
 
 
-def predict_img_with_overlap(
-    input_img, window_size, subdivisions, n_classes, pred_func
-):
+def predict_img_with_overlap(input_img, window_size, subdivisions, n_classes, pred_func):
     """Based on predict_img_with_smooth_windowing but works just with the
     original image instead of creating 8 new ones.
     """

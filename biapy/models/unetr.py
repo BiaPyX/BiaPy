@@ -100,9 +100,7 @@ class UNETR(nn.Module):
         self.ViT_hidd_mult = ViT_hidd_mult
         self.ndim = 3 if len(input_shape) == 4 else 2
         self.n_classes = 1 if n_classes <= 2 else n_classes
-        self.multiclass = (
-            True if n_classes > 2 and output_channels is not None else False
-        )
+        self.multiclass = True if n_classes > 2 and output_channels is not None else False
         self.k_size = k_size
 
         if self.ndim == 3:
@@ -257,21 +255,15 @@ class UNETR(nn.Module):
             elif output_channels in ["BCM", "BCD", "BCDv2"]:
                 self.last_block = conv(num_filters, 3, kernel_size=1, padding="same")
             elif output_channels in ["A"]:
-                self.last_block = conv(
-                    num_filters, self.ndim, kernel_size=1, padding="same"
-                )
+                self.last_block = conv(num_filters, self.ndim, kernel_size=1, padding="same")
         # Other
         else:
-            self.last_block = conv(
-                num_filters, self.n_classes, kernel_size=1, padding="same"
-            )
+            self.last_block = conv(num_filters, self.n_classes, kernel_size=1, padding="same")
 
         # Multi-head: instances + classification
         self.last_class_head = None
         if self.multiclass:
-            self.last_class_head = conv(
-                num_filters, self.n_classes, kernel_size=1, padding="same"
-            )
+            self.last_class_head = conv(num_filters, self.n_classes, kernel_size=1, padding="same")
 
         self.apply(self._init_weights)
 
@@ -289,9 +281,7 @@ class UNETR(nn.Module):
         x = torch.cat((cls_tokens, x), dim=1)
         x = x + self.pos_embed
 
-        skip_connection_index = [
-            self.ViT_hidd_mult * layer for layer in range(1, self.total_upscale_factor)
-        ]
+        skip_connection_index = [self.ViT_hidd_mult * layer for layer in range(1, self.total_upscale_factor)]
         skip_connections = []
         for i, blk in enumerate(self.blocks):
             x = blk(x)
@@ -301,9 +291,7 @@ class UNETR(nn.Module):
         # CNN Decoder
         x = self.bottleneck(self.proj_feat(x[:, 1:, :]))
 
-        for i, layers in enumerate(
-            zip(self.mid_blue_block, self.two_yellow_layers, self.up_green_layers)
-        ):
+        for i, layers in enumerate(zip(self.mid_blue_block, self.two_yellow_layers, self.up_green_layers)):
             blue, yellow, green = layers
             z = self.proj_feat(skip_connections[i])
             z = blue(z)

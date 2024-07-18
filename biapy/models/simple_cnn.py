@@ -47,14 +47,10 @@ class simple_CNN(nn.Module):
             conv(image_shape[-1], firt_block_features, kernel_size=3, padding="same"),
             batchnorm_layer(firt_block_features),
             activation,
-            conv(
-                firt_block_features, firt_block_features, kernel_size=3, padding="same"
-            ),
+            conv(firt_block_features, firt_block_features, kernel_size=3, padding="same"),
             batchnorm_layer(firt_block_features),
             activation,
-            conv(
-                firt_block_features, firt_block_features, kernel_size=5, padding="same"
-            ),
+            conv(firt_block_features, firt_block_features, kernel_size=5, padding="same"),
             pool(2),
             batchnorm_layer(firt_block_features),
             activation,

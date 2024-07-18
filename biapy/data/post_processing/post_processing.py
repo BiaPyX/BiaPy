@@ -147,17 +147,11 @@ def watershed_by_channels(
         for i in tqdm(range(seed_map.shape[0])):
             if len(seed_morph_sequence) != 0:
                 for k, morph_function in enumerate(morph_funcs):
-                    seed_map[i] = morph_function(
-                        seed_map[i], disk(radius=seed_morph_radius[k])
-                    )
+                    seed_map[i] = morph_function(seed_map[i], disk(radius=seed_morph_radius[k]))
 
             if erode_and_dilate_foreground:
-                foreground[i] = binary_dilation(
-                    foreground[i], disk(radius=fore_erosion_radius)
-                )
-                foreground[i] = binary_erosion(
-                    foreground[i], disk(radius=fore_dilation_radius)
-                )
+                foreground[i] = binary_dilation(foreground[i], disk(radius=fore_erosion_radius))
+                foreground[i] = binary_erosion(foreground[i], disk(radius=fore_dilation_radius))
 
         if not image3d:
             seed_map = seed_map.squeeze()
@@ -168,9 +162,7 @@ def watershed_by_channels(
             ths["TH_BINARY_MASK"] = threshold_otsu(data[..., 0])
             ths["TH_CONTOUR"] = threshold_otsu(data[..., 1])
             ths["TH_FOREGROUND"] = ths["TH_BINARY_MASK"] / 2
-        seed_map = (data[..., 0] > ths["TH_BINARY_MASK"]) * (
-            data[..., 1] < ths["TH_CONTOUR"]
-        )
+        seed_map = (data[..., 0] > ths["TH_BINARY_MASK"]) * (data[..., 1] < ths["TH_CONTOUR"])
         foreground = data[..., 0] > ths["TH_FOREGROUND"]
 
         if len(seed_morph_sequence) != 0 or erode_and_dilate_foreground:
@@ -184,9 +176,7 @@ def watershed_by_channels(
             ths["TH_BINARY_MASK"] = threshold_otsu(1 - data[..., 0])
             ths["TH_CONTOUR"] = threshold_otsu(data[..., 0])
             ths["TH_FOREGROUND"] = ths["TH_BINARY_MASK"] / 2
-        seed_map = (1 - data[..., 0] > ths["TH_BINARY_MASK"]) * (
-            data[..., 0] < ths["TH_CONTOUR"]
-        )
+        seed_map = (1 - data[..., 0] > ths["TH_BINARY_MASK"]) * (data[..., 0] < ths["TH_CONTOUR"])
         foreground = 1 - data[..., 0] > ths["TH_FOREGROUND"]
 
         if len(seed_morph_sequence) != 0 or erode_and_dilate_foreground:
@@ -205,9 +195,7 @@ def watershed_by_channels(
             ths["TH_BINARY_MASK"] = threshold_otsu(foreground_probs)
             ths["TH_CONTOUR"] = threshold_otsu(1 - foreground_probs)
             ths["TH_FOREGROUND"] = ths["TH_BINARY_MASK"] / 2
-        seed_map = (foreground_probs > ths["TH_BINARY_MASK"]) * (
-            1 - foreground_probs < ths["TH_CONTOUR"]
-        )
+        seed_map = (foreground_probs > ths["TH_BINARY_MASK"]) * (1 - foreground_probs < ths["TH_CONTOUR"])
         foreground = foreground_probs > ths["TH_FOREGROUND"]
 
         if len(seed_morph_sequence) != 0 or erode_and_dilate_foreground:
@@ -245,9 +233,7 @@ def watershed_by_channels(
             seed_map[z, y, x] = 1
 
         res = (1,) + resolution if len(resolution) == 2 else resolution
-        semantic = -edt.edt(
-            1 - seed_map, anisotropy=res[::-1], black_border=False, order="F"
-        )
+        semantic = -edt.edt(1 - seed_map, anisotropy=res[::-1], black_border=False, order="F")
 
         if len(seed_morph_sequence) != 0 or erode_and_dilate_foreground:
             erode_seed_and_foreground()
@@ -258,9 +244,7 @@ def watershed_by_channels(
         if ths["TYPE"] == "auto":
             ths["TH_BINARY_MASK"] = threshold_otsu(data[..., 0])
             ths["TH_FOREGROUND"] = ths["TH_BINARY_MASK"] / 2
-        seed_map = (data[..., 0] > ths["TH_BINARY_MASK"]) * (
-            data[..., 1] < ths["TH_DISTANCE"]
-        )
+        seed_map = (data[..., 0] > ths["TH_BINARY_MASK"]) * (data[..., 1] < ths["TH_DISTANCE"])
         foreground = semantic > ths["TH_FOREGROUND"]
         seed_map = label(seed_map, connectivity=1)
     elif channels in ["BCD"]:
@@ -293,10 +277,7 @@ def watershed_by_channels(
                 * (data[..., 1] < ths["TH_DISTANCE"])
             )
             background_seed = binary_dilation(
-                (
-                    (data[..., 0] > ths["TH_BINARY_MASK"])
-                    + (data[..., 1] > ths["TH_CONTOUR"])
-                ).astype(np.uint8),
+                ((data[..., 0] > ths["TH_BINARY_MASK"]) + (data[..., 1] > ths["TH_CONTOUR"])).astype(np.uint8),
                 iterations=2,
             )
             seed_map, num = label(seed_map, connectivity=1, return_num=True)
@@ -309,12 +290,8 @@ def watershed_by_channels(
         elif channels == "BDv2":  # 'BDv2'
             if ths["TYPE"] == "auto":
                 ths["TH_BINARY_MASK"] = threshold_otsu(data[..., 0])
-            seed_map = (data[..., 0] > ths["TH_BINARY_MASK"]) * (
-                data[..., 1] < ths["TH_DISTANCE"]
-            )
-            background_seed = binary_dilation(
-                (data[..., 1] < ths["TH_DISTANCE"]).astype(np.uint8), iterations=2
-            )
+            seed_map = (data[..., 0] > ths["TH_BINARY_MASK"]) * (data[..., 1] < ths["TH_DISTANCE"])
+            background_seed = binary_dilation((data[..., 1] < ths["TH_DISTANCE"]).astype(np.uint8), iterations=2)
             seed_map = label(seed_map, connectivity=1)
             background_seed = label(background_seed, connectivity=1)
 
@@ -528,11 +505,7 @@ def ensemble8_2d_predictions(
     _decoded_aug_img = []
     l = int(math.ceil(total_img.shape[0] / batch_size_value))
     for i in range(l):
-        top = (
-            (i + 1) * batch_size_value
-            if (i + 1) * batch_size_value < total_img.shape[0]
-            else total_img.shape[0]
-        )
+        top = (i + 1) * batch_size_value if (i + 1) * batch_size_value < total_img.shape[0] else total_img.shape[0]
         with torch.cuda.amp.autocast():
             r_aux = pred_func(total_img[i * batch_size_value : top])
 
@@ -618,9 +591,7 @@ def ensemble8_2d_predictions(
         return out
 
 
-def ensemble16_3d_predictions(
-    vol, pred_func, axis_order_back, axis_order, device, batch_size_value=1, mode="mean"
-):
+def ensemble16_3d_predictions(vol, pred_func, axis_order_back, axis_order, device, batch_size_value=1, mode="mean"):
     """
     Outputs the mean prediction of a given image generating its 16 possible rotations and flips.
 
@@ -685,48 +656,24 @@ def ensemble16_3d_predictions(
 
         # Make 16 different combinations of the volume
         aug_vols.append(volume)
-        aug_vols.append(
-            rotate(volume, mode="reflect", axes=(2, 1), angle=90, reshape=False)
-        )
-        aug_vols.append(
-            rotate(volume, mode="reflect", axes=(2, 1), angle=180, reshape=False)
-        )
-        aug_vols.append(
-            rotate(volume, mode="reflect", axes=(2, 1), angle=270, reshape=False)
-        )
+        aug_vols.append(rotate(volume, mode="reflect", axes=(2, 1), angle=90, reshape=False))
+        aug_vols.append(rotate(volume, mode="reflect", axes=(2, 1), angle=180, reshape=False))
+        aug_vols.append(rotate(volume, mode="reflect", axes=(2, 1), angle=270, reshape=False))
         volume_aux = np.flip(volume, 0)
         aug_vols.append(volume_aux)
-        aug_vols.append(
-            rotate(volume_aux, mode="reflect", axes=(2, 1), angle=90, reshape=False)
-        )
-        aug_vols.append(
-            rotate(volume_aux, mode="reflect", axes=(2, 1), angle=180, reshape=False)
-        )
-        aug_vols.append(
-            rotate(volume_aux, mode="reflect", axes=(2, 1), angle=270, reshape=False)
-        )
+        aug_vols.append(rotate(volume_aux, mode="reflect", axes=(2, 1), angle=90, reshape=False))
+        aug_vols.append(rotate(volume_aux, mode="reflect", axes=(2, 1), angle=180, reshape=False))
+        aug_vols.append(rotate(volume_aux, mode="reflect", axes=(2, 1), angle=270, reshape=False))
         volume_aux = np.flip(volume, 1)
         aug_vols.append(volume_aux)
-        aug_vols.append(
-            rotate(volume_aux, mode="reflect", axes=(2, 1), angle=90, reshape=False)
-        )
-        aug_vols.append(
-            rotate(volume_aux, mode="reflect", axes=(2, 1), angle=180, reshape=False)
-        )
-        aug_vols.append(
-            rotate(volume_aux, mode="reflect", axes=(2, 1), angle=270, reshape=False)
-        )
+        aug_vols.append(rotate(volume_aux, mode="reflect", axes=(2, 1), angle=90, reshape=False))
+        aug_vols.append(rotate(volume_aux, mode="reflect", axes=(2, 1), angle=180, reshape=False))
+        aug_vols.append(rotate(volume_aux, mode="reflect", axes=(2, 1), angle=270, reshape=False))
         volume_aux = np.flip(volume, 2)
         aug_vols.append(volume_aux)
-        aug_vols.append(
-            rotate(volume_aux, mode="reflect", axes=(2, 1), angle=90, reshape=False)
-        )
-        aug_vols.append(
-            rotate(volume_aux, mode="reflect", axes=(2, 1), angle=180, reshape=False)
-        )
-        aug_vols.append(
-            rotate(volume_aux, mode="reflect", axes=(2, 1), angle=270, reshape=False)
-        )
+        aug_vols.append(rotate(volume_aux, mode="reflect", axes=(2, 1), angle=90, reshape=False))
+        aug_vols.append(rotate(volume_aux, mode="reflect", axes=(2, 1), angle=180, reshape=False))
+        aug_vols.append(rotate(volume_aux, mode="reflect", axes=(2, 1), angle=270, reshape=False))
         aug_vols = np.array(aug_vols)
 
         # Add the last channel again
@@ -741,11 +688,7 @@ def ensemble16_3d_predictions(
 
     l = int(math.ceil(total_vol.shape[0] / batch_size_value))
     for i in range(l):
-        top = (
-            (i + 1) * batch_size_value
-            if (i + 1) * batch_size_value < total_vol.shape[0]
-            else total_vol.shape[0]
-        )
+        top = (i + 1) * batch_size_value if (i + 1) * batch_size_value < total_vol.shape[0] else total_vol.shape[0]
         with torch.cuda.amp.autocast():
             r_aux = pred_func(total_vol[i * batch_size_value : top])
 
@@ -1032,9 +975,7 @@ def create_th_plot(
         plt.fill_between(ths, y_mean - y_std, y_mean + y_std, alpha=0.25)
         if ideal_value is not None:
             plt.axhline(ideal_value, color="r")
-            trans = transforms.blended_transform_factory(
-                ax.get_yticklabels()[0].get_transform(), ax.transData
-            )
+            trans = transforms.blended_transform_factory(ax.get_yticklabels()[0].get_transform(), ax.transData)
             ax.text(
                 1.12,
                 ideal_value,
@@ -1059,9 +1000,7 @@ def create_th_plot(
     else:
         plt.ylabel("Number of objects")
     p = "_per_validation_sample" if per_sample else ""
-    plt.savefig(
-        os.path.join(chart_dir, str(th_name) + p + ".svg"), format="svg", dpi=100
-    )
+    plt.savefig(os.path.join(chart_dir, str(th_name) + p + ".svg"), format="svg", dpi=100)
     plt.show()
 
 
@@ -1097,15 +1036,9 @@ def voronoi_on_mask(data, mask, th=0, verbose=False):
     if data.ndim != 2 and data.ndim != 3:
         raise ValueError("Data must be 2/3 dimensional, provided {}".format(data.shape))
     if mask.ndim != 3 and mask.ndim != 4:
-        raise ValueError(
-            "Data mask must be 3/4 dimensional, provided {}".format(mask.shape)
-        )
+        raise ValueError("Data mask must be 3/4 dimensional, provided {}".format(mask.shape))
     if mask.shape[-1] < 2:
-        raise ValueError(
-            "Mask needs to have two channels at least, received {}".format(
-                mask.shape[-1]
-            )
-        )
+        raise ValueError("Mask needs to have two channels at least, received {}".format(mask.shape[-1]))
 
     if verbose:
         print("Applying Voronoi {}D . . .".format(data.ndim))
@@ -1132,18 +1065,14 @@ def voronoi_on_mask(data, mask, th=0, verbose=False):
     binaryMask = mask > thresh
 
     # Close to fill holes
-    closedBinaryMask = morphology.closing(binaryMask, morphology.ball(radius=5)).astype(
-        np.uint8
-    )
+    closedBinaryMask = morphology.closing(binaryMask, morphology.ball(radius=5)).astype(np.uint8)
 
     voronoiCyst = data * closedBinaryMask
     binaryVoronoiCyst = (voronoiCyst > 0) * 1
     binaryVoronoiCyst = binaryVoronoiCyst.astype("uint8")
 
     # Cell Perimeter
-    erodedVoronoiCyst = morphology.binary_erosion(
-        binaryVoronoiCyst, morphology.ball(radius=2)
-    )
+    erodedVoronoiCyst = morphology.binary_erosion(binaryVoronoiCyst, morphology.ball(radius=2))
     cellPerimeter = binaryVoronoiCyst - erodedVoronoiCyst
 
     # Define ids to fill where there is mask but no labels
@@ -1159,9 +1088,7 @@ def voronoi_on_mask(data, mask, th=0, verbose=False):
         idSeedMin = np.argwhere(distCoord == np.min(distCoord))
         idSeedMin = idSeedMin[0][1]
         labelPerId[nId] = labelsPerimIds[idSeedMin]
-        voronoiCyst[idsToFill[nId][0], idsToFill[nId][1], idsToFill[nId][2]] = (
-            labelsPerimIds[idSeedMin]
-        )
+        voronoiCyst[idsToFill[nId][0], idsToFill[nId][1], idsToFill[nId][2]] = labelsPerimIds[idSeedMin]
 
     if image3d:
         data = data[0]
@@ -1171,9 +1098,7 @@ def voronoi_on_mask(data, mask, th=0, verbose=False):
     return voronoiCyst
 
 
-def remove_close_points(
-    points, radius, resolution, classes=None, ndim=3, return_drops=False
-):
+def remove_close_points(points, radius, resolution, classes=None, ndim=3, return_drops=False):
     """
     Remove all points from ``point_list`` that are at a ``radius``
     or less distance from each other.
@@ -1244,9 +1169,7 @@ def remove_close_points(
     for node in positions:
         if node not in discard:  # if node already in discard set: skip
             keep.append(node)  # add node to keep list
-            discard.update(
-                neighbors.get(node, set())
-            )  # add node's neighbors to discard set
+            discard.update(neighbors.get(node, set()))  # add node's neighbors to discard set
 
     # points to keep
     new_point_list = [points[i] for i in keep]
@@ -1322,9 +1245,7 @@ def detection_watershed(
 
     # Read the test image
     img = read_img(data_filename, is_3d=ndim == 3)
-    img = reduce_dtype(
-        img, np.min(img), np.max(img), out_min=0, out_max=255, out_type=np.uint8
-    )
+    img = reduce_dtype(img, np.min(img), np.max(img), out_min=0, out_max=255, out_type=np.uint8)
     img = equalize_adapthist(img)
 
     # Dilate first the seeds if needed
@@ -1334,10 +1255,9 @@ def detection_watershed(
     new_seeds = np.zeros(seeds.shape, dtype=seeds.dtype)
     for i in range(nclasses):
         if all(x != 0 for x in first_dilation[i]):
-            new_seeds += (
-                binary_dilation(seeds == i + 1, structure=np.ones(first_dilation[i]))
-                * (i + 1)
-            ).astype(np.uint8)
+            new_seeds += (binary_dilation(seeds == i + 1, structure=np.ones(first_dilation[i])) * (i + 1)).astype(
+                np.uint8
+            )
             dilated = True
         else:
             new_seeds += ((seeds == i + 1) * (i + 1)).astype(np.uint8)
@@ -1372,12 +1292,8 @@ def detection_watershed(
                 # Patch coordinates
                 l = seeds[c[0], c[1], c[2]]
                 if ndim == 2:
-                    y1, y2 = max(c[0] - half_spatch[0], 0), min(
-                        c[0] + half_spatch[0], img.shape[0]
-                    )
-                    x1, x2 = max(c[1] - half_spatch[1], 0), min(
-                        c[1] + half_spatch[1], img.shape[1]
-                    )
+                    y1, y2 = max(c[0] - half_spatch[0], 0), min(c[0] + half_spatch[0], img.shape[0])
+                    x1, x2 = max(c[1] - half_spatch[1], 0), min(c[1] + half_spatch[1], img.shape[1])
                     img_patch = img[y1:y2, x1:x2]
                     seed_patch = seeds[y1:y2, x1:x2]
 
@@ -1385,15 +1301,9 @@ def detection_watershed(
                     line_y = img_patch[:, half_spatch[1]]
                     line_x = img_patch[half_spatch[0], :]
                 else:
-                    z1, z2 = max(c[0] - half_spatch[0], 0), min(
-                        c[0] + half_spatch[0], img.shape[0]
-                    )
-                    y1, y2 = max(c[1] - half_spatch[1], 0), min(
-                        c[1] + half_spatch[1], img.shape[1]
-                    )
-                    x1, x2 = max(c[2] - half_spatch[2], 0), min(
-                        c[2] + half_spatch[2], img.shape[2]
-                    )
+                    z1, z2 = max(c[0] - half_spatch[0], 0), min(c[0] + half_spatch[0], img.shape[0])
+                    y1, y2 = max(c[1] - half_spatch[1], 0), min(c[1] + half_spatch[1], img.shape[1])
+                    x1, x2 = max(c[2] - half_spatch[2], 0), min(c[2] + half_spatch[2], img.shape[2])
                     img_patch = img[z1:z2, y1:y2, x1:x2]
                     seed_patch = seeds[z1:z2, y1:y2, x1:x2]
 
@@ -1405,42 +1315,26 @@ def detection_watershed(
                 seed_patch = (seed_patch == l) * l
                 fillable_patch = fillable_patch == 0
 
-                aux = np.expand_dims(
-                    np.expand_dims((img_patch).astype(np.float32), -1), 0
-                )
-                save_tif(
-                    aux, class_check_dir, ["{}_patch.tif".format(l)], verbose=False
-                )
+                aux = np.expand_dims(np.expand_dims((img_patch).astype(np.float32), -1), 0)
+                save_tif(aux, class_check_dir, ["{}_patch.tif".format(l)], verbose=False)
 
                 # Save the verticial and horizontal lines in the patch to debug
                 patch_y = np.zeros(img_patch.shape, dtype=np.float32)
                 if ndim == 2:
                     patch_y[:, half_spatch[1]] = img_patch[:, half_spatch[1]]
                 else:
-                    patch_y[half_spatch[0], :, half_spatch[2]] = img_patch[
-                        half_spatch[0], :, half_spatch[2]
-                    ]
+                    patch_y[half_spatch[0], :, half_spatch[2]] = img_patch[half_spatch[0], :, half_spatch[2]]
 
-                aux = np.expand_dims(
-                    np.expand_dims((patch_y).astype(np.float32), -1), 0
-                )
-                save_tif(
-                    aux, class_check_dir, ["{}_y_line.tif".format(l)], verbose=False
-                )
+                aux = np.expand_dims(np.expand_dims((patch_y).astype(np.float32), -1), 0)
+                save_tif(aux, class_check_dir, ["{}_y_line.tif".format(l)], verbose=False)
 
                 patch_x = np.zeros(img_patch.shape, dtype=np.float32)
                 if ndim == 2:
                     patch_x[half_spatch[0], :] = img_patch[half_spatch[0], :]
                 else:
-                    patch_x[half_spatch[0], half_spatch[1], :] = img_patch[
-                        half_spatch[0], half_spatch[1], :
-                    ]
-                aux = np.expand_dims(
-                    np.expand_dims((patch_x).astype(np.float32), -1), 0
-                )
-                save_tif(
-                    aux, class_check_dir, ["{}_x_line.tif".format(l)], verbose=False
-                )
+                    patch_x[half_spatch[0], half_spatch[1], :] = img_patch[half_spatch[0], half_spatch[1], :]
+                aux = np.expand_dims(np.expand_dims((patch_x).astype(np.float32), -1), 0)
+                save_tif(aux, class_check_dir, ["{}_x_line.tif".format(l)], verbose=False)
                 # Save vertical and horizontal line plots to debug
                 plt.title("Line graph")
                 plt.plot(list(range(len(line_y))), line_y, color="red")
@@ -1458,15 +1352,11 @@ def detection_watershed(
                 # Save vertical and horizontal lines again but now filtered
                 plt.title("Line graph")
                 plt.plot(list(range(len(line_y))), line_y, color="red")
-                plt.savefig(
-                    os.path.join(class_check_dir, "{}_line_y_filtered.png".format(l))
-                )
+                plt.savefig(os.path.join(class_check_dir, "{}_line_y_filtered.png".format(l)))
                 plt.clf()
                 plt.title("Line graph")
                 plt.plot(list(range(len(line_x))), line_x, color="red")
-                plt.savefig(
-                    os.path.join(class_check_dir, "{}_line_x_filtered.png".format(l))
-                )
+                plt.savefig(os.path.join(class_check_dir, "{}_line_x_filtered.png".format(l)))
                 plt.clf()
 
                 # Find maximums
@@ -1539,10 +1429,8 @@ def detection_watershed(
                             x_diff_dilation - first_dilation[dclass - 1][1],
                         ]
                         donuts_cell_dilation = [
-                            donuts_cell_dilation[0]
-                            - int(donuts_cell_dilation[0] * 0.4),
-                            donuts_cell_dilation[1]
-                            - int(donuts_cell_dilation[1] * 0.4),
+                            donuts_cell_dilation[0] - int(donuts_cell_dilation[0] * 0.4),
+                            donuts_cell_dilation[1] - int(donuts_cell_dilation[1] * 0.4),
                         ]
                     else:
                         donuts_cell_dilation = [
@@ -1552,53 +1440,35 @@ def detection_watershed(
                         ]
                         donuts_cell_dilation = [
                             donuts_cell_dilation[0],
-                            donuts_cell_dilation[1]
-                            - int(donuts_cell_dilation[1] * 0.4),
-                            donuts_cell_dilation[2]
-                            - int(donuts_cell_dilation[2] * 0.4),
+                            donuts_cell_dilation[1] - int(donuts_cell_dilation[1] * 0.4),
+                            donuts_cell_dilation[2] - int(donuts_cell_dilation[2] * 0.4),
                         ]
 
                     # If the center is not wide the cell is not very large
                     dilate = True
                     if x_diff_dilation + y_diff_dilation < donuts_nucleus_diameter * 2:
-                        print(
-                            "Instance {} has 'donuts' shape but it seems to be not very large!".format(
-                                l
-                            )
-                        )
+                        print("Instance {} has 'donuts' shape but it seems to be not very large!".format(l))
                     else:
                         print("Instance {} has 'donuts' shape!".format(l))
                         if not y_left_gradient:
-                            print(
-                                "    - Its vertical left part seems to have low gradient"
-                            )
+                            print("    - Its vertical left part seems to have low gradient")
                             dilate = False
                         if not y_right_gradient:
-                            print(
-                                "    - Its vertical right part seems to have low gradient"
-                            )
+                            print("    - Its vertical right part seems to have low gradient")
                             dilate = False
                         if not x_left_gradient:
-                            print(
-                                "    - Its horizontal left part seems to have low gradient"
-                            )
+                            print("    - Its horizontal left part seems to have low gradient")
                             dilate = False
                         if not x_right_gradient:
-                            print(
-                                "    - Its horizontal right part seems to have low gradient"
-                            )
+                            print("    - Its horizontal right part seems to have low gradient")
                             dilate = False
                     if dilate:
                         if all(x > 0 for x in donuts_cell_dilation):
-                            seed_patch = grey_dilation(
-                                seed_patch, footprint=np.ones((donuts_cell_dilation))
-                            )
+                            seed_patch = grey_dilation(seed_patch, footprint=np.ones((donuts_cell_dilation)))
                             if ndim == 2:
                                 seeds[y1:y2, x1:x2] += seed_patch * fillable_patch
                             else:
-                                seeds[z1:z2, y1:y2, x1:x2] += (
-                                    seed_patch * fillable_patch
-                                )
+                                seeds[z1:z2, y1:y2, x1:x2] += seed_patch * fillable_patch
                     else:
                         print("    - Not dilating it!")
                 else:
@@ -1805,12 +1675,8 @@ def measure_morphological_props_and_filter(
                 (props["bbox-3"][k] - props["bbox-1"][k]) // 2,
             ]
             perimeter = props["perimeter"][k]
-            elongations[label_index] = (
-                (perimeter * perimeter) / (4 * math.pi * pixels) if pixels > 0 else 0
-            )
-            circularity = (
-                (4 * math.pi * pixels) / (perimeter * perimeter) if perimeter > 0 else 0
-            )
+            elongations[label_index] = (perimeter * perimeter) / (4 * math.pi * pixels) if pixels > 0 else 0
+            circularity = (4 * math.pi * pixels) / (perimeter * perimeter) if perimeter > 0 else 0
 
             perimeters[label_index] = perimeter
             circularities[label_index] = circularity
@@ -1832,14 +1698,11 @@ def measure_morphological_props_and_filter(
             lst = [[] for i in range(total_labels + 1)]
             for i in fs:
                 lst[int(cs[i[0]])].append(i)
-            surface_area = [
-                0 if len(i) == 0 else mesh_surface_area(vts, i) for i in lst
-            ]
+            surface_area = [0 if len(i) == 0 else mesh_surface_area(vts, i) for i in lst]
 
             for i in range(total_labels):
                 sphericity = (
-                    (36 * math.pi * pixels * pixels)
-                    / (surface_area[i + 1] * surface_area[i + 1] * surface_area[i + 1])
+                    (36 * math.pi * pixels * pixels) / (surface_area[i + 1] * surface_area[i + 1] * surface_area[i + 1])
                     if surface_area[i + 1] > 0
                     else 0
                 )
@@ -1960,11 +1823,7 @@ def find_neighbors(img, label, neighbors=1):
                         z = min(max(coord[0] + i, 0), img.shape[0] - 1)
                         y = min(max(coord[1] + j, 0), img.shape[1] - 1)
                         x = min(max(coord[2] + k, 0), img.shape[2] - 1)
-                        if (
-                            img[z, y, x] not in list_of_neighbors
-                            and img[z, y, x] != label
-                            and img[z, y, x] != 0
-                        ):
+                        if img[z, y, x] not in list_of_neighbors and img[z, y, x] != label and img[z, y, x] != 0:
                             list_of_neighbors.append(img[z, y, x])
     else:
         for p in range(len(label_points[0])):
@@ -1973,11 +1832,7 @@ def find_neighbors(img, label, neighbors=1):
                 for j in range(-neighbors, neighbors + 1):
                     y = min(max(coord[0] + i, 0), img.shape[0] - 1)
                     x = min(max(coord[1] + j, 0), img.shape[1] - 1)
-                    if (
-                        img[y, x] not in list_of_neighbors
-                        and img[y, x] != label
-                        and img[y, x] != 0
-                    ):
+                    if img[y, x] not in list_of_neighbors and img[y, x] != label and img[y, x] != 0:
                         list_of_neighbors.append(img[y, x])
     return list_of_neighbors
 
@@ -2040,23 +1895,12 @@ def repare_large_blobs(img, size_th=10000):
                         neig_sy, neig_fy = props["bbox-1"][ind], props["bbox-4"][ind]
                         neig_sx, neig_fx = props["bbox-2"][ind], props["bbox-5"][ind]
 
-                        if (
-                            neig_sz < sz
-                            or neig_fz > fz
-                            or neig_sy < sy
-                            or neig_fy > fy
-                            or neig_sx < sx
-                            or neig_fx > fx
-                        ):
-                            neigbor_ind_in_patch = list(inst_patches).index(
-                                neighbors[i]
-                            )
+                        if neig_sz < sz or neig_fz > fz or neig_sy < sy or neig_fy > fy or neig_sx < sx or neig_fx > fx:
+                            neigbor_ind_in_patch = list(inst_patches).index(neighbors[i])
                             pixels_in_patch = inst_pixels[neigbor_ind_in_patch]
                             # pixels outside the patch of that neighbor are greater than 30% means that probably it will
                             # represent another blob so do not merge
-                            if (props["area"][ind][0] - pixels_in_patch) / props[
-                                "area"
-                            ][ind][0] > 0.30:
+                            if (props["area"][ind][0] - pixels_in_patch) / props["area"][ind][0] > 0.30:
                                 contained_in_large_blob = False
                     else:
                         neig_sy, neig_fy = props["bbox-0"][ind], props["bbox-2"][ind]
@@ -2107,9 +1951,7 @@ def apply_binary_mask(X, bin_mask_dir):
     """
 
     if X.ndim != 4 and X.ndim != 3:
-        raise ValueError(
-            "'X' needs to have 3 or 4 dimensions and not {}".format(X.ndim)
-        )
+        raise ValueError("'X' needs to have 3 or 4 dimensions and not {}".format(X.ndim))
 
     print("Applying binary mask(s) from {}".format(bin_mask_dir))
 
@@ -2118,9 +1960,7 @@ def apply_binary_mask(X, bin_mask_dir):
     if len(ids) == 1:
         one_file = True
         print(
-            "It is assumed that the mask found {} is valid for all 'X' data".format(
-                os.path.join(bin_mask_dir, ids[0])
-            )
+            "It is assumed that the mask found {} is valid for all 'X' data".format(os.path.join(bin_mask_dir, ids[0]))
         )
     else:
         one_file = False

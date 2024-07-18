@@ -53,9 +53,7 @@ class Super_resolution_Workflow(Base_Workflow):
     """
 
     def __init__(self, cfg, job_identifier, device, args, **kwargs):
-        super(Super_resolution_Workflow, self).__init__(
-            cfg, job_identifier, device, args, **kwargs
-        )
+        super(Super_resolution_Workflow, self).__init__(cfg, job_identifier, device, args, **kwargs)
 
         self.stats["psnr_merge_patches"] = 0
         self.stats["mse_merge_patches"] = 0
@@ -179,18 +177,10 @@ class Super_resolution_Workflow(Base_Workflow):
                 # Metrics computed here, will only be calculated during testing
 
                 # The metrcis below need to have normalized (between 0 and 1) images with 3 channels
-                norm_output = (output - torch.min(output)) / (
-                    torch.max(output) - torch.min(output) + 1e-8
-                )
-                norm_targets = (targets - torch.min(targets)) / (
-                    torch.max(targets) - torch.min(targets) + 1e-8
-                )
-                norm_3c_output = torch.cat(
-                    [norm_output, norm_output, norm_output], dim=1
-                )
-                norm_3c_targets = torch.cat(
-                    [norm_targets, norm_targets, norm_targets], dim=1
-                )
+                norm_output = (output - torch.min(output)) / (torch.max(output) - torch.min(output) + 1e-8)
+                norm_targets = (targets - torch.min(targets)) / (torch.max(targets) - torch.min(targets) + 1e-8)
+                norm_3c_output = torch.cat([norm_output, norm_output, norm_output], dim=1)
+                norm_3c_targets = torch.cat([norm_targets, norm_targets, norm_targets], dim=1)
 
                 # Update FID (it will be computed on self.after_all_images())
                 self.test_metrics[0].update(norm_3c_output, real=True)
@@ -254,9 +244,7 @@ class Super_resolution_Workflow(Base_Workflow):
 
         # Predict each patch
         if self.cfg.TEST.AUGMENTATION:
-            for k in tqdm(
-                range(self._X.shape[0]), leave=False, disable=not is_main_process()
-            ):
+            for k in tqdm(range(self._X.shape[0]), leave=False, disable=not is_main_process()):
                 if self.cfg.PROBLEM.NDIM == "2D":
                     p = ensemble8_2d_predictions(
                         self._X[k],
@@ -290,9 +278,7 @@ class Super_resolution_Workflow(Base_Workflow):
                 )
                 with torch.cuda.amp.autocast():
                     p = self.model(self._X[k * self.cfg.TRAIN.BATCH_SIZE : top])
-                p = to_numpy_format(
-                    self.apply_model_activations(p), self.axis_order_back
-                )
+                p = to_numpy_format(self.apply_model_activations(p), self.axis_order_back)
                 if "pred" not in locals():
                     pred = np.zeros((self._X.shape[0],) + p.shape[1:], dtype=self.dtype)
                 pred[k * self.cfg.TRAIN.BATCH_SIZE : top] = p
@@ -302,36 +288,20 @@ class Super_resolution_Workflow(Base_Workflow):
         if original_data_shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
             if self.cfg.PROBLEM.NDIM == "3D":
                 original_data_shape = original_data_shape[1:]
-            f_name = (
-                merge_data_with_overlap
-                if self.cfg.PROBLEM.NDIM == "2D"
-                else merge_3D_data_with_overlap
-            )
+            f_name = merge_data_with_overlap if self.cfg.PROBLEM.NDIM == "2D" else merge_3D_data_with_overlap
             if self.cfg.PROBLEM.NDIM == "2D":
-                pad = tuple(
-                    p * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[0]
-                    for p in self.cfg.DATA.TEST.PADDING
-                )
-                ov = tuple(
-                    o * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[1]
-                    for o in self.cfg.DATA.TEST.OVERLAP
-                )
+                pad = tuple(p * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[0] for p in self.cfg.DATA.TEST.PADDING)
+                ov = tuple(o * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[1] for o in self.cfg.DATA.TEST.OVERLAP)
             else:
                 pad = (
-                    self.cfg.DATA.TEST.PADDING[0]
-                    * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[0],
-                    self.cfg.DATA.TEST.PADDING[1]
-                    * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[1],
-                    self.cfg.DATA.TEST.PADDING[2]
-                    * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[2],
+                    self.cfg.DATA.TEST.PADDING[0] * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[0],
+                    self.cfg.DATA.TEST.PADDING[1] * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[1],
+                    self.cfg.DATA.TEST.PADDING[2] * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[2],
                 )
                 ov = (
-                    self.cfg.DATA.TEST.OVERLAP[0]
-                    * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[0],
-                    self.cfg.DATA.TEST.OVERLAP[1]
-                    * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[1],
-                    self.cfg.DATA.TEST.OVERLAP[2]
-                    * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[2],
+                    self.cfg.DATA.TEST.OVERLAP[0] * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[0],
+                    self.cfg.DATA.TEST.OVERLAP[1] * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[1],
+                    self.cfg.DATA.TEST.OVERLAP[2] * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[2],
                 )
             pred = f_name(
                 pred,
@@ -351,9 +321,7 @@ class Super_resolution_Workflow(Base_Workflow):
         if x_norm["type"] == "div":
             pred = undo_norm_range01(pred, x_norm)
         elif x_norm["type"] == "scale_range":
-            pred = undo_norm_range01(
-                pred, x_norm, x_norm["min_val_scale"], x_norm["max_val_scale"]
-            )
+            pred = undo_norm_range01(pred, x_norm, x_norm["min_val_scale"], x_norm["max_val_scale"])
         else:
             pred = denormalize(pred, x_norm["mean"], x_norm["std"])
 
@@ -461,9 +429,7 @@ class Super_resolution_Workflow(Base_Workflow):
         train_fid = train_fid.item() if not torch.isnan(train_fid) else 0
         self.stats["fid_merge_patches"] = train_fid
 
-        train_is = self.test_metrics[1].compute()[
-            0
-        ]  # It returns a the mean and the std, we only need the mean
+        train_is = self.test_metrics[1].compute()[0]  # It returns a the mean and the std, we only need the mean
         train_is = train_is.item() if not torch.isnan(train_is) else 0
         self.stats["iscore_merge_patches"] = train_is
 
@@ -482,18 +448,10 @@ class Super_resolution_Workflow(Base_Workflow):
         image_counter : int
             Number of images to average the metrics.
         """
-        self.stats["psnr_merge_patches"] = (
-            self.stats["psnr_merge_patches"] / image_counter
-        )
-        self.stats["mse_merge_patches"] = (
-            self.stats["mse_merge_patches"] / image_counter
-        )
-        self.stats["mae_merge_patches"] = (
-            self.stats["mae_merge_patches"] / image_counter
-        )
-        self.stats["ssim_merge_patches"] = (
-            self.stats["ssim_merge_patches"] / image_counter
-        )
+        self.stats["psnr_merge_patches"] = self.stats["psnr_merge_patches"] / image_counter
+        self.stats["mse_merge_patches"] = self.stats["mse_merge_patches"] / image_counter
+        self.stats["mae_merge_patches"] = self.stats["mae_merge_patches"] / image_counter
+        self.stats["ssim_merge_patches"] = self.stats["ssim_merge_patches"] / image_counter
 
         # FID, IS and LPIPS are already normalized
 
@@ -509,27 +467,11 @@ class Super_resolution_Workflow(Base_Workflow):
         self.normalize_stats(image_counter)
 
         if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
-            print(
-                "Test PSNR (merge patches): {}".format(self.stats["psnr_merge_patches"])
-            )
-            print(
-                "Test MSE (merge patches): {}".format(self.stats["mse_merge_patches"])
-            )
-            print(
-                "Test MAE (merge patches): {}".format(self.stats["mae_merge_patches"])
-            )
-            print(
-                "Test SSIM (merge patches): {}".format(self.stats["ssim_merge_patches"])
-            )
-            print(
-                "Test FID (merge patches): {}".format(self.stats["fid_merge_patches"])
-            )
-            print(
-                "Test IS (merge patches): {}".format(self.stats["iscore_merge_patches"])
-            )
-            print(
-                "Test LPIPS (merge patches): {}".format(
-                    self.stats["lpips_merge_patches"]
-                )
-            )
+            print("Test PSNR (merge patches): {}".format(self.stats["psnr_merge_patches"]))
+            print("Test MSE (merge patches): {}".format(self.stats["mse_merge_patches"]))
+            print("Test MAE (merge patches): {}".format(self.stats["mae_merge_patches"]))
+            print("Test SSIM (merge patches): {}".format(self.stats["ssim_merge_patches"]))
+            print("Test FID (merge patches): {}".format(self.stats["fid_merge_patches"]))
+            print("Test IS (merge patches): {}".format(self.stats["iscore_merge_patches"]))
+            print("Test LPIPS (merge patches): {}".format(self.stats["lpips_merge_patches"]))
             print(" ")

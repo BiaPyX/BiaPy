@@ -180,12 +180,8 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.post_processing["per_image"] = True
 
         # Define permute shapes to pass from Numpy axis order (Y,X,C) to Pytorch's (C,Y,X)
-        self.axis_order = (
-            (0, 3, 1, 2) if self.cfg.PROBLEM.NDIM == "2D" else (0, 4, 1, 2, 3)
-        )
-        self.axis_order_back = (
-            (0, 2, 3, 1) if self.cfg.PROBLEM.NDIM == "2D" else (0, 2, 3, 4, 1)
-        )
+        self.axis_order = (0, 3, 1, 2) if self.cfg.PROBLEM.NDIM == "2D" else (0, 4, 1, 2, 3)
+        self.axis_order_back = (0, 2, 3, 1) if self.cfg.PROBLEM.NDIM == "2D" else (0, 2, 3, 4, 1)
 
         # Define metrics
         self.define_metrics()
@@ -200,9 +196,7 @@ class Base_Workflow(metaclass=ABCMeta):
             self.bmz_config["preprocessing"] = check_bmz_model_compatibility(self.cfg)
 
             print("Loading BioImage Model Zoo pretrained model . . .")
-            self.bmz_config["original_bmz_config"] = load_description(
-                self.cfg.MODEL.BMZ.SOURCE_MODEL_ID
-            )
+            self.bmz_config["original_bmz_config"] = load_description(self.cfg.MODEL.BMZ.SOURCE_MODEL_ID)
 
             # let's make sure we have a valid model...
             if isinstance(self.bmz_config["original_bmz_config"], InvalidDescr):
@@ -219,18 +213,14 @@ class Base_Workflow(metaclass=ABCMeta):
             elif "raw" in inputs.members:
                 input_image_shape = inputs.members["raw"]._data.shape
             else:
-                raise ValueError(
-                    f"Couldn't load input info from BMZ model's RDF: {inputs}"
-                )
+                raise ValueError(f"Couldn't load input info from BMZ model's RDF: {inputs}")
             # if not self.bmz_config['original_model_spec_version']:
             #     input_image = np.load(download(self.bmz_config['original_bmz_config'].test_inputs[0]).path)
             # else:
             #     input_image = np.load(download(self.bmz_config['original_bmz_config'].inputs[0].test_tensor.source.absolute()).path)
 
             opts = []
-            if self.cfg.DATA.PATCH_SIZE != input_image_shape[2:] + (
-                input_image_shape[1],
-            ):
+            if self.cfg.DATA.PATCH_SIZE != input_image_shape[2:] + (input_image_shape[1],):
                 opts += [
                     "DATA.PATCH_SIZE",
                     input_image_shape[2:] + (input_image_shape[1],),
@@ -245,22 +235,12 @@ class Base_Workflow(metaclass=ABCMeta):
             print(
                 f"[BMZ] Overriding preprocessing steps to the ones fixed in BMZ model: {self.bmz_config['preprocessing']}"
             )
-            if (
-                isinstance(self.bmz_config["preprocessing"], list)
-                and len(self.bmz_config["preprocessing"]) > 1
-            ):
-                raise ValueError(
-                    "More than one preprocessing from BMZ not implemented yet"
-                )
+            if isinstance(self.bmz_config["preprocessing"], list) and len(self.bmz_config["preprocessing"]) > 1:
+                raise ValueError("More than one preprocessing from BMZ not implemented yet")
 
             # Translate BMZ keywords into BiaPy's
             if len(self.bmz_config["preprocessing"]) > 0:
-                app_mode = (
-                    "dataset"
-                    if self.bmz_config["preprocessing"]["kwargs"]["mode"]
-                    == "per_dataset"
-                    else "image"
-                )
+                app_mode = "dataset" if self.bmz_config["preprocessing"]["kwargs"]["mode"] == "per_dataset" else "image"
                 if app_mode != self.cfg.DATA.NORMALIZATION.APPLICATION_MODE:
                     opts += ["DATA.NORMALIZATION.APPLICATION_MODE", app_mode]
                     print(
@@ -269,30 +249,19 @@ class Base_Workflow(metaclass=ABCMeta):
                         )
                     )
 
-                if (
-                    self.cfg.TRAIN.ENABLE
-                    and not self.cfg.DATA.TRAIN.IN_MEMORY
-                    and app_mode == "dataset"
-                ):
+                if self.cfg.TRAIN.ENABLE and not self.cfg.DATA.TRAIN.IN_MEMORY and app_mode == "dataset":
                     raise ValueError(
                         "The BioImage Model Zoo model selected changed your normalization settings. Due to that the following error "
                         "appear:\n'DATA.NORMALIZATION.APPLICATION_MODE' == 'dataset' can only be applied if 'DATA.TRAIN.IN_MEMORY' == True"
                     )
-                if (
-                    self.cfg.TEST.ENABLE
-                    and not self.cfg.DATA.TEST.IN_MEMORY
-                    and app_mode == "dataset"
-                ):
+                if self.cfg.TEST.ENABLE and not self.cfg.DATA.TEST.IN_MEMORY and app_mode == "dataset":
                     raise ValueError(
                         "The BioImage Model Zoo model selected changed your normalization settings. Due to that the following error "
                         "appear:\n'DATA.NORMALIZATION.APPLICATION_MODE' == 'dataset' can only be applied if 'DATA.TEST.IN_MEMORY' == True"
                     )
 
                 # 'zero_mean_unit_variance' norm of BMZ is as our 'custom' norm without providing mean/std
-                if (
-                    self.bmz_config["preprocessing"]["name"]
-                    == "zero_mean_unit_variance"
-                ):
+                if self.bmz_config["preprocessing"]["name"] == "zero_mean_unit_variance":
                     opts += [
                         "DATA.NORMALIZATION.TYPE",
                         "custom",
@@ -338,30 +307,16 @@ class Base_Workflow(metaclass=ABCMeta):
                             )
                         )
                     if (
-                        float(
-                            self.bmz_config["preprocessing"]["kwargs"]["min_percentile"]
-                        )
-                        != 0
-                        or float(
-                            self.bmz_config["preprocessing"]["kwargs"]["max_percentile"]
-                        )
-                        != 100
+                        float(self.bmz_config["preprocessing"]["kwargs"]["min_percentile"]) != 0
+                        or float(self.bmz_config["preprocessing"]["kwargs"]["max_percentile"]) != 100
                     ):
                         opts += [
                             "DATA.NORMALIZATION.PERC_CLIP",
                             True,
                             "DATA.NORMALIZATION.PERC_LOWER",
-                            float(
-                                self.bmz_config["preprocessing"]["kwargs"][
-                                    "min_percentile"
-                                ]
-                            ),
+                            float(self.bmz_config["preprocessing"]["kwargs"]["min_percentile"]),
                             "DATA.NORMALIZATION.PERC_UPPER",
-                            float(
-                                self.bmz_config["preprocessing"]["kwargs"][
-                                    "max_percentile"
-                                ]
-                            ),
+                            float(self.bmz_config["preprocessing"]["kwargs"]["max_percentile"]),
                         ]
                         if not self.cfg.DATA.NORMALIZATION.PERC_CLIP:
                             print(
@@ -371,30 +326,22 @@ class Base_Workflow(metaclass=ABCMeta):
                             )
                         if (
                             self.cfg.DATA.NORMALIZATION.PERC_LOWER
-                            != self.bmz_config["preprocessing"]["kwargs"][
-                                "min_percentile"
-                            ]
+                            != self.bmz_config["preprocessing"]["kwargs"]["min_percentile"]
                         ):
                             print(
                                 "[BMZ] Changed 'DATA.NORMALIZATION.PERC_LOWER' from {} to {} as defined in the RDF".format(
                                     self.cfg.DATA.NORMALIZATION.PERC_LOWER,
-                                    self.bmz_config["preprocessing"]["kwargs"][
-                                        "min_percentile"
-                                    ],
+                                    self.bmz_config["preprocessing"]["kwargs"]["min_percentile"],
                                 )
                             )
                         if (
                             self.cfg.DATA.NORMALIZATION.PERC_UPPER
-                            != self.bmz_config["preprocessing"]["kwargs"][
-                                "max_percentile"
-                            ]
+                            != self.bmz_config["preprocessing"]["kwargs"]["max_percentile"]
                         ):
                             print(
                                 "[BMZ] Changed 'DATA.NORMALIZATION.PERC_UPPER' from {} to {} as defined in the RDF".format(
                                     self.cfg.DATA.NORMALIZATION.PERC_UPPER,
-                                    self.bmz_config["preprocessing"]["kwargs"][
-                                        "max_percentile"
-                                    ],
+                                    self.bmz_config["preprocessing"]["kwargs"]["max_percentile"],
                                 )
                             )
 
@@ -470,22 +417,10 @@ class Base_Workflow(metaclass=ABCMeta):
             print("##########################")
             self.X_val, self.Y_val = None, None
             if self.cfg.DATA.TRAIN.IN_MEMORY:
-                val_split = (
-                    self.cfg.DATA.VAL.SPLIT_TRAIN
-                    if self.cfg.DATA.VAL.FROM_TRAIN
-                    else 0.0
-                )
-                f_name = (
-                    load_and_prepare_2D_train_data
-                    if self.cfg.PROBLEM.NDIM == "2D"
-                    else load_and_prepare_3D_data
-                )
-                preprocess_cfg = (
-                    self.cfg.DATA.PREPROCESS if self.cfg.DATA.PREPROCESS.TRAIN else None
-                )
-                preprocess_fn = (
-                    preprocess_data if self.cfg.DATA.PREPROCESS.TRAIN else None
-                )
+                val_split = self.cfg.DATA.VAL.SPLIT_TRAIN if self.cfg.DATA.VAL.FROM_TRAIN else 0.0
+                f_name = load_and_prepare_2D_train_data if self.cfg.PROBLEM.NDIM == "2D" else load_and_prepare_3D_data
+                preprocess_cfg = self.cfg.DATA.PREPROCESS if self.cfg.DATA.PREPROCESS.TRAIN else None
+                preprocess_fn = preprocess_data if self.cfg.DATA.PREPROCESS.TRAIN else None
                 is_y_mask = self.cfg.PROBLEM.TYPE in ["SEMANTIC_SEG", "INSTANCE_SEG"]
                 objs = f_name(
                     self.cfg.DATA.TRAIN.PATH,
@@ -539,31 +474,16 @@ class Base_Workflow(metaclass=ABCMeta):
                     and (len(zarr_files) > 0 and ".zarr" in zarr_files[0])
                     or (len(h5_files) > 0 and ".h5" in h5_files[0])
                 ):
-                    val_split = (
-                        self.cfg.DATA.VAL.SPLIT_TRAIN
-                        if self.cfg.DATA.VAL.FROM_TRAIN
-                        else 0.0
-                    )
+                    val_split = self.cfg.DATA.VAL.SPLIT_TRAIN if self.cfg.DATA.VAL.FROM_TRAIN else 0.0
 
                     if len(zarr_files) > 0 and ".zarr" in zarr_files[0]:
                         print("Working with Zarr files . . .")
-                        img_files = [
-                            os.path.join(self.cfg.DATA.TRAIN.PATH, x)
-                            for x in zarr_files
-                        ]
-                        mask_files = [
-                            os.path.join(self.mask_path, x)
-                            for x in sorted(next(os.walk(self.mask_path))[1])
-                        ]
+                        img_files = [os.path.join(self.cfg.DATA.TRAIN.PATH, x) for x in zarr_files]
+                        mask_files = [os.path.join(self.mask_path, x) for x in sorted(next(os.walk(self.mask_path))[1])]
                     elif len(h5_files) > 0 and ".h5" in h5_files[0]:
                         print("Working with H5 files . . .")
-                        img_files = [
-                            os.path.join(self.cfg.DATA.TRAIN.PATH, x) for x in h5_files
-                        ]
-                        mask_files = [
-                            os.path.join(self.mask_path, x)
-                            for x in sorted(next(os.walk(self.mask_path))[2])
-                        ]
+                        img_files = [os.path.join(self.cfg.DATA.TRAIN.PATH, x) for x in h5_files]
+                        mask_files = [os.path.join(self.mask_path, x) for x in sorted(next(os.walk(self.mask_path))[2])]
                     del zarr_files, h5_files
 
                     if self.cfg.DATA.EXTRACT_RANDOM_PATCH:
@@ -571,9 +491,7 @@ class Base_Workflow(metaclass=ABCMeta):
                             "WARNING: 'DATA.EXTRACT_RANDOM_PATCH' not taken into account when working with Zarr/H5 images"
                         )
                     if self.cfg.DATA.FORCE_RGB:
-                        print(
-                            "WARNING: 'DATA.FORCE_RGB' not taken into account when working with Zarr/H5 images"
-                        )
+                        print("WARNING: 'DATA.FORCE_RGB' not taken into account when working with Zarr/H5 images")
 
                     # When the labels and raw images are within the same Zarr file
                     mult_dat = None
@@ -627,19 +545,9 @@ class Base_Workflow(metaclass=ABCMeta):
             if not self.cfg.DATA.VAL.FROM_TRAIN:
                 if self.cfg.DATA.VAL.IN_MEMORY:
                     print("1) Loading validation images . . .")
-                    f_name = (
-                        load_data_from_dir
-                        if self.cfg.PROBLEM.NDIM == "2D"
-                        else load_3d_images_from_dir
-                    )
-                    preprocess_cfg = (
-                        self.cfg.DATA.PREPROCESS
-                        if self.cfg.DATA.PREPROCESS.VAL
-                        else None
-                    )
-                    preprocess_fn = (
-                        preprocess_data if self.cfg.DATA.PREPROCESS.VAL else None
-                    )
+                    f_name = load_data_from_dir if self.cfg.PROBLEM.NDIM == "2D" else load_3d_images_from_dir
+                    preprocess_cfg = self.cfg.DATA.PREPROCESS if self.cfg.DATA.PREPROCESS.VAL else None
+                    preprocess_fn = preprocess_data if self.cfg.DATA.PREPROCESS.VAL else None
                     is_y_mask = self.cfg.PROBLEM.TYPE in [
                         "SEMANTIC_SEG",
                         "INSTANCE_SEG",
@@ -659,21 +567,16 @@ class Base_Workflow(metaclass=ABCMeta):
 
                     if self.cfg.PROBLEM.NDIM == "2D":
                         crop_shape = (
-                            self.cfg.DATA.PATCH_SIZE[0]
-                            * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[0],
-                            self.cfg.DATA.PATCH_SIZE[1]
-                            * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[1],
+                            self.cfg.DATA.PATCH_SIZE[0] * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[0],
+                            self.cfg.DATA.PATCH_SIZE[1] * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[1],
                             self.cfg.DATA.PATCH_SIZE[2],
                         )
                     else:
                         crop_shape = (
                             self.cfg.DATA.PATCH_SIZE[0],
-                            self.cfg.DATA.PATCH_SIZE[1]
-                            * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[0],
-                            self.cfg.DATA.PATCH_SIZE[2]
-                            * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[1],
-                            self.cfg.DATA.PATCH_SIZE[3]
-                            * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[2],
+                            self.cfg.DATA.PATCH_SIZE[1] * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[0],
+                            self.cfg.DATA.PATCH_SIZE[2] * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[1],
+                            self.cfg.DATA.PATCH_SIZE[3] * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[2],
                         )
                     if self.load_Y_val:
                         self.Y_val, _, _ = f_name(
@@ -693,9 +596,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     if self.Y_val is not None and len(self.X_val) != len(self.Y_val):
                         raise ValueError(
                             "Different number of raw and ground truth items ({} vs {}). "
-                            "Please check the data!".format(
-                                len(self.X_val), len(self.Y_val)
-                            )
+                            "Please check the data!".format(len(self.X_val), len(self.Y_val))
                         )
                 else:
                     # Checking if the user inputted Zarr/H5 files
@@ -709,40 +610,26 @@ class Base_Workflow(metaclass=ABCMeta):
                         print("1) Loading validation image information . . .")
                         if len(zarr_files) > 0 and ".zarr" in zarr_files[0]:
                             print("Working with Zarr files . . .")
-                            img_files = [
-                                os.path.join(self.cfg.DATA.VAL.PATH, x)
-                                for x in zarr_files
-                            ]
+                            img_files = [os.path.join(self.cfg.DATA.VAL.PATH, x) for x in zarr_files]
                             mask_files = [
-                                os.path.join(self.mask_path, x)
-                                for x in sorted(next(os.walk(self.mask_path))[1])
+                                os.path.join(self.mask_path, x) for x in sorted(next(os.walk(self.mask_path))[1])
                             ]
                         elif len(h5_files) > 0 and ".h5" in h5_files[0]:
                             print("Working with H5 files . . .")
-                            img_files = [
-                                os.path.join(self.cfg.DATA.VAL.PATH, x)
-                                for x in h5_files
-                            ]
+                            img_files = [os.path.join(self.cfg.DATA.VAL.PATH, x) for x in h5_files]
                             mask_files = [
-                                os.path.join(self.mask_path, x)
-                                for x in sorted(next(os.walk(self.mask_path))[2])
+                                os.path.join(self.mask_path, x) for x in sorted(next(os.walk(self.mask_path))[2])
                             ]
                         del zarr_files, h5_files
 
                         if self.cfg.DATA.FORCE_RGB:
-                            print(
-                                "WARNING: 'DATA.FORCE_RGB' not taken into account when working with Zarr/H5 images"
-                            )
+                            print("WARNING: 'DATA.FORCE_RGB' not taken into account when working with Zarr/H5 images")
 
                         data_within_zarr_path, data_within_zarr_mask_path = None, None
                         if self.cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA:
-                            data_within_zarr_path = (
-                                self.cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH
-                            )
+                            data_within_zarr_path = self.cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH
                             if self.cfg.PROBLEM.TYPE != "INSTANCE_SEG":
-                                data_within_zarr_mask_path = (
-                                    self.cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH
-                                )
+                                data_within_zarr_mask_path = self.cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH
 
                         self.X_val, _ = load_3D_efficient_files(
                             data_path=img_files,
@@ -755,21 +642,16 @@ class Base_Workflow(metaclass=ABCMeta):
 
                         if self.cfg.PROBLEM.NDIM == "2D":
                             crop_shape = (
-                                self.cfg.DATA.PATCH_SIZE[0]
-                                * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[0],
-                                self.cfg.DATA.PATCH_SIZE[1]
-                                * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[1],
+                                self.cfg.DATA.PATCH_SIZE[0] * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[0],
+                                self.cfg.DATA.PATCH_SIZE[1] * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[1],
                                 self.cfg.DATA.PATCH_SIZE[2],
                             )
                         else:
                             crop_shape = (
                                 self.cfg.DATA.PATCH_SIZE[0],
-                                self.cfg.DATA.PATCH_SIZE[1]
-                                * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[0],
-                                self.cfg.DATA.PATCH_SIZE[2]
-                                * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[1],
-                                self.cfg.DATA.PATCH_SIZE[3]
-                                * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[2],
+                                self.cfg.DATA.PATCH_SIZE[1] * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[0],
+                                self.cfg.DATA.PATCH_SIZE[2] * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[1],
+                                self.cfg.DATA.PATCH_SIZE[3] * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[2],
                             )
 
                         if self.load_Y_val:
@@ -785,14 +667,10 @@ class Base_Workflow(metaclass=ABCMeta):
                             )
                         else:
                             self.Y_val = None
-                        if self.Y_val is not None and len(self.X_val) != len(
-                            self.Y_val
-                        ):
+                        if self.Y_val is not None and len(self.X_val) != len(self.Y_val):
                             raise ValueError(
                                 "Different number of raw and ground truth items ({} vs {}). "
-                                "Please check the data!".format(
-                                    len(self.X_val), len(self.Y_val)
-                                )
+                                "Please check the data!".format(len(self.X_val), len(self.Y_val))
                             )
 
                     else:
@@ -843,10 +721,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.world_size,
                 self.global_rank,
             )
-            if (
-                self.cfg.DATA.CHECK_GENERATORS
-                and self.cfg.PROBLEM.TYPE != "CLASSIFICATION"
-            ):
+            if self.cfg.DATA.CHECK_GENERATORS and self.cfg.PROBLEM.TYPE != "CLASSIFICATION":
                 check_generator_consistence(
                     self.train_generator,
                     self.cfg.PATHS.GEN_CHECKS + "_train",
@@ -973,9 +848,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.bmz_config["model_build_kwargs"],
             ) = build_model(self.cfg, self.job_identifier, self.device)
         elif self.cfg.MODEL.SOURCE == "torchvision":
-            self.model, self.torchvision_preprocessing = build_torchvision_model(
-                self.cfg, self.device
-            )
+            self.model, self.torchvision_preprocessing = build_torchvision_model(self.cfg, self.device)
         # BioImage Model Zoo pretrained models
         elif self.cfg.MODEL.SOURCE == "bmz":
             # Create a bioimage pipeline to create predictions
@@ -993,19 +866,13 @@ class Base_Workflow(metaclass=ABCMeta):
                 )
 
             if self.args.distributed:
-                raise ValueError(
-                    "DDP can not be activated when loading a BMZ pretrained model"
-                )
+                raise ValueError("DDP can not be activated when loading a BMZ pretrained model")
 
-            self.model = build_bmz_model(
-                self.cfg, self.bmz_config["original_bmz_config"], self.device
-            )
+            self.model = build_bmz_model(self.cfg, self.bmz_config["original_bmz_config"], self.device)
 
         self.model_without_ddp = self.model
         if self.args.distributed:
-            find_unused_parameters = (
-                True if self.cfg.MODEL.ARCHITECTURE.lower() == "unetr" else False
-            )
+            find_unused_parameters = True if self.cfg.MODEL.ARCHITECTURE.lower() == "unetr" else False
             self.model = torch.nn.parallel.DistributedDataParallel(
                 self.model,
                 device_ids=[self.args.gpu],
@@ -1044,9 +911,7 @@ class Base_Workflow(metaclass=ABCMeta):
         if self.global_rank == 0:
             os.makedirs(self.cfg.LOG.LOG_DIR, exist_ok=True)
             os.makedirs(self.cfg.PATHS.CHECKPOINT, exist_ok=True)
-            self.log_writer = TensorboardLogger(
-                log_dir=self.cfg.LOG.TENSORBOARD_LOG_DIR
-            )
+            self.log_writer = TensorboardLogger(log_dir=self.cfg.LOG.TENSORBOARD_LOG_DIR)
         else:
             self.log_writer = None
 
@@ -1076,9 +941,7 @@ class Base_Workflow(metaclass=ABCMeta):
         print("#  TRAIN THE MODEL  #")
         print("#####################")
 
-        print(
-            f"Start training in epoch {self.start_epoch+1} - Total: {self.cfg.TRAIN.EPOCHS}"
-        )
+        print(f"Start training in epoch {self.start_epoch+1} - Total: {self.cfg.TRAIN.EPOCHS}")
         start_time = time.time()
         val_best_metric = np.zeros(len(self.metric_names), dtype=np.float32)
         val_best_loss = np.Inf
@@ -1174,9 +1037,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
                 # Store validation stats
                 if self.log_writer is not None:
-                    self.log_writer.update(
-                        test_loss=test_stats["loss"], head="perf", step=epoch
-                    )
+                    self.log_writer.update(test_loss=test_stats["loss"], head="perf", step=epoch)
                     for i in range(len(self.metric_names)):
                         self.log_writer.update(
                             test_iou=test_stats[self.metric_names[i]],
@@ -1208,13 +1069,9 @@ class Base_Workflow(metaclass=ABCMeta):
                 if self.val_generator is not None:
                     self.plot_values["val_loss"].append(test_stats["loss"])
                 for i in range(len(self.metric_names)):
-                    self.plot_values[self.metric_names[i]].append(
-                        train_stats[self.metric_names[i]]
-                    )
+                    self.plot_values[self.metric_names[i]].append(train_stats[self.metric_names[i]])
                     if self.val_generator is not None:
-                        self.plot_values["val_" + self.metric_names[i]].append(
-                            test_stats[self.metric_names[i]]
-                        )
+                        self.plot_values["val_" + self.metric_names[i]].append(test_stats[self.metric_names[i]])
                 if (epoch + 1) % self.cfg.LOG.CHART_CREATION_FREQ == 0:
                     create_plots(
                         self.plot_values,
@@ -1235,10 +1092,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 "[Time] {} {}/{}\n".format(
                     time_text(t_epoch),
                     time_text(e_end - start_time),
-                    time_text(
-                        (e_end - start_time)
-                        + (t_epoch * (self.cfg.TRAIN.EPOCHS - epoch))
-                    ),
+                    time_text((e_end - start_time) + (t_epoch * (self.cfg.TRAIN.EPOCHS - epoch))),
                 )
             )
 
@@ -1248,11 +1102,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
         print("Train loss: {}".format(train_stats["loss"]))
         for i in range(len(self.metric_names)):
-            print(
-                "Train {}: {}".format(
-                    self.metric_names[i], train_stats[self.metric_names[i]]
-                )
-            )
+            print("Train {}: {}".format(self.metric_names[i], train_stats[self.metric_names[i]]))
         if self.val_generator is not None:
             print("Val loss: {}".format(val_best_loss))
             for i in range(len(self.metric_names)):
@@ -1281,19 +1131,9 @@ class Base_Workflow(metaclass=ABCMeta):
             if not self.cfg.DATA.TEST.USE_VAL_AS_TEST:
                 if self.cfg.DATA.TEST.IN_MEMORY:
                     print("2) Loading test images . . .")
-                    f_name = (
-                        load_data_from_dir
-                        if self.cfg.PROBLEM.NDIM == "2D"
-                        else load_3d_images_from_dir
-                    )
-                    preprocess_cfg = (
-                        self.cfg.DATA.PREPROCESS
-                        if self.cfg.DATA.PREPROCESS.TEST
-                        else None
-                    )
-                    preprocess_fn = (
-                        preprocess_data if self.cfg.DATA.PREPROCESS.TEST else None
-                    )
+                    f_name = load_data_from_dir if self.cfg.PROBLEM.NDIM == "2D" else load_3d_images_from_dir
+                    preprocess_cfg = self.cfg.DATA.PREPROCESS if self.cfg.DATA.PREPROCESS.TEST else None
+                    preprocess_fn = preprocess_data if self.cfg.DATA.PREPROCESS.TEST else None
                     is_y_mask = self.cfg.PROBLEM.TYPE in [
                         "SEMANTIC_SEG",
                         "INSTANCE_SEG",
@@ -1318,9 +1158,7 @@ class Base_Workflow(metaclass=ABCMeta):
                         if len(self.X_test) != len(self.Y_test):
                             raise ValueError(
                                 "Different number of raw and ground truth items ({} vs {}). "
-                                "Please check the data!".format(
-                                    len(self.X_test), len(self.Y_test)
-                                )
+                                "Please check the data!".format(len(self.X_test), len(self.Y_test))
                             )
                     else:
                         self.Y_test = None
@@ -1328,21 +1166,13 @@ class Base_Workflow(metaclass=ABCMeta):
                     self.X_test, self.Y_test = None, None
 
                 if self.original_test_path is None:
-                    self.test_filenames = sorted(
-                        next(os.walk(self.cfg.DATA.TEST.PATH))[2]
-                    )
+                    self.test_filenames = sorted(next(os.walk(self.cfg.DATA.TEST.PATH))[2])
                     if len(self.test_filenames) == 0:
-                        self.test_filenames = sorted(
-                            next(os.walk(self.cfg.DATA.TEST.PATH))[1]
-                        )
+                        self.test_filenames = sorted(next(os.walk(self.cfg.DATA.TEST.PATH))[1])
                 else:
-                    self.test_filenames = sorted(
-                        next(os.walk(self.original_test_path))[2]
-                    )
+                    self.test_filenames = sorted(next(os.walk(self.original_test_path))[2])
                     if len(self.test_filenames) == 0:
-                        self.test_filenames = sorted(
-                            next(os.walk(self.original_test_path))[1]
-                        )
+                        self.test_filenames = sorted(next(os.walk(self.original_test_path))[1])
             else:
                 # The test is the validation, and as it is only available when validation is obtained from train and when
                 # cross validation is enabled, the test set files reside in the train folder
@@ -1379,9 +1209,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
                 if self.cross_val_samples_ids is not None:
                     self.test_filenames = [
-                        x
-                        for i, x in enumerate(self.test_filenames)
-                        if i in self.cross_val_samples_ids
+                        x for i, x in enumerate(self.test_filenames) if i in self.cross_val_samples_ids
                     ]
                 self.original_test_path = self.orig_train_path
                 self.original_test_mask_path = self.orig_train_mask_path
@@ -1451,17 +1279,13 @@ class Base_Workflow(metaclass=ABCMeta):
             for key, value in self.activations[out_heads].items():
                 # Ignore CE_Sigmoid as torch.nn.BCEWithLogitsLoss will apply Sigmoid automatically in a way
                 # that is more stable numerically (ref: https://pytorch.org/docs/stable/generated/torch.nn.BCEWithLogitsLoss.html)
-                if (training and value not in ["Linear", "CE_Sigmoid"]) or (
-                    not training and value != "Linear"
-                ):
+                if (training and value not in ["Linear", "CE_Sigmoid"]) or (not training and value != "Linear"):
                     value = "Sigmoid" if value == "CE_Sigmoid" else value
                     act = getattr(torch.nn, value)()
                     if key == ":":
                         pred[out_heads] = act(pred[out_heads])
                     else:
-                        pred[out_heads][:, int(key), ...] = act(
-                            pred[out_heads][:, int(key), ...]
-                        )
+                        pred[out_heads][:, int(key), ...] = act(pred[out_heads][:, int(key), ...])
 
         if not multiple_heads:
             return pred[0]
@@ -1493,9 +1317,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
         # Check possible checkpoint problems
         if self.start_epoch == -1:
-            raise ValueError(
-                "There was a problem loading the checkpoint. Test phase aborted!"
-            )
+            raise ValueError("There was a problem loading the checkpoint. Test phase aborted!")
 
         image_counter = 0
 
@@ -1524,18 +1346,14 @@ class Base_Workflow(metaclass=ABCMeta):
             if "Y_norm" in gen_obj:
                 Y_norm = gen_obj["Y_norm"]
             self.processing_filenames = (
-                self.test_filenames[gen_obj["file"]]
-                if isinstance(gen_obj["file"], int)
-                else gen_obj["file"]
+                self.test_filenames[gen_obj["file"]] if isinstance(gen_obj["file"], int) else gen_obj["file"]
             )
             self.processing_filenames = [os.path.basename(self.processing_filenames)]
             self.f_numbers = [i]
             del gen_obj
 
             if self.cfg.TEST.BY_CHUNKS.ENABLE and self.cfg.PROBLEM.NDIM == "3D":
-                print(
-                    f"[Rank {get_rank()} ({os.getpid()})] Processing image(s): {self.processing_filenames[0]}"
-                )
+                print(f"[Rank {get_rank()} ({os.getpid()})] Processing image(s): {self.processing_filenames[0]}")
                 self.process_sample_by_chunks(self.processing_filenames[0])
             else:
                 if is_main_process():
@@ -1572,9 +1390,7 @@ class Base_Workflow(metaclass=ABCMeta):
                                 np.max(self.plot_values[self.metric_names[i]]),
                             )
                         )
-                print(
-                    "Validation loss: {}".format(np.min(self.plot_values["val_loss"]))
-                )
+                print("Validation loss: {}".format(np.min(self.plot_values["val_loss"])))
                 for i in range(len(self.metric_names)):
                     if self.metric_names[i] == "IoU":
                         print(
@@ -1604,9 +1420,7 @@ class Base_Workflow(metaclass=ABCMeta):
         """
         filename, file_extension = os.path.splitext(filenames)
         ext = ".h5" if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5" else ".zarr"
-        out_data_div_filename = os.path.join(
-            self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename + ext
-        )
+        out_data_div_filename = os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename + ext)
 
         if not self.cfg.TEST.REUSE_PREDICTIONS:
             if file_extension not in [".hdf5", ".h5", ".zarr"]:
@@ -1619,11 +1433,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 self._X_file, self._X = read_chunked_data(self._X)
             else:  # Numpy array
                 if self._X.ndim == 3:
-                    c_pos = (
-                        -1
-                        if self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER[-1] == "C"
-                        else 1
-                    )
+                    c_pos = -1 if self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER[-1] == "C" else 1
                     self._X = np.expand_dims(self._X, c_pos)
 
             if is_main_process():
@@ -1634,9 +1444,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
             if self._X.ndim < 3:
                 raise ValueError(
-                    "Loaded image need to have at least 3 dimensions: {} (ndim: {})".format(
-                        self._X.shape, self._X.ndim
-                    )
+                    "Loaded image need to have at least 3 dimensions: {} (ndim: {})".format(self._X.shape, self._X.ndim)
                 )
 
             if len(self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER) != self._X.ndim:
@@ -1661,12 +1469,8 @@ class Base_Workflow(metaclass=ABCMeta):
                     filename + "_part" + str(get_rank()) + "_mask" + ext,
                 )
             else:
-                out_data_filename = os.path.join(
-                    self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename + "_nodiv" + ext
-                )
-                out_data_mask_filename = os.path.join(
-                    self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename + "_mask" + ext
-                )
+                out_data_filename = os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename + "_nodiv" + ext)
+                out_data_mask_filename = os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename + "_mask" + ext)
             in_data = self._X
 
             # Process in charge of processing one predicted patch
@@ -1732,9 +1536,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 p = self.apply_model_activations(p)
                 # Multi-head concatenation
                 if isinstance(p, list):
-                    p = torch.cat(
-                        (p[0], torch.argmax(p[1], axis=1).unsqueeze(1)), dim=1
-                    )
+                    p = torch.cat((p[0], torch.argmax(p[1], axis=1).unsqueeze(1)), dim=1)
                 p = to_numpy_format(p, self.axis_order_back)
 
                 t_dim, z_dim, y_dim, x_dim, c_dim = order_dimensions(
@@ -1748,12 +1550,9 @@ class Base_Workflow(metaclass=ABCMeta):
                 # final H5/Zarr file
                 p = p[
                     0,
-                    z_dim * self.cfg.DATA.TEST.PADDING[0] : p.shape[1]
-                    - z_dim * self.cfg.DATA.TEST.PADDING[0],
-                    y_dim * self.cfg.DATA.TEST.PADDING[1] : p.shape[2]
-                    - y_dim * self.cfg.DATA.TEST.PADDING[1],
-                    x_dim * self.cfg.DATA.TEST.PADDING[2] : p.shape[3]
-                    - x_dim * self.cfg.DATA.TEST.PADDING[2],
+                    z_dim * self.cfg.DATA.TEST.PADDING[0] : p.shape[1] - z_dim * self.cfg.DATA.TEST.PADDING[0],
+                    y_dim * self.cfg.DATA.TEST.PADDING[1] : p.shape[2] - y_dim * self.cfg.DATA.TEST.PADDING[1],
+                    x_dim * self.cfg.DATA.TEST.PADDING[2] : p.shape[3] - x_dim * self.cfg.DATA.TEST.PADDING[2],
                 ]
                 m = np.ones(p.shape, dtype=np.uint8)
                 patch_coords = np.array(
@@ -1764,9 +1563,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.output_queue.put([p, m, patch_coords])
 
             # Get some auxiliar variables
-            self.stats["patch_by_batch_counter"] = self.extract_info_queue.get(
-                timeout=60
-            )
+            self.stats["patch_by_batch_counter"] = self.extract_info_queue.get(timeout=60)
             if is_main_process():
                 z_vol_info = self.extract_info_queue.get(timeout=60)
                 list_of_vols_in_z = self.extract_info_queue.get(timeout=60)
@@ -1793,19 +1590,13 @@ class Base_Workflow(metaclass=ABCMeta):
                 if self.cfg.SYSTEM.NUM_GPUS > 1:
                     # Obtain parts of the data created by all GPUs
                     if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
-                        data_parts_filenames = sorted(
-                            next(os.walk(self.cfg.PATHS.RESULT_DIR.PER_IMAGE))[2]
-                        )
+                        data_parts_filenames = sorted(next(os.walk(self.cfg.PATHS.RESULT_DIR.PER_IMAGE))[2])
                     else:
-                        data_parts_filenames = sorted(
-                            next(os.walk(self.cfg.PATHS.RESULT_DIR.PER_IMAGE))[1]
-                        )
+                        data_parts_filenames = sorted(next(os.walk(self.cfg.PATHS.RESULT_DIR.PER_IMAGE))[1])
                     parts = []
                     mask_parts = []
                     for x in data_parts_filenames:
-                        if filename + "_part" in x and x.endswith(
-                            self.cfg.TEST.BY_CHUNKS.FORMAT
-                        ):
+                        if filename + "_part" in x and x.endswith(self.cfg.TEST.BY_CHUNKS.FORMAT):
                             if "_mask" not in x:
                                 parts.append(x)
                             else:
@@ -1814,28 +1605,14 @@ class Base_Workflow(metaclass=ABCMeta):
                     data_parts_mask_filenames = mask_parts
                     del parts, mask_parts
 
-                    if (
-                        max(1, self.cfg.SYSTEM.NUM_GPUS)
-                        != len(data_parts_filenames)
-                        != len(list_of_vols_in_z)
-                    ):
-                        raise ValueError(
-                            "Number of data parts is not the same as number of GPUs"
-                        )
+                    if max(1, self.cfg.SYSTEM.NUM_GPUS) != len(data_parts_filenames) != len(list_of_vols_in_z):
+                        raise ValueError("Number of data parts is not the same as number of GPUs")
 
                     # Compose the large image
                     for i, data_part_fname in enumerate(data_parts_filenames):
-                        print(
-                            "Reading {}".format(
-                                os.path.join(
-                                    self.cfg.PATHS.RESULT_DIR.PER_IMAGE, data_part_fname
-                                )
-                            )
-                        )
+                        print("Reading {}".format(os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, data_part_fname)))
                         data_part_file, data_part = read_chunked_data(
-                            os.path.join(
-                                self.cfg.PATHS.RESULT_DIR.PER_IMAGE, data_part_fname
-                            )
+                            os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, data_part_fname)
                         )
                         data_mask_part_file, data_mask_part = read_chunked_data(
                             os.path.join(
@@ -1845,9 +1622,7 @@ class Base_Workflow(metaclass=ABCMeta):
                         )
 
                         if "data" not in locals():
-                            all_data_filename = os.path.join(
-                                self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename + ext
-                            )
+                            all_data_filename = os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename + ext)
                             if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
                                 allfile = h5py.File(all_data_filename, "w")
                                 data = allfile.create_dataset(
@@ -1868,9 +1643,7 @@ class Base_Workflow(metaclass=ABCMeta):
                         for j, k in enumerate(list_of_vols_in_z[i]):
 
                             slices = (
-                                slice(
-                                    z_vol_info[k][0], z_vol_info[k][1]
-                                ),  # z (only z axis is distributed across GPUs)
+                                slice(z_vol_info[k][0], z_vol_info[k][1]),  # z (only z axis is distributed across GPUs)
                                 slice(None),  # y
                                 slice(None),  # x
                                 slice(None),  # Channel
@@ -1884,12 +1657,9 @@ class Base_Workflow(metaclass=ABCMeta):
                             )
 
                             if self.cfg.TEST.VERBOSE:
-                                print(
-                                    f"Filling {k} [{z_vol_info[k][0]}:{z_vol_info[k][1]}]"
-                                )
+                                print(f"Filling {k} [{z_vol_info[k][0]}:{z_vol_info[k][1]}]")
                             data[data_ordered_slices] = (
-                                data_part[data_ordered_slices]
-                                / data_mask_part[data_ordered_slices]
+                                data_part[data_ordered_slices] / data_mask_part[data_ordered_slices]
                             )
 
                             if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
@@ -1900,10 +1670,7 @@ class Base_Workflow(metaclass=ABCMeta):
                             data_mask_part_file.close()
 
                     # Save image
-                    if (
-                        self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF
-                        and self.cfg.PATHS.RESULT_DIR.PER_IMAGE != ""
-                    ):
+                    if self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF and self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
                         current_order = np.array(range(len(data.shape)))
                         transpose_order = order_dimensions(
                             current_order,
@@ -1911,12 +1678,8 @@ class Base_Workflow(metaclass=ABCMeta):
                             output_order="TZYXC",
                             default_value=np.nan,
                         )
-                        transpose_order = [
-                            x for x in transpose_order if not np.isnan(x)
-                        ]
-                        data = np.array(data, dtype=self.dtype).transpose(
-                            transpose_order
-                        )
+                        transpose_order = [x for x in transpose_order if not np.isnan(x)]
+                        data = np.array(data, dtype=self.dtype).transpose(transpose_order)
                         if "T" not in out_data_order:
                             data = np.expand_dims(data, 0)
 
@@ -1939,14 +1702,10 @@ class Base_Workflow(metaclass=ABCMeta):
                     # Create new file
                     if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
                         fid_div = h5py.File(out_data_div_filename, "w")
-                        pred_div = fid_div.create_dataset(
-                            "data", pred.shape, dtype=pred.dtype, compression="gzip"
-                        )
+                        pred_div = fid_div.create_dataset("data", pred.shape, dtype=pred.dtype, compression="gzip")
                     else:
                         fid_div = zarr.open_group(out_data_div_filename, mode="w")
-                        pred_div = fid_div.create_dataset(
-                            "data", shape=pred.shape, dtype=pred.dtype
-                        )
+                        pred_div = fid_div.create_dataset("data", shape=pred.shape, dtype=pred.dtype)
 
                     t_dim, z_dim, c_dim, y_dim, x_dim = order_dimensions(
                         out_data_shape, self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER
@@ -1963,21 +1722,15 @@ class Base_Workflow(metaclass=ABCMeta):
                                 slices = (
                                     slice(
                                         z * self.cfg.DATA.PATCH_SIZE[0],
-                                        min(
-                                            z_dim, self.cfg.DATA.PATCH_SIZE[0] * (z + 1)
-                                        ),
+                                        min(z_dim, self.cfg.DATA.PATCH_SIZE[0] * (z + 1)),
                                     ),
                                     slice(
                                         y * self.cfg.DATA.PATCH_SIZE[1],
-                                        min(
-                                            y_dim, self.cfg.DATA.PATCH_SIZE[1] * (y + 1)
-                                        ),
+                                        min(y_dim, self.cfg.DATA.PATCH_SIZE[1] * (y + 1)),
                                     ),
                                     slice(
                                         x * self.cfg.DATA.PATCH_SIZE[2],
-                                        min(
-                                            x_dim, self.cfg.DATA.PATCH_SIZE[2] * (x + 1)
-                                        ),
+                                        min(x_dim, self.cfg.DATA.PATCH_SIZE[2] * (x + 1)),
                                     ),
                                     slice(0, pred.shape[c_index]),  # Channel
                                 )
@@ -1988,19 +1741,13 @@ class Base_Workflow(metaclass=ABCMeta):
                                     output_order=out_data_order,
                                     default_value=0,
                                 )
-                                pred_div[data_ordered_slices] = (
-                                    pred[data_ordered_slices]
-                                    / mask[data_ordered_slices]
-                                )
+                                pred_div[data_ordered_slices] = pred[data_ordered_slices] / mask[data_ordered_slices]
 
                         if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
                             fid_div.flush()
 
                     # Save image
-                    if (
-                        self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF
-                        and self.cfg.PATHS.RESULT_DIR.PER_IMAGE != ""
-                    ):
+                    if self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF and self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
                         current_order = np.array(range(len(pred_div.shape)))
                         transpose_order = order_dimensions(
                             current_order,
@@ -2008,12 +1755,8 @@ class Base_Workflow(metaclass=ABCMeta):
                             output_order="TZYXC",
                             default_value=np.nan,
                         )
-                        transpose_order = [
-                            x for x in transpose_order if not np.isnan(x)
-                        ]
-                        pred_div = np.array(pred_div, dtype=self.dtype).transpose(
-                            transpose_order
-                        )
+                        transpose_order = [x for x in transpose_order if not np.isnan(x)]
+                        pred_div = np.array(pred_div, dtype=self.dtype).transpose(transpose_order)
                         if "T" not in out_data_order:
                             pred_div = np.expand_dims(pred_div, 0)
 
@@ -2036,13 +1779,9 @@ class Base_Workflow(metaclass=ABCMeta):
 
             if self.cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS:
                 if self.cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE == "chunk_by_chunk":
-                    self.after_merge_patches_by_chunks_proccess_patch(
-                        out_data_div_filename
-                    )
+                    self.after_merge_patches_by_chunks_proccess_patch(out_data_div_filename)
                 else:
-                    self.after_merge_patches_by_chunks_proccess_entire_pred(
-                        out_data_div_filename
-                    )
+                    self.after_merge_patches_by_chunks_proccess_entire_pred(out_data_div_filename)
 
         # Wait until the main thread is done to predict the next sample
         if self.cfg.SYSTEM.NUM_GPUS > 1:
@@ -2051,9 +1790,7 @@ class Base_Workflow(metaclass=ABCMeta):
             if is_dist_avail_and_initialized():
                 dist.barrier()
             if self.cfg.TEST.VERBOSE:
-                print(
-                    f"[Rank {get_rank()} ({os.getpid()})] Synched with main thread. Go for the next sample"
-                )
+                print(f"[Rank {get_rank()} ({os.getpid()})] Synched with main thread. Go for the next sample")
 
     def process_sample(self, norm):
         """
@@ -2068,9 +1805,7 @@ class Base_Workflow(metaclass=ABCMeta):
         if self.cfg.DATA.PATCH_SIZE[-1] != self._X.shape[-1]:
             raise ValueError(
                 "Channel of the DATA.PATCH_SIZE given {} does not correspond with the loaded image {}. "
-                "Please, check the channels of the images!".format(
-                    self.cfg.DATA.PATCH_SIZE[-1], self._X.shape[-1]
-                )
+                "Please, check the channels of the images!".format(self.cfg.DATA.PATCH_SIZE[-1], self._X.shape[-1])
             )
 
         # Save test_output if the user wants to export the model to BMZ later
@@ -2111,10 +1846,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     if self.cfg.PROBLEM.NDIM != "3D":
                         X_original = self._X.copy()
 
-                    if (
-                        self.cfg.DATA.TEST.LOAD_GT
-                        and self._X.shape[:-1] != self._Y.shape[:-1]
-                    ):
+                    if self.cfg.DATA.TEST.LOAD_GT and self._X.shape[:-1] != self._Y.shape[:-1]:
                         raise ValueError(
                             "Image {} and mask {} differ in shape (without considering the channels, i.e. last dimension)".format(
                                 self._X.shape, self._Y.shape
@@ -2148,8 +1880,7 @@ class Base_Workflow(metaclass=ABCMeta):
                             if self.cfg.DATA.TEST.LOAD_GT:
                                 self._Y = crop_3D_data_with_overlap(
                                     self._Y[0],
-                                    self.cfg.DATA.PATCH_SIZE[:-1]
-                                    + (self._Y.shape[-1],),
+                                    self.cfg.DATA.PATCH_SIZE[:-1] + (self._Y.shape[-1],),
                                     overlap=self.cfg.DATA.TEST.OVERLAP,
                                     padding=self.cfg.DATA.TEST.PADDING,
                                     verbose=self.cfg.TEST.VERBOSE,
@@ -2184,9 +1915,7 @@ class Base_Workflow(metaclass=ABCMeta):
                         )
                         with torch.cuda.amp.autocast():
                             output = self.apply_model_activations(
-                                self.model_call_func(
-                                    self._X[k * self.cfg.TRAIN.BATCH_SIZE : top]
-                                )
+                                self.model_call_func(self._X[k * self.cfg.TRAIN.BATCH_SIZE : top])
                             )
                             loss = self.loss(
                                 output,
@@ -2240,14 +1969,10 @@ class Base_Workflow(metaclass=ABCMeta):
                         p = self.apply_model_activations(p)
                         # Multi-head concatenation
                         if isinstance(p, list):
-                            p = torch.cat(
-                                (p[0], torch.argmax(p[1], axis=1).unsqueeze(1)), dim=1
-                            )
+                            p = torch.cat((p[0], torch.argmax(p[1], axis=1).unsqueeze(1)), dim=1)
                         p = to_numpy_format(p, self.axis_order_back)
                         if "pred" not in locals():
-                            pred = np.zeros(
-                                (self._X.shape[0],) + p.shape[1:], dtype=self.dtype
-                            )
+                            pred = np.zeros((self._X.shape[0],) + p.shape[1:], dtype=self.dtype)
                         pred[k] = p
                 else:
                     l = int(math.ceil(self._X.shape[0] / self.cfg.TRAIN.BATCH_SIZE))
@@ -2259,9 +1984,7 @@ class Base_Workflow(metaclass=ABCMeta):
                         )
                         with torch.cuda.amp.autocast():
                             p = self.apply_model_activations(
-                                self.model_call_func(
-                                    self._X[k * self.cfg.TRAIN.BATCH_SIZE : top]
-                                )
+                                self.model_call_func(self._X[k * self.cfg.TRAIN.BATCH_SIZE : top])
                             )
                             # Multi-head concatenation
                             if isinstance(p, list):
@@ -2271,9 +1994,7 @@ class Base_Workflow(metaclass=ABCMeta):
                                 )
                             p = to_numpy_format(p, self.axis_order_back)
                         if "pred" not in locals():
-                            pred = np.zeros(
-                                (self._X.shape[0],) + p.shape[1:], dtype=self.dtype
-                            )
+                            pred = np.zeros((self._X.shape[0],) + p.shape[1:], dtype=self.dtype)
                         pred[k * self.cfg.TRAIN.BATCH_SIZE : top] = p
 
                 # Delete self._X as in 3D there is no full image
@@ -2284,11 +2005,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 if original_data_shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
                     if self.cfg.PROBLEM.NDIM == "3D":
                         original_data_shape = original_data_shape[1:]
-                    f_name = (
-                        merge_data_with_overlap
-                        if self.cfg.PROBLEM.NDIM == "2D"
-                        else merge_3D_data_with_overlap
-                    )
+                    f_name = merge_data_with_overlap if self.cfg.PROBLEM.NDIM == "2D" else merge_3D_data_with_overlap
 
                     if self.cfg.TEST.REDUCE_MEMORY:
                         pred = f_name(
@@ -2330,9 +2047,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
                 if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE:
                     if self.cfg.PROBLEM.NDIM == "2D":
-                        pred = pred[
-                            :, -reflected_orig_shape[1] :, -reflected_orig_shape[2] :
-                        ]
+                        pred = pred[:, -reflected_orig_shape[1] :, -reflected_orig_shape[2] :]
                         if self._Y is not None:
                             self._Y = self._Y[
                                 :,
@@ -2356,9 +2071,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
                 # Apply mask
                 if self.cfg.TEST.POST_PROCESSING.APPLY_MASK:
-                    pred = np.expand_dims(
-                        apply_binary_mask(pred[0], self.cfg.DATA.TEST.BINARY_MASKS), 0
-                    )
+                    pred = np.expand_dims(apply_binary_mask(pred[0], self.cfg.DATA.TEST.BINARY_MASKS), 0)
 
                 # Save image
                 if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
@@ -2374,14 +2087,9 @@ class Base_Workflow(metaclass=ABCMeta):
                     _type = np.uint8 if self.cfg.MODEL.N_CLASSES < 255 else np.uint16
                     pred = np.expand_dims(np.argmax(pred, -1), -1).astype(_type)
                     if self.cfg.DATA.TEST.LOAD_GT:
-                        self._Y = np.expand_dims(np.argmax(self._Y, -1), -1).astype(
-                            _type
-                        )
+                        self._Y = np.expand_dims(np.argmax(self._Y, -1), -1).astype(_type)
 
-                if (
-                    self.cfg.DATA.TEST.LOAD_GT
-                    and self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS != "Dv2"
-                ):
+                if self.cfg.DATA.TEST.LOAD_GT and self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS != "Dv2":
                     _iou_merge_patches = jaccard_index_numpy(
                         (self._Y > 0.5).astype(np.uint8),
                         (pred > 0.5).astype(np.uint8),
@@ -2398,9 +2106,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 ### POST-PROCESSING (3D) ###
                 ############################
                 if self.post_processing["per_image"]:
-                    pred, _iou_post, _ov_iou_post = apply_post_processing(
-                        self.cfg, pred, self._Y
-                    )
+                    pred, _iou_post, _ov_iou_post = apply_post_processing(self.cfg, pred, self._Y)
                     self.stats["iou_merge_patches_post"] += _iou_post
                     self.stats["ov_iou_merge_patches_post"] += _ov_iou_post
                     save_tif(
@@ -2431,14 +2137,10 @@ class Base_Workflow(metaclass=ABCMeta):
         ### FULL IMAGE ###
         ##################
         if self.cfg.TEST.FULL_IMG and self.cfg.PROBLEM.NDIM == "2D":
-            self._X, o_test_shape = check_downsample_division(
-                self._X, len(self.cfg.MODEL.FEATURE_MAPS) - 1
-            )
+            self._X, o_test_shape = check_downsample_division(self._X, len(self.cfg.MODEL.FEATURE_MAPS) - 1)
             if not self.cfg.TEST.REUSE_PREDICTIONS:
                 if self.cfg.DATA.TEST.LOAD_GT:
-                    self._Y, _ = check_downsample_division(
-                        self._Y, len(self.cfg.MODEL.FEATURE_MAPS) - 1
-                    )
+                    self._Y, _ = check_downsample_division(self._Y, len(self.cfg.MODEL.FEATURE_MAPS) - 1)
 
                 # Evaluate each img
                 if self.cfg.DATA.TEST.LOAD_GT:
@@ -2472,9 +2174,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 pred = self.apply_model_activations(pred)
                 # Multi-head concatenation
                 if isinstance(pred, list):
-                    pred = torch.cat(
-                        (pred[0], torch.argmax(pred[1], axis=1).unsqueeze(1)), dim=1
-                    )
+                    pred = torch.cat((pred[0], torch.argmax(pred[1], axis=1).unsqueeze(1)), dim=1)
                 pred = to_numpy_format(pred, self.axis_order_back)
                 del self._X
 
@@ -2504,17 +2204,13 @@ class Base_Workflow(metaclass=ABCMeta):
                     _type = np.uint8 if self.cfg.MODEL.N_CLASSES < 255 else np.uint16
                     pred = np.expand_dims(np.argmax(pred, -1), -1).astype(_type)
                     if self.cfg.DATA.TEST.LOAD_GT:
-                        self._Y = np.expand_dims(np.argmax(self._Y, -1), -1).astype(
-                            _type
-                        )
+                        self._Y = np.expand_dims(np.argmax(self._Y, -1), -1).astype(_type)
 
                 if self.cfg.TEST.POST_PROCESSING.APPLY_MASK:
                     pred = apply_binary_mask(pred, self.cfg.DATA.TEST.BINARY_MASKS)
 
                 if self.cfg.DATA.TEST.LOAD_GT:
-                    score = jaccard_index_numpy(
-                        (self._Y > 0.5).astype(np.uint8), (pred > 0.5).astype(np.uint8)
-                    )
+                    score = jaccard_index_numpy((self._Y > 0.5).astype(np.uint8), (pred > 0.5).astype(np.uint8))
                     self.stats["iou"] += score
                     self.stats["ov_iou"] += voc_calculation(
                         (self._Y > 0.5).astype(np.uint8),
@@ -2563,12 +2259,8 @@ class Base_Workflow(metaclass=ABCMeta):
         )
 
         # Merge patches
-        self.stats["iou_merge_patches"] = (
-            self.stats["iou_merge_patches"] / image_counter
-        )
-        self.stats["ov_iou_merge_patches"] = (
-            self.stats["ov_iou_merge_patches"] / image_counter
-        )
+        self.stats["iou_merge_patches"] = self.stats["iou_merge_patches"] / image_counter
+        self.stats["ov_iou_merge_patches"] = self.stats["ov_iou_merge_patches"] / image_counter
 
         # Full image
         self.stats["iou"] = self.stats["iou"] / image_counter
@@ -2576,12 +2268,8 @@ class Base_Workflow(metaclass=ABCMeta):
         self.stats["ov_iou"] = self.stats["ov_iou"] / image_counter
 
         if self.post_processing["per_image"]:
-            self.stats["iou_merge_patches_post"] = (
-                self.stats["iou_merge_patches_post"] / image_counter
-            )
-            self.stats["ov_iou_merge_patches_post"] = (
-                self.stats["ov_iou_merge_patches_post"] / image_counter
-            )
+            self.stats["iou_merge_patches_post"] = self.stats["iou_merge_patches_post"] / image_counter
+            self.stats["ov_iou_merge_patches_post"] = self.stats["ov_iou_merge_patches_post"] / image_counter
 
     def print_stats(self, image_counter):
         """
@@ -2596,22 +2284,10 @@ class Base_Workflow(metaclass=ABCMeta):
         if self.cfg.DATA.TEST.LOAD_GT and not self.cfg.TEST.REUSE_PREDICTIONS:
             if not self.cfg.TEST.FULL_IMG:
                 print("Loss (per patch): {}".format(self.stats["loss_per_crop"]))
-                print(
-                    "Test Foreground IoU (per patch): {}".format(
-                        self.stats["iou_per_crop"]
-                    )
-                )
+                print("Test Foreground IoU (per patch): {}".format(self.stats["iou_per_crop"]))
                 print(" ")
-                print(
-                    "Test Foreground IoU (merge patches): {}".format(
-                        self.stats["iou_merge_patches"]
-                    )
-                )
-                print(
-                    "Test Overall IoU (merge patches): {}".format(
-                        self.stats["ov_iou_merge_patches"]
-                    )
-                )
+                print("Test Foreground IoU (merge patches): {}".format(self.stats["iou_merge_patches"]))
+                print("Test Overall IoU (merge patches): {}".format(self.stats["ov_iou_merge_patches"]))
                 print(" ")
             else:
                 print("Loss (per image): {}".format(self.stats["loss"]))
@@ -2638,14 +2314,10 @@ class Base_Workflow(metaclass=ABCMeta):
                 print(" ")
             if self.post_processing["as_3D_stack"]:
                 print(
-                    "Test Foreground IoU (as 3D stack - post-processing): {}".format(
-                        self.stats["iou_as_3D_stack_post"]
-                    )
+                    "Test Foreground IoU (as 3D stack - post-processing): {}".format(self.stats["iou_as_3D_stack_post"])
                 )
                 print(
-                    "Test Overall IoU (as 3D stack - post-processing): {}".format(
-                        self.stats["ov_iou_as_3D_stack_post"]
-                    )
+                    "Test Overall IoU (as 3D stack - post-processing): {}".format(self.stats["ov_iou_as_3D_stack_post"])
                 )
                 print(" ")
 
@@ -2680,9 +2352,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
         # Adjust shape
         if pred.ndim < 3:
-            raise ValueError(
-                "Read image seems to be 2D: {}. Path: {}".format(pred.shape, filename)
-            )
+            raise ValueError("Read image seems to be 2D: {}. Path: {}".format(pred.shape, filename))
         if pred.ndim == 3:
             pred = np.expand_dims(pred, -1)
         else:
@@ -2738,9 +2408,7 @@ class Base_Workflow(metaclass=ABCMeta):
         ############################
         if self.post_processing["as_3D_stack"]:
             self.all_pred = np.concatenate(self.all_pred)
-            self.all_gt = (
-                np.concatenate(self.all_gt) if self.cfg.DATA.TEST.LOAD_GT else None
-            )
+            self.all_gt = np.concatenate(self.all_gt) if self.cfg.DATA.TEST.LOAD_GT else None
             save_tif(
                 np.expand_dims(self.all_pred, 0),
                 self.cfg.PATHS.RESULT_DIR.AS_3D_STACK,
@@ -2763,9 +2431,7 @@ class Base_Workflow(metaclass=ABCMeta):
             )
 
 
-def extract_patch_from_dataset(
-    data, cfg, input_queue, extract_info_queue, verbose=False
-):
+def extract_patch_from_dataset(data, cfg, input_queue, extract_info_queue, verbose=False):
     """
     Extract patches from data and put them into a queue read by each GPU inference process.
     This function will be run by a child process created for every test sample.
@@ -2790,9 +2456,7 @@ def extract_patch_from_dataset(
     """
     if verbose and cfg.SYSTEM.NUM_GPUS > 1:
         if isinstance(data, str):
-            print(
-                f"[Rank {get_rank()} ({os.getpid()})] In charge of extracting patch from data from {data}"
-            )
+            print(f"[Rank {get_rank()} ({os.getpid()})] In charge of extracting patch from data from {data}")
         else:
             print(
                 f"[Rank {get_rank()} ({os.getpid()})] In charge of extracting patch from data from Numpy array {data.shape}"
@@ -2848,13 +2512,9 @@ def extract_patch_from_dataset(
 
     if verbose and cfg.SYSTEM.NUM_GPUS > 1:
         if isinstance(data, str):
-            print(
-                f"[Rank {get_rank()} ({os.getpid()})] Finish extracting patches from data {data}"
-            )
+            print(f"[Rank {get_rank()} ({os.getpid()})] Finish extracting patches from data {data}")
         else:
-            print(
-                f"[Rank {get_rank()} ({os.getpid()})] Finish extracting patches from data {data.shape}"
-            )
+            print(f"[Rank {get_rank()} ({os.getpid()})] Finish extracting patches from data {data.shape}")
 
     if "data_file" in locals() and cfg.TEST.BY_CHUNKS.FORMAT == "h5":
         data_file.close()
@@ -2907,9 +2567,7 @@ def insert_patch_into_dataset(
         To print useful information for debugging.
     """
     if verbose and cfg.SYSTEM.NUM_GPUS > 1:
-        print(
-            f"[Rank {get_rank()} ({os.getpid()})] In charge of inserting patches into data . . ."
-        )
+        print(f"[Rank {get_rank()} ({os.getpid()})] In charge of inserting patches into data . . .")
 
     if file_type == "h5":
         fid = h5py.File(data_filename, "w")
@@ -2932,24 +2590,16 @@ def insert_patch_into_dataset(
                 out_data_shape = tuple(out_data_shape) + (p.shape[-1],)
                 out_data_order = cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER + "C"
             else:
-                out_data_shape[cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER.index("C")] = (
-                    p.shape[-1]
-                )
+                out_data_shape[cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER.index("C")] = p.shape[-1]
                 out_data_shape = tuple(out_data_shape)
                 out_data_order = cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER
 
             if file_type == "h5":
-                data = fid.create_dataset(
-                    "data", out_data_shape, dtype=dtype_str, compression="gzip"
-                )
-                mask = fid_mask.create_dataset(
-                    "data", out_data_shape, dtype=dtype_str, compression="gzip"
-                )
+                data = fid.create_dataset("data", out_data_shape, dtype=dtype_str, compression="gzip")
+                mask = fid_mask.create_dataset("data", out_data_shape, dtype=dtype_str, compression="gzip")
             else:
                 data = fid.create_dataset("data", shape=out_data_shape, dtype=dtype_str)
-                mask = fid_mask.create_dataset(
-                    "data", shape=out_data_shape, dtype=dtype_str
-                )
+                mask = fid_mask.create_dataset("data", shape=out_data_shape, dtype=dtype_str)
 
         # Adjust slices to calculate where to insert the predicted patch. This slice does not have into account the
         # channel so any of them can be inserted
@@ -3001,9 +2651,7 @@ def insert_patch_into_dataset(
         if "T" not in out_data_order:
             data = np.expand_dims(data, 0)
             mask = np.expand_dims(mask, 0)
-        save_tif(
-            data, cfg.PATHS.RESULT_DIR.PER_IMAGE, [filename + ".tif"], verbose=verbose
-        )
+        save_tif(data, cfg.PATHS.RESULT_DIR.PER_IMAGE, [filename + ".tif"], verbose=verbose)
         save_tif(
             mask,
             cfg.PATHS.RESULT_DIR.PER_IMAGE,
@@ -3015,6 +2663,4 @@ def insert_patch_into_dataset(
         fid_mask.close()
 
     if verbose and cfg.SYSTEM.NUM_GPUS > 1:
-        print(
-            f"[Rank {get_rank()} ({os.getpid()})] Finish inserting patches into data . . ."
-        )
+        print(f"[Rank {get_rank()} ({os.getpid()})] Finish inserting patches into data . . .")

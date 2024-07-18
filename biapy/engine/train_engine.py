@@ -35,19 +35,12 @@ def train_one_epoch(
 
     optimizer.zero_grad()
 
-    for step, (batch, targets) in enumerate(
-        metric_logger.log_every(data_loader, print_freq, header)
-    ):
+    for step, (batch, targets) in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
 
         # Apply warmup cosine decay scheduler if selected
         # (notice we use a per iteration (instead of per epoch) lr scheduler)
-        if (
-            epoch % cfg.TRAIN.ACCUM_ITER == 0
-            and cfg.TRAIN.LR_SCHEDULER.NAME == "warmupcosine"
-        ):
-            lr_scheduler.adjust_learning_rate(
-                optimizer, step / len(data_loader) + epoch
-            )
+        if epoch % cfg.TRAIN.ACCUM_ITER == 0 and cfg.TRAIN.LR_SCHEDULER.NAME == "warmupcosine":
+            lr_scheduler.adjust_learning_rate(optimizer, step / len(data_loader) + epoch)
 
         it = start_steps + step  # global training iteration
 
@@ -97,9 +90,7 @@ def train_one_epoch(
         for group in optimizer.param_groups:
             max_lr = max(max_lr, group["lr"])
         if step == 0:
-            metric_logger.add_meter(
-                "lr", SmoothedValue(window_size=1, fmt="{value:.6f}")
-            )
+            metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value:.6f}"))
         metric_logger.update(lr=max_lr)
         if log_writer is not None:
             log_writer.update(lr=max_lr, head="opt")

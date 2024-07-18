@@ -30,9 +30,7 @@ class wdsr(nn.Module):
         num_outputs = scale * scale * num_channels
 
         body = []
-        conv = weight_norm(
-            nn.Conv2d(num_channels, num_filters, kernel_size, padding=kernel_size // 2)
-        )
+        conv = weight_norm(nn.Conv2d(num_channels, num_filters, kernel_size, padding=kernel_size // 2))
         init.ones_(conv.weight_g)
         init.zeros_(conv.bias)
         body.append(conv)
@@ -46,9 +44,7 @@ class wdsr(nn.Module):
                     res_scale=1 / math.sqrt(num_res_blocks),
                 )
             )
-        conv = weight_norm(
-            nn.Conv2d(num_filters, num_outputs, kernel_size, padding=kernel_size // 2)
-        )
+        conv = weight_norm(nn.Conv2d(num_filters, num_outputs, kernel_size, padding=kernel_size // 2))
         init.ones_(conv.weight_g)
         init.zeros_(conv.bias)
         body.append(conv)

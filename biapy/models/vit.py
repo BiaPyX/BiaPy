@@ -62,20 +62,14 @@ class VisionTransformer(timm.models.vision_transformer.VisionTransformer):
             bias=True,
         )
         num_patches = self.patch_embed.num_patches
-        embed_len = (
-            num_patches if self.no_embed_class else num_patches + self.num_prefix_tokens
-        )
-        self.pos_embed = nn.Parameter(
-            torch.randn(1, embed_len, kwargs["embed_dim"]) * 0.02
-        )
+        embed_len = num_patches if self.no_embed_class else num_patches + self.num_prefix_tokens
+        self.pos_embed = nn.Parameter(torch.randn(1, embed_len, kwargs["embed_dim"]) * 0.02)
 
     def forward_features(self, x):
         B = x.shape[0]
         x = self.patch_embed(x)
 
-        cls_tokens = self.cls_token.expand(
-            B, -1, -1
-        )  # stole cls_tokens impl from Phil Wang, thanks
+        cls_tokens = self.cls_token.expand(B, -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
         x = torch.cat((cls_tokens, x), dim=1)
         x = x + self.pos_embed
         x = self.pos_drop(x)

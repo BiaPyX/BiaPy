@@ -56,9 +56,7 @@ class Self_supervised_Workflow(Base_Workflow):
     """
 
     def __init__(self, cfg, job_identifier, device, args, **kwargs):
-        super(Self_supervised_Workflow, self).__init__(
-            cfg, job_identifier, device, args, **kwargs
-        )
+        super(Self_supervised_Workflow, self).__init__(cfg, job_identifier, device, args, **kwargs)
 
         self.prepare_ssl_data()
 
@@ -154,9 +152,7 @@ class Self_supervised_Workflow(Base_Workflow):
             # Swap with original images so we can calculate PSNR metric afterwards
             return batch.to(self.device)
         else:
-            return to_pytorch_format(
-                targets, self.axis_order, self.device, dtype=self.loss_dtype
-            )
+            return to_pytorch_format(targets, self.axis_order, self.device, dtype=self.loss_dtype)
 
     def process_sample(self, norm):
         """
@@ -175,9 +171,7 @@ class Self_supervised_Workflow(Base_Workflow):
         if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE:
             reflected_orig_shape = self._X.shape
             self._X = np.expand_dims(
-                pad_and_reflect(
-                    self._X[0], self.cfg.DATA.PATCH_SIZE, verbose=self.cfg.TEST.VERBOSE
-                ),
+                pad_and_reflect(self._X[0], self.cfg.DATA.PATCH_SIZE, verbose=self.cfg.TEST.VERBOSE),
                 0,
             )
             if self.cfg.DATA.TEST.LOAD_GT:
@@ -214,9 +208,7 @@ class Self_supervised_Workflow(Base_Workflow):
 
         # Predict each patch
         if self.cfg.TEST.AUGMENTATION:
-            for k in tqdm(
-                range(self._X.shape[0]), leave=False, disable=not is_main_process()
-            ):
+            for k in tqdm(range(self._X.shape[0]), leave=False, disable=not is_main_process()):
                 if self.cfg.PROBLEM.NDIM == "2D":
                     p = ensemble8_2d_predictions(
                         self._X[k],
@@ -275,12 +267,8 @@ class Self_supervised_Workflow(Base_Workflow):
                 if "pred" not in locals():
                     pred = np.zeros((self._X.shape[0],) + p.shape[1:], dtype=self.dtype)
                     if self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
-                        pred_mask = np.zeros(
-                            (self._X.shape[0],) + p.shape[1:], dtype=self.dtype
-                        )
-                        pred_visi = np.zeros(
-                            (self._X.shape[0],) + p.shape[1:], dtype=self.dtype
-                        )
+                        pred_mask = np.zeros((self._X.shape[0],) + p.shape[1:], dtype=self.dtype)
+                        pred_visi = np.zeros((self._X.shape[0],) + p.shape[1:], dtype=self.dtype)
                 pred[k * self.cfg.TRAIN.BATCH_SIZE : top] = p
                 if self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
                     pred_mask[k * self.cfg.TRAIN.BATCH_SIZE : top] = m
@@ -294,11 +282,7 @@ class Self_supervised_Workflow(Base_Workflow):
         if original_data_shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
             if self.cfg.PROBLEM.NDIM == "3D":
                 original_data_shape = original_data_shape[1:]
-            f_name = (
-                merge_data_with_overlap
-                if self.cfg.PROBLEM.NDIM == "2D"
-                else merge_3D_data_with_overlap
-            )
+            f_name = merge_data_with_overlap if self.cfg.PROBLEM.NDIM == "2D" else merge_3D_data_with_overlap
             pred = f_name(
                 pred,
                 original_data_shape[:-1] + (pred.shape[-1],),
@@ -334,16 +318,10 @@ class Self_supervised_Workflow(Base_Workflow):
             if self.cfg.PROBLEM.NDIM == "2D":
                 pred = pred[:, -reflected_orig_shape[1] :, -reflected_orig_shape[2] :]
                 if self._Y is not None:
-                    self._Y = self._Y[
-                        :, -reflected_orig_shape[1] :, -reflected_orig_shape[2] :
-                    ]
+                    self._Y = self._Y[:, -reflected_orig_shape[1] :, -reflected_orig_shape[2] :]
                 if self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
-                    pred_mask = pred_mask[
-                        :, -reflected_orig_shape[1] :, -reflected_orig_shape[2] :
-                    ]
-                    pred_visi = pred_visi[
-                        :, -reflected_orig_shape[1] :, -reflected_orig_shape[2] :
-                    ]
+                    pred_mask = pred_mask[:, -reflected_orig_shape[1] :, -reflected_orig_shape[2] :]
+                    pred_visi = pred_visi[:, -reflected_orig_shape[1] :, -reflected_orig_shape[2] :]
             else:
                 pred = pred[
                     :,
@@ -377,9 +355,7 @@ class Self_supervised_Workflow(Base_Workflow):
         if x_norm["type"] == "div":
             pred = undo_norm_range01(pred, x_norm)
         elif x_norm["type"] == "scale_range":
-            pred = undo_norm_range01(
-                pred, x_norm, x_norm["min_val_scale"], x_norm["max_val_scale"]
-            )
+            pred = undo_norm_range01(pred, x_norm, x_norm["min_val_scale"], x_norm["max_val_scale"])
         else:
             pred = denormalize(pred, x_norm["mean"], x_norm["std"])
 
@@ -509,9 +485,7 @@ class Self_supervised_Workflow(Base_Workflow):
         on the input images provided. They will be saved in a separate folder in the root path of the inout images.
         """
         if self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
-            print(
-                "No SSL data needs to be prepared for masking, as it will be generated on the fly"
-            )
+            print("No SSL data needs to be prepared for masking, as it will be generated on the fly")
             return
 
         if is_main_process():
@@ -526,9 +500,7 @@ class Self_supervised_Workflow(Base_Workflow):
                     print(
                         "You select to create detection masks from given .csv files but no file is detected in {}. "
                         "So let's prepare the data. Notice that, if you do not modify 'DATA.TRAIN.SSL_SOURCE_DIR' "
-                        "path, this process will be done just once!".format(
-                            self.cfg.DATA.TRAIN.SSL_SOURCE_DIR
-                        )
+                        "path, this process will be done just once!".format(self.cfg.DATA.TRAIN.SSL_SOURCE_DIR)
                     )
                     create_mask = True
                 else:
@@ -543,11 +515,7 @@ class Self_supervised_Workflow(Base_Workflow):
                         )
                         create_mask = True
                     else:
-                        print(
-                            "Train source data found in {}".format(
-                                self.cfg.DATA.TRAIN.SSL_SOURCE_DIR
-                            )
-                        )
+                        print("Train source data found in {}".format(self.cfg.DATA.TRAIN.SSL_SOURCE_DIR))
                 if create_mask:
                     create_ssl_source_data_masks(self.cfg, data_type="train")
 
@@ -558,9 +526,7 @@ class Self_supervised_Workflow(Base_Workflow):
                     print(
                         "You select to create detection masks from given .csv files but no file is detected in {}. "
                         "So let's prepare the data. Notice that, if you do not modify 'DATA.VAL.SSL_SOURCE_DIR' "
-                        "path, this process will be done just once!".format(
-                            self.cfg.DATA.VAL.SSL_SOURCE_DIR
-                        )
+                        "path, this process will be done just once!".format(self.cfg.DATA.VAL.SSL_SOURCE_DIR)
                     )
                     create_mask = True
                 else:
@@ -575,11 +541,7 @@ class Self_supervised_Workflow(Base_Workflow):
                         )
                         create_mask = True
                     else:
-                        print(
-                            "Validation source data found in {}".format(
-                                self.cfg.DATA.VAL.SSL_SOURCE_DIR
-                            )
-                        )
+                        print("Validation source data found in {}".format(self.cfg.DATA.VAL.SSL_SOURCE_DIR))
                 if create_mask:
                     create_ssl_source_data_masks(self.cfg, data_type="val")
 
@@ -590,9 +552,7 @@ class Self_supervised_Workflow(Base_Workflow):
                     print(
                         "You select to create detection masks from given .csv files but no file is detected in {}. "
                         "So let's prepare the data. Notice that, if you do not modify 'DATA.TEST.SSL_SOURCE_DIR' "
-                        "path, this process will be done just once!".format(
-                            self.cfg.DATA.TEST.SSL_SOURCE_DIR
-                        )
+                        "path, this process will be done just once!".format(self.cfg.DATA.TEST.SSL_SOURCE_DIR)
                     )
                     create_mask = True
                 else:
@@ -607,11 +567,7 @@ class Self_supervised_Workflow(Base_Workflow):
                         )
                         create_mask = True
                     else:
-                        print(
-                            "Test source data found in {}".format(
-                                self.cfg.DATA.TEST.SSL_SOURCE_DIR
-                            )
-                        )
+                        print("Test source data found in {}".format(self.cfg.DATA.TEST.SSL_SOURCE_DIR))
                 if create_mask:
                     create_ssl_source_data_masks(self.cfg, data_type="test")
 
@@ -626,9 +582,7 @@ class Self_supervised_Workflow(Base_Workflow):
                 )
             )
             print(
-                "DATA.TRAIN.GT_PATH changed from {} to {}".format(
-                    self.cfg.DATA.TRAIN.GT_PATH, self.cfg.DATA.TRAIN.PATH
-                )
+                "DATA.TRAIN.GT_PATH changed from {} to {}".format(self.cfg.DATA.TRAIN.GT_PATH, self.cfg.DATA.TRAIN.PATH)
             )
             opts.extend(
                 [
@@ -645,9 +599,7 @@ class Self_supervised_Workflow(Base_Workflow):
                     )
                 )
                 print(
-                    "DATA.VAL.GT_PATH changed from {} to {}".format(
-                        self.cfg.DATA.VAL.GT_PATH, self.cfg.DATA.VAL.PATH
-                    )
+                    "DATA.VAL.GT_PATH changed from {} to {}".format(self.cfg.DATA.VAL.GT_PATH, self.cfg.DATA.VAL.PATH)
                 )
                 opts.extend(
                     [
@@ -663,11 +615,7 @@ class Self_supervised_Workflow(Base_Workflow):
                     self.cfg.DATA.TEST.PATH, self.cfg.DATA.TEST.SSL_SOURCE_DIR
                 )
             )
-            print(
-                "DATA.TEST.GT_PATH changed from {} to {}".format(
-                    self.cfg.DATA.TEST.GT_PATH, self.cfg.DATA.TEST.PATH
-                )
-            )
+            print("DATA.TEST.GT_PATH changed from {} to {}".format(self.cfg.DATA.TEST.GT_PATH, self.cfg.DATA.TEST.PATH))
             opts.extend(
                 [
                     "DATA.TEST.PATH",

@@ -943,7 +943,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 if rcls_post is not None:
                     self.all_class_stats_merge_patches_post.append(rcls_post)
         else:
-            NotImplementedError
+            raise NotImplementedError
 
     def after_merge_patches_by_chunks_proccess_patch(self, filename):
         """
@@ -992,7 +992,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 if rcls_post is not None:
                     self.all_class_stats_post.append(rcls_post)
         else:
-            NotImplementedError
+            raise NotImplementedError
 
     def after_all_images(self):
         """

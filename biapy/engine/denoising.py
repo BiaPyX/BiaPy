@@ -44,9 +44,7 @@ class Denoising_Workflow(Base_Workflow):
     """
 
     def __init__(self, cfg, job_identifier, device, args, **kwargs):
-        super(Denoising_Workflow, self).__init__(
-            cfg, job_identifier, device, args, **kwargs
-        )
+        super(Denoising_Workflow, self).__init__(cfg, job_identifier, device, args, **kwargs)
 
         # From now on, no modification of the cfg will be allowed
         self.cfg.freeze()
@@ -113,9 +111,7 @@ class Denoising_Workflow(Base_Workflow):
         if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE:
             reflected_orig_shape = self._X.shape
             self._X = np.expand_dims(
-                pad_and_reflect(
-                    self._X[0], self.cfg.DATA.PATCH_SIZE, verbose=self.cfg.TEST.VERBOSE
-                ),
+                pad_and_reflect(self._X[0], self.cfg.DATA.PATCH_SIZE, verbose=self.cfg.TEST.VERBOSE),
                 0,
             )
             if self.cfg.DATA.TEST.LOAD_GT:
@@ -184,9 +180,7 @@ class Denoising_Workflow(Base_Workflow):
 
         # Predict each patch
         if self.cfg.TEST.AUGMENTATION:
-            for k in tqdm(
-                range(self._X.shape[0]), leave=False, disable=not is_main_process()
-            ):
+            for k in tqdm(range(self._X.shape[0]), leave=False, disable=not is_main_process()):
                 if self.cfg.PROBLEM.NDIM == "2D":
                     p = ensemble8_2d_predictions(
                         self._X[k],
@@ -220,9 +214,7 @@ class Denoising_Workflow(Base_Workflow):
                 )
                 with torch.cuda.amp.autocast():
                     p = self.model(self._X[k * self.cfg.TRAIN.BATCH_SIZE : top])
-                p = to_numpy_format(
-                    self.apply_model_activations(p), self.axis_order_back
-                )
+                p = to_numpy_format(self.apply_model_activations(p), self.axis_order_back)
                 if "pred" not in locals():
                     pred = np.zeros((self._X.shape[0],) + p.shape[1:], dtype=self.dtype)
                 pred[k * self.cfg.TRAIN.BATCH_SIZE : top] = p
@@ -232,11 +224,7 @@ class Denoising_Workflow(Base_Workflow):
         if original_data_shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
             if self.cfg.PROBLEM.NDIM == "3D":
                 original_data_shape = original_data_shape[1:]
-            f_name = (
-                merge_data_with_overlap
-                if self.cfg.PROBLEM.NDIM == "2D"
-                else merge_3D_data_with_overlap
-            )
+            f_name = merge_data_with_overlap if self.cfg.PROBLEM.NDIM == "2D" else merge_3D_data_with_overlap
 
             if self.cfg.TEST.REDUCE_MEMORY:
                 pred = f_name(
@@ -277,9 +265,7 @@ class Denoising_Workflow(Base_Workflow):
             if self.cfg.PROBLEM.NDIM == "2D":
                 pred = pred[:, -reflected_orig_shape[1] :, -reflected_orig_shape[2] :]
                 if self._Y is not None:
-                    self._Y = self._Y[
-                        :, -reflected_orig_shape[1] :, -reflected_orig_shape[2] :
-                    ]
+                    self._Y = self._Y[:, -reflected_orig_shape[1] :, -reflected_orig_shape[2] :]
             else:
                 pred = pred[
                     :,
@@ -300,9 +286,7 @@ class Denoising_Workflow(Base_Workflow):
         if x_norm["type"] == "div":
             pred = undo_norm_range01(pred, x_norm)
         elif x_norm["type"] == "scale_range":
-            pred = undo_norm_range01(
-                pred, x_norm, x_norm["min_val_scale"], x_norm["max_val_scale"]
-            )
+            pred = undo_norm_range01(pred, x_norm, x_norm["min_val_scale"], x_norm["max_val_scale"])
         else:
             pred = denormalize(pred, x_norm["mean"], x_norm["std"])
 
@@ -470,9 +454,7 @@ def mask_center(local_sub_patch_radius, ndims=2):
     if ndims == 2:
         patch_wo_center[local_sub_patch_radius, local_sub_patch_radius] = 0
     elif ndims == 3:
-        patch_wo_center[
-            local_sub_patch_radius, local_sub_patch_radius, local_sub_patch_radius
-        ] = 0
+        patch_wo_center[local_sub_patch_radius, local_sub_patch_radius, local_sub_patch_radius] = 0
     else:
         raise NotImplementedError()
     return ma.make_mask(patch_wo_center)
@@ -494,13 +476,8 @@ def pm_mean(local_sub_patch_radius):
         patch_wo_center = mask_center(local_sub_patch_radius, ndims=dims)
         vals = []
         for coord in zip(*coords):
-            sub_patch, crop_neg, crop_pos = get_subpatch(
-                patch, coord, local_sub_patch_radius
-            )
-            slices = [
-                slice(-n, s - p)
-                for n, p, s in zip(crop_neg, crop_pos, patch_wo_center.shape)
-            ]
+            sub_patch, crop_neg, crop_pos = get_subpatch(patch, coord, local_sub_patch_radius)
+            slices = [slice(-n, s - p) for n, p, s in zip(crop_neg, crop_pos, patch_wo_center.shape)]
             sub_patch_mask = (structN2Vmask or patch_wo_center)[tuple(slices)]
             vals.append(np.mean(sub_patch[sub_patch_mask]))
         return vals
@@ -513,13 +490,8 @@ def pm_median(local_sub_patch_radius):
         patch_wo_center = mask_center(local_sub_patch_radius, ndims=dims)
         vals = []
         for coord in zip(*coords):
-            sub_patch, crop_neg, crop_pos = get_subpatch(
-                patch, coord, local_sub_patch_radius
-            )
-            slices = [
-                slice(-n, s - p)
-                for n, p, s in zip(crop_neg, crop_pos, patch_wo_center.shape)
-            ]
+            sub_patch, crop_neg, crop_pos = get_subpatch(patch, coord, local_sub_patch_radius)
+            slices = [slice(-n, s - p) for n, p, s in zip(crop_neg, crop_pos, patch_wo_center.shape)]
             sub_patch_mask = (structN2Vmask or patch_wo_center)[tuple(slices)]
             vals.append(np.median(sub_patch[sub_patch_mask]))
         return vals
@@ -544,13 +516,8 @@ def pm_uniform_withoutCP(local_sub_patch_radius):
         patch_wo_center = mask_center(local_sub_patch_radius, ndims=dims)
         vals = []
         for coord in zip(*coords):
-            sub_patch, crop_neg, crop_pos = get_subpatch(
-                patch, coord, local_sub_patch_radius
-            )
-            slices = [
-                slice(-n, s - p)
-                for n, p, s in zip(crop_neg, crop_pos, patch_wo_center.shape)
-            ]
+            sub_patch, crop_neg, crop_pos = get_subpatch(patch, coord, local_sub_patch_radius)
+            slices = [slice(-n, s - p) for n, p, s in zip(crop_neg, crop_pos, patch_wo_center.shape)]
             sub_patch_mask = (structN2Vmask or patch_wo_center)[tuple(slices)]
             vals.append(np.random.permutation(sub_patch[sub_patch_mask])[0])
         return vals
@@ -574,11 +541,7 @@ def pm_normal_fitted(local_sub_patch_radius):
         for coord in zip(*coords):
             sub_patch, _, _ = get_subpatch(patch, coord, local_sub_patch_radius)
             axis = tuple(range(dims))
-            vals.append(
-                np.random.normal(
-                    np.mean(sub_patch, axis=axis), np.std(sub_patch, axis=axis)
-                )
-            )
+            vals.append(np.random.normal(np.mean(sub_patch, axis=axis), np.std(sub_patch, axis=axis)))
         return vals
 
     return local_gaussian
@@ -675,9 +638,7 @@ def apply_structN2Vmask3D(patch, coords, mask):
         mix = dx.T[..., None] + coords[None]
         mix = mix.transpose([1, 0, 2]).reshape([ndim, -1]).T
         ## stay within patch boundary
-        mix = mix.clip(min=np.zeros(ndim), max=np.array(patch.shape[1:]) - 1).astype(
-            np.uint
-        )
+        mix = mix.clip(min=np.zeros(ndim), max=np.array(patch.shape[1:]) - 1).astype(np.uint)
         ## replace neighbouring pixels with random values from flat dist
         patch[z][tuple(mix.T)] = np.random.rand(mix.shape[0]) * 4 - 2
 
@@ -705,9 +666,7 @@ def manipulate_val_data(
         desc="Preparing validation data: ",
         disable=not is_main_process(),
     ):
-        coords = get_stratified_coords(
-            box_size=box_size, shape=np.array(X_val.shape)[1:-1]
-        )
+        coords = get_stratified_coords(box_size=box_size, shape=np.array(X_val.shape)[1:-1])
         for c in range(n_chan):
             indexing = (j,) + coords + (c,)
             indexing_mask = (j,) + coords + (c + n_chan,)

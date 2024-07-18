@@ -66,8 +66,7 @@ def _check_label_array(y, name=None, check_sequential=False):
     err = ValueError(
         "{label} must be an array of {integers}.".format(
             label="labels" if name is None else name,
-            integers=("sequential " if check_sequential else "")
-            + "non-negative integers",
+            integers=("sequential " if check_sequential else "") + "non-negative integers",
         )
     )
     is_array_of_integers(y) or _raise(err)
@@ -214,9 +213,7 @@ def matching(y_true, y_pred, thresh=0.5, criterion="iou", report_matches=False):
             )
         )
     )
-    criterion in matching_criteria or _raise(
-        ValueError("Matching criterion '%s' not supported." % criterion)
-    )
+    criterion in matching_criteria or _raise(ValueError("Matching criterion '%s' not supported." % criterion))
     if thresh is None:
         thresh = 0
     thresh = float(thresh) if np.isscalar(thresh) else map(float, thresh)
@@ -253,9 +250,7 @@ def matching(y_true, y_pred, thresh=0.5, criterion="iou", report_matches=False):
         # assert tp+fn == n_true
 
         # the score sum over all matched objects (tp)
-        sum_matched_score = (
-            np.sum(scores[true_ind, pred_ind][match_ok]) if not_trivial else 0.0
-        )
+        sum_matched_score = np.sum(scores[true_ind, pred_ind][match_ok]) if not_trivial else 0.0
 
         # the score average over all matched objects (tp)
         mean_matched_score = _safe_divide(sum_matched_score, tp)
@@ -284,8 +279,7 @@ def matching(y_true, y_pred, thresh=0.5, criterion="iou", report_matches=False):
                 stats_dict.update(
                     # int() to be json serializable
                     matched_pairs=tuple(
-                        (int(map_rev_true[i]), int(map_rev_pred[j]))
-                        for i, j in zip(1 + true_ind, 1 + pred_ind)
+                        (int(map_rev_true[i]), int(map_rev_pred[j])) for i, j in zip(1 + true_ind, 1 + pred_ind)
                     ),
                     matched_scores=tuple(scores[true_ind, pred_ind]),
                     matched_tps=tuple(map(int, np.flatnonzero(match_ok))),
@@ -378,7 +372,5 @@ def wrapper_matching_dataset_lazy(stats_all, thresh, criterion="iou", by_image=F
                 panoptic_quality=panoptic_quality,
             )
 
-    accumulate = tuple(
-        namedtuple("DatasetMatching", acc.keys())(*acc.values()) for acc in accumulate
-    )
+    accumulate = tuple(namedtuple("DatasetMatching", acc.keys())(*acc.values()) for acc in accumulate)
     return accumulate[0] if single_thresh else accumulate

@@ -22,10 +22,22 @@ class Single3DImageDataGenerator(SingleBaseDataGenerator):
 
     def __init__(self, zflip=False, **kwars):
         super().__init__(**kwars)
-        # self.z_size = self.X.shape[1]
         self.zflip = zflip
 
     def ensure_shape(self, img):
+        """
+        Ensures ``img`` correct axis number and their order.
+
+        Parameters
+        ----------
+        img : Numpy array representing a ``3D`` image
+            Image to use as sample.
+
+        Returns
+        -------
+        img : 4D Numpy array
+            Image to use as sample. E.g. ``(z, y, x, channels)``.
+        """
         # Shape adjustment
         if img.ndim == 3:
             img = np.expand_dims(img, -1)
@@ -64,6 +76,29 @@ class Single3DImageDataGenerator(SingleBaseDataGenerator):
         return image.transpose((2, 1, 0, 3))
 
     def save_aug_samples(self, img, orig_images, i, pos, out_dir, draw_grid):
+        """
+        Save transformed samples in order to check the generator.
+
+        Parameters
+        ----------
+        img : 4D Numpy array
+            Image to use as sample. E.g. ``(z, y, x, channels)``.
+
+        orig_images : dict
+            Dict where the original image is saved in "o_x".
+
+        i : int
+            Number of the sample within the transformed ones.
+
+        pos : int
+            Number of the sample within the dataset.
+
+        out_dir : str
+            Directory to save the images.
+
+        draw_grid : bool
+            Whether to draw a grid or not.
+        """
         # Original image
         if draw_grid:
             self.draw_grid(orig_images["o_x"])

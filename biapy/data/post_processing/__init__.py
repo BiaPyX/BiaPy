@@ -39,12 +39,8 @@ def apply_post_processing(cfg, data, Y=None):
         data = apply_median_filtering(data, axes=f, mf_size=val)
 
     if Y is not None:
-        iou_post = jaccard_index_numpy(
-            (Y > 0.5).astype(np.uint8), (data > 0.5).astype(np.uint8)
-        )
-        ov_iou_post = voc_calculation(
-            (Y > 0.5).astype(np.uint8), (data > 0.5).astype(np.uint8), iou_post
-        )
+        iou_post = jaccard_index_numpy((Y > 0.5).astype(np.uint8), (data > 0.5).astype(np.uint8))
+        ov_iou_post = voc_calculation((Y > 0.5).astype(np.uint8), (data > 0.5).astype(np.uint8), iou_post)
     else:
         iou_post, ov_iou_post = 0, 0
 

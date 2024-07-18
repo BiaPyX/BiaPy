@@ -240,11 +240,7 @@ def load_and_prepare_2D_train_data(
 
     # Discard images that do not surpass the foreground percentage threshold imposed
     if minimum_foreground_perc != -1 and Y_train is not None:
-        print(
-            "Data that do not have {}% of foreground is discarded".format(
-                minimum_foreground_perc
-            )
-        )
+        print("Data that do not have {}% of foreground is discarded".format(minimum_foreground_perc))
 
         X_train_keep = []
         Y_train_keep = []
@@ -252,9 +248,7 @@ def load_and_prepare_2D_train_data(
 
         samples_discarded = 0
         for i in tqdm(range(len(Y_train)), leave=False, disable=not is_main_process()):
-            labels, npixels = np.unique(
-                (Y_train[i] > 0).astype(np.uint8), return_counts=True
-            )
+            labels, npixels = np.unique((Y_train[i] > 0).astype(np.uint8), return_counts=True)
 
             total_pixels = 1
             for val in list(Y_train[i].shape):
@@ -301,11 +295,7 @@ def load_and_prepare_2D_train_data(
                     "Please, decrease the percentage to be more permissive"
                 )
         else:
-            print(
-                "*** Remaining data shape is {}".format(
-                    (len(X_train),) + X_train[0].shape[1:]
-                )
-            )
+            print("*** Remaining data shape is {}".format((len(X_train),) + X_train[0].shape[1:]))
             if len(X_train) <= 1 and create_val:
                 raise ValueError(
                     "0 or 1 sample left to train, which is insufficent. "
@@ -337,13 +327,9 @@ def load_and_prepare_2D_train_data(
                     random_state=seed,
                 )
             else:
-                X_train, X_val = train_test_split(
-                    X_train, test_size=val_split, shuffle=shuffle_val, random_state=seed
-                )
+                X_train, X_val = train_test_split(X_train, test_size=val_split, shuffle=shuffle_val, random_state=seed)
         else:
-            skf = StratifiedKFold(
-                n_splits=cross_val_nsplits, shuffle=shuffle_val, random_state=seed
-            )
+            skf = StratifiedKFold(n_splits=cross_val_nsplits, shuffle=shuffle_val, random_state=seed)
             fold = 1
             train_index, test_index = None, None
 
@@ -372,32 +358,18 @@ def load_and_prepare_2D_train_data(
                 fold += 1
 
             if len(test_index) > 5:
-                print(
-                    "Fold number {}. Printing the first 5 ids: {}".format(
-                        fold, test_index[:5]
-                    )
-                )
+                print("Fold number {}. Printing the first 5 ids: {}".format(fold, test_index[:5]))
             else:
-                print(
-                    "Fold number {}. Indexes used in cross validation: {}".format(
-                        fold, test_index
-                    )
-                )
+                print("Fold number {}. Indexes used in cross validation: {}".format(fold, test_index))
 
             # Then crop after cross validation
             if delay_crop:
                 # X_train
                 data = []
                 for img_num in range(len(X_train)):
-                    if X_train[img_num].shape != crop_shape[:2] + (
-                        X_train[img_num].shape[-1],
-                    ):
+                    if X_train[img_num].shape != crop_shape[:2] + (X_train[img_num].shape[-1],):
                         img = crop_data_with_overlap(
-                            (
-                                X_train[img_num][0]
-                                if isinstance(X_train, list)
-                                else np.expand_dims(X_train[img_num], 0)
-                            ),
+                            (X_train[img_num][0] if isinstance(X_train, list) else np.expand_dims(X_train[img_num], 0)),
                             crop_shape[:2] + (X_train[img_num].shape[-1],),
                             overlap=ov,
                             padding=padding,
@@ -416,9 +388,7 @@ def load_and_prepare_2D_train_data(
                         crop_shape[2],
                     )
                     for img_num in range(len(Y_train)):
-                        if Y_train[img_num].shape != scrop[:2] + (
-                            Y_train[img_num].shape[-1],
-                        ):
+                        if Y_train[img_num].shape != scrop[:2] + (Y_train[img_num].shape[-1],):
                             img = crop_data_with_overlap(
                                 (
                                     Y_train[img_num][0]
@@ -437,15 +407,9 @@ def load_and_prepare_2D_train_data(
                 # X_val
                 data = []
                 for img_num in range(len(X_val)):
-                    if X_val[img_num].shape != crop_shape[:2] + (
-                        X_val[img_num].shape[-1],
-                    ):
+                    if X_val[img_num].shape != crop_shape[:2] + (X_val[img_num].shape[-1],):
                         img = crop_data_with_overlap(
-                            (
-                                X_val[img_num][0]
-                                if isinstance(X_val, list)
-                                else np.expand_dims(X_val[img_num], 0)
-                            ),
+                            (X_val[img_num][0] if isinstance(X_val, list) else np.expand_dims(X_val[img_num], 0)),
                             crop_shape[:2] + (X_val[img_num].shape[-1],),
                             overlap=ov,
                             padding=padding,
@@ -464,15 +428,9 @@ def load_and_prepare_2D_train_data(
                         crop_shape[2],
                     )
                     for img_num in range(len(Y_val)):
-                        if Y_val[img_num].shape != scrop[:2] + (
-                            Y_val[img_num].shape[-1],
-                        ):
+                        if Y_val[img_num].shape != scrop[:2] + (Y_val[img_num].shape[-1],):
                             img = crop_data_with_overlap(
-                                (
-                                    Y_val[img_num][0]
-                                    if isinstance(Y_val, list)
-                                    else np.expand_dims(Y_val[img_num], 0)
-                                ),
+                                (Y_val[img_num][0] if isinstance(Y_val, list) else np.expand_dims(Y_val[img_num], 0)),
                                 scrop[:2] + (Y_val[img_num].shape[-1],),
                                 overlap=ov,
                                 padding=padding,
@@ -499,35 +457,15 @@ def load_and_prepare_2D_train_data(
                     "configured properly 'PROBLEM.SUPER_RESOLUTION.UPSCALING' variable"
                 )
 
-    s = (
-        X_train.shape
-        if not isinstance(X_train, list)
-        else (len(X_train),) + X_train[0].shape[1:]
-    )
+    s = X_train.shape if not isinstance(X_train, list) else (len(X_train),) + X_train[0].shape[1:]
     if Y_train is not None:
-        sm = (
-            Y_train.shape
-            if not isinstance(Y_train, list)
-            else (len(Y_train),) + Y_train[0].shape[1:]
-        )
+        sm = Y_train.shape if not isinstance(Y_train, list) else (len(Y_train),) + Y_train[0].shape[1:]
     if create_val:
-        sv = (
-            X_val.shape
-            if not isinstance(X_val, list)
-            else (len(X_val),) + X_val[0].shape[1:]
-        )
+        sv = X_val.shape if not isinstance(X_val, list) else (len(X_val),) + X_val[0].shape[1:]
         if Y_val is not None:
-            svm = (
-                Y_val.shape
-                if not isinstance(Y_val, list)
-                else (len(Y_val),) + Y_val[0].shape[1:]
-            )
+            svm = Y_val.shape if not isinstance(Y_val, list) else (len(Y_val),) + Y_val[0].shape[1:]
         if not isinstance(X_train, list):
-            print(
-                "Not all samples seem to have the same shape. Number of samples: {}".format(
-                    len(X_train)
-                )
-            )
+            print("Not all samples seem to have the same shape. Number of samples: {}".format(len(X_train)))
         print("*** Loaded train data shape is: {}".format(s))
         if Y_train is not None:
             print("*** Loaded train GT shape is: {}".format(sm))
@@ -547,9 +485,7 @@ def load_and_prepare_2D_train_data(
         return X_train, Y_train, t_filenames
 
 
-def crop_data_with_overlap(
-    data, crop_shape, data_mask=None, overlap=(0, 0), padding=(0, 0), verbose=True
-):
+def crop_data_with_overlap(data, crop_shape, data_mask=None, overlap=(0, 0), padding=(0, 0), verbose=True):
     """
     Crop data into small square pieces with overlap. The difference with :func:`~crop_data` is that this function
     allows you to create patches with overlap.
@@ -642,21 +578,13 @@ def crop_data_with_overlap(
     """
 
     if data.ndim != 4:
-        raise ValueError(
-            "data expected to be 4 dimensional, given {}".format(data.shape)
-        )
+        raise ValueError("data expected to be 4 dimensional, given {}".format(data.shape))
     if data_mask is not None:
         if data.ndim != 4:
-            raise ValueError(
-                "data mask expected to be 4 dimensional, given {}".format(
-                    data_mask.shape
-                )
-            )
+            raise ValueError("data mask expected to be 4 dimensional, given {}".format(data_mask.shape))
         if data.shape[:-1] != data_mask.shape[:-1]:
             raise ValueError(
-                "data and data_mask shapes mismatch: {} vs {}".format(
-                    data.shape[:-1], data_mask.shape[:-1]
-                )
+                "data and data_mask shapes mismatch: {} vs {}".format(data.shape[:-1], data_mask.shape[:-1])
             )
 
     for i, p in enumerate(padding):
@@ -667,9 +595,7 @@ def crop_data_with_overlap(
                 )
             )
     if len(crop_shape) != 3:
-        raise ValueError(
-            "crop_shape expected to be of length 3, given {}".format(crop_shape)
-        )
+        raise ValueError("crop_shape expected to be of length 3, given {}".format(crop_shape))
     if crop_shape[0] > data.shape[1]:
         raise ValueError(
             "'crop_shape[0]' {} greater than {} (you can reduce 'DATA.PATCH_SIZE' or use 'DATA.REFLECT_TO_COMPLETE_SHAPE')".format(
@@ -687,11 +613,7 @@ def crop_data_with_overlap(
 
     if verbose:
         print("### OV-CROP ###")
-        print(
-            "Cropping {} images into {} with overlapping. . .".format(
-                data.shape, crop_shape
-            )
-        )
+        print("Cropping {} images into {} with overlapping. . .".format(data.shape, crop_shape))
         print("Minimum overlap selected: {}".format(overlap))
         print("Padding: {}".format(padding))
 
@@ -717,11 +639,7 @@ def crop_data_with_overlap(
     # Y
     step_y = int((crop_shape[0] - padding[0] * 2) * overlap_y)
     crops_per_y = math.ceil(data.shape[1] / step_y)
-    last_y = (
-        0
-        if crops_per_y == 1
-        else (((crops_per_y - 1) * step_y) + crop_shape[0]) - padded_data.shape[1]
-    )
+    last_y = 0 if crops_per_y == 1 else (((crops_per_y - 1) * step_y) + crop_shape[0]) - padded_data.shape[1]
     ovy_per_block = last_y // (crops_per_y - 1) if crops_per_y > 1 else 0
     step_y -= ovy_per_block
     last_y -= ovy_per_block * (crops_per_y - 1)
@@ -729,11 +647,7 @@ def crop_data_with_overlap(
     # X
     step_x = int((crop_shape[1] - padding[1] * 2) * overlap_x)
     crops_per_x = math.ceil(data.shape[2] / step_x)
-    last_x = (
-        0
-        if crops_per_x == 1
-        else (((crops_per_x - 1) * step_x) + crop_shape[1]) - padded_data.shape[2]
-    )
+    last_x = 0 if crops_per_x == 1 else (((crops_per_x - 1) * step_x) + crop_shape[1]) - padded_data.shape[2]
     ovx_per_block = last_x // (crops_per_x - 1) if crops_per_x > 1 else 0
     step_x -= ovx_per_block
     last_x -= ovx_per_block * (crops_per_x - 1)
@@ -764,12 +678,8 @@ def crop_data_with_overlap(
     for z in range(data.shape[0]):
         for y in range(crops_per_y):
             for x in range(crops_per_x):
-                d_y = (
-                    0 if (y * step_y + crop_shape[0]) < padded_data.shape[1] else last_y
-                )
-                d_x = (
-                    0 if (x * step_x + crop_shape[1]) < padded_data.shape[2] else last_x
-                )
+                d_y = 0 if (y * step_y + crop_shape[0]) < padded_data.shape[1] else last_y
+                d_x = 0 if (x * step_x + crop_shape[1]) < padded_data.shape[2] else last_x
 
                 cropped_data[c] = padded_data[
                     z,
@@ -931,9 +841,7 @@ def merge_data_with_overlap(
     if data_mask is not None:
         if data.shape[:-1] != data_mask.shape[:-1]:
             raise ValueError(
-                "data and data_mask shapes mismatch: {} vs {}".format(
-                    data.shape[:-1], data_mask.shape[:-1]
-                )
+                "data and data_mask shapes mismatch: {} vs {}".format(data.shape[:-1], data_mask.shape[:-1])
             )
 
     for i, p in enumerate(padding):
@@ -946,11 +854,7 @@ def merge_data_with_overlap(
 
     if verbose:
         print("### MERGE-OV-CROP ###")
-        print(
-            "Merging {} images into {} with overlapping . . .".format(
-                data.shape, original_shape
-            )
-        )
+        print("Merging {} images into {} with overlapping . . .".format(data.shape, original_shape))
         print("Minimum overlap selected: {}".format(overlap))
         print("Padding: {}".format(padding))
 
@@ -969,9 +873,7 @@ def merge_data_with_overlap(
 
     merged_data = np.zeros((original_shape), dtype=np.float32)
     if data_mask is not None:
-        merged_data_mask = np.zeros(
-            (original_shape[:-1] + (data_mask.shape[-1],)), dtype=np.float32
-        )
+        merged_data_mask = np.zeros((original_shape[:-1] + (data_mask.shape[-1],)), dtype=np.float32)
         data_mask = data_mask[
             :,
             padding[0] : data_mask.shape[1] - padding[0],
@@ -994,11 +896,7 @@ def merge_data_with_overlap(
     # Y
     step_y = int((pad_input_shape[1] - padding[0] * 2) * overlap_y)
     crops_per_y = math.ceil(original_shape[1] / step_y)
-    last_y = (
-        0
-        if crops_per_y == 1
-        else (((crops_per_y - 1) * step_y) + pad_input_shape[1]) - padded_data_shape[0]
-    )
+    last_y = 0 if crops_per_y == 1 else (((crops_per_y - 1) * step_y) + pad_input_shape[1]) - padded_data_shape[0]
     ovy_per_block = last_y // (crops_per_y - 1) if crops_per_y > 1 else 0
     step_y -= ovy_per_block
     last_y -= ovy_per_block * (crops_per_y - 1)
@@ -1006,11 +904,7 @@ def merge_data_with_overlap(
     # X
     step_x = int((pad_input_shape[2] - padding[1] * 2) * overlap_x)
     crops_per_x = math.ceil(original_shape[2] / step_x)
-    last_x = (
-        0
-        if crops_per_x == 1
-        else (((crops_per_x - 1) * step_x) + pad_input_shape[2]) - padded_data_shape[1]
-    )
+    last_x = 0 if crops_per_x == 1 else (((crops_per_x - 1) * step_x) + pad_input_shape[2]) - padded_data_shape[1]
     ovx_per_block = last_x // (crops_per_x - 1) if crops_per_x > 1 else 0
     step_x -= ovx_per_block
     last_x -= ovx_per_block * (crops_per_x - 1)
@@ -1078,9 +972,7 @@ def merge_data_with_overlap(
 
     merged_data = np.true_divide(merged_data, ov_map_counter).astype(data.dtype)
     if data_mask is not None:
-        merged_data_mask = np.true_divide(merged_data_mask, ov_map_counter).astype(
-            data_mask.dtype
-        )
+        merged_data_mask = np.true_divide(merged_data_mask, ov_map_counter).astype(data_mask.dtype)
 
     # Save a copy of the merged data with the overlapped regions colored as: green when 2 crops overlap, yellow when
     # (2 < x < 6) and red when more than 6 overlaps are merged
@@ -1107,19 +999,13 @@ def merge_data_with_overlap(
                     px[im_i, im_j] = (255, 255, 255, 255)
                 # Overlap zone
                 elif ov_map[im_j, im_i, 0] == -3:
-                    px[im_i, im_j] = tuple(
-                        map(sum, zip((0, 74, 0, 125), px[im_i, im_j]))
-                    )
+                    px[im_i, im_j] = tuple(map(sum, zip((0, 74, 0, 125), px[im_i, im_j])))
                 # 2 < x < 6 overlaps
                 elif ov_map[im_j, im_i, 0] == -2:
-                    px[im_i, im_j] = tuple(
-                        map(sum, zip((74, 74, 0, 125), px[im_i, im_j]))
-                    )
+                    px[im_i, im_j] = tuple(map(sum, zip((74, 74, 0, 125), px[im_i, im_j])))
                 # 6 >= overlaps
                 elif ov_map[im_j, im_i, 0] == -1:
-                    px[im_i, im_j] = tuple(
-                        map(sum, zip((74, 0, 0, 125), px[im_i, im_j]))
-                    )
+                    px[im_i, im_j] = tuple(map(sum, zip((74, 0, 0, 125), px[im_i, im_j])))
 
         im.save(os.path.join(out_dir, prefix + "merged_ov_map.png"))
 
@@ -1290,9 +1176,7 @@ def load_data_classification(
                     f"Validation data can not be extracted from training data as the number of splits ({cross_val_nsplits}) "
                     f"is greater than the number of samples {len(X_data)}. Please check the data."
                 )
-            skf = StratifiedKFold(
-                n_splits=cross_val_nsplits, shuffle=shuffle_val, random_state=seed
-            )
+            skf = StratifiedKFold(n_splits=cross_val_nsplits, shuffle=shuffle_val, random_state=seed)
             fold = 1
             train_index, test_index = None, None
 
@@ -1314,17 +1198,9 @@ def load_data_classification(
                     break
                 fold += 1
             if len(test_index) > 5:
-                print(
-                    "Fold number {}. Printing the first 5 ids: {}".format(
-                        fold, test_index[:5]
-                    )
-                )
+                print("Fold number {}. Printing the first 5 ids: {}".format(fold, test_index[:5]))
             else:
-                print(
-                    "Fold number {}. Indexes used in cross validation: {}".format(
-                        fold, test_index
-                    )
-                )
+                print("Fold number {}. Indexes used in cross validation: {}".format(fold, test_index))
 
     if create_val:
         print("*** Loaded train data shape is: {}".format(X_data.shape))

@@ -53,9 +53,7 @@ class Detection_Workflow(Base_Workflow):
     """
 
     def __init__(self, cfg, job_identifier, device, args, **kwargs):
-        super(Detection_Workflow, self).__init__(
-            cfg, job_identifier, device, args, **kwargs
-        )
+        super(Detection_Workflow, self).__init__(cfg, job_identifier, device, args, **kwargs)
 
         # Detection stats
         self.stats["d_precision"] = 0
@@ -107,10 +105,7 @@ class Detection_Workflow(Base_Workflow):
             self.stats["d_FP_by_chunks"] = 0
             self.stats["d_FN_by_chunks"] = 0
 
-        if (
-            self.cfg.TEST.POST_PROCESSING.DET_WATERSHED
-            or self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS
-        ):
+        if self.cfg.TEST.POST_PROCESSING.DET_WATERSHED or self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS:
             self.post_processing["detection_post"] = True
         else:
             self.post_processing["detection_post"] = False
@@ -149,9 +144,7 @@ class Detection_Workflow(Base_Workflow):
         elif self.cfg.LOSS.TYPE == "DICE":
             self.loss = DiceLoss()
         elif self.cfg.LOSS.TYPE == "W_CE_DICE":
-            self.loss = DiceBCELoss(
-                w_dice=self.cfg.LOSS.WEIGHTS[0], w_bce=self.cfg.LOSS.WEIGHTS[1]
-            )
+            self.loss = DiceBCELoss(w_dice=self.cfg.LOSS.WEIGHTS[0], w_bce=self.cfg.LOSS.WEIGHTS[1])
 
     def metric_calculation(self, output, targets, metric_logger=None):
         """
@@ -181,9 +174,7 @@ class Detection_Workflow(Base_Workflow):
             else:
                 return train_iou
 
-    def detection_process(
-        self, pred, filenames, metric_names=[], patch_pos=None, verbose=False
-    ):
+    def detection_process(self, pred, filenames, metric_names=[], patch_pos=None, verbose=False):
         """
         Detection workflow engine for test/inference. Process model's prediction to prepare detection output and
         calculate metrics.
@@ -240,9 +231,7 @@ class Detection_Workflow(Base_Workflow):
                 if len(self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS) == 1:
                     radius = self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS[0]
                 else:
-                    radius = self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS[
-                        channel
-                    ]
+                    radius = self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS[channel]
 
                 pred_coordinates = remove_close_points(
                     pred_coordinates, radius, self.cfg.DATA.TEST.RESOLUTION, ndim=ndim
@@ -255,11 +244,7 @@ class Detection_Workflow(Base_Workflow):
         # Remove close points again seeing all classes together, as it can be that a point is detected in both classes
         # if there is not clear distinction between them
         classes = 1 if self.cfg.MODEL.N_CLASSES <= 2 else self.cfg.MODEL.N_CLASSES
-        if (
-            self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS
-            and classes > 1
-            and not self.by_chunks
-        ):
+        if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS and classes > 1 and not self.by_chunks:
             if self.cfg.TEST.VERBOSE:
                 print("All classes together")
             radius = np.min(self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS)
@@ -305,11 +290,7 @@ class Detection_Workflow(Base_Workflow):
                         write_chunked_data(
                             np.expand_dims(np.expand_dims(pred_id_img, -1), 0),
                             self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
-                            os.path.splitext(filenames[0])[0]
-                            + "_class"
-                            + str(n + 1)
-                            + "_pred_ids"
-                            + file_ext,
+                            os.path.splitext(filenames[0])[0] + "_class" + str(n + 1) + "_pred_ids" + file_ext,
                             dtype_str="uint32",
                             verbose=self.cfg.TEST.VERBOSE,
                         )
@@ -317,12 +298,7 @@ class Detection_Workflow(Base_Workflow):
                         save_tif(
                             np.expand_dims(np.expand_dims(pred_id_img, 0), -1),
                             self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
-                            [
-                                os.path.splitext(filenames[0])[0]
-                                + "_class"
-                                + str(n + 1)
-                                + "_pred_ids.tif"
-                            ],
+                            [os.path.splitext(filenames[0])[0] + "_class" + str(n + 1) + "_pred_ids.tif"],
                             verbose=self.cfg.TEST.VERBOSE,
                         )
 
@@ -513,9 +489,7 @@ class Detection_Workflow(Base_Workflow):
             del aux
 
             # Save just the points and their probabilities
-            os.makedirs(
-                self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, exist_ok=True
-            )
+            os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, exist_ok=True)
             df.to_csv(
                 os.path.join(
                     self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
@@ -530,22 +504,16 @@ class Detection_Workflow(Base_Workflow):
             gt_all_coords = []
 
             # Read the GT coordinates from the CSV file
-            csv_filename = os.path.join(
-                self.original_test_mask_path, os.path.splitext(filenames[0])[0] + ".csv"
-            )
+            csv_filename = os.path.join(self.original_test_mask_path, os.path.splitext(filenames[0])[0] + ".csv")
             if not os.path.exists(csv_filename):
                 if self.cfg.TEST.VERBOSE:
                     print(
                         "WARNING: The CSV file seems to have different name than image. Using the CSV file "
                         "with the same position as the CSV in the directory. Check if it is correct!"
                     )
-                csv_filename = os.path.join(
-                    self.original_test_mask_path, self.csv_files[self.f_numbers[0]]
-                )
+                csv_filename = os.path.join(self.original_test_mask_path, self.csv_files[self.f_numbers[0]])
                 if self.cfg.TEST.VERBOSE:
-                    print(
-                        "Its respective CSV file seems to be: {}".format(csv_filename)
-                    )
+                    print("Its respective CSV file seems to be: {}".format(csv_filename))
             if self.cfg.TEST.VERBOSE:
                 print("Reading GT data from: {}".format(csv_filename))
             df_gt = pd.read_csv(csv_filename)
@@ -555,17 +523,13 @@ class Detection_Workflow(Base_Workflow):
             class_info = None
             if self.cfg.PROBLEM.NDIM == "3D":
                 xcoords = df_gt["axis-2"].tolist()
-                gt_coordinates = [
-                    [z, y, x] for z, y, x in zip(zcoords, ycoords, xcoords)
-                ]
+                gt_coordinates = [[z, y, x] for z, y, x in zip(zcoords, ycoords, xcoords)]
             else:
                 gt_coordinates = [[0, y, x] for y, x in zip(zcoords, ycoords)]
 
             if classes > 1:
                 if "class" not in df_gt:
-                    raise ValueError(
-                        "MODEL.N_CLASSES > 1 but no class specified in CSV file"
-                    )
+                    raise ValueError("MODEL.N_CLASSES > 1 but no class specified in CSV file")
                 else:
                     class_info = df_gt["class"].tolist()
 
@@ -584,14 +548,8 @@ class Detection_Workflow(Base_Workflow):
                         y = y - patch_pos[1][0]
                         x = x - patch_pos[2][0]
                         patch_gt_coordinates.append([z, y, x])
-                        if (
-                            z >= pred_shape[0]
-                            or y >= pred_shape[1]
-                            or x >= pred_shape[2]
-                        ):
-                            raise ValueError(
-                                f"Point [{z},{y},{x}] outside image with shape {pred_shape}"
-                            )
+                        if z >= pred_shape[0] or y >= pred_shape[1] or x >= pred_shape[2]:
+                            raise ValueError(f"Point [{z},{y},{x}] outside image with shape {pred_shape}")
                 gt_coordinates = patch_gt_coordinates.copy()
             gt_all_coords.append(gt_coordinates)
 
@@ -602,16 +560,14 @@ class Detection_Workflow(Base_Workflow):
                         [
                             self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[0],
                             max(
-                                pred_shape[0]
-                                - self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[0],
+                                pred_shape[0] - self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[0],
                                 0,
                             ),
                         ],
                         [
                             self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[1],
                             max(
-                                pred_shape[1]
-                                - self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[1],
+                                pred_shape[1] - self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[1],
                                 0,
                             ),
                         ],
@@ -621,24 +577,21 @@ class Detection_Workflow(Base_Workflow):
                         [
                             self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[0],
                             max(
-                                pred_shape[0]
-                                - self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[0],
+                                pred_shape[0] - self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[0],
                                 0,
                             ),
                         ],
                         [
                             self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[1],
                             max(
-                                pred_shape[1]
-                                - self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[1],
+                                pred_shape[1] - self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[1],
                                 0,
                             ),
                         ],
                         [
                             self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[2],
                             max(
-                                pred_shape[2]
-                                - self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[2],
+                                pred_shape[2] - self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[2],
                                 0,
                             ),
                         ],
@@ -686,38 +639,24 @@ class Detection_Workflow(Base_Workflow):
                     if self.cfg.PROBLEM.NDIM == "2D":
                         if gt_assoc is not None:
                             gt_assoc = gt_assoc.drop(columns=["axis-0"])
-                            gt_assoc = gt_assoc.rename(
-                                columns={"axis-1": "axis-0", "axis-2": "axis-1"}
-                            )
+                            gt_assoc = gt_assoc.rename(columns={"axis-1": "axis-0", "axis-2": "axis-1"})
                         if fp is not None:
                             fp = fp.drop(columns=["axis-0"])
-                            fp = fp.rename(
-                                columns={"axis-1": "axis-0", "axis-2": "axis-1"}
-                            )
+                            fp = fp.rename(columns={"axis-1": "axis-0", "axis-2": "axis-1"})
                     if gt_assoc is not None:
-                        os.makedirs(
-                            self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, exist_ok=True
-                        )
+                        os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, exist_ok=True)
                         gt_assoc.to_csv(
                             os.path.join(
                                 self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
-                                os.path.splitext(filenames[0])[0]
-                                + "_class"
-                                + str(ch + 1)
-                                + "_gt_assoc.csv",
+                                os.path.splitext(filenames[0])[0] + "_class" + str(ch + 1) + "_gt_assoc.csv",
                             )
                         )
                     if fp is not None:
-                        os.makedirs(
-                            self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, exist_ok=True
-                        )
+                        os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, exist_ok=True)
                         fp.to_csv(
                             os.path.join(
                                 self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
-                                os.path.splitext(filenames[0])[0]
-                                + "_class"
-                                + str(ch + 1)
-                                + "_fp.csv",
+                                os.path.splitext(filenames[0])[0] + "_class" + str(ch + 1) + "_fp.csv",
                             )
                         )
                 else:
@@ -753,9 +692,7 @@ class Detection_Workflow(Base_Workflow):
                 self.stats[metric_names[5]] += all_channel_d_metrics[5]
 
             if self.cfg.TEST.VERBOSE:
-                print(
-                    "Creating the image with a summary of detected points and false positives with colors . . ."
-                )
+                print("Creating the image with a summary of detected points and false positives with colors . . .")
             if not self.by_chunks:
                 points_pred = np.zeros(pred_shape[:-1] + (3,), dtype=np.uint8)
                 for ch, gt_coords in enumerate(gt_all_coords):
@@ -773,15 +710,9 @@ class Detection_Workflow(Base_Workflow):
                         z, y, x = cor
                         z, y, x = int(z), int(y), int(x)
                         if gt_assoc is not None:
-                            if (
-                                gt_assoc[gt_assoc["gt_id"] == j + 1]["tag"].iloc[0]
-                                == "TP"
-                            ):
+                            if gt_assoc[gt_assoc["gt_id"] == j + 1]["tag"].iloc[0] == "TP":
                                 points_pred[z, y, x] = (0, 255, 0)  # Green
-                            elif (
-                                gt_assoc[gt_assoc["gt_id"] == j + 1]["tag"].iloc[0]
-                                == "NC"
-                            ):
+                            elif gt_assoc[gt_assoc["gt_id"] == j + 1]["tag"].iloc[0] == "NC":
                                 points_pred[z, y, x] = (150, 150, 150)  # Gray
                             else:
                                 points_pred[z, y, x] = (255, 0, 0)  # Red
@@ -797,11 +728,7 @@ class Detection_Workflow(Base_Workflow):
                         write_chunked_data(
                             np.expand_dims(np.expand_dims(gt_id_img, -1), 0),
                             self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
-                            os.path.splitext(filenames[0])[0]
-                            + "_class"
-                            + str(ch + 1)
-                            + "_gt_ids"
-                            + file_ext,
+                            os.path.splitext(filenames[0])[0] + "_class" + str(ch + 1) + "_gt_ids" + file_ext,
                             dtype_str="uint32",
                             verbose=self.cfg.TEST.VERBOSE,
                         )
@@ -809,12 +736,7 @@ class Detection_Workflow(Base_Workflow):
                         save_tif(
                             np.expand_dims(np.expand_dims(gt_id_img, 0), -1),
                             self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
-                            [
-                                os.path.splitext(filenames[0])[0]
-                                + "_class"
-                                + str(ch + 1)
-                                + "_gt_ids.csv"
-                            ],
+                            [os.path.splitext(filenames[0])[0] + "_class" + str(ch + 1) + "_gt_ids.csv"],
                             verbose=self.cfg.TEST.VERBOSE,
                         )
 
@@ -832,9 +754,7 @@ class Detection_Workflow(Base_Workflow):
                 # Dilate and save the predicted points for the current class
                 for i in range(points_pred.shape[0]):
                     for j in range(points_pred.shape[-1]):
-                        points_pred[i, ..., j] = dilation(
-                            points_pred[i, ..., j], disk(3)
-                        )
+                        points_pred[i, ..., j] = dilation(points_pred[i, ..., j], disk(3))
                 if file_ext in [".hdf5", ".h5", ".zarr"]:
                     write_chunked_data(
                         np.expand_dims(points_pred, 0),
@@ -866,30 +786,16 @@ class Detection_Workflow(Base_Workflow):
 
         if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
             if self.by_chunks:
-                self.stats["d_precision_by_chunks"] = (
-                    self.stats["d_precision_by_chunks"] / image_counter
-                )
-                self.stats["d_recall_by_chunks"] = (
-                    self.stats["d_recall_by_chunks"] / image_counter
-                )
-                self.stats["d_F1_by_chunks"] = (
-                    self.stats["d_F1_by_chunks"] / image_counter
-                )
+                self.stats["d_precision_by_chunks"] = self.stats["d_precision_by_chunks"] / image_counter
+                self.stats["d_recall_by_chunks"] = self.stats["d_recall_by_chunks"] / image_counter
+                self.stats["d_F1_by_chunks"] = self.stats["d_F1_by_chunks"] / image_counter
             else:
                 if not self.cfg.TEST.FULL_IMG:
-                    self.stats["d_precision_merge_patches"] = (
-                        self.stats["d_precision_merge_patches"] / image_counter
-                    )
-                    self.stats["d_recall_merge_patches"] = (
-                        self.stats["d_recall_merge_patches"] / image_counter
-                    )
-                    self.stats["d_F1_merge_patches"] = (
-                        self.stats["d_F1_merge_patches"] / image_counter
-                    )
+                    self.stats["d_precision_merge_patches"] = self.stats["d_precision_merge_patches"] / image_counter
+                    self.stats["d_recall_merge_patches"] = self.stats["d_recall_merge_patches"] / image_counter
+                    self.stats["d_F1_merge_patches"] = self.stats["d_F1_merge_patches"] / image_counter
                 else:
-                    self.stats["d_precision"] = (
-                        self.stats["d_precision"] / image_counter
-                    )
+                    self.stats["d_precision"] = self.stats["d_precision"] / image_counter
                     self.stats["d_recall"] = self.stats["d_recall"] / image_counter
                     self.stats["d_F1"] = self.stats["d_F1"] / image_counter
 
@@ -918,7 +824,7 @@ class Detection_Workflow(Base_Workflow):
                 ],
             )
         else:
-            NotImplementedError
+            raise NotImplementedError
 
     def process_patch(
         self,
@@ -995,8 +901,7 @@ class Detection_Workflow(Base_Workflow):
                     ),
                     min(
                         z_dim,
-                        self.cfg.DATA.PATCH_SIZE[0] * (z + 1)
-                        + self.cfg.DATA.TEST.PADDING[0],
+                        self.cfg.DATA.PATCH_SIZE[0] * (z + 1) + self.cfg.DATA.TEST.PADDING[0],
                     ),
                     max(
                         0,
@@ -1004,8 +909,7 @@ class Detection_Workflow(Base_Workflow):
                     ),
                     min(
                         y_dim,
-                        self.cfg.DATA.PATCH_SIZE[1] * (y + 1)
-                        + self.cfg.DATA.TEST.PADDING[1],
+                        self.cfg.DATA.PATCH_SIZE[1] * (y + 1) + self.cfg.DATA.TEST.PADDING[1],
                     ),
                     max(
                         0,
@@ -1013,8 +917,7 @@ class Detection_Workflow(Base_Workflow):
                     ),
                     min(
                         x_dim,
-                        self.cfg.DATA.PATCH_SIZE[2] * (x + 1)
-                        + self.cfg.DATA.TEST.PADDING[2],
+                        self.cfg.DATA.PATCH_SIZE[2] * (x + 1) + self.cfg.DATA.TEST.PADDING[2],
                     ),
                 )
             )
@@ -1027,24 +930,21 @@ class Detection_Workflow(Base_Workflow):
                 max(0, z * self.cfg.DATA.PATCH_SIZE[0] - self.cfg.DATA.TEST.PADDING[0]),
                 min(
                     z_dim,
-                    self.cfg.DATA.PATCH_SIZE[0] * (z + 1)
-                    + self.cfg.DATA.TEST.PADDING[0],
+                    self.cfg.DATA.PATCH_SIZE[0] * (z + 1) + self.cfg.DATA.TEST.PADDING[0],
                 ),
             ),
             slice(
                 max(0, y * self.cfg.DATA.PATCH_SIZE[1] - self.cfg.DATA.TEST.PADDING[1]),
                 min(
                     y_dim,
-                    self.cfg.DATA.PATCH_SIZE[1] * (y + 1)
-                    + self.cfg.DATA.TEST.PADDING[1],
+                    self.cfg.DATA.PATCH_SIZE[1] * (y + 1) + self.cfg.DATA.TEST.PADDING[1],
                 ),
             ),
             slice(
                 max(0, x * self.cfg.DATA.PATCH_SIZE[2] - self.cfg.DATA.TEST.PADDING[2]),
                 min(
                     x_dim,
-                    self.cfg.DATA.PATCH_SIZE[2] * (x + 1)
-                    + self.cfg.DATA.TEST.PADDING[2],
+                    self.cfg.DATA.PATCH_SIZE[2] * (x + 1) + self.cfg.DATA.TEST.PADDING[2],
                 ),
             ),
             slice(None),  # Channel
@@ -1079,9 +979,7 @@ class Detection_Workflow(Base_Workflow):
         df_patch = self.detection_process(patch, [fname], patch_pos=patch_pos)
         if df_patch is not None:  # if there is at least one point detected
 
-            if (
-                z * self.cfg.DATA.PATCH_SIZE[0] - self.cfg.DATA.TEST.PADDING[0] >= 0
-            ):  # if a patch was added
+            if z * self.cfg.DATA.PATCH_SIZE[0] - self.cfg.DATA.TEST.PADDING[0] >= 0:  # if a patch was added
                 df_patch["axis-0"] = (
                     df_patch["axis-0"] - self.cfg.DATA.TEST.PADDING[0]
                 )  # shift the coordinates to the correct patch position
@@ -1090,9 +988,7 @@ class Detection_Workflow(Base_Workflow):
             if x * self.cfg.DATA.PATCH_SIZE[2] - self.cfg.DATA.TEST.PADDING[2] >= 0:
                 df_patch["axis-2"] = df_patch["axis-2"] - self.cfg.DATA.TEST.PADDING[2]
 
-            df_patch = df_patch[
-                df_patch["axis-0"] >= 0
-            ]  # remove all coordinate from the previous patch
+            df_patch = df_patch[df_patch["axis-0"] >= 0]  # remove all coordinate from the previous patch
             df_patch = df_patch[
                 df_patch["axis-0"] < self.cfg.DATA.PATCH_SIZE[0]
             ]  # remove all coordinate from the next patch
@@ -1138,9 +1034,7 @@ class Detection_Workflow(Base_Workflow):
         # Load H5/Zarr
         pred_file, pred = read_chunked_data(filename)
 
-        t_dim, z_dim, c_dim, y_dim, x_dim = order_dimensions(
-            pred.shape, self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER
-        )
+        t_dim, z_dim, c_dim, y_dim, x_dim = order_dimensions(pred.shape, self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER)
         pred_shape = [z_dim, y_dim, x_dim]
 
         # Fill the new data
@@ -1151,9 +1045,7 @@ class Detection_Workflow(Base_Workflow):
         d = len(str(total_patches))
         c = 1
 
-        workers = (
-            self.cfg.SYSTEM.NUM_WORKERS if self.cfg.SYSTEM.NUM_WORKERS > 0 else None
-        )
+        workers = self.cfg.SYSTEM.NUM_WORKERS if self.cfg.SYSTEM.NUM_WORKERS > 0 else None
         with ThreadPoolExecutor(max_workers=workers) as executor:
             futures = []
             for z in tqdm(range(z_vols), disable=not is_main_process()):
@@ -1241,22 +1133,16 @@ class Detection_Workflow(Base_Workflow):
             print("Calculating detection metrics with all the points found . . .")
 
             # Read the GT coordinates from the CSV file
-            csv_filename = os.path.join(
-                self.original_test_mask_path, os.path.splitext(filename[0])[0] + ".csv"
-            )
+            csv_filename = os.path.join(self.original_test_mask_path, os.path.splitext(filename[0])[0] + ".csv")
             if not os.path.exists(csv_filename):
                 if self.cfg.TEST.VERBOSE:
                     print(
                         "WARNING: The CSV file seems to have different name than image. Using the CSV file "
                         "with the same position as the CSV in the directory. Check if it is correct!"
                     )
-                csv_filename = os.path.join(
-                    self.original_test_mask_path, self.csv_files[self.f_numbers[0]]
-                )
+                csv_filename = os.path.join(self.original_test_mask_path, self.csv_files[self.f_numbers[0]])
                 if self.cfg.TEST.VERBOSE:
-                    print(
-                        "Its respective CSV file seems to be: {}".format(csv_filename)
-                    )
+                    print("Its respective CSV file seems to be: {}".format(csv_filename))
             if self.cfg.TEST.VERBOSE:
                 print("Reading GT data from: {}".format(csv_filename))
             df_gt = pd.read_csv(csv_filename)
@@ -1277,24 +1163,21 @@ class Detection_Workflow(Base_Workflow):
                     [
                         self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[0],
                         max(
-                            pred_shape[0]
-                            - self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[0],
+                            pred_shape[0] - self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[0],
                             0,
                         ),
                     ],
                     [
                         self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[1],
                         max(
-                            pred_shape[1]
-                            - self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[1],
+                            pred_shape[1] - self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[1],
                             0,
                         ),
                     ],
                     [
                         self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[2],
                         max(
-                            pred_shape[2]
-                            - self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[2],
+                            pred_shape[2] - self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[2],
                             0,
                         ),
                     ],
@@ -1337,9 +1220,7 @@ class Detection_Workflow(Base_Workflow):
             if self.cfg.DATA.PATCH_SIZE[-1] != self._X.shape[-1]:
                 raise ValueError(
                     "Channel of the DATA.PATCH_SIZE given {} does not correspond with the loaded image {}. "
-                    "Please, check the channels of the images!".format(
-                        self.cfg.DATA.PATCH_SIZE[-1], self._X.shape[-1]
-                    )
+                    "Please, check the channels of the images!".format(self.cfg.DATA.PATCH_SIZE[-1], self._X.shape[-1])
                 )
 
             ##################
@@ -1428,7 +1309,7 @@ class Detection_Workflow(Base_Workflow):
                 ["d_precision", "d_recall", "d_F1", "d_TP", "d_FP", "d_FN"],
             )
         else:
-            NotImplementedError
+            raise NotImplementedError
 
     def after_all_images(self):
         """
@@ -1454,91 +1335,29 @@ class Detection_Workflow(Base_Workflow):
         print("Detection specific metrics:")
         if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
             if self.by_chunks:
-                print(
-                    "Detection - Test Precision (per image): {}".format(
-                        self.stats["d_precision_by_chunks"]
-                    )
-                )
-                print(
-                    "Detection - Test Recall (per image): {}".format(
-                        self.stats["d_recall_by_chunks"]
-                    )
-                )
-                print(
-                    "Detection - Test F1 (per image): {}".format(
-                        self.stats["d_F1_by_chunks"]
-                    )
-                )
-                print(
-                    "Detection - Test TP (per image): {}".format(
-                        self.stats["d_TP_by_chunks"]
-                    )
-                )
-                print(
-                    "Detection - Test FP (per image): {}".format(
-                        self.stats["d_FP_by_chunks"]
-                    )
-                )
-                print(
-                    "Detection - Test FN (per image): {}".format(
-                        self.stats["d_FN_by_chunks"]
-                    )
-                )
+                print("Detection - Test Precision (per image): {}".format(self.stats["d_precision_by_chunks"]))
+                print("Detection - Test Recall (per image): {}".format(self.stats["d_recall_by_chunks"]))
+                print("Detection - Test F1 (per image): {}".format(self.stats["d_F1_by_chunks"]))
+                print("Detection - Test TP (per image): {}".format(self.stats["d_TP_by_chunks"]))
+                print("Detection - Test FP (per image): {}".format(self.stats["d_FP_by_chunks"]))
+                print("Detection - Test FN (per image): {}".format(self.stats["d_FN_by_chunks"]))
             else:
                 if not self.cfg.TEST.FULL_IMG:
                     print(
-                        "Detection - Test Precision (merge patches): {}".format(
-                            self.stats["d_precision_merge_patches"]
-                        )
+                        "Detection - Test Precision (merge patches): {}".format(self.stats["d_precision_merge_patches"])
                     )
-                    print(
-                        "Detection - Test Recall (merge patches): {}".format(
-                            self.stats["d_recall_merge_patches"]
-                        )
-                    )
-                    print(
-                        "Detection - Test F1 (merge patches): {}".format(
-                            self.stats["d_F1_merge_patches"]
-                        )
-                    )
-                    print(
-                        "Detection - Test TP (merge patches): {}".format(
-                            self.stats["d_TP_merge_patches"]
-                        )
-                    )
-                    print(
-                        "Detection - Test FP (merge patches): {}".format(
-                            self.stats["d_FP_merge_patches"]
-                        )
-                    )
-                    print(
-                        "Detection - Test FN (merge patches): {}".format(
-                            self.stats["d_FN_merge_patches"]
-                        )
-                    )
+                    print("Detection - Test Recall (merge patches): {}".format(self.stats["d_recall_merge_patches"]))
+                    print("Detection - Test F1 (merge patches): {}".format(self.stats["d_F1_merge_patches"]))
+                    print("Detection - Test TP (merge patches): {}".format(self.stats["d_TP_merge_patches"]))
+                    print("Detection - Test FP (merge patches): {}".format(self.stats["d_FP_merge_patches"]))
+                    print("Detection - Test FN (merge patches): {}".format(self.stats["d_FN_merge_patches"]))
                 else:
-                    print(
-                        "Detection - Test Precision (per image): {}".format(
-                            self.stats["d_precision"]
-                        )
-                    )
-                    print(
-                        "Detection - Test Recall (per image): {}".format(
-                            self.stats["d_recall"]
-                        )
-                    )
-                    print(
-                        "Detection - Test F1 (per image): {}".format(self.stats["d_F1"])
-                    )
-                    print(
-                        "Detection - Test TP (per image): {}".format(self.stats["d_TP"])
-                    )
-                    print(
-                        "Detection - Test FP (per image): {}".format(self.stats["d_FP"])
-                    )
-                    print(
-                        "Detection - Test FN (per image): {}".format(self.stats["d_FN"])
-                    )
+                    print("Detection - Test Precision (per image): {}".format(self.stats["d_precision"]))
+                    print("Detection - Test Recall (per image): {}".format(self.stats["d_recall"]))
+                    print("Detection - Test F1 (per image): {}".format(self.stats["d_F1"]))
+                    print("Detection - Test TP (per image): {}".format(self.stats["d_TP"]))
+                    print("Detection - Test FP (per image): {}".format(self.stats["d_FP"]))
+                    print("Detection - Test FN (per image): {}".format(self.stats["d_FN"]))
 
     def prepare_detection_data(self):
         """
@@ -1560,17 +1379,13 @@ class Detection_Workflow(Base_Workflow):
                     print(
                         "You select to create detection masks from given .csv files but no file is detected in {}. "
                         "So let's prepare the data. Notice that, if you do not modify 'DATA.TRAIN.DETECTION_MASK_DIR' "
-                        "path, this process will be done just once!".format(
-                            self.cfg.DATA.TRAIN.DETECTION_MASK_DIR
-                        )
+                        "path, this process will be done just once!".format(self.cfg.DATA.TRAIN.DETECTION_MASK_DIR)
                     )
                     create_mask = True
                 else:
-                    if len(
-                        next(os.walk(self.cfg.DATA.TRAIN.DETECTION_MASK_DIR))[2]
-                    ) != len(next(os.walk(self.cfg.DATA.TRAIN.GT_PATH))[2]) and len(
-                        next(os.walk(self.cfg.DATA.TRAIN.DETECTION_MASK_DIR))[1]
-                    ) != len(
+                    if len(next(os.walk(self.cfg.DATA.TRAIN.DETECTION_MASK_DIR))[2]) != len(
+                        next(os.walk(self.cfg.DATA.TRAIN.GT_PATH))[2]
+                    ) and len(next(os.walk(self.cfg.DATA.TRAIN.DETECTION_MASK_DIR))[1]) != len(
                         next(os.walk(self.cfg.DATA.TRAIN.GT_PATH))[2]
                     ):
                         print(
@@ -1591,17 +1406,13 @@ class Detection_Workflow(Base_Workflow):
                     print(
                         "You select to create detection masks from given .csv files but no file is detected in {}. "
                         "So let's prepare the data. Notice that, if you do not modify 'DATA.VAL.DETECTION_MASK_DIR' "
-                        "path, this process will be done just once!".format(
-                            self.cfg.DATA.VAL.DETECTION_MASK_DIR
-                        )
+                        "path, this process will be done just once!".format(self.cfg.DATA.VAL.DETECTION_MASK_DIR)
                     )
                     create_mask = True
                 else:
-                    if len(
-                        next(os.walk(self.cfg.DATA.VAL.DETECTION_MASK_DIR))[2]
-                    ) != len(next(os.walk(self.cfg.DATA.VAL.GT_PATH))[2]) and len(
-                        next(os.walk(self.cfg.DATA.VAL.DETECTION_MASK_DIR))[1]
-                    ) != len(
+                    if len(next(os.walk(self.cfg.DATA.VAL.DETECTION_MASK_DIR))[2]) != len(
+                        next(os.walk(self.cfg.DATA.VAL.GT_PATH))[2]
+                    ) and len(next(os.walk(self.cfg.DATA.VAL.DETECTION_MASK_DIR))[1]) != len(
                         next(os.walk(self.cfg.DATA.VAL.GT_PATH))[2]
                     ):
                         print(
@@ -1616,27 +1427,19 @@ class Detection_Workflow(Base_Workflow):
                     create_detection_masks(self.cfg, data_type="val")
 
             # Create selected channels for test data once
-            if (
-                self.cfg.TEST.ENABLE
-                and self.cfg.DATA.TEST.LOAD_GT
-                and not self.cfg.DATA.TEST.USE_VAL_AS_TEST
-            ):
+            if self.cfg.TEST.ENABLE and self.cfg.DATA.TEST.LOAD_GT and not self.cfg.DATA.TEST.USE_VAL_AS_TEST:
                 create_mask = False
                 if not os.path.isdir(self.cfg.DATA.TEST.DETECTION_MASK_DIR):
                     print(
                         "You select to create detection masks from given .csv files but no file is detected in {}. "
                         "So let's prepare the data. Notice that, if you do not modify 'DATA.TEST.DETECTION_MASK_DIR' "
-                        "path, this process will be done just once!".format(
-                            self.cfg.DATA.TEST.DETECTION_MASK_DIR
-                        )
+                        "path, this process will be done just once!".format(self.cfg.DATA.TEST.DETECTION_MASK_DIR)
                     )
                     create_mask = True
                 else:
-                    if len(
-                        next(os.walk(self.cfg.DATA.TEST.DETECTION_MASK_DIR))[2]
-                    ) != len(next(os.walk(self.cfg.DATA.TEST.GT_PATH))[2]) and len(
-                        next(os.walk(self.cfg.DATA.TEST.DETECTION_MASK_DIR))[1]
-                    ) != len(
+                    if len(next(os.walk(self.cfg.DATA.TEST.DETECTION_MASK_DIR))[2]) != len(
+                        next(os.walk(self.cfg.DATA.TEST.GT_PATH))[2]
+                    ) and len(next(os.walk(self.cfg.DATA.TEST.DETECTION_MASK_DIR))[1]) != len(
                         next(os.walk(self.cfg.DATA.TEST.GT_PATH))[2]
                     ):
                         print(

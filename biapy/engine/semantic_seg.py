@@ -38,9 +38,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
     """
 
     def __init__(self, cfg, job_identifier, device, args, **kwargs):
-        super(Semantic_Segmentation_Workflow, self).__init__(
-            cfg, job_identifier, device, args, **kwargs
-        )
+        super(Semantic_Segmentation_Workflow, self).__init__(cfg, job_identifier, device, args, **kwargs)
 
         if cfg.TRAIN.ENABLE and cfg.DATA.TRAIN.CHECK_DATA:
             check_masks(cfg.DATA.TRAIN.GT_PATH, n_classes=cfg.MODEL.N_CLASSES + 1)
@@ -82,9 +80,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         elif self.cfg.LOSS.TYPE == "DICE":
             self.loss = DiceLoss()
         elif self.cfg.LOSS.TYPE == "W_CE_DICE":
-            self.loss = DiceBCELoss(
-                w_dice=self.cfg.LOSS.WEIGHTS[0], w_bce=self.cfg.LOSS.WEIGHTS[1]
-            )
+            self.loss = DiceBCELoss(w_dice=self.cfg.LOSS.WEIGHTS[0], w_bce=self.cfg.LOSS.WEIGHTS[1])
 
     def process_sample(self, norm):
         """
@@ -106,9 +102,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
             if self.cfg.DATA.PATCH_SIZE[-1] != self._X.shape[-1]:
                 raise ValueError(
                     "Channel of the DATA.PATCH_SIZE given {} does not correspond with the loaded image {}. "
-                    "Please, check the channels of the images!".format(
-                        self.cfg.DATA.PATCH_SIZE[-1], self._X.shape[-1]
-                    )
+                    "Please, check the channels of the images!".format(self.cfg.DATA.PATCH_SIZE[-1], self._X.shape[-1])
                 )
 
             ##################
@@ -131,9 +125,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
 
                     loss = self.loss(
                         output,
-                        to_pytorch_format(
-                            self._Y, self.axis_order, self.device, dtype=self.loss_dtype
-                        ),
+                        to_pytorch_format(self._Y, self.axis_order, self.device, dtype=self.loss_dtype),
                     )
                 self.stats["loss"] += loss.item()
                 del output
@@ -150,9 +142,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
             if self.cfg.DATA.TEST.LOAD_GT:
                 if not resized_Y and pred.shape != self._Y.shape:
                     self._Y = resize(self._Y, pred.shape, order=0)
-                score = jaccard_index_numpy(
-                    (self._Y > 0.5).astype(np.uint8), (pred > 0.5).astype(np.uint8)
-                )
+                score = jaccard_index_numpy((self._Y > 0.5).astype(np.uint8), (pred > 0.5).astype(np.uint8))
                 self.stats["iou"] += score
                 self.stats["ov_iou"] += voc_calculation(
                     (self._Y > 0.5).astype(np.uint8),
@@ -195,9 +185,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
 
         # Save masks
         if not is_train:
-            masks = np.expand_dims(
-                np.argmax(pred[key].cpu().numpy().transpose(0, 2, 3, 1), axis=-1), -1
-            )
+            masks = np.expand_dims(np.argmax(pred[key].cpu().numpy().transpose(0, 2, 3, 1), axis=-1), -1)
             save_tif(
                 masks,
                 self.cfg.PATHS.RESULT_DIR.FULL_IMAGE,
@@ -254,9 +242,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
             Resulting targets.
         """
         # We do not use 'batch' input but in SSL workflow
-        return to_pytorch_format(
-            targets, self.axis_order, self.device, dtype=self.loss_dtype
-        )
+        return to_pytorch_format(targets, self.axis_order, self.device, dtype=self.loss_dtype)
 
     def after_merge_patches(self, pred):
         """
