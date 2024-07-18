@@ -11,9 +11,12 @@ from shutil import copyfile
 import numpy as np
 import importlib
 import multiprocessing
-
+from typing import (
+    Optional,
+)
 from bioimageio.spec.model.v0_5 import (
     Author,
+    Maintainer,
     CiteEntry,
     Doi,
     HttpUrl,
@@ -25,9 +28,10 @@ from bioimageio.spec.model.v0_5 import (
     FileDescr,
     Identifier,
     InputTensorDescr,
+    OutputTensorDescr,
     IntervalOrRatioDataDescr,
-    ParameterizedSize,
     SpaceInputAxis,
+    SpaceOutputAxis,
     TensorId,
     WeightsDescr,
     ArchitectureFromFileDescr,
@@ -35,8 +39,8 @@ from bioimageio.spec.model.v0_5 import (
     EnvironmentFileDescr,
     ModelDescr,
 )
+from bioimageio.spec._internal.io_basics import Sha256
 from bioimageio.spec import save_bioimageio_package
-from bioimageio.core import test_model
 
 from biapy.utils.misc import (
     init_devices,
@@ -54,23 +58,23 @@ from biapy.utils.util import create_file_sha256sum
 class BiaPy:
     def __init__(
         self,
-        config,
-        result_dir=os.getenv("HOME"),
-        name="unknown_job",
-        run_id=1,
-        gpu=None,
-        world_size=1,
-        local_rank=-1,
-        dist_on_itp=False,
-        dist_url="env://",
-        dist_backend="nccl",
+        config: str,
+        result_dir: Optional[str] = "",
+        name: Optional[str] = "unknown_job",
+        run_id: Optional[int] = 1,
+        gpu: Optional[str] = "",
+        world_size: Optional[int] = 1,
+        local_rank: Optional[int] = -1,
+        dist_on_itp: Optional[bool] = False,
+        dist_url: Optional[str] = "env://",
+        dist_backend: Optional[str] = "nccl",
     ):
         """
         Run the main functionality of the job.
 
         Parameters
         ----------
-        config: str,  optional
+        config: str
             Path to the configuration file.
 
         result_dir: str, optional
@@ -100,6 +104,7 @@ class BiaPy:
         dist_backend: str, optional
             Backend to use in distributed mode. Should be either 'nccl' or 'gloo'. Defaults to 'nccl'.
         """
+        result_dir = result_dir if result_dir != "" else str(os.getenv("HOME"))
 
         if dist_backend not in ["nccl", "gloo"]:
             raise ValueError(
@@ -136,7 +141,9 @@ class BiaPy:
 
         if not os.path.exists(self.args.config):
             raise FileNotFoundError(
-                "Provided {} config file does not exist".format(self.args.config)
+                "Provided {} config file does not exist".format(
+                    self.args.config
+                )
             )
         copyfile(self.args.config, self.cfg_file)
 
@@ -158,7 +165,9 @@ class BiaPy:
         opts = []
         if self.args.gpu:
             os.environ["CUDA_VISIBLE_DEVICES"] = self.args.gpu
-            self.num_gpus = len(np.unique(np.array(self.args.gpu.strip().split(","))))
+            self.num_gpus = len(
+                np.unique(np.array(self.args.gpu.strip().split(",")))
+            )
             opts.extend(["SYSTEM.NUM_GPUS", self.num_gpus])
 
         # GPU management
@@ -219,7 +228,10 @@ class BiaPy:
         self.workflow.prepare_model()
 
     def export_model_to_bmz(
-        self, building_dir, bmz_cfg=None, reuse_original_bmz_config=False
+        self,
+        building_dir: str,
+        bmz_cfg: Optional[dict] = {},
+        reuse_original_bmz_config: Optional[bool] = False,
     ):
         """
         Export a model into Bioimage Model Zoo format.
@@ -241,21 +253,27 @@ class BiaPy:
             authors : list of dicts
                 Authors of the model. Need to be a list of dicts. E.g. ``[{"name": "Gizmo"}]``.
 
+            model_name : str
+                Name of the model. If not set a name based on the selected configuration
+                will be created.
+
             license : str
                 A `SPDX license identifier <https://spdx.org/licenses/>`__. E.g. "CC-BY-4.0", "MIT",
                 "BSD-2-Clause".
 
-            tags : List of dicts
-                Tags to make models more findable on the website.
-                E.g. ``[{'modality': 'electron-microscopy', 'content': 'mitochondria'}]``.
+            tags : List of str
+                Tags to make models more findable on the website. Only set useful information related to
+                the data the model was trained with, as the BiaPy will introduce the rest of the tags for you,
+                such as dimensions, software ("biapy" in this case), workflow used etc.
+                E.g. ``['electron-microscopy','mitochondria']``.
+
+            maintainers : list of dicts, optional
+                Maintainers of the model. Need to be a list of dicts. E.g. ``[{"name": "Gizmo"}]``. If not
+                provided the authors will be set as maintainers.
 
             cite : List of dicts, optional
                 List of dictionaries of citations associated. E.g.
                 ``[{"text": "Gizmo et al.", "doi": "10.1002/xyzacab123"}]``
-
-            model_name : str, optional
-                Name of the model. If not set a name based on the selected configuration
-                will be created.
 
             input_axes : List of str, optional
                 Axis order of the input file. E.g. ["bcyx"].
@@ -279,6 +297,8 @@ class BiaPy:
             was previously loaded from BMZ.
 
         """
+        if bmz_cfg is None:
+            bmz_cfg = {}
         if (
             reuse_original_bmz_config
             and "original_bmz_config" not in self.workflow.bmz_config
@@ -286,20 +306,32 @@ class BiaPy:
             raise ValueError(
                 "The model to export was not previously loaded from BMZ, so there is no config to reuse."
             )
-        if not reuse_original_bmz_config and bmz_cfg is None:
+        if not reuse_original_bmz_config and len(bmz_cfg) == 0:
             raise ValueError(
                 "'bmz_cfg' arg must be provided if 'reuse_original_bmz_config' is False."
             )
 
         # Check keys
         if not reuse_original_bmz_config:
-            need_info = ["description", "authors", "license", "tags"]
+            need_info = [
+                "description",
+                "authors",
+                "license",
+                "tags",
+                "model_name",
+            ]
             for x in need_info:
                 if x not in bmz_cfg:
-                    raise ValueError(f"'{x}' property must be declared in 'bmz_cfg'")
+                    raise ValueError(
+                        f"'{x}' property must be declared in 'bmz_cfg'"
+                    )
 
         # Check if BiaPy has been run so some of the variables have been created
         if not self.workflow.model_prepared:
+            raise ValueError(
+                "You need first to call prepare_model(), train(), test() or run_job() functions so the model can be built"
+            )
+        if not reuse_original_bmz_config and "model_file" in self.workflow.bmz_config and self.workflow.checkpoint_path is None:
             raise ValueError(
                 "You need first to call prepare_model(), train(), test() or run_job() functions so the model can be built"
             )
@@ -369,16 +401,50 @@ class BiaPy:
                 )
             if not isinstance(bmz_cfg["tags"], list):
                 raise ValueError(
-                    "'bmz_cfg['tags']' needs to be a list of dicts. E.g. [{'modality': 'electron-microscopy', 'content': 'mitochondria'}]"
+                    "'bmz_cfg['tags']' needs to be a list of str. E.g. ['electron-microscopy', 'mitochondria']"
                 )
             else:
                 if len(bmz_cfg["tags"]) == 0:
                     raise ValueError("'bmz_cfg['tags']' can not be empty")
                 for d in bmz_cfg["tags"]:
+                    if not isinstance(d, str):
+                        raise ValueError(
+                            "'bmz_cfg['tags']' must be a list of str. E.g. ['electron-microscopy', 'mitochondria']"
+                        )
+            if "maintainers" in bmz_cfg:
+                if len(bmz_cfg["maintainers"]) == 0:
+                    raise ValueError(
+                        "'bmz_cfg['maintainers']' can not be empty."
+                    )
+                for d in bmz_cfg["maintainers"]:
                     if not isinstance(d, dict):
                         raise ValueError(
-                            "'bmz_cfg['tags']' must be a list of dicts. E.g. [{'modality': 'electron-microscopy', 'content': 'mitochondria'}]"
+                            "'bmz_cfg['maintainers']' must be a list of dicts. E.g. [{'name': 'Daniel'}]"
                         )
+                    else:
+                        if (
+                            len(d.keys()) < 2
+                            or "name" not in d
+                            or "github_user" not in d
+                        ):
+                            raise ValueError(
+                                "Author dictionary must have at least 'name' and 'github_user' keys"
+                            )
+                        for k in d.keys():
+                            if k not in [
+                                "name",
+                                "affiliation",
+                                "email",
+                                "github_user",
+                                "orcid",
+                            ]:
+                                raise ValueError(
+                                    "Author dictionary available keys are: ['name', 'affiliation', 'email', "
+                                    f"'github_user', 'orcid']. Provided {k}"
+                                )
+            else:
+                bmz_cfg["maintainers"] = bmz_cfg["authors"]
+
             if "cite" in bmz_cfg:
                 if not isinstance(bmz_cfg["cite"], list):
                     raise ValueError(
@@ -427,15 +493,132 @@ class BiaPy:
                     raise ValueError(
                         "'bmz_cfg['output_axes']' needs to be a list containing just one str. E.g. ['bcyx']."
                     )
-            if "test_input" in bmz_cfg and not torch.is_tensor(bmz_cfg["test_input"]):
+            if "test_input" in bmz_cfg and not torch.is_tensor(
+                bmz_cfg["test_input"]
+            ):
                 raise ValueError("'bmz_cfg['test_input']' needs to be a Tensor")
-            if "test_output" in bmz_cfg and not torch.is_tensor(bmz_cfg["test_output"]):
-                raise ValueError("'bmz_cfg['test_output']' needs to be a Tensor")
+            if "test_output" in bmz_cfg and not torch.is_tensor(
+                bmz_cfg["test_output"]
+            ):
+                raise ValueError(
+                    "'bmz_cfg['test_output']' needs to be a Tensor"
+                )
             if "covers" in bmz_cfg:
                 if not isinstance(bmz_cfg["covers"], list):
                     raise ValueError(
                         "'bmz_cfg['covers']' needs to be a list containing strings."
                     )
+
+        # Preprocessing
+        # Actually Torchvision has its own preprocessing but it can not be adapted to BMZ easily, so for now
+        # we set it like we were using BiaPy backend
+        if (
+            self.cfg.MODEL.SOURCE in ["biapy", "torchvision"]
+            or self.cfg.MODEL.SOURCE == "bmz"
+            and len(self.workflow.bmz_config["preprocessing"]) == 0
+        ):
+            if self.cfg.DATA.NORMALIZATION.TYPE == "div":
+                preprocessing = [
+                    {
+                        "id": "scale_linear",
+                        "kwargs": {"gain": 1 / 255, "offset": 0},
+                    }
+                ]
+            elif self.cfg.DATA.NORMALIZATION.TYPE == "scale_range":
+                preprocessing = [{"id": "scale_range"}]
+            else:  # custom
+                if self.cfg.DATA.NORMALIZATION.APPLICATION_MODE == "dataset":
+                    if not os.path.exists(
+                        self.cfg.PATHS.MEAN_INFO_FILE
+                    ) or not os.path.exists(self.cfg.PATHS.STD_INFO_FILE):
+                        raise FileNotFoundError(
+                            "Not mean/std files found in {} and {}".format(
+                                self.cfg.PATHS.MEAN_INFO_FILE,
+                                self.cfg.PATHS.STD_INFO_FILE,
+                            )
+                        )
+                    custom_mean = float(np.load(self.cfg.PATHS.MEAN_INFO_FILE))
+                    custom_std = float(np.load(self.cfg.PATHS.STD_INFO_FILE))
+                    preprocessing = [
+                        {
+                            "id": "zero_mean_unit_variance",
+                            "kwargs": {
+                                "mean": custom_mean,
+                                "std": custom_std,
+                                "mode": "per_dataset",
+                            },
+                        }
+                    ]
+
+                else:
+                    axes = ["channel"]
+                    axes += (
+                        list("zyx")
+                        if self.cfg.PROBLEM.NDIM == "3D"
+                        else list("yx")
+                    )
+                    preprocessing = [
+                        {
+                            "id": "zero_mean_unit_variance",
+                            "kwargs": {
+                                "axes": axes,
+                            },
+                        }
+                    ]
+            # Add percentile norm
+            if self.cfg.DATA.NORMALIZATION.PERC_CLIP:
+                min_percentile, max_percentile = 0, 100
+                if self.cfg.DATA.NORMALIZATION.PERC_CLIP:
+                    min_percentile = self.cfg.DATA.NORMALIZATION.PERC_LOWER
+                    max_percentile = self.cfg.DATA.NORMALIZATION.PERC_UPPER
+                axes = ["channel"]
+                axes += (
+                    list("zyx") if self.cfg.PROBLEM.NDIM == "3D" else list("yx")
+                )
+                perc_instructions = {
+                    "axes": axes,
+                    "max_percentile": max_percentile,
+                    "min_percentile": min_percentile,
+                    "mode": self.cfg.DATA.NORMALIZATION.APPLICATION_MODE,
+                }
+                preprocessing[0]["kwargs"].update(perc_instructions)
+        # BMZ, reusing the preprocessing
+        else:
+            if (
+                self.workflow.bmz_config["original_model_spec_version"]
+                == "v0_5"
+            ):
+                preprocessing = (
+                    self.workflow.bmz_config["original_bmz_config"]
+                    .inputs[0]
+                    .preprocessing
+                )
+            else:
+                preprocessing = []
+                for prep in (
+                    self.workflow.bmz_config["original_bmz_config"]
+                    .inputs[0]
+                    .preprocessing
+                ):
+                    p = {}
+                    p["id"] = prep.name
+                    if "ScaleRangeDescr" in str(type(prep)):
+                        p["kwargs"] = {}
+                        axes = list(prep.kwargs.axes)
+                        axes[axes.index("c")] = "channel"
+                        p["kwargs"]["axes"] = axes
+                        p["kwargs"][
+                            "min_percentile"
+                        ] = prep.kwargs.min_percentile
+                        p["kwargs"][
+                            "max_percentile"
+                        ] = prep.kwargs.max_percentile
+                    preprocessing.append(p)
+
+        # Post-processing (not clear for now so just output the raw output of the model)
+        # postprocessing = None
+        # if self.cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'DETECTION', "SUPER_RESOLUTION", "SELF_SUPERVISED"]:
+        #     postprocessing = [{"name": "binarize", "kwargs": {"threshold": 0.5}}]
 
         # Save input/output samples
         os.makedirs(building_dir, exist_ok=True)
@@ -451,7 +634,8 @@ class BiaPy:
                 BatchAxis(),
                 ChannelAxis(
                     channel_names=[
-                        Identifier("raw" + str(i)) for i in range(test_input.shape[-1])
+                        Identifier("channel" + str(i))
+                        for i in range(test_input.shape[-1])
                     ]
                 ),
             ]
@@ -466,41 +650,41 @@ class BiaPy:
                 )
                 input_axes += [
                     SpaceInputAxis(
-                        id=AxisId("y"), size=ParameterizedSize(min=256, step=8)
+                        id=AxisId("y"), size=self.cfg.DATA.PATCH_SIZE[0]
                     ),
                     SpaceInputAxis(
-                        id=AxisId("x"), size=ParameterizedSize(min=256, step=8)
+                        id=AxisId("x"), size=self.cfg.DATA.PATCH_SIZE[1]
                     ),
                 ]
-                in_axes = ["bcyx"]
             else:
                 np.save(
                     test_input_path,
                     (
                         test_input.permute((3, 0, 1, 2)).unsqueeze(0)
                         if torch.is_tensor(test_input)
-                        else np.expand_dims(test_input.transpose((3, 0, 1, 2)), 0)
+                        else np.expand_dims(
+                            test_input.transpose((3, 0, 1, 2)), 0
+                        )
                     ),
                 )
                 input_axes += [
                     SpaceInputAxis(
-                        id=AxisId("z"), size=ParameterizedSize(min=16, step=8)
+                        id=AxisId("z"), size=self.cfg.DATA.PATCH_SIZE[0]
                     ),
                     SpaceInputAxis(
-                        id=AxisId("y"), size=ParameterizedSize(min=144, step=72)
+                        id=AxisId("y"), size=self.cfg.DATA.PATCH_SIZE[1]
                     ),
                     SpaceInputAxis(
-                        id=AxisId("x"), size=ParameterizedSize(min=144, step=72)
+                        id=AxisId("x"), size=self.cfg.DATA.PATCH_SIZE[2]
                     ),
                 ]
-                in_axes = ["bczyx"]
             data_descr = IntervalOrRatioDataDescr(type="float32")
-
             input_descr = InputTensorDescr(
-                id=TensorId("raw"),
+                id=TensorId("input0"),
                 axes=input_axes,
-                test_tensor=FileDescr(source=test_input_path),
+                test_tensor=FileDescr(source=Path(test_input_path)),
                 data=data_descr,
+                preprocessing=preprocessing,  # type: ignore
             )
             inputs = [input_descr]
 
@@ -513,7 +697,8 @@ class BiaPy:
                 BatchAxis(),
                 ChannelAxis(
                     channel_names=[
-                        Identifier("raw" + str(i)) for i in range(test_output.shape[-1])
+                        Identifier("channel" + str(i))
+                        for i in range(test_output.shape[-1])
                     ]
                 ),
             ]
@@ -527,42 +712,42 @@ class BiaPy:
                     ),
                 )
                 output_axes += [
-                    SpaceInputAxis(
-                        id=AxisId("y"), size=ParameterizedSize(min=256, step=8)
+                    SpaceOutputAxis(
+                        id=AxisId("y"), size=self.cfg.DATA.PATCH_SIZE[0]
                     ),
-                    SpaceInputAxis(
-                        id=AxisId("x"), size=ParameterizedSize(min=256, step=8)
+                    SpaceOutputAxis(
+                        id=AxisId("x"), size=self.cfg.DATA.PATCH_SIZE[1]
                     ),
                 ]
-                in_axes = ["bcyx"]
             else:
                 np.save(
                     test_output_path,
                     (
                         test_output.permute((3, 0, 1, 2)).unsqueeze(0)
                         if torch.is_tensor(test_output)
-                        else np.expand_dims(test_output.transpose((3, 0, 1, 2)), 0)
+                        else np.expand_dims(
+                            test_output.transpose((3, 0, 1, 2)), 0
+                        )
                     ),
                 )
                 output_axes += [
-                    SpaceInputAxis(
-                        id=AxisId("z"), size=ParameterizedSize(min=16, step=8)
+                    SpaceOutputAxis(
+                        id=AxisId("z"), size=self.cfg.DATA.PATCH_SIZE[0]
                     ),
-                    SpaceInputAxis(
-                        id=AxisId("y"), size=ParameterizedSize(min=144, step=72)
+                    SpaceOutputAxis(
+                        id=AxisId("y"), size=self.cfg.DATA.PATCH_SIZE[1]
                     ),
-                    SpaceInputAxis(
-                        id=AxisId("x"), size=ParameterizedSize(min=144, step=72)
+                    SpaceOutputAxis(
+                        id=AxisId("x"), size=self.cfg.DATA.PATCH_SIZE[2]
                     ),
                 ]
-                in_axes = ["bczyx"]
             data_descr = IntervalOrRatioDataDescr(type="float32")
-
-            output_descr = InputTensorDescr(
-                id=TensorId("raw"),
+            output_descr = OutputTensorDescr(
+                id=TensorId("output0"),
                 axes=output_axes,
-                test_tensor=FileDescr(source=test_output_path),
+                test_tensor=FileDescr(source=Path(test_output_path)),
                 data=data_descr,
+                # postprocessing=postprocessing,
             )
             outputs = [output_descr]
         else:
@@ -571,143 +756,40 @@ class BiaPy:
 
         # Name of the model
         if not reuse_original_bmz_config:
-            if "model_name" in bmz_cfg:
-                model_name = bmz_cfg["model_name"]
-            else:
-                if self.cfg.MODEL.SOURCE == "biapy":
-                    model_name = (
-                        "my_"
-                        + self.cfg.MODEL.ARCHITECTURE
-                        + "_"
-                        + self.cfg.PROBLEM.NDIM
-                    )
-                elif self.cfg.MODEL.SOURCE == "torchvision":
-                    model_name = (
-                        "my_"
-                        + self.cfg.MODEL.TORCHVISION_MODEL_NAME
-                        + "_"
-                        + self.cfg.PROBLEM.NDIM
-                    )
-                else:
-                    model_name = str(
-                        "my_BMZ_" + self.cfg.MODEL.BMZ.SOURCE_MODEL_DOI
-                    ).replace("/", "_")
+            model_name = bmz_cfg["model_name"]
         else:
             model_name = self.workflow.bmz_config["original_bmz_config"].name
 
-        # Preprocessing
-        # Actually Torchvision has its own preprocessing but it can not be adapted to BMZ easily, so for now
-        # we set it like we were using BiaPy backend
-        if (
-            self.cfg.MODEL.SOURCE in ["biapy", "torchvision"]
-            or self.cfg.MODEL.SOURCE == "bmz"
-            and len(self.workflow.bmz_config["preprocessing"]) == 0
-        ):
-            if self.cfg.DATA.NORMALIZATION.TYPE == "div":
-                preprocessing = [
-                    [{"name": "scale_linear", "kwargs": {"gain": 1 / 255, "offset": 0}}]
-                ]
-            elif self.cfg.DATA.NORMALIZATION.TYPE == "scale_range":
-                preprocessing = [[{"name": "scale_range"}]]
-            else:
-                if self.cfg.DATA.NORMALIZATION.APPLICATION_MODE == "dataset":
-                    if not os.path.exists(
-                        self.cfg.PATHS.MEAN_INFO_FILE
-                    ) or not os.path.exists(self.cfg.PATHS.STD_INFO_FILE):
-                        raise FileNotFoundError(
-                            "Not mean/std files found in {} and {}".format(
-                                self.cfg.PATHS.MEAN_INFO_FILE,
-                                self.cfg.PATHS.STD_INFO_FILE,
-                            )
-                        )
-                    custom_mean = float(np.load(self.cfg.PATHS.MEAN_INFO_FILE))
-                    custom_std = float(np.load(self.cfg.PATHS.STD_INFO_FILE))
-                    preprocessing = [
-                        [
-                            {
-                                "name": "zero_mean_unit_variance",
-                                "kwargs": {
-                                    "mean": custom_mean,
-                                    "std": custom_std,
-                                    "mode": "per_dataset",
-                                },
-                            }
-                        ]
-                    ]
-                else:
-                    preprocessing = [
-                        [
-                            {
-                                "name": "zero_mean_unit_variance",
-                                "kwargs": {
-                                    "axes": (
-                                        "czyx"
-                                        if self.cfg.PROBLEM.NDIM == "3D"
-                                        else "cyx"
-                                    ),
-                                    "mode": "per_sample",
-                                },
-                            }
-                        ]
-                    ]
-
-            # Add percentile norm
-            if self.cfg.DATA.NORMALIZATION.PERC_CLIP:
-                min_percentile, max_percentile = 0, 100
-                if self.cfg.DATA.NORMALIZATION.PERC_CLIP:
-                    min_percentile = self.cfg.DATA.NORMALIZATION.PERC_LOWER
-                    max_percentile = self.cfg.DATA.NORMALIZATION.PERC_UPPER
-                perc_instructions = {
-                    "axes": "cyx",
-                    "max_percentile": max_percentile,
-                    "min_percentile": min_percentile,
-                    "mode": self.cfg.DATA.NORMALIZATION.APPLICATION_MODE,
-                }
-                if "kwargs" not in preprocessing[0][0]:
-                    preprocessing[0][0]["kwargs"] = perc_instructions
-                else:
-                    preprocessing[0][0]["kwargs"].update(perc_instructions)
-
-        else:  # BMZ
-            # Done as in https://github.com/bioimage-io/core-bioimage-io-python/blob/main/example/model_creation.ipynb
-            preprocessing = [
-                [
-                    {"name": prep.name, "kwargs": prep.kwargs}
-                    for prep in inp.preprocessing
-                ]
-                for inp in self.workflow.bmz_config["original_bmz_config"].inputs
-            ]
-
-        # Post-processing (not clear for now so just output the raw output of the model)
-        postprocessing = None
-        # if self.cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'DETECTION', "SUPER_RESOLUTION", "SELF_SUPERVISED"]:
-        #     postprocessing = [{"name": "binarize", "kwargs": {"threshold": 0.5}}]
-
-        # Configure tags. For now there is no "biapy" tag so we are filling as much as we can
+        # Configure tags
         if not reuse_original_bmz_config:
             tags = bmz_cfg["tags"][0]
-            if "dims" not in tags:
-                tags["dims"] = self.cfg.PROBLEM.NDIM.lower()
-            tags["framework"] = "pytorch"
-            # tags['software'] = "biapy" # {'software': ['ilastik', 'imagej', 'fiji', 'imjoy', 'deepimagej', 'napari']}
-            # tags['method'] = # {'method': ['stardist', 'cellpose', 'yolo', 'care', 'n2v', 'denoiseg']},
-            # tags['task'] = {'task': ['semantic-segmentation', 'instance-segmentation', 'object-detection', 'image-classification', \
-            # 'denoising', 'image-restoration', 'image-reconstruction', 'in-silico-labeling']}
+            if "2d" not in tags and "3d" not in tags:
+                tags += str(self.cfg.PROBLEM.NDIM.lower())
+            if "pytorch" not in tags:
+                tags += "pytorch"
+            if "biapy" not in tags:
+                tags += "biapy"
+            tags += str(self.cfg.PROBLEM.TYPE.lower().replace("_", "-"))
+            tags += str(self.cfg.MODEL.ARCHITECTURE.lower().replace("_", "-"))
             tags = [tags]
         else:
-            tags = [self.workflow.bmz_config["original_bmz_config"].tags]
+            tags = self.workflow.bmz_config["original_bmz_config"].tags
 
         # Description
         if not reuse_original_bmz_config:
             description = bmz_cfg["description"]
         else:
-            description = self.workflow.bmz_config["original_bmz_config"].description
+            description = self.workflow.bmz_config[
+                "original_bmz_config"
+            ].description
 
-        # Authors
-        authors = []
+        # Authors & maintainers
+        authors, maintainers = [], []
         if not reuse_original_bmz_config:
             for author in bmz_cfg["authors"]:
-                affiliation = author["affiliation"] if "affiliation" in author else None
+                affiliation = (
+                    author["affiliation"] if "affiliation" in author else None
+                )
                 orcid = author["orcid"] if "orcid" in author else None
                 email = author["email"] if "email" in author else None
                 a = Author(
@@ -718,12 +800,30 @@ class BiaPy:
                     email=email,
                 )
                 authors.append(a)
+
+            for author in bmz_cfg["maintainers"]:
+                affiliation = (
+                    author["affiliation"] if "affiliation" in author else None
+                )
+                orcid = author["orcid"] if "orcid" in author else None
+                email = author["email"] if "email" in author else None
+                a = Maintainer(
+                    name=author["name"],
+                    affiliation=affiliation,
+                    github_user=author["github_user"],
+                    orcid=orcid,
+                    email=email,
+                )
+                maintainers.append(a)
         else:
             authors = self.workflow.bmz_config["original_bmz_config"].authors
+            maintainers = self.workflow.bmz_config[
+                "original_bmz_config"
+            ].maintainers
 
         # License
         if not reuse_original_bmz_config:
-            license = (LicenseId(bmz_cfg["license"]),)
+            license = LicenseId(bmz_cfg["license"])
         else:
             license = self.workflow.bmz_config["original_bmz_config"].license
 
@@ -734,7 +834,7 @@ class BiaPy:
             else:
                 doc = bmz_cfg["doc"]
         else:
-            doc = str(self.workflow.bmz_config["original_bmz_config"].documentation)
+            doc = self.workflow.bmz_config["original_bmz_config"].documentation
 
         # Cite
         citations = []
@@ -742,7 +842,9 @@ class BiaPy:
             for cite in bmz_cfg["cite"]:
                 url = cite["url"] if "url" in cite else None
                 doi = (
-                    Doi(re.sub(r"^.*?10", "10", cite["doi"])) if "doi" in cite else None
+                    Doi(re.sub(r"^.*?10", "10", cite["doi"]))
+                    if "doi" in cite
+                    else None
                 )
                 c = CiteEntry(text=cite["text"], doi=doi, url=url)
                 citations.append(c)
@@ -751,15 +853,17 @@ class BiaPy:
             citations.append(
                 CiteEntry(
                     text="BiaPy: A unified framework for versatile bioimage analysis with deep learning",
-                    doi="10.1101/2024.02.03.576026",
-                    url="https://www.biorxiv.org/content/10.1101/2024.02.03.576026.abstract",
+                    doi=Doi("10.1101/2024.02.03.576026"),
+                    url=HttpUrl(
+                        "https://www.biorxiv.org/content/10.1101/2024.02.03.576026.abstract"
+                    ),
                 )
             )
         else:
             citations = self.workflow.bmz_config["original_bmz_config"].cite
 
         # Cover
-        covers = None
+        covers = []
         if not reuse_original_bmz_config and "covers" in bmz_cfg:
             covers = bmz_cfg["covers"]
         elif (
@@ -774,17 +878,21 @@ class BiaPy:
 
         # Weights + architecture
         # If it's a BiaPy model
-        if not reuse_original_bmz_config and "model_file" in self.workflow.bmz_config:
-            arch_file_path = re.sub(r":.*", "", self.workflow.bmz_config["model_file"])
+        if (
+            not reuse_original_bmz_config
+            and "model_file" in self.workflow.bmz_config
+        ):
+            arch_file_path = re.sub(
+                r":.*", "", self.workflow.bmz_config["model_file"]
+            )
             arch_file_sha256 = create_file_sha256sum(arch_file_path)
             pytorch_architecture = ArchitectureFromFileDescr(
-                source=arch_file_path,
-                sha256=arch_file_sha256,
+                source=Path(arch_file_path),
+                sha256=Sha256(arch_file_sha256),
                 callable=self.workflow.bmz_config["model_name"],
                 kwargs=self.workflow.bmz_config["model_build_kwargs"],
             )
-            state_dict_source = "/data/dfranco/exp_results/2d_instance_segmentation/checkpoints/2d_instance_segmentation_1-checkpoint-best.pth"
-            # state_dict_sha256 = sha256(str(self.workflow.model.state_dict()).encode('utf-8')).hexdigest()
+            state_dict_source = Path(self.workflow.checkpoint_path)
             state_dict_sha256 = None
         else:
             state_dict_source, state_dict_sha256, pytorch_architecture = (
@@ -794,16 +902,12 @@ class BiaPy:
                 )
             )
 
-        pytorch_state_dict = (
-            PytorchStateDictWeightsDescr(
-                source=state_dict_source,
-                sha256=state_dict_sha256,
-                architecture=pytorch_architecture,
-                pytorch_version=Version(torch.__version__),
-                dependencies=EnvironmentFileDescr(
-                    source="/data/dfranco/BiaPy/environment.yml"
-                ),
-            ),
+        # Only exporting in pytorch_state_dict
+        pytorch_state_dict = PytorchStateDictWeightsDescr(
+            source=state_dict_source,
+            sha256=state_dict_sha256,
+            architecture=pytorch_architecture,
+            pytorch_version=Version(torch.__version__),
         )
         # torchscript = TorchscriptWeightsDescr(
         #     source=self.workflow.bmz_config['original_bmz_config'].weights.torchscript.source,
@@ -812,13 +916,8 @@ class BiaPy:
         #     parent="pytorch_state_dict", # these weights were converted from the pytorch_state_dict weights ones.
         # ),
 
-        weights_descr = WeightsDescr(
-            pytorch_state_dict=pytorch_state_dict,
-            # torchscript,
-        )
-
         # Export model to BMZ format
-        args = dict(
+        model_descr = ModelDescr(
             name=model_name,
             description=description,
             authors=authors,
@@ -828,21 +927,21 @@ class BiaPy:
             git_repo=HttpUrl("https://github.com/BiaPyX/BiaPy"),
             inputs=inputs,
             outputs=outputs,
-            weights=weights_descr,
+            weights=WeightsDescr(
+                pytorch_state_dict=pytorch_state_dict,
+                # torchscript,
+            ),
             tags=tags,
             covers=covers,
-            maintainers=authors,
-            preprocessing=preprocessing,
-            postprocessing=postprocessing,
+            maintainers=maintainers,
         )
 
-        print(f"Building BMZ package: {args}")
-        model_descr = ModelDescr(**args)
+        # print(f"Building BMZ package: {args}")
         print(f"Created '{model_descr.name}'")
 
         # Checking model consistency
-        summary = test_model(model_descr)
-        summary.display()
+        # summary = test_model(model_descr)
+        # summary.display()
 
         # Saving the model into BMZ format
         model_path = os.path.join(building_dir, model_name + ".zip")

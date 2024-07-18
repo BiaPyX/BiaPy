@@ -186,6 +186,8 @@ def save_model(cfg, jobname, epoch, model, model_without_ddp, optimizer, loss_sc
         }
 
         save_on_master(to_save, checkpoint_path)
+    if len(checkpoint_paths)>0:
+        return checkpoint_paths[0]
 
 
 def save_on_master(*args, **kwargs):
@@ -218,7 +220,7 @@ def get_checkpoint_path(cfg, jobname):
                 checkpoint_dir, "{}-checkpoint-best.pth".format(jobname)
             )
         else:
-            NotImplementedError
+            raise NotImplementedError
 
     return resume
 
@@ -263,7 +265,7 @@ def load_model_checkpoint(
         loss_scaler.load_state_dict(checkpoint["scaler"])
         print("Scaler info loaded!")
 
-    return start_epoch
+    return start_epoch, resume
 
 
 def all_reduce_mean(x):

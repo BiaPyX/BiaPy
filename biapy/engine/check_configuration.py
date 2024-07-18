@@ -400,23 +400,9 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         )
 
     if cfg.MODEL.SOURCE == "bmz":
-        if cfg.MODEL.BMZ.SOURCE_MODEL_DOI == "":
+        if cfg.MODEL.BMZ.SOURCE_MODEL_ID == "":
             raise ValueError(
-                "'MODEL.BMZ.SOURCE_MODEL_DOI' needs to be configured when 'MODEL.SOURCE' is 'bmz'"
-            )
-
-        # Check if the model exists
-        doi_to_find = str(cfg.MODEL.BMZ.SOURCE_MODEL_DOI).strip()
-        # In case newer version of the models are available
-        if len(doi_to_find.split("/")) > 2:
-            doi_to_find = "/".join(doi_to_find.split("/")[:2])
-        url = "http://www.doi.org/" + doi_to_find
-        r = requests.get(url, stream=True, verify=True)
-        if r.status_code >= 200 and r.status_code < 400:
-            print(f"BMZ model DOI: {cfg.MODEL.BMZ.SOURCE_MODEL_DOI} found")
-        else:
-            raise ValueError(
-                f"BMZ model DOI: {cfg.MODEL.BMZ.SOURCE_MODEL_DOI} not found. Aborting!"
+                "'MODEL.BMZ.SOURCE_MODEL_ID' needs to be configured when 'MODEL.SOURCE' is 'bmz'"
             )
 
     elif cfg.MODEL.SOURCE == "torchvision":

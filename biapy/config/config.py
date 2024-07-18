@@ -3,7 +3,7 @@ from yacs.config import CfgNode as CN
 
 
 class Config:
-    def __init__(self, job_dir, job_identifier):
+    def __init__(self, job_dir: str, job_identifier: str):
 
         if "/" in job_identifier:
             raise ValueError(
@@ -286,7 +286,7 @@ class Config:
         _C.DATA.PREPROCESS.RESIZE.OUTPUT_SHAPE = (512, 512)
         # interpolation order: {0: Nearest-neighbor, 1: Bi-linear (default), 2: Bi-quadratic, 3: Bi-cubic, 4: Bi-quartic, 5: Bi-quintic}
         _C.DATA.PREPROCESS.RESIZE.ORDER = 1
-        # Points outside the boundaries of the input are filled according to the given mode: {‘constant’, ‘edge’, ‘symmetric’, ‘reflect’, ‘wrap’}
+        # Points outside the boundaries of the input are filled according to the given mode: {'constant', 'edge', 'symmetric', 'reflect', 'wrap'}
         _C.DATA.PREPROCESS.RESIZE.MODE = "reflect"
         # Used in conjunction with mode ‘constant’, the value outside the image boundaries.
         _C.DATA.PREPROCESS.RESIZE.CVAL = 0.0
@@ -627,8 +627,8 @@ class Config:
         # BMZ BACKEND MODELS AND OPTIONS
         #
         _C.MODEL.BMZ = CN()
-        # DOI of the model from BMZ to load. It can not be empty if MODEL.SOURCE = "bmz".
-        _C.MODEL.BMZ.SOURCE_MODEL_DOI = ""
+        # DOI or nickname of the model from BMZ to load. It can not be empty if MODEL.SOURCE = "bmz".
+        _C.MODEL.BMZ.SOURCE_MODEL_ID = ""
         # BMZ model export options
 
         #
@@ -781,7 +781,7 @@ class Config:
         # Loss
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         _C.LOSS = CN()
-        # Loss type, two options: 
+        # Loss type, two options:
         #   * "CE": cross entropy
         #   * "DICE": cross entropy
         #   * "W_CE_DICE": CE and Dice (with a weight term on each one that must sum 1)
@@ -1209,13 +1209,13 @@ class Config:
 
         self._C = _C
 
-    def get_cfg_defaults(self):
+    def get_cfg_defaults(self) -> CN:
         """Get a yacs CfgNode object with default values for my_project."""
         # Return a clone so that the defaults will not be altered
         # This is for the "local variable" use pattern
         return self._C.clone()
 
-    def update_dependencies(self):
+    def update_dependencies(self) -> None:
         """Update some variables that depend of changes made after merge the .cfg file provide by the user. That is,
         this function should be called after YACS's merge_from_file().
         """

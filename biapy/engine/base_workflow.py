@@ -5,6 +5,7 @@ import time
 import json
 import torch
 import h5py
+import argparse
 import zarr
 import numpy as np
 from tqdm import tqdm
@@ -19,6 +20,7 @@ from bioimageio.spec import load_description, InvalidDescr
 from bioimageio.spec.model.v0_5 import ModelDescr
 from bioimageio.core.digest_spec import get_test_inputs
 
+from biapy.config.config import Config
 from biapy.models import (
     build_model,
     build_torchvision_model,
@@ -98,7 +100,13 @@ class Base_Workflow(metaclass=ABCMeta):
         Arguments used in BiaPy's call.
     """
 
-    def __init__(self, cfg, job_identifier, device, args):
+    def __init__(
+        self,
+        cfg: type[Config],
+        job_identifier: str,
+        device: type[torch.device],
+        args: type[argparse.Namespace],
+    ):
         self.cfg = cfg
         self.args = args
         self.job_identifier = job_identifier
@@ -114,6 +122,7 @@ class Base_Workflow(metaclass=ABCMeta):
         self.metrics = []
         self.data_norm = None
         self.model = None
+        self.checkpoint_path = None
         self.optimizer = None
         self.loss_scaler = None
         self.model_prepared = False
@@ -192,7 +201,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
             print("Loading BioImage Model Zoo pretrained model . . .")
             self.bmz_config["original_bmz_config"] = load_description(
-                self.cfg.MODEL.BMZ.SOURCE_MODEL_DOI
+                self.cfg.MODEL.BMZ.SOURCE_MODEL_ID
             )
 
             # let's make sure we have a valid model...
@@ -405,7 +414,7 @@ class Base_Workflow(metaclass=ABCMeta):
         self.loss : Function
             Loss function used during training.
         """
-        NotImplementedError
+        raise NotImplementedError
 
     @abstractmethod
     def metric_calculation(self, output, targets, metric_logger=None):
@@ -428,7 +437,7 @@ class Base_Workflow(metaclass=ABCMeta):
         value : float
             Value of the metric for the given prediction.
         """
-        NotImplementedError
+        raise NotImplementedError
 
     def prepare_targets(self, targets, batch):
         """
@@ -1007,7 +1016,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
         # Load checkpoint if necessary
         if self.cfg.MODEL.SOURCE == "biapy" and self.cfg.MODEL.LOAD_CHECKPOINT:
-            self.start_epoch = load_model_checkpoint(
+            self.start_epoch, self.checkpoint_path = load_model_checkpoint(
                 cfg=self.cfg,
                 jobname=self.job_identifier,
                 model_without_ddp=self.model_without_ddp,
@@ -1152,7 +1161,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     val_best_loss = test_stats["loss"]
 
                     if is_main_process():
-                        save_model(
+                        self.checkpoint_path = save_model(
                             cfg=self.cfg,
                             jobname=self.job_identifier,
                             model=self.model,
@@ -1368,11 +1377,12 @@ class Base_Workflow(metaclass=ABCMeta):
                             )
                         )
 
-                self.test_filenames = [
-                    x
-                    for i, x in enumerate(self.test_filenames)
-                    if i in self.cross_val_samples_ids
-                ]
+                if self.cross_val_samples_ids is not None:
+                    self.test_filenames = [
+                        x
+                        for i, x in enumerate(self.test_filenames)
+                        if i in self.cross_val_samples_ids
+                    ]
                 self.original_test_path = self.orig_train_path
                 self.original_test_mask_path = self.orig_train_mask_path
 
@@ -1474,7 +1484,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
         # Load best checkpoint on validation
         if self.cfg.TRAIN.ENABLE and self.cfg.MODEL.SOURCE == "biapy":
-            self.start_epoch = load_model_checkpoint(
+            self.start_epoch, self.checkpoint_path = load_model_checkpoint(
                 cfg=self.cfg,
                 jobname=self.job_identifier,
                 model_without_ddp=self.model_without_ddp,
@@ -2230,7 +2240,9 @@ class Base_Workflow(metaclass=ABCMeta):
                         p = self.apply_model_activations(p)
                         # Multi-head concatenation
                         if isinstance(p, list):
-                            p = torch.cat((p[0], torch.argmax(p[1], axis=1).unsqueeze(1)), dim=1)
+                            p = torch.cat(
+                                (p[0], torch.argmax(p[1], axis=1).unsqueeze(1)), dim=1
+                            )
                         p = to_numpy_format(p, self.axis_order_back)
                         if "pred" not in locals():
                             pred = np.zeros(
@@ -2253,7 +2265,10 @@ class Base_Workflow(metaclass=ABCMeta):
                             )
                             # Multi-head concatenation
                             if isinstance(p, list):
-                                p = torch.cat((p[0], torch.argmax(p[1], axis=1).unsqueeze(1)), dim=1)
+                                p = torch.cat(
+                                    (p[0], torch.argmax(p[1], axis=1).unsqueeze(1)),
+                                    dim=1,
+                                )
                             p = to_numpy_format(p, self.axis_order_back)
                         if "pred" not in locals():
                             pred = np.zeros(
@@ -2353,13 +2368,15 @@ class Base_Workflow(metaclass=ABCMeta):
                         self.processing_filenames,
                         verbose=self.cfg.TEST.VERBOSE,
                     )
-                
+
                 # Argmax if needed
                 if self.cfg.MODEL.N_CLASSES > 2 and self.cfg.DATA.TEST.ARGMAX_TO_OUTPUT:
                     _type = np.uint8 if self.cfg.MODEL.N_CLASSES < 255 else np.uint16
                     pred = np.expand_dims(np.argmax(pred, -1), -1).astype(_type)
                     if self.cfg.DATA.TEST.LOAD_GT:
-                        self._Y = np.expand_dims(np.argmax(self._Y, -1), -1).astype(_type)
+                        self._Y = np.expand_dims(np.argmax(self._Y, -1), -1).astype(
+                            _type
+                        )
 
                 if (
                     self.cfg.DATA.TEST.LOAD_GT
@@ -2484,9 +2501,12 @@ class Base_Workflow(metaclass=ABCMeta):
 
                 # Argmax if needed
                 if self.cfg.MODEL.N_CLASSES > 2 and self.cfg.DATA.TEST.ARGMAX_TO_OUTPUT:
-                    pred = np.expand_dims(np.argmax(pred, -1), -1)
+                    _type = np.uint8 if self.cfg.MODEL.N_CLASSES < 255 else np.uint16
+                    pred = np.expand_dims(np.argmax(pred, -1), -1).astype(_type)
                     if self.cfg.DATA.TEST.LOAD_GT:
-                        self._Y = np.expand_dims(np.argmax(self._Y, -1), -1)
+                        self._Y = np.expand_dims(np.argmax(self._Y, -1), -1).astype(
+                            _type
+                        )
 
                 if self.cfg.TEST.POST_PROCESSING.APPLY_MASK:
                     pred = apply_binary_mask(pred, self.cfg.DATA.TEST.BINARY_MASKS)

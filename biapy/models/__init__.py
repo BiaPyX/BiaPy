@@ -10,7 +10,6 @@ import torch.nn as nn
 from torchinfo import summary
 from bioimageio.spec.utils import download
 from bioimageio.core.model_adapters._pytorch_model_adapter import PytorchModelAdapter
-from bioimageio.spec._internal.io import RelativePath
 from bioimageio.spec.model.v0_5 import (
     ArchitectureFromFileDescr,
     ArchitectureFromLibraryDescr,
@@ -364,17 +363,15 @@ def get_bmz_model_info(model, spec_version="v0_4"):
         state_dict_source = model.weights.pytorch_state_dict.source
         state_dict_sha256 = model.weights.pytorch_state_dict.sha256
     else:  # v0_4
-        weights = model.weights.pytorch_state_dict
-        arch_file_sha256 = weights.architecture_sha256
+        arch_file_sha256 = model.weights.pytorch_state_dict.architecture_sha256
 
-        arch_file_path = download(RelativePath("unet.py"), sha256=arch_file_sha256).path
-        # arch_file_path = download(weights.architecture, sha256=arch_file_sha256).path
-        arch_name = weights.architecture  # 'unet.py:UNet2d'
+        arch_file_path = download(model.weights.pytorch_state_dict.architecture.source_file, sha256=arch_file_sha256).path
+        arch_name = model.weights.pytorch_state_dict.architecture.callable_name  
         pytorch_architecture = ArchitectureFromFileDescr(
             source=arch_file_path,
             sha256=arch_file_sha256,
             callable=arch_name,
-            kwargs=weights.kwargs,
+            kwargs=model.weights.pytorch_state_dict.kwargs,
         )
         state_dict_source = model.weights.pytorch_state_dict.source
         state_dict_sha256 = model.weights.pytorch_state_dict.sha256
@@ -391,19 +388,20 @@ def check_bmz_model_compatibility(cfg):
         collection = json.load(f)
 
     # Find the model among all
-    model_doi = cfg.MODEL.BMZ.SOURCE_MODEL_DOI
+    model_doi = cfg.MODEL.BMZ.SOURCE_MODEL_ID
     model_urls = [
-        entry["rdf_source"]
+        entry
         for entry in collection["collection"]
-        if entry["type"] == "model" and model_doi in entry["rdf_source"]
+        if entry["type"] == "model" and (model_doi in entry["nickname"] or model_doi in entry["rdf_source"])
     ]
+    
     if len(model_urls) == 0:
         raise ValueError(f"No model found with the provided DOI: {model_doi}")
     if len(model_urls) > 1:
         raise ValueError(
             "More than one model found with the provided DOI. Contact BiaPy team."
         )
-    with open(Path(pooch.retrieve(model_urls[0], known_hash=None))) as stream:
+    with open(Path(pooch.retrieve(model_urls[0]["rdf_source"], known_hash=None))) as stream:
         try:
             model_rdf = yaml.safe_load(stream)
         except yaml.YAMLError as exc:
