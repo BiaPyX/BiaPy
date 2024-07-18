@@ -2230,7 +2230,7 @@ class Base_Workflow(metaclass=ABCMeta):
                         p = self.apply_model_activations(p)
                         # Multi-head concatenation
                         if isinstance(p, list):
-                            p = torch.cat((p[0], p[1]), dim=1)
+                            p = torch.cat((p[0], torch.argmax(p[1], axis=1).unsqueeze(1)), dim=1)
                         p = to_numpy_format(p, self.axis_order_back)
                         if "pred" not in locals():
                             pred = np.zeros(
@@ -2253,7 +2253,7 @@ class Base_Workflow(metaclass=ABCMeta):
                             )
                             # Multi-head concatenation
                             if isinstance(p, list):
-                                p = torch.cat((p[0], p[1]), dim=1)
+                                p = torch.cat((p[0], torch.argmax(p[1], axis=1).unsqueeze(1)), dim=1)
                             p = to_numpy_format(p, self.axis_order_back)
                         if "pred" not in locals():
                             pred = np.zeros(
@@ -2339,27 +2339,6 @@ class Base_Workflow(metaclass=ABCMeta):
                                 -reflected_orig_shape[3] :,
                             ]
 
-                # Argmax if needed
-                if self.cfg.MODEL.N_CLASSES > 2 and self.cfg.DATA.TEST.ARGMAX_TO_OUTPUT:
-                    # Multi-head case of instance segmentation
-                    if pred.shape[-1] > self.cfg.MODEL.N_CLASSES:
-                        pred = np.concatenate(
-                            [
-                                pred[..., : -(self.cfg.MODEL.N_CLASSES)],
-                                np.expand_dims(
-                                    np.argmax(
-                                        pred[..., -(self.cfg.MODEL.N_CLASSES) :], -1
-                                    ),
-                                    -1,
-                                ),
-                            ],
-                            axis=-1,
-                        )
-                    else:
-                        pred = np.expand_dims(np.argmax(pred, -1), -1)
-                    if self.cfg.DATA.TEST.LOAD_GT:
-                        self._Y = np.expand_dims(np.argmax(self._Y, -1), -1)
-
                 # Apply mask
                 if self.cfg.TEST.POST_PROCESSING.APPLY_MASK:
                     pred = np.expand_dims(
@@ -2374,6 +2353,13 @@ class Base_Workflow(metaclass=ABCMeta):
                         self.processing_filenames,
                         verbose=self.cfg.TEST.VERBOSE,
                     )
+                
+                # Argmax if needed
+                if self.cfg.MODEL.N_CLASSES > 2 and self.cfg.DATA.TEST.ARGMAX_TO_OUTPUT:
+                    _type = np.uint8 if self.cfg.MODEL.N_CLASSES < 255 else np.uint16
+                    pred = np.expand_dims(np.argmax(pred, -1), -1).astype(_type)
+                    if self.cfg.DATA.TEST.LOAD_GT:
+                        self._Y = np.expand_dims(np.argmax(self._Y, -1), -1).astype(_type)
 
                 if (
                     self.cfg.DATA.TEST.LOAD_GT
