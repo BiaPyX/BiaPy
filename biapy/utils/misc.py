@@ -232,7 +232,7 @@ def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=Non
     model_without_ddp.load_state_dict(checkpoint["model"], strict=False)
     print("Model weights loaded!")
     if cfg.MODEL.LOAD_CHECKPOINT_ONLY_WEIGHTS:
-        return start_epoch
+        return start_epoch, resume
 
     # Load also opt, epoch and scaler info
     if "optimizer" in checkpoint and optimizer is not None:
