@@ -1,7 +1,6 @@
 import os
 import numpy as np
 import collections
-import requests
 from biapy.utils.misc import get_checkpoint_path
 from biapy.utils.util import check_value
 

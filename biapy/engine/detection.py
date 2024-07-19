@@ -15,8 +15,10 @@ from biapy.data.post_processing.post_processing import (
 )
 from biapy.utils.misc import (
     is_main_process,
-    save_tif,
     is_dist_avail_and_initialized,
+)
+from biapy.utils.util import (
+    save_tif,
     write_chunked_data,
     order_dimensions,
     read_chunked_data,
