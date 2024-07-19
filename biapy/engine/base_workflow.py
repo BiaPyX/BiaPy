@@ -25,7 +25,7 @@ from biapy.models import (
     build_model,
     build_torchvision_model,
     build_bmz_model,
-    check_bmz_model_compatibility,
+    check_bmz_args,
 )
 from biapy.engine import prepare_optimizer, build_callbacks
 from biapy.data.generators import (
@@ -193,11 +193,11 @@ class Base_Workflow(metaclass=ABCMeta):
         self.bmz_config = {}
         self.bmz_pipeline = None
         if self.cfg.MODEL.SOURCE == "bmz":
-            self.bmz_config["preprocessing"] = check_bmz_model_compatibility(self.cfg)
+            self.bmz_config["preprocessing"] = check_bmz_args(self.cfg.MODEL.BMZ.SOURCE_MODEL_ID, self.cfg)
 
             print("Loading BioImage Model Zoo pretrained model . . .")
             self.bmz_config["original_bmz_config"] = load_description(self.cfg.MODEL.BMZ.SOURCE_MODEL_ID)
-
+            
             # let's make sure we have a valid model...
             if isinstance(self.bmz_config["original_bmz_config"], InvalidDescr):
                 raise ValueError(f"Failed to load {self.cfg.MODEL.SOURCE}")

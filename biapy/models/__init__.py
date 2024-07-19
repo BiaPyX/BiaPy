@@ -8,12 +8,21 @@ import torch
 import numpy as np
 import torch.nn as nn
 from torchinfo import summary
+from typing import Optional, Dict, Tuple, List, Literal
+
 from bioimageio.spec.utils import download
 from bioimageio.core.model_adapters._pytorch_model_adapter import PytorchModelAdapter
 from bioimageio.spec.model.v0_5 import (
     ArchitectureFromFileDescr,
     ArchitectureFromLibraryDescr,
 )
+from bioimageio.spec._internal.io_basics import Sha256
+from bioimageio.spec.model.v0_4 import ModelDescr as ModelDescr_v0_4
+from bioimageio.spec.model.v0_5 import ModelDescr as ModelDescr_v0_5
+from bioimageio.spec._internal.types import ImportantFileSource
+
+
+from biapy.config.config import Config
 
 
 def build_model(cfg, job_identifier, device):
@@ -278,7 +287,31 @@ def build_model(cfg, job_identifier, device):
     return model, model_file, model_name, args
 
 
-def build_bmz_model(cfg, model, device):
+def build_bmz_model(
+        cfg: type[Config], 
+        model: ModelDescr_v0_4 | ModelDescr_v0_5, 
+        device: type[torch.device]
+):
+    """
+    Build a model from Bioimage Model Zoo (BMZ).
+
+    Parameters
+    ----------
+    cfg : YACS configuration
+        Running configuration.
+
+    model : ModelDescr
+        BMZ model RDF that contains all the information of the model.
+
+    device : Torch device
+        Device used.
+
+    Returns
+    -------
+    model_instance : Torch model
+        Torch model.
+    """
+
     model_instance = PytorchModelAdapter.get_network(model.weights.pytorch_state_dict)
     model_instance = model_instance.to(device)
     state = torch.load(download(model.weights.pytorch_state_dict).path, map_location=device)
@@ -307,13 +340,31 @@ def build_bmz_model(cfg, model, device):
         depth=10,
         device=device.type,
     )
+
     return model_instance
 
 
-def get_bmz_model_info(model, spec_version="v0_4"):
+def get_bmz_model_info(
+    model: ModelDescr_v0_4 | ModelDescr_v0_5, 
+    spec_version: Literal["v0_4", "v0_5"] = "v0_4"
+) -> Tuple[ImportantFileSource, Sha256 | None, ArchitectureFromFileDescr | ArchitectureFromLibraryDescr]:
     """
-    Gather model info depending on its spec version.
+    Gather model info depending on its spec version. Currently supports ``v0_4`` and ``v0_5`` spec model.
+
+    Parameters
+    ----------
+    model : ModelDescr
+        BMZ model RDF that contains all the information of the model.
+
+    spec_version : str
+        Version of model's specs.
+
+    Returns
+    -------
+    model_instance : Torch model
+        Torch model.
     """
+
     assert (
         model.weights.pytorch_state_dict is not None
     ), "Seems that the original BMZ model has no pytorch_state_dict object. Aborting"
@@ -361,7 +412,26 @@ def get_bmz_model_info(model, spec_version="v0_4"):
     return state_dict_source, state_dict_sha256, pytorch_architecture
 
 
-def check_bmz_model_compatibility(cfg):
+def check_bmz_args(
+    model_ID: str,
+    cfg: Optional[type[Config]],
+) -> List[str]:
+    """
+    Check user's provided BMZ arguments.
+
+    Parameters
+    ----------
+    model_ID : str
+        Model identifier. It can be either its ``DOI`` or ``nickname``.
+
+    cfg : YACS configuration
+        Running configuration.
+
+    Returns
+    -------
+    model_instance : Torch model
+        Torch model.
+    """
     # Checking BMZ model compatibility using the available model list provided by BMZ
     # COLLECTION_URL = "https://uk1s3.embassy.ebi.ac.uk/public-datasets/bioimage.io/collection.json"
     COLLECTION_URL = "https://raw.githubusercontent.com/bioimage-io/collection-bioimage-io/gh-pages/collection.json"
@@ -370,15 +440,14 @@ def check_bmz_model_compatibility(cfg):
         collection = json.load(f)
 
     # Find the model among all
-    model_doi = cfg.MODEL.BMZ.SOURCE_MODEL_ID
     model_urls = [
         entry
         for entry in collection["collection"]
-        if entry["type"] == "model" and (model_doi in entry["nickname"] or model_doi in entry["rdf_source"])
+        if entry["type"] == "model" and (model_ID in entry["nickname"] or model_ID in entry["rdf_source"])
     ]
 
     if len(model_urls) == 0:
-        raise ValueError(f"No model found with the provided DOI: {model_doi}")
+        raise ValueError(f"No model found with the provided DOI: {model_ID}")
     if len(model_urls) > 1:
         raise ValueError("More than one model found with the provided DOI. Contact BiaPy team.")
     with open(Path(pooch.retrieve(model_urls[0]["rdf_source"], known_hash=None))) as stream:
@@ -387,18 +456,60 @@ def check_bmz_model_compatibility(cfg):
         except yaml.YAMLError as exc:
             print(exc)
 
-    # Check axes, preprocessing functions used and postprocessing to ensure BiaPy can handle it
-    implemented = True
+    workflow_specs = {}
+    workflow_specs["workflow_type"] = cfg.PROBLEM.TYPE
+    workflow_specs["ndim"] = cfg.PROBLEM.NDIM
+    workflow_specs["nclasses"] = cfg.MODEL.N_CLASSES
+
+    preproc_info, error, error_message = check_bmz_model_compatibility(model_rdf, workflow_specs=workflow_specs)
+
+    if error:
+        raise ValueError(f"Model {model_ID} can not be used in BiaPy. Message:\n{error_message}\n")
+
+    return preproc_info
+
+
+def check_bmz_model_compatibility(
+    model_rdf: Dict,
+    workflow_specs: Optional[Dict] = None,
+) -> Tuple[List[str], bool, str]:
+    """
+    Checks model compatibility with BiaPy.
+
+    Parameters
+    ----------
+    model_rdf : dict
+        BMZ model RDF that contains all the information of the model.
+
+    workflow_specs : dict
+        Specifications of the workflow. If not provided all possible models will be considered.
+
+    Returns
+    -------
+    preproc_info: dict of str
+        Preprocessing names that the model is using.
+
+    error : bool
+        Whether it there is a problem to consume the model in BiaPy or not.
+
+    reason_message: str
+        Reason why the model can not be consumed if there is any.
+    """
+    specific_workflow = "all" if workflow_specs is None else workflow_specs["workflow_type"]
+    specific_dims = "all" if workflow_specs is None else workflow_specs["ndim"]
+    ref_classes = "all" if workflow_specs is None else workflow_specs["nclasses"]
+
+    error = False
     reason_message = ""
-    preproc_names = []
+    preproc_info = []
+
+    # Accepting models that are exported in pytorch_state_dict and with just one input
     if "pytorch_state_dict" in model_rdf["weights"] and len(model_rdf["inputs"]) == 1:
+
         # Check problem type
-        model_problem_match = False
-        if cfg.PROBLEM.TYPE == "SEMANTIC_SEG" and (
+        if (specific_workflow in ["all", "SEMANTIC_SEG"]) and (
             "semantic-segmentation" in model_rdf["tags"] or "segmentation" in model_rdf["tags"]
         ):
-            model_problem_match = True
-
             # Check number of classes
             classes = -1
             if "kwargs" in model_rdf["weights"]["pytorch_state_dict"]:
@@ -409,84 +520,84 @@ def check_bmz_model_compatibility(cfg):
                 elif "n_classes" in model_rdf["weights"]["pytorch_state_dict"]["kwargs"]:
                     classes = model_rdf["weights"]["pytorch_state_dict"]["kwargs"]["n_classes"]
             if classes != -1:
-                if classes > 2 and cfg.MODEL.N_CLASSES != classes:
-                    raise ValueError("'MODEL.N_CLASSES' does not match network's output classes. Please check it!")
-                else:
-                    print(
-                        "BiaPy works only with one channel for the binary case (classes <= 2) so will adapt the output to match "
-                        "the ground truth data"
-                    )
+                if ref_classes != "all":
+                    if classes > 2 and ref_classes != classes:
+                        reason_message += f"[{specific_workflow}] 'MODEL.N_CLASSES' does not match network's output classes. Please check it!\n"
+                        error = True
+                    else:
+                        reason_message += f"[{specific_workflow}] BiaPy works only with one channel for the binary case (classes <= 2) so will adapt the output to match the ground truth data\n"
             else:
-                print("WARNING: couldn't find the classes this model is returning so please be aware to match it")
+                reason_message += f"[{specific_workflow}] Couldn't find the classes this model is returning so please be aware to match it\n"
+                error = True
 
-        elif cfg.PROBLEM.TYPE == "INSTANCE_SEG" and "instance-segmentation" in model_rdf["tags"]:
-            model_problem_match = True
-        elif cfg.PROBLEM.TYPE == "DETECTION" and "detection" in model_rdf["tags"]:
-            model_problem_match = True
-        elif cfg.PROBLEM.TYPE == "DENOISING" and "denoising" in model_rdf["tags"]:
-            model_problem_match = True
-        elif cfg.PROBLEM.TYPE == "SUPER_RESOLUTION" and "super-resolution" in model_rdf["tags"]:
-            model_problem_match = True
-        elif cfg.PROBLEM.TYPE == "SELF_SUPERVISED" and "self-supervision" in model_rdf["tags"]:
-            model_problem_match = True
-        elif cfg.PROBLEM.TYPE == "CLASSIFICATION" and "classification" in model_rdf["tags"]:
-            model_problem_match = True
-        elif cfg.PROBLEM.TYPE == "IMAGE_TO_IMAGE" and (
+        elif specific_workflow in ["all", "INSTANCE_SEG"] and "instance-segmentation" in model_rdf["tags"]:
+            pass
+        elif specific_workflow in ["all", "DETECTION"] and "detection" in model_rdf["tags"]:
+            pass
+        elif specific_workflow in ["all", "DENOISING"] and "denoising" in model_rdf["tags"]:
+            pass
+        elif specific_workflow in ["all", "SUPER_RESOLUTION"] and "super-resolution" in model_rdf["tags"]:
+            pass
+        elif specific_workflow in ["all", "SELF_SUPERVISED"] and "self-supervision" in model_rdf["tags"]:
+            pass
+        elif specific_workflow in ["all", "CLASSIFICATION"] and "classification" in model_rdf["tags"]:
+            pass
+        elif specific_workflow in ["all", "IMAGE_TO_IMAGE"] and (
             "pix2pix" in model_rdf["tags"]
             or "image-reconstruction" in model_rdf["tags"]
             or "image-to-image" in model_rdf["tags"]
             or "image-restoration" in model_rdf["tags"]
         ):
-            model_problem_match = True
-
-        if not model_problem_match:
-            implemented = False
-            reason_message = f"Selected model is not for {cfg.PROBLEM.TYPE} problem"
+            pass
+        else:
+            reason_message += "[{}] no workflow tag recognized in {}.\n".format(specific_workflow, model_rdf["tags"])
+            error = True
 
         # Check axes and dimension
-        if cfg.PROBLEM.NDIM == "2D":
+        if specific_dims == "2D":
             if model_rdf["inputs"][0]["axes"] != "bcyx":
-                implemented = False
-                reason_message = f"In a 2D problem the axes need to be 'bcyx', found {model_rdf['inputs'][0]['axes']}"
+                error = True
+                reason_message += f"[{specific_workflow}] In a 2D problem the axes need to be 'bcyx', found {model_rdf['inputs'][0]['axes']}\n"
             elif "2d" not in model_rdf["tags"]:
-                implemented = False
-                reason_message = f"Selected model seems to not be 2D"
-        elif cfg.PROBLEM.NDIM == "3D":
+                error = True
+                reason_message += f"[{specific_workflow}] Selected model seems to not be 2D\n"
+        elif specific_dims == "3D":
             if model_rdf["inputs"][0]["axes"] != "bczyx":
-                implemented = False
-                reason_message = f"In a 3D problem the axes need to be 'bczyx', found {model_rdf['inputs'][0]['axes']}"
+                error = True
+                reason_message += f"[{specific_workflow}] In a 3D problem the axes need to be 'bczyx', found {model_rdf['inputs'][0]['axes']}\n"
             elif "3d" not in model_rdf["tags"]:
-                implemented = False
-                reason_message = f"Selected model seems to not be 3D"
+                error = True
+                reason_message += f"[{specific_workflow}] Selected model seems to not be 3D\n"
+        else:  # All
+            if model_rdf["inputs"][0]["axes"] not in ["bcyx", "bczyx"]:
+                error = True
+                reason_message += f"[{specific_workflow}] Accepting models only with ['bcyx', 'bczyx'] axis order\n"
 
         # Check preprocessing
-        if implemented and "preprocessing" in model_rdf["inputs"][0]:
+        if "preprocessing" in model_rdf["inputs"][0]:
             for preprocs in model_rdf["inputs"][0]["preprocessing"]:
                 if preprocs["name"] not in [
                     "zero_mean_unit_variance",
                     "scale_range",
-                ]:  # TODO: scale_linear
-                    implemented = False
-                    reason_message = f"Not recognized preprocessing found: {preprocs['name']}"
+                    "scale_linear",
+                ]:
+                    error = True
+                    reason_message += f"[{specific_workflow}] Not recognized preprocessing found: {preprocs['name']}\n"
                     break
-                preproc_names = preprocs
+                preproc_info = preprocs
 
         # Check post-processing
         if (
-            implemented
-            and "postprocessing" in model_rdf["weights"]["pytorch_state_dict"]["kwargs"]
+            "postprocessing" in model_rdf["weights"]["pytorch_state_dict"]["kwargs"]
             and model_rdf["weights"]["pytorch_state_dict"]["kwargs"]["postprocessing"] is not None
         ):
-            implemented = False
-            reason_message = f"Currently no postprocessing is supported. Found: {model_rdf['weights']['pytorch_state_dict']['kwargs']['postprocessing']}"
+            error = True
+            reason_message += f"[{specific_workflow}] Currently no postprocessing is supported. Found: {model_rdf['weights']['pytorch_state_dict']['kwargs']['postprocessing']}\n"
     else:
-        implemented = False
-        reason_message = "pytorch_state_dict not found in model RDF"
+        error = True
+        reason_message += f"[{specific_workflow}] pytorch_state_dict not found in model RDF\n"
 
-    if not implemented:
-        raise ValueError(f"Model {model_doi} can not be used in BiaPy. Message: {reason_message}")
-
-    return preproc_names
+    return preproc_info, error, reason_message
 
 
 def build_torchvision_model(cfg, device):
