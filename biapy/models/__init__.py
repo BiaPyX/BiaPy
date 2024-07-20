@@ -129,7 +129,9 @@ def build_model(cfg, job_identifier, device):
                 if cfg.DATA.PATCH_SIZE[:-1] != (224, 224)
                 else cfg.DATA.PATCH_SIZE
             )
-            args = dict(cfg.MODEL.ARCHITECTURE.lower(), shape, n_classes=cfg.MODEL.N_CLASSES)
+            args = dict(
+                efficientnet_name=cfg.MODEL.ARCHITECTURE.lower(), image_shape=shape, n_classes=cfg.MODEL.N_CLASSES
+            )
             model = efficientnet(**args)
             callable_model = efficientnet
         elif modelname == "vit":
@@ -287,11 +289,7 @@ def build_model(cfg, job_identifier, device):
     return model, model_file, model_name, args
 
 
-def build_bmz_model(
-        cfg: type[Config], 
-        model: ModelDescr_v0_4 | ModelDescr_v0_5, 
-        device: type[torch.device]
-):
+def build_bmz_model(cfg: type[Config], model: ModelDescr_v0_4 | ModelDescr_v0_5, device: type[torch.device]):
     """
     Build a model from Bioimage Model Zoo (BMZ).
 
@@ -345,8 +343,7 @@ def build_bmz_model(
 
 
 def get_bmz_model_info(
-    model: ModelDescr_v0_4 | ModelDescr_v0_5, 
-    spec_version: Literal["v0_4", "v0_5"] = "v0_4"
+    model: ModelDescr_v0_4 | ModelDescr_v0_5, spec_version: Literal["v0_4", "v0_5"] = "v0_4"
 ) -> Tuple[ImportantFileSource, Sha256 | None, ArchitectureFromFileDescr | ArchitectureFromLibraryDescr]:
     """
     Gather model info depending on its spec version. Currently supports ``v0_4`` and ``v0_5`` spec model.
