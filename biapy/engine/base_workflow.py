@@ -1440,7 +1440,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 print(f"Loaded image shape is {self._X.shape}")
 
             data_shape = self._X.shape
-            out_data_shape = data_shape * self.DATA.PREPROCESS.ZOOM.ZOOM_FACTOR
+            out_data_shape = data_shape * self.cfg.DATA.PREPROCESS.ZOOM.ZOOM_FACTOR
 
             if self._X.ndim < 3:
                 raise ValueError(
@@ -1540,7 +1540,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 p = to_numpy_format(p, self.axis_order_back)
 
                 t_dim, z_dim, y_dim, x_dim, c_dim = order_dimensions(
-                    self.DATA.PREPROCESS.ZOOM.ZOOM_FACTOR,
+                    self.cfg.DATA.PREPROCESS.ZOOM.ZOOM_FACTOR,
                     input_order=self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
                     output_order="TZYXC",
                     default_value=1,
