@@ -1205,8 +1205,9 @@ def detection_watershed(
 
     Parameters
     ----------
-    seeds : 4D Numpy array
-        Binary foreground labels and contours data to apply watershed into. E.g. ``(397, 1450, 2000, 2)``.
+    seeds : 3D/4D Numpy array
+        Binary foreground labels and contours data to apply watershed into. E.g. ``(1450, 2000, 1)`` 
+        for ``2D`` and ``(397, 1450, 2000, 1)`` for ``3D``.
 
     coords : List of 3 ints
         Coordinates of all detected points.
@@ -1221,7 +1222,7 @@ def detection_watershed(
         Number of classes.
 
     ndim : int, optional
-        Number of dimensions. E.g. for 2D set it to ``2`` and for 3D to ``3``.
+        Number of dimensions. E.g. for ``2D`` set it to ``2`` and for ``3D`` to ``3``.
 
     donuts_classes : List of ints, optional
         Classes to check a donuts type cell. Set to ``-1`` to disable it.
@@ -1238,13 +1239,13 @@ def detection_watershed(
 
     Returns
     -------
-    segm : 4D Numpy array
-        Image with Voronoi applied. ``(num_of_images, z, y, x)`` e.g. ``(1, 397, 1450, 2000)``
+    segm : 2D/3D Numpy array
+        Image with Voronoi applied. E.g. ``(y, x)`` for ``2D`` and ``(z, y, x)`` for ``3D``.
     """
     print("Applying detection watershed . . .")
 
     # Read the test image
-    img = read_img(data_filename, is_3d=ndim == 3)
+    img = read_img(data_filename, is_3d=ndim == 3).squeeze()
     img = reduce_dtype(img, np.min(img), np.max(img), out_min=0, out_max=255, out_type=np.uint8)
     img = equalize_adapthist(img)
 
