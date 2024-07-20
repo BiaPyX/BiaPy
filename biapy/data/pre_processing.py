@@ -1185,7 +1185,7 @@ def calculate_3D_volume_prob_map(Y, Y_path=None, w_foreground=0.94, w_background
 ###########
 # GENERAL #
 ###########
-def norm_range01(x, dtype=np.float32, div_using_max_and_scale=False):
+def norm_range01(x, dtype=np.float32, div_using_max_and_scale=False, div_using_max_and_scale_per_channel=False):
     norm_steps = {}
     norm_steps["orig_dtype"] = x.dtype
 
@@ -1194,21 +1194,49 @@ def norm_range01(x, dtype=np.float32, div_using_max_and_scale=False):
         norm_steps["max_val_scale"] = x.max()
 
     if x.dtype in [np.uint8, torch.uint8]:
-        x = x / 255 if not div_using_max_and_scale else (x - x.min()) / (x.max() - x.min() + sys.float_info.epsilon)
+        if div_using_max_and_scale_per_channel:
+            if not div_using_max_and_scale:
+                x = x / 255
+            else:
+                x = x.astype(dtype)
+                for c in range(x.shape[-1]):
+                    x[...,c] = (x[...,c] - x[...,c].min()) / (x[...,c].max() - x[...,c].min() + sys.float_info.epsilon)
+        else:
+            x = x / 255 if not div_using_max_and_scale else (x - x.min()) / (x.max() - x.min() + sys.float_info.epsilon)
         norm_steps["div"] = 1
     else:
         if (isinstance(x, np.ndarray) and np.max(x) > 255) or (torch.is_tensor(x) and torch.max(x) > 255):
             norm_steps["reduced_{}".format(x.dtype)] = 1
-            x = reduce_dtype(
-                x,
-                0 if not div_using_max_and_scale else x.min(),
-                65535 if not div_using_max_and_scale else x.max(),
-                out_min=0,
-                out_max=1,
-                out_type=dtype,
-            )
+            if div_using_max_and_scale_per_channel:
+                x = x.astype(dtype)
+                for c in range(x.shape[-1]):
+                    x[...,c] = reduce_dtype(
+                        x[...,c],
+                        0 if not div_using_max_and_scale else x[...,c].min(),
+                        65535 if not div_using_max_and_scale else x[...,c].max(),
+                        out_min=0,
+                        out_max=1,
+                        out_type=dtype,
+                    )
+            else:
+                x = reduce_dtype(
+                    x,
+                    0 if not div_using_max_and_scale else x.min(),
+                    65535 if not div_using_max_and_scale else x.max(),
+                    out_min=0,
+                    out_max=1,
+                    out_type=dtype,
+                )
         elif (isinstance(x, np.ndarray) and np.max(x) > 2) or (torch.is_tensor(x) and torch.max(x) > 2):
-            x = x / 255 if not div_using_max_and_scale else (x - x.min()) / (x.max() - x.min() + sys.float_info.epsilon)
+            if div_using_max_and_scale_per_channel:
+                if not div_using_max_and_scale:
+                    x = x / 255
+                else:
+                    x = x.astype(dtype)
+                    for c in range(x.shape[-1]):
+                        x[...,c] = (x[...,c] - x[...,c].min()) / (x[...,c].max() - x[...,c].min() + sys.float_info.epsilon)
+            else:
+                x = x / 255 if not div_using_max_and_scale else (x - x.min()) / (x.max() - x.min() + sys.float_info.epsilon)                
             norm_steps["div"] = 1
 
     if torch.is_tensor(x):
