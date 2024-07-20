@@ -445,7 +445,6 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         """
         # Choose the data source
         if self.data_mode == "in_memory":
-            assert self.Y is not None
             img = np.squeeze(self.X[idx].copy())
             img_class = int(self.Y[idx]) if self.ptype == "classification" else 0
         else:
