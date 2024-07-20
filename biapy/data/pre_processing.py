@@ -271,7 +271,7 @@ def create_test_instance_channels(cfg):
         Configuration.
     """
     if cfg.DATA.TEST.LOAD_GT:
-        Y = sorted(next(os.walk(cfg.DATA.TEST.GT_PATH)[2]))
+        Y = sorted(next(os.walk(cfg.DATA.TEST.GT_PATH))[2])
         print("Creating Y_test channels . . .")
         for i in tqdm(range(len(Y)), disable=not is_main_process()):
             img = read_img(
@@ -291,7 +291,7 @@ def create_test_instance_channels(cfg):
                 verbose=False,
             )
 
-    X = sorted(next(os.walk(cfg.DATA.TEST.PATH)[2]))
+    X = sorted(next(os.walk(cfg.DATA.TEST.PATH))[2])
     print("Creating X_test channels . . .")
     for i in tqdm(range(len(X)), disable=not is_main_process()):
         img = read_img(os.path.join(cfg.DATA.TEST.PATH, X[i]), is_3d=not cfg.PROBLEM.NDIM == "2D")
