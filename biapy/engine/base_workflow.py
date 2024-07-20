@@ -2184,20 +2184,12 @@ class Base_Workflow(metaclass=ABCMeta):
                     self._Y = self._Y[:, : o_test_shape[1], : o_test_shape[2]]
 
                 # Save image
-                if pred.ndim == 4 and self.cfg.PROBLEM.NDIM == "3D":
-                    save_tif(
-                        np.expand_dims(pred, 0),
-                        self.cfg.PATHS.RESULT_DIR.FULL_IMAGE,
-                        self.processing_filenames,
-                        verbose=self.cfg.TEST.VERBOSE,
-                    )
-                else:
-                    save_tif(
-                        pred,
-                        self.cfg.PATHS.RESULT_DIR.FULL_IMAGE,
-                        self.processing_filenames,
-                        verbose=self.cfg.TEST.VERBOSE,
-                    )
+                save_tif(
+                    pred,
+                    self.cfg.PATHS.RESULT_DIR.FULL_IMAGE,
+                    self.processing_filenames,
+                    verbose=self.cfg.TEST.VERBOSE,
+                )
 
                 # Argmax if needed
                 if self.cfg.MODEL.N_CLASSES > 2 and self.cfg.DATA.TEST.ARGMAX_TO_OUTPUT:
@@ -2407,15 +2399,15 @@ class Base_Workflow(metaclass=ABCMeta):
         ### POST-PROCESSING (2D) ###
         ############################
         if self.post_processing["as_3D_stack"]:
-            self.all_pred = np.concatenate(self.all_pred)
-            self.all_gt = np.concatenate(self.all_gt) if self.cfg.DATA.TEST.LOAD_GT else None
+            self.all_pred = np.expand_dims(np.concatenate(self.all_pred), 0)
+            self.all_gt = np.expand_dims(np.concatenate(self.all_gt), 0) if self.cfg.DATA.TEST.LOAD_GT else None
             save_tif(
-                np.expand_dims(self.all_pred, 0),
+                self.all_pred,
                 self.cfg.PATHS.RESULT_DIR.AS_3D_STACK,
                 verbose=self.cfg.TEST.VERBOSE,
             )
             save_tif(
-                np.expand_dims((self.all_pred > 0.5).astype(np.uint8), 0),
+                (self.all_pred > 0.5).astype(np.uint8),
                 self.cfg.PATHS.RESULT_DIR.AS_3D_STACK_BIN,
                 verbose=self.cfg.TEST.VERBOSE,
             )
@@ -2425,7 +2417,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.stats["ov_iou_as_3D_stack_post"],
             ) = apply_post_processing(self.cfg, self.all_pred, self.all_gt)
             save_tif(
-                np.expand_dims(self.all_pred, 0),
+                self.all_pred,
                 self.cfg.PATHS.RESULT_DIR.AS_3D_STACK_POST_PROCESSING,
                 verbose=self.cfg.TEST.VERBOSE,
             )
