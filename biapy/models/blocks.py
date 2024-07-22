@@ -932,13 +932,16 @@ class ResUNetPlusPlus_AttentionBlock(nn.Module):
         input_decoder,
         output_dim,
         z_down=2,
-        batch_norm=False,
+        norm="none",
     ):
         super(ResUNetPlusPlus_AttentionBlock, self).__init__()
 
         block = []
-        if batch_norm is not None:
-            block.append(batch_norm(input_encoder))
+        if norm != "none":
+            if conv == nn.Conv2d:
+                block.append(get_norm_2d(norm, input_encoder))
+            else:
+                block.append(get_norm_3d(norm, input_encoder))
         block += [
             nn.ReLU(),
             conv(input_encoder, output_dim, 3, padding=1),
@@ -947,14 +950,20 @@ class ResUNetPlusPlus_AttentionBlock(nn.Module):
         self.conv_encoder = nn.Sequential(*block)
 
         block = []
-        if batch_norm is not None:
-            block.append(batch_norm(input_decoder))
+        if norm != "none":
+            if conv == nn.Conv2d:
+                block.append(get_norm_2d(norm, input_encoder))
+            else:
+                block.append(get_norm_3d(norm, input_encoder))
         block += [nn.ReLU(), conv(input_decoder, output_dim, 3, padding=1)]
         self.conv_decoder = nn.Sequential(*block)
 
         block = []
-        if batch_norm is not None:
-            block.append(batch_norm(output_dim))
+        if norm != "none":
+            if conv == nn.Conv2d:
+                block.append(get_norm_2d(norm, output_dim))
+            else:
+                block.append(get_norm_3d(norm, output_dim))
         block += [nn.ReLU(), conv(output_dim, 1, 1)]
         self.conv_attn = nn.Sequential(*block)
 
@@ -969,29 +978,38 @@ class ASPP(nn.Module):
     Adapted from `here <https://github.com/rishikksh20/ResUnet/blob/master/core/modules.py>`_.
     """
 
-    def __init__(self, conv, in_dims, out_dims, batch_norm=None, rate=[6, 12, 18]):
+    def __init__(self, conv, in_dims, out_dims, norm="none", rate=[6, 12, 18]):
         super(ASPP, self).__init__()
 
         block = [
             conv(in_dims, out_dims, 3, stride=1, padding=rate[0], dilation=rate[0]),
             nn.ReLU(inplace=True),
         ]
-        if batch_norm is not None:
-            block.append(batch_norm(out_dims))
+        if norm != "none":
+            if conv == nn.Conv2d:
+                block.append(get_norm_2d(norm, out_dims))
+            else:
+                block.append(get_norm_3d(norm, out_dims))
         self.aspp_block1 = nn.Sequential(*block)
         block = [
             conv(in_dims, out_dims, 3, stride=1, padding=rate[1], dilation=rate[1]),
             nn.ReLU(inplace=True),
         ]
-        if batch_norm is not None:
-            block.append(batch_norm(out_dims))
+        if norm != "none":
+            if conv == nn.Conv2d:
+                block.append(get_norm_2d(norm, out_dims))
+            else:
+                block.append(get_norm_3d(norm, out_dims))
         self.aspp_block2 = nn.Sequential(*block)
         block = [
             conv(in_dims, out_dims, 3, stride=1, padding=rate[2], dilation=rate[2]),
             nn.ReLU(inplace=True),
         ]
-        if batch_norm is not None:
-            block.append(batch_norm(out_dims))
+        if norm != "none":
+            if conv == nn.Conv2d:
+                block.append(get_norm_2d(norm, out_dims))
+            else:
+                block.append(get_norm_3d(norm, out_dims))
         self.aspp_block3 = nn.Sequential(*block)
 
         self.output = conv(len(rate) * out_dims, out_dims, 1)
