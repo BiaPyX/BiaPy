@@ -182,7 +182,7 @@ class U_NeXt_V1(nn.Module):
         # DECODER
         self.up_path = nn.ModuleList()
         in_channels = feature_maps[-1]
-        upsample_layer = "upsampling"
+
         for i in range(self.depth - 1, -1, -1):
             self.up_path.append(
                 UpConvNeXtBlock_V1(
