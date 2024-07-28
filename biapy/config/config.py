@@ -115,7 +115,10 @@ class Config:
 
         ### DETECTION
         _C.PROBLEM.DETECTION = CN()
-        # Size of the disk that will be used to dilate the central point created from the CSV file. 0 to not dilate and only create a 3x3 square.
+        # Shape of the ellipse that will be used to dilate the central point created from the CSV file. 0 to not dilate and only create a 3x3 square.
+        # The value is the radius of the ellipse in pixels. If an integer is given, the shape will be a ball with the given side length.
+        # If a list is given, the shape will be a hyperball with the given side lengths.
+        # For example [1, 2, 3] will result in an ellipse with a radius of 1 in the first dimension, 2 in the second and 3 in the third.
         _C.PROBLEM.DETECTION.CENTRAL_POINT_DILATION = 3
         _C.PROBLEM.DETECTION.CHECK_POINTS_CREATED = True
         # Whether to save watershed check files
