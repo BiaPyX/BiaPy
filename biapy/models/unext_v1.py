@@ -130,7 +130,8 @@ class U_NeXt_V1(nn.Module):
         in_channels = image_shape[-1]
 
         # STEM
-        mpool = (z_down[0], stem_k_size, stem_k_size) if self.ndim == 3 else (stem_k_size, stem_k_size)
+        z_factor = min( z_down[0]/stem_k_size, 1 )
+        mpool = (stem_k_size * z_factor, stem_k_size, stem_k_size) if self.ndim == 3 else (stem_k_size, stem_k_size)
         self.down_path.append(
             nn.Sequential(
                 conv(in_channels, feature_maps[0], kernel_size=mpool, stride=mpool),
@@ -227,7 +228,7 @@ class U_NeXt_V1(nn.Module):
             in_channels = feature_maps[i]
 
         # Inverted Stem
-        mpool = (z_down[0], stem_k_size, stem_k_size) if self.ndim == 3 else (stem_k_size, stem_k_size)
+        mpool = (stem_k_size * z_factor, stem_k_size, stem_k_size) if self.ndim == 3 else (stem_k_size, stem_k_size)
         self.up_path.append(
             nn.Sequential(
                 convtranspose(feature_maps[0], feature_maps[0], kernel_size=mpool, stride=mpool),
