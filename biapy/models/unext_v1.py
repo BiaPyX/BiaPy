@@ -58,6 +58,9 @@ class U_NeXt_V1(nn.Module):
     isotropy : bool or list of bool, optional
         Whether to use 3d or 2d depthwise convolutions at each U-NeXt level even if input is 3d.
 
+    stem_k_size : int, optional
+        Size of the stem kernel (default: 2).
+
     Returns
     -------
     model : Torch model
@@ -87,6 +90,7 @@ class U_NeXt_V1(nn.Module):
         layer_scale=1e-6,
         cn_layers=[2, 2, 2, 2],
         isotropy=True,
+        stem_k_size=2
     ):
         super(U_NeXt_V1, self).__init__()
         self.depth = len(feature_maps) - 1
@@ -126,7 +130,7 @@ class U_NeXt_V1(nn.Module):
         in_channels = image_shape[-1]
 
         # STEM
-        mpool = (z_down[0], 2, 2) if self.ndim == 3 else (2, 2)
+        mpool = (z_down[0], stem_k_size, stem_k_size) if self.ndim == 3 else (stem_k_size, stem_k_size)
         self.down_path.append(
             nn.Sequential(
                 conv(in_channels, feature_maps[0], kernel_size=mpool, stride=mpool),
@@ -223,7 +227,7 @@ class U_NeXt_V1(nn.Module):
             in_channels = feature_maps[i]
 
         # Inverted Stem
-        mpool = (z_down[0], 2, 2) if self.ndim == 3 else (2, 2)
+        mpool = (z_down[0], stem_k_size, stem_k_size) if self.ndim == 3 else (stem_k_size, stem_k_size)
         self.up_path.append(
             nn.Sequential(
                 convtranspose(feature_maps[0], feature_maps[0], kernel_size=mpool, stride=mpool),

@@ -719,6 +719,8 @@ class Config:
         _C.MODEL.CONVNEXT_SD_PROB = 0.1
         # Layer Scale parameter for the U-NeXt model.
         _C.MODEL.CONVNEXT_LAYER_SCALE = 1e-6
+        # Size of the stem kernel in the U-NeXt model.
+        _C.MODEL.CONVNEXT_STEM_K_SIZE = 2
 
         # TRANSFORMERS MODELS
         # Type of model. Options are "custom", "vit_base_patch16", "vit_large_patch16" and "vit_huge_patch16". On custom setting
