@@ -194,10 +194,10 @@ class ConvNeXtBlock_V1(nn.Module):
             layer_scale_dim = (dim, 1, 1)
 
         self.block = nn.Sequential(
-            conv(dim, dim, kernel_size=7, padding=3, groups=dim, bias=True),
+            conv(dim, dim, kernel_size=7, padding=3, groups=dim, bias=True), # depthwise conv
             pre_ln_permutation,
-            layer_norm(dim),
-            nn.Linear(in_features=dim, out_features=4 * dim, bias=True),
+            layer_norm(dim, eps=1e-6),
+            nn.Linear(in_features=dim, out_features=4 * dim, bias=True), # pointwise/1x1 convs, implemented with linear layers
             nn.GELU(),
             nn.Linear(in_features=4 * dim, out_features=dim, bias=True),
             post_ln_permutation,
