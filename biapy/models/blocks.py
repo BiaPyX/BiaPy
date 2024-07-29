@@ -168,6 +168,9 @@ class ConvNeXtBlock_V1(nn.Module):
 
     layer_norm : nn.LayerNorm Torch layer, optional
         Layer normalization layer to use.
+    
+    k_size : int or 3 int tuple, optional
+            Height, width and depth of the depthwise convolution window.
     """
 
     def __init__(
@@ -178,6 +181,7 @@ class ConvNeXtBlock_V1(nn.Module):
         layer_scale=1e-6,
         stochastic_depth_prob=0.0,
         layer_norm=None,
+        k_size = 7
     ):
         super().__init__()
 
@@ -188,13 +192,15 @@ class ConvNeXtBlock_V1(nn.Module):
             pre_ln_permutation = Permute([0, 2, 3, 4, 1])
             post_ln_permutation = Permute([0, 4, 1, 2, 3])
             layer_scale_dim = (dim, 1, 1, 1)
+            pad = (0, 3, 3) if k_size[0] == 1 else (3, 3, 3)
         elif ndim == 2:
             pre_ln_permutation = Permute([0, 2, 3, 1])
             post_ln_permutation = Permute([0, 3, 1, 2])
             layer_scale_dim = (dim, 1, 1)
+            pad = (3, 3)
 
         self.block = nn.Sequential(
-            conv(dim, dim, kernel_size=7, padding=3, groups=dim, bias=True), # depthwise conv
+            conv(dim, dim, kernel_size=k_size, padding=pad, groups=dim, bias=True), # depthwise conv
             pre_ln_permutation,
             layer_norm(dim, eps=1e-6),
             nn.Linear(in_features=dim, out_features=4 * dim, bias=True), # pointwise/1x1 convs, implemented with linear layers
@@ -335,6 +341,7 @@ class UpConvNeXtBlock_V1(nn.Module):
         sd_probs=[0.0],
         layer_scale=1e-6,
         layer_norm=None,
+        k_size=7
     ):
         """
         Convolutional ConvNext upsampling block.
@@ -381,6 +388,9 @@ class UpConvNeXtBlock_V1(nn.Module):
 
         layer_norm : nn.LayerNorm Torch layer, optional
             Layer normalization layer to use.
+
+        k_size : int or 3 int tuple, optional
+            Height, width and depth of the depthwise convolution window.
         """
         super(UpConvNeXtBlock_V1, self).__init__()
         self.ndim = ndim
@@ -429,6 +439,7 @@ class UpConvNeXtBlock_V1(nn.Module):
                     layer_scale,
                     sd_probs[i],
                     layer_norm=layer_norm,
+                    k_size=k_size
                 )
             )
         self.cn_block = nn.Sequential(*stage)
