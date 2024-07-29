@@ -208,13 +208,15 @@ class ConvNeXtBlock_V1(nn.Module):
             nn.Linear(in_features=4 * dim, out_features=dim, bias=True),
             post_ln_permutation,
         )
-        self.layer_scale = nn.Parameter(torch.ones(layer_scale_dim) * layer_scale)
+        self.layer_scale = nn.Parameter(torch.ones(layer_scale_dim) * layer_scale,
+                                        requires_grad=True) if layer_scale > 0 else None
         self.stochastic_depth = StochasticDepth(stochastic_depth_prob, "row")
 
     def forward(self, x):
-        result = self.layer_scale * self.block(x)
-        result = self.stochastic_depth(result)
-        result += x
+        result = self.block(x)
+        if self.layer_scale is not None:
+            result = self.layer_scale * result 
+        result = x + self.stochastic_depth(result)
         return result
 
 
