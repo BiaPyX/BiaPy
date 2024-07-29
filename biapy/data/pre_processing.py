@@ -509,6 +509,49 @@ def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
 #############
 # DETECTION #
 #############
+def generate_ellipse_footprint(
+        shape = [1, 1, 1],
+        n_dim = 3,
+        ) -> tuple:
+    """
+    Generate footprint of an ellipse in a n-dimensional image.
+
+    Parameters
+    ----------
+    shape : int or list, optional
+        Shape of the ellipse. If an integer is given, the shape will be a ball with the given side length.
+        If a list is given, the shape will be a hyperball with the given side lengths.
+
+    n_dim : int, optional
+        Number of dimensions of the image.
+
+    Returns
+    -------
+    distances : np.ndarray
+        Ellipse footprint.
+    """
+
+
+    if isinstance(shape, int):
+        shape = [shape] * n_dim
+
+    center = (np.array(shape) / 2).astype(int)
+    
+    ranges = [np.arange(int(center[i] - shape[i]), int(center[i] + shape[i]) + 1)
+              if shape[i] > 0
+              else
+              [center[i]]
+              for i in range(len(center))]
+    grids = np.meshgrid(*ranges, indexing='ij')
+
+    # put all the dimensions at least to 1
+    shape = [1 if i == 0 else i for i in shape]
+
+    distances = np.array([((grids[d] - center[d])**2) / shape[d]**2 for d in range(len(center))])
+    distances = np.sum(distances, axis=0) <= 1
+
+    return distances.astype(bool)
+
 def create_detection_masks(cfg, data_type="train"):
     """
     Create detection masks based on CSV files.
@@ -671,15 +714,15 @@ def create_detection_masks(cfg, data_type="train"):
                             )
 
                         mask[a0_coord, a1_coord, a2_coord, c_point] = 1
-                        if a1_coord + 1 < mask.shape[1]:
-                            mask[a0_coord, a1_coord + 1, a2_coord, c_point] = 1
-                        if a1_coord - 1 > 0:
-                            mask[a0_coord, a1_coord - 1, a2_coord, c_point] = 1
-                        if a2_coord + 1 < mask.shape[2]:
-                            mask[a0_coord, a1_coord, a2_coord + 1, c_point] = 1
-                        if a2_coord - 1 > 0:
-                            mask[a0_coord, a1_coord, a2_coord - 1, c_point] = 1
                         if cfg.PROBLEM.DETECTION.CENTRAL_POINT_DILATION == 0:
+                            if a1_coord + 1 < mask.shape[1]:
+                                mask[a0_coord, a1_coord + 1, a2_coord, c_point] = 1
+                            if a1_coord - 1 > 0:
+                                mask[a0_coord, a1_coord - 1, a2_coord, c_point] = 1
+                            if a2_coord + 1 < mask.shape[2]:
+                                mask[a0_coord, a1_coord, a2_coord + 1, c_point] = 1
+                            if a2_coord - 1 > 0:
+                                mask[a0_coord, a1_coord, a2_coord - 1, c_point] = 1
                             if a1_coord + 1 < mask.shape[1] and a2_coord + 1 < mask.shape[2]:
                                 mask[a0_coord, a1_coord + 1, a2_coord + 1, c_point] = 1
                             if a1_coord - 1 > 0 and a2_coord - 1 > 0:
@@ -722,10 +765,12 @@ def create_detection_masks(cfg, data_type="train"):
                         )
 
             # Dilate the mask
-            if cfg.PROBLEM.DETECTION.CENTRAL_POINT_DILATION > 0:
+            if cfg.PROBLEM.DETECTION.CENTRAL_POINT_DILATION != 0:
+
                 print("Dilating all points . . .")
                 if cfg.PROBLEM.NDIM == "2D":
                     mask = np.expand_dims(mask, 0)
+
                 for k in tqdm(
                     range(mask.shape[0]),
                     total=len(mask),
@@ -733,10 +778,11 @@ def create_detection_masks(cfg, data_type="train"):
                     disable=not is_main_process(),
                 ):
                     for ch in range(mask.shape[-1]):
+                        ellipse_footprint = generate_ellipse_footprint(cfg.PROBLEM.DETECTION.CENTRAL_POINT_DILATION, mask[k, ..., ch].ndim)
                         mask[k, ..., ch] = binary_dilation_scipy(
                             mask[k, ..., ch],
                             iterations=1,
-                            structure=disk(cfg.PROBLEM.DETECTION.CENTRAL_POINT_DILATION),
+                            structure=ellipse_footprint,
                         )
                 if cfg.PROBLEM.NDIM == "2D":
                     mask = mask[0]
