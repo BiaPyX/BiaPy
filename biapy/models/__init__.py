@@ -104,6 +104,7 @@ def build_model(cfg, job_identifier, device):
                 cn_layers=cfg.MODEL.CONVNEXT_LAYERS,
                 layer_scale=cfg.MODEL.CONVNEXT_LAYER_SCALE,
                 stochastic_depth_prob=cfg.MODEL.CONVNEXT_SD_PROB,
+                isotropy = cfg.MODEL.ISOTROPY
             )
             callable_model = U_NeXt_V1
         args["output_channels"] = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS if cfg.PROBLEM.TYPE == "INSTANCE_SEG" else None

@@ -55,6 +55,8 @@ class U_NeXt_V1(nn.Module):
         Number of times each ConvNext block is repeated in each level. This array should be the same length
         as the 'feature_maps' attribute.
 
+    isotropy : bool or list of bool, optional
+        Whether to use 3d or 2d depthwise convolutions at each U-NeXt level even if input is 3d.
 
     Returns
     -------
@@ -84,6 +86,7 @@ class U_NeXt_V1(nn.Module):
         stochastic_depth_prob=0.1,
         layer_scale=1e-6,
         cn_layers=[2, 2, 2, 2],
+        isotropy=True,
     ):
         super(U_NeXt_V1, self).__init__()
         self.depth = len(feature_maps) - 1
@@ -92,7 +95,11 @@ class U_NeXt_V1(nn.Module):
         self.n_classes = 1 if n_classes <= 2 else n_classes
         self.multiclass = True if n_classes > 2 and output_channels is not None else False
         layer_norm = nn.LayerNorm
-
+        
+        # convert isotropy to list if it is a single bool
+        if type(isotropy) == bool:
+            isotropy = isotropy * len(feature_maps)
+        
         if self.ndim == 3:
             conv = nn.Conv3d
             convtranspose = nn.ConvTranspose3d
@@ -129,6 +136,9 @@ class U_NeXt_V1(nn.Module):
             )
         )
 
+        # depthwise kernel size for ConvNeXt block
+        kernel_size = (7, 7) if self.ndim == 2 else (7, 7, 7)
+
         # Encoder
         stage_block_id = 0
         total_stage_blocks = sum(cn_layers)
@@ -136,6 +146,10 @@ class U_NeXt_V1(nn.Module):
         for i in range(self.depth):
             stage = nn.ModuleList()
             sd_probs_stage = []
+            
+            # adjust depthwise kernel size if needed
+            if isotropy[i] is False and self.ndim == 3:
+                kernel_size = (1, 7, 7)
 
             # ConvNeXtBlocks
             for _ in range(cn_layers[i]):
@@ -148,6 +162,7 @@ class U_NeXt_V1(nn.Module):
                         layer_scale,
                         sd_prob,
                         layer_norm,
+                        k_size=kernel_size
                     )
                 )
                 stage_block_id += 1
@@ -173,9 +188,11 @@ class U_NeXt_V1(nn.Module):
 
         # BOTTLENECK
         stage = nn.ModuleList()
+        if isotropy[-1] is False and self.ndim == 3:
+                kernel_size = (1, 7, 7)
         for _ in range(cn_layers[-1]):
             sd_prob = stochastic_depth_prob * stage_block_id / (total_stage_blocks - 1.0)
-            stage.append(ConvNeXtBlock_V1(self.ndim, conv, feature_maps[-1], layer_scale, sd_prob, layer_norm))
+            stage.append(ConvNeXtBlock_V1(self.ndim, conv, feature_maps[-1], layer_scale, sd_prob, layer_norm, k_size=kernel_size))
             stage_block_id += 1
         self.bottleneck = nn.Sequential(*stage)
 
@@ -184,6 +201,8 @@ class U_NeXt_V1(nn.Module):
         in_channels = feature_maps[-1]
 
         for i in range(self.depth - 1, -1, -1):
+            if isotropy[i] is False and self.ndim == 3:
+                kernel_size = (1, 7, 7)
             self.up_path.append(
                 UpConvNeXtBlock_V1(
                     self.ndim,
@@ -198,6 +217,7 @@ class U_NeXt_V1(nn.Module):
                     sd_probs=sd_probs[i],
                     layer_scale=layer_scale,
                     layer_norm=layer_norm,
+                    k_size=kernel_size
                 )
             )
             in_channels = feature_maps[i]
