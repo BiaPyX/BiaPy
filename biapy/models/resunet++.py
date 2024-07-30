@@ -113,8 +113,6 @@ class ResUNetPlusPlus(nn.Module):
                 stride=upsampling_factor,
             )
 
-        self.down_path = nn.ModuleList()
-
         # ENCODER
         self.down_path = nn.ModuleList()
         self.mpooling_layers = nn.ModuleList()
