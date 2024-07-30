@@ -965,9 +965,9 @@ class ResUNetPlusPlus_AttentionBlock(nn.Module):
         block = []
         if norm != "none":
             if conv == nn.Conv2d:
-                block.append(get_norm_2d(norm, input_encoder))
+                block.append(get_norm_2d(norm, input_decoder))
             else:
-                block.append(get_norm_3d(norm, input_encoder))
+                block.append(get_norm_3d(norm, input_decoder))
         block += [nn.ReLU(), conv(input_decoder, output_dim, 3, padding=1)]
         self.conv_decoder = nn.Sequential(*block)
 
