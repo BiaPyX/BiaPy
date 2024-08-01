@@ -57,7 +57,7 @@ class rcan(nn.Module):
         num_channels=3,
         filters=64,
         scale=2,
-        n_sub_block=2,
+        num_rg=10,
         num_rcab=20,
         reduction=16,
     ):
@@ -66,7 +66,7 @@ class rcan(nn.Module):
             scale = scale[0]
         self.ndim = ndim
         self.sf = nn.Conv2d(num_channels, filters, kernel_size=3, padding="same")
-        self.rgs = nn.Sequential(*[RG(filters, num_rcab, reduction) for _ in range(n_sub_block)])
+        self.rgs = nn.Sequential(*[RG(filters, num_rcab, reduction) for _ in range(num_rg)])
         self.conv1 = nn.Conv2d(filters, filters, kernel_size=3, padding="same")
         self.upscale = nn.Sequential(
             nn.Conv2d(filters, filters * (scale**2), kernel_size=3, padding="same"),

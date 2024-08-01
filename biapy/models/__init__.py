@@ -216,7 +216,6 @@ def build_model(cfg, job_identifier, device):
                 ndim=ndim,
                 filters=16,
                 scale=scale,
-                n_sub_block=int(np.log2(scale)),
                 num_channels=cfg.DATA.PATCH_SIZE[-1],
             )
             model = rcan(**args)
