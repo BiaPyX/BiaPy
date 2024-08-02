@@ -43,7 +43,7 @@ AUGMENTOR:
     CONTRAST: True
     ELASTIC: True
     RANDOM_ROT: True
-    AFFINE_MODE: 'mirror'
+    AFFINE_MODE: 'reflect'
     GRIDMASK: True
     GRID_D_RANGE: (0.2, 0.6)
 
