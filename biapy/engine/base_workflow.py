@@ -128,6 +128,10 @@ class Base_Workflow(metaclass=ABCMeta):
         self.dtype_str = "float32" if not self.cfg.TEST.REDUCE_MEMORY else "float16"
         self.loss_dtype = torch.float32
 
+        self.use_gt = False
+        if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
+            self.use_gt = True
+
         # Save paths in case we need them in a future
         self.orig_train_path = self.cfg.DATA.TRAIN.PATH
         self.orig_train_mask_path = self.cfg.DATA.TRAIN.GT_PATH
@@ -153,7 +157,6 @@ class Base_Workflow(metaclass=ABCMeta):
 
         # Full image
         self.stats["full_image"] = {}
-        self.stats["full_image_loss"] = 0
         self.stats["full_image_post"] = {}
 
         # By chunks
@@ -1868,7 +1871,7 @@ class Base_Workflow(metaclass=ABCMeta):
                         ),
                         0,
                     )
-                    if self.cfg.DATA.TEST.LOAD_GT:
+                    if self._Y is not None:
                         self._Y = np.expand_dims(
                             pad_and_reflect(
                                 self._Y[0],
@@ -1886,7 +1889,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     if self.cfg.PROBLEM.NDIM != "3D":
                         X_original = self._X.copy()
 
-                    if self.cfg.DATA.TEST.LOAD_GT and self._X.shape[:-1] != self._Y.shape[:-1]:
+                    if self._Y is not None and self._X.shape[:-1] != self._Y.shape[:-1]:
                         raise ValueError(
                             "Image {} and mask {} differ in shape (without considering the channels, i.e. last dimension)".format(
                                 self._X.shape, self._Y.shape
@@ -1902,7 +1905,7 @@ class Base_Workflow(metaclass=ABCMeta):
                             padding=self.cfg.DATA.TEST.PADDING,
                             verbose=self.cfg.TEST.VERBOSE,
                         )
-                        if self.cfg.DATA.TEST.LOAD_GT:
+                        if self._Y is not None:
                             self._X, self._Y = obj
                         else:
                             self._X = obj
@@ -1917,7 +1920,7 @@ class Base_Workflow(metaclass=ABCMeta):
                                 verbose=self.cfg.TEST.VERBOSE,
                                 median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING,
                             )
-                            if self.cfg.DATA.TEST.LOAD_GT:
+                            if self._Y is not None:
                                 self._Y = crop_3D_data_with_overlap(
                                     self._Y[0],
                                     self.cfg.DATA.PATCH_SIZE[:-1] + (self._Y.shape[-1],),
@@ -1927,7 +1930,7 @@ class Base_Workflow(metaclass=ABCMeta):
                                     median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING,
                                 )
                         else:
-                            if self.cfg.DATA.TEST.LOAD_GT:
+                            if self._Y is not None:
                                 self._Y = self._Y[0]
                             obj = crop_3D_data_with_overlap(
                                 self._X[0],
@@ -1938,7 +1941,7 @@ class Base_Workflow(metaclass=ABCMeta):
                                 verbose=self.cfg.TEST.VERBOSE,
                                 median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING,
                             )
-                            if self.cfg.DATA.TEST.LOAD_GT:
+                            if self._Y is not None:
                                 self._X, self._Y = obj
                             else:
                                 self._X = obj
@@ -1972,7 +1975,7 @@ class Base_Workflow(metaclass=ABCMeta):
                             p = torch.cat((p[0], torch.argmax(p[1], axis=1).unsqueeze(1)), dim=1)
 
                         # Calculate the metrics
-                        if self.cfg.DATA.TEST.LOAD_GT:
+                        if self._Y is not None:
                             metric_values = self.metric_calculation(
                                 p,
                                 to_pytorch_format(
@@ -2013,7 +2016,7 @@ class Base_Workflow(metaclass=ABCMeta):
                                 )
 
                         # Calculate the metrics
-                        if self.cfg.DATA.TEST.LOAD_GT:
+                        if self._Y is not None:
                             metric_values = self.metric_calculation(
                                 p,
                                 to_pytorch_format(
@@ -2053,7 +2056,7 @@ class Base_Workflow(metaclass=ABCMeta):
                             overlap=self.cfg.DATA.TEST.OVERLAP,
                             verbose=self.cfg.TEST.VERBOSE,
                         )
-                        if self.cfg.DATA.TEST.LOAD_GT:
+                        if self._Y is not None:
                             self._Y = f_name(
                                 self._Y,
                                 original_data_shape[:-1] + (self._Y.shape[-1],),
@@ -2070,7 +2073,7 @@ class Base_Workflow(metaclass=ABCMeta):
                             overlap=self.cfg.DATA.TEST.OVERLAP,
                             verbose=self.cfg.TEST.VERBOSE,
                         )
-                        if self.cfg.DATA.TEST.LOAD_GT:
+                        if self._Y is not None:
                             pred, self._Y = obj
                         else:
                             pred = obj
@@ -2124,11 +2127,11 @@ class Base_Workflow(metaclass=ABCMeta):
                 if self.cfg.MODEL.N_CLASSES > 2 and self.cfg.DATA.TEST.ARGMAX_TO_OUTPUT:
                     _type = np.uint8 if self.cfg.MODEL.N_CLASSES < 255 else np.uint16
                     pred = np.expand_dims(np.argmax(pred, -1), -1).astype(_type)
-                    if self.cfg.DATA.TEST.LOAD_GT:
+                    if self._Y is not None:
                         self._Y = np.expand_dims(np.argmax(self._Y, -1), -1).astype(_type)
 
                 # Calculate the metrics
-                if self.cfg.DATA.TEST.LOAD_GT:
+                if self._Y is not None:
                     metric_values = self.metric_calculation(
                         to_pytorch_format(pred, self.axis_order, self.device),
                         to_pytorch_format(
@@ -2151,7 +2154,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     pred = apply_post_processing(self.cfg, pred)
 
                     # Calculate the metrics
-                    if self.cfg.DATA.TEST.LOAD_GT:
+                    if self._Y is not None:
                         metric_values = self.metric_calculation(
                             to_pytorch_format(pred, self.axis_order, self.device),
                             to_pytorch_format(
@@ -2188,7 +2191,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
             if self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
                 self.all_pred.append(pred)
-                if self.cfg.DATA.TEST.LOAD_GT:
+                if self._Y is not None:
                     self.all_gt.append(self._Y)
 
         ##################
@@ -2197,24 +2200,8 @@ class Base_Workflow(metaclass=ABCMeta):
         if self.cfg.TEST.FULL_IMG and self.cfg.PROBLEM.NDIM == "2D":
             self._X, o_test_shape = check_downsample_division(self._X, len(self.cfg.MODEL.FEATURE_MAPS) - 1)
             if not self.cfg.TEST.REUSE_PREDICTIONS:
-                if self.cfg.DATA.TEST.LOAD_GT:
+                if self._Y is not None:
                     self._Y, _ = check_downsample_division(self._Y, len(self.cfg.MODEL.FEATURE_MAPS) - 1)
-
-                # Evaluate each img
-                if self.cfg.DATA.TEST.LOAD_GT:
-                    with torch.cuda.amp.autocast():
-                        output = self.model_call_func(self._X)
-                        loss = self.loss(
-                            output,
-                            to_pytorch_format(
-                                self._Y,
-                                self.axis_order,
-                                self.device,
-                                dtype=self.loss_dtype,
-                            ),
-                        )
-                    self.stats["full_image_loss"] += loss.item()
-                    del output
 
                 # Make the prediction
                 if self.cfg.TEST.AUGMENTATION:
@@ -2238,7 +2225,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
                 # Recover original shape if padded with check_downsample_division
                 pred = pred[:, : o_test_shape[1], : o_test_shape[2]]
-                if self.cfg.DATA.TEST.LOAD_GT:
+                if self._Y is not None:
                     self._Y = self._Y[:, : o_test_shape[1], : o_test_shape[2]]
 
                 # Save image
@@ -2253,14 +2240,14 @@ class Base_Workflow(metaclass=ABCMeta):
                 if self.cfg.MODEL.N_CLASSES > 2 and self.cfg.DATA.TEST.ARGMAX_TO_OUTPUT:
                     _type = np.uint8 if self.cfg.MODEL.N_CLASSES < 255 else np.uint16
                     pred = np.expand_dims(np.argmax(pred, -1), -1).astype(_type)
-                    if self.cfg.DATA.TEST.LOAD_GT:
+                    if self._Y is not None:
                         self._Y = np.expand_dims(np.argmax(self._Y, -1), -1).astype(_type)
 
                 if self.cfg.TEST.POST_PROCESSING.APPLY_MASK:
                     pred = apply_binary_mask(pred, self.cfg.DATA.TEST.BINARY_MASKS)
 
                 # Calculate the metrics
-                if self.cfg.DATA.TEST.LOAD_GT:
+                if self._Y is not None:
                     metric_values = self.metric_calculation(
                         to_pytorch_format(pred, self.axis_order, self.device),
                         to_pytorch_format(
@@ -2286,7 +2273,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
             if self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
                 self.all_pred.append(pred)
-                if self.cfg.DATA.TEST.LOAD_GT:
+                if self._Y is not None:
                     self.all_gt.append(self._Y)
 
             self.after_full_image(pred)
@@ -2330,7 +2317,6 @@ class Base_Workflow(metaclass=ABCMeta):
             self.stats["full_image"][metric] = (
                 self.stats["full_image"][metric] / image_counter if image_counter != 0 else 0
             )
-        self.stats["full_image_loss"] = self.stats["full_image_loss"] / image_counter if image_counter != 0 else 0
 
         # By chunks
         for metric in self.stats["by_chunks"]:
@@ -2391,7 +2377,6 @@ class Base_Workflow(metaclass=ABCMeta):
                                     )
                                 )
                 else:
-                    print("Loss (per image): {}".format(self.stats["full_image_loss"]))
                     if len(self.stats["full_image"]) > 0:
                         for metric in self.test_metric_names:
                             if metric.lower() in self.stats["full_image"]:

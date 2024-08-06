@@ -383,7 +383,7 @@ class Super_resolution_Workflow(Base_Workflow):
         if pred.dtype == np.dtype("uint16"):
             pred = pred.astype(np.float32)
 
-        if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
+        if self._Y is not None:
             if self._Y.dtype == np.dtype("uint16"):
                 self._Y = self._Y.astype(np.float32)
 

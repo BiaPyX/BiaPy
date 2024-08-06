@@ -180,15 +180,6 @@ class Denoising_Workflow(Base_Workflow):
                 pad_and_reflect(self._X[0], self.cfg.DATA.PATCH_SIZE, verbose=self.cfg.TEST.VERBOSE),
                 0,
             )
-            if self.cfg.DATA.TEST.LOAD_GT:
-                self._Y = np.expand_dims(
-                    pad_and_reflect(
-                        self._Y[0],
-                        self.cfg.DATA.PATCH_SIZE,
-                        verbose=self.cfg.TEST.VERBOSE,
-                    ),
-                    0,
-                )
 
         original_data_shape = self._X.shape
 
@@ -198,30 +189,16 @@ class Denoising_Workflow(Base_Workflow):
                 obj = crop_data_with_overlap(
                     self._X,
                     self.cfg.DATA.PATCH_SIZE,
-                    data_mask=self._Y,
                     overlap=self.cfg.DATA.TEST.OVERLAP,
                     padding=self.cfg.DATA.TEST.PADDING,
                     verbose=self.cfg.TEST.VERBOSE,
                 )
-                if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
-                    self._X, self._Y = obj
-                else:
-                    self._X = obj
+                self._X = obj
                 del obj
             else:
-                if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
-                    self._Y = self._Y[0]
                 if self.cfg.TEST.REDUCE_MEMORY:
                     self._X = crop_3D_data_with_overlap(
                         self._X[0],
-                        self.cfg.DATA.PATCH_SIZE,
-                        overlap=self.cfg.DATA.TEST.OVERLAP,
-                        padding=self.cfg.DATA.TEST.PADDING,
-                        verbose=self.cfg.TEST.VERBOSE,
-                        median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING,
-                    )
-                    self._Y = crop_3D_data_with_overlap(
-                        self._Y,
                         self.cfg.DATA.PATCH_SIZE,
                         overlap=self.cfg.DATA.TEST.OVERLAP,
                         padding=self.cfg.DATA.TEST.PADDING,
@@ -232,16 +209,12 @@ class Denoising_Workflow(Base_Workflow):
                     obj = crop_3D_data_with_overlap(
                         self._X[0],
                         self.cfg.DATA.PATCH_SIZE,
-                        data_mask=self._Y,
                         overlap=self.cfg.DATA.TEST.OVERLAP,
                         padding=self.cfg.DATA.TEST.PADDING,
                         verbose=self.cfg.TEST.VERBOSE,
                         median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING,
                     )
-                    if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
-                        self._X, self._Y = obj
-                    else:
-                        self._X = obj
+                    self._X = obj
                     del obj
 
         # Predict each patch
@@ -300,38 +273,23 @@ class Denoising_Workflow(Base_Workflow):
                     overlap=self.cfg.DATA.TEST.OVERLAP,
                     verbose=self.cfg.TEST.VERBOSE,
                 )
-                self._Y = f_name(
-                    self._Y,
-                    original_data_shape[:-1] + (self._Y.shape[-1],),
-                    padding=self.cfg.DATA.TEST.PADDING,
-                    overlap=self.cfg.DATA.TEST.OVERLAP,
-                    verbose=self.cfg.TEST.VERBOSE,
-                )
             else:
                 obj = f_name(
                     pred,
                     original_data_shape[:-1] + (pred.shape[-1],),
-                    data_mask=self._Y,
                     padding=self.cfg.DATA.TEST.PADDING,
                     overlap=self.cfg.DATA.TEST.OVERLAP,
                     verbose=self.cfg.TEST.VERBOSE,
                 )
-                if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
-                    pred, self._Y = obj
-                else:
-                    pred = obj
+                pred = obj
                 del obj
 
             if self.cfg.PROBLEM.NDIM == "3D":
                 pred = np.expand_dims(pred, 0)
-                if self._Y is not None:
-                    self._Y = np.expand_dims(self._Y, 0)
 
         if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE:
             if self.cfg.PROBLEM.NDIM == "2D":
                 pred = pred[:, -reflected_orig_shape[1] :, -reflected_orig_shape[2] :]
-                if self._Y is not None:
-                    self._Y = self._Y[:, -reflected_orig_shape[1] :, -reflected_orig_shape[2] :]
             else:
                 pred = pred[
                     :,
@@ -339,13 +297,6 @@ class Denoising_Workflow(Base_Workflow):
                     -reflected_orig_shape[2] :,
                     -reflected_orig_shape[3] :,
                 ]
-                if self._Y is not None:
-                    self._Y = self._Y[
-                        :,
-                        -reflected_orig_shape[1] :,
-                        -reflected_orig_shape[2] :,
-                        -reflected_orig_shape[3] :,
-                    ]
 
         # Undo normalization
         x_norm = norm[0]

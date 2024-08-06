@@ -238,7 +238,7 @@ class Image_to_Image_Workflow(Base_Workflow):
                 pad_and_reflect(self._X[0], self.cfg.DATA.PATCH_SIZE, verbose=self.cfg.TEST.VERBOSE),
                 0,
             )
-            if self.cfg.DATA.TEST.LOAD_GT:
+            if self._Y is not None:
                 self._Y = np.expand_dims(
                     pad_and_reflect(
                         self._Y[0],
@@ -261,13 +261,13 @@ class Image_to_Image_Workflow(Base_Workflow):
                     padding=self.cfg.DATA.TEST.PADDING,
                     verbose=self.cfg.TEST.VERBOSE,
                 )
-                if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
+                if self._Y is not None:
                     self._X, self._Y = obj
                 else:
                     self._X = obj
                 del obj
             else:
-                if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
+                if self._Y is not None:
                     self._Y = self._Y[0]
                 if self.cfg.TEST.REDUCE_MEMORY:
                     self._X = crop_3D_data_with_overlap(
@@ -296,7 +296,7 @@ class Image_to_Image_Workflow(Base_Workflow):
                         verbose=self.cfg.TEST.VERBOSE,
                         median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING,
                     )
-                    if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
+                    if self._Y is not None:
                         self._X, self._Y = obj
                     else:
                         self._X = obj
@@ -374,7 +374,7 @@ class Image_to_Image_Workflow(Base_Workflow):
                     overlap=self.cfg.DATA.TEST.OVERLAP,
                     verbose=self.cfg.TEST.VERBOSE,
                 )
-                if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
+                if self._Y is not None:
                     pred, self._Y = obj
                 else:
                     pred = obj
@@ -438,7 +438,7 @@ class Image_to_Image_Workflow(Base_Workflow):
         if pred.dtype == np.dtype("uint16"):
             pred = pred.astype(np.float32)
 
-        if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
+        if self._Y is not None:
             if self._Y.dtype == np.dtype("uint16"):
                 self._Y = self._Y.astype(np.float32)
 

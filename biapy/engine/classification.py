@@ -359,7 +359,7 @@ class Classification_Workflow(Base_Workflow):
             p = np.argmax(p, axis=1)
             self.all_pred.append(p)
 
-        if self.cfg.DATA.TEST.LOAD_GT:
+        if self._Y is not None:
             self.all_gt.append(self._Y)
 
         # Save test_output if the user wants to export the model to BMZ later
