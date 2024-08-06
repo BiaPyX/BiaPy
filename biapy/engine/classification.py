@@ -328,7 +328,7 @@ class Classification_Workflow(Base_Workflow):
                 self.original_test_path = self.orig_train_path
                 self.original_test_mask_path = self.orig_train_mask_path
 
-    def process_sample(self, norm):
+    def process_test_sample(self, norm):
         """
         Function to process a sample in the inference phase.
 

@@ -120,7 +120,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
 
         super().define_metrics()
 
-    def process_sample(self, norm):
+    def process_test_sample(self, norm):
         """
         Function to process a sample in the inference phase.
 
@@ -130,7 +130,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
             Normalization used during training. Required to denormalize the predictions of the model.
         """
         if self.cfg.MODEL.SOURCE != "torchvision":
-            super().process_sample(norm)
+            super().process_test_sample(norm)
         else:
             # Save test_input if the user wants to export the model to BMZ later
             if "test_input" not in self.bmz_config:

@@ -871,7 +871,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
         return results, results_post_proc, results_class, results_class_post_proc
 
-    def process_sample(self, norm):
+    def process_test_sample(self, norm):
         """
         Function to process a sample in the inference phase.
 
@@ -882,7 +882,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         """
         if self.cfg.MODEL.SOURCE != "torchvision":
             self.instances_already_created = False
-            super().process_sample(norm)
+            super().process_test_sample(norm)
         else:
             # Save test_input if the user wants to export the model to BMZ later
             if "test_input" not in self.bmz_config:
@@ -1444,5 +1444,5 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
         # Actually to allow training this should return a Torch Tensor and not a Numpy array. For instance,
         # segmentation training is disabled, due to the absence of generators that contain bboxes, so this can be left
-        # returning a Numpy array. This will only be called in process_sample inference function and for full image setting
+        # returning a Numpy array. This will only be called in process_test_sample inference function and for full image setting
         return np.expand_dims(masks.squeeze(), 0)

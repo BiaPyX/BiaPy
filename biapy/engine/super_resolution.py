@@ -225,7 +225,7 @@ class Super_resolution_Workflow(Base_Workflow):
                     metric_logger.meters[list_names_to_use[i]].update(val)
         return out_metrics
 
-    def process_sample(self, norm):
+    def process_test_sample(self, norm):
         """
         Function to process a sample in the inference phase.
 

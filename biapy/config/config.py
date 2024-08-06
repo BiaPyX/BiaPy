@@ -934,7 +934,7 @@ class Config:
         _C.TEST.REUSE_PREDICTIONS = False
 
         # If PROBLEM.NDIM = '2D' this can be activated to process each image entirely instead of patch by patch. Only can be done
-        # if the neural network is fully convolutional. It's not implemented in super-resolution workflow.
+        # if the neural network is fully convolutional. Implemented in semantic-segmentation, instance-segmentation and detection workflows.
         _C.TEST.FULL_IMG = False
 
         # Metrics to apply during training. Depending on the workflow different ones can be applied. If empty, some

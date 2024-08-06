@@ -278,7 +278,7 @@ class Self_supervised_Workflow(Base_Workflow):
         else:
             return to_pytorch_format(targets, self.axis_order, self.device, dtype=self.loss_dtype)
 
-    def process_sample(self, norm):
+    def process_test_sample(self, norm):
         """
         Function to process a sample in the inference phase.
 

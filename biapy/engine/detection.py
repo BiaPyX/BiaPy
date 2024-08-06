@@ -1191,7 +1191,7 @@ class Detection_Workflow(Base_Workflow):
                     self.stats["by_chunks"][str(metric).lower()] = 0
                 self.stats["by_chunks"][str(metric).lower()] += d_metrics[str(metric)]
 
-    def process_sample(self, norm):
+    def process_test_sample(self, norm):
         """
         Function to process a sample in the inference phase.
 
@@ -1201,7 +1201,7 @@ class Detection_Workflow(Base_Workflow):
             Normalization used during training. Required to denormalize the predictions of the model.
         """
         if self.cfg.MODEL.SOURCE != "torchvision":
-            super().process_sample(norm)
+            super().process_test_sample(norm)
         else:
             # Save test_output if the user wants to export the model to BMZ later
             if "test_input" not in self.bmz_config:
