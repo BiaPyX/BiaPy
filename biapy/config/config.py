@@ -906,8 +906,6 @@ class Config:
         _C.TEST.AUGMENTATION = False
         # Select test-time augmentation mode. Options: "mean" (default), "min", "max".
         _C.TEST.AUGMENTATION_MODE = "mean"
-        # Whether to evaluate or not
-        _C.TEST.EVALUATE = True
         # Stack 2D images into a 3D image and then process it entirely instead of going image per image
         _C.TEST.ANALIZE_2D_IMGS_AS_3D_STACK = False
         # Whether to reuse the existing ones (from file) or calculate predictions using the model

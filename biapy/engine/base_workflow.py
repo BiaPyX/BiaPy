@@ -141,7 +141,6 @@ class Base_Workflow(metaclass=ABCMeta):
 
         # Per crop
         self.stats["per_crop"] = {}
-        self.stats["loss_per_crop"] = 0
         self.stats["patch_by_batch_counter"] = 0
 
         # Merging the image
@@ -1945,32 +1944,6 @@ class Base_Workflow(metaclass=ABCMeta):
                                 self._X = obj
                             del obj
 
-                # Evaluate each patch
-                if self.cfg.DATA.TEST.LOAD_GT and self.cfg.TEST.EVALUATE:
-                    l = int(math.ceil(self._X.shape[0] / self.cfg.TRAIN.BATCH_SIZE))
-                    for k in tqdm(range(l), leave=False):
-                        top = (
-                            (k + 1) * self.cfg.TRAIN.BATCH_SIZE
-                            if (k + 1) * self.cfg.TRAIN.BATCH_SIZE < self._X.shape[0]
-                            else self._X.shape[0]
-                        )
-                        with torch.cuda.amp.autocast():
-                            output = self.apply_model_activations(
-                                self.model_call_func(self._X[k * self.cfg.TRAIN.BATCH_SIZE : top])
-                            )
-                            loss = self.loss(
-                                output,
-                                to_pytorch_format(
-                                    self._Y[k * self.cfg.TRAIN.BATCH_SIZE : top],
-                                    self.axis_order,
-                                    self.device,
-                                    dtype=self.loss_dtype,
-                                ),
-                            )
-                        self.stats["loss_per_crop"] += loss.item()
-
-                    del output
-
                 # Predict each patch
                 if self.cfg.TEST.AUGMENTATION:
                     for k in tqdm(range(self._X.shape[0]), leave=False):
@@ -2339,11 +2312,6 @@ class Base_Workflow(metaclass=ABCMeta):
             Number of images to average the metrics.
         """
         # Per crop
-        self.stats["loss_per_crop"] = (
-            self.stats["loss_per_crop"] / self.stats["patch_by_batch_counter"]
-            if self.stats["patch_by_batch_counter"] != 0
-            else 0
-        )
         for metric in self.stats["per_crop"]:
             self.stats["per_crop"][metric] = (
                 self.stats["per_crop"][metric] / self.stats["patch_by_batch_counter"]
@@ -2401,9 +2369,6 @@ class Base_Workflow(metaclass=ABCMeta):
                 if not self.cfg.TEST.FULL_IMG or (
                     len(self.stats["per_crop"]) > 0 or len(self.stats["merge_patches"]) > 0
                 ):
-                    if self.cfg.TEST.EVALUATE:
-                        print("Loss (per patch): {}".format(self.stats["loss_per_crop"]))
-
                     if len(self.stats["per_crop"]) > 0:
                         for metric in self.test_metric_names:
                             if metric.lower() in self.stats["per_crop"]:
