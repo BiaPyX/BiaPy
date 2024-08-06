@@ -24,8 +24,6 @@ from biapy.data.data_3D_manipulation import (
     crop_3D_data_with_overlap,
     merge_3D_data_with_overlap,
 )
-from biapy.engine.metrics import MSE_wrapper
-
 
 class Image_to_Image_Workflow(Base_Workflow):
     """
