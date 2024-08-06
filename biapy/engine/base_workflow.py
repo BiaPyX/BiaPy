@@ -978,8 +978,8 @@ class Base_Workflow(metaclass=ABCMeta):
 
         print(f"Start training in epoch {self.start_epoch+1} - Total: {self.cfg.TRAIN.EPOCHS}")
         start_time = time.time()
-        val_best_metric = np.zeros(len(self.train_metric_names), dtype=np.float32)
-        val_best_loss = np.Inf
+        self.val_best_metric = np.zeros(len(self.train_metric_names), dtype=np.float32)
+        self.val_best_loss = np.Inf
         for epoch in range(self.start_epoch, self.cfg.TRAIN.EPOCHS):
             print("~~~ Epoch {}/{} ~~~\n".format(epoch + 1, self.cfg.TRAIN.EPOCHS))
             e_start = time.time()
@@ -1042,21 +1042,21 @@ class Base_Workflow(metaclass=ABCMeta):
                 )
 
                 # Save checkpoint is val loss improved
-                if test_stats["loss"] < val_best_loss:
+                if test_stats["loss"] < self.val_best_loss:
                     f = os.path.join(
                         self.cfg.PATHS.CHECKPOINT,
                         "{}-checkpoint-best.pth".format(self.job_identifier),
                     )
                     print(
                         "Val loss improved from {} to {}, saving model to {}".format(
-                            val_best_loss, test_stats["loss"], f
+                            self.val_best_loss, test_stats["loss"], f
                         )
                     )
                     m = " "
-                    for i in range(len(val_best_metric)):
-                        val_best_metric[i] = test_stats[self.train_metric_names[i]]
-                        m += f"{self.train_metric_names[i]}: {val_best_metric[i]:.4f} "
-                    val_best_loss = test_stats["loss"]
+                    for i in range(len(self.val_best_metric)):
+                        self.val_best_metric[i] = test_stats[self.train_metric_names[i]]
+                        m += f"{self.train_metric_names[i]}: {self.val_best_metric[i]:.4f} "
+                    self.val_best_loss = test_stats["loss"]
 
                     if is_main_process():
                         self.checkpoint_path = save_model(
@@ -1068,7 +1068,7 @@ class Base_Workflow(metaclass=ABCMeta):
                             loss_scaler=self.loss_scaler,
                             epoch="best",
                         )
-                print(f"[Val] best loss: {val_best_loss:.4f} best " + m)
+                print(f"[Val] best loss: {self.val_best_loss:.4f} best " + m)
 
                 # Store validation stats
                 if self.log_writer is not None:
@@ -1135,15 +1135,15 @@ class Base_Workflow(metaclass=ABCMeta):
 
         total_time = time.time() - start_time
         self.total_training_time_str = str(datetime.timedelta(seconds=int(total_time)))
-        print("Training time {}".format(self.total_training_time_str))
+        print("Training time: {}".format(self.total_training_time_str))
 
         print("Train loss: {}".format(train_stats["loss"]))
         for i in range(len(self.train_metric_names)):
             print("Train {}: {}".format(self.train_metric_names[i], train_stats[self.train_metric_names[i]]))
         if self.val_generator is not None:
-            print("Val loss: {}".format(val_best_loss))
+            print("Validation loss: {}".format(self.val_best_loss))
             for i in range(len(self.train_metric_names)):
-                print("Val {}: {}".format(self.train_metric_names[i], val_best_metric[i]))
+                print("Validation {}: {}".format(self.train_metric_names[i], self.val_best_metric[i]))
 
         print("Finished Training")
 
@@ -1427,7 +1427,7 @@ class Base_Workflow(metaclass=ABCMeta):
                             ),
                         )
                     )
-                print("Validation loss: {}".format(np.min(self.plot_values["val_loss"])))
+                print("Validation loss: {}".format(self.val_best_loss))
                 for i in range(len(self.train_metric_names)):
                     metric_name = (
                         "Foreground IoU" if self.train_metric_names[i] == "IoU" else self.train_metric_names[i]
@@ -1435,11 +1435,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     print(
                         "Validation {}: {}".format(
                             metric_name,
-                            (
-                                np.max(self.plot_values[self.train_metric_names[i]])
-                                if self.train_metric_best[i] == "max"
-                                else np.min(self.plot_values[self.train_metric_names[i]])
-                            ),
+                            self.val_best_metric[i],
                         )
                     )
             self.print_stats(image_counter)
