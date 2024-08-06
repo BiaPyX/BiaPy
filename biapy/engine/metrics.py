@@ -843,61 +843,6 @@ def n2v_loss_mse(y_pred, y_true):
     loss = torch.sum(torch.square(target - y_pred.squeeze() * mask)) / torch.sum(mask)
     return loss
 
-
-class L1_wrapper:
-    def __init__(self):
-        """
-        Wrapper to L1 loss function.
-        """
-        self.loss = torch.nn.L1Loss(reduction="mean")
-
-    def __call__(self, y_pred, y_true):
-        """
-        Calculate instance segmentation loss.
-
-        Parameters
-        ----------
-        y_true : Tensor
-            Ground truth masks.
-
-        y_pred : Tensor or list of Tensors
-            Predictions.
-
-        Returns
-        -------
-        loss : Tensor
-            Loss value.
-        """
-        return self.loss(y_pred, y_true)
-
-
-class MSE_wrapper:
-    def __init__(self):
-        """
-        Wrapper to MSE loss function.
-        """
-        self.loss = torch.nn.MSELoss(reduction="mean")
-
-    def __call__(self, y_pred, y_true):
-        """
-        Calculate instance segmentation loss.
-
-        Parameters
-        ----------
-        y_true : Tensor
-            Ground truth masks.
-
-        y_pred : Tensor or list of Tensors
-            Predictions.
-
-        Returns
-        -------
-        loss : Tensor
-            Loss value.
-        """
-        return self.loss(y_pred, y_true)
-
-
 class SSIM_wrapper:
     def __init__(self):
         """

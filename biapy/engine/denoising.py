@@ -111,8 +111,9 @@ class Denoising_Workflow(Base_Workflow):
                 )
                 self.test_metric_names.append("MAE")
 
-        print("Overriding 'LOSS.TYPE' to set it to N2V loss (masked MSE)")
-        self.loss = n2v_loss_mse
+        # print("Overriding 'LOSS.TYPE' to set it to N2V loss (masked MSE)")
+        if self.cfg.LOSS.TYPE == "MSE":
+            self.loss = n2v_loss_mse
 
         super().define_metrics()
 

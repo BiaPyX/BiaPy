@@ -141,8 +141,10 @@ class Image_to_Image_Workflow(Base_Workflow):
                 )
                 self.test_metric_names.append("LPIPS")
 
-        print("Overriding 'LOSS.TYPE' to set it to MSE")
-        self.loss = MSE_wrapper()
+        if self.cfg.LOSS.TYPE == "MSE":
+            self.loss = torch.nn.MSELoss().to(self.device)
+        elif self.cfg.LOSS.TYPE == "MAE":
+            self.loss = torch.nn.L1Loss().to(self.device)
 
         super().define_metrics()
 

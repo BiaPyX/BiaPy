@@ -772,16 +772,38 @@ class Config:
         # Loss
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         _C.LOSS = CN()
-        # Loss type, two options:
-        #   * "CE": cross entropy
-        #   * "DICE": cross entropy
-        #   * "W_CE_DICE": CE and Dice (with a weight term on each one that must sum 1)
-        _C.LOSS.TYPE = "CE"
+        # Loss type, different options depending on the workflow. If empty the default loss on each case will be set:
+        #   * Semantic segmentation:
+        #       * "CE" (default): cross entropy. Ref: https://pytorch.org/docs/stable/generated/torch.nn.CrossEntropyLoss.html
+        #       * "DICE": Dice loss. Ref: https://www.kaggle.com/code/bigironsphere/loss-function-library-keras-pytorch
+        #       * "W_CE_DICE": CE and Dice (with a weight term on each one that must sum 1). Ref: https://www.kaggle.com/code/bigironsphere/loss-function-library-keras-pytorch
+        #   * Instance segmentation: automatically set depending on the channels selected (PROBLEM.INSTANCE_SEG.DATA_CHANNELS). There is no need
+        #                            to set it.
+        #   * Detection:
+        #       * "CE" (default): cross entropy. Ref: https://pytorch.org/docs/stable/generated/torch.nn.CrossEntropyLoss.html
+        #       * "DICE": Dice loss. Ref: https://www.kaggle.com/code/bigironsphere/loss-function-library-keras-pytorch
+        #       * "W_CE_DICE": CE and Dice (with a weight term on each one that must sum 1). Ref: https://www.kaggle.com/code/bigironsphere/loss-function-library-keras-pytorch
+        #   * Denoising:
+        #       * "MSE" (default): mean square error. Ref: https://pytorch.org/docs/stable/generated/torch.nn.MSELoss.html#torch.nn.MSELoss
+        #   * Super-resolution:
+        #       * "MAE" (default): mean absolute error. Ref: https://pytorch.org/docs/stable/generated/torch.nn.L1Loss.html#torch.nn.L1Loss
+        #       * "MSE": mean square error. Ref: https://pytorch.org/docs/stable/generated/torch.nn.MSELoss.html#torch.nn.MSELoss
+        #   * Self-supervision:
+        #       These losses can only be set when PROBLEM.SELF_SUPERVISED.PRETEXT_TASK = "crappify". Otherwise it will be automatically set to MSE when
+        #       PROBLEM.SELF_SUPERVISED.PRETEXT_TASK = "masking".
+        #       * "MAE" (default): mean absolute error. Ref: https://pytorch.org/docs/stable/generated/torch.nn.L1Loss.html#torch.nn.L1Loss
+        #       * "MSE": mean square error. Ref: https://pytorch.org/docs/stable/generated/torch.nn.MSELoss.html#torch.nn.MSELoss
+        #   * Classification:
+        #       * "CE" (default): cross entropy. Ref: https://pytorch.org/docs/stable/generated/torch.nn.CrossEntropyLoss.html
+        #   * Image to image:
+        #       * "MAE" (default): mean absolute error. Ref: https://pytorch.org/docs/stable/generated/torch.nn.L1Loss.html#torch.nn.L1Loss
+        #       * "MSE": mean square error. Ref: https://pytorch.org/docs/stable/generated/torch.nn.MSELoss.html#torch.nn.MSELoss
+        _C.LOSS.TYPE = ""
         # Wights to be apply in multiple loss combination cases. Currently only available when LOSS.TYPE == "W_CE_DICE" where
         # it needs to be a list of two floats (one for CE loss and the other for DICE loss). They must sum 1. E.g. [0.3, 0.7].
         _C.LOSS.WEIGHTS = [0.66, 0.34]
         # To adjust the loss function based on the imbalance between classes. Used when LOSS.TYPE == "CE" in detection and
-        # semantic segmentation and if using B,C,M,P or A channels in instance segmentation.
+        # semantic segmentation and if using B,C,M,P or A channels in instance segmentation workflow.
         _C.LOSS.CLASS_REBALANCE = False
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -808,15 +830,15 @@ class Config:
         _C.TRAIN.EPOCHS = 360
         # Epochs to wait with no validation data improvement until the training is stopped
         _C.TRAIN.PATIENCE = -1
-        # Metrics to apply during training. Depending on the workflow different ones can be applied. If empty, some 
+        # Metrics to apply during training. Depending on the workflow different ones can be applied. If empty, some
         # default metrics will be configured automatically:
         #   * Semantic segmentation: 'iou' (called also Jaccard index)
-        #   * Instance segmentation: automatically set depending on the channels selected (PROBLEM.INSTANCE_SEG.DATA_CHANNELS). 
+        #   * Instance segmentation: automatically set depending on the channels selected (PROBLEM.INSTANCE_SEG.DATA_CHANNELS).
         #   * Detection: 'iou' (called also Jaccard index)
         #   * Denoising: 'mae', 'mse'
         #   * Super-resolution: "psnr", "mae", "mse", "ssim"
         #   * Self-supervision: "psnr", "mae", "mse", "ssim"
-        #   * Classification: 'accuracy', 'top-5-accuracy' 
+        #   * Classification: 'accuracy', 'top-5-accuracy'
         #   * Image to image: "psnr", "mae", "mse", "ssim"
         _C.TRAIN.METRICS = []
 
@@ -915,22 +937,22 @@ class Config:
         # if the neural network is fully convolutional. It's not implemented in super-resolution workflow.
         _C.TEST.FULL_IMG = False
 
-        # Metrics to apply during training. Depending on the workflow different ones can be applied. If empty, some 
+        # Metrics to apply during training. Depending on the workflow different ones can be applied. If empty, some
         # default metrics will be configured automatically:
         #   * Semantic segmentation: 'iou' (called also Jaccard index)
-        #   * Instance segmentation: automatically set depending on the channels selected (PROBLEM.INSTANCE_SEG.DATA_CHANNELS). 
+        #   * Instance segmentation: automatically set depending on the channels selected (PROBLEM.INSTANCE_SEG.DATA_CHANNELS).
         #                            Instance metrics will be always calculated.
         #   * Detection: 'iou' (called also Jaccard index)
         #   * Denoising: 'mae', 'mse'
-        #   * Super-resolution: "psnr", "mae", "mse", "ssim". Additionally, if only if PROBLEM.NDIM == '2D', these 
+        #   * Super-resolution: "psnr", "mae", "mse", "ssim". Additionally, if only if PROBLEM.NDIM == '2D', these
         #                       can also be selected:  "fid", "is", "lpips"
-        #   * Self-supervision: "psnr", "mae", "mse", "ssim". Additionally, if only if PROBLEM.NDIM == '2D', these 
-        #                       can also be selected:  "fid", "is", "lpips" 
+        #   * Self-supervision: "psnr", "mae", "mse", "ssim". Additionally, if only if PROBLEM.NDIM == '2D', these
+        #                       can also be selected:  "fid", "is", "lpips"
         #   * Classification: 'accuracy'. Always calculated: Confusion matrix
-        #   * Image to image: "psnr", "mae", "mse", "ssim". Additionally, if only if PROBLEM.NDIM == '2D', these 
+        #   * Image to image: "psnr", "mae", "mse", "ssim". Additionally, if only if PROBLEM.NDIM == '2D', these
         #                     can also be selected:  "fid", "is", "lpips"
         _C.TEST.METRICS = []
-    
+
         ### Instance segmentation
         # Whether to calculate matching statistics (average overlap, accuracy, recall, precision, etc.)
         _C.TEST.MATCHING_STATS = True

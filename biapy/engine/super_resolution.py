@@ -153,8 +153,10 @@ class Super_resolution_Workflow(Base_Workflow):
             print("Overriding 'LOSS.TYPE' to set it to DFCAN loss")
             self.loss = dfcan_loss(self.device)
         else:
-            print("Overriding 'LOSS.TYPE' to set it to MAE")
-            self.loss = torch.nn.L1Loss()
+            if self.cfg.LOSS.TYPE == "MSE":
+                self.loss = torch.nn.MSELoss().to(self.device)
+            elif self.cfg.LOSS.TYPE == "MAE":
+                self.loss = torch.nn.L1Loss().to(self.device)
 
         super().define_metrics()
 

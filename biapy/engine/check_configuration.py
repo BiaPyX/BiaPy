@@ -305,11 +305,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             ", full image statistics will be disabled to avoid GPU memory overflow"
         )
 
-    if cfg.LOSS.TYPE != "CE" and cfg.PROBLEM.TYPE not in ["SEMANTIC_SEG", "DETECTION"]:
-        raise ValueError(
-            "Not implemented pipeline option: LOSS.TYPE != 'CE' only available in 'SEMANTIC_SEG' and 'DETECTION'"
-        )
-
     set_train_metrics = True if len(cfg.TRAIN.METRICS) == 0 else False
     set_test_metrics = True if len(cfg.TEST.METRICS) == 0 else False
 
@@ -340,9 +335,9 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             opts.extend(["TRAIN.METRICS", ["psnr", "mae", "mse", "ssim"]])
         if set_test_metrics:
             metric_default_list = ["psnr", "mae", "mse", "ssim"]
-            if cfg.PROBLEM.NDIM == "2D": # IS, FID and LPIPS implementations only works for 2D images
+            if cfg.PROBLEM.NDIM == "2D":  # IS, FID and LPIPS implementations only works for 2D images
                 metric_default_list += ["is", "fid", "lpips"]
-            opts.extend(["TEST.METRICS", metric_default_list])    
+            opts.extend(["TEST.METRICS", metric_default_list])
 
         assert len(cfg.TRAIN.METRICS) == 0 or all(
             [True if x.lower() in ["psnr", "mae", "mse", "ssim"] else False for x in cfg.TRAIN.METRICS]
@@ -353,7 +348,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 for x in cfg.TEST.METRICS
             ]
         ), f"'TEST.METRICS' options are ['psnr', 'mae', 'mse', 'ssim', 'fid', 'is', 'lpips'] in {cfg.PROBLEM.TYPE} workflow"
-        
+
         if any([True for x in cfg.TEST.METRICS if x.lower() in ["is", "fid", "lpips"]]) and cfg.PROBLEM.NDIM == "3D":
             raise ValueError("IS, FID and LPIPS metrics can only be measured when PROBLEM.NDIM == '3D'")
 
@@ -385,6 +380,40 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
         if "top-5-accuracy" in [x.lower() for x in cfg.TRAIN.METRICS] and cfg.MODEL.N_CLASSES < 5:
             raise ValueError("'top-5-accuracy' can only be used when MODEL.N_CLASSES >= 5")
+
+    if cfg.PROBLEM.TYPE in [
+        "SEMANTIC_SEG",
+        "DETECTION",
+    ]:
+        loss = "CE" if cfg.LOSS.TYPE == "" else cfg.LOSS.TYPE
+        assert loss in [
+            "CE",
+            "DICE",
+            "W_CE_DICE",
+        ], "LOSS.TYPE not in ['CE', 'DICE', 'W_CE_DICE']"
+
+        if loss == "W_CE_DICE":
+            assert (
+                len(cfg.LOSS.WEIGHTS) == 2
+            ), "'LOSS.WEIGHTS' needs to be a list of two floats when using LOSS.TYPE == 'W_CE_DICE'"
+            assert sum(cfg.LOSS.WEIGHTS) != 1, "'LOSS.WEIGHTS' values need to sum 1"
+    elif cfg.PROBLEM.TYPE in [
+        "SUPER_RESOLUTION",
+        "SELF_SUPERVISED",
+        "IMAGE_TO_IMAGE",
+    ]:
+        loss = "MAE" if cfg.LOSS.TYPE == "" else cfg.LOSS.TYPE
+        assert loss in [
+            "MAE",
+            "MSE",
+        ], "LOSS.TYPE not in ['MAE', 'MSE']"
+    elif cfg.PROBLEM.TYPE == "DENOISING":
+        loss = "MSE" if cfg.LOSS.TYPE == "" else cfg.LOSS.TYPE
+        assert loss == "MSE", "LOSS.TYPE must be 'MSE'"
+    elif cfg.PROBLEM.TYPE == "CLASSIFICATION":
+        loss = "CE" if cfg.LOSS.TYPE == "" else cfg.LOSS.TYPE
+        assert loss == "CE", "LOSS.TYPE must be 'CE'"
+    opts.extend(["LOSS.TYPE", loss])
 
     if cfg.TEST.ENABLE and cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK and cfg.PROBLEM.NDIM == "3D":
         raise ValueError("'TEST.ANALIZE_2D_IMGS_AS_3D_STACK' makes no sense when the problem is 3D. Disable it.")
@@ -452,10 +481,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 raise ValueError(
                     "With TorchVision models for semantic segmentation workflow only 'TEST.FULL_IMG' setting is available, so "
                     "please set it."
-                )
-            if cfg.LOSS.TYPE != "CE":
-                raise ValueError(
-                    "Only 'LOSS.TYPE' = 'CE' is available in semantic segmentation workflow using TorchVision models"
                 )
 
     #### Instance segmentation ####
@@ -1412,16 +1437,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         "ADAM",
         "ADAMW",
     ], "TRAIN.OPTIMIZER not in ['SGD', 'ADAM', 'ADAMW']"
-    assert cfg.LOSS.TYPE in [
-        "CE",
-        "DICE",
-        "W_CE_DICE",
-    ], "LOSS.TYPE not in ['CE', 'DICE', 'W_CE_DICE']"
-    if cfg.LOSS.TYPE == "W_CE_DICE":
-        assert (
-            len(cfg.LOSS.WEIGHTS) == 2
-        ), "'LOSS.WEIGHTS' needs to be a list of two floats when using LOSS.TYPE == 'W_CE_DICE'"
-        assert sum(cfg.LOSS.WEIGHTS) != 1, "'LOSS.WEIGHTS' values need to sum 1"
 
     if cfg.TRAIN.LR_SCHEDULER.NAME != "":
         if cfg.TRAIN.LR_SCHEDULER.NAME not in [

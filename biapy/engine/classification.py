@@ -106,7 +106,9 @@ class Classification_Workflow(Base_Workflow):
         self.test_metrics.append(confusion_matrix)
         self.test_metric_names.append("Confusion matrix")
 
-        self.loss = torch.nn.CrossEntropyLoss()
+        if self.cfg.LOSS.TYPE == "CE":
+            self.loss = torch.nn.CrossEntropyLoss()
+            
         super().define_metrics()
 
     def metric_calculation(self, output, targets, train=True, metric_logger=None):
