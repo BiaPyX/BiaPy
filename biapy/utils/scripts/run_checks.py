@@ -173,11 +173,11 @@ all_test_info["Test13"] = {
     "enable": True,
     "run_experiment": True,
     "jobname": "test13",
-    "description": "3D super-resolution. SR 3D data. Cross-val. extract random patch. Basic DA. resunet++",
+    "description": "3D super-resolution. SR 3D data. Cross-val. Basic DA. resunet++. one-cycle",
     "yaml": "test_13.yaml",
     "internal_checks": [
-        {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 13.0},
-        {"type": "regular", "pattern": "Test PSNR (merge patches)", "gt": True, "value": 13.0},
+        {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 21.0},
+        {"type": "regular", "pattern": "Test PSNR (merge patches)", "gt": True, "value": 21.0},
     ]
 }
 
@@ -2075,7 +2075,6 @@ if all_test_info["Test13"]["enable"]:
             raise ValueError(exc)
 
     biapy_config['PROBLEM']['SUPER_RESOLUTION']['UPSCALING'] = "(1,1,1)"
-    biapy_config['DATA']['EXTRACT_RANDOM_PATCH'] = True
 
     biapy_config['DATA']['PATCH_SIZE'] = "(6,128,128,1)"
     biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(super_resolution_3d_data_outpath, "data", "train", "LR")
@@ -2092,10 +2091,15 @@ if all_test_info["Test13"]["enable"]:
     biapy_config['TRAIN']['ENABLE'] = True
     biapy_config['TRAIN']['EPOCHS'] = 20
     biapy_config['TRAIN']['PATIENCE'] = -1
+    biapy_config['TRAIN']['PATIENCE'] = -1
+    biapy_config['TRAIN']['LR_SCHEDULER'] = {}
+    biapy_config['TRAIN']['LR'] = 0.001
 
     biapy_config['MODEL']['ARCHITECTURE'] = 'resunet++'
-    biapy_config['MODEL']['Z_DOWN'] = [1,1,1,1]
+    biapy_config['MODEL']['Z_DOWN'] = [1,1]
     biapy_config['MODEL']['LOAD_CHECKPOINT'] = False
+    biapy_config['MODEL']['UNET_SR_UPSAMPLE_POSITION'] = "post"
+    biapy_config['MODEL']['FEATURE_MAPS'] = [32, 64, 128]    
 
     biapy_config['TEST']['ENABLE'] = True
 

@@ -381,6 +381,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         if "top-5-accuracy" in [x.lower() for x in cfg.TRAIN.METRICS] and cfg.MODEL.N_CLASSES < 5:
             raise ValueError("'top-5-accuracy' can only be used when MODEL.N_CLASSES >= 5")
 
+    loss = ""
     if cfg.PROBLEM.TYPE in [
         "SEMANTIC_SEG",
         "DETECTION",
