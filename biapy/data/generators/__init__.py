@@ -607,11 +607,11 @@ def create_test_augmentor(
             print("Test normalization: using mean {} and std: {}".format(norm_dict["mean"], norm_dict["std"]))
 
     instance_problem = True if cfg.PROBLEM.TYPE == "INSTANCE_SEG" else False
-    if cfg.PROBLEM.TYPE in ["SELF_SUPERVISED"]:
+    if cfg.PROBLEM.TYPE == "SELF_SUPERVISED" and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
         provide_Y = False
     else:
-        provide_Y = cfg.DATA.TEST.LOAD_GT
-    if cfg.PROBLEM.TYPE in ["SUPER_RESOLUTION", "IMAGE_TO_IMAGE"]:
+        provide_Y = cfg.DATA.TEST.LOAD_GT or cfg.DATA.TEST.USE_VAL_AS_TEST
+    if cfg.PROBLEM.TYPE in ["SUPER_RESOLUTION", "IMAGE_TO_IMAGE", "SELF_SUPERVISED"]:
         norm_dict["mask_norm"] = "none"
 
     ndim: int = 3 if cfg.PROBLEM.NDIM == "3D" else 2
@@ -631,7 +631,9 @@ def create_test_augmentor(
         convert_to_rgb=cfg.DATA.FORCE_RGB,
     )
 
-    if cfg.PROBLEM.TYPE in ["CLASSIFICATION", "SELF_SUPERVISED"]:
+    if cfg.PROBLEM.TYPE == "CLASSIFICATION" or (
+        cfg.PROBLEM.TYPE == "SELF_SUPERVISED" and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"
+    ):
         gen_name = test_single_data_generator
         r_shape = cfg.DATA.PATCH_SIZE
         if cfg.MODEL.ARCHITECTURE == "efficientnet_b0" and cfg.DATA.PATCH_SIZE[:-1] != (

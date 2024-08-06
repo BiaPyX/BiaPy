@@ -310,6 +310,82 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "Not implemented pipeline option: LOSS.TYPE != 'CE' only available in 'SEMANTIC_SEG' and 'DETECTION'"
         )
 
+    set_train_metrics = True if len(cfg.TRAIN.METRICS) == 0 else False
+    set_test_metrics = True if len(cfg.TEST.METRICS) == 0 else False
+
+    if cfg.PROBLEM.TYPE in [
+        "SEMANTIC_SEG",
+        "INSTANCE_SEG",
+        "DETECTION",
+    ]:
+        if set_train_metrics:
+            opts.extend(["TRAIN.METRICS", ["iou"]])
+        if set_test_metrics:
+            opts.extend(["TEST.METRICS", ["iou"]])
+
+        assert len(cfg.TRAIN.METRICS) == 0 or all(
+            [True if x.lower() in ["iou"] else False for x in cfg.TRAIN.METRICS]
+        ), f"'TRAIN.METRICS' needs to be 'iou' in {cfg.PROBLEM.TYPE} workflow"
+
+        assert len(cfg.TEST.METRICS) == 0 or all(
+            [True if x.lower() in ["iou"] else False for x in cfg.TEST.METRICS]
+        ), f"'TEST.METRICS' needs to be 'iou' in {cfg.PROBLEM.TYPE} workflow"
+
+    elif cfg.PROBLEM.TYPE in [
+        "SUPER_RESOLUTION",
+        "IMAGE_TO_IMAGE",
+        "SELF_SUPERVISED",
+    ]:
+        if set_train_metrics:
+            opts.extend(["TRAIN.METRICS", ["psnr", "mae", "mse", "ssim"]])
+        if set_test_metrics:
+            metric_default_list = ["psnr", "mae", "mse", "ssim"]
+            if cfg.PROBLEM.NDIM == "2D": # IS, FID and LPIPS implementations only works for 2D images
+                metric_default_list += ["is", "fid", "lpips"]
+            opts.extend(["TEST.METRICS", metric_default_list])    
+
+        assert len(cfg.TRAIN.METRICS) == 0 or all(
+            [True if x.lower() in ["psnr", "mae", "mse", "ssim"] else False for x in cfg.TRAIN.METRICS]
+        ), f"'TRAIN.METRICS' options are ['psnr', 'mae', 'mse', 'ssim'] in {cfg.PROBLEM.TYPE} workflow"
+        assert len(cfg.TEST.METRICS) == 0 or all(
+            [
+                True if x.lower() in ["psnr", "mae", "mse", "ssim", "fid", "is", "lpips"] else False
+                for x in cfg.TEST.METRICS
+            ]
+        ), f"'TEST.METRICS' options are ['psnr', 'mae', 'mse', 'ssim', 'fid', 'is', 'lpips'] in {cfg.PROBLEM.TYPE} workflow"
+        
+        if any([True for x in cfg.TEST.METRICS if x.lower() in ["is", "fid", "lpips"]]) and cfg.PROBLEM.NDIM == "3D":
+            raise ValueError("IS, FID and LPIPS metrics can only be measured when PROBLEM.NDIM == '3D'")
+
+    elif cfg.PROBLEM.TYPE == "DENOISING":
+        if set_train_metrics:
+            opts.extend(["TRAIN.METRICS", ["mae", "mse"]])
+        if set_test_metrics:
+            opts.extend(["TEST.METRICS", ["mae", "mse"]])
+
+        assert len(cfg.TRAIN.METRICS) == 0 or all(
+            [True if x.lower() in ["mae", "mse"] else False for x in cfg.TRAIN.METRICS]
+        ), f"'TRAIN.METRICS' options are ['mae', 'mse'] in {cfg.PROBLEM.TYPE} workflow"
+        assert len(cfg.TEST.METRICS) == 0 or all(
+            [True if x.lower() in ["mae", "mse"] else False for x in cfg.TEST.METRICS]
+        ), f"'TEST.METRICS' options are ['mae', 'mse'] in {cfg.PROBLEM.TYPE} workflow"
+
+    elif cfg.PROBLEM.TYPE == "CLASSIFICATION":
+        if set_train_metrics:
+            opts.extend(["TRAIN.METRICS", ["accuracy", "top-5-accuracy"]])
+        if set_test_metrics:
+            opts.extend(["TEST.METRICS", ["accuracy"]])
+
+        assert len(cfg.TRAIN.METRICS) == 0 or all(
+            [True if x.lower() in ["accuracy", "top-5-accuracy"] else False for x in cfg.TRAIN.METRICS]
+        ), f"'TRAIN.METRICS' options are ['accuracy', 'top-5-accuracy'] in {cfg.PROBLEM.TYPE} workflow"
+        assert len(cfg.TEST.METRICS) == 0 or all(
+            [True if x.lower() in ["accuracy"] else False for x in cfg.TEST.METRICS]
+        ), f"'TEST.METRICS' options is 'accuracy' in {cfg.PROBLEM.TYPE} workflow"
+
+        if "top-5-accuracy" in [x.lower() for x in cfg.TRAIN.METRICS] and cfg.MODEL.N_CLASSES < 5:
+            raise ValueError("'top-5-accuracy' can only be used when MODEL.N_CLASSES >= 5")
+
     if cfg.TEST.ENABLE and cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK and cfg.PROBLEM.NDIM == "3D":
         raise ValueError("'TEST.ANALIZE_2D_IMGS_AS_3D_STACK' makes no sense when the problem is 3D. Disable it.")
 

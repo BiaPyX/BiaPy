@@ -808,6 +808,17 @@ class Config:
         _C.TRAIN.EPOCHS = 360
         # Epochs to wait with no validation data improvement until the training is stopped
         _C.TRAIN.PATIENCE = -1
+        # Metrics to apply during training. Depending on the workflow different ones can be applied. If empty, some 
+        # default metrics will be configured automatically:
+        #   * Semantic segmentation: 'iou' (called also Jaccard index)
+        #   * Instance segmentation: automatically set depending on the channels selected (PROBLEM.INSTANCE_SEG.DATA_CHANNELS). 
+        #   * Detection: 'iou' (called also Jaccard index)
+        #   * Denoising: 'mae', 'mse'
+        #   * Super-resolution: "psnr", "mae", "mse", "ssim"
+        #   * Self-supervision: "psnr", "mae", "mse", "ssim"
+        #   * Classification: 'accuracy', 'top-5-accuracy' 
+        #   * Image to image: "psnr", "mae", "mse", "ssim"
+        _C.TRAIN.METRICS = []
 
         # LR Scheduler
         _C.TRAIN.LR_SCHEDULER = CN()
@@ -906,6 +917,22 @@ class Config:
         # if the neural network is fully convolutional. It's not implemented in super-resolution workflow.
         _C.TEST.FULL_IMG = False
 
+        # Metrics to apply during training. Depending on the workflow different ones can be applied. If empty, some 
+        # default metrics will be configured automatically:
+        #   * Semantic segmentation: 'iou' (called also Jaccard index)
+        #   * Instance segmentation: automatically set depending on the channels selected (PROBLEM.INSTANCE_SEG.DATA_CHANNELS). 
+        #                            Instance metrics will be always calculated.
+        #   * Detection: 'iou' (called also Jaccard index)
+        #   * Denoising: 'mae', 'mse'
+        #   * Super-resolution: "psnr", "mae", "mse", "ssim". Additionally, if only if PROBLEM.NDIM == '2D', these 
+        #                       can also be selected:  "fid", "is", "lpips"
+        #   * Self-supervision: "psnr", "mae", "mse", "ssim". Additionally, if only if PROBLEM.NDIM == '2D', these 
+        #                       can also be selected:  "fid", "is", "lpips" 
+        #   * Classification: 'accuracy'. Always calculated: Confusion matrix
+        #   * Image to image: "psnr", "mae", "mse", "ssim". Additionally, if only if PROBLEM.NDIM == '2D', these 
+        #                     can also be selected:  "fid", "is", "lpips"
+        _C.TEST.METRICS = []
+    
         ### Instance segmentation
         # Whether to calculate matching statistics (average overlap, accuracy, recall, precision, etc.)
         _C.TEST.MATCHING_STATS = True

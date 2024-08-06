@@ -76,7 +76,6 @@ from biapy.data.post_processing.post_processing import (
     ensemble16_3d_predictions,
     apply_binary_mask,
 )
-from biapy.engine.metrics import jaccard_index_numpy, voc_calculation
 from biapy.data.post_processing import apply_post_processing
 from biapy.data.pre_processing import preprocess_data
 
@@ -119,7 +118,6 @@ class Base_Workflow(metaclass=ABCMeta):
         self.post_processing["per_image"] = False
         self.post_processing["as_3D_stack"] = False
         self.test_filenames = None
-        self.metrics = []
         self.data_norm = None
         self.model = None
         self.checkpoint_path = None
@@ -142,24 +140,33 @@ class Base_Workflow(metaclass=ABCMeta):
         self.stats = {}
 
         # Per crop
+        self.stats["per_crop"] = {}
         self.stats["loss_per_crop"] = 0
-        self.stats["iou_per_crop"] = 0
         self.stats["patch_by_batch_counter"] = 0
 
         # Merging the image
-        self.stats["iou_merge_patches"] = 0
-        self.stats["ov_iou_merge_patches"] = 0
-        self.stats["iou_merge_patches_post"] = 0
-        self.stats["ov_iou_merge_patches_post"] = 0
+        self.stats["merge_patches"] = {}
+        self.stats["merge_patches_post"] = {}
 
         # As 3D stack
-        self.stats["iou_as_3D_stack_post"] = 0
-        self.stats["ov_iou_as_3D_stack_post"] = 0
+        self.stats["as_3D_stack"] = {}
+        self.stats["as_3D_stack_post"] = {}
 
         # Full image
-        self.stats["loss"] = 0
-        self.stats["iou"] = 0
-        self.stats["ov_iou"] = 0
+        self.stats["full_image"] = {}
+        self.stats["full_image_loss"] = 0
+        self.stats["full_image_post"] = {}
+
+        # By chunks
+        self.stats["by_chunks"] = {}
+
+        self.by_chunks = False
+        if (
+            self.cfg.TEST.BY_CHUNKS.ENABLE
+            and self.cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.ENABLE
+            and self.cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE == "chunk_by_chunk"
+        ):
+            self.by_chunks = True
 
         self.world_size = get_world_size()
         self.global_rank = get_rank()
@@ -197,7 +204,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
             print("Loading BioImage Model Zoo pretrained model . . .")
             self.bmz_config["original_bmz_config"] = load_description(self.cfg.MODEL.BMZ.SOURCE_MODEL_ID)
-            
+
             # let's make sure we have a valid model...
             if isinstance(self.bmz_config["original_bmz_config"], InvalidDescr):
                 raise ValueError(f"Failed to load {self.cfg.MODEL.SOURCE}")
@@ -347,24 +354,47 @@ class Base_Workflow(metaclass=ABCMeta):
 
             self.cfg.merge_from_list(opts)
 
-    @abstractmethod
     def define_metrics(self):
         """
         This function must define the following variables:
 
-        self.metrics : List of functions
-            Metrics to be calculated during model's training and inference.
+        self.train_metrics : List of functions
+            Metrics to be calculated during model's training.
 
-        self.metric_names : List of str
-            Names of the metrics calculated.
+        self.train_metric_names : List of str
+            Names of the metrics calculated during training.
+
+        self.train_metric_best : List of str
+            To know which value should be considered as the best one. Options must be: "max" or "min".
+
+        self.test_metrics : List of functions
+            Metrics to be calculated during model's test/inference.
+
+        self.test_metric_names : List of str
+            Names of the metrics calculated during test/inference.
 
         self.loss : Function
-            Loss function used during training.
+            Loss function used during training and test.
         """
-        raise NotImplementedError
+        if not hasattr(self, "train_metrics"):
+            raise ValueError("'train_metrics' is not defined. Correct define_metrics() function")
+        if not hasattr(self, "train_metric_names"):
+            raise ValueError("'train_metric_names' is not defined. Correct define_metrics() function")
+        if not hasattr(self, "train_metric_best"):
+            raise ValueError("'train_metric_best' is not defined. Correct define_metrics() function")
+        else:
+            assert all(
+                [True if x in ["max", "min"] else False for x in self.train_metric_best]
+            ), "'train_metric_best' needs to be one between ['max', 'min']"
+        if not hasattr(self, "test_metrics"):
+            raise ValueError("'test_metrics' is not defined. Correct define_metrics() function")
+        if not hasattr(self, "test_metric_names"):
+            raise ValueError("'test_metric_names' is not defined. Correct define_metrics() function")
+        if not hasattr(self, "loss"):
+            raise ValueError("'loss' is not defined. Correct define_metrics() function")
 
     @abstractmethod
-    def metric_calculation(self, output, targets, metric_logger=None):
+    def metric_calculation(self, output, targets, train=True, metric_logger=None):
         """
         Execution of the metrics defined in :func:`~define_metrics` function.
 
@@ -375,6 +405,9 @@ class Base_Workflow(metaclass=ABCMeta):
 
         targets : Torch Tensor
             Ground truth to compare the prediction with.
+
+        train : bool, optional
+            Whether to calculate train or test metrics.
 
         metric_logger : MetricLogger, optional
             Class to be updated with the new metric(s) value(s) calculated.
@@ -918,9 +951,9 @@ class Base_Workflow(metaclass=ABCMeta):
         self.plot_values = {}
         self.plot_values["loss"] = []
         self.plot_values["val_loss"] = []
-        for i in range(len(self.metric_names)):
-            self.plot_values[self.metric_names[i]] = []
-            self.plot_values["val_" + self.metric_names[i]] = []
+        for i in range(len(self.train_metric_names)):
+            self.plot_values[self.train_metric_names[i]] = []
+            self.plot_values["val_" + self.train_metric_names[i]] = []
 
     def train(self):
         """
@@ -943,7 +976,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
         print(f"Start training in epoch {self.start_epoch+1} - Total: {self.cfg.TRAIN.EPOCHS}")
         start_time = time.time()
-        val_best_metric = np.zeros(len(self.metric_names), dtype=np.float32)
+        val_best_metric = np.zeros(len(self.train_metric_names), dtype=np.float32)
         val_best_loss = np.Inf
         for epoch in range(self.start_epoch, self.cfg.TRAIN.EPOCHS):
             print("~~~ Epoch {}/{} ~~~\n".format(epoch + 1, self.cfg.TRAIN.EPOCHS))
@@ -1019,8 +1052,8 @@ class Base_Workflow(metaclass=ABCMeta):
                     )
                     m = " "
                     for i in range(len(val_best_metric)):
-                        val_best_metric[i] = test_stats[self.metric_names[i]]
-                        m += f"{self.metric_names[i]}: {val_best_metric[i]:.4f} "
+                        val_best_metric[i] = test_stats[self.train_metric_names[i]]
+                        m += f"{self.train_metric_names[i]}: {val_best_metric[i]:.4f} "
                     val_best_loss = test_stats["loss"]
 
                     if is_main_process():
@@ -1038,9 +1071,9 @@ class Base_Workflow(metaclass=ABCMeta):
                 # Store validation stats
                 if self.log_writer is not None:
                     self.log_writer.update(test_loss=test_stats["loss"], head="perf", step=epoch)
-                    for i in range(len(self.metric_names)):
+                    for i in range(len(self.train_metric_names)):
                         self.log_writer.update(
-                            test_iou=test_stats[self.metric_names[i]],
+                            test_iou=test_stats[self.train_metric_names[i]],
                             head="perf",
                             step=epoch,
                         )
@@ -1068,14 +1101,16 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.plot_values["loss"].append(train_stats["loss"])
                 if self.val_generator is not None:
                     self.plot_values["val_loss"].append(test_stats["loss"])
-                for i in range(len(self.metric_names)):
-                    self.plot_values[self.metric_names[i]].append(train_stats[self.metric_names[i]])
+                for i in range(len(self.train_metric_names)):
+                    self.plot_values[self.train_metric_names[i]].append(train_stats[self.train_metric_names[i]])
                     if self.val_generator is not None:
-                        self.plot_values["val_" + self.metric_names[i]].append(test_stats[self.metric_names[i]])
+                        self.plot_values["val_" + self.train_metric_names[i]].append(
+                            test_stats[self.train_metric_names[i]]
+                        )
                 if (epoch + 1) % self.cfg.LOG.CHART_CREATION_FREQ == 0:
                     create_plots(
                         self.plot_values,
-                        self.metric_names,
+                        self.train_metric_names,
                         self.job_identifier,
                         self.cfg.PATHS.CHARTS,
                     )
@@ -1101,12 +1136,12 @@ class Base_Workflow(metaclass=ABCMeta):
         print("Training time {}".format(self.total_training_time_str))
 
         print("Train loss: {}".format(train_stats["loss"]))
-        for i in range(len(self.metric_names)):
-            print("Train {}: {}".format(self.metric_names[i], train_stats[self.metric_names[i]]))
+        for i in range(len(self.train_metric_names)):
+            print("Train {}: {}".format(self.train_metric_names[i], train_stats[self.train_metric_names[i]]))
         if self.val_generator is not None:
             print("Val loss: {}".format(val_best_loss))
-            for i in range(len(self.metric_names)):
-                print("Val {}: {}".format(self.metric_names[i], val_best_metric[i]))
+            for i in range(len(self.train_metric_names)):
+                print("Val {}: {}".format(self.train_metric_names[i], val_best_metric[i]))
 
         print("Finished Training")
 
@@ -1375,37 +1410,36 @@ class Base_Workflow(metaclass=ABCMeta):
                 print("Epoch number: {}".format(len(self.plot_values["val_loss"])))
                 print("Train time (s): {}".format(self.total_training_time_str))
                 print("Train loss: {}".format(np.min(self.plot_values["loss"])))
-                for i in range(len(self.metric_names)):
-                    if self.metric_names[i] == "IoU":
-                        print(
-                            "Train Foreground {}: {}".format(
-                                self.metric_names[i],
-                                np.max(self.plot_values[self.metric_names[i]]),
-                            )
+
+                for i in range(len(self.train_metric_names)):
+                    metric_name = (
+                        "Foreground IoU" if self.train_metric_names[i] == "IoU" else self.train_metric_names[i]
+                    )
+                    print(
+                        "Train {}: {}".format(
+                            metric_name,
+                            (
+                                np.max(self.plot_values[self.train_metric_names[i]])
+                                if self.train_metric_best[i] == "max"
+                                else np.min(self.plot_values[self.train_metric_names[i]])
+                            ),
                         )
-                    else:
-                        print(
-                            "Train {}: {}".format(
-                                self.metric_names[i],
-                                np.max(self.plot_values[self.metric_names[i]]),
-                            )
-                        )
+                    )
                 print("Validation loss: {}".format(np.min(self.plot_values["val_loss"])))
-                for i in range(len(self.metric_names)):
-                    if self.metric_names[i] == "IoU":
-                        print(
-                            "Validation Foreground {}: {}".format(
-                                self.metric_names[i],
-                                np.max(self.plot_values["val_" + self.metric_names[i]]),
-                            )
+                for i in range(len(self.train_metric_names)):
+                    metric_name = (
+                        "Foreground IoU" if self.train_metric_names[i] == "IoU" else self.train_metric_names[i]
+                    )
+                    print(
+                        "Validation {}: {}".format(
+                            metric_name,
+                            (
+                                np.max(self.plot_values[self.train_metric_names[i]])
+                                if self.train_metric_best[i] == "max"
+                                else np.min(self.plot_values[self.train_metric_names[i]])
+                            ),
                         )
-                    else:
-                        print(
-                            "Validation {}: {}".format(
-                                self.metric_names[i],
-                                np.max(self.plot_values["val_" + self.metric_names[i]]),
-                            )
-                        )
+                    )
             self.print_stats(image_counter)
 
     def process_sample_by_chunks(self, filenames):
@@ -1440,7 +1474,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 print(f"Loaded image shape is {self._X.shape}")
 
             data_shape = self._X.shape
-            out_data_shape = data_shape * self.cfg.DATA.PREPROCESS.ZOOM.ZOOM_FACTOR
+            out_data_shape = [x * y for x, y in zip(data_shape, self.cfg.DATA.PREPROCESS.ZOOM.ZOOM_FACTOR)]
 
             if self._X.ndim < 3:
                 raise ValueError(
@@ -1808,9 +1842,16 @@ class Base_Workflow(metaclass=ABCMeta):
                 "Please, check the channels of the images!".format(self.cfg.DATA.PATCH_SIZE[-1], self._X.shape[-1])
             )
 
-        # Save test_output if the user wants to export the model to BMZ later
+        # Save test_input if the user wants to export the model to BMZ later
         if "test_input" not in self.bmz_config:
-            self.bmz_config["test_input"] = self._X[0].copy()
+            if self.cfg.PROBLEM.NDIM == "2D":
+                self.bmz_config["test_input"] = self._X[0][
+                    : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1]
+                ].copy()
+            else:
+                self.bmz_config["test_input"] = self._X[0][
+                    : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1], : self.cfg.DATA.PATCH_SIZE[2]
+                ].copy()
 
         #################
         ### PER PATCH ###
@@ -1926,21 +1967,7 @@ class Base_Workflow(metaclass=ABCMeta):
                                     dtype=self.loss_dtype,
                                 ),
                             )
-
-                        # Calculate the metrics
-                        train_iou = self.metric_calculation(
-                            output,
-                            to_pytorch_format(
-                                self._Y[k * self.cfg.TRAIN.BATCH_SIZE : top],
-                                self.axis_order,
-                                self.device,
-                                dtype=self.loss_dtype,
-                            ),
-                        )
-
                         self.stats["loss_per_crop"] += loss.item()
-                        self.stats["iou_per_crop"] += train_iou
-                        self.stats["patch_by_batch_counter"] += 1
 
                     del output
 
@@ -1970,6 +1997,25 @@ class Base_Workflow(metaclass=ABCMeta):
                         # Multi-head concatenation
                         if isinstance(p, list):
                             p = torch.cat((p[0], torch.argmax(p[1], axis=1).unsqueeze(1)), dim=1)
+
+                        # Calculate the metrics
+                        if self.cfg.DATA.TEST.LOAD_GT:
+                            metric_values = self.metric_calculation(
+                                p,
+                                to_pytorch_format(
+                                    self._Y[k],
+                                    self.axis_order,
+                                    self.device,
+                                    dtype=self.loss_dtype,
+                                ),
+                                train=False,
+                            )
+                            for metric in metric_values:
+                                if str(metric).lower() not in self.stats["per_crop"]:
+                                    self.stats["per_crop"][str(metric).lower()] = 0
+                                self.stats["per_crop"][str(metric).lower()] += metric_values[metric]
+                        self.stats["patch_by_batch_counter"] += 1
+
                         p = to_numpy_format(p, self.axis_order_back)
                         if "pred" not in locals():
                             pred = np.zeros((self._X.shape[0],) + p.shape[1:], dtype=self.dtype)
@@ -1992,7 +2038,26 @@ class Base_Workflow(metaclass=ABCMeta):
                                     (p[0], torch.argmax(p[1], axis=1).unsqueeze(1)),
                                     dim=1,
                                 )
-                            p = to_numpy_format(p, self.axis_order_back)
+
+                        # Calculate the metrics
+                        if self.cfg.DATA.TEST.LOAD_GT:
+                            metric_values = self.metric_calculation(
+                                p,
+                                to_pytorch_format(
+                                    self._Y[k * self.cfg.TRAIN.BATCH_SIZE : top],
+                                    self.axis_order,
+                                    self.device,
+                                    dtype=self.loss_dtype,
+                                ),
+                                train=False,
+                            )
+                            for metric in metric_values:
+                                if str(metric).lower() not in self.stats["per_crop"]:
+                                    self.stats["per_crop"][str(metric).lower()] = 0
+                                self.stats["per_crop"][str(metric).lower()] += metric_values[metric]
+                        self.stats["patch_by_batch_counter"] += 1
+
+                        p = to_numpy_format(p, self.axis_order_back)
                         if "pred" not in locals():
                             pred = np.zeros((self._X.shape[0],) + p.shape[1:], dtype=self.dtype)
                         pred[k * self.cfg.TRAIN.BATCH_SIZE : top] = p
@@ -2089,26 +2154,46 @@ class Base_Workflow(metaclass=ABCMeta):
                     if self.cfg.DATA.TEST.LOAD_GT:
                         self._Y = np.expand_dims(np.argmax(self._Y, -1), -1).astype(_type)
 
-                if self.cfg.DATA.TEST.LOAD_GT and self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS != "Dv2":
-                    _iou_merge_patches = jaccard_index_numpy(
-                        (self._Y > 0.5).astype(np.uint8),
-                        (pred > 0.5).astype(np.uint8),
+                # Calculate the metrics
+                if self.cfg.DATA.TEST.LOAD_GT:
+                    metric_values = self.metric_calculation(
+                        to_pytorch_format(pred, self.axis_order, self.device),
+                        to_pytorch_format(
+                            self._Y,
+                            self.axis_order,
+                            self.device,
+                            dtype=self.loss_dtype,
+                        ),
+                        train=False,
                     )
-                    _ov_iou_merge_patches = voc_calculation(
-                        (self._Y > 0.5).astype(np.uint8),
-                        (pred > 0.5).astype(np.uint8),
-                        _iou_merge_patches,
-                    )
-                    self.stats["iou_merge_patches"] += _iou_merge_patches
-                    self.stats["ov_iou_merge_patches"] += _ov_iou_merge_patches
+                    for metric in metric_values:
+                        if str(metric).lower() not in self.stats["merge_patches"]:
+                            self.stats["merge_patches"][str(metric).lower()] = 0
+                        self.stats["merge_patches"][str(metric).lower()] += metric_values[metric]
 
                 ############################
                 ### POST-PROCESSING (3D) ###
                 ############################
                 if self.post_processing["per_image"]:
-                    pred, _iou_post, _ov_iou_post = apply_post_processing(self.cfg, pred, self._Y)
-                    self.stats["iou_merge_patches_post"] += _iou_post
-                    self.stats["ov_iou_merge_patches_post"] += _ov_iou_post
+                    pred = apply_post_processing(self.cfg, pred)
+
+                    # Calculate the metrics
+                    if self.cfg.DATA.TEST.LOAD_GT:
+                        metric_values = self.metric_calculation(
+                            to_pytorch_format(pred, self.axis_order, self.device),
+                            to_pytorch_format(
+                                self._Y,
+                                self.axis_order,
+                                self.device,
+                                dtype=self.loss_dtype,
+                            ),
+                            train=False,
+                        )
+                        for metric in metric_values:
+                            if str(metric).lower() not in self.stats["merge_patches_post"]:
+                                self.stats["merge_patches_post"][str(metric).lower()] = 0
+                            self.stats["merge_patches_post"][str(metric).lower()] += metric_values[metric]
+
                     save_tif(
                         pred,
                         self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,
@@ -2155,7 +2240,7 @@ class Base_Workflow(metaclass=ABCMeta):
                                 dtype=self.loss_dtype,
                             ),
                         )
-                    self.stats["loss"] += loss.item()
+                    self.stats["full_image_loss"] += loss.item()
                     del output
 
                 # Make the prediction
@@ -2201,14 +2286,22 @@ class Base_Workflow(metaclass=ABCMeta):
                 if self.cfg.TEST.POST_PROCESSING.APPLY_MASK:
                     pred = apply_binary_mask(pred, self.cfg.DATA.TEST.BINARY_MASKS)
 
+                # Calculate the metrics
                 if self.cfg.DATA.TEST.LOAD_GT:
-                    score = jaccard_index_numpy((self._Y > 0.5).astype(np.uint8), (pred > 0.5).astype(np.uint8))
-                    self.stats["iou"] += score
-                    self.stats["ov_iou"] += voc_calculation(
-                        (self._Y > 0.5).astype(np.uint8),
-                        (pred > 0.5).astype(np.uint8),
-                        score,
+                    metric_values = self.metric_calculation(
+                        to_pytorch_format(pred, self.axis_order, self.device),
+                        to_pytorch_format(
+                            self._Y,
+                            self.axis_order,
+                            self.device,
+                            dtype=self.loss_dtype,
+                        ),
+                        train=False,
                     )
+                    for metric in metric_values:
+                        if str(metric).lower() not in self.stats["full_image"]:
+                            self.stats["full_image"][str(metric).lower()] = 0
+                        self.stats["full_image"][str(metric).lower()] += metric_values[metric]
             else:
                 # load prediction from file
                 test_file = os.path.join(
@@ -2227,7 +2320,14 @@ class Base_Workflow(metaclass=ABCMeta):
 
         # Save test_output if the user wants to export the model to BMZ later
         if "test_output" not in self.bmz_config:
-            self.bmz_config["test_output"] = pred[0].copy()
+            if self.cfg.PROBLEM.NDIM == "2D":
+                self.bmz_config["test_output"] = pred[0][
+                    : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1]
+                ].copy()
+            else:
+                self.bmz_config["test_output"] = pred[0][
+                    : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1], : self.cfg.DATA.PATCH_SIZE[2]
+                ].copy()
 
     def normalize_stats(self, image_counter):
         """
@@ -2244,24 +2344,37 @@ class Base_Workflow(metaclass=ABCMeta):
             if self.stats["patch_by_batch_counter"] != 0
             else 0
         )
-        self.stats["iou_per_crop"] = (
-            self.stats["iou_per_crop"] / self.stats["patch_by_batch_counter"]
-            if self.stats["patch_by_batch_counter"] != 0
-            else 0
-        )
+        for metric in self.stats["per_crop"]:
+            self.stats["per_crop"][metric] = (
+                self.stats["per_crop"][metric] / self.stats["patch_by_batch_counter"]
+                if self.stats["patch_by_batch_counter"] != 0
+                else 0
+            )
 
         # Merge patches
-        self.stats["iou_merge_patches"] = self.stats["iou_merge_patches"] / image_counter
-        self.stats["ov_iou_merge_patches"] = self.stats["ov_iou_merge_patches"] / image_counter
+        for metric in self.stats["merge_patches"]:
+            self.stats["merge_patches"][metric] = (
+                self.stats["merge_patches"][metric] / image_counter if image_counter != 0 else 0
+            )
 
         # Full image
-        self.stats["iou"] = self.stats["iou"] / image_counter
-        self.stats["loss"] = self.stats["loss"] / image_counter
-        self.stats["ov_iou"] = self.stats["ov_iou"] / image_counter
+        for metric in self.stats["full_image"]:
+            self.stats["full_image"][metric] = (
+                self.stats["full_image"][metric] / image_counter if image_counter != 0 else 0
+            )
+        self.stats["full_image_loss"] = self.stats["full_image_loss"] / image_counter if image_counter != 0 else 0
+
+        # By chunks
+        for metric in self.stats["by_chunks"]:
+            self.stats["by_chunks"][metric] = (
+                self.stats["by_chunks"][metric] / image_counter if image_counter != 0 else 0
+            )
 
         if self.post_processing["per_image"]:
-            self.stats["iou_merge_patches_post"] = self.stats["iou_merge_patches_post"] / image_counter
-            self.stats["ov_iou_merge_patches_post"] = self.stats["ov_iou_merge_patches_post"] / image_counter
+            for metric in self.stats["merge_patches_post"]:
+                self.stats["merge_patches_post"][metric] = (
+                    self.stats["merge_patches_post"][metric] / image_counter if image_counter != 0 else 0
+                )
 
     def print_stats(self, image_counter):
         """
@@ -2274,43 +2387,81 @@ class Base_Workflow(metaclass=ABCMeta):
         """
         self.normalize_stats(image_counter)
         if self.cfg.DATA.TEST.LOAD_GT and not self.cfg.TEST.REUSE_PREDICTIONS:
-            if not self.cfg.TEST.FULL_IMG:
-                print("Loss (per patch): {}".format(self.stats["loss_per_crop"]))
-                print("Test Foreground IoU (per patch): {}".format(self.stats["iou_per_crop"]))
-                print(" ")
-                print("Test Foreground IoU (merge patches): {}".format(self.stats["iou_merge_patches"]))
-                print("Test Overall IoU (merge patches): {}".format(self.stats["ov_iou_merge_patches"]))
-                print(" ")
+            if self.by_chunks:
+                if len(self.stats["by_chunks"]) > 0:
+                    for metric in self.test_metric_names:
+                        if metric.lower() in self.stats["by_chunks"]:  # IoU is not calculated
+                            print(
+                                "Test {} (per image): {}".format(
+                                    str(metric),
+                                    self.stats["by_chunks"][metric.lower()],
+                                )
+                            )
             else:
-                print("Loss (per image): {}".format(self.stats["loss"]))
-                print("Test Foreground IoU (per image): {}".format(self.stats["iou"]))
-                print("Test Overall IoU (per image): {}".format(self.stats["ov_iou"]))
+                if not self.cfg.TEST.FULL_IMG or (
+                    len(self.stats["per_crop"]) > 0 or len(self.stats["merge_patches"]) > 0
+                ):
+                    if self.cfg.TEST.EVALUATE:
+                        print("Loss (per patch): {}".format(self.stats["loss_per_crop"]))
+
+                    if len(self.stats["per_crop"]) > 0:
+                        for metric in self.test_metric_names:
+                            if metric.lower() in self.stats["per_crop"]:
+                                metric_name = "Foreground IoU" if metric == "IoU" else metric
+                                print(
+                                    "Test {} (per patch): {}".format(
+                                        metric_name,
+                                        self.stats["per_crop"][metric.lower()],
+                                    )
+                                )
+
+                    if len(self.stats["merge_patches"]) > 0:
+                        for metric in self.test_metric_names:
+                            if metric.lower() in self.stats["merge_patches"]:
+                                metric_name = "Foreground IoU" if metric == "IoU" else metric
+                                print(
+                                    "Test {} (merge patches): {}".format(
+                                        metric_name,
+                                        self.stats["merge_patches"][metric.lower()],
+                                    )
+                                )
+                else:
+                    print("Loss (per image): {}".format(self.stats["full_image_loss"]))
+                    if len(self.stats["full_image"]) > 0:
+                        for metric in self.test_metric_names:
+                            if metric.lower() in self.stats["full_image"]:
+                                metric_name = "Foreground IoU" if metric == "IoU" else metric
+                                print(
+                                    "Test {} (per image): {}".format(
+                                        metric_name,
+                                        self.stats["full_image"][metric.lower()],
+                                    )
+                                )
+
+            print(" ")
+
+            if self.post_processing["per_image"] and len(self.stats["merge_patches_post"]) > 0:
+                for metric in self.test_metric_names:
+                    if metric.lower() in self.stats["merge_patches_post"]:
+                        metric_name = "Foreground IoU" if metric == "IoU" else metric
+                        print(
+                            "Test {} (merge patches - post-processing): {}".format(
+                                metric_name,
+                                self.stats["merge_patches_post"][metric.lower()],
+                            )
+                        )
                 print(" ")
 
-    def print_post_processing_stats(self):
-        """
-        Print post-processing statistics.
-        """
-        if self.cfg.DATA.TEST.LOAD_GT:
-            if self.post_processing["per_image"]:
-                print(
-                    "Test Foreground IoU (merge patches - post-processing): {}".format(
-                        self.stats["iou_merge_patches_post"]
-                    )
-                )
-                print(
-                    "Test Overall IoU (merge patches - post-processing): {}".format(
-                        self.stats["ov_iou_merge_patches_post"]
-                    )
-                )
-                print(" ")
-            if self.post_processing["as_3D_stack"]:
-                print(
-                    "Test Foreground IoU (as 3D stack - post-processing): {}".format(self.stats["iou_as_3D_stack_post"])
-                )
-                print(
-                    "Test Overall IoU (as 3D stack - post-processing): {}".format(self.stats["ov_iou_as_3D_stack_post"])
-                )
+            if self.post_processing["as_3D_stack"] and len(self.stats["as_3D_stack_post"]) > 0:
+                for metric in self.test_metric_names:
+                    if metric.lower() in self.stats["as_3D_stack_post"]:
+                        metric_name = "Foreground IoU" if metric == "IoU" else metric
+                        print(
+                            "Test {} (as 3D stack - post-processing): {}".format(
+                                metric_name,
+                                self.stats["as_3D_stack_post"][metric.lower()],
+                            )
+                        )
                 print(" ")
 
     @abstractmethod
@@ -2411,11 +2562,24 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.cfg.PATHS.RESULT_DIR.AS_3D_STACK_BIN,
                 verbose=self.cfg.TEST.VERBOSE,
             )
-            (
-                self.all_pred,
-                self.stats["iou_as_3D_stack_post"],
-                self.stats["ov_iou_as_3D_stack_post"],
-            ) = apply_post_processing(self.cfg, self.all_pred, self.all_gt)
+
+            self.all_pred = apply_post_processing(self.cfg, self.all_pred)
+
+            # Calculate the metrics
+            if self.cfg.DATA.TEST.LOAD_GT:
+                metric_values = self.metric_calculation(
+                    to_pytorch_format(self.all_pred[0], self.axis_order, self.device),
+                    to_pytorch_format(
+                        self.all_gt[0],
+                        self.axis_order,
+                        self.device,
+                        dtype=self.loss_dtype,
+                    ),
+                    train=False,
+                )
+                for metric in metric_values:
+                    self.stats["as_3D_stack_post"][str(metric).lower()] = metric_values[metric]
+
             save_tif(
                 self.all_pred,
                 self.cfg.PATHS.RESULT_DIR.AS_3D_STACK_POST_PROCESSING,
@@ -2479,10 +2643,10 @@ def extract_patch_from_dataset(data, cfg, input_queue, extract_info_queue, verbo
 
         t_dim, z_dim, y_dim, x_dim, c_dim = order_dimensions(
             cfg.DATA.PREPROCESS.ZOOM.ZOOM_FACTOR,
+            input_order=cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
             output_order="TZYXC",
-            default_value=np.nan,
+            default_value=1,
         )
-
         patch_coords = (np.array([z_dim, y_dim, x_dim]) * np.array(patch_coords).T).T
         img = zoom(img, (t_dim, z_dim, y_dim, x_dim, c_dim), order=0, mode="nearest")
 

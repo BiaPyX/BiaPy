@@ -3,6 +3,7 @@ import torch
 import numpy as np
 import numpy.ma as ma
 from tqdm import tqdm
+from torchmetrics.regression import MeanSquaredError, MeanAbsoluteError
 
 from biapy.data.data_2D_manipulation import (
     crop_data_with_overlap,
@@ -59,14 +60,63 @@ class Denoising_Workflow(Base_Workflow):
 
     def define_metrics(self):
         """
-        Definition of self.metrics, self.metric_names and self.loss variables.
+        This function must define the following variables:
+
+        self.train_metrics : List of functions
+            Metrics to be calculated during model's training.
+
+        self.train_metric_names : List of str
+            Names of the metrics calculated during training.
+
+        self.train_metric_best : List of str
+            To know which value should be considered as the best one. Options must be: "max" or "min".
+
+        self.test_metrics : List of functions
+            Metrics to be calculated during model's test/inference.
+
+        self.test_metric_names : List of str
+            Names of the metrics calculated during test/inference.
+
+        self.loss : Function
+            Loss function used during training and test.
         """
+        self.train_metrics = []
+        self.train_metric_names = []
+        self.train_metric_best = []
+        for metric in list(set(self.cfg.TRAIN.METRICS)):
+            if metric in ["mse"]:
+                self.train_metrics.append(
+                    MeanSquaredError().to(self.device),
+                )
+                self.train_metric_names.append("MSE")
+                self.train_metric_best.append("min")
+            elif metric == "mae":
+                self.train_metrics.append(
+                    MeanAbsoluteError().to(self.device),
+                )
+                self.train_metric_names.append("MAE")
+                self.train_metric_best.append("min")
+
+        self.test_metrics = []
+        self.test_metric_names = []
+        for metric in list(set(self.cfg.TEST.METRICS)):
+            if metric in ["mse"]:
+                self.test_metrics.append(
+                    MeanSquaredError().to(self.device),
+                )
+                self.test_metric_names.append("MSE")
+            elif metric == "mae":
+                self.test_metrics.append(
+                    MeanAbsoluteError().to(self.device),
+                )
+                self.test_metric_names.append("MAE")
+
         print("Overriding 'LOSS.TYPE' to set it to N2V loss (masked MSE)")
-        self.metrics = [torch.nn.MSELoss()]
-        self.metric_names = ["MSE"]
         self.loss = n2v_loss_mse
 
-    def metric_calculation(self, output, targets, metric_logger=None):
+        super().define_metrics()
+
+    def metric_calculation(self, output, targets, train=True, metric_logger=None):
         """
         Execution of the metrics defined in :func:`~define_metrics` function.
 
@@ -78,21 +128,30 @@ class Denoising_Workflow(Base_Workflow):
         targets : Torch Tensor
             Ground truth to compare the prediction with.
 
+        train : bool, optional
+            Whether to calculate train or test metrics.
+
         metric_logger : MetricLogger, optional
             Class to be updated with the new metric(s) value(s) calculated.
 
         Returns
         -------
-        value : float
-            Value of the metric for the given prediction.
+        out_metrics : dict
+            Value of the metrics for the given prediction.
         """
+        out_metrics = {}
+        list_to_use = self.train_metrics if train else self.test_metrics
+        list_names_to_use = self.train_metric_names if train else self.test_metric_names
+
         with torch.no_grad():
-            train_mse = self.metrics[0](output.squeeze(), targets[:, 0].squeeze())
-            train_mse = train_mse.item() if not torch.isnan(train_mse) else 0
-            if metric_logger is not None:
-                metric_logger.meters[self.metric_names[0]].update(train_mse)
-            else:
-                return train_mse
+            for i, metric in enumerate(list_to_use):
+                val = metric(output.squeeze(), targets[:, 0].squeeze())
+                val = val.item() if not torch.isnan(val) else 0
+                out_metrics[list_names_to_use[i]] = val
+
+                if metric_logger is not None:
+                    metric_logger.meters[list_names_to_use[i]].update(val)
+        return out_metrics
 
     def process_sample(self, norm):
         """
@@ -103,9 +162,16 @@ class Denoising_Workflow(Base_Workflow):
         norm : List of dicts
             Normalization used during training. Required to denormalize the predictions of the model.
         """
-        # Save test_input if the user wants to export the model to BMZ later
+        # Save test_output if the user wants to export the model to BMZ later
         if "test_input" not in self.bmz_config:
-            self.bmz_config["test_input"] = self._X[0].copy()
+            if self.cfg.PROBLEM.NDIM == "2D":
+                self.bmz_config["test_input"] = self._X[0][
+                    : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1]
+                ].copy()
+            else:
+                self.bmz_config["test_input"] = self._X[0][
+                    : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1], : self.cfg.DATA.PATCH_SIZE[2]
+                ].copy()
 
         # Reflect data to complete the needed shape
         if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE:
@@ -312,7 +378,14 @@ class Denoising_Workflow(Base_Workflow):
 
         # Save test_output if the user wants to export the model to BMZ later
         if "test_output" not in self.bmz_config:
-            self.bmz_config["test_output"] = pred[0].copy()
+            if self.cfg.PROBLEM.NDIM == "2D":
+                self.bmz_config["test_output"] = pred[0][
+                    : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1]
+                ].copy()
+            else:
+                self.bmz_config["test_output"] = pred[0][
+                    : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1], : self.cfg.DATA.PATCH_SIZE[2]
+                ].copy()
 
     def torchvision_model_call(self, in_img, is_train=False):
         """
@@ -373,28 +446,6 @@ class Denoising_Workflow(Base_Workflow):
         Steps that must be done after predicting all images.
         """
         super().after_all_images()
-
-    def normalize_stats(self, image_counter):
-        """
-        Normalize statistics.
-
-        Parameters
-        ----------
-        image_counter : int
-            Number of images to average the metrics.
-        """
-        pass
-
-    def print_stats(self, image_counter):
-        """
-        Print statistics.
-
-        Parameters
-        ----------
-        image_counter : int
-            Number of images to call ``normalize_stats``.
-        """
-        self.normalize_stats(image_counter)
 
 
 ####################################

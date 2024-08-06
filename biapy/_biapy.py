@@ -825,6 +825,8 @@ class BiaPy:
         # Recover the original working path
         os.chdir(cwd)
 
+        print("FINISHED JOB {} !!".format(self.job_identifier))
+        
     def run_job(self):
         """Run a complete BiaPy workflow."""
         if self.cfg.TRAIN.ENABLE:

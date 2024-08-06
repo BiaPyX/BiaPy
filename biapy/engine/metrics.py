@@ -223,18 +223,18 @@ class instance_metrics:
         self.multihead = False
         self.metric_func = []
         for i in range(len(metric_names)):
-            if "jaccard_index_classes" in metric_names[i] and self.jaccard_multi is None:
+            if "IoU (classes)" in metric_names[i] and self.jaccard_multi is None:
                 self.jaccard_multi = JaccardIndex(task="multiclass", threshold=0.5, num_classes=self.num_classes).to(
                     self.device, non_blocking=True
                 )
                 self.multihead = True
                 loss_func = self.jaccard_multi
-            elif "jaccard_index" in metric_names[i] and self.jaccard is None:
+            elif "IoU" in metric_names[i] and self.jaccard is None:
                 self.jaccard = JaccardIndex(task="binary", threshold=0.5, num_classes=2).to(
                     self.device, non_blocking=True
                 )
                 loss_func = self.jaccard
-            elif metric_names[i] == "L1_distance_channel" and self.l1loss is None:
+            elif metric_names[i] == "L1 (distance channel)" and self.l1loss is None:
                 self.l1loss = torch.nn.L1Loss()
                 loss_func = self.l1loss
 
@@ -266,8 +266,8 @@ class instance_metrics:
             num_channels = y_pred.shape[1]
             _y_pred = y_pred
             assert (
-                "jaccard_index_classes" not in self.metric_names
-            ), "'jaccard_index_classes' can only be used with multi-head predictions"
+                "IoU (classes)" not in self.metric_names
+            ), "'IoU (classes)' can only be used with multi-head predictions"
 
         # If image shape has changed due to TorchVision or BMZ preprocessing then the mask needs
         # to be resized too
@@ -286,7 +286,7 @@ class instance_metrics:
             if self.metric_names[i] not in res_metrics:
                 res_metrics[self.metric_names[i]] = []
             # Measure metric
-            if self.metric_names[i] == "jaccard_index_classes":
+            if self.metric_names[i] == "IoU (classes)":
                 res_metrics[self.metric_names[i]].append(self.metric_func[i](_y_pred_class, y_true[:, 1]))
             else:
                 res_metrics[self.metric_names[i]].append(self.metric_func[i](_y_pred[:, i], y_true[:, 0]))
@@ -413,51 +413,6 @@ class DiceBCELoss(nn.Module):
         Dice_BCE = (BCE * self.w_bce) + (dice_loss * self.w_dice)
 
         return Dice_BCE
-
-
-def voc_calculation(y_true, y_pred, foreground):
-    """
-    Calculate VOC metric value.
-
-    Parameters
-    ----------
-    y_true : 4D Numpy array
-        Ground truth masks. E.g. ``(num_of_images, x, y, channels)``.
-
-    y_pred : 4D Numpy array
-        Predicted masks. E.g. ``(num_of_images, x, y, channels)``.
-
-    foreground : float
-        Foreground Jaccard index score.
-
-    Returns
-    -------
-    voc : float
-        VOC score value.
-    """
-
-    # Invert the arrays
-    y_pred[y_pred == 0] = 2
-    y_pred[y_pred == 1] = 0
-    y_pred[y_pred == 2] = 1
-
-    y_true[y_true == 0] = 2
-    y_true[y_true == 1] = 0
-    y_true[y_true == 2] = 1
-
-    background = jaccard_index_numpy(y_true, y_pred)
-    voc = (float)(foreground + background) / 2
-
-    # Revert the changes
-    y_pred[y_pred == 0] = 2
-    y_pred[y_pred == 1] = 0
-    y_pred[y_pred == 2] = 1
-
-    y_true[y_true == 0] = 2
-    y_true[y_true == 1] = 0
-    y_true[y_true == 2] = 1
-
-    return voc
 
 
 class instance_segmentation_loss:
@@ -853,15 +808,15 @@ def detection_metrics(
             )
         else:
             print("Points in ground truth: {}, Points in prediction: {}".format(len(_true), len(_pred)))
-        print("True positives: {}, False positives: {}, False negatives: {}".format(TP, FP, FN))
+        print("True positives: {}, False positives: {}, False negatives: {}".format(int(TP), int(FP), int(FN)))
 
     r_dict = {
         "Precision": precision,
         "Recall": recall,
         "F1": F1,
-        "TP": TP,
-        "FP": FP,
-        "FN": FN,
+        "TP": int(TP),
+        "FP": int(FP),
+        "FN": int(FN),
     }
     if return_assoc:
         return r_dict, df, df_fp

@@ -1,8 +1,12 @@
 import math
 import torch
 import numpy as np
-from torchmetrics.image import PeakSignalNoiseRatio
 from tqdm import tqdm
+from torchmetrics.regression import MeanSquaredError, MeanAbsoluteError
+from torchmetrics.image import PeakSignalNoiseRatio, StructuralSimilarityIndexMeasure
+from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
+from torchmetrics.image.fid import FrechetInceptionDistance
+from torchmetrics.image.inception import InceptionScore
 
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.utils.util import save_tif, pad_and_reflect
@@ -44,8 +48,6 @@ class Image_to_Image_Workflow(Base_Workflow):
 
     def __init__(self, cfg, job_identifier, device, args, **kwargs):
         super(Image_to_Image_Workflow, self).__init__(cfg, job_identifier, device, args, **kwargs)
-        self.stats["psnr_merge_patches"] = 0
-
         # From now on, no modification of the cfg will be allowed
         self.cfg.freeze()
 
@@ -57,14 +59,94 @@ class Image_to_Image_Workflow(Base_Workflow):
 
     def define_metrics(self):
         """
-        Definition of self.metrics, self.metric_names and self.loss variables.
+        This function must define the following variables:
+
+        self.train_metrics : List of functions
+            Metrics to be calculated during model's training.
+
+        self.train_metric_names : List of str
+            Names of the metrics calculated during training.
+
+        self.train_metric_best : List of str
+            To know which value should be considered as the best one. Options must be: "max" or "min".
+
+        self.test_metrics : List of functions
+            Metrics to be calculated during model's test/inference.
+
+        self.test_metric_names : List of str
+            Names of the metrics calculated during test/inference.
+
+        self.loss : Function
+            Loss function used during training and test.
         """
-        self.metrics = [PeakSignalNoiseRatio().to(self.device), torch.nn.MSELoss()]
-        self.metric_names = ["PSNR", "MSE"]
+        self.train_metrics = []
+        self.train_metric_names = []
+        self.train_metric_best = []
+        for metric in list(set(self.cfg.TRAIN.METRICS)):
+            if metric == "psnr":
+                self.train_metrics.append(PeakSignalNoiseRatio().to(self.device))
+                self.train_metric_names.append("PSNR")
+                self.train_metric_best.append("max")
+            elif metric == "mse":
+                self.train_metrics.append(MeanSquaredError().to(self.device))
+                self.train_metric_names.append("MSE")
+                self.train_metric_best.append("min")
+            elif metric == "mae":
+                self.train_metrics.append(MeanAbsoluteError().to(self.device))
+                self.train_metric_names.append("MAE")
+                self.train_metric_best.append("min")
+            elif metric == "ssim":
+                self.train_metrics.append(StructuralSimilarityIndexMeasure().to(self.device))
+                self.train_metric_names.append("SSIM")
+                self.train_metric_best.append("max")
+            elif metric == "fid":
+                self.train_metrics.append(FrechetInceptionDistance(normalize=True).to(self.device))
+                self.train_metric_names.append("FID")
+                self.train_metric_best.append("min")
+            elif metric == "is":
+                self.train_metrics.append(InceptionScore(normalize=True).to(self.device))
+                self.train_metric_names.append("IS")
+                self.train_metric_best.append("max")
+            elif metric == "lpips":
+                self.train_metrics.append(
+                    LearnedPerceptualImagePatchSimilarity(net_type="squeeze", normalize=True).to(self.device)
+                )
+                self.train_metric_names.append("LPIPS")
+                self.train_metric_best.append("min")
+
+        self.test_metrics = []
+        self.test_metric_names = []
+        for metric in list(set(self.cfg.TEST.METRICS)):
+            if metric == "psnr":
+                self.test_metrics.append(PeakSignalNoiseRatio().to(self.device))
+                self.test_metric_names.append("PSNR")
+            elif metric == "mse":
+                self.test_metrics.append(MeanSquaredError().to(self.device))
+                self.test_metric_names.append("MSE")
+            elif metric == "mae":
+                self.test_metrics.append(MeanAbsoluteError().to(self.device))
+                self.test_metric_names.append("MAE")
+            elif metric == "ssim":
+                self.test_metrics.append(StructuralSimilarityIndexMeasure().to(self.device))
+                self.test_metric_names.append("SSIM")
+            elif metric == "fid":
+                self.test_metrics.append(FrechetInceptionDistance(normalize=True).to(self.device))
+                self.test_metric_names.append("FID")
+            elif metric == "is":
+                self.test_metrics.append(InceptionScore(normalize=True).to(self.device))
+                self.test_metric_names.append("IS")
+            elif metric == "lpips":
+                self.test_metrics.append(
+                    LearnedPerceptualImagePatchSimilarity(net_type="squeeze", normalize=True).to(self.device)
+                )
+                self.test_metric_names.append("LPIPS")
+
         print("Overriding 'LOSS.TYPE' to set it to MSE")
         self.loss = MSE_wrapper()
 
-    def metric_calculation(self, output, targets, metric_logger=None):
+        super().define_metrics()
+
+    def metric_calculation(self, output, targets, train=True, metric_logger=None):
         """
         Execution of the metrics defined in :func:`~define_metrics` function.
 
@@ -76,26 +158,58 @@ class Image_to_Image_Workflow(Base_Workflow):
         targets : Torch Tensor
             Ground truth to compare the prediction with.
 
+        train : bool, optional
+            Whether to calculate train or test metrics.
+
         metric_logger : MetricLogger, optional
             Class to be updated with the new metric(s) value(s) calculated.
 
         Returns
         -------
-        value : float
-            Value of the metric for the given prediction.
+        out_metrics : dict
+            Value of the metrics for the given prediction.
         """
+        out_metrics = {}
+        list_to_use = self.train_metrics if train else self.test_metrics
+        list_names_to_use = self.train_metric_names if train else self.test_metric_names
+
         with torch.no_grad():
-            train_psnr = self.metrics[0](output.squeeze(), targets.squeeze())
-            train_psnr = train_psnr.item() if not torch.isnan(train_psnr) else 0
+            for i, metric in enumerate(list_to_use):
+                m_name = list_names_to_use[i].lower()
+                if m_name in ["mse", "mae"]:
+                    val = metric(output, targets)
+                elif m_name == "ssim":
+                    val = metric(output.to(torch.float32), targets.to(torch.float32))
+                elif m_name == "psnr":
+                    # Normalize values to be between 0-255 range so PSNR value its more meaningful
+                    norm_output = ((output - torch.min(output)) / (torch.max(output) - torch.min(output) + 1e-8)) * 255
+                    norm_targets = (
+                        (targets - torch.min(targets)) / (torch.max(targets) - torch.min(targets) + 1e-8)
+                    ) * 255
+                    val = metric(norm_output, norm_targets)
+                elif m_name in ["is", "lpips", "fid"]:
+                    # These metrics need to have normalized (between 0 and 1) images with 3 channels
+                    norm_output = (output - torch.min(output)) / (torch.max(output) - torch.min(output) + 1e-8)
+                    norm_targets = (targets - torch.min(targets)) / (torch.max(targets) - torch.min(targets) + 1e-8)
+                    norm_3c_output = torch.cat([norm_output, norm_output, norm_output], dim=1)
+                    norm_3c_targets = torch.cat([norm_targets, norm_targets, norm_targets], dim=1)
+                    if m_name == "fid":
+                        metric.update(norm_3c_output, real=True)
+                        metric.update(norm_3c_targets, real=False)
+                    elif m_name == "is":
+                        metric.update(norm_3c_targets)
+                    else:  # lpips
+                        metric.update(norm_3c_output, norm_3c_targets)
+                else:
+                    raise NotImplementedError
 
-            train_mse = self.metrics[1](output.squeeze(), targets.squeeze())
-            train_mse = train_mse.item() if not torch.isnan(train_mse) else 0
+                if m_name in ["mse", "mae", "ssim", "psnr"]:
+                    val = val.item() if not torch.isnan(val) else 0
+                    out_metrics[m_name] = val
 
-            if metric_logger is not None:
-                metric_logger.meters[self.metric_names[0]].update(train_psnr)
-                metric_logger.meters[self.metric_names[1]].update(train_mse)
-
-            return train_psnr, train_mse
+                if metric_logger is not None:
+                    metric_logger.meters[list_names_to_use[i]].update(val)
+        return out_metrics
 
     def process_sample(self, norm):
         """
@@ -108,7 +222,14 @@ class Image_to_Image_Workflow(Base_Workflow):
         """
         # Save test_input if the user wants to export the model to BMZ later
         if "test_input" not in self.bmz_config:
-            self.bmz_config["test_input"] = self._X[0].copy()
+            if self.cfg.PROBLEM.NDIM == "2D":
+                self.bmz_config["test_input"] = self._X[0][
+                    : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1]
+                ].copy()
+            else:
+                self.bmz_config["test_input"] = self._X[0][
+                    : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1], : self.cfg.DATA.PATCH_SIZE[2]
+                ].copy()
 
         # Reflect data to complete the needed shape
         if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE:
@@ -313,18 +434,39 @@ class Image_to_Image_Workflow(Base_Workflow):
                 verbose=self.cfg.TEST.VERBOSE,
             )
 
-        # Calculate PSNR
+        # Calculate metrics
+        if pred.dtype == np.dtype("uint16"):
+            pred = pred.astype(np.float32)
+
         if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
-            if pred.dtype == np.dtype("uint16"):
-                pred = pred.astype(np.float32)
             if self._Y.dtype == np.dtype("uint16"):
                 self._Y = self._Y.astype(np.float32)
-            psnr_merge_patches = self.metrics[0](torch.from_numpy(pred), torch.from_numpy(self._Y))
-            self.stats["psnr_merge_patches"] += psnr_merge_patches
+
+            metric_values = self.metric_calculation(
+                to_pytorch_format(pred, self.axis_order, self.device),
+                to_pytorch_format(
+                    self._Y,
+                    self.axis_order,
+                    self.device,
+                    dtype=self.loss_dtype,
+                ),
+                train=False,
+            )
+            for metric in metric_values:
+                if str(metric).lower() not in self.stats["merge_patches"]:
+                    self.stats["merge_patches"][str(metric).lower()] = 0
+                self.stats["merge_patches"][str(metric).lower()] += metric_values[metric]
 
         # Save test_output if the user wants to export the model to BMZ later
         if "test_output" not in self.bmz_config:
-            self.bmz_config["test_output"] = pred[0].copy()
+            if self.cfg.PROBLEM.NDIM == "2D":
+                self.bmz_config["test_output"] = pred[0][
+                    : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1]
+                ].copy()
+            else:
+                self.bmz_config["test_output"] = pred[0][
+                    : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1], : self.cfg.DATA.PATCH_SIZE[2]
+                ].copy()
 
     def torchvision_model_call(self, in_img, is_train=False):
         """
@@ -384,30 +526,17 @@ class Image_to_Image_Workflow(Base_Workflow):
         """
         Steps that must be done after predicting all images.
         """
+        # FID, IS and LPIPS need to be computed for all the images
+        for i, metric in enumerate(self.test_metrics):
+            m_name = self.test_metric_names[i].lower()
+            if m_name in ["fid", "is", "lpips"]:
+                # label = "full_image" if not self.cfg.TEST.FULL_IMG or self.cfg.PROBLEM.NDIM == "3D" else "merge_patches"
+                label = "merge_patches"
+                if m_name == "is":
+                    val = metric.compute()[0]  # It returns a the mean and the std, we only need the mean
+                else:
+                    val = metric.compute()
+                val = val.item() if not torch.isnan(val) else 0
+                self.stats[label][m_name] = val
+
         super().after_all_images()
-
-    def normalize_stats(self, image_counter):
-        """
-        Normalize statistics.
-
-        Parameters
-        ----------
-        image_counter : int
-            Number of images to average the metrics.
-        """
-        self.stats["psnr_merge_patches"] = self.stats["psnr_merge_patches"] / image_counter
-
-    def print_stats(self, image_counter):
-        """
-        Print statistics.
-
-        Parameters
-        ----------
-        image_counter : int
-            Number of images to call ``normalize_stats``.
-        """
-        self.normalize_stats(image_counter)
-
-        if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
-            print("Test PSNR (merge patches): {}".format(self.stats["psnr_merge_patches"]))
-            print(" ")
