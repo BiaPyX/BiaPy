@@ -13,7 +13,7 @@ from skimage.io import imsave, imread
 from skimage import measure
 from hashlib import sha256
 
-from biapy.engine.metrics import jaccard_index_numpy, voc_calculation
+from biapy.engine.metrics import jaccard_index_numpy
 from biapy.utils.misc import is_main_process
 
 
@@ -112,9 +112,6 @@ def threshold_plots(preds_test, Y_test, n_dig, job_id, job_file, char_dir, r_val
     t_jac : float
         Value of the Jaccard index when the threshold is ``r_val``.
 
-    t_voc : float
-        Value of VOC when the threshold is ``r_val``.
-
     Examples
     --------
     ::
@@ -123,9 +120,9 @@ def threshold_plots(preds_test, Y_test, n_dig, job_id, job_file, char_dir, r_val
             preds_test, Y_test, det_eval_ge_path, det_eval_path, det_bin,
             n_dig, args.job_id, '278_3', char_dir)
 
-    Will generate 3 charts, one per each metric: IoU and VOC. In the x axis represents the 9 different
-    thresholds applied, that is: ``0.1, 0.2, 0.3, ..., 0.9``. The y axis is the value of the metric in each chart. For
-    instance, the Jaccard/IoU chart will look like this:
+    Will generate one chart for the IoU. In the x axis represents the 9 different thresholds applied, that is: 
+    ``0.1, 0.2, 0.3, ..., 0.9``. The y axis is the value of the metric in each chart. For instance, the Jaccard/IoU 
+    chart will look like this:
 
     .. image:: ../../img/278_3_threshold_Jaccard.png
         :width: 60%
@@ -137,7 +134,6 @@ def threshold_plots(preds_test, Y_test, n_dig, job_id, job_file, char_dir, r_val
     char_dir = os.path.join(char_dir, "t_" + job_file)
 
     t_jac = np.zeros(9)
-    t_voc = np.zeros(9)
     objects = []
     r_val_pos = 0
 
@@ -151,13 +147,10 @@ def threshold_plots(preds_test, Y_test, n_dig, job_id, job_file, char_dir, r_val
         # Threshold images
         bin_preds_test = (preds_test > t).astype(np.uint8)
 
-        # Metrics (Jaccard + VOC)
         print("Calculate metrics . . .")
         t_jac[i] = jaccard_index_numpy(Y_test, bin_preds_test)
-        t_voc[i] = voc_calculation(Y_test, bin_preds_test, t_jac[i])
 
         print("t_jac[{}]: {}".format(i, t_jac[i]))
-        print("t_voc[{}]: {}".format(i, t_voc[i]))
 
     # For matplotlib errors in display
     os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -175,17 +168,7 @@ def threshold_plots(preds_test, Y_test, n_dig, job_id, job_file, char_dir, r_val
     plt.savefig(os.path.join(char_dir, job_file + "_threshold_Jaccard.png"))
     plt.clf()
 
-    # Plot VOC values
-    plt.plot(objects, t_voc)
-    plt.title("Model JOBID=" + job_file + " VOC", y=1.08)
-    plt.ylabel("Value")
-    plt.xlabel("Threshold")
-    for k, point in enumerate(zip(objects, t_voc)):
-        plt.text(point[0], point[1], "%.3f" % float(t_voc[k]))
-    plt.savefig(os.path.join(char_dir, job_file + "_threshold_VOC.png"))
-    plt.clf()
-
-    return t_jac[r_val_pos], t_voc[r_val_pos]
+    return t_jac[r_val_pos]
 
 
 def save_tif(X, data_dir=None, filenames=None, verbose=True):

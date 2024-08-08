@@ -65,7 +65,7 @@ def train_one_epoch(
             sys.exit(1)
 
         # Calculate the metrics
-        metric_function(outputs, targets, metric_logger)
+        metric_function(outputs, targets, metric_logger=metric_logger)
 
         # Forward pass scaling the loss
         loss /= cfg.TRAIN.ACCUM_ITER
@@ -136,7 +136,7 @@ def evaluate(
             loss = loss_function(outputs, targets)
 
         # Calculate the metrics
-        metric_function(outputs, targets, metric_logger)
+        metric_function(outputs, targets, metric_logger=metric_logger)
 
         metric_logger.update(loss=loss.item())
 

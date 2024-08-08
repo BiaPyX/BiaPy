@@ -11,8 +11,6 @@ from biapy.engine.metrics import (
     CrossEntropyLoss_wrapper,
     DiceBCELoss,
     DiceLoss,
-    jaccard_index_numpy,
-    voc_calculation,
 )
 from biapy.data.pre_processing import norm_range01
 
@@ -61,16 +59,54 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
 
     def define_metrics(self):
         """
-        Definition of self.metrics, self.metric_names and self.loss variables.
+        This function must define the following variables:
+
+        self.train_metrics : List of functions
+            Metrics to be calculated during model's training.
+
+        self.train_metric_names : List of str
+            Names of the metrics calculated during training.
+
+        self.train_metric_best : List of str
+            To know which value should be considered as the best one. Options must be: "max" or "min".
+
+        self.test_metrics : List of functions
+            Metrics to be calculated during model's test/inference.
+
+        self.test_metric_names : List of str
+            Names of the metrics calculated during test/inference.
+
+        self.loss : Function
+            Loss function used during training and test.
         """
-        self.metrics = [
-            jaccard_index(
-                num_classes=self.cfg.MODEL.N_CLASSES,
-                device=self.device,
-                model_source=self.cfg.MODEL.SOURCE,
-            )
-        ]
-        self.metric_names = ["jaccard_index"]
+        self.train_metrics = []
+        self.train_metric_names = []
+        self.train_metric_best = []
+        for metric in list(set(self.cfg.TRAIN.METRICS)):
+            if metric in ["iou", "jaccard_index"]:
+                self.train_metrics.append(
+                    jaccard_index(
+                        num_classes=self.cfg.MODEL.N_CLASSES,
+                        device=self.device,
+                        model_source=self.cfg.MODEL.SOURCE,
+                    )
+                )
+                self.train_metric_names.append("IoU")
+                self.train_metric_best.append("max")
+
+        self.test_metrics = []
+        self.test_metric_names = []
+        for metric in list(set(self.cfg.TEST.METRICS)):
+            if metric in ["iou", "jaccard_index"]:
+                self.test_metrics.append(
+                    jaccard_index(
+                        num_classes=self.cfg.MODEL.N_CLASSES,
+                        device=self.device,
+                        model_source=self.cfg.MODEL.SOURCE,
+                    )
+                )
+                self.test_metric_names.append("IoU")
+
         if self.cfg.LOSS.TYPE == "CE":
             self.loss = CrossEntropyLoss_wrapper(
                 num_classes=self.cfg.MODEL.N_CLASSES,
@@ -82,7 +118,9 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         elif self.cfg.LOSS.TYPE == "W_CE_DICE":
             self.loss = DiceBCELoss(w_dice=self.cfg.LOSS.WEIGHTS[0], w_bce=self.cfg.LOSS.WEIGHTS[1])
 
-    def process_sample(self, norm):
+        super().define_metrics()
+
+    def process_test_sample(self, norm):
         """
         Function to process a sample in the inference phase.
 
@@ -92,11 +130,18 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
             Normalization used during training. Required to denormalize the predictions of the model.
         """
         if self.cfg.MODEL.SOURCE != "torchvision":
-            super().process_sample(norm)
+            super().process_test_sample(norm)
         else:
             # Save test_input if the user wants to export the model to BMZ later
             if "test_input" not in self.bmz_config:
-                self.bmz_config["test_input"] = self._X[0].copy()
+                if self.cfg.PROBLEM.NDIM == "2D":
+                    self.bmz_config["test_input"] = self._X[0][
+                        : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1]
+                    ].copy()
+                else:
+                    self.bmz_config["test_input"] = self._X[0][
+                        : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1], : self.cfg.DATA.PATCH_SIZE[2]
+                    ].copy()
 
             # Data channel check
             if self.cfg.DATA.PATCH_SIZE[-1] != self._X.shape[-1]:
@@ -108,28 +153,6 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
             ##################
             ### FULL IMAGE ###
             ##################
-            resized_Y = False
-            # Evaluate each img
-            if self.cfg.DATA.TEST.LOAD_GT:
-                with torch.cuda.amp.autocast():
-                    output = self.model_call_func(self._X)
-
-                    # Resize target if it was done due to model restrictions (applied with TorchVision preprocessing provided)
-                    if output.shape != self._Y.shape:
-                        self._Y = self._Y.transpose((self.axis_order))
-                        s = list(output.shape)
-                        s[1] = self._Y.shape[1]
-                        self._Y = resize(self._Y, s, order=0)
-                        self._Y = self._Y.transpose((self.axis_order_back))
-                        resized_Y = True
-
-                    loss = self.loss(
-                        output,
-                        to_pytorch_format(self._Y, self.axis_order, self.device, dtype=self.loss_dtype),
-                    )
-                self.stats["loss"] += loss.item()
-                del output
-
             # Make the prediction
             with torch.cuda.amp.autocast():
                 pred = self.model_call_func(self._X)
@@ -139,20 +162,35 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
             if self.cfg.TEST.POST_PROCESSING.APPLY_MASK:
                 pred = apply_binary_mask(pred, self.cfg.DATA.TEST.BINARY_MASKS)
 
-            if self.cfg.DATA.TEST.LOAD_GT:
-                if not resized_Y and pred.shape != self._Y.shape:
+            if self._Y is not None:
+                if pred.shape != self._Y.shape:
                     self._Y = resize(self._Y, pred.shape, order=0)
-                score = jaccard_index_numpy((self._Y > 0.5).astype(np.uint8), (pred > 0.5).astype(np.uint8))
-                self.stats["iou"] += score
-                self.stats["ov_iou"] += voc_calculation(
-                    (self._Y > 0.5).astype(np.uint8),
-                    (pred > 0.5).astype(np.uint8),
-                    score,
+
+                metric_values = self.metric_calculation(
+                    to_pytorch_format(pred, self.axis_order, self.device),
+                    to_pytorch_format(
+                        self._Y,
+                        self.axis_order,
+                        self.device,
+                        dtype=self.loss_dtype,
+                    ),
+                    train=False,
                 )
+                for metric in metric_values:
+                    if str(metric).lower() not in self.stats["full_image"]:
+                        self.stats["full_image"][str(metric).lower()] = 0
+                    self.stats["full_image"][str(metric).lower()] += metric_values[metric]
 
             # Save test_output if the user wants to export the model to BMZ later
             if "test_output" not in self.bmz_config:
-                self.bmz_config["test_output"] = pred[0].copy()
+                if self.cfg.PROBLEM.NDIM == "2D":
+                    self.bmz_config["test_output"] = pred[0][
+                        : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1]
+                    ].copy()
+                else:
+                    self.bmz_config["test_output"] = pred[0][
+                        : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1], : self.cfg.DATA.PATCH_SIZE[2]
+                    ].copy()
 
     def torchvision_model_call(self, in_img, is_train=False):
         """
@@ -195,7 +233,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
 
         return pred[key]
 
-    def metric_calculation(self, output, targets, metric_logger=None):
+    def metric_calculation(self, output, targets, train=True, metric_logger=None):
         """
         Execution of the metrics defined in :func:`~define_metrics` function.
 
@@ -207,21 +245,30 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         targets : Torch Tensor
             Ground truth to compare the prediction with.
 
+        train : bool, optional
+            Whether to calculate train or test metrics.
+
         metric_logger : MetricLogger, optional
             Class to be updated with the new metric(s) value(s) calculated.
 
         Returns
         -------
-        value : float
-            Value of the metric for the given prediction.
+        out_metrics : dict
+            Value of the metrics for the given prediction.
         """
+        out_metrics = {}
+        list_to_use = self.train_metrics if train else self.test_metrics
+        list_names_to_use = self.train_metric_names if train else self.test_metric_names
+
         with torch.no_grad():
-            train_iou = self.metrics[0](output, targets)
-            train_iou = train_iou.item() if not torch.isnan(train_iou) else 0
-            if metric_logger is not None:
-                metric_logger.meters[self.metric_names[0]].update(train_iou)
-            else:
-                return train_iou
+            for i, metric in enumerate(list_to_use):
+                val = metric(output, targets)
+                val = val.item() if not torch.isnan(val) else 0
+                out_metrics[list_names_to_use[i]] = val
+
+                if metric_logger is not None:
+                    metric_logger.meters[list_names_to_use[i]].update(val)
+        return out_metrics
 
     def prepare_targets(self, targets, batch):
         """
@@ -298,26 +345,3 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         Steps that must be done after predicting all images.
         """
         super().after_all_images()
-
-    def normalize_stats(self, image_counter):
-        """
-        Normalize statistics.
-
-        Parameters
-        ----------
-        image_counter : int
-            Number of images to average the metrics.
-        """
-        super().normalize_stats(image_counter)
-
-    def print_stats(self, image_counter):
-        """
-        Print statistics.
-
-        Parameters
-        ----------
-        image_counter : int
-            Number of images to call ``normalize_stats``.
-        """
-        super().print_stats(image_counter)
-        super().print_post_processing_stats()

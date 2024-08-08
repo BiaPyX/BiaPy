@@ -38,8 +38,6 @@ class Classification_Workflow(Base_Workflow):
 
     def __init__(self, cfg, job_identifier, device, args, **kwargs):
         super(Classification_Workflow, self).__init__(cfg, job_identifier, device, args, **kwargs)
-        self.stats["test_accuracy"] = 0
-        self.stats["cm"] = None
         self.all_pred = []
         if self.cfg.DATA.TEST.LOAD_GT:
             self.all_gt = []
@@ -59,53 +57,97 @@ class Classification_Workflow(Base_Workflow):
 
     def define_metrics(self):
         """
-        Definition of self.metrics, self.metric_names and self.loss variables.
-        """
-        self.metrics = [Accuracy(task="multiclass", num_classes=self.cfg.MODEL.N_CLASSES)]
-        self.metric_names = ["accuracy"]
-        if self.cfg.MODEL.N_CLASSES > 5:
-            self.metrics.append(Accuracy(task="multiclass", num_classes=self.cfg.MODEL.N_CLASSES, top_k=5))
-            self.metric_names.append("top-5-accuracy")
-        self.loss = torch.nn.CrossEntropyLoss()
+        This function must define the following variables:
 
-    def metric_calculation(self, output, targets, metric_logger=None):
+        self.train_metrics : List of functions
+            Metrics to be calculated during model's training.
+
+        self.train_metric_names : List of str
+            Names of the metrics calculated during training.
+
+        self.train_metric_best : List of str
+            To know which value should be considered as the best one. Options must be: "max" or "min".
+
+        self.test_metrics : List of functions
+            Metrics to be calculated during model's test/inference.
+
+        self.test_metric_names : List of str
+            Names of the metrics calculated during test/inference.
+
+        self.loss : Function
+            Loss function used during training and test.
+        """
+        self.train_metrics = []
+        self.train_metric_names = []
+        self.train_metric_best = []
+        for metric in list(set(self.cfg.TRAIN.METRICS)):
+            if metric == "accuracy":
+                self.train_metrics.append(
+                    Accuracy(task="multiclass", num_classes=self.cfg.MODEL.N_CLASSES).to(self.device),
+                )
+                self.train_metric_names.append("Accuracy")
+                self.train_metric_best.append("max")
+            elif metric == "top-5-accuracy":
+                self.train_metrics.append(
+                    Accuracy(task="multiclass", num_classes=self.cfg.MODEL.N_CLASSES, top_k=5).to(self.device),
+                )
+                self.train_metric_names.append("Top 5 accuracy")
+                self.train_metric_best.append("max")
+
+        self.test_metrics = []
+        self.test_metric_names = []
+        for metric in list(set(self.cfg.TEST.METRICS)):
+            if metric == "accuracy":
+                self.test_metrics.append(
+                    accuracy_score,
+                )
+                self.test_metric_names.append("Accuracy")
+
+        self.test_metrics.append(confusion_matrix)
+        self.test_metric_names.append("Confusion matrix")
+
+        if self.cfg.LOSS.TYPE == "CE":
+            self.loss = torch.nn.CrossEntropyLoss()
+            
+        super().define_metrics()
+
+    def metric_calculation(self, output, targets, train=True, metric_logger=None):
         """
         Execution of the metrics defined in :func:`~define_metrics` function.
 
         Parameters
         ----------
-        output : Torch Tensor
+        output : Torch Tensor/List of ints
             Prediction of the model.
 
-        targets : Torch Tensor
+        targets : Torch Tensor/List of ints
             Ground truth to compare the prediction with.
+
+        train : bool, optional
+            Whether to calculate train or test metrics.
 
         metric_logger : MetricLogger, optional
             Class to be updated with the new metric(s) value(s) calculated.
 
         Returns
         -------
-        value : float
-            Value of the metric for the given prediction.
+        out_metrics : dict
+            Value of the metrics for the given prediction.
         """
+        out_metrics = {}
+        list_to_use = self.train_metrics if train else self.test_metrics
+        list_names_to_use = self.train_metric_names if train else self.test_metric_names
+
         with torch.no_grad():
-            train_acc = self.metrics[0](
-                output.to(torch.float32).detach().cpu(),
-                targets.to(torch.float32).detach().cpu(),
-            )
-            train_acc = train_acc.item() if not torch.isnan(train_acc) else 0
-            if self.cfg.MODEL.N_CLASSES > 5:
-                train_5acc = self.metrics[1](
-                    output.to(torch.float32).detach().cpu(),
-                    targets.to(torch.float32).detach().cpu(),
-                )
-                train_5acc = train_5acc.item() if not torch.isnan(train_5acc) else 0
-            if metric_logger is not None:
-                metric_logger.meters[self.metric_names[0]].update(train_acc)
-                if self.cfg.MODEL.N_CLASSES > 5:
-                    metric_logger.meters[self.metric_names[1]].update(train_5acc)
-            else:
-                return train_acc
+            for i, metric in enumerate(list_to_use):
+                val = metric(output, targets)
+                if torch.is_tensor(val):
+                    val = val.item() if not torch.isnan(val) else 0
+                out_metrics[list_names_to_use[i]] = val
+
+                if metric_logger is not None:
+                    metric_logger.meters[list_names_to_use[i]].update(val)
+        return out_metrics
 
     def prepare_targets(self, targets, batch):
         """
@@ -286,7 +328,7 @@ class Classification_Workflow(Base_Workflow):
                 self.original_test_path = self.orig_train_path
                 self.original_test_mask_path = self.orig_train_mask_path
 
-    def process_sample(self, norm):
+    def process_test_sample(self, norm):
         """
         Function to process a sample in the inference phase.
 
@@ -295,9 +337,16 @@ class Classification_Workflow(Base_Workflow):
         norm : List of dicts
             Normalization used during training. Required to denormalize the predictions of the model.
         """
-        # Save test_input if the user wants to export the model to BMZ later
+        # Save test_output if the user wants to export the model to BMZ later
         if "test_input" not in self.bmz_config:
-            self.bmz_config["test_input"] = self._X[0].copy()
+            if self.cfg.PROBLEM.NDIM == "2D":
+                self.bmz_config["test_input"] = self._X[0][
+                    : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1]
+                ].copy()
+            else:
+                self.bmz_config["test_input"] = self._X[0][
+                    : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1], : self.cfg.DATA.PATCH_SIZE[2]
+                ].copy()
 
         # Predict each patch
         l = int(math.ceil(self._X.shape[0] / self.cfg.TRAIN.BATCH_SIZE))
@@ -311,9 +360,8 @@ class Classification_Workflow(Base_Workflow):
                 p = self.model_call_func(self._X[k * self.cfg.TRAIN.BATCH_SIZE : top]).cpu().numpy()
             p = np.argmax(p, axis=1)
             self.all_pred.append(p)
-            self.stats["patch_by_batch_counter"] += 1
 
-        if self.cfg.DATA.TEST.LOAD_GT:
+        if self._Y is not None:
             self.all_gt.append(self._Y)
 
         # Save test_output if the user wants to export the model to BMZ later
@@ -359,9 +407,15 @@ class Classification_Workflow(Base_Workflow):
         os.makedirs(self.cfg.PATHS.RESULT_DIR.PATH, exist_ok=True)
         df.to_csv(f, index=False, header=True)
 
-        if self.cfg.DATA.TEST.LOAD_GT and self.cfg.TEST.EVALUATE:
-            self.stats["test_accuracy"] = accuracy_score(self.all_gt, self.all_pred)
-            self.stats["cm"] = confusion_matrix(self.all_gt, self.all_pred)
+        # Calculate the metrics
+        if self.cfg.DATA.TEST.LOAD_GT:
+            metric_values = self.metric_calculation(
+                self.all_pred,
+                self.all_gt,
+                train=False,
+            )
+            for metric in metric_values:
+                self.stats["full_image"][str(metric).lower()] = metric_values[metric]
 
     def print_stats(self, image_counter):
         """
@@ -372,17 +426,26 @@ class Classification_Workflow(Base_Workflow):
         image_counter : int
             Number of images to call ``normalize_stats``.
         """
-        if self.cfg.DATA.TEST.LOAD_GT and self.cfg.TEST.EVALUATE:
-            print("Test Accuracy: ", round((self.stats["test_accuracy"] * 100), 2), "%")
-            print("Confusion matrix: ")
-            print(self.stats["cm"])
-            if self.class_names is not None:
-                display_labels = [
-                    "Category {} ({})".format(i, self.class_names[i]) for i in range(self.cfg.MODEL.N_CLASSES)
-                ]
-            else:
-                display_labels = ["Category {}".format(i) for i in range(self.cfg.MODEL.N_CLASSES)]
-            print("\n" + classification_report(self.all_gt, self.all_pred, target_names=display_labels))
+        if len(self.stats["full_image"]) > 0:
+            for metric in self.test_metric_names:
+                if metric.lower() in self.stats["full_image"]:
+                    if metric == "Confusion matrix":
+                        print("Confusion matrix: ")
+                        print(self.stats["full_image"][metric.lower()])
+                        if self.class_names is not None:
+                            display_labels = [
+                                "Category {} ({})".format(i, self.class_names[i]) for i in range(self.cfg.MODEL.N_CLASSES)
+                            ]
+                        else:
+                            display_labels = ["Category {}".format(i) for i in range(self.cfg.MODEL.N_CLASSES)]
+                        print("\n" + classification_report(self.all_gt, self.all_pred, target_names=display_labels))
+                    else:
+                        print(
+                            "Test {}: {}".format(
+                                metric,
+                                self.stats["full_image"][metric.lower()],
+                            )
+                        )
 
     def after_merge_patches(self, pred):
         """
@@ -416,16 +479,5 @@ class Classification_Workflow(Base_Workflow):
         ----------
         pred : Torch Tensor
             Model prediction.
-        """
-        pass
-
-    def normalize_stats(self, image_counter):
-        """
-        Normalize statistics.
-
-        Parameters
-        ----------
-        image_counter : int
-            Number of images to average the metrics.
         """
         pass

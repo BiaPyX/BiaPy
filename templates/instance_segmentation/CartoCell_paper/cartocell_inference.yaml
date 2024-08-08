@@ -59,7 +59,6 @@ TRAIN:
   
 TEST:
     ENABLE: True
-    EVALUATE: False
     STATS:
         PER_PATCH: True
         MERGE_PATCHES: True

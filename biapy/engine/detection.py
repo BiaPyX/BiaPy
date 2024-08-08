@@ -57,26 +57,7 @@ class Detection_Workflow(Base_Workflow):
     def __init__(self, cfg, job_identifier, device, args, **kwargs):
         super(Detection_Workflow, self).__init__(cfg, job_identifier, device, args, **kwargs)
 
-        # Detection stats
-        self.stats["d_precision"] = 0
-        self.stats["d_recall"] = 0
-        self.stats["d_F1"] = 0
-        self.stats["d_TP"] = 0
-        self.stats["d_FP"] = 0
-        self.stats["d_FN"] = 0
-
-        self.stats["d_precision_merge_patches"] = 0
-        self.stats["d_recall_merge_patches"] = 0
-        self.stats["d_F1_merge_patches"] = 0
-        self.stats["d_TP_merge_patches"] = 0
-        self.stats["d_FP_merge_patches"] = 0
-        self.stats["d_FN_merge_patches"] = 0
-
         self.original_test_mask_path = self.prepare_detection_data()
-
-        self.use_gt = False
-        if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
-            self.use_gt = True
 
         if self.use_gt:
             self.csv_files = sorted(next(os.walk(self.original_test_mask_path))[2])
@@ -93,20 +74,6 @@ class Detection_Workflow(Base_Workflow):
         self.load_Y_val = True
 
         # Workflow specific test variables
-        self.by_chunks = False
-        if (
-            cfg.TEST.BY_CHUNKS.ENABLE
-            and cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.ENABLE
-            and cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE == "chunk_by_chunk"
-        ):
-            self.by_chunks = True
-            self.stats["d_precision_by_chunks"] = 0
-            self.stats["d_recall_by_chunks"] = 0
-            self.stats["d_F1_by_chunks"] = 0
-            self.stats["d_TP_by_chunks"] = 0
-            self.stats["d_FP_by_chunks"] = 0
-            self.stats["d_FN_by_chunks"] = 0
-
         if self.cfg.TEST.POST_PROCESSING.DET_WATERSHED or self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS:
             self.post_processing["detection_post"] = True
         else:
@@ -127,16 +94,59 @@ class Detection_Workflow(Base_Workflow):
 
     def define_metrics(self):
         """
-        Definition of self.metrics, self.metric_names and self.loss variables.
+        This function must define the following variables:
+
+        self.train_metrics : List of functions
+            Metrics to be calculated during model's training.
+
+        self.train_metric_names : List of str
+            Names of the metrics calculated during training.
+
+        self.train_metric_best : List of str
+            To know which value should be considered as the best one. Options must be: "max" or "min".
+
+        self.test_metrics : List of functions
+            Metrics to be calculated during model's test/inference.
+
+        self.test_metric_names : List of str
+            Names of the metrics calculated during test/inference.
+
+        self.loss : Function
+            Loss function used during training and test.
         """
-        self.metrics = [
-            jaccard_index(
-                num_classes=self.cfg.MODEL.N_CLASSES,
-                device=self.device,
-                model_source=self.cfg.MODEL.SOURCE,
-            )
-        ]
-        self.metric_names = ["jaccard_index"]
+        self.train_metrics = []
+        self.train_metric_names = []
+        self.train_metric_best = []
+        for metric in list(set(self.cfg.TRAIN.METRICS)):
+            if metric in ["iou", "jaccard_index"]:
+                self.train_metrics.append(
+                    jaccard_index(
+                        num_classes=self.cfg.MODEL.N_CLASSES,
+                        device=self.device,
+                        model_source=self.cfg.MODEL.SOURCE,
+                    )
+                )
+                self.train_metric_names.append("IoU")
+                self.train_metric_best.append("max")
+
+        self.test_metrics = []
+        self.test_metric_names = []
+        for metric in list(set(self.cfg.TEST.METRICS)):
+            if metric in ["iou", "jaccard_index"]:
+                self.test_metrics.append(
+                    jaccard_index(
+                        num_classes=self.cfg.MODEL.N_CLASSES,
+                        device=self.device,
+                        model_source=self.cfg.MODEL.SOURCE,
+                    )
+                )
+                self.test_metric_names.append("IoU")
+
+        # Workflow specific metrics calculated in a different way than calling metric_calculation(). These metrics are
+        # always calculated
+        self.test_extra_metrics = ["Precision", "Recall", "F1", "TP", "FP", "FN"]
+        self.test_metric_names += self.test_extra_metrics
+
         if self.cfg.LOSS.TYPE == "CE":
             self.loss = CrossEntropyLoss_wrapper(
                 num_classes=self.cfg.MODEL.N_CLASSES,
@@ -148,7 +158,9 @@ class Detection_Workflow(Base_Workflow):
         elif self.cfg.LOSS.TYPE == "W_CE_DICE":
             self.loss = DiceBCELoss(w_dice=self.cfg.LOSS.WEIGHTS[0], w_bce=self.cfg.LOSS.WEIGHTS[1])
 
-    def metric_calculation(self, output, targets, metric_logger=None):
+        super().define_metrics()
+
+    def metric_calculation(self, output, targets, train=True, metric_logger=None):
         """
         Execution of the metrics defined in :func:`~define_metrics` function.
 
@@ -160,23 +172,32 @@ class Detection_Workflow(Base_Workflow):
         targets : Torch Tensor
             Ground truth to compare the prediction with.
 
+        train : bool, optional
+            Whether to calculate train or test metrics.
+
         metric_logger : MetricLogger, optional
             Class to be updated with the new metric(s) value(s) calculated.
 
         Returns
         -------
-        value : float
-            Value of the metric for the given prediction.
+        out_metrics : dict
+            Value of the metrics for the given prediction.
         """
-        with torch.no_grad():
-            train_iou = self.metrics[0](output, targets)
-            train_iou = train_iou.item() if not torch.isnan(train_iou) else 0
-            if metric_logger is not None:
-                metric_logger.meters[self.metric_names[0]].update(train_iou)
-            else:
-                return train_iou
+        out_metrics = {}
+        list_to_use = self.train_metrics if train else self.test_metrics
+        list_names_to_use = self.train_metric_names if train else self.test_metric_names
 
-    def detection_process(self, pred, filenames, metric_names=[], patch_pos=None, verbose=False):
+        with torch.no_grad():
+            for i, metric in enumerate(list_to_use):
+                val = metric(output, targets)
+                val = val.item() if not torch.isnan(val) else 0
+                out_metrics[list_names_to_use[i]] = val
+
+                if metric_logger is not None:
+                    metric_logger.meters[list_names_to_use[i]].update(val)
+        return out_metrics
+
+    def detection_process(self, pred, filenames, inference_type="full_image", patch_pos=None):
         """
         Detection workflow engine for test/inference. Process model's prediction to prepare detection output and
         calculate metrics.
@@ -189,10 +210,15 @@ class Detection_Workflow(Base_Workflow):
         filenames : List of str
             Predicted image's filenames.
 
-        metric_names : List of str
-            Metrics names.
+        inference_type : str
+            Type of inference. Options: ["per_crop", "merge_patches", "as_3D_stack", "full_image", "by_chunks"].
+
+        patch_pos : List of tuples of ints
+            Position of the patch to analize. By setting this the function will take only into account the GT points
+            corresponding to the patch at hand.
         """
-        assert pred.ndim == 4, "Prediction doesn't have 4 dim: {pred.shape}"
+        assert inference_type in ["per_crop", "merge_patches", "as_3D_stack", "full_image", "by_chunks"]
+        assert pred.ndim == 4, f"Prediction doesn't have 4 dim: {pred.shape}"
 
         file_ext = os.path.splitext(filenames[0])[1]
         ndim = 2 if self.cfg.PROBLEM.NDIM == "2D" else 3
@@ -623,6 +649,7 @@ class Detection_Workflow(Base_Workflow):
                     )
                     if self.cfg.TEST.VERBOSE:
                         print("Detection metrics: {}".format(d_metrics))
+
                     all_channel_d_metrics[0] += d_metrics["Precision"]
                     all_channel_d_metrics[1] += d_metrics["Recall"]
                     all_channel_d_metrics[2] += d_metrics["F1"]
@@ -686,12 +713,10 @@ class Detection_Workflow(Base_Workflow):
                 )
 
             if not self.by_chunks:
-                self.stats[metric_names[0]] += all_channel_d_metrics[0]
-                self.stats[metric_names[1]] += all_channel_d_metrics[1]
-                self.stats[metric_names[2]] += all_channel_d_metrics[2]
-                self.stats[metric_names[3]] += all_channel_d_metrics[3]
-                self.stats[metric_names[4]] += all_channel_d_metrics[4]
-                self.stats[metric_names[5]] += all_channel_d_metrics[5]
+                for n, metric in enumerate(self.test_extra_metrics):
+                    if str(metric).lower() not in self.stats[inference_type]:
+                        self.stats[inference_type][str(metric.lower())] = 0
+                    self.stats[inference_type][str(metric).lower()] += all_channel_d_metrics[n]
 
             if self.cfg.TEST.VERBOSE:
                 print("Creating the image with a summary of detected points and false positives with colors . . .")
@@ -775,32 +800,6 @@ class Detection_Workflow(Base_Workflow):
 
         return df
 
-    def normalize_stats(self, image_counter):
-        """
-        Normalize statistics.
-
-        Parameters
-        ----------
-        image_counter : int
-            Number of images to average the metrics.
-        """
-        super().normalize_stats(image_counter)
-
-        if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
-            if self.by_chunks:
-                self.stats["d_precision_by_chunks"] = self.stats["d_precision_by_chunks"] / image_counter
-                self.stats["d_recall_by_chunks"] = self.stats["d_recall_by_chunks"] / image_counter
-                self.stats["d_F1_by_chunks"] = self.stats["d_F1_by_chunks"] / image_counter
-            else:
-                if not self.cfg.TEST.FULL_IMG:
-                    self.stats["d_precision_merge_patches"] = self.stats["d_precision_merge_patches"] / image_counter
-                    self.stats["d_recall_merge_patches"] = self.stats["d_recall_merge_patches"] / image_counter
-                    self.stats["d_F1_merge_patches"] = self.stats["d_F1_merge_patches"] / image_counter
-                else:
-                    self.stats["d_precision"] = self.stats["d_precision"] / image_counter
-                    self.stats["d_recall"] = self.stats["d_recall"] / image_counter
-                    self.stats["d_F1"] = self.stats["d_F1"] / image_counter
-
     def after_merge_patches(self, pred):
         """
         Steps need to be done after merging all predicted patches into the original image.
@@ -816,14 +815,7 @@ class Detection_Workflow(Base_Workflow):
             self.detection_process(
                 pred,
                 self.processing_filenames,
-                [
-                    "d_precision_merge_patches",
-                    "d_recall_merge_patches",
-                    "d_F1_merge_patches",
-                    "d_TP_merge_patches",
-                    "d_FP_merge_patches",
-                    "d_FN_merge_patches",
-                ],
+                inference_type="merge_patches",
             )
         else:
             raise NotImplementedError
@@ -971,13 +963,12 @@ class Detection_Workflow(Base_Workflow):
             output_order="TZYXC",
             default_value=np.nan,
         )
-
+        transpose_order = [x for x in transpose_order if not np.isnan(x)]
         transpose_order = current_order[np.array(transpose_order)]
         raw_patch = pred[data_ordered_slices]
         patch = raw_patch.transpose(transpose_order)
-        patch = patch[0]  # remove the z dimension
 
-        patch_pos = [(k.start, k.stop) for k in slices]
+        patch_pos = [(k.start, k.stop) for k in slices[1:]]
         df_patch = self.detection_process(patch, [fname], patch_pos=patch_pos)
         if df_patch is not None:  # if there is at least one point detected
 
@@ -1111,7 +1102,7 @@ class Detection_Workflow(Base_Workflow):
         df = df.sort_values(by=["file"])
 
         t_dim, z_dim, y_dim, x_dim, c_dim = order_dimensions(
-            self.DATA.PREPROCESS.ZOOM.ZOOM_FACTOR,
+            self.cfg.DATA.PREPROCESS.ZOOM.ZOOM_FACTOR,
             input_order=self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
             output_order="TZYXC",
             default_value=1,
@@ -1195,14 +1186,12 @@ class Detection_Workflow(Base_Workflow):
             )
             print("Detection metrics: {}".format(d_metrics))
 
-            self.stats["d_precision_by_chunks"] += d_metrics["Precision"]
-            self.stats["d_recall_by_chunks"] += d_metrics["Recall"]
-            self.stats["d_F1_by_chunks"] += d_metrics["F1"]
-            self.stats["d_TP_by_chunks"] += d_metrics["TP"]
-            self.stats["d_FP_by_chunks"] += d_metrics["FP"]
-            self.stats["d_FN_by_chunks"] += d_metrics["FN"]
+            for metric in self.test_extra_metrics:
+                if str(metric).lower() not in self.stats["by_chunks"]:
+                    self.stats["by_chunks"][str(metric).lower()] = 0
+                self.stats["by_chunks"][str(metric).lower()] += d_metrics[str(metric)]
 
-    def process_sample(self, norm):
+    def process_test_sample(self, norm):
         """
         Function to process a sample in the inference phase.
 
@@ -1212,11 +1201,18 @@ class Detection_Workflow(Base_Workflow):
             Normalization used during training. Required to denormalize the predictions of the model.
         """
         if self.cfg.MODEL.SOURCE != "torchvision":
-            super().process_sample(norm)
+            super().process_test_sample(norm)
         else:
-            # Save test_input if the user wants to export the model to BMZ later
+            # Save test_output if the user wants to export the model to BMZ later
             if "test_input" not in self.bmz_config:
-                self.bmz_config["test_input"] = self._X[0].copy()
+                if self.cfg.PROBLEM.NDIM == "2D":
+                    self.bmz_config["test_input"] = self._X[0][
+                        : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1]
+                    ].copy()
+                else:
+                    self.bmz_config["test_input"] = self._X[0][
+                        : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1], : self.cfg.DATA.PATCH_SIZE[2]
+                    ].copy()
 
             # Data channel check
             if self.cfg.DATA.PATCH_SIZE[-1] != self._X.shape[-1]:
@@ -1235,7 +1231,14 @@ class Detection_Workflow(Base_Workflow):
 
             # Save test_output if the user wants to export the model to BMZ later
             if "test_output" not in self.bmz_config:
-                self.bmz_config["test_output"] = pred[0].copy()
+                if self.cfg.PROBLEM.NDIM == "2D":
+                    self.bmz_config["test_output"] = pred[0][
+                        : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1]
+                    ].copy()
+                else:
+                    self.bmz_config["test_output"] = pred[0][
+                        : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1], : self.cfg.DATA.PATCH_SIZE[2]
+                    ].copy()
 
     def torchvision_model_call(self, in_img, is_train=False):
         """
@@ -1308,7 +1311,7 @@ class Detection_Workflow(Base_Workflow):
             self.detection_process(
                 pred,
                 self.processing_filenames,
-                ["d_precision", "d_recall", "d_F1", "d_TP", "d_FP", "d_FN"],
+                inference_type="full_image",
             )
         else:
             raise NotImplementedError
@@ -1318,48 +1321,6 @@ class Detection_Workflow(Base_Workflow):
         Steps that must be done after predicting all images.
         """
         super().after_all_images()
-
-    def print_stats(self, image_counter):
-        """
-        Print statistics.
-
-        Parameters
-        ----------
-        image_counter : int
-            Number of images to call ``normalize_stats``.
-        """
-        if not self.use_gt or self.cfg.MODEL.SOURCE == "torchvision":
-            return
-
-        super().print_stats(image_counter)
-        super().print_post_processing_stats()
-
-        print("Detection specific metrics:")
-        if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
-            if self.by_chunks:
-                print("Detection - Test Precision (per image): {}".format(self.stats["d_precision_by_chunks"]))
-                print("Detection - Test Recall (per image): {}".format(self.stats["d_recall_by_chunks"]))
-                print("Detection - Test F1 (per image): {}".format(self.stats["d_F1_by_chunks"]))
-                print("Detection - Test TP (per image): {}".format(self.stats["d_TP_by_chunks"]))
-                print("Detection - Test FP (per image): {}".format(self.stats["d_FP_by_chunks"]))
-                print("Detection - Test FN (per image): {}".format(self.stats["d_FN_by_chunks"]))
-            else:
-                if not self.cfg.TEST.FULL_IMG:
-                    print(
-                        "Detection - Test Precision (merge patches): {}".format(self.stats["d_precision_merge_patches"])
-                    )
-                    print("Detection - Test Recall (merge patches): {}".format(self.stats["d_recall_merge_patches"]))
-                    print("Detection - Test F1 (merge patches): {}".format(self.stats["d_F1_merge_patches"]))
-                    print("Detection - Test TP (merge patches): {}".format(self.stats["d_TP_merge_patches"]))
-                    print("Detection - Test FP (merge patches): {}".format(self.stats["d_FP_merge_patches"]))
-                    print("Detection - Test FN (merge patches): {}".format(self.stats["d_FN_merge_patches"]))
-                else:
-                    print("Detection - Test Precision (per image): {}".format(self.stats["d_precision"]))
-                    print("Detection - Test Recall (per image): {}".format(self.stats["d_recall"]))
-                    print("Detection - Test F1 (per image): {}".format(self.stats["d_F1"]))
-                    print("Detection - Test TP (per image): {}".format(self.stats["d_TP"]))
-                    print("Detection - Test FP (per image): {}".format(self.stats["d_FP"]))
-                    print("Detection - Test FN (per image): {}".format(self.stats["d_FN"]))
 
     def prepare_detection_data(self):
         """
