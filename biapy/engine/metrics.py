@@ -217,26 +217,18 @@ class instance_metrics:
         self.device = device
         self.model_source = model_source
 
-        self.jaccard = None
-        self.jaccard_multi = None
-        self.l1loss = None
-        self.multihead = False
         self.metric_func = []
         for i in range(len(metric_names)):
-            if "IoU (classes)" in metric_names[i] and self.jaccard_multi is None:
-                self.jaccard_multi = JaccardIndex(task="multiclass", threshold=0.5, num_classes=self.num_classes).to(
+            if "IoU (classes)" in metric_names[i]:
+                loss_func = JaccardIndex(task="multiclass", threshold=0.5, num_classes=self.num_classes).to(
                     self.device, non_blocking=True
                 )
-                self.multihead = True
-                loss_func = self.jaccard_multi
-            elif "IoU" in metric_names[i] and self.jaccard is None:
-                self.jaccard = JaccardIndex(task="binary", threshold=0.5, num_classes=2).to(
+            elif "IoU" in metric_names[i]:
+                loss_func = JaccardIndex(task="binary", threshold=0.5, num_classes=2).to(
                     self.device, non_blocking=True
                 )
-                loss_func = self.jaccard
-            elif metric_names[i] == "L1 (distance channel)" and self.l1loss is None:
-                self.l1loss = torch.nn.L1Loss()
-                loss_func = self.l1loss
+            elif metric_names[i] == "L1 (distance channel)":
+                loss_func = torch.nn.L1Loss()
 
             self.metric_func.append(loss_func)
 

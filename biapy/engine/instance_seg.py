@@ -241,7 +241,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BC":
             self.test_metric_names = ["IoU (B channel)", "IoU (C channel)"]
         if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "C":
-            self.test_metric_names = ["jaccard_index"]
+            self.test_metric_names = ["IoU (C channel)"]
         elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BCM"]:
             self.test_metric_names = [
                 "IoU (B channel)",
