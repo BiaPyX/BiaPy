@@ -511,30 +511,20 @@ def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
 #############
 def generate_ellipse_footprint(
         shape = [1, 1, 1],
-        n_dim = 3,
         ) -> tuple:
     """
     Generate footprint of an ellipse in a n-dimensional image.
 
     Parameters
     ----------
-    shape : int or list, optional
-        Shape of the ellipse. If an integer is given, the shape will be a ball with the given side length.
-        If a list is given, the shape will be a hyperball with the given side lengths.
-
-    n_dim : int, optional
-        Number of dimensions of the image.
+    shape : list, optional
+        Shape of the hyperball with the given side lengths.
 
     Returns
     -------
     distances : np.ndarray
         Ellipse footprint.
     """
-
-
-    if isinstance(shape, int):
-        shape = [shape] * n_dim
-
     center = (np.array(shape) / 2).astype(int)
     
     ranges = [np.arange(int(center[i] - shape[i]), int(center[i] + shape[i]) + 1)
@@ -696,15 +686,15 @@ def create_detection_masks(cfg, data_type="train"):
                     )
 
                 # Paint the point
+                cpd = cfg.PROBLEM.DETECTION.CENTRAL_POINT_DILATION
                 if cfg.PROBLEM.NDIM == "3D":
                     if a0_coord < mask.shape[0] and a1_coord < mask.shape[1] and a2_coord < mask.shape[2]:
-                        cpd = cfg.PROBLEM.DETECTION.CENTRAL_POINT_DILATION
                         if (
                             1
                             in mask[
-                                max(0, a0_coord - 1) : min(mask.shape[0], a0_coord + 2),
-                                max(0, a1_coord - 1 - cpd) : min(mask.shape[1], a1_coord + 2 + cpd),
-                                max(0, a2_coord - 1 - cpd) : min(mask.shape[2], a2_coord + 2 + cpd),
+                                max(0, a0_coord - 1 - cpd[0]) : min(mask.shape[0], a0_coord + 2 + cpd[0]),
+                                max(0, a1_coord - 1 - cpd[1]) : min(mask.shape[1], a1_coord + 2 + cpd[1]),
+                                max(0, a2_coord - 1 - cpd[2]) : min(mask.shape[2], a2_coord + 2 + cpd[2]),
                                 c_point,
                             ]
                         ):
@@ -714,7 +704,7 @@ def create_detection_masks(cfg, data_type="train"):
                             )
 
                         mask[a0_coord, a1_coord, a2_coord, c_point] = 1
-                        if cfg.PROBLEM.DETECTION.CENTRAL_POINT_DILATION == 0:
+                        if all([True for x in cpd if x == 0]):
                             if a1_coord + 1 < mask.shape[1]:
                                 mask[a0_coord, a1_coord + 1, a2_coord, c_point] = 1
                             if a1_coord - 1 > 0:
@@ -742,8 +732,8 @@ def create_detection_masks(cfg, data_type="train"):
                         if (
                             1
                             in mask[
-                                max(0, a0_coord - 4) : min(mask.shape[0], a0_coord + 5),
-                                max(0, a1_coord - 4) : min(mask.shape[1], a1_coord + 5),
+                                max(0, a0_coord - 1 - cpd[0]) : min(mask.shape[0], a0_coord + 2 + cpd[0]),
+                                max(0, a1_coord - 1 - cpd[1]) : min(mask.shape[1], a1_coord + 2 + cpd[1]),
                                 c_point,
                             ]
                         ):
@@ -765,27 +755,15 @@ def create_detection_masks(cfg, data_type="train"):
                         )
 
             # Dilate the mask
-            if cfg.PROBLEM.DETECTION.CENTRAL_POINT_DILATION != 0:
-
+            if any([True for x in cpd if x != 0]):
                 print("Dilating all points . . .")
-                if cfg.PROBLEM.NDIM == "2D":
-                    mask = np.expand_dims(mask, 0)
-
-                for k in tqdm(
-                    range(mask.shape[0]),
-                    total=len(mask),
-                    leave=False,
-                    disable=not is_main_process(),
-                ):
-                    for ch in range(mask.shape[-1]):
-                        ellipse_footprint = generate_ellipse_footprint(cfg.PROBLEM.DETECTION.CENTRAL_POINT_DILATION, mask[k, ..., ch].ndim)
-                        mask[k, ..., ch] = binary_dilation_scipy(
-                            mask[k, ..., ch],
-                            iterations=1,
-                            structure=ellipse_footprint,
-                        )
-                if cfg.PROBLEM.NDIM == "2D":
-                    mask = mask[0]
+                for ch in range(mask.shape[-1]):
+                    ellipse_footprint = generate_ellipse_footprint(cpd)
+                    mask[..., ch] = binary_dilation_scipy(
+                        mask[..., ch],
+                        iterations=1,
+                        structure=ellipse_footprint,
+                    )
 
             if cfg.PROBLEM.DETECTION.CHECK_POINTS_CREATED:
                 print("Check points created to see if some of them are very close that create a large label")

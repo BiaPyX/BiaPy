@@ -1573,7 +1573,7 @@ if all_test_info["Test7"]["enable"]:
             raise ValueError(exc)
 
     biapy_config['PROBLEM']['DETECTION'] = {}
-    biapy_config['PROBLEM']['DETECTION']['CENTRAL_POINT_DILATION'] = 3
+    biapy_config['PROBLEM']['DETECTION']['CENTRAL_POINT_DILATION'] = [3]
     biapy_config['PROBLEM']['DETECTION']['CHECK_POINTS_CREATED'] = False
     biapy_config['PROBLEM']['DETECTION']['DATA_CHECK_MW'] = True
 
@@ -1667,7 +1667,7 @@ if all_test_info["Test8"]["enable"]:
             raise ValueError(exc)
 
     biapy_config['PROBLEM']['DETECTION'] = {}
-    biapy_config['PROBLEM']['DETECTION']['CENTRAL_POINT_DILATION'] = 3
+    biapy_config['PROBLEM']['DETECTION']['CENTRAL_POINT_DILATION'] = [3]
     biapy_config['PROBLEM']['DETECTION']['CHECK_POINTS_CREATED'] = False
     biapy_config['PROBLEM']['DETECTION']['DATA_CHECK_MW'] = True
 
@@ -1763,7 +1763,7 @@ if all_test_info["Test11"]["enable"]:
             raise ValueError(exc)
 
     biapy_config['PROBLEM']['DETECTION'] = {}
-    biapy_config['PROBLEM']['DETECTION']['CENTRAL_POINT_DILATION'] = 2
+    biapy_config['PROBLEM']['DETECTION']['CENTRAL_POINT_DILATION'] = [2]
     biapy_config['PROBLEM']['DETECTION']['CHECK_POINTS_CREATED'] = False
 
     biapy_config['DATA']['PATCH_SIZE'] = "(20, 128, 128, 2)"
@@ -3014,7 +3014,7 @@ if all_test_info["Test26"]["enable"]:
             raise ValueError(exc)
 
     biapy_config['PROBLEM']['DETECTION'] = {}
-    biapy_config['PROBLEM']['DETECTION']['CENTRAL_POINT_DILATION'] = 2
+    biapy_config['PROBLEM']['DETECTION']['CENTRAL_POINT_DILATION'] = [2]
     biapy_config['PROBLEM']['DETECTION']['CHECK_POINTS_CREATED'] = False
 
     biapy_config['DATA']['PATCH_SIZE'] = "(20, 128, 128, 2)"
