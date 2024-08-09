@@ -584,6 +584,18 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     if cfg.PROBLEM.TYPE == "DETECTION":
         if cfg.MODEL.SOURCE == "biapy" and cfg.MODEL.N_CLASSES < 2:
             raise ValueError("'MODEL.N_CLASSES' needs to be greater or equal 2 (binary case)")
+        
+        cpd = cfg.PROBLEM.DETECTION.CENTRAL_POINT_DILATION
+        if len(cpd) == 1:
+            cpd = cpd * 2 if cfg.PROBLEM.NDIM == "2D" else cpd * 3
+            
+        if len(cpd) != 3 and cfg.PROBLEM.NDIM == "3D":
+            raise ValueError("'PROBLEM.DETECTION.CENTRAL_POINT_DILATION' needs to be a list of three ints in a 3D problem")
+        elif len(cpd) != 2 and cfg.PROBLEM.NDIM == "2D":
+            raise ValueError("'PROBLEM.DETECTION.CENTRAL_POINT_DILATION' needs to be a list of two ints in a 2D problem")
+        
+        opts.extend(["PROBLEM.DETECTION.CENTRAL_POINT_DILATION", cpd])
+
         if cfg.TEST.POST_PROCESSING.DET_WATERSHED:
             if any(len(x) != dim_count for x in cfg.TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION):
                 raise ValueError(
