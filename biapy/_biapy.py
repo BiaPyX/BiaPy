@@ -666,8 +666,8 @@ class BiaPy:
                 tags += ["pytorch"]
             if "biapy" not in tags:
                 tags += ["biapy"]
-            tags += [str(self.cfg.PROBLEM.TYPE.lower().replace("_", "-"))]
-            tags += [str(self.cfg.MODEL.ARCHITECTURE.lower().replace("_", "-"))]
+            tags += [self.cfg.PROBLEM.TYPE.lower().replace("_", "-").replace("seg", "segmentation")]
+            tags += [self.cfg.MODEL.ARCHITECTURE.lower().replace("_", "-")]
         else:
             tags = self.workflow.bmz_config["original_bmz_config"].tags
 
