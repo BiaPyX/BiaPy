@@ -38,11 +38,15 @@ if args["reuse_original_bmz_config"]:
 else:
     # Create a dict with all BMZ requirements
     bmz_cfg = {}
-    bmz_cfg["description"] = "Test model"
+    bmz_cfg["description"] = "Mitochondria segmentation for electron microscopy"
     bmz_cfg["authors"] = [{"name": "Daniel", "github_user": "danifranco"}]
     bmz_cfg["license"] = "CC-BY-4.0"
     bmz_cfg["tags"] = ["electron-microscopy", "mitochondria"]
-    bmz_cfg["cite"] = [{"text": "Gizmo et al.", "doi": "doi:10.1002/xyzacab123"}]
+    bmz_cfg["cite"] = [
+        {"text": "training library", "doi": "10.1101/2024.02.03.576026"},
+        {"text": "architecture", "doi": "10.1109/LGRS.2018.2802944"},
+        {"text": "data", "doi": "10.48550/arXiv.1812.06024"},
+        ]
     bmz_cfg["doc"] = args["doc_file"]
     bmz_cfg["model_name"] = args["model_name"]
 

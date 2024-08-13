@@ -261,12 +261,12 @@ class Base_Workflow(metaclass=ABCMeta):
                 if self.cfg.TRAIN.ENABLE and not self.cfg.DATA.TRAIN.IN_MEMORY and app_mode == "dataset":
                     raise ValueError(
                         "The BioImage Model Zoo model selected changed your normalization settings. Due to that the following error "
-                        "appear:\n'DATA.NORMALIZATION.APPLICATION_MODE' == 'dataset' can only be applied if 'DATA.TRAIN.IN_MEMORY' == True"
+                        "appeared:\n'DATA.NORMALIZATION.APPLICATION_MODE' == 'dataset' can only be applied if 'DATA.TRAIN.IN_MEMORY' == True"
                     )
                 if self.cfg.TEST.ENABLE and not self.cfg.DATA.TEST.IN_MEMORY and app_mode == "dataset":
                     raise ValueError(
                         "The BioImage Model Zoo model selected changed your normalization settings. Due to that the following error "
-                        "appear:\n'DATA.NORMALIZATION.APPLICATION_MODE' == 'dataset' can only be applied if 'DATA.TEST.IN_MEMORY' == True"
+                        "appeared:\n'DATA.NORMALIZATION.APPLICATION_MODE' == 'dataset' can only be applied if 'DATA.TEST.IN_MEMORY' == True"
                     )
 
                 # 'zero_mean_unit_variance' norm of BMZ is as our 'custom' norm without providing mean/std
@@ -295,6 +295,41 @@ class Base_Workflow(metaclass=ABCMeta):
                         print(
                             "[BMZ] Changed 'DATA.NORMALIZATION.CUSTOM_STD' from {} to {} as defined in the RDF".format(
                                 self.cfg.DATA.NORMALIZATION.CUSTOM_STD, -1
+                            )
+                        )
+                elif self.bmz_config["preprocessing"]["name"] == "fixed_zero_mean_unit_variance":
+                    mean = -1
+                    std = -1
+                    if "kwargs" in self.bmz_config["preprocessing"] and "mean" in self.bmz_config["preprocessing"]["kwargs"]:
+                        mean = self.bmz_config["preprocessing"]["kwargs"]["mean"]
+                        std = self.bmz_config["preprocessing"]["kwargs"]["std"]
+                    elif "mean" in self.bmz_config["preprocessing"]:
+                        mean = self.bmz_config["preprocessing"]["mean"]
+                        std = self.bmz_config["preprocessing"]["std"]
+                    opts += [
+                        "DATA.NORMALIZATION.TYPE",
+                        "custom",
+                        "DATA.NORMALIZATION.CUSTOM_MEAN",
+                        mean,
+                        "DATA.NORMALIZATION.CUSTOM_STD",
+                        std,
+                    ]
+                    if self.cfg.DATA.NORMALIZATION.TYPE != "custom":
+                        print(
+                            "[BMZ] Changed 'DATA.NORMALIZATION.TYPE' from {} to {} as defined in the RDF".format(
+                                self.cfg.DATA.NORMALIZATION.TYPE, "custom"
+                            )
+                        )
+                    if self.cfg.DATA.NORMALIZATION.CUSTOM_MEAN != mean:
+                        print(
+                            "[BMZ] Changed 'DATA.NORMALIZATION.CUSTOM_MEAN' from {} to {} as defined in the RDF".format(
+                                self.cfg.DATA.NORMALIZATION.CUSTOM_MEAN, mean
+                            )
+                        )
+                    if self.cfg.DATA.NORMALIZATION.CUSTOM_STD != std:
+                        print(
+                            "[BMZ] Changed 'DATA.NORMALIZATION.CUSTOM_STD' from {} to {} as defined in the RDF".format(
+                                self.cfg.DATA.NORMALIZATION.CUSTOM_STD, std
                             )
                         )
                 # 'scale_linear' norm of BMZ is close to our 'div' norm (TODO: we need to control the "gain" arg)

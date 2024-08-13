@@ -479,6 +479,8 @@ class BiaPy:
             elif self.cfg.DATA.NORMALIZATION.TYPE == "scale_range":
                 preprocessing = [{"id": "scale_range"}]
             else:  # custom
+                custom_mean = -1 
+                custom_std = -1
                 if self.cfg.DATA.NORMALIZATION.APPLICATION_MODE == "dataset":
                     if not os.path.exists(self.cfg.PATHS.MEAN_INFO_FILE) or not os.path.exists(
                         self.cfg.PATHS.STD_INFO_FILE
@@ -489,19 +491,20 @@ class BiaPy:
                                 self.cfg.PATHS.STD_INFO_FILE,
                             )
                         )
-                    custom_mean = float(np.load(self.cfg.PATHS.MEAN_INFO_FILE))
-                    custom_std = float(np.load(self.cfg.PATHS.STD_INFO_FILE))
+                    if self.cfg.DATA.NORMALIZATION.CUSTOM_MEAN != -1 and self.cfg.DATA.NORMALIZATION.CUSTOM_STD != -1:
+                        custom_mean = float(np.load(self.cfg.PATHS.MEAN_INFO_FILE))
+                        custom_std = float(np.load(self.cfg.PATHS.STD_INFO_FILE))
+
+                if custom_mean != -1 and custom_std != -1:
                     preprocessing = [
                         {
-                            "id": "zero_mean_unit_variance",
+                            "id": "fixed_zero_mean_unit_variance",
                             "kwargs": {
                                 "mean": custom_mean,
                                 "std": custom_std,
-                                "mode": "per_dataset",
                             },
                         }
                     ]
-
                 else:
                     axes = ["channel"]
                     axes += list("zyx") if self.cfg.PROBLEM.NDIM == "3D" else list("yx")
@@ -513,6 +516,7 @@ class BiaPy:
                             },
                         }
                     ]
+                
             # Add percentile norm
             if self.cfg.DATA.NORMALIZATION.PERC_CLIP:
                 min_percentile, max_percentile = 0, 100
@@ -655,16 +659,15 @@ class BiaPy:
 
         # Configure tags
         if not reuse_original_bmz_config:
-            tags = bmz_cfg["tags"][0]
+            tags = bmz_cfg["tags"]
             if "2d" not in tags and "3d" not in tags:
-                tags += str(self.cfg.PROBLEM.NDIM.lower())
+                tags += [str(self.cfg.PROBLEM.NDIM.lower())]
             if "pytorch" not in tags:
-                tags += "pytorch"
+                tags += ["pytorch"]
             if "biapy" not in tags:
-                tags += "biapy"
-            tags += str(self.cfg.PROBLEM.TYPE.lower().replace("_", "-"))
-            tags += str(self.cfg.MODEL.ARCHITECTURE.lower().replace("_", "-"))
-            tags = [tags]
+                tags += ["biapy"]
+            tags += [str(self.cfg.PROBLEM.TYPE.lower().replace("_", "-"))]
+            tags += [str(self.cfg.MODEL.ARCHITECTURE.lower().replace("_", "-"))]
         else:
             tags = self.workflow.bmz_config["original_bmz_config"].tags
 
@@ -678,30 +681,15 @@ class BiaPy:
         authors, maintainers = [], []
         if not reuse_original_bmz_config:
             for author in bmz_cfg["authors"]:
-                affiliation = author["affiliation"] if "affiliation" in author else None
-                orcid = author["orcid"] if "orcid" in author else None
-                email = author["email"] if "email" in author else None
-                a = Author(
-                    name=author["name"],
-                    affiliation=affiliation,
-                    github_user=author["github_user"],
-                    orcid=orcid,
-                    email=email,
-                )
-                authors.append(a)
-
-            for author in bmz_cfg["maintainers"]:
-                affiliation = author["affiliation"] if "affiliation" in author else None
-                orcid = author["orcid"] if "orcid" in author else None
-                email = author["email"] if "email" in author else None
-                a = Maintainer(
-                    name=author["name"],
-                    affiliation=affiliation,
-                    github_user=author["github_user"],
-                    orcid=orcid,
-                    email=email,
-                )
-                maintainers.append(a)
+                args = dict(name=author["name"], github_user=author["github_user"])
+                if "affiliation" in author:
+                    args["affiliation"] = author["affiliation"]
+                if "orcid" in author:
+                    args["orcid"] = author["orcid"]
+                if "email" in author:
+                    args["email"] = author["email"]
+                authors.append(Author(**args))
+                maintainers.append(Maintainer(**args))
         else:
             authors = self.workflow.bmz_config["original_bmz_config"].authors
             maintainers = self.workflow.bmz_config["original_bmz_config"].maintainers
@@ -725,10 +713,12 @@ class BiaPy:
         citations = []
         if not reuse_original_bmz_config:
             for cite in bmz_cfg["cite"]:
-                url = cite["url"] if "url" in cite else None
-                doi = Doi(re.sub(r"^.*?10", "10", cite["doi"])) if "doi" in cite else None
-                c = CiteEntry(text=cite["text"], doi=doi, url=url)
-                citations.append(c)
+                args = dict(text=cite["text"])
+                if "url" in cite:
+                    args["url"] = cite["url"] 
+                if "doi" in cite:
+                    args["doi"] = Doi(re.sub(r"^.*?10", "10", cite["doi"]))
+                citations.append(CiteEntry(**args))
 
             # Add BiaPy citation
             citations.append(

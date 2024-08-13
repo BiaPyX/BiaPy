@@ -511,12 +511,13 @@ def check_bmz_model_compatibility(
             # Check number of classes
             classes = -1
             if "kwargs" in model_rdf["weights"]["pytorch_state_dict"]:
-                if "out_channels" in model_rdf["weights"]["pytorch_state_dict"]["kwargs"]:
+                if "n_classes" in model_rdf["weights"]["pytorch_state_dict"]["kwargs"]: # BiaPy
+                    classes = model_rdf["weights"]["pytorch_state_dict"]["kwargs"]["n_classes"]
+                elif "out_channels" in model_rdf["weights"]["pytorch_state_dict"]["kwargs"]:
                     classes = model_rdf["weights"]["pytorch_state_dict"]["kwargs"]["out_channels"]
                 elif "classes" in model_rdf["weights"]["pytorch_state_dict"]["kwargs"]:
                     classes = model_rdf["weights"]["pytorch_state_dict"]["kwargs"]["classes"]
-                elif "n_classes" in model_rdf["weights"]["pytorch_state_dict"]["kwargs"]:
-                    classes = model_rdf["weights"]["pytorch_state_dict"]["kwargs"]["n_classes"]
+                
             if classes != -1:
                 if ref_classes != "all":
                     if classes > 2 and ref_classes != classes:
@@ -576,6 +577,7 @@ def check_bmz_model_compatibility(
             for preprocs in model_rdf["inputs"][0]["preprocessing"]:
                 if preprocs["name"] not in [
                     "zero_mean_unit_variance",
+                    "fixed_zero_mean_unit_variance",
                     "scale_range",
                     "scale_linear",
                 ]:
