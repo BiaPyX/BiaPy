@@ -9,6 +9,7 @@ import numpy as np
 import torch.nn as nn
 from torchinfo import summary
 from typing import Optional, Dict, Tuple, List, Literal
+from packaging.version import Version
 
 from bioimageio.spec.utils import download
 from bioimageio.core.model_adapters._pytorch_model_adapter import PytorchModelAdapter
@@ -503,6 +504,10 @@ def check_bmz_model_compatibility(
 
     # Accepting models that are exported in pytorch_state_dict and with just one input
     if "pytorch_state_dict" in model_rdf["weights"] and len(model_rdf["inputs"]) == 1:
+        
+        model_version = Version("0.5")
+        if "format_version" in model_rdf:
+            model_version = Version(model_rdf["format_version"])
 
         # Check problem type
         if (specific_workflow in ["all", "SEMANTIC_SEG"]) and (
@@ -553,46 +558,79 @@ def check_bmz_model_compatibility(
             error = True
 
         # Check axes and dimension
+        if model_version > Version("0.5.0"):
+            axes_order = ""
+            for axis in model_rdf["inputs"][0]["axes"]:
+                if 'type' in axis:
+                    if axis['type'] == "batch":
+                        axes_order += "b"
+                    elif axis['type'] == "channel":
+                        axes_order += "c"
+                    elif 'id' in axis:
+                        axes_order += axis['id']
+                elif 'id' in axis:
+                    if axis['id'] == "channel":
+                        axes_order += "c"
+                    else:
+                        axes_order += axis['id']
+        else:
+            axes_order = model_rdf["inputs"][0]["axes"]
         if specific_dims == "2D":
-            if model_rdf["inputs"][0]["axes"] != "bcyx":
+            if axes_order != "bcyx":
                 error = True
-                reason_message += f"[{specific_workflow}] In a 2D problem the axes need to be 'bcyx', found {model_rdf['inputs'][0]['axes']}\n"
+                reason_message += f"[{specific_workflow}] In a 2D problem the axes need to be 'bcyx', found {axes_order}\n"
             elif "2d" not in model_rdf["tags"]:
                 error = True
                 reason_message += f"[{specific_workflow}] Selected model seems to not be 2D\n"
         elif specific_dims == "3D":
-            if model_rdf["inputs"][0]["axes"] != "bczyx":
+            if axes_order != "bczyx":
                 error = True
-                reason_message += f"[{specific_workflow}] In a 3D problem the axes need to be 'bczyx', found {model_rdf['inputs'][0]['axes']}\n"
+                reason_message += f"[{specific_workflow}] In a 3D problem the axes need to be 'bczyx', found {axes_order}\n"
             elif "3d" not in model_rdf["tags"]:
                 error = True
                 reason_message += f"[{specific_workflow}] Selected model seems to not be 3D\n"
         else:  # All
-            if model_rdf["inputs"][0]["axes"] not in ["bcyx", "bczyx"]:
+            if axes_order not in ["bcyx", "bczyx"]:
                 error = True
-                reason_message += f"[{specific_workflow}] Accepting models only with ['bcyx', 'bczyx'] axis order\n"
+                reason_message += f"[{specific_workflow}] Accepting models only with ['bcyx', 'bczyx'] axis order, found {axes_order}\n"
 
         # Check preprocessing
         if "preprocessing" in model_rdf["inputs"][0]:
             for preprocs in model_rdf["inputs"][0]["preprocessing"]:
-                if preprocs["name"] not in [
-                    "zero_mean_unit_variance",
-                    "fixed_zero_mean_unit_variance",
-                    "scale_range",
-                    "scale_linear",
-                ]:
+                key_to_find = "id" if model_version > Version("0.5.0") else "name"
+
+                if key_to_find in preprocs:
+                    if preprocs[key_to_find] not in [
+                        "zero_mean_unit_variance",
+                        "fixed_zero_mean_unit_variance",
+                        "scale_range",
+                        "scale_linear",
+                    ]:
+                        error = True
+                        reason_message += f"[{specific_workflow}] Not recognized preprocessing found: {preprocs[key_to_find]}\n"
+                        break
+                else:
                     error = True
-                    reason_message += f"[{specific_workflow}] Not recognized preprocessing found: {preprocs['name']}\n"
+                    reason_message += f"[{specific_workflow}] Not recognized preprocessing structure found: {preprocs}\n"
                     break
+
                 preproc_info = preprocs
 
         # Check post-processing
-        if (
-            "postprocessing" in model_rdf["weights"]["pytorch_state_dict"]["kwargs"]
-            and model_rdf["weights"]["pytorch_state_dict"]["kwargs"]["postprocessing"] is not None
-        ):
-            error = True
-            reason_message += f"[{specific_workflow}] Currently no postprocessing is supported. Found: {model_rdf['weights']['pytorch_state_dict']['kwargs']['postprocessing']}\n"
+        if model_version > Version("0.5.0"):
+            if (
+                "postprocessing" in model_rdf["weights"]["pytorch_state_dict"]["architecture"]["kwargs"]
+                and model_rdf["weights"]["pytorch_state_dict"]["architecture"]["kwargs"]["postprocessing"] is not None
+            ):
+                error = True
+                reason_message += f"[{specific_workflow}] Currently no postprocessing is supported. Found: {model_rdf['weights']['pytorch_state_dict']['kwargs']['postprocessing']}\n"
+        else:
+            if (
+                "postprocessing" in model_rdf["weights"]["pytorch_state_dict"]["kwargs"]
+                and model_rdf["weights"]["pytorch_state_dict"]["kwargs"]["postprocessing"] is not None
+            ):
+                error = True
+                reason_message += f"[{specific_workflow}] Currently no postprocessing is supported. Found: {model_rdf['weights']['pytorch_state_dict']['kwargs']['postprocessing']}\n"
     else:
         error = True
         reason_message += f"[{specific_workflow}] pytorch_state_dict not found in model RDF\n"
