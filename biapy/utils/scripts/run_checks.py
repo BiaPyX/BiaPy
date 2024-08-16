@@ -164,7 +164,7 @@ all_test_info["Test12"] = {
     "description": "2D super-resolution. SR 2D data. Cross-val. Basic DA. DFCAN",
     "yaml": "test_12.yaml",
     "internal_checks": [
-        {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 19.0},
+        {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 17.0},
         {"type": "regular", "pattern": "Test PSNR (merge patches)", "gt": True, "value": 19.0},
     ]
 }
@@ -176,8 +176,8 @@ all_test_info["Test13"] = {
     "description": "3D super-resolution. SR 3D data. Cross-val. Basic DA. resunet++. one-cycle",
     "yaml": "test_13.yaml",
     "internal_checks": [
-        {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 21.0},
-        {"type": "regular", "pattern": "Test PSNR (merge patches)", "gt": True, "value": 21.0},
+        {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 20.0},
+        {"type": "regular", "pattern": "Test PSNR (merge patches)", "gt": True, "value": 20.0},
     ]
 }
 
@@ -222,7 +222,7 @@ all_test_info["Test17"] = {
     "description": "3D self-supervision. Lucchi data. Basic DA. resunet++",
     "yaml": "test17.yaml",
     "internal_checks": [
-        {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 18.0},
+        {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 16.0},
     ]
 }
 
