@@ -713,6 +713,8 @@ class Config:
         # Decide which checkpoint to load from job's dir if PATHS.CHECKPOINT_FILE is ''.
         # Options: 'best_on_val' or 'last_on_train'
         _C.MODEL.LOAD_CHECKPOINT_EPOCH = "best_on_val"
+        # Whether to load the model from the checkpoint instead of builiding it following 'MODEL.ARCHITECTURE' when 'MODEL.SOURCE' is "biapy"
+        _C.MODEL.LOAD_MODEL_FROM_CHECKPOINT = False
         # Epochs to save a checkpoint of the model apart from the ones saved with LOAD_CHECKPOINT_ONLY_WEIGHTS. Set it to -1 to
         # not do it.
         _C.MODEL.SAVE_CKPT_FREQ = -1

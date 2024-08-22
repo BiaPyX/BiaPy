@@ -26,7 +26,7 @@ from bioimageio.spec._internal.types import ImportantFileSource
 from biapy.config.config import Config
 
 
-def build_model(cfg, job_identifier, device):
+def build_model(cfg, device):
     """
     Build selected model
 
@@ -35,12 +35,10 @@ def build_model(cfg, job_identifier, device):
     cfg : YACS CN object
         Configuration.
 
-    job_identifier: str
-        Job name.
-
     device : Torch device
         Using device. Most commonly "cpu" or "cuda" for GPU, but also potentially "mps",
         "xpu", "xla" or "meta".
+    
     Returns
     -------
     model : Keras model

@@ -433,7 +433,18 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             )
         if cfg.TEST.AUGMENTATION:
             print("WARNING: 'TEST.AUGMENTATION' is not available using TorchVision models")
-
+        if cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
+                raise ValueError(
+                    "'TEST.ANALIZE_2D_IMGS_AS_3D_STACK' can not be activated with TorchVision models"
+                )
+        if cfg.PROBLEM.NDIM == "3D":
+            raise ValueError("TorchVision model's are only available for 2D images")
+        
+        if not cfg.TEST.FULL_IMG and cfg.PROBLEM.TYPE != "CLASSIFICATION":
+            raise ValueError(
+                "With TorchVision models only 'TEST.FULL_IMG' setting is available, so please set it"
+            )
+    
     if cfg.TEST.AUGMENTATION and cfg.TEST.REDUCE_MEMORY:
         raise ValueError(
             "'TEST.AUGMENTATION' and 'TEST.REDUCE_MEMORY' are incompatible as the function used to make the rotation "
@@ -455,7 +466,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     model_arch = cfg.MODEL.ARCHITECTURE.lower()
     #### Semantic segmentation ####
     if cfg.PROBLEM.TYPE == "SEMANTIC_SEG":
-        if cfg.MODEL.SOURCE == "biapy":
+        if not cfg.MODEL.LOAD_MODEL_FROM_CHECKPOINT and cfg.MODEL.SOURCE == "biapy":
             if cfg.MODEL.N_CLASSES < 2:
                 raise ValueError("'MODEL.N_CLASSES' needs to be greater or equal 2 (binary case)")
         elif cfg.MODEL.SOURCE == "torchvision":
@@ -475,13 +486,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 raise ValueError(
                     "'deeplabv3_mobilenet_v3_large' model expects 3 channel data (RGB). "
                     f"'DATA.PATCH_SIZE' set is {cfg.DATA.PATCH_SIZE}"
-                )
-            if cfg.PROBLEM.NDIM == "3D":
-                raise ValueError("TorchVision model's for semantic segmentation are only available for 2D images")
-            if not cfg.TEST.FULL_IMG:
-                raise ValueError(
-                    "With TorchVision models for semantic segmentation workflow only 'TEST.FULL_IMG' setting is available, so "
-                    "please set it."
                 )
 
     #### Instance segmentation ####
@@ -569,20 +573,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 raise ValueError("TorchVision model's for instance segmentation are only available for 2D images")
             if cfg.TRAIN.ENABLE:
                 raise NotImplementedError  # require bbox generator etc.
-            if cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
-                raise ValueError(
-                    "'TEST.ANALIZE_2D_IMGS_AS_3D_STACK' can not be activated with TorchVision models for instance segmentation "
-                    "workflow"
-                )
-            if not cfg.TEST.FULL_IMG:
-                raise ValueError(
-                    "With TorchVision models for instance segmentation workflow only 'TEST.FULL_IMG' setting is available, so "
-                    "please set it."
-                )
 
     #### Detection ####
     if cfg.PROBLEM.TYPE == "DETECTION":
-        if cfg.MODEL.SOURCE == "biapy" and cfg.MODEL.N_CLASSES < 2:
+        if not cfg.MODEL.LOAD_MODEL_FROM_CHECKPOINT and cfg.MODEL.SOURCE == "biapy" and cfg.MODEL.N_CLASSES < 2:
             raise ValueError("'MODEL.N_CLASSES' needs to be greater or equal 2 (binary case)")
         
         cpd = cfg.PROBLEM.DETECTION.CENTRAL_POINT_DILATION
@@ -644,11 +638,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 raise ValueError("TorchVision model's for detection are only available for 2D images")
             if cfg.TRAIN.ENABLE:
                 raise NotImplementedError  # require bbox generator etc.
-            if not cfg.TEST.FULL_IMG:
-                raise ValueError(
-                    "With TorchVision models for detection workflow only 'TEST.FULL_IMG' setting is available, so "
-                    "please set it."
-                )
+
         if cfg.TEST.ENABLE and len(cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX) > 0:
             assert [x > 0 for x in cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX], (
                 "'TEST.DET_IGNORE_POINTS_OUTSIDE_BOX' needs to be a list " "of positive integers"
@@ -678,12 +668,12 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 raise ValueError("'PROBLEM.SELF_SUPERVISED.RESIZING_FACTOR' not in [2,4,6]")
             if not check_value(cfg.PROBLEM.SELF_SUPERVISED.NOISE):
                 raise ValueError("'PROBLEM.SELF_SUPERVISED.NOISE' not in [0, 1] range")
-            if model_arch == "mae":
+            if not cfg.MODEL.LOAD_MODEL_FROM_CHECKPOINT and model_arch == "mae":
                 raise ValueError(
                     "'MODEL.ARCHITECTURE' can not be 'mae' when 'PROBLEM.SELF_SUPERVISED.PRETEXT_TASK' is 'crappify'"
                 )
         elif cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
-            if model_arch != "mae":
+            if not cfg.MODEL.LOAD_MODEL_FROM_CHECKPOINT and model_arch != "mae":
                 raise ValueError(
                     "'MODEL.ARCHITECTURE' needs to be 'mae' when 'PROBLEM.SELF_SUPERVISED.PRETEXT_TASK' is 'masking'"
                 )
@@ -830,8 +820,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     "'vit_h_14', 'vit_l_16', 'vit_l_32', 'wide_resnet101_2', 'wide_resnet50_2' "
                     "]"
                 )
-            if cfg.PROBLEM.NDIM == "3D":
-                raise ValueError("TorchVision model's for classification are only available for 2D images")
 
     #### Image to image ####
     elif cfg.PROBLEM.TYPE == "IMAGE_TO_IMAGE":
@@ -1152,7 +1140,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             print("WARNING: 'DATA.TRAIN.REPLICATE' has no effect in the selected workflow")
 
     ### Model ###
-    if cfg.MODEL.SOURCE == "biapy":
+    if not cfg.MODEL.LOAD_MODEL_FROM_CHECKPOINT and cfg.MODEL.SOURCE == "biapy":
         assert model_arch in [
             "unet",
             "resunet",
@@ -1277,7 +1265,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     if len(opts) > 0:
         cfg.merge_from_list(opts)
 
-    if cfg.MODEL.SOURCE == "biapy":
+    if not cfg.MODEL.LOAD_MODEL_FROM_CHECKPOINT and cfg.MODEL.SOURCE == "biapy":
         assert cfg.MODEL.LAST_ACTIVATION.lower() in [
             "relu",
             "tanh",
@@ -1443,6 +1431,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     if cfg.MODEL.LOAD_CHECKPOINT and check_data_paths:
         if not os.path.exists(get_checkpoint_path(cfg, jobname)):
             raise FileNotFoundError(f"Model checkpoint not found at {get_checkpoint_path(cfg, jobname)}")
+    if not cfg.MODEL.LOAD_CHECKPOINT and cfg.MODEL.LOAD_MODEL_FROM_CHECKPOINT:
+        raise ValueError("'MODEL.LOAD_MODEL_FROM_CHECKPOINT' can not be enabled when 'MODEL.LOAD_CHECKPOINT' is not enabled too")
 
     ### Train ###
     assert cfg.TRAIN.OPTIMIZER in [
@@ -1563,3 +1553,33 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             raise ValueError(
                 "'TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS' needs to be set when 'TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS' is True"
             )
+
+def compare_configurations_without_model(actual_cfg, old_cfg, header_message=""):
+    """
+    Compares two configurations and throws an error if they differ in some critical variables that change workflow behaviour. This
+    comparisdon does not take into account model specs. 
+    """
+    print("Comparing configurations . . .")
+
+    vars_to_compare = [
+        "PROBLEM.TYPE",
+        "PROBLEM.NDIM",
+        "DATA.PATCH_SIZE",
+        "PROBLEM.INSTANCE_SEG.DATA_CHANNELS",
+        "PROBLEM.SELF_SUPERVISED.PRETEXT_TASK",
+        "PROBLEM.SUPER_RESOLUTION.UPSCALING",
+        "MODEL.N_CLASSES",
+        ]
+        
+    def get_attribute_recursive(var, attr):
+        att = attr.split(".")
+        if len(att) == 1:
+            return getattr(var, att[0])
+        else:
+            return get_attribute_recursive(getattr(var, att[0]), ".".join(att[1:]))
+        
+    for var_to_compare in vars_to_compare:
+        if get_attribute_recursive(actual_cfg, var_to_compare) != get_attribute_recursive(old_cfg, var_to_compare):
+            raise ValueError(header_message+f"The '{var_to_compare}' value of the compared configurations does not match")
+        
+    print("Configurations seem to be compatible. Continuing . . .")

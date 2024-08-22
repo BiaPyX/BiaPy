@@ -78,7 +78,7 @@ from biapy.data.post_processing.post_processing import (
 )
 from biapy.data.post_processing import apply_post_processing
 from biapy.data.pre_processing import preprocess_data
-
+from biapy.engine.check_configuration import check_configuration, compare_configurations_without_model
 
 class Base_Workflow(metaclass=ABCMeta):
     """
@@ -120,6 +120,7 @@ class Base_Workflow(metaclass=ABCMeta):
         self.test_filenames = None
         self.data_norm = None
         self.model = None
+        self.model_build_kwargs = None
         self.checkpoint_path = None
         self.optimizer = None
         self.loss_scaler = None
@@ -911,12 +912,33 @@ class Base_Workflow(metaclass=ABCMeta):
         print("# Build model #")
         print("###############")
         if self.cfg.MODEL.SOURCE == "biapy":
+            # Obtain model spec from checkpoint 
+            if self.cfg.MODEL.LOAD_CHECKPOINT and self.cfg.MODEL.LOAD_MODEL_FROM_CHECKPOINT:
+                self.model_build_kwargs, saved_cfg = load_model_checkpoint(
+                    cfg=self.cfg,
+                    jobname=self.job_identifier,
+                    model_without_ddp=None,
+                    device=None,
+                    just_extract_model=True,
+                )
+
+                # Checks that this config and previous represent same workflow
+                header_message = "There is an inconsistency between the configuration loaded from checkpoint and the actual one. Error:\n"
+                compare_configurations_without_model(self.cfg, saved_cfg, header_message)
+                
+                # Override model specs 
+                self.cfg["MODEL"] = saved_cfg["MODEL"]
+            
+                # Check if the merge is coherent 
+                updated_config = self.cfg.clone()
+                updated_config["MODEL"]["LOAD_MODEL_FROM_CHECKPOINT"] = False
+                check_configuration(updated_config, self.job_identifier)
             (
                 self.model,
                 self.bmz_config["model_file"],
                 self.bmz_config["model_name"],
-                self.bmz_config["model_build_kwargs"],
-            ) = build_model(self.cfg, self.job_identifier, self.device)
+                self.model_build_kwargs,
+            ) = build_model(self.cfg, self.device)
         elif self.cfg.MODEL.SOURCE == "torchvision":
             self.model, self.torchvision_preprocessing = build_torchvision_model(self.cfg, self.device)
         # BioImage Model Zoo pretrained models
@@ -1054,11 +1076,11 @@ class Base_Workflow(metaclass=ABCMeta):
                     save_model(
                         cfg=self.cfg,
                         jobname=self.job_identifier,
-                        model=self.model,
                         model_without_ddp=self.model_without_ddp,
                         optimizer=self.optimizer,
                         loss_scaler=self.loss_scaler,
                         epoch=epoch + 1,
+                        model_build_kwargs=self.model_build_kwargs,
                     )
 
             # Validation
@@ -1097,11 +1119,11 @@ class Base_Workflow(metaclass=ABCMeta):
                         self.checkpoint_path = save_model(
                             cfg=self.cfg,
                             jobname=self.job_identifier,
-                            model=self.model,
                             model_without_ddp=self.model_without_ddp,
                             optimizer=self.optimizer,
                             loss_scaler=self.loss_scaler,
                             epoch="best",
+                            model_build_kwargs=self.model_build_kwargs,
                         )
                 print(f"[Val] best loss: {self.val_best_loss:.4f} best " + m)
 

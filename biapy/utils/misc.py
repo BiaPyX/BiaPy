@@ -11,6 +11,7 @@ import torch.distributed as dist
 import torch.backends.cudnn as cudnn
 from tensorboardX import SummaryWriter
 from pathlib import Path
+from yacs.config import CfgNode
 
 # from torch._six import inf
 from torch import inf
@@ -166,12 +167,14 @@ def get_grad_norm_(parameters, norm_type: float = 2.0) -> torch.Tensor:
     return total_norm
 
 
-def save_model(cfg, jobname, epoch, model, model_without_ddp, optimizer, loss_scaler):
+def save_model(cfg, jobname, epoch, model_without_ddp, optimizer, loss_scaler, model_build_kwargs=None):
     output_dir = Path(cfg.PATHS.CHECKPOINT)
     sc = loss_scaler.state_dict() if loss_scaler is not None else "NONE"
     checkpoint_paths = [output_dir / "{}-checkpoint-{}.pth".format(jobname, str(epoch))]
+
     for checkpoint_path in checkpoint_paths:
         to_save = {
+            "model_build_kwargs": model_build_kwargs,
             "model": model_without_ddp.state_dict(),
             "optimizer": optimizer.state_dict(),
             "epoch": epoch,
@@ -212,8 +215,8 @@ def get_checkpoint_path(cfg, jobname):
 
     return resume
 
-
-def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=None, loss_scaler=None):
+def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=None, loss_scaler=None,
+    just_extract_model=False):
     start_epoch = 0
 
     resume = get_checkpoint_path(cfg, jobname)
@@ -221,16 +224,28 @@ def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=Non
     if not os.path.exists(resume):
         raise FileNotFoundError(f"Checkpoint file {resume} not found")
     else:
-        print("Loading checkpoint from file {}".format(resume))
+        if just_extract_model:
+            print("Extracting model from checkpoint file {}".format(resume))
+        else:
+            print("Loading checkpoint from file {}".format(resume))
 
     # Load checkpoint file
+    torch.serialization.add_safe_globals([CfgNode])
+    torch.serialization.add_safe_globals([set])
     if resume.startswith("https"):
         checkpoint = torch.hub.load_state_dict_from_url(resume, map_location=device, check_hash=True)
     else:
-        checkpoint = torch.load(resume, map_location=device)
+        checkpoint = torch.load(resume, map_location=device, weights_only=True)
 
+    if just_extract_model:
+        if "model_build_kwargs" not in checkpoint or 'cfg' not in checkpoint:
+            raise ValueError("Checkpoint seems to not be from BiaPy (v3.5.1 or later) as model building args couldn't be extracted")
+        
+        return checkpoint["model_build_kwargs"], checkpoint["cfg"]
+    
     model_without_ddp.load_state_dict(checkpoint["model"], strict=False)
     print("Model weights loaded!")
+
     if cfg.MODEL.LOAD_CHECKPOINT_ONLY_WEIGHTS:
         return start_epoch, resume
 

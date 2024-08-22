@@ -754,7 +754,7 @@ class BiaPy:
                 source=Path(arch_file_path),
                 sha256=Sha256(arch_file_sha256),
                 callable=self.workflow.bmz_config["model_name"],
-                kwargs=self.workflow.bmz_config["model_build_kwargs"],
+                kwargs=self.workflow.model_build_kwargs,
             )
             state_dict_source = Path(self.workflow.checkpoint_path)
             state_dict_sha256 = None
