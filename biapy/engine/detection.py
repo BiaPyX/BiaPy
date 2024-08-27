@@ -1071,16 +1071,22 @@ class Detection_Workflow(Base_Workflow):
                             )
                         )
                         c += 1
-        df = None
-        for future in futures:
-            df_patch, fname = future.result()
-            if df_patch is not None:
-                if "df" not in locals():
-                    df = df_patch.copy()
-                    df["file"] = fname
-                else:
-                    df_patch["file"] = fname
-                    df = pd.concat([df, df_patch], ignore_index=True)
+
+            df = None
+            for future in as_completed(futures):
+                try:
+                    data = future.result()
+                    df_patch, fname = data
+                    if df_patch is not None:
+                        if "df" not in locals():
+                            df = df_patch.copy()
+                            df["file"] = fname
+                        else:
+                            df_patch["file"] = fname
+                            df = pd.concat([df, df_patch], ignore_index=True)
+                        print("Current total points detected: {}".format(len(df)))
+                except Exception as e:
+                    print("Error while detecting patch", e)
 
         # Take point coords
         pred_coordinates = []
