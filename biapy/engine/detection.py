@@ -1005,6 +1005,15 @@ class Detection_Workflow(Base_Workflow):
             df_patch["axis-1"] = df_patch["axis-1"] + shift[1]
             df_patch["axis-2"] = df_patch["axis-2"] + shift[2]
 
+            # save the detected points in the patch
+            os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, exist_ok=True)
+            df_patch.to_csv(
+                os.path.join(
+                    self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
+                    os.path.splitext(fname)[0] + "_points_global.csv",
+                )
+            )
+
             return df_patch, fname
 
         return None, None
