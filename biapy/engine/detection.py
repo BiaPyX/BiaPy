@@ -1005,6 +1005,15 @@ class Detection_Workflow(Base_Workflow):
             df_patch["axis-1"] = df_patch["axis-1"] + shift[1]
             df_patch["axis-2"] = df_patch["axis-2"] + shift[2]
 
+            # save the detected points in the patch
+            os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, exist_ok=True)
+            df_patch.to_csv(
+                os.path.join(
+                    self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
+                    os.path.splitext(fname)[0] + "_points_global.csv",
+                )
+            )
+
             return df_patch, fname
 
         return None, None
@@ -1062,16 +1071,22 @@ class Detection_Workflow(Base_Workflow):
                             )
                         )
                         c += 1
-        df = None
-        for future in futures:
-            df_patch, fname = future.result()
-            if df_patch is not None:
-                if "df" not in locals():
-                    df = df_patch.copy()
-                    df["file"] = fname
-                else:
-                    df_patch["file"] = fname
-                    df = pd.concat([df, df_patch], ignore_index=True)
+
+            df = None
+            for future in as_completed(futures):
+                try:
+                    data = future.result()
+                    df_patch, fname = data
+                    if df_patch is not None:
+                        if "df" not in locals():
+                            df = df_patch.copy()
+                            df["file"] = fname
+                        else:
+                            df_patch["file"] = fname
+                            df = pd.concat([df, df_patch], ignore_index=True)
+                        print("Current total points detected: {}".format(len(df)))
+                except Exception as e:
+                    print("Error while detecting patch", e)
 
         # Take point coords
         pred_coordinates = []
