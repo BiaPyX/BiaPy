@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from skimage.feature import peak_local_max, blob_log
 from skimage.morphology import disk, dilation
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 from biapy.data.post_processing.post_processing import (
     remove_close_points,
@@ -1005,16 +1005,18 @@ class Detection_Workflow(Base_Workflow):
             df_patch["axis-1"] = df_patch["axis-1"] + shift[1]
             df_patch["axis-2"] = df_patch["axis-2"] + shift[2]
 
-            # save the detected points in the patch
-            os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, exist_ok=True)
-            df_patch.to_csv(
-                os.path.join(
-                    self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
-                    os.path.splitext(fname)[0] + "_points_global.csv",
-                )
-            )
 
-            return df_patch, fname
+            if not df_patch.empty:
+                # save the detected points in the patch
+                os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, exist_ok=True)
+                df_patch.to_csv(
+                    os.path.join(
+                        self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
+                        os.path.splitext(fname)[0] + "_points_global.csv",
+                    )
+                )
+
+                return df_patch, fname
 
         return None, None
 
@@ -1073,20 +1075,20 @@ class Detection_Workflow(Base_Workflow):
                         c += 1
 
             df = None
+            all_patches = []
             for future in as_completed(futures):
                 try:
                     data = future.result()
                     df_patch, fname = data
                     if df_patch is not None:
-                        if "df" not in locals():
-                            df = df_patch.copy()
-                            df["file"] = fname
-                        else:
-                            df_patch["file"] = fname
-                            df = pd.concat([df, df_patch], ignore_index=True)
-                        print("Current total points detected: {}".format(len(df)))
+                        df_patch["file"] = fname
+                        all_patches.append(df_patch)
+                        print("Current total patch with detection: {}".format(len(all_patches)))
                 except Exception as e:
                     print("Error while detecting patch", e)
+
+
+        df = pd.concat(all_patches, ignore_index=True)
 
         # Take point coords
         pred_coordinates = []
