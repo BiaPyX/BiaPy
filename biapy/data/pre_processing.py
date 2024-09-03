@@ -1695,7 +1695,7 @@ def preprocess_data(cfg, x_data=[], y_data=[], is_2d=True, is_y_mask=False):
             print("Preprocessing: applying median blur . . .")
             x_data = apply_median_blur(
                 x_data,
-                footprint=cfg.MEDIAN_BLUR.FOOTPRINT,
+                footprint=np.ones(cfg.MEDIAN_BLUR.KERNEL_SIZE, dtype=np.uint8).tolist(),
             )
         if cfg.MATCH_HISTOGRAM.ENABLE:
             print("Preprocessing: applying histogram matching . . .")

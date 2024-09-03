@@ -885,6 +885,17 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             raise ValueError(
                 "When 'DATA.VAL.FROM_TRAIN' is True and 'DATA.PREPROCESS.TRAIN' is True, 'DATA.PREPROCESS.VAL' also needs to be True."
             )
+        if cfg.DATA.PREPROCESS.MEDIAN_BLUR.ENABLE:
+            if cfg.PROBLEM.NDIM == "2D" and len(cfg.DATA.PREPROCESS.MEDIAN_BLUR.KERNEL_SIZE) != 3:
+                raise ValueError(
+                    "When 'PROBLEM.NDIM' is 2D, 'DATA.PREPROCESS.MEDIAN_BLUR.KERNEL_SIZE' must indicate desired kernel size for each dimension, including channels (y,x,c)."
+                    f"Given kernel size ({cfg.DATA.PREPROCESS.MEDIAN_BLUR.KERNEL_SIZE}) is not compatible."
+                )
+            elif cfg.PROBLEM.NDIM == "3D" and len(cfg.DATA.PREPROCESS.MEDIAN_BLUR.KERNEL_SIZE) != 4:
+                raise ValueError(
+                    "When 'PROBLEM.NDIM' is 3D, 'DATA.PREPROCESS.MEDIAN_BLUR.KERNEL_SIZE' must indicate desired kernel size for each dimension, including channels (z,y,x,c)."
+                    f"Given kernel size ({cfg.DATA.PREPROCESS.MEDIAN_BLUR.KERNEL_SIZE}) is not compatible."
+                )
         if cfg.DATA.PREPROCESS.MATCH_HISTOGRAM.ENABLE:
             if not os.path.exists(cfg.DATA.PREPROCESS.MATCH_HISTOGRAM.REFERENCE_PATH):
                 raise ValueError(
