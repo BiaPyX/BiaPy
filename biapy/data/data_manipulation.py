@@ -1,5 +1,6 @@
 import os
 import h5py
+import random
 import numpy as np
 from tqdm import tqdm
 from skimage.io import imread
@@ -162,7 +163,7 @@ def load_and_prepare_train_data(
 
     filter_by_entire_image : bool, optional
         If filtering is done this will decide how the filtering will be done:
-            * ``True``: apply filter image by image. 
+            * ``True``: apply filter image by image.
             * ``False``: apply filtering sample by sample. Each sample represents a patch within an image.
 
     random_crops_in_DA : bool, optional
@@ -203,10 +204,10 @@ def load_and_prepare_train_data(
         are expected.
 
     multiple_raw_images : bool, optional
-        When a folder of folders for each image is expected. In each of those subfolder different versions of the same image 
+        When a folder of folders for each image is expected. In each of those subfolder different versions of the same image
         are placed. Visit the following tutorial for a real use case and a more detailed description:
         `Light My Cells <https://biapy.readthedocs.io/en/latest/tutorials/image-to-image/lightmycells.html>`_.
-        This is used when ``PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER`` is selected. 
+        This is used when ``PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER`` is selected.
 
     Returns
     -------
@@ -214,7 +215,7 @@ def load_and_prepare_train_data(
         Loaded train X data. Each item in the list represents a sample of the dataset. Each sample is represented as follows:
             * ``"filename"``: name of the image to extract the data sample from.
             * ``"dir"``: directory where the image resides.
-            * ``"coords"``: dictionary with the coordinates to extract the sample from the image. If ``None`` it implies that a random 
+            * ``"coords"``: dictionary with the coordinates to extract the sample from the image. If ``None`` it implies that a random
               patch needs to be extracted. Following keys are avaialable:
                 * ``"z_start"``: starting point of the patch in Z axis.
                 * ``"z_end"``: end point of the patch in Z axis.
@@ -226,18 +227,18 @@ def load_and_prepare_train_data(
             * ``"shape"``: shape of the sample.
             * ``"img"`` (optional): image sample itself. It is a ndarrray of  ``(y, x, channels)`` in ``2D`` and
               ``(z, y, x, channels)`` in ``3D``. Provided when ``train_in_memory`` is ``True``.
-            * ``"gt_associated_id"`` (optional): position of associated ground truth of the sample within its list. Present if 
+            * ``"gt_associated_id"`` (optional): position of associated ground truth of the sample within its list. Present if
               ``multiple_raw_images`` is ``True``.
             * ``"parallel_data"``(optional): to ``True`` is the sample is a Zarr/H5 file. Not present otherwise.
             * ``"input_axes"`` (optional): order of the axes in Zarr. Not present in non-Zarr/H5 files.
-            * ``"path_in_zarr"``(optional): path where the data resides within the Zarr. Provided when ``multiple_data_within_zarr`` was 
-              set in ``train_zarr_data_information``.  
+            * ``"path_in_zarr"``(optional): path where the data resides within the Zarr. Provided when ``multiple_data_within_zarr`` was
+              set in ``train_zarr_data_information``.
 
     Y_train : list of dict
         Loaded train Y data. Each item in the list represents a sample of the dataset. Each sample is represented as follows:
             * ``"filename"``: name of the image to extract the data sample from.
             * ``"dir"``: directory where the image resides.
-            * ``"coords"``: dictionary with the coordinates to extract the sample from the image. If ``None`` it implies that a random 
+            * ``"coords"``: dictionary with the coordinates to extract the sample from the image. If ``None`` it implies that a random
               patch needs to be extracted. Following keys are avaialable:
                 * ``"z_start"``: starting point of the patch in Z axis.
                 * ``"z_end"``: end point of the patch in Z axis.
@@ -249,18 +250,18 @@ def load_and_prepare_train_data(
             * ``"shape"``: shape of the sample.
             * ``"img"`` (optional): image sample itself. It is a ndarrray of  ``(y, x, channels)`` in ``2D`` and
               ``(z, y, x, channels)`` in ``3D``. Provided when ``train_in_memory`` is ``True``.
-            * ``"gt_associated_id"`` (optional): position of associated ground truth of the sample within its list. Present if 
+            * ``"gt_associated_id"`` (optional): position of associated ground truth of the sample within its list. Present if
               ``multiple_raw_images`` is ``True``.
             * ``"parallel_data"``(optional): to ``True`` is the sample is a Zarr/H5 file. Not present otherwise.
             * ``"input_axes"`` (optional): order of the axes in Zarr. Not present in non-Zarr/H5 files.
-            * ``"path_in_zarr"``(optional): path where the data resides within the Zarr. Provided when ``multiple_data_within_zarr`` was 
-              set in ``train_zarr_data_information``.  
+            * ``"path_in_zarr"``(optional): path where the data resides within the Zarr. Provided when ``multiple_data_within_zarr`` was
+              set in ``train_zarr_data_information``.
 
     X_val : list of dict
         Loaded validation X data. Each item in the list represents a sample of the dataset. Each sample is represented as follows:
             * ``"filename"``: name of the image to extract the data sample from.
             * ``"dir"``: directory where the image resides.
-            * ``"coords"``: dictionary with the coordinates to extract the sample from the image. If ``None`` it implies that a random 
+            * ``"coords"``: dictionary with the coordinates to extract the sample from the image. If ``None`` it implies that a random
               patch needs to be extracted. Following keys are avaialable:
                 * ``"z_start"``: starting point of the patch in Z axis.
                 * ``"z_end"``: end point of the patch in Z axis.
@@ -272,18 +273,18 @@ def load_and_prepare_train_data(
             * ``"shape"``: shape of the sample.
             * ``"img"`` (optional): image sample itself. It is a ndarrray of  ``(y, x, channels)`` in ``2D`` and
               ``(z, y, x, channels)`` in ``3D``. Provided when ``val_in_memory`` is ``True``.
-            * ``"gt_associated_id"`` (optional): position of associated ground truth of the sample within its list. Present if 
+            * ``"gt_associated_id"`` (optional): position of associated ground truth of the sample within its list. Present if
               ``multiple_raw_images`` is ``True``.
             * ``"parallel_data"``(optional): to ``True`` is the sample is a Zarr/H5 file. Not present otherwise.
             * ``"input_axes"`` (optional): order of the axes in Zarr. Not present in non-Zarr/H5 files.
-            * ``"path_in_zarr"``(optional): path where the data resides within the Zarr. Provided when ``multiple_data_within_zarr`` was 
-              set in ``val_zarr_data_information``.  
+            * ``"path_in_zarr"``(optional): path where the data resides within the Zarr. Provided when ``multiple_data_within_zarr`` was
+              set in ``val_zarr_data_information``.
 
     Y_val : list of dict
         Loaded validation Y data. Each item in the list represents a sample of the dataset. Each sample is represented as follows:
             * ``"filename"``: name of the image to extract the data sample from.
             * ``"dir"``: directory where the image resides.
-            * ``"coords"``: dictionary with the coordinates to extract the sample from the image. If ``None`` it implies that a random 
+            * ``"coords"``: dictionary with the coordinates to extract the sample from the image. If ``None`` it implies that a random
               patch needs to be extracted. Following keys are avaialable:
                 * ``"z_start"``: starting point of the patch in Z axis.
                 * ``"z_end"``: end point of the patch in Z axis.
@@ -295,12 +296,12 @@ def load_and_prepare_train_data(
             * ``"shape"``: shape of the sample.
             * ``"img"`` (optional): image sample itself. It is a ndarrray of  ``(y, x, channels)`` in ``2D`` and
               ``(z, y, x, channels)`` in ``3D``. Provided when ``val_in_memory`` is ``True``.
-            * ``"gt_associated_id"`` (optional): position of associated ground truth of the sample within its list. Present if 
+            * ``"gt_associated_id"`` (optional): position of associated ground truth of the sample within its list. Present if
               ``multiple_raw_images`` is ``True``.
             * ``"parallel_data"``(optional): to ``True`` is the sample is a Zarr/H5 file. Not present otherwise.
             * ``"input_axes"`` (optional): order of the axes in Zarr. Not present in non-Zarr/H5 files.
-            * ``"path_in_zarr"``(optional): path where the data resides within the Zarr. Provided when ``multiple_data_within_zarr`` was 
-              set in ``val_zarr_data_information``.  
+            * ``"path_in_zarr"``(optional): path where the data resides within the Zarr. Provided when ``multiple_data_within_zarr`` was
+              set in ``val_zarr_data_information``.
     """
     train_shape_will_change = False
     if train_preprocess_f is not None:
@@ -484,8 +485,10 @@ def load_and_prepare_train_data(
         # create the validation data
         x_train_files = list(set([os.path.join(x["dir"], x["filename"]) for x in X_train]))
         if len(x_train_files) == 1:
-            print("As only one sample was found BiaPy will assume that it is big enough to hold multiple training samples "
-                  "so the validation will be created extracting samples from it too.")
+            print(
+                "As only one sample was found BiaPy will assume that it is big enough to hold multiple training samples "
+                "so the validation will be created extracting samples from it too."
+            )
         if train_using_zarr or len(x_train_files) == 1:
             x_train_ids = np.array(range(0, len(X_train)))
             if train_mask_path is not None:
@@ -505,7 +508,7 @@ def load_and_prepare_train_data(
                     raise ValueError(
                         f"Raw image number ({len(x_train_ids)}) and ground truth file mismatch ({len(y_train_ids)}). Please check the data!"
                     )
-                
+
         val_path = train_path
         val_mask_path = train_mask_path
         val_zarr_data_information = train_zarr_data_information
@@ -547,7 +550,7 @@ def load_and_prepare_train_data(
         # It's important to sort them in order to speed up load_images_to_sample_list() process
         x_val_ids.sort()
         x_train_ids.sort()
-        # Separate validation from train. Using Zarr the method is simpler as only each sample is processed. In other cases 
+        # Separate validation from train. Using Zarr the method is simpler as only each sample is processed. In other cases
         # the validation will be composed by samples that are extracted from the images selected to be part of the validation.
         if train_using_zarr or len(x_train_files) == 1:
             # Create validation data from train.
@@ -555,7 +558,7 @@ def load_and_prepare_train_data(
             if Y_train is not None:
                 Y_val = [Y_train[i] for i in x_val_ids]
 
-            # Remove val samples from train. 
+            # Remove val samples from train.
             X_train = [X_train[i] for i in x_train_ids]
             if Y_train is not None:
                 Y_train = [Y_train[i] for i in x_train_ids]
@@ -566,7 +569,7 @@ def load_and_prepare_train_data(
             if train_mask_path is not None:
                 y_val_files = [y_train_files[i] for i in y_val_ids]
                 Y_val = [x for x in Y_train if os.path.join(x["dir"], x["filename"]) in y_val_files]
-            # Remove val samples from train. 
+            # Remove val samples from train.
             x_train_files = [x_train_files[i] for i in x_train_ids]
             if train_mask_path is not None:
                 y_train_files = [y_train_files[i] for i in x_train_ids]
@@ -735,7 +738,7 @@ def load_and_prepare_train_data(
                 raise ValueError(
                     f"Raw image number ({len(x_val_ids)}) and ground truth file mismatch ({len(y_val_ids)}). Please check the data!"
                 )
-        
+
     if train_in_memory:
         print("* Loading train images . . .")
         load_images_to_sample_list(
@@ -857,10 +860,10 @@ def load_and_prepare_test_data(
         Path to the test data masks.
 
     multiple_raw_images : bool, optional
-        When a folder of folders for each image is expected. In each of those subfolder different versions of the same image 
+        When a folder of folders for each image is expected. In each of those subfolder different versions of the same image
         are placed. Visit the following tutorial for a real use case and a more detailed description:
         `Light My Cells <https://biapy.readthedocs.io/en/latest/tutorials/image-to-image/lightmycells.html>`_.
-        This is used when ``PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER`` is selected. 
+        This is used when ``PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER`` is selected.
 
     Returns
     -------
@@ -882,10 +885,10 @@ def load_and_prepare_test_data(
 
     X_test, Y_test = [], None
 
-    # Just read the images from test folder 
+    # Just read the images from test folder
     if not os.path.exists(test_path):
         raise ValueError(f"{test_path} doesn't exist")
-    
+
     ids = sorted(next(os.walk(test_path))[2])
     if not multiple_raw_images or len(ids) > 0:
         fids = sorted(next(os.walk(test_path))[1])
@@ -906,10 +909,10 @@ def load_and_prepare_test_data(
         # Extract a list of all training gt images
         if test_mask_path is not None:
             Y_test = []
-            
+
             if not os.path.exists(test_mask_path):
                 raise ValueError(f"{test_mask_path} doesn't exist")
-            
+
             ids = sorted(next(os.walk(test_mask_path))[2])
             fids = sorted(next(os.walk(test_mask_path))[1])
             if len(ids) == 0:
@@ -1548,7 +1551,7 @@ def samples_from_image_list(
         Samples generated out of ``list_of_data``. Each item in the list represents a sample of the dataset containing:
             * ``"filename"``: name of the image to extract the data sample from
             * ``"dir"``: directory where the image resides
-            * ``"coords"``: dictionary with the coordinates to extract the sample from the image. If ``None`` it implies that a random 
+            * ``"coords"``: dictionary with the coordinates to extract the sample from the image. If ``None`` it implies that a random
               patch needs to be extracted. Following keys are avaialable:
                 * ``"z_start"``: starting point of the patch in Z axis.
                 * ``"z_end"``: end point of the patch in Z axis.
@@ -1688,7 +1691,7 @@ def samples_from_zarr(list_of_data, data_path, zarr_data_info, crop_shape, ov, p
         Samples generated out of ``list_of_data``. Each item in the list represents a sample of the dataset containing:
             * ``"filename"``: name of the image to extract the data sample from.
             * ``"dir"``: directory where the image resides.
-            * ``"coords"``: dictionary with the coordinates to extract the sample from the image. If ``None`` it implies that a random 
+            * ``"coords"``: dictionary with the coordinates to extract the sample from the image. If ``None`` it implies that a random
               patch needs to be extracted. Following keys are avaialable:
                 * ``"z_start"``: starting point of the patch in Z axis.
                 * ``"z_end"``: end point of the patch in Z axis.
@@ -1700,8 +1703,8 @@ def samples_from_zarr(list_of_data, data_path, zarr_data_info, crop_shape, ov, p
             * ``"shape"``: shape of the sample.
             * ``"parallel_data"``: to ``True`` always as the sample is a Zarr/H5 file.
             * ``"input_axes"``: order of the axes in Zarr.
-            * ``"path_in_zarr"``(optional): path where the data resides within the Zarr. Present if ``multiple_data_within_zarr`` was 
-              provided in ``zarr_data_info``.  
+            * ``"path_in_zarr"``(optional): path where the data resides within the Zarr. Present if ``multiple_data_within_zarr`` was
+              provided in ``zarr_data_info``.
     """
     # Extract a list of all training samples within the Zarr
     sample_list = []
@@ -1711,10 +1714,10 @@ def samples_from_zarr(list_of_data, data_path, zarr_data_info, crop_shape, ov, p
         data_within_zarr_path = None
         if zarr_data_info["multiple_data_within_zarr"]:
             if not is_mask:
-                data_within_zarr_path = zarr_data_info["raw_path"] 
+                data_within_zarr_path = zarr_data_info["raw_path"]
             else:
                 data_within_zarr_path = zarr_data_info["gt_path"] if zarr_data_info["use_gt_path"] else None
-        
+
         data, file = load_img_data(sample_path, is_3d=is_3d, data_within_zarr_path=data_within_zarr_path)
         key_to_check = "input_img_axes" if not is_mask else "input_mask_axes"
         if "C" in zarr_data_info[key_to_check]:
@@ -1873,7 +1876,7 @@ def samples_from_image_list_multiple_raw_one_gt(
         Samples generated out of ``data_path``. Each item in the list represents a sample of the dataset containing:
             * ``"filename"``: name of the image to extract the data sample from.
             * ``"dir"``: directory where the image resides.
-            * ``"coords"``: dictionary with the coordinates to extract the sample from the image. If ``None`` it implies that a random 
+            * ``"coords"``: dictionary with the coordinates to extract the sample from the image. If ``None`` it implies that a random
               patch needs to be extracted. Following keys are avaialable:
                 * ``"z_start"``: starting point of the patch in Z axis.
                 * ``"z_end"``: end point of the patch in Z axis.
@@ -1889,7 +1892,7 @@ def samples_from_image_list_multiple_raw_one_gt(
         Samples generated out of ``gt_path``. Each item in the list represents a sample of the dataset containing:
             * ``"filename"``: name of the image to extract the data sample from.
             * ``"dir"``: directory where the image resides.
-            * ``"coords"``: dictionary with the coordinates to extract the sample from the image. If ``None`` it implies that a random 
+            * ``"coords"``: dictionary with the coordinates to extract the sample from the image. If ``None`` it implies that a random
               patch needs to be extracted. Following keys are avaialable:
                 * ``"z_start"``: starting point of the patch in Z axis.
                 * ``"z_end"``: end point of the patch in Z axis.
@@ -2072,7 +2075,7 @@ def samples_from_image_list_multiple_raw_one_gt(
                     "coords": crop_coords[i] if crop_coords is not None else None,
                     "original_data_shape": original_data_shape,
                     "shape": raw_shape,
-                    "gt_associated_id": cont+i,  # this extra variable is added
+                    "gt_associated_id": cont + i,  # this extra variable is added
                 }
                 sample_list.append(sample_dict)
 
@@ -2209,13 +2212,13 @@ def filter_samples_by_properties(
     filter_conds,
     filter_vals,
     filter_signs,
-    filter_by_entire_image=True, 
+    filter_by_entire_image=True,
     y_filenames=None,
     zarr_data_information=None,
 ):
     """
-    Filter samples from ``x_filenames`` using defined conditions. The filtering will be done using the images each sample is extracted 
-    from. However, if ``zarr_data_info`` is provided the function will assume that Zarr/h5 files are provided, so the filtering will be 
+    Filter samples from ``x_filenames`` using defined conditions. The filtering will be done using the images each sample is extracted
+    from. However, if ``zarr_data_info`` is provided the function will assume that Zarr/h5 files are provided, so the filtering will be
     performed sample by sample.
 
     Parameters
@@ -2224,19 +2227,19 @@ def filter_samples_by_properties(
         X samples to process. Each sample is represented as follows:
             * ``"filename"``: name of the image to extract the data sample from.
             * ``"dir"``: directory where the image resides.
-            * ``"coords"``: dictionary with the coordinates to extract the sample from the image. If ``None`` it implies that a random 
+            * ``"coords"``: dictionary with the coordinates to extract the sample from the image. If ``None`` it implies that a random
               patch needs to be extracted. Following keys are avaialable:
                 * ``"z_start"``: starting point of the patch in Z axis.
                 * ``"z_end"``: end point of the patch in Z axis.
                 * ``"y_start"``: starting point of the patch in Y axis.
                 * ``"y_end"``: end point of the patch in Y axis.
                 * ``"x_start"``: starting point of the patch in X axis.
-                * ``"x_end"``: end point of the patch in X axis.         
+                * ``"x_end"``: end point of the patch in X axis.
             * ``"original_data_shape"``: shape of the image where the samples is extracted (useful for reconstructing it later),
             * ``"shape"``: shape of the sample.
             * ``"img"`` (optional): image sample itself. It is a ndarrray of  ``(y, x, channels)`` in ``2D`` and
               ``(z, y, x, channels)`` in ``3D``. Provided when ``train_in_memory`` is ``True``.
-            * ``"gt_associated_id"`` (optional): position of associated ground truth of the sample within its list. Present if 
+            * ``"gt_associated_id"`` (optional): position of associated ground truth of the sample within its list. Present if
               ``multiple_raw_images`` is ``True``.
 
     is_3d: bool, optional
@@ -2262,7 +2265,7 @@ def filter_samples_by_properties(
 
     filter_by_entire_image : bool, optional
         This decides how the filtering is done:
-            * ``True``: apply filter image by image. 
+            * ``True``: apply filter image by image.
             * ``False``: apply filtering sample by sample. Each sample represents a patch within an image.
 
     y_filenames : list of dict, optional
@@ -2290,12 +2293,12 @@ def filter_samples_by_properties(
     new_x_filenames = []
     if y_filenames is not None:
         new_y_filenames = []
-    
+
     foreground_filter_requested = any([True for cond in filter_conds if "foreground" in cond])
     if foreground_filter_requested:
         if y_filenames is None:
             raise ValueError("'foreground' condition can not be used for filtering when 'y_filenames' was not provided")
-        
+
     using_zarr = False
     if zarr_data_information is not None:
         using_zarr = True
@@ -2304,7 +2307,7 @@ def filter_samples_by_properties(
     else:
         images = list(set([os.path.join(x["dir"], x["filename"]) for x in x_filenames]))
         if foreground_filter_requested:
-            masks = list(set([os.path.join(x["dir"], x["filename"]) for x in y_filenames])) 
+            masks = list(set([os.path.join(x["dir"], x["filename"]) for x in y_filenames]))
         print(f"Number of samples before filtering: {len(images)}")
 
     if not using_zarr and filter_by_entire_image:
@@ -2326,8 +2329,8 @@ def filter_samples_by_properties(
                 not_discarded_images.append(image_path)
             else:
                 print(f"Discarding file {image_path}")
-                
-        # Keep only those samples from not discarded images 
+
+        # Keep only those samples from not discarded images
         for n, sample in enumerate(x_filenames):
             if os.path.join(sample["dir"], sample["filename"]) in not_discarded_images:
                 new_x_filenames.append(x_filenames[n])
@@ -2337,7 +2340,7 @@ def filter_samples_by_properties(
         number_of_samples = len(not_discarded_images)
     else:
         img_path, mask_path = "", ""
-        file, mfile = None, None               
+        file, mfile = None, None
         for n, sample in tqdm(enumerate(x_filenames), disable=not is_main_process()):
             # Load X data
             filepath = os.path.join(sample["dir"], sample["filename"])
@@ -2345,7 +2348,9 @@ def filter_samples_by_properties(
                 img_path = filepath
                 if file is not None and isinstance(file, h5py.File):
                     file.close()
-                data_within_zarr_path = zarr_data_information["raw_path"] if zarr_data_information["multiple_data_within_zarr"] else None
+                data_within_zarr_path = (
+                    zarr_data_information["raw_path"] if zarr_data_information["multiple_data_within_zarr"] else None
+                )
                 xdata, file = load_img_data(img_path, is_3d=is_3d, data_within_zarr_path=data_within_zarr_path)
 
                 # Load Y data
@@ -2356,7 +2361,9 @@ def filter_samples_by_properties(
                         mfile.close()
                     data_within_zarr_path = None
                     if zarr_data_information["multiple_data_within_zarr"]:
-                        data_within_zarr_path = zarr_data_information["gt_path"] if zarr_data_information["use_gt_path"] else None
+                        data_within_zarr_path = (
+                            zarr_data_information["gt_path"] if zarr_data_information["use_gt_path"] else None
+                        )
                     ydata, mfile = load_img_data(mask_path, is_3d=is_3d, data_within_zarr_path=data_within_zarr_path)
                 else:
                     ydata, mfile = None, None
@@ -2551,7 +2558,7 @@ def load_images_to_sample_list(
         Loaded data. Each item in the list represents a sample of the dataset. Each sample is represented as follows:
             * ``"filename"``: name of the image to extract the data sample from.
             * ``"dir"``: directory where the image resides.
-            * ``"coords"``: dictionary with the coordinates to extract the sample from the image. If ``None`` it implies that a random 
+            * ``"coords"``: dictionary with the coordinates to extract the sample from the image. If ``None`` it implies that a random
               patch needs to be extracted. Following keys are avaialable:
                 * ``"z_start"``: starting point of the patch in Z axis.
                 * ``"z_end"``: end point of the patch in Z axis.
@@ -2733,9 +2740,13 @@ def pad_and_reflect(img, crop_shape, verbose=False):
         Image padded. E.g. ``(y, x, channels)`` for 2D and ``(z, y, x, channels)`` for 3D.
     """
     if img.ndim == 4 and len(crop_shape) != 4:
-        raise ValueError(f"'crop_shape' needs to have 4 values as the input array has 4 dims. Provided crop_shape: {crop_shape}")
+        raise ValueError(
+            f"'crop_shape' needs to have 4 values as the input array has 4 dims. Provided crop_shape: {crop_shape}"
+        )
     if img.ndim == 3 and len(crop_shape) != 3:
-        raise ValueError(f"'crop_shape' needs to have 3 values as the input array has 3 dims. Provided crop_shape: {crop_shape}")
+        raise ValueError(
+            f"'crop_shape' needs to have 3 values as the input array has 3 dims. Provided crop_shape: {crop_shape}"
+        )
 
     if img.ndim == 4:
         if img.shape[0] < crop_shape[0]:
@@ -2910,6 +2921,7 @@ def read_img_as_ndarray(path, is_3d=False):
 
     return img
 
+
 def check_value(value, value_range=(0, 1)):
     """
     Checks if a value is within a range
@@ -2944,3 +2956,58 @@ def data_range(x):
         return "uint16 range"
     else:
         return "none_range"
+
+
+def check_masks(path, n_classes=2, is_3d=False):
+    """
+    Check whether the data masks have the correct labels inspection a few random images of the given path. If the
+    function gives no error one should assume that the masks are correct.
+
+    Parameters
+    ----------
+    path : str
+        Path to the data mask.
+
+    n_classes : int, optional
+        Maximum classes that the masks must contain.
+
+    is_3d : bool, optional
+        Whether if the expected image to read is 3D or not.
+    """
+    print("Checking ground truth classes in {} . . .".format(path))
+
+    ids = sorted(next(os.walk(path))[2])
+    classes_found = []
+    m = ""
+    error = False
+    for i in tqdm(range(len(ids))):
+        if ids[i].endswith(".zarr") or ids[i].endswith(".hdf5") or ids[i].endswith(".h5"):
+            raise ValueError(
+                "Mask checking with Zarr not implemented in BiaPy yet. Disable 'DATA.*.CHECK_DATA' variables to continue"
+            )
+        else:
+            img = read_img_as_ndarray(os.path.join(path, ids[i]), is_3d=is_3d)
+            values = np.unique(img)
+            if len(values) > n_classes:
+                print(
+                    "Error: given mask ({}) has more classes than specified in 'MODEL.N_CLASSES'. "
+                    "Values found: {}".format(os.path.join(path, ids[i]), values)
+                )
+                error = True
+
+            classes_found += list(values)
+            classes_found = list(set(classes_found))
+
+    if len(classes_found) > n_classes:
+        m += (
+            "Number of classes found across images is greater than the value specified in 'MODEL.N_CLASSES'. "
+            f"Classes found: {classes_found}\n"
+        )
+        error = True
+
+    if error:
+        m += (
+            "'MODEL.N_CLASSES' variable value must be set taking into account the background class. E.g. if mask has [0,1,2] "
+            "values 'MODEL.N_CLASSES' should be 3.\nCorrect the errors in the masks above to continue"
+        )
+        raise ValueError(m)

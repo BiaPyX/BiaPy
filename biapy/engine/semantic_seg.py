@@ -4,7 +4,8 @@ from skimage.transform import resize
 
 from biapy.data.post_processing.post_processing import apply_binary_mask
 from biapy.engine.base_workflow import Base_Workflow
-from biapy.utils.util import save_tif, check_masks
+from biapy.utils.util import save_tif
+from biapy.data.data_manipulation import check_masks
 from biapy.utils.misc import to_pytorch_format, to_numpy_format
 from biapy.engine.metrics import (
     jaccard_index,
@@ -13,6 +14,7 @@ from biapy.engine.metrics import (
     DiceLoss,
 )
 from biapy.data.pre_processing import norm_range01
+
 
 class Semantic_Segmentation_Workflow(Base_Workflow):
     """
@@ -38,11 +40,11 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         super(Semantic_Segmentation_Workflow, self).__init__(cfg, job_identifier, device, args, **kwargs)
 
         if cfg.TRAIN.ENABLE and cfg.DATA.TRAIN.CHECK_DATA:
-            check_masks(cfg.DATA.TRAIN.GT_PATH, n_classes=cfg.MODEL.N_CLASSES + 1)
+            check_masks(cfg.DATA.TRAIN.GT_PATH, n_classes=cfg.MODEL.N_CLASSES, is_3d=(self.cfg.PROBLEM.NDIM == "3D"))
             if not cfg.DATA.VAL.FROM_TRAIN:
-                check_masks(cfg.DATA.VAL.GT_PATH, n_classes=cfg.MODEL.N_CLASSES + 1)
+                check_masks(cfg.DATA.VAL.GT_PATH, n_classes=cfg.MODEL.N_CLASSES, is_3d=(self.cfg.PROBLEM.NDIM == "3D"))
         if cfg.TEST.ENABLE and cfg.DATA.TEST.LOAD_GT and cfg.DATA.TEST.CHECK_DATA:
-            check_masks(cfg.DATA.TEST.GT_PATH, n_classes=cfg.MODEL.N_CLASSES + 1)
+            check_masks(cfg.DATA.TEST.GT_PATH, n_classes=cfg.MODEL.N_CLASSES, is_3d=(self.cfg.PROBLEM.NDIM == "3D"))
 
         # From now on, no modification of the cfg will be allowed
         self.cfg.freeze()
@@ -128,8 +130,8 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         if self.cfg.MODEL.SOURCE != "torchvision":
             super().process_test_sample()
         else:
-            # Skip processing image 
-            if "discard" in self.current_sample["X"] and self.current_sample["X"]["discard"]: 
+            # Skip processing image
+            if "discard" in self.current_sample["X"] and self.current_sample["X"]["discard"]:
                 return True
 
             # Save test_input if the user wants to export the model to BMZ later

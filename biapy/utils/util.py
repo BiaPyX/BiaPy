@@ -9,13 +9,12 @@ import scipy.ndimage
 import copy
 from PIL import Image
 from tqdm import tqdm
-from skimage.io import imsave, imread
+from skimage.io import imsave
 from skimage import measure
 from hashlib import sha256
 
 from biapy.engine.metrics import jaccard_index_numpy
 from biapy.utils.misc import is_main_process
-
 
 def create_plots(results, metrics, job_id, chartOutDir):
     """
@@ -779,40 +778,6 @@ def save_filters_of_convlayer(model, out_dir, l_num=None, name=None, prefix="", 
     prefix += "_" if prefix != "" else prefix
     plt.savefig(os.path.join(out_dir, prefix + "f_layer" + str(l_num) + ".png"))
     plt.clf()
-
-
-def check_masks(path, n_classes=2):
-    """
-    Check Whether the data masks have the correct labels inspection a few random images of the given path. If the
-    function gives no error one should assume that the masks are correct.
-
-    Parameters
-    ----------
-    path : str
-        Path to the data mask.
-
-    n_classes : int, optional
-        Maximum classes that the masks must contain.
-    """
-
-    print("Checking ground truth classes in {} . . .".format(path))
-
-    ids = sorted(next(os.walk(path))[2])
-
-    # Check only 4 random images or less if there are not as many
-    num_sample = [4, len(ids)]
-    numbers = random.sample(range(0, len(ids)), min(num_sample))
-    for i in numbers:
-        img = imread(os.path.join(path, ids[i]))
-        values, _ = np.unique(img, return_counts=True)
-        if len(values) > n_classes:
-            raise ValueError(
-                "Error: given mask ({}) has more classes than specified in 'MODEL.N_CLASSES'."
-                "That variable value need to be counting with the background class."
-                " E.g. if mask has [0,1,2] values 'MODEL.N_CLASSES' should be 3.\n"
-                "Values found: {}".format(os.path.join(path, ids[i]), values)
-            )
-
 
 def check_downsample_division(X, d_levels):
     """
