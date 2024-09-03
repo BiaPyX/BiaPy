@@ -315,8 +315,8 @@ class Config:
         # Median blur
         _C.DATA.PREPROCESS.MEDIAN_BLUR = CN()
         _C.DATA.PREPROCESS.MEDIAN_BLUR.ENABLE = False
-        # Footprint to be used for the median blur. Can be squared, circle, etc.
-        _C.DATA.PREPROCESS.MEDIAN_BLUR.FOOTPRINT = None
+        # Desired kernel size (including channels). When using 3D data, size must be also in 3D (ex. (3,7,7,1) for (z,y,x,c))
+        _C.DATA.PREPROCESS.MEDIAN_BLUR.KERNEL_SIZE = (3,3,1)
 
         # Histogram matching. More info at: https://en.wikipedia.org/wiki/Histogram_matching
         _C.DATA.PREPROCESS.MATCH_HISTOGRAM = CN()
