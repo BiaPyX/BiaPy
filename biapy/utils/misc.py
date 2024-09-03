@@ -12,6 +12,7 @@ import torch.backends.cudnn as cudnn
 from tensorboardX import SummaryWriter
 from pathlib import Path
 from yacs.config import CfgNode
+from functools import partial
 
 # from torch._six import inf
 from torch import inf
@@ -232,6 +233,8 @@ def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=Non
     # Load checkpoint file
     torch.serialization.add_safe_globals([CfgNode])
     torch.serialization.add_safe_globals([set])
+    torch.serialization.add_safe_globals([partial])
+    torch.serialization.add_safe_globals([torch.nn.modules.normalization.LayerNorm])
     if resume.startswith("https"):
         checkpoint = torch.hub.load_state_dict_from_url(resume, map_location=device, check_hash=True)
     else:

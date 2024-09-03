@@ -6,14 +6,11 @@ import pandas as pd
 from tqdm import tqdm
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 from torchmetrics import Accuracy
-from sklearn.model_selection import StratifiedKFold
 
 from biapy.engine.base_workflow import Base_Workflow
-from biapy.data.pre_processing import norm_range01
-from biapy.data.data_2D_manipulation import load_data_classification
-from biapy.data.data_3D_manipulation import load_3d_data_classification
+from biapy.data.pre_processing import norm_range01, preprocess_data
+from biapy.data.data_manipulation import load_and_prepare_train_data_cls, load_and_prepare_cls_test_data
 from biapy.utils.misc import is_main_process
-from biapy.data.pre_processing import preprocess_data
 
 
 class Classification_Workflow(Base_Workflow):
@@ -53,6 +50,7 @@ class Classification_Workflow(Base_Workflow):
 
         # Workflow specific training variables
         self.mask_path = cfg.DATA.TRAIN.GT_PATH
+        self.is_y_mask = False
         self.load_Y_val = True
 
     def define_metrics(self):
@@ -108,7 +106,7 @@ class Classification_Workflow(Base_Workflow):
 
         if self.cfg.LOSS.TYPE == "CE":
             self.loss = torch.nn.CrossEntropyLoss()
-            
+
         super().define_metrics()
 
     def metric_calculation(self, output, targets, train=True, metric_logger=None):
@@ -173,196 +171,119 @@ class Classification_Workflow(Base_Workflow):
         """
         Load training and validation data.
         """
-        if self.cfg.TRAIN.ENABLE:
-            print("##########################\n" "#   LOAD TRAINING DATA   #\n" "##########################\n")
-            if self.cfg.DATA.TRAIN.IN_MEMORY:
-                val_split = self.cfg.DATA.VAL.SPLIT_TRAIN if self.cfg.DATA.VAL.FROM_TRAIN else 0.0
-                f_name = load_data_classification if self.cfg.PROBLEM.NDIM == "2D" else load_3d_data_classification
-                preprocess_cfg = self.cfg.DATA.PREPROCESS if self.cfg.DATA.PREPROCESS.TRAIN else None
-                preprocess_fn = preprocess_data if self.cfg.DATA.PREPROCESS.TRAIN else None
-                print("0) Loading train images . . .")
-                objs = f_name(
-                    self.cfg.DATA.TRAIN.PATH,
-                    self.cfg.DATA.PATCH_SIZE,
-                    convert_to_rgb=self.cfg.DATA.FORCE_RGB,
-                    expected_classes=self.cfg.MODEL.N_CLASSES,
-                    cross_val=self.cfg.DATA.VAL.CROSS_VAL,
-                    cross_val_nsplits=self.cfg.DATA.VAL.CROSS_VAL_NFOLD,
-                    cross_val_fold=self.cfg.DATA.VAL.CROSS_VAL_FOLD,
-                    val_split=val_split,
-                    seed=self.cfg.SYSTEM.SEED,
-                    shuffle_val=self.cfg.DATA.VAL.RANDOM,
-                    preprocess_cfg=preprocess_cfg,
-                    preprocess_f=preprocess_fn,
-                )
-
-                if self.cfg.DATA.VAL.FROM_TRAIN:
-                    if self.cfg.DATA.VAL.CROSS_VAL:
-                        (
-                            self.X_train,
-                            self.Y_train,
-                            self.X_val,
-                            self.Y_val,
-                            self.train_filenames,
-                            self.cross_val_samples_ids,
-                        ) = objs
-                    else:
-                        (
-                            self.X_train,
-                            self.Y_train,
-                            self.X_val,
-                            self.Y_val,
-                            self.train_filenames,
-                        ) = objs
-                else:
-                    self.X_train, self.Y_train, self.train_filenames = objs
-                del objs
-            else:
-                self.X_train, self.Y_train = None, None
-
-            ##################
-            ### VALIDATION ###
-            ##################
-            if not self.cfg.DATA.VAL.FROM_TRAIN:
-                if self.cfg.DATA.VAL.IN_MEMORY:
-                    print("1) Loading validation images . . .")
-                    f_name = load_data_classification if self.cfg.PROBLEM.NDIM == "2D" else load_3d_data_classification
-                    preprocess_cfg = self.cfg.DATA.PREPROCESS if self.cfg.DATA.PREPROCESS.VAL else None
-                    preprocess_fn = preprocess_data if self.cfg.DATA.PREPROCESS.VAL else None
-                    self.X_val, self.Y_val, _ = f_name(
-                        self.cfg.DATA.VAL.PATH,
-                        self.cfg.DATA.PATCH_SIZE,
-                        convert_to_rgb=self.cfg.DATA.FORCE_RGB,
-                        expected_classes=self.cfg.MODEL.N_CLASSES,
-                        val_split=0,
-                        preprocess_cfg=preprocess_cfg,
-                        preprocess_f=preprocess_fn,
-                    )
-
-                    if self.Y_val is not None and len(self.X_val) != len(self.Y_val):
-                        raise ValueError(
-                            "Different number of raw and ground truth items ({} vs {}). "
-                            "Please check the data!".format(len(self.X_val), len(self.Y_val))
-                        )
-                else:
-                    self.X_val, self.Y_val = None, None
-
+        (
+            self.X_train,
+            self.X_val,
+            self.cross_val_samples_ids,
+        ) = load_and_prepare_train_data_cls(
+            train_path=self.cfg.DATA.TRAIN.PATH,
+            train_in_memory=self.cfg.DATA.TRAIN.IN_MEMORY,
+            val_path=self.cfg.DATA.VAL.PATH,
+            val_in_memory=self.cfg.DATA.VAL.IN_MEMORY,
+            expected_classes=self.cfg.MODEL.N_CLASSES,
+            cross_val=self.cfg.DATA.VAL.CROSS_VAL,
+            cross_val_nsplits=self.cfg.DATA.VAL.CROSS_VAL_NFOLD,
+            cross_val_fold=self.cfg.DATA.VAL.CROSS_VAL_FOLD,
+            val_split=self.cfg.DATA.VAL.SPLIT_TRAIN if self.cfg.DATA.VAL.FROM_TRAIN else 0.0,
+            seed=self.cfg.SYSTEM.SEED,
+            shuffle_val=self.cfg.DATA.VAL.RANDOM,
+            train_preprocess_f=preprocess_data if self.cfg.DATA.PREPROCESS.TRAIN else None,
+            train_preprocess_cfg=self.cfg.DATA.PREPROCESS if self.cfg.DATA.PREPROCESS.TRAIN else None,
+            train_filter_conds=(
+                self.cfg.DATA.TRAIN.FILTER_SAMPLES.PROPS if self.cfg.DATA.TRAIN.FILTER_SAMPLES.ENABLE else []
+            ),
+            train_filter_vals=(
+                self.cfg.DATA.TRAIN.FILTER_SAMPLES.VALUES if self.cfg.DATA.TRAIN.FILTER_SAMPLES.ENABLE else []
+            ),
+            train_filter_signs=(
+                self.cfg.DATA.TRAIN.FILTER_SAMPLES.SIGNS if self.cfg.DATA.TRAIN.FILTER_SAMPLES.ENABLE else []
+            ),
+            val_preprocess_f=preprocess_data if self.cfg.DATA.PREPROCESS.VAL else None,
+            val_preprocess_cfg=self.cfg.DATA.PREPROCESS if self.cfg.DATA.PREPROCESS.VAL else None,
+            val_filter_conds=(
+                self.cfg.DATA.VAL.FILTER_SAMPLES.PROPS if self.cfg.DATA.VAL.FILTER_SAMPLES.ENABLE else []
+            ),
+            val_filter_vals=(
+                self.cfg.DATA.VAL.FILTER_SAMPLES.VALUES if self.cfg.DATA.VAL.FILTER_SAMPLES.ENABLE else []
+            ),
+            val_filter_signs=(
+                self.cfg.DATA.VAL.FILTER_SAMPLES.SIGNS if self.cfg.DATA.VAL.FILTER_SAMPLES.ENABLE else []
+            ),
+            crop_shape=self.cfg.DATA.PATCH_SIZE,
+            reflect_to_complete_shape=self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE,
+            convert_to_rgb=self.cfg.DATA.FORCE_RGB,
+            is_3d=(self.cfg.PROBLEM.NDIM == "3D"),
+        )
+        self.Y_train, self.Y_val = None, None 
+        
     def load_test_data(self):
         """
         Load test data.
         """
         if self.cfg.TEST.ENABLE:
-            print("######################\n" "#   LOAD TEST DATA   #\n" "######################\n")
-            if not self.cfg.DATA.TEST.USE_VAL_AS_TEST:
-                if self.cfg.DATA.TEST.IN_MEMORY:
-                    print("2) Loading test images . . .")
-                    f_name = load_data_classification if self.cfg.PROBLEM.NDIM == "2D" else load_3d_data_classification
-                    preprocess_cfg = self.cfg.DATA.PREPROCESS if self.cfg.DATA.PREPROCESS.TEST else None
-                    preprocess_fn = preprocess_data if self.cfg.DATA.PREPROCESS.TEST else None
-                    self.X_test, self.Y_test, self.test_filenames = f_name(
-                        self.cfg.DATA.TEST.PATH,
-                        self.cfg.DATA.PATCH_SIZE,
-                        convert_to_rgb=self.cfg.DATA.FORCE_RGB,
-                        preprocess_cfg=preprocess_cfg,
-                        preprocess_f=preprocess_fn,
-                        expected_classes=(self.cfg.MODEL.N_CLASSES if self.cfg.DATA.TEST.LOAD_GT else None),
-                        val_split=0,
-                    )
-                    self.class_names = sorted(next(os.walk(self.cfg.DATA.TEST.PATH))[1])
-                else:
-                    self.X_test, self.Y_test = None, None
+            print("######################")
+            print("#   LOAD TEST DATA   #")
+            print("######################")
+            use_val_as_test_info = None
+            if self.cfg.DATA.TEST.USE_VAL_AS_TEST:
+                use_val_as_test_info = {
+                    "cross_val_samples_ids": self.cross_val_samples_ids,
+                    "train_path": self.cfg.DATA.TRAIN.PATH,
+                    "selected_fold": self.cfg.DATA.VAL.CROSS_VAL_FOLD,
+                    "n_splits": self.cfg.DATA.VAL.CROSS_VAL_NFOLD,
+                    "shuffle": self.cfg.DATA.VAL.RANDOM,
+                    "seed": self.cfg.SYSTEM.SEED,
+                }
 
-                self.class_names = sorted(next(os.walk(self.cfg.DATA.TEST.PATH))[1])
-                if self.test_filenames is None:
-                    self.test_filenames = []
-                    for c_num, folder in enumerate(self.class_names):
-                        self.test_filenames += sorted(next(os.walk(os.path.join(self.cfg.DATA.TEST.PATH, folder)))[2])
-            else:
-                # The test is the validation, and as it is only available when validation is obtained from train and when
-                # cross validation is enabled, the test set files reside in the train folder
-                self.X_test, self.Y_test = None, None
-                self.class_names = sorted(next(os.walk(self.cfg.DATA.TRAIN.PATH))[1])
-                if self.cross_val_samples_ids is None:
-                    # Split the test as it was the validation when train is not enabled
-                    skf = StratifiedKFold(
-                        n_splits=self.cfg.DATA.VAL.CROSS_VAL_NFOLD,
-                        shuffle=self.cfg.DATA.VAL.RANDOM,
-                        random_state=self.cfg.SYSTEM.SEED,
-                    )
-                    fold = 1
-                    test_index = None
-                    self.test_filenames = []
-                    B = []
-                    for c_num, folder in enumerate(self.class_names):
-                        ids = sorted(next(os.walk(os.path.join(self.cfg.DATA.TRAIN.PATH, folder)))[2])
-                        B.append((c_num,) * len(ids))
-                        self.test_filenames += ids
-                    A = np.zeros(len(self.test_filenames))
-                    B = np.concatenate(B, 0)
+            self.Y_test = None
+            (
+                self.X_test,
+                self.test_filenames,
+            ) = load_and_prepare_cls_test_data(
+                test_path=self.cfg.DATA.TEST.PATH,
+                use_val_as_test=self.cfg.DATA.TEST.USE_VAL_AS_TEST,
+                expected_classes=self.cfg.MODEL.N_CLASSES if self.use_gt else 1,
+                crop_shape=self.cfg.DATA.PATCH_SIZE,
+                is_3d=(self.cfg.PROBLEM.NDIM == "3D"),
+                reflect_to_complete_shape=self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE,
+                convert_to_rgb=self.cfg.DATA.FORCE_RGB,
+                use_val_as_test_info=use_val_as_test_info,
+            )
 
-                    for _, te_index in skf.split(A, B):
-                        if self.cfg.DATA.VAL.CROSS_VAL_FOLD == fold:
-                            self.cross_val_samples_ids = te_index.copy()
-                            break
-                        fold += 1
-                    if len(self.cross_val_samples_ids) > 5:
-                        print(
-                            "Fold number {} used for test data. Printing the first 5 ids: {}".format(
-                                fold, self.cross_val_samples_ids[:5]
-                            )
-                        )
-                    else:
-                        print(
-                            "Fold number {}. Indexes used in cross validation: {}".format(
-                                fold, self.cross_val_samples_ids
-                            )
-                        )
-
-                if self.test_filenames is None:
-                    self.test_filenames = []
-                    for c_num, folder in enumerate(self.class_names):
-                        f = os.path.join(self.cfg.DATA.TRAIN.PATH, folder)
-                        ids = sorted(next(os.walk(f))[2])
-                        self.test_filenames += ids
-                self.test_filenames = [x for i, x in enumerate(self.test_filenames) if i in self.cross_val_samples_ids]
-                self.original_test_path = self.orig_train_path
-                self.original_test_mask_path = self.orig_train_mask_path
-
-    def process_test_sample(self, norm):
+    def process_test_sample(self):
         """
         Function to process a sample in the inference phase.
-
-        Parameters
-        ----------
-        norm : List of dicts
-            Normalization used during training. Required to denormalize the predictions of the model.
         """
+        # Skip processing image 
+        if "discard" in self.current_sample["X"] and self.current_sample["X"]["discard"]: 
+            return True
+
         # Save test_output if the user wants to export the model to BMZ later
         if "test_input" not in self.bmz_config:
             if self.cfg.PROBLEM.NDIM == "2D":
-                self.bmz_config["test_input"] = self._X[0][
+                self.bmz_config["test_input"] = self.current_sample["X"][0][
                     : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1]
                 ].copy()
             else:
-                self.bmz_config["test_input"] = self._X[0][
+                self.bmz_config["test_input"] = self.current_sample["X"][0][
                     : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1], : self.cfg.DATA.PATCH_SIZE[2]
                 ].copy()
 
         # Predict each patch
-        l = int(math.ceil(self._X.shape[0] / self.cfg.TRAIN.BATCH_SIZE))
+        l = int(math.ceil(self.current_sample["X"].shape[0] / self.cfg.TRAIN.BATCH_SIZE))
         for k in tqdm(range(l), leave=False, disable=not is_main_process()):
             top = (
                 (k + 1) * self.cfg.TRAIN.BATCH_SIZE
-                if (k + 1) * self.cfg.TRAIN.BATCH_SIZE < self._X.shape[0]
-                else self._X.shape[0]
+                if (k + 1) * self.cfg.TRAIN.BATCH_SIZE < self.current_sample["X"].shape[0]
+                else self.current_sample["X"].shape[0]
             )
             with torch.cuda.amp.autocast():
-                p = self.model_call_func(self._X[k * self.cfg.TRAIN.BATCH_SIZE : top]).cpu().numpy()
+                p = self.model_call_func(self.current_sample["X"][k * self.cfg.TRAIN.BATCH_SIZE : top]).cpu().numpy()
             p = np.argmax(p, axis=1)
             self.all_pred.append(p)
 
-        if self._Y is not None:
-            self.all_gt.append(self._Y)
+        if self.current_sample["Y"] is not None:
+            self.all_gt.append(self.current_sample["Y"])
 
         # Save test_output if the user wants to export the model to BMZ later
         if "test_output" not in self.bmz_config:
@@ -434,7 +355,8 @@ class Classification_Workflow(Base_Workflow):
                         print(self.stats["full_image"][metric.lower()])
                         if self.class_names is not None:
                             display_labels = [
-                                "Category {} ({})".format(i, self.class_names[i]) for i in range(self.cfg.MODEL.N_CLASSES)
+                                "Category {} ({})".format(i, self.class_names[i])
+                                for i in range(self.cfg.MODEL.N_CLASSES)
                             ]
                         else:
                             display_labels = ["Category {}".format(i) for i in range(self.cfg.MODEL.N_CLASSES)]

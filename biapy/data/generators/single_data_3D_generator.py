@@ -24,40 +24,6 @@ class Single3DImageDataGenerator(SingleBaseDataGenerator):
         super().__init__(**kwars)
         self.zflip = zflip
 
-    def ensure_shape(self, img):
-        """
-        Ensures ``img`` correct axis number and their order.
-
-        Parameters
-        ----------
-        img : Numpy array representing a ``3D`` image
-            Image to use as sample.
-
-        Returns
-        -------
-        img : 4D Numpy array
-            Image to use as sample. E.g. ``(z, y, x, channels)``.
-        """
-        # Shape adjustment
-        if img.ndim == 3:
-            img = np.expand_dims(img, -1)
-        else:
-            min_val = min(img.shape)
-            channel_pos = img.shape.index(min_val)
-            if channel_pos != 3 and img.shape[channel_pos] <= 4:
-                new_pos = [x for x in range(4) if x != channel_pos] + [
-                    channel_pos,
-                ]
-                img = img.transpose(new_pos)
-
-        if img.ndim != 4:
-            raise ValueError(f"Image loaded seems to not be 3D: {img.shape}")
-
-        if self.convert_to_rgb and self.shape[-1] == 3 and img.shape[-1] == 1:
-            img = np.repeat(img, 3, axis=-1)
-
-        return img
-
     def apply_transform(self, image):
         # Transpose them so we can merge the z and c channels easily.
         # z, y, x, c --> x, y, z, c

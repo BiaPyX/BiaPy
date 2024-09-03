@@ -19,22 +19,19 @@ from skimage.color import rgb2gray
 from skimage.filters import gaussian, median
 
 from biapy.utils.util import (
-    load_data_from_dir,
-    load_3d_images_from_dir,
     save_tif,
     seg2aff_pni,
     seg_widen_border,
-    write_chunked_data,
     read_chunked_data,
-    order_dimensions,
-    read_img,
+    write_chunked_data,
 )
 from biapy.utils.misc import is_main_process
 from biapy.data.data_3D_manipulation import (
     load_3D_efficient_files,
     load_img_part_from_efficient_file,
+    order_dimensions,
 )
-
+from biapy.data.data_manipulation import read_img_as_ndarray, load_data_from_dir
 
 #########################
 # INSTANCE SEGMENTATION #
@@ -207,7 +204,7 @@ def create_instance_channels(cfg, data_type="train"):
             mask[data_ordered_slices] = img.transpose(transpose_order)
     else:
         for i in tqdm(range(len(Y)), disable=not is_main_process()):
-            img = read_img(
+            img = read_img_as_ndarray(
                 os.path.join(getattr(cfg.DATA, tag).GT_PATH, Y[i]),
                 is_3d=not cfg.PROBLEM.NDIM == "2D",
             )
@@ -240,7 +237,7 @@ def create_instance_channels(cfg, data_type="train"):
         X = sorted(next(os.walk(getattr(cfg.DATA, tag).PATH))[2])
         print("Creating X_{} channels . . .".format(data_type))
         for i in tqdm(range(len(X)), disable=not is_main_process()):
-            img = read_img(
+            img = read_img_as_ndarray(
                 os.path.join(getattr(cfg.DATA, tag).PATH, X[i]),
                 is_3d=not cfg.PROBLEM.NDIM == "2D",
             )
@@ -274,7 +271,7 @@ def create_test_instance_channels(cfg):
         Y = sorted(next(os.walk(cfg.DATA.TEST.GT_PATH))[2])
         print("Creating Y_test channels . . .")
         for i in tqdm(range(len(Y)), disable=not is_main_process()):
-            img = read_img(
+            img = read_img_as_ndarray(
                 os.path.join(cfg.DATA.TEST.GT_PATH, Y[i]),
                 is_3d=not cfg.PROBLEM.NDIM == "2D",
             )
@@ -294,7 +291,7 @@ def create_test_instance_channels(cfg):
     X = sorted(next(os.walk(cfg.DATA.TEST.PATH))[2])
     print("Creating X_test channels . . .")
     for i in tqdm(range(len(X)), disable=not is_main_process()):
-        img = read_img(os.path.join(cfg.DATA.TEST.PATH, X[i]), is_3d=not cfg.PROBLEM.NDIM == "2D")
+        img = read_img_as_ndarray(os.path.join(cfg.DATA.TEST.PATH, X[i]), is_3d=not cfg.PROBLEM.NDIM == "2D")
         save_tif(
             np.expand_dims(img, 0),
             data_dir=cfg.DATA.TEST.INSTANCE_CHANNELS_DIR,
@@ -608,7 +605,7 @@ def create_detection_masks(cfg, data_type="train"):
             df = pd.read_csv(os.path.join(label_dir, ids[i]))
             df = df.dropna()
             if ".zarr" != img_ext:
-                img = read_img(
+                img = read_img_as_ndarray(
                     os.path.join(img_dir, img_filename),
                     is_3d=not cfg.PROBLEM.NDIM == "2D",
                 )
@@ -852,7 +849,7 @@ def create_ssl_source_data_masks(cfg, data_type="train"):
     for i in range(len(ids)):
         if not os.path.exists(os.path.join(out_dir, ids[i])):
             print("Crappifying file {} to create SSL source".format(os.path.join(img_dir, ids[i])))
-            img = read_img(os.path.join(img_dir, ids[i]), is_3d=not cfg.PROBLEM.NDIM == "2D")
+            img = read_img_as_ndarray(os.path.join(img_dir, ids[i]), is_3d=not cfg.PROBLEM.NDIM == "2D")
             img = crappify(
                 img,
                 resizing_factor=cfg.PROBLEM.SELF_SUPERVISED.RESIZING_FACTOR,
@@ -966,17 +963,23 @@ def add_gaussian_noise(image, percentage_of_noise):
 ################
 # SEMANTIC SEG #
 ################
-def calculate_2D_volume_prob_map(Y, Y_path=None, w_foreground=0.94, w_background=0.06, save_dir=None):
+def calculate_volume_prob_map(Y, is_3d=False, w_foreground=0.94, w_background=0.06, save_dir=None):
     """
-    Calculate the probability map of the given 2D data.
+    Calculate the probability map of the given data.
 
     Parameters
     ----------
-    Y : 4D Numpy array
-        Data to calculate the probability map from. E. g. ``(num_of_images, y, x, channel)``
-
-    Y_path : str, optional
-        Path to load the data from in case ``Y=None``.
+    Y : list of dict
+        Data to calculate the probability map from. Each item in the list represents a sample of the dataset. 
+        Each sample is represented as follows:
+            * ``"filename"``: name of the image to extract the data sample from.
+            * ``"dir"``: directory where the image resides.
+            * ``"coords"``: coordinates to extract the sample from the image. If ``None`` it implies that a random patch needs to 
+              be extracted.
+            * ``"original_data_shape"``: shape of the image where the samples is extracted (useful for reconstructing it later),
+            * ``"shape"``: shape of the sample.
+            * ``"img"`` (optional): image sample itself. It is a ndarrray of  ``(y, x, channels)`` in ``2D`` and
+              ``(z, y, x, channels)``in ``3D``. Provided if the user selected to load data into memory. 
 
     w_foreground : float, optional
         Weight of the foreground. This value plus ``w_background`` must be equal ``1``.
@@ -987,14 +990,6 @@ def calculate_2D_volume_prob_map(Y, Y_path=None, w_foreground=0.94, w_background
     save_dir : str, optional
         Path to the file where the probability map will be stored.
 
-    Raises
-    ------
-    ValueError
-        if ``Y`` does not have 4 dimensions.
-
-    ValueError
-        if ``w_foreground + w_background > 1``.
-
     Returns
     -------
     Array : Str or 4D Numpy array
@@ -1002,65 +997,50 @@ def calculate_2D_volume_prob_map(Y, Y_path=None, w_foreground=0.94, w_background
         shapes. Otherwise, an array that represents the probability map of ``Y`` or all loaded data files from
         ``Y_path`` will be returned.
     """
-
-    if Y is not None:
-        if Y.ndim != 4:
-            raise ValueError("'Y' must be a 4D Numpy array")
-
-    if Y is None and Y_path is None:
-        raise ValueError("'Y' or 'Y_path' need to be provided")
-
-    if Y is not None:
-        prob_map = np.copy(Y).astype(np.float32)
-        l = prob_map.shape[0]
-        channels = prob_map.shape[-1]
-        v = np.max(prob_map)
-    else:
-        prob_map, _, _ = load_data_from_dir(Y_path)
-        l = len(prob_map)
-        channels = prob_map[0].shape[-1]
-        v = np.max(prob_map[0])
-
-    if isinstance(prob_map, list):
-        first_shape = prob_map[0][0].shape
-    else:
-        first_shape = prob_map[0].shape
-
-    print("Connstructing the probability map . . .")
+    print("Constructing the probability map . . .")
     maps = []
     diff_shape = False
-    for i in tqdm(range(l), disable=not is_main_process()):
-        if isinstance(prob_map, list):
-            _map = prob_map[i][0].copy().astype(np.float32)
+    first_shape = None
+    Ylen = len(Y)
+    for i in tqdm(range(Ylen), disable=not is_main_process()):
+        if "img" in Y[i]:
+            _map = Y[i]["img"].copy().astype(np.float32)
         else:
-            _map = prob_map[i].copy().astype(np.float32)
+            path = os.path.join(Y[i]["dir"],Y[i]["filename"])
+            _map = read_img_as_ndarray(path, is_3d=is_3d).astype(np.float32)
 
-        for k in range(channels):
-            # Remove artifacts connected to image border
-            _map[:, :, k] = clear_border(_map[:, :, k])
+        for k in range(_map.shape[-1]):
+            if is_3d:
+                for j in range(_map.shape[0]):
+                    # Remove artifacts connected to image border
+                    _map[j,...,k] = clear_border(_map[j,...,k])
+            else:
+                # Remove artifacts connected to image border
+                _map[...,k] = clear_border(_map[...,k])
 
-            foreground_pixels = (_map[:, :, k] == v).sum()
-            background_pixels = (_map[:, :, k] == 0).sum()
+            foreground_pixels = (_map[...,k] > 0).sum()
+            background_pixels = (_map[...,k] == 0).sum()
 
             if foreground_pixels == 0:
-                _map[:, :, k][np.where(_map[:, :, k] == v)] = 0
+                _map[...,k][np.where(_map[...,k] > 0)] = 0
             else:
-                _map[:, :, k][np.where(_map[:, :, k] == v)] = w_foreground / foreground_pixels
+                _map[...,k][np.where(_map[...,k] > 0)] = w_foreground / foreground_pixels
             if background_pixels == 0:
-                _map[:, :, k][np.where(_map[:, :, k] == 0)] = 0
+                _map[...,k][np.where(_map[...,k] == 0)] = 0
             else:
-                _map[:, :, k][np.where(_map[:, :, k] == 0)] = w_background / background_pixels
+                _map[...,k][np.where(_map[...,k] == 0)] = w_background / background_pixels
 
             # Necessary to get all probs sum 1
-            s = _map[:, :, k].sum()
+            s = _map[...,k].sum()
             if s == 0:
                 t = 1
-                for x in _map[:, :, k].shape:
+                for x in _map[...,k].shape:
                     t *= x
-                _map[:, :, k].fill(1 / t)
+                _map[...,k].fill(1 / t)
             else:
-                _map[:, :, k] = _map[:, :, k] / _map[:, :, k].sum()
-
+                _map[...,k] = _map[...,k] / _map[...,k].sum()
+        if first_shape is None:
+            first_shape = _map.shape
         if first_shape != _map.shape:
             diff_shape = True
         maps.append(_map)
@@ -1080,131 +1060,11 @@ def calculate_2D_volume_prob_map(Y, Y_path=None, w_foreground=0.94, w_background
                 "As the files loaded have different shapes, the probability map for each one will be stored"
                 " separately in {}".format(save_dir)
             )
-            d = len(str(l))
-            for i in range(l):
+            d = len(str(Ylen))
+            for i in range(Ylen):
                 f = os.path.join(save_dir, "prob_map" + str(i).zfill(d) + ".npy")
                 np.save(f, maps[i])
             return save_dir
-
-
-def calculate_3D_volume_prob_map(Y, Y_path=None, w_foreground=0.94, w_background=0.06, save_dir=None):
-    """
-    Calculate the probability map of the given 3D data.
-
-    Parameters
-    ----------
-    Y : 5D Numpy array
-        Data to calculate the probability map from. E. g. ``(num_subvolumes, z, y, x, channel)``
-
-    Y_path : str, optional
-        Path to load the data from in case ``Y=None``.
-
-    w_foreground : float, optional
-        Weight of the foreground. This value plus ``w_background`` must be equal ``1``.
-
-    w_background : float, optional
-        Weight of the background. This value plus ``w_foreground`` must be equal ``1``.
-
-    save_dir : str, optional
-        Path to the directory where the probability map will be stored.
-
-    Returns
-    -------
-    Array : Str or 5D Numpy array
-        Path where the probability map/s is/are stored if ``Y_path`` was given and there are images of different
-        shapes. Otherwise, an array that represents the probability map of ``Y`` or all loaded data files from
-        ``Y_path`` will be returned.
-
-    Raises
-    ------
-    ValueError
-        if ``Y`` does not have 5 dimensions.
-    ValueError
-        if ``w_foreground + w_background > 1``.
-    """
-
-    if Y is not None:
-        if Y.ndim != 5:
-            raise ValueError("'Y' must be a 5D Numpy array")
-
-    if Y is None and Y_path is None:
-        raise ValueError("'Y' or 'Y_path' need to be provided")
-
-    if Y is not None:
-        prob_map = np.copy(Y).astype(np.float32)
-        l = prob_map.shape[0]
-        channels = prob_map.shape[-1]
-        v = np.max(prob_map)
-    else:
-        prob_map, _, _ = load_3d_images_from_dir(Y_path)
-        l = len(prob_map)
-        channels = prob_map[0].shape[-1]
-        v = np.max(prob_map[0])
-
-    if isinstance(prob_map, list):
-        first_shape = prob_map[0][0].shape
-    else:
-        first_shape = prob_map[0].shape
-
-    print("Constructing the probability map . . .")
-    maps = []
-    diff_shape = False
-    for i in range(l):
-        if isinstance(prob_map, list):
-            _map = prob_map[i][0].copy().astype(np.float64)
-        else:
-            _map = prob_map[i].copy().astype(np.float64)
-
-        for k in range(channels):
-            for j in range(_map.shape[0]):
-                # Remove artifacts connected to image border
-                _map[j, :, :, k] = clear_border(_map[j, :, :, k])
-            foreground_pixels = (_map[:, :, :, k] == v).sum()
-            background_pixels = (_map[:, :, :, k] == 0).sum()
-
-            if foreground_pixels == 0:
-                _map[:, :, :, k][np.where(_map[:, :, :, k] == v)] = 0
-            else:
-                _map[:, :, :, k][np.where(_map[:, :, :, k] == v)] = w_foreground / foreground_pixels
-            if background_pixels == 0:
-                _map[:, :, :, k][np.where(_map[:, :, :, k] == 0)] = 0
-            else:
-                _map[:, :, :, k][np.where(_map[:, :, :, k] == 0)] = w_background / background_pixels
-
-            # Necessary to get all probs sum 1
-            s = _map[:, :, :, k].sum()
-            if s == 0:
-                t = 1
-                for x in _map[:, :, :, k].shape:
-                    t *= x
-                _map[:, :, :, k].fill(1 / t)
-            else:
-                _map[:, :, :, k] = _map[:, :, :, k] / _map[:, :, :, k].sum()
-
-        if first_shape != _map.shape:
-            diff_shape = True
-        maps.append(_map)
-
-    if save_dir is not None:
-        os.makedirs(save_dir, exist_ok=True)
-        if not diff_shape:
-            for i in range(len(maps)):
-                maps[i] = np.expand_dims(maps[i], 0)
-            maps = np.concatenate(maps)
-            print("Saving the probability map in {}".format(save_dir))
-            np.save(os.path.join(save_dir, "prob_map.npy"), maps)
-            return maps
-        else:
-            print(
-                "As the files loaded have different shapes, the probability map for each one will be stored "
-                "separately in {}".format(save_dir)
-            )
-            d = len(str(l))
-            for i in range(l):
-                f = os.path.join(save_dir, "prob_map" + str(i).zfill(d) + ".npy")
-                np.save(f, maps[i])
-            return save_dir
-
 
 ###########
 # GENERAL #
@@ -1570,8 +1430,7 @@ def apply_histogram_matching(images, reference_path, is_2d):
         The result of matching the histogram of the input images to the histogram of the reference image.
         The returned data will use the same data type as the given `images`.
     """
-    f_name = load_data_from_dir if is_2d else load_3d_images_from_dir
-    references, *_ = f_name(reference_path)
+    references = load_data_from_dir(reference_path, is_3d=not is_2d)
 
     matched_images = _histogram_matching(images, references)
     if isinstance(images, np.ndarray):
@@ -1655,20 +1514,8 @@ def preprocess_data(cfg, x_data=[], y_data=[], is_2d=True, is_y_mask=False):
         Preprocessed data. The same structure and dimensionality of the given data will be returned.
     """
 
-    if cfg.RESIZE.ENABLE:
-        print("Preprocessing: applying resize . . .")
-        if len(x_data) > 0:
-            x_data = resize_images(
-                x_data,
-                output_shape=cfg.RESIZE.OUTPUT_SHAPE,
-                order=cfg.RESIZE.ORDER,
-                mode=cfg.RESIZE.MODE,
-                cval=cfg.RESIZE.CVAL,
-                clip=cfg.RESIZE.CLIP,
-                preserve_range=cfg.RESIZE.PRESERVE_RANGE,
-                anti_aliasing=cfg.RESIZE.ANTI_ALIASING,
-            )
-        if len(y_data) > 0:
+    if len(y_data) > 0:
+        if cfg.RESIZE.ENABLE:
             # if y is a mask, then use nearest
             y_order = 0 if is_y_mask else cfg.RESIZE.ORDER
             y_data = resize_images(
@@ -1683,8 +1530,18 @@ def preprocess_data(cfg, x_data=[], y_data=[], is_2d=True, is_y_mask=False):
             )
 
     if len(x_data) > 0:
+        if cfg.RESIZE.ENABLE:
+            x_data = resize_images(
+                x_data,
+                output_shape=cfg.RESIZE.OUTPUT_SHAPE,
+                order=cfg.RESIZE.ORDER,
+                mode=cfg.RESIZE.MODE,
+                cval=cfg.RESIZE.CVAL,
+                clip=cfg.RESIZE.CLIP,
+                preserve_range=cfg.RESIZE.PRESERVE_RANGE,
+                anti_aliasing=cfg.RESIZE.ANTI_ALIASING,
+            )
         if cfg.GAUSSIAN_BLUR.ENABLE:
-            print("Preprocessing: applying gaussian blur . . .")
             x_data = apply_gaussian_blur(
                 x_data,
                 sigma=cfg.GAUSSIAN_BLUR.SIGMA,
@@ -1692,27 +1549,23 @@ def preprocess_data(cfg, x_data=[], y_data=[], is_2d=True, is_y_mask=False):
                 channel_axis=cfg.GAUSSIAN_BLUR.CHANNEL_AXIS,
             )
         if cfg.MEDIAN_BLUR.ENABLE:
-            print("Preprocessing: applying median blur . . .")
             x_data = apply_median_blur(
                 x_data,
                 footprint=np.ones(cfg.MEDIAN_BLUR.KERNEL_SIZE, dtype=np.uint8).tolist(),
             )
         if cfg.MATCH_HISTOGRAM.ENABLE:
-            print("Preprocessing: applying histogram matching . . .")
             x_data = apply_histogram_matching(
                 x_data,
                 reference_path=cfg.MATCH_HISTOGRAM.REFERENCE_PATH,
                 is_2d=is_2d,
             )
         if cfg.CLAHE.ENABLE:
-            print("Preprocessing: applying CLAHE . . .")
             x_data = apply_clahe(
                 x_data,
                 kernel_size=cfg.CLAHE.KERNEL_SIZE,
                 clip_limit=cfg.CLAHE.CLIP_LIMIT,
             )
         if cfg.CANNY.ENABLE:
-            print("Preprocessing: applying Canny . . .")
             x_data = detect_edges(
                 x_data,
                 low_threshold=cfg.CANNY.LOW_THRESHOLD,

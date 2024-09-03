@@ -2,7 +2,7 @@ import os
 import numpy as np
 import collections
 from biapy.utils.misc import get_checkpoint_path
-from biapy.utils.util import check_value
+from biapy.data.data_manipulation import check_value
 
 
 def check_configuration(cfg, jobname, check_data_paths=True):
@@ -45,13 +45,105 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     ]
                 )
 
-    if cfg.DATA.TRAIN.MINIMUM_FOREGROUND_PER != -1:
-        if not check_value(cfg.DATA.TRAIN.MINIMUM_FOREGROUND_PER):
-            raise ValueError("DATA.TRAIN.MINIMUM_FOREGROUND_PER not in [0, 1] range")
-        if cfg.PROBLEM.TYPE not in ["SEMANTIC_SEG", "INSTANCE_SEG", "DETECTION"]:
-            raise ValueError(
-                "'DATA.TRAIN.MINIMUM_FOREGROUND_PER' can only be set in 'SEMANTIC_SEG', 'INSTANCE_SEG' and 'DETECTION' workflows"
-            )
+    for phase in ["TRAIN", "VAL", "TEST"]:
+        if getattr(cfg.DATA, phase).FILTER_SAMPLES.ENABLE:
+            if not (
+                    len(getattr(cfg.DATA, phase).FILTER_SAMPLES.PROPS)
+                    == len(getattr(cfg.DATA, phase).FILTER_SAMPLES.VALUES)
+                    == len(getattr(cfg.DATA, phase).FILTER_SAMPLES.SIGNS)
+                ):
+                    raise ValueError(
+                        "'DATA.TRAIN.FILTER_SAMPLES.PROPS', 'DATA.TRAIN.FILTER_SAMPLES.VALUES' and "
+                        "'DATA.TRAIN.FILTER_SAMPLES.SIGNS' need to have same length"
+                    )
+            foreground_filter_requested = any([True for cond in getattr(cfg.DATA, phase).FILTER_SAMPLES.PROPS if "foreground" in cond])
+            if foreground_filter_requested:
+                if cfg.PROBLEM.TYPE not in ["SEMANTIC_SEG", "INSTANCE_SEG", "DETECTION"]:
+                    raise ValueError(
+                        "'foreground' property can only be used in SEMANTIC_SEG, INSTANCE_SEG and DETECTION workflows"
+                    )
+                if phase == "TEST" and not cfg.DATA.TEST.LOAD_GT and cfg.DATA.TEST.USE_VAL_AS_TEST:
+                    raise ValueError("'foreground' condition can not be used for filtering when test ground truth is not provided")
+                
+            if len(getattr(cfg.DATA, phase).FILTER_SAMPLES.PROPS) == 0:
+                raise ValueError(
+                    "'DATA.TRAIN.FILTER_SAMPLES.PROPS' can not be an empty list when "
+                    "'DATA.TRAIN.FILTER_SAMPLES.ENABLE' is enabled"
+                )
+
+            for i in range(len(getattr(cfg.DATA, phase).FILTER_SAMPLES.PROPS)):
+                if not isinstance(
+                    getattr(cfg.DATA, phase).FILTER_SAMPLES.PROPS[i],
+                    list,
+                ):
+                    raise ValueError(
+                        "'DATA.TRAIN.FILTER_SAMPLES.PROPS' need to be a list of list. E.g. [ ['mean'], ['min', 'max'] ]"
+                    )
+                if not isinstance(
+                    getattr(cfg.DATA, phase).FILTER_SAMPLES.VALUES[i],
+                    list,
+                ):
+                    raise ValueError(
+                        "'DATA.TRAIN.FILTER_SAMPLES.VALUES' need to be a list of list. E.g. [ [10], [15, 3] ]"
+                    )
+                if not isinstance(
+                    getattr(cfg.DATA, phase).FILTER_SAMPLES.SIGNS[i],
+                    list,
+                ):
+                    raise ValueError(
+                        "'DATA.TRAIN.FILTER_SAMPLES.SIGNS' need to be a list of list. E.g. [ ['gt'], ['le', 'gt'] ]"
+                    )
+
+                if not (
+                    len(getattr(cfg.DATA, phase).FILTER_SAMPLES.PROPS[i])
+                    == len(getattr(cfg.DATA, phase).FILTER_SAMPLES.VALUES[i])
+                    == len(getattr(cfg.DATA, phase).FILTER_SAMPLES.SIGNS[i])
+                ):
+                    raise ValueError(
+                        "'DATA.TRAIN.FILTER_SAMPLES.PROPS', 'DATA.TRAIN.FILTER_SAMPLES.VALUES' and "
+                        "'DATA.TRAIN.FILTER_SAMPLES.SIGNS' need to have same length"
+                    )
+
+                # Check for unique values
+                if (
+                    len(
+                        [
+                            item
+                            for item, count in collections.Counter(
+                                getattr(cfg.DATA, phase).FILTER_SAMPLES.PROPS[i]
+                            ).items()
+                            if count > 1
+                        ]
+                    )
+                    > 0
+                ):
+                    raise ValueError(
+                        "Non repeated values are allowed in 'DATA.TRAIN.FILTER_SAMPLES'"
+                    )
+                for j in range(len(getattr(cfg.DATA, phase).FILTER_SAMPLES.PROPS[i])):
+                    if getattr(cfg.DATA, phase).FILTER_SAMPLES.PROPS[i][j] not in [
+                        'foreground', 'mean', 'min', 'max'
+                    ]:
+                        raise ValueError(
+                            "'DATA.TRAIN.FILTER_SAMPLES.PROPS' can only be one among these: ['foreground', 'mean', 'min', 'max']"
+                        )
+                    if getattr(cfg.DATA, phase).FILTER_SAMPLES.SIGNS[i][j] not in [
+                        "gt",
+                        "ge",
+                        "lt",
+                        "le",
+                    ]:
+                        raise ValueError(
+                            "'DATA.TRAIN.FILTER_SAMPLES.SIGNS' can only be one among these: ['gt', 'ge', 'lt', 'le']"
+                        )
+                    if getattr(cfg.DATA, phase).FILTER_SAMPLES.PROPS[i][
+                        j
+                    ] == "foreground" and not check_value(
+                        getattr(cfg.DATA, phase).FILTER_SAMPLES.VALUES[i][j]
+                    ):
+                        raise ValueError(
+                            "'foreground' property value can only be in [0, 1] range (check 'DATA.TRAIN.FILTER_SAMPLES.VALUES' values)"
+                        )
 
     if len(cfg.DATA.TRAIN.RESOLUTION) == 1 and cfg.DATA.TRAIN.RESOLUTION[0] == -1:
         opts.extend(["DATA.TRAIN.RESOLUTION", (1,) * dim_count])
@@ -826,35 +918,21 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         if cfg.MODEL.SOURCE == "torchvision":
             raise ValueError("'MODEL.SOURCE' as 'torchvision' is not available in image to image workflow")
         if cfg.PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER:
-            if cfg.DATA.TRAIN.IN_MEMORY:
-                raise ValueError(
-                    "'PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER' can only be used if 'DATA.TRAIN.IN_MEMORY' == 'False'"
-                )
-            if cfg.DATA.VAL.IN_MEMORY:
-                raise ValueError(
-                    "'PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER' can only be used if 'DATA.VAL.IN_MEMORY' == 'False'"
-                )
-            if cfg.DATA.TEST.IN_MEMORY:
-                raise ValueError(
-                    "'PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER' can only be used if 'DATA.TEST.IN_MEMORY' == 'False'"
-                )
+            if cfg.TRAIN.ENABLE and cfg.DATA.TRAIN.FILTER_SAMPLES.ENABLE:
+                raise ValueError("'DATA.TRAIN.FILTER_SAMPLES.ENABLE' can not be enabled when 'PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER' is enabled too")
+            
+            if cfg.TRAIN.ENABLE and cfg.DATA.VAL.FILTER_SAMPLES.ENABLE:
+                raise ValueError("'DATA.VAL.FILTER_SAMPLES.ENABLE' can not be enabled when 'PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER' is enabled too")
 
     if cfg.DATA.EXTRACT_RANDOM_PATCH and cfg.DATA.PROBABILITY_MAP:
         if cfg.DATA.W_FOREGROUND + cfg.DATA.W_BACKGROUND != 1:
             raise ValueError(
                 "cfg.DATA.W_FOREGROUND+cfg.DATA.W_BACKGROUND need to sum 1. E.g. 0.94 and 0.06 respectively."
             )
-    if not cfg.DATA.TRAIN.IN_MEMORY and cfg.DATA.PREPROCESS.TRAIN:
-        raise ValueError("To use preprocessing DATA.TRAIN.IN_MEMORY needs to be True.")
-    if not cfg.DATA.VAL.IN_MEMORY and cfg.DATA.PREPROCESS.VAL:
-        if cfg.DATA.VAL.FROM_TRAIN:
-            print(
-                "WARNING: validation preprocessing will be done based on 'DATA.PREPROCESS.TRAIN', as 'DATA.VAL.FROM_TRAIN' is selected"
-            )
-        else:
-            raise ValueError("To use preprocessing DATA.VAL.IN_MEMORY needs to be True.")
-    if not cfg.DATA.TEST.IN_MEMORY and cfg.DATA.PREPROCESS.TEST:
-        raise ValueError("To use preprocessing DATA.TEST.IN_MEMORY needs to be True.")
+    if cfg.DATA.VAL.FROM_TRAIN and cfg.DATA.PREPROCESS.VAL:
+        print(
+            "WARNING: validation preprocessing will be done based on 'DATA.PREPROCESS.TRAIN', as 'DATA.VAL.FROM_TRAIN' is selected"
+        )
 
     ### Pre-processing ###
     if cfg.DATA.PREPROCESS.TRAIN or cfg.DATA.PREPROCESS.TEST or cfg.DATA.PREPROCESS.VAL:
@@ -881,10 +959,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     )
         if cfg.DATA.PREPROCESS.CANNY.ENABLE and cfg.PROBLEM.NDIM != "2D":
             raise ValueError("Canny or edge detection can not be activated when 'PROBLEM.NDIM' is 2D.")
-        if not cfg.DATA.PREPROCESS.VAL and cfg.DATA.VAL.FROM_TRAIN and cfg.DATA.PREPROCESS.TRAIN:
-            raise ValueError(
-                "When 'DATA.VAL.FROM_TRAIN' is True and 'DATA.PREPROCESS.TRAIN' is True, 'DATA.PREPROCESS.VAL' also needs to be True."
-            )
         if cfg.DATA.PREPROCESS.MEDIAN_BLUR.ENABLE:
             if cfg.PROBLEM.NDIM == "2D" and len(cfg.DATA.PREPROCESS.MEDIAN_BLUR.KERNEL_SIZE) != 3:
                 raise ValueError(
@@ -921,7 +995,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 and not cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA
             ):
                 raise ValueError("Train mask data dir not found: {}".format(cfg.DATA.TRAIN.GT_PATH))
-            if not cfg.DATA.VAL.FROM_TRAIN and not cfg.DATA.VAL.IN_MEMORY:
+            if not cfg.DATA.VAL.FROM_TRAIN:
                 if not os.path.exists(cfg.DATA.VAL.PATH):
                     raise ValueError("Validation data dir not found: {}".format(cfg.DATA.VAL.PATH))
                 if (
@@ -1000,14 +1074,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         if cfg.DATA.VAL.FROM_TRAIN and not cfg.DATA.VAL.CROSS_VAL and cfg.DATA.VAL.SPLIT_TRAIN <= 0:
             raise ValueError("'DATA.VAL.SPLIT_TRAIN' needs to be > 0 when 'DATA.VAL.FROM_TRAIN' == True")
 
-        if cfg.DATA.VAL.FROM_TRAIN and not cfg.DATA.TRAIN.IN_MEMORY:
-            zarr_files = sorted(next(os.walk(cfg.DATA.TRAIN.PATH))[1])
-            if len(zarr_files) == 0:
-                raise ValueError(
-                    "Validation can only be extracted from train, when 'DATA.TRAIN.IN_MEMORY' == False, if 'DATA.TRAIN.PATH' "
-                    "contains Zarr files. If it's not your case, please, set 'DATA.VAL.FROM_TRAIN' to False and configure "
-                    "'DATA.VAL.PATH'/'DATA.VAL.GT_PATH'"
-                )
         if cfg.PROBLEM.NDIM == "2D" and cfg.DATA.TRAIN.INPUT_IMG_AXES_ORDER != "TZCYX":
             raise ValueError("'DATA.TRAIN.INPUT_IMG_AXES_ORDER' can not be set in 2D problems")
         if cfg.PROBLEM.NDIM == "2D" and cfg.DATA.TRAIN.INPUT_MASK_AXES_ORDER != "TZCYX":
@@ -1031,12 +1097,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             raise ValueError("'DATA.VAL.CROSS_VAL' can only be used when 'DATA.VAL.FROM_TRAIN' is True")
         if cfg.DATA.VAL.CROSS_VAL_NFOLD < cfg.DATA.VAL.CROSS_VAL_FOLD:
             raise ValueError("'DATA.VAL.CROSS_VAL_NFOLD' can not be less than 'DATA.VAL.CROSS_VAL_FOLD'")
-        if not cfg.DATA.VAL.IN_MEMORY:
-            print("WARNING: ignoring 'DATA.VAL.IN_MEMORY' as it is always True when 'DATA.VAL.CROSS_VAL' is enabled")
     if cfg.DATA.TEST.USE_VAL_AS_TEST and not cfg.DATA.VAL.CROSS_VAL:
         raise ValueError("'DATA.TEST.USE_VAL_AS_TEST' can only be used when 'DATA.VAL.CROSS_VAL' is selected")
-    if cfg.DATA.TEST.USE_VAL_AS_TEST and not cfg.TRAIN.ENABLE and cfg.DATA.TEST.IN_MEMORY:
-        print("WARNING: 'DATA.TEST.IN_MEMORY' is disabled when 'DATA.TEST.USE_VAL_AS_TEST' is enabled")
     if len(cfg.DATA.TRAIN.RESOLUTION) != 1 and len(cfg.DATA.TRAIN.RESOLUTION) != dim_count:
         raise ValueError(
             "When PROBLEM.NDIM == {} DATA.TRAIN.RESOLUTION tuple must be length {}, given {}.".format(
@@ -1123,14 +1185,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         "scale_range",
         "custom",
     ], "DATA.NORMALIZATION.TYPE not in ['div', 'scale_range', 'custom']"
-    assert cfg.DATA.NORMALIZATION.APPLICATION_MODE in [
-        "image",
-        "dataset",
-    ], "'DATA.NORMALIZATION.APPLICATION_MODE' needs to be one between ['image', 'dataset']"
-    if cfg.TRAIN.ENABLE and not cfg.DATA.TRAIN.IN_MEMORY and cfg.DATA.NORMALIZATION.APPLICATION_MODE == "dataset":
-        raise ValueError(
-            "'DATA.NORMALIZATION.APPLICATION_MODE' == 'dataset' can only be applied if 'DATA.TRAIN.IN_MEMORY' == True"
-        )
+    if cfg.DATA.NORMALIZATION.CUSTOM_MEAN != -1 and cfg.DATA.NORMALIZATION.CUSTOM_STD == -1:
+        raise ValueError("'DATA.NORMALIZATION.CUSTOM_STD' needs to be provided when 'DATA.NORMALIZATION.CUSTOM_MEAN' is provided too")
     if cfg.DATA.NORMALIZATION.PERC_CLIP:
         if cfg.DATA.NORMALIZATION.PERC_LOWER == -1:
             raise ValueError(

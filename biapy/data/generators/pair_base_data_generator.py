@@ -9,21 +9,21 @@ import random
 import torch
 import os
 import sys
+import h5py
 import imgaug as ia
 from tqdm import tqdm
 from imgaug import augmenters as iaa
-from skimage.io import imread
 from skimage.util import random_noise
 from imgaug.augmentables.heatmaps import HeatmapsOnImage
 from imgaug.augmentables.segmaps import SegmentationMapsOnImage
 from abc import ABCMeta, abstractmethod
 from torch.utils.data import Dataset
 
-from biapy.utils.util import pad_and_reflect, read_chunked_data
 from biapy.data.generators.augmentors import *
 from biapy.data.pre_processing import normalize, norm_range01, percentile_clip
 from biapy.utils.misc import is_main_process
-from biapy.data.data_3D_manipulation import load_img_part_from_efficient_file
+from biapy.data.data_manipulation import pad_and_reflect, load_img_data
+from biapy.data.data_3D_manipulation import extract_patch_from_efficient_file
 
 
 class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
@@ -40,21 +40,54 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
     ndim : int
         Dimensions of the data (``2`` for ``2D`` and ``3`` for 3D).
 
-    X : 4D/5D Numpy array
-        Data. E.g. ``(num_of_images, y, x, channels)`` for ``2D`` or ``(num_of_images, z, y, x, channels)`` for ``3D``.
+    X : list of dict
+        X data. Each item in the list represents a sample of the dataset. Each sample is represented as follows:
+            * ``"filename"``: name of the image to extract the data sample from.
+            * ``"dir"``: directory where the image resides.
+            * ``"coords"``: dictionary with the coordinates to extract the sample from the image. If ``None`` it implies that a random
+              patch needs to be extracted. Following keys are avaialable:
+                * ``"z_start"``: starting point of the patch in Z axis.
+                * ``"z_end"``: end point of the patch in Z axis.
+                * ``"y_start"``: starting point of the patch in Y axis.
+                * ``"y_end"``: end point of the patch in Y axis.
+                * ``"x_start"``: starting point of the patch in X axis.
+                * ``"x_end"``: end point of the patch in X axis.
+            * ``"original_data_shape"``: shape of the image where the samples is extracted (useful for reconstructing it later),
+            * ``"shape"``: shape of the sample.
+            * ``"img"`` (optional): image sample itself. It is a ndarrray of  ``(y, x, channels)`` in ``2D`` and
+              ``(z, y, x, channels)`` in ``3D``. Provided if the user selected to load images into memory.
+            * ``"gt_associated_id"`` (optional): position of associated ground truth of the sample within its list. Present if the
+              user selected ``PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER`` to be ``True``.
+            * ``"parallel_data"``(optional): to ``True`` is the sample is a Zarr/H5 file. Not present otherwise.
+            * ``"input_axes"`` (optional): order of the axes in Zarr. Not present in non-Zarr/H5 files.
+            * ``"path_in_zarr"``(optional): path where the data resides within the Zarr. Provided when ``multiple_data_within_zarr`` was
+              set in ``train_zarr_data_information``.
 
-    Y : 4D/5D Numpy array
-        Mask data. E.g. ``(num_of_images, y, x, channels)`` for ``2D`` or ``(num_of_images, z, y, x, channels)`` for ``3D``.
+    Y : list of dict
+        Y data. Each item in the list represents a sample of the dataset. Each sample is represented as follows:
+            * ``"filename"``: name of the image to extract the data sample from.
+            * ``"dir"``: directory where the image resides.
+            * ``"coords"``: dictionary with the coordinates to extract the sample from the image. If ``None`` it implies that a random
+              patch needs to be extracted. Following keys are avaialable:
+                * ``"z_start"``: starting point of the patch in Z axis.
+                * ``"z_end"``: end point of the patch in Z axis.
+                * ``"y_start"``: starting point of the patch in Y axis.
+                * ``"y_end"``: end point of the patch in Y axis.
+                * ``"x_start"``: starting point of the patch in X axis.
+                * ``"x_end"``: end point of the patch in X axis.
+            * ``"original_data_shape"``: shape of the image where the samples is extracted (useful for reconstructing it later),
+            * ``"shape"``: shape of the sample.
+            * ``"img"`` (optional): image sample itself. It is a ndarrray of  ``(y, x, channels)`` in ``2D`` and
+              ``(z, y, x, channels)`` in ``3D``. Provided if the user selected to load images into memory.
+            * ``"gt_associated_id"`` (optional): position of associated ground truth of the sample within its list. Present if the
+              user selected ``PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER`` to be ``True``.
+            * ``"parallel_data"``(optional): to ``True`` is the sample is a Zarr/H5 file. Not present otherwise.
+            * ``"input_axes"`` (optional): order of the axes in Zarr. Not present in non-Zarr/H5 files.
+            * ``"path_in_zarr"``(optional): path where the data resides within the Zarr. Provided when ``multiple_data_within_zarr`` was
+              set in ``train_zarr_data_information``.
 
     seed : int, optional
         Seed for random functions.
-
-    data_mode : str, optional
-        Information about how the data needs to be managed. Options: ['in_memory', 'not_in_memory', 'chunked_data']
-
-    data_paths : List of str, optional
-        If the data is in memory (``data_mode`` == ``'in_memory'``), this list should contain the paths to load data and
-        masks. ``data_paths[0]`` should be data path and ``data_paths[1]`` masks path.
 
     da : bool, optional
         To activate the data augmentation.
@@ -346,20 +379,20 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         In case RGB images are expected, e.g. if ``crop_shape`` channel is 3, those images that are grayscale are
         converted into RGB.
 
-    multiple_raw_images : bool, optional
-        Whether to consider more than one raw images or not. In this case, a folder per each sample is expected. Visit
-        `LightMyCells challenge approach <https://biapy.readthedocs.io/en/latest/tutorials/image-to-image/lightmycells.html>`_
-        for a real use case.
+    preprocess_f : function, optional
+        The preprocessing function, is necessary in case you want to apply any preprocessing.
+
+    preprocess_cfg : dict, optional
+        Configuration parameters for preprocessing, is necessary in case you want to apply any preprocessing.
+
     """
 
     def __init__(
         self,
         ndim: int,
-        X: np.ndarray | None,
-        Y: np.ndarray | None,
+        X: List,
+        Y: List,
         seed: int = 0,
-        data_mode: Literal["in_memory", "not_in_memory", "chunked_data"] = "in_memory",
-        data_paths: None | List[str] = None,
         da: bool = True,
         da_prob: float = 0.5,
         rotation90: bool = False,
@@ -450,142 +483,50 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         instance_problem: bool = False,
         random_crop_scale: Tuple[int, ...] = (1, 1),
         convert_to_rgb: bool = False,
-        multiple_raw_images: bool = False,
+        preprocess_f=None,
+        preprocess_cfg=None,
     ):
-
-        assert norm_dict != None, "Normalization instructions must be provided with 'norm_dict'"
-        assert norm_dict["mask_norm"] in ["as_mask", "as_image", "none"]
+        if preprocess_f is not None and preprocess_cfg is None:
+            raise ValueError("'preprocess_cfg' needs to be provided with 'preprocess_f'")
 
         self.ndim = ndim
         self.z_size = -1
         self.val = val
         self.convert_to_rgb = convert_to_rgb
         self.norm_dict = norm_dict
-        self.data_mode = data_mode
-        self.multiple_raw_images = multiple_raw_images
+        self.random_crops_in_DA = random_crops_in_DA
+        self.prob_map = None
+        self.preprocess_f = preprocess_f
+        self.preprocess_cfg = preprocess_cfg
 
-        if data_mode == "in_memory":
-            assert X is not None
-            # If not Y was provided and this generator was still selected means that we need to generate it.
-            # This workflow type is common in Denoising.
-            self.Y_provided = Y is not None
-
-            _X = X if type(X) != list else X[0]
-            if self.Y_provided and Y is not None:
-                _Y = Y if type(Y) != list else Y[0]
-
-            if _X.ndim != (self.ndim + 2):
-                raise ValueError("X must be a {}D Numpy array".format((self.ndim + 1)))
-            if self.Y_provided and _Y.ndim != (self.ndim + 2):
-                raise ValueError("Y must be a {}D Numpy array".format((self.ndim + 1)))
-
-            if type(X) != list and all([x == 1 for x in random_crop_scale]) and self.Y_provided and Y is not None:
-                if X.shape[: (self.ndim + 1)] != Y.shape[: (self.ndim + 1)]:
-                    raise ValueError(
-                        "The shape of X and Y must be the same. {} != {}".format(
-                            X.shape[: (self.ndim + 1)], Y.shape[: (self.ndim + 1)]
-                        )
-                    )
-
-        if data_mode == "in_memory" and X is None:
-            raise ValueError("'X' need to be provided together with data_mode == 'in_memory'")
-
-        if data_mode == "not_in_memory" and data_paths is not None:
-            if len(data_paths) == 2:
-                self.Y_provided = True
-            elif len(data_paths) == 1:
-                self.Y_provided = False
+        self.random_crop_func = random_3D_crop_pair if ndim == 3 else random_crop_pair
+        if random_crops_in_DA and prob_map is not None:
+            if isinstance(prob_map, str):
+                f = sorted(next(os.walk(prob_map))[2])
+                self.prob_map = []
+                for i in range(len(f)):
+                    self.prob_map.append(os.path.join(prob_map, f[i]))
             else:
-                raise ValueError(
-                    "'data_paths' must contain one or two paths: 1) data path ; 2) data masks path (optional)"
-                )
-        elif data_mode == "chunked_data":
-            self.Y_provided = Y is not None
-
-        if random_crops_in_DA and data_mode == "in_memory":
-            if ndim == 3:
-                if shape[0] > _X.shape[1] or shape[1] > _X.shape[2] or shape[2] > _X.shape[3]:
-                    raise ValueError("Given 'shape' is bigger than the data provided")
-            else:
-                if shape[0] > _X.shape[1] or shape[1] > _X.shape[2]:
-                    raise ValueError("Given 'shape' is bigger than the data provided")
-                if shape[0] != shape[1]:
-                    raise ValueError(
-                        "When 'random_crops_in_DA' is selected the shape given must be square, e.g. (256, 256, 1)"
-                    )
-
-        if data_mode == "not_in_memory" and not random_crops_in_DA:
-            m = "TRAIN" if not val else "VAL"
-            print(
-                "WARNING: you are going to load samples from disk (as 'DATA.{}.IN_MEMORY' = False) and "
-                "'DATA.EXTRACT_RANDOM_PATCH' = False so all samples are expected to have the same shape".format(m)
-            )
-
-        if rotation90 and rand_rot:
-            print("Warning: you selected double rotation type. Maybe you should set only 'rand_rot'?")
+                self.prob_map = prob_map
 
         # Super-resolution options
         self.random_crop_scale = random_crop_scale
 
-        self.random_crops_in_DA = random_crops_in_DA
-        self.data_paths = None
-        if data_mode == "not_in_memory":
-            assert data_paths is not None
-            # Save paths where the data is stored
-            self.paths = data_paths
-            if self.multiple_raw_images:
-                self.data = {}
-                self.data_paths = sorted(next(os.walk(data_paths[0]))[1])
-                assert self.Y_provided, "Implementation error. Contact BiaPy team"
-                if self.Y_provided:
-                    self.data_mask_path = sorted(next(os.walk(data_paths[1]))[1])
-                    c = 0
-                    for i in range(len(self.data_mask_path)):
-                        gt_image_path = next(os.walk(os.path.join(data_paths[1], self.data_mask_path[i])))[2][0]
-                        associated_raw_image_dir = os.path.join(data_paths[0], self.data_mask_path[i])
+        assert norm_dict != None, "Normalization instructions must be provided with 'norm_dict'"
+        assert norm_dict["mask_norm"] in ["as_mask", "as_image", "none"]
 
-                        samples = sorted(next(os.walk(associated_raw_image_dir))[2])
-                        if self.val:
-                            for j in range(len(samples)):
-                                self.data[f"sample_{c}"] = {}
-                                self.data[f"sample_{c}"]["raw"] = os.path.join(associated_raw_image_dir, samples[j])
-                                self.data[f"sample_{c}"]["gt"] = os.path.join(
-                                    data_paths[1], self.data_mask_path[i], gt_image_path
-                                )
-                                c += 1
-                        else:
-                            self.data[f"sample_{c}"] = {}
-                            self.data[f"sample_{c}"]["raw"] = []
-                            for j in range(len(samples)):
-                                self.data[f"sample_{c}"]["raw"].append(
-                                    os.path.join(associated_raw_image_dir, samples[j])
-                                )
-                            self.data[f"sample_{c}"]["gt"] = os.path.join(
-                                data_paths[1], self.data_mask_path[i], gt_image_path
-                            )
-                            c += 1
+        if len(X[0]["shape"]) != (ndim + 1):
+            raise ValueError("Samples in X must be have {} dimensions. Provided: {}".format(ndim + 1, X[0]["shape"]))
 
-                self.length = len(self.data)
-                if self.length == 0:
-                    raise ValueError("No image found in {}".format(data_paths[0]))
-            else:
-                self.data_paths = sorted(next(os.walk(data_paths[0]))[2])
-                if self.Y_provided:
-                    self.data_mask_path = sorted(next(os.walk(data_paths[1]))[2])
-                    if len(self.data_paths) != len(self.data_mask_path):
-                        raise ValueError(
-                            "Different number of raw and ground truth images ({} vs {}). "
-                            "Please check the data!".format(len(self.data_paths), len(self.data_mask_path))
-                        )
-                self.length = len(self.data_paths)
-                if self.length == 0:
-                    raise ValueError("No image found in {}".format(data_paths))
-        else:  # data_mode in ["in_memory", "chunked_data"]
-            assert X is not None
-            self.X = X
-            if self.Y_provided:
-                self.Y = Y
-            self.length = len(self.X)
+        if len(Y[0]["shape"]) != (ndim + 1):
+            raise ValueError("Samples in Y must be have {} dimensions. Provided: {}".format(ndim + 1, Y[0]["shape"]))
+
+        if rotation90 and rand_rot:
+            print("Warning: you selected double rotation type. Maybe you should set only 'rand_rot'?")
+
+        self.X = X
+        self.Y = Y
+        self.length = len(self.X)
 
         self.real_length = self.length
         self.channel_info = {}
@@ -607,72 +548,54 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                         "Channel of the patch size given {} does not correspond with the loaded image {}. "
                         "Please, check the channels of the images!".format(shape[-1], img.shape[-1])
                     )
-                if not random_crops_in_DA and shape != img.shape:
-                    raise ValueError(
-                        "Image shape {} does not match provided DATA.PATCH_SIZE {}. If you want to ensure "
-                        "that PATCH_SIZE you have two options: 1) Set IN_MEMORY = True (as the images will be cropped "
-                        "automatically to that DATA.PATCH_SIZE) ; 2) Set DATA.EXTRACT_RANDOM_PATCH = True to extract a patch "
-                        "(if possible) from loaded image".format(img.shape, shape)
-                    )
-
         self.X_channels = img.shape[-1]
         self.Y_channels = img.shape[-1]
-        self.shape = shape if random_crops_in_DA else img.shape
         del img
 
         # Y data analysis
-        if self.Y_provided:
-            assert self.Y is not None
-            self.channels_to_analize = -1
+        # Loop over a few masks to ensure foreground class is present to decide normalization
+        self.channels_to_analize = -1
+        if self.norm_dict["mask_norm"] == "as_mask":
+            print("Checking which channel of the mask needs normalization . . .")
+            n_samples = min(1000, len(self.X))
+            analized = False
+            for i in range(n_samples):
+                _, mask = self.load_sample(i)
+                # Store which channels are binary or not (e.g. distance transform channel is not binary)
+                if not analized:
+                    if n_classes > 2 and instance_problem:
+                        self.channels_to_analize = mask.shape[-1] - 1
+                        self.channel_info[self.channels_to_analize] = {"type": "classes"}
+                        self.channel_info[self.channels_to_analize]["div"] = False
+                    else:
+                        self.channels_to_analize = mask.shape[-1]
+                    analized = True
 
-            # Loop over a few masks to ensure foreground class is present to decide normalization
-            if self.norm_dict["mask_norm"] == "as_mask":
-                print("Checking which channel of the mask needs normalization . . .")
-                if data_mode == "not_in_memory":
-                    n_samples = len(self.data_mask_path)
-                elif data_mode == "in_memory":
-                    n_samples = len(self.Y)
-                else:  # data_mode == "chunked_data":
-                    n_samples = 1000 if len(self.Y) > 1000 else len(self.Y)
-                analized = False
-                for i in range(n_samples):
-                    _, mask = self.load_sample(i)
-                    # Store which channels are binary or not (e.g. distance transform channel is not binary)
-                    if not analized:
-                        if n_classes > 2 and instance_problem:
-                            self.channels_to_analize = mask.shape[-1] - 1
-                            self.channel_info[self.channels_to_analize] = {"type": "classes"}
-                            self.channel_info[self.channels_to_analize]["div"] = False
-                        else:
-                            self.channels_to_analize = mask.shape[-1]
-                        analized = True
+                for j in range(self.channels_to_analize):
+                    if j not in self.channel_info:
+                        self.channel_info[j] = {"type": "bin"}
+                        self.channel_info[j]["div"] = False
 
-                    for j in range(self.channels_to_analize):
-                        if j not in self.channel_info:
-                            self.channel_info[j] = {"type": "bin"}
-                            self.channel_info[j]["div"] = False
+                    if instance_problem:
+                        if len(np.unique(mask[..., j])) > 2:
+                            self.channel_info[j]["type"] = "no_bin"
+                            self.no_bin_channel_found = True
+                        if np.max(mask[..., j]) > 30:
+                            self.channel_info[j]["div"] = True
+                    else:  # In semantic seg, maybe the mask are in 255
+                        if np.max(mask[..., j]) > n_classes:
+                            self.channel_info[j]["div"] = True
 
-                        if instance_problem:
-                            if len(np.unique(mask[..., j])) > 2:
-                                self.channel_info[j]["type"] = "no_bin"
-                                self.no_bin_channel_found = True
-                            if np.max(mask[..., j]) > 30:
-                                self.channel_info[j]["div"] = True
-                        else:  # In semantic seg, maybe the mask are in 255
-                            if np.max(mask[..., j]) > n_classes:
-                                self.channel_info[j]["div"] = True
+        _, mask = self.load_sample(0)
 
-            _, mask = self.load_sample(0)
-
-            if self.channels_to_analize == -1:
-                self.channels_to_analize = mask.shape[-1]
-            self.Y_channels = mask.shape[-1]
-            self.Y_dtype = mask.dtype
-            del mask
+        if self.channels_to_analize == -1:
+            self.channels_to_analize = mask.shape[-1]
+        self.Y_channels = mask.shape[-1]
+        self.Y_dtype = mask.dtype
+        del mask
 
         print("Normalization config used for X: {}".format(self.norm_dict))
-        if self.Y_provided:
-            print("Normalization config used for Y: {}".format(norm_dict["mask_norm"]))
+        print("Normalization config used for Y: {}".format(norm_dict["mask_norm"]))
 
         if self.ndim == 2:
             resolution = tuple(resolution[i] for i in [1, 0])  # y, x -> x, y
@@ -764,28 +687,11 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             self.value_manipulation = get_value_manipulation(n2v_manipulator, n2v_neighborhood_radius)
             self.n2v_structMask = n2v_structMask
             self.apply_structN2Vmask_func = apply_structN2Vmask if self.ndim == 2 else apply_structN2Vmask3D
-        if data_mode == "in_memory":
-            del _X
-            if self.Y_provided:
-                del _Y
-
-        self.prob_map = None
-        if random_crops_in_DA and prob_map is not None:
-            if isinstance(prob_map, str):
-                f = sorted(next(os.walk(prob_map))[2])
-                self.prob_map = []
-                for i in range(len(f)):
-                    self.prob_map.append(os.path.join(prob_map, f[i]))
-            else:
-                self.prob_map = prob_map
 
         if extra_data_factor > 1:
             self.extra_data_factor = extra_data_factor
             self.o_indexes = np.concatenate([self.o_indexes] * extra_data_factor)
             self.length = self.length * extra_data_factor
-            if self.data_paths is not None:
-                self.data_paths = self.data_paths * extra_data_factor
-                self.data_mask_path = self.data_mask_path * extra_data_factor
         else:
             self.extra_data_factor = 1
 
@@ -892,7 +798,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.seed = seed
         ia.seed(seed)
 
-        self.random_crop_func = random_3D_crop_pair if self.ndim == 3 else random_crop_pair
         self.indexes = self.o_indexes.copy()
 
     @abstractmethod
@@ -937,32 +842,49 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         """
         raise NotImplementedError
 
-    @abstractmethod
-    def ensure_shape(self, img: np.ndarray, mask: np.ndarray | None):
+    def __len__(self):
+        """Defines the number of samples per epoch."""
+        return self.length
+
+    def extract_patch_within_image(self, img, coords, is_3d=False):
         """
-        Ensures ``img`` and ``mask`` correct axis number and their order.
+        Extract patch within the image.
 
         Parameters
         ----------
-        img : Numpy array representing a ``2D`` or ``3D`` image
-            Image to use as sample.
+        img : 3D/4D Numpy array
+            Input image to extract the patch from. E.g. ``(y, x, channels)`` in ``2D`` and
+            ``(z, y, x, channels)`` in ``3D``.
 
-        mask : Numpy array representing a ``2D`` or ``3D`` image
-            Mask to use as sample.
+        coords : dict
+            Coordinates of the crop where the following keys are expected:
+                * ``"z_start"``: starting point of the patch in Z axis.
+                * ``"z_end"``: end point of the patch in Z axis.
+                * ``"y_start"``: starting point of the patch in Y axis.
+                * ``"y_end"``: end point of the patch in Y axis.
+                * ``"x_start"``: starting point of the patch in X axis.
+                * ``"x_end"``: end point of the patch in X axis.
+
+        is_3d : bool, optional
+            Whether if the expected image to read is 3D or not.
 
         Returns
         -------
         img : 3D/4D Numpy array
-            Image to use as sample. E.g. ``(y, x, channels)`` for ``2D`` and ``(z, y, x, channels)`` for ``3D``.
-
-        mask : 3D/4D Numpy array
-            Mask to use as sample. E.g. ``(y, x, channels)`` for ``2D`` and ``(z, y, x, channels)`` for ``3D``.
+            X element. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
         """
-        raise NotImplementedError
-
-    def __len__(self):
-        """Defines the number of samples per epoch."""
-        return self.length
+        if not is_3d:
+            img = img[
+                coords["y_start"] : coords["y_end"],
+                coords["x_start"] : coords["x_end"],
+            ]
+        else:
+            img = img[
+                coords["z_start"] : coords["z_end"],
+                coords["y_start"] : coords["y_end"],
+                coords["x_start"] : coords["x_end"],
+            ]
+        return img
 
     def load_sample(self, _idx: int, first_load: bool = False) -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -984,56 +906,115 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         mask : 3D/4D Numpy array
             Y element. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
         """
-        # Choose the data source
         idx = _idx % self.real_length
-        if self.data_mode == "in_memory":
-            img = np.squeeze(self.X[idx].copy())
-            if self.Y_provided and self.Y is not None:
-                mask = np.squeeze(self.Y[idx].copy())
-        elif self.data_mode == "not_in_memory":
-            if self.multiple_raw_images:
-                if not self.val:
-                    random_raw_image = np.random.randint(0, len(self.data[f"sample_{idx}"]["raw"]))
-                    img = imread(self.data[f"sample_{idx}"]["raw"][random_raw_image])
-                else:
-                    img = imread(self.data[f"sample_{idx}"]["raw"])
-                mask = imread(self.data[f"sample_{idx}"]["gt"])
+        sample = self.X[idx]
 
-                img = np.squeeze(img)
-                mask = np.squeeze(mask)
-            else:
-                assert self.data_paths is not None
-                if self.data_paths[idx].endswith(".npy"):
-                    img = np.load(os.path.join(self.paths[0], self.data_paths[idx]))
-                    if self.Y_provided:
-                        mask = np.load(os.path.join(self.paths[1], self.data_mask_path[idx]))
-                elif self.data_paths[idx].endswith(".zarr"):
-                    _, img = read_chunked_data(os.path.join(self.paths[0], self.data_paths[idx]))  # type: ignore
-                    img = np.array(img)
-                else:
-                    img = imread(os.path.join(self.paths[0], self.data_paths[idx]))
-                    if self.Y_provided:
-                        mask = imread(os.path.join(self.paths[1], self.data_mask_path[idx]))
-                img = np.squeeze(img)
-                if self.Y_provided:
-                    mask = np.squeeze(mask)
-        else:  # self.data_mode == "chunked_data"
-            img = load_img_part_from_efficient_file(self.X[idx]["filepath"], self.X[idx]["patch_coords"])
-            if self.Y_provided and self.Y is not None:
-                mask = load_img_part_from_efficient_file(self.Y[idx]["filepath"], self.Y[idx]["patch_coords"])
-        if self.Y_provided:
-            img, mask = self.ensure_shape(img, mask)
+        # X data
+        if "img" in sample:
+            img = sample["img"].copy()
         else:
-            img = self.ensure_shape(img, None)
+            img, img_file = load_img_data(
+                os.path.join(sample["dir"], sample["filename"]),
+                is_3d=(self.ndim == 3),
+                data_within_zarr_path=sample["path_in_zarr"] if "path_in_zarr" in sample else None,
+            )
+
+            if "parallel_data" not in sample:
+                # Apply preprocessing
+                if self.preprocess_f is not None:
+                    img = self.preprocess_f(self.preprocess_cfg, x_data=[img], is_2d=(self.ndim == 2))[0]
+
+                img = pad_and_reflect(img, self.shape, verbose=False)
+
+                # Extract the sample within the image
+                if sample["coords"] is not None:
+                    img = self.extract_patch_within_image(img, sample["coords"], is_3d=(self.ndim == 3))
+            else:
+                img = extract_patch_from_efficient_file(img, sample["coords"], data_axis_order=sample["input_axes"])
+
+                # Apply preprocessing after extract sample
+                if "parallel_data" in sample:
+                    if self.preprocess_f is not None:
+                        img = self.preprocess_f(self.preprocess_cfg, x_data=[img], is_2d=(self.ndim == 2))[0]
+
+                    if isinstance(img_file, h5py.File):
+                        img_file.close()
+
+        # Y data
+        # "gt_associated_id" available only in PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER
+        if "gt_associated_id" in sample:
+            msample = self.Y[sample["gt_associated_id"]]
+            mask, _ = load_img_data(
+                os.path.join(msample["dir"], msample["filename"]), is_3d=(self.ndim == 3),
+            )
+            # Extract the sample within the image
+            if msample["coords"] is not None:
+                mask = self.extract_patch_within_image(mask, msample["coords"], is_3d=(self.ndim == 3))
+        else:
+            if "img" in self.Y[idx]:
+                mask = self.Y[idx]["img"].copy()
+            else:
+                mask, mask_file = load_img_data(
+                    os.path.join(self.Y[idx]["dir"], self.Y[idx]["filename"]),
+                    is_3d=(self.ndim == 3),
+                    data_within_zarr_path=self.Y[idx]["path_in_zarr"] if "path_in_zarr" in self.Y[idx] else None,
+                )
+
+                if "parallel_data" not in self.Y[idx]:
+                    # Apply preprocessing
+                    if self.preprocess_f is not None:
+                        mask = self.preprocess_f(
+                            self.preprocess_cfg, y_data=[mask], is_2d=(self.ndim == 2), is_y_mask=True
+                        )[0]
+
+                    mask = pad_and_reflect(mask, self.shape, verbose=False)
+
+                    # Extract the sample within the image
+                    if self.Y[idx]["coords"] is not None:
+                        mask = self.extract_patch_within_image(mask, self.Y[idx]["coords"], is_3d=(self.ndim == 3))
+                else:
+                    mask = extract_patch_from_efficient_file(
+                        mask,
+                        self.Y[idx]["coords"],
+                        data_axis_order=self.Y[idx]["input_axes"],
+                    )
+
+                    # Apply preprocessing after extract sample
+                    if self.preprocess_f is not None:
+                        mask = self.preprocess_f(
+                            self.preprocess_cfg, y_data=[mask], is_2d=(self.ndim == 2), is_y_mask=True
+                        )[0]
+
+                    if "parallel_data" not in self.Y[idx]:
+                        if mask_file is not None and isinstance(mask_file, h5py.File):
+                            mask_file.close()
+
+        # Apply random crops if it is selected
+        if sample["coords"] is None:
+            # Capture probability map
+            if self.prob_map is not None:
+                if isinstance(self.prob_map, list):
+                    img_prob = np.load(self.prob_map[idx])
+                else:
+                    img_prob = self.prob_map[idx]
+            else:
+                img_prob = None
+
+            img, mask = self.random_crop_func(  # type: ignore
+                img,
+                mask,
+                self.shape[: self.ndim],
+                self.val,
+                img_prob=img_prob,
+                scale=self.random_crop_scale,
+            )
 
         if self.norm_dict["enable"] and not first_load and img is not None:
             img = self.norm_X(img)
-        if self.Y_provided:
-            if self.norm_dict["enable"] and not first_load:
-                mask = self.norm_Y(mask)
-            return img, mask
-        else:
-            return img, np.zeros(img.shape, dtype=np.float32)
+        if self.norm_dict["enable"] and not first_load:
+            mask = self.norm_Y(mask)
+        
+        return img, mask
 
     def norm_X(self, img: np.ndarray) -> np.ndarray:
         """
@@ -1050,7 +1031,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             X element normalized. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
         """
         # Percentile clipping
-        if "lower_bound" in self.norm_dict and self.norm_dict["application_mode"] == "image":
+        if "lower_bound" in self.norm_dict:
             img, _, _ = percentile_clip(
                 img,
                 lower=self.norm_dict["lower_bound"],
@@ -1062,10 +1043,10 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         elif self.norm_dict["type"] == "scale_range":
             img, _ = norm_range01(img, div_using_max_and_scale=True)
         elif self.norm_dict["type"] == "custom":
-            if self.norm_dict["application_mode"] == "image":
-                img = normalize(img, img.mean(), img.std())
-            else:
+            if "mean" in self.norm_dict:
                 img = normalize(img, self.norm_dict["mean"], self.norm_dict["std"])
+            else:
+                img = normalize(img, img.mean(), img.std())
         return img
 
     def norm_Y(self, mask: np.ndarray) -> np.ndarray:
@@ -1083,13 +1064,13 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         mask : 3D/4D Numpy array
             Y element normalized. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
         """
-        if self.norm_dict["mask_norm"] == "as_mask" and self.Y_provided:
+        if self.norm_dict["mask_norm"] == "as_mask":
             for j in range(self.channels_to_analize):
                 if self.channel_info[j]["div"]:
                     mask[..., j] = mask[..., j] / 255
-        elif self.norm_dict["mask_norm"] == "as_image" and self.Y_provided:
+        elif self.norm_dict["mask_norm"] == "as_image":
             # Percentile clipping
-            if "lower_bound" in self.norm_dict and self.norm_dict["application_mode"] == "image":
+            if "lower_bound" in self.norm_dict:
                 mask, _, _ = percentile_clip(
                     mask,
                     lower=self.norm_dict["lower_bound"],
@@ -1101,10 +1082,10 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             elif self.norm_dict["type"] == "scale_range":
                 mask, _ = norm_range01(mask, div_using_max_and_scale=True)
             elif self.norm_dict["type"] == "custom":
-                if self.norm_dict["application_mode"] == "image":
-                    mask = normalize(mask, mask.mean(), mask.std())
-                else:
+                if "mean" in self.norm_dict:
                     mask = normalize(mask, self.norm_dict["mean"], self.norm_dict["std"])
+                else:
+                    mask = normalize(mask, mask.mean(), mask.std())
         return mask
 
     def getitem(self, index: int) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -1142,30 +1123,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             Y element, for instance, a mask. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
         """
         img, mask = self.load_sample(index)
-
-        # Apply random crops if it is selected
-        if self.random_crops_in_DA:
-            # Capture probability map
-            if self.prob_map is not None:
-                if isinstance(self.prob_map, list):
-                    img_prob = np.load(self.prob_map[index])
-                else:
-                    img_prob = self.prob_map[index]
-            else:
-                img_prob = None
-
-            # Pad and reflect img/mask if necessary
-            img = pad_and_reflect(img, self.shape, verbose=False)
-            mask = pad_and_reflect(mask, self.shape, verbose=False)
-
-            img, mask = self.random_crop_func(  # type: ignore
-                img,
-                mask,
-                self.shape[: self.ndim],
-                self.val,
-                img_prob=img_prob,
-                scale=self.random_crop_scale,
-            )
 
         # Apply transformations
         if self.da:

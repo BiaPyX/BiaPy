@@ -23,10 +23,7 @@ class Pair3DImageDataGenerator(PairBaseDataGenerator):
 
     def __init__(self, zflip: bool = False, **kwars):
         super().__init__(**kwars)
-        if self.random_crops_in_DA or self.data_mode == "chunked_data":
-            self.z_size = self.shape[0]
-        else:
-            self.z_size = self.X.shape[1]
+        self.z_size = self.X[0]["shape"][0]
         self.zflip = zflip
         self.grid_d_size = (
             self.shape[1] * self.grid_d_range[0],
@@ -34,75 +31,6 @@ class Pair3DImageDataGenerator(PairBaseDataGenerator):
             self.shape[0] * self.grid_d_range[0],
             self.shape[0] * self.grid_d_range[1],
         )
-
-    def ensure_shape(
-        self, img: np.ndarray, mask: np.ndarray | None
-    ) -> Union[Tuple[np.ndarray, Union[np.ndarray, None]], np.ndarray]:
-        """
-        Ensures ``img`` and ``mask`` correct axis number and their order.
-
-        Parameters
-        ----------
-        img : Numpy array representing a 3D image
-            Image to use as sample.
-
-        mask : Numpy array representing a 3D image
-            Mask to use as sample.
-
-        Returns
-        -------
-        img : 4D Numpy array
-            Image to use as sample. E.g. ``(z, y, x, channels)``.
-
-        mask : 4D Numpy array
-            Mask to use as sample. E.g. ``(z, y, x, channels)``.
-        """
-        # Shape adjustment
-        if img.ndim == 3:
-            img = np.expand_dims(img, -1)
-        else:
-            min_val = min(img.shape)
-            channel_pos = img.shape.index(min_val)
-            if channel_pos != 3 and img.shape[channel_pos] <= 4:
-                new_pos = [x for x in range(4) if x != channel_pos] + [
-                    channel_pos,
-                ]
-                img = img.transpose(new_pos)
-        if self.Y_provided and mask is not None:
-            if mask.ndim == 3:
-                mask = np.expand_dims(mask, -1)
-            else:
-                min_val = min(mask.shape)
-                channel_pos = mask.shape.index(min_val)
-                if channel_pos != 3 and mask.shape[channel_pos] <= 4:
-                    new_pos = [x for x in range(4) if x != channel_pos] + [
-                        channel_pos,
-                    ]
-                    mask = mask.transpose(new_pos)
-
-        if img.ndim != 4:
-            raise ValueError(f"Image loaded seems to not be 3D: {img.shape}")
-
-        # Super-resolution check. if random_crops_in_DA is activated the images have not been cropped yet,
-        # so this check can not be done and it will be done in the random crop
-        if not self.random_crops_in_DA and self.Y_provided and any([x != 1 for x in self.random_crop_scale]):
-            s = [
-                img.shape[0] * self.random_crop_scale[0],
-                img.shape[1] * self.random_crop_scale[1],
-                img.shape[2] * self.random_crop_scale[2],
-            ]
-            if mask is not None and all(x != y for x, y in zip(s, mask.shape[0:-1])):
-                raise ValueError(
-                    "Images loaded need to be LR and its HR version. LR shape:"
-                    " {} vs HR shape {} is not x{} larger".format(
-                        img.shape[:-1], mask.shape[:-1], self.random_crop_scale
-                    )
-                )
-
-        if self.Y_provided:
-            return img, mask
-        else:
-            return img
 
     def apply_transform(
         self,

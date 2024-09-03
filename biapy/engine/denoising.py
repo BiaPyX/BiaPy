@@ -18,11 +18,10 @@ from biapy.data.post_processing.post_processing import (
     ensemble16_3d_predictions,
 )
 from biapy.engine.base_workflow import Base_Workflow
-from biapy.utils.util import save_tif, pad_and_reflect
+from biapy.utils.util import save_tif
 from biapy.utils.misc import to_pytorch_format, to_numpy_format, is_main_process
 from biapy.data.pre_processing import denormalize, undo_norm_range01
 from biapy.engine.metrics import n2v_loss_mse
-
 
 class Denoising_Workflow(Base_Workflow):
     """
@@ -56,6 +55,7 @@ class Denoising_Workflow(Base_Workflow):
 
         # Workflow specific training variables
         self.mask_path = None
+        self.is_y_mask = False
         self.load_Y_val = False
 
     def define_metrics(self):
@@ -154,76 +154,53 @@ class Denoising_Workflow(Base_Workflow):
                     metric_logger.meters[list_names_to_use[i]].update(val)
         return out_metrics
 
-    def process_test_sample(self, norm):
+    def process_test_sample(self):
         """
         Function to process a sample in the inference phase.
-
-        Parameters
-        ----------
-        norm : List of dicts
-            Normalization used during training. Required to denormalize the predictions of the model.
         """
+        # Skip processing image 
+        if "discard" in self.current_sample["X"] and self.current_sample["X"]["discard"]: 
+            return True
+
         # Save test_output if the user wants to export the model to BMZ later
         if "test_input" not in self.bmz_config:
             if self.cfg.PROBLEM.NDIM == "2D":
-                self.bmz_config["test_input"] = self._X[0][
+                self.bmz_config["test_input"] = self.current_sample["X"][0][
                     : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1]
                 ].copy()
             else:
-                self.bmz_config["test_input"] = self._X[0][
+                self.bmz_config["test_input"] = self.current_sample["X"][0][
                     : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1], : self.cfg.DATA.PATCH_SIZE[2]
                 ].copy()
 
-        # Reflect data to complete the needed shape
-        if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE:
-            reflected_orig_shape = self._X.shape
-            self._X = np.expand_dims(
-                pad_and_reflect(self._X[0], self.cfg.DATA.PATCH_SIZE, verbose=self.cfg.TEST.VERBOSE),
-                0,
-            )
-
-        original_data_shape = self._X.shape
+        original_data_shape = self.current_sample["X"].shape
 
         # Crop if necessary
-        if self._X.shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
+        if self.current_sample["X"].shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
             if self.cfg.PROBLEM.NDIM == "2D":
-                obj = crop_data_with_overlap(
-                    self._X,
+                self.current_sample["X"], _ = crop_data_with_overlap(
+                    self.current_sample["X"],
                     self.cfg.DATA.PATCH_SIZE,
                     overlap=self.cfg.DATA.TEST.OVERLAP,
                     padding=self.cfg.DATA.TEST.PADDING,
                     verbose=self.cfg.TEST.VERBOSE,
                 )
-                self._X = obj
-                del obj
             else:
-                if self.cfg.TEST.REDUCE_MEMORY:
-                    self._X = crop_3D_data_with_overlap(
-                        self._X[0],
-                        self.cfg.DATA.PATCH_SIZE,
-                        overlap=self.cfg.DATA.TEST.OVERLAP,
-                        padding=self.cfg.DATA.TEST.PADDING,
-                        verbose=self.cfg.TEST.VERBOSE,
-                        median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING,
-                    )
-                else:
-                    obj = crop_3D_data_with_overlap(
-                        self._X[0],
-                        self.cfg.DATA.PATCH_SIZE,
-                        overlap=self.cfg.DATA.TEST.OVERLAP,
-                        padding=self.cfg.DATA.TEST.PADDING,
-                        verbose=self.cfg.TEST.VERBOSE,
-                        median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING,
-                    )
-                    self._X = obj
-                    del obj
+                self.current_sample["X"], _ = crop_3D_data_with_overlap(
+                    self.current_sample["X"][0],
+                    self.cfg.DATA.PATCH_SIZE,
+                    overlap=self.cfg.DATA.TEST.OVERLAP,
+                    padding=self.cfg.DATA.TEST.PADDING,
+                    verbose=self.cfg.TEST.VERBOSE,
+                    median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING,
+                )
 
         # Predict each patch
         if self.cfg.TEST.AUGMENTATION:
-            for k in tqdm(range(self._X.shape[0]), leave=False, disable=not is_main_process()):
+            for k in tqdm(range(self.current_sample["X"].shape[0]), leave=False, disable=not is_main_process()):
                 if self.cfg.PROBLEM.NDIM == "2D":
                     p = ensemble8_2d_predictions(
-                        self._X[k],
+                        self.current_sample["X"][k],
                         axis_order_back=self.axis_order_back,
                         pred_func=self.model_call_func,
                         axis_order=self.axis_order,
@@ -231,7 +208,7 @@ class Denoising_Workflow(Base_Workflow):
                     )
                 else:
                     p = ensemble16_3d_predictions(
-                        self._X[k],
+                        self.current_sample["X"][k],
                         batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
                         axis_order_back=self.axis_order_back,
                         pred_func=self.model_call_func,
@@ -241,24 +218,24 @@ class Denoising_Workflow(Base_Workflow):
                 p = self.apply_model_activations(p)
                 p = to_numpy_format(p, self.axis_order_back)
                 if "pred" not in locals():
-                    pred = np.zeros((self._X.shape[0],) + p.shape[1:], dtype=self.dtype)
+                    pred = np.zeros((self.current_sample["X"].shape[0],) + p.shape[1:], dtype=self.dtype)
                 pred[k] = p
         else:
-            self._X = to_pytorch_format(self._X, self.axis_order, self.device)
-            l = int(math.ceil(self._X.shape[0] / self.cfg.TRAIN.BATCH_SIZE))
+            self.current_sample["X"] = to_pytorch_format(self.current_sample["X"], self.axis_order, self.device)
+            l = int(math.ceil(self.current_sample["X"].shape[0] / self.cfg.TRAIN.BATCH_SIZE))
             for k in tqdm(range(l), leave=False, disable=not is_main_process()):
                 top = (
                     (k + 1) * self.cfg.TRAIN.BATCH_SIZE
-                    if (k + 1) * self.cfg.TRAIN.BATCH_SIZE < self._X.shape[0]
-                    else self._X.shape[0]
+                    if (k + 1) * self.cfg.TRAIN.BATCH_SIZE < self.current_sample["X"].shape[0]
+                    else self.current_sample["X"].shape[0]
                 )
                 with torch.cuda.amp.autocast():
-                    p = self.model(self._X[k * self.cfg.TRAIN.BATCH_SIZE : top])
+                    p = self.model(self.current_sample["X"][k * self.cfg.TRAIN.BATCH_SIZE : top])
                 p = to_numpy_format(self.apply_model_activations(p), self.axis_order_back)
                 if "pred" not in locals():
-                    pred = np.zeros((self._X.shape[0],) + p.shape[1:], dtype=self.dtype)
+                    pred = np.zeros((self.current_sample["X"].shape[0],) + p.shape[1:], dtype=self.dtype)
                 pred[k * self.cfg.TRAIN.BATCH_SIZE : top] = p
-        del self._X, p
+        del self.current_sample["X"], p
 
         # Reconstruct the predictions
         if original_data_shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
@@ -289,18 +266,20 @@ class Denoising_Workflow(Base_Workflow):
                 pred = np.expand_dims(pred, 0)
 
         if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE:
-            if self.cfg.PROBLEM.NDIM == "2D":
-                pred = pred[:, -reflected_orig_shape[1] :, -reflected_orig_shape[2] :]
-            else:
-                pred = pred[
-                    :,
-                    -reflected_orig_shape[1] :,
-                    -reflected_orig_shape[2] :,
-                    -reflected_orig_shape[3] :,
-                ]
+            reflected_orig_shape = (1,) + self.current_sample["reflected_orig_shape"]
+            if reflected_orig_shape != pred.shape:
+                if self.cfg.PROBLEM.NDIM == "2D":
+                    pred = pred[:, -reflected_orig_shape[1] :, -reflected_orig_shape[2] :]
+                else:
+                    pred = pred[
+                        :,
+                        -reflected_orig_shape[1] :,
+                        -reflected_orig_shape[2] :,
+                        -reflected_orig_shape[3] :,
+                    ]
 
         # Undo normalization
-        x_norm = norm[0]
+        x_norm = self.current_sample["X_norm"]
         if x_norm["type"] == "div":
             pred = undo_norm_range01(pred, x_norm)
         elif x_norm["type"] == "scale_range":
@@ -324,7 +303,7 @@ class Denoising_Workflow(Base_Workflow):
             save_tif(
                 pred,
                 self.cfg.PATHS.RESULT_DIR.PER_IMAGE,
-                self.processing_filenames,
+                [self.current_sample["filename"]],
                 verbose=self.cfg.TEST.VERBOSE,
             )
 

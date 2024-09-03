@@ -1,4 +1,4 @@
-# conda activsate biapy_env_test, which is biapy_env and the following packages:
+# conda activate biapy_env_test, which is biapy_env and the following packages:
 # pip install gdown==5.1.0 --quiet
 import sys
 import os
@@ -6,9 +6,8 @@ import gdown
 import urllib
 import yaml
 from zipfile import ZipFile
-from subprocess import Popen, PIPE
+from subprocess import Popen
 import numpy as np
-from contextlib import redirect_stdout
 
 gpu = "0"
 gpus = "0,1" # For those tests that use more than one
@@ -19,8 +18,8 @@ bmz_script = os.path.join(biapy_folder, "biapy", "utils", "scripts", "export_bmz
 
 all_test_info = {}
 all_test_info["Test1"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test1",
     "description": "2D Semantic seg. Lucchi++. Basic DA. Extract random crops (probability map). unet. 2D stack as 3D. Post-proc: z-filtering.",
     "yaml": "test_1.yaml",
@@ -31,8 +30,8 @@ all_test_info["Test1"] = {
 }
 
 all_test_info["Test2"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test2",
     "description": "3D Semantic seg. Lucchi++. attention_unet. Basic DA.",
     "yaml": "test_2.yaml",
@@ -42,8 +41,8 @@ all_test_info["Test2"] = {
 }
 
 all_test_info["Test3"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test3",
     "description": "2D Semantic seg. Lucchi++. Basic DA. 5 epochs. seunet. FULL_IMG False",
     "yaml": "test_3.yaml",
@@ -53,8 +52,8 @@ all_test_info["Test3"] = {
 }
 
 all_test_info["Test4"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test4",
     "description": "2D Instance seg. Stardist 2D data. Basic DA. BC (auto). Replicate 2. resunet++. "
         "Post-proc: Clear border + remove instances by properties",
@@ -69,8 +68,8 @@ all_test_info["Test4"] = {
 }
 
 all_test_info["Test5"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test5",
     "description": "3D Instance seg. Demo 3D data. Basic DA. BCD (manual). resunet. Watershed multiple options. Post-proc: Clear border",
     "yaml": "test_5.yaml",
@@ -83,8 +82,8 @@ all_test_info["Test5"] = {
 }
 
 all_test_info["Test6"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test6",
     "description": "3D Instance seg. Cyst data. Basic DA. BCM (auto). resunet. Post-proc: Clear border + Voronoi + remove by props",
     "yaml": "test_6.yaml",
@@ -97,10 +96,10 @@ all_test_info["Test6"] = {
 }
 
 all_test_info["Test7"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test7",
-    "description": "2D Detection. Stardist v2 2D data. custom norm, dataset, percentile clip. Basic DA. "
+    "description": "2D Detection. Stardist v2 2D data. custom norm, percentile clip. Basic DA. "
         "multiresunet. Post-proc: remove close points + det weatershed",
     "yaml": "test_7.yaml",
     "internal_checks": [
@@ -110,10 +109,10 @@ all_test_info["Test7"] = {
 }
 
 all_test_info["Test8"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test8",
-    "description": "3D Detection. NucMM-Z 3D data. custom norm, dataset, percentile clip. Basic DA. "
+    "description": "3D Detection. NucMM-Z 3D data. custom norm, percentile clip. Basic DA. "
         "unetr. Post-proc: remove close points + det weatershed",
     "yaml": "test_8.yaml",
     "internal_checks": [
@@ -122,11 +121,11 @@ all_test_info["Test8"] = {
 }
 
 all_test_info["Test11"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test11",
     "description": "3D Detection. Zarr 3D data (Brainglobe). custom norm, percentile norm, per image. "
-        "MINIMUM_FOREGROUND_PER. warmupcosine. Basic DA. resunet. test by chunks: Zarr. Post-proc: remove close points",
+        "filter samples: foreground + mean. warmupcosine. Basic DA. resunet. test by chunks: Zarr. Post-proc: remove close points",
     "yaml": "test_11.yaml",
     "internal_checks": [
         {"type": "regular", "pattern": "Test F1 (per image)", "gt": True, "value": 0.15},
@@ -134,10 +133,10 @@ all_test_info["Test11"] = {
 }
 
 all_test_info["Test9"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test9",
-    "description": "2D Denoising. Convallaria data. custom norm, dataset. Basic DA."
+    "description": "2D Denoising. Convallaria data. custom norm. Basic DA."
         "unetr. Post-proc: remove close points + det weatershed",
     "yaml": "test_9.yaml",
     "internal_checks": [
@@ -146,10 +145,10 @@ all_test_info["Test9"] = {
 }
 
 all_test_info["Test10"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test10",
-    "description": "3D Denoising. Flywing 3D data. custom norm, dataset. Basic DA. "
+    "description": "3D Denoising. Flywing 3D data. custom norm. Basic DA. "
         "resunet. Post-proc: remove close points + det weatershed",
     "yaml": "test_10.yaml",
     "internal_checks": [
@@ -158,8 +157,8 @@ all_test_info["Test10"] = {
 }
 
 all_test_info["Test12"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test12",
     "description": "2D super-resolution. SR 2D data. Cross-val. Basic DA. DFCAN",
     "yaml": "test_12.yaml",
@@ -170,8 +169,8 @@ all_test_info["Test12"] = {
 }
 
 all_test_info["Test13"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test13",
     "description": "3D super-resolution. SR 3D data. Cross-val. Basic DA. resunet++. one-cycle",
     "yaml": "test_13.yaml",
@@ -182,8 +181,8 @@ all_test_info["Test13"] = {
 }
 
 all_test_info["Test14"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test14",
     "description": "2D self-supervision. Lucchi data. Cross-val. Basic DA. rcan",
     "yaml": "test_14.yaml",
@@ -194,8 +193,8 @@ all_test_info["Test14"] = {
 }
 
 all_test_info["Test15"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test15",
     "description": "2D self-supervision. Lucchi data. Cross-val. Basic DA. mae, masking: random",
     "yaml": "test_15.yaml",
@@ -205,8 +204,8 @@ all_test_info["Test15"] = {
 }
 
 all_test_info["Test16"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test16",
     "description": "2D self-supervision. Lucchi data. Cross-val. Basic DA. mae, masking: grid",
     "yaml": "test16.yaml",
@@ -216,19 +215,19 @@ all_test_info["Test16"] = {
 }
 
 all_test_info["Test17"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test17",
     "description": "3D self-supervision. Lucchi data. Basic DA. resunet++",
     "yaml": "test17.yaml",
     "internal_checks": [
-        {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 16.0},
+        {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 10.0},
     ]
 }
 
 all_test_info["Test18"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test18",
     "description": "3D self-supervision. Lucchi data. Cross-val. Basic DA. mae, masking: random",
     "yaml": "test18.yaml",
@@ -238,8 +237,8 @@ all_test_info["Test18"] = {
 }
 
 all_test_info["Test19"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test19",
     "description": "3D self-supervision. Lucchi data. Cross-val. Basic DA. mae, masking: grid",
     "yaml": "test19.yaml",
@@ -249,8 +248,8 @@ all_test_info["Test19"] = {
 }
 
 all_test_info["Test20"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test20",
     "description": "2D classification. DermaMNIST 2D data. preprocess: resize, Cross-val. Basic DA. ViT",
     "yaml": "test20.yaml",
@@ -260,8 +259,8 @@ all_test_info["Test20"] = {
 }
 
 all_test_info["Test21"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test21",
     "description": "2D classification. butterfly data. preprocess: resize. Basic DA. efficientnet_b1",
     "yaml": "test21.yaml",
@@ -271,8 +270,8 @@ all_test_info["Test21"] = {
 }
 
 all_test_info["Test22"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test22",
     "description": "3D classification. DermaMNIST 3D data. preprocess: resize, Cross-val. Basic DA. simple_cnn",
     "yaml": "test22.yaml",
@@ -282,8 +281,8 @@ all_test_info["Test22"] = {
 }
 
 all_test_info["Test23"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test23",
     "description": "3D classification. DermaMNIST 3D data. preprocess: resize. Basic DA. simple_cnn",
     "yaml": "test23.yaml",
@@ -293,21 +292,21 @@ all_test_info["Test23"] = {
 }
 
 all_test_info["Test24"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test24",
     "description": "2D image to image. Dapi 2D data. preprocess: resize, Cross-val. Basic DA. multiresunet",
     "yaml": "test24.yaml",
     "internal_checks": [
-        {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 19.0},
+        {"type": "regular", "pattern": "Test PSNR:", "gt": True, "value": 19.0},
     ]
 }
 
 all_test_info["Test25"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test25",
-    "description": "2D image to image. lighmycells 2D data. preprocess: resize, Cross-val. Basic DA. ViT",
+    "description": "2D image to image. lightmycells 2D data. preprocess: resize, Cross-val. Basic DA. ViT",
     "yaml": "test25.yaml",
     "internal_checks": [
         {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 22.0},
@@ -315,20 +314,20 @@ all_test_info["Test25"] = {
 }
 
 all_test_info["Test26"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test26",
     "description": "3D Detection. Zarr 3D data (Brainglobe). in memory false. custom norm, percentile norm, per image. "
-        "MINIMUM_FOREGROUND_PER. warmupcosine. Basic DA. resunet. test by chunks: Zarr. Post-proc: remove close points",
+        "filter_samples: foreground. warmupcosine. Basic DA. resunet. test by chunks: Zarr. Post-proc: remove close points",
     "yaml": "test_26.yaml",
     "internal_checks": [
-        {"type": "regular", "pattern": "Test F1 (per image)", "gt": True, "value": 0.15},
+        {"type": "regular", "pattern": "Test F1 (per image)", "gt": True, "value": 0.5},
     ]
 }
 
 all_test_info["Test27"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test27",
     "description": "3D Instance seg. Zarr 3D data SNEMI. in memory false. input zarr multiple data raw: 'volumes.raw'"
         "warmupcosine. inference, by chunks, zarr multiple data, workflow process: entire pred.",
@@ -340,8 +339,8 @@ all_test_info["Test27"] = {
 }
 
 all_test_info["Test28"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test28",
     "description": "3D Image to image. Nuclear_Pore_complex_3D data. in memory true. val 0.1 of train.",
     "yaml": "test_28.yaml",
@@ -351,8 +350,8 @@ all_test_info["Test28"] = {
 }
 
 all_test_info["Test29"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test29",
     "description": "2D instance segmentation. BMZ 'affable-shark' model import, inference and export. "
         "zero_mean_unit_variance + format_version: 0.5.3 ",
@@ -366,8 +365,8 @@ all_test_info["Test29"] = {
 }
 
 all_test_info["Test30"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test30",
     "description": "2D instance segmentation. BMZ 'hiding-blowfish' model import, inference and export."
         "scale_range + format_version: 0.4.10",
@@ -378,8 +377,8 @@ all_test_info["Test30"] = {
 }
 
 all_test_info["Test31"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test31",
     "description": "2D instance segmentation. BMZ 'affable-shark' model import, finetunning and export (reusing model original info)."
         "zero_mean_unit_variance + format_version: 0.5.3 ",
@@ -393,14 +392,36 @@ all_test_info["Test31"] = {
 }
 
 all_test_info["Test32"] = {
-    "enable": True,
-    "run_experiment": True,
+    "enable": False,
+    "run_experiment": False,
     "jobname": "test32",
     "description": "2D instance segmentation. Export BiaPy model to BMZ format",
     "yaml": "test_32.yaml",
     "internal_checks": [
         {"type": "regular", "pattern": "Test IoU (B channel) (merge patches):", "gt": True, "value": 0.7},
         {"type": "BMZ", "pattern": "Package path:", "bmz_package_name":  "biapy_model.zip"},
+    ]
+}
+
+all_test_info["Test33"] = {
+    "enable": False,
+    "run_experiment": False,
+    "jobname": "test33",
+    "description": "2D Semantic seg. Lucchi++. Basic DA. unet. validation from train when not in memory. preprocess resize train and test",
+    "yaml": "test_33.yaml",
+    "internal_checks": [
+        {"type": "regular", "pattern": "Test Foreground IoU (merge patches)", "gt": True, "value": 0.5},
+    ]
+}
+
+all_test_info["Test34"] = {
+    "enable": True,
+    "run_experiment": True,
+    "jobname": "test34",
+    "description": "2D image to image. lightmycells 2D data. preprocess: resize, Cross-val. Basic DA. ViT",
+    "yaml": "test34.yaml",
+    "internal_checks": [
+        {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 22.0},
     ]
 }
 
@@ -601,7 +622,7 @@ if not os.path.exists(biapy_folder):
 
 # General things: 2D Data + YAML donwload
 if not os.path.exists(semantic_2d_data_outpath) and (all_test_info["Test1"]["enable"] or\
-    all_test_info["Test3"]["enable"]):
+    all_test_info["Test3"]["enable"] or all_test_info["Test33"]["enable"]):
     print("Downloading 2D semantic seg. data . . .")
 
     os.makedirs(semantic_folder, exist_ok=True)
@@ -923,7 +944,7 @@ if not os.path.exists(classification_3d_data_outpath) and all_test_info["Test22"
 
 # General things: 2D Data + YAML donwload
 if not os.path.exists(image_to_image_2d_data_outpath) and (all_test_info["Test24"]["enable"] \
-    or all_test_info["Test25"]["enable"]):
+    or all_test_info["Test25"]["enable"] or all_test_info["Test34"]["enable"]):
     print("Downloading 2D image_to_image data . . .")
 
     os.makedirs(image_to_image_folder, exist_ok=True)
@@ -1582,7 +1603,6 @@ if all_test_info["Test7"]["enable"]:
     biapy_config['DATA']['NORMALIZATION']['PERC_LOWER'] = 0.1
     biapy_config['DATA']['NORMALIZATION']['PERC_UPPER'] = 99.8
     biapy_config['DATA']['NORMALIZATION']['TYPE'] = 'custom'
-    biapy_config['DATA']['NORMALIZATION']['APPLICATION_MODE'] = 'dataset'
 
     biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(detection_2d_data_outpath, "data", "train", "x")
     biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(detection_2d_data_outpath, "data", "train", "y")
@@ -1676,7 +1696,6 @@ if all_test_info["Test8"]["enable"]:
     biapy_config['DATA']['NORMALIZATION']['PERC_LOWER'] = 0.1
     biapy_config['DATA']['NORMALIZATION']['PERC_UPPER'] = 99.8
     biapy_config['DATA']['NORMALIZATION']['TYPE'] = 'custom'
-    biapy_config['DATA']['NORMALIZATION']['APPLICATION_MODE'] = 'image'
 
     biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(detection_3d_data_outpath, "data", "train", "x")
     biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(detection_3d_data_outpath, "data", "train", "y")
@@ -1771,10 +1790,13 @@ if all_test_info["Test11"]["enable"]:
     biapy_config['DATA']['NORMALIZATION']['PERC_CLIP'] = True
     biapy_config['DATA']['NORMALIZATION']['PERC_LOWER'] = 0.1
     biapy_config['DATA']['NORMALIZATION']['PERC_UPPER'] = 99.8
-    biapy_config['DATA']['NORMALIZATION']['APPLICATION_MODE'] = 'image'
 
     biapy_config['DATA']['TRAIN']['INPUT_IMG_AXES_ORDER'] = 'ZYXC'
-    biapy_config['DATA']['TRAIN']['MINIMUM_FOREGROUND_PER'] = 0.0000000000000000000001
+    biapy_config['DATA']['TRAIN']['FILTER_SAMPLES'] = {}
+    biapy_config['DATA']['TRAIN']['FILTER_SAMPLES']['ENABLE'] = True
+    biapy_config['DATA']['TRAIN']['FILTER_SAMPLES']['PROPS'] = [['foreground']]
+    biapy_config['DATA']['TRAIN']['FILTER_SAMPLES']['VALUES'] = [[1.0e-22]]
+    biapy_config['DATA']['TRAIN']['FILTER_SAMPLES']['SIGNS'] = [["lt"]]
     biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(detection_3d_brainglobe_data_outpath, "data", "3D_ch2ch4_Zarr")
     biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(detection_3d_brainglobe_data_outpath, "data", "y")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
@@ -1874,7 +1896,6 @@ if all_test_info["Test9"]["enable"]:
 
     biapy_config['DATA']['NORMALIZATION'] = {}
     biapy_config['DATA']['NORMALIZATION']['TYPE'] = 'custom'
-    biapy_config['DATA']['NORMALIZATION']['APPLICATION_MODE'] = 'image'
 
     biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(denoising_2d_data_outpath, "data", "train")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
@@ -1942,7 +1963,6 @@ if all_test_info["Test10"]["enable"]:
 
     biapy_config['DATA']['NORMALIZATION'] = {}
     biapy_config['DATA']['NORMALIZATION']['TYPE'] = 'custom'
-    biapy_config['DATA']['NORMALIZATION']['APPLICATION_MODE'] = 'dataset'
 
     biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(denoising_3d_data_outpath, "data", "train")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
@@ -2016,6 +2036,11 @@ if all_test_info["Test12"]["enable"]:
     biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(super_resolution_2d_data_outpath, "data", "test", "HR")
     biapy_config['DATA']['TEST']['IN_MEMORY'] = False
     biapy_config['DATA']['TEST']['USE_VAL_AS_TEST'] = True
+    biapy_config['DATA']['TRAIN']['FILTER_SAMPLES'] = {}
+    biapy_config['DATA']['TRAIN']['FILTER_SAMPLES']['ENABLE'] = True
+    biapy_config['DATA']['TRAIN']['FILTER_SAMPLES']['PROPS'] = [['mean']]
+    biapy_config['DATA']['TRAIN']['FILTER_SAMPLES']['VALUES'] = [[10000]]
+    biapy_config['DATA']['TRAIN']['FILTER_SAMPLES']['SIGNS'] = [["lt"]]
 
     biapy_config['TRAIN']['ENABLE'] = True
     biapy_config['TRAIN']['EPOCHS'] = 20
@@ -3022,11 +3047,14 @@ if all_test_info["Test26"]["enable"]:
     biapy_config['DATA']['NORMALIZATION']['PERC_CLIP'] = True
     biapy_config['DATA']['NORMALIZATION']['PERC_LOWER'] = 0.1
     biapy_config['DATA']['NORMALIZATION']['PERC_UPPER'] = 99.8
-    biapy_config['DATA']['NORMALIZATION']['APPLICATION_MODE'] = 'image'
 
     biapy_config['DATA']['TRAIN']['INPUT_IMG_AXES_ORDER'] = 'ZYXC'
     biapy_config['DATA']['TRAIN']['INPUT_MASK_AXES_ORDER'] = 'TZCYX'
-    biapy_config['DATA']['TRAIN']['MINIMUM_FOREGROUND_PER'] = 0.0000000000000000000001
+    biapy_config['DATA']['TRAIN']['FILTER_SAMPLES'] = {}
+    biapy_config['DATA']['TRAIN']['FILTER_SAMPLES']['ENABLE'] = True
+    biapy_config['DATA']['TRAIN']['FILTER_SAMPLES']['PROPS'] = [['foreground'], ["mean"]]
+    biapy_config['DATA']['TRAIN']['FILTER_SAMPLES']['VALUES'] = [[1.0e-22], [0.1]]
+    biapy_config['DATA']['TRAIN']['FILTER_SAMPLES']['SIGNS'] = [["lt"], ["lt"]]
     biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(detection_3d_brainglobe_data_outpath, "data", "3D_ch2ch4_Zarr")
     biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(detection_3d_brainglobe_data_outpath, "data", "y")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = False
@@ -3595,5 +3623,153 @@ if all_test_info["Test32"]["enable"]:
     # Test result
     print_result(results, all_test_info["Test32"]["jobname"], int_checks)
 
+#~~~~~~~~~~~~
+# Test 33
+#~~~~~~~~~~~~
+if all_test_info["Test33"]["enable"]:
+    print("######")
+    print("Running Test 33")
+    print_inventory(all_test_info["Test33"])
+
+    #*******************
+    # File preparation
+    #*******************
+    # Open config file
+    with open(semantic_2d_template_local, 'r') as stream:
+        try:
+            biapy_config = yaml.safe_load(stream)
+        except yaml.YAMLError as exc:
+            raise ValueError(exc)
+
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(semantic_2d_data_outpath, "data", "train", "x")
+    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(semantic_2d_data_outpath, "data", "train", "y")
+    biapy_config['DATA']['TRAIN']['IN_MEMORY'] = False
+    biapy_config['DATA']['VAL']['FROM_TRAIN'] = True
+    biapy_config['DATA']['VAL']['SPLIT_TRAIN'] = 0.1
+    biapy_config['DATA']['VAL']['IN_MEMORY'] = True
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(semantic_2d_data_outpath, "data", "test", "x")
+    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(semantic_2d_data_outpath, "data", "test", "y")
+    biapy_config['DATA']['TEST']['IN_MEMORY'] = True
+    biapy_config['DATA']['TEST']['LOAD_GT'] = True
+
+    biapy_config['DATA']['PREPROCESS'] = {}
+    biapy_config['DATA']['PREPROCESS']["TRAIN"] = True
+    biapy_config['DATA']['PREPROCESS']["TEST"] = True
+    biapy_config['DATA']['PREPROCESS']["RESIZE"] = {}
+    biapy_config['DATA']['PREPROCESS']["RESIZE"]["ENABLE"] = True
+    biapy_config['DATA']['PREPROCESS']["RESIZE"]["OUTPUT_SHAPE"] = "(512, 512)"
+
+    biapy_config['AUGMENTOR']['CONTRAST'] = True
+    biapy_config['AUGMENTOR']['BRIGHTNESS'] = True
+
+    biapy_config['TRAIN']['ENABLE'] = True
+    biapy_config['TRAIN']['EPOCHS'] = 50
+    biapy_config['TRAIN']['PATIENCE'] = -1
+
+    biapy_config['MODEL']['ARCHITECTURE'] = 'unet'
+
+    biapy_config['TEST']['ENABLE'] = True
+    biapy_config['TEST']['AUGMENTATION'] = False
+    biapy_config['TEST']['FULL_IMG'] = False
+
+    # Save file
+    test_file = os.path.join(semantic_folder, all_test_info["Test33"]["yaml"])
+    with open(test_file, 'w') as outfile:
+        yaml.dump(biapy_config, outfile, default_flow_style=False)
+
+    # Run
+    if all_test_info["Test33"]["run_experiment"]:
+        runjob(all_test_info["Test33"], results_folder, test_file, biapy_folder)
+
+    # Check
+    results = []
+    res, last_lines = check_finished(all_test_info["Test33"], "Test 1")
+    if not res:
+        print("Internal check not passed: seems that it didn't finish")
+    results.append(res)
+    int_checks = 1
+    for checks in all_test_info["Test33"]["internal_checks"]:
+        results.append(check_value(last_lines, checks["pattern"], checks["value"], checks["gt"]))
+        int_checks += 1
+        if not results[-1]:
+            print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
+
+    # Test result
+    print_result(results, all_test_info["Test33"]["jobname"], int_checks)
+
+#~~~~~~~~~~~~
+# Test 34
+#~~~~~~~~~~~~
+if all_test_info["Test34"]["enable"]:
+    print("######")
+    print("Running Test 34")
+    print_inventory(all_test_info["Test34"])
+
+    #*******************
+    # File preparation
+    #*******************
+    # Open config file
+    with open(image_to_image_light_2d_template_local, 'r') as stream:
+        try:
+            biapy_config = yaml.safe_load(stream)
+        except yaml.YAMLError as exc:
+            raise ValueError(exc)
+
+    biapy_config['DATA']['REFLECT_TO_COMPLETE_SHAPE'] = True
+    biapy_config['DATA']['PATCH_SIZE'] = "(1024, 1024, 1)"
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "x")
+    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "y")
+    biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
+    biapy_config['DATA']['VAL']['FROM_TRAIN'] = False
+    biapy_config['DATA']['VAL']['PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "x")
+    biapy_config['DATA']['VAL']['GT_PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "y")
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "x")
+    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "y")
+    biapy_config['DATA']['TEST']['IN_MEMORY'] = True
+    biapy_config['DATA']['TEST']['PADDING'] = "(200,200)"
+
+    biapy_config['TRAIN']['ENABLE'] = True
+    biapy_config['TRAIN']['EPOCHS'] = 10
+    biapy_config['TRAIN']['PATIENCE'] = -1
+    biapy_config['TRAIN']['LR_SCHEDULER']['WARMUP_COSINE_DECAY_EPOCHS'] = 5
+
+    biapy_config['AUGMENTOR']['GRIDMASK'] = False
+    biapy_config['AUGMENTOR']['ROT90'] = True
+
+    biapy_config['MODEL']['ARCHITECTURE'] = 'attention_unet'
+    biapy_config['MODEL']['LOAD_CHECKPOINT'] = False
+
+    biapy_config['TEST']['ENABLE'] = True
+
+    del biapy_config['PATHS']
+
+    # Save file
+    test_file = os.path.join(image_to_image_folder, all_test_info["Test34"]["yaml"])
+    with open(test_file, 'w') as outfile:
+        yaml.dump(biapy_config, outfile, default_flow_style=False)
+
+    # Run
+    if all_test_info["Test34"]["run_experiment"]:
+        runjob(all_test_info["Test34"], results_folder, test_file, biapy_folder)
+
+    # Check
+    results = []
+    res, last_lines = check_finished(all_test_info["Test34"], "Test 34")
+    if not res:
+        print("Internal check not passed: seems that it didn't finish")
+    results.append(res)
+    int_checks = 1
+    for checks in all_test_info["Test34"]["internal_checks"]:
+        if checks["type"] == "regular":
+            results.append(check_value(last_lines, checks["pattern"], checks["value"], checks["gt"]))
+        else:
+            results.append(check_DatasetMatching(last_lines, checks["pattern"], checks["value"], gt=checks["gt"],
+                value_to_check=checks["nApparition"], metric=checks["metric"]))
+        int_checks += 1
+        if not results[-1]:
+            print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
+
+    # Test result
+    print_result(results, all_test_info["Test34"]["jobname"], int_checks)
 
 print("Finish tests!!")

@@ -16,7 +16,6 @@ DATA:
     REFLECT_TO_COMPLETE_SHAPE: True
     NORMALIZATION:
         TYPE: 'custom'
-        APPLICATION_MODE: 'image'
     TRAIN:
         PATH: /path/mito/x
         GT_PATH: /path/mito/y

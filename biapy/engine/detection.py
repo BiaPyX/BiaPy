@@ -20,7 +20,6 @@ from biapy.utils.misc import (
 from biapy.utils.util import (
     save_tif,
     write_chunked_data,
-    order_dimensions,
     read_chunked_data,
 )
 from biapy.engine.metrics import (
@@ -32,6 +31,7 @@ from biapy.engine.metrics import (
 )
 from biapy.data.pre_processing import create_detection_masks, norm_range01
 from biapy.engine.base_workflow import Base_Workflow
+from biapy.data.data_3D_manipulation import order_dimensions
 
 
 class Detection_Workflow(Base_Workflow):
@@ -71,6 +71,7 @@ class Detection_Workflow(Base_Workflow):
 
         # Workflow specific training variables
         self.mask_path = cfg.DATA.TRAIN.GT_PATH
+        self.is_y_mask = True
         self.load_Y_val = True
 
         # Workflow specific test variables
@@ -814,7 +815,7 @@ class Detection_Workflow(Base_Workflow):
                 pred = pred[0]
             self.detection_process(
                 pred,
-                self.processing_filenames,
+                [self.current_sample["filename"]],
                 inference_type="merge_patches",
             )
         else:
@@ -1005,7 +1006,6 @@ class Detection_Workflow(Base_Workflow):
             df_patch["axis-1"] = df_patch["axis-1"] + shift[1]
             df_patch["axis-2"] = df_patch["axis-2"] + shift[2]
 
-
             if not df_patch.empty:
                 # save the detected points in the patch
                 os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, exist_ok=True)
@@ -1086,7 +1086,6 @@ class Detection_Workflow(Base_Workflow):
                         print("Current total patch with detection: {}".format(len(all_patches)))
                 except Exception as e:
                     print("Error while detecting patch", e)
-
 
         df = pd.concat(all_patches, ignore_index=True)
 
@@ -1208,43 +1207,49 @@ class Detection_Workflow(Base_Workflow):
                     self.stats["by_chunks"][str(metric).lower()] = 0
                 self.stats["by_chunks"][str(metric).lower()] += d_metrics[str(metric)]
 
-    def process_test_sample(self, norm):
+    def process_test_sample(self):
         """
         Function to process a sample in the inference phase.
-
-        Parameters
-        ----------
-        norm : List of dicts
-            Normalization used during training. Required to denormalize the predictions of the model.
         """
         if self.cfg.MODEL.SOURCE != "torchvision":
-            super().process_test_sample(norm)
+            super().process_test_sample()
         else:
+            # Skip processing image 
+            if "discard" in self.current_sample["X"] and self.current_sample["X"]["discard"]: 
+                return True
+            
             # Save test_output if the user wants to export the model to BMZ later
             if "test_input" not in self.bmz_config:
                 if self.cfg.PROBLEM.NDIM == "2D":
-                    self.bmz_config["test_input"] = self._X[0][
+                    self.bmz_config["test_input"] = self.current_sample["X"][0][
                         : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1]
                     ].copy()
                 else:
-                    self.bmz_config["test_input"] = self._X[0][
+                    self.bmz_config["test_input"] = self.current_sample["X"][0][
                         : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1], : self.cfg.DATA.PATCH_SIZE[2]
                     ].copy()
 
-            # Data channel check
-            if self.cfg.DATA.PATCH_SIZE[-1] != self._X.shape[-1]:
-                raise ValueError(
-                    "Channel of the DATA.PATCH_SIZE given {} does not correspond with the loaded image {}. "
-                    "Please, check the channels of the images!".format(self.cfg.DATA.PATCH_SIZE[-1], self._X.shape[-1])
-                )
 
             ##################
             ### FULL IMAGE ###
             ##################
             # Make the prediction
             with torch.cuda.amp.autocast():
-                pred = self.model_call_func(self._X)
-            del self._X
+                pred = self.model_call_func(self.current_sample["X"])
+            del self.current_sample["X"]
+        
+            if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE:
+                reflected_orig_shape = (1,) + self.current_sample["reflected_orig_shape"]
+                if reflected_orig_shape != pred.shape:
+                    if self.cfg.PROBLEM.NDIM == "2D":
+                        pred = pred[:, -reflected_orig_shape[1] :, -reflected_orig_shape[2] :]
+                    else:
+                        pred = pred[
+                            :,
+                            -reflected_orig_shape[1] :,
+                            -reflected_orig_shape[2] :,
+                            -reflected_orig_shape[3] :,
+                        ]
 
             # Save test_output if the user wants to export the model to BMZ later
             if "test_output" not in self.bmz_config:
@@ -1274,7 +1279,7 @@ class Detection_Workflow(Base_Workflow):
         prediction : Tensor
             Image prediction.
         """
-        filename, file_extension = os.path.splitext(self.processing_filenames[0])
+        filename, file_extension = os.path.splitext(self.current_sample["filename"])
 
         # Convert first to 0-255 range if uint16
         if in_img.dtype == torch.float32:
@@ -1327,7 +1332,7 @@ class Detection_Workflow(Base_Workflow):
                 pred = pred[0]
             self.detection_process(
                 pred,
-                self.processing_filenames,
+                [self.current_sample["filename"]],
                 inference_type="full_image",
             )
         else:

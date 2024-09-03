@@ -26,10 +26,10 @@ from skimage.measure import label, regionprops_table, marching_cubes, mesh_surfa
 from skimage.io import imread
 from skimage.exposure import equalize_adapthist
 
-from biapy.utils.util import save_tif, read_img
+from biapy.utils.util import save_tif
 from biapy.data.pre_processing import reduce_dtype
 from biapy.utils.misc import to_numpy_format, to_pytorch_format
-
+from biapy.data.data_manipulation import read_img_as_ndarray
 
 def watershed_by_channels(
     data,
@@ -1245,7 +1245,7 @@ def detection_watershed(
     print("Applying detection watershed . . .")
 
     # Read the test image
-    img = read_img(data_filename, is_3d=ndim == 3).squeeze()
+    img = read_img_as_ndarray(data_filename, is_3d=(ndim == 3)).squeeze()
     img = reduce_dtype(img, np.min(img), np.max(img), out_min=0, out_max=255, out_type=np.uint8)
     img = equalize_adapthist(img)
 

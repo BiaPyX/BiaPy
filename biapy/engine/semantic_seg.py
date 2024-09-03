@@ -14,7 +14,6 @@ from biapy.engine.metrics import (
 )
 from biapy.data.pre_processing import norm_range01
 
-
 class Semantic_Segmentation_Workflow(Base_Workflow):
     """
     Semantic segmentation workflow where the goal is to assign a class to each pixel of the input image.
@@ -54,6 +53,8 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
 
         # Workflow specific training variables
         self.mask_path = cfg.DATA.TRAIN.GT_PATH
+        self.is_y_mask = True
+
         self.load_Y_val = True
         self.loss_dtype = torch.float32
 
@@ -120,56 +121,61 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
 
         super().define_metrics()
 
-    def process_test_sample(self, norm):
+    def process_test_sample(self):
         """
         Function to process a sample in the inference phase.
-
-        Parameters
-        ----------
-        norm : List of dicts
-            Normalization used during training. Required to denormalize the predictions of the model.
         """
         if self.cfg.MODEL.SOURCE != "torchvision":
-            super().process_test_sample(norm)
+            super().process_test_sample()
         else:
+            # Skip processing image 
+            if "discard" in self.current_sample["X"] and self.current_sample["X"]["discard"]: 
+                return True
+
             # Save test_input if the user wants to export the model to BMZ later
             if "test_input" not in self.bmz_config:
                 if self.cfg.PROBLEM.NDIM == "2D":
-                    self.bmz_config["test_input"] = self._X[0][
+                    self.bmz_config["test_input"] = self.current_sample["X"][0][
                         : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1]
                     ].copy()
                 else:
-                    self.bmz_config["test_input"] = self._X[0][
+                    self.bmz_config["test_input"] = self.current_sample["X"][0][
                         : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1], : self.cfg.DATA.PATCH_SIZE[2]
                     ].copy()
-
-            # Data channel check
-            if self.cfg.DATA.PATCH_SIZE[-1] != self._X.shape[-1]:
-                raise ValueError(
-                    "Channel of the DATA.PATCH_SIZE given {} does not correspond with the loaded image {}. "
-                    "Please, check the channels of the images!".format(self.cfg.DATA.PATCH_SIZE[-1], self._X.shape[-1])
-                )
 
             ##################
             ### FULL IMAGE ###
             ##################
             # Make the prediction
             with torch.cuda.amp.autocast():
-                pred = self.model_call_func(self._X)
+                pred = self.model_call_func(self.current_sample["X"])
             pred = to_numpy_format(pred, self.axis_order_back)
-            del self._X
+            del self.current_sample["X"]
+
+            if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE:
+                reflected_orig_shape = (1,) + self.current_sample["reflected_orig_shape"]
+                if reflected_orig_shape != pred.shape:
+                    if self.cfg.PROBLEM.NDIM == "2D":
+                        pred = pred[:, -reflected_orig_shape[1] :, -reflected_orig_shape[2] :]
+                    else:
+                        pred = pred[
+                            :,
+                            -reflected_orig_shape[1] :,
+                            -reflected_orig_shape[2] :,
+                            -reflected_orig_shape[3] :,
+                        ]
 
             if self.cfg.TEST.POST_PROCESSING.APPLY_MASK:
                 pred = apply_binary_mask(pred, self.cfg.DATA.TEST.BINARY_MASKS)
 
-            if self._Y is not None:
-                if pred.shape != self._Y.shape:
-                    self._Y = resize(self._Y, pred.shape, order=0)
+            if self.current_sample["Y"] is not None:
+                if pred.shape != self.current_sample["Y"].shape:
+                    self.current_sample["Y"] = resize(self.current_sample["Y"], pred.shape, order=0)
 
                 metric_values = self.metric_calculation(
                     to_pytorch_format(pred, self.axis_order, self.device),
                     to_pytorch_format(
-                        self._Y,
+                        self.current_sample["Y"],
                         self.axis_order,
                         self.device,
                         dtype=self.loss_dtype,
@@ -227,7 +233,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
             save_tif(
                 masks,
                 self.cfg.PATHS.RESULT_DIR.FULL_IMAGE,
-                self.processing_filenames,
+                [self.current_sample["filename"]],
                 verbose=self.cfg.TEST.VERBOSE,
             )
 
@@ -306,7 +312,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         save_tif(
             pred,
             self.cfg.PATHS.RESULT_DIR.PER_IMAGE_BIN,
-            self.processing_filenames,
+            [self.current_sample["filename"]],
             verbose=self.cfg.TEST.VERBOSE,
         )
 
@@ -336,7 +342,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         save_tif(
             (pred > 0.5).astype(np.uint8),
             self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_BIN,
-            self.processing_filenames,
+            [self.current_sample["filename"]],
             verbose=self.cfg.TEST.VERBOSE,
         )
 

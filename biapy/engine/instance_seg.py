@@ -23,7 +23,6 @@ from biapy.utils.util import (
     save_tif,
     read_chunked_data,
     read_chunked_nested_data,
-    read_img,
 )
 from biapy.utils.matching import matching, wrapper_matching_dataset_lazy
 from biapy.engine.metrics import (
@@ -33,7 +32,7 @@ from biapy.engine.metrics import (
 )
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.utils.misc import is_main_process, is_dist_avail_and_initialized
-
+from biapy.data.data_manipulation import read_img_as_ndarray
 
 class Instance_Segmentation_Workflow(Base_Workflow):
     """
@@ -58,6 +57,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
     def __init__(self, cfg, job_identifier, device, args, **kwargs):
         super(Instance_Segmentation_Workflow, self).__init__(cfg, job_identifier, device, args, **kwargs)
 
+        self.original_train_input_mask_axis_order = self.cfg.DATA.TRAIN.INPUT_MASK_AXES_ORDER
         self.original_test_path, self.original_test_mask_path = self.prepare_instance_data()
 
         # Merging the image
@@ -133,6 +133,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
         # Workflow specific training variables
         self.mask_path = cfg.DATA.TRAIN.GT_PATH
+        self.is_y_mask = True
         self.load_Y_val = True
         if self.cfg.DATA.TEST.LOAD_GT:
             self.test_gt_filenames = sorted(next(os.walk(self.original_test_mask_path))[2])
@@ -325,7 +326,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         list_names_to_use = self.train_metric_names if train else self.test_metric_names
 
         with torch.no_grad():
-            k=0
+            k = 0
             for i, metric in enumerate(list_to_use):
                 val = metric(output, targets)
                 if isinstance(val, dict):
@@ -455,11 +456,11 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
             # Need to load instance labels, as Y are binary channels used for IoU calculation
             if self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK and len(self.test_filenames) == w_pred.shape[0]:
-                del self._Y
+                del self.current_sample["Y"]
                 _Y = np.zeros(w_pred.shape, dtype=w_pred.dtype)
                 for i in range(len(self.test_filenames)):
                     test_file = os.path.join(self.original_test_mask_path, self.test_filenames[i])
-                    _Y[i] = read_img(test_file, is_3d=False).squeeze()
+                    _Y[i] = read_img_as_ndarray(test_file, is_3d=False).squeeze()
             else:
                 test_file = os.path.join(self.original_test_mask_path, self.test_filenames[self.f_numbers[0]])
                 if not os.path.exists(test_file):
@@ -483,7 +484,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         _, _Y = read_chunked_data(test_file)
                     _Y = np.array(_Y).squeeze()
                 else:
-                    _Y = read_img(test_file, is_3d=self.cfg.PROBLEM.NDIM == "3D").squeeze()
+                    _Y = read_img_as_ndarray(test_file, is_3d=self.cfg.PROBLEM.NDIM == "3D").squeeze()
 
             # Multi-head: instances + classification
             if self.cfg.MODEL.N_CLASSES > 2:
@@ -871,45 +872,51 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
         return results, results_post_proc, results_class, results_class_post_proc
 
-    def process_test_sample(self, norm):
+    def process_test_sample(self):
         """
         Function to process a sample in the inference phase.
-
-        Parameters
-        ----------
-        norm : List of dicts
-            Normalization used during training. Required to denormalize the predictions of the model.
         """
         if self.cfg.MODEL.SOURCE != "torchvision":
             self.instances_already_created = False
-            super().process_test_sample(norm)
+            super().process_test_sample()
         else:
+            # Skip processing image 
+            if "discard" in self.current_sample["X"] and self.current_sample["X"]["discard"]: 
+                return True
+            
             # Save test_input if the user wants to export the model to BMZ later
             if "test_input" not in self.bmz_config:
                 if self.cfg.PROBLEM.NDIM == "2D":
-                    self.bmz_config["test_input"] = self._X[0][
+                    self.bmz_config["test_input"] = self.current_sample["X"][0][
                         : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1]
                     ].copy()
                 else:
-                    self.bmz_config["test_input"] = self._X[0][
+                    self.bmz_config["test_input"] = self.current_sample["X"][0][
                         : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1], : self.cfg.DATA.PATCH_SIZE[2]
                     ].copy()
 
             self.instances_already_created = True
-            # Data channel check
-            if self.cfg.DATA.PATCH_SIZE[-1] != self._X.shape[-1]:
-                raise ValueError(
-                    "Channel of the DATA.PATCH_SIZE given {} does not correspond with the loaded image {}. "
-                    "Please, check the channels of the images!".format(self.cfg.DATA.PATCH_SIZE[-1], self._X.shape[-1])
-                )
 
             ##################
             ### FULL IMAGE ###
             ##################
             # Make the prediction
             with torch.cuda.amp.autocast():
-                pred = self.model_call_func(self._X)
-            del self._X
+                pred = self.model_call_func(self.current_sample["X"])
+            del self.current_sample["X"]
+
+            if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE:
+                reflected_orig_shape = (1,) + self.current_sample["reflected_orig_shape"]
+                if reflected_orig_shape != pred.shape:
+                    if self.cfg.PROBLEM.NDIM == "2D":
+                        pred = pred[:, -reflected_orig_shape[1] :, -reflected_orig_shape[2] :]
+                    else:
+                        pred = pred[
+                            :,
+                            -reflected_orig_shape[1] :,
+                            -reflected_orig_shape[2] :,
+                            -reflected_orig_shape[3] :,
+                        ]
 
             if self.cfg.TEST.POST_PROCESSING.APPLY_MASK:
                 pred = apply_binary_mask(pred, self.cfg.DATA.TEST.BINARY_MASKS)
@@ -947,7 +954,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 )
                 r, r_post, rcls, rcls_post = self.instance_seg_process(
                     pred,
-                    self.processing_filenames,
+                    [self.current_sample["filename"]],
                     self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
                     self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,
                     resolution,
@@ -996,7 +1003,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 )
                 r, r_post, rcls, rcls_post = self.instance_seg_process(
                     pred,
-                    self.processing_filenames,
+                    [self.current_sample["filename"]],
                     self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_INSTANCES,
                     self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_POST_PROCESSING,
                     resolution,
@@ -1390,7 +1397,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         prediction : Tensor
             Image prediction.
         """
-        filename, file_extension = os.path.splitext(self.processing_filenames[0])
+        filename, file_extension = os.path.splitext(self.current_sample["filename"])
 
         # Convert first to 0-255 range if uint16
         if in_img.dtype == torch.float32:
@@ -1438,7 +1445,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             save_tif(
                 np.expand_dims(masks, 0),
                 self.cfg.PATHS.RESULT_DIR.FULL_IMAGE,
-                self.processing_filenames,
+                [self.current_sample["filename"]],
                 verbose=self.cfg.TEST.VERBOSE,
             )
 

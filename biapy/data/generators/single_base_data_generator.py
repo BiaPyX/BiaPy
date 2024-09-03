@@ -4,9 +4,9 @@ from torch.utils.data import Dataset
 import numpy as np
 import random
 import os
+import h5py
 from tqdm import tqdm
 import imgaug as ia
-from skimage.io import imread
 from imgaug import augmenters as iaa
 from typing import (
     List,
@@ -18,6 +18,8 @@ from typing import (
 from biapy.data.pre_processing import normalize, norm_range01, percentile_clip
 from biapy.data.generators.augmentors import *
 from biapy.utils.misc import is_main_process
+from biapy.data.data_manipulation import load_img_data
+from biapy.data.data_3D_manipulation import extract_patch_from_efficient_file
 
 
 class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
@@ -34,26 +36,21 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
     ndim : int
         Dimensions of the data (``2`` for 2D and ``3`` for 3D).
 
-    X : 4D/5D Numpy array
-        Data. E.g. ``(num_of_images, y, x, channels)`` for ``2D`` or ``(num_of_images, z, y, x, channels)`` for ``3D``.
-
-    Y : 2D Numpy array
-        Image class. ``(num_of_images, class)``.
-
-    data_path : List of str, optional
-        If the data is in memory (``data_mode`` == ``'in_memory'``) this should contain the path to load images.
-
-    ptype : str
-        Problem type. Options ['mae','classification'].
+    X : list of dict
+        X data. Each item in the list represents a sample of the dataset. Each sample is represented as follows:
+            * ``"filename"``: name of the image to extract the data sample from.
+            * ``"dir"``: directory where the image resides.
+            * ``"shape"``: shape of the sample.
+            * ``"class_name"``: name of the class.
+            * ``"class"``: integer that represents the class.
+            * ``"img"`` (optional): image sample itself. It is a ndarrray of  ``(y, x, channels)`` in ``2D`` and
+              ``(z, y, x, channels)`` in ``3D``. Provided if the user selected to load images into memory.
 
     n_classes : int
         Number of classes to predict.
 
     seed : int, optional
         Seed for random functions.
-
-    data_mode : str, optional
-        Information about how the data needs to be managed. Options: ['in_memory', 'not_in_memory', 'chunked_data']
 
     da : bool, optional
         To activate the data augmentation.
@@ -157,18 +154,21 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
     convert_to_rgb : bool, optional
         In case RGB images are expected, e.g. if ``crop_shape`` channel is 3, those images that are grayscale are
         converted into RGB.
+
+    preprocess_f : function, optional
+        The preprocessing function, is necessary in case you want to apply any preprocessing.
+
+    preprocess_cfg : dict, optional
+        Configuration parameters for preprocessing, is necessary in case you want to apply any preprocessing.
+
     """
 
     def __init__(
         self,
         ndim: int,
-        X: np.ndarray | None,
-        Y: np.ndarray | None,
-        data_path: None | str = None,
-        ptype: Literal["mae", "classification"] = "mae",
+        X: List,
         n_classes: int = 2,
         seed: int = 0,
-        data_mode: Literal["in_memory", "not_in_memory", "chunked_data"] = "in_memory",
         da: bool = True,
         da_prob: float = 0.5,
         rotation90: bool = False,
@@ -202,85 +202,27 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         resize_shape: Tuple[int, ...] = (256, 256, 1),
         norm_dict: Dict | None = None,
         convert_to_rgb: bool = False,
+        preprocess_f=None,
+        preprocess_cfg=None,
     ):
+        if preprocess_f is not None and preprocess_cfg is None:
+            raise ValueError("'preprocess_cfg' needs to be provided with 'preprocess_f'")
 
         assert norm_dict != None, "Normalization instructions must be provided with 'norm_dict'"
         assert norm_dict["mask_norm"] in ["as_mask", "as_image", "none"]
-        assert data_mode in ["in_memory", "not_in_memory", "chunked_data"]
-        assert ptype in ["mae", "classification"]
 
-        if data_mode == "in_memory":
-            assert X is not None
-            if X.ndim != (ndim + 2):
-                raise ValueError("X must be a {}D Numpy array".format((ndim + 1)))
+        if len(X[0]["shape"]) != (ndim + 1):
+            raise ValueError("Samples in X must be have {} dimensions. Provided: {}".format(ndim + 1, X[0]["shape"]))
 
-        if ptype == "classification":
-            if data_mode == "in_memory" and (X is None or Y is None):
-                raise ValueError("'X' and 'Y' need to be provided together with data_mode == 'in_memory'")
-        else:
-            if data_mode == "in_memory" and X is None:
-                raise ValueError("'X' needs to be provided together with data_mode == 'in_memory'")
-
-        self.ptype = ptype
         self.ndim = ndim
         self.z_size = -1
         self.convert_to_rgb = convert_to_rgb
-        self.data_mode = data_mode
         self.norm_dict = norm_dict
-
-        # Save paths where the data is stored
-        if data_mode == "not_in_memory":
-            assert data_path is not None
-            self.data_path = data_path
-            if ptype == "mae":
-                self.all_samples = sorted(next(os.walk(data_path))[2])
-            else:
-                self.class_names = sorted(next(os.walk(data_path))[1])
-                self.class_numbers = {}
-                for i, c_name in enumerate(self.class_names):
-                    self.class_numbers[c_name] = i
-                self.classes = []
-                self.all_samples = []
-                print("Collecting data ids . . .")
-                for folder in self.class_names:
-                    print("Analizing folder {}".format(os.path.join(data_path, folder)))
-                    ids = sorted(next(os.walk(os.path.join(data_path, folder)))[2])
-                    print("Found {} samples".format(len(ids)))
-                    for i in range(len(ids)):
-                        self.classes.append(folder)
-                        self.all_samples.append(ids[i])
-                temp = list(zip(self.all_samples, self.classes))
-                random.shuffle(temp)
-                self.all_samples, self.classes = zip(*temp)
-                del temp
-                present_classes = np.unique(np.array(self.classes))
-                if len(present_classes) != n_classes:
-                    raise ValueError(
-                        "MODEL.N_CLASSES is {} but {} classes found: {}".format(
-                            n_classes, len(present_classes), present_classes
-                        )
-                    )
-
-            self.length = len(self.all_samples)
-            if self.length == 0:
-                raise ValueError("No image found in {}".format(data_path))
-        else:
-            assert X is not None
-            self.X = X
-            if ptype == "classification":
-                self.Y = Y
-
-                present_classes = np.unique(np.array(self.Y))
-                if len(present_classes) != n_classes:
-                    raise ValueError(
-                        "MODEL.N_CLASSES is {} but {} classes found: {}".format(
-                            n_classes, len(present_classes), present_classes
-                        )
-                    )
-
-            self.length = len(self.X)
-
+        self.X = X
+        self.length = len(self.X)
         self.shape = resize_shape
+        self.random_crop_func = random_3D_crop_single if ndim == 3 else random_crop_single
+        self.val = val
 
         # X data analysis
         img, _ = self.load_sample(0, first_load=True)
@@ -301,12 +243,10 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         print("Normalization config used for X: {}".format(self.norm_dict))
 
         self.shape = resize_shape if resize_shape is not None else img.shape
-
         self.o_indexes = np.arange(self.length)
         self.n_classes = n_classes
         self.da = da
         self.da_prob = da_prob
-        self.val = val
         self.zoom = zoom
         self.zoom_range = zoom_range
         self.zoom_in_z = zoom_in_z
@@ -316,6 +256,8 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.affine_mode = affine_mode
         self.gamma_contrast = gamma_contrast
         self.gc_gamma = gc_gamma
+        self.seed = seed
+        self.indexes = self.o_indexes.copy()
 
         self.da_options = []
         self.trans_made = ""
@@ -362,10 +304,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         self.trans_made = self.trans_made.replace(" ", "")
         self.seq = iaa.Sequential(self.da_options)
-        self.seed = seed
         ia.seed(seed)
-        self.indexes = self.o_indexes.copy()
-        self.random_crop_func = random_3D_crop_single if self.ndim == 3 else random_crop_single
 
     @abstractmethod
     def save_aug_samples(
@@ -402,23 +341,6 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         """
         raise NotImplementedError
 
-    @abstractmethod
-    def ensure_shape(self, img: np.ndarray):
-        """
-        Ensures ``img`` correct axis number and their order.
-
-        Parameters
-        ----------
-        img : Numpy array representing a ``2D`` or ``3D`` image
-            Image to use as sample.
-
-        Returns
-        -------
-        img : 3D/4D Numpy array
-            Image to use as sample. E.g. ``(y, x, channels)`` for ``2D`` and ``(z, y, x, channels)`` for ``3D``.
-        """
-        raise NotImplementedError
-
     def __len__(self):
         """Defines the number of samples per epoch."""
         return self.length
@@ -440,29 +362,47 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         img : 3D/4D Numpy array
             X element. E.g. ``(y, x, channels)`` in  ``2D`` and ``(z, y, x, channels)`` in ``3D``.
 
-        class : int
-            Y element.
+        img_class : int
+            Class of the image.
         """
-        # Choose the data source
-        if self.data_mode == "in_memory":
-            img = np.squeeze(self.X[idx].copy())
-            img_class = int(self.Y[idx]) if self.ptype == "classification" else 0
+        sample = self.X[idx]
+
+        if "img" in sample:
+            img = sample["img"].copy()
         else:
-            sample_id = self.all_samples[idx]
-            if self.ptype == "classification":
-                sample_class_dir = self.classes[idx]
-                f = os.path.join(self.data_path, sample_class_dir, sample_id)
-                img_class = self.class_numbers[sample_class_dir]
+            img, img_file = load_img_data(
+                os.path.join(sample["dir"], sample["filename"]),
+                is_3d=(self.ndim == 3),
+                data_within_zarr_path=sample["path_in_zarr"] if "path_in_zarr" in sample else None,
+            )
+
+            if "parallel_data" not in sample:
+                # Apply preprocessing
+                if self.preprocess_f is not None:
+                    img = self.preprocess_f(self.preprocess_cfg, x_data=[img], is_2d=(self.ndim == 2))[0]                
             else:
-                f = os.path.join(self.data_path, sample_id)
-                img_class = 0
-            img = np.load(f) if sample_id.endswith(".npy") else imread(f)
-            img = np.squeeze(img)
+                img = extract_patch_from_efficient_file(
+                    img, sample["coords"], data_axis_order=sample["input_axes"]
+                )
+
+                # Apply preprocessing after extract sample
+                if "parallel_data" in sample:
+                    if self.preprocess_f is not None:
+                        img = self.preprocess_f(self.preprocess_cfg, x_data=[img], is_2d=(self.ndim == 2))[0]
+
+                    if isinstance(img_file, h5py.File):
+                        img_file.close()
+
+        img_class = sample["class"] if "class" in sample else 0  # For SSL just put 0 class
+
+        if img.shape[:-1] != self.shape[:-1]:
+            img = self.random_crop_func(img, self.shape[:-1], self.val)
+            img = resize_img(img, self.shape[:-1])  # type: ignore
 
         # X normalization
         if self.norm_dict["enable"] and not first_load:
             # Percentile clipping
-            if "lower_bound" in self.norm_dict and self.norm_dict["application_mode"] == "image":
+            if "lower_bound" in self.norm_dict:
                 img, _, _ = percentile_clip(
                     img,
                     lower=self.norm_dict["lower_bound"],
@@ -474,12 +414,10 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
             elif self.norm_dict["type"] == "scale_range":
                 img, _ = norm_range01(img, div_using_max_and_scale=True)
             elif self.norm_dict["type"] == "custom":
-                if self.norm_dict["application_mode"] == "image":
-                    img = normalize(img, img.mean(), img.std())
-                else:
+                if "mean" in self.norm_dict:
                     img = normalize(img, self.norm_dict["mean"], self.norm_dict["std"])
-
-        img = self.ensure_shape(img)
+                else:
+                    img = normalize(img, img.mean(), img.std())
 
         return img, img_class
 
@@ -516,10 +454,6 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
             ``(z, y, x, channels)`` in ``3D``.
         """
         img, img_class = self.load_sample(index)
-
-        if img.shape[:-1] != self.shape[:-1]:
-            img = self.random_crop_func(img, self.shape[:-1], self.val)
-            img = resize_img(img, self.shape[:-1])  # type: ignore
 
         # Apply transformations
         if self.da:

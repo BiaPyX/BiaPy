@@ -1,5 +1,5 @@
 import os
-from typing import List, Dict, Any, Optional, Tuple, Union
+from typing import List, Dict, Any, Tuple, Union
 from torch.utils.data import (
     DistributedSampler,
     DataLoader,
@@ -11,8 +11,7 @@ from tqdm import tqdm
 
 from biapy.utils.util import save_tif
 from biapy.data.pre_processing import (
-    calculate_2D_volume_prob_map,
-    calculate_3D_volume_prob_map,
+    calculate_volume_prob_map,
     save_tif,
     percentile_clip,
 )
@@ -23,16 +22,17 @@ from biapy.data.generators.single_data_3D_generator import Single3DImageDataGene
 from biapy.data.generators.test_pair_data_generators import test_pair_data_generator
 from biapy.data.generators.test_single_data_generator import test_single_data_generator
 from biapy.config.config import Config
+from biapy.data.pre_processing import preprocess_data
 
 
 def create_train_val_augmentors(
     cfg: type[Config],
-    X_train: np.ndarray | None,
-    Y_train: np.ndarray | None,
-    X_val: Any,
-    Y_val: Any,
+    X_train: List,
+    X_val: List,
     world_size: int,
     global_rank: int,
+    Y_train: List | None = None,
+    Y_val: List | None = None,
 ) -> Tuple[DataLoader, DataLoader, Dict, int]:
     """
     Create training and validation generators.
@@ -42,25 +42,65 @@ def create_train_val_augmentors(
     cfg : Config
         BiaPy configuration.
 
-    X_train : 4D/5D Numpy array
-        Training data. E.g. ``(num_of_images, y, x, channels)`` for ``2D`` or ``(num_of_images, z, y, x, channels)`` for ``3D``.
+    X_train : list of dict
+        Loaded train X data. Each item in the list represents a sample of the dataset. Each sample is represented as follows:
+            * ``"filename"``: name of the image to extract the data sample from.
+            * ``"dir"``: directory where the image resides.
+            * ``"coords"``: coordinates to extract the sample from the image. If ``None`` it implies that a random patch needs to
+              be extracted.
+            * ``"original_data_shape"``: shape of the image where the samples is extracted (useful for reconstructing it later),
+            * ``"shape"``: shape of the sample.
+            * ``"img"`` (optional): image sample itself. It is a ndarrray of  ``(y, x, channels)`` in ``2D`` and
+              ``(z, y, x, channels)`` in ``3D``. Provided if the user selected to load images into memory.
+            * ``"gt_associated"`` (optional): path to the associated ground truth of the sample. Present if the user selected
+              ``PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER`` to be ``True``.
+            * ``"class_name"`` (optional): name of the class. In classification workflow.
+            * ``"class"`` (optional): integer that represents the class. In classification workflow.
 
-    Y_train : 4D/5D Numpy array
-        Training data mask/class. E.g. ``(num_of_images, y, x, channels)`` for ``2D`` or ``(num_of_images, z, y, x, channels)`` for ``3D``
-        in all the workflows except classification. For this last the shape is ``(num_of_images, class)`` for both ``2D`` and ``3D``.
-
-    X_val : 4D/5D Numpy array
-        Validation data mask/class. E.g. ``(num_of_images, y, x, channels)`` for ``2D`` or ``(num_of_images, z, y, x, channels)`` for ``3D``.
-
-    Y_val : 4D/5D Numpy array
-        Validation data mask/class. E.g. ``(num_of_images, y, x, channels)`` for ``2D`` or ``(num_of_images, z, y, x, channels)`` for ``3D``
-        in all the workflows except classification. For this last the shape is ``(num_of_images, class)`` for both ``2D`` and ``3D``.
+    X_val : list of dict
+        Loaded train Y data. Each item in the list represents a sample of the dataset. Each sample is represented as follows:
+            * ``"filename"``: name of the image to extract the data sample from.
+            * ``"dir"``: directory where the image resides.
+            * ``"coords"``: coordinates to extract the sample from the image. If ``None`` it implies that a random patch needs to
+              be extracted.
+            * ``"original_data_shape"``: shape of the image where the samples is extracted (useful for reconstructing it later),
+            * ``"shape"``: shape of the sample.
+            * ``"img"`` (optional): image sample itself. It is a ndarrray of  ``(y, x, channels)`` in ``2D`` and
+              ``(z, y, x, channels)`` in ``3D``. Provided if the user selected to load images into memory.
+            * ``"gt_associated"`` (optional): path to the associated ground truth of the sample. Present if the user selected
+              ``PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER`` to be ``True``.
 
     world_size: int
         Number of processes participating in the training.
 
     global_rank: int
         Rank of the current process.
+
+    Y_train : list of dict, optional
+        Loaded train Y data. Each item in the list represents a sample of the dataset. Each sample is represented as follows:
+            * ``"filename"``: name of the image to extract the data sample from.
+            * ``"dir"``: directory where the image resides.
+            * ``"coords"``: coordinates to extract the sample from the image. If ``None`` it implies that a random patch needs to
+              be extracted.
+            * ``"original_data_shape"``: shape of the image where the samples is extracted (useful for reconstructing it later),
+            * ``"shape"``: shape of the sample.
+            * ``"img"`` (optional): image sample itself. It is a ndarrray of  ``(y, x, channels)`` in ``2D`` and
+              ``(z, y, x, channels)`` in ``3D``. Provided if the user selected to load images into memory.
+            * ``"gt_associated"`` (optional): path to the associated ground truth of the sample. Present if the user selected
+              ``PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER`` to be ``True``.
+
+    Y_val : list of dict, optional
+        Loaded validation Y data. Each item in the list represents a sample of the dataset. Each sample is represented as follows:
+            * ``"filename"``: name of the image to extract the data sample from.
+            * ``"dir"``: directory where the image resides.
+            * ``"coords"``: coordinates to extract the sample from the image. If ``None`` it implies that a random patch needs to
+              be extracted.
+            * ``"original_data_shape"``: shape of the image where the samples is extracted (useful for reconstructing it later),
+            * ``"shape"``: shape of the sample.
+            * ``"img"`` (optional): image sample itself. It is a ndarrray of  ``(y, x, channels)`` in ``2D`` and
+              ``(z, y, x, channels)`` in ``3D``. Provided if the user selected to load images into memory.
+            * ``"gt_associated"`` (optional): path to the associated ground truth of the sample. Present if the user selected
+              ``PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER`` to be ``True``.
 
     Returns
     -------
@@ -86,10 +126,9 @@ def create_train_val_augmentors(
             num_files = len(next(os.walk(cfg.PATHS.PROB_MAP_DIR))[2])
             prob_map = cfg.PATHS.PROB_MAP_DIR if num_files > 1 else np.load(prob_map_file)
         else:
-            f_name = calculate_2D_volume_prob_map if cfg.PROBLEM.NDIM == "2D" else calculate_3D_volume_prob_map
-            prob_map = f_name(
+            prob_map = calculate_volume_prob_map(
                 Y_train,
-                cfg.DATA.TRAIN.GT_PATH,
+                (cfg.PROBLEM.NDIM == "3D"),
                 cfg.DATA.W_FOREGROUND,
                 cfg.DATA.W_BACKGROUND,
                 save_dir=cfg.PATHS.PROB_MAP_DIR,
@@ -99,44 +138,17 @@ def create_train_val_augmentors(
     norm_dict = {}
     norm_dict["type"] = cfg.DATA.NORMALIZATION.TYPE
     norm_dict["mask_norm"] = "as_mask"
-    norm_dict["application_mode"] = cfg.DATA.NORMALIZATION.APPLICATION_MODE
     norm_dict["enable"] = True
 
     # Percentile clipping
     if cfg.DATA.NORMALIZATION.PERC_CLIP:
         norm_dict["lower_bound"] = cfg.DATA.NORMALIZATION.PERC_LOWER
         norm_dict["upper_bound"] = cfg.DATA.NORMALIZATION.PERC_UPPER
-        if cfg.DATA.NORMALIZATION.APPLICATION_MODE == "dataset":
-            (
-                X_train,
-                norm_dict["dataset_X_lower_value"],
-                norm_dict["dataset_X_upper_value"],
-            ) = percentile_clip(X_train, norm_dict["lower_bound"], norm_dict["upper_bound"])
-            os.makedirs(os.path.dirname(cfg.PATHS.LWR_X_FILE), exist_ok=True)
-            np.save(cfg.PATHS.LWR_X_FILE, norm_dict["dataset_X_lower_value"])
-            np.save(cfg.PATHS.UPR_X_FILE, norm_dict["dataset_X_upper_value"])
-            print(f"X_train clipped using the following values: {norm_dict}")
-
+        
     if cfg.DATA.NORMALIZATION.TYPE == "custom":
-        if cfg.DATA.NORMALIZATION.APPLICATION_MODE == "dataset":
-            if cfg.DATA.NORMALIZATION.CUSTOM_MEAN == -1 and cfg.DATA.NORMALIZATION.CUSTOM_STD == -1:
-                print("Train/Val normalization: trying to load mean from {}".format(cfg.PATHS.MEAN_INFO_FILE))
-                print("Train/Val normalization: trying to load std from {}".format(cfg.PATHS.STD_INFO_FILE))
-                if not os.path.exists(cfg.PATHS.MEAN_INFO_FILE) or not os.path.exists(cfg.PATHS.STD_INFO_FILE):
-                    print("Train/Val normalization: mean and/or std files not found. Calculating it for the first time")
-                    if isinstance(X_train, np.ndarray):
-                        norm_dict["mean"] = np.mean(X_train)
-                        norm_dict["std"] = np.std(X_train)
-                    os.makedirs(os.path.dirname(cfg.PATHS.MEAN_INFO_FILE), exist_ok=True)
-                    np.save(cfg.PATHS.MEAN_INFO_FILE, norm_dict["mean"])
-                    np.save(cfg.PATHS.STD_INFO_FILE, norm_dict["std"])
-                else:
-                    norm_dict["mean"] = float(np.load(cfg.PATHS.MEAN_INFO_FILE))
-                    norm_dict["std"] = float(np.load(cfg.PATHS.STD_INFO_FILE))
-                    print("Train/Val normalization values loaded!")
-            else:
-                norm_dict["mean"] = cfg.DATA.NORMALIZATION.CUSTOM_MEAN
-                norm_dict["std"] = cfg.DATA.NORMALIZATION.CUSTOM_STD
+        if cfg.DATA.NORMALIZATION.CUSTOM_MEAN != -1:
+            norm_dict["mean"] = cfg.DATA.NORMALIZATION.CUSTOM_MEAN
+            norm_dict["std"] = cfg.DATA.NORMALIZATION.CUSTOM_STD
         if "mean" in norm_dict:
             print("Train/Val normalization: using mean {} and std: {}".format(norm_dict["mean"], norm_dict["std"]))
 
@@ -156,26 +168,6 @@ def create_train_val_augmentors(
             f_name = Pair3DImageDataGenerator
 
     ndim = 3 if cfg.PROBLEM.NDIM == "3D" else 2
-    if cfg.PROBLEM.TYPE != "DENOISING":
-        data_paths = [cfg.DATA.TRAIN.PATH, cfg.DATA.TRAIN.GT_PATH]
-    else:
-        data_paths = [cfg.DATA.TRAIN.PATH]
-
-    if cfg.DATA.TRAIN.IN_MEMORY:
-        data_mode = "in_memory"
-    else:
-        if (
-            cfg.PROBLEM.NDIM == "3D"
-            and X_train is not None
-            and (isinstance(X_train, list) or isinstance(X_train, dict))
-            and isinstance(X_train[0], dict)
-            and "filepath" in X_train[0]
-            and (".zarr" in X_train[0]["filepath"] or ".h5" in X_train[0]["filepath"])
-        ):
-            data_mode = "chunked_data"
-        else:
-            data_mode = "not_in_memory"
-
     if cfg.PROBLEM.TYPE == "CLASSIFICATION" or (
         cfg.PROBLEM.TYPE == "SELF_SUPERVISED" and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"
     ):
@@ -186,17 +178,12 @@ def create_train_val_augmentors(
         ):
             r_shape = (224, 224) + (cfg.DATA.PATCH_SIZE[-1],)
             print("Changing patch size from {} to {} to use efficientnet_b0".format(cfg.DATA.PATCH_SIZE[:-1], r_shape))
-        ptype = "classification" if cfg.PROBLEM.TYPE == "CLASSIFICATION" else "mae"
         dic = dict(
             ndim=ndim,
             X=X_train,
-            Y=Y_train,
-            data_path=cfg.DATA.TRAIN.PATH,
-            ptype=ptype,
             n_classes=cfg.MODEL.N_CLASSES,
             seed=cfg.SYSTEM.SEED,
             da=cfg.AUGMENTOR.ENABLE,
-            data_mode=data_mode,
             da_prob=cfg.AUGMENTOR.DA_PROB,
             rotation90=cfg.AUGMENTOR.ROT90,
             rand_rot=cfg.AUGMENTOR.RANDOM_ROT,
@@ -228,6 +215,8 @@ def create_train_val_augmentors(
             resize_shape=r_shape,
             norm_dict=norm_dict,
             convert_to_rgb=cfg.DATA.FORCE_RGB,
+            preprocess_f=preprocess_data if cfg.DATA.PREPROCESS.TRAIN else None,
+            preprocess_cfg=cfg.DATA.PREPROCESS if cfg.DATA.PREPROCESS.TRAIN else None,
         )
     else:
         dic = dict(
@@ -235,8 +224,6 @@ def create_train_val_augmentors(
             X=X_train,
             Y=Y_train,
             seed=cfg.SYSTEM.SEED,
-            data_mode=data_mode,
-            data_paths=data_paths,
             da=cfg.AUGMENTOR.ENABLE,
             da_prob=cfg.AUGMENTOR.DA_PROB,
             rotation90=cfg.AUGMENTOR.ROT90,
@@ -320,6 +307,8 @@ def create_train_val_augmentors(
             norm_dict=norm_dict,
             random_crop_scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
             convert_to_rgb=cfg.DATA.FORCE_RGB,
+            preprocess_f=preprocess_data if cfg.DATA.PREPROCESS.TRAIN else None,
+            preprocess_cfg=cfg.DATA.PREPROCESS if cfg.DATA.PREPROCESS.TRAIN else None,
         )
 
         if cfg.PROBLEM.NDIM == "3D":
@@ -330,8 +319,6 @@ def create_train_val_augmentors(
             norm_dict["mask_norm"] = "as_image"
         elif cfg.PROBLEM.TYPE == "IMAGE_TO_IMAGE":
             norm_dict["mask_norm"] = "as_image"
-            if cfg.PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER:
-                dic["multiple_raw_images"] = True
         elif cfg.PROBLEM.TYPE == "DENOISING":
             dic["n2v"] = True
             dic["n2v_perc_pix"] = cfg.PROBLEM.DENOISING.N2V_PERC_PIX
@@ -341,92 +328,30 @@ def create_train_val_augmentors(
                 np.array([[0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0]]) if cfg.PROBLEM.DENOISING.N2V_STRUCTMASK else None
             )
 
-    if (
-        norm_dict["mask_norm"] == "as_image"
-        and cfg.DATA.NORMALIZATION.PERC_CLIP
-        and cfg.DATA.NORMALIZATION.APPLICATION_MODE == "dataset"
-    ):
-        (
-            Y_train,
-            norm_dict["dataset_Y_lower_value"],
-            norm_dict["dataset_Y_upper_value"],
-        ) = percentile_clip(Y_train, norm_dict["lower_bound"], norm_dict["upper_bound"])
-        np.save(cfg.PATHS.LWR_Y_FILE, norm_dict["dataset_Y_lower_value"])
-        np.save(cfg.PATHS.UPR_Y_FILE, norm_dict["dataset_Y_upper_value"])
-        print(f"Y_train clipped using the following values: {norm_dict}")
-
     print("Initializing train data generator . . .")
     train_generator = f_name(**dic)  # type: ignore
     data_norm = train_generator.get_data_normalization()
 
     print("Initializing val data generator . . .")
-    if cfg.DATA.VAL.FROM_TRAIN:
-        if data_mode == "chunked_data":
-            val_data_mode = "chunked_data"
-        else:
-            val_data_mode = "in_memory"
-    else:
-        if cfg.DATA.VAL.IN_MEMORY:
-            val_data_mode = "in_memory"
-        else:
-            if (
-                cfg.PROBLEM.NDIM == "3D"
-                and X_val is not None
-                and (isinstance(X_val, list) or isinstance(X_val, dict))
-                and isinstance(X_val[0], dict)
-                and "filepath" in X_val[0]
-                and (".zarr" in X_val[0]["filepath"] or ".h5" in X_val[0]["filepath"])
-            ):
-                val_data_mode = "chunked_data"
-            else:
-                val_data_mode = "not_in_memory"
-
-    if (
-        norm_dict["mask_norm"] == "as_image"
-        and cfg.DATA.NORMALIZATION.PERC_CLIP
-        and cfg.DATA.NORMALIZATION.APPLICATION_MODE == "dataset"
-    ):
-        X_val, _, _ = percentile_clip(
-            X_val,
-            lwr_perc_val=norm_dict["dataset_X_lower_value"],
-            uppr_perc_val=norm_dict["dataset_X_upper_value"],
-        )
-        Y_val, _, _ = percentile_clip(
-            Y_val,
-            lwr_perc_val=norm_dict["dataset_Y_lower_value"],
-            uppr_perc_val=norm_dict["dataset_Y_upper_value"],
-        )
-        print(f"X_val clipped using the following values: {norm_dict}")
-        print(f"Y_val clipped using the following values: {norm_dict}")
-
     if cfg.PROBLEM.TYPE == "CLASSIFICATION" or (
         cfg.PROBLEM.TYPE == "SELF_SUPERVISED" and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"
     ):
-        ptype = "classification" if cfg.PROBLEM.TYPE == "CLASSIFICATION" else "mae"
         val_generator = f_name(
             ndim=ndim,
             X=X_val,
-            Y=Y_val,
-            data_path=cfg.DATA.VAL.PATH,
-            ptype=ptype,
             n_classes=cfg.MODEL.N_CLASSES,
             seed=cfg.SYSTEM.SEED,
             da=False,
             resize_shape=r_shape,
             norm_dict=norm_dict,
-            data_mode=val_data_mode,
+            preprocess_f=preprocess_data if cfg.DATA.PREPROCESS.VAL else None,
+            preprocess_cfg=cfg.DATA.PREPROCESS if cfg.DATA.PREPROCESS.VAL else None,
         )
     else:
-        if cfg.PROBLEM.TYPE != "DENOISING":
-            data_paths = [cfg.DATA.VAL.PATH, cfg.DATA.VAL.GT_PATH]
-        else:
-            data_paths = [cfg.DATA.VAL.PATH]
         dic = dict(
             ndim=ndim,
             X=X_val,
             Y=Y_val,
-            data_mode=val_data_mode,
-            data_paths=data_paths,
             da=False,
             shape=cfg.DATA.PATCH_SIZE,
             random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH,
@@ -436,15 +361,13 @@ def create_train_val_augmentors(
             norm_dict=norm_dict,
             resolution=cfg.DATA.VAL.RESOLUTION,
             random_crop_scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
+            preprocess_f=preprocess_data if cfg.DATA.PREPROCESS.VAL else None,
+            preprocess_cfg=cfg.DATA.PREPROCESS if cfg.DATA.PREPROCESS.VAL else None,
         )
         if cfg.PROBLEM.TYPE == "INSTANCE_SEG":
             dic["instance_problem"] = True
-        elif cfg.PROBLEM.TYPE in ["SELF_SUPERVISED", "SUPER_RESOLUTION"]:
+        elif cfg.PROBLEM.TYPE in ["SELF_SUPERVISED", "SUPER_RESOLUTION" "IMAGE_TO_IMAGE"]:
             norm_dict["mask_norm"] = "as_image"
-        elif cfg.PROBLEM.TYPE == "IMAGE_TO_IMAGE":
-            norm_dict["mask_norm"] = "as_image"
-            if cfg.PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER:
-                dic["multiple_raw_images"] = True
         elif cfg.PROBLEM.TYPE == "DENOISING":
             dic["n2v"] = True
             dic["n2v_perc_pix"] = cfg.PROBLEM.DENOISING.N2V_PERC_PIX
@@ -516,7 +439,6 @@ def create_test_augmentor(
     cfg: type[Config],
     X_test: Any,
     Y_test: Any,
-    cross_val_samples_ids: Optional[List[int] | None] = None,
 ) -> Tuple[Union[test_pair_data_generator, test_single_data_generator], Dict]:
     """
     Create test data generator.
@@ -533,9 +455,6 @@ def create_test_augmentor(
         Test data mask/class. E.g. ``(num_of_images, y, x, channels)`` for ``2D`` or ``(num_of_images, z, y, x, channels)`` for ``3D``
         in all the workflows except classification. For this last the shape is ``(num_of_images, class)`` for both ``2D`` and ``3D``.
 
-    cross_val_samples_ids : List of ints, optional
-        When cross validation is used training data samples' id are passed.
-
     Returns
     -------
     test_generator : test_pair_data_generator/test_single_data_generator
@@ -547,7 +466,6 @@ def create_test_augmentor(
     norm_dict = {}
     norm_dict["type"] = cfg.DATA.NORMALIZATION.TYPE
     norm_dict["mask_norm"] = "as_mask"
-    norm_dict["application_mode"] = cfg.DATA.NORMALIZATION.APPLICATION_MODE
     norm_dict["enable"] = True
 
     # Percentile clipping
@@ -555,58 +473,14 @@ def create_test_augmentor(
         norm_dict["lower_bound"] = cfg.DATA.NORMALIZATION.PERC_LOWER
         norm_dict["upper_bound"] = cfg.DATA.NORMALIZATION.PERC_UPPER
         norm_dict["clipped"] = X_test is not None
-        bmz_clip = False
-        if cfg.DATA.NORMALIZATION.APPLICATION_MODE == "dataset":
-            if not os.path.exists(cfg.PATHS.LWR_X_FILE) or not os.path.exists(cfg.PATHS.UPR_X_FILE):
-                if cfg.MODEL.SOURCE == "bmz" and X_test is not None:
-                    (
-                        X_test,
-                        norm_dict["dataset_X_lower_value"],
-                        norm_dict["dataset_X_upper_value"],
-                    ) = percentile_clip(X_test, norm_dict["lower_bound"], norm_dict["upper_bound"])
-                    bmz_clip = True
-                else:
-                    raise FileNotFoundError(
-                        "Lower/uper percentile files not found in {} and {}".format(
-                            cfg.PATHS.LWR_X_FILE, cfg.PATHS.UPR_X_FILE
-                        )
-                    )
-            else:
-                norm_dict["dataset_X_lower_value"] = float(np.load(cfg.PATHS.LWR_X_FILE))
-                norm_dict["dataset_X_upper_value"] = float(np.load(cfg.PATHS.UPR_X_FILE))
-
-            if X_test is not None and not bmz_clip:
-                X_test, _, _ = percentile_clip(
-                    X_test,
-                    lwr_perc_val=norm_dict["dataset_X_lower_value"],
-                    uppr_perc_val=norm_dict["dataset_X_upper_value"],
-                )
-                print(f"X_test clipped using the following values: {norm_dict}")
 
     if cfg.DATA.NORMALIZATION.TYPE == "custom":
-        if cfg.DATA.NORMALIZATION.APPLICATION_MODE == "dataset":
-            if cfg.DATA.NORMALIZATION.CUSTOM_MEAN == -1 and cfg.DATA.NORMALIZATION.CUSTOM_STD == -1:
-                print("Test normalization: trying to load mean from {}".format(cfg.PATHS.MEAN_INFO_FILE))
-                print("Test normalization: trying to load std from {}".format(cfg.PATHS.STD_INFO_FILE))
-                if not os.path.exists(cfg.PATHS.MEAN_INFO_FILE) or not os.path.exists(cfg.PATHS.STD_INFO_FILE):
-                    if cfg.MODEL.SOURCE == "bmz" and X_test is not None:
-                        norm_dict["mean"] = np.mean(X_test)
-                        norm_dict["std"] = np.std(X_test)
-                    else:
-                        raise FileNotFoundError(
-                            "Mean/std files not found in {} and {}".format(
-                                cfg.PATHS.MEAN_INFO_FILE, cfg.PATHS.STD_INFO_FILE
-                            )
-                        )
-                else:
-                    norm_dict["mean"] = float(np.load(cfg.PATHS.MEAN_INFO_FILE))
-                    norm_dict["std"] = float(np.load(cfg.PATHS.STD_INFO_FILE))
-            else:
-                norm_dict["mean"] = cfg.DATA.NORMALIZATION.CUSTOM_MEAN
-                norm_dict["std"] = cfg.DATA.NORMALIZATION.CUSTOM_STD
+        if cfg.DATA.NORMALIZATION.CUSTOM_MEAN != -1:
+            norm_dict["mean"] = cfg.DATA.NORMALIZATION.CUSTOM_MEAN
+            norm_dict["std"] = cfg.DATA.NORMALIZATION.CUSTOM_STD
+        if "mean" in norm_dict:
             print("Test normalization: using mean {} and std: {}".format(norm_dict["mean"], norm_dict["std"]))
 
-    instance_problem = True if cfg.PROBLEM.TYPE == "INSTANCE_SEG" else False
     if cfg.PROBLEM.TYPE == "SELF_SUPERVISED" and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
         provide_Y = False
     else:
@@ -616,19 +490,20 @@ def create_test_augmentor(
 
     ndim: int = 3 if cfg.PROBLEM.NDIM == "3D" else 2
     dic = dict(
-        ndim=ndim,
         X=X_test,
-        d_path=(cfg.DATA.TEST.PATH if cross_val_samples_ids is None else cfg.DATA.TRAIN.PATH),
-        test_by_chunks=cfg.TEST.BY_CHUNKS.ENABLE,
         provide_Y=provide_Y,
-        Y=Y_test,
-        dm_path=(cfg.DATA.TEST.GT_PATH if cross_val_samples_ids is None else cfg.DATA.TRAIN.GT_PATH),
+        ndim=ndim,
         seed=cfg.SYSTEM.SEED,
-        instance_problem=instance_problem,
         norm_dict=norm_dict,
         reduce_mem=cfg.TEST.REDUCE_MEMORY,
-        sample_ids=cross_val_samples_ids,
         convert_to_rgb=cfg.DATA.FORCE_RGB,
+        filter_props= cfg.DATA.TEST.FILTER_SAMPLES.PROPS,
+        filter_vals=cfg.DATA.TEST.FILTER_SAMPLES.VALUES,
+        filter_signs=cfg.DATA.TEST.FILTER_SAMPLES.SIGNS,
+        preprocess_data = preprocess_data if cfg.DATA.PREPROCESS.TEST else None,
+        preprocess_cfg = cfg.DATA.PREPROCESS if cfg.DATA.PREPROCESS.TEST else None,
+        reflect_to_complete_shape = cfg.DATA.REFLECT_TO_COMPLETE_SHAPE,
+        data_shape = cfg.DATA.PATCH_SIZE,
     )
 
     if cfg.PROBLEM.TYPE == "CLASSIFICATION" or (
@@ -644,15 +519,12 @@ def create_test_augmentor(
             print("Changing patch size from {} to {} to use efficientnet_b0".format(cfg.DATA.PATCH_SIZE[:-1], r_shape))
         if cfg.PROBLEM.TYPE == "CLASSIFICATION":
             dic["crop_center"] = True
-            dic["resize_shape"] = r_shape
-            dic["ptype"] = "classification"
-        else:
-            dic["ptype"] = "ssl"
+            dic["data_shape"] = r_shape
     else:
         gen_name = test_pair_data_generator
-
-    if cfg.PROBLEM.TYPE == "IMAGE_TO_IMAGE" and cfg.PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER:
-        dic["multiple_raw_images"] = True
+        dic["Y"] = Y_test
+        dic["test_by_chunks"] = cfg.TEST.BY_CHUNKS.ENABLE
+        dic["instance_problem"] = cfg.PROBLEM.TYPE == "INSTANCE_SEG"
 
     test_generator = gen_name(**dic)
     data_norm = test_generator.get_data_normalization()

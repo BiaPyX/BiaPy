@@ -9,7 +9,7 @@ from torchmetrics.image.fid import FrechetInceptionDistance
 from torchmetrics.image.inception import InceptionScore
 
 from biapy.engine.base_workflow import Base_Workflow
-from biapy.utils.util import save_tif, pad_and_reflect
+from biapy.utils.util import save_tif
 from biapy.utils.misc import to_pytorch_format, to_numpy_format
 from biapy.data.pre_processing import undo_norm_range01, denormalize
 from biapy.data.post_processing.post_processing import (
@@ -54,6 +54,7 @@ class Image_to_Image_Workflow(Base_Workflow):
         self.activations = [{":": "Linear"}]
 
         self.mask_path = cfg.DATA.TRAIN.GT_PATH
+        self.is_y_mask = False
 
     def define_metrics(self):
         """
@@ -211,75 +212,57 @@ class Image_to_Image_Workflow(Base_Workflow):
                     metric_logger.meters[list_names_to_use[i]].update(val)
         return out_metrics
 
-    def process_test_sample(self, norm):
+    def process_test_sample(self):
         """
         Function to process a sample in the inference phase.
-
-        Parameters
-        ----------
-        norm : List of dicts
-            Normalization used during training. Required to denormalize the predictions of the model.
         """
+        # Skip processing image 
+        if "discard" in self.current_sample["X"] and self.current_sample["X"]["discard"]: 
+            return True
+
         # Save test_input if the user wants to export the model to BMZ later
         if "test_input" not in self.bmz_config:
             if self.cfg.PROBLEM.NDIM == "2D":
-                self.bmz_config["test_input"] = self._X[0][
+                self.bmz_config["test_input"] = self.current_sample["X"][0][
                     : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1]
                 ].copy()
             else:
-                self.bmz_config["test_input"] = self._X[0][
+                self.bmz_config["test_input"] = self.current_sample["X"][0][
                     : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1], : self.cfg.DATA.PATCH_SIZE[2]
                 ].copy()
 
-        # Reflect data to complete the needed shape
-        if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE:
-            reflected_orig_shape = self._X.shape
-            self._X = np.expand_dims(
-                pad_and_reflect(self._X[0], self.cfg.DATA.PATCH_SIZE, verbose=self.cfg.TEST.VERBOSE),
-                0,
-            )
-            if self._Y is not None:
-                self._Y = np.expand_dims(
-                    pad_and_reflect(
-                        self._Y[0],
-                        self.cfg.DATA.PATCH_SIZE,
-                        verbose=self.cfg.TEST.VERBOSE,
-                    ),
-                    0,
-                )
-
-        original_data_shape = self._X.shape
+        original_data_shape = self.current_sample["X"].shape
 
         # Crop if necessary
-        if self._X.shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
+        if self.current_sample["X"].shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
             if self.cfg.PROBLEM.NDIM == "2D":
                 obj = crop_data_with_overlap(
-                    self._X,
+                    self.current_sample["X"],
                     self.cfg.DATA.PATCH_SIZE,
-                    data_mask=self._Y,
+                    data_mask=self.current_sample["Y"],
                     overlap=self.cfg.DATA.TEST.OVERLAP,
                     padding=self.cfg.DATA.TEST.PADDING,
                     verbose=self.cfg.TEST.VERBOSE,
                 )
-                if self._Y is not None:
-                    self._X, self._Y = obj
+                if self.current_sample["Y"] is not None:
+                    self.current_sample["X"], self.current_sample["Y"], _ = obj
                 else:
-                    self._X = obj
+                    self.current_sample["X"], _ = obj
                 del obj
             else:
-                if self._Y is not None:
-                    self._Y = self._Y[0]
+                if self.current_sample["Y"] is not None:
+                    self.current_sample["Y"] = self.current_sample["Y"][0]
                 if self.cfg.TEST.REDUCE_MEMORY:
-                    self._X = crop_3D_data_with_overlap(
-                        self._X[0],
+                    self.current_sample["X"], _ = crop_3D_data_with_overlap(
+                        self.current_sample["X"][0],
                         self.cfg.DATA.PATCH_SIZE,
                         overlap=self.cfg.DATA.TEST.OVERLAP,
                         padding=self.cfg.DATA.TEST.PADDING,
                         verbose=self.cfg.TEST.VERBOSE,
                         median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING,
                     )
-                    self._Y = crop_3D_data_with_overlap(
-                        self._Y,
+                    self.current_sample["Y"], _ = crop_3D_data_with_overlap(
+                        self.current_sample["Y"],
                         self.cfg.DATA.PATCH_SIZE,
                         overlap=self.cfg.DATA.TEST.OVERLAP,
                         padding=self.cfg.DATA.TEST.PADDING,
@@ -288,26 +271,26 @@ class Image_to_Image_Workflow(Base_Workflow):
                     )
                 else:
                     obj = crop_3D_data_with_overlap(
-                        self._X[0],
+                        self.current_sample["X"][0],
                         self.cfg.DATA.PATCH_SIZE,
-                        data_mask=self._Y,
+                        data_mask=self.current_sample["Y"],
                         overlap=self.cfg.DATA.TEST.OVERLAP,
                         padding=self.cfg.DATA.TEST.PADDING,
                         verbose=self.cfg.TEST.VERBOSE,
                         median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING,
                     )
-                    if self._Y is not None:
-                        self._X, self._Y = obj
+                    if self.current_sample["Y"] is not None:
+                        self.current_sample["X"], self.current_sample["Y"], _ = obj
                     else:
-                        self._X = obj
+                        self.current_sample["X"], _ = obj
                     del obj
 
         # Predict each patch
         if self.cfg.TEST.AUGMENTATION:
-            for k in tqdm(range(self._X.shape[0]), leave=False):
+            for k in tqdm(range(self.current_sample["X"].shape[0]), leave=False):
                 if self.cfg.PROBLEM.NDIM == "2D":
                     p = ensemble8_2d_predictions(
-                        self._X[k],
+                        self.current_sample["X"][k],
                         axis_order_back=self.axis_order_back,
                         pred_func=self.model_call_func,
                         axis_order=self.axis_order,
@@ -315,7 +298,7 @@ class Image_to_Image_Workflow(Base_Workflow):
                     )
                 else:
                     p = ensemble16_3d_predictions(
-                        self._X[k],
+                        self.current_sample["X"][k],
                         batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
                         axis_order_back=self.axis_order_back,
                         pred_func=self.model_call_func,
@@ -325,24 +308,24 @@ class Image_to_Image_Workflow(Base_Workflow):
                 p = self.apply_model_activations(p)
                 p = to_numpy_format(p, self.axis_order_back)
                 if "pred" not in locals():
-                    pred = np.zeros((self._X.shape[0],) + p.shape[1:], dtype=self.dtype)
+                    pred = np.zeros((self.current_sample["X"].shape[0],) + p.shape[1:], dtype=self.dtype)
                 pred[k] = p
         else:
-            self._X = to_pytorch_format(self._X, self.axis_order, self.device)
-            l = int(math.ceil(self._X.shape[0] / self.cfg.TRAIN.BATCH_SIZE))
+            self.current_sample["X"] = to_pytorch_format(self.current_sample["X"], self.axis_order, self.device)
+            l = int(math.ceil(self.current_sample["X"].shape[0] / self.cfg.TRAIN.BATCH_SIZE))
             for k in tqdm(range(l), leave=False):
                 top = (
                     (k + 1) * self.cfg.TRAIN.BATCH_SIZE
-                    if (k + 1) * self.cfg.TRAIN.BATCH_SIZE < self._X.shape[0]
-                    else self._X.shape[0]
+                    if (k + 1) * self.cfg.TRAIN.BATCH_SIZE < self.current_sample["X"].shape[0]
+                    else self.current_sample["X"].shape[0]
                 )
                 with torch.cuda.amp.autocast():
-                    p = self.model(self._X[k * self.cfg.TRAIN.BATCH_SIZE : top])
+                    p = self.model(self.current_sample["X"][k * self.cfg.TRAIN.BATCH_SIZE : top])
                 p = to_numpy_format(self.apply_model_activations(p), self.axis_order_back)
                 if "pred" not in locals():
-                    pred = np.zeros((self._X.shape[0],) + p.shape[1:], dtype=self.dtype)
+                    pred = np.zeros((self.current_sample["X"].shape[0],) + p.shape[1:], dtype=self.dtype)
                 pred[k * self.cfg.TRAIN.BATCH_SIZE : top] = p
-        del self._X, p
+        del self.current_sample["X"], p
 
         # Reconstruct the predictions
         if original_data_shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
@@ -358,9 +341,9 @@ class Image_to_Image_Workflow(Base_Workflow):
                     overlap=self.cfg.DATA.TEST.OVERLAP,
                     verbose=self.cfg.TEST.VERBOSE,
                 )
-                self._Y = f_name(
-                    self._Y,
-                    original_data_shape[:-1] + (self._Y.shape[-1],),
+                self.current_sample["Y"] = f_name(
+                    self.current_sample["Y"],
+                    original_data_shape[:-1] + (self.current_sample["Y"].shape[-1],),
                     padding=self.cfg.DATA.TEST.PADDING,
                     overlap=self.cfg.DATA.TEST.OVERLAP,
                     verbose=self.cfg.TEST.VERBOSE,
@@ -369,44 +352,48 @@ class Image_to_Image_Workflow(Base_Workflow):
                 obj = f_name(
                     pred,
                     original_data_shape[:-1] + (pred.shape[-1],),
-                    data_mask=self._Y,
+                    data_mask=self.current_sample["Y"],
                     padding=self.cfg.DATA.TEST.PADDING,
                     overlap=self.cfg.DATA.TEST.OVERLAP,
                     verbose=self.cfg.TEST.VERBOSE,
                 )
-                if self._Y is not None:
-                    pred, self._Y = obj
+                if self.current_sample["Y"] is not None:
+                    pred, self.current_sample["Y"] = obj
                 else:
                     pred = obj
                 del obj
 
             if self.cfg.PROBLEM.NDIM == "3D":
                 pred = np.expand_dims(pred, 0)
-                if self._Y is not None:
-                    self._Y = np.expand_dims(self._Y, 0)
+                if self.current_sample["Y"] is not None:
+                    self.current_sample["Y"] = np.expand_dims(self.current_sample["Y"], 0)
 
         if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE:
-            if self.cfg.PROBLEM.NDIM == "2D":
-                pred = pred[:, -reflected_orig_shape[1] :, -reflected_orig_shape[2] :]
-                if self._Y is not None:
-                    self._Y = self._Y[:, -reflected_orig_shape[1] :, -reflected_orig_shape[2] :]
-            else:
-                pred = pred[
-                    :,
-                    -reflected_orig_shape[1] :,
-                    -reflected_orig_shape[2] :,
-                    -reflected_orig_shape[3] :,
-                ]
-                if self._Y is not None:
-                    self._Y = self._Y[
+            reflected_orig_shape = (1,) + self.current_sample["reflected_orig_shape"]
+            if reflected_orig_shape != pred.shape:
+                if self.cfg.PROBLEM.NDIM == "2D":
+                    pred = pred[:, -reflected_orig_shape[1] :, -reflected_orig_shape[2] :]
+                    if self.current_sample["Y"] is not None:
+                        self.current_sample["Y"] = self.current_sample["Y"][
+                            :, -reflected_orig_shape[1] :, -reflected_orig_shape[2] :
+                        ]
+                else:
+                    pred = pred[
                         :,
                         -reflected_orig_shape[1] :,
                         -reflected_orig_shape[2] :,
                         -reflected_orig_shape[3] :,
                     ]
+                    if self.current_sample["Y"] is not None:
+                        self.current_sample["Y"] = self.current_sample["Y"][
+                            :,
+                            -reflected_orig_shape[1] :,
+                            -reflected_orig_shape[2] :,
+                            -reflected_orig_shape[3] :,
+                        ]
 
         # Undo normalization
-        x_norm = norm[0]
+        x_norm = self.current_sample["X_norm"]
         if x_norm["type"] == "div":
             pred = undo_norm_range01(pred, x_norm)
         elif x_norm["type"] == "scale_range":
@@ -430,7 +417,7 @@ class Image_to_Image_Workflow(Base_Workflow):
             save_tif(
                 pred,
                 self.cfg.PATHS.RESULT_DIR.PER_IMAGE,
-                self.processing_filenames,
+                [self.current_sample["filename"]],
                 verbose=self.cfg.TEST.VERBOSE,
             )
 
@@ -438,14 +425,14 @@ class Image_to_Image_Workflow(Base_Workflow):
         if pred.dtype == np.dtype("uint16"):
             pred = pred.astype(np.float32)
 
-        if self._Y is not None:
-            if self._Y.dtype == np.dtype("uint16"):
-                self._Y = self._Y.astype(np.float32)
+        if self.current_sample["Y"] is not None:
+            if self.current_sample["Y"].dtype == np.dtype("uint16"):
+                self.current_sample["Y"] = self.current_sample["Y"].astype(np.float32)
 
             metric_values = self.metric_calculation(
                 to_pytorch_format(pred, self.axis_order, self.device),
                 to_pytorch_format(
-                    self._Y,
+                    self.current_sample["Y"],
                     self.axis_order,
                     self.device,
                     dtype=self.loss_dtype,
@@ -527,16 +514,17 @@ class Image_to_Image_Workflow(Base_Workflow):
         Steps that must be done after predicting all images.
         """
         # FID, IS and LPIPS need to be computed for all the images
-        for i, metric in enumerate(self.test_metrics):
-            m_name = self.test_metric_names[i].lower()
-            if m_name in ["fid", "is", "lpips"]:
-                # label = "full_image" if not self.cfg.TEST.FULL_IMG or self.cfg.PROBLEM.NDIM == "3D" else "merge_patches"
-                label = "merge_patches"
-                if m_name == "is":
-                    val = metric.compute()[0]  # It returns a the mean and the std, we only need the mean
-                else:
-                    val = metric.compute()
-                val = val.item() if not torch.isnan(val) else 0
-                self.stats[label][m_name] = val
+        if self.use_gt:
+            for i, metric in enumerate(self.test_metrics):
+                m_name = self.test_metric_names[i].lower()
+                if m_name in ["fid", "is", "lpips"]:
+                    # label = "full_image" if not self.cfg.TEST.FULL_IMG or self.cfg.PROBLEM.NDIM == "3D" else "merge_patches"
+                    label = "merge_patches"
+                    if m_name == "is":
+                        val = metric.compute()[0]  # It returns a the mean and the std, we only need the mean
+                    else:
+                        val = metric.compute()
+                    val = val.item() if not torch.isnan(val) else 0
+                    self.stats[label][m_name] = val
 
         super().after_all_images()

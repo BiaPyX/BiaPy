@@ -1,17 +1,18 @@
 import os
+import h5py
 import numpy as np
 from torch.utils.data import Dataset
-from skimage.io import imread
-
-from biapy.data.pre_processing import normalize, norm_range01, percentile_clip
-from biapy.data.generators.augmentors import center_crop_single, resize_img
-
 from typing import (
     List,
     Tuple,
     Dict,
     Any,
+    Callable,
 )
+
+from biapy.data.pre_processing import normalize, norm_range01, percentile_clip
+from biapy.data.generators.augmentors import center_crop_single, resize_img
+from biapy.data.data_manipulation import load_img_data, sample_satisfy_conds, pad_and_reflect
 
 
 class test_single_data_generator(Dataset):
@@ -23,26 +24,18 @@ class test_single_data_generator(Dataset):
     ndim : int
         Dimensions of the data (``2`` for 2D and ``3`` for 3D).
 
-    ptype : str
-        Problem type. Options ['ssl','classification'].
-
-    X : Numpy 5D/4D array, optional
-        Data. E.g. ``(num_of_images, z, y, x, channels)``  for ``3D`` or ``(num_of_images, y, x, channels)`` for ``2D``.
-
-    d_path : str, optional
-        Path to load the data from.
-
-    test_by_chunks : bool, optional
-        Not used in this generator yet but added for compatibility.
+    X : list of dict
+        X data. Each item in the list represents a sample of the dataset. Each sample is represented as follows:
+            * ``"filename"``: name of the image to extract the data sample from.
+            * ``"dir"``: directory where the image resides.
+            * ``"shape"``: shape of the sample.
+            * ``"class_name"``: name of the class.
+            * ``"class"``: integer that represents the class.
+            * ``"img"`` (optional): image sample itself. It is a ndarrray of  ``(y, x, channels)`` in ``2D`` and
+              ``(z, y, x, channels)`` in ``3D``. Provided if the user selected to load images into memory.
 
     provide_Y: bool, optional
         Whether the ground truth has been provided or not.
-
-    Y : Numpy 2D array, optional
-        Image classes. E.g. ``(num_of_images, class)``.
-
-    dm_path : str, optional
-        Not used here.
 
     dims: str, optional
         Dimension of the data. Possible options: ``2D`` or ``3D``.
@@ -59,53 +52,75 @@ class test_single_data_generator(Dataset):
     reduce_mem : bool, optional
         To reduce the dtype from float32 to float16.
 
-    resize_shape : tuple of ints, optional
-        Shape to resize the images into.
-
     crop_center : bool, optional
-        Whether to extract a
-
-    sample_ids : List of ints, optional
-        When cross validation is used specific training samples are passed to the generator.
-        Not used in this generator.
+        Whether to extract a central crop from each image.
 
     convert_to_rgb : bool, optional
-        In case RGB images are expected, e.g. if ``crop_shape`` channel is 3, those images that are grayscale are
-        converted into RGB.
+        Whether to convert images into 3-channel, i.e. RGB, by using the information of the first channel.
 
-    multiple_raw_images : bool, optional
-        Not used in this generator yet but added for compatibility.
+    filter_conds : list of lists of str, optional
+        Filter conditions to be applied to the data. The three variables, ``filter_conds``, ``filter_vals`` and ``filter_vals``
+        will compose a list of conditions to remove the samples from the list. They are list of list of conditions. For instance, the
+        conditions can be like this: ``[['A'], ['B','C']]``. Then, if the sample satisfies the first list of conditions, only 'A'
+        in this first case (from ['A'] list), or satisfy 'B' and 'C' (from ['B','C'] list) it will be removed. In each sublist all the
+        conditions must be satisfied. Available properties are: [``'foreground'``, ``'mean'``, ``'min'``, ``'max'``].
+        Each property descrition:
+          * ``'foreground'`` is defined as the mask foreground percentage.
+          * ``'mean'`` is defined as the mean value.
+          * ``'min'`` is defined as the min value.
+          * ``'max'`` is defined as the max value.
+
+    filter_vals : list of int/float, optional
+        Represent the values of the properties listed in ``filter_conds`` that the images need to satisfy to not be dropped.
+
+    filter_signs : list of list of str, optional
+        Signs to do the comparison for data filtering. Options: [``'gt'``, ``'ge'``, ``'lt'``, ``'le'``] that corresponds to
+        "greather than", e.g. ">", "greather equal", e.g. ">=", "less than", e.g. "<", and "less equal" e.g. "<=" comparisons.
+
+    preprocess_data : bool, optional
+        Whether to apply preprocessing to test data or not.
+
+    preprocess_cfg : dict, optional
+        Configuration of the preprocessing.
+
+    data_shape : tuple of int, optional
+        Shape of the images to output.
+
+    reflect_to_complete_shape : bool, optional
+        Whether to reshape the dimensions that does not satisfy the patch shape selected by padding it with reflect.
     """
 
     def __init__(
         self,
         ndim: int,
-        ptype: str,
-        X: np.ndarray | None = None,
-        d_path: str = "",
-        test_by_chunks: bool = False,
+        X: List[Dict],
         provide_Y: bool = False,
-        Y: np.ndarray | None = None,
-        dm_path: str = "",
         seed: int = 42,
-        instance_problem: bool = False,
         norm_dict: Dict | None = None,
         crop_center: bool = False,
         reduce_mem: bool = False,
-        resize_shape: Tuple[int, ...] = (256, 256, 1),
-        sample_ids: List[int] | None = None,
         convert_to_rgb: bool = False,
-        multiple_raw_images: bool = False,
+        filter_props: List[List[str]] = [],
+        filter_vals: List[List[str]] | None = None,
+        filter_signs: List[List[str]] | None = None,
+        preprocess_data: Callable = False,
+        preprocess_cfg: dict | None = None,
+        data_shape: Tuple[int, ...] = (256, 256, 1),
+        reflect_to_complete_shape: bool = True,
     ):
-        assert ptype in ["ssl", "classification"]
         assert norm_dict != None, "Normalization instructions must be provided with 'norm_dict'"
 
-        self.ptype = ptype
         self.X = X
-        self.Y = Y
-        self.d_path = d_path
         self.provide_Y = provide_Y
         self.convert_to_rgb = convert_to_rgb
+        self.filter_samples = True if len(filter_props) > 0 else False
+        self.filter_props = filter_props
+        self.filter_vals = filter_vals
+        self.filter_signs = filter_signs
+        self.preprocess_data = preprocess_data
+        self.preprocess_cfg = preprocess_cfg
+        self.reflect_to_complete_shape = reflect_to_complete_shape
+        self.data_shape = data_shape
 
         if not reduce_mem:
             self.dtype = np.float32
@@ -114,42 +129,7 @@ class test_single_data_generator(Dataset):
             self.dtype = np.float16
             self.dtype_str = "float16"
         self.crop_center = crop_center
-        self.resize_shape = resize_shape
-
-        if self.ptype == "classification":
-            self.class_names = sorted(next(os.walk(d_path))[1])
-            self.class_numbers = {}
-            for i, c_name in enumerate(self.class_names):
-                self.class_numbers[c_name] = i
-            self.classes = {}
-            if self.X is None:
-                self.data_path = []
-                print("Collecting data ids . . .")
-                for folder in self.class_names:
-                    print("Analizing folder {}".format(os.path.join(d_path, folder)))
-                    ids = sorted(next(os.walk(os.path.join(d_path, folder)))[2])
-                    print("Found {} samples".format(len(ids)))
-                    for i in range(len(ids)):
-                        self.classes[ids[i]] = folder
-                        self.data_path.append(ids[i])
-
-                if sample_ids is not None:
-                    self.data_path = [x for i, x in enumerate(self.data_path) if i in sample_ids]
-                    old_classes = self.classes.copy()
-                    for i, key in enumerate(old_classes.keys()):
-                        if i not in sample_ids:
-                            del self.classes[key]
-                    del old_classes
-
-                self.len = len(self.data_path)
-                if self.len == 0:
-                    raise ValueError("No image found in {}".format(d_path))
-            else:
-                assert X is not None
-                self.len = len(X)
-        else:
-            self.data_path = sorted(next(os.walk(d_path))[2])
-            self.len = len(self.data_path)
+        self.len = len(self.X)
         self.seed = seed
         self.ndim = ndim
         self.o_indexes = np.arange(self.len)
@@ -161,92 +141,128 @@ class test_single_data_generator(Dataset):
             self.norm_dict["orig_dtype"] = img.dtype
 
     # img, img_class, xnorm, filename
-    def load_sample(self, idx: int) -> Tuple[np.ndarray, Any, Dict | None, Any]:
-        """Load one data sample given its corresponding index."""
-        img_class, filename = None, None
+    def load_sample(self, idx: int) -> Tuple[Any, Any, Any, Any, Any]:
+        """
+        Load one data sample given its corresponding index.
 
-        # Choose the data source
-        if self.X is not None:
-            img = self.X[idx]
-            img = np.squeeze(img)
-            filename = idx
-            if self.provide_Y and self.Y is not None:
-                img_class = self.Y[idx] if self.ptype == "classification" else 0
-        else:
-            sample_id = self.data_path[idx]
-            if self.ptype == "classification":
-                sample_class_dir = self.classes[sample_id]
-                f = os.path.join(self.d_path, sample_class_dir, sample_id)
-                img_class = self.class_numbers[sample_class_dir]
-            else:
-                f = os.path.join(self.d_path, sample_id)
-                img_class = 0
-            img = np.load(f) if sample_id.endswith(".npy") else imread(f)
-            img = np.squeeze(img)
-            filename = f
+        Parameters
+        ----------
+        idx : int
+            Sample index counter.
 
-        # Correct dimensions
-        if self.ndim == 3:
-            if img.ndim == 3:
-                img = np.expand_dims(img, -1)
-            else:
-                min_val = min(img.shape)
-                channel_pos = img.shape.index(min_val)
-                if channel_pos != 3 and img.shape[channel_pos] <= 4:
-                    new_pos = [x for x in range(4) if x != channel_pos] + [
-                        channel_pos,
-                    ]
-                    img = img.transpose(new_pos)
+        Returns
+        -------
+        img : 3D/4D ndarray array
+            Image read. E.g. ``(z, y, x, num_classes)`` for 3D or ``(y, x, num_classes)`` for 2D.
+
+        img_class: int
+            Class of the image. It will be -1 when no class is available.
+
+        xnorm : dict
+            X element normalization steps.
+
+        sample : dict
+            * ``"filename"``: name of the image to extract the data sample from.
+            * ``"dir"``: directory where the image resides.
+            * ``"shape"``: shape of the sample.
+            * ``"class_name"``: name of the class.
+            * ``"class"``: integer that represents the class.
+            * ``"img"`` (optional): image sample itself. It is a ndarrray of  ``(y, x, channels)`` in ``2D`` and
+              ``(z, y, x, channels)`` in ``3D``. Provided if the user selected to load images into memory.
+            * ``"discard"`` (optional): whether the sample should be discarded or not. Present if ``filter_conds``,``filter_vals``
+              and ``filter_signs`` were provided.
+            * ``"reflected_orig_shape"`` (optional): original shape of the image before reflecting. Present if ``reflect_to_complete_shape``
+              is ``True`` and ``crop_center`` is ``False``.
+        """
+        sample = self.X[idx].copy()
+
+        img, img_file = load_img_data(
+            os.path.join(sample["dir"], sample["filename"]),
+            is_3d=(self.ndim == 3),
+            data_within_zarr_path=sample["path_in_zarr"] if "path_in_zarr" in sample else None,
+        )
+
+        if (
+            sample["filename"].endswith(".zarr")
+            or sample["filename"].endswith(".hdf5")
+            or sample["filename"].endswith(".h5")
+        ):
+            if not self.test_by_chunks:
+                raise ValueError(
+                    "If you are using Zarr images please set 'TEST.BY_CHUNKS.ENABLE' and configure " "its options."
+                )
+            
+            if img_file is not None and isinstance(img_file, h5py.File):
+                sample["img_file_to_close"] = img_file
         else:
-            if img.ndim == 2:
-                img = np.expand_dims(img, -1)
-            else:
-                if img.shape[0] <= 3:
-                    img = img.transpose((1, 2, 0))
+            # Skip processing image
+            discard = False
+            if self.filter_samples:
+                discard = sample_satisfy_conds(
+                    img,
+                    self.filter_props,
+                    self.filter_vals,
+                    self.filter_signs,
+                )
+            sample["discard"] = discard
+
+            if not discard:
+                # Preprocess test data
+                if self.preprocess_data is not None:
+                    img = self.preprocess_data(
+                        self.preprocess_cfg,
+                        x_data=[img],
+                        is_2d=(self.ndim == 2),
+                    )[0]
+
+                # Reflect data to complete the needed shape
+                if not self.crop_center and self.reflect_to_complete_shape:
+                    reflected_orig_shape = img.shape
+                    img = pad_and_reflect(
+                        img,
+                        self.data_shape,
+                        verbose=True,
+                    )
+                    sample["reflected_orig_shape"] = reflected_orig_shape
+
+                if self.convert_to_rgb and img.shape[-1] == 1:
+                    img = np.repeat(img, 3, axis=-1)
+
+                # Data channel check
+                if self.data_shape[-1] != img.shape[-1]:
+                    raise ValueError(
+                        "Channel of the DATA.PATCH_SIZE given {} does not correspond with the loaded image {}. "
+                        "Please, check the channels of the images!".format(self.data_shape[-1], img.shape[-1])
+                    )
+
+        img_class = -1
+        if "class" in sample:
+            img_class = sample["class"]
+            img_class = np.expand_dims(np.array(img_class), 0)
 
         # Normalization
         xnorm = None
         if self.norm_dict["enable"]:
             # Percentile clipping
             if "lower_bound" in self.norm_dict:
-                if self.norm_dict["application_mode"] == "image":
-                    img, _, _ = percentile_clip(
-                        img,
-                        lower=self.norm_dict["lower_bound"],
-                        upper=self.norm_dict["upper_bound"],
-                    )
-                elif self.norm_dict["application_mode"] == "dataset" and not self.norm_dict["clipped"]:
-                    img, _, _ = percentile_clip(
-                        img,
-                        lwr_perc_val=self.norm_dict["dataset_X_lower_value"],
-                        uppr_perc_val=self.norm_dict["dataset_X_upper_value"],
-                    )
+                img, _, _ = percentile_clip(
+                    img,
+                    lower=self.norm_dict["lower_bound"],
+                    upper=self.norm_dict["upper_bound"],
+                )
 
             if self.norm_dict["type"] == "div":
                 img, xnorm = norm_range01(img, dtype=self.dtype)  # type: ignore
             elif self.norm_dict["type"] == "scale_range":
                 img, xnorm = norm_range01(img, dtype=self.dtype, div_using_max_and_scale=True)  # type: ignore
             elif self.norm_dict["type"] == "custom":
-                if self.norm_dict["application_mode"] == "image":
-                    xnorm = {}
-                    xnorm["mean"] = img.mean()
-                    xnorm["std"] = img.std()
-                    img = normalize(img, img.mean(), img.std(), out_type=self.dtype_str)
-                else:
-                    img = normalize(
-                        img,
-                        self.norm_dict["mean"],
-                        self.norm_dict["std"],
-                        out_type=self.dtype_str,
-                    )
+                xnorm = {}
+                xnorm["mean"] = img.mean() if "mean" not in self.norm_dict else self.norm_dict["mean"]
+                xnorm["std"] = img.std() if "std" not in self.norm_dict else self.norm_dict["std"]
+                img = normalize(img, xnorm["mean"], xnorm["std"], out_type=self.dtype_str)
 
         img = np.expand_dims(img, 0).astype(self.dtype)
-        img_class = np.expand_dims(np.array(img_class), 0)
-
-        if self.convert_to_rgb and img.shape[-1] == 1:
-            img = np.repeat(img, 3, axis=-1)
-
-        return img, img_class, xnorm, filename
+        return img, img_class, xnorm, sample
 
     def __len__(self) -> int:
         """Defines the length of the generator"""
@@ -264,43 +280,42 @@ class test_single_data_generator(Dataset):
         Returns
         -------
         dict : dict
-            Dictionary containing:
-
-            img : 4D/5D Numpy array
-                X element, for instance, an image. E.g. ``(1, z, y, x, channels)`` if ``2D`` or
-                ``(1, y, x, channels)`` if ``3D``.
-
-            X_norm : dict
-                X element normalization steps.
-
-            file : str or int
-                Processed image file path or integer position in loaded data.
-
-            img_class : 2D Numpy array, optional
-                Y element, for instance, a class number. E.g. ``(1, class)``.
+            Test sample containing:
+            * ``"X"``: X data. It is a ndarrray of  ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
+            * ``"X_norm"``: X element normalization steps.
+            * ``"Y"``: Y data. It is a ndarrray of  ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
+            * ``"Y_norm"``: Y element normalization steps.
+            * ``"filename"``: name of the image to extract the data sample from.
+            * ``"dir"``: directory where the image resides.
+            * ``"discard"`` (optional): whether the sample should be discarded or not. Present if ``filter_conds``,``filter_vals``
+              and ``filter_signs`` were provided.
+            * ``"reflected_orig_shape"`` (optional): original shape of the image before reflecting. Present if ``reflect_to_complete_shape``
+              is ``True``.
         """
-        img, img_class, norm, filename = self.load_sample(index)
+        img, img_class, norm, sample = self.load_sample(index)
 
-        if self.crop_center and img.shape[:-1] != self.resize_shape[:-1]:
-            img = center_crop_single(img[0], self.resize_shape)
-            img = resize_img(img, self.resize_shape[:-1])
+        if self.crop_center and img.shape[:-1] != self.data_shape[:-1]:
+            img = center_crop_single(img[0], self.data_shape)
+            img = resize_img(img, self.data_shape[:-1])
             img = np.expand_dims(img, 0)
 
         if norm is not None:
             self.norm_dict.update(norm)
 
-        if self.ptype == "classification":
-            if self.provide_Y:
-                return {
-                    "X": img,
-                    "X_norm": self.norm_dict,
-                    "Y": img_class,
-                    "file": filename,
-                }
-            else:
-                return {"X": img, "X_norm": self.norm_dict, "file": filename}
-        else:  # SSL - MAE
-            return {"X": img, "X_norm": self.norm_dict, "file": filename}
+        test_sample = {
+            "X": img,
+            "X_norm": self.norm_dict,
+            "filename": sample["filename"],
+            "dir": sample["dir"],
+        }
+        if self.provide_Y:
+            test_sample["Y"] = img_class
+        if "discard" in sample:
+            test_sample["discard"] = sample["discard"]
+        if "reflected_orig_shape" in sample:
+            test_sample["reflected_orig_shape"] = sample["reflected_orig_shape"]
+
+        return test_sample
 
     def get_data_normalization(self) -> Dict:
         return self.norm_dict

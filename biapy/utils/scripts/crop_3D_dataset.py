@@ -24,8 +24,8 @@ for n, id_ in tqdm(enumerate(ids), total=len(ids)):
         img = np.expand_dims(img, axis=-1)
 
     if img.shape != crop_shape[:3]+(img.shape[-1],):
-        img = crop_3D_data_with_overlap(img, crop_shape[:3]+(img.shape[-1],), overlap=overlap, padding=padding,
-                                        median_padding=median_padding, verbose=True)
+        img, _ = crop_3D_data_with_overlap(img, crop_shape[:3]+(img.shape[-1],), overlap=overlap, padding=padding,
+                                           median_padding=median_padding, verbose=True)
     else:
         img = np.expand_dims(img, axis=0)
 

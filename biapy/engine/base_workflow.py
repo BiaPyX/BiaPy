@@ -10,7 +10,6 @@ import zarr
 import numpy as np
 from tqdm import tqdm
 from abc import ABCMeta, abstractmethod
-from sklearn.model_selection import StratifiedKFold
 import torch.multiprocessing as mp
 import torch.distributed as dist
 from scipy.ndimage import zoom
@@ -47,30 +46,29 @@ from biapy.utils.misc import (
     setup_for_distributed,
 )
 from biapy.utils.util import (
-    load_data_from_dir,
-    load_3d_images_from_dir,
     create_plots,
-    pad_and_reflect,
     save_tif,
     check_downsample_division,
     read_chunked_data,
-    order_dimensions,
-    read_img,
 )
 from biapy.engine.train_engine import train_one_epoch, evaluate
 from biapy.data.data_2D_manipulation import (
     crop_data_with_overlap,
     merge_data_with_overlap,
-    load_and_prepare_2D_train_data,
 )
 from biapy.data.data_3D_manipulation import (
     crop_3D_data_with_overlap,
     merge_3D_data_with_overlap,
-    load_and_prepare_3D_data,
-    load_and_prepare_3D_efficient_format_data,
-    load_3D_efficient_files,
     extract_3D_patch_with_overlap_yield,
+    order_dimensions,
 )
+from biapy.data.data_manipulation import (
+    load_and_prepare_train_data,
+    load_and_prepare_test_data,
+    read_img_as_ndarray,
+    sample_satisfy_conds,
+)
+
 from biapy.data.post_processing.post_processing import (
     ensemble8_2d_predictions,
     ensemble16_3d_predictions,
@@ -79,6 +77,7 @@ from biapy.data.post_processing.post_processing import (
 from biapy.data.post_processing import apply_post_processing
 from biapy.data.pre_processing import preprocess_data
 from biapy.engine.check_configuration import check_configuration, compare_configurations_without_model
+
 
 class Base_Workflow(metaclass=ABCMeta):
     """
@@ -110,14 +109,12 @@ class Base_Workflow(metaclass=ABCMeta):
         self.args = args
         self.job_identifier = job_identifier
         self.device = device
-        self.original_test_path = None
         self.original_test_mask_path = None
         self.test_mask_filenames = None
         self.cross_val_samples_ids = None
         self.post_processing = {}
         self.post_processing["per_image"] = False
         self.post_processing["as_3D_stack"] = False
-        self.test_filenames = None
         self.data_norm = None
         self.model = None
         self.model_build_kwargs = None
@@ -250,26 +247,6 @@ class Base_Workflow(metaclass=ABCMeta):
 
             # Translate BMZ keywords into BiaPy's
             if len(self.bmz_config["preprocessing"]) > 0:
-                app_mode = "dataset" if self.bmz_config["preprocessing"]["kwargs"]["mode"] == "per_dataset" else "image"
-                if app_mode != self.cfg.DATA.NORMALIZATION.APPLICATION_MODE:
-                    opts += ["DATA.NORMALIZATION.APPLICATION_MODE", app_mode]
-                    print(
-                        "[BMZ] Changed 'DATA.NORMALIZATION.APPLICATION_MODE' from {} to {} as defined in the RDF".format(
-                            self.cfg.DATA.NORMALIZATION.APPLICATION_MODE, app_mode
-                        )
-                    )
-
-                if self.cfg.TRAIN.ENABLE and not self.cfg.DATA.TRAIN.IN_MEMORY and app_mode == "dataset":
-                    raise ValueError(
-                        "The BioImage Model Zoo model selected changed your normalization settings. Due to that the following error "
-                        "appeared:\n'DATA.NORMALIZATION.APPLICATION_MODE' == 'dataset' can only be applied if 'DATA.TRAIN.IN_MEMORY' == True"
-                    )
-                if self.cfg.TEST.ENABLE and not self.cfg.DATA.TEST.IN_MEMORY and app_mode == "dataset":
-                    raise ValueError(
-                        "The BioImage Model Zoo model selected changed your normalization settings. Due to that the following error "
-                        "appeared:\n'DATA.NORMALIZATION.APPLICATION_MODE' == 'dataset' can only be applied if 'DATA.TEST.IN_MEMORY' == True"
-                    )
-
                 # 'zero_mean_unit_variance' norm of BMZ is as our 'custom' norm without providing mean/std
                 if self.bmz_config["preprocessing"]["name"] == "zero_mean_unit_variance":
                     opts += [
@@ -301,7 +278,10 @@ class Base_Workflow(metaclass=ABCMeta):
                 elif self.bmz_config["preprocessing"]["name"] == "fixed_zero_mean_unit_variance":
                     mean = -1
                     std = -1
-                    if "kwargs" in self.bmz_config["preprocessing"] and "mean" in self.bmz_config["preprocessing"]["kwargs"]:
+                    if (
+                        "kwargs" in self.bmz_config["preprocessing"]
+                        and "mean" in self.bmz_config["preprocessing"]["kwargs"]
+                    ):
                         mean = self.bmz_config["preprocessing"]["kwargs"]["mean"]
                         std = self.bmz_config["preprocessing"]["kwargs"]["std"]
                     elif "mean" in self.bmz_config["preprocessing"]:
@@ -482,270 +462,84 @@ class Base_Workflow(metaclass=ABCMeta):
         """
         Load training and validation data.
         """
-        if self.cfg.TRAIN.ENABLE:
-            print("##########################")
-            print("#   LOAD TRAINING DATA   #")
-            print("##########################")
-            self.X_val, self.Y_val = None, None
-            if self.cfg.DATA.TRAIN.IN_MEMORY:
-                val_split = self.cfg.DATA.VAL.SPLIT_TRAIN if self.cfg.DATA.VAL.FROM_TRAIN else 0.0
-                f_name = load_and_prepare_2D_train_data if self.cfg.PROBLEM.NDIM == "2D" else load_and_prepare_3D_data
-                preprocess_cfg = self.cfg.DATA.PREPROCESS if self.cfg.DATA.PREPROCESS.TRAIN else None
-                preprocess_fn = preprocess_data if self.cfg.DATA.PREPROCESS.TRAIN else None
-                is_y_mask = self.cfg.PROBLEM.TYPE in ["SEMANTIC_SEG", "INSTANCE_SEG"]
-                objs = f_name(
-                    self.cfg.DATA.TRAIN.PATH,
-                    self.mask_path,
-                    cross_val=self.cfg.DATA.VAL.CROSS_VAL,
-                    cross_val_nsplits=self.cfg.DATA.VAL.CROSS_VAL_NFOLD,
-                    cross_val_fold=self.cfg.DATA.VAL.CROSS_VAL_FOLD,
-                    val_split=val_split,
-                    seed=self.cfg.SYSTEM.SEED,
-                    shuffle_val=self.cfg.DATA.VAL.RANDOM,
-                    random_crops_in_DA=self.cfg.DATA.EXTRACT_RANDOM_PATCH,
-                    crop_shape=self.cfg.DATA.PATCH_SIZE,
-                    y_upscaling=self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
-                    ov=self.cfg.DATA.TRAIN.OVERLAP,
-                    padding=self.cfg.DATA.TRAIN.PADDING,
-                    minimum_foreground_perc=self.cfg.DATA.TRAIN.MINIMUM_FOREGROUND_PER,
-                    reflect_to_complete_shape=self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE,
-                    convert_to_rgb=self.cfg.DATA.FORCE_RGB,
-                    preprocess_cfg=preprocess_cfg,
-                    is_y_mask=is_y_mask,
-                    preprocess_f=preprocess_fn,
-                )
-
-                if self.cfg.DATA.VAL.FROM_TRAIN:
-                    if self.cfg.DATA.VAL.CROSS_VAL:
-                        (
-                            self.X_train,
-                            self.Y_train,
-                            self.X_val,
-                            self.Y_val,
-                            self.train_filenames,
-                            self.cross_val_samples_ids,
-                        ) = objs
-                    else:
-                        (
-                            self.X_train,
-                            self.Y_train,
-                            self.X_val,
-                            self.Y_val,
-                            self.train_filenames,
-                        ) = objs
-                else:
-                    self.X_train, self.Y_train, self.train_filenames = objs
-                del objs
-            else:
-                # Checking if the user inputted Zarr/H5 files
-                zarr_files = sorted(next(os.walk(self.cfg.DATA.TRAIN.PATH))[1])
-                h5_files = sorted(next(os.walk(self.cfg.DATA.TRAIN.PATH))[2])
-                if (
-                    self.cfg.PROBLEM.NDIM == "3D"
-                    and (len(zarr_files) > 0 and ".zarr" in zarr_files[0])
-                    or (len(h5_files) > 0 and ".h5" in h5_files[0])
-                ):
-                    val_split = self.cfg.DATA.VAL.SPLIT_TRAIN if self.cfg.DATA.VAL.FROM_TRAIN else 0.0
-
-                    if len(zarr_files) > 0 and ".zarr" in zarr_files[0]:
-                        print("Working with Zarr files . . .")
-                        img_files = [os.path.join(self.cfg.DATA.TRAIN.PATH, x) for x in zarr_files]
-                        mask_files = [os.path.join(self.mask_path, x) for x in sorted(next(os.walk(self.mask_path))[1])]
-                    elif len(h5_files) > 0 and ".h5" in h5_files[0]:
-                        print("Working with H5 files . . .")
-                        img_files = [os.path.join(self.cfg.DATA.TRAIN.PATH, x) for x in h5_files]
-                        mask_files = [os.path.join(self.mask_path, x) for x in sorted(next(os.walk(self.mask_path))[2])]
-                    del zarr_files, h5_files
-
-                    if self.cfg.DATA.EXTRACT_RANDOM_PATCH:
-                        print(
-                            "WARNING: 'DATA.EXTRACT_RANDOM_PATCH' not taken into account when working with Zarr/H5 images"
-                        )
-                    if self.cfg.DATA.FORCE_RGB:
-                        print("WARNING: 'DATA.FORCE_RGB' not taken into account when working with Zarr/H5 images")
-
-                    # When the labels and raw images are within the same Zarr file
-                    mult_dat = None
-                    if self.cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA:
-                        mult_dat = {
-                            "raw_path": self.cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH,
-                            "gt_path": self.cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_GT_PATH,
-                            "use_gt_path": self.cfg.PROBLEM.TYPE != "INSTANCE_SEG",
-                        }
-
-                    objs = load_and_prepare_3D_efficient_format_data(
-                        img_files,
-                        mask_files,
-                        input_img_axes=self.cfg.DATA.TRAIN.INPUT_IMG_AXES_ORDER,
-                        input_mask_axes=self.cfg.DATA.TRAIN.INPUT_MASK_AXES_ORDER,
-                        cross_val=self.cfg.DATA.VAL.CROSS_VAL,
-                        cross_val_nsplits=self.cfg.DATA.VAL.CROSS_VAL_NFOLD,
-                        cross_val_fold=self.cfg.DATA.VAL.CROSS_VAL_FOLD,
-                        val_split=val_split,
-                        seed=self.cfg.SYSTEM.SEED,
-                        shuffle_val=self.cfg.DATA.VAL.RANDOM,
-                        crop_shape=self.cfg.DATA.PATCH_SIZE,
-                        y_upscaling=self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
-                        ov=self.cfg.DATA.TRAIN.OVERLAP,
-                        padding=self.cfg.DATA.TRAIN.PADDING,
-                        minimum_foreground_perc=self.cfg.DATA.TRAIN.MINIMUM_FOREGROUND_PER,
-                        multiple_data_within_zarr=mult_dat,
-                    )
-
-                    if self.cfg.DATA.VAL.FROM_TRAIN:
-                        if self.cfg.DATA.VAL.CROSS_VAL:
-                            (
-                                self.X_train,
-                                self.Y_train,
-                                self.X_val,
-                                self.Y_val,
-                                self.cross_val_samples_ids,
-                            ) = objs
-                        else:
-                            self.X_train, self.Y_train, self.X_val, self.Y_val = objs
-                    else:
-                        self.X_train, self.Y_train = objs
-                    del objs
-
-                else:
-                    self.X_train, self.Y_train = None, None
-
-            ##################
-            ### VALIDATION ###
-            ##################
-            if not self.cfg.DATA.VAL.FROM_TRAIN:
-                if self.cfg.DATA.VAL.IN_MEMORY:
-                    print("1) Loading validation images . . .")
-                    f_name = load_data_from_dir if self.cfg.PROBLEM.NDIM == "2D" else load_3d_images_from_dir
-                    preprocess_cfg = self.cfg.DATA.PREPROCESS if self.cfg.DATA.PREPROCESS.VAL else None
-                    preprocess_fn = preprocess_data if self.cfg.DATA.PREPROCESS.VAL else None
-                    is_y_mask = self.cfg.PROBLEM.TYPE in [
-                        "SEMANTIC_SEG",
-                        "INSTANCE_SEG",
-                    ]
-                    self.X_val, _, _ = f_name(
-                        self.cfg.DATA.VAL.PATH,
-                        crop=True,
-                        crop_shape=self.cfg.DATA.PATCH_SIZE,
-                        overlap=self.cfg.DATA.VAL.OVERLAP,
-                        padding=self.cfg.DATA.VAL.PADDING,
-                        reflect_to_complete_shape=self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE,
-                        convert_to_rgb=self.cfg.DATA.FORCE_RGB,
-                        preprocess_cfg=preprocess_cfg,
-                        is_mask=False,
-                        preprocess_f=preprocess_fn,
-                    )
-
-                    if self.cfg.PROBLEM.NDIM == "2D":
-                        crop_shape = (
-                            self.cfg.DATA.PATCH_SIZE[0] * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[0],
-                            self.cfg.DATA.PATCH_SIZE[1] * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[1],
-                            self.cfg.DATA.PATCH_SIZE[2],
-                        )
-                    else:
-                        crop_shape = (
-                            self.cfg.DATA.PATCH_SIZE[0],
-                            self.cfg.DATA.PATCH_SIZE[1] * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[0],
-                            self.cfg.DATA.PATCH_SIZE[2] * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[1],
-                            self.cfg.DATA.PATCH_SIZE[3] * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[2],
-                        )
-                    if self.load_Y_val:
-                        self.Y_val, _, _ = f_name(
-                            self.cfg.DATA.VAL.GT_PATH,
-                            crop=True,
-                            crop_shape=crop_shape,
-                            overlap=self.cfg.DATA.VAL.OVERLAP,
-                            padding=self.cfg.DATA.VAL.PADDING,
-                            reflect_to_complete_shape=self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE,
-                            check_channel=False,
-                            check_drange=False,
-                            convert_to_rgb=self.cfg.DATA.FORCE_RGB,
-                            preprocess_cfg=preprocess_cfg,
-                            is_mask=is_y_mask,
-                            preprocess_f=preprocess_fn,
-                        )
-                    if self.Y_val is not None and len(self.X_val) != len(self.Y_val):
-                        raise ValueError(
-                            "Different number of raw and ground truth items ({} vs {}). "
-                            "Please check the data!".format(len(self.X_val), len(self.Y_val))
-                        )
-                else:
-                    # Checking if the user inputted Zarr/H5 files
-                    zarr_files = sorted(next(os.walk(self.cfg.DATA.VAL.PATH))[1])
-                    h5_files = sorted(next(os.walk(self.cfg.DATA.VAL.PATH))[2])
-                    if (
-                        self.cfg.PROBLEM.NDIM == "3D"
-                        and (len(zarr_files) > 0 and ".zarr" in zarr_files[0])
-                        or (len(h5_files) > 0 and ".h5" in h5_files[0])
-                    ):
-                        print("1) Loading validation image information . . .")
-                        if len(zarr_files) > 0 and ".zarr" in zarr_files[0]:
-                            print("Working with Zarr files . . .")
-                            img_files = [os.path.join(self.cfg.DATA.VAL.PATH, x) for x in zarr_files]
-                            mask_files = [
-                                os.path.join(self.mask_path, x) for x in sorted(next(os.walk(self.mask_path))[1])
-                            ]
-                        elif len(h5_files) > 0 and ".h5" in h5_files[0]:
-                            print("Working with H5 files . . .")
-                            img_files = [os.path.join(self.cfg.DATA.VAL.PATH, x) for x in h5_files]
-                            mask_files = [
-                                os.path.join(self.mask_path, x) for x in sorted(next(os.walk(self.mask_path))[2])
-                            ]
-                        del zarr_files, h5_files
-
-                        if self.cfg.DATA.FORCE_RGB:
-                            print("WARNING: 'DATA.FORCE_RGB' not taken into account when working with Zarr/H5 images")
-
-                        data_within_zarr_path, data_within_zarr_mask_path = None, None
-                        if self.cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA:
-                            data_within_zarr_path = self.cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH
-                            if self.cfg.PROBLEM.TYPE != "INSTANCE_SEG":
-                                data_within_zarr_mask_path = self.cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH
-
-                        self.X_val, _ = load_3D_efficient_files(
-                            data_path=img_files,
-                            input_axes=self.cfg.DATA.VAL.INPUT_IMG_AXES_ORDER,
-                            crop_shape=self.cfg.DATA.PATCH_SIZE,
-                            overlap=self.cfg.DATA.VAL.OVERLAP,
-                            padding=self.cfg.DATA.VAL.PADDING,
-                            data_within_zarr_path=data_within_zarr_path,
-                        )
-
-                        if self.cfg.PROBLEM.NDIM == "2D":
-                            crop_shape = (
-                                self.cfg.DATA.PATCH_SIZE[0] * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[0],
-                                self.cfg.DATA.PATCH_SIZE[1] * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[1],
-                                self.cfg.DATA.PATCH_SIZE[2],
-                            )
-                        else:
-                            crop_shape = (
-                                self.cfg.DATA.PATCH_SIZE[0],
-                                self.cfg.DATA.PATCH_SIZE[1] * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[0],
-                                self.cfg.DATA.PATCH_SIZE[2] * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[1],
-                                self.cfg.DATA.PATCH_SIZE[3] * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[2],
-                            )
-
-                        if self.load_Y_val:
-                            print("1) Loading validation GT information . . .")
-                            self.Y_val, _ = load_3D_efficient_files(
-                                data_path=mask_files,
-                                input_axes=self.cfg.DATA.VAL.INPUT_MASK_AXES_ORDER,
-                                crop_shape=crop_shape,
-                                overlap=self.cfg.DATA.VAL.OVERLAP,
-                                padding=self.cfg.DATA.VAL.PADDING,
-                                check_channel=False,
-                                data_within_zarr_path=data_within_zarr_mask_path,
-                            )
-                        else:
-                            self.Y_val = None
-                        if self.Y_val is not None and len(self.X_val) != len(self.Y_val):
-                            raise ValueError(
-                                "Different number of raw and ground truth items ({} vs {}). "
-                                "Please check the data!".format(len(self.X_val), len(self.Y_val))
-                            )
-
-                    else:
-                        self.X_val, self.Y_val = None, None
+        print("##########################")
+        print("#   LOAD TRAINING DATA   #")
+        print("##########################")
+        train_zarr_data_information = {
+            "raw_path": self.cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH,
+            "gt_path": self.cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_GT_PATH,
+            "use_gt_path": self.cfg.PROBLEM.TYPE != "INSTANCE_SEG",
+            "multiple_data_within_zarr": self.cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA,
+            "input_img_axes": self.cfg.DATA.TRAIN.INPUT_IMG_AXES_ORDER,
+            "input_mask_axes":  self.cfg.DATA.TRAIN.INPUT_MASK_AXES_ORDER,
+        }
+        val_zarr_data_information = {
+            "raw_path": self.cfg.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH,
+            "gt_path": self.cfg.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_GT_PATH,
+            "use_gt_path": self.cfg.PROBLEM.TYPE != "INSTANCE_SEG",
+            "multiple_data_within_zarr": self.cfg.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA,
+            "input_img_axes": self.cfg.DATA.VAL.INPUT_IMG_AXES_ORDER,
+            "input_mask_axes": self.cfg.DATA.VAL.INPUT_MASK_AXES_ORDER,
+        }
+        (
+            self.X_train,
+            self.Y_train,
+            self.X_val,
+            self.Y_val,
+        ) = load_and_prepare_train_data(
+            train_path=self.cfg.DATA.TRAIN.PATH,
+            train_mask_path=self.mask_path,
+            train_in_memory=self.cfg.DATA.TRAIN.IN_MEMORY,
+            train_ov=self.cfg.DATA.TRAIN.OVERLAP,
+            train_padding=self.cfg.DATA.TRAIN.PADDING,
+            val_path=self.cfg.DATA.VAL.PATH,
+            val_mask_path=self.cfg.DATA.VAL.GT_PATH,
+            val_in_memory=self.cfg.DATA.VAL.IN_MEMORY,
+            val_ov=self.cfg.DATA.VAL.OVERLAP,
+            val_padding=self.cfg.DATA.VAL.PADDING,
+            cross_val=self.cfg.DATA.VAL.CROSS_VAL,
+            cross_val_nsplits=self.cfg.DATA.VAL.CROSS_VAL_NFOLD,
+            cross_val_fold=self.cfg.DATA.VAL.CROSS_VAL_FOLD,
+            val_split=self.cfg.DATA.VAL.SPLIT_TRAIN if self.cfg.DATA.VAL.FROM_TRAIN else 0.0,
+            seed=self.cfg.SYSTEM.SEED,
+            shuffle_val=self.cfg.DATA.VAL.RANDOM,
+            train_preprocess_f=preprocess_data if self.cfg.DATA.PREPROCESS.TRAIN else None,
+            train_preprocess_cfg=self.cfg.DATA.PREPROCESS if self.cfg.DATA.PREPROCESS.TRAIN else None,
+            train_filter_conds=(
+                self.cfg.DATA.TRAIN.FILTER_SAMPLES.PROPS if self.cfg.DATA.TRAIN.FILTER_SAMPLES.ENABLE else []
+            ),
+            train_filter_vals=(
+                self.cfg.DATA.TRAIN.FILTER_SAMPLES.VALUES if self.cfg.DATA.TRAIN.FILTER_SAMPLES.ENABLE else []
+            ),
+            train_filter_signs=(
+                self.cfg.DATA.TRAIN.FILTER_SAMPLES.SIGNS if self.cfg.DATA.TRAIN.FILTER_SAMPLES.ENABLE else []
+            ),
+            val_preprocess_f=preprocess_data if self.cfg.DATA.PREPROCESS.VAL else None,
+            val_preprocess_cfg=self.cfg.DATA.PREPROCESS if self.cfg.DATA.PREPROCESS.VAL else None,
+            val_filter_conds=(
+                self.cfg.DATA.VAL.FILTER_SAMPLES.PROPS if self.cfg.DATA.VAL.FILTER_SAMPLES.ENABLE else []
+            ),
+            val_filter_vals=(
+                self.cfg.DATA.VAL.FILTER_SAMPLES.VALUES if self.cfg.DATA.VAL.FILTER_SAMPLES.ENABLE else []
+            ),
+            val_filter_signs=(
+                self.cfg.DATA.VAL.FILTER_SAMPLES.SIGNS if self.cfg.DATA.VAL.FILTER_SAMPLES.ENABLE else []
+            ),
+            random_crops_in_DA=self.cfg.DATA.EXTRACT_RANDOM_PATCH,
+            filter_by_entire_image=self.cfg.DATA.FILTER_BY_IMAGE,
+            crop_shape=self.cfg.DATA.PATCH_SIZE,
+            y_upscaling=self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
+            reflect_to_complete_shape=self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE,
+            convert_to_rgb=self.cfg.DATA.FORCE_RGB,
+            is_y_mask=self.is_y_mask,
+            is_3d=(self.cfg.PROBLEM.NDIM == "3D"),
+            train_zarr_data_information=train_zarr_data_information,
+            val_zarr_data_information=val_zarr_data_information,
+            multiple_raw_images=(
+                self.cfg.PROBLEM.TYPE == "IMAGE_TO_IMAGE"
+                and self.cfg.PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER
+            ),
+        )
 
         # Ensure all the processes have read the data
         if is_dist_avail_and_initialized():
@@ -785,12 +579,12 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.num_training_steps_per_epoch,
             ) = create_train_val_augmentors(
                 self.cfg,
-                self.X_train,
-                self.Y_train,
-                self.X_val,
-                self.Y_val,
-                self.world_size,
-                self.global_rank,
+                X_train=self.X_train,
+                X_val=self.X_val,
+                world_size=self.world_size,
+                global_rank=self.global_rank,
+                Y_train=self.Y_train,
+                Y_val=self.Y_val,
             )
             if self.cfg.DATA.CHECK_GENERATORS and self.cfg.PROBLEM.TYPE != "CLASSIFICATION":
                 check_generator_consistence(
@@ -912,7 +706,7 @@ class Base_Workflow(metaclass=ABCMeta):
         print("# Build model #")
         print("###############")
         if self.cfg.MODEL.SOURCE == "biapy":
-            # Obtain model spec from checkpoint 
+            # Obtain model spec from checkpoint
             if self.cfg.MODEL.LOAD_CHECKPOINT and self.cfg.MODEL.LOAD_MODEL_FROM_CHECKPOINT:
                 self.model_build_kwargs, saved_cfg = load_model_checkpoint(
                     cfg=self.cfg,
@@ -925,11 +719,11 @@ class Base_Workflow(metaclass=ABCMeta):
                 # Checks that this config and previous represent same workflow
                 header_message = "There is an inconsistency between the configuration loaded from checkpoint and the actual one. Error:\n"
                 compare_configurations_without_model(self.cfg, saved_cfg, header_message)
-                
-                # Override model specs 
+
+                # Override model specs
                 self.cfg["MODEL"] = saved_cfg["MODEL"]
-            
-                # Check if the merge is coherent 
+
+                # Check if the merge is coherent
                 updated_config = self.cfg.clone()
                 updated_config["MODEL"]["LOAD_MODEL_FROM_CHECKPOINT"] = False
                 check_configuration(updated_config, self.job_identifier)
@@ -1218,95 +1012,41 @@ class Base_Workflow(metaclass=ABCMeta):
         """
         Load test data.
         """
-        if self.cfg.TEST.ENABLE:
-            print("######################")
-            print("#   LOAD TEST DATA   #")
-            print("######################")
-            if not self.cfg.DATA.TEST.USE_VAL_AS_TEST:
-                if self.cfg.DATA.TEST.IN_MEMORY:
-                    print("2) Loading test images . . .")
-                    f_name = load_data_from_dir if self.cfg.PROBLEM.NDIM == "2D" else load_3d_images_from_dir
-                    preprocess_cfg = self.cfg.DATA.PREPROCESS if self.cfg.DATA.PREPROCESS.TEST else None
-                    preprocess_fn = preprocess_data if self.cfg.DATA.PREPROCESS.TEST else None
-                    is_y_mask = self.cfg.PROBLEM.TYPE in [
-                        "SEMANTIC_SEG",
-                        "INSTANCE_SEG",
-                    ]
-                    self.X_test, _, _ = f_name(
-                        self.cfg.DATA.TEST.PATH,
-                        convert_to_rgb=self.cfg.DATA.FORCE_RGB,
-                        preprocess_cfg=preprocess_cfg,
-                        is_mask=False,
-                        preprocess_f=preprocess_fn,
-                    )
-                    if self.cfg.DATA.TEST.LOAD_GT:
-                        print("3) Loading test masks . . .")
-                        self.Y_test, _, _ = f_name(
-                            self.cfg.DATA.TEST.GT_PATH,
-                            check_channel=False,
-                            check_drange=False,
-                            preprocess_cfg=preprocess_cfg,
-                            is_mask=is_y_mask,
-                            preprocess_f=preprocess_fn,
-                        )
-                        if len(self.X_test) != len(self.Y_test):
-                            raise ValueError(
-                                "Different number of raw and ground truth items ({} vs {}). "
-                                "Please check the data!".format(len(self.X_test), len(self.Y_test))
-                            )
-                    else:
-                        self.Y_test = None
-                else:
-                    self.X_test, self.Y_test = None, None
+        print("######################")
+        print("#   LOAD TEST DATA   #")
+        print("######################")
 
-                if self.original_test_path is None:
-                    self.test_filenames = sorted(next(os.walk(self.cfg.DATA.TEST.PATH))[2])
-                    if len(self.test_filenames) == 0:
-                        self.test_filenames = sorted(next(os.walk(self.cfg.DATA.TEST.PATH))[1])
-                else:
-                    self.test_filenames = sorted(next(os.walk(self.original_test_path))[2])
-                    if len(self.test_filenames) == 0:
-                        self.test_filenames = sorted(next(os.walk(self.original_test_path))[1])
-            else:
-                # The test is the validation, and as it is only available when validation is obtained from train and when
-                # cross validation is enabled, the test set files reside in the train folder
-                self.test_filenames = sorted(next(os.walk(self.cfg.DATA.TRAIN.PATH))[2])
-                self.X_test, self.Y_test = None, None
-                if self.cross_val_samples_ids is None:
-                    # Split the test as it was the validation when train is not enabled
-                    skf = StratifiedKFold(
-                        n_splits=self.cfg.DATA.VAL.CROSS_VAL_NFOLD,
-                        shuffle=self.cfg.DATA.VAL.RANDOM,
-                        random_state=self.cfg.SYSTEM.SEED,
-                    )
-                    fold = 1
-                    test_index = None
-                    A = B = np.zeros(len(self.test_filenames))
-
-                    for _, te_index in skf.split(A, B):
-                        if self.cfg.DATA.VAL.CROSS_VAL_FOLD == fold:
-                            self.cross_val_samples_ids = te_index.copy()
-                            break
-                        fold += 1
-                    if len(self.cross_val_samples_ids) > 5:
-                        print(
-                            "Fold number {} used for test data. Printing the first 5 ids: {}".format(
-                                fold, self.cross_val_samples_ids[:5]
-                            )
-                        )
-                    else:
-                        print(
-                            "Fold number {}. Indexes used in cross validation: {}".format(
-                                fold, self.cross_val_samples_ids
-                            )
-                        )
-
-                if self.cross_val_samples_ids is not None:
-                    self.test_filenames = [
-                        x for i, x in enumerate(self.test_filenames) if i in self.cross_val_samples_ids
-                    ]
-                self.original_test_path = self.orig_train_path
-                self.original_test_mask_path = self.orig_train_mask_path
+        self.X_test, self.Y_test = None, None
+        if self.cfg.DATA.TEST.USE_VAL_AS_TEST:
+            print("Loading train data information to extract the validation to be used as test")
+            self.cfg.merge_from_list(["DATA.TRAIN.IN_MEMORY", False, "DATA.VAL.IN_MEMORY", False])
+            self.load_train_data()
+            self.X_test = list(set([os.path.join(x["dir"], x["filename"]) for x in self.X_val]))
+            self.X_test.sort()
+            self.X_test = [
+                {"dir": os.path.dirname(x), "filename": os.path.basename(x)}
+                for x in self.X_test
+            ]
+            if self.Y_val is not None:
+                self.Y_test = list(set([os.path.join(x["dir"], x["filename"]) for x in self.Y_val]))
+                self.Y_test.sort()
+                self.Y_test = [
+                    {"dir": os.path.dirname(x), "filename": os.path.basename(x)}
+                    for x in self.Y_test
+                ]
+        else:
+            (
+                self.X_test,
+                self.Y_test,
+                self.test_filenames,
+            ) = load_and_prepare_test_data(
+                test_path=self.cfg.DATA.TEST.PATH,
+                test_mask_path=self.cfg.DATA.TEST.GT_PATH if self.use_gt else None,
+                multiple_raw_images=(
+                    self.cfg.PROBLEM.TYPE == "IMAGE_TO_IMAGE"
+                    and self.cfg.PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER
+                ),
+            )
 
     def destroy_test_data(self):
         """
@@ -1319,10 +1059,8 @@ class Base_Workflow(metaclass=ABCMeta):
             del self.Y_test
         if "test_generator" in locals() or "test_generator" in globals():
             del self.test_generator
-        if "_X" in locals() or "_X" in globals():
-            del self._X
-        if "_Y" in locals() or "_Y" in globals():
-            del self._Y
+        if "current_sample" in locals() or "current_sample" in globals():
+            del self.current_sample
 
     def prepare_test_generators(self):
         """
@@ -1332,9 +1070,7 @@ class Base_Workflow(metaclass=ABCMeta):
             print("############################")
             print("#  PREPARE TEST GENERATOR  #")
             print("############################")
-            self.test_generator, self.data_norm = create_test_augmentor(
-                self.cfg, self.X_test, self.Y_test, self.cross_val_samples_ids
-            )
+            self.test_generator, self.data_norm = create_test_augmentor(self.cfg, self.X_test, self.Y_test)
 
     def apply_model_activations(self, pred, training=False):
         """
@@ -1425,36 +1161,34 @@ class Base_Workflow(metaclass=ABCMeta):
             setup_for_distributed(True)
 
         # Process all the images
-        for i, gen_obj in tqdm(
+        for i, self.current_sample in tqdm(
             enumerate(self.test_generator),
             total=len(self.test_generator),
             disable=not is_main_process(),
         ):
-            self._X, X_norm, self._Y, Y_norm = None, None, None, None
-            if "X" in gen_obj:
-                self._X = gen_obj["X"]
-            if "X_norm" in gen_obj:
-                X_norm = gen_obj["X_norm"]
-            if "Y" in gen_obj:
-                self._Y = gen_obj["Y"]
-            if "Y_norm" in gen_obj:
-                Y_norm = gen_obj["Y_norm"]
-            self.processing_filenames = (
-                self.test_filenames[gen_obj["file"]] if isinstance(gen_obj["file"], int) else gen_obj["file"]
-            )
-            self.processing_filenames = [os.path.basename(self.processing_filenames)]
             self.f_numbers = [i]
-            del gen_obj
-
+            if "Y" not in self.current_sample:
+                self.current_sample["Y"] = None
+                
+            discarded = False
             if self.cfg.TEST.BY_CHUNKS.ENABLE and self.cfg.PROBLEM.NDIM == "3D":
-                print(f"[Rank {get_rank()} ({os.getpid()})] Processing image(s): {self.processing_filenames[0]}")
-                self.process_test_sample_by_chunks(self.processing_filenames[0])
+                print(
+                    "[Rank {} ({})] Processing image(s): {}".format(
+                        get_rank(), os.getpid(), self.current_sample["filename"]
+                    )
+                )
+                self.process_test_sample_by_chunks()
             else:
                 if is_main_process():
-                    print("Processing image: {}".format(self.processing_filenames[0]))
-                    self.process_test_sample(norm=(X_norm, Y_norm))
+                    print("Processing image: {}".format(self.current_sample["filename"]))
+                    discarded = self.process_test_sample()
 
-            image_counter += 1
+            # If process_test_sample() returns True means that the sample was skipped due to filter set
+            # up with: DATA.TEST.FILTER_SAMPLES
+            if discarded:
+                print(" Skipping image: {}".format(self.current_sample["filename"]))
+            else:
+                image_counter += 1
 
         self.destroy_test_data()
 
@@ -1497,17 +1231,12 @@ class Base_Workflow(metaclass=ABCMeta):
                     )
             self.print_stats(image_counter)
 
-    def process_test_sample_by_chunks(self, filenames):
+    def process_test_sample_by_chunks(self):
         """
         Function to process a sample in the inference phase. A final H5/Zarr file is created in "TZCYX" or "TZYXC" order
         depending on ``TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER`` ('T' is always included).
-
-        Parameters
-        ----------
-        filenames : List of str
-            Filenames fo the samples to process.
         """
-        filename, file_extension = os.path.splitext(filenames)
+        filename, file_extension = os.path.splitext(self.current_sample["filename"])
         ext = ".h5" if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5" else ".zarr"
         out_data_div_filename = os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename + ext)
 
@@ -1518,31 +1247,31 @@ class Base_Workflow(metaclass=ABCMeta):
                     "or Zarr (.zarr) as with 'TEST.BY_CHUNKS.ENABLE' option enabled H5/Zarr files will be processed by chunks"
                 )
             # Load data
-            if file_extension in [".hdf5", ".h5", ".zarr"]:
-                self._X_file, self._X = read_chunked_data(self._X)
-            else:  # Numpy array
-                if self._X.ndim == 3:
+            if file_extension not in [".hdf5", ".h5", ".zarr"]:  # Numpy array
+                if self.current_sample["X"].ndim == 3:
                     c_pos = -1 if self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER[-1] == "C" else 1
-                    self._X = np.expand_dims(self._X, c_pos)
+                    self.current_sample["X"] = np.expand_dims(self.current_sample["X"], c_pos)
 
             if is_main_process():
-                print(f"Loaded image shape is {self._X.shape}")
+                print("Loaded image shape is {}".format(self.current_sample["X"].shape))
 
-            data_shape = self._X.shape
+            data_shape = self.current_sample["X"].shape
             out_data_shape = [x * y for x, y in zip(data_shape, self.cfg.DATA.PREPROCESS.ZOOM.ZOOM_FACTOR)]
 
-            if self._X.ndim < 3:
+            if self.current_sample["X"].ndim < 3:
                 raise ValueError(
-                    "Loaded image need to have at least 3 dimensions: {} (ndim: {})".format(self._X.shape, self._X.ndim)
+                    "Loaded image need to have at least 3 dimensions: {} (ndim: {})".format(
+                        self.current_sample["X"].shape, self.current_sample["X"].ndim
+                    )
                 )
 
-            if len(self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER) != self._X.ndim:
+            if len(self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER) != self.current_sample["X"].ndim:
                 raise ValueError(
                     "'TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER' value {} does not match the number of dimensions of the loaded H5/Zarr "
                     "file {} (ndim: {})".format(
                         self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
-                        self._X.shape,
-                        self._X.ndim,
+                        self.current_sample["X"].shape,
+                        self.current_sample["X"].ndim,
                     )
                 )
 
@@ -1560,7 +1289,7 @@ class Base_Workflow(metaclass=ABCMeta):
             else:
                 out_data_filename = os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename + "_nodiv" + ext)
                 out_data_mask_filename = os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename + "_mask" + ext)
-            in_data = self._X
+            in_data = self.current_sample["X"]
 
             # Process in charge of processing one predicted patch
             output_handle_proc = mp.Process(
@@ -1595,9 +1324,11 @@ class Base_Workflow(metaclass=ABCMeta):
             load_data_process.daemon = True
             load_data_process.start()
 
-            if "_X_file" in locals() and isinstance(self._X_file, h5py.File):
-                self._X_file.close()
-            del self._X, in_data
+            if "img_file_to_close" in self.current_sample and isinstance(
+                self.current_sample["img_file_to_close"], h5py.File
+            ):
+                self.current_sample["img_file_to_close"].close()
+            del in_data
 
             # Lock the thread inferring until no more patches
             if self.cfg.TEST.VERBOSE and self.cfg.SYSTEM.NUM_GPUS > 1:
@@ -1608,25 +1339,39 @@ class Base_Workflow(metaclass=ABCMeta):
                     break
 
                 img, patch_coords = obj
-                img, _ = self.test_generator.norm_X(img)
-                if self.cfg.TEST.AUGMENTATION:
-                    p = ensemble16_3d_predictions(
-                        img[0],
-                        batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
-                        axis_order_back=self.axis_order_back,
-                        pred_func=self.model_call_func,
-                        axis_order=self.axis_order,
-                        device=self.device,
-                        mode=self.cfg.TEST.AUGMENTATION_MODE,
+
+                # To decide if the patch needs to be processed or not
+                discard = False
+                if self.cfg.DATA.TEST.FILTER_SAMPLES.ENABLE:
+                    discard = sample_satisfy_conds(
+                        img,
+                        self.cfg.DATA.TEST.FILTER_SAMPLES.PROPS,
+                        self.cfg.DATA.TEST.FILTER_SAMPLES.VALUES,
+                        self.cfg.DATA.TEST.FILTER_SAMPLES.SIGNS,
                     )
+
+                if not discard:
+                    img, _ = self.test_generator.norm_X(img)
+                    if self.cfg.TEST.AUGMENTATION:
+                        p = ensemble16_3d_predictions(
+                            img[0],
+                            batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
+                            axis_order_back=self.axis_order_back,
+                            pred_func=self.model_call_func,
+                            axis_order=self.axis_order,
+                            device=self.device,
+                            mode=self.cfg.TEST.AUGMENTATION_MODE,
+                        )
+                    else:
+                        with torch.cuda.amp.autocast():
+                            p = self.model_call_func(img)
+                    p = self.apply_model_activations(p)
+                    # Multi-head concatenation
+                    if isinstance(p, list):
+                        p = torch.cat((p[0], torch.argmax(p[1], axis=1).unsqueeze(1)), dim=1)
+                    p = to_numpy_format(p, self.axis_order_back)
                 else:
-                    with torch.cuda.amp.autocast():
-                        p = self.model_call_func(img)
-                p = self.apply_model_activations(p)
-                # Multi-head concatenation
-                if isinstance(p, list):
-                    p = torch.cat((p[0], torch.argmax(p[1], axis=1).unsqueeze(1)), dim=1)
-                p = to_numpy_format(p, self.axis_order_back)
+                    p = np.zeros(img.shape)
 
                 t_dim, z_dim, y_dim, x_dim, c_dim = order_dimensions(
                     self.cfg.DATA.PREPROCESS.ZOOM.ZOOM_FACTOR,
@@ -1881,30 +1626,22 @@ class Base_Workflow(metaclass=ABCMeta):
             if self.cfg.TEST.VERBOSE:
                 print(f"[Rank {get_rank()} ({os.getpid()})] Synched with main thread. Go for the next sample")
 
-    def process_test_sample(self, norm):
+    def process_test_sample(self):
         """
         Function to process a sample in the inference phase.
-
-        Parameters
-        ----------
-        norm : List of dicts
-            Normalization used during training. Required to denormalize the predictions of the model.
         """
-        # Data channel check
-        if self.cfg.DATA.PATCH_SIZE[-1] != self._X.shape[-1]:
-            raise ValueError(
-                "Channel of the DATA.PATCH_SIZE given {} does not correspond with the loaded image {}. "
-                "Please, check the channels of the images!".format(self.cfg.DATA.PATCH_SIZE[-1], self._X.shape[-1])
-            )
+        # Skip processing image
+        if "discard" in self.current_sample["X"] and self.current_sample["X"]["discard"]:
+            return True
 
         # Save test_input if the user wants to export the model to BMZ later
         if "test_input" not in self.bmz_config:
             if self.cfg.PROBLEM.NDIM == "2D":
-                self.bmz_config["test_input"] = self._X[0][
+                self.bmz_config["test_input"] = self.current_sample["X"][0][
                     : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1]
                 ].copy()
             else:
-                self.bmz_config["test_input"] = self._X[0][
+                self.bmz_config["test_input"] = self.current_sample["X"][0][
                     : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1], : self.cfg.DATA.PATCH_SIZE[2]
                 ].copy()
 
@@ -1913,99 +1650,81 @@ class Base_Workflow(metaclass=ABCMeta):
         #################
         if not self.cfg.TEST.FULL_IMG or self.cfg.PROBLEM.NDIM == "3D":
             if not self.cfg.TEST.REUSE_PREDICTIONS:
-                # Reflect data to complete the needed shape
-                if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE:
-                    reflected_orig_shape = self._X.shape
-                    self._X = np.expand_dims(
-                        pad_and_reflect(
-                            self._X[0],
-                            self.cfg.DATA.PATCH_SIZE,
-                            verbose=self.cfg.TEST.VERBOSE,
-                        ),
-                        0,
-                    )
-                    if self._Y is not None:
-                        self._Y = np.expand_dims(
-                            pad_and_reflect(
-                                self._Y[0],
-                                self.cfg.DATA.PATCH_SIZE,
-                                verbose=self.cfg.TEST.VERBOSE,
-                            ),
-                            0,
-                        )
-
-                original_data_shape = self._X.shape
+                original_data_shape = self.current_sample["X"].shape
 
                 # Crop if necessary
-                if self._X.shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
+                if self.current_sample["X"].shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
                     # Copy X to be used later in full image
                     if self.cfg.PROBLEM.NDIM != "3D":
-                        X_original = self._X.copy()
+                        X_original = self.current_sample["X"].copy()
 
-                    if self._Y is not None and self._X.shape[:-1] != self._Y.shape[:-1]:
+                    if (
+                        self.current_sample["Y"] is not None
+                        and self.current_sample["X"].shape[:-1] != self.current_sample["Y"].shape[:-1]
+                    ):
                         raise ValueError(
                             "Image {} and mask {} differ in shape (without considering the channels, i.e. last dimension)".format(
-                                self._X.shape, self._Y.shape
+                                self.current_sample["X"].shape, self.current_sample["Y"].shape
                             )
                         )
 
                     if self.cfg.PROBLEM.NDIM == "2D":
                         obj = crop_data_with_overlap(
-                            self._X,
+                            self.current_sample["X"],
                             self.cfg.DATA.PATCH_SIZE,
-                            data_mask=self._Y,
+                            data_mask=self.current_sample["Y"],
                             overlap=self.cfg.DATA.TEST.OVERLAP,
                             padding=self.cfg.DATA.TEST.PADDING,
                             verbose=self.cfg.TEST.VERBOSE,
                         )
-                        if self._Y is not None:
-                            self._X, self._Y = obj
+                        if self.current_sample["Y"] is not None:
+                            self.current_sample["X"], self.current_sample["Y"], _ = obj
                         else:
-                            self._X = obj
+                            self.current_sample["X"], _ = obj
                         del obj
                     else:
                         if self.cfg.TEST.REDUCE_MEMORY:
-                            self._X = crop_3D_data_with_overlap(
-                                self._X[0],
+                            self.current_sample["X"] = crop_3D_data_with_overlap(
+                                self.current_sample["X"][0],
                                 self.cfg.DATA.PATCH_SIZE,
                                 overlap=self.cfg.DATA.TEST.OVERLAP,
                                 padding=self.cfg.DATA.TEST.PADDING,
                                 verbose=self.cfg.TEST.VERBOSE,
                                 median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING,
                             )
-                            if self._Y is not None:
-                                self._Y = crop_3D_data_with_overlap(
-                                    self._Y[0],
-                                    self.cfg.DATA.PATCH_SIZE[:-1] + (self._Y.shape[-1],),
+                            if self.current_sample["Y"] is not None:
+                                self.current_sample["Y"] = crop_3D_data_with_overlap(
+                                    self.current_sample["Y"][0],
+                                    self.cfg.DATA.PATCH_SIZE[:-1] + (self.current_sample["Y"].shape[-1],),
                                     overlap=self.cfg.DATA.TEST.OVERLAP,
                                     padding=self.cfg.DATA.TEST.PADDING,
                                     verbose=self.cfg.TEST.VERBOSE,
                                     median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING,
                                 )
                         else:
-                            if self._Y is not None:
-                                self._Y = self._Y[0]
+                            if self.current_sample["Y"] is not None:
+                                self.current_sample["Y"] = self.current_sample["Y"][0]
                             obj = crop_3D_data_with_overlap(
-                                self._X[0],
+                                self.current_sample["X"][0],
                                 self.cfg.DATA.PATCH_SIZE,
-                                data_mask=self._Y,
+                                data_mask=self.current_sample["Y"],
                                 overlap=self.cfg.DATA.TEST.OVERLAP,
                                 padding=self.cfg.DATA.TEST.PADDING,
                                 verbose=self.cfg.TEST.VERBOSE,
                                 median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING,
                             )
-                            if self._Y is not None:
-                                self._X, self._Y = obj
+                            if self.current_sample["Y"] is not None:
+                                self.current_sample["X"], self.current_sample["Y"], _ = obj
                             else:
-                                self._X = obj
+                                self.current_sample["X"], _ = obj
                             del obj
 
                 # Predict each patch
                 if self.cfg.TEST.AUGMENTATION:
-                    for k in tqdm(range(self._X.shape[0]), leave=False):
+                    for k in tqdm(range(self.current_sample["X"].shape[0]), leave=False):
                         if self.cfg.PROBLEM.NDIM == "2D":
                             p = ensemble8_2d_predictions(
-                                self._X[k],
+                                self.current_sample["X"][k],
                                 axis_order_back=self.axis_order_back,
                                 pred_func=self.model_call_func,
                                 axis_order=self.axis_order,
@@ -2014,7 +1733,7 @@ class Base_Workflow(metaclass=ABCMeta):
                             )
                         else:
                             p = ensemble16_3d_predictions(
-                                self._X[k],
+                                self.current_sample["X"][k],
                                 batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
                                 axis_order_back=self.axis_order_back,
                                 pred_func=self.model_call_func,
@@ -2028,11 +1747,11 @@ class Base_Workflow(metaclass=ABCMeta):
                             p = torch.cat((p[0], torch.argmax(p[1], axis=1).unsqueeze(1)), dim=1)
 
                         # Calculate the metrics
-                        if self._Y is not None:
+                        if self.current_sample["Y"] is not None:
                             metric_values = self.metric_calculation(
                                 p,
                                 to_pytorch_format(
-                                    self._Y[k],
+                                    self.current_sample["Y"][k],
                                     self.axis_order,
                                     self.device,
                                     dtype=self.loss_dtype,
@@ -2047,19 +1766,19 @@ class Base_Workflow(metaclass=ABCMeta):
 
                         p = to_numpy_format(p, self.axis_order_back)
                         if "pred" not in locals():
-                            pred = np.zeros((self._X.shape[0],) + p.shape[1:], dtype=self.dtype)
+                            pred = np.zeros((self.current_sample["X"].shape[0],) + p.shape[1:], dtype=self.dtype)
                         pred[k] = p
                 else:
-                    l = int(math.ceil(self._X.shape[0] / self.cfg.TRAIN.BATCH_SIZE))
+                    l = int(math.ceil(self.current_sample["X"].shape[0] / self.cfg.TRAIN.BATCH_SIZE))
                     for k in tqdm(range(l), leave=False):
                         top = (
                             (k + 1) * self.cfg.TRAIN.BATCH_SIZE
-                            if (k + 1) * self.cfg.TRAIN.BATCH_SIZE < self._X.shape[0]
-                            else self._X.shape[0]
+                            if (k + 1) * self.cfg.TRAIN.BATCH_SIZE < self.current_sample["X"].shape[0]
+                            else self.current_sample["X"].shape[0]
                         )
                         with torch.cuda.amp.autocast():
                             p = self.apply_model_activations(
-                                self.model_call_func(self._X[k * self.cfg.TRAIN.BATCH_SIZE : top])
+                                self.model_call_func(self.current_sample["X"][k * self.cfg.TRAIN.BATCH_SIZE : top])
                             )
                             # Multi-head concatenation
                             if isinstance(p, list):
@@ -2069,11 +1788,11 @@ class Base_Workflow(metaclass=ABCMeta):
                                 )
 
                         # Calculate the metrics
-                        if self._Y is not None:
+                        if self.current_sample["Y"] is not None:
                             metric_values = self.metric_calculation(
                                 p,
                                 to_pytorch_format(
-                                    self._Y[k * self.cfg.TRAIN.BATCH_SIZE : top],
+                                    self.current_sample["Y"][k * self.cfg.TRAIN.BATCH_SIZE : top],
                                     self.axis_order,
                                     self.device,
                                     dtype=self.loss_dtype,
@@ -2088,12 +1807,12 @@ class Base_Workflow(metaclass=ABCMeta):
 
                         p = to_numpy_format(p, self.axis_order_back)
                         if "pred" not in locals():
-                            pred = np.zeros((self._X.shape[0],) + p.shape[1:], dtype=self.dtype)
+                            pred = np.zeros((self.current_sample["X"].shape[0],) + p.shape[1:], dtype=self.dtype)
                         pred[k * self.cfg.TRAIN.BATCH_SIZE : top] = p
 
-                # Delete self._X as in 3D there is no full image
+                # Delete self.current_sample["X"] as in 3D there is no full image
                 if self.cfg.PROBLEM.NDIM == "3D":
-                    del self._X, p
+                    del self.current_sample["X"], p
 
                 # Reconstruct the predictions
                 if original_data_shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
@@ -2109,10 +1828,10 @@ class Base_Workflow(metaclass=ABCMeta):
                             overlap=self.cfg.DATA.TEST.OVERLAP,
                             verbose=self.cfg.TEST.VERBOSE,
                         )
-                        if self._Y is not None:
-                            self._Y = f_name(
-                                self._Y,
-                                original_data_shape[:-1] + (self._Y.shape[-1],),
+                        if self.current_sample["Y"] is not None:
+                            self.current_sample["Y"] = f_name(
+                                self.current_sample["Y"],
+                                original_data_shape[:-1] + (self.current_sample["Y"].shape[-1],),
                                 padding=self.cfg.DATA.TEST.PADDING,
                                 overlap=self.cfg.DATA.TEST.OVERLAP,
                                 verbose=self.cfg.TEST.VERBOSE,
@@ -2121,47 +1840,49 @@ class Base_Workflow(metaclass=ABCMeta):
                         obj = f_name(
                             pred,
                             original_data_shape[:-1] + (pred.shape[-1],),
-                            data_mask=self._Y,
+                            data_mask=self.current_sample["Y"],
                             padding=self.cfg.DATA.TEST.PADDING,
                             overlap=self.cfg.DATA.TEST.OVERLAP,
                             verbose=self.cfg.TEST.VERBOSE,
                         )
-                        if self._Y is not None:
-                            pred, self._Y = obj
+                        if self.current_sample["Y"] is not None:
+                            pred, self.current_sample["Y"] = obj
                         else:
                             pred = obj
                         del obj
                     if self.cfg.PROBLEM.NDIM != "3D":
-                        self._X = X_original.copy()
+                        self.current_sample["X"] = X_original.copy()
                         del X_original
                     else:
                         pred = np.expand_dims(pred, 0)
-                        if self._Y is not None:
-                            self._Y = np.expand_dims(self._Y, 0)
+                        if self.current_sample["Y"] is not None:
+                            self.current_sample["Y"] = np.expand_dims(self.current_sample["Y"], 0)
 
                 if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE:
-                    if self.cfg.PROBLEM.NDIM == "2D":
-                        pred = pred[:, -reflected_orig_shape[1] :, -reflected_orig_shape[2] :]
-                        if self._Y is not None:
-                            self._Y = self._Y[
-                                :,
-                                -reflected_orig_shape[1] :,
-                                -reflected_orig_shape[2] :,
-                            ]
-                    else:
-                        pred = pred[
-                            :,
-                            -reflected_orig_shape[1] :,
-                            -reflected_orig_shape[2] :,
-                            -reflected_orig_shape[3] :,
-                        ]
-                        if self._Y is not None:
-                            self._Y = self._Y[
+                    reflected_orig_shape = (1,) + self.current_sample["reflected_orig_shape"]
+                    if reflected_orig_shape != pred.shape:
+                        if self.cfg.PROBLEM.NDIM == "2D":
+                            pred = pred[:, -reflected_orig_shape[1] :, -reflected_orig_shape[2] :]
+                            if self.current_sample["Y"] is not None:
+                                self.current_sample["Y"] = self.current_sample["Y"][
+                                    :,
+                                    -reflected_orig_shape[1] :,
+                                    -reflected_orig_shape[2] :,
+                                ]
+                        else:
+                            pred = pred[
                                 :,
                                 -reflected_orig_shape[1] :,
                                 -reflected_orig_shape[2] :,
                                 -reflected_orig_shape[3] :,
                             ]
+                            if self.current_sample["Y"] is not None:
+                                self.current_sample["Y"] = self.current_sample["Y"][
+                                    :,
+                                    -reflected_orig_shape[1] :,
+                                    -reflected_orig_shape[2] :,
+                                    -reflected_orig_shape[3] :,
+                                ]
 
                 # Apply mask
                 if self.cfg.TEST.POST_PROCESSING.APPLY_MASK:
@@ -2172,7 +1893,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     save_tif(
                         pred,
                         self.cfg.PATHS.RESULT_DIR.PER_IMAGE,
-                        self.processing_filenames,
+                        [self.current_sample["filename"]],
                         verbose=self.cfg.TEST.VERBOSE,
                     )
 
@@ -2180,15 +1901,17 @@ class Base_Workflow(metaclass=ABCMeta):
                 if self.cfg.MODEL.N_CLASSES > 2 and self.cfg.DATA.TEST.ARGMAX_TO_OUTPUT:
                     _type = np.uint8 if self.cfg.MODEL.N_CLASSES < 255 else np.uint16
                     pred = np.expand_dims(np.argmax(pred, -1), -1).astype(_type)
-                    if self._Y is not None:
-                        self._Y = np.expand_dims(np.argmax(self._Y, -1), -1).astype(_type)
+                    if self.current_sample["Y"] is not None:
+                        self.current_sample["Y"] = np.expand_dims(np.argmax(self.current_sample["Y"], -1), -1).astype(
+                            _type
+                        )
 
                 # Calculate the metrics
-                if self._Y is not None:
+                if self.current_sample["Y"] is not None:
                     metric_values = self.metric_calculation(
                         to_pytorch_format(pred, self.axis_order, self.device),
                         to_pytorch_format(
-                            self._Y,
+                            self.current_sample["Y"],
                             self.axis_order,
                             self.device,
                             dtype=self.loss_dtype,
@@ -2207,11 +1930,11 @@ class Base_Workflow(metaclass=ABCMeta):
                     pred = apply_post_processing(self.cfg, pred)
 
                     # Calculate the metrics
-                    if self._Y is not None:
+                    if self.current_sample["Y"] is not None:
                         metric_values = self.metric_calculation(
                             to_pytorch_format(pred, self.axis_order, self.device),
                             to_pytorch_format(
-                                self._Y,
+                                self.current_sample["Y"],
                                 self.axis_order,
                                 self.device,
                                 dtype=self.loss_dtype,
@@ -2226,7 +1949,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     save_tif(
                         pred,
                         self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,
-                        self.processing_filenames,
+                        [self.current_sample["filename"]],
                         verbose=self.cfg.TEST.VERBOSE,
                     )
             else:
@@ -2236,30 +1959,34 @@ class Base_Workflow(metaclass=ABCMeta):
                     if self.post_processing["per_image"]
                     else self.cfg.PATHS.RESULT_DIR.PER_IMAGE
                 )
-                test_file = os.path.join(folder, self.test_filenames[self.f_numbers[0]])
-                pred = read_img(test_file, is_3d=self.cfg.PROBLEM.NDIM == "3D")
+                test_file = os.path.join(folder, [self.current_sample["filename"]])
+                pred = read_img_as_ndarray(test_file, is_3d=self.cfg.PROBLEM.NDIM == "3D")
                 pred = np.expand_dims(pred, 0)  # expand dimensions to include "batch"
 
             self.after_merge_patches(pred)
 
             if self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
                 self.all_pred.append(pred)
-                if self._Y is not None:
-                    self.all_gt.append(self._Y)
+                if self.current_sample["Y"] is not None:
+                    self.all_gt.append(self.current_sample["Y"])
 
         ##################
         ### FULL IMAGE ###
         ##################
         if self.cfg.TEST.FULL_IMG and self.cfg.PROBLEM.NDIM == "2D":
-            self._X, o_test_shape = check_downsample_division(self._X, len(self.cfg.MODEL.FEATURE_MAPS) - 1)
+            self.current_sample["X"], o_test_shape = check_downsample_division(
+                self.current_sample["X"], len(self.cfg.MODEL.FEATURE_MAPS) - 1
+            )
             if not self.cfg.TEST.REUSE_PREDICTIONS:
-                if self._Y is not None:
-                    self._Y, _ = check_downsample_division(self._Y, len(self.cfg.MODEL.FEATURE_MAPS) - 1)
+                if self.current_sample["Y"] is not None:
+                    self.current_sample["Y"], _ = check_downsample_division(
+                        self.current_sample["Y"], len(self.cfg.MODEL.FEATURE_MAPS) - 1
+                    )
 
                 # Make the prediction
                 if self.cfg.TEST.AUGMENTATION:
                     pred = ensemble8_2d_predictions(
-                        self._X[0],
+                        self.current_sample["X"][0],
                         axis_order_back=self.axis_order_back,
                         pred_func=self.model_call_func,
                         axis_order=self.axis_order,
@@ -2268,24 +1995,24 @@ class Base_Workflow(metaclass=ABCMeta):
                     )
                 else:
                     with torch.cuda.amp.autocast():
-                        pred = self.model_call_func(self._X)
+                        pred = self.model_call_func(self.current_sample["X"])
                 pred = self.apply_model_activations(pred)
                 # Multi-head concatenation
                 if isinstance(pred, list):
                     pred = torch.cat((pred[0], torch.argmax(pred[1], axis=1).unsqueeze(1)), dim=1)
                 pred = to_numpy_format(pred, self.axis_order_back)
-                del self._X
+                del self.current_sample["X"]
 
                 # Recover original shape if padded with check_downsample_division
                 pred = pred[:, : o_test_shape[1], : o_test_shape[2]]
-                if self._Y is not None:
-                    self._Y = self._Y[:, : o_test_shape[1], : o_test_shape[2]]
+                if self.current_sample["Y"] is not None:
+                    self.current_sample["Y"] = self.current_sample["Y"][:, : o_test_shape[1], : o_test_shape[2]]
 
                 # Save image
                 save_tif(
                     pred,
                     self.cfg.PATHS.RESULT_DIR.FULL_IMAGE,
-                    self.processing_filenames,
+                    [self.current_sample["filename"]],
                     verbose=self.cfg.TEST.VERBOSE,
                 )
 
@@ -2293,18 +2020,20 @@ class Base_Workflow(metaclass=ABCMeta):
                 if self.cfg.MODEL.N_CLASSES > 2 and self.cfg.DATA.TEST.ARGMAX_TO_OUTPUT:
                     _type = np.uint8 if self.cfg.MODEL.N_CLASSES < 255 else np.uint16
                     pred = np.expand_dims(np.argmax(pred, -1), -1).astype(_type)
-                    if self._Y is not None:
-                        self._Y = np.expand_dims(np.argmax(self._Y, -1), -1).astype(_type)
+                    if self.current_sample["Y"] is not None:
+                        self.current_sample["Y"] = np.expand_dims(np.argmax(self.current_sample["Y"], -1), -1).astype(
+                            _type
+                        )
 
                 if self.cfg.TEST.POST_PROCESSING.APPLY_MASK:
                     pred = apply_binary_mask(pred, self.cfg.DATA.TEST.BINARY_MASKS)
 
                 # Calculate the metrics
-                if self._Y is not None:
+                if self.current_sample["Y"] is not None:
                     metric_values = self.metric_calculation(
                         to_pytorch_format(pred, self.axis_order, self.device),
                         to_pytorch_format(
-                            self._Y,
+                            self.current_sample["Y"],
                             self.axis_order,
                             self.device,
                             dtype=self.loss_dtype,
@@ -2319,15 +2048,15 @@ class Base_Workflow(metaclass=ABCMeta):
                 # load prediction from file
                 test_file = os.path.join(
                     self.cfg.PATHS.RESULT_DIR.FULL_IMAGE,
-                    self.test_filenames[self.f_numbers[0]],
+                    [self.current_sample["filename"]],
                 )
-                pred = read_img(test_file, is_3d=self.cfg.PROBLEM.NDIM == "3D")
+                pred = read_img_as_ndarray(test_file, is_3d=self.cfg.PROBLEM.NDIM == "3D")
                 pred = np.expand_dims(pred, 0)  # expand dimensions to include "batch"
 
             if self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
                 self.all_pred.append(pred)
-                if self._Y is not None:
-                    self.all_gt.append(self._Y)
+                if self.current_sample["Y"] is not None:
+                    self.all_gt.append(self.current_sample["Y"])
 
             self.after_full_image(pred)
 
@@ -2513,8 +2242,6 @@ class Base_Workflow(metaclass=ABCMeta):
         if pred.ndim == 4:
             pred = np.expand_dims(pred, 0)
 
-        fname, file_extension = os.path.splitext(os.path.basename(filename))
-        self.processing_filenames = [fname + ".tif"]
         self.after_merge_patches(pred)
 
     @abstractmethod
@@ -2650,7 +2377,14 @@ def extract_patch_from_dataset(data, cfg, input_queue, extract_info_queue, verbo
             output_order="TZYXC",
             default_value=1,
         )
-        patch_coords = (np.array([z_dim, y_dim, x_dim]) * np.array(patch_coords).T).T
+        patch_coords = np.array(
+            [
+                [patch_coords["z_start"], patch_coords["z_end"]],
+                [patch_coords["y_start"], patch_coords["y_end"]],
+                [patch_coords["x_start"], patch_coords["x_end"]],
+            ]
+        )
+        patch_coords = (np.array([z_dim, y_dim, x_dim]) * patch_coords.T).T
         img = zoom(img, (t_dim, z_dim, y_dim, x_dim, c_dim), order=0, mode="nearest")
 
         input_queue.put([img, patch_coords])

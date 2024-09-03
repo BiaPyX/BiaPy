@@ -42,7 +42,7 @@ for n, id_ in tqdm(enumerate(ids), total=len(ids)):
         mask = np.expand_dims(mask, axis=0)
 
     if img.shape != crop_shape[:2]+(img.shape[-1],):
-        img, mask = crop_data_with_overlap(img, crop_shape[:2]+(img.shape[-1],), data_mask=mask, overlap=overlap,
+        img, mask, _ = crop_data_with_overlap(img, crop_shape[:2]+(img.shape[-1],), data_mask=mask, overlap=overlap,
                                               padding=padding, verbose=verbose)
     else:
         img = np.expand_dims(img, axis=0)

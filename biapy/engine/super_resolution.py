@@ -30,7 +30,6 @@ from biapy.data.pre_processing import (
     undo_norm_range01,
 )
 
-
 class Super_resolution_Workflow(Base_Workflow):
     """
     Semantic segmentation workflow where the goal is to assign a class to each pixel of the input image.
@@ -63,6 +62,7 @@ class Super_resolution_Workflow(Base_Workflow):
 
         # Workflow specific training variables
         self.mask_path = cfg.DATA.TRAIN.GT_PATH
+        self.is_y_mask = False
         self.load_Y_val = True
 
     def define_metrics(self):
@@ -225,55 +225,54 @@ class Super_resolution_Workflow(Base_Workflow):
                     metric_logger.meters[list_names_to_use[i]].update(val)
         return out_metrics
 
-    def process_test_sample(self, norm):
+    def process_test_sample(self):
         """
         Function to process a sample in the inference phase.
-
-        Parameters
-        ----------
-        norm : List of dicts
-            Normalization used during training. Required to denormalize the predictions of the model.
         """
+        # Skip processing image 
+        if "discard" in self.current_sample["X"] and self.current_sample["X"]["discard"]: 
+            return True
+
         # Save test_input if the user wants to export the model to BMZ later
         if "test_input" not in self.bmz_config:
             if self.cfg.PROBLEM.NDIM == "2D":
-                self.bmz_config["test_input"] = self._X[0][
+                self.bmz_config["test_input"] = self.current_sample["X"][0][
                     : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1]
                 ].copy()
             else:
-                self.bmz_config["test_input"] = self._X[0][
+                self.bmz_config["test_input"] = self.current_sample["X"][0][
                     : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1], : self.cfg.DATA.PATCH_SIZE[2]
                 ].copy()
 
         if self.cfg.PROBLEM.NDIM == "2D":
             original_data_shape = (
-                self._X.shape[0],
-                self._X.shape[1] * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[0],
-                self._X.shape[2] * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[1],
-                self._X.shape[3],
+                self.current_sample["X"].shape[0],
+                self.current_sample["X"].shape[1] * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[0],
+                self.current_sample["X"].shape[2] * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[1],
+                self.current_sample["X"].shape[3],
             )
         else:
             original_data_shape = (
-                self._X.shape[0],
-                self._X.shape[1] * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[0],
-                self._X.shape[2] * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[1],
-                self._X.shape[3] * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[2],
-                self._X.shape[4],
+                self.current_sample["X"].shape[0],
+                self.current_sample["X"].shape[1] * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[0],
+                self.current_sample["X"].shape[2] * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[1],
+                self.current_sample["X"].shape[3] * self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING[2],
+                self.current_sample["X"].shape[4],
             )
 
         # Crop if necessary
-        if self._X.shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
+        if self.current_sample["X"].shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
             if self.cfg.PROBLEM.NDIM == "2D":
-                self._X = crop_data_with_overlap(
-                    self._X,
+                self.current_sample["X"], _ = crop_data_with_overlap(
+                    self.current_sample["X"],
                     self.cfg.DATA.PATCH_SIZE,
                     overlap=self.cfg.DATA.TEST.OVERLAP,
                     padding=self.cfg.DATA.TEST.PADDING,
                     verbose=self.cfg.TEST.VERBOSE,
                 )
             else:
-                self._X = crop_3D_data_with_overlap(
-                    self._X[0],
+                self.current_sample["X"], _ = crop_3D_data_with_overlap(
+                    self.current_sample["X"][0],
                     self.cfg.DATA.PATCH_SIZE,
                     overlap=self.cfg.DATA.TEST.OVERLAP,
                     padding=self.cfg.DATA.TEST.PADDING,
@@ -282,10 +281,10 @@ class Super_resolution_Workflow(Base_Workflow):
 
         # Predict each patch
         if self.cfg.TEST.AUGMENTATION:
-            for k in tqdm(range(self._X.shape[0]), leave=False, disable=not is_main_process()):
+            for k in tqdm(range(self.current_sample["X"].shape[0]), leave=False, disable=not is_main_process()):
                 if self.cfg.PROBLEM.NDIM == "2D":
                     p = ensemble8_2d_predictions(
-                        self._X[k],
+                        self.current_sample["X"][k],
                         axis_order_back=self.axis_order_back,
                         pred_func=self.model_call_func,
                         axis_order=self.axis_order,
@@ -293,7 +292,7 @@ class Super_resolution_Workflow(Base_Workflow):
                     )
                 else:
                     p = ensemble16_3d_predictions(
-                        self._X[k],
+                        self.current_sample["X"][k],
                         batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
                         axis_order_back=self.axis_order_back,
                         pred_func=self.model_call_func,
@@ -303,24 +302,24 @@ class Super_resolution_Workflow(Base_Workflow):
                 p = self.apply_model_activations(p)
                 p = to_numpy_format(p, self.axis_order_back)
                 if "pred" not in locals():
-                    pred = np.zeros((self._X.shape[0],) + p.shape[1:], dtype=self.dtype)
+                    pred = np.zeros((self.current_sample["X"].shape[0],) + p.shape[1:], dtype=self.dtype)
                 pred[k] = p
         else:
-            self._X = to_pytorch_format(self._X, self.axis_order, self.device)
-            l = int(math.ceil(self._X.shape[0] / self.cfg.TRAIN.BATCH_SIZE))
+            self.current_sample["X"] = to_pytorch_format(self.current_sample["X"], self.axis_order, self.device)
+            l = int(math.ceil(self.current_sample["X"].shape[0] / self.cfg.TRAIN.BATCH_SIZE))
             for k in tqdm(range(l), leave=False, disable=not is_main_process()):
                 top = (
                     (k + 1) * self.cfg.TRAIN.BATCH_SIZE
-                    if (k + 1) * self.cfg.TRAIN.BATCH_SIZE < self._X.shape[0]
-                    else self._X.shape[0]
+                    if (k + 1) * self.cfg.TRAIN.BATCH_SIZE < self.current_sample["X"].shape[0]
+                    else self.current_sample["X"].shape[0]
                 )
                 with torch.cuda.amp.autocast():
-                    p = self.model(self._X[k * self.cfg.TRAIN.BATCH_SIZE : top])
+                    p = self.model(self.current_sample["X"][k * self.cfg.TRAIN.BATCH_SIZE : top])
                 p = to_numpy_format(self.apply_model_activations(p), self.axis_order_back)
                 if "pred" not in locals():
-                    pred = np.zeros((self._X.shape[0],) + p.shape[1:], dtype=self.dtype)
+                    pred = np.zeros((self.current_sample["X"].shape[0],) + p.shape[1:], dtype=self.dtype)
                 pred[k * self.cfg.TRAIN.BATCH_SIZE : top] = p
-        del self._X, p
+        del self.current_sample["X"], p
 
         # Reconstruct the predictions
         if original_data_shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
@@ -352,8 +351,32 @@ class Super_resolution_Workflow(Base_Workflow):
             if self.cfg.PROBLEM.NDIM == "3D":
                 pred = np.expand_dims(pred, 0)
 
+        if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE:
+            reflected_orig_shape = (1,) + self.current_sample["reflected_orig_shape"]
+            if reflected_orig_shape != pred.shape:
+                if self.cfg.PROBLEM.NDIM == "2D":
+                    pred = pred[:, -reflected_orig_shape[1] :, -reflected_orig_shape[2] :]
+                    if self.current_sample["Y"] is not None:
+                        self.current_sample["Y"] = self.current_sample["Y"][
+                            :, -reflected_orig_shape[1] :, -reflected_orig_shape[2] :
+                        ]
+                else:
+                    pred = pred[
+                        :,
+                        -reflected_orig_shape[1] :,
+                        -reflected_orig_shape[2] :,
+                        -reflected_orig_shape[3] :,
+                    ]
+                    if self.current_sample["Y"] is not None:
+                        self.current_sample["Y"] = self.current_sample["Y"][
+                            :,
+                            -reflected_orig_shape[1] :,
+                            -reflected_orig_shape[2] :,
+                            -reflected_orig_shape[3] :,
+                        ]
+
         # Undo normalization
-        x_norm = norm[0]
+        x_norm = self.current_sample["X_norm"]
         if x_norm["type"] == "div":
             pred = undo_norm_range01(pred, x_norm)
         elif x_norm["type"] == "scale_range":
@@ -377,7 +400,7 @@ class Super_resolution_Workflow(Base_Workflow):
             save_tif(
                 pred,
                 self.cfg.PATHS.RESULT_DIR.PER_IMAGE,
-                self.processing_filenames,
+                [self.current_sample["filename"]],
                 verbose=self.cfg.TEST.VERBOSE,
             )
 
@@ -385,14 +408,14 @@ class Super_resolution_Workflow(Base_Workflow):
         if pred.dtype == np.dtype("uint16"):
             pred = pred.astype(np.float32)
 
-        if self._Y is not None:
-            if self._Y.dtype == np.dtype("uint16"):
-                self._Y = self._Y.astype(np.float32)
+        if self.current_sample["Y"] is not None:
+            if self.current_sample["Y"].dtype == np.dtype("uint16"):
+                self.current_sample["Y"] = self.current_sample["Y"].astype(np.float32)
 
             metric_values = self.metric_calculation(
                 to_pytorch_format(pred, self.axis_order, self.device),
                 to_pytorch_format(
-                    self._Y,
+                    self.current_sample["Y"],
                     self.axis_order,
                     self.device,
                     dtype=self.loss_dtype,

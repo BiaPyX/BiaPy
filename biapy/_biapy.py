@@ -479,21 +479,8 @@ class BiaPy:
             elif self.cfg.DATA.NORMALIZATION.TYPE == "scale_range":
                 preprocessing = [{"id": "scale_range"}]
             else:  # custom
-                custom_mean = -1 
-                custom_std = -1
-                if self.cfg.DATA.NORMALIZATION.APPLICATION_MODE == "dataset":
-                    if not os.path.exists(self.cfg.PATHS.MEAN_INFO_FILE) or not os.path.exists(
-                        self.cfg.PATHS.STD_INFO_FILE
-                    ):
-                        raise FileNotFoundError(
-                            "Not mean/std files found in {} and {}".format(
-                                self.cfg.PATHS.MEAN_INFO_FILE,
-                                self.cfg.PATHS.STD_INFO_FILE,
-                            )
-                        )
-                    if self.cfg.DATA.NORMALIZATION.CUSTOM_MEAN != -1 and self.cfg.DATA.NORMALIZATION.CUSTOM_STD != -1:
-                        custom_mean = float(np.load(self.cfg.PATHS.MEAN_INFO_FILE))
-                        custom_std = float(np.load(self.cfg.PATHS.STD_INFO_FILE))
+                custom_mean = self.cfg.DATA.NORMALIZATION.CUSTOM_MEAN
+                custom_std = self.cfg.DATA.NORMALIZATION.CUSTOM_STD
 
                 if custom_mean != -1 and custom_std != -1:
                     preprocessing = [
@@ -529,7 +516,6 @@ class BiaPy:
                     "axes": axes,
                     "max_percentile": max_percentile,
                     "min_percentile": min_percentile,
-                    "mode": self.cfg.DATA.NORMALIZATION.APPLICATION_MODE,
                 }
                 preprocessing[0]["kwargs"].update(perc_instructions)
         # BMZ, reusing the preprocessing

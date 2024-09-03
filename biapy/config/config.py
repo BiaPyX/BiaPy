@@ -189,9 +189,15 @@ class Config:
         _C.DATA.W_FOREGROUND = 0.94  # Used when _C.DATA.PROBABILITY_MAP=True
         _C.DATA.W_BACKGROUND = 0.06  # Used when _C.DATA.PROBABILITY_MAP=True
 
-        # Whether to reshape the dimensions that does not satisfy the patch shape selected by padding it with reflect. It's not
-        # implemented in super-resolution inference phase workflow (as usually the patch size is small).
+        # Whether to reshape the dimensions that does not satisfy the patch shape selected by padding it with reflect.
         _C.DATA.REFLECT_TO_COMPLETE_SHAPE = False
+        # If 'DATA.PATCH_SIZE' selected has 3 channels, e.g. RGB images are expected, so will force grayscale images to be
+        # converted into RGB (e.g. in ImageNet some of the images are grayscale)
+        _C.DATA.FORCE_RGB = False
+        # If filtering is done, with any of DATA.*.FILTER_SAMPLES.* variables, this will decide how this filtering will be done:
+        #   * True: apply filter image by image. 
+        #   * False: apply filtering sample by sample. Each sample represents a patch within an image.
+        _C.DATA.FILTER_BY_IMAGE = True
 
         _C.DATA.NORMALIZATION = CN()
         # Whether to apply or not a percentile clipping before normalizing the data
@@ -205,17 +211,9 @@ class Config:
         #    and not by 255 or 65535
         #   'custom' to use DATA.NORMALIZATION.CUSTOM_MEAN and DATA.NORMALIZATION.CUSTOM_STD to normalize
         _C.DATA.NORMALIZATION.TYPE = "div"
-        # Whether to apply the normalization by sample ("image") or by all dataset statistics ("dataset").
-        # Used with 'DATA.NORMALIZATION.PERC_CLIP' == 'True' and/or when 'DATA.NORMALIZATION.TYPE' == 'custom'.
-        # Options: ["image", "dataset"]
-        _C.DATA.NORMALIZATION.APPLICATION_MODE = "image"
         # Custom normalization variables: mean and std (they are calculated if not provided)
         _C.DATA.NORMALIZATION.CUSTOM_MEAN = -1.0
         _C.DATA.NORMALIZATION.CUSTOM_STD = -1.0
-
-        # If 'DATA.PATCH_SIZE' selected has 3 channels, e.g. RGB images are expected, so will force grayscale images to be
-        # converted into RGB (e.g. in ImageNet some of the images are grayscale)
-        _C.DATA.FORCE_RGB = False
 
         # Train
         _C.DATA.TRAIN = CN()
@@ -256,13 +254,48 @@ class Config:
         # performing some augmentations, e.g. cutout. If defined it need to be (y,x)/(z,y,x) and needs to be to be a 2D
         # tuple when using _C.PROBLEM.NDIM='2D' and 3D tuple when using _C.PROBLEM.NDIM='3D'
         _C.DATA.TRAIN.RESOLUTION = (-1,)
-        # Minimum foreground percentage that each image loaded need to have to not discard it (only used when TRAIN.IN_MEMORY == True).
-        # This option is only valid for SEMANTIC_SEG, INSTANCE_SEG and DETECTION.
-        _C.DATA.TRAIN.MINIMUM_FOREGROUND_PER = -1.0
         # Order of the axes of the image when using Zarr/H5 images in train data.
         _C.DATA.TRAIN.INPUT_IMG_AXES_ORDER = "TZCYX"
         # Order of the axes of the mask when using Zarr/H5 images in train data.
         _C.DATA.TRAIN.INPUT_MASK_AXES_ORDER = "TZCYX"
+
+        # Remove training images by the conditions based on their properties. When using Zarr each patch within the Zarr will be processed and not
+        # the entire image.
+        # The three variables, DATA.TRAIN.FILTER_SAMPLES.PROPS, DATA.TRAIN.FILTER_SAMPLES.VALUES and DATA.TRAIN.FILTER_SAMPLES.SIGN will compose a list of 
+        # conditions to remove the images. They are list of list of conditions. For instance, the conditions can be like this: [['A'], ['B','C']]. Then, if 
+        # the image satisfies the first list of conditions, only 'A' in this first case (from ['A'] list), or satisfy 'B' and 'C' (from ['B','C'] list) 
+        # it will be removed from the image. In each sublist all the conditions must be satisfied. Available properties are: ['foreground', 'mean', 'min', 'max'].
+        #
+        # Each property descrition:
+        #   * 'foreground' is defined as the mask foreground percentage. This option is only valid for SEMANTIC_SEG, INSTANCE_SEG and DETECTION.
+        #   * 'mean' is defined as the mean value.
+        #   * 'min' is defined as the min value.
+        #   * 'max' is defined as the max value.
+        #
+        # A full example of this filtering:
+        # If you want to remove those samples that have less than 0.00001 and a mean average more than 100 (you need to know image data type) you should
+        # declare the above three variables as follows:
+        #   _C.DATA.TRAIN.FILTER_SAMPLES.PROPS = [['foreground','mean']]
+        #   _C.DATA.TRAIN.FILTER_SAMPLES.VALUES = [[0.00001, 100]]
+        #   _C.DATA.TRAIN.FILTER_SAMPLES.SIGN = [['lt', 'gt']]
+        # You can also concatenate more restrictions and they will be applied in order. For instance, if you want to filter those
+        # samples with a max value more than 1000, and do that before the condition described above, you can define the
+        # variables this way:
+        #   _C.DATA.TRAIN.FILTER_SAMPLES.PROPS = [['max'], ['foreground','mean']]
+        #   _C.DATA.TRAIN.FILTER_SAMPLES.VALUES = [[1000], [0.00001, 100]]
+        #   _C.DATA.TRAIN.FILTER_SAMPLES.SIGN = [['gt'], ['lt', 'gt']]
+        # This way, the images will be removed by 'max' and then by 'foreground' and 'mean'
+        _C.DATA.TRAIN.FILTER_SAMPLES = CN()
+        # Whether to enable or not the filtering by properties
+        _C.DATA.TRAIN.FILTER_SAMPLES.ENABLE = False
+        # List of lists of properties to apply a filter. Available properties are: ['foreground', 'mean', 'min', 'max']
+        _C.DATA.TRAIN.FILTER_SAMPLES.PROPS = []
+        # List of ints/float that represent the values of the properties listed in 'DATA.TRAIN.FILTER_SAMPLES.PROPS'
+        # that the images need to satisfy to not be dropped.
+        _C.DATA.TRAIN.FILTER_SAMPLES.VALUES = []
+        # List of list of signs to do the comparison. Options: ['gt', 'ge', 'lt', 'le'] that corresponds to "greather than", e.g. ">",
+        # "greather equal", e.g. ">=", "less than", e.g. "<", and "less equal" e.g. "<=" comparisons.
+        _C.DATA.TRAIN.FILTER_SAMPLES.SIGNS = []
 
         # PREPROCESSING
         # Same preprocessing will be applied to all selected datasets
@@ -381,6 +414,43 @@ class Config:
         _C.DATA.TEST.RESOLUTION = (-1,)
         # Whether to apply argmax to the predicted images
         _C.DATA.TEST.ARGMAX_TO_OUTPUT = True
+        # Remove test images by the conditions based on their properties. When using Zarr each patch within the Zarr will be processed and not
+        # the entire image.
+        # The three variables, DATA.TEST.FILTER_SAMPLES.PROPS, DATA.TEST.FILTER_SAMPLES.VALUES and DATA.TEST.FILTER_SAMPLES.SIGN will compose a 
+        # list of conditions to remove the images. They are list of list of conditions. For instance, the conditions can be like this: [['A'], ['B','C']]. 
+        # Then, if the image satisfies the first list of conditions, only 'A' in this first case (from ['A'] list), or satisfy 'B' and 'C' (from ['B','C'] list) 
+        # it will be removed from the image. In each sublist all the conditions must be satisfied. Available properties are: ['foreground', 'mean', 'min', 'max'].
+        #
+        # Each property descrition:
+        #   * 'foreground' is defined as the mask foreground percentage. This option is only valid for SEMANTIC_SEG, INSTANCE_SEG and DETECTION.
+        #   * 'mean' is defined as the mean value.
+        #   * 'min' is defined as the min value.
+        #   * 'max' is defined as the max value.
+        #
+        # A full example of this filtering:
+        # If you want to remove those samples that have less than 0.00001 and a mean average more than 100 (you need to know image data type) you should
+        # declare the above three variables as follows:
+        #   _C.DATA.TEST.FILTER_SAMPLES.PROPS = [['foreground','mean']]
+        #   _C.DATA.TEST.FILTER_SAMPLES.VALUES = [[0.00001, 100]]
+        #   _C.DATA.TEST.FILTER_SAMPLES.SIGN = [['lt', 'gt']]
+        # You can also concatenate more restrictions and they will be applied in order. For instance, if you want to filter those
+        # samples with a max value more than 1000, and do that before the condition described above, you can define the
+        # variables this way:
+        #   _C.DATA.TEST.FILTER_SAMPLES.PROPS = [['max'], ['foreground','mean']]
+        #   _C.DATA.TEST.FILTER_SAMPLES.VALUES = [[1000], [0.00001, 100]]
+        #   _C.DATA.TEST.FILTER_SAMPLES.SIGN = [['gt'], ['lt', 'gt']]
+        # This way, the images will be removed by 'max' and then by 'foreground' and 'mean'
+        _C.DATA.TEST.FILTER_SAMPLES = CN()
+        # Whether to enable or not the filtering by properties
+        _C.DATA.TEST.FILTER_SAMPLES.ENABLE = False
+        # List of lists of properties to apply a filter. Available properties are: ['foreground', 'mean', 'min', 'max']
+        _C.DATA.TEST.FILTER_SAMPLES.PROPS = []
+        # List of ints/float that represent the values of the properties listed in 'DATA.TEST.FILTER_SAMPLES.PROPS'
+        # that the images need to satisfy to not be dropped.
+        _C.DATA.TEST.FILTER_SAMPLES.VALUES = []
+        # List of list of signs to do the comparison. Options: ['gt', 'ge', 'lt', 'le'] that corresponds to "greather than", e.g. ">",
+        # "greather equal", e.g. ">=", "less than", e.g. "<", and "less equal" e.g. "<=" comparisons.
+        _C.DATA.TEST.FILTER_SAMPLES.SIGNS = []
 
         # Validation
         _C.DATA.VAL = CN()
@@ -437,7 +507,43 @@ class Config:
         _C.DATA.VAL.INPUT_IMG_AXES_ORDER = "TZCYX"
         # Order of the axes of the mask when using Zarr/H5 images in validation data.
         _C.DATA.VAL.INPUT_MASK_AXES_ORDER = "TZCYX"
-
+        # Remove validation images by the conditions based on their properties. When using Zarr each patch within the Zarr will be processed and not
+        # the entire image. 
+        # The three variables, DATA.VAL.FILTER_SAMPLES.PROPS, DATA.VAL.FILTER_SAMPLES.VALUES and DATA.VAL.FILTER_SAMPLES.SIGN will compose a list of 
+        # conditions to remove the images. They are list of list of conditions. For instance, the conditions can be like this: [['A'], ['B','C']]. Then, 
+        # if the image satisfies the first list of conditions, only 'A' in this first case (from ['A'] list), or satisfy 'B' and 'C' (from ['B','C'] list) 
+        # it will be removed from the image. In each sublist all the conditions must be satisfied. Available properties are: ['foreground', 'mean', 'min', 'max'].
+        #
+        # Each property descrition:
+        #   * 'foreground' is defined as the mask foreground percentage. This option is only valid for SEMANTIC_SEG, INSTANCE_SEG and DETECTION.
+        #   * 'mean' is defined as the mean value.
+        #   * 'min' is defined as the min value.
+        #   * 'max' is defined as the max value.
+        #
+        # A full example of this filtering:
+        # If you want to remove those samples that have less than 0.00001 and a mean average more than 100 (you need to know image data type) you should
+        # declare the above three variables as follows:
+        #   _C.DATA.VAL.FILTER_SAMPLES.PROPS = [['foreground','mean']]
+        #   _C.DATA.VAL.FILTER_SAMPLES.VALUES = [[0.00001, 100]]
+        #   _C.DATA.VAL.FILTER_SAMPLES.SIGN = [['lt', 'gt']]
+        # You can also concatenate more restrictions and they will be applied in order. For instance, if you want to filter those
+        # samples with a max value more than 1000, and do that before the condition described above, you can define the
+        # variables this way:
+        #   _C.DATA.VAL.FILTER_SAMPLES.PROPS = [['max'], ['foreground','mean']]
+        #   _C.DATA.VAL.FILTER_SAMPLES.VALUES = [[1000], [0.00001, 100]]
+        #   _C.DATA.VAL.FILTER_SAMPLES.SIGN = [['gt'], ['lt', 'gt']]
+        # This way, the images will be removed by 'max' and then by 'foreground' and 'mean'
+        _C.DATA.VAL.FILTER_SAMPLES = CN()
+        # Whether to enable or not the filtering by properties
+        _C.DATA.VAL.FILTER_SAMPLES.ENABLE = False
+        # List of lists of properties to apply a filter. Available properties are: ['foreground', 'mean', 'min', 'max']
+        _C.DATA.VAL.FILTER_SAMPLES.PROPS = []
+        # List of ints/float that represent the values of the properties listed in 'DATA.VAL.FILTER_SAMPLES.PROPS'
+        # that the images need to satisfy to not be dropped.
+        _C.DATA.VAL.FILTER_SAMPLES.VALUES = []
+        # List of list of signs to do the comparison. Options: ['gt', 'ge', 'lt', 'le'] that corresponds to "greather than", e.g. ">",
+        # "greather equal", e.g. ">=", "less than", e.g. "<", and "less equal" e.g. "<=" comparisons.
+        _C.DATA.VAL.FILTER_SAMPLES.SIGNS = []
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Data augmentation (DA)
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
