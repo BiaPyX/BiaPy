@@ -15,9 +15,7 @@ import torch.distributed as dist
 from scipy.ndimage import zoom
 
 from bioimageio.core import create_prediction_pipeline
-from bioimageio.spec import load_description, InvalidDescr
-from bioimageio.spec.model.v0_5 import ModelDescr
-from bioimageio.core.digest_spec import get_test_inputs
+from bioimageio.spec import load_description
 
 from biapy.config.config import Config
 from biapy.models import (
@@ -25,6 +23,7 @@ from biapy.models import (
     build_torchvision_model,
     build_bmz_model,
     check_bmz_args,
+    check_model_restrictions,
 )
 from biapy.engine import prepare_optimizer, build_callbacks
 from biapy.data.generators import (
@@ -205,171 +204,8 @@ class Base_Workflow(metaclass=ABCMeta):
             print("Loading BioImage Model Zoo pretrained model . . .")
             self.bmz_config["original_bmz_config"] = load_description(self.cfg.MODEL.BMZ.SOURCE_MODEL_ID)
 
-            # let's make sure we have a valid model...
-            if isinstance(self.bmz_config["original_bmz_config"], InvalidDescr):
-                raise ValueError(f"Failed to load {self.cfg.MODEL.SOURCE}")
-
-            self.bmz_config["original_model_spec_version"] = "v0_4"
-            if isinstance(self.bmz_config["original_bmz_config"], ModelDescr):
-                self.bmz_config["original_model_spec_version"] = "v0_5"
-
-            # 1) Change PATCH_SIZE with the one stored in the RDF
-            inputs = get_test_inputs(self.bmz_config["original_bmz_config"])
-            if "input0" in inputs.members:
-                input_image_shape = inputs.members["input0"]._data.shape
-            elif "raw" in inputs.members:
-                input_image_shape = inputs.members["raw"]._data.shape
-            else:
-                raise ValueError(f"Couldn't load input info from BMZ model's RDF: {inputs}")
-            # if not self.bmz_config['original_model_spec_version']:
-            #     input_image = np.load(download(self.bmz_config['original_bmz_config'].test_inputs[0]).path)
-            # else:
-            #     input_image = np.load(download(self.bmz_config['original_bmz_config'].inputs[0].test_tensor.source.absolute()).path)
-
-            opts = []
-            if self.cfg.DATA.PATCH_SIZE != input_image_shape[2:] + (input_image_shape[1],):
-                opts += [
-                    "DATA.PATCH_SIZE",
-                    input_image_shape[2:] + (input_image_shape[1],),
-                ]
-                print(
-                    "[BMZ] Changed 'DATA.PATCH_SIZE' from {} to {} as defined in the RDF".format(
-                        self.cfg.DATA.PATCH_SIZE, opts[1]
-                    )
-                )
-
-            # 2) Change preprocessing to the one stablished by BMZ
-            print(
-                f"[BMZ] Overriding preprocessing steps to the ones fixed in BMZ model: {self.bmz_config['preprocessing']}"
-            )
-            if isinstance(self.bmz_config["preprocessing"], list) and len(self.bmz_config["preprocessing"]) > 1:
-                raise ValueError("More than one preprocessing from BMZ not implemented yet")
-
-            # Translate BMZ keywords into BiaPy's
-            if len(self.bmz_config["preprocessing"]) > 0:
-                # 'zero_mean_unit_variance' norm of BMZ is as our 'custom' norm without providing mean/std
-                if self.bmz_config["preprocessing"]["name"] == "zero_mean_unit_variance":
-                    opts += [
-                        "DATA.NORMALIZATION.TYPE",
-                        "custom",
-                        "DATA.NORMALIZATION.CUSTOM_MEAN",
-                        -1.0,
-                        "DATA.NORMALIZATION.CUSTOM_STD",
-                        -1.0,
-                    ]
-                    if self.cfg.DATA.NORMALIZATION.TYPE != "custom":
-                        print(
-                            "[BMZ] Changed 'DATA.NORMALIZATION.TYPE' from {} to {} as defined in the RDF".format(
-                                self.cfg.DATA.NORMALIZATION.TYPE, "custom"
-                            )
-                        )
-                    if self.cfg.DATA.NORMALIZATION.CUSTOM_MEAN != -1:
-                        print(
-                            "[BMZ] Changed 'DATA.NORMALIZATION.CUSTOM_MEAN' from {} to {} as defined in the RDF".format(
-                                self.cfg.DATA.NORMALIZATION.CUSTOM_MEAN, -1
-                            )
-                        )
-                    if self.cfg.DATA.NORMALIZATION.CUSTOM_STD != -1:
-                        print(
-                            "[BMZ] Changed 'DATA.NORMALIZATION.CUSTOM_STD' from {} to {} as defined in the RDF".format(
-                                self.cfg.DATA.NORMALIZATION.CUSTOM_STD, -1
-                            )
-                        )
-                elif self.bmz_config["preprocessing"]["name"] == "fixed_zero_mean_unit_variance":
-                    mean = -1
-                    std = -1
-                    if (
-                        "kwargs" in self.bmz_config["preprocessing"]
-                        and "mean" in self.bmz_config["preprocessing"]["kwargs"]
-                    ):
-                        mean = self.bmz_config["preprocessing"]["kwargs"]["mean"]
-                        std = self.bmz_config["preprocessing"]["kwargs"]["std"]
-                    elif "mean" in self.bmz_config["preprocessing"]:
-                        mean = self.bmz_config["preprocessing"]["mean"]
-                        std = self.bmz_config["preprocessing"]["std"]
-                    opts += [
-                        "DATA.NORMALIZATION.TYPE",
-                        "custom",
-                        "DATA.NORMALIZATION.CUSTOM_MEAN",
-                        mean,
-                        "DATA.NORMALIZATION.CUSTOM_STD",
-                        std,
-                    ]
-                    if self.cfg.DATA.NORMALIZATION.TYPE != "custom":
-                        print(
-                            "[BMZ] Changed 'DATA.NORMALIZATION.TYPE' from {} to {} as defined in the RDF".format(
-                                self.cfg.DATA.NORMALIZATION.TYPE, "custom"
-                            )
-                        )
-                    if self.cfg.DATA.NORMALIZATION.CUSTOM_MEAN != mean:
-                        print(
-                            "[BMZ] Changed 'DATA.NORMALIZATION.CUSTOM_MEAN' from {} to {} as defined in the RDF".format(
-                                self.cfg.DATA.NORMALIZATION.CUSTOM_MEAN, mean
-                            )
-                        )
-                    if self.cfg.DATA.NORMALIZATION.CUSTOM_STD != std:
-                        print(
-                            "[BMZ] Changed 'DATA.NORMALIZATION.CUSTOM_STD' from {} to {} as defined in the RDF".format(
-                                self.cfg.DATA.NORMALIZATION.CUSTOM_STD, std
-                            )
-                        )
-                # 'scale_linear' norm of BMZ is close to our 'div' norm (TODO: we need to control the "gain" arg)
-                elif self.bmz_config["preprocessing"]["name"] == "scale_linear":
-                    opts += ["DATA.NORMALIZATION.TYPE", "div"]
-                    if self.cfg.DATA.NORMALIZATION.TYPE != "div":
-                        print(
-                            "[BMZ] Changed 'DATA.NORMALIZATION.TYPE' from {} to {} as defined in the RDF".format(
-                                self.cfg.DATA.NORMALIZATION.TYPE, "div"
-                            )
-                        )
-                # 'scale_range' norm of BMZ is as our PERC_CLIP + 'scale_range' norm
-                elif self.bmz_config["preprocessing"]["name"] == "scale_range":
-                    opts += ["DATA.NORMALIZATION.TYPE", "scale_range"]
-                    if self.cfg.DATA.NORMALIZATION.TYPE != "scale_range":
-                        print(
-                            "[BMZ] Changed 'DATA.NORMALIZATION.TYPE' from {} to {} as defined in the RDF".format(
-                                self.cfg.DATA.NORMALIZATION.TYPE, "scale_range"
-                            )
-                        )
-                    if (
-                        float(self.bmz_config["preprocessing"]["kwargs"]["min_percentile"]) != 0
-                        or float(self.bmz_config["preprocessing"]["kwargs"]["max_percentile"]) != 100
-                    ):
-                        opts += [
-                            "DATA.NORMALIZATION.PERC_CLIP",
-                            True,
-                            "DATA.NORMALIZATION.PERC_LOWER",
-                            float(self.bmz_config["preprocessing"]["kwargs"]["min_percentile"]),
-                            "DATA.NORMALIZATION.PERC_UPPER",
-                            float(self.bmz_config["preprocessing"]["kwargs"]["max_percentile"]),
-                        ]
-                        if not self.cfg.DATA.NORMALIZATION.PERC_CLIP:
-                            print(
-                                "[BMZ] Changed 'DATA.NORMALIZATION.PERC_CLIP' from {} to {} as defined in the RDF".format(
-                                    self.cfg.DATA.NORMALIZATION.PERC_CLIP, True
-                                )
-                            )
-                        if (
-                            self.cfg.DATA.NORMALIZATION.PERC_LOWER
-                            != self.bmz_config["preprocessing"]["kwargs"]["min_percentile"]
-                        ):
-                            print(
-                                "[BMZ] Changed 'DATA.NORMALIZATION.PERC_LOWER' from {} to {} as defined in the RDF".format(
-                                    self.cfg.DATA.NORMALIZATION.PERC_LOWER,
-                                    self.bmz_config["preprocessing"]["kwargs"]["min_percentile"],
-                                )
-                            )
-                        if (
-                            self.cfg.DATA.NORMALIZATION.PERC_UPPER
-                            != self.bmz_config["preprocessing"]["kwargs"]["max_percentile"]
-                        ):
-                            print(
-                                "[BMZ] Changed 'DATA.NORMALIZATION.PERC_UPPER' from {} to {} as defined in the RDF".format(
-                                    self.cfg.DATA.NORMALIZATION.PERC_UPPER,
-                                    self.bmz_config["preprocessing"]["kwargs"]["max_percentile"],
-                                )
-                            )
-
+            opts = check_model_restrictions(self.cfg, self.bmz_config)
+            
             self.cfg.merge_from_list(opts)
 
     def define_metrics(self):
@@ -1198,7 +1034,7 @@ class Base_Workflow(metaclass=ABCMeta):
             print("#############")
             print("#  RESULTS  #")
             print("#############")
-
+            print("The values below represent the averages across all test samples")
             if self.cfg.TRAIN.ENABLE:
                 print("Epoch number: {}".format(len(self.plot_values["val_loss"])))
                 print("Train time (s): {}".format(self.total_training_time_str))

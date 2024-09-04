@@ -5,7 +5,7 @@ from pathlib import Path
 import pooch
 import yaml
 import torch
-import numpy as np
+import functools
 import torch.nn as nn
 from torchinfo import summary
 from typing import Optional, Dict, Tuple, List, Literal
@@ -21,7 +21,8 @@ from bioimageio.spec._internal.io_basics import Sha256
 from bioimageio.spec.model.v0_4 import ModelDescr as ModelDescr_v0_4
 from bioimageio.spec.model.v0_5 import ModelDescr as ModelDescr_v0_5
 from bioimageio.spec._internal.types import ImportantFileSource
-
+from bioimageio.spec import InvalidDescr
+from bioimageio.core.digest_spec import get_test_inputs
 
 from biapy.config.config import Config
 
@@ -426,8 +427,8 @@ def check_bmz_args(
 
     Returns
     -------
-    model_instance : Torch model
-        Torch model.
+    preproc_info: dict of str
+        Preprocessing names that the model is using.
     """
     # Checking BMZ model compatibility using the available model list provided by BMZ
     # COLLECTION_URL = "https://uk1s3.embassy.ebi.ac.uk/public-datasets/bioimage.io/collection.json"
@@ -635,6 +636,105 @@ def check_bmz_model_compatibility(
 
     return preproc_info, error, reason_message
 
+def check_model_restrictions(cfg, bmz_config):
+    """
+    Checks model restrictions to be applied into the current configuration.
+
+    Parameters
+    ----------
+    cfg : YACS configuration
+        Running configuration.
+ 
+    bmz_config : dict
+        BMZ configuration where among other thins the RDF of the model is stored.
+
+    Returns
+    -------
+    option_list: list of str
+        List of variables and values to change in current configuration. These changes
+        are imposed by the selected model. 
+    """
+    # First let's make sure we have a valid model
+    if isinstance(bmz_config["original_bmz_config"], InvalidDescr):
+        raise ValueError(f"Failed to load {cfg.MODEL.SOURCE}")
+
+    # Version of the model
+    model_version = Version(bmz_config["original_bmz_config"].format_version)
+    if model_version > Version("0.5.0"):
+        bmz_config["original_model_spec_version"] = "v0_5"
+    else:
+        bmz_config["original_model_spec_version"] = "v0_4"
+
+    opts = {}    
+
+    # 1) Change PATCH_SIZE with the one stored in the RDF
+    inputs = get_test_inputs(bmz_config["original_bmz_config"])
+    if "input0" in inputs.members:
+        input_image_shape = inputs.members["input0"]._data.shape
+    elif "raw" in inputs.members:
+        input_image_shape = inputs.members["raw"]._data.shape
+    else:
+        raise ValueError(f"Couldn't load input info from BMZ model's RDF: {inputs}")
+    if cfg.DATA.PATCH_SIZE != input_image_shape[2:] + (input_image_shape[1],):
+        opts["DATA.PATCH_SIZE"] = input_image_shape[2:] + (input_image_shape[1],)
+
+    # 2) Change preprocessing to the one stablished by BMZ
+    print(
+        f"[BMZ] Overriding preprocessing steps to the ones fixed in BMZ model: {bmz_config['preprocessing']}"
+    )
+    if isinstance(bmz_config["preprocessing"], list) and len(bmz_config["preprocessing"]) > 1:
+        raise ValueError("More than one preprocessing from BMZ not implemented yet")
+
+    # Translate BMZ keywords into BiaPy's
+    if len(bmz_config["preprocessing"]) > 0:
+        # 'zero_mean_unit_variance' and 'fixed_zero_mean_unit_variance' norms of BMZ can be translated to our 'custom' norm 
+        # providing mean and std
+        if bmz_config["preprocessing"]["name"] in ["fixed_zero_mean_unit_variance", "zero_mean_unit_variance"]:
+            if (
+                "kwargs" in bmz_config["preprocessing"]
+                and "mean" in bmz_config["preprocessing"]["kwargs"]
+            ):
+                mean = bmz_config["preprocessing"]["kwargs"]["mean"]
+                std = bmz_config["preprocessing"]["kwargs"]["std"]
+            elif "mean" in bmz_config["preprocessing"]:
+                mean = bmz_config["preprocessing"]["mean"]
+                std = bmz_config["preprocessing"]["std"]
+            else:
+                mean, std = -1., -1.
+
+            opts["DATA.NORMALIZATION.TYPE"] = "custom"
+            opts["DATA.NORMALIZATION.CUSTOM_MEAN"] = mean
+            opts["DATA.NORMALIZATION.CUSTOM_STD"] = std
+
+        # 'scale_linear' norm of BMZ is close to our 'div' norm (TODO: we need to control the "gain" arg)
+        elif bmz_config["preprocessing"]["name"] == "scale_linear":
+            opts["DATA.NORMALIZATION.TYPE"] = "div"
+
+        # 'scale_range' norm of BMZ is as our PERC_CLIP + 'scale_range' norm
+        elif bmz_config["preprocessing"]["name"] == "scale_range":
+            opts["DATA.NORMALIZATION.TYPE"] = "scale_range"
+            if (
+                float(bmz_config["preprocessing"]["kwargs"]["min_percentile"]) != 0
+                or float(bmz_config["preprocessing"]["kwargs"]["max_percentile"]) != 100
+            ):
+                opts["DATA.NORMALIZATION.PERC_CLIP"] = True
+                opts["DATA.NORMALIZATION.PERC_LOWER"] = float(bmz_config["preprocessing"]["kwargs"]["min_percentile"])
+                opts["DATA.NORMALIZATION.PERC_UPPER"] = float(bmz_config["preprocessing"]["kwargs"]["max_percentile"])
+
+    option_list = []
+    for key, val in opts.items():
+        old_val = get_cfg_key_value(cfg, key)
+        if old_val != val:
+            print(f"[BMZ] Changed '{key}' from {old_val} to {val} as defined in the RDF")
+        option_list.append(key)
+        option_list.append(val)
+
+    return option_list
+
+def get_cfg_key_value(obj, attr, *args):
+    def _getattr(obj, attr):
+        return getattr(obj, attr, *args)
+    return functools.reduce(_getattr, [obj] + attr.split('.'))
 
 def build_torchvision_model(cfg, device):
     # Find model in TorchVision
