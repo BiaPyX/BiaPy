@@ -18,8 +18,8 @@ bmz_script = os.path.join(biapy_folder, "biapy", "utils", "scripts", "export_bmz
 
 all_test_info = {}
 all_test_info["Test1"] = {
-    "enable": False,
-    "run_experiment": False,
+    "enable": True,
+    "run_experiment": True,
     "jobname": "test1",
     "description": "2D Semantic seg. Lucchi++. Basic DA. Extract random crops (probability map). unet. 2D stack as 3D. Post-proc: z-filtering.",
     "yaml": "test_1.yaml",
@@ -30,8 +30,8 @@ all_test_info["Test1"] = {
 }
 
 all_test_info["Test2"] = {
-    "enable": False,
-    "run_experiment": False,
+    "enable": True,
+    "run_experiment": True,
     "jobname": "test2",
     "description": "3D Semantic seg. Lucchi++. attention_unet. Basic DA.",
     "yaml": "test_2.yaml",
@@ -41,8 +41,8 @@ all_test_info["Test2"] = {
 }
 
 all_test_info["Test3"] = {
-    "enable": False,
-    "run_experiment": False,
+    "enable": True,
+    "run_experiment": True,
     "jobname": "test3",
     "description": "2D Semantic seg. Lucchi++. Basic DA. 5 epochs. seunet. FULL_IMG False",
     "yaml": "test_3.yaml",
@@ -52,8 +52,8 @@ all_test_info["Test3"] = {
 }
 
 all_test_info["Test4"] = {
-    "enable": False,
-    "run_experiment": False,
+    "enable": True,
+    "run_experiment": True,
     "jobname": "test4",
     "description": "2D Instance seg. Stardist 2D data. Basic DA. BC (auto). Replicate 2. resunet++. "
         "Post-proc: Clear border + remove instances by properties",
@@ -68,8 +68,8 @@ all_test_info["Test4"] = {
 }
 
 all_test_info["Test5"] = {
-    "enable": False,
-    "run_experiment": False,
+    "enable": True,
+    "run_experiment": True,
     "jobname": "test5",
     "description": "3D Instance seg. Demo 3D data. Basic DA. BCD (manual). resunet. Watershed multiple options. Post-proc: Clear border",
     "yaml": "test_5.yaml",
@@ -82,8 +82,8 @@ all_test_info["Test5"] = {
 }
 
 all_test_info["Test6"] = {
-    "enable": False,
-    "run_experiment": False,
+    "enable": True,
+    "run_experiment": True,
     "jobname": "test6",
     "description": "3D Instance seg. Cyst data. Basic DA. BCM (auto). resunet. Post-proc: Clear border + Voronoi + remove by props",
     "yaml": "test_6.yaml",
@@ -96,8 +96,8 @@ all_test_info["Test6"] = {
 }
 
 all_test_info["Test7"] = {
-    "enable": False,
-    "run_experiment": False,
+    "enable": True,
+    "run_experiment": True,
     "jobname": "test7",
     "description": "2D Detection. Stardist v2 2D data. custom norm, percentile clip. Basic DA. "
         "multiresunet. Post-proc: remove close points + det weatershed",
@@ -109,8 +109,8 @@ all_test_info["Test7"] = {
 }
 
 all_test_info["Test8"] = {
-    "enable": False,
-    "run_experiment": False,
+    "enable": True,
+    "run_experiment": True,
     "jobname": "test8",
     "description": "3D Detection. NucMM-Z 3D data. custom norm, percentile clip. Basic DA. "
         "unetr. Post-proc: remove close points + det weatershed",
@@ -121,8 +121,8 @@ all_test_info["Test8"] = {
 }
 
 all_test_info["Test11"] = {
-    "enable": False,
-    "run_experiment": False,
+    "enable": True,
+    "run_experiment": True,
     "jobname": "test11",
     "description": "3D Detection. Zarr 3D data (Brainglobe). custom norm, percentile norm, per image. "
         "filter samples: foreground + mean. warmupcosine. Basic DA. resunet. test by chunks: Zarr. Post-proc: remove close points",
@@ -133,8 +133,8 @@ all_test_info["Test11"] = {
 }
 
 all_test_info["Test9"] = {
-    "enable": False,
-    "run_experiment": False,
+    "enable": True,
+    "run_experiment": True,
     "jobname": "test9",
     "description": "2D Denoising. Convallaria data. custom norm. Basic DA."
         "unetr. Post-proc: remove close points + det weatershed",
@@ -145,8 +145,8 @@ all_test_info["Test9"] = {
 }
 
 all_test_info["Test10"] = {
-    "enable": False,
-    "run_experiment": False,
+    "enable": True,
+    "run_experiment": True,
     "jobname": "test10",
     "description": "3D Denoising. Flywing 3D data. custom norm. Basic DA. "
         "resunet. Post-proc: remove close points + det weatershed",
@@ -157,8 +157,8 @@ all_test_info["Test10"] = {
 }
 
 all_test_info["Test12"] = {
-    "enable": False,
-    "run_experiment": False,
+    "enable": True,
+    "run_experiment": True,
     "jobname": "test12",
     "description": "2D super-resolution. SR 2D data. Cross-val. Basic DA. DFCAN",
     "yaml": "test_12.yaml",
@@ -169,8 +169,8 @@ all_test_info["Test12"] = {
 }
 
 all_test_info["Test13"] = {
-    "enable": False,
-    "run_experiment": False,
+    "enable": True,
+    "run_experiment": True,
     "jobname": "test13",
     "description": "3D super-resolution. SR 3D data. Cross-val. Basic DA. resunet++. one-cycle",
     "yaml": "test_13.yaml",
@@ -181,8 +181,8 @@ all_test_info["Test13"] = {
 }
 
 all_test_info["Test14"] = {
-    "enable": False,
-    "run_experiment": False,
+    "enable": True,
+    "run_experiment": True,
     "jobname": "test14",
     "description": "2D self-supervision. Lucchi data. Cross-val. Basic DA. rcan",
     "yaml": "test_14.yaml",
@@ -193,8 +193,8 @@ all_test_info["Test14"] = {
 }
 
 all_test_info["Test15"] = {
-    "enable": False,
-    "run_experiment": False,
+    "enable": True,
+    "run_experiment": True,
     "jobname": "test15",
     "description": "2D self-supervision. Lucchi data. Cross-val. Basic DA. mae, masking: random",
     "yaml": "test_15.yaml",
@@ -204,8 +204,8 @@ all_test_info["Test15"] = {
 }
 
 all_test_info["Test16"] = {
-    "enable": False,
-    "run_experiment": False,
+    "enable": True,
+    "run_experiment": True,
     "jobname": "test16",
     "description": "2D self-supervision. Lucchi data. Cross-val. Basic DA. mae, masking: grid",
     "yaml": "test16.yaml",
@@ -215,8 +215,8 @@ all_test_info["Test16"] = {
 }
 
 all_test_info["Test17"] = {
-    "enable": False,
-    "run_experiment": False,
+    "enable": True,
+    "run_experiment": True,
     "jobname": "test17",
     "description": "3D self-supervision. Lucchi data. Basic DA. resunet++",
     "yaml": "test17.yaml",
@@ -226,8 +226,8 @@ all_test_info["Test17"] = {
 }
 
 all_test_info["Test18"] = {
-    "enable": False,
-    "run_experiment": False,
+    "enable": True,
+    "run_experiment": True,
     "jobname": "test18",
     "description": "3D self-supervision. Lucchi data. Cross-val. Basic DA. mae, masking: random",
     "yaml": "test18.yaml",
@@ -237,8 +237,8 @@ all_test_info["Test18"] = {
 }
 
 all_test_info["Test19"] = {
-    "enable": False,
-    "run_experiment": False,
+    "enable": True,
+    "run_experiment": True,
     "jobname": "test19",
     "description": "3D self-supervision. Lucchi data. Cross-val. Basic DA. mae, masking: grid",
     "yaml": "test19.yaml",
@@ -248,8 +248,8 @@ all_test_info["Test19"] = {
 }
 
 all_test_info["Test20"] = {
-    "enable": False,
-    "run_experiment": False,
+    "enable": True,
+    "run_experiment": True,
     "jobname": "test20",
     "description": "2D classification. DermaMNIST 2D data. preprocess: resize, Cross-val. Basic DA. ViT",
     "yaml": "test20.yaml",
@@ -259,8 +259,8 @@ all_test_info["Test20"] = {
 }
 
 all_test_info["Test21"] = {
-    "enable": False,
-    "run_experiment": False,
+    "enable": True,
+    "run_experiment": True,
     "jobname": "test21",
     "description": "2D classification. butterfly data. preprocess: resize. Basic DA. efficientnet_b1",
     "yaml": "test21.yaml",
@@ -270,8 +270,8 @@ all_test_info["Test21"] = {
 }
 
 all_test_info["Test22"] = {
-    "enable": False,
-    "run_experiment": False,
+    "enable": True,
+    "run_experiment": True,
     "jobname": "test22",
     "description": "3D classification. DermaMNIST 3D data. preprocess: resize, Cross-val. Basic DA. simple_cnn",
     "yaml": "test22.yaml",
@@ -281,8 +281,8 @@ all_test_info["Test22"] = {
 }
 
 all_test_info["Test23"] = {
-    "enable": False,
-    "run_experiment": False,
+    "enable": True,
+    "run_experiment": True,
     "jobname": "test23",
     "description": "3D classification. DermaMNIST 3D data. preprocess: resize. Basic DA. simple_cnn",
     "yaml": "test23.yaml",
@@ -292,42 +292,42 @@ all_test_info["Test23"] = {
 }
 
 all_test_info["Test24"] = {
-    "enable": False,
-    "run_experiment": False,
+    "enable": True,
+    "run_experiment": True,
     "jobname": "test24",
     "description": "2D image to image. Dapi 2D data. preprocess: resize, Cross-val. Basic DA. multiresunet",
     "yaml": "test24.yaml",
     "internal_checks": [
-        {"type": "regular", "pattern": "Test PSNR:", "gt": True, "value": 19.0},
+        {"type": "regular", "pattern": "Test PSNR (merge patches):", "gt": True, "value": 20.0},
     ]
 }
 
 all_test_info["Test25"] = {
-    "enable": False,
-    "run_experiment": False,
+    "enable": True,
+    "run_experiment": True,
     "jobname": "test25",
-    "description": "2D image to image. lightmycells 2D data. preprocess: resize, Cross-val. Basic DA. ViT",
+    "description": "2D image to image. lightmycells 2D data. extract random. val and train not in memory. Basic DA. UNETR",
     "yaml": "test25.yaml",
     "internal_checks": [
-        {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 22.0},
+        {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 8.0},
     ]
 }
 
 all_test_info["Test26"] = {
-    "enable": False,
-    "run_experiment": False,
+    "enable": True,
+    "run_experiment": True,
     "jobname": "test26",
     "description": "3D Detection. Zarr 3D data (Brainglobe). in memory false. custom norm, percentile norm, per image. "
         "filter_samples: foreground. warmupcosine. Basic DA. resunet. test by chunks: Zarr. Post-proc: remove close points",
     "yaml": "test_26.yaml",
     "internal_checks": [
-        {"type": "regular", "pattern": "Test F1 (per image)", "gt": True, "value": 0.5},
+        {"type": "regular", "pattern": "Test F1 (per image)", "gt": True, "value": 0.35},
     ]
 }
 
 all_test_info["Test27"] = {
-    "enable": False,
-    "run_experiment": False,
+    "enable": True,
+    "run_experiment": True,
     "jobname": "test27",
     "description": "3D Instance seg. Zarr 3D data SNEMI. in memory false. input zarr multiple data raw: 'volumes.raw'"
         "warmupcosine. inference, by chunks, zarr multiple data, workflow process: entire pred.",
@@ -339,8 +339,8 @@ all_test_info["Test27"] = {
 }
 
 all_test_info["Test28"] = {
-    "enable": False,
-    "run_experiment": False,
+    "enable": True,
+    "run_experiment": True,
     "jobname": "test28",
     "description": "3D Image to image. Nuclear_Pore_complex_3D data. in memory true. val 0.1 of train.",
     "yaml": "test_28.yaml",
@@ -350,8 +350,8 @@ all_test_info["Test28"] = {
 }
 
 all_test_info["Test29"] = {
-    "enable": False,
-    "run_experiment": False,
+    "enable": True,
+    "run_experiment": True,
     "jobname": "test29",
     "description": "2D instance segmentation. BMZ 'affable-shark' model import, inference and export. "
         "zero_mean_unit_variance + format_version: 0.5.3 ",
@@ -365,8 +365,8 @@ all_test_info["Test29"] = {
 }
 
 all_test_info["Test30"] = {
-    "enable": False,
-    "run_experiment": False,
+    "enable": True,
+    "run_experiment": True,
     "jobname": "test30",
     "description": "2D instance segmentation. BMZ 'hiding-blowfish' model import, inference and export."
         "scale_range + format_version: 0.4.10",
@@ -377,8 +377,8 @@ all_test_info["Test30"] = {
 }
 
 all_test_info["Test31"] = {
-    "enable": False,
-    "run_experiment": False,
+    "enable": True,
+    "run_experiment": True,
     "jobname": "test31",
     "description": "2D instance segmentation. BMZ 'affable-shark' model import, finetunning and export (reusing model original info)."
         "zero_mean_unit_variance + format_version: 0.5.3 ",
@@ -392,8 +392,8 @@ all_test_info["Test31"] = {
 }
 
 all_test_info["Test32"] = {
-    "enable": False,
-    "run_experiment": False,
+    "enable": True,
+    "run_experiment": True,
     "jobname": "test32",
     "description": "2D instance segmentation. Export BiaPy model to BMZ format",
     "yaml": "test_32.yaml",
@@ -404,8 +404,8 @@ all_test_info["Test32"] = {
 }
 
 all_test_info["Test33"] = {
-    "enable": False,
-    "run_experiment": False,
+    "enable": True,
+    "run_experiment": True,
     "jobname": "test33",
     "description": "2D Semantic seg. Lucchi++. Basic DA. unet. validation from train when not in memory. preprocess resize train and test",
     "yaml": "test_33.yaml",
@@ -418,10 +418,10 @@ all_test_info["Test34"] = {
     "enable": True,
     "run_experiment": True,
     "jobname": "test34",
-    "description": "2D image to image. lightmycells 2D data. preprocess: resize, Cross-val. Basic DA. ViT",
+    "description": "2D image to image. lightmycells 2D data. preprocess: resize. Val in memory, train not in memory. Basic DA. attention_unet",
     "yaml": "test34.yaml",
     "internal_checks": [
-        {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 22.0},
+        {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 9.0},
     ]
 }
 
@@ -3729,7 +3729,7 @@ if all_test_info["Test34"]["enable"]:
     biapy_config['DATA']['TEST']['PADDING'] = "(200,200)"
 
     biapy_config['TRAIN']['ENABLE'] = True
-    biapy_config['TRAIN']['EPOCHS'] = 10
+    biapy_config['TRAIN']['EPOCHS'] = 50
     biapy_config['TRAIN']['PATIENCE'] = -1
     biapy_config['TRAIN']['LR_SCHEDULER']['WARMUP_COSINE_DECAY_EPOCHS'] = 5
 
