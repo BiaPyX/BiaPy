@@ -595,25 +595,24 @@ def check_bmz_model_compatibility(
 
         # Check preprocessing
         if "preprocessing" in model_rdf["inputs"][0]:
-            for preprocs in model_rdf["inputs"][0]["preprocessing"]:
-                key_to_find = "id" if model_version > Version("0.5.0") else "name"
+            preproc_info = model_rdf["inputs"][0]["preprocessing"]
+            if isinstance(preproc_info, list) and len(preproc_info) > 1:
+                error = True
+                reason_message += f"[{specific_workflow}] More than one preprocessing from BMZ not implemented yet {axes_order}\n"
 
-                if key_to_find in preprocs:
-                    if preprocs[key_to_find] not in [
-                        "zero_mean_unit_variance",
-                        "fixed_zero_mean_unit_variance",
-                        "scale_range",
-                        "scale_linear",
-                    ]:
-                        error = True
-                        reason_message += f"[{specific_workflow}] Not recognized preprocessing found: {preprocs[key_to_find]}\n"
-                        break
-                else:
+            key_to_find = "id" if model_version > Version("0.5.0") else "name"
+            if key_to_find in preproc_info:
+                if preproc_info[key_to_find] not in [
+                    "zero_mean_unit_variance",
+                    "fixed_zero_mean_unit_variance",
+                    "scale_range",
+                    "scale_linear",
+                ]:
                     error = True
-                    reason_message += f"[{specific_workflow}] Not recognized preprocessing structure found: {preprocs}\n"
-                    break
-
-                preproc_info = preprocs
+                    reason_message += f"[{specific_workflow}] Not recognized preprocessing found: {preproc_info[key_to_find]}\n"
+            else:
+                error = True
+                reason_message += f"[{specific_workflow}] Not recognized preprocessing structure found: {preproc_info}\n"
 
         # Check post-processing
         if model_version > Version("0.5.0"):
@@ -678,14 +677,10 @@ def check_model_restrictions(cfg, bmz_config):
     if cfg.DATA.PATCH_SIZE != input_image_shape[2:] + (input_image_shape[1],):
         opts["DATA.PATCH_SIZE"] = input_image_shape[2:] + (input_image_shape[1],)
 
-    # 2) Change preprocessing to the one stablished by BMZ
+    # 2) Change preprocessing to the one stablished by BMZ by translate BMZ keywords into BiaPy's
     print(
         f"[BMZ] Overriding preprocessing steps to the ones fixed in BMZ model: {bmz_config['preprocessing']}"
     )
-    if isinstance(bmz_config["preprocessing"], list) and len(bmz_config["preprocessing"]) > 1:
-        raise ValueError("More than one preprocessing from BMZ not implemented yet")
-
-    # Translate BMZ keywords into BiaPy's
     if len(bmz_config["preprocessing"]) > 0:
         # 'zero_mean_unit_variance' and 'fixed_zero_mean_unit_variance' norms of BMZ can be translated to our 'custom' norm 
         # providing mean and std
