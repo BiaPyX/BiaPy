@@ -10,6 +10,7 @@ import torch.nn as nn
 from torchinfo import summary
 from typing import Optional, Dict, Tuple, List, Literal
 from packaging.version import Version
+from functools import partial
 
 from bioimageio.spec.utils import download
 from bioimageio.core.model_adapters._pytorch_model_adapter import PytorchModelAdapter
@@ -472,7 +473,8 @@ def check_bmz_model_compatibility(
     workflow_specs: Optional[Dict] = None,
 ) -> Tuple[List[str], bool, str]:
     """
-    Checks model compatibility with BiaPy.
+    Checks one model compatibility with BiaPy by looking at its RDF file provided by BMZ. This function is the one
+    used in BMZ's continuous integration with BiaPy.
 
     Parameters
     ----------
