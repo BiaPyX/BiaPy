@@ -1419,13 +1419,14 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "resunet",
                 "resunet++",
                 "seunet",
+                "resunet_se",
                 "attention_unet",
                 "unetr",
                 "multiresunet",
                 "unext_v1",
             ]:
                 raise ValueError(
-                    "Architectures available for 'IMAGE_TO_IMAGE' are: ['edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'unetr', 'multiresunet', 'unext_v1']"
+                    "Architectures available for 'IMAGE_TO_IMAGE' are: ['edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'resunet_se', 'seunet', 'attention_unet', 'unetr', 'multiresunet', 'unext_v1']"
                 )
         elif cfg.PROBLEM.TYPE == "SELF_SUPERVISED":
             if model_arch not in [

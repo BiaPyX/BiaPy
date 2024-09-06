@@ -66,9 +66,9 @@ class Config:
 
         # Weights to be applied to the channels.
         _C.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS = (1, 1)
-        # Contour creation mode. Corresponds to 'mode' arg of find_boundaries function from ``scikit-image``. More
+        # Contour creation mode. Corresponds to 'mode' arg of find_boundaries function from scikit-image. More
         # info in: https://scikit-image.org/docs/stable/api/skimage.segmentation.html#skimage.segmentation.find_boundaries.
-        # It can be also set as "dense", to label as contour every pixel that is not in ``B`` channel.
+        # It can be also set as "dense", to label as contour every pixel that is not in B channel.
         _C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE = "thick"
         # Whether if the threshold are going to be set as automaticaly (with Otsu thresholding) or manually.
         # Options available: 'auto' or 'manual'. If this last is used PROBLEM.INSTANCE_SEG.DATA_MW_TH_* need to be set.
@@ -687,7 +687,7 @@ class Config:
         _C.AUGMENTOR.GRIDMASK = False
         # Determines the keep ratio of an input image
         _C.AUGMENTOR.GRID_RATIO = 0.6
-        # Range to choose a ``d`` value
+        # Range to choose a d value
         _C.AUGMENTOR.GRID_D_RANGE = (0.4, 1)
         # Rotation of the mask in GridMask. Needs to be between [0,1] where 1 is 360 degrees.
         _C.AUGMENTOR.GRID_ROTATE = 1.0
@@ -784,18 +784,18 @@ class Config:
         #   * Semantic segmentation: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'resunet_se', 'unetr', 'unext_v1'
         #   * Instance segmentation: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'resunet_se', 'unetr', 'unext_v1'
         #   * Detection: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'resunet_se', 'unetr', 'unext_v1'
-        #   * Denoising: 'unet', 'resunet', 'resunet++', 'attention_unet', 'seunet', 'resunet_se',, 'unext_v1'
+        #   * Denoising: 'unet', 'resunet', 'resunet++', 'attention_unet', 'seunet', 'resunet_se', 'unext_v1'
         #   * Super-resolution: 'edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'multiresunet', 'unext_v1'
         #   * Self-supervision: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'resunet_se', 'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae', 'unext_v1'
         #   * Classification: 'simple_cnn', 'vit', 'efficientnet_b[0-7]' (only 2D)
-        #   * Image to image: 'edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'unetr', 'multiresunet', 'unext_v1'
+        #   * Image to image: 'edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'unetr', 'multiresunet', 'unext_v1'
         _C.MODEL.ARCHITECTURE = "unet"
         # Number of feature maps on each level of the network.
         _C.MODEL.FEATURE_MAPS = [16, 32, 64, 128, 256]
         # Values to make the dropout with. Set to 0 to prevent dropout. When using it with 'ViT' or 'unetr'
         # a list with just one number must be provided
         _C.MODEL.DROPOUT_VALUES = [0.0, 0.0, 0.0, 0.0, 0.0]
-        # Normalization layer (one of ``'bn'``, ``'sync_bn'`` ``'in'``, ``'gn'`` or ``'none'``).
+        # Normalization layer (one of 'bn', 'sync_bn' 'in', 'gn' or 'none').
         _C.MODEL.NORMALIZATION = "bn"
         # Kernel size
         _C.MODEL.KERNEL_SIZE = 3
