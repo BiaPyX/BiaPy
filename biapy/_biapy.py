@@ -35,9 +35,9 @@ from bioimageio.spec.model.v0_5 import (
     TensorId,
     WeightsDescr,
     ArchitectureFromFileDescr,
-    Version,
     ModelDescr,
 )
+from packaging.version import Version
 from bioimageio.spec._internal.io_basics import Sha256
 from bioimageio.spec import save_bioimageio_package
 
@@ -293,6 +293,9 @@ class BiaPy:
         if not reuse_original_bmz_config and len(bmz_cfg) == 0:
             raise ValueError("'bmz_cfg' arg must be provided if 'reuse_original_bmz_config' is False.")
 
+        if "original_bmz_config" in self.workflow.bmz_config:
+            original_model_version = Version(self.workflow.bmz_config["original_bmz_config"].format_version)
+
         # Check keys
         if not reuse_original_bmz_config:
             need_info = [
@@ -467,7 +470,6 @@ class BiaPy:
         if (
             self.cfg.MODEL.SOURCE in ["biapy", "torchvision"]
             or self.cfg.MODEL.SOURCE == "bmz"
-            and len(self.workflow.bmz_config["preprocessing"]) == 0
         ):
             if self.cfg.DATA.NORMALIZATION.TYPE == "div":
                 preprocessing = [
@@ -520,7 +522,7 @@ class BiaPy:
                 preprocessing[0]["kwargs"].update(perc_instructions)
         # BMZ, reusing the preprocessing
         else:
-            if self.workflow.bmz_config["original_model_spec_version"] == "v0_5":
+            if original_model_version > Version("0.5.0"):
                 preprocessing = self.workflow.bmz_config["original_bmz_config"].inputs[0].preprocessing
             else:
                 preprocessing = []
@@ -747,7 +749,7 @@ class BiaPy:
         else:
             state_dict_source, state_dict_sha256, pytorch_architecture = get_bmz_model_info(
                 self.workflow.bmz_config["original_bmz_config"],
-                self.workflow.bmz_config["original_model_spec_version"],
+                original_model_version,
             )
 
         # Only exporting in pytorch_state_dict
@@ -755,7 +757,7 @@ class BiaPy:
             source=state_dict_source,
             sha256=state_dict_sha256,
             architecture=pytorch_architecture,
-            pytorch_version=Version(torch.__version__),
+            pytorch_version=torch.__version__,
         )
         # torchscript = TorchscriptWeightsDescr(
         #     source=self.workflow.bmz_config['original_bmz_config'].weights.torchscript.source,

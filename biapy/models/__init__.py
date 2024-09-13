@@ -40,7 +40,7 @@ def build_model(cfg, device):
     device : Torch device
         Using device. Most commonly "cpu" or "cuda" for GPU, but also potentially "mps",
         "xpu", "xla" or "meta".
-    
+
     Returns
     -------
     model : Keras model
@@ -345,7 +345,7 @@ def build_bmz_model(cfg: type[Config], model: ModelDescr_v0_4 | ModelDescr_v0_5,
 
 
 def get_bmz_model_info(
-    model: ModelDescr_v0_4 | ModelDescr_v0_5, spec_version: Literal["v0_4", "v0_5"] = "v0_4"
+    model: ModelDescr_v0_4 | ModelDescr_v0_5, spec_version: Version = Version("0.4.0")
 ) -> Tuple[ImportantFileSource, Sha256 | None, ArchitectureFromFileDescr | ArchitectureFromLibraryDescr]:
     """
     Gather model info depending on its spec version. Currently supports ``v0_4`` and ``v0_5`` spec model.
@@ -368,7 +368,7 @@ def get_bmz_model_info(
         model.weights.pytorch_state_dict is not None
     ), "Seems that the original BMZ model has no pytorch_state_dict object. Aborting"
 
-    if spec_version == "v0_5":
+    if spec_version > Version("0.5.0"):
         arch = model.weights.pytorch_state_dict.architecture
         if isinstance(arch, ArchitectureFromFileDescr):
             arch_file_path = download(arch.source, sha256=arch.sha256).path
@@ -432,8 +432,8 @@ def check_bmz_args(
         Preprocessing names that the model is using.
     """
     # Checking BMZ model compatibility using the available model list provided by BMZ
-    # COLLECTION_URL = "https://uk1s3.embassy.ebi.ac.uk/public-datasets/bioimage.io/collection.json"
-    COLLECTION_URL = "https://raw.githubusercontent.com/bioimage-io/collection-bioimage-io/gh-pages/collection.json"
+    COLLECTION_URL = "https://uk1s3.embassy.ebi.ac.uk/public-datasets/bioimage.io/collection.json"
+    # COLLECTION_URL = "https://raw.githubusercontent.com/bioimage-io/collection-bioimage-io/gh-pages/collection.json"
     collection_path = Path(pooch.retrieve(COLLECTION_URL, known_hash=None))
     with collection_path.open() as f:
         collection = json.load(f)
@@ -442,13 +442,17 @@ def check_bmz_args(
     model_urls = [
         entry
         for entry in collection["collection"]
-        if entry["type"] == "model" and (model_ID in entry["nickname"] or model_ID in entry["rdf_source"])
+        if entry["type"] == "model" and (
+            ("nickname" in entry and model_ID in entry["nickname"]) or
+            ("id" in entry and model_ID in entry["id"]) or
+            ("rdf_source" in entry and model_ID in entry["rdf_source"])
+            )
     ]
 
     if len(model_urls) == 0:
-        raise ValueError(f"No model found with the provided DOI: {model_ID}")
+        raise ValueError(f"No model found with the provided DOI/name: {model_ID}")
     if len(model_urls) > 1:
-        raise ValueError("More than one model found with the provided DOI. Contact BiaPy team.")
+        raise ValueError(f"More than one model found with the provided DOI/name ({model_ID}). Contact BiaPy team.")
     with open(Path(pooch.retrieve(model_urls[0]["rdf_source"], known_hash=None))) as stream:
         try:
             model_rdf = yaml.safe_load(stream)
@@ -505,7 +509,7 @@ def check_bmz_model_compatibility(
 
     # Accepting models that are exported in pytorch_state_dict and with just one input
     if "pytorch_state_dict" in model_rdf["weights"] and len(model_rdf["inputs"]) == 1:
-        
+
         model_version = Version("0.5")
         if "format_version" in model_rdf:
             model_version = Version(model_rdf["format_version"])
@@ -523,7 +527,7 @@ def check_bmz_model_compatibility(
                     classes = model_rdf["weights"]["pytorch_state_dict"]["kwargs"]["out_channels"]
                 elif "classes" in model_rdf["weights"]["pytorch_state_dict"]["kwargs"]:
                     classes = model_rdf["weights"]["pytorch_state_dict"]["kwargs"]["classes"]
-                
+
             if classes != -1:
                 if ref_classes != "all":
                     if classes > 2 and ref_classes != classes:
@@ -601,7 +605,7 @@ def check_bmz_model_compatibility(
             if isinstance(preproc_info, list) and len(preproc_info) > 1:
                 error = True
                 reason_message += f"[{specific_workflow}] More than one preprocessing from BMZ not implemented yet {axes_order}\n"
-
+            preproc_info = preproc_info[0]
             key_to_find = "id" if model_version > Version("0.5.0") else "name"
             if key_to_find in preproc_info:
                 if preproc_info[key_to_find] not in [
@@ -617,20 +621,19 @@ def check_bmz_model_compatibility(
                 reason_message += f"[{specific_workflow}] Not recognized preprocessing structure found: {preproc_info}\n"
 
         # Check post-processing
-        if model_version > Version("0.5.0"):
-            if (
-                "postprocessing" in model_rdf["weights"]["pytorch_state_dict"]["architecture"]["kwargs"]
-                and model_rdf["weights"]["pytorch_state_dict"]["architecture"]["kwargs"]["postprocessing"] is not None
-            ):
-                error = True
-                reason_message += f"[{specific_workflow}] Currently no postprocessing is supported. Found: {model_rdf['weights']['pytorch_state_dict']['kwargs']['postprocessing']}\n"
-        else:
-            if (
-                "postprocessing" in model_rdf["weights"]["pytorch_state_dict"]["kwargs"]
-                and model_rdf["weights"]["pytorch_state_dict"]["kwargs"]["postprocessing"] is not None
-            ):
-                error = True
-                reason_message += f"[{specific_workflow}] Currently no postprocessing is supported. Found: {model_rdf['weights']['pytorch_state_dict']['kwargs']['postprocessing']}\n"
+        model_kwargs = None
+        if "kwargs" in model_rdf["weights"]["pytorch_state_dict"]:
+            model_kwargs = model_rdf["weights"]["pytorch_state_dict"]["kwargs"]
+        elif "architecture" in model_rdf["weights"]["pytorch_state_dict"] and "kwargs" in model_rdf["weights"]["pytorch_state_dict"]["architecture"]:
+            model_kwargs = model_rdf["weights"]["pytorch_state_dict"]["architecture"]["kwargs"]
+        if (
+            model_kwargs is not None
+            and "postprocessing" in model_kwargs
+            and model_kwargs["postprocessing"] is not None
+        ):
+            error = True
+            reason_message += f"[{specific_workflow}] Currently no postprocessing is supported. Found: {model_kwargs['postprocessing']}\n"
+
     else:
         error = True
         reason_message += f"[{specific_workflow}] pytorch_state_dict not found in model RDF\n"
@@ -645,7 +648,7 @@ def check_model_restrictions(cfg, bmz_config):
     ----------
     cfg : YACS configuration
         Running configuration.
- 
+
     bmz_config : dict
         BMZ configuration where among other thins the RDF of the model is stored.
 
@@ -653,7 +656,7 @@ def check_model_restrictions(cfg, bmz_config):
     -------
     option_list: list of str
         List of variables and values to change in current configuration. These changes
-        are imposed by the selected model. 
+        are imposed by the selected model.
     """
     # First let's make sure we have a valid model
     if isinstance(bmz_config["original_bmz_config"], InvalidDescr):
@@ -661,12 +664,7 @@ def check_model_restrictions(cfg, bmz_config):
 
     # Version of the model
     model_version = Version(bmz_config["original_bmz_config"].format_version)
-    if model_version > Version("0.5.0"):
-        bmz_config["original_model_spec_version"] = "v0_5"
-    else:
-        bmz_config["original_model_spec_version"] = "v0_4"
-
-    opts = {}    
+    opts = {}
 
     # 1) Change PATCH_SIZE with the one stored in the RDF
     inputs = get_test_inputs(bmz_config["original_bmz_config"])
@@ -683,40 +681,41 @@ def check_model_restrictions(cfg, bmz_config):
     print(
         f"[BMZ] Overriding preprocessing steps to the ones fixed in BMZ model: {bmz_config['preprocessing']}"
     )
-    if len(bmz_config["preprocessing"]) > 0:
-        # 'zero_mean_unit_variance' and 'fixed_zero_mean_unit_variance' norms of BMZ can be translated to our 'custom' norm 
-        # providing mean and std
-        if bmz_config["preprocessing"]["name"] in ["fixed_zero_mean_unit_variance", "zero_mean_unit_variance"]:
-            if (
-                "kwargs" in bmz_config["preprocessing"]
-                and "mean" in bmz_config["preprocessing"]["kwargs"]
-            ):
-                mean = bmz_config["preprocessing"]["kwargs"]["mean"]
-                std = bmz_config["preprocessing"]["kwargs"]["std"]
-            elif "mean" in bmz_config["preprocessing"]:
-                mean = bmz_config["preprocessing"]["mean"]
-                std = bmz_config["preprocessing"]["std"]
-            else:
-                mean, std = -1., -1.
 
-            opts["DATA.NORMALIZATION.TYPE"] = "custom"
-            opts["DATA.NORMALIZATION.CUSTOM_MEAN"] = mean
-            opts["DATA.NORMALIZATION.CUSTOM_STD"] = std
+    key_to_find = "id" if model_version > Version("0.5.0") else "name"
+    # 'zero_mean_unit_variance' and 'fixed_zero_mean_unit_variance' norms of BMZ can be translated to our 'custom' norm
+    # providing mean and std
+    if bmz_config["preprocessing"][key_to_find] in ["fixed_zero_mean_unit_variance", "zero_mean_unit_variance"]:
+        if (
+            "kwargs" in bmz_config["preprocessing"]
+            and "mean" in bmz_config["preprocessing"]["kwargs"]
+        ):
+            mean = bmz_config["preprocessing"]["kwargs"]["mean"]
+            std = bmz_config["preprocessing"]["kwargs"]["std"]
+        elif "mean" in bmz_config["preprocessing"]:
+            mean = bmz_config["preprocessing"]["mean"]
+            std = bmz_config["preprocessing"]["std"]
+        else:
+            mean, std = -1., -1.
 
-        # 'scale_linear' norm of BMZ is close to our 'div' norm (TODO: we need to control the "gain" arg)
-        elif bmz_config["preprocessing"]["name"] == "scale_linear":
-            opts["DATA.NORMALIZATION.TYPE"] = "div"
+        opts["DATA.NORMALIZATION.TYPE"] = "custom"
+        opts["DATA.NORMALIZATION.CUSTOM_MEAN"] = mean
+        opts["DATA.NORMALIZATION.CUSTOM_STD"] = std
 
-        # 'scale_range' norm of BMZ is as our PERC_CLIP + 'scale_range' norm
-        elif bmz_config["preprocessing"]["name"] == "scale_range":
-            opts["DATA.NORMALIZATION.TYPE"] = "scale_range"
-            if (
-                float(bmz_config["preprocessing"]["kwargs"]["min_percentile"]) != 0
-                or float(bmz_config["preprocessing"]["kwargs"]["max_percentile"]) != 100
-            ):
-                opts["DATA.NORMALIZATION.PERC_CLIP"] = True
-                opts["DATA.NORMALIZATION.PERC_LOWER"] = float(bmz_config["preprocessing"]["kwargs"]["min_percentile"])
-                opts["DATA.NORMALIZATION.PERC_UPPER"] = float(bmz_config["preprocessing"]["kwargs"]["max_percentile"])
+    # 'scale_linear' norm of BMZ is close to our 'div' norm (TODO: we need to control the "gain" arg)
+    elif bmz_config["preprocessing"][key_to_find] == "scale_linear":
+        opts["DATA.NORMALIZATION.TYPE"] = "div"
+
+    # 'scale_range' norm of BMZ is as our PERC_CLIP + 'scale_range' norm
+    elif bmz_config["preprocessing"][key_to_find] == "scale_range":
+        opts["DATA.NORMALIZATION.TYPE"] = "scale_range"
+        if (
+            float(bmz_config["preprocessing"]["kwargs"]["min_percentile"]) != 0
+            or float(bmz_config["preprocessing"]["kwargs"]["max_percentile"]) != 100
+        ):
+            opts["DATA.NORMALIZATION.PERC_CLIP"] = True
+            opts["DATA.NORMALIZATION.PERC_LOWER"] = float(bmz_config["preprocessing"]["kwargs"]["min_percentile"])
+            opts["DATA.NORMALIZATION.PERC_UPPER"] = float(bmz_config["preprocessing"]["kwargs"]["max_percentile"])
 
     option_list = []
     for key, val in opts.items():
