@@ -516,7 +516,8 @@ def check_bmz_model_compatibility(
 
         # Check problem type
         if (specific_workflow in ["all", "SEMANTIC_SEG"]) and (
-            "semantic-segmentation" in model_rdf["tags"] or "segmentation" in model_rdf["tags"]
+            "semantic-segmentation" in model_rdf["tags"] or 
+            ("segmentation" in model_rdf["tags"] and "instance-segmentation" not in model_rdf["tags"])
         ):
             # Check number of classes
             classes = -1
@@ -540,6 +541,7 @@ def check_bmz_model_compatibility(
                 error = True
 
         elif specific_workflow in ["all", "INSTANCE_SEG"] and "instance-segmentation" in model_rdf["tags"]:
+            # TODO: add cellpose tag and create flow post-processing to create images 
             pass
         elif specific_workflow in ["all", "DETECTION"] and "detection" in model_rdf["tags"]:
             pass
@@ -562,36 +564,37 @@ def check_bmz_model_compatibility(
             reason_message += "[{}] no workflow tag recognized in {}.\n".format(specific_workflow, model_rdf["tags"])
             error = True
 
-        # Check axes and dimension
-        if model_version > Version("0.5.0"):
-            axes_order = ""
-            for axis in model_rdf["inputs"][0]["axes"]:
+        # Check axes
+        axes_order = model_rdf["inputs"][0]["axes"]
+        if isinstance(axes_order, list):
+            _axes_order = ""
+            for axis in axes_order:
                 if 'type' in axis:
                     if axis['type'] == "batch":
-                        axes_order += "b"
+                        _axes_order += "b"
                     elif axis['type'] == "channel":
-                        axes_order += "c"
+                        _axes_order += "c"
                     elif 'id' in axis:
-                        axes_order += axis['id']
+                        _axes_order += axis['id']
                 elif 'id' in axis:
                     if axis['id'] == "channel":
-                        axes_order += "c"
+                        _axes_order += "c"
                     else:
-                        axes_order += axis['id']
-        else:
-            axes_order = model_rdf["inputs"][0]["axes"]
+                        _axes_order += axis['id']
+            axes_order = _axes_order
+
         if specific_dims == "2D":
             if axes_order != "bcyx":
                 error = True
                 reason_message += f"[{specific_workflow}] In a 2D problem the axes need to be 'bcyx', found {axes_order}\n"
-            elif "2d" not in model_rdf["tags"]:
+            elif "2d" not in model_rdf["tags"] and "3d" in model_rdf["tags"]:
                 error = True
                 reason_message += f"[{specific_workflow}] Selected model seems to not be 2D\n"
         elif specific_dims == "3D":
             if axes_order != "bczyx":
                 error = True
                 reason_message += f"[{specific_workflow}] In a 3D problem the axes need to be 'bczyx', found {axes_order}\n"
-            elif "3d" not in model_rdf["tags"]:
+            elif "3d" not in model_rdf["tags"] and "2d" in model_rdf["tags"]:
                 error = True
                 reason_message += f"[{specific_workflow}] Selected model seems to not be 3D\n"
         else:  # All
@@ -602,23 +605,34 @@ def check_bmz_model_compatibility(
         # Check preprocessing
         if "preprocessing" in model_rdf["inputs"][0]:
             preproc_info = model_rdf["inputs"][0]["preprocessing"]
-            if isinstance(preproc_info, list) and len(preproc_info) > 1:
-                error = True
-                reason_message += f"[{specific_workflow}] More than one preprocessing from BMZ not implemented yet {axes_order}\n"
-            preproc_info = preproc_info[0]
             key_to_find = "id" if model_version > Version("0.5.0") else "name"
-            if key_to_find in preproc_info:
-                if preproc_info[key_to_find] not in [
-                    "zero_mean_unit_variance",
-                    "fixed_zero_mean_unit_variance",
-                    "scale_range",
-                    "scale_linear",
-                ]:
+            if isinstance(preproc_info, list):
+                # Remove "ensure_dtype" preprocessing when casting to float, as BiaPy will alsways do it like that
+                new_preproc_info = []
+                for preproc in preproc_info:
+                    if key_to_find in preproc and not (preproc[key_to_find] == "ensure_dtype" and 'kwargs' in preproc and 'dtype' in preproc['kwargs'] and 'float' in preproc['kwargs']['dtype']):
+                        new_preproc_info.append(preproc)
+                preproc_info = new_preproc_info.copy()
+                
+                # Then if there is still more than one preprocessing not continue as it is not implemented yet
+                if len(preproc_info) > 1:
                     error = True
-                    reason_message += f"[{specific_workflow}] Not recognized preprocessing found: {preproc_info[key_to_find]}\n"
-            else:
-                error = True
-                reason_message += f"[{specific_workflow}] Not recognized preprocessing structure found: {preproc_info}\n"
+                    reason_message += f"[{specific_workflow}] More than one preprocessing from BMZ not implemented yet {axes_order}\n"
+                elif len(preproc_info) == 1:
+                    preproc_info = preproc_info[0]
+                    if key_to_find in preproc_info:
+                        if preproc_info[key_to_find] not in [
+                            "zero_mean_unit_variance",
+                            "fixed_zero_mean_unit_variance",
+                            "scale_range",
+                            "scale_linear",
+                        ]:
+                            error = True
+                            reason_message += f"[{specific_workflow}] Not recognized preprocessing found: {preproc_info[key_to_find]}\n"
+                    else:
+                        error = True
+                        reason_message += f"[{specific_workflow}] Not recognized preprocessing structure found: {preproc_info}\n"
+
 
         # Check post-processing
         model_kwargs = None
@@ -668,11 +682,14 @@ def check_model_restrictions(cfg, bmz_config):
 
     # 1) Change PATCH_SIZE with the one stored in the RDF
     inputs = get_test_inputs(bmz_config["original_bmz_config"])
+    input_image_shape = None
     if "input0" in inputs.members:
         input_image_shape = inputs.members["input0"]._data.shape
     elif "raw" in inputs.members:
         input_image_shape = inputs.members["raw"]._data.shape
-    else:
+    else: # ambitious-sloth case
+        input_image_shape = inputs.members[list(inputs.members.keys())[0]]._data.shape
+    if input_image_shape is None:
         raise ValueError(f"Couldn't load input info from BMZ model's RDF: {inputs}")
     if cfg.DATA.PATCH_SIZE != input_image_shape[2:] + (input_image_shape[1],):
         opts["DATA.PATCH_SIZE"] = input_image_shape[2:] + (input_image_shape[1],)
