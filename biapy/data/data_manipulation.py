@@ -2306,8 +2306,10 @@ def filter_samples_by_properties(
         print(f"Number of samples before filtering: {len(x_filenames)}")
     else:
         images = list(set([os.path.join(x["dir"], x["filename"]) for x in x_filenames]))
+        images.sort()
         if foreground_filter_requested:
             masks = list(set([os.path.join(x["dir"], x["filename"]) for x in y_filenames]))
+            masks.sort()
         print(f"Number of samples before filtering: {len(images)}")
 
     if not using_zarr and filter_by_entire_image:
@@ -2318,8 +2320,7 @@ def filter_samples_by_properties(
 
             # Load Y data
             if foreground_filter_requested:
-                mask_path = os.path.join(masks[n]["dir"], masks[n]["filename"])
-                mask, _ = load_img_data(mask_path, is_3d=is_3d)
+                mask, _ = load_img_data(masks[n], is_3d=is_3d)
             else:
                 mask = None
 
