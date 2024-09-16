@@ -657,7 +657,7 @@ def check_bmz_model_compatibility(
 
     return preproc_info, error, reason_message
 
-def check_model_restrictions(cfg, bmz_config):
+def check_model_restrictions(cfg, bmz_config, workflow_specs):
     """
     Checks model restrictions to be applied into the current configuration.
 
@@ -669,12 +669,17 @@ def check_model_restrictions(cfg, bmz_config):
     bmz_config : dict
         BMZ configuration where among other thins the RDF of the model is stored.
 
+    workflow_specs : dict
+        Specifications of the workflow. Only expected "workflow_type" key.
+
     Returns
     -------
     option_list: list of str
         List of variables and values to change in current configuration. These changes
         are imposed by the selected model.
     """
+    specific_workflow = workflow_specs["workflow_type"]
+
     # First let's make sure we have a valid model
     if isinstance(bmz_config["original_bmz_config"], InvalidDescr):
         raise ValueError(f"Failed to load {cfg.MODEL.SOURCE}")
@@ -697,13 +702,26 @@ def check_model_restrictions(cfg, bmz_config):
     if cfg.DATA.PATCH_SIZE != input_image_shape[2:] + (input_image_shape[1],):
         opts["DATA.PATCH_SIZE"] = input_image_shape[2:] + (input_image_shape[1],)
 
-    # 2) Change preprocessing to the one stablished by BMZ by translate BMZ keywords into BiaPy's
-    print(
-        f"[BMZ] Overriding preprocessing steps to the ones fixed in BMZ model: {bmz_config['preprocessing']}"
-    )
-    
+    # 2) Classes in semantic segmentation
+    # if (specific_workflow in ["INSTANCE_SEG", "SEMANTIC_SEG", "DETECTION"]):
+    if specific_workflow in ["SEMANTIC_SEG"]:
+        # Check number of classes
+        classes = -1
+        if "n_classes" in bmz_config["original_bmz_config"].weights.pytorch_state_dict.kwargs: # BiaPy
+            classes = bmz_config["original_bmz_config"].weights.pytorch_state_dict.kwargs["n_classes"]
+        elif "out_channels" in bmz_config["original_bmz_config"].weights.pytorch_state_dict.kwargs:
+            classes = bmz_config["original_bmz_config"].weights.pytorch_state_dict.kwargs["out_channels"]
+        elif "classes" in bmz_config["original_bmz_config"].weights.pytorch_state_dict.kwargs:
+            classes = bmz_config["original_bmz_config"].weights.pytorch_state_dict.kwargs["classes"]
+            
+        if specific_workflow == "SEMANTIC_SEG" and classes == -1:
+            raise ValueError("Classes not found for semantic segmentation dir. ")
+        opts["MODEL.N_CLASSES"] = max(2,classes)
+
+    # 3) Change preprocessing to the one stablished by BMZ by translate BMZ keywords into BiaPy's
     # 'zero_mean_unit_variance' and 'fixed_zero_mean_unit_variance' norms of BMZ can be translated to our 'custom' norm
     # providing mean and std
+    print( f"[BMZ] Overriding preprocessing steps to the ones fixed in BMZ model: {bmz_config['preprocessing']}")
     key_to_find = "id" if model_version > Version("0.5.0") else "name"
     if key_to_find in bmz_config["preprocessing"]:
         if bmz_config["preprocessing"][key_to_find] in ["fixed_zero_mean_unit_variance", "zero_mean_unit_variance"]:

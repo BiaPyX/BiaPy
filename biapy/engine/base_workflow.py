@@ -204,7 +204,7 @@ class Base_Workflow(metaclass=ABCMeta):
             print("Loading BioImage Model Zoo pretrained model . . .")
             self.bmz_config["original_bmz_config"] = load_description(self.cfg.MODEL.BMZ.SOURCE_MODEL_ID)
 
-            opts = check_model_restrictions(self.cfg, self.bmz_config)
+            opts = check_model_restrictions(self.cfg, self.bmz_config, {"workflow_type": cfg.PROBLEM.TYPE})
             
             self.cfg.merge_from_list(opts)
 
