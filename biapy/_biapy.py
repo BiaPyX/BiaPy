@@ -479,7 +479,30 @@ class BiaPy:
                     }
                 ]
             elif self.cfg.DATA.NORMALIZATION.TYPE == "scale_range":
-                preprocessing = [{"id": "scale_range"}]
+                axes = ["channel"]
+                axes += list("zyx") if self.cfg.PROBLEM.NDIM == "3D" else list("yx")
+                preprocessing = [{
+                    "id": "scale_range", 
+                    "kwargs": {
+                        "max_percentile": 100,
+                        "min_percentile": 0,
+                        "axes": axes,
+                        }
+                    }]
+
+                # Add percentile norm
+                if self.cfg.DATA.NORMALIZATION.PERC_CLIP:
+                    min_percentile, max_percentile = 0, 100
+                    if self.cfg.DATA.NORMALIZATION.PERC_CLIP:
+                        min_percentile = self.cfg.DATA.NORMALIZATION.PERC_LOWER
+                        max_percentile = self.cfg.DATA.NORMALIZATION.PERC_UPPER
+                    perc_instructions = {
+                        "axes": axes,
+                        "max_percentile": max_percentile,
+                        "min_percentile": min_percentile,
+                    }
+                    preprocessing[0]["kwargs"].update(perc_instructions)
+                    
             else:  # custom
                 custom_mean = self.cfg.DATA.NORMALIZATION.CUSTOM_MEAN
                 custom_std = self.cfg.DATA.NORMALIZATION.CUSTOM_STD
@@ -505,21 +528,7 @@ class BiaPy:
                             },
                         }
                     ]
-                
-            # Add percentile norm
-            if self.cfg.DATA.NORMALIZATION.PERC_CLIP:
-                min_percentile, max_percentile = 0, 100
-                if self.cfg.DATA.NORMALIZATION.PERC_CLIP:
-                    min_percentile = self.cfg.DATA.NORMALIZATION.PERC_LOWER
-                    max_percentile = self.cfg.DATA.NORMALIZATION.PERC_UPPER
-                axes = ["channel"]
-                axes += list("zyx") if self.cfg.PROBLEM.NDIM == "3D" else list("yx")
-                perc_instructions = {
-                    "axes": axes,
-                    "max_percentile": max_percentile,
-                    "min_percentile": min_percentile,
-                }
-                preprocessing[0]["kwargs"].update(perc_instructions)
+
         # BMZ, reusing the preprocessing
         else:
             if original_model_version > Version("0.5.0"):

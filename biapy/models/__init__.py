@@ -505,7 +505,7 @@ def check_bmz_model_compatibility(
 
     error = False
     reason_message = ""
-    preproc_info = []
+    preproc_info = {}
 
     # Accepting models that are exported in pytorch_state_dict and with just one input
     if "pytorch_state_dict" in model_rdf["weights"] and len(model_rdf["inputs"]) == 1:
@@ -633,7 +633,6 @@ def check_bmz_model_compatibility(
                         error = True
                         reason_message += f"[{specific_workflow}] Not recognized preprocessing structure found: {preproc_info}\n"
 
-
         # Check post-processing
         model_kwargs = None
         if "kwargs" in model_rdf["weights"]["pytorch_state_dict"]:
@@ -698,41 +697,42 @@ def check_model_restrictions(cfg, bmz_config):
     print(
         f"[BMZ] Overriding preprocessing steps to the ones fixed in BMZ model: {bmz_config['preprocessing']}"
     )
-
-    key_to_find = "id" if model_version > Version("0.5.0") else "name"
+    
     # 'zero_mean_unit_variance' and 'fixed_zero_mean_unit_variance' norms of BMZ can be translated to our 'custom' norm
     # providing mean and std
-    if bmz_config["preprocessing"][key_to_find] in ["fixed_zero_mean_unit_variance", "zero_mean_unit_variance"]:
-        if (
-            "kwargs" in bmz_config["preprocessing"]
-            and "mean" in bmz_config["preprocessing"]["kwargs"]
-        ):
-            mean = bmz_config["preprocessing"]["kwargs"]["mean"]
-            std = bmz_config["preprocessing"]["kwargs"]["std"]
-        elif "mean" in bmz_config["preprocessing"]:
-            mean = bmz_config["preprocessing"]["mean"]
-            std = bmz_config["preprocessing"]["std"]
-        else:
-            mean, std = -1., -1.
+    key_to_find = "id" if model_version > Version("0.5.0") else "name"
+    if key_to_find in bmz_config["preprocessing"]:
+        if bmz_config["preprocessing"][key_to_find] in ["fixed_zero_mean_unit_variance", "zero_mean_unit_variance"]:
+            if (
+                "kwargs" in bmz_config["preprocessing"]
+                and "mean" in bmz_config["preprocessing"]["kwargs"]
+            ):
+                mean = bmz_config["preprocessing"]["kwargs"]["mean"]
+                std = bmz_config["preprocessing"]["kwargs"]["std"]
+            elif "mean" in bmz_config["preprocessing"]:
+                mean = bmz_config["preprocessing"]["mean"]
+                std = bmz_config["preprocessing"]["std"]
+            else:
+                mean, std = -1., -1.
 
-        opts["DATA.NORMALIZATION.TYPE"] = "custom"
-        opts["DATA.NORMALIZATION.CUSTOM_MEAN"] = mean
-        opts["DATA.NORMALIZATION.CUSTOM_STD"] = std
+            opts["DATA.NORMALIZATION.TYPE"] = "custom"
+            opts["DATA.NORMALIZATION.CUSTOM_MEAN"] = mean
+            opts["DATA.NORMALIZATION.CUSTOM_STD"] = std
 
-    # 'scale_linear' norm of BMZ is close to our 'div' norm (TODO: we need to control the "gain" arg)
-    elif bmz_config["preprocessing"][key_to_find] == "scale_linear":
-        opts["DATA.NORMALIZATION.TYPE"] = "div"
+        # 'scale_linear' norm of BMZ is close to our 'div' norm (TODO: we need to control the "gain" arg)
+        elif bmz_config["preprocessing"][key_to_find] == "scale_linear":
+            opts["DATA.NORMALIZATION.TYPE"] = "div"
 
-    # 'scale_range' norm of BMZ is as our PERC_CLIP + 'scale_range' norm
-    elif bmz_config["preprocessing"][key_to_find] == "scale_range":
-        opts["DATA.NORMALIZATION.TYPE"] = "scale_range"
-        if (
-            float(bmz_config["preprocessing"]["kwargs"]["min_percentile"]) != 0
-            or float(bmz_config["preprocessing"]["kwargs"]["max_percentile"]) != 100
-        ):
-            opts["DATA.NORMALIZATION.PERC_CLIP"] = True
-            opts["DATA.NORMALIZATION.PERC_LOWER"] = float(bmz_config["preprocessing"]["kwargs"]["min_percentile"])
-            opts["DATA.NORMALIZATION.PERC_UPPER"] = float(bmz_config["preprocessing"]["kwargs"]["max_percentile"])
+        # 'scale_range' norm of BMZ is as our PERC_CLIP + 'scale_range' norm
+        elif bmz_config["preprocessing"][key_to_find] == "scale_range":
+            opts["DATA.NORMALIZATION.TYPE"] = "scale_range"
+            if (
+                float(bmz_config["preprocessing"]["kwargs"]["min_percentile"]) != 0
+                or float(bmz_config["preprocessing"]["kwargs"]["max_percentile"]) != 100
+            ):
+                opts["DATA.NORMALIZATION.PERC_CLIP"] = True
+                opts["DATA.NORMALIZATION.PERC_LOWER"] = float(bmz_config["preprocessing"]["kwargs"]["min_percentile"])
+                opts["DATA.NORMALIZATION.PERC_UPPER"] = float(bmz_config["preprocessing"]["kwargs"]["max_percentile"])
 
     option_list = []
     for key, val in opts.items():
