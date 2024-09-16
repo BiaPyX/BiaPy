@@ -510,6 +510,10 @@ def check_bmz_model_compatibility(
     # Accepting models that are exported in pytorch_state_dict and with just one input
     if "pytorch_state_dict" in model_rdf["weights"] and len(model_rdf["inputs"]) == 1:
 
+        # TODO: control model.weights.pytorch_state_dict.dependencies conda env to check if all 
+        # dependencies are installed 
+        # https://github.com/bioimage-io/collection-bioimage-io/issues/609
+
         model_version = Version("0.5")
         if "format_version" in model_rdf:
             model_version = Version(model_rdf["format_version"])
