@@ -223,7 +223,9 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.shape = resize_shape
         self.random_crop_func = random_3D_crop_single if ndim == 3 else random_crop_single
         self.val = val
-
+        self.preprocess_f = preprocess_f
+        self.preprocess_cfg = preprocess_cfg
+        
         # X data analysis
         img, _ = self.load_sample(0, first_load=True)
         if norm_dict["enable"]:
