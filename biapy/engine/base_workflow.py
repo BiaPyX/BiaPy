@@ -17,7 +17,7 @@ from scipy.ndimage import zoom
 from bioimageio.core import create_prediction_pipeline
 from bioimageio.spec import load_description
 
-from biapy.config.config import Config
+from biapy.config.config import Config, update_dependencies
 from biapy.models import (
     build_model,
     build_torchvision_model,
@@ -189,9 +189,6 @@ class Base_Workflow(metaclass=ABCMeta):
         self.axis_order = (0, 3, 1, 2) if self.cfg.PROBLEM.NDIM == "2D" else (0, 4, 1, 2, 3)
         self.axis_order_back = (0, 2, 3, 1) if self.cfg.PROBLEM.NDIM == "2D" else (0, 2, 3, 4, 1)
 
-        # Define metrics
-        self.define_metrics()
-
         # Tochvision variables
         self.torchvision_preprocessing = None
 
@@ -207,6 +204,10 @@ class Base_Workflow(metaclass=ABCMeta):
             opts = check_model_restrictions(self.cfg, self.bmz_config, {"workflow_type": cfg.PROBLEM.TYPE})
             
             self.cfg.merge_from_list(opts)
+            update_dependencies(self.cfg)
+
+        # Define metrics
+        self.define_metrics()
 
     def define_metrics(self):
         """

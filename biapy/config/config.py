@@ -1325,93 +1325,94 @@ class Config:
         # This is for the "local variable" use pattern
         return self._C.clone()
 
-    def update_dependencies(self) -> None:
-        """Update some variables that depend of changes made after merge the .cfg file provide by the user. That is,
-        this function should be called after YACS's merge_from_file().
-        """
-        # Remove possible / characters at the end of the paths
-        self._C.DATA.TRAIN.PATH = (
-            self._C.DATA.TRAIN.PATH if self._C.DATA.TRAIN.PATH[-1] != "/" else self._C.DATA.TRAIN.PATH[:-1]
-        )
-        self._C.DATA.TRAIN.GT_PATH = (
-            self._C.DATA.TRAIN.GT_PATH if self._C.DATA.TRAIN.GT_PATH[-1] != "/" else self._C.DATA.TRAIN.GT_PATH[:-1]
-        )
-        self._C.DATA.VAL.PATH = (
-            self._C.DATA.VAL.PATH if self._C.DATA.VAL.PATH[-1] != "/" else self._C.DATA.VAL.PATH[:-1]
-        )
-        self._C.DATA.VAL.GT_PATH = (
-            self._C.DATA.VAL.GT_PATH if self._C.DATA.VAL.GT_PATH[-1] != "/" else self._C.DATA.VAL.GT_PATH[:-1]
-        )
-        self._C.DATA.TEST.PATH = (
-            self._C.DATA.TEST.PATH if self._C.DATA.TEST.PATH[-1] != "/" else self._C.DATA.TEST.PATH[:-1]
-        )
-        self._C.DATA.TEST.GT_PATH = (
-            self._C.DATA.TEST.GT_PATH if self._C.DATA.TEST.GT_PATH[-1] != "/" else self._C.DATA.TEST.GT_PATH[:-1]
-        )
+def update_dependencies(cfg) -> None:
+    """Update some variables that depend of changes made after merge the .cfg file provide by the user. That is,
+    this function should be called after YACS's merge_from_file().
+    """
+    call = getattr(cfg, "_C") if bool(getattr(cfg, "_C", False)) else cfg
+    # Remove possible / characters at the end of the paths
+    call.DATA.TRAIN.PATH = (
+        call.DATA.TRAIN.PATH if call.DATA.TRAIN.PATH[-1] != "/" else call.DATA.TRAIN.PATH[:-1]
+    )
+    call.DATA.TRAIN.GT_PATH = (
+        call.DATA.TRAIN.GT_PATH if call.DATA.TRAIN.GT_PATH[-1] != "/" else call.DATA.TRAIN.GT_PATH[:-1]
+    )
+    call.DATA.VAL.PATH = (
+        call.DATA.VAL.PATH if call.DATA.VAL.PATH[-1] != "/" else call.DATA.VAL.PATH[:-1]
+    )
+    call.DATA.VAL.GT_PATH = (
+        call.DATA.VAL.GT_PATH if call.DATA.VAL.GT_PATH[-1] != "/" else call.DATA.VAL.GT_PATH[:-1]
+    )
+    call.DATA.TEST.PATH = (
+        call.DATA.TEST.PATH if call.DATA.TEST.PATH[-1] != "/" else call.DATA.TEST.PATH[:-1]
+    )
+    call.DATA.TEST.GT_PATH = (
+        call.DATA.TEST.GT_PATH if call.DATA.TEST.GT_PATH[-1] != "/" else call.DATA.TEST.GT_PATH[:-1]
+    )
 
-        self._C.DATA.TRAIN.INSTANCE_CHANNELS_DIR = (
-            self._C.DATA.TRAIN.PATH
-            + "_"
-            + self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
-            + "_"
-            + self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
-        )
-        self._C.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR = (
-            self._C.DATA.TRAIN.GT_PATH
-            + "_"
-            + self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
-            + "_"
-            + self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
-        )
-        self._C.DATA.TRAIN.DETECTION_MASK_DIR = self._C.DATA.TRAIN.GT_PATH + "_detection_masks"
-        self._C.DATA.TRAIN.SSL_SOURCE_DIR = self._C.DATA.TRAIN.PATH + "_ssl_source"
-        self._C.DATA.VAL.INSTANCE_CHANNELS_DIR = (
-            self._C.DATA.VAL.PATH
-            + "_"
-            + self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
-            + "_"
-            + self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
-        )
-        self._C.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR = (
-            self._C.DATA.VAL.GT_PATH
-            + "_"
-            + self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
-            + "_"
-            + self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
-        )
-        # If value is not the default
-        self._C.DATA.VAL.DETECTION_MASK_DIR = self._C.DATA.VAL.GT_PATH + "_detection_masks"
-        self._C.DATA.VAL.SSL_SOURCE_DIR = self._C.DATA.VAL.PATH + "_ssl_source"
-        self._C.DATA.TEST.INSTANCE_CHANNELS_DIR = (
-            self._C.DATA.TEST.PATH
-            + "_"
-            + self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
-            + "_"
-            + self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
-        )
-        self._C.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR = (
-            self._C.DATA.TEST.GT_PATH
-            + "_"
-            + self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
-            + "_"
-            + self._C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
-        )
-        # If value is not the default
-        if self._C.DATA.TEST.BINARY_MASKS == os.path.join("user_data", "test", "bin_mask"):
-            self._C.DATA.TEST.BINARY_MASKS = os.path.join(self._C.DATA.TEST.PATH, "..", "bin_mask")
-        self._C.DATA.TEST.DETECTION_MASK_DIR = self._C.DATA.TEST.GT_PATH + "_detection_masks"
-        self._C.DATA.TEST.SSL_SOURCE_DIR = self._C.DATA.TEST.PATH + "_ssl_source"
-        self._C.PATHS.TEST_FULL_GT_H5 = os.path.join(self._C.DATA.TEST.GT_PATH, "h5")
+    call.DATA.TRAIN.INSTANCE_CHANNELS_DIR = (
+        call.DATA.TRAIN.PATH
+        + "_"
+        + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
+        + "_"
+        + call.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
+    )
+    call.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR = (
+        call.DATA.TRAIN.GT_PATH
+        + "_"
+        + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
+        + "_"
+        + call.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
+    )
+    call.DATA.TRAIN.DETECTION_MASK_DIR = call.DATA.TRAIN.GT_PATH + "_detection_masks"
+    call.DATA.TRAIN.SSL_SOURCE_DIR = call.DATA.TRAIN.PATH + "_ssl_source"
+    call.DATA.VAL.INSTANCE_CHANNELS_DIR = (
+        call.DATA.VAL.PATH
+        + "_"
+        + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
+        + "_"
+        + call.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
+    )
+    call.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR = (
+        call.DATA.VAL.GT_PATH
+        + "_"
+        + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
+        + "_"
+        + call.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
+    )
+    # If value is not the default
+    call.DATA.VAL.DETECTION_MASK_DIR = call.DATA.VAL.GT_PATH + "_detection_masks"
+    call.DATA.VAL.SSL_SOURCE_DIR = call.DATA.VAL.PATH + "_ssl_source"
+    call.DATA.TEST.INSTANCE_CHANNELS_DIR = (
+        call.DATA.TEST.PATH
+        + "_"
+        + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
+        + "_"
+        + call.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
+    )
+    call.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR = (
+        call.DATA.TEST.GT_PATH
+        + "_"
+        + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
+        + "_"
+        + call.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
+    )
+    # If value is not the default
+    if call.DATA.TEST.BINARY_MASKS == os.path.join("user_data", "test", "bin_mask"):
+        call.DATA.TEST.BINARY_MASKS = os.path.join(call.DATA.TEST.PATH, "..", "bin_mask")
+    call.DATA.TEST.DETECTION_MASK_DIR = call.DATA.TEST.GT_PATH + "_detection_masks"
+    call.DATA.TEST.SSL_SOURCE_DIR = call.DATA.TEST.PATH + "_ssl_source"
+    call.PATHS.TEST_FULL_GT_H5 = os.path.join(call.DATA.TEST.GT_PATH, "h5")
 
-        self._C.PATHS.TRAIN_INSTANCE_CHANNELS_CHECK = os.path.join(
-            self._C.PATHS.RESULT_DIR.PATH,
-            "train_" + self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS + "_instance_channels",
-        )
-        self._C.PATHS.VAL_INSTANCE_CHANNELS_CHECK = os.path.join(
-            self._C.PATHS.RESULT_DIR.PATH,
-            "val_" + self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS + "_instance_channels",
-        )
-        self._C.PATHS.TEST_INSTANCE_CHANNELS_CHECK = os.path.join(
-            self._C.PATHS.RESULT_DIR.PATH,
-            "test_" + self._C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS + "_instance_channels",
-        )
+    call.PATHS.TRAIN_INSTANCE_CHANNELS_CHECK = os.path.join(
+        call.PATHS.RESULT_DIR.PATH,
+        "train_" + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS + "_instance_channels",
+    )
+    call.PATHS.VAL_INSTANCE_CHANNELS_CHECK = os.path.join(
+        call.PATHS.RESULT_DIR.PATH,
+        "val_" + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS + "_instance_channels",
+    )
+    call.PATHS.TEST_INSTANCE_CHANNELS_CHECK = os.path.join(
+        call.PATHS.RESULT_DIR.PATH,
+        "test_" + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS + "_instance_channels",
+    )

@@ -48,7 +48,7 @@ from biapy.utils.misc import (
     get_rank,
     setup_for_distributed,
 )
-from biapy.config.config import Config
+from biapy.config.config import Config, update_dependencies
 from biapy.engine.check_configuration import check_configuration
 from biapy.models import get_bmz_model_info
 from biapy.utils.util import create_file_sha256sum
@@ -143,7 +143,7 @@ class BiaPy:
         # Merge conf file with the default settings
         self.cfg = Config(self.job_dir, self.job_identifier)
         self.cfg._C.merge_from_file(self.cfg_file)
-        self.cfg.update_dependencies()
+        update_dependencies(self.cfg)
         # self.cfg.freeze()
 
         now = datetime.datetime.now()
