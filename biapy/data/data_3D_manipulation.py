@@ -377,7 +377,7 @@ def crop_3D_data_with_overlap(
         if p >= vol_shape[i] // 2:
             raise ValueError(
                 "'Padding' can not be greater than the half of 'vol_shape'. Max value for this {} input shape is {}".format(
-                    data.shape,
+                    vol_shape,
                     [
                         (vol_shape[0] // 2) - 1,
                         (vol_shape[1] // 2) - 1,
@@ -848,7 +848,7 @@ def extract_3D_patch_with_overlap_yield(
         if p >= vol_shape[i] // 2:
             raise ValueError(
                 "'Padding' can not be greater than the half of 'vol_shape'. Max value for this {} input shape is {}".format(
-                    data.shape,
+                    vol_shape,
                     [
                         (vol_shape[0] // 2) - 1,
                         (vol_shape[1] // 2) - 1,

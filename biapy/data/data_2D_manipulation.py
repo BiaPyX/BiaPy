@@ -122,7 +122,7 @@ def crop_data_with_overlap(data, crop_shape, data_mask=None, overlap=(0, 0), pad
         if p >= crop_shape[i] // 2:
             raise ValueError(
                 "'Padding' can not be greater than the half of 'crop_shape'. Max value for this {} input shape is {}".format(
-                    data.shape, [(crop_shape[0] // 2) - 1, (crop_shape[1] // 2) - 1]
+                    crop_shape, [(crop_shape[0] // 2) - 1, (crop_shape[1] // 2) - 1]
                 )
             )
     if len(crop_shape) != 3:
