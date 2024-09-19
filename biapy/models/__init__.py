@@ -532,8 +532,13 @@ def check_bmz_model_compatibility(
                     classes = model_rdf["weights"]["pytorch_state_dict"]["kwargs"]["out_channels"]
                 elif "classes" in model_rdf["weights"]["pytorch_state_dict"]["kwargs"]:
                     classes = model_rdf["weights"]["pytorch_state_dict"]["kwargs"]["classes"]
+                if isinstance(classes, list): 
+                    classes = classes[0]   
+                if not isinstance(classes, int):
+                    reason_message += f"[{specific_workflow}] 'MODEL.N_CLASSES' not extracted. Obtained {classes}. Please check it!\n"
+                    error = True
 
-            if classes != -1:
+            if isinstance(classes, int) and classes != -1:
                 if ref_classes != "all":
                     if classes > 2 and ref_classes != classes:
                         reason_message += f"[{specific_workflow}] 'MODEL.N_CLASSES' does not match network's output classes. Please check it!\n"
@@ -713,9 +718,14 @@ def check_model_restrictions(cfg, bmz_config, workflow_specs):
             classes = bmz_config["original_bmz_config"].weights.pytorch_state_dict.kwargs["out_channels"]
         elif "classes" in bmz_config["original_bmz_config"].weights.pytorch_state_dict.kwargs:
             classes = bmz_config["original_bmz_config"].weights.pytorch_state_dict.kwargs["classes"]
+        
+        if isinstance(classes, list): 
+            classes = classes[0]    
+        if not isinstance(classes, int):
+            raise ValueError(f"Classes not extracted correctly. Obtained {classes}")
             
         if specific_workflow == "SEMANTIC_SEG" and classes == -1:
-            raise ValueError("Classes not found for semantic segmentation dir. ")
+            raise ValueError("Classes not found for semantic segmentation dir.")
         opts["MODEL.N_CLASSES"] = max(2,classes)
 
     # 3) Change preprocessing to the one stablished by BMZ by translate BMZ keywords into BiaPy's
