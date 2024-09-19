@@ -1499,8 +1499,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     if cfg.MODEL.LOAD_CHECKPOINT and check_data_paths:
         if not os.path.exists(get_checkpoint_path(cfg, jobname)):
             raise FileNotFoundError(f"Model checkpoint not found at {get_checkpoint_path(cfg, jobname)}")
-    if not cfg.MODEL.LOAD_CHECKPOINT and cfg.MODEL.LOAD_MODEL_FROM_CHECKPOINT:
-        raise ValueError("'MODEL.LOAD_MODEL_FROM_CHECKPOINT' can not be enabled when 'MODEL.LOAD_CHECKPOINT' is not enabled too")
 
     ### Train ###
     assert cfg.TRAIN.OPTIMIZER in [
