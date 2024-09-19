@@ -707,8 +707,8 @@ def check_model_restrictions(cfg, bmz_config, workflow_specs):
     if cfg.DATA.PATCH_SIZE != input_image_shape[2:] + (input_image_shape[1],):
         opts["DATA.PATCH_SIZE"] = input_image_shape[2:] + (input_image_shape[1],)
 
-    # 2) Classes in semantic segmentation
-    # if (specific_workflow in ["INSTANCE_SEG", "SEMANTIC_SEG", "DETECTION"]):
+    # 2) Workflow specific restrictions 
+    # Classes in semantic segmentation
     if specific_workflow in ["SEMANTIC_SEG"]:
         # Check number of classes
         classes = -1
@@ -727,6 +727,22 @@ def check_model_restrictions(cfg, bmz_config, workflow_specs):
         if specific_workflow == "SEMANTIC_SEG" and classes == -1:
             raise ValueError("Classes not found for semantic segmentation dir.")
         opts["MODEL.N_CLASSES"] = max(2,classes)
+    elif specific_workflow in ["INSTANCE_SEG"]:
+        # Assumed it's BC. This needs a more elaborated process. Still deciding this:
+        # https://github.com/bioimage-io/spec-bioimage-io/issues/621
+        channels = 2 
+        if "out_channels" in bmz_config["original_bmz_config"].weights.pytorch_state_dict.kwargs:
+            channels = bmz_config["original_bmz_config"].weights.pytorch_state_dict.kwargs["out_channels"]
+        if channels == 1:
+            channel_code = "C"
+        elif channels == 2:
+            channel_code = "BC"
+        elif channels == 3:
+            channel_code = "BCM"
+        if channels > 3:
+            raise ValueError(f"Not recognized number of channels for instance segmentation. Obtained {channels}")
+        
+        opts["PROBLEM.INSTANCE_SEG.DATA_CHANNELS"] = channel_code
 
     # 3) Change preprocessing to the one stablished by BMZ by translate BMZ keywords into BiaPy's
     # 'zero_mean_unit_variance' and 'fixed_zero_mean_unit_variance' norms of BMZ can be translated to our 'custom' norm
