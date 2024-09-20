@@ -470,7 +470,7 @@ def load_and_prepare_train_data(
             train_filter_vals,
             train_filter_signs,
             y_filenames=Y_train,
-            filter_by_entire_image=filter_by_entire_image,
+            filter_by_entire_image = filter_by_entire_image if not random_crops_in_DA else True,
             zarr_data_information=train_zarr_data_information if train_using_zarr else None,
         )
         if train_mask_path is not None:
@@ -722,7 +722,7 @@ def load_and_prepare_train_data(
                 val_filter_vals,
                 val_filter_signs,
                 y_filenames=Y_val,
-                filter_by_entire_image=filter_by_entire_image,
+                filter_by_entire_image = filter_by_entire_image if not random_crops_in_DA else True,
                 zarr_data_information=val_zarr_data_information if val_using_zarr else None,
             )
             if val_mask_path is not None:
