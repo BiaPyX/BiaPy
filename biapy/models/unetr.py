@@ -155,7 +155,7 @@ class UNETR(nn.Module):
         # UNETR Part (bottom_up, from the bottle-neck, to the output)
         self.total_upscale_factor = int(math.log2(patch_size))
         # make a list of dropout values if needed
-        if type(dropout) is float:
+        if type(dropout) is float or type(dropout) is int:
             dropout = [
                 dropout,
             ] * self.total_upscale_factor
