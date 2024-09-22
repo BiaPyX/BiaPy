@@ -556,9 +556,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         )
 
     model_arch = cfg.MODEL.ARCHITECTURE.lower()
+    model_will_be_read = cfg.MODEL.LOAD_CHECKPOINT and cfg.MODEL.LOAD_MODEL_FROM_CHECKPOINT
     #### Semantic segmentation ####
     if cfg.PROBLEM.TYPE == "SEMANTIC_SEG":
-        if not cfg.MODEL.LOAD_MODEL_FROM_CHECKPOINT and cfg.MODEL.SOURCE == "biapy":
+        if not model_will_be_read and cfg.MODEL.SOURCE == "biapy":
             if cfg.MODEL.N_CLASSES < 2:
                 raise ValueError("'MODEL.N_CLASSES' needs to be greater or equal 2 (binary case)")
         elif cfg.MODEL.SOURCE == "torchvision":
@@ -668,7 +669,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
     #### Detection ####
     if cfg.PROBLEM.TYPE == "DETECTION":
-        if not cfg.MODEL.LOAD_MODEL_FROM_CHECKPOINT and cfg.MODEL.SOURCE == "biapy" and cfg.MODEL.N_CLASSES < 2:
+        if not model_will_be_read and cfg.MODEL.SOURCE == "biapy" and cfg.MODEL.N_CLASSES < 2:
             raise ValueError("'MODEL.N_CLASSES' needs to be greater or equal 2 (binary case)")
         
         cpd = cfg.PROBLEM.DETECTION.CENTRAL_POINT_DILATION
@@ -760,12 +761,12 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 raise ValueError("'PROBLEM.SELF_SUPERVISED.RESIZING_FACTOR' not in [2,4,6]")
             if not check_value(cfg.PROBLEM.SELF_SUPERVISED.NOISE):
                 raise ValueError("'PROBLEM.SELF_SUPERVISED.NOISE' not in [0, 1] range")
-            if not cfg.MODEL.LOAD_MODEL_FROM_CHECKPOINT and model_arch == "mae":
+            if not model_will_be_read and model_arch == "mae":
                 raise ValueError(
                     "'MODEL.ARCHITECTURE' can not be 'mae' when 'PROBLEM.SELF_SUPERVISED.PRETEXT_TASK' is 'crappify'"
                 )
         elif cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
-            if not cfg.MODEL.LOAD_MODEL_FROM_CHECKPOINT and model_arch != "mae":
+            if not model_will_be_read and model_arch != "mae":
                 raise ValueError(
                     "'MODEL.ARCHITECTURE' needs to be 'mae' when 'PROBLEM.SELF_SUPERVISED.PRETEXT_TASK' is 'masking'"
                 )
@@ -1207,7 +1208,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             print("WARNING: 'DATA.TRAIN.REPLICATE' has no effect in the selected workflow")
 
     ### Model ###
-    if not cfg.MODEL.LOAD_MODEL_FROM_CHECKPOINT and cfg.MODEL.SOURCE == "biapy":
+    if not model_will_be_read and cfg.MODEL.SOURCE == "biapy":
         assert model_arch in [
             "unet",
             "resunet",
@@ -1332,7 +1333,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     if len(opts) > 0:
         cfg.merge_from_list(opts)
 
-    if not cfg.MODEL.LOAD_MODEL_FROM_CHECKPOINT and cfg.MODEL.SOURCE == "biapy":
+    if not model_will_be_read and cfg.MODEL.SOURCE == "biapy":
         assert cfg.MODEL.LAST_ACTIVATION.lower() in [
             "relu",
             "tanh",
