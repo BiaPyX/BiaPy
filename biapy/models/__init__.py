@@ -707,38 +707,48 @@ def check_model_restrictions(cfg, bmz_config, workflow_specs):
     if cfg.DATA.PATCH_SIZE != input_image_shape[2:] + (input_image_shape[1],):
         opts["DATA.PATCH_SIZE"] = input_image_shape[2:] + (input_image_shape[1],)
 
+    if hasattr(bmz_config["original_bmz_config"].weights.pytorch_state_dict, 'kwargs'):
+        kwargs = bmz_config["original_bmz_config"].weights.pytorch_state_dict.kwargs
+    elif hasattr(bmz_config["original_bmz_config"].weights.pytorch_state_dict, 'architecture'):
+        kwargs = bmz_config["original_bmz_config"].weights.pytorch_state_dict.architecture.kwargs
+    else: 
+        raise ValueError(f"Couldn't extract kwargs from model description.")
+        
     # 2) Workflow specific restrictions 
     # Classes in semantic segmentation
     if specific_workflow in ["SEMANTIC_SEG"]:
         # Check number of classes
         classes = -1
-        if "n_classes" in bmz_config["original_bmz_config"].weights.pytorch_state_dict.kwargs: # BiaPy
-            classes = bmz_config["original_bmz_config"].weights.pytorch_state_dict.kwargs["n_classes"]
-        elif "out_channels" in bmz_config["original_bmz_config"].weights.pytorch_state_dict.kwargs:
-            classes = bmz_config["original_bmz_config"].weights.pytorch_state_dict.kwargs["out_channels"]
-        elif "classes" in bmz_config["original_bmz_config"].weights.pytorch_state_dict.kwargs:
-            classes = bmz_config["original_bmz_config"].weights.pytorch_state_dict.kwargs["classes"]
+        if "n_classes" in kwargs: # BiaPy
+            classes = kwargs["n_classes"]
+        elif "out_channels" in kwargs:
+            classes = kwargs["out_channels"]
+        elif "classes" in kwargs:
+            classes = kwargs["classes"]
         
         if isinstance(classes, list): 
             classes = classes[0]    
+
         if not isinstance(classes, int):
             raise ValueError(f"Classes not extracted correctly. Obtained {classes}")
-            
-        if specific_workflow == "SEMANTIC_SEG" and classes == -1:
+        if classes == -1:
             raise ValueError("Classes not found for semantic segmentation dir.")
+        
         opts["MODEL.N_CLASSES"] = max(2,classes)
+
     elif specific_workflow in ["INSTANCE_SEG"]:
         # Assumed it's BC. This needs a more elaborated process. Still deciding this:
         # https://github.com/bioimage-io/spec-bioimage-io/issues/621
         channels = 2 
-        if "out_channels" in bmz_config["original_bmz_config"].weights.pytorch_state_dict.kwargs:
-            channels = bmz_config["original_bmz_config"].weights.pytorch_state_dict.kwargs["out_channels"]
+        if "out_channels" in kwargs:
+            channels = kwargs["out_channels"]
         if channels == 1:
             channel_code = "C"
         elif channels == 2:
             channel_code = "BC"
         elif channels == 3:
             channel_code = "BCM"
+            
         if channels > 3:
             raise ValueError(f"Not recognized number of channels for instance segmentation. Obtained {channels}")
         
