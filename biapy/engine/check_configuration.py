@@ -1619,13 +1619,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     "'MODEL.BMZ.EXPORT.MODEL_NAME' must be set. Remember that it should be something meaningful (take other models names in https://bioimage.io/#/ as reference)."
                 )
 
-            if cfg.MODEL.BMZ.EXPORT.EXPORT_PATH == "":
-                raise ValueError("'MODEL.BMZ.EXPORT.EXPORT_PATH' must be set.")
-            elif not os.path.exists(cfg.MODEL.BMZ.EXPORT.EXPORT_PATH):
-                raise ValueError(
-                    "BioImage Model Zoo model exportation path not found: '{}'".format(cfg.MODEL.BMZ.EXPORT.EXPORT_PATH)
-                )
-
             if cfg.MODEL.BMZ.EXPORT.DESCRIPTION == "":
                 raise ValueError(
                     "'MODEL.BMZ.EXPORT.DESCRIPTION' must be set. Remember that it should be meaninful (take other models descriptions in https://bioimage.io/#/ as reference)."

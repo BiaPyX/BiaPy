@@ -732,8 +732,6 @@ class Config:
         _C.MODEL.BMZ.EXPORT.ENABLE = False
         # Name of the model to create. It should be something meaningful. Take other models in https://bioimage.io/#/ as reference.
         _C.MODEL.BMZ.EXPORT.MODEL_NAME = ""
-        # Path to store the BMZ model created 
-        _C.MODEL.BMZ.EXPORT.EXPORT_PATH = ""
         # Description of the model. It should be something meaningful. Take other models in https://bioimage.io/#/ as reference.
         # E.g. "Mitochondria segmentation for electron microscopy"
         _C.MODEL.BMZ.EXPORT.DESCRIPTION = ""
@@ -757,8 +755,7 @@ class Config:
         #  {"text": "data", "doi": "10.48550/arXiv.1812.06024"}]
         _C.MODEL.BMZ.EXPORT.CITE = []
         # If you are loading a BMZ model you can enable this option to avoid setting all above variables and instead reuse the same
-        # information that was present in that model. You need still to set 'MODEL.BMZ.EXPORT.ENABLE' to 'True' and 
-        # 'MODEL.BMZ.EXPORT.EXPORT_PATH', but nothing else.
+        # information that was present in that model. You need still to set 'MODEL.BMZ.EXPORT.ENABLE' to 'True' and nothing else.
         _C.MODEL.BMZ.EXPORT.REUSE_BMZ_CONFIG = False
 
         #
@@ -1296,6 +1293,8 @@ class Config:
         )
         _C.PATHS.RESULT_DIR.DET_ASSOC_POINTS = os.path.join(_C.PATHS.RESULT_DIR.PATH, "point_associations")
         _C.PATHS.RESULT_DIR.INST_ASSOC_POINTS = os.path.join(_C.PATHS.RESULT_DIR.PATH, "instance_associations")
+        # Path to store the BMZ model created 
+        _C.PATHS.BMZ_EXPORT_PATH = os.path.join(_C.PATHS.RESULT_DIR.PATH, "BMZ_files")
 
         # Path to store profiler files
         _C.PATHS.PROFILER = os.path.join(_C.PATHS.RESULT_DIR.PATH, "profiler")

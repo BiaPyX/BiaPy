@@ -964,7 +964,7 @@ class BiaPy:
 
         if self.cfg.MODEL.BMZ.EXPORT.ENABLE:
             if self.cfg.MODEL.BMZ.EXPORT.REUSE_BMZ_CONFIG:
-                self.export_model_to_bmz(self.cfg.MODEL.BMZ.EXPORT.EXPORT_PATH, reuse_original_bmz_config=True)
+                self.export_model_to_bmz(self.cfg.PATHS.BMZ_EXPORT_PATH, reuse_original_bmz_config=True)
             else:
                 # Create a dict with all BMZ requirements
                 bmz_cfg = {}
@@ -976,6 +976,6 @@ class BiaPy:
                 bmz_cfg["doc"] = self.cfg.MODEL.BMZ.EXPORT.DOCUMENTATION
                 bmz_cfg["model_name"] = self.cfg.MODEL.BMZ.EXPORT.MODEL_NAME
 
-                self.export_model_to_bmz(self.cfg.MODEL.BMZ.EXPORT.EXPORT_PATH, bmz_cfg=bmz_cfg)
+                self.export_model_to_bmz(self.cfg.PATHS.BMZ_EXPORT_PATH, bmz_cfg=bmz_cfg)
 
         print("FINISHED JOB {} !!".format(self.job_identifier))
