@@ -740,7 +740,8 @@ class Config:
         _C.MODEL.BMZ.EXPORT.AUTHORS = []
         # License of the model.
         _C.MODEL.BMZ.EXPORT.LICENSE = "CC-BY-4.0"
-        # Path to a .md extension file with the documentation of the model. Take other models in https://bioimage.io/#/ as reference.
+        # Path to a .md extension file with the documentation of the model. If it is not set so the model documentation will point to 
+        # BiaPy doc: https://github.com/BiaPyX/BiaPy/blob/master/README.md". Take other models in https://bioimage.io/#/ as reference.
         _C.MODEL.BMZ.EXPORT.DOCUMENTATION = ""
         # List of tags. Here the type of dataset and the target object should be provided. BiaPy automatically sets the following tags: 
         #   * "biapy": to represent that the model was created with BiaPy.
