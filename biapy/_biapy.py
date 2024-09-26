@@ -6,6 +6,7 @@ import argparse
 import datetime
 import ntpath
 import torch
+import pooch
 import torch.distributed as dist
 from shutil import copyfile
 import numpy as np
@@ -52,6 +53,7 @@ from biapy.config.config import Config, update_dependencies
 from biapy.engine.check_configuration import check_configuration
 from biapy.models import get_bmz_model_info
 from biapy.utils.util import create_file_sha256sum
+from biapy.data.data_manipulation import ensure_2d_shape, ensure_3d_shape
 
 
 class BiaPy:
@@ -467,10 +469,7 @@ class BiaPy:
         # Preprocessing
         # Actually Torchvision has its own preprocessing but it can not be adapted to BMZ easily, so for now
         # we set it like we were using BiaPy backend
-        if (
-            self.cfg.MODEL.SOURCE in ["biapy", "torchvision"]
-            or self.cfg.MODEL.SOURCE == "bmz"
-        ):
+        if self.cfg.MODEL.SOURCE in ["biapy", "torchvision"] or self.cfg.MODEL.SOURCE == "bmz":
             if self.cfg.DATA.NORMALIZATION.TYPE == "div":
                 preprocessing = [
                     {
@@ -481,14 +480,16 @@ class BiaPy:
             elif self.cfg.DATA.NORMALIZATION.TYPE == "scale_range":
                 axes = ["channel"]
                 axes += list("zyx") if self.cfg.PROBLEM.NDIM == "3D" else list("yx")
-                preprocessing = [{
-                    "id": "scale_range", 
-                    "kwargs": {
-                        "max_percentile": 100,
-                        "min_percentile": 0,
-                        "axes": axes,
-                        }
-                    }]
+                preprocessing = [
+                    {
+                        "id": "scale_range",
+                        "kwargs": {
+                            "max_percentile": 100,
+                            "min_percentile": 0,
+                            "axes": axes,
+                        },
+                    }
+                ]
 
                 # Add percentile norm
                 if self.cfg.DATA.NORMALIZATION.PERC_CLIP:
@@ -502,7 +503,7 @@ class BiaPy:
                         "min_percentile": min_percentile,
                     }
                     preprocessing[0]["kwargs"].update(perc_instructions)
-                    
+
             else:  # custom
                 custom_mean = self.cfg.DATA.NORMALIZATION.CUSTOM_MEAN
                 custom_std = self.cfg.DATA.NORMALIZATION.CUSTOM_STD
@@ -645,8 +646,101 @@ class BiaPy:
             )
             outputs = [output_descr]
         else:
-            inputs = self.workflow.bmz_config["original_bmz_config"].inputs
-            outputs = self.workflow.bmz_config["original_bmz_config"].outputs
+            inputs = []
+            for i, input in enumerate(self.workflow.bmz_config["original_bmz_config"].inputs):
+                if type(input) != InputTensorDescr:
+                    # Read tensor
+                    test_tensor_local_path = pooch.retrieve(
+                        self.workflow.bmz_config["original_bmz_config"].test_inputs[i].absolute(), known_hash=None
+                    )
+                    test_tensor = np.load(test_tensor_local_path).squeeze()
+                    if self.cfg.PROBLEM.NDIM == "2D":
+                        test_tensor = ensure_2d_shape(test_tensor, test_tensor_local_path)
+                    else:
+                        test_tensor = ensure_3d_shape(test_tensor, test_tensor_local_path)
+
+                    # Create axes object
+                    input_axes = []
+                    for letter in input.axes:
+                        if letter == "b":
+                            input_axes.append(BatchAxis())
+                        elif letter == "c":
+                            input_axes.append(
+                                ChannelAxis(
+                                    channel_names=[Identifier("channel" + str(i)) for i in range(test_tensor.shape[-1])]
+                                ),
+                            )
+                        elif letter == "z":
+                            input_axes.append(SpaceInputAxis(id=AxisId(str(letter)), size=test_tensor.shape[0]))
+                        elif letter == "y":
+                            if self.cfg.PROBLEM.NDIM == "2D":
+                                input_axes.append(SpaceInputAxis(id=AxisId(str(letter)), size=test_tensor.shape[0]))
+                            else:
+                                input_axes.append(SpaceInputAxis(id=AxisId(str(letter)), size=test_tensor.shape[1]))
+                        elif letter == "x":
+                            if self.cfg.PROBLEM.NDIM == "2D":
+                                input_axes.append(SpaceInputAxis(id=AxisId(str(letter)), size=test_tensor.shape[1]))
+                            else:
+                                input_axes.append(SpaceInputAxis(id=AxisId(str(letter)), size=test_tensor.shape[2]))
+
+                    input_descr = InputTensorDescr(
+                        id=TensorId(input.name),
+                        axes=input_axes,
+                        test_tensor=FileDescr(source=Path(test_tensor_local_path)),
+                        data=IntervalOrRatioDataDescr(type=input.data_type),
+                        preprocessing=preprocessing,  # type: ignore
+                    )
+                    inputs.append(input_descr)
+                else:
+                    inputs.append(input)
+
+            outputs = []
+            for i, output in enumerate(self.workflow.bmz_config["original_bmz_config"].outputs):
+                if type(output) != OutputTensorDescr:
+                    # Read tensor
+                    test_tensor_local_path = pooch.retrieve(
+                        self.workflow.bmz_config["original_bmz_config"].test_outputs[i].absolute(), known_hash=None
+                    )
+                    test_tensor = np.load(test_tensor_local_path).squeeze()
+                    if self.cfg.PROBLEM.NDIM == "2D":
+                        test_tensor = ensure_2d_shape(test_tensor, test_tensor_local_path)
+                    else:
+                        test_tensor = ensure_3d_shape(test_tensor, test_tensor_local_path)
+
+                    # Create axes object
+                    output_axes = []
+                    for letter in output.axes:
+                        if letter == "b":
+                            output_axes.append(BatchAxis())
+                        elif letter == "c":
+                            output_axes.append(
+                                ChannelAxis(
+                                    channel_names=[Identifier("channel" + str(i)) for i in range(test_tensor.shape[-1])]
+                                ),
+                            )
+                        elif letter == "z":
+                            output_axes.append(SpaceOutputAxis(id=AxisId(str(letter)), size=test_tensor.shape[0]))
+                        elif letter == "y":
+                            if self.cfg.PROBLEM.NDIM == "2D":
+                                output_axes.append(SpaceOutputAxis(id=AxisId(str(letter)), size=test_tensor.shape[0]))
+                            else:
+                                output_axes.append(SpaceOutputAxis(id=AxisId(str(letter)), size=test_tensor.shape[1]))
+                        elif letter == "x":
+                            if self.cfg.PROBLEM.NDIM == "2D":
+                                output_axes.append(SpaceOutputAxis(id=AxisId(str(letter)), size=test_tensor.shape[1]))
+                            else:
+                                output_axes.append(SpaceOutputAxis(id=AxisId(str(letter)), size=test_tensor.shape[2]))
+
+                    output_descr = OutputTensorDescr(
+                        id=TensorId(output.name),
+                        axes=output_axes,
+                        test_tensor=FileDescr(source=Path(test_tensor_local_path)),
+                        data=IntervalOrRatioDataDescr(type=output.data_type),
+                        # postprocessing=postprocessing,
+                    )
+                    outputs.append(output_descr)
+                else:
+                    outputs.append(output)
 
         # Name of the model
         if not reuse_original_bmz_config:
@@ -688,8 +782,32 @@ class BiaPy:
                 authors.append(Author(**args))
                 maintainers.append(Maintainer(**args))
         else:
-            authors = self.workflow.bmz_config["original_bmz_config"].authors
-            maintainers = self.workflow.bmz_config["original_bmz_config"].maintainers
+            _authors = self.workflow.bmz_config["original_bmz_config"].authors
+            for author in _authors:
+                if type(author) != Author:
+                    args = dict(name=author.name, github_user=author.github_user)
+                    if author.affiliation:
+                        args["affiliation"] = author.affiliation
+                    if author.orcid:
+                        args["orcid"] = author.orcid
+                    if author.email:
+                        args["email"] = author.email
+                    authors.append(Author(**args))
+                else:
+                    authors.append(author)
+            _maintainers = self.workflow.bmz_config["original_bmz_config"].maintainers
+            for author in _maintainers:
+                if type(author) != Maintainer:
+                    args = dict(name=author.name, github_user=author.github_user)
+                    if author.affiliation:
+                        args["affiliation"] = author.affiliation
+                    if author.orcid:
+                        args["orcid"] = author.orcid
+                    if author.email:
+                        args["email"] = author.email
+                    maintainers.append(Maintainer(**args))
+                else:
+                    maintainers.append(author)
 
         # License
         if not reuse_original_bmz_config:
@@ -699,10 +817,11 @@ class BiaPy:
 
         # Doc
         if not reuse_original_bmz_config:
-            if str(bmz_cfg["doc"]).startswith("http"):
-                doc = HttpUrl("https://biapy.readthedocs.io/en/latest/")
-            else:
-                doc = bmz_cfg["doc"]
+            doc = (
+                HttpUrl("https://github.com/BiaPyX/BiaPy/blob/master/README.md")
+                if bmz_cfg["doc"] == ""
+                else bmz_cfg["doc"]
+            )
         else:
             doc = self.workflow.bmz_config["original_bmz_config"].documentation
 
@@ -712,12 +831,25 @@ class BiaPy:
             for cite in bmz_cfg["cite"]:
                 args = dict(text=cite["text"])
                 if "url" in cite:
-                    args["url"] = cite["url"] 
+                    args["url"] = cite["url"]
                 if "doi" in cite:
                     args["doi"] = Doi(re.sub(r"^.*?10", "10", cite["doi"]))
                 citations.append(CiteEntry(**args))
+        else:
+            _citations = self.workflow.bmz_config["original_bmz_config"].cite
+            for cite in _citations:
+                if type(cite) != CiteEntry:
+                    args = dict(text=cite.text)
+                    if cite.url:
+                        args["url"] = cite.url
+                    if cite.doi:
+                        args["doi"] = Doi(cite.doi)
+                    citations.append(CiteEntry(**args))
+                else:
+                    citations.append(cite)
 
-            # Add BiaPy citation
+        # Add BiaPy citation if it's not there
+        if not any([True for cite in citations if "biapy" in cite.text.lower()]):
             citations.append(
                 CiteEntry(
                     text="BiaPy: A unified framework for versatile bioimage analysis with deep learning",
@@ -725,8 +857,6 @@ class BiaPy:
                     url=HttpUrl("https://www.biorxiv.org/content/10.1101/2024.02.03.576026.abstract"),
                 )
             )
-        else:
-            citations = self.workflow.bmz_config["original_bmz_config"].cite
 
         # Cover
         covers = []
@@ -813,7 +943,7 @@ class BiaPy:
         os.chdir(cwd)
 
         print("FINISHED JOB {} !!".format(self.job_identifier))
-        
+
     def run_job(self):
         """Run a complete BiaPy workflow."""
         if self.cfg.TRAIN.ENABLE:
@@ -831,5 +961,21 @@ class BiaPy:
             setup_for_distributed(self.args.rank == 0)
             dist.barrier()
             dist.destroy_process_group()
+
+        if self.cfg.MODEL.BMZ.EXPORT.ENABLE:
+            if self.cfg.MODEL.BMZ.EXPORT.REUSE_BMZ_CONFIG:
+                self.export_model_to_bmz(self.cfg.MODEL.BMZ.EXPORT.EXPORT_PATH, reuse_original_bmz_config=True)
+            else:
+                # Create a dict with all BMZ requirements
+                bmz_cfg = {}
+                bmz_cfg["description"] = self.cfg.MODEL.BMZ.EXPORT.DESCRIPTION
+                bmz_cfg["authors"] = self.cfg.MODEL.BMZ.EXPORT.AUTHORS
+                bmz_cfg["license"] = self.cfg.MODEL.BMZ.EXPORT.LICENSE
+                bmz_cfg["tags"] = self.cfg.MODEL.BMZ.EXPORT.TAGS
+                bmz_cfg["cite"] = self.cfg.MODEL.BMZ.EXPORT.CITE
+                bmz_cfg["doc"] = self.cfg.MODEL.BMZ.EXPORT.DOCUMENTATION
+                bmz_cfg["model_name"] = self.cfg.MODEL.BMZ.EXPORT.MODEL_NAME
+
+                self.export_model_to_bmz(self.cfg.MODEL.BMZ.EXPORT.EXPORT_PATH, bmz_cfg=bmz_cfg)
 
         print("FINISHED JOB {} !!".format(self.job_identifier))

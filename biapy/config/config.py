@@ -727,6 +727,39 @@ class Config:
         # DOI or nickname of the model from BMZ to load. It can not be empty if MODEL.SOURCE = "bmz".
         _C.MODEL.BMZ.SOURCE_MODEL_ID = ""
         # BMZ model export options
+        _C.MODEL.BMZ.EXPORT = CN()
+        # Whether to activate or not the exporation of the used model to the BMZ format after train and/or test 
+        _C.MODEL.BMZ.EXPORT.ENABLE = False
+        # Name of the model to create. It should be something meaningful. Take other models in https://bioimage.io/#/ as reference.
+        _C.MODEL.BMZ.EXPORT.MODEL_NAME = ""
+        # Path to store the BMZ model created 
+        _C.MODEL.BMZ.EXPORT.EXPORT_PATH = ""
+        # Description of the model. It should be something meaningful. Take other models in https://bioimage.io/#/ as reference.
+        # E.g. "Mitochondria segmentation for electron microscopy"
+        _C.MODEL.BMZ.EXPORT.DESCRIPTION = ""
+        # List of authors of the model. Each item must be a dict containing "name" and "githubuser".
+        # E.g. [{"name": "Daniel", "github_user": "danifranco"}]
+        _C.MODEL.BMZ.EXPORT.AUTHORS = []
+        # License of the model.
+        _C.MODEL.BMZ.EXPORT.LICENSE = "CC-BY-4.0"
+        # Path to a .md extension file with the documentation of the model. Take other models in https://bioimage.io/#/ as reference.
+        _C.MODEL.BMZ.EXPORT.DOCUMENTATION = ""
+        # List of tags. Here the type of dataset and the target object should be provided. BiaPy automatically sets the following tags: 
+        #   * "biapy": to represent that the model was created with BiaPy.
+        #   * "pytorch": to represent that you are using Pytorch
+        #   * "2d" or "3d": depending on the image dimensions one or the other is selected.
+        #   * workflow tag: depending on the workflow the tag is set. E.g. "semantic-segmentation"
+        #
+        # So, what you can set for instance is: ["electron-microscopy", "mitochondria"]
+        _C.MODEL.BMZ.EXPORT.TAGS = []
+        # Citations. It must be a list of dictionaries with keys "text" and "doi". E.g.:
+        # [{"text": "training library", "doi": "10.1101/2024.02.03.576026"}, {"text": "architecture", "doi": "10.1109/LGRS.2018.2802944"},
+        #  {"text": "data", "doi": "10.48550/arXiv.1812.06024"}]
+        _C.MODEL.BMZ.EXPORT.CITE = []
+        # If you are loading a BMZ model you can enable this option to avoid setting all above variables and instead reuse the same
+        # information that was present in that model. You need still to set 'MODEL.BMZ.EXPORT.ENABLE' to 'True' and 
+        # 'MODEL.BMZ.EXPORT.EXPORT_PATH', but nothing else.
+        _C.MODEL.BMZ.EXPORT.REUSE_BMZ_CONFIG = False
 
         #
         # TOCHIVISION BACKEND MODELS AND OPTIONS

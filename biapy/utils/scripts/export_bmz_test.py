@@ -16,7 +16,7 @@ parser.add_argument(
     help="Path to where the resulting output of the job will be stored",
 )
 parser.add_argument("--model_name", required=True, help="Name of the model")
-parser.add_argument("--doc_file", required=True, help="Dcoumentation file")
+parser.add_argument("--doc_file", required=True, help="Documentation file")
 parser.add_argument("--bmz_folder", required=True, help="BMZ model out folder")
 parser.add_argument("--gpu", required=True, help="GPU to use")
 parser.add_argument(

@@ -48,23 +48,27 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     for phase in ["TRAIN", "VAL", "TEST"]:
         if getattr(cfg.DATA, phase).FILTER_SAMPLES.ENABLE:
             if not (
-                    len(getattr(cfg.DATA, phase).FILTER_SAMPLES.PROPS)
-                    == len(getattr(cfg.DATA, phase).FILTER_SAMPLES.VALUES)
-                    == len(getattr(cfg.DATA, phase).FILTER_SAMPLES.SIGNS)
-                ):
-                    raise ValueError(
-                        "'DATA.TRAIN.FILTER_SAMPLES.PROPS', 'DATA.TRAIN.FILTER_SAMPLES.VALUES' and "
-                        "'DATA.TRAIN.FILTER_SAMPLES.SIGNS' need to have same length"
-                    )
-            foreground_filter_requested = any([True for cond in getattr(cfg.DATA, phase).FILTER_SAMPLES.PROPS if "foreground" in cond])
+                len(getattr(cfg.DATA, phase).FILTER_SAMPLES.PROPS)
+                == len(getattr(cfg.DATA, phase).FILTER_SAMPLES.VALUES)
+                == len(getattr(cfg.DATA, phase).FILTER_SAMPLES.SIGNS)
+            ):
+                raise ValueError(
+                    "'DATA.TRAIN.FILTER_SAMPLES.PROPS', 'DATA.TRAIN.FILTER_SAMPLES.VALUES' and "
+                    "'DATA.TRAIN.FILTER_SAMPLES.SIGNS' need to have same length"
+                )
+            foreground_filter_requested = any(
+                [True for cond in getattr(cfg.DATA, phase).FILTER_SAMPLES.PROPS if "foreground" in cond]
+            )
             if foreground_filter_requested:
                 if cfg.PROBLEM.TYPE not in ["SEMANTIC_SEG", "INSTANCE_SEG", "DETECTION"]:
                     raise ValueError(
                         "'foreground' property can only be used in SEMANTIC_SEG, INSTANCE_SEG and DETECTION workflows"
                     )
                 if phase == "TEST" and not cfg.DATA.TEST.LOAD_GT and cfg.DATA.TEST.USE_VAL_AS_TEST:
-                    raise ValueError("'foreground' condition can not be used for filtering when test ground truth is not provided")
-                
+                    raise ValueError(
+                        "'foreground' condition can not be used for filtering when test ground truth is not provided"
+                    )
+
             if len(getattr(cfg.DATA, phase).FILTER_SAMPLES.PROPS) == 0:
                 raise ValueError(
                     "'DATA.TRAIN.FILTER_SAMPLES.PROPS' can not be an empty list when "
@@ -117,13 +121,9 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     )
                     > 0
                 ):
-                    raise ValueError(
-                        "Non repeated values are allowed in 'DATA.TRAIN.FILTER_SAMPLES'"
-                    )
+                    raise ValueError("Non repeated values are allowed in 'DATA.TRAIN.FILTER_SAMPLES'")
                 for j in range(len(getattr(cfg.DATA, phase).FILTER_SAMPLES.PROPS[i])):
-                    if getattr(cfg.DATA, phase).FILTER_SAMPLES.PROPS[i][j] not in [
-                        'foreground', 'mean', 'min', 'max'
-                    ]:
+                    if getattr(cfg.DATA, phase).FILTER_SAMPLES.PROPS[i][j] not in ["foreground", "mean", "min", "max"]:
                         raise ValueError(
                             "'DATA.TRAIN.FILTER_SAMPLES.PROPS' can only be one among these: ['foreground', 'mean', 'min', 'max']"
                         )
@@ -136,9 +136,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                         raise ValueError(
                             "'DATA.TRAIN.FILTER_SAMPLES.SIGNS' can only be one among these: ['gt', 'ge', 'lt', 'le']"
                         )
-                    if getattr(cfg.DATA, phase).FILTER_SAMPLES.PROPS[i][
-                        j
-                    ] == "foreground" and not check_value(
+                    if getattr(cfg.DATA, phase).FILTER_SAMPLES.PROPS[i][j] == "foreground" and not check_value(
                         getattr(cfg.DATA, phase).FILTER_SAMPLES.VALUES[i][j]
                     ):
                         raise ValueError(
@@ -526,17 +524,13 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         if cfg.TEST.AUGMENTATION:
             print("WARNING: 'TEST.AUGMENTATION' is not available using TorchVision models")
         if cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
-                raise ValueError(
-                    "'TEST.ANALIZE_2D_IMGS_AS_3D_STACK' can not be activated with TorchVision models"
-                )
+            raise ValueError("'TEST.ANALIZE_2D_IMGS_AS_3D_STACK' can not be activated with TorchVision models")
         if cfg.PROBLEM.NDIM == "3D":
             raise ValueError("TorchVision model's are only available for 2D images")
-        
+
         if not cfg.TEST.FULL_IMG and cfg.PROBLEM.TYPE != "CLASSIFICATION":
-            raise ValueError(
-                "With TorchVision models only 'TEST.FULL_IMG' setting is available, so please set it"
-            )
-    
+            raise ValueError("With TorchVision models only 'TEST.FULL_IMG' setting is available, so please set it")
+
     if cfg.TEST.AUGMENTATION and cfg.TEST.REDUCE_MEMORY:
         raise ValueError(
             "'TEST.AUGMENTATION' and 'TEST.REDUCE_MEMORY' are incompatible as the function used to make the rotation "
@@ -671,16 +665,20 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     if cfg.PROBLEM.TYPE == "DETECTION":
         if not model_will_be_read and cfg.MODEL.SOURCE == "biapy" and cfg.MODEL.N_CLASSES < 2:
             raise ValueError("'MODEL.N_CLASSES' needs to be greater or equal 2 (binary case)")
-        
+
         cpd = cfg.PROBLEM.DETECTION.CENTRAL_POINT_DILATION
         if len(cpd) == 1:
             cpd = cpd * 2 if cfg.PROBLEM.NDIM == "2D" else cpd * 3
-            
+
         if len(cpd) != 3 and cfg.PROBLEM.NDIM == "3D":
-            raise ValueError("'PROBLEM.DETECTION.CENTRAL_POINT_DILATION' needs to be a list of three ints in a 3D problem")
+            raise ValueError(
+                "'PROBLEM.DETECTION.CENTRAL_POINT_DILATION' needs to be a list of three ints in a 3D problem"
+            )
         elif len(cpd) != 2 and cfg.PROBLEM.NDIM == "2D":
-            raise ValueError("'PROBLEM.DETECTION.CENTRAL_POINT_DILATION' needs to be a list of two ints in a 2D problem")
-        
+            raise ValueError(
+                "'PROBLEM.DETECTION.CENTRAL_POINT_DILATION' needs to be a list of two ints in a 2D problem"
+            )
+
         opts.extend(["PROBLEM.DETECTION.CENTRAL_POINT_DILATION", cpd])
 
         if cfg.TEST.POST_PROCESSING.DET_WATERSHED:
@@ -920,10 +918,14 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             raise ValueError("'MODEL.SOURCE' as 'torchvision' is not available in image to image workflow")
         if cfg.PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER:
             if cfg.TRAIN.ENABLE and cfg.DATA.TRAIN.FILTER_SAMPLES.ENABLE:
-                raise ValueError("'DATA.TRAIN.FILTER_SAMPLES.ENABLE' can not be enabled when 'PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER' is enabled too")
-            
+                raise ValueError(
+                    "'DATA.TRAIN.FILTER_SAMPLES.ENABLE' can not be enabled when 'PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER' is enabled too"
+                )
+
             if cfg.TRAIN.ENABLE and cfg.DATA.VAL.FILTER_SAMPLES.ENABLE:
-                raise ValueError("'DATA.VAL.FILTER_SAMPLES.ENABLE' can not be enabled when 'PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER' is enabled too")
+                raise ValueError(
+                    "'DATA.VAL.FILTER_SAMPLES.ENABLE' can not be enabled when 'PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER' is enabled too"
+                )
 
     if cfg.DATA.EXTRACT_RANDOM_PATCH and cfg.DATA.PROBABILITY_MAP:
         if cfg.DATA.W_FOREGROUND + cfg.DATA.W_BACKGROUND != 1:
@@ -1187,7 +1189,9 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         "custom",
     ], "DATA.NORMALIZATION.TYPE not in ['div', 'scale_range', 'custom']"
     if cfg.DATA.NORMALIZATION.CUSTOM_MEAN != -1 and cfg.DATA.NORMALIZATION.CUSTOM_STD == -1:
-        raise ValueError("'DATA.NORMALIZATION.CUSTOM_STD' needs to be provided when 'DATA.NORMALIZATION.CUSTOM_MEAN' is provided too")
+        raise ValueError(
+            "'DATA.NORMALIZATION.CUSTOM_STD' needs to be provided when 'DATA.NORMALIZATION.CUSTOM_MEAN' is provided too"
+        )
     if cfg.DATA.NORMALIZATION.PERC_CLIP:
         if cfg.DATA.NORMALIZATION.PERC_LOWER == -1:
             raise ValueError(
@@ -1607,6 +1611,72 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "normalization will lead to"
             )
 
+    # BioImage Model Zoo exportation process
+    if cfg.MODEL.BMZ.EXPORT.ENABLE:
+        if not cfg.MODEL.BMZ.EXPORT.REUSE_BMZ_CONFIG:
+            if cfg.MODEL.BMZ.EXPORT.MODEL_NAME == "":
+                raise ValueError(
+                    "'MODEL.BMZ.EXPORT.MODEL_NAME' must be set. Remember that it should be something meaningful (take other models names in https://bioimage.io/#/ as reference)."
+                )
+
+            if cfg.MODEL.BMZ.EXPORT.EXPORT_PATH == "":
+                raise ValueError("'MODEL.BMZ.EXPORT.EXPORT_PATH' must be set.")
+            elif not os.path.exists(cfg.MODEL.BMZ.EXPORT.EXPORT_PATH):
+                raise ValueError(
+                    "BioImage Model Zoo model exportation path not found: '{}'".format(cfg.MODEL.BMZ.EXPORT.EXPORT_PATH)
+                )
+
+            if cfg.MODEL.BMZ.EXPORT.DESCRIPTION == "":
+                raise ValueError(
+                    "'MODEL.BMZ.EXPORT.DESCRIPTION' must be set. Remember that it should be meaninful (take other models descriptions in https://bioimage.io/#/ as reference)."
+                )
+            if len(cfg.MODEL.BMZ.EXPORT.AUTHORS) == 0:
+                raise ValueError(
+                    "At least one author must be provided in 'MODEL.BMZ.EXPORT.AUTHORS'. Each author must be a dictionary containing 'name' and 'github_user' keys. E.g. [{'name': 'Daniel', 'github_user': 'danifranco'}]"
+                )
+            if cfg.MODEL.BMZ.EXPORT.LICENSE == "":
+                raise ValueError(
+                    "'MODEL.BMZ.EXPORT.LICENSE' must be set. Remember that it should be something meaningful (take other models licenses in https://bioimage.io/#/ as reference)."
+                )
+            if len(cfg.MODEL.BMZ.EXPORT.TAGS) == 0:
+                raise ValueError(
+                    "'MODEL.BMZ.EXPORT.TAGS' must be set. Remember that it should be something meaningful (take other models tags in https://bioimage.io/#/ as reference)."
+                )
+            if len(cfg.MODEL.BMZ.EXPORT.CITE) > 0:
+                for d in cfg.MODEL.BMZ.EXPORT.CITE:
+                    if not isinstance(d, dict):
+                        raise ValueError(
+                            "'MODEL.BMZ.EXPORT.CITE' needs to be a list of dicts. E.g. [{'text': 'Gizmo et al.', 'doi': '10.1002/xyzacab123'}, {'text': 'training library', 'doi': '10.1101/2024.02.03.576026'}]"
+                        )
+                    else:
+                        if len(d.keys()) < 2 or "text" not in d:
+                            raise ValueError(
+                                "'MODEL.BMZ.EXPORT.CITE' malformed. Cite dictionary must have at least 'text' key. E.g. {'text': 'Gizmo et al.', 'doi': '10.1002/xyzacab123'}"
+                            )
+                        for k in d.keys():
+                            if k not in ["text", "doi", "url"]:
+                                raise ValueError(
+                                    f"'MODEL.BMZ.EXPORT.CITE' malformed. Cite dictionary available keys are: ['text', 'doi', 'url']. Provided {k}. E.g. {'text': 'Gizmo et al.', 'doi': '10.1002/xyzacab123'}"
+                                )
+                            
+            if cfg.MODEL.BMZ.EXPORT.DOCUMENTATION == "":
+                print(
+                    "WARNING: 'MODEL.BMZ.EXPORT.DOCUMENTATION' not set so the model documentation will point to BiaPy doc: https://github.com/BiaPyX/BiaPy/blob/master/README.md"
+                )
+            elif not os.path.exists(cfg.MODEL.BMZ.EXPORT.DOCUMENTATION):
+                raise ValueError(
+                    "'MODEL.BMZ.EXPORT.DOCUMENTATION' path provided doesn't point to a file or can't be reached: {}".format(
+                        cfg.MODEL.BMZ.EXPORT.DOCUMENTATION
+                    )
+                )
+            elif not str(cfg.MODEL.BMZ.EXPORT.DOCUMENTATION).endswith(".md"):
+                raise ValueError(
+                    "'MODEL.BMZ.EXPORT.DOCUMENTATION' file suffix must be .md"
+                )
+        else:
+            if cfg.MODEL.SOURCE != "bmz":
+                raise ValueError("Seems that you are not loading a BioImage Model Zoo model. Thus, you can not activate 'MODEL.BMZ.EXPORT.REUSE_BMZ_CONFIG' as there will be nothing to reuse.")
+
     #### Post-processing ####
     if cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS:
         if len(cfg.DATA.TEST.RESOLUTION) == 1:
@@ -1621,10 +1691,11 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "'TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS' needs to be set when 'TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS' is True"
             )
 
+
 def compare_configurations_without_model(actual_cfg, old_cfg, header_message=""):
     """
     Compares two configurations and throws an error if they differ in some critical variables that change workflow behaviour. This
-    comparisdon does not take into account model specs. 
+    comparisdon does not take into account model specs.
     """
     print("Comparing configurations . . .")
 
@@ -1636,17 +1707,19 @@ def compare_configurations_without_model(actual_cfg, old_cfg, header_message="")
         "PROBLEM.SELF_SUPERVISED.PRETEXT_TASK",
         "PROBLEM.SUPER_RESOLUTION.UPSCALING",
         "MODEL.N_CLASSES",
-        ]
-        
+    ]
+
     def get_attribute_recursive(var, attr):
         att = attr.split(".")
         if len(att) == 1:
             return getattr(var, att[0])
         else:
             return get_attribute_recursive(getattr(var, att[0]), ".".join(att[1:]))
-        
+
     for var_to_compare in vars_to_compare:
         if get_attribute_recursive(actual_cfg, var_to_compare) != get_attribute_recursive(old_cfg, var_to_compare):
-            raise ValueError(header_message+f"The '{var_to_compare}' value of the compared configurations does not match")
-        
+            raise ValueError(
+                header_message + f"The '{var_to_compare}' value of the compared configurations does not match"
+            )
+
     print("Configurations seem to be compatible. Continuing . . .")
