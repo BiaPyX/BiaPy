@@ -549,7 +549,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     cfg=self.cfg,
                     jobname=self.job_identifier,
                     model_without_ddp=None,
-                    device=None,
+                    device=self.device,
                     just_extract_model=True,
                 )
 
