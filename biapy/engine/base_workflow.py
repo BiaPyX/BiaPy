@@ -563,6 +563,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 # Check if the merge is coherent
                 updated_config = self.cfg.clone()
                 updated_config["MODEL"]["LOAD_MODEL_FROM_CHECKPOINT"] = False
+                self.cfg["MODEL"]["LOAD_CHECKPOINT"] = True
                 check_configuration(updated_config, self.job_identifier)
             (
                 self.model,
