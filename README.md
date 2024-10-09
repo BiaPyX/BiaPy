@@ -1,6 +1,6 @@
 ![BiaPy logo](https://raw.githubusercontent.com/BiaPyX/BiaPy/master/img/biapy_logo.png)
 
-# BiaPy: Bioimage analysis pipelines in Python
+# BiaPy: Accessible deep learning on bioimages
 
 <p align="left">
     <a href="https://www.python.org/">
