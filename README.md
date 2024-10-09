@@ -29,7 +29,7 @@ This repository is actively under development by the [BiaPy Team](https://biapyx
 
 ![BiaPy workflows](https://raw.githubusercontent.com/BiaPyX/BiaPy/master/img/BiaPy-workflow-readme.svg)
 
-## Description video
+## Description videos
 Find a comprehensive overview of BiaPy and its functionality in the following videos:
 
 | [![BiaPy history and GUI demo](./img/BiaPy_presentation_and_demo_at_RTmfm.jpg)](https://www.youtube.com/watch?v=Gnm-VsZQ6Cc "BiaPy: a ready-to-use library for Bioimage Analysis Pipelines") <br> <span style="font-weight:normal">BiaPy history and GUI demo at [RTmfm](https://rtmfm.cnrs.fr/en/) by Ignacio Arganda-Carreras and Daniel Franco-Barranco.</span> |
