@@ -86,6 +86,7 @@ Project's page: [[BiaPy GUI](https://github.com/BiaPyX/BiaPy-GUI)]
 | [Anatole Chessel](https://scholar.google.com/citations?hl=en&user=GC8aiVsAAAAJ)                                                        | Supervision                 | <ul> <li>Laboratoire d’Optique et Biosciences, CNRS, Inserm, Ecole Polytechnique</li> </ul>  |
 
 ## Citation
+Please note that BiaPy is based on a publication. If you use it successfully for your research please be so kind to cite our work:
 ```
 Franco-Barranco, D., Andrés-San Román, J.A., Gómez-Gálvez, P., Escudero, L.M., Muñoz-Barrutia, A. and
 Arganda-Carreras, I., 2023, April. BiaPy: a ready-to-use library for Bioimage Analysis Pipelines.
