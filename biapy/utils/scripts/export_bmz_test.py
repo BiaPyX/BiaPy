@@ -1,4 +1,3 @@
-import os
 import sys
 import argparse
 
@@ -34,7 +33,7 @@ biapy.run_job()
 
 # import pdb; pdb.set_trace()
 if args["reuse_original_bmz_config"]:
-    biapy.export_model_to_bmz("/data/dfranco/bmz_check", reuse_original_bmz_config=True)
+    biapy.export_model_to_bmz(args["bmz_folder"], reuse_original_bmz_config=True)
 else:
     # Create a dict with all BMZ requirements
     bmz_cfg = {}

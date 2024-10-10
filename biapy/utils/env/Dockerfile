@@ -31,14 +31,14 @@ RUN conda update -qy conda \
 SHELL ["conda", "run", "-n", "BiaPy_env", "/bin/bash", "-c"]
 
 # Install BiaPy
-RUN pip install biapy==3.5.3
+RUN pip install biapy==3.5.4
 
 # Install Pytorch 2.2.0 + CUDA 11.8
 RUN pip install torch==2.4.0 torchvision==0.19.0 torchaudio==2.4.0 --index-url https://download.pytorch.org/whl/cu118 
 RUN pip install timm pytorch-msssim torchmetrics[image]
 
 # Clone BiaPy, as running it with python -c "" stops the container with no error after a few seconds running 
- RUN git clone --depth 1 https://github.com/BiaPyX/BiaPy.git  --branch v3.5.3 /installations/BiaPy
+ RUN git clone --depth 1 https://github.com/BiaPyX/BiaPy.git  --branch v3.5.4 /installations/BiaPy
 
 # This time clone the last commit (25729c ; v3.5.2) as some minor bugs were solved but not created a new release yet
 #RUN git clone --depth 1 https://github.com/BiaPyX/BiaPy.git /installations/BiaPy

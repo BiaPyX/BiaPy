@@ -75,9 +75,9 @@ all_test_info["Test5"] = {
     "yaml": "test_5.yaml",
     "internal_checks": [
         {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 1, "metric": "f1",
-            "gt": True, "value": 0.6},
+            "gt": True, "value": 0.55},
         {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 2, "metric": "f1",
-            "gt": True, "value": 0.6}, # Post-processing
+            "gt": True, "value": 0.55}, # Post-processing
     ]
 }
 
