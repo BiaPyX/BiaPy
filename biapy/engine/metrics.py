@@ -183,12 +183,12 @@ class jaccard_index:
             y_true = torch.cat((1 - y_true, y_true), 1)
 
         if self.num_classes > 2:
-            return self.jaccard(
-                y_pred,
-                (y_true.squeeze() if y_true.shape[0] > 1 else y_true.squeeze().unsqueeze(0)),
-            )
-        else:
-            return self.jaccard(y_pred, y_true)
+            if y_pred.shape[1] > 1:
+                y_true = y_true.squeeze()
+            if len(y_pred.shape)-2 == len(y_true.shape):
+                y_true = y_true.unsqueeze(0)
+  
+        return self.jaccard(y_pred, y_true)
 
 
 class instance_metrics:

@@ -1739,10 +1739,6 @@ class Base_Workflow(metaclass=ABCMeta):
                 if self.cfg.MODEL.N_CLASSES > 2 and self.cfg.DATA.TEST.ARGMAX_TO_OUTPUT:
                     _type = np.uint8 if self.cfg.MODEL.N_CLASSES < 255 else np.uint16
                     pred = np.expand_dims(np.argmax(pred, -1), -1).astype(_type)
-                    if self.current_sample["Y"] is not None:
-                        self.current_sample["Y"] = np.expand_dims(np.argmax(self.current_sample["Y"], -1), -1).astype(
-                            _type
-                        )
 
                 # Calculate the metrics
                 if self.current_sample["Y"] is not None:
@@ -1858,10 +1854,6 @@ class Base_Workflow(metaclass=ABCMeta):
                 if self.cfg.MODEL.N_CLASSES > 2 and self.cfg.DATA.TEST.ARGMAX_TO_OUTPUT:
                     _type = np.uint8 if self.cfg.MODEL.N_CLASSES < 255 else np.uint16
                     pred = np.expand_dims(np.argmax(pred, -1), -1).astype(_type)
-                    if self.current_sample["Y"] is not None:
-                        self.current_sample["Y"] = np.expand_dims(np.argmax(self.current_sample["Y"], -1), -1).astype(
-                            _type
-                        )
 
                 if self.cfg.TEST.POST_PROCESSING.APPLY_MASK:
                     pred = apply_binary_mask(pred, self.cfg.DATA.TEST.BINARY_MASKS)
