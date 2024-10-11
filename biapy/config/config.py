@@ -259,9 +259,9 @@ class Config:
         # Order of the axes of the mask when using Zarr/H5 images in train data.
         _C.DATA.TRAIN.INPUT_MASK_AXES_ORDER = "TZCYX"
 
-        # Remove training images by the conditions based on their properties. When using Zarr each patch within the Zarr will be processed and not
-        # the entire image.
-        # The three variables, DATA.TRAIN.FILTER_SAMPLES.PROPS, DATA.TRAIN.FILTER_SAMPLES.VALUES and DATA.TRAIN.FILTER_SAMPLES.SIGN will compose a list of 
+        # Remove training images by the conditions based on their properties. When using Zarr each patch within the Zarr will be processed and will
+        # not depend on 'DATA.FILTER_BY_IMAGE' variable
+        # The three variables, DATA.TRAIN.FILTER_SAMPLES.PROPS, DATA.TRAIN.FILTER_SAMPLES.VALUES and DATA.TRAIN.FILTER_SAMPLES.SIGNS will compose a list of 
         # conditions to remove the images. They are list of list of conditions. For instance, the conditions can be like this: [['A'], ['B','C']]. Then, if 
         # the image satisfies the first list of conditions, only 'A' in this first case (from ['A'] list), or satisfy 'B' and 'C' (from ['B','C'] list) 
         # it will be removed from the image. In each sublist all the conditions must be satisfied. Available properties are: ['foreground', 'mean', 'min', 'max'].
@@ -277,13 +277,13 @@ class Config:
         # declare the above three variables as follows:
         #   _C.DATA.TRAIN.FILTER_SAMPLES.PROPS = [['foreground','mean']]
         #   _C.DATA.TRAIN.FILTER_SAMPLES.VALUES = [[0.00001, 100]]
-        #   _C.DATA.TRAIN.FILTER_SAMPLES.SIGN = [['lt', 'gt']]
+        #   _C.DATA.TRAIN.FILTER_SAMPLES.SIGNS = [['lt', 'gt']]
         # You can also concatenate more restrictions and they will be applied in order. For instance, if you want to filter those
         # samples with a max value more than 1000, and do that before the condition described above, you can define the
         # variables this way:
         #   _C.DATA.TRAIN.FILTER_SAMPLES.PROPS = [['max'], ['foreground','mean']]
         #   _C.DATA.TRAIN.FILTER_SAMPLES.VALUES = [[1000], [0.00001, 100]]
-        #   _C.DATA.TRAIN.FILTER_SAMPLES.SIGN = [['gt'], ['lt', 'gt']]
+        #   _C.DATA.TRAIN.FILTER_SAMPLES.SIGNS = [['gt'], ['lt', 'gt']]
         # This way, the images will be removed by 'max' and then by 'foreground' and 'mean'
         _C.DATA.TRAIN.FILTER_SAMPLES = CN()
         # Whether to enable or not the filtering by properties
@@ -414,9 +414,9 @@ class Config:
         _C.DATA.TEST.RESOLUTION = (-1,)
         # Whether to apply argmax to the predicted images
         _C.DATA.TEST.ARGMAX_TO_OUTPUT = True
-        # Remove test images by the conditions based on their properties. When using Zarr each patch within the Zarr will be processed and not
-        # the entire image.
-        # The three variables, DATA.TEST.FILTER_SAMPLES.PROPS, DATA.TEST.FILTER_SAMPLES.VALUES and DATA.TEST.FILTER_SAMPLES.SIGN will compose a 
+        # Remove test images by the conditions based on their properties. When using Zarr each patch within the Zarr will be processed and will
+        # not depend on 'DATA.FILTER_BY_IMAGE' variable
+        # The three variables, DATA.TEST.FILTER_SAMPLES.PROPS, DATA.TEST.FILTER_SAMPLES.VALUES and DATA.TEST.FILTER_SAMPLES.SIGNS will compose a 
         # list of conditions to remove the images. They are list of list of conditions. For instance, the conditions can be like this: [['A'], ['B','C']]. 
         # Then, if the image satisfies the first list of conditions, only 'A' in this first case (from ['A'] list), or satisfy 'B' and 'C' (from ['B','C'] list) 
         # it will be removed from the image. In each sublist all the conditions must be satisfied. Available properties are: ['foreground', 'mean', 'min', 'max'].
@@ -432,13 +432,13 @@ class Config:
         # declare the above three variables as follows:
         #   _C.DATA.TEST.FILTER_SAMPLES.PROPS = [['foreground','mean']]
         #   _C.DATA.TEST.FILTER_SAMPLES.VALUES = [[0.00001, 100]]
-        #   _C.DATA.TEST.FILTER_SAMPLES.SIGN = [['lt', 'gt']]
+        #   _C.DATA.TEST.FILTER_SAMPLES.SIGNS = [['lt', 'gt']]
         # You can also concatenate more restrictions and they will be applied in order. For instance, if you want to filter those
         # samples with a max value more than 1000, and do that before the condition described above, you can define the
         # variables this way:
         #   _C.DATA.TEST.FILTER_SAMPLES.PROPS = [['max'], ['foreground','mean']]
         #   _C.DATA.TEST.FILTER_SAMPLES.VALUES = [[1000], [0.00001, 100]]
-        #   _C.DATA.TEST.FILTER_SAMPLES.SIGN = [['gt'], ['lt', 'gt']]
+        #   _C.DATA.TEST.FILTER_SAMPLES.SIGNS = [['gt'], ['lt', 'gt']]
         # This way, the images will be removed by 'max' and then by 'foreground' and 'mean'
         _C.DATA.TEST.FILTER_SAMPLES = CN()
         # Whether to enable or not the filtering by properties
@@ -507,9 +507,9 @@ class Config:
         _C.DATA.VAL.INPUT_IMG_AXES_ORDER = "TZCYX"
         # Order of the axes of the mask when using Zarr/H5 images in validation data.
         _C.DATA.VAL.INPUT_MASK_AXES_ORDER = "TZCYX"
-        # Remove validation images by the conditions based on their properties. When using Zarr each patch within the Zarr will be processed and not
-        # the entire image. 
-        # The three variables, DATA.VAL.FILTER_SAMPLES.PROPS, DATA.VAL.FILTER_SAMPLES.VALUES and DATA.VAL.FILTER_SAMPLES.SIGN will compose a list of 
+        # Remove validation images by the conditions based on their properties. When using Zarr each patch within the Zarr will be processed and will
+        # not depend on 'DATA.FILTER_BY_IMAGE' variable 
+        # The three variables, DATA.VAL.FILTER_SAMPLES.PROPS, DATA.VAL.FILTER_SAMPLES.VALUES and DATA.VAL.FILTER_SAMPLES.SIGNS will compose a list of 
         # conditions to remove the images. They are list of list of conditions. For instance, the conditions can be like this: [['A'], ['B','C']]. Then, 
         # if the image satisfies the first list of conditions, only 'A' in this first case (from ['A'] list), or satisfy 'B' and 'C' (from ['B','C'] list) 
         # it will be removed from the image. In each sublist all the conditions must be satisfied. Available properties are: ['foreground', 'mean', 'min', 'max'].
@@ -525,13 +525,13 @@ class Config:
         # declare the above three variables as follows:
         #   _C.DATA.VAL.FILTER_SAMPLES.PROPS = [['foreground','mean']]
         #   _C.DATA.VAL.FILTER_SAMPLES.VALUES = [[0.00001, 100]]
-        #   _C.DATA.VAL.FILTER_SAMPLES.SIGN = [['lt', 'gt']]
+        #   _C.DATA.VAL.FILTER_SAMPLES.SIGNS = [['lt', 'gt']]
         # You can also concatenate more restrictions and they will be applied in order. For instance, if you want to filter those
         # samples with a max value more than 1000, and do that before the condition described above, you can define the
         # variables this way:
         #   _C.DATA.VAL.FILTER_SAMPLES.PROPS = [['max'], ['foreground','mean']]
         #   _C.DATA.VAL.FILTER_SAMPLES.VALUES = [[1000], [0.00001, 100]]
-        #   _C.DATA.VAL.FILTER_SAMPLES.SIGN = [['gt'], ['lt', 'gt']]
+        #   _C.DATA.VAL.FILTER_SAMPLES.SIGNS = [['gt'], ['lt', 'gt']]
         # This way, the images will be removed by 'max' and then by 'foreground' and 'mean'
         _C.DATA.VAL.FILTER_SAMPLES = CN()
         # Whether to enable or not the filtering by properties
@@ -1164,7 +1164,7 @@ class Config:
         _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES = CN()
         _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.ENABLE = False
         # Remove instances by the conditions based in each instance properties. The three variables, TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS,
-        # TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.VALUES and TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGN will compose a list
+        # TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.VALUES and TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGNS will compose a list
         # of conditions to remove the instances. They are list of list of conditions. For instance, the conditions can be like this: [['A'], ['B','C']]. Then, if the instance satisfies
         # the first list of conditions, only 'A' in this first case (from ['A'] list), or satisfy 'B' and 'C' (from ['B','C'] list) it will be
         # removed from the image. In each sublist all the conditions must be satisfied. Available properties are: ['circularity', 'elongation',
@@ -1208,13 +1208,13 @@ class Config:
         # declare the above three variables as follows:
         #   _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS = [['npixels', 'circularity']]
         #   _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.VALUES = [[100, 0.7]]
-        #   _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGN = [['lt', 'le']]
+        #   _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGNS = [['lt', 'le']]
         # You can also concatenate more restrictions and they will be applied in order. For instance, if you want to remove those
         # instances that are bigger than an specific area, and do that before the condition described above, you can define the
         # variables this way:
         #   _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS = [['area'], ['npixels', 'circularity']]
         #   _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.VALUES = [[500], [100, 0.7]]
-        #   _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGN = [['gt'], ['lt', 'le']]
+        #   _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGNS = [['gt'], ['lt', 'le']]
         # This way, the instances will be removed by 'area' and then by 'npixels' and 'circularity'
         _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES = CN()
         # Whether to enable or not the filtering by properties
@@ -1227,7 +1227,7 @@ class Config:
         _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.VALUES = []
         # List of list of signs to do the comparison. Options: ['gt', 'ge', 'lt', 'le'] that corresponds to "greather than", e.g. ">",
         # "greather equal", e.g. ">=", "less than", e.g. "<", and "less equal" e.g. "<=" comparisons.
-        _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGN = []
+        _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGNS = []
 
         # Whether to apply Voronoi using 'BC' or 'M' channels need to be present
         _C.TEST.POST_PROCESSING.VORONOI_ON_MASK = False
