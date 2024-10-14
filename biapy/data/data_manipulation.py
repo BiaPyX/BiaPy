@@ -470,7 +470,7 @@ def load_and_prepare_train_data(
             train_filter_vals,
             train_filter_signs,
             y_filenames=Y_train,
-            filter_by_entire_image = filter_by_entire_image if not random_crops_in_DA else True,
+            filter_by_entire_image=filter_by_entire_image if not random_crops_in_DA else True,
             zarr_data_information=train_zarr_data_information if train_using_zarr else None,
         )
         if train_mask_path is not None:
@@ -722,7 +722,7 @@ def load_and_prepare_train_data(
                 val_filter_vals,
                 val_filter_signs,
                 y_filenames=Y_val,
-                filter_by_entire_image = filter_by_entire_image if not random_crops_in_DA else True,
+                filter_by_entire_image=filter_by_entire_image if not random_crops_in_DA else True,
                 zarr_data_information=val_zarr_data_information if val_using_zarr else None,
             )
             if val_mask_path is not None:
@@ -2305,12 +2305,15 @@ def filter_samples_by_properties(
         print("Assuming we are working with Zarr/H5 images so the filtering will be done patch by patch.")
         print(f"Number of samples before filtering: {len(x_filenames)}")
     else:
-        images = list(set([os.path.join(x["dir"], x["filename"]) for x in x_filenames]))
-        images.sort()
-        if foreground_filter_requested:
-            masks = list(set([os.path.join(x["dir"], x["filename"]) for x in y_filenames]))
-            masks.sort()
-        print(f"Number of samples before filtering: {len(images)}")
+        if filter_by_entire_image:
+            images = list(set([os.path.join(x["dir"], x["filename"]) for x in x_filenames]))
+            images.sort()
+            if foreground_filter_requested:
+                masks = list(set([os.path.join(x["dir"], x["filename"]) for x in y_filenames]))
+                masks.sort()
+            print(f"Number of samples before filtering: {len(images)}")
+        else:
+            print(f"Number of samples before filtering: {len(x_filenames)}")
 
     if not using_zarr and filter_by_entire_image:
         not_discarded_images = []
@@ -2350,7 +2353,9 @@ def filter_samples_by_properties(
                 if file is not None and isinstance(file, h5py.File):
                     file.close()
                 data_within_zarr_path = (
-                    zarr_data_information["raw_path"] if zarr_data_information["multiple_data_within_zarr"] else None
+                    zarr_data_information["raw_path"]
+                    if zarr_data_information is not None and zarr_data_information["multiple_data_within_zarr"]
+                    else None
                 )
                 xdata, file = load_img_data(img_path, is_3d=is_3d, data_within_zarr_path=data_within_zarr_path)
 
@@ -2361,7 +2366,7 @@ def filter_samples_by_properties(
                     if mfile is not None and isinstance(mfile, h5py.File):
                         mfile.close()
                     data_within_zarr_path = None
-                    if zarr_data_information["multiple_data_within_zarr"]:
+                    if zarr_data_information is not None and zarr_data_information["multiple_data_within_zarr"]:
                         data_within_zarr_path = (
                             zarr_data_information["gt_path"] if zarr_data_information["use_gt_path"] else None
                         )
@@ -2390,13 +2395,15 @@ def filter_samples_by_properties(
                     slice(coords["x_start"], coords["x_end"]),
                     slice(None),
                 )
-
-            xdata_ordered_slices = order_dimensions(
-                xslices,
-                input_order="TZYXC",
-                output_order=zarr_data_information["input_img_axes"],
-                default_value=0,
-            )
+            if zarr_data_information is not None:
+                xdata_ordered_slices = order_dimensions(
+                    xslices,
+                    input_order="TZYXC",
+                    output_order=zarr_data_information["input_img_axes"],
+                    default_value=0,
+                )
+            else:
+                xdata_ordered_slices = tuple([x for x in xslices if x != slice(None)])  
 
             if is_3d:
                 yslices = (
@@ -2413,12 +2420,15 @@ def filter_samples_by_properties(
                     slice(mcoords["x_start"], mcoords["x_end"]),
                     slice(None),
                 )
-            ydata_ordered_slices = order_dimensions(
-                yslices,
-                input_order="TZYXC",
-                output_order=zarr_data_information["input_mask_axes"],
-                default_value=0,
-            )
+            if zarr_data_information is not None:
+                ydata_ordered_slices = order_dimensions(
+                    yslices,
+                    input_order="TZYXC",
+                    output_order=zarr_data_information["input_mask_axes"],
+                    default_value=0,
+                )
+            else:
+                ydata_ordered_slices = tuple([x for x in yslices if x != slice(None)]) 
 
             img = xdata[xdata_ordered_slices]
             if foreground_filter_requested:
