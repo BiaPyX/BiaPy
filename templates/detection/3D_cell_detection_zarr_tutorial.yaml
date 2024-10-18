@@ -18,10 +18,14 @@ DATA:
       PERC_UPPER: 99.5
     TRAIN:
         INPUT_IMG_AXES_ORDER: 'ZYXC'
-        MINIMUM_FOREGROUND_PER: 0.000000000000001
         PATH: /path/to/data
         GT_PATH: /path/to/data
         IN_MEMORY: False
+        FILTER_SAMPLES:
+          ENABLE: True
+          PROPS: [['foreground']]
+          VALUES: [[1.0e-22]]
+          SIGNS: [["lt"]]
     VAL:
         FROM_TRAIN: True
         IN_MEMORY: False
