@@ -520,21 +520,19 @@ class MetricLogger(object):
 
 def update_dict_with_existing_keys(d, u, not_recognized_keys=[], not_recognized_key_vals=[]):
     for k, v in u.items():
-        if isinstance(v, collections.abc.Mapping):
-            if k in d:
-                d[k], not_keys, not_vals = update_dict_with_existing_keys(d.get(k, {}), v, not_recognized_keys, not_recognized_key_vals)
-                if len(not_keys) > 0:
-                    not_recognized_keys += not_keys
-                    not_recognized_key_vals += not_vals
+        if k in d:
+            if isinstance(v, collections.abc.Mapping):
+                d[k], _, _ = update_dict_with_existing_keys(d.get(k, {}), v, not_recognized_keys, not_recognized_key_vals)
             else:
-                not_recognized_keys.append(k)
-                not_recognized_key_vals.append(v)
-        else:
-            if k in d:
-                d[k] = v
-            else: 
-                not_recognized_keys.append(k)
-                not_recognized_key_vals.append(v)
+                if k in d:
+                    d[k] = v
+                else: 
+                    not_recognized_keys.append(k)
+                    not_recognized_key_vals.append(v)
+        else: 
+            not_recognized_keys.append(k)
+            not_recognized_key_vals.append(v)
+
     return d, not_recognized_keys, not_recognized_key_vals
 
 def convert_old_model_cfg_to_current_version(keys_to_convert, values_to_check, biapy_old_version=None):
@@ -551,6 +549,8 @@ def convert_old_model_cfg_to_current_version(keys_to_convert, values_to_check, b
         if biapy_old_version is None:
             if k == "BATCH_NORMALIZATION" and v == True:
                 new_cfg_list += ["MODEL.NORMALIZATION", 'bn']
+            if k == "SOURCE_MODEL_DOI" and v != "":
+                new_cfg_list += ["MODEL.BMZ.SOURCE_MODEL_ID", v]
 
     if len(new_cfg_list) > 0:     
         print(f"Configuration to be translated: {new_cfg_list}")
