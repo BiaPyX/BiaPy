@@ -1685,7 +1685,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             )
 
 
-def compare_configurations_without_model(actual_cfg, old_cfg, header_message=""):
+def compare_configurations_without_model(actual_cfg, old_cfg, header_message="", old_cfg_version=None):
     """
     Compares two configurations and throws an error if they differ in some critical variables that change workflow behaviour. This
     comparisdon does not take into account model specs.
@@ -1708,6 +1708,13 @@ def compare_configurations_without_model(actual_cfg, old_cfg, header_message="")
             return getattr(var, att[0])
         else:
             return get_attribute_recursive(getattr(var, att[0]), ".".join(att[1:]))
+
+    # Old configuration translation
+    dim_count = 2 if old_cfg.PROBLEM.NDIM == "2D" else 3
+    # BiaPy version less than 3.5.5
+    if old_cfg_version is None:
+        if isinstance(old_cfg["PROBLEM"]["SUPER_RESOLUTION"]["UPSCALING"], int):
+            old_cfg["PROBLEM"]["SUPER_RESOLUTION"]["UPSCALING"] = (old_cfg["PROBLEM"]["SUPER_RESOLUTION"]["UPSCALING"],) * dim_count
 
     for var_to_compare in vars_to_compare:
         if get_attribute_recursive(actual_cfg, var_to_compare) != get_attribute_recursive(old_cfg, var_to_compare):

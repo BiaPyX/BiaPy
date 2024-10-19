@@ -13,6 +13,7 @@ from tensorboardX import SummaryWriter
 from pathlib import Path
 from yacs.config import CfgNode
 from functools import partial
+import collections.abc
 
 # from torch._six import inf
 from torch import inf
@@ -168,7 +169,7 @@ def get_grad_norm_(parameters, norm_type: float = 2.0) -> torch.Tensor:
     return total_norm
 
 
-def save_model(cfg, jobname, epoch, model_without_ddp, optimizer, loss_scaler, model_build_kwargs=None):
+def save_model(cfg, biapy_version, jobname, epoch, model_without_ddp, optimizer, loss_scaler, model_build_kwargs=None):
     output_dir = Path(cfg.PATHS.CHECKPOINT)
     sc = loss_scaler.state_dict() if loss_scaler is not None else "NONE"
     checkpoint_paths = [output_dir / "{}-checkpoint-{}.pth".format(jobname, str(epoch))]
@@ -181,6 +182,7 @@ def save_model(cfg, jobname, epoch, model_without_ddp, optimizer, loss_scaler, m
             "epoch": epoch,
             "scaler": sc,
             "cfg": cfg,
+            "biapy_version": biapy_version,
         }
 
         save_on_master(to_save, checkpoint_path)
@@ -241,10 +243,13 @@ def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=Non
         checkpoint = torch.load(resume, map_location=device, weights_only=True)
 
     if just_extract_model:
-        if "model_build_kwargs" not in checkpoint or 'cfg' not in checkpoint:
-            raise ValueError("Checkpoint seems to not be from BiaPy (v3.5.1 or later) as model building args couldn't be extracted")
-        
-        return checkpoint["model_build_kwargs"], checkpoint["cfg"]
+        if 'cfg' not in checkpoint:
+            print("Checkpoint seems to not be from BiaPy (v3.5.1 or later) as model building args couldn't be extracted. Thus, "
+                  "the model will be built based on the current configuration")
+        return (
+            checkpoint["cfg"] if 'cfg' in checkpoint else None, 
+            checkpoint["biapy_version"] if 'biapy_version' in checkpoint else None
+            )
     
     model_without_ddp.load_state_dict(checkpoint["model"], strict=False)
     print("Model weights loaded!")
@@ -512,3 +517,42 @@ class MetricLogger(object):
         total_time = time.time() - start_time
         total_time_str = str(datetime.timedelta(seconds=int(total_time)))
         print("{} Total time: {} ({:.4f} s / it)".format(header, total_time_str, total_time / len(iterable)))
+
+def update_dict_with_existing_keys(d, u, not_recognized_keys=[], not_recognized_key_vals=[]):
+    for k, v in u.items():
+        if isinstance(v, collections.abc.Mapping):
+            if k in d:
+                d[k], not_keys, not_vals = update_dict_with_existing_keys(d.get(k, {}), v, not_recognized_keys, not_recognized_key_vals)
+                if len(not_keys) > 0:
+                    not_recognized_keys += not_keys
+                    not_recognized_key_vals += not_vals
+            else:
+                not_recognized_keys.append(k)
+                not_recognized_key_vals.append(v)
+        else:
+            if k in d:
+                d[k] = v
+            else: 
+                not_recognized_keys.append(k)
+                not_recognized_key_vals.append(v)
+    return d, not_recognized_keys, not_recognized_key_vals
+
+def convert_old_model_cfg_to_current_version(keys_to_convert, values_to_check, biapy_old_version=None):
+    new_cfg_list = []
+    if biapy_old_version is None:
+        print("There is no BiaPy version information in the checkpoint")
+    else:
+        print(f"Checkpoint in version: {biapy_old_version}")
+
+    for k, v in zip(keys_to_convert, values_to_check):
+        print(f"Trying to convert {k} key from old checkpoint")
+
+        # BiaPy version less than 3.5.5
+        if biapy_old_version is None:
+            if k == "BATCH_NORMALIZATION" and v == True:
+                new_cfg_list += ["MODEL.NORMALIZATION", 'bn']
+
+    if len(new_cfg_list) > 0:     
+        print(f"Configuration to be translated: {new_cfg_list}")
+
+    return new_cfg_list

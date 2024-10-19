@@ -14,6 +14,7 @@ import torch.multiprocessing as mp
 import torch.distributed as dist
 from scipy.ndimage import zoom
 
+import biapy
 from bioimageio.core import create_prediction_pipeline
 from bioimageio.spec import load_description
 
@@ -43,6 +44,8 @@ from biapy.utils.misc import (
     to_numpy_format,
     is_dist_avail_and_initialized,
     setup_for_distributed,
+    update_dict_with_existing_keys,
+    convert_old_model_cfg_to_current_version,
 )
 from biapy.utils.util import (
     create_plots,
@@ -202,7 +205,7 @@ class Base_Workflow(metaclass=ABCMeta):
             self.bmz_config["original_bmz_config"] = load_description(self.cfg.MODEL.BMZ.SOURCE_MODEL_ID)
 
             opts = check_model_restrictions(self.cfg, self.bmz_config, {"workflow_type": cfg.PROBLEM.TYPE})
-            
+
             self.cfg.merge_from_list(opts)
             update_dependencies(self.cfg)
 
@@ -308,7 +311,7 @@ class Base_Workflow(metaclass=ABCMeta):
             "use_gt_path": self.cfg.PROBLEM.TYPE != "INSTANCE_SEG",
             "multiple_data_within_zarr": self.cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA,
             "input_img_axes": self.cfg.DATA.TRAIN.INPUT_IMG_AXES_ORDER,
-            "input_mask_axes":  self.cfg.DATA.TRAIN.INPUT_MASK_AXES_ORDER,
+            "input_mask_axes": self.cfg.DATA.TRAIN.INPUT_MASK_AXES_ORDER,
         }
         val_zarr_data_information = {
             "raw_path": self.cfg.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH,
@@ -545,26 +548,38 @@ class Base_Workflow(metaclass=ABCMeta):
         if self.cfg.MODEL.SOURCE == "biapy":
             # Obtain model spec from checkpoint
             if self.cfg.MODEL.LOAD_CHECKPOINT and self.cfg.MODEL.LOAD_MODEL_FROM_CHECKPOINT:
-                self.model_build_kwargs, saved_cfg = load_model_checkpoint(
+                saved_cfg, biapy_ckpt_version = load_model_checkpoint(
                     cfg=self.cfg,
                     jobname=self.job_identifier,
                     model_without_ddp=None,
                     device=self.device,
                     just_extract_model=True,
                 )
+                if saved_cfg is not None:
+                    # Checks that this config and previous represent same workflow
+                    header_message = "There is an inconsistency between the configuration loaded from checkpoint and the actual one. Error:\n"
+                    compare_configurations_without_model(
+                        self.cfg, saved_cfg, header_message, old_cfg_version=biapy_ckpt_version
+                    )
 
-                # Checks that this config and previous represent same workflow
-                header_message = "There is an inconsistency between the configuration loaded from checkpoint and the actual one. Error:\n"
-                compare_configurations_without_model(self.cfg, saved_cfg, header_message)
+                    # Override model specs
+                    self.cfg["MODEL"], not_recognized_keys, not_recognized_keys_values = update_dict_with_existing_keys(
+                        self.cfg["MODEL"], saved_cfg["MODEL"]
+                    )
+                    if len(not_recognized_keys) > 0:
+                        print(
+                            "Seems that a old checkpoint is being used and some not recognized keys have been found. Trying to convert into the current configuration"
+                        )
+                        opts = convert_old_model_cfg_to_current_version(
+                            not_recognized_keys, not_recognized_keys_values, biapy_old_version=biapy_ckpt_version
+                        )
+                        self.cfg.merge_from_list(opts)
 
-                # Override model specs
-                self.cfg["MODEL"] = saved_cfg["MODEL"]
-
-                # Check if the merge is coherent
-                updated_config = self.cfg.clone()
-                updated_config["MODEL"]["LOAD_MODEL_FROM_CHECKPOINT"] = False
-                self.cfg["MODEL"]["LOAD_CHECKPOINT"] = True
-                check_configuration(updated_config, self.job_identifier)
+                    # Check if the merge is coherent
+                    updated_config = self.cfg.clone()
+                    updated_config["MODEL"]["LOAD_MODEL_FROM_CHECKPOINT"] = False
+                    self.cfg["MODEL"]["LOAD_CHECKPOINT"] = True
+                    check_configuration(updated_config, self.job_identifier)
             (
                 self.model,
                 self.bmz_config["model_file"],
@@ -707,6 +722,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 ):
                     save_model(
                         cfg=self.cfg,
+                        biapy_version=biapy.__version__,
                         jobname=self.job_identifier,
                         model_without_ddp=self.model_without_ddp,
                         optimizer=self.optimizer,
@@ -750,6 +766,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     if is_main_process():
                         self.checkpoint_path = save_model(
                             cfg=self.cfg,
+                            biapy_version=biapy.__version__,
                             jobname=self.job_identifier,
                             model_without_ddp=self.model_without_ddp,
                             optimizer=self.optimizer,
@@ -861,17 +878,11 @@ class Base_Workflow(metaclass=ABCMeta):
             self.load_train_data()
             self.X_test = list(set([os.path.join(x["dir"], x["filename"]) for x in self.X_val]))
             self.X_test.sort()
-            self.X_test = [
-                {"dir": os.path.dirname(x), "filename": os.path.basename(x)}
-                for x in self.X_test
-            ]
+            self.X_test = [{"dir": os.path.dirname(x), "filename": os.path.basename(x)} for x in self.X_test]
             if self.Y_val is not None:
                 self.Y_test = list(set([os.path.join(x["dir"], x["filename"]) for x in self.Y_val]))
                 self.Y_test.sort()
-                self.Y_test = [
-                    {"dir": os.path.dirname(x), "filename": os.path.basename(x)}
-                    for x in self.Y_test
-                ]
+                self.Y_test = [{"dir": os.path.dirname(x), "filename": os.path.basename(x)} for x in self.Y_test]
         else:
             (
                 self.X_test,
@@ -1007,7 +1018,7 @@ class Base_Workflow(metaclass=ABCMeta):
             self.f_numbers = [i]
             if "Y" not in self.current_sample:
                 self.current_sample["Y"] = None
-                
+
             discarded = False
             if self.cfg.TEST.BY_CHUNKS.ENABLE and self.cfg.PROBLEM.NDIM == "3D":
                 print(
