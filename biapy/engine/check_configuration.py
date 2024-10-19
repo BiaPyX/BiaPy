@@ -1512,7 +1512,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         "ADAMW",
     ], "TRAIN.OPTIMIZER not in ['SGD', 'ADAM', 'ADAMW']"
 
-    if cfg.TRAIN.LR_SCHEDULER.NAME != "":
+    if cfg.TRAIN.ENABLE and cfg.TRAIN.LR_SCHEDULER.NAME != "":
         if cfg.TRAIN.LR_SCHEDULER.NAME not in [
             "reduceonplateau",
             "warmupcosine",
