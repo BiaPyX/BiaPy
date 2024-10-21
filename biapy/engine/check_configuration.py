@@ -1723,3 +1723,166 @@ def compare_configurations_without_model(actual_cfg, old_cfg, header_message="",
             )
 
     print("Configurations seem to be compatible. Continuing . . .")
+
+
+def convert_old_model_cfg_to_current_version(old_cfg):
+    """
+    Backward compatibility until commit 6aa291baa9bc5d7fb410454bfcea3a3da0c23604 (version 3.2.0)
+    Commit url: https://github.com/BiaPyX/BiaPy/commit/6aa291baa9bc5d7fb410454bfcea3a3da0c23604
+    """
+    if "TEST" in old_cfg:
+        if "STATS" in old_cfg["TEST"]:
+            full_image = old_cfg["TEST"]["STATS"]["FULL_IMG"]
+            del old_cfg["TEST"]["STATS"]
+            old_cfg["TEST"]["FULL_IMG"] = full_image
+        if "EVALUATE" in old_cfg["TEST"]:
+            del old_cfg["TEST"]["EVALUATE"]
+        if "POST_PROCESSING" in old_cfg["TEST"]:
+            if "YZ_FILTERING" in old_cfg["TEST"]["POST_PROCESSING"]:
+                del old_cfg["TEST"]["POST_PROCESSING"]["YZ_FILTERING"] 
+                try:
+                    fsize = old_cfg["TEST"]["POST_PROCESSING"]["YZ_FILTERING_SIZE"] 
+                except: 
+                    fsize = 5
+                del old_cfg["TEST"]["POST_PROCESSING"]["YZ_FILTERING_SIZE"]
+                
+                old_cfg["TEST"]["POST_PROCESSING"]["MEDIAN_FILTER"] = True
+                old_cfg["TEST"]["POST_PROCESSING"]["MEDIAN_FILTER_AXIS"] = ["yz"]
+                old_cfg["TEST"]["POST_PROCESSING"]["MEDIAN_FILTER_SIZE"] = [fsize]
+            if "Z_FILTERING" in old_cfg["TEST"]["POST_PROCESSING"]:
+                del old_cfg["TEST"]["POST_PROCESSING"]["Z_FILTERING"] 
+                try:
+                    fsize = old_cfg["TEST"]["POST_PROCESSING"]["Z_FILTERING_SIZE"] 
+                except: 
+                    fsize = 5
+                del old_cfg["TEST"]["POST_PROCESSING"]["Z_FILTERING_SIZE"]
+                
+                old_cfg["TEST"]["POST_PROCESSING"]["MEDIAN_FILTER"] = True
+                old_cfg["TEST"]["POST_PROCESSING"]["MEDIAN_FILTER_AXIS"] = ["z"]
+                old_cfg["TEST"]["POST_PROCESSING"]["MEDIAN_FILTER_SIZE"] = [fsize]
+
+            if "MEASURE_PROPERTIES" in old_cfg["TEST"]["POST_PROCESSING"]:
+                if "REMOVE_BY_PROPERTIES" in old_cfg["TEST"]["POST_PROCESSING"]["MEASURE_PROPERTIES"]:
+                    if "SIGN" in old_cfg["TEST"]["POST_PROCESSING"]["MEASURE_PROPERTIES"]["REMOVE_BY_PROPERTIES"]:
+                        old_cfg["TEST"]["POST_PROCESSING"]["MEASURE_PROPERTIES"]["REMOVE_BY_PROPERTIES"]["SIGNS"] = old_cfg["TEST"]["POST_PROCESSING"]["MEASURE_PROPERTIES"]["REMOVE_BY_PROPERTIES"]["SIGN"]
+                        del old_cfg["TEST"]["POST_PROCESSING"]["MEASURE_PROPERTIES"]["REMOVE_BY_PROPERTIES"]["SIGN"]
+
+            if "REMOVE_BY_PROPERTIES" in old_cfg["TEST"]["POST_PROCESSING"]:
+                old_cfg["TEST"]["POST_PROCESSING"]["MEASURE_PROPERTIES"] = {}
+                old_cfg["TEST"]["POST_PROCESSING"]["MEASURE_PROPERTIES"]["REMOVE_BY_PROPERTIES"] = {}
+                old_cfg["TEST"]["POST_PROCESSING"]["MEASURE_PROPERTIES"]["ENABLE"] = True
+                old_cfg["TEST"]["POST_PROCESSING"]["MEASURE_PROPERTIES"]["REMOVE_BY_PROPERTIES"]["ENABLE"] = True
+                old_cfg["TEST"]["POST_PROCESSING"]["MEASURE_PROPERTIES"]["REMOVE_BY_PROPERTIES"]["PROPS"] = old_cfg["TEST"]["POST_PROCESSING"]["REMOVE_BY_PROPERTIES"]
+                del old_cfg["TEST"]["POST_PROCESSING"]["REMOVE_BY_PROPERTIES"]
+                if "REMOVE_BY_PROPERTIES_VALUES" in old_cfg["TEST"]["POST_PROCESSING"]:
+                    old_cfg["TEST"]["POST_PROCESSING"]["MEASURE_PROPERTIES"]["REMOVE_BY_PROPERTIES"]["VALUES"] = old_cfg["TEST"]["POST_PROCESSING"]["REMOVE_BY_PROPERTIES_VALUES"]
+                    del old_cfg["TEST"]["POST_PROCESSING"]["REMOVE_BY_PROPERTIES_VALUES"]
+                if "REMOVE_BY_PROPERTIES_SIGN" in old_cfg["TEST"]["POST_PROCESSING"]:
+                    old_cfg["TEST"]["POST_PROCESSING"]["MEASURE_PROPERTIES"]["REMOVE_BY_PROPERTIES"]["SIGNS"] = old_cfg["TEST"]["POST_PROCESSING"]["REMOVE_BY_PROPERTIES_SIGN"]
+                    del old_cfg["TEST"]["POST_PROCESSING"]["REMOVE_BY_PROPERTIES_SIGN"]
+
+    if "PROBLEM" in old_cfg:
+        ndim = 3 if "NDIM" in old_cfg["PROBLEM"] and old_cfg["PROBLEM"]["NDIM"] == "3D" else 2
+        if "DETECTION" in old_cfg["PROBLEM"]:
+            if "CENTRAL_POINT_DILATION" in old_cfg["PROBLEM"]["DETECTION"]:
+                if isinstance(old_cfg["PROBLEM"]["DETECTION"]["CENTRAL_POINT_DILATION"], int):
+                    old_cfg["PROBLEM"]["DETECTION"]["CENTRAL_POINT_DILATION"] = [old_cfg["PROBLEM"]["DETECTION"]["CENTRAL_POINT_DILATION"]]
+
+        if "SUPER_RESOLUTION" in old_cfg["PROBLEM"]:
+            if "UPSCALING" in old_cfg["PROBLEM"]["SUPER_RESOLUTION"]:
+                if isinstance(old_cfg["PROBLEM"]["SUPER_RESOLUTION"]["UPSCALING"], int):
+                    old_cfg["PROBLEM"]["SUPER_RESOLUTION"]["UPSCALING"] = (old_cfg["PROBLEM"]["SUPER_RESOLUTION"]["UPSCALING"],)*ndim
+
+    if "DATA" in old_cfg:
+        if "TRAIN" in old_cfg["DATA"]:
+            if "MINIMUM_FOREGROUND_PER" in old_cfg["DATA"]["TRAIN"]:
+                min_fore = old_cfg["DATA"]["TRAIN"]["MINIMUM_FOREGROUND_PER"]
+                del old_cfg["DATA"]["TRAIN"]["MINIMUM_FOREGROUND_PER"]
+                if min_fore != -1:  
+                    old_cfg["DATA"]["TRAIN"]["FILTER_SAMPLES"] = {} 
+                    old_cfg["DATA"]["TRAIN"]["FILTER_SAMPLES"]["PROPS"] = [['foreground']]
+                    old_cfg["DATA"]["TRAIN"]["FILTER_SAMPLES"]["VALUES"] = [[min_fore]]
+                    old_cfg["DATA"]["TRAIN"]["FILTER_SAMPLES"]["SIGN"] = [['lt']]
+        if "VAL" in old_cfg["DATA"]:
+            if "BINARY_MASKS" in old_cfg["DATA"]["VAL"]:
+                del old_cfg["DATA"]["VAL"]["BINARY_MASKS"]
+
+    if "AUGMENTOR" in old_cfg:
+        if "BRIGHTNESS_EM" in old_cfg["AUGMENTOR"]:
+            del old_cfg["AUGMENTOR"]["BRIGHTNESS_EM"]
+        if "BRIGHTNESS_EM_FACTOR" in old_cfg["AUGMENTOR"]:
+            del old_cfg["AUGMENTOR"]["BRIGHTNESS_EM_FACTOR"]
+        if "BRIGHTNESS_EM_MODE" in old_cfg["AUGMENTOR"]:
+            del old_cfg["AUGMENTOR"]["BRIGHTNESS_EM_MODE"]
+        if "CONTRAST_EM" in old_cfg["AUGMENTOR"]:
+            del old_cfg["AUGMENTOR"]["CONTRAST_EM"]
+        if "CONTRAST_EM_FACTOR" in old_cfg["AUGMENTOR"]:
+            del old_cfg["AUGMENTOR"]["CONTRAST_EM_FACTOR"]
+        if "CONTRAST_EM_MODE" in old_cfg["AUGMENTOR"]:
+            del old_cfg["AUGMENTOR"]["CONTRAST_EM_MODE"]
+
+    if "MODEL" in old_cfg:
+        if "BATCH_NORMALIZATION" in old_cfg["MODEL"]:
+            if old_cfg["MODEL"]["BATCH_NORMALIZATION"]:
+                old_cfg["MODEL"]["NORMALIZATION"] = "bn"
+            del old_cfg["MODEL"]["BATCH_NORMALIZATION"]
+
+        if "BMZ" in old_cfg["MODEL"]:
+            if "SOURCE_MODEL_DOI" in old_cfg["MODEL"]["BMZ"]:
+                model = old_cfg["MODEL"]["BMZ"]["SOURCE_MODEL_DOI"]
+                del old_cfg["MODEL"]["BMZ"]["SOURCE_MODEL_DOI"]
+                old_cfg["MODEL"]["BMZ"]["SOURCE_MODEL_ID"] = model
+            if "EXPORT_MODEL" in old_cfg["MODEL"]["BMZ"]:
+                old_cfg["MODEL"]["BMZ"]["EXPORT"] = {}
+                try:                
+                    enabled = old_cfg["MODEL"]["BMZ"]["EXPORT_MODEL"]["ENABLE"]
+                except:
+                    enabled = False
+                old_cfg["MODEL"]["BMZ"]["EXPORT"]["ENABLED"] = enabled 
+                try:                
+                    model_name = old_cfg["MODEL"]["BMZ"]["EXPORT_MODEL"]["NAME"]
+                except:
+                    model_name = ''
+                old_cfg["MODEL"]["BMZ"]["EXPORT"]["MODEL_NAME"] = model_name 
+                try:                
+                    description = old_cfg["MODEL"]["BMZ"]["EXPORT_MODEL"]["DESCRIPTION"]
+                except:
+                    description = ""
+                old_cfg["MODEL"]["BMZ"]["EXPORT"]["DESCRIPTION"] = description 
+                try:                
+                    authors = old_cfg["MODEL"]["BMZ"]["EXPORT_MODEL"]["AUTHORS"]
+                except:
+                    authors = []
+                old_cfg["MODEL"]["BMZ"]["EXPORT"]["AUTHORS"] = authors 
+                try:                
+                    license = old_cfg["MODEL"]["BMZ"]["EXPORT_MODEL"]["LICENSE"]
+                except:
+                    license = "CC-BY-4.0"
+                old_cfg["MODEL"]["BMZ"]["EXPORT"]["LICENSE"] = license 
+                try:                
+                    doc = old_cfg["MODEL"]["BMZ"]["EXPORT_MODEL"]["DOCUMENTATION"]
+                except:
+                    doc = ""
+                old_cfg["MODEL"]["BMZ"]["EXPORT"]["DOCUMENTATION"] = doc 
+                try:                
+                    tags = old_cfg["MODEL"]["BMZ"]["EXPORT_MODEL"]["TAGS"]
+                except:
+                    tags = []
+                old_cfg["MODEL"]["BMZ"]["EXPORT"]["TAGS"] = tags 
+                try:                
+                    cite = old_cfg["MODEL"]["BMZ"]["EXPORT_MODEL"]["CITE"]
+                except:
+                    cite = []
+                old_cfg["MODEL"]["BMZ"]["EXPORT"]["CITE"] = cite 
+                del old_cfg["MODEL"]["BMZ"]["EXPORT_MODEL"]
+    
+    if "LOSS" in old_cfg:
+        if "TYPE" in old_cfg["LOSS"]:
+            del old_cfg["LOSS"]["TYPE"]
+
+    try:
+        del old_cfg["PATHS"]["RESULT_DIR"]["BMZ_BUILD"]
+    except:
+        pass
+
+    return old_cfg

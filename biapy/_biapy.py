@@ -11,6 +11,8 @@ import torch.distributed as dist
 from shutil import copyfile
 import numpy as np
 import importlib
+import tempfile
+import yaml
 import multiprocessing
 from typing import (
     Optional,
@@ -50,7 +52,7 @@ from biapy.utils.misc import (
     setup_for_distributed,
 )
 from biapy.config.config import Config, update_dependencies
-from biapy.engine.check_configuration import check_configuration
+from biapy.engine.check_configuration import check_configuration, convert_old_model_cfg_to_current_version
 from biapy.models import get_bmz_model_info
 from biapy.utils.util import create_file_sha256sum
 from biapy.data.data_manipulation import ensure_2d_shape, ensure_3d_shape
@@ -142,9 +144,29 @@ class BiaPy:
             raise FileNotFoundError("Provided {} config file does not exist".format(self.args.config))
         copyfile(self.args.config, self.cfg_file)
 
-        # Merge conf file with the default settings
+        # Merge conf file with the default settings. If there is an error it tries to translate old keys to current BiaPy version.
         self.cfg = Config(self.job_dir, self.job_identifier)
-        self.cfg._C.merge_from_file(self.cfg_file)
+        self.tmp_log_dir = os.path.join(tempfile._get_default_tempdir(), "BiaPy")
+        try:
+            self.cfg._C.merge_from_file(self.cfg_file)
+        except:
+            # Read the configuration file
+            with open(self.cfg_file, "r", encoding='utf8') as stream:
+                try:
+                    temp_cfg = yaml.safe_load(stream)
+                except yaml.YAMLError as exc:
+                    self.main_gui.logger.error(exc)
+
+            # Translate it to current version 
+            temp_cfg = convert_old_model_cfg_to_current_version(temp_cfg)
+
+            # Create temporal config file
+            os.makedirs(self.tmp_log_dir, exist_ok=True)
+            tmp_cfg_file = os.path.join(self.tmp_log_dir, "temp_config.yaml")
+            with open(tmp_cfg_file, 'w', encoding='utf8') as outfile:
+                yaml.dump(temp_cfg, outfile, default_flow_style=False)
+            self.cfg._C.merge_from_file(tmp_cfg_file)
+
         update_dependencies(self.cfg)
         # self.cfg.freeze()
 
