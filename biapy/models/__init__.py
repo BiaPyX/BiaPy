@@ -506,7 +506,11 @@ def check_bmz_model_compatibility(
     preproc_info = {}
 
     # Accepting models that are exported in pytorch_state_dict and with just one input
-    if "pytorch_state_dict" in model_rdf["weights"] and len(model_rdf["inputs"]) == 1:
+    if (
+        "pytorch_state_dict" in model_rdf["weights"] 
+        and model_rdf["weights"]["pytorch_state_dict"] is not None
+        and len(model_rdf["inputs"]) == 1
+    ):
 
         # TODO: control model.weights.pytorch_state_dict.dependencies conda env to check if all 
         # dependencies are installed 
