@@ -1,0 +1,26 @@
+# Checks BiaPy code consistency
+
+name: check code consistency
+
+# Once a week (on Sunday)
+on:
+  schedule:
+    - cron: '0 0 * * 0'
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.10"
+        cache: "pip" # caching pip dependencies
+    - name: Installing BiaPy dependencies
+      run: pip install --editable .
+    - name: Installing Pytorch
+      run: pip install torch==2.4.0 torchvision==0.19.0 torchaudio==2.4.0 --index-url https://download.pytorch.org/whl/cpu
+    - name: Installing last packages that rely on the Pytorch installation
+      run: pip install timm torchmetrics[image] pytorch-msssim
+    - name: Checking BiaPy code consistency 
+      run: python -u biapy/utils/scripts/run_checks.py
