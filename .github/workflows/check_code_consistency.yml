@@ -1,6 +1,6 @@
 # Checks BiaPy code consistency
 
-name: check code consistency
+name: Code consistency
 
 # Once a week (on Sunday)
 on:
