@@ -8,11 +8,25 @@ import yaml
 from zipfile import ZipFile
 from subprocess import Popen
 import numpy as np
+import argparse
 
-gpu = "0"
-gpus = "0,1" # For those tests that use more than one
-data_folder = "/data/dfranco/biapy_checks"
-biapy_folder = "/data/dfranco/BiaPy"
+parser = argparse.ArgumentParser(description="Check BiaPy code consistency",
+                                 formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser.add_argument("--out_folder", type=str, help="Output folder")
+parser.add_argument("--gpus", type=str, help="GPUs to use")
+parser.add_argument("--biapy_folder", default="", help="BiaPy code directory to test")
+args = parser.parse_args()
+
+gpu = args.gpus.split(",")[0] # "0"
+gpus = args.gpus # "0,1" # For those tests that use more than one
+print(f"Using GPU: '{gpu}' (single-gpu checks) ; GPUs: '{gpus}' (multi-gpu checks)")
+data_folder = args.out_folder # "/data/dfranco/biapy_checks"
+print(f"Out folder: {data_folder}")
+if args.biapy_folder == "":
+    biapy_folder = os.getcwd()# "/data/dfranco/BiaPy"
+else:
+    biapy_folder = args.biapy_folder
+print(f"Running in folder: {biapy_folder}")
 bmz_folder = os.path.join(data_folder, "bmz_files")
 bmz_script = os.path.join(biapy_folder, "biapy", "utils", "scripts", "export_bmz_test.py")
 
