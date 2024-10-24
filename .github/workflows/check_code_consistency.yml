@@ -10,7 +10,7 @@ on:
 
 jobs:
   run:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, nanoneuro-gpu]
     steps:
     - uses: actions/checkout@v4
     - uses: actions/setup-python@v5
@@ -26,4 +26,6 @@ jobs:
     - name: Installing dependencies for the run_checks.py script
       run: pip install gdown
     - name: Checking BiaPy code consistency 
-      run: python -u biapy/utils/scripts/run_checks.py
+      run: |
+          mkdir biapy_checks
+          python -u biapy/utils/scripts/run_checks.py --out_folder biapy_checks --gpus "0,2"
