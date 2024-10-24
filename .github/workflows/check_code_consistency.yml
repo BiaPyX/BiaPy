@@ -23,5 +23,7 @@ jobs:
       run: pip install torch==2.4.0 torchvision==0.19.0 torchaudio==2.4.0 --index-url https://download.pytorch.org/whl/cpu
     - name: Installing last packages that rely on the Pytorch installation
       run: pip install timm torchmetrics[image] pytorch-msssim
+    - name: Installing dependencies for the run_checks.py script
+      run: pip install gdown
     - name: Checking BiaPy code consistency 
       run: python -u biapy/utils/scripts/run_checks.py
