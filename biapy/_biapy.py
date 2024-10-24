@@ -39,6 +39,7 @@ from bioimageio.spec.model.v0_5 import (
     WeightsDescr,
     ArchitectureFromFileDescr,
     ModelDescr,
+    EnvironmentFileDescr,
 )
 from packaging.version import Version
 from bioimageio.spec._internal.io_basics import Sha256
@@ -53,7 +54,7 @@ from biapy.utils.misc import (
 )
 from biapy.config.config import Config, update_dependencies
 from biapy.engine.check_configuration import check_configuration, convert_old_model_cfg_to_current_version
-from biapy.models import get_bmz_model_info
+from biapy.models import get_bmz_model_info, create_environment_file_for_model, create_model_cover
 from biapy.utils.util import create_file_sha256sum
 from biapy.data.data_manipulation import ensure_2d_shape, ensure_3d_shape
 
@@ -152,10 +153,7 @@ class BiaPy:
         except:
             # Read the configuration file
             with open(self.cfg_file, "r", encoding='utf8') as stream:
-                try:
-                    temp_cfg = yaml.safe_load(stream)
-                except yaml.YAMLError as exc:
-                    self.main_gui.logger.error(exc)
+                temp_cfg = yaml.safe_load(stream)
 
             # Translate it to current version 
             temp_cfg = convert_old_model_cfg_to_current_version(temp_cfg)
@@ -579,6 +577,7 @@ class BiaPy:
         os.makedirs(building_dir, exist_ok=True)
         test_input_path = os.path.join(building_dir, "test-input.npy")
         test_output_path = os.path.join(building_dir, "test-output.npy")
+        file_paths = {}
         if not reuse_original_bmz_config:
             test_input = (
                 self.workflow.bmz_config["test_input"] if "test_input" not in bmz_cfg else bmz_cfg["test_input"]
@@ -623,6 +622,7 @@ class BiaPy:
                 preprocessing=preprocessing,  # type: ignore
             )
             inputs = [input_descr]
+            file_paths["input"] = Path(test_input_path)
 
             test_output = (
                 self.workflow.bmz_config["test_output"] if "test_output" not in bmz_cfg else bmz_cfg["test_output"]
@@ -667,6 +667,7 @@ class BiaPy:
                 # postprocessing=postprocessing,
             )
             outputs = [output_descr]
+            file_paths["output"] = Path(test_output_path)
         else:
             inputs = []
             for i, input in enumerate(self.workflow.bmz_config["original_bmz_config"].inputs):
@@ -713,9 +714,19 @@ class BiaPy:
                         preprocessing=preprocessing,  # type: ignore
                     )
                     inputs.append(input_descr)
+                    if i == 0:
+                        file_paths["input"] = Path(test_tensor_local_path)
                 else:
                     inputs.append(input)
-
+                    if i == 0:
+                        try:
+                            file_paths["input"] = input.sample_tensor.download().path
+                        except:
+                            try:
+                                file_paths["input"] = input.test_tensor.download().path
+                            except:
+                                pass 
+    
             outputs = []
             for i, output in enumerate(self.workflow.bmz_config["original_bmz_config"].outputs):
                 if type(output) != OutputTensorDescr:
@@ -761,8 +772,18 @@ class BiaPy:
                         # postprocessing=postprocessing,
                     )
                     outputs.append(output_descr)
+                    if i == 0:
+                        file_paths["output"] = Path(test_tensor_local_path)
                 else:
                     outputs.append(output)
+                    if i == 0:
+                        try:
+                            file_paths["output"] = output.sample_tensor.download().path
+                        except:
+                            try:
+                                file_paths["output"] = output.test_tensor.download().path
+                            except:
+                                pass 
 
         # Name of the model
         if not reuse_original_bmz_config:
@@ -771,6 +792,7 @@ class BiaPy:
             model_name = self.workflow.bmz_config["original_bmz_config"].name
 
         # Configure tags
+        workflow = self.cfg.PROBLEM.TYPE.lower().replace("_", "-").replace("seg", "segmentation")
         if not reuse_original_bmz_config:
             tags = bmz_cfg["tags"]
             if "2d" not in tags and "3d" not in tags:
@@ -779,7 +801,7 @@ class BiaPy:
                 tags += ["pytorch"]
             if "biapy" not in tags:
                 tags += ["biapy"]
-            tags += [self.cfg.PROBLEM.TYPE.lower().replace("_", "-").replace("seg", "segmentation")]
+            tags += [workflow]
             tags += [self.cfg.MODEL.ARCHITECTURE.lower().replace("_", "-")]
         else:
             tags = self.workflow.bmz_config["original_bmz_config"].tags
@@ -889,6 +911,9 @@ class BiaPy:
             and "covers" in self.workflow.bmz_config["original_bmz_config"]
         ):
             covers = self.workflow.bmz_config["original_bmz_config"].covers
+        else: # create_model_cover
+            cover_path = create_model_cover(file_paths, building_dir, is_3d=self.cfg.PROBLEM.NDIM == "3D", workflow=workflow)
+            covers.append(Path(cover_path))
 
         # Change dir as the building process copies to the current directory the files used to create the BMZ model
         cwd = os.getcwd()
@@ -912,6 +937,7 @@ class BiaPy:
                 self.workflow.bmz_config["original_bmz_config"],
                 original_model_version,
             )
+        env_file_path = create_environment_file_for_model(building_dir)
 
         # Only exporting in pytorch_state_dict
         pytorch_state_dict = PytorchStateDictWeightsDescr(
@@ -919,7 +945,12 @@ class BiaPy:
             sha256=state_dict_sha256,
             architecture=pytorch_architecture,
             pytorch_version=torch.__version__,
+            dependencies=EnvironmentFileDescr(
+                source=Path(env_file_path), 
+                sha256=create_file_sha256sum(env_file_path)
+            ), 
         )
+        
         # torchscript = TorchscriptWeightsDescr(
         #     source=self.workflow.bmz_config['original_bmz_config'].weights.torchscript.source,
         #     sha256=self.workflow.bmz_config['original_bmz_config'].weights.torchscript.sha256,
@@ -951,6 +982,7 @@ class BiaPy:
         print(f"Created '{model_descr.name}'")
 
         # Checking model consistency
+        # from bioimageio.core import test_model
         # summary = test_model(model_descr)
         # summary.display()
 

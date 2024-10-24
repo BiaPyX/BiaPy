@@ -7,6 +7,7 @@ import yaml
 import torch
 import functools
 import torch.nn as nn
+import numpy as np
 from torchinfo import summary
 from typing import Optional, Dict, Tuple, List, Literal
 from packaging.version import Version
@@ -26,7 +27,10 @@ from bioimageio.spec import InvalidDescr
 from bioimageio.core.digest_spec import get_test_inputs
 
 from biapy.config.config import Config
-
+from biapy.data.data_manipulation import read_img_as_ndarray
+from biapy.data.pre_processing import reduce_dtype
+from biapy.data.generators.augmentors import random_crop_pair
+from imageio import imwrite
 
 def build_model(cfg, device):
     """
@@ -410,6 +414,157 @@ def get_bmz_model_info(
 
     return state_dict_source, state_dict_sha256, pytorch_architecture
 
+def create_environment_file_for_model(building_dir):
+    """
+    Create a conda environment file (environment.yaml) with the necessary dependencies to build a model 
+    with BiaPy.
+
+    Parameters
+    ----------
+    building_dir : str
+        Directory to save the environment.yaml file. 
+
+    Returns
+    -------
+    env_file : str
+        Path to the environment.yaml file created.
+    """
+    import biapy
+    env = dict(
+        name = 'biapy',
+        channels = ['conda-forge', 'pytorch', 'nodefaults'],
+        dependencies = [
+            'python>=3.10',
+            'pip', 
+            'pytorch >=2.4.0,<3',
+            {
+             'pip': [
+                'biapy=={}'.format(biapy.__version__), 
+                'torchvision==0.19.0',
+                'torchaudio==2.4.0',
+                'timm==1.0.8',
+                'pytorch-msssim==1.0.0',
+                "torchmetrics[image]==1.4.1",
+                ]
+            },
+        ],
+    )
+    
+    os.makedirs(building_dir, exist_ok=True)
+    env_file = os.path.join(building_dir, "environment.yaml")
+    with open(env_file, 'w', encoding='utf8') as outfile:
+        yaml.dump(env, outfile, default_flow_style=False)
+
+    return env_file
+
+def create_model_cover(file_paths, out_path, patch_size=256, is_3d=False, workflow="semantic-segmentation"):
+    """
+    Create a cover based on the files that will be read from ``file_paths``. 
+
+    Parameters
+    ----------
+    file_paths : dict
+        Contains information about the input/output images to read. It must have the following keys:
+            * ``"input"`` (str): path to the input image to be loaded
+            * ``"output"`` (str): path to the output image to be loaded
+
+    out_path : str
+        Directory to save the cover. 
+
+    patch_size : int, optional
+        Size of the image to create. 
+    
+    is_3d : bool, optional
+        Whether if the images to load are 3D or not. 
+
+    workflow : str, optional
+        Workflow to create the cover to. Options are: [``"semantic-segmentation"``, ``"instance-segmentation"``, 
+        ``"detection"``, ``"denoising"``, ``"super-resolution"``, ``"self-supervised"``, ``"classification"``, 
+        ``"image-to-image"``]
+
+    Returns
+    -------
+    cover_path : str
+        Path to the cover.
+    """
+    assert workflow in [
+        "semantic-segmentation", 
+        "instance-segmentation", 
+        "detection", 
+        "denoising", 
+        "super-resolution", 
+        "self-supervised", 
+        "classification", 
+        "image-to-image"
+    ]    
+    assert "input" in file_paths
+    assert "output" in file_paths
+    img = read_img_as_ndarray(str(file_paths["input"]), is_3d=is_3d)
+    mask = read_img_as_ndarray(str(file_paths["output"]), is_3d=is_3d)
+
+    # If 3D just take middle slice. TODO: better choose the slice based on mask
+    if is_3d and img.ndim == 4:
+        img = img[img.shape[0]//2]
+    if is_3d and mask.ndim == 4:    
+        mask = mask[mask.shape[0]//2]
+
+    # Take a random patch from the image. TODO: better choose the crop based on mask 
+    img, mask = random_crop_pair(img, mask, (patch_size,patch_size))
+    
+    # Convert to RGB
+    if img.shape[-1] == 1:
+        img = np.stack((img[...,0],)*3, axis=-1)
+    elif img.shape[-1] == 2:
+        img = np.stack((np.zeros(img.shape, dtype=img.dtype), img), axis=-1)   
+    elif img.shape[-1] > 3: 
+        img = img[...,:3]
+
+    # Normalize image
+    img = reduce_dtype(img, img.min(), img.max(), out_min=0, out_max=255, out_type=np.uint8)
+
+    # Same procedure with the mask in those workflows where the target is also an image 
+    if workflow in ["super-resolution","image-to-image","denoising","self-supervised"]:
+        # Convert to RGB
+        if mask.shape[-1] == 1:
+            mask = np.stack((mask[...,0],)*3, axis=-1)
+        elif mask.shape[-1] == 2:
+            mask = np.stack((np.zeros(mask.shape, dtype=mask.dtype), mask), axis=-1)   
+        elif mask.shape[-1] > 3: 
+            mask = mask[...,:3]
+
+        # Normalize mask, as in this workflow case it is also a raw image
+        mask = reduce_dtype(mask, mask.min(), mask.max(), out_min=0, out_max=255, out_type=np.uint8)
+
+        # Create cover with image and mask side-by-side
+        out = np.ones((patch_size, patch_size*2, 3), dtype=img.dtype)
+        out[:, :patch_size] = img.copy()
+        out[:, patch_size:] = mask.copy()
+    else:
+        if mask.max() <= 1:
+            mask = (mask*255).astype(np.uint8)
+
+        # Create cover with image and mask split by the diagonal
+        if mask.shape[-1] == 1:
+            out = np.ones(img.shape, dtype="uint8")
+            for c in range(img.shape[-1]):
+                outc = np.tril(img[..., c])
+                mask_tril = outc == 0
+                outc[mask_tril] = np.triu(mask[..., 0])[mask_tril]
+                out[..., c] = outc
+        else:
+            # Create cover with image and mask side-by-side considering all channels of the mask
+            out = np.ones((patch_size, patch_size*(mask.shape[-1]+1), 3), dtype=img.dtype)
+            out[:, :patch_size] = img.copy()
+            for c in range(mask.shape[-1]):
+                out[:, patch_size*(c+1):patch_size*(c+2)] = np.stack((mask[...,c],)*3, axis=-1)
+    
+    # Save the cover 
+    os.makedirs(out_path, exist_ok=True)
+    cover_path = os.path.join(out_path, "cover.png")
+    print(f"Creating cover: {cover_path}")
+    imwrite(os.path.join(out_path, "cover.png"), out)
+
+    return cover_path
 
 def check_bmz_args(
     model_ID: str,
