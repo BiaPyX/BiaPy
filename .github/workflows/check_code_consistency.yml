@@ -10,7 +10,7 @@ on:
 
 jobs:
   run:
-    runs-on: [self-hosted, nanoneuro-gpu]
+    runs-on: self-hosted
     steps:
     - uses: actions/checkout@v4
     - uses: actions/setup-python@v5
