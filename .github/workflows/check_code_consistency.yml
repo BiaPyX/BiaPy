@@ -4,6 +4,7 @@ name: check code consistency
 
 # Once a week (on Sunday)
 on:
+  workflow_dispatch:
   schedule:
     - cron: '0 0 * * 0'
 
