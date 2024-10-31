@@ -4,3 +4,4 @@ other_projects
 docs/build/
 biapy.egg-info/
 dist/
+*.DS_Store
