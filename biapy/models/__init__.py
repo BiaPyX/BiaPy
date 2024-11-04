@@ -71,6 +71,7 @@ def build_model(cfg, device):
         "resunet_se",
         "attention_unet",
         "unext_v1",
+        "unext_v2",
     ]:
         args = dict(
             image_shape=cfg.DATA.PATCH_SIZE,
@@ -113,6 +114,18 @@ def build_model(cfg, device):
                 stem_k_size = cfg.MODEL.CONVNEXT_STEM_K_SIZE,
             )
             callable_model = U_NeXt_V1
+        elif modelname == "unext_v2":
+            args = dict(
+                image_shape=cfg.DATA.PATCH_SIZE,
+                feature_maps=cfg.MODEL.FEATURE_MAPS,
+                upsample_layer=cfg.MODEL.UPSAMPLE_LAYER,
+                z_down=cfg.MODEL.Z_DOWN,
+                cn_layers=cfg.MODEL.CONVNEXT_LAYERS,
+                stochastic_depth_prob=cfg.MODEL.CONVNEXT_SD_PROB,
+                isotropy = cfg.MODEL.ISOTROPY,
+                stem_k_size = cfg.MODEL.CONVNEXT_STEM_K_SIZE,
+            )
+            callable_model = U_NeXt_V2
         args["output_channels"] = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS if cfg.PROBLEM.TYPE == "INSTANCE_SEG" else None
         if cfg.PROBLEM.TYPE == "SUPER_RESOLUTION":
             args["upsampling_factor"] = cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING

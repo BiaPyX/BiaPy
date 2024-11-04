@@ -239,7 +239,7 @@ class GRN(nn.Module):
 
 class ConvNeXtBlock_V2(nn.Module):
     """
-    ConvNext block.
+    ConvNextV2 block.
 
     Parameters
     ----------
@@ -250,7 +250,7 @@ class ConvNeXtBlock_V2(nn.Module):
         Convolutional layer to use in the residual block. 
 
     dim: int
-        Input feature maps of the ConvNext block. The same value will be used as output feature maps.
+        Input feature maps of the ConvNextV2 block. The same value will be used as output feature maps.
 
     stochastic_depth_prob: float, optional
         Stochastic depth probability.
@@ -557,7 +557,7 @@ class UpConvNeXtBlock_V2(nn.Module):
         k_size=7
     ):
         """
-        Convolutional ConvNext upsampling block.
+        Convolutional ConvNextV2 upsampling block.
 
         Parameters
         ----------
