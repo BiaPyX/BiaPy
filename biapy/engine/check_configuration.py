@@ -1811,7 +1811,7 @@ def convert_old_model_cfg_to_current_version(old_cfg):
                     old_cfg["DATA"]["TRAIN"]["FILTER_SAMPLES"] = {} 
                     old_cfg["DATA"]["TRAIN"]["FILTER_SAMPLES"]["PROPS"] = [['foreground']]
                     old_cfg["DATA"]["TRAIN"]["FILTER_SAMPLES"]["VALUES"] = [[min_fore]]
-                    old_cfg["DATA"]["TRAIN"]["FILTER_SAMPLES"]["SIGN"] = [['lt']]
+                    old_cfg["DATA"]["TRAIN"]["FILTER_SAMPLES"]["SIGNS"] = [['lt']]
         if "VAL" in old_cfg["DATA"]:
             if "BINARY_MASKS" in old_cfg["DATA"]["VAL"]:
                 del old_cfg["DATA"]["VAL"]["BINARY_MASKS"]
