@@ -9,6 +9,7 @@ from zipfile import ZipFile
 from subprocess import Popen
 import numpy as np
 import argparse
+import time 
 
 parser = argparse.ArgumentParser(description="Check BiaPy code consistency",
                                  formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -20,7 +21,7 @@ args = parser.parse_args()
 gpu = args.gpus.split(",")[0] # "0"
 gpus = args.gpus # "0,1" # For those tests that use more than one
 print(f"Using GPU: '{gpu}' (single-gpu checks) ; GPUs: '{gpus}' (multi-gpu checks)")
-data_folder = args.out_folder # "/data/dfranco/biapy_checks"
+data_folder = os.path.join(os.getcwd(), args.out_folder) # "/data/dfranco/biapy_checks"
 print(f"Out folder: {data_folder}")
 if args.biapy_folder == "":
     biapy_folder = os.getcwd()# "/data/dfranco/BiaPy"
@@ -627,6 +628,21 @@ image_to_image_3d_data_drive_link = "https://drive.google.com/uc?id=1jL0bn2X3OFa
 image_to_image_3d_data_filename = "Nuclear_Pore_complex_3D.zip"
 image_to_image_3d_data_outpath = os.path.join(image_to_image_folder, "Nuclear_Pore_complex_3D")
 
+def download_drive_file(drive_link, out_filename, attempts=5):
+    """
+    Try a few times to donwload a file from Drive using gdown (as sometimes it crashes randomly)
+    """
+    for i in range(attempts):
+        print(f"Trying to download {drive_link} (attempt {i+1})")
+        try:
+            gdown.download(drive_link, out_filename, quiet=True)
+        except Exception as e: 
+            print(e)
+            time.sleep(5)
+
+        if os.path.exists(out_filename):
+            break
+
 if not os.path.exists(biapy_folder):
     raise ValueError(f"BiaPy not found in: {biapy_folder}")
 
@@ -641,7 +657,8 @@ if not os.path.exists(semantic_2d_data_outpath) and (all_test_info["Test1"]["ena
 
     os.makedirs(semantic_folder, exist_ok=True)
     os.chdir(semantic_folder)
-    gdown.download(semantic_2d_data_drive_link, semantic_2d_data_filename, quiet=True)
+
+    download_drive_file(semantic_2d_data_drive_link, semantic_2d_data_filename)
 
     with ZipFile(os.path.join(semantic_folder, semantic_2d_data_filename), 'r') as zObject:
         zObject.extractall(path=semantic_2d_data_outpath)
@@ -656,7 +673,7 @@ if not os.path.exists(semantic_3d_data_outpath) and all_test_info["Test2"]["enab
 
     os.makedirs(semantic_folder, exist_ok=True)
     os.chdir(semantic_folder)
-    gdown.download(semantic_3d_data_drive_link, semantic_3d_data_filename, quiet=True)
+    download_drive_file(semantic_3d_data_drive_link, semantic_3d_data_filename)
 
     with ZipFile(os.path.join(semantic_folder, semantic_3d_data_filename), 'r') as zObject:
         zObject.extractall(path=semantic_3d_data_outpath)
@@ -677,7 +694,7 @@ if (not os.path.exists(instance_seg_2d_data_outpath) or not os.path.exists(insta
     if all_test_info["Test4"]["enable"] or all_test_info["Test31"]["enable"]:
         os.makedirs(inst_seg_folder, exist_ok=True)
         os.chdir(inst_seg_folder)
-        gdown.download(instance_seg_2d_data_drive_link, instance_seg_2d_data_filename, quiet=True)
+        download_drive_file(instance_seg_2d_data_drive_link, instance_seg_2d_data_filename)
 
         with ZipFile(os.path.join(inst_seg_folder, instance_seg_2d_data_filename), 'r') as zObject:
             zObject.extractall(path=instance_seg_2d_data_outpath)
@@ -701,7 +718,7 @@ if not os.path.exists(instance_seg_3d_data_outpath) and all_test_info["Test5"]["
 
     os.makedirs(inst_seg_folder, exist_ok=True)
     os.chdir(inst_seg_folder)
-    gdown.download(instance_seg_3d_data_drive_link, instance_seg_3d_data_filename, quiet=True)
+    download_drive_file(instance_seg_3d_data_drive_link, instance_seg_3d_data_filename)
 
     with ZipFile(os.path.join(inst_seg_folder, instance_seg_3d_data_filename), 'r') as zObject:
         zObject.extractall(path=instance_seg_3d_data_outpath)
@@ -731,7 +748,7 @@ if not os.path.exists(instance_seg_snemi_zarr_data_outpath) and all_test_info["T
 
     os.makedirs(inst_seg_folder, exist_ok=True)
     os.chdir(inst_seg_folder)
-    gdown.download(instance_seg_snemi_zarr_data_drive_link, instance_seg_snemi_zarr_data_filename, quiet=True)
+    download_drive_file(instance_seg_snemi_zarr_data_drive_link, instance_seg_snemi_zarr_data_filename)
 
     with ZipFile(os.path.join(inst_seg_folder, instance_seg_snemi_zarr_data_filename), 'r') as zObject:
         zObject.extractall(path=instance_seg_snemi_zarr_data_outpath)
@@ -747,7 +764,7 @@ if not os.path.exists(instance_seg_mitoem_data_outpath) and (all_test_info["Test
 
     os.makedirs(inst_seg_folder, exist_ok=True)
     os.chdir(inst_seg_folder)
-    gdown.download(instance_seg_mitoem_data_drive_link, instance_seg_mitoem_data_filename, quiet=True)
+    download_drive_file(instance_seg_mitoem_data_drive_link, instance_seg_mitoem_data_filename)
 
     with ZipFile(os.path.join(inst_seg_folder, instance_seg_mitoem_data_filename), 'r') as zObject:
         zObject.extractall(path=instance_seg_mitoem_data_outpath)
@@ -766,8 +783,8 @@ if not os.path.exists(detection_2d_data_outpath) and all_test_info["Test7"]["ena
 
     os.makedirs(detection_folder, exist_ok=True)
     os.chdir(detection_folder)
-    gdown.download(detection_2d_data_drive_link, detection_2d_data_filename, quiet=True)
-
+    download_drive_file(detection_2d_data_drive_link, detection_2d_data_filename)
+    
     with ZipFile(os.path.join(detection_folder, detection_2d_data_filename), 'r') as zObject:
         zObject.extractall(path=detection_2d_data_outpath)
 
@@ -781,7 +798,7 @@ if not os.path.exists(detection_3d_data_outpath) and all_test_info["Test8"]["ena
 
     os.makedirs(detection_folder, exist_ok=True)
     os.chdir(detection_folder)
-    gdown.download(detection_3d_data_drive_link, detection_3d_data_filename, quiet=True)
+    download_drive_file(detection_3d_data_drive_link, detection_3d_data_filename)
 
     with ZipFile(os.path.join(detection_folder, detection_3d_data_filename), 'r') as zObject:
         zObject.extractall(path=detection_3d_data_outpath)
@@ -797,7 +814,7 @@ if not os.path.exists(detection_3d_brainglobe_data_outpath) and (all_test_info["
 
     os.makedirs(detection_folder, exist_ok=True)
     os.chdir(detection_folder)
-    gdown.download(detection_3d_brainglobe_data_drive_link, detection_3d_brainglobe_data_filename, quiet=True)
+    download_drive_file(detection_3d_brainglobe_data_drive_link, detection_3d_brainglobe_data_filename)
 
     with ZipFile(os.path.join(detection_folder, detection_3d_brainglobe_data_filename), 'r') as zObject:
         zObject.extractall(path=detection_3d_brainglobe_data_outpath)
@@ -816,7 +833,7 @@ if not os.path.exists(denoising_2d_data_outpath) and all_test_info["Test9"]["ena
 
     os.makedirs(denoising_folder, exist_ok=True)
     os.chdir(denoising_folder)
-    gdown.download(denoising_2d_data_drive_link, denoising_2d_data_filename, quiet=True)
+    download_drive_file(denoising_2d_data_drive_link, denoising_2d_data_filename)
 
     with ZipFile(os.path.join(denoising_folder, denoising_2d_data_filename), 'r') as zObject:
         zObject.extractall(path=denoising_2d_data_outpath)
@@ -831,7 +848,7 @@ if not os.path.exists(denoising_3d_data_outpath) and all_test_info["Test10"]["en
 
     os.makedirs(denoising_folder, exist_ok=True)
     os.chdir(denoising_folder)
-    gdown.download(denoising_3d_data_drive_link, denoising_3d_data_filename, quiet=True)
+    download_drive_file(denoising_3d_data_drive_link, denoising_3d_data_filename)
 
     with ZipFile(os.path.join(denoising_folder, denoising_3d_data_filename), 'r') as zObject:
         zObject.extractall(path=denoising_3d_data_outpath)
@@ -850,7 +867,7 @@ if not os.path.exists(super_resolution_2d_data_outpath) and all_test_info["Test1
 
     os.makedirs(super_resolution_folder, exist_ok=True)
     os.chdir(super_resolution_folder)
-    gdown.download(super_resolution_2d_data_drive_link, super_resolution_2d_data_filename, quiet=True)
+    download_drive_file(super_resolution_2d_data_drive_link, super_resolution_2d_data_filename)
 
     with ZipFile(os.path.join(super_resolution_folder, super_resolution_2d_data_filename), 'r') as zObject:
         zObject.extractall(path=super_resolution_2d_data_outpath)
@@ -865,7 +882,7 @@ if not os.path.exists(super_resolution_3d_data_outpath) and all_test_info["Test1
 
     os.makedirs(super_resolution_folder, exist_ok=True)
     os.chdir(super_resolution_folder)
-    gdown.download(super_resolution_3d_data_drive_link, super_resolution_3d_data_filename, quiet=True)
+    download_drive_file(super_resolution_3d_data_drive_link, super_resolution_3d_data_filename)
 
     with ZipFile(os.path.join(super_resolution_folder, super_resolution_3d_data_filename), 'r') as zObject:
         zObject.extractall(path=super_resolution_3d_data_outpath)
@@ -885,7 +902,7 @@ if not os.path.exists(self_supervision_2d_data_outpath) and (all_test_info["Test
 
     os.makedirs(self_supervision_folder, exist_ok=True)
     os.chdir(self_supervision_folder)
-    gdown.download(self_supervision_2d_data_drive_link, self_supervision_2d_data_filename, quiet=True)
+    download_drive_file(self_supervision_2d_data_drive_link, self_supervision_2d_data_filename)
 
     with ZipFile(os.path.join(self_supervision_folder, self_supervision_2d_data_filename), 'r') as zObject:
         zObject.extractall(path=self_supervision_2d_data_outpath)
@@ -901,7 +918,7 @@ if not os.path.exists(self_supervision_3d_data_outpath) and (all_test_info["Test
 
     os.makedirs(self_supervision_folder, exist_ok=True)
     os.chdir(self_supervision_folder)
-    gdown.download(self_supervision_3d_data_drive_link, self_supervision_3d_data_filename, quiet=True)
+    download_drive_file(self_supervision_3d_data_drive_link, self_supervision_3d_data_filename)
 
     with ZipFile(os.path.join(self_supervision_folder, self_supervision_3d_data_filename), 'r') as zObject:
         zObject.extractall(path=self_supervision_3d_data_outpath)
@@ -921,14 +938,14 @@ if not os.path.exists(classification_2d_data_outpath) and (all_test_info["Test20
 
     os.makedirs(classification_folder, exist_ok=True)
     os.chdir(classification_folder)
-    gdown.download(classification_2d_data_drive_link, classification_2d_data_filename, quiet=True)
+    download_drive_file(classification_2d_data_drive_link, classification_2d_data_filename)
 
     with ZipFile(os.path.join(classification_folder, classification_2d_data_filename), 'r') as zObject:
         zObject.extractall(path=classification_2d_data_outpath)
 
     # Butterfly data
     os.chdir(classification_folder)
-    gdown.download(classification_butterfly_2d_data_drive_link, classification_butterfly_2d_data_filename, quiet=True)
+    download_drive_file(classification_butterfly_2d_data_drive_link, classification_butterfly_2d_data_filename)
 
     with ZipFile(os.path.join(classification_folder, classification_butterfly_2d_data_filename), 'r') as zObject:
         zObject.extractall(path=classification_butterfly_2d_data_outpath)
@@ -943,7 +960,7 @@ if not os.path.exists(classification_3d_data_outpath) and all_test_info["Test22"
 
     os.makedirs(classification_folder, exist_ok=True)
     os.chdir(classification_folder)
-    gdown.download(classification_3d_data_drive_link, classification_3d_data_filename, quiet=True)
+    download_drive_file(classification_3d_data_drive_link, classification_3d_data_filename)
 
     with ZipFile(os.path.join(classification_folder, classification_3d_data_filename), 'r') as zObject:
         zObject.extractall(path=classification_3d_data_outpath)
@@ -963,14 +980,14 @@ if not os.path.exists(image_to_image_2d_data_outpath) and (all_test_info["Test24
 
     os.makedirs(image_to_image_folder, exist_ok=True)
     os.chdir(image_to_image_folder)
-    gdown.download(image_to_image_2d_data_drive_link, image_to_image_2d_data_filename, quiet=True)
+    download_drive_file(image_to_image_2d_data_drive_link, image_to_image_2d_data_filename)
 
     with ZipFile(os.path.join(image_to_image_folder, image_to_image_2d_data_filename), 'r') as zObject:
         zObject.extractall(path=image_to_image_2d_data_outpath)
 
     # Lightmycells data
     os.chdir(image_to_image_folder)
-    gdown.download(image_to_image_light_2d_data_drive_link, image_to_image_light_2d_data_filename, quiet=True)
+    download_drive_file(image_to_image_light_2d_data_drive_link, image_to_image_light_2d_data_filename)
 
     with ZipFile(os.path.join(image_to_image_folder, image_to_image_light_2d_data_filename), 'r') as zObject:
         zObject.extractall(path=image_to_image_light_2d_data_outpath)
@@ -989,7 +1006,7 @@ if not os.path.exists(image_to_image_3d_data_outpath) and all_test_info["Test28"
 
     os.makedirs(image_to_image_folder, exist_ok=True)
     os.chdir(image_to_image_folder)
-    gdown.download(image_to_image_3d_data_drive_link, image_to_image_3d_data_filename, quiet=True)
+    download_drive_file(image_to_image_3d_data_drive_link, image_to_image_3d_data_filename)
 
     with ZipFile(os.path.join(image_to_image_folder, image_to_image_3d_data_filename), 'r') as zObject:
         zObject.extractall(path=image_to_image_3d_data_outpath)

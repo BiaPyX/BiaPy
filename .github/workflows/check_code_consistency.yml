@@ -28,4 +28,4 @@ jobs:
     - name: Checking BiaPy code consistency 
       run: |
           mkdir biapy_checks
-          python -u biapy/utils/scripts/run_checks.py --out_folder biapy_checks --gpus "0,2"
+          python -u biapy/utils/scripts/run_checks.py --out_folder biapy_checks --gpus "0,1"
