@@ -20,7 +20,7 @@ jobs:
     - name: Installing BiaPy dependencies
       run: pip install --editable .
     - name: Installing Pytorch
-      run: pip install torch==2.4.0 torchvision==0.19.0 torchaudio==2.4.0 --index-url https://download.pytorch.org/whl/cpu
+      run: pip install torch==2.4.0 torchvision==0.19.0 torchaudio==2.4.0 --index-url https://download.pytorch.org/whl/cu118
     - name: Installing last packages that rely on the Pytorch installation
       run: pip install timm torchmetrics[image] pytorch-msssim
     - name: Installing dependencies for the run_checks.py script
