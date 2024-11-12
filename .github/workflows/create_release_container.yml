@@ -41,5 +41,5 @@ jobs:
           context: .
           file: ./biapy/utils/env/Dockerfile
           push: true
-          tags: ${{ steps.meta.outputs.tags }}-11.8
+          tags: "${{ steps.meta.outputs.tags }}-11.8"
           labels: ${{ steps.meta.outputs.labels }}
