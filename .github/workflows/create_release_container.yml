@@ -29,7 +29,8 @@ jobs:
         uses: docker/metadata-action@9ec57ed1fcdbf14dcef7dfbe97b2010124a938b7
         with:
           images: biapyx/biapy
-          
+          tags: |
+            type=semver,pattern={{version}}
       # - name: Change Dockerfile version
       #   run: sed -i "/3.5.5/${{ steps.meta.outputs.tags }}/g" biapy/utils/env/Dockerfile
         
@@ -40,12 +41,5 @@ jobs:
           context: .
           file: ./biapy/utils/env/Dockerfile
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: ${{ steps.meta.outputs.tags }}-11.8
           labels: ${{ steps.meta.outputs.labels }}
-
-      - name: Generate artifact attestation
-        uses: actions/attest-build-provenance@v1
-        with:
-          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME}}
-          subject-digest: ${{ steps.push.outputs.digest }}
-          push-to-registry: true
