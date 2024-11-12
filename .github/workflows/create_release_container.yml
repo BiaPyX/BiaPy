@@ -31,7 +31,7 @@ jobs:
           images: biapyx/biapy
           
       - name: Change Dockerfile version
-        run: sed -i "/3.5.5/${{ steps.meta.outputs.tags }}/g"
+        run: sed -i "/3.5.5/${{ steps.meta.outputs.labels }}/g" biapy/utils/env/Dockerfile
         
       - name: Build and push Docker image
         id: push
