@@ -49,15 +49,15 @@ class Config:
 
         ### INSTANCE_SEG
         _C.PROBLEM.INSTANCE_SEG = CN()
-        # Possible options: 'C', 'BC', 'BP', 'BD', 'BCM', 'BCD', 'BCDv2', 'Dv2', 'BDv2' and 'A'. This variable determines the channels to be created
-        # based on input instance masks. These option are composed from these individual options:
-        #   - 'B' stands for 'Binary segmentation', containing each instance region without the contour.
-        #   - 'C' stands for 'Contour', containing each instance contour.
-        #   - 'D' stands for 'Distance', each pixel containing the distance of it to the instance contour.
-        #   - 'M' stands for 'Mask', contains the B and the C channels, i.e. the foreground mask.
-        #     Is simply achieved by binarizing input instance masks.
-        #   - 'Dv2' stands for 'Distance V2', which is an updated version of 'D' channel calculating background distance as well.
-        #   - 'P' stands for 'Points' and contains the central points of an instance (as in Detection workflow)
+        # Possible options: 'C', 'BC', 'BP', 'BD', 'BCM', 'BCD', 'BCDv2', 'Dv2', 'BDv2' and 'A'. This variable defines the channels
+        # to be used to represent instances based on the input instance masks. The meaning of each letter is a follows:
+        #   - 'B' stands for 'Binary mask', it is a binary representation of each instance region without its contour.
+        #   - 'C' stands for 'Contour', it is a binary representation of the countours of each instance.
+        #   - 'D' stands for 'Distance', where, for each instance, the pixel/voxel value is the distance to its contour.
+        #   - 'M' stands for 'Mask', contains the B and the C channels, i.e. the foreground mask. It is simply calculated by 
+        #     binarizing the input instance masks.
+        #   - 'Dv2' stands for 'Distance V2', which is a version of the 'D' channel calculating background distance as well.
+        #   - 'P' stands for 'Points' and contains a binary representation of the central points of each instance.
         #   - 'A' stands for 'Affinities" and contains the affinity values for each dimension.
         _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS = "BC"
         # Whether to mask the distance channel to only calculate the loss in those regions where the binary mask
@@ -259,27 +259,31 @@ class Config:
         # Order of the axes of the mask when using Zarr/H5 images in train data.
         _C.DATA.TRAIN.INPUT_MASK_AXES_ORDER = "TZCYX"
 
-        # Remove training images by the conditions based on their properties. When using Zarr each patch within the Zarr will be processed and will
-        # not depend on 'DATA.FILTER_BY_IMAGE' variable
-        # The three variables, DATA.TRAIN.FILTER_SAMPLES.PROPS, DATA.TRAIN.FILTER_SAMPLES.VALUES and DATA.TRAIN.FILTER_SAMPLES.SIGNS will compose a list of 
-        # conditions to remove the images. They are list of list of conditions. For instance, the conditions can be like this: [['A'], ['B','C']]. Then, if 
-        # the image satisfies the first list of conditions, only 'A' in this first case (from ['A'] list), or satisfy 'B' and 'C' (from ['B','C'] list) 
-        # it will be removed from the image. In each sublist all the conditions must be satisfied. Available properties are: ['foreground', 'mean', 'min', 'max'].
+        # DATA.TRAIN.FILTER_SAMPLES allows removing training images by the conditions based on their properties. When using Zarr each patch within the Zarr will be
+        # processed and will not depend on 'DATA.FILTER_BY_IMAGE' variable.
+        # Its three variables (PROPS, VALUES and SIGNS) define a set of conditions to remove the images from the training set. If an image satisfies any of the 
+        # conditions, the image won't be used for training.
         #
-        # Each property descrition:
-        #   * 'foreground' is defined as the mask foreground percentage. This option is only valid for SEMANTIC_SEG, INSTANCE_SEG and DETECTION.
-        #   * 'mean' is defined as the mean value.
-        #   * 'min' is defined as the min value.
-        #   * 'max' is defined as the max value.
+        # In PROPS, we define the property to look at to establish the condition. The available properties are: ['foreground', 'mean', 'min', 'max'].
         #
-        # A full example of this filtering:
-        # If you want to remove those samples that have less than 0.00001 and a mean average more than 100 (you need to know image data type) you should
-        # declare the above three variables as follows:
+        #   * 'foreground' is defined as the percentage of pixels/voxels corresponding to the foreground mask. This option is only valid for
+        #     SEMANTIC_SEG, INSTANCE_SEG and DETECTION.
+        #   * 'mean' is defined as the mean intensity value.
+        #   * 'min' is defined as the min intensity value.
+        #   * 'max' is defined as the max intensity value.
+        #
+        # With VALUES and SIGNS, we define the specific values and the comparison operators of each property, respectively.
+        # The available operators are: ['gt', 'ge', 'lt', 'le'], that corresponds to "greather than" (or ">"), "greather equal" (or ">="), "less than" (or "<"),
+        # and "less equal"  (or "<=").
+        #   
+        # Here you have a full example of this filtering:
+        # If you want to remove those samples that have intensity values lower than 0.00001 and a mean average greater than 100 you should
+        # declare the above three variables as follows (notice you need to know the image data type in advance):
         #   _C.DATA.TRAIN.FILTER_SAMPLES.PROPS = [['foreground','mean']]
         #   _C.DATA.TRAIN.FILTER_SAMPLES.VALUES = [[0.00001, 100]]
         #   _C.DATA.TRAIN.FILTER_SAMPLES.SIGNS = [['lt', 'gt']]
         # You can also concatenate more restrictions and they will be applied in order. For instance, if you want to filter those
-        # samples with a max value more than 1000, and do that before the condition described above, you can define the
+        # samples with a maximum intensity value greater than 1000, and do that before the condition described above, you can define the
         # variables this way:
         #   _C.DATA.TRAIN.FILTER_SAMPLES.PROPS = [['max'], ['foreground','mean']]
         #   _C.DATA.TRAIN.FILTER_SAMPLES.VALUES = [[1000], [0.00001, 100]]
