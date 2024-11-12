@@ -23,20 +23,12 @@ jobs:
         with:
           username: biapyx
           password: ${{ secrets.BIAPYX_DOCKERHUB_PASS }}
-
-      - name: Extract metadata (tags, labels) for Docker
-        id: meta
-        uses: docker/metadata-action@9ec57ed1fcdbf14dcef7dfbe97b2010124a938b7
-        with:
-          images: biapyx/biapy
-          tags: |
-            type=semver,pattern={{version}}
-      
-      # - name: Set env
-      #   run: echo "CONTAINER_TAG=${{ steps.meta.outputs.tags }}-11.8" >> $GITHUB_ENV
-      
-      # - name: Change Dockerfile version
-      #   run: sed -i "/3.5.5/${{ steps.meta.outputs.tags }}/g" biapy/utils/env/Dockerfile
+        
+      - name: Change Dockerfile version
+        run: |
+          tag="${{ github.event.release.tag_name }}"
+          sed -i "s/3.5.5/$tag/g" biapy/utils/env/Dockerfile
+          cat biapy/utils/env/Dockerfile
         
       - name: Build and push Docker image
         id: push
@@ -45,5 +37,4 @@ jobs:
           context: .
           file: ./biapy/utils/env/Dockerfile
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: biapyx/biapy:${{ github.event.release.tag_name }}-11.8
