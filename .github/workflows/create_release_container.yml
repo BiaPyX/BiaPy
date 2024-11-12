@@ -33,7 +33,7 @@ jobs:
             type=semver,pattern={{version}}
       
       - name: Set env
-        run: echo ::set-env name=CONTAINER_TAG::${{ steps.meta.outputs.tags }}-11.8
+        run: echo "CONTAINER_TAG=${{ steps.meta.outputs.tags }}-11.8" >> $GITHUB_ENV
       
       # - name: Change Dockerfile version
       #   run: sed -i "/3.5.5/${{ steps.meta.outputs.tags }}/g" biapy/utils/env/Dockerfile
