@@ -70,7 +70,7 @@ class Config:
         # info in: https://scikit-image.org/docs/stable/api/skimage.segmentation.html#skimage.segmentation.find_boundaries.
         # It can be also set as "dense", to label as contour every pixel that is not in B channel.
         _C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE = "thick"
-        # Whether if the threshold are going to be set as automaticaly (with Otsu thresholding) or manually.
+        # Whether the threshold are going to be set as automaticaly (with Otsu thresholding) or manually.
         # Options available: 'auto' or 'manual'. If this last is used PROBLEM.INSTANCE_SEG.DATA_MW_TH_* need to be set.
         # In case 'auto' was selected you will still need to set
         _C.PROBLEM.INSTANCE_SEG.DATA_MW_TH_TYPE = "auto"
@@ -222,7 +222,7 @@ class Config:
         _C.DATA.TRAIN.IN_MEMORY = True
         _C.DATA.TRAIN.PATH = os.path.join("user_data", "train", "x")
         _C.DATA.TRAIN.GT_PATH = os.path.join("user_data", "train", "y")
-        # Whether if your input Zarr contains the raw images and labels together or not. Use 'DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH'
+        # Whether your input Zarr contains the raw images and labels together or not. Use 'DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH'
         # and 'DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_GT_PATH' to determine the tag to find within the Zarr
         _C.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA = False
         # Paths to the raw and gt within the Zarr file. Only used when 'DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA' is True.
@@ -478,7 +478,7 @@ class Config:
         _C.DATA.VAL.PATH = os.path.join("user_data", "val", "x")
         # Path to the validation data mask. Used when _C.DATA.VAL.FROM_TRAIN = False
         _C.DATA.VAL.GT_PATH = os.path.join("user_data", "val", "y")
-        # Whether if your input Zarr contains the raw images and labels together or not. Use 'DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH'
+        # Whether your input Zarr contains the raw images and labels together or not. Use 'DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH'
         # and 'DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_GT_PATH' to determine the tag to find within the Zarr
         _C.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA = False
         # Paths to the raw and gt within the Zarr file. Only used when 'DATA.VAL.INPUT_ZARR_MULTIPLE_DATA' is True.
@@ -851,7 +851,7 @@ class Config:
         _C.MODEL.LARGER_IO = False
         # Checkpoint: set to True to load previous training weigths (needed for inference or to make fine-tunning)
         _C.MODEL.LOAD_CHECKPOINT = False
-        # When loading checkpoints whether if only model's weights are going to be loaded or optimizer, epochs and loss_scaler.
+        # When loading checkpoints whether only model's weights are going to be loaded or optimizer, epochs and loss_scaler.
         _C.MODEL.LOAD_CHECKPOINT_ONLY_WEIGHTS = True
         # Decide which checkpoint to load from job's dir if PATHS.CHECKPOINT_FILE is ''.
         # Options: 'best_on_val' or 'last_on_train'
@@ -1049,7 +1049,7 @@ class Config:
         _C.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER = "TZCYX"
         # Order of the axes of the mask when using Zarr/H5 images in test data.
         _C.TEST.BY_CHUNKS.INPUT_MASK_AXES_ORDER = "TZCYX"
-        # Whether if your input Zarr contains the raw images and labels together or not. Use 'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH'
+        # Whether your input Zarr contains the raw images and labels together or not. Use 'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH'
         # and 'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_GT_PATH' to determine the tag to find within the Zarr
         _C.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA = False
         # Paths to the raw and gt within the Zarr file. Only used when 'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA' is True.
@@ -1057,7 +1057,7 @@ class Config:
         _C.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH = ""
         _C.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_GT_PATH = ""
 
-        # Whether if after reconstructing the prediction the pipeline will continue each workflow specific steps. For this process
+        # Whether after reconstructing the prediction the pipeline will continue each workflow specific steps. For this process
         # the prediction image needs to be loaded into memory so be sure that it can fit in you memory. E.g. in instance
         # segmentation the instances will be created from the prediction.
         _C.TEST.BY_CHUNKS.WORKFLOW_PROCESS = CN()
