@@ -31,6 +31,10 @@ jobs:
           images: biapyx/biapy
           tags: |
             type=semver,pattern={{version}}
+      
+      - name: Set env
+        run: echo ::set-env name=CONTAINER_TAG::${{ steps.meta.outputs.tags }}-11.8
+      
       # - name: Change Dockerfile version
       #   run: sed -i "/3.5.5/${{ steps.meta.outputs.tags }}/g" biapy/utils/env/Dockerfile
         
@@ -41,5 +45,5 @@ jobs:
           context: .
           file: ./biapy/utils/env/Dockerfile
           push: true
-          tags: "${{ steps.meta.outputs.tags }}-11.8"
+          tags: $CONTAINER_TAG
           labels: ${{ steps.meta.outputs.labels }}
