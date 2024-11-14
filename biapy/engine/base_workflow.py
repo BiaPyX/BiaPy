@@ -862,7 +862,7 @@ class Base_Workflow(metaclass=ABCMeta):
             self.bmz_config["test_input"] = sample[1][0][0]
 
             # Save output 
-            pred = self.model_call_func(self.bmz_config["test_input"].unsqueeze(0)).cpu().detach()
+            pred = self.apply_model_activations(self.model_call_func(self.bmz_config["test_input"].unsqueeze(0))).cpu().detach()
             self.bmz_config["test_output"] = to_numpy_format(pred, self.axis_order_back)
             if not isinstance(self.bmz_config["test_output"], int):
                 self.bmz_config["test_output"] = self.bmz_config["test_output"][0]
