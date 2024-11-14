@@ -1,4 +1,4 @@
-name: Upload Python Package to PyPI when a Release is Created
+name: Upload BiaPy to PyPI
 
 on:
   release:
