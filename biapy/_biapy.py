@@ -941,6 +941,13 @@ class BiaPy:
             )
             state_dict_source = Path(self.workflow.checkpoint_path)
             state_dict_sha256 = None
+            
+            # Isolate pytorch_state_dict from checkpoint 
+            checkpoint = torch.load(state_dict_source, map_location="cpu", weights_only=True)
+            if "model" in checkpoint:
+                state_dict_source = os.path.join(building_dir,"checkpoint.pth")
+                os.makedirs(building_dir, exist_ok=True)
+                torch.save(checkpoint["model"], state_dict_source)
         else:
             state_dict_source, state_dict_sha256, pytorch_architecture = get_bmz_model_info(
                 self.workflow.bmz_config["original_bmz_config"],
