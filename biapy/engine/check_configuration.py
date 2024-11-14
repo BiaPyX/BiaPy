@@ -1728,7 +1728,8 @@ def compare_configurations_without_model(actual_cfg, old_cfg, header_message="",
     for var_to_compare in vars_to_compare:
         if get_attribute_recursive(actual_cfg, var_to_compare) != get_attribute_recursive(old_cfg, var_to_compare):
             raise ValueError(
-                header_message + f"The '{var_to_compare}' value of the compared configurations does not match"
+                header_message + f"The '{var_to_compare}' value of the compared configurations does not match: " +\
+                f"{get_attribute_recursive(actual_cfg, var_to_compare)} (current configuration) vs {get_attribute_recursive(old_cfg, var_to_compare)} (from loaded configuration)"
             )
 
     print("Configurations seem to be compatible. Continuing . . .")
