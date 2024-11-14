@@ -568,10 +568,19 @@ class BiaPy:
                         p["kwargs"]["max_percentile"] = prep.kwargs.max_percentile
                     preprocessing.append(p)
 
-        # Post-processing (not clear for now so just output the raw output of the model)
-        # postprocessing = None
+        # Post-processing
         # if self.cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'DETECTION', "SUPER_RESOLUTION", "SELF_SUPERVISED"]:
         #     postprocessing = [{"name": "binarize", "kwargs": {"threshold": 0.5}}]
+        postprocessing = None
+        if len(self.workflow.bmz_config["postprocessing"]) > 0:
+            postprocessing = []
+            for post in self.workflow.bmz_config["postprocessing"]:
+                if post == "sigmoid":
+                    postprocessing.append(
+                        {
+                            "id": "sigmoid",
+                        }
+                    )
 
         # Save input/output samples
         os.makedirs(building_dir, exist_ok=True)
@@ -664,7 +673,7 @@ class BiaPy:
                 axes=output_axes,
                 test_tensor=FileDescr(source=Path(test_output_path)),
                 data=data_descr,
-                # postprocessing=postprocessing,
+                postprocessing=postprocessing,
             )
             outputs = [output_descr]
             file_paths["output"] = Path(test_output_path)
