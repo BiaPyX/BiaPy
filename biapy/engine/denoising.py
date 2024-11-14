@@ -317,6 +317,13 @@ class Denoising_Workflow(Base_Workflow):
                 self.bmz_config["test_output"] = pred[0][
                     : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1], : self.cfg.DATA.PATCH_SIZE[2]
                 ].copy()
+            
+            # Check activations to be inserted as postprocessing in BMZ
+            self.bmz_config["postprocessing"] = []
+            act = list(self.activations[0].values())
+            for ac in act:
+                if ac in ["CE_Sigmoid","Sigmoid"]:
+                    self.bmz_config["postprocessing"].append("sigmoid")
 
     def torchvision_model_call(self, in_img, is_train=False):
         """

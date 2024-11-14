@@ -1924,6 +1924,14 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.bmz_config["test_output"] = pred[0][
                     : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1], : self.cfg.DATA.PATCH_SIZE[2]
                 ].copy()
+                
+            # Check activations to be inserted as postprocessing in BMZ
+            self.bmz_config["postprocessing"] = []
+            act = list(self.activations[0].values())
+            for ac in act:
+                if ac in ["CE_Sigmoid","Sigmoid"]:
+                    self.bmz_config["postprocessing"].append("sigmoid")
+
 
     def normalize_stats(self, image_counter):
         """
