@@ -855,12 +855,25 @@ class Base_Workflow(metaclass=ABCMeta):
 
         # Save two samples to export the model to BMZ
         if "test_input" not in self.bmz_config:
+            # Extract sample from generator
             sample = next(enumerate(self.train_generator))
+            
+            # Save input 
             self.bmz_config["test_input"] = sample[1][0][0]
-            self.bmz_config["test_output"] = sample[1][1]
+
+            # Save output 
+            pred = self.model_call_func(self.bmz_config["test_input"].unsqueeze(0)).cpu().detach()
+            self.bmz_config["test_output"] = to_numpy_format(pred, self.axis_order_back)
             if not isinstance(self.bmz_config["test_output"], int):
                 self.bmz_config["test_output"] = self.bmz_config["test_output"][0]
 
+            # Check activations to be inserted as postprocessing in BMZ
+            self.bmz_config["postprocessing"] = []
+            act = list(self.activations[0].values())
+            for ac in act:
+                if ac in ["CE_Sigmoid","Sigmoid"]:
+                    self.bmz_config["postprocessing"].append("sigmoid")
+            
         self.destroy_train_data()
 
     def load_test_data(self):
