@@ -32,7 +32,7 @@ dependencies = [
     "tensorboardX>=2.6.2.2",
     "h5py>=3.9.0",
     "zarr>=2.16.1",
-    "bioimageio.core==0.6.7",
+    "bioimageio.core==0.7.0",
     "imagecodecs>=2024.1.1",
     "numpy<2",
     "imgaug>=0.4.0",
