@@ -70,14 +70,13 @@ from biapy.data.data_manipulation import (
     read_img_as_ndarray,
     sample_satisfy_conds,
 )
-
 from biapy.data.post_processing.post_processing import (
     ensemble8_2d_predictions,
     ensemble16_3d_predictions,
     apply_binary_mask,
 )
 from biapy.data.post_processing import apply_post_processing
-from biapy.data.pre_processing import preprocess_data
+from biapy.data.pre_processing import preprocess_data, undo_sample_normalization
 from biapy.engine.check_configuration import check_configuration, compare_configurations_without_model
 
 
@@ -417,6 +416,8 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.val_generator,
                 self.data_norm,
                 self.num_training_steps_per_epoch,
+                self.bmz_config["test_input"],
+                self.bmz_config["test_input_norm"],
             ) = create_train_val_augmentors(
                 self.cfg,
                 X_train=self.X_train,
@@ -853,19 +854,21 @@ class Base_Workflow(metaclass=ABCMeta):
 
         print("Finished Training")
 
-        # Save two samples to export the model to BMZ
-        if "test_input" not in self.bmz_config:
-            # Extract sample from generator
-            sample = next(enumerate(self.train_generator))
-            
-            # Save input 
-            self.bmz_config["test_input"] = sample[1][0][0]
+        # Save output sample to export the model to BMZ
+        if self.cfg.MODEL.BMZ.EXPORT.ENABLE and "test_output" not in self.bmz_config:
+            # Load best checkpoint on validation to ensure it 
+            _ = load_model_checkpoint(
+                cfg=self.cfg,
+                jobname=self.job_identifier,
+                model_without_ddp=self.model,
+                device=self.device,
+            )
+            self.model.eval()
 
-            # Save output 
-            pred = self.apply_model_activations(self.model_call_func(self.bmz_config["test_input"].unsqueeze(0))).cpu().detach()
-            self.bmz_config["test_output"] = to_numpy_format(pred, self.axis_order_back)
-            if not isinstance(self.bmz_config["test_output"], int):
-                self.bmz_config["test_output"] = self.bmz_config["test_output"][0]
+            # Call the model directly to avoid using Numpy transpose() function, as it changes something internally that
+            # leds to slightly different results and the BMZ test will not pass
+            pred = self.apply_model_activations(self.model(torch.from_numpy(self.bmz_config["test_input_norm"]).to(self.device)))
+            self.bmz_config["test_output"] = pred.clone().cpu().detach().numpy()
 
             # Check activations to be inserted as postprocessing in BMZ
             self.bmz_config["postprocessing"] = []
@@ -873,7 +876,7 @@ class Base_Workflow(metaclass=ABCMeta):
             for ac in act:
                 if ac in ["CE_Sigmoid","Sigmoid"]:
                     self.bmz_config["postprocessing"].append("sigmoid")
-            
+
         self.destroy_train_data()
 
     def load_test_data(self):
@@ -1487,6 +1490,50 @@ class Base_Workflow(metaclass=ABCMeta):
                 dist.barrier()
             if self.cfg.TEST.VERBOSE:
                 print(f"[Rank {get_rank()} ({os.getpid()})] Synched with main thread. Go for the next sample")
+    
+    def prepare_bmz_sample(self, sample_key, img):
+        """
+        Prepare a sample from the given ``img`` using the patch size in the configuration. It also saves
+        the sample in ``self.bmz_config`` using the ``sample_key``. 
+
+        Parameters
+        ----------
+        sample_key : str
+            Key to store the sample into. Must be one between: ``["test_input", "test_output"]``
+
+        img : Numpy array
+            Image to extract the sample from. 
+        """
+        assert sample_key in ["test_input", "test_output"]
+        if self.cfg.PROBLEM.NDIM == "2D":
+            self.bmz_config[sample_key] = img[
+                0,
+                :self.cfg.DATA.PATCH_SIZE[0], 
+                :self.cfg.DATA.PATCH_SIZE[1]
+            ].copy().squeeze()
+        else:
+            self.bmz_config[sample_key] = img[
+                0,
+                :self.cfg.DATA.PATCH_SIZE[0], 
+                :self.cfg.DATA.PATCH_SIZE[1], 
+                :self.cfg.DATA.PATCH_SIZE[2]
+            ].copy().squeeze()
+        
+        if (
+            (self.cfg.PROBLEM.NDIM == "2D" and self.bmz_config[sample_key].ndim == 2)
+            or (self.cfg.PROBLEM.NDIM == "3D" and self.bmz_config[sample_key].ndim == 3)
+        ):
+            self.bmz_config[sample_key] = np.expand_dims(self.bmz_config[sample_key], 0)
+        self.bmz_config[sample_key] = np.expand_dims(self.bmz_config[sample_key], 0) # Add batch size 
+        
+        if "postprocessing" not in self.bmz_config:
+            # Check activations to be inserted as postprocessing in BMZ
+            self.bmz_config["postprocessing"] = []
+            act = list(self.activations[0].values())
+            for ac in act:
+                if ac in ["CE_Sigmoid","Sigmoid"]:
+                    self.bmz_config["postprocessing"].append("sigmoid")
+
 
     def process_test_sample(self):
         """
@@ -1496,16 +1543,24 @@ class Base_Workflow(metaclass=ABCMeta):
         if "discard" in self.current_sample["X"] and self.current_sample["X"]["discard"]:
             return True
 
-        # Save test_input if the user wants to export the model to BMZ later
-        if "test_input" not in self.bmz_config:
-            if self.cfg.PROBLEM.NDIM == "2D":
-                self.bmz_config["test_input"] = self.current_sample["X"][0][
-                    : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1]
-                ].copy()
-            else:
-                self.bmz_config["test_input"] = self.current_sample["X"][0][
-                    : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1], : self.cfg.DATA.PATCH_SIZE[2]
-                ].copy()
+        # Save BMZ input/output if the user wants to export the model to BMZ later
+        if self.cfg.MODEL.BMZ.EXPORT.ENABLE and "test_output" not in self.bmz_config:
+            # Generate prediction and save test_output
+            self.prepare_bmz_sample("test_input", self.current_sample["X"])
+            p = self.model(torch.from_numpy(self.bmz_config["test_input"]).to(self.device))
+            self.prepare_bmz_sample(
+                "test_output", 
+                self.apply_model_activations(
+                    p.clone()
+                ).cpu().detach().numpy().astype(np.float32)
+            )
+
+            # Save test_input
+            self.bmz_config["test_input"] = undo_sample_normalization(
+                self.current_sample["X"], 
+                self.current_sample["X_norm"]
+            ).astype(np.float32)
+            self.prepare_bmz_sample("test_input", self.bmz_config["test_input"])
 
         #################
         ### PER PATCH ###
@@ -1913,24 +1968,6 @@ class Base_Workflow(metaclass=ABCMeta):
                     self.all_gt.append(self.current_sample["Y"])
 
             self.after_full_image(pred)
-
-        # Save test_output if the user wants to export the model to BMZ later
-        if "test_output" not in self.bmz_config:
-            if self.cfg.PROBLEM.NDIM == "2D":
-                self.bmz_config["test_output"] = pred[0][
-                    : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1]
-                ].copy()
-            else:
-                self.bmz_config["test_output"] = pred[0][
-                    : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1], : self.cfg.DATA.PATCH_SIZE[2]
-                ].copy()
-                
-            # Check activations to be inserted as postprocessing in BMZ
-            self.bmz_config["postprocessing"] = []
-            act = list(self.activations[0].values())
-            for ac in act:
-                if ac in ["CE_Sigmoid","Sigmoid"]:
-                    self.bmz_config["postprocessing"].append("sigmoid")
 
 
     def normalize_stats(self, image_counter):

@@ -292,11 +292,13 @@ class BiaPy:
             output_axes : List of str, optional
                 Axis order of the output file. E.g. ["bcyx"].
 
-            test_input : 3D/4D Torch tensor, optional
-                Test input image sample. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
+            test_input : 4D/5D Torch tensor, optional
+                Test input image sample. It is crucial to give the expected axes as follows: 
+                E.g. ``(batch, channels, y, x)`` or ``(batch, channels, z, y, x)``.
 
-            test_output : 3D/4D Torch tensor, optional
-                Test output image sample. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
+            test_output : 4D/5D Torch tensor, optional
+                Test output image sample. It is crucial to give the expected axes as follows: 
+                E.g. ``(batch, channels, y, x)`` or ``(batch, channels, z, y, x)``.
 
             covers : List of str, optional
                 A list of cover images provided by either a relative path to the model folder, or
@@ -489,84 +491,75 @@ class BiaPy:
         # Preprocessing
         # Actually Torchvision has its own preprocessing but it can not be adapted to BMZ easily, so for now
         # we set it like we were using BiaPy backend
-        if self.cfg.MODEL.SOURCE in ["biapy", "torchvision"] or self.cfg.MODEL.SOURCE == "bmz":
-            if self.cfg.DATA.NORMALIZATION.TYPE == "div":
+        if self.cfg.DATA.NORMALIZATION.TYPE == "div":
+            max_val = 255
+            if not reuse_original_bmz_config:
+                test_input = (
+                    self.workflow.bmz_config["test_input_norm"] if "test_input" not in bmz_cfg else bmz_cfg["test_input"]
+                )
+                if test_input.max() > max_val:
+                    max_val = 65535
+
+            preprocessing = [
+                {
+                    "id": "scale_linear",
+                    "kwargs": {"gain": 1 / max_val, "offset": 0},
+                }
+            ]
+        elif self.cfg.DATA.NORMALIZATION.TYPE == "scale_range":
+            axes = ["channel"]
+            axes += list("zyx") if self.cfg.PROBLEM.NDIM == "3D" else list("yx")
+            preprocessing = [
+                {
+                    "id": "scale_range",
+                    "kwargs": {
+                        "max_percentile": 100,
+                        "min_percentile": 0,
+                        "axes": axes,
+                    },
+                }
+            ]
+
+            # Add percentile norm
+            if self.cfg.DATA.NORMALIZATION.PERC_CLIP:
+                min_percentile, max_percentile = 0, 100
+                if self.cfg.DATA.NORMALIZATION.PERC_CLIP:
+                    min_percentile = self.cfg.DATA.NORMALIZATION.PERC_LOWER
+                    max_percentile = self.cfg.DATA.NORMALIZATION.PERC_UPPER
+                perc_instructions = {
+                    "axes": axes,
+                    "max_percentile": max_percentile,
+                    "min_percentile": min_percentile,
+                }
+                preprocessing[0]["kwargs"].update(perc_instructions)
+
+        else:  # custom
+            custom_mean = self.cfg.DATA.NORMALIZATION.CUSTOM_MEAN
+            custom_std = self.cfg.DATA.NORMALIZATION.CUSTOM_STD
+
+            if custom_mean != -1 and custom_std != -1:
                 preprocessing = [
                     {
-                        "id": "scale_linear",
-                        "kwargs": {"gain": 1 / 255, "offset": 0},
+                        "id": "fixed_zero_mean_unit_variance",
+                        "kwargs": {
+                            "mean": custom_mean,
+                            "std": custom_std,
+                        },
                     }
                 ]
-            elif self.cfg.DATA.NORMALIZATION.TYPE == "scale_range":
+            else:
                 axes = ["channel"]
                 axes += list("zyx") if self.cfg.PROBLEM.NDIM == "3D" else list("yx")
                 preprocessing = [
                     {
-                        "id": "scale_range",
+                        "id": "zero_mean_unit_variance",
                         "kwargs": {
-                            "max_percentile": 100,
-                            "min_percentile": 0,
                             "axes": axes,
                         },
                     }
                 ]
 
-                # Add percentile norm
-                if self.cfg.DATA.NORMALIZATION.PERC_CLIP:
-                    min_percentile, max_percentile = 0, 100
-                    if self.cfg.DATA.NORMALIZATION.PERC_CLIP:
-                        min_percentile = self.cfg.DATA.NORMALIZATION.PERC_LOWER
-                        max_percentile = self.cfg.DATA.NORMALIZATION.PERC_UPPER
-                    perc_instructions = {
-                        "axes": axes,
-                        "max_percentile": max_percentile,
-                        "min_percentile": min_percentile,
-                    }
-                    preprocessing[0]["kwargs"].update(perc_instructions)
-
-            else:  # custom
-                custom_mean = self.cfg.DATA.NORMALIZATION.CUSTOM_MEAN
-                custom_std = self.cfg.DATA.NORMALIZATION.CUSTOM_STD
-
-                if custom_mean != -1 and custom_std != -1:
-                    preprocessing = [
-                        {
-                            "id": "fixed_zero_mean_unit_variance",
-                            "kwargs": {
-                                "mean": custom_mean,
-                                "std": custom_std,
-                            },
-                        }
-                    ]
-                else:
-                    axes = ["channel"]
-                    axes += list("zyx") if self.cfg.PROBLEM.NDIM == "3D" else list("yx")
-                    preprocessing = [
-                        {
-                            "id": "zero_mean_unit_variance",
-                            "kwargs": {
-                                "axes": axes,
-                            },
-                        }
-                    ]
-
-        # BMZ, reusing the preprocessing
-        else:
-            if original_model_version > Version("0.5.0"):
-                preprocessing = self.workflow.bmz_config["original_bmz_config"].inputs[0].preprocessing
-            else:
-                preprocessing = []
-                for prep in self.workflow.bmz_config["original_bmz_config"].inputs[0].preprocessing:
-                    p = {}
-                    p["id"] = prep.name
-                    if "ScaleRangeDescr" in str(type(prep)):
-                        p["kwargs"] = {}
-                        axes = list(prep.kwargs.axes)
-                        axes[axes.index("c")] = "channel"
-                        p["kwargs"]["axes"] = axes
-                        p["kwargs"]["min_percentile"] = prep.kwargs.min_percentile
-                        p["kwargs"]["max_percentile"] = prep.kwargs.max_percentile
-                    preprocessing.append(p)
+        print("Pre-processing: {}".format(preprocessing))
 
         # Post-processing
         # if self.cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'DETECTION', "SUPER_RESOLUTION", "SELF_SUPERVISED"]:
@@ -581,6 +574,10 @@ class BiaPy:
                             "id": "sigmoid",
                         }
                     )
+        if postprocessing is not None:
+            print("Post-processing: {}".format(postprocessing))
+        else:
+            print("Post-processing: any")
 
         # Save input/output samples
         os.makedirs(building_dir, exist_ok=True)
@@ -592,31 +589,16 @@ class BiaPy:
                 self.workflow.bmz_config["test_input"] if "test_input" not in bmz_cfg else bmz_cfg["test_input"]
             )
             input_axes = [
-                BatchAxis(),
-                ChannelAxis(channel_names=[Identifier("channel" + str(i)) for i in range(test_input.shape[-1])]),
+                BatchAxis(size=1),
+                ChannelAxis(channel_names=[Identifier("channel" + str(i)) for i in range(test_input.shape[1])]),
             ]
-            if test_input.ndim == 3:
-                np.save(
-                    test_input_path,
-                    (
-                        test_input.permute((2, 0, 1)).unsqueeze(0)
-                        if torch.is_tensor(test_input)
-                        else np.expand_dims(test_input.transpose((2, 0, 1)), 0)
-                    ),
-                )
+            np.save(test_input_path, test_input)
+            if test_input.ndim == 4:
                 input_axes += [
                     SpaceInputAxis(id=AxisId("y"), size=self.cfg.DATA.PATCH_SIZE[0]),
                     SpaceInputAxis(id=AxisId("x"), size=self.cfg.DATA.PATCH_SIZE[1]),
                 ]
             else:
-                np.save(
-                    test_input_path,
-                    (
-                        test_input.permute((3, 0, 1, 2)).unsqueeze(0)
-                        if torch.is_tensor(test_input)
-                        else np.expand_dims(test_input.transpose((3, 0, 1, 2)), 0)
-                    ),
-                )
                 input_axes += [
                     SpaceInputAxis(id=AxisId("z"), size=self.cfg.DATA.PATCH_SIZE[0]),
                     SpaceInputAxis(id=AxisId("y"), size=self.cfg.DATA.PATCH_SIZE[1]),
@@ -637,31 +619,16 @@ class BiaPy:
                 self.workflow.bmz_config["test_output"] if "test_output" not in bmz_cfg else bmz_cfg["test_output"]
             )
             output_axes = [
-                BatchAxis(),
-                ChannelAxis(channel_names=[Identifier("channel" + str(i)) for i in range(test_output.shape[-1])]),
+                BatchAxis(size=1),
+                ChannelAxis(channel_names=[Identifier("channel" + str(i)) for i in range(test_output.shape[1])]),
             ]
-            if test_output.ndim == 3:
-                np.save(
-                    test_output_path,
-                    (
-                        test_output.permute((2, 0, 1)).unsqueeze(0)
-                        if torch.is_tensor(test_output)
-                        else np.expand_dims(test_output.transpose((2, 0, 1)), 0)
-                    ),
-                )
+            np.save(test_output_path, test_output)
+            if test_output.ndim == 4:
                 output_axes += [
                     SpaceOutputAxis(id=AxisId("y"), size=self.cfg.DATA.PATCH_SIZE[0]),
                     SpaceOutputAxis(id=AxisId("x"), size=self.cfg.DATA.PATCH_SIZE[1]),
                 ]
             else:
-                np.save(
-                    test_output_path,
-                    (
-                        test_output.permute((3, 0, 1, 2)).unsqueeze(0)
-                        if torch.is_tensor(test_output)
-                        else np.expand_dims(test_output.transpose((3, 0, 1, 2)), 0)
-                    ),
-                )
                 output_axes += [
                     SpaceOutputAxis(id=AxisId("z"), size=self.cfg.DATA.PATCH_SIZE[0]),
                     SpaceOutputAxis(id=AxisId("y"), size=self.cfg.DATA.PATCH_SIZE[1]),
@@ -778,7 +745,7 @@ class BiaPy:
                         axes=output_axes,
                         test_tensor=FileDescr(source=Path(test_tensor_local_path)),
                         data=IntervalOrRatioDataDescr(type=output.data_type),
-                        # postprocessing=postprocessing,
+                        postprocessing=postprocessing,
                     )
                     outputs.append(output_descr)
                     if i == 0:

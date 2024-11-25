@@ -33,6 +33,20 @@ from biapy.data.data_3D_manipulation import (
 )
 from biapy.data.data_manipulation import read_img_as_ndarray, load_data_from_dir
 
+numpy_torch_dtype_dict = {
+    "bool": [torch.bool, bool],
+    "uint8": [torch.uint8, np.uint8],
+    "int8": [torch.int8, np.int8],
+    "int16": [torch.int16, np.int16],
+    "int32": [torch.int32, np.int32],
+    "int64": [torch.int64, np.int64],
+    "float16": [torch.float16, np.float16],
+    "float32": [torch.float32, np.float32],
+    "float64": [torch.float64, np.float64],
+    "complex64": [torch.complex64, np.complex64],
+    "complex128": [torch.complex128, np.complex128],
+}
+
 #########################
 # INSTANCE SEGMENTATION #
 #########################
@@ -1168,20 +1182,7 @@ def reduce_dtype(x, x_min, x_max, out_min=0, out_max=1, out_type=np.float32):
         return ((((x - x_min) / (x_max - x_min)) * (out_max - out_min)) + out_min).to(out_type)
 
 
-def normalize(data, means, stds, out_type="float32"):
-    numpy_torch_dtype_dict = {
-        "bool": [torch.bool, bool],
-        "uint8": [torch.uint8, np.uint8],
-        "int8": [torch.int8, np.int8],
-        "int16": [torch.int16, np.int16],
-        "int32": [torch.int32, np.int32],
-        "int64": [torch.int64, np.int64],
-        "float16": [torch.float16, np.float16],
-        "float32": [torch.float32, np.float32],
-        "float64": [torch.float64, np.float64],
-        "complex64": [torch.complex64, np.complex64],
-        "complex128": [torch.complex128, np.complex128],
-    }
+def zero_mean_unit_variance_normalization(data, means, stds, out_type="float32"):
     if torch.is_tensor(data):
         if stds == 0:
             return data.to(numpy_torch_dtype_dict[out_type][0])
@@ -1194,20 +1195,7 @@ def normalize(data, means, stds, out_type="float32"):
             return ((data - means) / stds).astype(numpy_torch_dtype_dict[out_type][1])
 
 
-def denormalize(data, means, stds, out_type="float32"):
-    numpy_torch_dtype_dict = {
-        "bool": [torch.bool, bool],
-        "uint8": [torch.uint8, np.uint8],
-        "int8": [torch.int8, np.int8],
-        "int16": [torch.int16, np.int16],
-        "int32": [torch.int32, np.int32],
-        "int64": [torch.int64, np.int64],
-        "float16": [torch.float16, np.float16],
-        "float32": [torch.float32, np.float32],
-        "float64": [torch.float64, np.float64],
-        "complex64": [torch.complex64, np.complex64],
-        "complex128": [torch.complex128, np.complex128],
-    }
+def undo_zero_mean_unit_variance_normalization(data, means, stds, out_type="float32"):
     if torch.is_tensor(data):
         return ((data * stds) + means).to(numpy_torch_dtype_dict[out_type][0])
     else:
@@ -1221,6 +1209,27 @@ def percentile_clip(x, lower=0.1, upper=99.9, lwr_perc_val=None, uppr_perc_val=N
         x_lwr = int(x_lwr)
         x_upr = int(x_upr)
     return np.clip(x, x_lwr, x_upr, out=x), x_lwr, x_upr
+
+
+def undo_sample_normalization(pred, x_norm):
+    if x_norm["type"] == "div":
+        pred = undo_norm_range01(pred, x_norm)
+    elif x_norm["type"] == "scale_range":
+        pred = undo_norm_range01(pred, x_norm, x_norm["min_val_scale"], x_norm["max_val_scale"])
+    else:
+        pred = undo_zero_mean_unit_variance_normalization(pred, x_norm["mean"], x_norm["std"])
+
+        if x_norm["orig_dtype"] not in [
+            np.dtype("float64"),
+            np.dtype("float32"),
+            np.dtype("float16"),
+        ]:
+            pred = np.round(pred)
+            minpred = np.min(pred)
+            pred = pred + abs(minpred)
+
+        pred = pred.astype(x_norm["orig_dtype"])
+    return pred 
 
 
 def resize_images(images, **kwards):

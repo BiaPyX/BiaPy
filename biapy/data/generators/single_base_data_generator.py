@@ -15,7 +15,7 @@ from typing import (
     Dict,
 )
 
-from biapy.data.pre_processing import normalize, norm_range01, percentile_clip
+from biapy.data.pre_processing import zero_mean_unit_variance_normalization, norm_range01, percentile_clip
 from biapy.data.generators.augmentors import *
 from biapy.utils.misc import is_main_process
 from biapy.data.data_manipulation import load_img_data
@@ -417,9 +417,9 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 img, _ = norm_range01(img, div_using_max_and_scale=True)
             elif self.norm_dict["type"] == "custom":
                 if "mean" in self.norm_dict:
-                    img = normalize(img, self.norm_dict["mean"], self.norm_dict["std"])
+                    img = zero_mean_unit_variance_normalization(img, self.norm_dict["mean"], self.norm_dict["std"])
                 else:
-                    img = normalize(img, img.mean(), img.std())
+                    img = zero_mean_unit_variance_normalization(img, img.mean(), img.std())
 
         return img, img_class
 

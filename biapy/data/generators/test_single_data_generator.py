@@ -10,7 +10,7 @@ from typing import (
     Callable,
 )
 
-from biapy.data.pre_processing import normalize, norm_range01, percentile_clip
+from biapy.data.pre_processing import zero_mean_unit_variance_normalization, norm_range01, percentile_clip
 from biapy.data.generators.augmentors import center_crop_single, resize_img
 from biapy.data.data_manipulation import load_img_data, sample_satisfy_conds, pad_and_reflect
 
@@ -259,7 +259,7 @@ class test_single_data_generator(Dataset):
                 xnorm = {}
                 xnorm["mean"] = img.mean() if "mean" not in self.norm_dict else self.norm_dict["mean"]
                 xnorm["std"] = img.std() if "std" not in self.norm_dict else self.norm_dict["std"]
-                img = normalize(img, xnorm["mean"], xnorm["std"], out_type=self.dtype_str)
+                img = zero_mean_unit_variance_normalization(img, xnorm["mean"], xnorm["std"], out_type=self.dtype_str)
 
         img = np.expand_dims(img, 0).astype(self.dtype)
         return img, img_class, xnorm, sample

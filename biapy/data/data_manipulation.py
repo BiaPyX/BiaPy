@@ -1,6 +1,7 @@
 import os
 import h5py
 import random
+import torch
 import numpy as np
 from tqdm import tqdm
 from skimage.io import imread
@@ -2915,6 +2916,8 @@ def read_img_as_ndarray(path, is_3d=False):
     # Read image
     if path.endswith(".npy"):
         img = np.load(path)
+    elif path.endswith(".pt"):
+        img = torch.load(path, weights_only=True, map_location='cpu').numpy()
     elif path.endswith(".hdf5") or path.endswith(".h5"):
         img = h5py.File(path, "r")
         img = np.array(img[list(img)[0]])

@@ -20,7 +20,7 @@ from abc import ABCMeta, abstractmethod
 from torch.utils.data import Dataset
 
 from biapy.data.generators.augmentors import *
-from biapy.data.pre_processing import normalize, norm_range01, percentile_clip
+from biapy.data.pre_processing import zero_mean_unit_variance_normalization, norm_range01, percentile_clip
 from biapy.utils.misc import is_main_process
 from biapy.data.data_manipulation import pad_and_reflect, load_img_data
 from biapy.data.data_3D_manipulation import extract_patch_from_efficient_file
@@ -1044,9 +1044,9 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             img, _ = norm_range01(img, div_using_max_and_scale=True)
         elif self.norm_dict["type"] == "custom":
             if "mean" in self.norm_dict:
-                img = normalize(img, self.norm_dict["mean"], self.norm_dict["std"])
+                img = zero_mean_unit_variance_normalization(img, self.norm_dict["mean"], self.norm_dict["std"])
             else:
-                img = normalize(img, img.mean(), img.std())
+                img = zero_mean_unit_variance_normalization(img, img.mean(), img.std())
         return img
 
     def norm_Y(self, mask: np.ndarray) -> np.ndarray:
@@ -1083,9 +1083,9 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 mask, _ = norm_range01(mask, div_using_max_and_scale=True)
             elif self.norm_dict["type"] == "custom":
                 if "mean" in self.norm_dict:
-                    mask = normalize(mask, self.norm_dict["mean"], self.norm_dict["std"])
+                    mask = zero_mean_unit_variance_normalization(mask, self.norm_dict["mean"], self.norm_dict["std"])
                 else:
-                    mask = normalize(mask, mask.mean(), mask.std())
+                    mask = zero_mean_unit_variance_normalization(mask, mask.mean(), mask.std())
         return mask
 
     def getitem(self, index: int) -> Tuple[torch.Tensor, torch.Tensor]:

@@ -134,16 +134,24 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
             if "discard" in self.current_sample["X"] and self.current_sample["X"]["discard"]:
                 return True
 
-            # Save test_input if the user wants to export the model to BMZ later
-            if "test_input" not in self.bmz_config:
-                if self.cfg.PROBLEM.NDIM == "2D":
-                    self.bmz_config["test_input"] = self.current_sample["X"][0][
-                        : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1]
-                    ].copy()
-                else:
-                    self.bmz_config["test_input"] = self.current_sample["X"][0][
-                        : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1], : self.cfg.DATA.PATCH_SIZE[2]
-                    ].copy()
+            # Save BMZ input/output if the user wants to export the model to BMZ later
+            if self.cfg.MODEL.BMZ.EXPORT.ENABLE and "test_output" not in self.bmz_config:
+                # Generate prediction and save test_output
+                self.prepare_bmz_sample("test_input", self.current_sample["X"])
+                p = self.model(torch.from_numpy(self.bmz_config["test_input"]).to(self.device))
+                self.prepare_bmz_sample(
+                    "test_output", 
+                    self.apply_model_activations(
+                        p.clone()
+                    ).cpu().detach().numpy().astype(np.float32)
+                )
+
+                # Save test_input
+                self.bmz_config["test_input"] = undo_sample_normalization(
+                    self.current_sample["X"], 
+                    self.current_sample["X_norm"]
+                ).astype(np.float32)
+                self.prepare_bmz_sample("test_input", self.bmz_config["test_input"])
 
             ##################
             ### FULL IMAGE ###
@@ -188,24 +196,6 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
                     if str(metric).lower() not in self.stats["full_image"]:
                         self.stats["full_image"][str(metric).lower()] = 0
                     self.stats["full_image"][str(metric).lower()] += metric_values[metric]
-
-            # Save test_output if the user wants to export the model to BMZ later
-            if "test_output" not in self.bmz_config:
-                if self.cfg.PROBLEM.NDIM == "2D":
-                    self.bmz_config["test_output"] = pred[0][
-                        : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1]
-                    ].copy()
-                else:
-                    self.bmz_config["test_output"] = pred[0][
-                        : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1], : self.cfg.DATA.PATCH_SIZE[2]
-                    ].copy()
-                
-                # Check activations to be inserted as postprocessing in BMZ
-                self.bmz_config["postprocessing"] = []
-                act = list(self.activations[0].values())
-                for ac in act:
-                    if ac in ["CE_Sigmoid","Sigmoid"]:
-                        self.bmz_config["postprocessing"].append("sigmoid")
 
     def torchvision_model_call(self, in_img, is_train=False):
         """
