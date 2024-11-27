@@ -491,6 +491,22 @@ class BiaPy:
         # Preprocessing
         # Actually Torchvision has its own preprocessing but it can not be adapted to BMZ easily, so for now
         # we set it like we were using BiaPy backend
+
+        # TODO: waiting to implement percentile clipping to add ours:
+        #    https://github.com/bioimage-io/spec-bioimage-io/issues/665#issuecomment-2497953374
+        # Add percentile norm
+        # if self.cfg.DATA.NORMALIZATION.PERC_CLIP:
+        #     min_percentile, max_percentile = 0, 100
+        #     if self.cfg.DATA.NORMALIZATION.PERC_CLIP:
+        #         min_percentile = self.cfg.DATA.NORMALIZATION.PERC_LOWER
+        #         max_percentile = self.cfg.DATA.NORMALIZATION.PERC_UPPER
+        #     perc_instructions = {
+        #         "axes": axes,
+        #         "max_percentile": max_percentile,
+        #         "min_percentile": min_percentile,
+        #     }
+        #     preprocessing[0]["kwargs"].update(perc_instructions)
+            
         if self.cfg.DATA.NORMALIZATION.TYPE == "div":
             max_val = 255
             if not reuse_original_bmz_config:
@@ -519,20 +535,6 @@ class BiaPy:
                     },
                 }
             ]
-
-            # Add percentile norm
-            if self.cfg.DATA.NORMALIZATION.PERC_CLIP:
-                min_percentile, max_percentile = 0, 100
-                if self.cfg.DATA.NORMALIZATION.PERC_CLIP:
-                    min_percentile = self.cfg.DATA.NORMALIZATION.PERC_LOWER
-                    max_percentile = self.cfg.DATA.NORMALIZATION.PERC_UPPER
-                perc_instructions = {
-                    "axes": axes,
-                    "max_percentile": max_percentile,
-                    "min_percentile": min_percentile,
-                }
-                preprocessing[0]["kwargs"].update(perc_instructions)
-
         else:  # custom
             custom_mean = self.cfg.DATA.NORMALIZATION.CUSTOM_MEAN
             custom_std = self.cfg.DATA.NORMALIZATION.CUSTOM_STD
