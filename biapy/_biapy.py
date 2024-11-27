@@ -495,7 +495,7 @@ class BiaPy:
             max_val = 255
             if not reuse_original_bmz_config:
                 test_input = (
-                    self.workflow.bmz_config["test_input_norm"] if "test_input" not in bmz_cfg else bmz_cfg["test_input"]
+                    self.workflow.bmz_config["test_input"] if "test_input" not in bmz_cfg else bmz_cfg["test_input"]
                 )
                 if test_input.max() > max_val:
                     max_val = 65535
@@ -503,7 +503,7 @@ class BiaPy:
             preprocessing = [
                 {
                     "id": "scale_linear",
-                    "kwargs": {"gain": 1 / max_val, "offset": 0},
+                    "kwargs": {"gain": float(1/max_val), "offset": 0},
                 }
             ]
         elif self.cfg.DATA.NORMALIZATION.TYPE == "scale_range":

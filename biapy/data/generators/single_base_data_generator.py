@@ -419,7 +419,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 if "mean" in self.norm_dict:
                     img = zero_mean_unit_variance_normalization(img, self.norm_dict["mean"], self.norm_dict["std"])
                 else:
-                    img = zero_mean_unit_variance_normalization(img, img.mean(), img.std())
+                    img = zero_mean_unit_variance_normalization(img)
 
         return img, img_class
 

@@ -1083,7 +1083,7 @@ def calculate_volume_prob_map(Y, is_3d=False, w_foreground=0.94, w_background=0.
 ###########
 # GENERAL #
 ###########
-def norm_range01(x, dtype=np.float32, div_using_max_and_scale=False, div_using_max_and_scale_per_channel=False):
+def norm_range01(x, dtype=np.float32, div_using_max_and_scale=False, div_using_max_and_scale_per_channel=False, eps=1e-6):
     norm_steps = {}
     norm_steps["orig_dtype"] = x.dtype
 
@@ -1091,22 +1091,28 @@ def norm_range01(x, dtype=np.float32, div_using_max_and_scale=False, div_using_m
         norm_steps["min_val_scale"] = x.min()
         norm_steps["max_val_scale"] = x.max()
 
+    # Changing dtype to floating tensor 
+    if torch.is_tensor(x):
+        if not torch.is_floating_point(x):
+            x = x.to(torch.float32)
+    else:
+        if not isinstance(x, np.floating):
+            x = x.astype(np.float32)
+
     if x.dtype in [np.uint8, torch.uint8]:
         if div_using_max_and_scale_per_channel:
             if not div_using_max_and_scale:
-                x = x / 255
-            else:
-                x = x.astype(dtype)
+                x = x * (1/255)
+            else:    
                 for c in range(x.shape[-1]):
-                    x[...,c] = (x[...,c] - x[...,c].min()) / (x[...,c].max() - x[...,c].min() + sys.float_info.epsilon)
+                    x[...,c] = (x[...,c] - x[...,c].min()) / (x[...,c].max() - x[...,c].min() + eps)
         else:
-            x = x / 255 if not div_using_max_and_scale else (x - x.min()) / (x.max() - x.min() + sys.float_info.epsilon)
+            x = x * (1/255) if not div_using_max_and_scale else (x - x.min()) / (x.max() - x.min() + eps)
         norm_steps["div"] = 1
     else:
         if (isinstance(x, np.ndarray) and np.max(x) > 255) or (torch.is_tensor(x) and torch.max(x) > 255):
             norm_steps["reduced_{}".format(x.dtype)] = 1
             if div_using_max_and_scale_per_channel:
-                x = x.astype(dtype)
                 for c in range(x.shape[-1]):
                     x[...,c] = reduce_dtype(
                         x[...,c],
@@ -1128,13 +1134,12 @@ def norm_range01(x, dtype=np.float32, div_using_max_and_scale=False, div_using_m
         elif (isinstance(x, np.ndarray) and np.max(x) > 2) or (torch.is_tensor(x) and torch.max(x) > 2):
             if div_using_max_and_scale_per_channel:
                 if not div_using_max_and_scale:
-                    x = x / 255
+                    x = x * (1/255)
                 else:
-                    x = x.astype(dtype)
                     for c in range(x.shape[-1]):
-                        x[...,c] = (x[...,c] - x[...,c].min()) / (x[...,c].max() - x[...,c].min() + sys.float_info.epsilon)
+                        x[...,c] = (x[...,c] - x[...,c].min()) / (x[...,c].max() - x[...,c].min() + eps)
             else:
-                x = x / 255 if not div_using_max_and_scale else (x - x.min()) / (x.max() - x.min() + sys.float_info.epsilon)                
+                x = x * (1/255) if not div_using_max_and_scale else (x - x.min()) / (x.max() - x.min() + eps)               
             norm_steps["div"] = 1
 
     if torch.is_tensor(x):
@@ -1175,24 +1180,31 @@ def undo_norm_range01(x, xnorm, min_val_scale=None, max_val_scale=None):
     return x
 
 
-def reduce_dtype(x, x_min, x_max, out_min=0, out_max=1, out_type=np.float32):
+def reduce_dtype(x, x_min, x_max, out_min=0, out_max=1, out_type=np.float32, eps=1e-6):
     if isinstance(x, np.ndarray):
-        return ((np.array((x - x_min) / (x_max - x_min)) * (out_max - out_min)) + out_min).astype(out_type)
+        if not isinstance(x, np.floating):
+            x = x.astype(np.float32)
+        return ((np.array((x - x_min) / (x_max - x_min + eps)) * (out_max - out_min)) + out_min).astype(out_type)
     else:  # Tensor considered
-        return ((((x - x_min) / (x_max - x_min)) * (out_max - out_min)) + out_min).to(out_type)
+        if not torch.is_floating_point(x):
+            x = x.to(torch.float32)
+        return ((((x - x_min) / (x_max - x_min + eps)) * (out_max - out_min)) + out_min).to(out_type)
 
 
-def zero_mean_unit_variance_normalization(data, means, stds, out_type="float32"):
+def zero_mean_unit_variance_normalization(data, means=None, stds=None, out_type="float32", eps=1e-6):
     if torch.is_tensor(data):
-        if stds == 0:
-            return data.to(numpy_torch_dtype_dict[out_type][0])
-        else:
-            return ((data - means) / stds).to(numpy_torch_dtype_dict[out_type][0])
+        if not torch.is_floating_point(data):
+            data = data.to(torch.float32)
     else:
-        if stds == 0:
-            return data.astype(numpy_torch_dtype_dict[out_type][1])
-        else:
-            return ((data - means) / stds).astype(numpy_torch_dtype_dict[out_type][1])
+        if not isinstance(data, np.floating):
+            data = data.astype(np.float32)
+
+    if means is None: means = data.mean()
+    if stds is None: stds = data.std()
+    if torch.is_tensor(data):
+        return ((data - means) / (stds + eps)).to(numpy_torch_dtype_dict[out_type][0])
+    else:
+        return ((data - means) / (stds + eps)).astype(numpy_torch_dtype_dict[out_type][1])
 
 
 def undo_zero_mean_unit_variance_normalization(data, means, stds, out_type="float32"):

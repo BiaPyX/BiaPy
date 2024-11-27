@@ -1046,7 +1046,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             if "mean" in self.norm_dict:
                 img = zero_mean_unit_variance_normalization(img, self.norm_dict["mean"], self.norm_dict["std"])
             else:
-                img = zero_mean_unit_variance_normalization(img, img.mean(), img.std())
+                img = zero_mean_unit_variance_normalization(img)
         return img
 
     def norm_Y(self, mask: np.ndarray) -> np.ndarray:
@@ -1085,7 +1085,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 if "mean" in self.norm_dict:
                     mask = zero_mean_unit_variance_normalization(mask, self.norm_dict["mean"], self.norm_dict["std"])
                 else:
-                    mask = zero_mean_unit_variance_normalization(mask, mask.mean(), mask.std())
+                    mask = zero_mean_unit_variance_normalization(mask)
         return mask
 
     def getitem(self, index: int) -> Tuple[torch.Tensor, torch.Tensor]:
