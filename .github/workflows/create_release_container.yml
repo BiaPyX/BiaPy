@@ -19,6 +19,12 @@ jobs:
       - name: Check out the repo
         uses: actions/checkout@v4
 
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: biapyx/biapy
+
       - name: Log in to Docker Hub
         uses: docker/login-action@f4ef78c080cd8ba55a85445d5b36e214a81df20a
         with:
@@ -27,15 +33,16 @@ jobs:
         
       - name: Change Dockerfile version
         run: |
-          tag="${{ github.event.release.tag_name }}"
+          tag=${{ steps.meta.outputs.tags }}
           sed -i "s/3.5.5/$tag/g" biapy/utils/env/Dockerfile
           cat biapy/utils/env/Dockerfile
         
       - name: Build and push Docker image
-        id: push
-        uses: docker/build-push-action@3b5e8027fcad23fda98b2e3ac259d8d67585f671
+        uses: docker/build-push-action@v5
         with:
           context: .
           file: ./biapy/utils/env/Dockerfile
-          push: true
-          tags: biapyx/biapy:${{ github.event.release.tag_name }}-11.8,biapyx/biapy:latest-11.8
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            biapyx/biapy:${{ steps.meta.outputs.tags }}-11.8
+            biapyx/biapy:latest-11.8
