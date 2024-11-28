@@ -1,7 +1,8 @@
 name: Publish Docker image
 
 on:
-  workflow_dispatch:
+  release:
+    types: [published]
   # workflow_run:
   #   workflows: ['Upload BiaPy to PyPI']
   #   types: [completed]
@@ -31,12 +32,6 @@ jobs:
         with:
           username: biapyx
           password: ${{ secrets.BIAPYX_DOCKERHUB_PASS }}
-        
-      - name: Change Dockerfile version
-        run: |
-          tag=${{ steps.meta.outputs.tags }}
-          sed -i "s/3.5.5/$tag/g" biapy/utils/env/Dockerfile
-          cat biapy/utils/env/Dockerfile
         
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
