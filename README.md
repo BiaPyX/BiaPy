@@ -20,6 +20,8 @@
 </p>
 
 [![Code consistency](https://github.com/BiaPyX/BiaPy/actions/workflows/check_code_consistency.yml/badge.svg)](https://github.com/BiaPyX/BiaPy/actions/workflows/check_code_consistency.yml)
+[![Upload BiaPy to PyPI](https://github.com/BiaPyX/BiaPy/actions/workflows/upload_biapy_to_pypi.yml/badge.svg)](https://github.com/BiaPyX/BiaPy/actions/workflows/upload_biapy_to_pypi.yml)
+[![Publish Docker image](https://github.com/BiaPyX/BiaPy/actions/workflows/create_release_container.yml/badge.svg)](https://github.com/BiaPyX/BiaPy/actions/workflows/create_release_container.yml)
 
 🔥**NEWS**🔥: We have a new **preprint**! Check it out at bioRxiv: https://www.biorxiv.org/content/10.1101/2024.02.03.576026v1
 
