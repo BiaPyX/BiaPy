@@ -40,5 +40,4 @@ jobs:
           file: ./biapy/utils/env/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
-            "${{ steps.meta.outputs.tags }}-11.8"
-            biapyx/biapy:latest-11.8
+            "${{ steps.meta.outputs.tags }}-11.8",biapyx/biapy:latest-11.8
