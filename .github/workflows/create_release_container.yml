@@ -38,4 +38,4 @@ jobs:
           context: .
           file: ./biapy/utils/env/Dockerfile
           push: true
-          tags: biapyx/biapy:${{ github.event.release.tag_name }}-11.8
+          tags: biapyx/biapy:${{ github.event.release.tag_name }}-11.8,biapyx/biapy:latest-11.8
