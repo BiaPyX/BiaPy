@@ -26,6 +26,8 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: biapyx/biapy
+          tags: |
+            type=semver,pattern={{version}}
           flavor: |
             latest=auto
             prefix=
