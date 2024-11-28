@@ -2,9 +2,9 @@ name: Publish Docker image
 
 on:
   workflow_dispatch:
-  workflow_run:
-    workflows: ['Upload BiaPy to PyPI']
-    types: [completed]
+  # workflow_run:
+  #   workflows: ['Upload BiaPy to PyPI']
+  #   types: [completed]
 
 jobs:
   push_to_registry:
@@ -15,7 +15,7 @@ jobs:
       contents: read
       attestations: write
       id-token: write
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    # if: ${{ github.event.workflow_run.conclusion == 'success' }}
     steps:
       - name: Check out the repo
         uses: actions/checkout@v4
