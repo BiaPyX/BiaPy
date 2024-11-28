@@ -28,5 +28,4 @@ jobs:
         run: |
           python -m build 
       - name: Publish package distributions to PyPI
-        run: |
-          twine upload dist/*
+        uses: pypa/gh-action-pypi-publish@release/v1
