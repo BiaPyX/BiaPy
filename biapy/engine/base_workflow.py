@@ -1601,7 +1601,7 @@ class Base_Workflow(metaclass=ABCMeta):
                         del obj
                     else:
                         if self.cfg.TEST.REDUCE_MEMORY:
-                            self.current_sample["X"] = crop_3D_data_with_overlap(
+                            self.current_sample["X"], _ = crop_3D_data_with_overlap(
                                 self.current_sample["X"][0],
                                 self.cfg.DATA.PATCH_SIZE,
                                 overlap=self.cfg.DATA.TEST.OVERLAP,
@@ -1610,7 +1610,7 @@ class Base_Workflow(metaclass=ABCMeta):
                                 median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING,
                             )
                             if self.current_sample["Y"] is not None:
-                                self.current_sample["Y"] = crop_3D_data_with_overlap(
+                                self.current_sample["Y"], _ = crop_3D_data_with_overlap(
                                     self.current_sample["Y"][0],
                                     self.cfg.DATA.PATCH_SIZE[:-1] + (self.current_sample["Y"].shape[-1],),
                                     overlap=self.cfg.DATA.TEST.OVERLAP,
