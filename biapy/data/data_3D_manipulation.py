@@ -44,7 +44,7 @@ def load_3D_efficient_files(
         Whether to check if the crop_shape channel matches with the loaded images' one.
 
     data_within_zarr_path : str, optional
-        Path to find the data within the Zarr file. E.g. 'volumes.labels.neuron_ids'.
+        Path to find the data within the Zarr/H5 file. E.g. 'volumes.labels.neuron_ids'.
 
     Returns
     -------

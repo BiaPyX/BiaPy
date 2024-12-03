@@ -1106,13 +1106,13 @@ class Base_Workflow(metaclass=ABCMeta):
         out_data_div_filename = os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename + ext)
 
         if not self.cfg.TEST.REUSE_PREDICTIONS:
-            if file_extension not in [".hdf5", ".h5", ".zarr"]:
+            if file_extension not in [".hdf5", ".hdf", ".h5", ".zarr"]:
                 print(
                     "WARNING: you could have saved more memory by converting input test images into H5 file format (.h5) "
                     "or Zarr (.zarr) as with 'TEST.BY_CHUNKS.ENABLE' option enabled H5/Zarr files will be processed by chunks"
                 )
             # Load data
-            if file_extension not in [".hdf5", ".h5", ".zarr"]:  # Numpy array
+            if file_extension not in [".hdf5", ".hdf", ".h5", ".zarr"]:  # Numpy array
                 if self.current_sample["X"].ndim == 3:
                     c_pos = -1 if self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER[-1] == "C" else 1
                     self.current_sample["X"] = np.expand_dims(self.current_sample["X"], c_pos)

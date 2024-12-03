@@ -182,11 +182,7 @@ class test_single_data_generator(Dataset):
             data_within_zarr_path=sample["path_in_zarr"] if "path_in_zarr" in sample else None,
         )
 
-        if (
-            sample["filename"].endswith(".zarr")
-            or sample["filename"].endswith(".hdf5")
-            or sample["filename"].endswith(".h5")
-        ):
+        if (any(sample["filename"].endswith(x) for x in [".zarr", ".h5", ".hdf5", ".hdf"])):
             if not self.test_by_chunks:
                 raise ValueError(
                     "If you are using Zarr images please set 'TEST.BY_CHUNKS.ENABLE' and configure " "its options."

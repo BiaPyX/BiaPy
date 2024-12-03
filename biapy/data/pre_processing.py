@@ -3,7 +3,6 @@ import torch
 import scipy
 import h5py
 import zarr
-import sys
 import numpy as np
 from tqdm import tqdm
 import pandas as pd
@@ -23,6 +22,7 @@ from biapy.utils.util import (
     seg2aff_pni,
     seg_widen_border,
     read_chunked_data,
+    read_chunked_nested_data,
     write_chunked_data,
 )
 from biapy.utils.misc import is_main_process
@@ -85,28 +85,33 @@ def create_instance_channels(cfg, data_type="train"):
     if (
         cfg.PROBLEM.NDIM == "3D"
         and (len(zarr_files) > 0 and ".zarr" in zarr_files[0])
-        or (len(h5_files) > 0 and ".h5" in h5_files[0])
+        or (
+            len(h5_files) > 0 
+            and any(h5_files[0].endswith(x) for x in [".h5", ".hdf5", ".hdf"])
+        )
     ):
         working_with_zarr_h5_files = True
         # Check if the raw images and labels are within the same file
-        mult_dat = None
         data_path = getattr(cfg.DATA, tag).GT_PATH
+        path_of_data = None
         if getattr(cfg.DATA, tag).INPUT_ZARR_MULTIPLE_DATA:
             data_path = getattr(cfg.DATA, tag).PATH
+            path_of_data = getattr(cfg.DATA, tag).INPUT_ZARR_MULTIPLE_DATA_GT_PATH
 
         if len(zarr_files) > 0 and ".zarr" in zarr_files[0]:
             print("Working with Zarr files . . .")
             img_files = [os.path.join(data_path, x) for x in zarr_files]
-        elif len(h5_files) > 0 and ".h5" in h5_files[0]:
+        elif len(h5_files) > 0 and any(h5_files[0].endswith(x) for x in [".h5", ".hdf5", ".hdf"]):
             print("Working with H5 files . . .")
             img_files = [os.path.join(data_path, x) for x in h5_files]
-
+        
         Y, Y_total_patches = load_3D_efficient_files(
             img_files,
             input_axes=getattr(cfg.DATA, tag).INPUT_IMG_AXES_ORDER,
             crop_shape=cfg.DATA.PATCH_SIZE,
             overlap=getattr(cfg.DATA, tag).OVERLAP,
             padding=getattr(cfg.DATA, tag).PADDING,
+            data_within_zarr_path=path_of_data, 
         )
     else:
         Y = sorted(next(os.walk(getattr(cfg.DATA, tag).GT_PATH))[2])
@@ -125,7 +130,7 @@ def create_instance_channels(cfg, data_type="train"):
             dtype_str = "uint8"
 
         mask = None
-        last_zarr_file = None
+        last_parallel_file = None
         for i in tqdm(range(len(Y.keys())), disable=not is_main_process()):
             # Extract the patch to process
             patch_coords = Y[i]["patch_coords"]
@@ -166,11 +171,20 @@ def create_instance_channels(cfg, data_type="train"):
             img = img[0]
 
             # Create the Zarr file where the mask will be placed
-            if mask is None or os.path.basename(Y[i]["filepath"]) != last_zarr_file:
-                last_zarr_file = os.path.basename(Y[i]["filepath"])
-                imgfile, data = read_chunked_data(Y[i]["filepath"])
+            if mask is None or os.path.basename(Y[i]["filepath"]) != last_parallel_file:
+                last_parallel_file = os.path.basename(Y[i]["filepath"])
+                
+                if path_of_data:
+                    imgfile, data = read_chunked_nested_data(Y[i]["filepath"], path_of_data)
+                else:
+                    imgfile, data = read_chunked_data(Y[i]["filepath"])
                 fname = os.path.join(savepath, os.path.basename(Y[i]["filepath"]))
-                fid_mask = zarr.open_group(fname, mode="w")
+
+                os.makedirs(savepath, exist_ok=True)
+                if any(fname.endswith(x) for x in [".h5", ".hdf5", ".hdf"]):
+                    fid_mask = h5py.File(fname, 'w')
+                else: # Zarr file
+                    fid_mask = zarr.open_group(fname, mode="w")
 
                 # Determine data shape
                 out_data_shape = np.array(data.shape)
@@ -184,7 +198,11 @@ def create_instance_channels(cfg, data_type="train"):
                     out_data_order = getattr(cfg.DATA, tag).INPUT_IMG_AXES_ORDER
                     channel_pos = getattr(cfg.DATA, tag).INPUT_IMG_AXES_ORDER.index("C")
 
-                mask = fid_mask.create_dataset("data", shape=out_data_shape, dtype=dtype_str)
+                if any(fname.endswith(x) for x in [".h5", ".hdf5", ".hdf"]):
+                    mask = fid_mask.create_dataset('data', out_data_shape, compression="lzf")
+                else:
+                    mask = fid_mask.create_dataset("data", shape=out_data_shape, dtype=dtype_str)
+                
                 del data, imgfile, fname
 
             # Adjust slices to calculate where to insert the predicted patch. This slice does not have into account the

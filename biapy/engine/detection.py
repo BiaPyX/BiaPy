@@ -315,7 +315,7 @@ class Detection_Workflow(Base_Workflow):
                 if self.use_gt:
                     for i in range(pred_id_img.shape[0]):
                         pred_id_img[i] = dilation(pred_id_img[i], disk(3))
-                    if file_ext in [".hdf5", ".h5", ".zarr"]:
+                    if file_ext in [".hdf5", ".hdf", ".h5", ".zarr"]:
                         write_chunked_data(
                             np.expand_dims(np.expand_dims(pred_id_img, -1), 0),
                             self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
@@ -338,7 +338,7 @@ class Detection_Workflow(Base_Workflow):
             if len(pred_coordinates) > 0:
                 for i in range(points_pred.shape[0]):
                     points_pred[i] = dilation(points_pred[i], disk(3))
-            if file_ext in [".hdf5", ".h5", ".zarr"]:
+            if file_ext in [".hdf5", ".hdf", ".h5", ".zarr"]:
                 write_chunked_data(
                     np.expand_dims(np.expand_dims(points_pred, -1), 0),
                     self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
@@ -381,7 +381,7 @@ class Detection_Workflow(Base_Workflow):
                     comp_signs=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGNS,
                 )
 
-                if file_ext in [".hdf5", ".h5", ".zarr"]:
+                if file_ext in [".hdf5", ".hdf", ".h5", ".zarr"]:
                     write_chunked_data(
                         np.expand_dims(np.expand_dims(points_pred, -1), 0),
                         self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
@@ -752,7 +752,7 @@ class Detection_Workflow(Base_Workflow):
                     # Dilate and save the GT ids for the current class
                     for i in range(gt_id_img.shape[0]):
                         gt_id_img[i] = dilation(gt_id_img[i], disk(3))
-                    if file_ext in [".hdf5", ".h5", ".zarr"]:
+                    if file_ext in [".hdf5", ".hdf", ".h5", ".zarr"]:
                         write_chunked_data(
                             np.expand_dims(np.expand_dims(gt_id_img, -1), 0),
                             self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
@@ -783,7 +783,7 @@ class Detection_Workflow(Base_Workflow):
                 for i in range(points_pred.shape[0]):
                     for j in range(points_pred.shape[-1]):
                         points_pred[i, ..., j] = dilation(points_pred[i, ..., j], disk(3))
-                if file_ext in [".hdf5", ".h5", ".zarr"]:
+                if file_ext in [".hdf5", ".hdf", ".h5", ".zarr"]:
                     write_chunked_data(
                         np.expand_dims(points_pred, 0),
                         self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,

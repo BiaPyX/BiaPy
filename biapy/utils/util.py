@@ -1,7 +1,6 @@
 import os
 import math
 import numpy as np
-import random
 import h5py
 import zarr
 import matplotlib.pyplot as plt
@@ -863,7 +862,7 @@ def save_npy_files(X, data_dir=None, filenames=None, verbose=True):
 
 def read_chunked_data(filename):
     if isinstance(filename, str):
-        if filename.endswith(".hdf5") or filename.endswith(".h5"):
+        if any(filename.endswith(x) for x in [".h5", ".hdf5", ".hdf"]):
             fid = h5py.File(filename, "r")
             data = fid[list(fid)[0]]
         elif filename.endswith(".zarr"):
@@ -915,7 +914,7 @@ def write_chunked_data(data, data_dir, filename, dtype_str="float32", verbose=Tr
 
     os.makedirs(data_dir, exist_ok=True)
 
-    if ext in [".hdf5", ".h5"]:
+    if ext in [".hdf5", ".hdf", ".h5"]:
         fid = h5py.File(os.path.join(data_dir, filename), "w")
         data = fid.create_dataset("data", data=data, dtype=dtype_str, compression="gzip")
     # Zarr
@@ -924,7 +923,16 @@ def write_chunked_data(data, data_dir, filename, dtype_str="float32", verbose=Tr
         data = fid.create_dataset("data", data=data, dtype=dtype_str)
 
 
-def read_chunked_nested_data(zarrfile, data_path=""):
+def read_chunked_nested_data(file, data_path=""):
+    """
+    Find recursively raw and ground truth data within a H5/Zarr file.
+    """
+    if any(file.endswith(x) for x in [".h5", ".hdf5", ".hdf"]):
+        return read_chunked_nested_h5(file, data_path)
+    elif file.endswith(".zarr"):
+        return read_chunked_nested_zarr(file, data_path)
+
+def read_chunked_nested_zarr(zarrfile, data_path=""):
     """
     Find recursively raw and ground truth data within a Zarr file.
     """
@@ -957,6 +965,34 @@ def read_chunked_nested_data(zarrfile, data_path=""):
 
     return fid, data
 
+def read_chunked_nested_h5(h5file, data_path=""):
+    """
+    Find recursively raw and ground truth data within a Zarr file.
+    """
+    if not any(h5file.endswith(x) for x in [".h5", ".hdf5", ".hdf"]):
+        raise ValueError("Not implemented for other filetypes than H5")
+    
+    fid = h5py.File(h5file, "r")
+
+    def find_obj(path, fid):
+        obj = None
+        rpath = path.split(".")
+        if len(rpath) == 0:
+            return None
+        else:
+            if len(rpath) > 1:
+                groups = list(fid.keys())
+                if rpath[0] not in groups:
+                    return None
+                obj = find_obj(".".join(rpath[1:]), fid[rpath[0]])
+            else:
+                arrays = list(fid.keys())
+                if rpath[0] not in arrays:
+                    return None
+                return fid[rpath[0]]
+        return obj
+    data = find_obj(data_path, fid)    
+    return fid, data
 
 def seg2aff_pni(img, dz=1, dy=1, dx=1, dtype="float32"):
     # Adapted from PyTorch for Connectomics:

@@ -334,8 +334,15 @@ def load_and_prepare_train_data(
     if not multiple_raw_images:
         ids = sorted(next(os.walk(train_path))[2])
         fids = sorted(next(os.walk(train_path))[1])
-        if len(ids) == 0:
-            if len(fids) == 0:  # Trying Zarr
+
+        if (
+            len(ids) == 0 # Zarr
+            or (
+                len(ids) > 0
+                and any(ids[0].endswith(x) for x in [".h5", ".hdf5", ".hdf"])
+                )
+        ):
+            if len(ids) == 0 and len(fids) == 0:  # Trying Zarr
                 raise ValueError("No images found in dir {}".format(train_path))
 
             # Working with Zarr
@@ -344,7 +351,7 @@ def load_and_prepare_train_data(
             train_using_zarr = True
 
             X_train = samples_from_zarr(
-                list_of_data=fids,
+                list_of_data=fids if len(ids) == 0 else ids,
                 data_path=train_path,
                 zarr_data_info=train_zarr_data_information,
                 crop_shape=crop_shape,
@@ -373,11 +380,17 @@ def load_and_prepare_train_data(
         if train_mask_path is not None:
             ids = sorted(next(os.walk(train_mask_path))[2])
             fids = sorted(next(os.walk(train_mask_path))[1])
-            if len(ids) == 0:
-                if len(fids) == 0:  # Trying Zarr
+            if (
+                len(ids) == 0 # Zarr
+                or (
+                    len(ids) > 0
+                    and any(ids[0].endswith(x) for x in [".h5", ".hdf5", ".hdf"])
+                    )
+            ):
+                if len(ids) == 0 and len(fids) == 0:  # Trying Zarr
                     raise ValueError("No images found in dir {}".format(train_mask_path))
                 Y_train = samples_from_zarr(
-                    list_of_data=fids,
+                    list_of_data=fids if len(ids) == 0 else ids,
                     data_path=train_mask_path,
                     zarr_data_info=train_zarr_data_information,
                     crop_shape=crop_shape,
@@ -437,6 +450,9 @@ def load_and_prepare_train_data(
     # Check that the shape of all images match
     if train_mask_path is not None:
         gt_id = 0
+        if len(X_train) != len(Y_train):
+            raise ValueError(f"Mistmatch between number of raw samples ({len(X_train)}) and number of corresponding "
+                             f"masks ({len(Y_train)}). Please, check that the data is of the same shape.")
         for i in range(len(X_train)):
             xshape = X_train[i]["shape"]
             if "gt_associated_id" in X_train[i]:
@@ -2884,7 +2900,7 @@ def load_img_data(path, is_3d=False, data_within_zarr_path=None):
     file : str
         File of the data read. Useful to close it in case it is an H5 file.
     """
-    if path.endswith(".zarr") or path.endswith(".hdf5") or path.endswith(".h5"):
+    if any(path.endswith(x) for x in [".zarr", ".h5", ".hdf5", ".hdf"]):
         if data_within_zarr_path:
             file, data = read_chunked_nested_data(path, data_within_zarr_path)
         else:
@@ -2918,7 +2934,7 @@ def read_img_as_ndarray(path, is_3d=False):
         img = np.load(path)
     elif path.endswith(".pt"):
         img = torch.load(path, weights_only=True, map_location='cpu').numpy()
-    elif path.endswith(".hdf5") or path.endswith(".h5"):
+    elif any(path.endswith(x) for x in [".h5", ".hdf5", ".hdf"]):
         img = h5py.File(path, "r")
         img = np.array(img[list(img)[0]])
     elif path.endswith(".zarr"):
@@ -2995,7 +3011,7 @@ def check_masks(path, n_classes=2, is_3d=False):
     m = ""
     error = False
     for i in tqdm(range(len(ids))):
-        if ids[i].endswith(".zarr") or ids[i].endswith(".hdf5") or ids[i].endswith(".h5"):
+        if (any(ids[i].endswith(x) for x in [".zarr", ".h5", ".hdf5", ".hdf"])):
             raise ValueError(
                 "Mask checking with Zarr not implemented in BiaPy yet. Disable 'DATA.*.CHECK_DATA' variables to continue"
             )
