@@ -2641,15 +2641,23 @@ def load_images_to_sample_list(
                 file.close()
             data_within_zarr_path = None
             if zarr_data_information is not None and zarr_data_information["multiple_data_within_zarr"]:
-                data_within_zarr_path = (
-                    zarr_data_information["raw_path"] if not is_mask else zarr_data_information["gt_path"]
-                )
+                if not is_mask:
+                    data_within_zarr_path = zarr_data_information["raw_path"]  
+                else:
+                    data_within_zarr_path = zarr_data_information["gt_path"] if zarr_data_information["use_gt_path"] else None
             data, file = load_img_data(img_path, is_3d=is_3d, data_within_zarr_path=data_within_zarr_path)
+
+            # Disable channel checking if it is not present. Can happen with a Zarr/H5 dataset, as in the load_img_data() 
+            # the axis were not checked to not have the data loaded in memory 
+            check_channel = True
+            key = "input_img_axes" if not is_mask else "input_mask_axes"
+            if zarr_data_information is not None and "C" not in zarr_data_information[key]:
+                check_channel = False 
 
             # Channel check within dataset images
             if channel_expected == -1:
                 channel_expected = data.shape[-1]
-            if data.shape[-1] != channel_expected:
+            if check_channel and data.shape[-1] != channel_expected:
                 raise ValueError(
                     f"All images need to have the same number of channels and represent same information to "
                     "ensure the deep learning model can be trained correctly. However, the current image (with "
@@ -2658,7 +2666,7 @@ def load_images_to_sample_list(
                 )
 
             # Channel check compared with crop_shape
-            if crop_shape is not None and not is_mask:
+            if check_channel and crop_shape is not None and not is_mask:
                 channel_to_compare = data.shape[-1] if not convert_to_rgb else 3
                 if crop_shape[-1] != channel_to_compare:
                     if not convert_to_rgb:
@@ -2711,7 +2719,6 @@ def load_images_to_sample_list(
                 )
 
             if zarr_data_information is not None:
-                key = "input_img_axes" if not is_mask else "input_mask_axes"
                 data_ordered_slices = order_dimensions(
                     xslices,
                     input_order="TZYXC",
