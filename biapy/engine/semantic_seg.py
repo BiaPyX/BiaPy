@@ -13,7 +13,7 @@ from biapy.engine.metrics import (
     DiceBCELoss,
     DiceLoss,
 )
-from biapy.data.pre_processing import norm_range01
+from biapy.data.pre_processing import norm_range01, undo_sample_normalization
 
 
 class Semantic_Segmentation_Workflow(Base_Workflow):

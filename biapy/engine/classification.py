@@ -8,7 +8,7 @@ from sklearn.metrics import accuracy_score, confusion_matrix, classification_rep
 from torchmetrics import Accuracy
 
 from biapy.engine.base_workflow import Base_Workflow
-from biapy.data.pre_processing import norm_range01, preprocess_data
+from biapy.data.pre_processing import norm_range01, preprocess_data, undo_sample_normalization
 from biapy.data.data_manipulation import load_and_prepare_train_data_cls, load_and_prepare_cls_test_data
 from biapy.utils.misc import is_main_process
 

@@ -29,7 +29,7 @@ from biapy.engine.metrics import (
     DiceLoss,
     CrossEntropyLoss_wrapper,
 )
-from biapy.data.pre_processing import create_detection_masks, norm_range01
+from biapy.data.pre_processing import create_detection_masks, norm_range01, undo_sample_normalization
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.data.data_3D_manipulation import order_dimensions
 

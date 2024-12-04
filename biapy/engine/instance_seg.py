@@ -18,6 +18,7 @@ from biapy.data.pre_processing import (
     create_instance_channels,
     create_test_instance_channels,
     norm_range01,
+    undo_sample_normalization,
 )
 from biapy.utils.util import (
     save_tif,
@@ -699,6 +700,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         d_result["sphericities"],
                         d_result["diameters"],
                         d_result["perimeters"],
+                        d_result["elongations"],
                         d_result["comment"],
                         d_result["conditions"],
                     ),
@@ -712,6 +714,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         "sphericity",
                         "diameter",
                         "perimeter (surface area)",
+                        "elongation (P2A)",
                         "comment",
                         "conditions",
                     ],
