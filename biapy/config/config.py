@@ -1187,11 +1187,14 @@ class Config:
         #     (Lehmann et al., 201211 ; https://doi.org/10.1093/bioinformatics/btw413).
         #
         #   * 'elongation' is the inverse of the circularity. The values of elongation range from 1 for round particles and increase for
-        #     elongated particles. Calculated as: (perimeter^2)/(4 * PI * area) . Only measurable for 2D images.
+        #     elongated particles. Calculated as: 
+        #       - In 2D: (perimeter^2)/(4 * PI * area) 
+        #       - In 3D: (sqrt(surface area^3))/ (6 * volume * sqrt(PI)) where 'sqrt' is the square root. For the 3D diplib library is used
+        #         where it corresponds to 'P2A' metric (more info here: https://diplib.org/diplib-docs/features.html#shape_features_P2A)
         #
         #   * 'npixels' corresponds to the sum of pixels that compose an instance.
         #
-        #   * 'area' correspond to the number of pixels taking into account the image resolution (we call it 'area' also even in a 3D
+        #   * 'area' corresponds to the number of pixels taking into account the image resolution (we call it 'area' also even in a 3D
         #     image for simplicity, but that will be the volume in that case). In the resulting statistics 'volume' will appear in that
         #     case too.
         #
@@ -1199,10 +1202,8 @@ class Config:
         #     is also taken into account. Does not take into account the image resolution.
         #
         #   * 'perimeter', in 2D, approximates the contour as a line through the centers of border pixels using a 4-connectivity. In 3D,
-        #     it is the surface area computed using Lewiner et al. algorithm (https://www.tandfonline.com/doi/abs/10.1080/10867651.2003.10487582)
-        #     using marching_cubes (https://scikit-image.org/docs/stable/api/skimage.measure.html#skimage.measure.marching_cubes) and
-        #     mesh_surface_area(https://scikit-image.org/docs/stable/api/skimage.measure.html#skimage.measure.mesh_surface_area) functions
-        #     of scikit-image.
+        #     it corresponds to the surface area calculated with diplib library 
+        #     (more info here https://diplib.org/diplib-docs/features.html#shape_features_P2A).
         #
         #   * 'sphericity', in 3D, it is the ratio of the squared volume over the cube of the surface area, normalized such that the value
         #     for a ball equals one: (36 * PI)*((volume^2)/(perimeter^3)). Only measurable for 3D images (use circularity for 2D images).

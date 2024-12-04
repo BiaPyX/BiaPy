@@ -25,6 +25,7 @@ from skimage.filters import rank, threshold_otsu
 from skimage.measure import label, regionprops_table, marching_cubes, mesh_surface_area
 from skimage.io import imread
 from skimage.exposure import equalize_adapthist
+import diplib as dip
 
 from biapy.utils.util import save_tif
 from biapy.data.pre_processing import reduce_dtype
@@ -1595,16 +1596,15 @@ def measure_morphological_props_and_filter(
 
         elongations : Array of ints
             Elongation of each instance. It is the inverse of the circularity. The values of elongation range from
-            ``1`` for round particles and increase for elongated particles. Calculated as: ``(perimeter^2)/(4 * PI * area)``.
-            Only measurable for 2D images.
+            ``1`` for round particles and increase for elongated particles. In 2D it is calculated as: 
+            ``(perimeter^2)/(4 * PI * area)``. In 3D: ``(sqrt(surface area^3))/ (6 * volume * sqrt(PI))`` where ``sqrt``
+            is the square root. For the 3D `diplib library <https://diplib.org/diplib-docs/features.html#shape_features_P2A>`__ 
+            is used (corresponds to 'P2A' metric in diplib).
 
         perimeter : Array of ints
             In 2D, approximates the contour as a line through the centers of border pixels using a 4-connectivity.
-            In 3D, it is the surface area computed using
-            `Lewiner et al. algorithm <https://www.tandfonline.com/doi/abs/10.1080/10867651.2003.10487582>`__ using
-            `marching_cubes <https://scikit-image.org/docs/stable/api/skimage.measure.html#skimage.measure.marching_cubes>`__ and
-            `mesh_surface_area <https://scikit-image.org/docs/stable/api/skimage.measure.html#skimage.measure.mesh_surface_area>`__
-            functions of scikit-image.
+            In 3D, it is the surface area computed using 
+            `the diplib library <https://diplib.org/diplib-docs/features.html#shape_features_P2A>`__.
 
         comment : List of str
             List containing 'Correct' string when the instance surpass the circularity threshold and 'Removed'
@@ -1643,8 +1643,7 @@ def measure_morphological_props_and_filter(
     centers = np.zeros((total_labels, 3 if image3d else 2), dtype=np.uint16)
     circularities = np.zeros(total_labels, dtype=np.float32)
     perimeters = np.zeros(total_labels, dtype=np.uint32)
-    if not image3d:
-        elongations = np.zeros(total_labels, dtype=np.float32)
+    elongations = np.zeros(total_labels, dtype=np.float32)
 
     # Area, diameter, center, circularity (if 2D), elongation (if 2D) and perimeter (if 2D) calculation over the whole image
     lprops = ["label", "bbox", "perimeter"] if not image3d else ["label", "bbox"]
@@ -1661,9 +1660,9 @@ def measure_morphological_props_and_filter(
                 props["bbox-5"][k] - props["bbox-2"][k],
             )
             center = [
-                (props["bbox-3"][k] - props["bbox-0"][k]) // 2,
-                (props["bbox-4"][k] - props["bbox-1"][k]) // 2,
-                (props["bbox-5"][k] - props["bbox-2"][k]) // 2,
+                props["bbox-0"][k] + ((props["bbox-3"][k] - props["bbox-0"][k]) // 2),
+                props["bbox-1"][k] + ((props["bbox-4"][k] - props["bbox-1"][k]) // 2),
+                props["bbox-2"][k] + ((props["bbox-5"][k] - props["bbox-2"][k]) // 2),
             ]
         else:
             vol = pixels * (resolution[0] + resolution[1])
@@ -1672,8 +1671,8 @@ def measure_morphological_props_and_filter(
                 props["bbox-3"][k] - props["bbox-1"][k],
             )
             center = [
-                (props["bbox-2"][k] - props["bbox-0"][k]) // 2,
-                (props["bbox-3"][k] - props["bbox-1"][k]) // 2,
+                props["bbox-0"][k] + ((props["bbox-2"][k] - props["bbox-0"][k]) // 2),
+                props["bbox-1"][k] + ((props["bbox-3"][k] - props["bbox-1"][k]) // 2),
             ]
             perimeter = props["perimeter"][k]
             elongations[label_index] = (perimeter * perimeter) / (4 * math.pi * pixels) if pixels > 0 else 0
@@ -1686,29 +1685,23 @@ def measure_morphological_props_and_filter(
         diameters[label_index] = diam
         centers[label_index] = center
 
-    # Calculate surface area (as in https://github.com/scikit-image/scikit-image/issues/3797) and sphericity
-    if image3d and total_labels > 0:
-        img_aux = img.copy()
-        img_aux, _, _ = relabel_sequential(img_aux)
-        img_aux[find_boundaries(img_aux, mode="outer")] = 0
-        try:
-            vts, fs, ns, cs = marching_cubes(img_aux, level=0, method="lewiner")
-        except:
-            print("Some error found during marching_cubes() call")
-        else:
-            lst = [[] for i in range(total_labels + 1)]
-            for i in fs:
-                lst[int(cs[i[0]])].append(i)
-            surface_area = [0 if len(i) == 0 else mesh_surface_area(vts, i) for i in lst]
+    if total_labels > 0:
+        img = dip.Image(img.astype(img.dtype.name))
 
-            for i in range(total_labels):
-                sphericity = (
-                    (36 * math.pi * pixels * pixels) / (surface_area[i + 1] * surface_area[i + 1] * surface_area[i + 1])
-                    if surface_area[i + 1] > 0
-                    else 0
-                )
-                perimeters[i] = surface_area[i + 1]
-                circularities[i] = sphericity
+        features = ["SurfaceArea", "P2A"] if image3d else ["P2A"]
+        measurement = dip.MeasurementTool.Measure(img, features=features)
+
+        for lbl in measurement.Objects():
+            label_index = np.where(label_list == lbl)[0]
+            perimeters[label_index] = measurement["SurfaceArea"][lbl]
+            pixels = npixels[label_index]
+            sphericity = (
+                (36 * math.pi * pixels**2) / (perimeters[label_index]**3)
+                if perimeters[label_index] > 0
+                else 0
+            )
+            circularities[label_index] = sphericity
+            elongations[label_index] = measurement["P2A"][lbl]
 
     # Remove those instances that do not satisfy the properties
     conditions = []
@@ -1776,12 +1769,10 @@ def measure_morphological_props_and_filter(
         cir_name: circularities,
         "diameters": diameters,
         "perimeters": perimeters,
+        "elongations": elongations,
         "comment": comment,
         "conditions": conditions,
     }
-
-    if not image3d:
-        d_result["elongations"] = elongations
 
     print(
         "Removed {} instances by properties ({}), {} instances left".format(

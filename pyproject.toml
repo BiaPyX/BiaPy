@@ -37,6 +37,7 @@ dependencies = [
     "numpy<2",
     "imgaug>=0.4.0",
     "pooch>=1.8.1",
+    "diplib>=3.5.1",
 ]
 
 [project.scripts]
