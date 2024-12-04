@@ -862,6 +862,9 @@ def save_npy_files(X, data_dir=None, filenames=None, verbose=True):
 
 def read_chunked_data(filename):
     if isinstance(filename, str):
+        if not os.path.exists(filename):
+            raise ValueError(f"File {filename} does not exist.")
+        
         if any(filename.endswith(x) for x in [".h5", ".hdf5", ".hdf"]):
             fid = h5py.File(filename, "r")
             data = fid[list(fid)[0]]
