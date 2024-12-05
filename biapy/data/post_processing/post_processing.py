@@ -1693,15 +1693,16 @@ def measure_morphological_props_and_filter(
 
         for lbl in measurement.Objects():
             label_index = np.where(label_list == lbl)[0]
-            perimeters[label_index] = measurement["SurfaceArea"][lbl]
-            pixels = npixels[label_index]
-            sphericity = (
-                (36 * math.pi * pixels**2) / (perimeters[label_index]**3)
-                if perimeters[label_index] > 0
-                else 0
-            )
-            circularities[label_index] = sphericity
             elongations[label_index] = measurement["P2A"][lbl]
+            if image3d:
+                perimeters[label_index] = measurement["SurfaceArea"][lbl]
+                pixels = npixels[label_index]
+                sphericity = (
+                    (36 * math.pi * pixels**2) / (perimeters[label_index]**3)
+                    if perimeters[label_index] > 0
+                    else 0
+                )
+                circularities[label_index] = sphericity
 
     # Remove those instances that do not satisfy the properties
     conditions = []
