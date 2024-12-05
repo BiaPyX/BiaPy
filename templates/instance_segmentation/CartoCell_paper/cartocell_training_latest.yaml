@@ -1,0 +1,59 @@
+# CartoCell training workflow compatible with BiaPy version 3.5.6
+
+SYSTEM:
+    NUM_CPUS: -1
+    NUM_WORKERS: 5
+
+PROBLEM:
+    TYPE: INSTANCE_SEG
+    NDIM: 3D
+    INSTANCE_SEG:
+        DATA_CHANNELS: BC
+        DATA_MW_TH_TYPE: "auto"
+  
+DATA: 
+    PATCH_SIZE: (80, 80, 80, 1)
+    TRAIN:                                                                                                              
+        PATH: /path/to/data
+        GT_PATH: /path/to/data
+        IN_MEMORY: True
+    VAL:
+        FROM_TRAIN: False
+        PATH: /path/to/data
+        GT_PATH: /path/to/data
+    TEST:                                                                                                               
+        PATH: /path/to/data
+        GT_PATH: /path/to/data
+        IN_MEMORY: True
+        LOAD_GT: True
+        PADDING: (16,16,16)
+
+AUGMENTOR:
+    ENABLE: True
+    RANDOM_ROT: True
+    VFLIP: True
+    HFLIP: True
+    ZFLIP: True
+    ELASTIC: True
+    BRIGHTNESS: True
+    BRIGHTNESS_FACTOR: (0.1, 0.15)
+
+MODEL:
+    ARCHITECTURE: resunet
+    FEATURE_MAPS: [52, 68, 84]
+    Z_DOWN: [1,1]
+    DROPOUT_VALUES: [0.1, 0.1, 0.1]
+    LOAD_CHECKPOINT: False
+
+TRAIN:
+    ENABLE: True
+    OPTIMIZER: ADAMW
+    LR: 1.E-4
+    BATCH_SIZE: 2
+    EPOCHS: 1300
+    PATIENCE: 200
+  
+TEST:
+    ENABLE: False
+    AUGMENTATION: False
+    FULL_IMG: False
