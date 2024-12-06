@@ -2128,8 +2128,16 @@ class Base_Workflow(metaclass=ABCMeta):
         if pred.ndim < 3:
             raise ValueError("Read image seems to be 2D: {}. Path: {}".format(pred.shape, filename))
         if pred.ndim == 3:
+            # Ensure Z axis is always in the first position
+            min_val = min(img.shape)
+            z_pos = img.shape.index(min_val)
+            if z_pos != 0:
+                new_pos = [z_pos,] + [x for x in range(3) if x != z_pos]
+                img = img.transpose(new_pos)
+                
             pred = np.expand_dims(pred, -1)
         else:
+            # Ensure channel axis is always in the first position (assuming Z is already set)
             min_val = min(pred.shape)
             channel_pos = pred.shape.index(min_val)
             if channel_pos != 3 and pred.shape[channel_pos] <= 4:

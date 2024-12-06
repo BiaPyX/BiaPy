@@ -1103,8 +1103,16 @@ def ensure_3d_shape(img, path=None):
         raise ValueError(m)
 
     if img.ndim == 3:
+        # Ensure Z axis is always in the first position
+        min_val = min(img.shape)
+        z_pos = img.shape.index(min_val)
+        if z_pos != 0:
+            new_pos = [z_pos,] + [x for x in range(3) if x != z_pos]
+            img = img.transpose(new_pos)
+            
         img = np.expand_dims(img, -1)
     else:
+        # Ensure channel axis is always in the first position (assuming Z is already set)
         min_val = min(img.shape)
         channel_pos = img.shape.index(min_val)
         if channel_pos != 3 and img.shape[channel_pos] <= 4:
