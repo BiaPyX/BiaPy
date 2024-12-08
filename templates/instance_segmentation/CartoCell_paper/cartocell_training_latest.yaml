@@ -4,56 +4,63 @@ SYSTEM:
     NUM_CPUS: -1
     NUM_WORKERS: 5
 
+# Problem definition
 PROBLEM:
-    TYPE: INSTANCE_SEG
-    NDIM: 3D
+    TYPE: INSTANCE_SEG          # instace segmentation workflow
+    NDIM: 3D                    # images are 3D
     INSTANCE_SEG:
-        DATA_CHANNELS: BC
-        DATA_MW_TH_TYPE: "auto"
-  
+        DATA_CHANNELS: BCM      # problem representation: binary masks + contours + foregound mask
+        DATA_MW_TH_TYPE: "auto" # automatic calculation of threshold per each channel
+
+# Data paths and management
 DATA: 
-    PATCH_SIZE: (80, 80, 80, 1)
+    PATCH_SIZE: (80, 80, 80, 1) # model input size (z, x, y, channels)
     TRAIN:                                                                                                              
-        PATH: /path/to/data
-        GT_PATH: /path/to/data
-        IN_MEMORY: True
+        PATH: /path/to/data     # full path to folder with training raw images
+        GT_PATH: /path/to/data  # full path to folder with training label images
+        IN_MEMORY: True         # load tranining data into RAM (faster) or not (save memory)
     VAL:
-        FROM_TRAIN: False
-        PATH: /path/to/data
-        GT_PATH: /path/to/data
+        FROM_TRAIN: False       # do not use random samples from training as validation set
+        PATH: /path/to/data     # full path to folder with validation raw images
+        GT_PATH: /path/to/data  # full path to folder with validation label images
     TEST:                                                                                                               
-        PATH: /path/to/data
-        GT_PATH: /path/to/data
-        IN_MEMORY: True
-        LOAD_GT: True
-        PADDING: (16,16,16)
+        PATH: /path/to/data     # full path to folder with test raw images
+        GT_PATH: /path/to/data  # full path to folder with test label images
+        IN_MEMORY: True         # load teset data into RAM (faster) or not (save memory)
+        LOAD_GT: True           # check if test labels available
+        PADDING: (16,16,16)     # padding to be used during test (z, x, y)
 
+# Data augmentation
 AUGMENTOR:
-    ENABLE: True
-    RANDOM_ROT: True
-    VFLIP: True
-    HFLIP: True
-    ZFLIP: True
-    ELASTIC: True
-    BRIGHTNESS: True
-    BRIGHTNESS_FACTOR: (0.1, 0.15)
+    ENABLE: True                    # wether to use data augmentation or not
+    RANDOM_ROT: True                # random rotations
+    VFLIP: True                     # vertical flips
+    HFLIP: True                     # horizontal flips
+    ZFLIP: True                     # z-axis flips
+    ELASTIC: True                   # elastic deformations
+    BRIGHTNESS: True                # use brightness augmentation
+    BRIGHTNESS_FACTOR: (0.1, 0.15)  # minimum and maximum brightness factors to apply
 
+# Deep learning model configuration
 MODEL:
-    ARCHITECTURE: resunet
-    FEATURE_MAPS: [52, 68, 84]
-    Z_DOWN: [1,1]
-    DROPOUT_VALUES: [0.1, 0.1, 0.1]
-    LOAD_CHECKPOINT: False
+    ARCHITECTURE: resunet           # architecture (ResU-Net)
+    FEATURE_MAPS: [52, 68, 84]      # number of feature maps at each level
+    Z_DOWN: [1,1]                   # do not downscale in z-axis after each level
+    DROPOUT_VALUES: [0.1, 0.1, 0.1] # dropout values at each level
+    LOAD_CHECKPOINT: False          # do not load pretrained model
 
+# Model training
 TRAIN:
-    ENABLE: True
-    OPTIMIZER: ADAMW
-    LR: 1.E-4
-    BATCH_SIZE: 2
-    EPOCHS: 1300
-    PATIENCE: 200
-  
+    ENABLE: True        # perform training
+    OPTIMIZER: ADAMW    # optimizer
+    LR: 1.E-4           # initial learning rate
+    BATCH_SIZE: 2       # batch size
+    EPOCHS: 1300        # number of epochs
+    PATIENCE: 200       # patience
+
+# Model testing
 TEST:
-    ENABLE: False
-    AUGMENTATION: False
-    FULL_IMG: False
+    ENABLE: False       # do not perform testing
+    AUGMENTATION: False # do not perform test-time augmentation
+    FULL_IMG: False     # do not process full images (use patches)
+
