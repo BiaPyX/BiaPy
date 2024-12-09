@@ -74,5 +74,5 @@ TEST:
     FULL_IMG: False     # do not process full images (use patches)
     POST_PROCESSING:
         VORONOI_ON_MASK: True   # apply Voronoi algorithm to improve masks
-        CLEAR_BORDER: True      # remove objects in the border
+        CLEAR_BORDER: False      # do not remove objects in the border
 
