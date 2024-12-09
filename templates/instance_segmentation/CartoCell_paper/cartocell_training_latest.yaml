@@ -58,6 +58,10 @@ TRAIN:
     EPOCHS: 1300        # number of epochs
     PATIENCE: 200       # patience
 
+# Loss function
+LOSS:
+    CLASS_REBALANCE: True # give the same weight to all channels (in BCM)
+
 # Model testing
 TEST:
     ENABLE: False       # do not perform testing
