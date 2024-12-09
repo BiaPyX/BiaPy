@@ -65,7 +65,7 @@ TRAIN:
 
 # Loss function
 LOSS:
-    CLASS_REBALANCE: True # give the same weight to all channels (in BCM)
+    CLASS_REBALANCE: False # whether to give the same weight to all channels (in BCM)
 
 # Model testing
 TEST:
