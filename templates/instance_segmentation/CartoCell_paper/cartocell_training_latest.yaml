@@ -56,7 +56,7 @@ TRAIN:
     LR: 1.E-4           # initial learning rate
     BATCH_SIZE: 2       # batch size
     EPOCHS: 1300        # number of epochs
-    PATIENCE: 200       # patience
+    PATIENCE: 100       # patience
 
 # Loss function
 LOSS:
