@@ -16,7 +16,7 @@ PROBLEM:
 
 # Data paths and management
 DATA: 
-    PATCH_SIZE: (80, 80, 80, 1) # model input size (z, x, y, channels)
+    PATCH_SIZE: (80, 80, 80, 1) # model input size (z, x, y, channels)    
     TRAIN:                                                                                                              
         PATH: /path/to/data     # full path to folder with training raw images
         GT_PATH: /path/to/data  # full path to folder with training label images
@@ -31,6 +31,7 @@ DATA:
         IN_MEMORY: True         # load teset data into RAM (faster) or not (save memory)
         LOAD_GT: True           # check if test labels available
         PADDING: (16,16,16)     # padding to be used during test (z, x, y)
+    REFLECT_TO_COMPLETE_SHAPE: True # use mirror padding when needed
 
 # Data augmentation
 AUGMENTOR:
@@ -55,10 +56,12 @@ MODEL:
 TRAIN:
     ENABLE: True        # perform training
     OPTIMIZER: ADAMW    # optimizer
-    LR: 1.E-4           # initial learning rate
+    LR: 1.E-3           # learning rate (maximum value for one-cycle scheduler)
     BATCH_SIZE: 2       # batch size
-    EPOCHS: 1300        # number of epochs
-    PATIENCE: 100       # patience
+    EPOCHS: 30          # number of epochs
+    PATIENCE: 30        # patience
+    LR_SCHEDULER:
+        NAME: 'onecycle'    # use learning one-cycle rate scheduler
 
 # Loss function
 LOSS:
@@ -71,4 +74,5 @@ TEST:
     FULL_IMG: False     # do not process full images (use patches)
     POST_PROCESSING:
         VORONOI_ON_MASK: True   # apply Voronoi algorithm to improve masks
+        CLEAR_BORDER: True      # remove objects in the border
 
