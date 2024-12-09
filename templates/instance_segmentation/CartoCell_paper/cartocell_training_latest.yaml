@@ -10,10 +10,7 @@ PROBLEM:
     NDIM: 3D                    # images are 3D
     INSTANCE_SEG:
         DATA_CHANNELS: BCM              # problem representation: binary masks + contours + foreground mask
-        DATA_MW_TH_TYPE: "manual"       # manual calculation of threshold per each channel
-        DATA_MW_TH_BINARY_MASK: 0.2     # threshold for the B channel (binary mask)
-        DATA_MW_TH_CONTOUR: 0.2         # threshold for the C channel (contours)
-        DATA_MW_TH_FOREGROUND: 0.25     # threshold for the M channel (foreground mask)
+        DATA_MW_TH_TYPE: "auto"         # automatic calculation of threshold per each channel
         DATA_REMOVE_BEFORE_MW: True     # remove objects before watershed
         DATA_REMOVE_SMALL_OBJ_BEFORE: 5 # size of small objects to be removed before watershed
 
@@ -65,7 +62,7 @@ TRAIN:
 
 # Loss function
 LOSS:
-    CLASS_REBALANCE: False # whether to give the same weight to all channels (in BCM)
+    CLASS_REBALANCE: True # give the same weight to all channels (in BCM)
 
 # Model testing
 TEST:
