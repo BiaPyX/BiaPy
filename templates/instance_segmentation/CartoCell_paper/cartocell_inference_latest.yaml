@@ -1,0 +1,82 @@
+# CartoCell inference workflow compatible with BiaPy version 3.5.6
+
+SYSTEM:
+    NUM_CPUS: -1
+    NUM_WORKERS: 5
+
+# Problem definition
+PROBLEM:
+    TYPE: INSTANCE_SEG          # instace segmentation workflow
+    NDIM: 3D                    # images are 3D
+    INSTANCE_SEG:
+        DATA_CHANNELS: BCM              # problem representation: binary masks + contours + foreground mask
+        DATA_MW_TH_TYPE: "auto"         # automatic calculation of threshold per each channel
+        DATA_REMOVE_BEFORE_MW: True     # remove objects before watershed
+        DATA_REMOVE_SMALL_OBJ_BEFORE: 5 # size of small objects to be removed before watershed
+
+# Data paths and management
+DATA: 
+    PATCH_SIZE: (80, 80, 80, 1) # model input size (z, x, y, channels)    
+    TRAIN:                                                                                                              
+        PATH: /path/to/data     # full path to folder with training raw images
+        GT_PATH: /path/to/data  # full path to folder with training label images
+        IN_MEMORY: True         # load tranining data into RAM (faster) or not (save memory)
+    VAL:
+        FROM_TRAIN: False       # do not use random samples from training as validation set
+        PATH: /path/to/data     # full path to folder with validation raw images
+        GT_PATH: /path/to/data  # full path to folder with validation label images
+    TEST:                                                                                                               
+        PATH: /path/to/data     # full path to folder with test raw images
+        GT_PATH: /path/to/data  # full path to folder with test label images
+        IN_MEMORY: True         # load teset data into RAM (faster) or not (save memory)
+        LOAD_GT: True           # check if test labels available
+        PADDING: (16,16,16)     # padding to be used during test (z, x, y)
+    REFLECT_TO_COMPLETE_SHAPE: True # use mirror padding when needed
+
+# Data augmentation
+AUGMENTOR:
+    ENABLE: True                    # wether to use data augmentation or not
+    RANDOM_ROT: True                # random rotations
+    VFLIP: True                     # vertical flips
+    HFLIP: True                     # horizontal flips
+    ZFLIP: True                     # z-axis flips
+    ELASTIC: True                   # elastic deformations
+    BRIGHTNESS: True                # use brightness augmentation
+    BRIGHTNESS_FACTOR: (0.1, 0.15)  # minimum and maximum brightness factors to apply
+
+# Deep learning model configuration
+MODEL:
+    ARCHITECTURE: resunet           # architecture (ResU-Net)
+    FEATURE_MAPS: [52, 68, 84]      # number of feature maps at each level
+    Z_DOWN: [1,1]                   # do not downscale in z-axis after each level
+    DROPOUT_VALUES: [0.1, 0.1, 0.1] # dropout values at each level
+    LOAD_CHECKPOINT: True           # load pretrained model (path to the model is needed)
+
+# Path to the pretrained model
+PATHS:
+    CHECKPOINT_FILE: /home/user/cartocell_model_latest.pth
+
+# Model training
+TRAIN:
+    ENABLE: False       # do not perform training (only inference)
+    OPTIMIZER: ADAMW    # optimizer
+    LR: 1.E-3           # learning rate (maximum value for one-cycle scheduler)
+    BATCH_SIZE: 2       # batch size
+    EPOCHS: 30          # number of epochs
+    PATIENCE: 30        # patience
+    LR_SCHEDULER:
+        NAME: 'onecycle'    # use learning one-cycle rate scheduler
+
+# Loss function
+LOSS:
+    CLASS_REBALANCE: True # give the same weight to all channels (in BCM)
+
+# Model testing
+TEST:
+    ENABLE: True        # perform testing (inference)
+    AUGMENTATION: False # do not perform test-time augmentation
+    FULL_IMG: False     # do not process full images (use patches)
+    POST_PROCESSING:
+        VORONOI_ON_MASK: True   # apply Voronoi algorithm to improve masks
+        CLEAR_BORDER: False     # do not remove objects in the border
+
