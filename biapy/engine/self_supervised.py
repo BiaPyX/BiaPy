@@ -78,6 +78,10 @@ class Self_supervised_Workflow(Base_Workflow):
             self.mask_path = cfg.DATA.TRAIN.GT_PATH
             self.load_Y_val = True
 
+        self.model_output_channels = {
+            "type": "image",
+        }
+        
     def define_metrics(self):
         """
         This function must define the following variables:

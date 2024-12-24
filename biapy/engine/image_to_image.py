@@ -56,6 +56,10 @@ class Image_to_Image_Workflow(Base_Workflow):
         self.mask_path = cfg.DATA.TRAIN.GT_PATH
         self.is_y_mask = False
 
+        self.model_output_channels = {
+            "type": "image",
+        }
+        
     def define_metrics(self):
         """
         This function must define the following variables:

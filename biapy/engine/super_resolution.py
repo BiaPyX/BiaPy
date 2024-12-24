@@ -62,6 +62,10 @@ class Super_resolution_Workflow(Base_Workflow):
         self.is_y_mask = False
         self.load_Y_val = True
 
+        self.model_output_channels = {
+            "type": "image",
+        }
+        
     def define_metrics(self):
         """
         This function must define the following variables:

@@ -211,6 +211,12 @@ class Base_Workflow(metaclass=ABCMeta):
         # Define metrics
         self.define_metrics()
 
+        # Save number of channels to be created by the model
+        self.model_output_channels = {
+            "type": "mask",
+            "channels": self.cfg.MODEL.N_CLASSES,
+        }
+
     def define_metrics(self):
         """
         This function must define the following variables:
@@ -1236,7 +1242,11 @@ class Base_Workflow(metaclass=ABCMeta):
                         p = torch.cat((p[0], torch.argmax(p[1], axis=1).unsqueeze(1)), dim=1)
                     p = to_numpy_format(p, self.axis_order_back)
                 else:
-                    p = np.zeros(img.shape)
+                    if self.model_output_channels["type"] == "image":
+                        shape = img.shape 
+                    else: # mask
+                        shape = img.shape[:-1] + (self.model_output_channels["channels"],) 
+                    p = np.zeros(shape)
 
                 t_dim, z_dim, y_dim, x_dim, c_dim = order_dimensions(
                     self.cfg.DATA.PREPROCESS.ZOOM.ZOOM_FACTOR,

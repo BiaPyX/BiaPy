@@ -125,10 +125,15 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             self.activations = {"0": "CE_Sigmoid", "1": "Linear"}
         elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BCD", "BCDv2"]:
             self.activations = {"0": "CE_Sigmoid", "1": "CE_Sigmoid", "2": "Linear"}
+        self.model_output_channels = {
+            "type": "mask",
+            "channels": len(self.activations),
+        }
 
         # Multi-head: instances + classification
         if self.cfg.MODEL.N_CLASSES > 2:
             self.activations = [self.activations, {"0": "Linear"}]
+            self.model_output_channels["channels"] += 1
         else:
             self.activations = [self.activations]
 
