@@ -15,7 +15,7 @@ DATA:
         IN_MEMORY: True
     VAL:
         FROM_TRAIN: True
-        SPLIT_TRAIN: 0.1
+        SPLIT_TRAIN: 0.2
     TEST:                                                                                                               
         IN_MEMORY: True
         LOAD_GT: True
@@ -37,9 +37,10 @@ TRAIN:
     ENABLE: True
     OPTIMIZER: ADAMW
     LR: 1.E-4
-    BATCH_SIZE: 6
-    EPOCHS: 360
-    PATIENCE: 50
-  
+    BATCH_SIZE: 8
+    EPOCHS: 10
+    PATIENCE: 10
+    LR_SCHEDULER:
+        NAME: 'onecycle'    # use learning one-cycle rate scheduler
 TEST:
     ENABLE: True
