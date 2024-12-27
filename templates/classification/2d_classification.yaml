@@ -36,9 +36,9 @@ TRAIN:
     ENABLE: True
     OPTIMIZER: ADAMW
     LR: 1.E-4
-    BATCH_SIZE: 6
-    EPOCHS: 360
-    PATIENCE: 50
+    BATCH_SIZE: 12
+    EPOCHS: 100
+    PATIENCE: 20
   
 TEST:
     ENABLE: True
