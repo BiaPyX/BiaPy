@@ -42,10 +42,12 @@ MODEL:
 TRAIN:
     ENABLE: True
     OPTIMIZER: ADAMW
-    LR: 1.E-4
-    BATCH_SIZE: 6
-    EPOCHS: 360
-    PATIENCE: 50
+    LR: 1.E-3
+    BATCH_SIZE: 2
+    EPOCHS: 30
+    PATIENCE: 30
+    LR_SCHEDULER:
+        NAME: 'onecycle'    # use learning one-cycle rate scheduler
   
 TEST:
     ENABLE: True
