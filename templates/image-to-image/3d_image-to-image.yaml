@@ -9,39 +9,44 @@ PROBLEM:
     NDIM: 3D
 
 DATA: 
-    PATCH_SIZE: (20, 128, 128, 1)
+    PATCH_SIZE: (32, 64, 64, 1)
     TRAIN:
         PATH: /path/to/data
         GT_PATH: /path/to/data
         IN_MEMORY: True
     VAL:
         FROM_TRAIN: True
-        SPLIT_TRAIN: 0.1
+        SPLIT_TRAIN: 0.2
     TEST:                                                                                                               
         PATH: /path/to/data
         GT_PATH: /path/to/data
         IN_MEMORY: False
         LOAD_GT: True
-        PADDING: (4,16,16)
+        PADDING: (4,8,8)
 
 AUGMENTOR:
     ENABLE: True
     VFLIP: True
     HFLIP: True
     ZFLIP: True
+    DROPOUT: True
+    GRIDMASK: True
+    CUTOUT: True
 
 MODEL:
-    ARCHITECTURE: attention_unet
+    ARCHITECTURE: resunet
     Z_DOWN: [1,1,1,1]
     LOAD_CHECKPOINT: False
 
 TRAIN:
     ENABLE: True
     OPTIMIZER: ADAMW
-    LR: 1.E-4
+    LR: 1.E-3
     BATCH_SIZE: 6
-    EPOCHS: 360
-    PATIENCE: 50
+    EPOCHS: 20
+    PATIENCE: 20
+    LR_SCHEDULER:
+        NAME: 'onecycle'    # use learning one-cycle rate scheduler
 
 TEST:
     ENABLE: True
