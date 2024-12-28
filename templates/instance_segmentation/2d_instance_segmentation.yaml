@@ -40,10 +40,14 @@ TRAIN:
     ENABLE: True
     OPTIMIZER: ADAMW
     LR: 1.E-4
-    BATCH_SIZE: 6
-    EPOCHS: 360
-    PATIENCE: 50
-  
+    BATCH_SIZE: 8
+    EPOCHS: 100
+    PATIENCE: 20
+
+# Loss function
+LOSS:
+    CLASS_REBALANCE: True # give the same weight to all problem representation channels
+
 TEST:
     ENABLE: True
     AUGMENTATION: False
