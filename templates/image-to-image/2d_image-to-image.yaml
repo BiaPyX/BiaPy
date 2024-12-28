@@ -9,7 +9,7 @@ PROBLEM:
     NDIM: 2D
 
 DATA: 
-    PATCH_SIZE: (256, 256, 1)
+    PATCH_SIZE: (128, 128, 1)
     TRAIN:
         PATH: /path/to/data
         GT_PATH: /path/to/data
@@ -37,9 +37,9 @@ TRAIN:
     ENABLE: True
     OPTIMIZER: ADAMW
     LR: 1.E-4
-    BATCH_SIZE: 6
-    EPOCHS: 360
-    PATIENCE: 50
+    BATCH_SIZE: 8
+    EPOCHS: 50
+    PATIENCE: 10
 
 TEST:
     ENABLE: True
