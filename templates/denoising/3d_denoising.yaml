@@ -9,6 +9,9 @@ PROBLEM:
     TYPE: DENOISING
     NDIM: 3D
     DENOISING:
+        N2V_PERC_PIX: 0.198
+        N2V_MANIPULATOR: 'uniform_withCP'
+        N2V_NEIGHBORHOOD_RADIUS: 5
         N2V_STRUCTMASK: True
   
 DATA: 
@@ -46,11 +49,11 @@ MODEL:
   
 TRAIN:
     ENABLE: True
-    OPTIMIZER: ADAM
-    LR: 4.E-4
+    OPTIMIZER: ADAMW
+    LR: 1.E-4
     BATCH_SIZE: 4
-    EPOCHS: 360
-    PATIENCE: 50
+    EPOCHS: 100
+    PATIENCE: 20
   
 TEST:
     ENABLE: True
