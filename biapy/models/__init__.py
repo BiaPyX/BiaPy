@@ -861,7 +861,7 @@ def check_model_restrictions(cfg, bmz_config, workflow_specs):
 
     # First let's make sure we have a valid model
     if isinstance(bmz_config["original_bmz_config"], InvalidDescr):
-        raise ValueError(f"Failed to load {cfg.MODEL.SOURCE}")
+        raise ValueError(f"Failed to load '{cfg.MODEL.BMZ.SOURCE_MODEL_ID}' model")
 
     # Version of the model
     model_version = Version(bmz_config["original_bmz_config"].format_version)
