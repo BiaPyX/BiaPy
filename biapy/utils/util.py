@@ -963,7 +963,7 @@ def read_chunked_nested_zarr(zarrfile, data_path=""):
 
     data = find_obj(data_path, fid)
 
-    if data is None:
+    if data is None and data_path != "":
         raise ValueError(f"'{data_path}' not found in Zarr: {zarrfile}.")
 
     return fid, data
@@ -995,6 +995,8 @@ def read_chunked_nested_h5(h5file, data_path=""):
                 return fid[rpath[0]]
         return obj
     data = find_obj(data_path, fid)    
+    if data is None and data_path != "":
+        raise ValueError(f"'{data_path}' not found in H5: {h5file}.")
     return fid, data
 
 def seg2aff_pni(img, dz=1, dy=1, dx=1, dtype="float32"):
