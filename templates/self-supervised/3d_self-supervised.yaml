@@ -8,10 +8,10 @@ PROBLEM:
     TYPE: SELF_SUPERVISED
     NDIM: 3D
     SELF_SUPERVISED:
-        PRETEXT_TASK: 'crappify'
+        PRETEXT_TASK: 'masking'
   
 DATA: 
-    PATCH_SIZE: (40, 128, 128, 1)
+    PATCH_SIZE: (96, 96, 96, 1)
     TRAIN:                                                                                                              
         PATH: /path/to/data
         IN_MEMORY: True
@@ -20,7 +20,7 @@ DATA:
     TEST:                                                                                                               
         IN_MEMORY: True
         PATH: /path/to/data
-        PADDING: (5,32,32)
+        PADDING: (16,16,16)
 
 AUGMENTOR:
     ENABLE: True
@@ -31,17 +31,16 @@ AUGMENTOR:
     ZFLIP: True
     
 MODEL:
-    ARCHITECTURE: unet
-    Z_DOWN: [1,1,1,1]
+    ARCHITECTURE: mae
     LOAD_CHECKPOINT: False
 
 TRAIN:
     ENABLE: True
     OPTIMIZER: ADAMW
     LR: 1.E-4
-    BATCH_SIZE: 12
-    EPOCHS: 360
-    PATIENCE: 50
+    BATCH_SIZE: 6
+    EPOCHS: 100
+    PATIENCE: 20
   
 TEST:
     ENABLE: True
