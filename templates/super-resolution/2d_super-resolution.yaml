@@ -11,7 +11,9 @@ PROBLEM:
         UPSCALING: (2,2)
   
 DATA: 
-    PATCH_SIZE: (48, 48, 1)
+    PATCH_SIZE: (128, 128, 1)
+    NORMALIZATION:
+        TYPE: 'div'
     TRAIN:                                                                                                              
         PATH: /path/to/data
         GT_PATH: /path/to/data
@@ -24,7 +26,7 @@ DATA:
         LOAD_GT: True
         PATH: /path/to/data
         GT_PATH: /path/to/data
-        PADDING: (8,8)
+        PADDING: (16,16)
 
 AUGMENTOR:
     ENABLE: True
@@ -34,16 +36,16 @@ AUGMENTOR:
     ROT90: True
 
 MODEL:
-    ARCHITECTURE: edsr
+    ARCHITECTURE: rcan
     LOAD_CHECKPOINT: False
 
 TRAIN:
     ENABLE: True
     OPTIMIZER: ADAMW
     LR: 1.E-4
-    BATCH_SIZE: 24
-    EPOCHS: 360
-    PATIENCE: 50
+    BATCH_SIZE: 8
+    EPOCHS: 50
+    PATIENCE: 10
   
 TEST:
     ENABLE: True
