@@ -41,6 +41,6 @@ TRAIN:
     EPOCHS: 10
     PATIENCE: 10
     LR_SCHEDULER:
-        NAME: 'onecycle'    # use learning one-cycle rate scheduler
+        NAME: 'onecycle'    # use one-cycle learning rate scheduler
 TEST:
     ENABLE: True
