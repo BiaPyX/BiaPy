@@ -7,6 +7,8 @@ SYSTEM:
 PROBLEM:
     TYPE: DETECTION
     NDIM: 2D
+    DETECTION:
+        CENTRAL_POINT_DILATION: 3
 
 DATA:
     PATCH_SIZE: (256, 256, 1)
@@ -55,8 +57,8 @@ TRAIN:
 TEST:
     ENABLE: True                                                                                                        
     AUGMENTATION: False                                                                                                 
-    DET_TOLERANCE: [3]                                                                                             
-    DET_MIN_TH_TO_BE_PEAK: [0.2]
+    DET_TOLERANCE: [10]                                                                                             
+    DET_MIN_TH_TO_BE_PEAK: [0.5]
     POST_PROCESSING:                                                                                                    
         REMOVE_CLOSE_POINTS: True                                                                                       
         REMOVE_CLOSE_POINTS_RADIUS: [3] 
