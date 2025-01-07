@@ -8,7 +8,7 @@ PROBLEM:
     TYPE: SUPER_RESOLUTION
     NDIM: 3D
     SUPER_RESOLUTION:
-        UPSCALING: (2,2,2)
+        UPSCALING: (1,1,1)
   
 DATA: 
     PATCH_SIZE: (6, 128, 128, 1)
@@ -17,13 +17,13 @@ DATA:
         GT_PATH: /path/to/data
         IN_MEMORY: True
     VAL:
-        SPLIT_TRAIN: 0.1
+        SPLIT_TRAIN: 0.2
     TEST:                                                                                                               
         IN_MEMORY: True
         LOAD_GT: True
         PATH: /path/to/data
         GT_PATH: /path/to/data
-        PADDING: (2,8,8)
+        PADDING: (2,16,16)
 
 AUGMENTOR:
     ENABLE: True
@@ -33,16 +33,18 @@ AUGMENTOR:
     ZFLIP: True
 
 MODEL:
-    ARCHITECTURE: unet
+    ARCHITECTURE: resunet
     LOAD_CHECKPOINT: False
 
 TRAIN:
     ENABLE: True
     OPTIMIZER: ADAMW
-    LR: 1.E-4
-    BATCH_SIZE: 12
-    EPOCHS: 400
-    PATIENCE: 50
+    LR: 1.E-3
+    BATCH_SIZE: 6
+    EPOCHS: 15
+    PATIENCE: 15
+    LR_SCHEDULER:
+        NAME: 'onecycle'    # use one-cycle learning rate scheduler
   
 TEST:
     ENABLE: True
