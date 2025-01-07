@@ -30,17 +30,19 @@ AUGMENTOR:
     HFLIP: True
 
 MODEL:
-    ARCHITECTURE: attention_unet
+    ARCHITECTURE: unet
     FEATURE_MAPS: [16, 32, 64, 128, 256]
     LOAD_CHECKPOINT: False
 
 TRAIN:
     ENABLE: True
     OPTIMIZER: ADAMW
-    LR: 1.E-4
+    LR: 1.E-3
     BATCH_SIZE: 6
-    EPOCHS: 360
-    PATIENCE: 50
+    EPOCHS: 20
+    PATIENCE: 20
+    LR_SCHEDULER:
+        NAME: 'onecycle'    # use one-cycle learning rate scheduler
   
 TEST:
     ENABLE: True
