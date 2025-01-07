@@ -8,7 +8,7 @@ PROBLEM:
     TYPE: DETECTION
     NDIM: 3D
     DETECTION: 
-        CENTRAL_POINT_DILATION: [1]
+        CENTRAL_POINT_DILATION: [0]
 
 DATA: 
     PATCH_SIZE: (64, 64, 64, 1)
@@ -42,17 +42,21 @@ MODEL:
 TRAIN:
     ENABLE: True
     OPTIMIZER: ADAMW
-    LR: 1.E-4
-    BATCH_SIZE: 6
-    EPOCHS: 360
-    PATIENCE: 50
+    LR: 1.E-3
+    BATCH_SIZE: 8
+    EPOCHS: 150
+    PATIENCE: 20
+    LR_SCHEDULER:
+        NAME: 'warmupcosine'    # use warm up cosine decay learning rate scheduler
+        MIN_LR: 0.0
+        WARMUP_COSINE_DECAY_EPOCHS: 0
   
 TEST:
     ENABLE: True
     VERBOSE: True
     AUGMENTATION: False
-    DET_TOLERANCE: [5]
-    DET_MIN_TH_TO_BE_PEAK: [0.50]
+    DET_TOLERANCE: [3]
+    DET_MIN_TH_TO_BE_PEAK: [0.20]
     POST_PROCESSING:
         REMOVE_CLOSE_POINTS: True
-        REMOVE_CLOSE_POINTS_RADIUS: [4.0]
+        REMOVE_CLOSE_POINTS_RADIUS: [3.0]
