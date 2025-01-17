@@ -1246,7 +1246,7 @@ class Detection_Workflow(Base_Workflow):
                 pred = self.model_call_func(self.current_sample["X"])
             del self.current_sample["X"]
             
-            # In Torchvision the output are bboxes so there is nothing else to do here 
+            # In Torchvision the output is a collection of bboxes so there is nothing else to do here 
             if self.cfg.MODEL.SOURCE == "torchvision" and pred is None:
                 return
             
