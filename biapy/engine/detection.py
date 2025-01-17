@@ -1245,7 +1245,11 @@ class Detection_Workflow(Base_Workflow):
             with torch.cuda.amp.autocast():
                 pred = self.model_call_func(self.current_sample["X"])
             del self.current_sample["X"]
-        
+            
+            # In Torchvision the output are bboxes so there is nothing else to do here 
+            if self.cfg.MODEL.SOURCE == "torchvision" and pred is None:
+                return
+            
             if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE:
                 reflected_orig_shape = (1,) + self.current_sample["reflected_orig_shape"]
                 if reflected_orig_shape != pred.shape:
