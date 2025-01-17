@@ -1060,10 +1060,21 @@ def build_torchvision_model(cfg, device):
             if cfg.MODEL.TORCHVISION_MODEL_NAME in ["maxvit_t"]:
                 sample_size = (1, 3, 224, 224)
     elif cfg.PROBLEM.TYPE == "SEMANTIC_SEG":
-        head = torch.nn.Conv2d(model.classifier[-1].in_channels, out_classes, kernel_size=1, stride=1)
-        model.classifier[-1] = head
-        head = torch.nn.Conv2d(model.aux_classifier[-1].in_channels, out_classes, kernel_size=1, stride=1)
-        model.aux_classifier[-1] = head
+        if cfg.MODEL.N_CLASSES != 21:
+            print(
+                f"WARNING: Model's head changed from 21 to {out_classes} so a finetunning is required to have good results"
+            )
+        if tc_model_name == "lraspp_mobilenet_v3_large":
+            head = torch.nn.Conv2d(model.classifier.low_classifier.in_channels, out_classes, kernel_size=1, stride=1)
+            model.classifier.low_classifier = head
+            head = torch.nn.Conv2d(model.classifier.high_classifier.in_channels, out_classes, kernel_size=1, stride=1)
+            model.classifier.high_classifier = head
+        else:
+            head = torch.nn.Conv2d(model.classifier[-1].in_channels, out_classes, kernel_size=1, stride=1)
+            model.classifier[-1] = head
+            head = torch.nn.Conv2d(model.aux_classifier[-1].in_channels, out_classes, kernel_size=1, stride=1)
+            model.aux_classifier[-1] = head
+        
     elif cfg.PROBLEM.TYPE == "INSTANCE_SEG":
         # MaskRCNN
         if cfg.MODEL.N_CLASSES != 91:  # 91 classes are the ones by default in MaskRCNN
