@@ -335,13 +335,7 @@ def load_and_prepare_train_data(
         ids = sorted(next(os.walk(train_path))[2])
         fids = sorted(next(os.walk(train_path))[1])
 
-        if (
-            len(ids) == 0 # Zarr
-            or (
-                len(ids) > 0
-                and any(ids[0].endswith(x) for x in [".h5", ".hdf5", ".hdf"])
-                )
-        ):
+        if len(ids) == 0 or (len(ids) > 0 and any(ids[0].endswith(x) for x in [".h5", ".hdf5", ".hdf"])):  # Zarr
             if len(ids) == 0 and len(fids) == 0:  # Trying Zarr
                 raise ValueError("No images found in dir {}".format(train_path))
 
@@ -380,13 +374,7 @@ def load_and_prepare_train_data(
         if train_mask_path is not None:
             ids = sorted(next(os.walk(train_mask_path))[2])
             fids = sorted(next(os.walk(train_mask_path))[1])
-            if (
-                len(ids) == 0 # Zarr
-                or (
-                    len(ids) > 0
-                    and any(ids[0].endswith(x) for x in [".h5", ".hdf5", ".hdf"])
-                    )
-            ):
+            if len(ids) == 0 or (len(ids) > 0 and any(ids[0].endswith(x) for x in [".h5", ".hdf5", ".hdf"])):  # Zarr
                 if len(ids) == 0 and len(fids) == 0:  # Trying Zarr
                     raise ValueError("No images found in dir {}".format(train_mask_path))
                 Y_train = samples_from_zarr(
@@ -451,8 +439,10 @@ def load_and_prepare_train_data(
     if train_mask_path is not None:
         gt_id = 0
         if len(X_train) != len(Y_train):
-            raise ValueError(f"Mistmatch between number of raw samples ({len(X_train)}) and number of corresponding "
-                             f"masks ({len(Y_train)}). Please, check that the data is of the same shape.")
+            raise ValueError(
+                f"Mistmatch between number of raw samples ({len(X_train)}) and number of corresponding "
+                f"masks ({len(Y_train)}). Please, check that the data is of the same shape."
+            )
         for i in range(len(X_train)):
             xshape = X_train[i]["shape"]
             if "gt_associated_id" in X_train[i]:
@@ -864,6 +854,7 @@ def load_and_prepare_test_data(
     test_path,
     test_mask_path,
     multiple_raw_images=False,
+    test_zarr_data_information=None,
 ):
     """
     Load test data.
@@ -881,6 +872,11 @@ def load_and_prepare_test_data(
         are placed. Visit the following tutorial for a real use case and a more detailed description:
         `Light My Cells <https://biapy.readthedocs.io/en/latest/tutorials/image-to-image/lightmycells.html>`_.
         This is used when ``PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER`` is selected.
+
+    test_zarr_data_information : dict, optional
+        Additional information when using Zarr/H5 files for test. The following keys are expected:
+            * ``"raw_path"``: path where the raw images reside within the zarr.
+            * ``"gt_path"``: path where the mask images reside within the zarr.
 
     Returns
     -------
@@ -921,6 +917,8 @@ def load_and_prepare_test_data(
                 "filename": test_filenames[i],
                 "dir": test_path,
             }
+            if test_zarr_data_information is not None:
+                sample_dict["path_in_zarr"] = test_zarr_data_information["raw_path"]
             X_test.append(sample_dict)
 
         # Extract a list of all training gt images
@@ -944,6 +942,8 @@ def load_and_prepare_test_data(
                     "filename": selected_ids[i],
                     "dir": test_mask_path,
                 }
+                if test_zarr_data_information is not None:
+                    sample_dict["path_in_zarr"] = test_zarr_data_information["raw_path"]
                 Y_test.append(sample_dict)
     else:
         test_filenames = sorted(next(os.walk(test_path))[1])
@@ -2420,7 +2420,7 @@ def filter_samples_by_properties(
                     default_value=0,
                 )
             else:
-                xdata_ordered_slices = tuple([x for x in xslices if x != slice(None)])  
+                xdata_ordered_slices = tuple([x for x in xslices if x != slice(None)])
 
             if is_3d:
                 yslices = (
@@ -2445,7 +2445,7 @@ def filter_samples_by_properties(
                     default_value=0,
                 )
             else:
-                ydata_ordered_slices = tuple([x for x in yslices if x != slice(None)]) 
+                ydata_ordered_slices = tuple([x for x in yslices if x != slice(None)])
 
             img = xdata[xdata_ordered_slices]
             if foreground_filter_requested:
@@ -2642,17 +2642,19 @@ def load_images_to_sample_list(
             data_within_zarr_path = None
             if zarr_data_information is not None and zarr_data_information["multiple_data_within_zarr"]:
                 if not is_mask:
-                    data_within_zarr_path = zarr_data_information["raw_path"]  
+                    data_within_zarr_path = zarr_data_information["raw_path"]
                 else:
-                    data_within_zarr_path = zarr_data_information["gt_path"] if zarr_data_information["use_gt_path"] else None
+                    data_within_zarr_path = (
+                        zarr_data_information["gt_path"] if zarr_data_information["use_gt_path"] else None
+                    )
             data, file = load_img_data(img_path, is_3d=is_3d, data_within_zarr_path=data_within_zarr_path)
 
-            # Disable channel checking if it is not present. Can happen with a Zarr/H5 dataset, as in the load_img_data() 
-            # the axis were not checked to not have the data loaded in memory 
+            # Disable channel checking if it is not present. Can happen with a Zarr/H5 dataset, as in the load_img_data()
+            # the axis were not checked to not have the data loaded in memory
             check_channel = True
             key = "input_img_axes" if not is_mask else "input_mask_axes"
             if zarr_data_information is not None and "C" not in zarr_data_information[key]:
-                check_channel = False 
+                check_channel = False
 
             # Channel check within dataset images
             if channel_expected == -1:
@@ -2940,7 +2942,7 @@ def read_img_as_ndarray(path, is_3d=False):
     if path.endswith(".npy"):
         img = np.load(path)
     elif path.endswith(".pt"):
-        img = torch.load(path, weights_only=True, map_location='cpu').numpy()
+        img = torch.load(path, weights_only=True, map_location="cpu").numpy()
     elif any(path.endswith(x) for x in [".h5", ".hdf5", ".hdf"]):
         img = h5py.File(path, "r")
         img = np.array(img[list(img)[0]])
@@ -3018,7 +3020,7 @@ def check_masks(path, n_classes=2, is_3d=False):
     m = ""
     error = False
     for i in tqdm(range(len(ids))):
-        if (any(ids[i].endswith(x) for x in [".zarr", ".h5", ".hdf5", ".hdf"])):
+        if any(ids[i].endswith(x) for x in [".zarr", ".h5", ".hdf5", ".hdf"]):
             raise ValueError(
                 "Mask checking with Zarr not implemented in BiaPy yet. Disable 'DATA.*.CHECK_DATA' variables to continue"
             )

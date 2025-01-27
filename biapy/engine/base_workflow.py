@@ -126,7 +126,8 @@ class Base_Workflow(metaclass=ABCMeta):
         self.dtype = np.float32 if not self.cfg.TEST.REDUCE_MEMORY else np.float16
         self.dtype_str = "float32" if not self.cfg.TEST.REDUCE_MEMORY else "float16"
         self.loss_dtype = torch.float32
-
+        self.dims = 2 if self.cfg.PROBLEM.NDIM == "2D" else 3
+        
         self.use_gt = False
         if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
             self.use_gt = True
@@ -215,6 +216,7 @@ class Base_Workflow(metaclass=ABCMeta):
         self.model_output_channels = {
             "type": "mask",
             "channels": self.cfg.MODEL.N_CLASSES,
+            "extra_channels": 0,
         }
 
     def define_metrics(self):
@@ -592,7 +594,11 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.bmz_config["model_file"],
                 self.bmz_config["model_name"],
                 self.model_build_kwargs,
-            ) = build_model(self.cfg, self.device)
+            ) = build_model(
+                self.cfg, 
+                self.model_output_channels["channels"], 
+                self.device
+            )
         elif self.cfg.MODEL.SOURCE == "torchvision":
             self.model, self.torchvision_preprocessing = build_torchvision_model(self.cfg, self.device)
         # BioImage Model Zoo pretrained models
@@ -906,6 +912,15 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.Y_test.sort()
                 self.Y_test = [{"dir": os.path.dirname(x), "filename": os.path.basename(x)} for x in self.Y_test]
         else:
+            # Paths to the raw and gt within the Zarr file. Only used when 'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA' is True.
+            test_zarr_data_information = None
+            if self.cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA:
+                test_zarr_data_information = {
+                    "raw_path": self.cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH,
+                    "gt_path": self.cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_GT_PATH,
+                    "multiple_data_within_zarr": self.cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA,
+                }
+                            
             (
                 self.X_test,
                 self.Y_test,
@@ -917,6 +932,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     self.cfg.PROBLEM.TYPE == "IMAGE_TO_IMAGE"
                     and self.cfg.PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER
                 ),
+                test_zarr_data_information=test_zarr_data_information,
             )
 
     def destroy_test_data(self):
@@ -1245,7 +1261,9 @@ class Base_Workflow(metaclass=ABCMeta):
                     if self.model_output_channels["type"] == "image":
                         shape = img.shape 
                     else: # mask
-                        shape = img.shape[:-1] + (self.model_output_channels["channels"],) 
+                        shape = img.shape[:-1] + (
+                            self.model_output_channels["channels"]+self.model_output_channels["extra_channels"]
+                            ,) 
                     p = np.zeros(shape)
 
                 t_dim, z_dim, y_dim, x_dim, c_dim = order_dimensions(

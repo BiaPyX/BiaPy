@@ -49,7 +49,11 @@ def load_3D_efficient_files(
     Returns
     -------
     data_info : dict
-        All patch info that can be extracted from all the Zarr/H5 samples in ``data_path``.
+        All patches that can be extracted from all the Zarr/H5 samples in ``data_path``.
+        Keys created are:
+            * ``"filepath"``: path to the file where the patch was extracted.
+            * ``"full_shape"``: shape of the data within the file where the patch was extracted.
+            * ``"patch_coords"``: coordinates of the data that represents the patch.
 
     data_info_total_patches : List of ints
         Amount of patches extracted from each sample in ``data_path``.
@@ -114,6 +118,7 @@ def load_3D_efficient_files(
 
             data_info[c] = {}
             data_info[c]["filepath"] = filename
+            data_info[c]["full_shape"] = data.shape
             data_info[c]["patch_coords"] = order_dimensions(
                 patch_coords,
                 input_order="ZYX",
