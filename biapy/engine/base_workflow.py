@@ -2168,7 +2168,7 @@ class Base_Workflow(metaclass=ABCMeta):
             # Ensure channel axis is always in the first position (assuming Z is already set)
             min_val = min(pred.shape)
             channel_pos = pred.shape.index(min_val)
-            if channel_pos != 3 and pred.shape[channel_pos] <= 4:
+            if channel_pos != 3:
                 new_pos = [x for x in range(4) if x != channel_pos] + [
                     channel_pos,
                 ]

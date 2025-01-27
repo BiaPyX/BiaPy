@@ -44,7 +44,7 @@ for n, id_ in tqdm(enumerate(ids), total=len(ids)):
     else:
         min_val = min(img.shape)
         channel_pos = img.shape.index(min_val)
-        if channel_pos != 3 and img.shape[channel_pos] <= 4:
+        if channel_pos != 3:
             new_pos = [x for x in range(4) if x != channel_pos]+[channel_pos,]
             img = img.transpose(new_pos)
     

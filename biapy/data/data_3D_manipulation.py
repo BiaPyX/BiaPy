@@ -1120,7 +1120,7 @@ def ensure_3d_shape(img, path=None):
         # Ensure channel axis is always in the first position (assuming Z is already set)
         min_val = min(img.shape)
         channel_pos = img.shape.index(min_val)
-        if channel_pos != 3 and img.shape[channel_pos] <= 4:
+        if channel_pos != 3:
             new_pos = [x for x in range(4) if x != channel_pos] + [
                 channel_pos,
             ]
