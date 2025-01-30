@@ -792,7 +792,8 @@ def detection_metrics(
         pred_fp_class = [-1] * len(fp_preds)
         for i in range(len(fp_preds)):
             fp_coords[i] = _pred[fp_preds[i] - 1]
-            pred_fp_class[i] = int(pred_classes[fp_preds[i] - 1])
+            if class_metrics:
+                pred_fp_class[i] = int(pred_classes[fp_preds[i] - 1])
 
         # Capture prediction coords
         pred_coords = np.zeros((len(pred_id_assoc), 3), dtype=np.float32)
@@ -802,7 +803,8 @@ def detection_metrics(
         for i in range(len(pred_id_assoc)):
             if pred_id_assoc[i] != -1:
                 pred_coords[i] = _pred[pred_id_assoc[i] - 1]
-                pred_class[i] = int(pred_classes[pred_id_assoc[i] - 1])
+                if class_metrics:
+                    pred_class[i] = int(pred_classes[pred_id_assoc[i] - 1])
             else:
                 pred_coords[i] = [0, 0, 0]
 
