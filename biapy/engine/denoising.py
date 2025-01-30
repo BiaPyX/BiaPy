@@ -183,8 +183,8 @@ class Denoising_Workflow(Base_Workflow):
         if "discard" in self.current_sample["X"] and self.current_sample["X"]["discard"]: 
             return True
 
-        # Save BMZ input/output if the user wants to export the model to BMZ later
-        if self.cfg.MODEL.BMZ.EXPORT.ENABLE and "test_output" not in self.bmz_config:
+        # Save BMZ input/output so the user could export the model to BMZ later
+        if "test_output" not in self.bmz_config:
             # Generate prediction and save test_output
             self.prepare_bmz_sample("test_input", self.current_sample["X"])
             p = self.model(torch.from_numpy(self.bmz_config["test_input"]).to(self.device))
@@ -195,7 +195,7 @@ class Denoising_Workflow(Base_Workflow):
                 ).cpu().detach().numpy().astype(np.float32)
             )
 
-            # Save test_input
+            # Save test_input without the normalization
             self.bmz_config["test_input"] = undo_sample_normalization(
                 self.current_sample["X"], 
                 self.current_sample["X_norm"]
