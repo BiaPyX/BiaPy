@@ -1151,6 +1151,9 @@ def runjob(test_info, results_folder, yaml_file, biapy_folder, multigpu=False, b
 
     logfile.close()
 
+
+test_results = []
+
 #~~~~~~~~~~~~
 # Test 1
 #~~~~~~~~~~~~
@@ -1172,11 +1175,11 @@ if all_test_info["Test1"]["enable"]:
     biapy_config['DATA']['EXTRACT_RANDOM_PATCH'] = True
     biapy_config['DATA']['PROBABILITY_MAP'] = True
 
-    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(semantic_2d_data_outpath, "data", "train", "x")
-    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(semantic_2d_data_outpath, "data", "train", "y")
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(semantic_2d_data_outpath, "data", "train", "raw")
+    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(semantic_2d_data_outpath, "data", "train", "label")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
-    biapy_config['DATA']['TEST']['PATH'] = os.path.join(semantic_2d_data_outpath, "data", "test", "x")
-    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(semantic_2d_data_outpath, "data", "test", "y")
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(semantic_2d_data_outpath, "data", "test", "raw")
+    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(semantic_2d_data_outpath, "data", "test", "label")
     biapy_config['DATA']['TEST']['IN_MEMORY'] = False
     biapy_config['DATA']['TEST']['LOAD_GT'] = True
 
@@ -1209,8 +1212,10 @@ if all_test_info["Test1"]["enable"]:
 
     # Check
     results = []
+    correct = True
     res, last_lines = check_finished(all_test_info["Test1"], "Test 1")
     if not res:
+        correct = False
         print("Internal check not passed: seems that it didn't finish")
     results.append(res)
     int_checks = 1
@@ -1218,11 +1223,12 @@ if all_test_info["Test1"]["enable"]:
         results.append(check_value(last_lines, checks["pattern"], checks["value"], checks["gt"]))
         int_checks += 1
         if not results[-1]:
+            correct = False
             print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
 
     # Test result
     print_result(results, all_test_info["Test1"]["jobname"], int_checks)
-
+    test_results.append(correct)
 
 #~~~~~~~~~~~~
 # Test 2
@@ -1242,11 +1248,11 @@ if all_test_info["Test2"]["enable"]:
         except yaml.YAMLError as exc:
             raise ValueError(exc)
 
-    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(semantic_3d_data_outpath, "data", "train", "x")
-    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(semantic_3d_data_outpath, "data", "train", "y")
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(semantic_3d_data_outpath, "data", "train", "raw")
+    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(semantic_3d_data_outpath, "data", "train", "label")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
-    biapy_config['DATA']['TEST']['PATH'] = os.path.join(semantic_3d_data_outpath, "data", "test", "x")
-    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(semantic_3d_data_outpath, "data", "test", "y")
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(semantic_3d_data_outpath, "data", "test", "raw")
+    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(semantic_3d_data_outpath, "data", "test", "label")
     biapy_config['DATA']['TEST']['IN_MEMORY'] = False
     biapy_config['DATA']['TEST']['LOAD_GT'] = True
 
@@ -1272,8 +1278,10 @@ if all_test_info["Test2"]["enable"]:
 
     # Check
     results = []
+    correct = True
     res, last_lines = check_finished(all_test_info["Test2"], "Test 2")
     if not res:
+        correct = False
         print("Internal check not passed: seems that it didn't finish")
     results.append(res)
     int_checks = 1
@@ -1281,10 +1289,12 @@ if all_test_info["Test2"]["enable"]:
         results.append(check_value(last_lines, checks["pattern"], checks["value"], checks["gt"]))
         int_checks += 1
         if not results[-1]:
+            correct = False
             print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
 
     # Test result
     print_result(results, all_test_info["Test2"]["jobname"], int_checks)
+    test_results.append(correct)
 
 #~~~~~~~~~~~~
 # Test 3
@@ -1304,11 +1314,11 @@ if all_test_info["Test3"]["enable"]:
         except yaml.YAMLError as exc:
             raise ValueError(exc)
 
-    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(semantic_2d_data_outpath, "data", "train", "x")
-    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(semantic_2d_data_outpath, "data", "train", "y")
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(semantic_2d_data_outpath, "data", "train", "raw")
+    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(semantic_2d_data_outpath, "data", "train", "label")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
-    biapy_config['DATA']['TEST']['PATH'] = os.path.join(semantic_2d_data_outpath, "data", "test", "x")
-    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(semantic_2d_data_outpath, "data", "test", "y")
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(semantic_2d_data_outpath, "data", "test", "raw")
+    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(semantic_2d_data_outpath, "data", "test", "label")
     biapy_config['DATA']['TEST']['IN_MEMORY'] = True
     biapy_config['DATA']['TEST']['LOAD_GT'] = True
 
@@ -1335,8 +1345,10 @@ if all_test_info["Test3"]["enable"]:
 
     # Check
     results = []
+    correct = True
     res, last_lines = check_finished(all_test_info["Test3"], "Test 2")
     if not res:
+        correct = False
         print("Internal check not passed: seems that it didn't finish")
     results.append(res)
     int_checks = 1
@@ -1344,10 +1356,12 @@ if all_test_info["Test3"]["enable"]:
         results.append(check_value(last_lines, checks["pattern"], checks["value"], checks["gt"]))
         int_checks += 1
         if not results[-1]:
+            correct = False
             print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
 
     # Test result
     print_result(results, all_test_info["Test3"]["jobname"], int_checks)
+    test_results.append(correct)
 
 # Multiclass semantic seg
 # DATA.TEST.ARGMAX_TO_OUTPUT = True
@@ -1374,12 +1388,12 @@ if all_test_info["Test4"]["enable"]:
     biapy_config['PROBLEM']['INSTANCE_SEG']['DATA_MW_TH_TYPE'] = "auto"
     biapy_config['PROBLEM']['INSTANCE_SEG']['DATA_CHANNEL_WEIGHTS'] = "(0.5, 1)"
 
-    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(instance_seg_2d_data_outpath, "data", "train", "x")
-    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(instance_seg_2d_data_outpath, "data", "train", "y")
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(instance_seg_2d_data_outpath, "data", "train", "raw")
+    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(instance_seg_2d_data_outpath, "data", "train", "label")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
     biapy_config['DATA']['TRAIN']['REPLICATE'] = 2
-    biapy_config['DATA']['TEST']['PATH'] = os.path.join(instance_seg_2d_data_outpath, "data", "test", "x")
-    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(instance_seg_2d_data_outpath, "data", "test", "y")
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(instance_seg_2d_data_outpath, "data", "test", "raw")
+    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(instance_seg_2d_data_outpath, "data", "test", "label")
     biapy_config['DATA']['TEST']['IN_MEMORY'] = False
     biapy_config['DATA']['TEST']['LOAD_GT'] = True
 
@@ -1413,8 +1427,10 @@ if all_test_info["Test4"]["enable"]:
 
     # Check
     results = []
+    correct = True
     res, last_lines = check_finished(all_test_info["Test4"], "Test 4")
     if not res:
+        correct = False
         print("Internal check not passed: seems that it didn't finish")
     results.append(res)
     int_checks = 1
@@ -1426,11 +1442,12 @@ if all_test_info["Test4"]["enable"]:
                 value_to_check=checks["nApparition"], metric=checks["metric"]))
         int_checks += 1
         if not results[-1]:
+            correct = False
             print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
 
     # Test result
     print_result(results, all_test_info["Test4"]["jobname"], int_checks)
-
+    test_results.append(correct)
 
 #~~~~~~~~~~~~
 # Test 5
@@ -1466,11 +1483,11 @@ if all_test_info["Test5"]["enable"]:
     biapy_config['PROBLEM']['INSTANCE_SEG']['DATA_CHECK_MW'] = True
     biapy_config['PROBLEM']['INSTANCE_SEG']['WATERSHED_BY_2D_SLICES'] = True
 
-    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(instance_seg_3d_data_outpath, "data", "train", "x")
-    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(instance_seg_3d_data_outpath, "data", "train", "y")
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(instance_seg_3d_data_outpath, "data", "train", "raw")
+    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(instance_seg_3d_data_outpath, "data", "train", "label")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
-    biapy_config['DATA']['TEST']['PATH'] = os.path.join(instance_seg_3d_data_outpath, "data", "test", "x")
-    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(instance_seg_3d_data_outpath, "data", "test", "y")
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(instance_seg_3d_data_outpath, "data", "test", "raw")
+    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(instance_seg_3d_data_outpath, "data", "test", "label")
     biapy_config['DATA']['TEST']['IN_MEMORY'] = False
     biapy_config['DATA']['TEST']['LOAD_GT'] = True
 
@@ -1496,8 +1513,10 @@ if all_test_info["Test5"]["enable"]:
 
     # Check
     results = []
+    correct = True
     res, last_lines = check_finished(all_test_info["Test5"], "Test 5")
     if not res:
+        correct = False
         print("Internal check not passed: seems that it didn't finish")
     results.append(res)
     int_checks = 1
@@ -1509,10 +1528,12 @@ if all_test_info["Test5"]["enable"]:
                 value_to_check=checks["nApparition"], metric=checks["metric"]))
         int_checks += 1
         if not results[-1]:
+            correct = False
             print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
 
     # Test result
     print_result(results, all_test_info["Test5"]["jobname"], int_checks)
+    test_results.append(correct)
 
 #~~~~~~~~~~~~
 # Test 6
@@ -1544,15 +1565,15 @@ if all_test_info["Test6"]["enable"]:
 
     biapy_config['DATA']['REFLECT_TO_COMPLETE_SHAPE'] = True
     biapy_config['DATA']['PATCH_SIZE'] = "(80, 80, 80, 1)"
-    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(instance_seg_cyst_data_outpath, "train_M2", "x")
-    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(instance_seg_cyst_data_outpath, "train_M2", "y")
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(instance_seg_cyst_data_outpath, "train_M2", "raw")
+    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(instance_seg_cyst_data_outpath, "train_M2", "label")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
-    biapy_config['DATA']['VAL']['PATH'] = os.path.join(instance_seg_cyst_data_outpath, "validation", "x")
-    biapy_config['DATA']['VAL']['GT_PATH'] = os.path.join(instance_seg_cyst_data_outpath, "validation", "y")
+    biapy_config['DATA']['VAL']['PATH'] = os.path.join(instance_seg_cyst_data_outpath, "validation", "raw")
+    biapy_config['DATA']['VAL']['GT_PATH'] = os.path.join(instance_seg_cyst_data_outpath, "validation", "label")
     biapy_config['DATA']['VAL']['IN_MEMORY'] = True
     biapy_config['DATA']['VAL']['FROM_TRAIN'] = False
-    biapy_config['DATA']['TEST']['PATH'] = os.path.join(instance_seg_cyst_data_outpath, "validation", "x")
-    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(instance_seg_cyst_data_outpath, "validation", "y")
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(instance_seg_cyst_data_outpath, "validation", "raw")
+    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(instance_seg_cyst_data_outpath, "validation", "label")
     biapy_config['DATA']['TEST']['IN_MEMORY'] = True
     biapy_config['DATA']['TEST']['LOAD_GT'] = True
 
@@ -1588,8 +1609,10 @@ if all_test_info["Test6"]["enable"]:
 
     # Check
     results = []
+    correct = True
     res, last_lines = check_finished(all_test_info["Test6"], "Test 6")
     if not res:
+        correct = False
         print("Internal check not passed: seems that it didn't finish")
     results.append(res)
     int_checks = 1
@@ -1601,10 +1624,12 @@ if all_test_info["Test6"]["enable"]:
                 value_to_check=checks["nApparition"], metric=checks["metric"]))
         int_checks += 1
         if not results[-1]:
+            correct = False
             print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
 
     # Test result
     print_result(results, all_test_info["Test6"]["jobname"], int_checks)
+    test_results.append(correct)
 
 #~~~~~~~~~~~~
 # Test 7
@@ -1635,11 +1660,11 @@ if all_test_info["Test7"]["enable"]:
     biapy_config['DATA']['NORMALIZATION']['PERC_UPPER'] = 99.8
     biapy_config['DATA']['NORMALIZATION']['TYPE'] = 'custom'
 
-    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(detection_2d_data_outpath, "data", "train", "x")
-    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(detection_2d_data_outpath, "data", "train", "y")
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(detection_2d_data_outpath, "data", "train", "raw")
+    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(detection_2d_data_outpath, "data", "train", "label")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
-    biapy_config['DATA']['TEST']['PATH'] = os.path.join(detection_2d_data_outpath, "data", "test", "x")
-    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(detection_2d_data_outpath, "data", "test", "y")
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(detection_2d_data_outpath, "data", "test", "raw")
+    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(detection_2d_data_outpath, "data", "test", "label")
     biapy_config['DATA']['TEST']['IN_MEMORY'] = False
     biapy_config['DATA']['TEST']['LOAD_GT'] = True
 
@@ -1654,13 +1679,13 @@ if all_test_info["Test7"]["enable"]:
     biapy_config['TEST']['FULL_IMG'] = False
     biapy_config['TEST']['DET_POINT_CREATION_FUNCTION'] = 'peak_local_max'
     biapy_config['TEST']['DET_PEAK_LOCAL_MAX_MIN_DISTANCE'] = 1
-    biapy_config['TEST']['DET_MIN_TH_TO_BE_PEAK'] = [0.7]
+    biapy_config['TEST']['DET_MIN_TH_TO_BE_PEAK'] = 0.7
 
     biapy_config['TEST']['POST_PROCESSING'] = {}
     biapy_config['TEST']['POST_PROCESSING']['REMOVE_CLOSE_POINTS'] = True
-    biapy_config['TEST']['POST_PROCESSING']['REMOVE_CLOSE_POINTS_RADIUS'] = [5]
+    biapy_config['TEST']['POST_PROCESSING']['REMOVE_CLOSE_POINTS_RADIUS'] = 5
     biapy_config['TEST']['POST_PROCESSING']['DET_WATERSHED'] = True
-    biapy_config['TEST']['POST_PROCESSING']['DET_WATERSHED_FIRST_DILATION'] = [[2,2]]
+    biapy_config['TEST']['POST_PROCESSING']['DET_WATERSHED_FIRST_DILATION'] = [2,2]
 
     biapy_config['TEST']['POST_PROCESSING']['MEASURE_PROPERTIES'] = {}
     biapy_config['TEST']['POST_PROCESSING']['MEASURE_PROPERTIES']['ENABLE'] = True
@@ -1681,8 +1706,10 @@ if all_test_info["Test7"]["enable"]:
 
     # Check
     results = []
+    correct = True
     res, last_lines = check_finished(all_test_info["Test7"], "Test 7")
     if not res:
+        correct = False
         print("Internal check not passed: seems that it didn't finish")
     results.append(res)
     int_checks = 1
@@ -1694,10 +1721,12 @@ if all_test_info["Test7"]["enable"]:
                 value_to_check=checks["nApparition"], metric=checks["metric"]))
         int_checks += 1
         if not results[-1]:
+            correct = False
             print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
 
     # Test result
     print_result(results, all_test_info["Test7"]["jobname"], int_checks)
+    test_results.append(correct)
 
 #~~~~~~~~~~~~
 # Test 8
@@ -1728,11 +1757,11 @@ if all_test_info["Test8"]["enable"]:
     biapy_config['DATA']['NORMALIZATION']['PERC_UPPER'] = 99.8
     biapy_config['DATA']['NORMALIZATION']['TYPE'] = 'custom'
 
-    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(detection_3d_data_outpath, "data", "train", "x")
-    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(detection_3d_data_outpath, "data", "train", "y")
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(detection_3d_data_outpath, "data", "train", "raw")
+    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(detection_3d_data_outpath, "data", "train", "label")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
-    biapy_config['DATA']['TEST']['PATH'] = os.path.join(detection_3d_data_outpath, "data", "test", "x")
-    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(detection_3d_data_outpath, "data", "test", "y")
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(detection_3d_data_outpath, "data", "test", "raw")
+    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(detection_3d_data_outpath, "data", "test", "label")
     biapy_config['DATA']['TEST']['IN_MEMORY'] = False
     biapy_config['DATA']['TEST']['LOAD_GT'] = True
 
@@ -1747,14 +1776,14 @@ if all_test_info["Test8"]["enable"]:
     biapy_config['TEST']['FULL_IMG'] = False
     biapy_config['TEST']['DET_POINT_CREATION_FUNCTION'] = 'blob_log'
     biapy_config['TEST']['DET_PEAK_LOCAL_MAX_MIN_DISTANCE'] = 1
-    biapy_config['TEST']['DET_MIN_TH_TO_BE_PEAK'] = [0.7]
-    biapy_config['TEST']['DET_TOLERANCE'] = [8]
+    biapy_config['TEST']['DET_MIN_TH_TO_BE_PEAK'] = 0.7
+    biapy_config['TEST']['DET_TOLERANCE'] = 8
 
     biapy_config['TEST']['POST_PROCESSING'] = {}
     biapy_config['TEST']['POST_PROCESSING']['REMOVE_CLOSE_POINTS'] = True
-    biapy_config['TEST']['POST_PROCESSING']['REMOVE_CLOSE_POINTS_RADIUS'] = [3]
+    biapy_config['TEST']['POST_PROCESSING']['REMOVE_CLOSE_POINTS_RADIUS'] = 3
     biapy_config['TEST']['POST_PROCESSING']['DET_WATERSHED'] = True
-    biapy_config['TEST']['POST_PROCESSING']['DET_WATERSHED_FIRST_DILATION'] = [[2,2,1]]
+    biapy_config['TEST']['POST_PROCESSING']['DET_WATERSHED_FIRST_DILATION'] = [2,2,1]
 
     biapy_config['TEST']['POST_PROCESSING']['MEASURE_PROPERTIES'] = {}
     biapy_config['TEST']['POST_PROCESSING']['MEASURE_PROPERTIES']['ENABLE'] = True
@@ -1775,8 +1804,10 @@ if all_test_info["Test8"]["enable"]:
 
     # Check
     results = []
+    correct = True
     res, last_lines = check_finished(all_test_info["Test8"], "Test 8")
     if not res:
+        correct = False
         print("Internal check not passed: seems that it didn't finish")
     results.append(res)
     int_checks = 1
@@ -1788,11 +1819,12 @@ if all_test_info["Test8"]["enable"]:
                 value_to_check=checks["nApparition"], metric=checks["metric"]))
         int_checks += 1
         if not results[-1]:
+            correct = False
             print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
 
     # Test result
     print_result(results, all_test_info["Test8"]["jobname"], int_checks)
-
+    test_results.append(correct)
 
 #~~~~~~~~~~~~
 # Test 11
@@ -1829,11 +1861,11 @@ if all_test_info["Test11"]["enable"]:
     biapy_config['DATA']['TRAIN']['FILTER_SAMPLES']['VALUES'] = [[1.0e-22]]
     biapy_config['DATA']['TRAIN']['FILTER_SAMPLES']['SIGNS'] = [["lt"]]
     biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(detection_3d_brainglobe_data_outpath, "data", "3D_ch2ch4_Zarr")
-    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(detection_3d_brainglobe_data_outpath, "data", "y")
+    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(detection_3d_brainglobe_data_outpath, "data", "label")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
     biapy_config['DATA']['VAL']['SPLIT_TRAIN'] = 0.1
     biapy_config['DATA']['TEST']['PATH'] = os.path.join(detection_3d_brainglobe_data_outpath, "data", "3D_ch2ch4_Zarr")
-    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(detection_3d_brainglobe_data_outpath, "data", "y")
+    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(detection_3d_brainglobe_data_outpath, "data", "label")
     biapy_config['DATA']['TEST']['IN_MEMORY'] = False
     biapy_config['DATA']['TEST']['LOAD_GT'] = True
     biapy_config['DATA']['TEST']['PADDING'] = "(0,18,18)"
@@ -1858,8 +1890,8 @@ if all_test_info["Test11"]["enable"]:
 
     biapy_config['TEST']['ENABLE'] = True
     biapy_config['TEST']['FULL_IMG'] = False
-    biapy_config['TEST']['DET_MIN_TH_TO_BE_PEAK'] = [0.2]
-    biapy_config['TEST']['DET_TOLERANCE'] = [8]
+    biapy_config['TEST']['DET_MIN_TH_TO_BE_PEAK'] = 0.2
+    biapy_config['TEST']['DET_TOLERANCE'] = 8
     biapy_config['TEST']['VERBOSE'] = True
 
     biapy_config['TEST']['BY_CHUNKS'] = {}
@@ -1873,7 +1905,7 @@ if all_test_info["Test11"]["enable"]:
 
     biapy_config['TEST']['POST_PROCESSING'] = {}
     biapy_config['TEST']['POST_PROCESSING']['REMOVE_CLOSE_POINTS'] = True
-    biapy_config['TEST']['POST_PROCESSING']['REMOVE_CLOSE_POINTS_RADIUS'] = [3]
+    biapy_config['TEST']['POST_PROCESSING']['REMOVE_CLOSE_POINTS_RADIUS'] = 3
 
     # Save file
     test_file = os.path.join(detection_folder, all_test_info["Test11"]["yaml"])
@@ -1886,8 +1918,10 @@ if all_test_info["Test11"]["enable"]:
 
     # Check
     results = []
+    correct = True
     res, last_lines = check_finished(all_test_info["Test11"], "Test 11")
     if not res:
+        correct = False
         print("Internal check not passed: seems that it didn't finish")
     results.append(res)
     int_checks = 1
@@ -1899,11 +1933,12 @@ if all_test_info["Test11"]["enable"]:
                 value_to_check=checks["nApparition"], metric=checks["metric"]))
         int_checks += 1
         if not results[-1]:
+            correct = False
             print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
 
     # Test result
     print_result(results, all_test_info["Test11"]["jobname"], int_checks)
-
+    test_results.append(correct)
 
 #~~~~~~~~~~~~
 # Test 9
@@ -1954,8 +1989,10 @@ if all_test_info["Test9"]["enable"]:
 
     # Check
     results = []
+    correct = True
     res, last_lines = check_finished(all_test_info["Test9"], "Test 9")
     if not res:
+        correct = False
         print("Internal check not passed: seems that it didn't finish")
     results.append(res)
     int_checks = 1
@@ -1967,10 +2004,12 @@ if all_test_info["Test9"]["enable"]:
                 value_to_check=checks["nApparition"], metric=checks["metric"]))
         int_checks += 1
         if not results[-1]:
+            correct = False
             print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
 
     # Test result
     print_result(results, all_test_info["Test9"]["jobname"], int_checks)
+    test_results.append(correct)
 
 #~~~~~~~~~~~~
 # Test 10
@@ -2021,8 +2060,10 @@ if all_test_info["Test10"]["enable"]:
 
     # Check
     results = []
+    correct = True
     res, last_lines = check_finished(all_test_info["Test10"], "Test 10")
     if not res:
+        correct = False
         print("Internal check not passed: seems that it didn't finish")
     results.append(res)
     int_checks = 1
@@ -2034,10 +2075,12 @@ if all_test_info["Test10"]["enable"]:
                 value_to_check=checks["nApparition"], metric=checks["metric"]))
         int_checks += 1
         if not results[-1]:
+            correct = False
             print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
 
     # Test result
     print_result(results, all_test_info["Test10"]["jobname"], int_checks)
+    test_results.append(correct)
 
 #~~~~~~~~~~~~
 # Test 12
@@ -2094,8 +2137,10 @@ if all_test_info["Test12"]["enable"]:
 
     # Check
     results = []
+    correct = True
     res, last_lines = check_finished(all_test_info["Test12"], "Test 12")
     if not res:
+        correct = False
         print("Internal check not passed: seems that it didn't finish")
     results.append(res)
     int_checks = 1
@@ -2107,10 +2152,12 @@ if all_test_info["Test12"]["enable"]:
                 value_to_check=checks["nApparition"], metric=checks["metric"]))
         int_checks += 1
         if not results[-1]:
+            correct = False
             print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
 
     # Test result
     print_result(results, all_test_info["Test12"]["jobname"], int_checks)
+    test_results.append(correct)
 
 #~~~~~~~~~~~~
 # Test 13
@@ -2170,8 +2217,10 @@ if all_test_info["Test13"]["enable"]:
 
     # Check
     results = []
+    correct = True
     res, last_lines = check_finished(all_test_info["Test13"], "Test 13")
     if not res:
+        correct = False
         print("Internal check not passed: seems that it didn't finish")
     results.append(res)
     int_checks = 1
@@ -2183,10 +2232,12 @@ if all_test_info["Test13"]["enable"]:
                 value_to_check=checks["nApparition"], metric=checks["metric"]))
         int_checks += 1
         if not results[-1]:
+            correct = False
             print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
 
     # Test result
     print_result(results, all_test_info["Test13"]["jobname"], int_checks)
+    test_results.append(correct)
 
 #~~~~~~~~~~~~
 # Test 14
@@ -2209,12 +2260,12 @@ if all_test_info["Test14"]["enable"]:
     biapy_config['DATA']['EXTRACT_RANDOM_PATCH'] = False
 
     biapy_config['DATA']['PATCH_SIZE'] = "(256,256,1)"
-    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(self_supervision_2d_data_outpath, "data", "train", "x")
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(self_supervision_2d_data_outpath, "data", "train", "raw")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
     biapy_config['DATA']['VAL']['CROSS_VAL'] = True
     biapy_config['DATA']['VAL']['CROSS_VAL_NFOLD'] = 5
     biapy_config['DATA']['VAL']['CROSS_VAL_FOLD'] = 1
-    biapy_config['DATA']['TEST']['PATH'] = os.path.join(self_supervision_2d_data_outpath, "data", "test", "x")
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(self_supervision_2d_data_outpath, "data", "test", "raw")
     biapy_config['DATA']['TEST']['IN_MEMORY'] = False
     biapy_config['DATA']['TEST']['USE_VAL_AS_TEST'] = True
     biapy_config['DATA']['TEST']['LOAD_GT'] = True
@@ -2240,8 +2291,10 @@ if all_test_info["Test14"]["enable"]:
 
     # Check
     results = []
+    correct = True
     res, last_lines = check_finished(all_test_info["Test14"], "Test 14")
     if not res:
+        correct = False
         print("Internal check not passed: seems that it didn't finish")
     results.append(res)
     int_checks = 1
@@ -2253,11 +2306,12 @@ if all_test_info["Test14"]["enable"]:
                 value_to_check=checks["nApparition"], metric=checks["metric"]))
         int_checks += 1
         if not results[-1]:
+            correct = False
             print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
 
     # Test result
     print_result(results, all_test_info["Test14"]["jobname"], int_checks)
-
+    test_results.append(correct)
 
 #~~~~~~~~~~~~
 # Test 15
@@ -2280,12 +2334,12 @@ if all_test_info["Test15"]["enable"]:
     biapy_config['PROBLEM']['SELF_SUPERVISED']['PRETEXT_TASK'] = 'masking'
 
     biapy_config['DATA']['PATCH_SIZE'] = "(128,128,1)"
-    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(self_supervision_2d_data_outpath, "data", "train", "x")
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(self_supervision_2d_data_outpath, "data", "train", "raw")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
     biapy_config['DATA']['VAL']['CROSS_VAL'] = True
     biapy_config['DATA']['VAL']['CROSS_VAL_NFOLD'] = 5
     biapy_config['DATA']['VAL']['CROSS_VAL_FOLD'] = 1
-    biapy_config['DATA']['TEST']['PATH'] = os.path.join(self_supervision_2d_data_outpath, "data", "test", "x")
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(self_supervision_2d_data_outpath, "data", "test", "raw")
     biapy_config['DATA']['TEST']['IN_MEMORY'] = False
     biapy_config['DATA']['TEST']['USE_VAL_AS_TEST'] = True
 
@@ -2310,8 +2364,10 @@ if all_test_info["Test15"]["enable"]:
 
     # Check
     results = []
+    correct = True
     res, last_lines = check_finished(all_test_info["Test15"], "Test 15")
     if not res:
+        correct = False
         print("Internal check not passed: seems that it didn't finish")
     results.append(res)
     int_checks = 1
@@ -2323,10 +2379,12 @@ if all_test_info["Test15"]["enable"]:
                 value_to_check=checks["nApparition"], metric=checks["metric"]))
         int_checks += 1
         if not results[-1]:
+            correct = False
             print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
 
     # Test result
     print_result(results, all_test_info["Test15"]["jobname"], int_checks)
+    test_results.append(correct)
 
 #~~~~~~~~~~~~
 # Test 16
@@ -2349,12 +2407,12 @@ if all_test_info["Test16"]["enable"]:
     biapy_config['PROBLEM']['SELF_SUPERVISED']['PRETEXT_TASK'] = 'masking'
 
     biapy_config['DATA']['PATCH_SIZE'] = "(128,128,1)"
-    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(self_supervision_2d_data_outpath, "data", "train", "x")
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(self_supervision_2d_data_outpath, "data", "train", "raw")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
     biapy_config['DATA']['VAL']['CROSS_VAL'] = True
     biapy_config['DATA']['VAL']['CROSS_VAL_NFOLD'] = 5
     biapy_config['DATA']['VAL']['CROSS_VAL_FOLD'] = 1
-    biapy_config['DATA']['TEST']['PATH'] = os.path.join(self_supervision_2d_data_outpath, "data", "test", "x")
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(self_supervision_2d_data_outpath, "data", "test", "raw")
     biapy_config['DATA']['TEST']['IN_MEMORY'] = False
     biapy_config['DATA']['TEST']['USE_VAL_AS_TEST'] = True
 
@@ -2379,8 +2437,10 @@ if all_test_info["Test16"]["enable"]:
 
     # Check
     results = []
+    correct = True
     res, last_lines = check_finished(all_test_info["Test16"], "Test 16")
     if not res:
+        correct = False
         print("Internal check not passed: seems that it didn't finish")
     results.append(res)
     int_checks = 1
@@ -2392,11 +2452,12 @@ if all_test_info["Test16"]["enable"]:
                 value_to_check=checks["nApparition"], metric=checks["metric"]))
         int_checks += 1
         if not results[-1]:
+            correct = False
             print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
 
     # Test result
     print_result(results, all_test_info["Test16"]["jobname"], int_checks)
-
+    test_results.append(correct)
 
 #~~~~~~~~~~~~
 # Test 17
@@ -2419,9 +2480,9 @@ if all_test_info["Test17"]["enable"]:
     biapy_config['PROBLEM']['SELF_SUPERVISED']['PRETEXT_TASK'] = 'crappify'
 
     biapy_config['DATA']['PATCH_SIZE'] = "(20,128,128,1)"
-    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(self_supervision_3d_data_outpath, "data", "train", "x")
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(self_supervision_3d_data_outpath, "data", "train", "raw")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
-    biapy_config['DATA']['TEST']['PATH'] = os.path.join(self_supervision_3d_data_outpath, "data", "test", "x")
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(self_supervision_3d_data_outpath, "data", "test", "raw")
     biapy_config['DATA']['TEST']['IN_MEMORY'] = False
 
     biapy_config['TRAIN']['ENABLE'] = True
@@ -2445,8 +2506,10 @@ if all_test_info["Test17"]["enable"]:
 
     # Check
     results = []
+    correct = True
     res, last_lines = check_finished(all_test_info["Test17"], "Test 17")
     if not res:
+        correct = False
         print("Internal check not passed: seems that it didn't finish")
     results.append(res)
     int_checks = 1
@@ -2458,11 +2521,12 @@ if all_test_info["Test17"]["enable"]:
                 value_to_check=checks["nApparition"], metric=checks["metric"]))
         int_checks += 1
         if not results[-1]:
+            correct = False
             print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
 
     # Test result
     print_result(results, all_test_info["Test17"]["jobname"], int_checks)
-
+    test_results.append(correct)
 
 #~~~~~~~~~~~~
 # Test 18
@@ -2485,9 +2549,9 @@ if all_test_info["Test18"]["enable"]:
     biapy_config['PROBLEM']['SELF_SUPERVISED']['PRETEXT_TASK'] = 'masking'
 
     biapy_config['DATA']['PATCH_SIZE'] = "(80,80,80,1)"
-    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(self_supervision_3d_data_outpath, "data", "train", "x")
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(self_supervision_3d_data_outpath, "data", "train", "raw")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
-    biapy_config['DATA']['TEST']['PATH'] = os.path.join(self_supervision_3d_data_outpath, "data", "test", "x")
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(self_supervision_3d_data_outpath, "data", "test", "raw")
     biapy_config['DATA']['TEST']['IN_MEMORY'] = False
     biapy_config['DATA']['TEST']['PADDING'] = "(0,0,0)"
 
@@ -2516,8 +2580,10 @@ if all_test_info["Test18"]["enable"]:
 
     # Check
     results = []
+    correct = True
     res, last_lines = check_finished(all_test_info["Test18"], "Test 18")
     if not res:
+        correct = False
         print("Internal check not passed: seems that it didn't finish")
     results.append(res)
     int_checks = 1
@@ -2529,11 +2595,12 @@ if all_test_info["Test18"]["enable"]:
                 value_to_check=checks["nApparition"], metric=checks["metric"]))
         int_checks += 1
         if not results[-1]:
+            correct = False
             print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
 
     # Test result
     print_result(results, all_test_info["Test18"]["jobname"], int_checks)
-
+    test_results.append(correct)
 
 #~~~~~~~~~~~~
 # Test 19
@@ -2556,9 +2623,9 @@ if all_test_info["Test19"]["enable"]:
     biapy_config['PROBLEM']['SELF_SUPERVISED']['PRETEXT_TASK'] = 'masking'
 
     biapy_config['DATA']['PATCH_SIZE'] = "(80,80,80,1)"
-    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(self_supervision_3d_data_outpath, "data", "train", "x")
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(self_supervision_3d_data_outpath, "data", "train", "raw")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
-    biapy_config['DATA']['TEST']['PATH'] = os.path.join(self_supervision_3d_data_outpath, "data", "test", "x")
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(self_supervision_3d_data_outpath, "data", "test", "raw")
     biapy_config['DATA']['TEST']['IN_MEMORY'] = False
     biapy_config['DATA']['TEST']['PADDING'] = "(0,0,0)"
 
@@ -2583,8 +2650,10 @@ if all_test_info["Test19"]["enable"]:
 
     # Check
     results = []
+    correct = True
     res, last_lines = check_finished(all_test_info["Test19"], "Test 19")
     if not res:
+        correct = False
         print("Internal check not passed: seems that it didn't finish")
     results.append(res)
     int_checks = 1
@@ -2596,11 +2665,12 @@ if all_test_info["Test19"]["enable"]:
                 value_to_check=checks["nApparition"], metric=checks["metric"]))
         int_checks += 1
         if not results[-1]:
+            correct = False
             print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
 
     # Test result
     print_result(results, all_test_info["Test19"]["jobname"], int_checks)
-
+    test_results.append(correct)
 
 #~~~~~~~~~~~~
 # Test 20
@@ -2661,8 +2731,10 @@ if all_test_info["Test20"]["enable"]:
 
     # Check
     results = []
+    correct = True
     res, last_lines = check_finished(all_test_info["Test20"], "Test 20")
     if not res:
+        correct = False
         print("Internal check not passed: seems that it didn't finish")
     results.append(res)
     int_checks = 1
@@ -2674,11 +2746,12 @@ if all_test_info["Test20"]["enable"]:
                 value_to_check=checks["nApparition"], metric=checks["metric"]))
         int_checks += 1
         if not results[-1]:
+            correct = False
             print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
 
     # Test result
     print_result(results, all_test_info["Test20"]["jobname"], int_checks)
-
+    test_results.append(correct)
 
 #~~~~~~~~~~~~
 # Test 21
@@ -2735,8 +2808,10 @@ if all_test_info["Test21"]["enable"]:
 
     # Check
     results = []
+    correct = True
     res, last_lines = check_finished(all_test_info["Test21"], "Test 21")
     if not res:
+        correct = False
         print("Internal check not passed: seems that it didn't finish")
     results.append(res)
     int_checks = 1
@@ -2748,11 +2823,12 @@ if all_test_info["Test21"]["enable"]:
                 value_to_check=checks["nApparition"], metric=checks["metric"]))
         int_checks += 1
         if not results[-1]:
+            correct = False
             print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
 
     # Test result
     print_result(results, all_test_info["Test21"]["jobname"], int_checks)
-
+    test_results.append(correct)
 
 #~~~~~~~~~~~~
 # Test 22
@@ -2813,8 +2889,10 @@ if all_test_info["Test22"]["enable"]:
 
     # Check
     results = []
+    correct = True
     res, last_lines = check_finished(all_test_info["Test22"], "Test 22")
     if not res:
+        correct = False
         print("Internal check not passed: seems that it didn't finish")
     results.append(res)
     int_checks = 1
@@ -2826,10 +2904,12 @@ if all_test_info["Test22"]["enable"]:
                 value_to_check=checks["nApparition"], metric=checks["metric"]))
         int_checks += 1
         if not results[-1]:
+            correct = False
             print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
 
     # Test result
     print_result(results, all_test_info["Test22"]["jobname"], int_checks)
+    test_results.append(correct)
 
 #~~~~~~~~~~~~
 # Test 23
@@ -2886,8 +2966,10 @@ if all_test_info["Test23"]["enable"]:
 
     # Check
     results = []
+    correct = True
     res, last_lines = check_finished(all_test_info["Test23"], "Test 23")
     if not res:
+        correct = False
         print("Internal check not passed: seems that it didn't finish")
     results.append(res)
     int_checks = 1
@@ -2899,11 +2981,12 @@ if all_test_info["Test23"]["enable"]:
                 value_to_check=checks["nApparition"], metric=checks["metric"]))
         int_checks += 1
         if not results[-1]:
+            correct = False
             print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
 
     # Test result
     print_result(results, all_test_info["Test23"]["jobname"], int_checks)
-
+    test_results.append(correct)
 
 #~~~~~~~~~~~~
 # Test 24
@@ -2925,13 +3008,13 @@ if all_test_info["Test24"]["enable"]:
 
     biapy_config['DATA']['REFLECT_TO_COMPLETE_SHAPE'] = False
     biapy_config['DATA']['PATCH_SIZE'] = "(256, 256, 1)"
-    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(image_to_image_2d_data_outpath, "data", "train", "x")
-    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(image_to_image_2d_data_outpath, "data", "train", "y")
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(image_to_image_2d_data_outpath, "data", "train", "raw")
+    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(image_to_image_2d_data_outpath, "data", "train", "label")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
     biapy_config['DATA']['VAL']['FROM_TRAIN'] = True
     biapy_config['DATA']['VAL']['CROSS_VAL'] = False
-    biapy_config['DATA']['TEST']['PATH'] = os.path.join(image_to_image_2d_data_outpath, "data", "test", "x")
-    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(image_to_image_2d_data_outpath, "data", "test", "y")
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(image_to_image_2d_data_outpath, "data", "test", "raw")
+    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(image_to_image_2d_data_outpath, "data", "test", "label")
     biapy_config['DATA']['TEST']['IN_MEMORY'] = True
     biapy_config['DATA']['TEST']['PADDING'] = "(40,40)"
 
@@ -2955,8 +3038,10 @@ if all_test_info["Test24"]["enable"]:
 
     # Check
     results = []
+    correct = True
     res, last_lines = check_finished(all_test_info["Test24"], "Test 24")
     if not res:
+        correct = False
         print("Internal check not passed: seems that it didn't finish")
     results.append(res)
     int_checks = 1
@@ -2968,11 +3053,12 @@ if all_test_info["Test24"]["enable"]:
                 value_to_check=checks["nApparition"], metric=checks["metric"]))
         int_checks += 1
         if not results[-1]:
+            correct = False
             print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
 
     # Test result
     print_result(results, all_test_info["Test24"]["jobname"], int_checks)
-
+    test_results.append(correct)
 
 #~~~~~~~~~~~~
 # Test 25
@@ -2995,14 +3081,14 @@ if all_test_info["Test25"]["enable"]:
     biapy_config['DATA']['EXTRACT_RANDOM_PATCH'] = True
     biapy_config['DATA']['REFLECT_TO_COMPLETE_SHAPE'] = True
     biapy_config['DATA']['PATCH_SIZE'] = "(1024, 1024, 1)"
-    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "x")
-    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "y")
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "raw")
+    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "label")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = False
     biapy_config['DATA']['VAL']['FROM_TRAIN'] = False
-    biapy_config['DATA']['VAL']['PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "x")
-    biapy_config['DATA']['VAL']['GT_PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "y")
-    biapy_config['DATA']['TEST']['PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "x")
-    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "y")
+    biapy_config['DATA']['VAL']['PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "raw")
+    biapy_config['DATA']['VAL']['GT_PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "label")
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "raw")
+    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "label")
     biapy_config['DATA']['TEST']['IN_MEMORY'] = False
     biapy_config['DATA']['TEST']['PADDING'] = "(200,200)"
 
@@ -3032,8 +3118,10 @@ if all_test_info["Test25"]["enable"]:
 
     # Check
     results = []
+    correct = True
     res, last_lines = check_finished(all_test_info["Test25"], "Test 25")
     if not res:
+        correct = False
         print("Internal check not passed: seems that it didn't finish")
     results.append(res)
     int_checks = 1
@@ -3045,11 +3133,12 @@ if all_test_info["Test25"]["enable"]:
                 value_to_check=checks["nApparition"], metric=checks["metric"]))
         int_checks += 1
         if not results[-1]:
+            correct = False
             print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
 
     # Test result
     print_result(results, all_test_info["Test25"]["jobname"], int_checks)
-
+    test_results.append(correct)
 
 #~~~~~~~~~~~~
 # Test 26
@@ -3087,16 +3176,16 @@ if all_test_info["Test26"]["enable"]:
     biapy_config['DATA']['TRAIN']['FILTER_SAMPLES']['VALUES'] = [[1.0e-22], [0.1]]
     biapy_config['DATA']['TRAIN']['FILTER_SAMPLES']['SIGNS'] = [["lt"], ["lt"]]
     biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(detection_3d_brainglobe_data_outpath, "data", "3D_ch2ch4_Zarr")
-    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(detection_3d_brainglobe_data_outpath, "data", "y")
+    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(detection_3d_brainglobe_data_outpath, "data", "label")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = False
     biapy_config['DATA']['VAL']['FROM_TRAIN'] = False
     biapy_config['DATA']['VAL']['PATH'] = os.path.join(detection_3d_brainglobe_data_outpath, "data", "3D_ch2ch4_Zarr")
-    biapy_config['DATA']['VAL']['GT_PATH'] = os.path.join(detection_3d_brainglobe_data_outpath, "data", "y")
+    biapy_config['DATA']['VAL']['GT_PATH'] = os.path.join(detection_3d_brainglobe_data_outpath, "data", "label")
     biapy_config['DATA']['VAL']['IN_MEMORY'] = False
     biapy_config['DATA']['VAL']['INPUT_IMG_AXES_ORDER'] = 'ZYXC'
     biapy_config['DATA']['VAL']['INPUT_MASK_AXES_ORDER'] = 'TZCYX'
     biapy_config['DATA']['TEST']['PATH'] = os.path.join(detection_3d_brainglobe_data_outpath, "data", "3D_ch2ch4_Zarr")
-    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(detection_3d_brainglobe_data_outpath, "data", "y")
+    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(detection_3d_brainglobe_data_outpath, "data", "label")
     biapy_config['DATA']['TEST']['IN_MEMORY'] = False
     biapy_config['DATA']['TEST']['LOAD_GT'] = True
     biapy_config['DATA']['TEST']['PADDING'] = "(0,18,18)"
@@ -3121,8 +3210,8 @@ if all_test_info["Test26"]["enable"]:
 
     biapy_config['TEST']['ENABLE'] = True
     biapy_config['TEST']['FULL_IMG'] = False
-    biapy_config['TEST']['DET_MIN_TH_TO_BE_PEAK'] = [0.2]
-    biapy_config['TEST']['DET_TOLERANCE'] = [8]
+    biapy_config['TEST']['DET_MIN_TH_TO_BE_PEAK'] = 0.2
+    biapy_config['TEST']['DET_TOLERANCE'] = 8
     biapy_config['TEST']['VERBOSE'] = True
 
     biapy_config['TEST']['BY_CHUNKS'] = {}
@@ -3136,7 +3225,7 @@ if all_test_info["Test26"]["enable"]:
 
     biapy_config['TEST']['POST_PROCESSING'] = {}
     biapy_config['TEST']['POST_PROCESSING']['REMOVE_CLOSE_POINTS'] = True
-    biapy_config['TEST']['POST_PROCESSING']['REMOVE_CLOSE_POINTS_RADIUS'] = [3]
+    biapy_config['TEST']['POST_PROCESSING']['REMOVE_CLOSE_POINTS_RADIUS'] = 3
 
     # Save file
     test_file = os.path.join(detection_folder, all_test_info["Test26"]["yaml"])
@@ -3149,8 +3238,10 @@ if all_test_info["Test26"]["enable"]:
 
     # Check
     results = []
+    correct = True
     res, last_lines = check_finished(all_test_info["Test26"], "Test 26")
     if not res:
+        correct = False
         print("Internal check not passed: seems that it didn't finish")
     results.append(res)
     int_checks = 1
@@ -3162,11 +3253,12 @@ if all_test_info["Test26"]["enable"]:
                 value_to_check=checks["nApparition"], metric=checks["metric"]))
         int_checks += 1
         if not results[-1]:
+            correct = False
             print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
 
     # Test result
     print_result(results, all_test_info["Test26"]["jobname"], int_checks)
-
+    test_results.append(correct)
 
 #~~~~~~~~~~~~
 # Test 27
@@ -3251,8 +3343,10 @@ if all_test_info["Test27"]["enable"]:
 
     # Check
     results = []
+    correct = True
     res, last_lines = check_finished(all_test_info["Test27"], "Test 27")
     if not res:
+        correct = False
         print("Internal check not passed: seems that it didn't finish")
     results.append(res)
     int_checks = 1
@@ -3264,11 +3358,12 @@ if all_test_info["Test27"]["enable"]:
                 value_to_check=checks["nApparition"], metric=checks["metric"]))
         int_checks += 1
         if not results[-1]:
+            correct = False
             print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
 
     # Test result
     print_result(results, all_test_info["Test27"]["jobname"], int_checks)
-
+    test_results.append(correct)
 
 #~~~~~~~~~~~~
 # Test 28
@@ -3289,13 +3384,13 @@ if all_test_info["Test28"]["enable"]:
             raise ValueError(exc)
 
     biapy_config['DATA']['PATCH_SIZE'] = "(6,128,128,1)"
-    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(image_to_image_3d_data_outpath, "data", "train", "x")
-    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(image_to_image_3d_data_outpath, "data", "train", "y")
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(image_to_image_3d_data_outpath, "data", "train", "raw")
+    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(image_to_image_3d_data_outpath, "data", "train", "label")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
     biapy_config['DATA']['VAL']['FROM_TRAIN'] = True
     biapy_config['DATA']['VAL']['SPLIT_TRAIN'] = 0.1
-    biapy_config['DATA']['TEST']['PATH'] = os.path.join(image_to_image_3d_data_outpath, "data", "test", "x")
-    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(image_to_image_3d_data_outpath, "data", "test", "y")
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(image_to_image_3d_data_outpath, "data", "test", "raw")
+    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(image_to_image_3d_data_outpath, "data", "test", "label")
     biapy_config['DATA']['TEST']['IN_MEMORY'] = False
     biapy_config['DATA']['TEST']['PADDING'] = "(0,24,24)"
 
@@ -3320,8 +3415,10 @@ if all_test_info["Test28"]["enable"]:
 
     # Check
     results = []
+    correct = True
     res, last_lines = check_finished(all_test_info["Test28"], "Test 28")
     if not res:
+        correct = False
         print("Internal check not passed: seems that it didn't finish")
     results.append(res)
     int_checks = 1
@@ -3333,11 +3430,12 @@ if all_test_info["Test28"]["enable"]:
                 value_to_check=checks["nApparition"], metric=checks["metric"]))
         int_checks += 1
         if not results[-1]:
+            correct = False
             print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
 
     # Test result
     print_result(results, all_test_info["Test28"]["jobname"], int_checks)
-
+    test_results.append(correct)
 
 #~~~~~~~~~~~~
 # Test 29
@@ -3393,8 +3491,10 @@ if all_test_info["Test29"]["enable"]:
 
     # Check
     results = []
+    correct = True
     res, last_lines = check_finished(all_test_info["Test29"], "Test 29")
     if not res:
+        correct = False
         print("Internal check not passed: seems that it didn't finish")
     results.append(res)
     int_checks = 1
@@ -3408,6 +3508,7 @@ if all_test_info["Test29"]["enable"]:
             results.append(check_bmz_file_created(last_lines, checks["pattern"], os.path.join(bmz_folder, checks['bmz_package_name'])))
         int_checks += 1
         if not results[-1]:
+            correct = False
             if checks["type"] in ["regular","DatasetMatching"]:
                 print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
             else:
@@ -3415,6 +3516,7 @@ if all_test_info["Test29"]["enable"]:
 
     # Test result
     print_result(results, all_test_info["Test29"]["jobname"], int_checks)
+    test_results.append(correct)
 
 #~~~~~~~~~~~~
 # Test 30
@@ -3438,8 +3540,8 @@ if all_test_info["Test30"]["enable"]:
     biapy_config['PROBLEM']['INSTANCE_SEG']['DATA_MW_TH_TYPE'] = "auto"
     biapy_config['PROBLEM']['INSTANCE_SEG']['DATA_CHANNEL_WEIGHTS'] = "(0.5, 1)"
 
-    biapy_config['DATA']['TEST']['PATH'] = os.path.join(instance_seg_mitoem_data_outpath, "toy", "train", "x")
-    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(instance_seg_mitoem_data_outpath, "toy", "train", "y")
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(instance_seg_mitoem_data_outpath, "toy", "train", "raw")
+    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(instance_seg_mitoem_data_outpath, "toy", "train", "label")
     biapy_config['DATA']['TEST']['IN_MEMORY'] = False
     biapy_config['DATA']['TEST']['LOAD_GT'] = True
 
@@ -3469,8 +3571,10 @@ if all_test_info["Test30"]["enable"]:
 
     # Check
     results = []
+    correct = True
     res, last_lines = check_finished(all_test_info["Test30"], "Test 30")
     if not res:
+        correct = False
         print("Internal check not passed: seems that it didn't finish")
     results.append(res)
     int_checks = 1
@@ -3485,6 +3589,7 @@ if all_test_info["Test30"]["enable"]:
 
         int_checks += 1
         if not results[-1]:
+            correct = False
             if checks["type"] in ["regular","DatasetMatching"]:
                 print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
             else:
@@ -3492,6 +3597,7 @@ if all_test_info["Test30"]["enable"]:
 
     # Test result
     print_result(results, all_test_info["Test30"]["jobname"], int_checks)
+    test_results.append(correct)
 
 #~~~~~~~~~~~~
 # Test 31
@@ -3515,11 +3621,11 @@ if all_test_info["Test31"]["enable"]:
     biapy_config['PROBLEM']['INSTANCE_SEG']['DATA_MW_TH_TYPE'] = "auto"
     biapy_config['PROBLEM']['INSTANCE_SEG']['DATA_CHANNEL_WEIGHTS'] = "(0.5, 1)"
 
-    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(instance_seg_2d_data_outpath, "data", "train", "x")
-    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(instance_seg_2d_data_outpath, "data", "train", "y")
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(instance_seg_2d_data_outpath, "data", "train", "raw")
+    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(instance_seg_2d_data_outpath, "data", "train", "label")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
-    biapy_config['DATA']['TEST']['PATH'] = os.path.join(instance_seg_2d_data_outpath, "data", "test", "x")
-    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(instance_seg_2d_data_outpath, "data", "test", "y")
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(instance_seg_2d_data_outpath, "data", "test", "raw")
+    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(instance_seg_2d_data_outpath, "data", "test", "label")
     biapy_config['DATA']['TEST']['IN_MEMORY'] = False
     biapy_config['DATA']['TEST']['LOAD_GT'] = True
 
@@ -3552,8 +3658,10 @@ if all_test_info["Test31"]["enable"]:
 
     # Check
     results = []
+    correct = True
     res, last_lines = check_finished(all_test_info["Test31"], "Test 31")
     if not res:
+        correct = False
         print("Internal check not passed: seems that it didn't finish")
     results.append(res)
     int_checks = 1
@@ -3568,6 +3676,7 @@ if all_test_info["Test31"]["enable"]:
 
         int_checks += 1
         if not results[-1]:
+            correct = False
             if checks["type"] in ["regular","DatasetMatching"]:
                 print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
             else:
@@ -3575,6 +3684,7 @@ if all_test_info["Test31"]["enable"]:
 
     # Test result
     print_result(results, all_test_info["Test31"]["jobname"], int_checks)
+    test_results.append(correct)
 
 #~~~~~~~~~~~~
 # Test 32
@@ -3598,11 +3708,11 @@ if all_test_info["Test32"]["enable"]:
     biapy_config['PROBLEM']['INSTANCE_SEG']['DATA_MW_TH_TYPE'] = "auto"
     biapy_config['PROBLEM']['INSTANCE_SEG']['DATA_CHANNEL_WEIGHTS'] = "(0.5, 1)"
 
-    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(instance_seg_mitoem_data_outpath, "toy", "train", "x")
-    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(instance_seg_mitoem_data_outpath, "toy", "train", "y")
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(instance_seg_mitoem_data_outpath, "toy", "train", "raw")
+    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(instance_seg_mitoem_data_outpath, "toy", "train", "label")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
-    biapy_config['DATA']['TEST']['PATH'] = os.path.join(instance_seg_mitoem_data_outpath, "toy", "train", "x")
-    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(instance_seg_mitoem_data_outpath, "toy", "train", "y")
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(instance_seg_mitoem_data_outpath, "toy", "train", "raw")
+    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(instance_seg_mitoem_data_outpath, "toy", "train", "label")
     biapy_config['DATA']['TEST']['IN_MEMORY'] = False
     biapy_config['DATA']['TEST']['LOAD_GT'] = True
 
@@ -3630,8 +3740,10 @@ if all_test_info["Test32"]["enable"]:
 
     # Check
     results = []
+    correct = True
     res, last_lines = check_finished(all_test_info["Test32"], "Test 32")
     if not res:
+        correct = False
         print("Internal check not passed: seems that it didn't finish")
     results.append(res)
     int_checks = 1
@@ -3646,6 +3758,7 @@ if all_test_info["Test32"]["enable"]:
 
         int_checks += 1
         if not results[-1]:
+            correct = False
             if checks["type"] in ["regular","DatasetMatching"]:
                 print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
             else:
@@ -3653,6 +3766,7 @@ if all_test_info["Test32"]["enable"]:
 
     # Test result
     print_result(results, all_test_info["Test32"]["jobname"], int_checks)
+    test_results.append(correct)
 
 #~~~~~~~~~~~~
 # Test 33
@@ -3672,14 +3786,14 @@ if all_test_info["Test33"]["enable"]:
         except yaml.YAMLError as exc:
             raise ValueError(exc)
 
-    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(semantic_2d_data_outpath, "data", "train", "x")
-    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(semantic_2d_data_outpath, "data", "train", "y")
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(semantic_2d_data_outpath, "data", "train", "raw")
+    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(semantic_2d_data_outpath, "data", "train", "label")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = False
     biapy_config['DATA']['VAL']['FROM_TRAIN'] = True
     biapy_config['DATA']['VAL']['SPLIT_TRAIN'] = 0.1
     biapy_config['DATA']['VAL']['IN_MEMORY'] = True
-    biapy_config['DATA']['TEST']['PATH'] = os.path.join(semantic_2d_data_outpath, "data", "test", "x")
-    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(semantic_2d_data_outpath, "data", "test", "y")
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(semantic_2d_data_outpath, "data", "test", "raw")
+    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(semantic_2d_data_outpath, "data", "test", "label")
     biapy_config['DATA']['TEST']['IN_MEMORY'] = True
     biapy_config['DATA']['TEST']['LOAD_GT'] = True
 
@@ -3714,8 +3828,10 @@ if all_test_info["Test33"]["enable"]:
 
     # Check
     results = []
+    correct = True
     res, last_lines = check_finished(all_test_info["Test33"], "Test 1")
     if not res:
+        correct = False
         print("Internal check not passed: seems that it didn't finish")
     results.append(res)
     int_checks = 1
@@ -3723,10 +3839,12 @@ if all_test_info["Test33"]["enable"]:
         results.append(check_value(last_lines, checks["pattern"], checks["value"], checks["gt"]))
         int_checks += 1
         if not results[-1]:
+            correct = False
             print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
 
     # Test result
     print_result(results, all_test_info["Test33"]["jobname"], int_checks)
+    test_results.append(correct)
 
 #~~~~~~~~~~~~
 # Test 34
@@ -3748,14 +3866,14 @@ if all_test_info["Test34"]["enable"]:
 
     biapy_config['DATA']['REFLECT_TO_COMPLETE_SHAPE'] = True
     biapy_config['DATA']['PATCH_SIZE'] = "(1024, 1024, 1)"
-    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "x")
-    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "y")
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "raw")
+    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "label")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
     biapy_config['DATA']['VAL']['FROM_TRAIN'] = False
-    biapy_config['DATA']['VAL']['PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "x")
-    biapy_config['DATA']['VAL']['GT_PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "y")
-    biapy_config['DATA']['TEST']['PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "x")
-    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "y")
+    biapy_config['DATA']['VAL']['PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "raw")
+    biapy_config['DATA']['VAL']['GT_PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "label")
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "raw")
+    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "label")
     biapy_config['DATA']['TEST']['IN_MEMORY'] = True
     biapy_config['DATA']['TEST']['PADDING'] = "(200,200)"
 
@@ -3785,8 +3903,10 @@ if all_test_info["Test34"]["enable"]:
 
     # Check
     results = []
+    correct = True
     res, last_lines = check_finished(all_test_info["Test34"], "Test 34")
     if not res:
+        correct = False
         print("Internal check not passed: seems that it didn't finish")
     results.append(res)
     int_checks = 1
@@ -3798,9 +3918,23 @@ if all_test_info["Test34"]["enable"]:
                 value_to_check=checks["nApparition"], metric=checks["metric"]))
         int_checks += 1
         if not results[-1]:
+            correct = False
             print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
 
     # Test result
     print_result(results, all_test_info["Test34"]["jobname"], int_checks)
+    test_results.append(correct)
 
 print("Finish tests!!")
+
+count_correct = 0
+for res in test_results:
+    if res:
+        count_correct += 1
+
+print(f"Test passed: ({count_correct}/{len(test_results)})")
+
+if count_correct == len(test_results):
+    sys.exit(0)
+else:
+    sys.exit(1)

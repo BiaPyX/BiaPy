@@ -32,7 +32,7 @@ from biapy.data.pre_processing import reduce_dtype
 from biapy.data.generators.augmentors import random_crop_pair
 from imageio import imwrite
 
-def build_model(cfg, device):
+def build_model(cfg, output_channels, device):
     """
     Build selected model
 
@@ -40,6 +40,9 @@ def build_model(cfg, device):
     ----------
     cfg : YACS CN object
         Configuration.
+
+    output_channels : int
+        Number of output channels. 
 
     device : Torch device
         Using device. Most commonly "cpu" or "cuda" for GPU, but also potentially "mps",
@@ -82,6 +85,7 @@ def build_model(cfg, device):
             k_size=cfg.MODEL.KERNEL_SIZE,
             upsample_layer=cfg.MODEL.UPSAMPLE_LAYER,
             z_down=cfg.MODEL.Z_DOWN,
+            output_channels=output_channels,
         )
         if modelname == "unet":
             callable_model = U_Net
@@ -126,13 +130,10 @@ def build_model(cfg, device):
                 stem_k_size = cfg.MODEL.CONVNEXT_STEM_K_SIZE,
             )
             callable_model = U_NeXt_V2
-        args["output_channels"] = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS if cfg.PROBLEM.TYPE == "INSTANCE_SEG" else None
+
         if cfg.PROBLEM.TYPE == "SUPER_RESOLUTION":
             args["upsampling_factor"] = cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING
             args["upsampling_position"] = cfg.MODEL.UNET_SR_UPSAMPLE_POSITION
-            args["n_classes"] = cfg.DATA.PATCH_SIZE[-1]
-        else:
-            args["n_classes"] = cfg.MODEL.N_CLASSES if cfg.PROBLEM.TYPE != "DENOISING" else cfg.DATA.PATCH_SIZE[-1]
         model = callable_model(**args)
     else:
         if modelname == "simple_cnn":
@@ -183,16 +184,12 @@ def build_model(cfg, device):
                 ndim=ndim,
                 alpha=1.67,
                 z_down=cfg.MODEL.Z_DOWN,
-            )
-            args["output_channels"] = (
-                cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS if cfg.PROBLEM.TYPE == "INSTANCE_SEG" else None
+                output_channels=output_channels,
             )
             if cfg.PROBLEM.TYPE == "SUPER_RESOLUTION":
                 args["upsampling_factor"] = cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING
                 args["upsampling_position"] = cfg.MODEL.UNET_SR_UPSAMPLE_POSITION
-                args["n_classes"] = cfg.DATA.PATCH_SIZE[-1]
-            else:
-                args["n_classes"] = cfg.MODEL.N_CLASSES if cfg.PROBLEM.TYPE != "DENOISING" else cfg.DATA.PATCH_SIZE[-1]
+
             model = MultiResUnet(**args)
             callable_model = MultiResUnet
         elif modelname == "unetr":
@@ -204,15 +201,12 @@ def build_model(cfg, device):
                 num_heads=cfg.MODEL.VIT_NUM_HEADS,
                 mlp_ratio=cfg.MODEL.VIT_MLP_RATIO,
                 num_filters=cfg.MODEL.UNETR_VIT_NUM_FILTERS,
-                n_classes=cfg.MODEL.N_CLASSES,
+                output_channels=output_channels,
                 decoder_activation=cfg.MODEL.UNETR_DEC_ACTIVATION,
                 ViT_hidd_mult=cfg.MODEL.UNETR_VIT_HIDD_MULT,
                 normalization=cfg.MODEL.NORMALIZATION,
                 dropout=cfg.MODEL.DROPOUT_VALUES[0],
                 k_size=cfg.MODEL.UNETR_DEC_KERNEL_SIZE,
-            )
-            args["output_channels"] = (
-                cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS if cfg.PROBLEM.TYPE == "INSTANCE_SEG" else None
             )
             model = UNETR(**args)
             callable_model = UNETR

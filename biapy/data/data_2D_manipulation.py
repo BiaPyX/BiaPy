@@ -580,7 +580,7 @@ def ensure_2d_shape(img, path=None):
     Returns
     -------
     img : Numpy 3D array
-        Image read. E.g. ``(y, x, num_classes)``.
+        Image read. E.g. ``(y, x, channels)``.
     """
     if img.ndim > 3:
         if path is not None:

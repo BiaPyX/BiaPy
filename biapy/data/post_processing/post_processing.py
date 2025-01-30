@@ -9,20 +9,16 @@ import matplotlib.transforms as transforms
 import fill_voids
 import edt
 from tqdm import tqdm
-from scipy import ndimage as ndi
 from scipy.signal import find_peaks
 from scipy.spatial import cKDTree
 from scipy.spatial.distance import cdist
-from scipy.ndimage.morphology import binary_erosion, binary_dilation
-from scipy.ndimage import rotate, grey_dilation
+from scipy.ndimage import rotate, grey_dilation, binary_erosion, binary_dilation, median_filter, center_of_mass
 from scipy.signal import savgol_filter
-from scipy.ndimage.filters import median_filter
-from scipy.ndimage.measurements import center_of_mass
 from skimage import morphology
 from skimage.morphology import disk, ball, remove_small_objects, dilation, erosion
-from skimage.segmentation import watershed, find_boundaries, relabel_sequential
+from skimage.segmentation import watershed, relabel_sequential
 from skimage.filters import rank, threshold_otsu
-from skimage.measure import label, regionprops_table, marching_cubes, mesh_surface_area
+from skimage.measure import label, regionprops_table
 from skimage.io import imread
 from skimage.exposure import equalize_adapthist
 import diplib as dip
@@ -1194,7 +1190,6 @@ def detection_watershed(
     coords,
     data_filename,
     first_dilation,
-    nclasses=1,
     ndim=3,
     donuts_classes=[-1],
     donuts_patch=[13, 120, 120],
@@ -1218,9 +1213,6 @@ def detection_watershed(
 
     first_dilation : str
         Each class seed's dilation before watershed.
-
-    nclasses : int, optional
-        Number of classes.
 
     ndim : int, optional
         Number of dimensions. E.g. for ``2D`` set it to ``2`` and for ``3D`` to ``3``.
@@ -1253,18 +1245,14 @@ def detection_watershed(
     # Dilate first the seeds if needed
     print("Dilating a bit the seeds . . .")
     seeds = seeds.squeeze()
-    dilated = False
     new_seeds = np.zeros(seeds.shape, dtype=seeds.dtype)
-    for i in range(nclasses):
-        if all(x != 0 for x in first_dilation[i]):
-            new_seeds += (binary_dilation(seeds == i + 1, structure=np.ones(first_dilation[i])) * (i + 1)).astype(
-                np.uint8
-            )
-            dilated = True
-        else:
-            new_seeds += ((seeds == i + 1) * (i + 1)).astype(np.uint8)
-    if dilated:
-        seeds = np.clip(new_seeds, 0, nclasses)
+    if all(x != 0 for x in first_dilation[i]):
+        new_seeds += (binary_dilation(seeds, structure=np.ones(first_dilation[i]))).astype(
+            np.uint8
+        )
+    else:
+        new_seeds += ((seeds == i + 1) * (i + 1)).astype(np.uint8)
+
     seeds = new_seeds
     del new_seeds
 

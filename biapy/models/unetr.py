@@ -44,8 +44,11 @@ class UNETR(nn.Module):
     norm_layer : Torch layer, optional
         Normalization layer to use in ViT backbone.
 
-    n_classes : int, optional
-        Number of classes to predict. Is the number of channels in the output tensor.
+    output_channels : list of int, optional
+        Output channels of the network. It must be a list of lenght ``1`` or ``2``. When two 
+        numbers are provided two task to be done is expected (multi-head). Possible scenarios are:
+            * instances + classification on instance segmentation
+            * points + classification in detection.
 
     decoder_activation : str, optional
         Activation function for the decoder.
@@ -64,10 +67,6 @@ class UNETR(nn.Module):
     k_size : int, optional
         Decoder convolutions' kernel size.
 
-    output_channels : str, optional
-        Channels to operate with. Possible values: ``BC``, ``BCD``, ``BP``, ``BCDv2``,
-        ``BDv2``, ``Dv2`` and ``BCM``.
-
     Returns
     -------
     model : Torch model
@@ -84,23 +83,27 @@ class UNETR(nn.Module):
         mlp_ratio=4.0,
         num_filters=16,
         norm_layer=nn.LayerNorm,
-        n_classes=1,
+        output_channels=[1],
         decoder_activation="relu",
         ViT_hidd_mult=3,
         normalization="bn",
         dropout=0.0,
         k_size=3,
-        output_channels="BC",
     ):
         super().__init__()
-
+        
+        if len(output_channels) == 0:
+            raise ValueError("'output_channels' needs to has at least one value")
+        if len(output_channels) != 1 and len(output_channels) != 2:
+            raise ValueError(f"'output_channels' must be a list of one or two values at max, not {output_channels}")
+        
         self.input_shape = input_shape
         self.embed_dim = embed_dim
         self.patch_size = patch_size
         self.ViT_hidd_mult = ViT_hidd_mult
         self.ndim = 3 if len(input_shape) == 4 else 2
-        self.n_classes = 1 if n_classes <= 2 else n_classes
-        self.multiclass = True if n_classes > 2 and output_channels is not None else False
+        self.output_channels = output_channels
+        self.multihead = len(output_channels) == 2
         self.k_size = k_size
 
         if self.ndim == 3:
@@ -244,26 +247,13 @@ class UNETR(nn.Module):
             )
         )
 
-        # Instance segmentation
-        if output_channels is not None:
-            if output_channels in ["C", "Dv2"]:
-                self.last_block = conv(num_filters, 1, kernel_size=1, padding="same")
-            elif output_channels in ["BC", "BP"]:
-                self.last_block = conv(num_filters, 2, kernel_size=1, padding="same")
-            elif output_channels in ["BDv2", "BD"]:
-                self.last_block = conv(num_filters, 2, kernel_size=1, padding="same")
-            elif output_channels in ["BCM", "BCD", "BCDv2"]:
-                self.last_block = conv(num_filters, 3, kernel_size=1, padding="same")
-            elif output_channels in ["A"]:
-                self.last_block = conv(num_filters, self.ndim, kernel_size=1, padding="same")
-        # Other
-        else:
-            self.last_block = conv(num_filters, self.n_classes, kernel_size=1, padding="same")
-
-        # Multi-head: instances + classification
+        self.last_block = conv(num_filters, output_channels[0], kernel_size=1, padding="same")
+        # Multi-head: 
+        #   Instance segmentation: instances + classification
+        #   Detection: points + classification 
         self.last_class_head = None
-        if self.multiclass:
-            self.last_class_head = conv(num_filters, self.n_classes, kernel_size=1, padding="same")
+        if self.multihead:
+            self.last_class_head = conv(num_filters, output_channels[1], kernel_size=1, padding="same")
 
         self.apply(self._init_weights)
 
@@ -306,11 +296,11 @@ class UNETR(nn.Module):
         # UNETR output
         x = self.two_yellow_layers[-1](x)
         class_head_out = torch.empty(())
-        if self.multiclass and self.last_class_head is not None:
+        if self.multihead and self.last_class_head is not None:
             class_head_out = self.last_class_head(x)
         x = self.last_block(x)
 
-        if self.multiclass:
+        if self.multihead:
             return [x, class_head_out]
         else:
             return x

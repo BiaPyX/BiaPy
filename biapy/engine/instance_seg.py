@@ -29,11 +29,12 @@ from biapy.utils.matching import matching, wrapper_matching_dataset_lazy
 from biapy.engine.metrics import (
     jaccard_index,
     instance_segmentation_loss,
-    instance_metrics,
+    multiple_metrics,
 )
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.utils.misc import is_main_process, is_dist_avail_and_initialized
 from biapy.data.data_manipulation import read_img_as_ndarray
+
 
 class Instance_Segmentation_Workflow(Base_Workflow):
     """
@@ -67,7 +68,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         self.stats["inst_stats_merge_patches"] = None
         self.stats["inst_stats_merge_patches_post"] = None
         # Multi-head: instances + classification
-        if self.cfg.MODEL.N_CLASSES > 2:
+        if self.multihead:
             self.all_class_stats_merge_patches = []
             self.all_class_stats_merge_patches_post = []
             self.stats["class_stats_merge_patches"] = None
@@ -79,7 +80,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         self.stats["inst_stats_as_3D_stack"] = None
         self.stats["inst_stats_as_3D_stack_post"] = None
         # Multi-head: instances + classification
-        if self.cfg.MODEL.N_CLASSES > 2:
+        if self.multihead:
             self.all_class_stats_as_3D_stack = []
             self.all_class_stats_as_3D_stack_post = []
             self.stats["class_stats_as_3D_stack"] = None
@@ -91,7 +92,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         self.stats["inst_stats"] = None
         self.stats["inst_stats_post"] = None
         # Multi-head: instances + classification
-        if self.cfg.MODEL.N_CLASSES > 2:
+        if self.multihead:
             self.all_class_stats = []
             self.all_class_stats_post = []
             self.stats["class_stats"] = None
@@ -107,35 +108,6 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
         # From now on, no modification of the cfg will be allowed
         self.cfg.freeze()
-
-        # Activations for each output channel:
-        # channel number : 'activation'
-        self.activations = {}
-        if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "Dv2":
-            self.activations = {"0": "Linear"}
-        elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in [
-            "A",
-            "C",
-            "BC",
-            "BP",
-            "BCM",
-        ]:
-            self.activations = {":": "CE_Sigmoid"}
-        elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BDv2", "BD"]:
-            self.activations = {"0": "CE_Sigmoid", "1": "Linear"}
-        elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BCD", "BCDv2"]:
-            self.activations = {"0": "CE_Sigmoid", "1": "CE_Sigmoid", "2": "Linear"}
-        self.model_output_channels = {
-            "type": "mask",
-            "channels": len(self.activations),
-        }
-
-        # Multi-head: instances + classification
-        if self.cfg.MODEL.N_CLASSES > 2:
-            self.activations = [self.activations, {"0": "Linear"}]
-            self.model_output_channels["channels"] += 1
-        else:
-            self.activations = [self.activations]
 
         # Workflow specific training variables
         self.mask_path = cfg.DATA.TRAIN.GT_PATH
@@ -157,6 +129,71 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         else:
             self.post_processing["instance_post"] = False
         self.instances_already_created = False
+
+
+    def define_activations_and_channels(self):
+        """
+        This function must define the following variables:
+
+        self.model_output_channels : List of functions
+            Metrics to be calculated during model's training.
+
+        self.multihead : List of str
+            Names of the metrics calculated during training.
+        
+        self.activations : List of dicts
+            Activations to be applied to the model output. Each dict will 
+            match an output channel of the model. If ':' is used the activation
+            will be applied to all channels at once. "Linear" and "CE_Sigmoid"
+            will not be applied. E.g. [{":": "Linear"}].
+        """
+        self.activations = {}
+        self.model_output_channels = {
+            "type": "mask",
+        }
+        if self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
+            if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "C":
+                self.activations = {"0": "Linear"}
+                self.model_output_channels["channels"] = 1
+            if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "Dv2":
+                self.activations = {"0": "Linear"}
+                self.model_output_channels["channels"] = 2
+            elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BC":
+                self.activations = {":": "CE_Sigmoid"}
+                self.model_output_channels["channels"] = 2
+            elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BP":
+                self.activations = {":": "CE_Sigmoid"}
+                self.model_output_channels["channels"] = 2
+            elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BCM":
+                self.activations = {":": "CE_Sigmoid"}
+                self.model_output_channels["channels"] = 3
+            elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "A":
+                self.activations = {":": "CE_Sigmoid"}
+                self.model_output_channels["channels"] = self.dims
+            elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BDv2", "BD"]:
+                self.activations = {"0": "CE_Sigmoid", "1": "Linear"}
+                self.model_output_channels["channels"] = 2
+            elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BCD", "BCDv2"]:
+                self.activations = {"0": "CE_Sigmoid", "1": "CE_Sigmoid", "2": "Linear"}
+                self.model_output_channels["channels"] = 3
+        else:  # synapses
+            if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BF":
+                self.activations = {"0": "CE_Sigmoid", "2": "Linear"}
+                self.model_output_channels["channels"] = 1 + self.dims
+
+        if len(self.activations) == 0:
+            raise ValueError("Something wrong happen during instance seg. channel configuration. Contact BiaPy team")
+
+        # Multi-head: instances + classification
+        if self.cfg.MODEL.N_CLASSES > 2:
+            self.activations = [self.activations, {"0": "Linear"}]
+            self.model_output_channels["channels"] = [self.model_output_channels["channels"], self.cfg.MODEL.N_CLASSES]
+            self.multihead = True
+        else:
+            self.activations = [self.activations]
+            self.model_output_channels["channels"] = [self.model_output_channels["channels"]]
+
+        super().define_activations_and_channels()
 
     def define_metrics(self):
         """
@@ -183,59 +220,74 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         self.train_metrics = []
         self.train_metric_names = []
         self.train_metric_best = []
-        if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BC":
-            self.train_metric_names = ["IoU (B channel)", "IoU (C channel)"]
-            self.train_metric_best += ["max", "max"]
-        if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "C":
-            self.train_metric_names = ["IoU (C channel)"]
-            self.train_metric_best += ["max"]
-        elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BCM"]:
-            self.train_metric_names = [
-                "IoU (B channel)",
-                "IoU (C channel)",
-                "IoU (M channel)",
-            ]
-            self.train_metric_best += ["max", "max", "max"]
-        elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["A"]:
-            if self.cfg.PROBLEM.NDIM == "3D":
+        if self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
+            if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BC":
+                self.train_metric_names = ["IoU (B channel)", "IoU (C channel)"]
+                self.train_metric_best += ["max", "max"]
+            elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "C":
+                self.train_metric_names = ["IoU (C channel)"]
+                self.train_metric_best += ["max"]
+            elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BCM"]:
                 self.train_metric_names = [
-                    "IoU (affinity Z)",
-                    "IoU (affinity Y)",
-                    "IoU (affinity X)",
+                    "IoU (B channel)",
+                    "IoU (C channel)",
+                    "IoU (M channel)",
                 ]
                 self.train_metric_best += ["max", "max", "max"]
-            else:
-                self.train_metric_names = ["IoU (affinity Y)", "IoU (affinity X)"]
+            elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["A"]:
+                if self.cfg.PROBLEM.NDIM == "3D":
+                    self.train_metric_names = [
+                        "IoU (affinity Z)",
+                        "IoU (affinity Y)",
+                        "IoU (affinity X)",
+                    ]
+                    self.train_metric_best += ["max", "max", "max"]
+                else:
+                    self.train_metric_names = ["IoU (affinity Y)", "IoU (affinity X)"]
+                    self.train_metric_best += ["max", "max"]
+            elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BP":
+                self.train_metric_names = ["IoU (B channel)", "IoU (P channel)"]
                 self.train_metric_best += ["max", "max"]
-        elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BP":
-            self.train_metric_names = ["IoU (B channel)", "IoU (P channel)"]
-            self.train_metric_best += ["max", "max"]
-        elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BD":
-            self.train_metric_names = ["IoU (B channel)", "L1 (distance channel)"]
-            self.train_metric_best += ["max", "min"]
-        elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BCD", "BCDv2"]:
-            self.train_metric_names = [
-                "IoU (B channel)",
-                "IoU (C channel)",
-                "L1 (distance channel)",
-            ]
-            self.train_metric_best += ["max", "max", "min"]
-        elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BDv2":
-            self.train_metric_names = ["IoU (B channel)", "L1 (distance channel)"]
-            self.train_metric_best += ["max", "min"]
-        elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "Dv2":
-            self.train_metric_names = ["L1 (distance channel)"]
-            self.train_metric_best += ["min"]
+            elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BD":
+                self.train_metric_names = ["IoU (B channel)", "L1 (distance channel)"]
+                self.train_metric_best += ["max", "min"]
+            elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BCD", "BCDv2"]:
+                self.train_metric_names = [
+                    "IoU (B channel)",
+                    "IoU (C channel)",
+                    "L1 (distance channel)",
+                ]
+                self.train_metric_best += ["max", "max", "min"]
+            elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BDv2":
+                self.train_metric_names = ["IoU (B channel)", "L1 (distance channel)"]
+                self.train_metric_best += ["max", "min"]
+            elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "Dv2":
+                self.train_metric_names = ["L1 (distance channel)"]
+                self.train_metric_best += ["min"]
 
-        # Multi-head: instances + classification
-        if self.cfg.MODEL.N_CLASSES > 2:
-            self.train_metric_names.append("IoU (classes)")
-            self.train_metric_best += ["max"]
-            # Used to calculate IoU with the classification results
-            self.jaccard_index_matching = jaccard_index(device=self.device, num_classes=self.cfg.MODEL.N_CLASSES)
+            # Multi-head: instances + classification
+            if self.multihead:
+                self.train_metric_names.append("IoU (classes)")
+                self.train_metric_best += ["max"]
+                # Used to calculate IoU with the classification results
+                self.jaccard_index_matching = jaccard_index(device=self.device, num_classes=self.cfg.MODEL.N_CLASSES)
+        else:  # synapses
+            if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BF":
+                self.train_metric_names = ["IoU (B channel)"]
+                self.train_metric_best = ["max"]
+                if self.cfg.PROBLEM.NDIM == "3D":
+                    self.train_metric_names += [
+                        "L1 (Z distance)",
+                        "L1 (Y distance)",
+                        "L1 (X distance)",
+                    ]
+                    self.train_metric_best += ["max", "max", "max"]
+                else:
+                    self.train_metric_names += ["L1 (Y distance)", "L1 (X distance)"]
+                    self.train_metric_best += ["max", "max"]
 
         self.train_metrics.append(
-            instance_metrics(
+            multiple_metrics(
                 num_classes=self.cfg.MODEL.N_CLASSES,
                 metric_names=self.train_metric_names,
                 device=self.device,
@@ -245,48 +297,60 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
         self.test_metrics = []
         self.test_metric_names = []
-        if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BC":
-            self.test_metric_names = ["IoU (B channel)", "IoU (C channel)"]
-        if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "C":
-            self.test_metric_names = ["IoU (C channel)"]
-        elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BCM"]:
-            self.test_metric_names = [
-                "IoU (B channel)",
-                "IoU (C channel)",
-                "IoU (M channel)",
-            ]
-        elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["A"]:
-            if self.cfg.PROBLEM.NDIM == "3D":
+        if self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
+            if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BC":
+                self.test_metric_names = ["IoU (B channel)", "IoU (C channel)"]
+            if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "C":
+                self.test_metric_names = ["IoU (C channel)"]
+            elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BCM"]:
                 self.test_metric_names = [
-                    "IoU (affinity Z)",
-                    "IoU (affinity Y)",
-                    "IoU (affinity X)",
+                    "IoU (B channel)",
+                    "IoU (C channel)",
+                    "IoU (M channel)",
                 ]
-            else:
-                self.test_metric_names = ["IoU (affinity Y)", "IoU (affinity X)"]
-        elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BP":
-            self.test_metric_names = ["IoU (B channel)", "IoU (P channel)"]
-        elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BD":
-            self.test_metric_names = ["IoU (B channel)", "L1 (distance channel)"]
-        elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BCD", "BCDv2"]:
-            self.test_metric_names = [
-                "IoU (B channel)",
-                "IoU (C channel)",
-                "L1 (distance channel)",
-            ]
-        elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BDv2":
-            self.test_metric_names = ["IoU (B channel)", "L1 (distance channel)"]
-        elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "Dv2":
-            self.test_metric_names = ["L1 (distance channel)"]
+            elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["A"]:
+                if self.cfg.PROBLEM.NDIM == "3D":
+                    self.test_metric_names = [
+                        "IoU (affinity Z)",
+                        "IoU (affinity Y)",
+                        "IoU (affinity X)",
+                    ]
+                else:
+                    self.test_metric_names = ["IoU (affinity Y)", "IoU (affinity X)"]
+            elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BP":
+                self.test_metric_names = ["IoU (B channel)", "IoU (P channel)"]
+            elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BD":
+                self.test_metric_names = ["IoU (B channel)", "L1 (distance channel)"]
+            elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in ["BCD", "BCDv2"]:
+                self.test_metric_names = [
+                    "IoU (B channel)",
+                    "IoU (C channel)",
+                    "L1 (distance channel)",
+                ]
+            elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BDv2":
+                self.test_metric_names = ["IoU (B channel)", "L1 (distance channel)"]
+            elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "Dv2":
+                self.test_metric_names = ["L1 (distance channel)"]
+        else:  # synapses
+            if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BF":
+                self.test_metric_names = ["IoU (B channel)"]
+                if self.cfg.PROBLEM.NDIM == "3D":
+                    self.test_metric_names += [
+                        "L1 (Z distance)",
+                        "L1 (Y distance)",
+                        "L1 (X distance)",
+                    ]
+                else:
+                    self.test_metric_names += ["L1 (Y distance)", "L1 (X distance)"]
 
         # Multi-head: instances + classification
-        if self.cfg.MODEL.N_CLASSES > 2:
+        if self.multihead:
             self.test_metric_names.append("IoU (classes)")
             # Used to calculate IoU with the classification results
             self.jaccard_index_matching = jaccard_index(device="cpu", num_classes=self.cfg.MODEL.N_CLASSES)
 
         self.test_metrics.append(
-            instance_metrics(
+            multiple_metrics(
                 num_classes=self.cfg.MODEL.N_CLASSES,
                 metric_names=self.test_metric_names,
                 device=self.device,
@@ -300,6 +364,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             self.cfg.PROBLEM.INSTANCE_SEG.DISTANCE_CHANNEL_MASK,
             self.cfg.MODEL.N_CLASSES,
             class_rebalance=self.cfg.LOSS.CLASS_REBALANCE,
+            instance_type=self.cfg.PROBLEM.INSTANCE_SEG.TYPE,
         )
 
         super().define_metrics()
@@ -375,7 +440,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         #############################
         if not self.instances_already_created:
             # Multi-head: instances + classification
-            if self.cfg.MODEL.N_CLASSES > 2:
+            if self.multihead:
                 class_channel = np.expand_dims(pred[..., -1], -1)
                 pred = pred[..., :-1]
 
@@ -395,14 +460,14 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 fore_erosion_radius=self.cfg.PROBLEM.INSTANCE_SEG.FORE_EROSION_RADIUS,
                 fore_dilation_radius=self.cfg.PROBLEM.INSTANCE_SEG.FORE_DILATION_RADIUS,
                 rmv_close_points=self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS,
-                remove_close_points_radius=self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS[0],
+                remove_close_points_radius=self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS,
                 resolution=resolution,
                 save_dir=check_wa,
                 watershed_by_2d_slices=self.cfg.PROBLEM.INSTANCE_SEG.WATERSHED_BY_2D_SLICES,
             )
 
             # Multi-head: instances + classification
-            if self.cfg.MODEL.N_CLASSES > 2:
+            if self.multihead:
                 print("Adapting class channel . . .")
                 labels = np.unique(w_pred)[1:]
                 new_class_channel = np.zeros(w_pred.shape, dtype=w_pred.dtype)
@@ -493,7 +558,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     _Y = read_img_as_ndarray(test_file, is_3d=self.cfg.PROBLEM.NDIM == "3D").squeeze()
 
             # Multi-head: instances + classification
-            if self.cfg.MODEL.N_CLASSES > 2:
+            if self.multihead:
                 # Channel check
                 error_shape = None
                 if self.cfg.PROBLEM.NDIM == "2D" and _Y.ndim != 3:
@@ -748,7 +813,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 w_pred = w_pred[0]
 
             # Multi-head: instances + classification
-            if self.cfg.MODEL.N_CLASSES > 2:
+            if self.multihead:
                 class_channel = np.where(w_pred > 0, class_channel, 0)  # Adapt changes to post-processed w_pred
                 save_tif(
                     np.expand_dims(
@@ -775,7 +840,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
             if self.cfg.TEST.MATCHING_STATS and (self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST):
                 # Multi-head: instances + classification
-                if self.cfg.MODEL.N_CLASSES > 2:
+                if self.multihead:
                     # Measure class IoU
                     class_iou = self.jaccard_index_matching(
                         torch.as_tensor(class_channel.squeeze().astype(np.int32)),
@@ -880,6 +945,63 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
         return results, results_post_proc, results_class, results_class_post_proc
 
+    def synapse_seg_process(self, pred, filenames, out_dir, out_dir_post_proc, resolution):
+        """
+        Synapse segmentation workflow engine for test/inference. Process model's prediction to prepare
+        synapse segmentation output and calculate metrics.
+
+        Parameters
+        ----------
+        pred : 4D/5D Torch tensor
+            Model predictions. E.g. ``(z, y, x, channels)`` for both 2D and 3D.
+
+        filenames : List of str
+            Predicted image's filenames.
+
+        out_dir : path
+            Output directory to save the instances.
+
+        out_dir_post_proc : path
+            Output directory to save the post-processed instances.
+        """
+        assert pred.ndim == 4, f"Prediction doesn't have 4 dim: {pred.shape}"
+
+        #############################
+        ### INSTANCE SEGMENTATION ###
+        #############################
+        if not self.instances_already_created:
+            save_tif(
+                np.expand_dims(pred, 0),
+                out_dir,
+                filenames,
+                verbose=self.cfg.TEST.VERBOSE,
+            )
+
+        # Create the synapses by fusing the channels
+
+        
+        ###################
+        # Post-processing #
+        ###################
+        if self.cfg.TEST.POST_PROCESSING.CLEAR_BORDER:
+            print("Clearing borders . . .")
+            if self.cfg.PROBLEM.NDIM == "2D":
+                pred = pred[0]
+            pred = clear_border(pred)
+            if self.cfg.PROBLEM.NDIM == "2D":
+                pred = np.expand_dims(pred, 0)
+
+        if self.post_processing["instance_post"]:
+            if self.cfg.PROBLEM.NDIM == "2D":
+                pred = pred[0]
+
+            save_tif(
+                np.expand_dims(np.expand_dims(pred, -1), 0),
+                out_dir_post_proc,
+                filenames,
+                verbose=self.cfg.TEST.VERBOSE,
+            )
+
     def process_test_sample(self):
         """
         Function to process a sample in the inference phase.
@@ -888,26 +1010,22 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             self.instances_already_created = False
             super().process_test_sample()
         else:
-            # Skip processing image 
-            if "discard" in self.current_sample["X"] and self.current_sample["X"]["discard"]: 
+            # Skip processing image
+            if "discard" in self.current_sample["X"] and self.current_sample["X"]["discard"]:
                 return True
-            
+
             # Save BMZ input/output if the user wants to export the model to BMZ later
             if self.cfg.MODEL.BMZ.EXPORT.ENABLE and "test_output" not in self.bmz_config:
                 # Generate prediction and save test_output
                 self.prepare_bmz_sample("test_input", self.current_sample["X"])
                 p = self.model(torch.from_numpy(self.bmz_config["test_input"]).to(self.device))
                 self.prepare_bmz_sample(
-                    "test_output", 
-                    self.apply_model_activations(
-                        p.clone()
-                    ).cpu().detach().numpy().astype(np.float32)
+                    "test_output", self.apply_model_activations(p.clone()).cpu().detach().numpy().astype(np.float32)
                 )
 
                 # Save test_input
                 self.bmz_config["test_input"] = undo_sample_normalization(
-                    self.current_sample["X"], 
-                    self.current_sample["X_norm"]
+                    self.current_sample["X"], self.current_sample["X_norm"]
                 ).astype(np.float32)
                 self.prepare_bmz_sample("test_input", self.bmz_config["test_input"])
 
@@ -920,11 +1038,11 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             with torch.cuda.amp.autocast():
                 pred = self.model_call_func(self.current_sample["X"])
             del self.current_sample["X"]
-            
-            # In Torchvision the output is a collection of bboxes so there is nothing else to do here 
+
+            # In Torchvision the output is a collection of bboxes so there is nothing else to do here
             if self.cfg.MODEL.SOURCE == "torchvision":
                 return
-            
+
             if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE:
                 reflected_orig_shape = (1,) + self.current_sample["reflected_orig_shape"]
                 if reflected_orig_shape != pred.shape:
@@ -961,21 +1079,30 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     if len(self.cfg.DATA.TEST.RESOLUTION) == 2
                     else self.cfg.DATA.TEST.RESOLUTION[1:]
                 )
-                r, r_post, rcls, rcls_post = self.instance_seg_process(
-                    pred,
-                    [self.current_sample["filename"]],
-                    self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
-                    self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,
-                    resolution,
-                )
-                if r is not None:
-                    self.all_matching_stats_merge_patches.append(r)
-                if r_post is not None:
-                    self.all_matching_stats_merge_patches_post.append(r_post)
-                if rcls is not None:
-                    self.all_class_stats_merge_patches.append(rcls)
-                if rcls_post is not None:
-                    self.all_class_stats_merge_patches_post.append(rcls_post)
+                if self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
+                    r, r_post, rcls, rcls_post = self.instance_seg_process(
+                        pred,
+                        [self.current_sample["filename"]],
+                        self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
+                        self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,
+                        resolution,
+                    )
+                    if r is not None:
+                        self.all_matching_stats_merge_patches.append(r)
+                    if r_post is not None:
+                        self.all_matching_stats_merge_patches_post.append(r_post)
+                    if rcls is not None:
+                        self.all_class_stats_merge_patches.append(rcls)
+                    if rcls_post is not None:
+                        self.all_class_stats_merge_patches_post.append(rcls_post)
+                else:  # synapses
+                    self.synapse_seg_process(
+                        pred,
+                        [self.current_sample["filename"]],
+                        self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
+                        self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,
+                        resolution,
+                    )
         else:
             raise NotImplementedError
 
@@ -1010,21 +1137,30 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     if len(self.cfg.DATA.TEST.RESOLUTION) == 2
                     else self.cfg.DATA.TEST.RESOLUTION[1:]
                 )
-                r, r_post, rcls, rcls_post = self.instance_seg_process(
-                    pred,
-                    [self.current_sample["filename"]],
-                    self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_INSTANCES,
-                    self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_POST_PROCESSING,
-                    resolution,
-                )
-                if r is not None:
-                    self.all_matching_stats.append(r)
-                if r_post is not None:
-                    self.all_matching_stats_post.append(r_post)
-                if rcls is not None:
-                    self.all_class_stats.append(rcls)
-                if rcls_post is not None:
-                    self.all_class_stats_post.append(rcls_post)
+                if self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
+                    r, r_post, rcls, rcls_post = self.instance_seg_process(
+                        pred,
+                        [self.current_sample["filename"]],
+                        self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_INSTANCES,
+                        self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_POST_PROCESSING,
+                        resolution,
+                    )
+                    if r is not None:
+                        self.all_matching_stats.append(r)
+                    if r_post is not None:
+                        self.all_matching_stats_post.append(r_post)
+                    if rcls is not None:
+                        self.all_class_stats.append(rcls)
+                    if rcls_post is not None:
+                        self.all_class_stats_post.append(rcls_post)
+                else:  # synapses
+                    self.synapse_seg_process(
+                        pred,
+                        [self.current_sample["filename"]],
+                        self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_INSTANCES,
+                        self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_POST_PROCESSING,
+                        resolution,
+                    )
         else:
             raise NotImplementedError
 
@@ -1042,21 +1178,30 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 if len(self.cfg.DATA.TEST.RESOLUTION) == 3
                 else (self.cfg.DATA.TEST.RESOLUTION[0],) + self.cfg.DATA.TEST.RESOLUTION
             )
-            r, r_post, rcls, rcls_post = self.instance_seg_process(
-                self.all_pred,
-                ["3D_stack_instances.tif"],
-                self.cfg.PATHS.RESULT_DIR.AS_3D_STACK,
-                self.cfg.PATHS.RESULT_DIR.AS_3D_STACK_POST_PROCESSING,
-                resolution,
-            )
-            if r is not None:
-                self.all_matching_stats_as_3D_stack.append(r)
-            if r_post is not None:
-                self.all_matching_stats_as_3D_stack_post.append(r_post)
-            if rcls is not None:
-                self.all_class_stats_as_3D_stack.append(rcls)
-            if rcls_post is not None:
-                self.all_class_stats_as_3D_stack_post.append(rcls_post)
+            if self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
+                r, r_post, rcls, rcls_post = self.instance_seg_process(
+                    self.all_pred,
+                    ["3D_stack_instances.tif"],
+                    self.cfg.PATHS.RESULT_DIR.AS_3D_STACK,
+                    self.cfg.PATHS.RESULT_DIR.AS_3D_STACK_POST_PROCESSING,
+                    resolution,
+                )
+                if r is not None:
+                    self.all_matching_stats_as_3D_stack.append(r)
+                if r_post is not None:
+                    self.all_matching_stats_as_3D_stack_post.append(r_post)
+                if rcls is not None:
+                    self.all_class_stats_as_3D_stack.append(rcls)
+                if rcls_post is not None:
+                    self.all_class_stats_as_3D_stack_post.append(rcls_post)
+            else:  # synapses
+                self.synapse_seg_process(
+                    self.all_pred,
+                    ["3D_stack_instances.tif"],
+                    self.cfg.PATHS.RESULT_DIR.AS_3D_STACK,
+                    self.cfg.PATHS.RESULT_DIR.AS_3D_STACK_POST_PROCESSING,
+                    resolution,
+                )
 
     def normalize_stats(self, image_counter):
         """
@@ -1109,7 +1254,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         )
 
                 # Multi-head: instances + classification
-                if self.cfg.MODEL.N_CLASSES > 2:
+                if self.multihead:
                     # Merge patches
                     if len(self.all_class_stats_merge_patches) > 0:
                         self.stats["class_stats_merge_patches"] = np.mean(self.all_class_stats_merge_patches)
@@ -1177,7 +1322,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                             print(f"      {self.stats['inst_stats_post'][i]}")
 
                 # Multi-head: instances + classification
-                if self.cfg.MODEL.N_CLASSES > 2:
+                if self.multihead:
                     # Merge patches
                     if self.stats["class_stats_merge_patches"] is not None:
                         print(f"      Merge patches classification IoU: {self.stats['class_stats_merge_patches']}")
@@ -1211,15 +1356,24 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         They will be saved in a separate folder in the root path of the ground truth.
         """
         original_test_path, original_test_mask_path = None, None
-        train_channel_dir = self.cfg.DATA.TRAIN.INSTANCE_CHANNELS_DIR
-        train_channel_mask_dir = self.cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR
-        val_channel_dir = self.cfg.DATA.VAL.INSTANCE_CHANNELS_DIR
-        val_channel_mask_dir = self.cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR
-        test_channel_dir = self.cfg.DATA.TEST.INSTANCE_CHANNELS_DIR
-        test_channel_mask_dir = self.cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR
-        test_instance_mask_dir = self.cfg.DATA.TEST.GT_PATH
-        opts = []
+        if not self.cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA:
+            train_channel_dir = self.cfg.DATA.TRAIN.INSTANCE_CHANNELS_DIR
+            train_channel_mask_dir = self.cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR
+            val_channel_dir = self.cfg.DATA.VAL.INSTANCE_CHANNELS_DIR
+            val_channel_mask_dir = self.cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR
+            test_channel_dir = self.cfg.DATA.TEST.INSTANCE_CHANNELS_DIR
+            test_channel_mask_dir = self.cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR
+            test_instance_mask_dir = self.cfg.DATA.TEST.GT_PATH
+        else:
+            train_channel_dir = self.cfg.DATA.TRAIN.PATH
+            train_channel_mask_dir = self.cfg.DATA.TRAIN.INSTANCE_CHANNELS_DIR
+            val_channel_dir = self.cfg.DATA.VAL.PATH
+            val_channel_mask_dir = self.cfg.DATA.VAL.INSTANCE_CHANNELS_DIR
+            test_channel_dir = self.cfg.DATA.TEST.PATH
+            test_channel_mask_dir = self.cfg.DATA.TEST.INSTANCE_CHANNELS_DIR
+            test_instance_mask_dir = self.cfg.DATA.TEST.PATH
 
+        opts = []
         print("###########################")
         print("#  PREPARE INSTANCE DATA  #")
         print("###########################")
@@ -1232,8 +1386,6 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             do_mask = True
             if self.cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA:
                 do_mask = not os.path.isdir(self.cfg.DATA.TRAIN.INSTANCE_CHANNELS_DIR)
-                train_channel_dir = self.cfg.DATA.TRAIN.PATH
-                train_channel_mask_dir = self.cfg.DATA.TRAIN.INSTANCE_CHANNELS_DIR
 
             if do_mask and is_main_process():
                 print(
@@ -1271,8 +1423,6 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             do_mask = True
             if self.cfg.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA:
                 do_mask = not os.path.isdir(self.cfg.DATA.VAL.INSTANCE_CHANNELS_DIR)
-                val_channel_dir = self.cfg.DATA.VAL.PATH
-                val_channel_mask_dir = self.cfg.DATA.VAL.INSTANCE_CHANNELS_DIR
 
             if do_mask and is_main_process():
                 print(
@@ -1310,9 +1460,6 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             do_mask = True
             if self.cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA:
                 do_mask = not os.path.isdir(self.cfg.DATA.TEST.INSTANCE_CHANNELS_DIR)
-                test_channel_dir = self.cfg.DATA.TEST.PATH
-                test_channel_mask_dir = self.cfg.DATA.TEST.INSTANCE_CHANNELS_DIR
-                test_instance_mask_dir = self.cfg.DATA.TEST.PATH
 
             if do_mask and is_main_process():
                 print(

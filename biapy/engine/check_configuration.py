@@ -33,9 +33,21 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
     # Adjust channel weights
     if cfg.PROBLEM.TYPE == "INSTANCE_SEG":
-        channels_provided = len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS.replace("Dv2", "D"))
-        if cfg.MODEL.N_CLASSES > 2:
-            channels_provided += 1
+        assert cfg.PROBLEM.INSTANCE_SEG.TYPE in [
+            "regular",
+            "synapses",
+        ], "'PROBLEM.INSTANCE_SEG.TYPE' needs to be one between ['regular', 'synapses']"
+
+        if cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
+            channels_provided = len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS.replace("Dv2", "D"))
+            if cfg.MODEL.N_CLASSES > 2:
+                channels_provided += 1
+        else:  # synapses
+            if cfg.PROBLEM.NDIM != "3D":
+                raise ValueError("'PROBLEM.INSTANCE_SEG.TYPE' == 'synapse' can only be used for 3D data")
+            
+            channels_provided = 1 + dim_count  # BF
+
         if len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS) != channels_provided:
             if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS == (1, 1):
                 opts.extend(
@@ -162,19 +174,18 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     if cfg.TEST.POST_PROCESSING.DET_WATERSHED and cfg.PROBLEM.TYPE != "DETECTION":
         raise ValueError("'TEST.POST_PROCESSING.DET_WATERSHED' can only be set when 'PROBLEM.TYPE' is 'DETECTION'")
     if cfg.TEST.POST_PROCESSING.DET_WATERSHED:
-        for x in cfg.TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION:
-            if not isinstance(x, list):
-                raise ValueError("'TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION' needs to be a list of list")
-            if any(y == -1 for y in x):
-                raise ValueError(
-                    "Please set 'TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION' when using 'TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION'"
+        if not isinstance(cfg.TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION, list):
+            raise ValueError("'TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION' needs to be a list")
+        if any(y == -1 for y in cfg.TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION):
+            raise ValueError(
+                "Please set 'TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION' when using 'TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION'"
+            )
+        if len(cfg.TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION) != dim_count:
+            raise ValueError(
+                "'TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION' needs to be of dimension {} for {} problem".format(
+                    dim_count, cfg.PROBLEM.NDIM
                 )
-            if len(x) != dim_count:
-                raise ValueError(
-                    "'TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION' needs to be of dimension {} for {} problem".format(
-                        dim_count, cfg.PROBLEM.NDIM
-                    )
-                )
+            )
         if cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES != [-1]:
             if len(cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES) > cfg.MODEL.N_CLASSES:
                 raise ValueError(
@@ -483,6 +494,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "W_CE_DICE",
         ], "LOSS.TYPE not in ['CE', 'DICE', 'W_CE_DICE']"
 
+        if cfg.MODEL.N_CLASSES > 2 and loss != "CE":
+            raise ValueError("'MODEL.N_CLASSES' can only be done with 'CE' loss")
         if loss == "W_CE_DICE":
             assert (
                 len(cfg.LOSS.WEIGHTS) == 2
@@ -569,26 +582,40 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     "'MODEL.SOURCE' must be one between ['deeplabv3_mobilenet_v3_large', 'deeplabv3_resnet101', "
                     "'deeplabv3_resnet50', 'fcn_resnet101', 'fcn_resnet50', 'lraspp_mobilenet_v3_large' ]"
                 )
-            if cfg.MODEL.TORCHVISION_MODEL_NAME in ["deeplabv3_mobilenet_v3_large"] and cfg.DATA.PATCH_SIZE[-1] != 3:
+            if cfg.MODEL.TORCHVISION_MODEL_NAME in [
+                "deeplabv3_mobilenet_v3_large", 
+                "deeplabv3_resnet101", 
+                "deeplabv3_resnet50",
+                "fcn_resnet101",
+                "fcn_resnet50",
+                "lraspp_mobilenet_v3_large",
+                ] and cfg.DATA.PATCH_SIZE[-1] != 3:
                 raise ValueError(
                     "'deeplabv3_mobilenet_v3_large' model expects 3 channel data (RGB). "
                     f"'DATA.PATCH_SIZE' set is {cfg.DATA.PATCH_SIZE}"
                 )
-
     #### Instance segmentation ####
     if cfg.PROBLEM.TYPE == "INSTANCE_SEG":
-        assert cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in [
-            "A",
-            "C",
-            "BC",
-            "BCM",
-            "BCD",
-            "BCDv2",
-            "Dv2",
-            "BDv2",
-            "BP",
-            "BD",
-        ], "PROBLEM.INSTANCE_SEG.DATA_CHANNELS not in ['A','C', 'BC', 'BCM', 'BCD', 'BCDv2', 'Dv2', 'BDv2', 'BP', 'BD']"
+        if cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
+            assert cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in [
+                "A",
+                "C",
+                "BC",
+                "BCM",
+                "BCD",
+                "BCDv2",
+                "Dv2",
+                "BDv2",
+                "BP",
+                "BD",
+            ], "PROBLEM.INSTANCE_SEG.DATA_CHANNELS not in ['A','C', 'BC', 'BCM', 'BCD', 'BCDv2', 'Dv2', 'BDv2', 'BP', 'BD']"
+        else:  # synapses
+            assert cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in [
+                "BF",
+            ], "PROBLEM.INSTANCE_SEG.DATA_CHANNELS not in ['BF']"
+            if not cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA or cfg.PROBLEM.NDIM != "3D":
+                raise ValueError("Synapse detection is only available for 3D Zarr/H5 data. Please set 'DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA' "
+                                 "and PROBLEM.NDIM == '3D'")
         if len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS) != channels_provided:
             raise ValueError(
                 "'PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS' needs to be of the same length as the channels selected in 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'. "
@@ -637,11 +664,15 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             raise ValueError(
                 "'PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE' must be one between ['thick', 'inner', 'outer', 'subpixel', 'dense']"
             )
-        if cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE == "dense" and cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BCM":
-            raise ValueError(
-                "'PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE' can not be 'dense' when 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS' is 'BCM'"
-                " as it does not have sense"
-            )
+        if cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
+            if (
+                cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE == "dense"
+                and cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BCM"
+            ):
+                raise ValueError(
+                    "'PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE' can not be 'dense' when 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS' is 'BCM'"
+                    " as it does not have sense"
+                )
         if cfg.PROBLEM.INSTANCE_SEG.WATERSHED_BY_2D_SLICES:
             if cfg.PROBLEM.NDIM == "2D" and not cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
                 raise ValueError(
@@ -682,7 +713,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         opts.extend(["PROBLEM.DETECTION.CENTRAL_POINT_DILATION", cpd])
 
         if cfg.TEST.POST_PROCESSING.DET_WATERSHED:
-            if any(len(x) != dim_count for x in cfg.TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION):
+            if len(cfg.TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION) != dim_count:
                 raise ValueError(
                     "Each structure object defined in 'TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION' "
                     "needs to be of {} dimension".format(dim_count)
@@ -1010,26 +1041,81 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         if cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA:
             if cfg.PROBLEM.NDIM != "3D":
                 raise ValueError("'DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA' to True is only implemented in 3D workflows")
-            if (
-                cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH == ""
-                or cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_GT_PATH == ""
-            ):
+            if cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH == "":
                 raise ValueError(
-                    "'DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH' and 'DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_GT_PATH' "
-                    "need to be set when 'DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA' is used."
+                    "'DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH' needs to be set when 'DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA' is used."
                 )
+            if cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
+                if cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_GT_PATH == "":
+                    raise ValueError(
+                        "'DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_GT_PATH' needs to be set when 'DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA' is used."
+                    )
+            else:  # synapses
+                if cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_ID_PATH == "":
+                    raise ValueError(
+                        "'DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_ID_PATH' needs to be set when 'DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA' is used "
+                        "and PROBLEM.INSTANCE_SEG.TYPE == 'synapses'"
+                    )
+                # if cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_TYPES_PATH == "":
+                #     raise ValueError(
+                #         "'DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_TYPES_PATH' needs to be set when 'DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA' is used "
+                #         "and PROBLEM.INSTANCE_SEG.TYPE == 'synapses'"
+                #     )
+                if cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_PARTNERS_PATH == "":
+                    raise ValueError(
+                        "'DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_PARTNERS_PATH' needs to be set when 'DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA' is used "
+                        "and PROBLEM.INSTANCE_SEG.TYPE == 'synapses'"
+                    )
+                if cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_LOCATIONS_PATH == "":
+                    raise ValueError(
+                        "'DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_LOCATIONS_PATH' needs to be set when 'DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA' is used "
+                        "and PROBLEM.INSTANCE_SEG.TYPE == 'synapses'"
+                    )
+                if cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_RESOLUTION_PATH == "":
+                    raise ValueError(
+                        "'DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_RESOLUTION_PATH' needs to be set when 'DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA' is used "
+                        "and PROBLEM.INSTANCE_SEG.TYPE == 'synapses'"
+                    )
+
         if cfg.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA:
             if cfg.PROBLEM.NDIM != "3D":
                 raise ValueError("'DATA.VAL.INPUT_ZARR_MULTIPLE_DATA' to True is only implemented in 3D workflows")
-            if (
-                cfg.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH == ""
-                or cfg.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_GT_PATH == ""
-            ):
+            if cfg.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH == "":
                 raise ValueError(
-                    "'DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH' and 'DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_GT_PATH' "
-                    "need to be set when 'DATA.VAL.INPUT_ZARR_MULTIPLE_DATA' is used."
+                    "'DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH'needs to be set when 'DATA.VAL.INPUT_ZARR_MULTIPLE_DATA' is used."
                 )
-
+            if cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
+                if cfg.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_GT_PATH == "":
+                    raise ValueError(
+                        "'DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_GT_PATH' needs to be set when 'DATA.VAL.INPUT_ZARR_MULTIPLE_DATA' is used."
+                    )
+            else:  # synapses
+                if cfg.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_ID_PATH == "":
+                    raise ValueError(
+                        "'DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_ID_PATH' needs to be set when 'DATA.VAL.INPUT_ZARR_MULTIPLE_DATA' is used "
+                        "and PROBLEM.INSTANCE_SEG.TYPE == 'synapses'"
+                    )
+                # if cfg.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_TYPES_PATH == "":
+                #     raise ValueError(
+                #         "'DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_TYPES_PATH' needs to be set when 'DATA.VAL.INPUT_ZARR_MULTIPLE_DATA' is used "
+                #         "and PROBLEM.INSTANCE_SEG.TYPE == 'synapses'"
+                #     )
+                if cfg.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_PARTNERS_PATH == "":
+                    raise ValueError(
+                        "'DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_PARTNERS_PATH' needs to be set when 'DATA.VAL.INPUT_ZARR_MULTIPLE_DATA' is used "
+                        "and PROBLEM.INSTANCE_SEG.TYPE == 'synapses'"
+                    )
+                if cfg.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_LOCATIONS_PATH == "":
+                    raise ValueError(
+                        "'DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_LOCATIONS_PATH' needs to be set when 'DATA.VAL.INPUT_ZARR_MULTIPLE_DATA' is used "
+                        "and PROBLEM.INSTANCE_SEG.TYPE == 'synapses'"
+                    )
+                if cfg.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_RESOLUTION_PATH == "":
+                    raise ValueError(
+                        "'DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_RESOLUTION_PATH' needs to be set when 'DATA.VAL.INPUT_ZARR_MULTIPLE_DATA' is used "
+                        "and PROBLEM.INSTANCE_SEG.TYPE == 'synapses'"
+                    )
+                
     if cfg.TEST.ENABLE and not cfg.DATA.TEST.USE_VAL_AS_TEST and check_data_paths:
         if not os.path.exists(cfg.DATA.TEST.PATH):
             raise ValueError("Test data not found: {}".format(cfg.DATA.TEST.PATH))
@@ -1063,11 +1149,40 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     "'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH' needs to be set when "
                     "'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA' is used."
                 )
-            if cfg.DATA.TEST.LOAD_GT and cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_GT_PATH == "":
-                raise ValueError(
-                    "'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_GT_PATH' needs to be set when "
-                    "'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA' is used."
-                )
+            if cfg.DATA.TEST.LOAD_GT:
+                if cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
+                    if cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_GT_PATH == "":
+                        raise ValueError(
+                            "'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_GT_PATH' needs to be set when "
+                            "'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA' is used."
+                        )
+                else:  # synapses
+                    if cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_ID_PATH == "":
+                        raise ValueError(
+                            "'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_ID_PATH' needs to be set when 'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA' is used "
+                            "and PROBLEM.INSTANCE_SEG.TYPE == 'synapses'"
+                        )
+                    # if cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_TYPES_PATH == "":
+                    #     raise ValueError(
+                    #         "'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_TYPES_PATH' needs to be set when 'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA' is used "
+                    #         "and PROBLEM.INSTANCE_SEG.TYPE == 'synapses'"
+                    #     )
+                    if cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_PARTNERS_PATH == "":
+                        raise ValueError(
+                            "'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_PARTNERS_PATH' needs to be set when 'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA' is used "
+                            "and PROBLEM.INSTANCE_SEG.TYPE == 'synapses'"
+                        )
+                    if cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_LOCATIONS_PATH == "":
+                        raise ValueError(
+                            "'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_LOCATIONS_PATH' needs to be set when 'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA' is used "
+                            "and PROBLEM.INSTANCE_SEG.TYPE == 'synapses'"
+                        )
+                    if cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_RESOLUTION_PATH == "":
+                        raise ValueError(
+                            "'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_RESOLUTION_PATH' needs to be set when 'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA' is used "
+                            "and PROBLEM.INSTANCE_SEG.TYPE == 'synapses'"
+                        )
+                    
 
     if cfg.TRAIN.ENABLE:
         if cfg.DATA.EXTRACT_RANDOM_PATCH and cfg.DATA.PROBABILITY_MAP:
@@ -1376,7 +1491,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "resunet_se",
                 "unetr",
                 "multiresunet",
-                "unext_v1","unext_v2",
+                "unext_v1",
+                "unext_v2",
             ]:
                 raise ValueError(
                     "Architectures available for {} are: ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'resunet_se', 'unetr', 'multiresunet', 'unext_v1', 'unext_v2']".format(
@@ -1660,7 +1776,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                                 raise ValueError(
                                     f"'MODEL.BMZ.EXPORT.CITE' malformed. Cite dictionary available keys are: ['text', 'doi', 'url']. Provided {k}. E.g. {'text': 'Gizmo et al.', 'doi': '10.1002/xyzacab123'}"
                                 )
-                            
+
             if cfg.MODEL.BMZ.EXPORT.DOCUMENTATION == "":
                 print(
                     "WARNING: 'MODEL.BMZ.EXPORT.DOCUMENTATION' not set so the model documentation will point to BiaPy doc: https://github.com/BiaPyX/BiaPy/blob/master/README.md"
@@ -1672,12 +1788,12 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     )
                 )
             elif not str(cfg.MODEL.BMZ.EXPORT.DOCUMENTATION).endswith(".md"):
-                raise ValueError(
-                    "'MODEL.BMZ.EXPORT.DOCUMENTATION' file suffix must be .md"
-                )
+                raise ValueError("'MODEL.BMZ.EXPORT.DOCUMENTATION' file suffix must be .md")
         else:
             if cfg.MODEL.SOURCE != "bmz":
-                raise ValueError("Seems that you are not loading a BioImage Model Zoo model. Thus, you can not activate 'MODEL.BMZ.EXPORT.REUSE_BMZ_CONFIG' as there will be nothing to reuse.")
+                raise ValueError(
+                    "Seems that you are not loading a BioImage Model Zoo model. Thus, you can not activate 'MODEL.BMZ.EXPORT.REUSE_BMZ_CONFIG' as there will be nothing to reuse."
+                )
 
     #### Post-processing ####
     if cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS:
@@ -1688,7 +1804,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "'DATA.TEST.RESOLUTION' must match in length to {}, which is the number of "
                 "dimensions".format(dim_count)
             )
-        if cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS[0] == -1:
+        if cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS == -1:
             raise ValueError(
                 "'TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS' needs to be set when 'TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS' is True"
             )
@@ -1723,13 +1839,16 @@ def compare_configurations_without_model(actual_cfg, old_cfg, header_message="",
     # BiaPy version less than 3.5.5
     if old_cfg_version is None:
         if isinstance(old_cfg["PROBLEM"]["SUPER_RESOLUTION"]["UPSCALING"], int):
-            old_cfg["PROBLEM"]["SUPER_RESOLUTION"]["UPSCALING"] = (old_cfg["PROBLEM"]["SUPER_RESOLUTION"]["UPSCALING"],) * dim_count
+            old_cfg["PROBLEM"]["SUPER_RESOLUTION"]["UPSCALING"] = (
+                old_cfg["PROBLEM"]["SUPER_RESOLUTION"]["UPSCALING"],
+            ) * dim_count
 
     for var_to_compare in vars_to_compare:
         if get_attribute_recursive(actual_cfg, var_to_compare) != get_attribute_recursive(old_cfg, var_to_compare):
             raise ValueError(
-                header_message + f"The '{var_to_compare}' value of the compared configurations does not match: " +\
-                f"{get_attribute_recursive(actual_cfg, var_to_compare)} (current configuration) vs {get_attribute_recursive(old_cfg, var_to_compare)} (from loaded configuration)"
+                header_message
+                + f"The '{var_to_compare}' value of the compared configurations does not match: "
+                + f"{get_attribute_recursive(actual_cfg, var_to_compare)} (current configuration) vs {get_attribute_recursive(old_cfg, var_to_compare)} (from loaded configuration)"
             )
 
     print("Configurations seem to be compatible. Continuing . . .")
@@ -1749,24 +1868,24 @@ def convert_old_model_cfg_to_current_version(old_cfg):
             del old_cfg["TEST"]["EVALUATE"]
         if "POST_PROCESSING" in old_cfg["TEST"]:
             if "YZ_FILTERING" in old_cfg["TEST"]["POST_PROCESSING"]:
-                del old_cfg["TEST"]["POST_PROCESSING"]["YZ_FILTERING"] 
+                del old_cfg["TEST"]["POST_PROCESSING"]["YZ_FILTERING"]
                 try:
-                    fsize = old_cfg["TEST"]["POST_PROCESSING"]["YZ_FILTERING_SIZE"] 
-                except: 
+                    fsize = old_cfg["TEST"]["POST_PROCESSING"]["YZ_FILTERING_SIZE"]
+                except:
                     fsize = 5
                 del old_cfg["TEST"]["POST_PROCESSING"]["YZ_FILTERING_SIZE"]
-                
+
                 old_cfg["TEST"]["POST_PROCESSING"]["MEDIAN_FILTER"] = True
                 old_cfg["TEST"]["POST_PROCESSING"]["MEDIAN_FILTER_AXIS"] = ["yz"]
                 old_cfg["TEST"]["POST_PROCESSING"]["MEDIAN_FILTER_SIZE"] = [fsize]
             if "Z_FILTERING" in old_cfg["TEST"]["POST_PROCESSING"]:
-                del old_cfg["TEST"]["POST_PROCESSING"]["Z_FILTERING"] 
+                del old_cfg["TEST"]["POST_PROCESSING"]["Z_FILTERING"]
                 try:
-                    fsize = old_cfg["TEST"]["POST_PROCESSING"]["Z_FILTERING_SIZE"] 
-                except: 
+                    fsize = old_cfg["TEST"]["POST_PROCESSING"]["Z_FILTERING_SIZE"]
+                except:
                     fsize = 5
                 del old_cfg["TEST"]["POST_PROCESSING"]["Z_FILTERING_SIZE"]
-                
+
                 old_cfg["TEST"]["POST_PROCESSING"]["MEDIAN_FILTER"] = True
                 old_cfg["TEST"]["POST_PROCESSING"]["MEDIAN_FILTER_AXIS"] = ["z"]
                 old_cfg["TEST"]["POST_PROCESSING"]["MEDIAN_FILTER_SIZE"] = [fsize]
@@ -1774,7 +1893,9 @@ def convert_old_model_cfg_to_current_version(old_cfg):
             if "MEASURE_PROPERTIES" in old_cfg["TEST"]["POST_PROCESSING"]:
                 if "REMOVE_BY_PROPERTIES" in old_cfg["TEST"]["POST_PROCESSING"]["MEASURE_PROPERTIES"]:
                     if "SIGN" in old_cfg["TEST"]["POST_PROCESSING"]["MEASURE_PROPERTIES"]["REMOVE_BY_PROPERTIES"]:
-                        old_cfg["TEST"]["POST_PROCESSING"]["MEASURE_PROPERTIES"]["REMOVE_BY_PROPERTIES"]["SIGNS"] = old_cfg["TEST"]["POST_PROCESSING"]["MEASURE_PROPERTIES"]["REMOVE_BY_PROPERTIES"]["SIGN"]
+                        old_cfg["TEST"]["POST_PROCESSING"]["MEASURE_PROPERTIES"]["REMOVE_BY_PROPERTIES"]["SIGNS"] = (
+                            old_cfg["TEST"]["POST_PROCESSING"]["MEASURE_PROPERTIES"]["REMOVE_BY_PROPERTIES"]["SIGN"]
+                        )
                         del old_cfg["TEST"]["POST_PROCESSING"]["MEASURE_PROPERTIES"]["REMOVE_BY_PROPERTIES"]["SIGN"]
 
             if "REMOVE_BY_PROPERTIES" in old_cfg["TEST"]["POST_PROCESSING"]:
@@ -1782,13 +1903,19 @@ def convert_old_model_cfg_to_current_version(old_cfg):
                 old_cfg["TEST"]["POST_PROCESSING"]["MEASURE_PROPERTIES"]["REMOVE_BY_PROPERTIES"] = {}
                 old_cfg["TEST"]["POST_PROCESSING"]["MEASURE_PROPERTIES"]["ENABLE"] = True
                 old_cfg["TEST"]["POST_PROCESSING"]["MEASURE_PROPERTIES"]["REMOVE_BY_PROPERTIES"]["ENABLE"] = True
-                old_cfg["TEST"]["POST_PROCESSING"]["MEASURE_PROPERTIES"]["REMOVE_BY_PROPERTIES"]["PROPS"] = old_cfg["TEST"]["POST_PROCESSING"]["REMOVE_BY_PROPERTIES"]
+                old_cfg["TEST"]["POST_PROCESSING"]["MEASURE_PROPERTIES"]["REMOVE_BY_PROPERTIES"]["PROPS"] = old_cfg[
+                    "TEST"
+                ]["POST_PROCESSING"]["REMOVE_BY_PROPERTIES"]
                 del old_cfg["TEST"]["POST_PROCESSING"]["REMOVE_BY_PROPERTIES"]
                 if "REMOVE_BY_PROPERTIES_VALUES" in old_cfg["TEST"]["POST_PROCESSING"]:
-                    old_cfg["TEST"]["POST_PROCESSING"]["MEASURE_PROPERTIES"]["REMOVE_BY_PROPERTIES"]["VALUES"] = old_cfg["TEST"]["POST_PROCESSING"]["REMOVE_BY_PROPERTIES_VALUES"]
+                    old_cfg["TEST"]["POST_PROCESSING"]["MEASURE_PROPERTIES"]["REMOVE_BY_PROPERTIES"]["VALUES"] = (
+                        old_cfg["TEST"]["POST_PROCESSING"]["REMOVE_BY_PROPERTIES_VALUES"]
+                    )
                     del old_cfg["TEST"]["POST_PROCESSING"]["REMOVE_BY_PROPERTIES_VALUES"]
                 if "REMOVE_BY_PROPERTIES_SIGN" in old_cfg["TEST"]["POST_PROCESSING"]:
-                    old_cfg["TEST"]["POST_PROCESSING"]["MEASURE_PROPERTIES"]["REMOVE_BY_PROPERTIES"]["SIGNS"] = old_cfg["TEST"]["POST_PROCESSING"]["REMOVE_BY_PROPERTIES_SIGN"]
+                    old_cfg["TEST"]["POST_PROCESSING"]["MEASURE_PROPERTIES"]["REMOVE_BY_PROPERTIES"]["SIGNS"] = old_cfg[
+                        "TEST"
+                    ]["POST_PROCESSING"]["REMOVE_BY_PROPERTIES_SIGN"]
                     del old_cfg["TEST"]["POST_PROCESSING"]["REMOVE_BY_PROPERTIES_SIGN"]
 
     if "PROBLEM" in old_cfg:
@@ -1796,23 +1923,27 @@ def convert_old_model_cfg_to_current_version(old_cfg):
         if "DETECTION" in old_cfg["PROBLEM"]:
             if "CENTRAL_POINT_DILATION" in old_cfg["PROBLEM"]["DETECTION"]:
                 if isinstance(old_cfg["PROBLEM"]["DETECTION"]["CENTRAL_POINT_DILATION"], int):
-                    old_cfg["PROBLEM"]["DETECTION"]["CENTRAL_POINT_DILATION"] = [old_cfg["PROBLEM"]["DETECTION"]["CENTRAL_POINT_DILATION"]]
+                    old_cfg["PROBLEM"]["DETECTION"]["CENTRAL_POINT_DILATION"] = [
+                        old_cfg["PROBLEM"]["DETECTION"]["CENTRAL_POINT_DILATION"]
+                    ]
 
         if "SUPER_RESOLUTION" in old_cfg["PROBLEM"]:
             if "UPSCALING" in old_cfg["PROBLEM"]["SUPER_RESOLUTION"]:
                 if isinstance(old_cfg["PROBLEM"]["SUPER_RESOLUTION"]["UPSCALING"], int):
-                    old_cfg["PROBLEM"]["SUPER_RESOLUTION"]["UPSCALING"] = (old_cfg["PROBLEM"]["SUPER_RESOLUTION"]["UPSCALING"],)*ndim
+                    old_cfg["PROBLEM"]["SUPER_RESOLUTION"]["UPSCALING"] = (
+                        old_cfg["PROBLEM"]["SUPER_RESOLUTION"]["UPSCALING"],
+                    ) * ndim
 
     if "DATA" in old_cfg:
         if "TRAIN" in old_cfg["DATA"]:
             if "MINIMUM_FOREGROUND_PER" in old_cfg["DATA"]["TRAIN"]:
                 min_fore = old_cfg["DATA"]["TRAIN"]["MINIMUM_FOREGROUND_PER"]
                 del old_cfg["DATA"]["TRAIN"]["MINIMUM_FOREGROUND_PER"]
-                if min_fore != -1:  
-                    old_cfg["DATA"]["TRAIN"]["FILTER_SAMPLES"] = {} 
-                    old_cfg["DATA"]["TRAIN"]["FILTER_SAMPLES"]["PROPS"] = [['foreground']]
+                if min_fore != -1:
+                    old_cfg["DATA"]["TRAIN"]["FILTER_SAMPLES"] = {}
+                    old_cfg["DATA"]["TRAIN"]["FILTER_SAMPLES"]["PROPS"] = [["foreground"]]
                     old_cfg["DATA"]["TRAIN"]["FILTER_SAMPLES"]["VALUES"] = [[min_fore]]
-                    old_cfg["DATA"]["TRAIN"]["FILTER_SAMPLES"]["SIGNS"] = [['lt']]
+                    old_cfg["DATA"]["TRAIN"]["FILTER_SAMPLES"]["SIGNS"] = [["lt"]]
         if "VAL" in old_cfg["DATA"]:
             if "BINARY_MASKS" in old_cfg["DATA"]["VAL"]:
                 del old_cfg["DATA"]["VAL"]["BINARY_MASKS"]
@@ -1844,48 +1975,48 @@ def convert_old_model_cfg_to_current_version(old_cfg):
                 old_cfg["MODEL"]["BMZ"]["SOURCE_MODEL_ID"] = model
             if "EXPORT_MODEL" in old_cfg["MODEL"]["BMZ"]:
                 old_cfg["MODEL"]["BMZ"]["EXPORT"] = {}
-                try:                
+                try:
                     enabled = old_cfg["MODEL"]["BMZ"]["EXPORT_MODEL"]["ENABLE"]
                 except:
                     enabled = False
-                old_cfg["MODEL"]["BMZ"]["EXPORT"]["ENABLED"] = enabled 
-                try:                
+                old_cfg["MODEL"]["BMZ"]["EXPORT"]["ENABLED"] = enabled
+                try:
                     model_name = old_cfg["MODEL"]["BMZ"]["EXPORT_MODEL"]["NAME"]
                 except:
-                    model_name = ''
-                old_cfg["MODEL"]["BMZ"]["EXPORT"]["MODEL_NAME"] = model_name 
-                try:                
+                    model_name = ""
+                old_cfg["MODEL"]["BMZ"]["EXPORT"]["MODEL_NAME"] = model_name
+                try:
                     description = old_cfg["MODEL"]["BMZ"]["EXPORT_MODEL"]["DESCRIPTION"]
                 except:
                     description = ""
-                old_cfg["MODEL"]["BMZ"]["EXPORT"]["DESCRIPTION"] = description 
-                try:                
+                old_cfg["MODEL"]["BMZ"]["EXPORT"]["DESCRIPTION"] = description
+                try:
                     authors = old_cfg["MODEL"]["BMZ"]["EXPORT_MODEL"]["AUTHORS"]
                 except:
                     authors = []
-                old_cfg["MODEL"]["BMZ"]["EXPORT"]["AUTHORS"] = authors 
-                try:                
+                old_cfg["MODEL"]["BMZ"]["EXPORT"]["AUTHORS"] = authors
+                try:
                     license = old_cfg["MODEL"]["BMZ"]["EXPORT_MODEL"]["LICENSE"]
                 except:
                     license = "CC-BY-4.0"
-                old_cfg["MODEL"]["BMZ"]["EXPORT"]["LICENSE"] = license 
-                try:                
+                old_cfg["MODEL"]["BMZ"]["EXPORT"]["LICENSE"] = license
+                try:
                     doc = old_cfg["MODEL"]["BMZ"]["EXPORT_MODEL"]["DOCUMENTATION"]
                 except:
                     doc = ""
-                old_cfg["MODEL"]["BMZ"]["EXPORT"]["DOCUMENTATION"] = doc 
-                try:                
+                old_cfg["MODEL"]["BMZ"]["EXPORT"]["DOCUMENTATION"] = doc
+                try:
                     tags = old_cfg["MODEL"]["BMZ"]["EXPORT_MODEL"]["TAGS"]
                 except:
                     tags = []
-                old_cfg["MODEL"]["BMZ"]["EXPORT"]["TAGS"] = tags 
-                try:                
+                old_cfg["MODEL"]["BMZ"]["EXPORT"]["TAGS"] = tags
+                try:
                     cite = old_cfg["MODEL"]["BMZ"]["EXPORT_MODEL"]["CITE"]
                 except:
                     cite = []
-                old_cfg["MODEL"]["BMZ"]["EXPORT"]["CITE"] = cite 
+                old_cfg["MODEL"]["BMZ"]["EXPORT"]["CITE"] = cite
                 del old_cfg["MODEL"]["BMZ"]["EXPORT_MODEL"]
-    
+
     if "LOSS" in old_cfg:
         if "TYPE" in old_cfg["LOSS"]:
             del old_cfg["LOSS"]["TYPE"]

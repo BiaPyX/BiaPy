@@ -37,12 +37,11 @@ class U_Net(nn.Module):
     z_down : List of ints, optional
         Downsampling used in z dimension. Set it to ``1`` if the dataset is not isotropic.
 
-    n_classes: int, optional
-        Number of classes.
-
-    output_channels : str, optional
-        Channels to operate with. Possible values: ``BC``, ``BCD``, ``BP``, ``BCDv2``,
-        ``BDv2``, ``Dv2`` and ``BCM``.
+    output_channels : list of int, optional
+        Output channels of the network. It must be a list of lenght ``1`` or ``2``. When two 
+        numbers are provided two task to be done is expected (multi-head). Possible scenarios are:
+            * instances + classification on instance segmentation
+            * points + classification in detection.
 
     upsampling_factor : tuple of ints, optional
         Factor of upsampling for super resolution workflow for each dimension.
@@ -76,18 +75,21 @@ class U_Net(nn.Module):
         k_size=3,
         upsample_layer="convtranspose",
         z_down=[2, 2, 2, 2],
-        n_classes=1,
-        output_channels="BC",
+        output_channels=[1],
         upsampling_factor=(),
         upsampling_position="pre",
     ):
         super(U_Net, self).__init__()
-
+        if len(output_channels) == 0:
+            raise ValueError("'output_channels' needs to has at least one value")
+        if len(output_channels) != 1 and len(output_channels) != 2:
+            raise ValueError(f"'output_channels' must be a list of one or two values at max, not {output_channels}")
+        
         self.depth = len(feature_maps) - 1
         self.ndim = 3 if len(image_shape) == 4 else 2
         self.z_down = z_down
-        self.n_classes = 1 if n_classes <= 2 else n_classes
-        self.multiclass = True if n_classes > 2 and output_channels is not None else False
+        self.output_channels = output_channels
+        self.multihead = len(output_channels) == 2
         if self.ndim == 3:
             conv = nn.Conv3d
             convtranspose = nn.ConvTranspose3d
@@ -168,26 +170,13 @@ class U_Net(nn.Module):
                 stride=upsampling_factor,
             )
 
-        # Instance segmentation
-        if output_channels is not None:
-            if output_channels in ["C", "Dv2"]:
-                self.last_block = conv(feature_maps[0], 1, kernel_size=1, padding="same")
-            elif output_channels in ["BC", "BP"]:
-                self.last_block = conv(feature_maps[0], 2, kernel_size=1, padding="same")
-            elif output_channels in ["BDv2", "BD"]:
-                self.last_block = conv(feature_maps[0], 2, kernel_size=1, padding="same")
-            elif output_channels in ["BCM", "BCD", "BCDv2"]:
-                self.last_block = conv(feature_maps[0], 3, kernel_size=1, padding="same")
-            elif output_channels in ["A"]:
-                self.last_block = conv(feature_maps[0], self.ndim, kernel_size=1, padding="same")
-        # Other
-        else:
-            self.last_block = conv(feature_maps[0], self.n_classes, kernel_size=1, padding="same")
-
-        # Multi-head: instances + classification
+        self.last_block = conv(feature_maps[0], output_channels[0], kernel_size=1, padding="same")
+        # Multi-head: 
+        #   Instance segmentation: instances + classification
+        #   Detection: points + classification 
         self.last_class_head = None
-        if self.multiclass:
-            self.last_class_head = conv(feature_maps[0], self.n_classes, kernel_size=1, padding="same")
+        if self.multihead:
+            self.last_class_head = conv(feature_maps[0], output_channels[1], kernel_size=1, padding="same")
 
         self.apply(self._init_weights)
 
@@ -216,12 +205,12 @@ class U_Net(nn.Module):
             x = self.post_upsampling(x)
 
         class_head_out = torch.empty(())
-        if self.multiclass and self.last_class_head is not None:
+        if self.multihead and self.last_class_head is not None:
             class_head_out = self.last_class_head(x)
 
         x = self.last_block(x)
 
-        if self.multiclass:
+        if self.multihead:
             return [x, class_head_out]
         else:
             return x

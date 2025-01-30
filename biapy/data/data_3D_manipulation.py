@@ -1098,7 +1098,7 @@ def ensure_3d_shape(img, path=None):
     Returns
     -------
     img : Numpy 4D array
-        Image read. E.g. ``(z, y, x, num_classes)``.
+        Image read. E.g. ``(z, y, x, channels)``.
     """
     if img.ndim < 3:
         if path is not None:

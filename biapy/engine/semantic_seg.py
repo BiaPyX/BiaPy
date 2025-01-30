@@ -49,16 +49,37 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         # From now on, no modification of the cfg will be allowed
         self.cfg.freeze()
 
-        # Activations for each output channel:
-        # channel number : 'activation'
-        self.activations = [{":": "CE_Sigmoid"}]
-
         # Workflow specific training variables
         self.mask_path = cfg.DATA.TRAIN.GT_PATH
         self.is_y_mask = True
 
         self.load_Y_val = True
         self.loss_dtype = torch.float32
+
+    def define_activations_and_channels(self):
+        """
+        This function must define the following variables:
+
+        self.model_output_channels : List of functions
+            Metrics to be calculated during model's training.
+
+        self.multihead : List of str
+            Names of the metrics calculated during training.
+        
+        self.activations : List of dicts
+            Activations to be applied to the model output. Each dict will 
+            match an output channel of the model. If ':' is used the activation
+            will be applied to all channels at once. "Linear" and "CE_Sigmoid"
+            will not be applied. E.g. [{":": "Linear"}].
+        """
+        self.model_output_channels = {
+            "type": "mask",
+            "channels": self.cfg.MODEL.N_CLASSES,
+        }
+        self.multihead = False 
+        self.activations = [{":": "CE_Sigmoid"}]
+
+        super().define_activations_and_channels()
 
     def define_metrics(self):
         """

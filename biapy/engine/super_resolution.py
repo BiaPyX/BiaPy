@@ -53,18 +53,35 @@ class Super_resolution_Workflow(Base_Workflow):
         # From now on, no modification of the cfg will be allowed
         self.cfg.freeze()
 
-        # Activations for each output channel:
-        # channel number : 'activation'
-        self.activations = [{":": "Linear"}]
-
         # Workflow specific training variables
         self.mask_path = cfg.DATA.TRAIN.GT_PATH
         self.is_y_mask = False
         self.load_Y_val = True
 
+    def define_activations_and_channels(self):
+        """
+        This function must define the following variables:
+
+        self.model_output_channels : List of functions
+            Metrics to be calculated during model's training.
+
+        self.multihead : List of str
+            Names of the metrics calculated during training.
+        
+        self.activations : List of dicts
+            Activations to be applied to the model output. Each dict will 
+            match an output channel of the model. If ':' is used the activation
+            will be applied to all channels at once. "Linear" and "CE_Sigmoid"
+            will not be applied. E.g. [{":": "Linear"}].
+        """
         self.model_output_channels = {
             "type": "image",
+            "channels": self.cfg.DATA.PATCH_SIZE[-1],
         }
+        self.multihead = False 
+        self.activations = [{":": "Linear"}]
+
+        super().define_activations_and_channels()
         
     def define_metrics(self):
         """

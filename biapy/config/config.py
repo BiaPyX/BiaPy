@@ -49,6 +49,11 @@ class Config:
 
         ### INSTANCE_SEG
         _C.PROBLEM.INSTANCE_SEG = CN()
+        # Type of instances expected. Options are: ["regular", "synapses"]
+        _C.PROBLEM.INSTANCE_SEG.TYPE = "regular" 
+
+        #### For "regular" type of instances ####
+        
         # Possible options: 'C', 'BC', 'BP', 'BD', 'BCM', 'BCD', 'BCDv2', 'Dv2', 'BDv2' and 'A'. This variable defines the channels
         # to be used to represent instances based on the input instance masks. The meaning of each letter is a follows:
         #   - 'B' stands for 'Binary mask', it is a binary representation of each instance region without its contour.
@@ -59,6 +64,7 @@ class Config:
         #   - 'Dv2' stands for 'Distance V2', which is a version of the 'D' channel calculating background distance as well.
         #   - 'P' stands for 'Points' and contains a binary representation of the central points of each instance.
         #   - 'A' stands for 'Affinities" and contains the affinity values for each dimension.
+        #   - 'F' stands for 'Flow' where, for each instance, contains the distance values to its center of mass for each dimension.
         _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS = "BC"
         # Whether to mask the distance channel to only calculate the loss in those regions where the binary mask
         # defined by B channel is present
@@ -113,6 +119,21 @@ class Config:
         # others if the objects in Z axis overlap too much.
         _C.PROBLEM.INSTANCE_SEG.WATERSHED_BY_2D_SLICES = False
 
+        #### For "synapses" type of instances (only available for 3D H5/Zarr data) ####
+        _C.PROBLEM.INSTANCE_SEG.SYNAPSES = CN()
+        # Possible options: 'BF'. This variable defines the channels to be used to represent synapse instances based on the input 
+        # synapse sites. The meaning of each letter is a follows:
+        #   - 'B' stands for 'Binary mask', it is a binary representation of each postsynaptic site
+        #   - 'F' stands for 'Flow' and contains the distance values to the corresponding presynaptic site (of each postsynaptic 
+        #     site) for each dimension.
+        _C.PROBLEM.INSTANCE_SEG.SYNAPSES.DATA_CHANNELS = "BF"
+        # Dilation in (z,y,x) to be made for the 'B' channel
+        _C.PROBLEM.INSTANCE_SEG.SYNAPSES.POSTSITE_DILATION = [2,4,4]
+        # Dilation in (z,y,x) to be made to construct the 'F' channel
+        _C.PROBLEM.INSTANCE_SEG.SYNAPSES.POSTSITE_DILATION_DISTANCE_CHANNELS = [3,10,10] 
+        # Whether to normalize or not the distances of channel 'F'
+        _C.PROBLEM.INSTANCE_SEG.SYNAPSES.NORMALIZE_DISTANCES = False
+        
         ### DETECTION
         _C.PROBLEM.DETECTION = CN()
         # Shape of the ellipse that will be used to dilate the central point created from the CSV file. 0 to not dilate and only create a 3x3 square.
@@ -229,6 +250,17 @@ class Config:
         # E.g. 'volumes.raw' for raw and 'volumes.labels.neuron_ids' for GT path.
         _C.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH = ""
         _C.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_GT_PATH = ""
+        # For synapse detection. The information must be stored as CREMI dataset (https://cremi.org/data/)
+        # Path within the file where the ``ids`` are stored. Reference in CREMI: ``annotations/ids``
+        _C.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_ID_PATH = "annotations.ids"
+        # Path within the file where the ``types`` are stored (not used). Reference in CREMI: ``annotations/types``
+        # _C.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_TYPES_PATH = "annotations.types"
+        # Path within the file where the ``partners`` are stored. Reference in CREMI: ``annotations/partners``
+        _C.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_PARTNERS_PATH = "annotations.presynaptic_site.partners"
+        # Path within the file where the ``locations`` are stored. Reference in CREMI: ``annotations/locations``
+        _C.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_LOCATIONS_PATH = "annotations.locations"
+        # Path within the file where the ``resolution`` is stored. Reference in CREMI: ``["volumes/raw"].attrs["offset"]``
+        _C.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_RESOLUTION_PATH = 'volumes.raw'
         # File to load/save data prepared with the appropiate channels in a instance segmentation problem.
         # E.g. _C.PROBLEM.TYPE ='INSTANCE_SEG' and _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS != 'B'
         _C.DATA.TRAIN.INSTANCE_CHANNELS_DIR = os.path.join(
@@ -485,6 +517,17 @@ class Config:
         # E.g. 'volumes.raw' for raw and 'volumes.labels.neuron_ids' for GT path.
         _C.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH = ""
         _C.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_GT_PATH = ""
+        # For synapse detection. The information must be stored as CREMI dataset (https://cremi.org/data/)
+        # Path within the file where the ``ids`` are stored. Reference in CREMI: ``annotations/ids``
+        _C.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_ID_PATH = "annotations.ids"
+        # Path within the file where the ``types`` are stored (not used). Reference in CREMI: ``annotations/types``
+        # _C.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_TYPES_PATH = "annotations.types"
+        # Path within the file where the ``partners`` are stored. Reference in CREMI: ``annotations/partners``
+        _C.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_PARTNERS_PATH = "annotations.presynaptic_site.partners"
+        # Path within the file where the ``locations`` are stored. Reference in CREMI: ``annotations/locations``
+        _C.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_LOCATIONS_PATH = "annotations.locations"
+        # Path within the file where the ``resolution`` is stored. Reference in CREMI: ``["volumes/raw"].attrs["offset"]``
+        _C.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_RESOLUTION_PATH = 'volumes.raw'
         # File to load/save data prepared with the appropiate channels in a instance segmentation problem.
         # E.g. _C.PROBLEM.TYPE ='INSTANCE_SEG' and _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS != 'B'
         _C.DATA.VAL.INSTANCE_CHANNELS_DIR = os.path.join(
@@ -1056,6 +1099,17 @@ class Config:
         # E.g. 'volumes.raw' for raw and 'volumes.labels.neuron_ids' for GT path.
         _C.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH = ""
         _C.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_GT_PATH = ""
+        # For synapse detection. The information must be stored as CREMI dataset (https://cremi.org/data/)
+        # Path within the file where the ``ids`` are stored. Reference in CREMI: ``annotations/ids``
+        _C.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_ID_PATH = "annotations.ids"
+        # Path within the file where the ``types`` are stored (not used). Reference in CREMI: ``annotations/types``
+        # _C.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_TYPES_PATH = "annotations.types"
+        # Path within the file where the ``partners`` are stored. Reference in CREMI: ``annotations/partners``
+        _C.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_PARTNERS_PATH = "annotations.presynaptic_site.partners"
+        # Path within the file where the ``locations`` are stored. Reference in CREMI: ``annotations/locations``
+        _C.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_LOCATIONS_PATH = "annotations.locations"
+        # Path within the file where the ``resolution`` is stored. Reference in CREMI: ``["volumes/raw"].attrs["offset"]``
+        _C.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_RESOLUTION_PATH = 'volumes.raw'
 
         # Whether after reconstructing the prediction the pipeline will continue each workflow specific steps. For this process
         # the prediction image needs to be loaded into memory so be sure that it can fit in you memory. E.g. in instance
@@ -1116,7 +1170,7 @@ class Config:
         _C.TEST.DET_PEAK_LOCAL_MAX_MIN_DISTANCE = 1
         # Minimun value to consider a point as a peak. Corresponds to 'threshold_abs' argument of the function
         # 'peak_local_max' of skimage.feature
-        _C.TEST.DET_MIN_TH_TO_BE_PEAK = [0.2]
+        _C.TEST.DET_MIN_TH_TO_BE_PEAK = 0.2
         # Corresponds to 'exclude_border' argument of 'peak_local_max' or 'blob_log' function of skimage. If True it will exclude
         # peaks from the border of the image to avoid partial detection.
         _C.TEST.DET_EXCLUDE_BORDER = False
@@ -1132,7 +1186,7 @@ class Config:
         # to consider between min_sigma and max_sigma.
         _C.TEST.DET_BLOB_LOG_NUM_SIGMA = 2
         # Maximum distance far away from a GT point to consider a point as a true positive
-        _C.TEST.DET_TOLERANCE = [10]
+        _C.TEST.DET_TOLERANCE = 10
         # To not take into account during detection metrics calculation to those points outside the bounding box defined with
         # this variable. Order is: [z, y, x] (3D) and [y, x] (2D). For example, using an image of 10x100x200 to not take into
         # account points on the first/last slices and with a border of 15 pixel for x and y axes, this variable could be defined
@@ -1252,14 +1306,11 @@ class Config:
         _C.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS = False
         # Distance between points to be considered the same. Only applies when TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS = True
         # This can also be set when using 'BP' channels for instance segmentation.
-        _C.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS = [-1.0]
+        _C.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS = -1.0
         # Whether to apply a watershed to grow the points detected
         _C.TEST.POST_PROCESSING.DET_WATERSHED = False
-        # Structure per each class to dilate the initial seeds before watershed. For instance, with two classes in a 3D problem:
-        # [ [2,2,1], [10,10,4] ]
-        _C.TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION = [
-            [-1, -1],
-        ]
+        # Structure to dilate the initial seeds before watershed. For instance in a 3D problem: [10,10,4]
+        _C.TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION = [-1, -1]
         # List of classes to be consider as 'donuts'. For those class points, the 'donuts' type cell means that their nucleus is
         # to big and that the seeds need to be dilated more so the watershed can grow the instances properly.
         _C.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES = [-1]
@@ -1387,54 +1438,117 @@ def update_dependencies(cfg) -> None:
     call.DATA.TEST.GT_PATH = (
         call.DATA.TEST.GT_PATH if call.DATA.TEST.GT_PATH[-1] != "/" else call.DATA.TEST.GT_PATH[:-1]
     )
-
-    call.DATA.TRAIN.INSTANCE_CHANNELS_DIR = (
-        call.DATA.TRAIN.PATH
-        + "_"
-        + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
-        + "_"
-        + call.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
-    )
-    call.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR = (
-        call.DATA.TRAIN.GT_PATH
-        + "_"
-        + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
-        + "_"
-        + call.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
-    )
+    post_dil = "".join(str(call.PROBLEM.INSTANCE_SEG.SYNAPSES.POSTSITE_DILATION)[1:-1].replace(",","")).replace(" ","_")
+    post_d_dil = "".join(str(call.PROBLEM.INSTANCE_SEG.SYNAPSES.POSTSITE_DILATION_DISTANCE_CHANNELS)[1:-1].replace(",","")).replace(" ","_")
+    if call.PROBLEM.INSTANCE_SEG.TYPE == "regular":
+        call.DATA.TRAIN.INSTANCE_CHANNELS_DIR = (
+            call.DATA.TRAIN.PATH
+            + "_"
+            + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
+            + "_"
+            + call.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
+        )
+        call.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR = (
+            call.DATA.TRAIN.GT_PATH
+            + "_"
+            + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
+            + "_"
+            + call.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
+        )
+    else: 
+        call.DATA.TRAIN.INSTANCE_CHANNELS_DIR = (
+            call.DATA.TRAIN.PATH
+            + "_"
+            + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
+            + "_"
+            + post_dil
+            + "_" 
+            + post_d_dil
+        )
+        call.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR = (
+            call.DATA.TRAIN.GT_PATH
+            + "_"
+            + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
+            + "_"
+            + post_dil
+            + "_" 
+            + post_d_dil
+        )
     call.DATA.TRAIN.DETECTION_MASK_DIR = call.DATA.TRAIN.GT_PATH + "_detection_masks"
     call.DATA.TRAIN.SSL_SOURCE_DIR = call.DATA.TRAIN.PATH + "_ssl_source"
-    call.DATA.VAL.INSTANCE_CHANNELS_DIR = (
-        call.DATA.VAL.PATH
-        + "_"
-        + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
-        + "_"
-        + call.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
-    )
-    call.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR = (
-        call.DATA.VAL.GT_PATH
-        + "_"
-        + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
-        + "_"
-        + call.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
-    )
+    if call.PROBLEM.INSTANCE_SEG.TYPE == "regular":
+        call.DATA.VAL.INSTANCE_CHANNELS_DIR = (
+            call.DATA.VAL.PATH
+            + "_"
+            + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
+            + "_"
+            + call.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
+        )
+        call.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR = (
+            call.DATA.VAL.GT_PATH
+            + "_"
+            + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
+            + "_"
+            + call.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
+        )
+    else: 
+        call.DATA.VAL.INSTANCE_CHANNELS_DIR = (
+            call.DATA.VAL.PATH
+            + "_"
+            + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
+            + "_"
+            + post_dil 
+            + "_" 
+            + post_d_dil
+        )
+        call.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR = (
+            call.DATA.VAL.GT_PATH
+            + "_"
+            + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
+            + "_"
+            + post_dil 
+            + "_" 
+            + post_d_dil
+        )
+    
     # If value is not the default
     call.DATA.VAL.DETECTION_MASK_DIR = call.DATA.VAL.GT_PATH + "_detection_masks"
     call.DATA.VAL.SSL_SOURCE_DIR = call.DATA.VAL.PATH + "_ssl_source"
-    call.DATA.TEST.INSTANCE_CHANNELS_DIR = (
-        call.DATA.TEST.PATH
-        + "_"
-        + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
-        + "_"
-        + call.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
-    )
-    call.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR = (
-        call.DATA.TEST.GT_PATH
-        + "_"
-        + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
-        + "_"
-        + call.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
-    )
+    if call.PROBLEM.INSTANCE_SEG.TYPE == "regular":
+        call.DATA.TEST.INSTANCE_CHANNELS_DIR = (
+            call.DATA.TEST.PATH
+            + "_"
+            + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
+            + "_"
+            + call.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
+        )
+        call.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR = (
+            call.DATA.TEST.GT_PATH
+            + "_"
+            + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
+            + "_"
+            + call.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
+        )
+    else: 
+        call.DATA.TEST.INSTANCE_CHANNELS_DIR = (
+            call.DATA.TEST.PATH
+            + "_"
+            + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
+            + "_"
+            + post_dil
+            + "_" 
+            + post_d_dil
+        )
+        call.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR = (
+            call.DATA.TEST.GT_PATH
+            + "_"
+            + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
+            + "_"
+            + post_dil
+            + "_" 
+            + post_d_dil
+        )
+    
     # If value is not the default
     if call.DATA.TEST.BINARY_MASKS == os.path.join("user_data", "test", "bin_mask"):
         call.DATA.TEST.BINARY_MASKS = os.path.join(call.DATA.TEST.PATH, "..", "bin_mask")

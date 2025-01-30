@@ -209,16 +209,48 @@ class Base_Workflow(metaclass=ABCMeta):
             self.cfg.merge_from_list(opts)
             update_dependencies(self.cfg)
 
+        # Save number of channels to be created by the model
+        self.define_activations_and_channels()
+
         # Define metrics
         self.define_metrics()
 
-        # Save number of channels to be created by the model
-        self.model_output_channels = {
-            "type": "mask",
-            "channels": self.cfg.MODEL.N_CLASSES,
-            "extra_channels": 0,
-        }
+    def define_activations_and_channels(self):
+        """
+        This function must define the following variables:
 
+        self.model_output_channels : List of functions
+            Metrics to be calculated during model's training.
+
+        self.multihead : List of str
+            Names of the metrics calculated during training.
+        
+        self.activations : List of dicts
+            Activations to be applied to the model output. Each dict will 
+            match an output channel of the model. If ':' is used the activation
+            will be applied to all channels at once. "Linear" and "CE_Sigmoid"
+            will not be applied. E.g. [{":": "Linear"}].
+        """
+        if not hasattr(self, "model_output_channels"):
+            raise ValueError("'model_output_channels' is not defined. Correct define_activations_and_channels() function")
+        else:
+            if not isinstance(self.model_output_channels, dict):
+                raise ValueError("'self.model_output_channels' must be a dict")  
+            if "type" not in self.model_output_channels:
+                raise ValueError("'self.model_output_channels' must have 'type' key")  
+            if "channels" not in self.model_output_channels:
+                raise ValueError("'self.model_output_channels' must have 'channels' key")  
+        if not hasattr(self, "multihead"):
+            raise ValueError("'multihead' is not defined. Correct define_activations_and_channels() function")
+        if not hasattr(self, "activations"):
+            raise ValueError("'activations' is not defined. Correct define_activations_and_channels() function")
+        else:
+            if not isinstance(self.activations, list):
+                raise ValueError("'self.activations' must be a list of dicts")  
+            for x in self.activations:
+                if not isinstance(x, dict):
+                    raise ValueError("'self.activations' must be a list of dicts")
+            
     def define_metrics(self):
         """
         This function must define the following variables:
@@ -1261,9 +1293,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     if self.model_output_channels["type"] == "image":
                         shape = img.shape 
                     else: # mask
-                        shape = img.shape[:-1] + (
-                            self.model_output_channels["channels"]+self.model_output_channels["extra_channels"]
-                            ,) 
+                        shape = img.shape[:-1] + (self.model_output_channels["channels"],) 
                     p = np.zeros(shape)
 
                 t_dim, z_dim, y_dim, x_dim, c_dim = order_dimensions(
@@ -1843,7 +1873,11 @@ class Base_Workflow(metaclass=ABCMeta):
                     )
 
                 # Argmax if needed
-                if self.cfg.MODEL.N_CLASSES > 2 and self.cfg.DATA.TEST.ARGMAX_TO_OUTPUT:
+                if (
+                    self.cfg.MODEL.N_CLASSES > 2 
+                    and self.cfg.DATA.TEST.ARGMAX_TO_OUTPUT
+                    and not self.multihead
+                ):
                     _type = np.uint8 if self.cfg.MODEL.N_CLASSES < 255 else np.uint16
                     pred = np.expand_dims(np.argmax(pred, -1), -1).astype(_type)
 
@@ -1958,7 +1992,11 @@ class Base_Workflow(metaclass=ABCMeta):
                 )
 
                 # Argmax if needed
-                if self.cfg.MODEL.N_CLASSES > 2 and self.cfg.DATA.TEST.ARGMAX_TO_OUTPUT:
+                if (
+                    self.cfg.MODEL.N_CLASSES > 2 
+                    and self.cfg.DATA.TEST.ARGMAX_TO_OUTPUT 
+                    and not self.multihead
+                ):
                     _type = np.uint8 if self.cfg.MODEL.N_CLASSES < 255 else np.uint16
                     pred = np.expand_dims(np.argmax(pred, -1), -1).astype(_type)
 

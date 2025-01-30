@@ -1,6 +1,5 @@
 import os
 import h5py
-import random
 import torch
 import numpy as np
 from tqdm import tqdm
@@ -434,10 +433,9 @@ def load_and_prepare_train_data(
             preprocess_f=train_preprocess_f if train_shape_will_change else None,
             preprocess_cfg=train_preprocess_cfg if train_shape_will_change else None,
         )
-
+    
     # Check that the shape of all images match
     if train_mask_path is not None:
-        gt_id = 0
         if len(X_train) != len(Y_train):
             raise ValueError(
                 f"Mistmatch between number of raw samples ({len(X_train)}) and number of corresponding "
@@ -2904,7 +2902,7 @@ def load_img_data(path, is_3d=False, data_within_zarr_path=None):
     Returns
     -------
     data : Zarr, H5 or Numpy 3D/4D array
-        Data read. E.g. ``(z, y, x, num_classes)`` for 3D or ``(y, x, num_classes)`` for 2D.
+        Data read. E.g. ``(z, y, x, channels)`` for 3D or ``(y, x, channels)`` for 2D.
 
     file : str
         File of the data read. Useful to close it in case it is an H5 file.
@@ -2936,7 +2934,7 @@ def read_img_as_ndarray(path, is_3d=False):
     Returns
     -------
     img : Numpy 3D/4D array
-        Image read. E.g. ``(z, y, x, num_classes)`` for 3D or ``(y, x, num_classes)`` for 2D.
+        Image read. E.g. ``(z, y, x, channels)`` for 3D or ``(y, x, channels)`` for 2D.
     """
     # Read image
     if path.endswith(".npy"):

@@ -24,7 +24,7 @@ from biapy.utils.util import (
 )
 from biapy.engine.metrics import (
     detection_metrics,
-    jaccard_index,
+    multiple_metrics,
     DiceBCELoss,
     DiceLoss,
     CrossEntropyLoss_wrapper,
@@ -65,10 +65,6 @@ class Detection_Workflow(Base_Workflow):
         # From now on, no modification of the cfg will be allowed
         self.cfg.freeze()
 
-        # Activations for each output channel:
-        # channel number : 'activation'
-        self.activations = [{"0": "CE_Sigmoid"}]
-
         # Workflow specific training variables
         self.mask_path = cfg.DATA.TRAIN.GT_PATH
         self.is_y_mask = True
@@ -92,6 +88,38 @@ class Detection_Workflow(Base_Workflow):
                 self.cfg.DATA.TEST.RESOLUTION[0],
                 self.cfg.DATA.TEST.RESOLUTION[1],
             )
+
+    def define_activations_and_channels(self):
+        """
+        This function must define the following variables:
+
+        self.model_output_channels : List of functions
+            Metrics to be calculated during model's training.
+
+        self.multihead : List of str
+            Names of the metrics calculated during training.
+        
+        self.activations : List of dicts
+            Activations to be applied to the model output. Each dict will 
+            match an output channel of the model. If ':' is used the activation
+            will be applied to all channels at once. "Linear" and "CE_Sigmoid"
+            will not be applied. E.g. [{":": "Linear"}].
+        """
+        self.model_output_channels = {
+            "type": "mask",
+            "channels": 1,
+        }
+
+        # Multi-head: points + classification
+        if self.cfg.MODEL.N_CLASSES > 2:
+            self.activations = [{"0": "CE_Sigmoid"}, {"0": "Linear"}]
+            self.model_output_channels["channels"] = [self.model_output_channels["channels"], self.cfg.MODEL.N_CLASSES]
+            self.multihead = True
+        else:
+            self.activations = [{"0": "CE_Sigmoid"}]
+            self.model_output_channels["channels"] = [self.model_output_channels["channels"]]
+
+        super().define_activations_and_channels()
 
     def define_metrics(self):
         """
@@ -120,37 +148,53 @@ class Detection_Workflow(Base_Workflow):
         self.train_metric_best = []
         for metric in list(set(self.cfg.TRAIN.METRICS)):
             if metric in ["iou", "jaccard_index"]:
-                self.train_metrics.append(
-                    jaccard_index(
-                        num_classes=self.cfg.MODEL.N_CLASSES,
-                        device=self.device,
-                        model_source=self.cfg.MODEL.SOURCE,
-                    )
-                )
                 self.train_metric_names.append("IoU")
                 self.train_metric_best.append("max")
+
+        # Multi-head: detection + classification
+        if self.multihead:
+            self.train_metric_names.append("IoU (classes)")
+            self.train_metric_best += ["max"]
+
+        self.train_metrics.append(
+            multiple_metrics(
+                num_classes=self.cfg.MODEL.N_CLASSES,
+                metric_names=self.train_metric_names,
+                device=self.device,
+                model_source=self.cfg.MODEL.SOURCE,
+            )
+        )
 
         self.test_metrics = []
         self.test_metric_names = []
         for metric in list(set(self.cfg.TEST.METRICS)):
             if metric in ["iou", "jaccard_index"]:
-                self.test_metrics.append(
-                    jaccard_index(
-                        num_classes=self.cfg.MODEL.N_CLASSES,
-                        device=self.device,
-                        model_source=self.cfg.MODEL.SOURCE,
-                    )
-                )
                 self.test_metric_names.append("IoU")
+
+        # Multi-head: detection + classification
+        if self.multihead:
+            self.test_metric_names.append("IoU (classes)")
+
+        self.test_metrics.append(
+            multiple_metrics(
+                num_classes=self.cfg.MODEL.N_CLASSES,
+                metric_names=self.test_metric_names,
+                device=self.device,
+                model_source=self.cfg.MODEL.SOURCE,
+            )
+        )
 
         # Workflow specific metrics calculated in a different way than calling metric_calculation(). These metrics are
         # always calculated
         self.test_extra_metrics = ["Precision", "Recall", "F1", "TP", "FP", "FN"]
+        if self.multihead:
+            self.test_extra_metrics += ["Precision (class)", "Recall (class)", "F1 (class)", "TP (class)", "FN (class)"]
         self.test_metric_names += self.test_extra_metrics
 
         if self.cfg.LOSS.TYPE == "CE":
             self.loss = CrossEntropyLoss_wrapper(
                 num_classes=self.cfg.MODEL.N_CLASSES,
+                multihead=self.multihead,
                 model_source=self.cfg.MODEL.SOURCE,
                 class_rebalance=self.cfg.LOSS.CLASS_REBALANCE,
             )
@@ -189,13 +233,21 @@ class Detection_Workflow(Base_Workflow):
         list_names_to_use = self.train_metric_names if train else self.test_metric_names
 
         with torch.no_grad():
+            k = 0
             for i, metric in enumerate(list_to_use):
                 val = metric(output, targets)
-                val = val.item() if not torch.isnan(val) else 0
-                out_metrics[list_names_to_use[i]] = val
-
-                if metric_logger is not None:
-                    metric_logger.meters[list_names_to_use[i]].update(val)
+                if isinstance(val, dict):
+                    for m in val:
+                        v = val[m].item() if not torch.isnan(val[m]) else 0
+                        out_metrics[list_names_to_use[k]] = v
+                        if metric_logger is not None:
+                            metric_logger.meters[list_names_to_use[k]].update(v)
+                        k += 1
+                else:
+                    val = val.item() if not torch.isnan(val) else 0
+                    out_metrics[list_names_to_use[i]] = val
+                    if metric_logger is not None:
+                        metric_logger.meters[list_names_to_use[i]].update(val)
         return out_metrics
 
     def detection_process(self, pred, filenames, inference_type="full_image", patch_pos=None):
@@ -221,151 +273,107 @@ class Detection_Workflow(Base_Workflow):
         assert inference_type in ["per_crop", "merge_patches", "as_3D_stack", "full_image", "by_chunks"]
         assert pred.ndim == 4, f"Prediction doesn't have 4 dim: {pred.shape}"
 
+        # Multi-head: points + classification
+        if self.multihead:
+            class_channel = np.expand_dims(pred[..., -1], -1)
+            pred = pred[..., :-1]
+            
         file_ext = os.path.splitext(filenames[0])[1]
-        ndim = 2 if self.cfg.PROBLEM.NDIM == "2D" else 3
         pred_shape = pred.shape
         if self.cfg.TEST.VERBOSE:
             print("Capturing the local maxima ")
-        all_points = []
-        all_classes = []
-        for channel in range(pred.shape[-1]):
-            if self.cfg.TEST.VERBOSE:
-                print("Class {}".format(channel + 1))
-            if len(self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK) == 1:
-                min_th_peak = self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK[0]
-            else:
-                min_th_peak = self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK[channel]
 
-            # Find points
-            if self.cfg.TEST.DET_POINT_CREATION_FUNCTION == "peak_local_max":
-                pred_coordinates = peak_local_max(
-                    pred[..., channel].astype(np.float32),
-                    min_distance=self.cfg.TEST.DET_PEAK_LOCAL_MAX_MIN_DISTANCE,
-                    threshold_abs=min_th_peak,
-                    exclude_border=self.cfg.TEST.DET_EXCLUDE_BORDER,
-                )
-            else:
-                pred_coordinates = blob_log(
-                    pred[..., channel] * 255,
-                    min_sigma=self.cfg.TEST.DET_BLOB_LOG_MIN_SIGMA,
-                    max_sigma=self.cfg.TEST.DET_BLOB_LOG_MAX_SIGMA,
-                    num_sigma=self.cfg.TEST.DET_BLOB_LOG_NUM_SIGMA,
-                    threshold=min_th_peak,
-                    exclude_border=self.cfg.TEST.DET_EXCLUDE_BORDER,
-                )
-                pred_coordinates = pred_coordinates[:, :3].astype(int)  # Remove sigma
+        # Find points
+        if self.cfg.TEST.DET_POINT_CREATION_FUNCTION == "peak_local_max":
+            pred_points = peak_local_max(
+                pred[..., 0].astype(np.float32),
+                min_distance=self.cfg.TEST.DET_PEAK_LOCAL_MAX_MIN_DISTANCE,
+                threshold_abs=self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK,
+                exclude_border=self.cfg.TEST.DET_EXCLUDE_BORDER,
+            )
+        else:
+            pred_points = blob_log(
+                pred[..., 0] * 255,
+                min_sigma=self.cfg.TEST.DET_BLOB_LOG_MIN_SIGMA,
+                max_sigma=self.cfg.TEST.DET_BLOB_LOG_MAX_SIGMA,
+                num_sigma=self.cfg.TEST.DET_BLOB_LOG_NUM_SIGMA,
+                threshold=self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK,
+                exclude_border=self.cfg.TEST.DET_EXCLUDE_BORDER,
+            )
+            pred_points = pred_points[:, :3].astype(int)  # Remove sigma
 
-            # Remove close points per class as post-processing method
-            if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS and not self.by_chunks:
-                if len(self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS) == 1:
-                    radius = self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS[0]
-                else:
-                    radius = self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS[channel]
-
-                pred_coordinates = remove_close_points(
-                    pred_coordinates, radius, self.cfg.DATA.TEST.RESOLUTION, ndim=ndim
-                )
-
-            all_points.append(pred_coordinates)
-            c_size = 1 if len(pred_coordinates) == 0 else len(pred_coordinates)
-            all_classes.append(np.full(c_size, channel))
-
-        # Remove close points again seeing all classes together, as it can be that a point is detected in both classes
-        # if there is not clear distinction between them
-        classes = 1 if self.cfg.MODEL.N_CLASSES <= 2 else self.cfg.MODEL.N_CLASSES
-        if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS and classes > 1 and not self.by_chunks:
-            if self.cfg.TEST.VERBOSE:
-                print("All classes together")
-            radius = np.min(self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS)
-
-            all_points = np.concatenate(all_points, axis=0)
-            all_classes = np.concatenate(all_classes, axis=0)
-
-            new_points, all_classes = remove_close_points(
-                all_points,
-                radius,
+        # Remove close points per class as post-processing method
+        if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS and not self.by_chunks:
+            pred_points = remove_close_points(
+                pred_points,
+                self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS,
                 self.cfg.DATA.TEST.RESOLUTION,
-                classes=all_classes,
-                ndim=ndim,
+                ndim=self.dims,
             )
 
-            # Create again list of arrays of all points
-            all_points = []
-            for i in range(classes):
-                all_points.append([])
-            for i, c in enumerate(all_classes):
-                all_points[c].append(new_points[i])
-            del new_points
+        # Decide the class for each point
+        pred_points_classes = []
+        if self.multihead:
+            for point in pred_points:
+                if self.dims == 3:
+                    point_area = class_channel[
+                        max(0, point[0] - 1) : min(pred.shape[0], point[0] + 1),
+                        max(0, point[1] - 1) : min(pred.shape[1], point[1] + 1),
+                        max(0, point[2] - 1) : min(pred.shape[2], point[2] + 1),
+                    ]
+                else:
+                    point_area = class_channel[
+                        max(0, point[0] - 1) : min(pred.shape[0], point[0] + 1),
+                        max(0, point[1] - 1) : min(pred.shape[1], point[1] + 1),
+                    ]
+                instances, counter = np.unique(point_area, return_counts=True)
+                most_voted_class = instances[np.argmax(counter)]
+                pred_points_classes.append(int(most_voted_class))
+        else:
+            pred_points_classes = [0]*len(pred_points)
 
         # Create a file with detected point and other image with predictions ids (if GT given)
         if not self.by_chunks:
             if self.cfg.TEST.VERBOSE:
                 print("Creating the images with detected points . . .")
-            points_pred = np.zeros(pred.shape[:-1], dtype=np.uint8)
-            for n, pred_coordinates in enumerate(all_points):
-                if self.use_gt:
-                    pred_id_img = np.zeros(pred_shape[:-1], dtype=np.uint32)
-                for j, coord in enumerate(pred_coordinates):
+            points_pred_mask = np.zeros(pred.shape[:-1], dtype=np.uint8)
+    
+            if len(pred_points) > 0:
+                # Paint the points
+                for n, coord in enumerate(pred_points):
                     z, y, x = coord
-                    points_pred[z, y, x] = n + 1
-                    if self.use_gt:
-                        pred_id_img[z, y, x] = j + 1
+                    points_pred_mask[z, y, x] = n + 1
 
-                # Dilate and save the prediction ids for the current class
-                if self.use_gt:
-                    for i in range(pred_id_img.shape[0]):
-                        pred_id_img[i] = dilation(pred_id_img[i], disk(3))
-                    if file_ext in [".hdf5", ".hdf", ".h5", ".zarr"]:
-                        write_chunked_data(
-                            np.expand_dims(np.expand_dims(pred_id_img, -1), 0),
-                            self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
-                            os.path.splitext(filenames[0])[0] + "_class" + str(n + 1) + "_pred_ids" + file_ext,
-                            dtype_str="uint32",
-                            verbose=self.cfg.TEST.VERBOSE,
-                        )
-                    else:
-                        save_tif(
-                            np.expand_dims(np.expand_dims(pred_id_img, 0), -1),
-                            self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
-                            [os.path.splitext(filenames[0])[0] + "_class" + str(n + 1) + "_pred_ids.tif"],
-                            verbose=self.cfg.TEST.VERBOSE,
-                        )
-
-            if self.use_gt:
-                del pred_id_img
-
-            # Dilate and save the detected point image
-            if len(pred_coordinates) > 0:
-                for i in range(points_pred.shape[0]):
-                    points_pred[i] = dilation(points_pred[i], disk(3))
-            if file_ext in [".hdf5", ".hdf", ".h5", ".zarr"]:
-                write_chunked_data(
-                    np.expand_dims(np.expand_dims(points_pred, -1), 0),
-                    self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
-                    filenames[0],
-                    dtype_str="uint8",
-                    verbose=self.cfg.TEST.VERBOSE,
-                )
-            else:
-                save_tif(
-                    np.expand_dims(np.expand_dims(points_pred, 0), -1),
-                    self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
-                    filenames,
-                    verbose=self.cfg.TEST.VERBOSE,
-                )
+                # Dilate and save the detected point image
+                for i in range(points_pred_mask.shape[0]):
+                    points_pred_mask[i] = dilation(points_pred_mask[i], disk(3))
+                if file_ext in [".hdf5", ".hdf", ".h5", ".zarr"]:
+                    write_chunked_data(
+                        np.expand_dims(np.expand_dims(points_pred_mask, -1), 0),
+                        self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
+                        filenames[0],
+                        dtype_str="uint8",
+                        verbose=self.cfg.TEST.VERBOSE,
+                    )
+                else:
+                    save_tif(
+                        np.expand_dims(np.expand_dims(points_pred_mask, 0), -1),
+                        self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
+                        filenames,
+                        verbose=self.cfg.TEST.VERBOSE,
+                    )
 
             # Detection watershed
             if self.cfg.TEST.POST_PROCESSING.DET_WATERSHED:
                 data_filename = os.path.join(self.cfg.DATA.TEST.PATH, filenames[0])
                 w_dir = os.path.join(self.cfg.PATHS.WATERSHED_DIR, filenames[0])
                 check_wa = w_dir if self.cfg.PROBLEM.DETECTION.DATA_CHECK_MW else None
-                points_pred = detection_watershed(
-                    points_pred,
-                    all_points,
+                points_pred_mask = detection_watershed(
+                    points_pred_mask,
+                    pred_points,
                     data_filename,
                     self.cfg.TEST.POST_PROCESSING.DET_WATERSHED_FIRST_DILATION,
-                    nclasses=classes,
-                    ndim=ndim,
+                    ndim=self.dims,
                     donuts_classes=self.cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES,
                     donuts_patch=self.cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_PATCH,
                     donuts_nucleus_diameter=self.cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_NUCLEUS_DIAMETER,
@@ -373,8 +381,8 @@ class Detection_Workflow(Base_Workflow):
                 )
 
                 # Instance filtering by properties
-                points_pred, d_result = measure_morphological_props_and_filter(
-                    points_pred,
+                points_pred_mask, d_result = measure_morphological_props_and_filter(
+                    points_pred_mask,
                     self.cfg.DATA.TEST.RESOLUTION,
                     properties=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS,
                     prop_values=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.VALUES,
@@ -383,7 +391,7 @@ class Detection_Workflow(Base_Workflow):
 
                 if file_ext in [".hdf5", ".hdf", ".h5", ".zarr"]:
                     write_chunked_data(
-                        np.expand_dims(np.expand_dims(points_pred, -1), 0),
+                        np.expand_dims(np.expand_dims(points_pred_mask, -1), 0),
                         self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
                         filenames[0],
                         dtype_str="uint8",
@@ -391,21 +399,19 @@ class Detection_Workflow(Base_Workflow):
                     )
                 else:
                     save_tif(
-                        np.expand_dims(np.expand_dims(points_pred, 0), -1),
+                        np.expand_dims(np.expand_dims(points_pred_mask, 0), -1),
                         self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,
                         filenames,
                         verbose=self.cfg.TEST.VERBOSE,
                     )
-            del points_pred
+            del points_pred_mask
 
         # Save coords in a couple of csv files
-        aux = np.concatenate(all_points, axis=0)
         df = None
-        if len(aux) != 0:
+        if len(pred_points) > 0:
+            aux = np.array(pred_points)
             if self.cfg.PROBLEM.NDIM == "3D":
-                prob = pred[aux[:, 0], aux[:, 1], aux[:, 2], all_classes]
-                prob = np.concatenate(prob, axis=0)
-                all_classes = np.concatenate(all_classes, axis=0)
+                prob = pred[aux[:, 0], aux[:, 1], aux[:, 2], 0]
                 if self.cfg.TEST.POST_PROCESSING.DET_WATERSHED:
                     df = pd.DataFrame(
                         zip(
@@ -414,7 +420,7 @@ class Detection_Workflow(Base_Workflow):
                             list(aux[:, 1]),
                             list(aux[:, 2]),
                             list(prob),
-                            list(all_classes),
+                            list(pred_points_classes),
                             d_result["npixels"],
                             d_result["areas"],
                             d_result["sphericities"],
@@ -439,13 +445,8 @@ class Detection_Workflow(Base_Workflow):
                             "conditions",
                         ],
                     )
-                    df = df.sort_values(by=["pred_id"])
                 else:
-                    labels = []
-                    for i, pred_coordinates in enumerate(all_points):
-                        for j in range(len(pred_coordinates)):
-                            labels.append(j + 1)
-
+                    labels = np.array(range(1, len(pred_points) + 1))
                     df = pd.DataFrame(
                         zip(
                             labels,
@@ -453,7 +454,7 @@ class Detection_Workflow(Base_Workflow):
                             list(aux[:, 1]),
                             list(aux[:, 2]),
                             list(prob),
-                            list(all_classes),
+                            list(pred_points_classes),
                         ),
                         columns=[
                             "pred_id",
@@ -464,12 +465,8 @@ class Detection_Workflow(Base_Workflow):
                             "class",
                         ],
                     )
-                    df = df.sort_values(by=["pred_id"])
             else:
-                aux = aux[:, 1:]
-                prob = pred[0, aux[:, 0], aux[:, 1], all_classes]
-                prob = np.concatenate(prob, axis=0)
-                all_classes = np.concatenate(all_classes, axis=0)
+                prob = pred[aux[:, 0], aux[:, 1], 0]
                 if self.cfg.TEST.POST_PROCESSING.DET_WATERSHED:
                     df = pd.DataFrame(
                         zip(
@@ -477,7 +474,7 @@ class Detection_Workflow(Base_Workflow):
                             list(aux[:, 0]),
                             list(aux[:, 1]),
                             list(prob),
-                            list(all_classes),
+                            list(pred_points_classes),
                             d_result["npixels"],
                             d_result["areas"],
                             d_result["circularities"],
@@ -503,19 +500,23 @@ class Detection_Workflow(Base_Workflow):
                             "conditions",
                         ],
                     )
-                    df = df.sort_values(by=["pred_id"])
                 else:
+                    labels = np.array(range(1, len(pred_points) + 1))
                     df = pd.DataFrame(
                         zip(
+                            labels,
                             list(aux[:, 0]),
                             list(aux[:, 1]),
                             list(prob),
-                            list(all_classes),
+                            list(pred_points_classes),
                         ),
-                        columns=["axis-0", "axis-1", "probability", "class"],
+                        columns=["pred_id", "axis-0", "axis-1", "probability", "class"],
                     )
-                    df = df.sort_values(by=["axis-0"])
+            df = df.sort_values(by=["pred_id"])
             del aux
+
+            if not self.multihead:
+                df = df.drop(columns=["class"])
 
             # Save just the points and their probabilities
             os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, exist_ok=True)
@@ -529,8 +530,8 @@ class Detection_Workflow(Base_Workflow):
         # Calculate detection metrics
         if self.use_gt:
             all_channel_d_metrics = [0, 0, 0, 0, 0, 0]
-            dfs = []
-            gt_all_coords = []
+            if self.multihead:
+                all_channel_d_metrics += [0, 0, 0, 0, 0]
 
             # Read the GT coordinates from the CSV file
             csv_filename = os.path.join(self.original_test_mask_path, os.path.splitext(filenames[0])[0] + ".csv")
@@ -549,19 +550,21 @@ class Detection_Workflow(Base_Workflow):
             df_gt = df_gt.rename(columns=lambda x: x.strip())
             zcoords = df_gt["axis-0"].tolist()
             ycoords = df_gt["axis-1"].tolist()
-            class_info = None
             if self.cfg.PROBLEM.NDIM == "3D":
                 xcoords = df_gt["axis-2"].tolist()
                 gt_coordinates = [[z, y, x] for z, y, x in zip(zcoords, ycoords, xcoords)]
             else:
                 gt_coordinates = [[0, y, x] for y, x in zip(zcoords, ycoords)]
 
-            if classes > 1:
+            if self.cfg.MODEL.N_CLASSES > 2:
                 if "class" not in df_gt:
-                    raise ValueError("MODEL.N_CLASSES > 1 but no class specified in CSV file")
-                else:
-                    class_info = df_gt["class"].tolist()
-
+                    raise ValueError("MODEL.N_CLASSES > 2 but no class specified in the CSV file")
+            gt_points_classes = None
+            if self.multihead:
+                if "class" not in df_gt:
+                    raise ValueError("'class' column not present in the CSV file")
+                gt_points_classes = df_gt["class"].tolist()
+            
             # Take only into account the GT points corresponding to the patch at hand
             if patch_pos is not None:
                 patch_gt_coordinates = []
@@ -580,7 +583,6 @@ class Detection_Workflow(Base_Workflow):
                         if z >= pred_shape[0] or y >= pred_shape[1] or x >= pred_shape[2]:
                             raise ValueError(f"Point [{z},{y},{x}] outside image with shape {pred_shape}")
                 gt_coordinates = patch_gt_coordinates.copy()
-            gt_all_coords.append(gt_coordinates)
 
             roi_to_consider = []
             if self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX:
@@ -625,93 +627,72 @@ class Detection_Workflow(Base_Workflow):
                             ),
                         ],
                     ]
-            for ch, pred_coordinates in enumerate(all_points):
-                # If there was class info take only the points related to the class at hand
-                if class_info is not None:
-                    class_points = []
-                    for i in range(len(gt_coordinates)):
-                        if int(class_info[i]) == ch:
-                            class_points.append(gt_coordinates[i])
-                    gt_coordinates = class_points.copy()
-                    del class_points
 
-                # Calculate detection metrics
-                if len(pred_coordinates) > 0:
-                    if self.cfg.TEST.VERBOSE:
-                        print("Detection (class " + str(ch + 1) + ")")
-                    d_metrics, gt_assoc, fp = detection_metrics(
-                        gt_coordinates,
-                        pred_coordinates,
-                        tolerance=self.cfg.TEST.DET_TOLERANCE[ch],
-                        voxel_size=self.v_size,
-                        return_assoc=True,
-                        bbox_to_consider=roi_to_consider,
-                        verbose=self.cfg.TEST.VERBOSE,
-                    )
-                    if self.cfg.TEST.VERBOSE:
-                        print("Detection metrics: {}".format(d_metrics))
-
-                    all_channel_d_metrics[0] += d_metrics["Precision"]
-                    all_channel_d_metrics[1] += d_metrics["Recall"]
-                    all_channel_d_metrics[2] += d_metrics["F1"]
-                    all_channel_d_metrics[3] += d_metrics["TP"]
-                    all_channel_d_metrics[4] += d_metrics["FP"]
-                    all_channel_d_metrics[5] += d_metrics["FN"]
-
-                    # Save csv files with the associations between GT points and predicted ones
-                    if gt_assoc is not None and fp is not None:
-                        dfs.append([gt_assoc.copy(), fp.copy()])
-                    else:
-                        if gt_assoc is not None:
-                            dfs.append([gt_assoc.copy(), None])
-                        if fp is not None:
-                            dfs.append([None, fp.copy()])
-                    if self.cfg.PROBLEM.NDIM == "2D":
-                        if gt_assoc is not None:
-                            gt_assoc = gt_assoc.drop(columns=["axis-0"])
-                            gt_assoc = gt_assoc.rename(columns={"axis-1": "axis-0", "axis-2": "axis-1"})
-                        if fp is not None:
-                            fp = fp.drop(columns=["axis-0"])
-                            fp = fp.rename(columns={"axis-1": "axis-0", "axis-2": "axis-1"})
-                    if gt_assoc is not None:
-                        os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, exist_ok=True)
-                        gt_assoc.to_csv(
-                            os.path.join(
-                                self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
-                                os.path.splitext(filenames[0])[0] + "_class" + str(ch + 1) + "_gt_assoc.csv",
-                            )
-                        )
-                    if fp is not None:
-                        os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, exist_ok=True)
-                        fp.to_csv(
-                            os.path.join(
-                                self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
-                                os.path.splitext(filenames[0])[0] + "_class" + str(ch + 1) + "_fp.csv",
-                            )
-                        )
-                else:
-                    if self.cfg.TEST.VERBOSE:
-                        print("No point found to calculate the metrics!")
-
-            if self.cfg.TEST.VERBOSE:
-                if len(gt_coordinates) == 0:
-                    print("No points found in GT!")
-                print("All classes " + str(ch + 1))
-            for k in range(len(all_channel_d_metrics)):
-                all_channel_d_metrics[k] = all_channel_d_metrics[k] / len(all_points)
-            if self.cfg.TEST.VERBOSE:
-                print(
-                    "Detection metrics: {}".format(
-                        [
-                            "Precision",
-                            all_channel_d_metrics[0],
-                            "Recall",
-                            all_channel_d_metrics[1],
-                            "F1",
-                            all_channel_d_metrics[2],
-                        ]
-                    )
+            # Calculate detection metrics
+            fp, gt_assoc = None, None
+            if len(pred_points) > 0:
+                
+                d_metrics, gt_assoc, fp = detection_metrics(
+                    gt_coordinates,
+                    pred_points,
+                    true_classes=gt_points_classes,
+                    pred_classes=pred_points_classes,
+                    tolerance=self.cfg.TEST.DET_TOLERANCE,
+                    voxel_size=self.v_size,
+                    bbox_to_consider=roi_to_consider,
+                    verbose=self.cfg.TEST.VERBOSE,
                 )
+                if self.cfg.TEST.VERBOSE:
+                    print("Detection metrics: {}".format(d_metrics))
+
+                all_channel_d_metrics[0] += d_metrics["Precision"]
+                all_channel_d_metrics[1] += d_metrics["Recall"]
+                all_channel_d_metrics[2] += d_metrics["F1"]
+                all_channel_d_metrics[3] += d_metrics["TP"]
+                all_channel_d_metrics[4] += d_metrics["FP"]
+                all_channel_d_metrics[5] += d_metrics["FN"]
+                if self.multihead:
+                    all_channel_d_metrics[6] += d_metrics["Precision (class)"]
+                    all_channel_d_metrics[7] += d_metrics["Recall (class)"]
+                    all_channel_d_metrics[8] += d_metrics["F1 (class)"]
+                    all_channel_d_metrics[9] += d_metrics["TP (class)"]
+                    all_channel_d_metrics[9] += d_metrics["FN (class)"]
+
+                # Save csv files with the associations between GT points and predicted ones
+                if gt_assoc is not None:
+                    gt_assoc_orig = gt_assoc.copy()
+                if fp is not None:
+                    fp_orig = fp.copy()   
+                if self.cfg.PROBLEM.NDIM == "2D":
+                    if gt_assoc is not None:
+                        gt_assoc = gt_assoc.drop(columns=["axis-0"])
+                        gt_assoc = gt_assoc.rename(columns={"axis-1": "axis-0", "axis-2": "axis-1"})
+                    if fp is not None:
+                        fp = fp.drop(columns=["axis-0"])
+                        fp = fp.rename(columns={"axis-1": "axis-0", "axis-2": "axis-1"})
+                if gt_assoc is not None:
+                    os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, exist_ok=True)
+                    gt_assoc.to_csv(
+                        os.path.join(
+                            self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
+                            os.path.splitext(filenames[0])[0] + "_gt_assoc.csv",
+                        )
+                    )
+                if fp is not None:
+                    os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, exist_ok=True)
+                    fp.to_csv(
+                        os.path.join(
+                            self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
+                            os.path.splitext(filenames[0])[0] + "_fp.csv",
+                        )
+                    )
+                if gt_assoc is not None:
+                    gt_assoc = gt_assoc_orig
+                if fp is not None:
+                    fp = fp_orig  
+            else:
+                if self.cfg.TEST.VERBOSE:
+                    print("No point found to calculate the metrics!")
 
             if not self.by_chunks:
                 for n, metric in enumerate(self.test_extra_metrics):
@@ -719,73 +700,67 @@ class Detection_Workflow(Base_Workflow):
                         self.stats[inference_type][str(metric.lower())] = 0
                     self.stats[inference_type][str(metric).lower()] += all_channel_d_metrics[n]
 
-            if self.cfg.TEST.VERBOSE:
-                print("Creating the image with a summary of detected points and false positives with colors . . .")
-            if not self.by_chunks:
-                points_pred = np.zeros(pred_shape[:-1] + (3,), dtype=np.uint8)
-                for ch, gt_coords in enumerate(gt_all_coords):
-                    # if gt_assoc is None:
-                    gt_assoc, fp = None, None
-                    if len(dfs) > 0 and len(dfs[ch]) > 0:
-                        if dfs[ch][0] is not None:
-                            gt_assoc = dfs[ch][0]
-                        if dfs[ch][1] is not None:
-                            fp = dfs[ch][1]
+                if self.cfg.TEST.VERBOSE:
+                    if len(gt_coordinates) == 0:
+                        print("No points found in GT!")
+                    print("Creating the image with a summary of detected points and false positives with colors . . .")
+                    
+                points_pred_mask_color = np.zeros(pred_shape[:-1] + (3,), dtype=np.uint8)
 
-                    # TP and FN
-                    gt_id_img = np.zeros(pred_shape[:-1], dtype=np.uint32)
-                    for j, cor in enumerate(gt_coords):
-                        z, y, x = cor
-                        z, y, x = int(z), int(y), int(x)
-                        if gt_assoc is not None:
-                            if gt_assoc[gt_assoc["gt_id"] == j + 1]["tag"].iloc[0] == "TP":
-                                points_pred[z, y, x] = (0, 255, 0)  # Green
-                            elif gt_assoc[gt_assoc["gt_id"] == j + 1]["tag"].iloc[0] == "NC":
-                                points_pred[z, y, x] = (150, 150, 150)  # Gray
-                            else:
-                                points_pred[z, y, x] = (255, 0, 0)  # Red
+                # TP and FN
+                gt_id_img = np.zeros(pred_shape[:-1], dtype=np.uint32)
+                for j, cor in enumerate(gt_coordinates):
+                    z, y, x = cor
+                    z, y, x = int(z), int(y), int(x)
+                    if gt_assoc is not None:
+                        if gt_assoc[gt_assoc["gt_id"] == j + 1]["tag"].iloc[0] == "TP":
+                            points_pred_mask_color[z, y, x] = (0, 255, 0)  # Green
+                        elif gt_assoc[gt_assoc["gt_id"] == j + 1]["tag"].iloc[0] == "NC":
+                            points_pred_mask_color[z, y, x] = (150, 150, 150)  # Gray
                         else:
-                            points_pred[z, y, x] = (255, 0, 0)  # Red
-
-                        gt_id_img[z, y, x] = j + 1
-
-                    # Dilate and save the GT ids for the current class
-                    for i in range(gt_id_img.shape[0]):
-                        gt_id_img[i] = dilation(gt_id_img[i], disk(3))
-                    if file_ext in [".hdf5", ".hdf", ".h5", ".zarr"]:
-                        write_chunked_data(
-                            np.expand_dims(np.expand_dims(gt_id_img, -1), 0),
-                            self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
-                            os.path.splitext(filenames[0])[0] + "_class" + str(ch + 1) + "_gt_ids" + file_ext,
-                            dtype_str="uint32",
-                            verbose=self.cfg.TEST.VERBOSE,
-                        )
+                            points_pred_mask_color[z, y, x] = (255, 0, 0)  # Red
                     else:
-                        save_tif(
-                            np.expand_dims(np.expand_dims(gt_id_img, 0), -1),
-                            self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
-                            [os.path.splitext(filenames[0])[0] + "_class" + str(ch + 1) + "_gt_ids.csv"],
-                            verbose=self.cfg.TEST.VERBOSE,
-                        )
+                        points_pred_mask_color[z, y, x] = (255, 0, 0)  # Red
 
-                    # FP
-                    if fp is not None:
-                        for cor in zip(
-                            fp["axis-0"].tolist(),
-                            fp["axis-1"].tolist(),
-                            fp["axis-2"].tolist(),
-                        ):
-                            z, y, x = cor
-                            z, y, x = int(z), int(y), int(x)
-                            points_pred[z, y, x] = (0, 0, 255)  # Blue
+                    gt_id_img[z, y, x] = j + 1
 
-                # Dilate and save the predicted points for the current class
-                for i in range(points_pred.shape[0]):
-                    for j in range(points_pred.shape[-1]):
-                        points_pred[i, ..., j] = dilation(points_pred[i, ..., j], disk(3))
+                # Dilate and save the GT ids for the current class
+                for i in range(gt_id_img.shape[0]):
+                    gt_id_img[i] = dilation(gt_id_img[i], disk(3))
                 if file_ext in [".hdf5", ".hdf", ".h5", ".zarr"]:
                     write_chunked_data(
-                        np.expand_dims(points_pred, 0),
+                        np.expand_dims(np.expand_dims(gt_id_img, -1), 0),
+                        self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
+                        os.path.splitext(filenames[0])[0] + "_gt_ids" + file_ext,
+                        dtype_str="uint32",
+                        verbose=self.cfg.TEST.VERBOSE,
+                    )
+                else:
+                    save_tif(
+                        np.expand_dims(np.expand_dims(gt_id_img, 0), -1),
+                        self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
+                        [os.path.splitext(filenames[0])[0] + "_gt_ids.csv"],
+                        verbose=self.cfg.TEST.VERBOSE,
+                    )
+
+                # FP
+                if fp is not None:
+                    for cor in zip(
+                        fp["axis-0"].tolist(),
+                        fp["axis-1"].tolist(),
+                        fp["axis-2"].tolist(),
+                    ):
+                        z, y, x = cor
+                        z, y, x = int(z), int(y), int(x)
+                        points_pred_mask_color[z, y, x] = (0, 0, 255)  # Blue
+
+                # Dilate and save the predicted points for the current class
+                for i in range(points_pred_mask_color.shape[0]):
+                    for j in range(points_pred_mask_color.shape[-1]):
+                        points_pred_mask_color[i, ..., j] = dilation(points_pred_mask_color[i, ..., j], disk(3))
+                if file_ext in [".hdf5", ".hdf", ".h5", ".zarr"]:
+                    write_chunked_data(
+                        np.expand_dims(points_pred_mask_color, 0),
                         self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
                         filenames[0],
                         dtype_str="uint8",
@@ -793,7 +768,7 @@ class Detection_Workflow(Base_Workflow):
                     )
                 else:
                     save_tif(
-                        np.expand_dims(points_pred, 0),
+                        np.expand_dims(points_pred_mask_color, 0),
                         self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
                         filenames,
                         verbose=self.cfg.TEST.VERBOSE,
@@ -1102,12 +1077,11 @@ class Detection_Workflow(Base_Workflow):
 
         # Apply post-processing of removing points
         if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS and self.by_chunks:
-            radius = self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS[0]
             pred_coordinates, dropped_pos = remove_close_points(
                 pred_coordinates,
-                radius,
+                self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS,
                 self.cfg.DATA.TEST.RESOLUTION,
-                ndim=3,
+                ndim=self.dims,
                 return_drops=True,
             )
 
@@ -1194,9 +1168,8 @@ class Detection_Workflow(Base_Workflow):
             d_metrics, gt_assoc, fp = detection_metrics(
                 gt_coordinates,
                 pred_coordinates,
-                tolerance=self.cfg.TEST.DET_TOLERANCE[0],
+                tolerance=self.cfg.TEST.DET_TOLERANCE,
                 voxel_size=self.v_size,
-                return_assoc=True,
                 bbox_to_consider=roi_to_consider,
                 verbose=self.cfg.TEST.VERBOSE,
             )
@@ -1214,29 +1187,24 @@ class Detection_Workflow(Base_Workflow):
         if self.cfg.MODEL.SOURCE != "torchvision":
             super().process_test_sample()
         else:
-            # Skip processing image 
-            if "discard" in self.current_sample["X"] and self.current_sample["X"]["discard"]: 
+            # Skip processing image
+            if "discard" in self.current_sample["X"] and self.current_sample["X"]["discard"]:
                 return True
-            
+
             # Save BMZ input/output if the user wants to export the model to BMZ later
             if self.cfg.MODEL.BMZ.EXPORT.ENABLE and "test_output" not in self.bmz_config:
                 # Generate prediction and save test_output
                 self.prepare_bmz_sample("test_input", self.current_sample["X"])
                 p = self.model(torch.from_numpy(self.bmz_config["test_input"]).to(self.device))
                 self.prepare_bmz_sample(
-                    "test_output", 
-                    self.apply_model_activations(
-                        p.clone()
-                    ).cpu().detach().numpy().astype(np.float32)
+                    "test_output", self.apply_model_activations(p.clone()).cpu().detach().numpy().astype(np.float32)
                 )
 
                 # Save test_input
                 self.bmz_config["test_input"] = undo_sample_normalization(
-                    self.current_sample["X"], 
-                    self.current_sample["X_norm"]
+                    self.current_sample["X"], self.current_sample["X_norm"]
                 ).astype(np.float32)
                 self.prepare_bmz_sample("test_input", self.bmz_config["test_input"])
-
 
             ##################
             ### FULL IMAGE ###
@@ -1245,11 +1213,11 @@ class Detection_Workflow(Base_Workflow):
             with torch.cuda.amp.autocast():
                 pred = self.model_call_func(self.current_sample["X"])
             del self.current_sample["X"]
-            
-            # In Torchvision the output is a collection of bboxes so there is nothing else to do here 
+
+            # In Torchvision the output is a collection of bboxes so there is nothing else to do here
             if self.cfg.MODEL.SOURCE == "torchvision" and pred is None:
                 return
-            
+
             if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE:
                 reflected_orig_shape = (1,) + self.current_sample["reflected_orig_shape"]
                 if reflected_orig_shape != pred.shape:
