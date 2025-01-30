@@ -1691,6 +1691,9 @@ def measure_morphological_props_and_filter(
                     else 0
                 )
                 circularities[label_index] = sphericity
+                
+        # Convert diplib.PyDIP_bin.Image back into numpy array
+        img = np.array(img)
 
     # Remove those instances that do not satisfy the properties
     conditions = []
