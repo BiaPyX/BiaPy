@@ -1293,7 +1293,11 @@ class Base_Workflow(metaclass=ABCMeta):
                     if self.model_output_channels["type"] == "image":
                         shape = img.shape 
                     else: # mask
-                        shape = img.shape[:-1] + (self.model_output_channels["channels"],) 
+                        if len(self.model_output_channels["channels"]) == 2:
+                            channels = self.model_output_channels["channels"]+1
+                        else:
+                            channels = self.model_output_channels["channels"][0]
+                        shape = img.shape[:-1] + (channels,) 
                     p = np.zeros(shape)
 
                 t_dim, z_dim, y_dim, x_dim, c_dim = order_dimensions(
