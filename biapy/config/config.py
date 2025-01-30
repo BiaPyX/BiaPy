@@ -1306,7 +1306,7 @@ class Config:
         _C.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS = False
         # Distance between points to be considered the same. Only applies when TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS = True
         # This can also be set when using 'BP' channels for instance segmentation.
-        _C.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS = -1.0
+        _C.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS = 0
         # Whether to apply a watershed to grow the points detected
         _C.TEST.POST_PROCESSING.DET_WATERSHED = False
         # Structure to dilate the initial seeds before watershed. For instance in a 3D problem: [10,10,4]

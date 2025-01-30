@@ -1656,7 +1656,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 raise ValueError(
                     "'TRAIN.LR_SCHEDULER.REDUCEONPLATEAU_PATIENCE' needs to be set when 'TRAIN.LR_SCHEDULER.NAME' is 'reduceonplateau'"
                 )
-            if cfg.TRAIN.LR_SCHEDULER.REDUCEONPLATEAU_PATIENCE >= cfg.TRAIN.PATIENCE:
+            if cfg.TRAIN.PATIENCE != -1 and cfg.TRAIN.LR_SCHEDULER.REDUCEONPLATEAU_PATIENCE >= cfg.TRAIN.PATIENCE:
                 raise ValueError(
                     "'TRAIN.LR_SCHEDULER.REDUCEONPLATEAU_PATIENCE' needs to be less than 'TRAIN.PATIENCE' "
                 )
@@ -1804,7 +1804,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "'DATA.TEST.RESOLUTION' must match in length to {}, which is the number of "
                 "dimensions".format(dim_count)
             )
-        if cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS == -1:
+        if cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS == 0:
             raise ValueError(
                 "'TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS' needs to be set when 'TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS' is True"
             )
