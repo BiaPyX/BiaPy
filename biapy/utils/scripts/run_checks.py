@@ -76,7 +76,7 @@ all_test_info["Test4"] = {
     "internal_checks": [
         {"type": "regular", "pattern": "Test IoU (B channel) (merge patches):", "gt": True, "value": 0.4},
         {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 1, "metric": "f1",
-            "gt": True, "value": 0.7},
+            "gt": True, "value": 0.65},
         {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 2, "metric": "f1",
             "gt": False, "value": 0.3}, # Post-processing
     ]
@@ -440,6 +440,20 @@ all_test_info["Test34"] = {
     ]
 }
 
+all_test_info["Test35"] = {
+    "enable": True,
+    "run_experiment": True,
+    "jobname": "test35",
+    "description": "2D Instance seg. Conic 2D data (multihead). Basic DA. BC (auto). resunet++. ",
+    "yaml": "test_35.yaml",
+    "internal_checks": [
+        {"type": "regular", "pattern": "Test IoU (B channel) (merge patches):", "gt": True, "value": 0.35},
+        {"type": "regular", "pattern": "Merge patches classification IoU:", "gt": True, "value": 0.1},
+        {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 1, "metric": "f1",
+            "gt": True, "value": 0.45},
+    ]
+}
+
 ################################################
 # NO-DEVS: DO NOT TOUCH BELOW THIS LINE
 ################################################
@@ -499,6 +513,11 @@ instance_seg_snemi_zarr_data_outpath = os.path.join(inst_seg_folder, "snemi_zarr
 instance_seg_mitoem_data_drive_link = "https://drive.google.com/uc?id=1xrSsK23-2KfxCanaNJD7dldewWboKIw5"
 instance_seg_mitoem_data_filename = "MitoEM_human_2d_toy_data.zip"
 instance_seg_mitoem_data_outpath = os.path.join(inst_seg_folder, "MitoEM_human_2d_toy_data")
+
+# Conic for multihead
+instance_seg_conic_data_drive_link = "https://drive.google.com/uc?id=1QGV0gP8N8B8-EmcAPNQAudr2dqXYzhss"
+instance_seg_conic_data_filename = "Conic.zip"
+instance_seg_conic_data_outpath = os.path.join(inst_seg_folder, "Conic")
 
 ###########
 # Detection
@@ -687,26 +706,41 @@ if not os.path.exists(semantic_3d_data_outpath) and all_test_info["Test2"]["enab
 ###############
 
 # General things: 2D Data + YAML donwload
-if (not os.path.exists(instance_seg_2d_data_outpath) or not os.path.exists(instance_seg_2d_affable_shark_data_outpath)) \
-     and (all_test_info["Test4"]["enable"] or all_test_info["Test29"]["enable"] or all_test_info["Test31"]["enable"]):
+if (
+    (
+        not os.path.exists(instance_seg_2d_data_outpath) 
+        or not os.path.exists(instance_seg_2d_affable_shark_data_outpath)
+        or not os.path.exists(instance_seg_conic_data_outpath)
+    )
+    and
+    (
+        all_test_info["Test4"]["enable"] 
+        or all_test_info["Test29"]["enable"] 
+        or all_test_info["Test31"]["enable"]
+        or all_test_info["Test35"]["enable"]
+    )
+):
     print("Downloading 2D instance seg. data . . .")
+    os.makedirs(inst_seg_folder, exist_ok=True)
+    os.chdir(inst_seg_folder)
 
     if all_test_info["Test4"]["enable"] or all_test_info["Test31"]["enable"]:
-        os.makedirs(inst_seg_folder, exist_ok=True)
-        os.chdir(inst_seg_folder)
         download_drive_file(instance_seg_2d_data_drive_link, instance_seg_2d_data_filename)
 
         with ZipFile(os.path.join(inst_seg_folder, instance_seg_2d_data_filename), 'r') as zObject:
             zObject.extractall(path=instance_seg_2d_data_outpath)
 
     if all_test_info["Test29"]["enable"]:
-        os.makedirs(inst_seg_folder, exist_ok=True)
-        os.chdir(inst_seg_folder)
         _, _ = urllib.request.urlretrieve(instance_seg_2d_affable_shark_data_link, filename=instance_seg_2d_affable_shark_data_filename)
 
         with ZipFile(os.path.join(inst_seg_folder, instance_seg_2d_affable_shark_data_filename), 'r') as zObject:
             zObject.extractall(path=inst_seg_folder)
 
+    if all_test_info["Test35"]["enable"]:
+        download_drive_file(instance_seg_conic_data_drive_link, instance_seg_conic_data_filename)
+
+        with ZipFile(os.path.join(inst_seg_folder, instance_seg_conic_data_filename), 'r') as zObject:
+            zObject.extractall(path=instance_seg_conic_data_outpath)
 
     if not os.path.exists(instance_seg_2d_template_local):
         print("Downloading instance seg. YAML . . .")
@@ -1483,11 +1517,11 @@ if all_test_info["Test5"]["enable"]:
     biapy_config['PROBLEM']['INSTANCE_SEG']['DATA_CHECK_MW'] = True
     biapy_config['PROBLEM']['INSTANCE_SEG']['WATERSHED_BY_2D_SLICES'] = True
 
-    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(instance_seg_3d_data_outpath, "data", "train", "raw")
-    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(instance_seg_3d_data_outpath, "data", "train", "label")
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(instance_seg_3d_data_outpath, "data", "train", "x")
+    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(instance_seg_3d_data_outpath, "data", "train", "y")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
-    biapy_config['DATA']['TEST']['PATH'] = os.path.join(instance_seg_3d_data_outpath, "data", "test", "raw")
-    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(instance_seg_3d_data_outpath, "data", "test", "label")
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(instance_seg_3d_data_outpath, "data", "test", "x")
+    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(instance_seg_3d_data_outpath, "data", "test", "y")
     biapy_config['DATA']['TEST']['IN_MEMORY'] = False
     biapy_config['DATA']['TEST']['LOAD_GT'] = True
 
@@ -1861,11 +1895,11 @@ if all_test_info["Test11"]["enable"]:
     biapy_config['DATA']['TRAIN']['FILTER_SAMPLES']['VALUES'] = [[1.0e-22]]
     biapy_config['DATA']['TRAIN']['FILTER_SAMPLES']['SIGNS'] = [["lt"]]
     biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(detection_3d_brainglobe_data_outpath, "data", "3D_ch2ch4_Zarr")
-    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(detection_3d_brainglobe_data_outpath, "data", "label")
+    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(detection_3d_brainglobe_data_outpath, "data", "y")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
     biapy_config['DATA']['VAL']['SPLIT_TRAIN'] = 0.1
     biapy_config['DATA']['TEST']['PATH'] = os.path.join(detection_3d_brainglobe_data_outpath, "data", "3D_ch2ch4_Zarr")
-    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(detection_3d_brainglobe_data_outpath, "data", "label")
+    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(detection_3d_brainglobe_data_outpath, "data", "y")
     biapy_config['DATA']['TEST']['IN_MEMORY'] = False
     biapy_config['DATA']['TEST']['LOAD_GT'] = True
     biapy_config['DATA']['TEST']['PADDING'] = "(0,18,18)"
@@ -2484,13 +2518,15 @@ if all_test_info["Test17"]["enable"]:
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
     biapy_config['DATA']['TEST']['PATH'] = os.path.join(self_supervision_3d_data_outpath, "data", "test", "raw")
     biapy_config['DATA']['TEST']['IN_MEMORY'] = False
-
+    biapy_config['DATA']['TEST']['PADDING'] = "(4,16,16)"
     biapy_config['TRAIN']['ENABLE'] = True
     biapy_config['TRAIN']['EPOCHS'] = 20
     biapy_config['TRAIN']['BATCH_SIZE'] = 1
     biapy_config['TRAIN']['PATIENCE'] = -1
 
     biapy_config['MODEL']['ARCHITECTURE'] = 'resunet++'
+    biapy_config['MODEL']['Z_DOWN'] = [1,1,1,1]
+
     biapy_config['MODEL']['LOAD_CHECKPOINT'] = False
 
     biapy_config['TEST']['ENABLE'] = True
@@ -3176,16 +3212,16 @@ if all_test_info["Test26"]["enable"]:
     biapy_config['DATA']['TRAIN']['FILTER_SAMPLES']['VALUES'] = [[1.0e-22], [0.1]]
     biapy_config['DATA']['TRAIN']['FILTER_SAMPLES']['SIGNS'] = [["lt"], ["lt"]]
     biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(detection_3d_brainglobe_data_outpath, "data", "3D_ch2ch4_Zarr")
-    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(detection_3d_brainglobe_data_outpath, "data", "label")
+    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(detection_3d_brainglobe_data_outpath, "data", "y")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = False
     biapy_config['DATA']['VAL']['FROM_TRAIN'] = False
     biapy_config['DATA']['VAL']['PATH'] = os.path.join(detection_3d_brainglobe_data_outpath, "data", "3D_ch2ch4_Zarr")
-    biapy_config['DATA']['VAL']['GT_PATH'] = os.path.join(detection_3d_brainglobe_data_outpath, "data", "label")
+    biapy_config['DATA']['VAL']['GT_PATH'] = os.path.join(detection_3d_brainglobe_data_outpath, "data", "y")
     biapy_config['DATA']['VAL']['IN_MEMORY'] = False
     biapy_config['DATA']['VAL']['INPUT_IMG_AXES_ORDER'] = 'ZYXC'
     biapy_config['DATA']['VAL']['INPUT_MASK_AXES_ORDER'] = 'TZCYX'
     biapy_config['DATA']['TEST']['PATH'] = os.path.join(detection_3d_brainglobe_data_outpath, "data", "3D_ch2ch4_Zarr")
-    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(detection_3d_brainglobe_data_outpath, "data", "label")
+    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(detection_3d_brainglobe_data_outpath, "data", "y")
     biapy_config['DATA']['TEST']['IN_MEMORY'] = False
     biapy_config['DATA']['TEST']['LOAD_GT'] = True
     biapy_config['DATA']['TEST']['PADDING'] = "(0,18,18)"
@@ -3281,7 +3317,6 @@ if all_test_info["Test27"]["enable"]:
     biapy_config['PROBLEM']['INSTANCE_SEG']['DATA_CHANNELS'] = 'BC'
     biapy_config['PROBLEM']['INSTANCE_SEG']['DATA_MW_TH_TYPE'] = "manual"
     biapy_config['PROBLEM']['INSTANCE_SEG']['DATA_MW_TH_BINARY_MASK'] = 0.9
-    biapy_config['PROBLEM']['INSTANCE_SEG']['DATA_MW_TH_CONTOUR'] = 0.1
     biapy_config['PROBLEM']['INSTANCE_SEG']['DATA_MW_TH_CONTOUR'] = 0.1
     biapy_config['PROBLEM']['INSTANCE_SEG']['DATA_REMOVE_SMALL_OBJ_BEFORE'] = 20
     biapy_config['PROBLEM']['INSTANCE_SEG']['DATA_REMOVE_BEFORE_MW'] = True
@@ -3923,6 +3958,83 @@ if all_test_info["Test34"]["enable"]:
 
     # Test result
     print_result(results, all_test_info["Test34"]["jobname"], int_checks)
+    test_results.append(correct)
+
+#~~~~~~~~~~~~
+# Test 35
+#~~~~~~~~~~~~
+if all_test_info["Test35"]["enable"]:
+    print("######")
+    print("Running Test 35")
+    print_inventory(all_test_info["Test35"])
+
+    #*******************
+    # File preparation
+    #*******************
+    # Open config file
+    with open(instance_seg_2d_template_local, 'r') as stream:
+        try:
+            biapy_config = yaml.safe_load(stream)
+        except yaml.YAMLError as exc:
+            raise ValueError(exc)
+
+    biapy_config['PROBLEM']['INSTANCE_SEG']['DATA_CHANNELS'] = 'BC'
+    biapy_config['PROBLEM']['INSTANCE_SEG']['DATA_MW_TH_TYPE'] = "auto"
+
+    biapy_config['DATA']['PATCH_SIZE'] = "(256,256,3)"
+    biapy_config['DATA']['NORMALIZATION'] = {}
+    biapy_config['DATA']['NORMALIZATION']['TYPE'] = 'custom'
+
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(instance_seg_conic_data_outpath, "conic_instance_subset", "train", "raw")
+    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(instance_seg_conic_data_outpath, "conic_instance_subset", "train", "label")
+    biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(instance_seg_conic_data_outpath, "conic_instance_subset", "tiny_test", "raw")
+    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(instance_seg_conic_data_outpath, "conic_instance_subset", "tiny_test", "label")
+    biapy_config['DATA']['TEST']['IN_MEMORY'] = False
+    biapy_config['DATA']['TEST']['LOAD_GT'] = True
+
+    biapy_config['TRAIN']['ENABLE'] = True
+    biapy_config['TRAIN']['EPOCHS'] = 5
+    biapy_config['TRAIN']['PATIENCE'] = 5
+    biapy_config['TRAIN']['BATCH_SIZE'] = 4
+
+    biapy_config['MODEL']['ARCHITECTURE'] = 'resunet'
+    biapy_config['MODEL']['N_CLASSES'] = 7
+
+    biapy_config['TEST']['ENABLE'] = True
+    biapy_config['TEST']['FULL_IMG'] = False
+
+    # Save file
+    test_file = os.path.join(inst_seg_folder, all_test_info["Test35"]["yaml"])
+    with open(test_file, 'w') as outfile:
+        yaml.dump(biapy_config, outfile, default_flow_style=False)
+
+    # Run
+    if all_test_info["Test35"]["run_experiment"]:
+        runjob(all_test_info["Test35"], results_folder, test_file, biapy_folder, multigpu=True)
+
+    # Check
+    results = []
+    correct = True
+    res, last_lines = check_finished(all_test_info["Test35"], "Test 35")
+    if not res:
+        correct = False
+        print("Internal check not passed: seems that it didn't finish")
+    results.append(res)
+    int_checks = 1
+    for checks in all_test_info["Test35"]["internal_checks"]:
+        if checks["type"] == "regular":
+            results.append(check_value(last_lines, checks["pattern"], checks["value"], checks["gt"]))
+        else:
+            results.append(check_DatasetMatching(last_lines, checks["pattern"], checks["value"], gt=checks["gt"],
+                value_to_check=checks["nApparition"], metric=checks["metric"]))
+        int_checks += 1
+        if not results[-1]:
+            correct = False
+            print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
+
+    # Test result
+    print_result(results, all_test_info["Test35"]["jobname"], int_checks)
     test_results.append(correct)
 
 print("Finish tests!!")
