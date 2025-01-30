@@ -223,7 +223,7 @@ def load_and_prepare_train_data(
                 * ``"y_end"``: end point of the patch in Y axis.
                 * ``"x_start"``: starting point of the patch in X axis.
                 * ``"x_end"``: end point of the patch in X axis.
-            * ``"original_data_shape"``: shape of the image where the samples is extracted (useful for reconstructing it later),
+            * ``"original_data_shape"``: shape of the image where the samples are extracted (useful for reconstructing it later).
             * ``"shape"``: shape of the sample.
             * ``"img"`` (optional): image sample itself. It is a ndarrray of  ``(y, x, channels)`` in ``2D`` and
               ``(z, y, x, channels)`` in ``3D``. Provided when ``train_in_memory`` is ``True``.
@@ -246,7 +246,7 @@ def load_and_prepare_train_data(
                 * ``"y_end"``: end point of the patch in Y axis.
                 * ``"x_start"``: starting point of the patch in X axis.
                 * ``"x_end"``: end point of the patch in X axis.
-            * ``"original_data_shape"``: shape of the image where the samples is extracted (useful for reconstructing it later),
+            * ``"original_data_shape"``: shape of the image where the samples are extracted (useful for reconstructing it later).
             * ``"shape"``: shape of the sample.
             * ``"img"`` (optional): image sample itself. It is a ndarrray of  ``(y, x, channels)`` in ``2D`` and
               ``(z, y, x, channels)`` in ``3D``. Provided when ``train_in_memory`` is ``True``.
@@ -269,7 +269,7 @@ def load_and_prepare_train_data(
                 * ``"y_end"``: end point of the patch in Y axis.
                 * ``"x_start"``: starting point of the patch in X axis.
                 * ``"x_end"``: end point of the patch in X axis.
-            * ``"original_data_shape"``: shape of the image where the samples is extracted (useful for reconstructing it later),
+            * ``"original_data_shape"``: shape of the image where the samples are extracted (useful for reconstructing it later).
             * ``"shape"``: shape of the sample.
             * ``"img"`` (optional): image sample itself. It is a ndarrray of  ``(y, x, channels)`` in ``2D`` and
               ``(z, y, x, channels)`` in ``3D``. Provided when ``val_in_memory`` is ``True``.
@@ -292,7 +292,7 @@ def load_and_prepare_train_data(
                 * ``"y_end"``: end point of the patch in Y axis.
                 * ``"x_start"``: starting point of the patch in X axis.
                 * ``"x_end"``: end point of the patch in X axis.
-            * ``"original_data_shape"``: shape of the image where the samples is extracted (useful for reconstructing it later),
+            * ``"original_data_shape"``: shape of the image where the samples are extracted (useful for reconstructing it later).
             * ``"shape"``: shape of the sample.
             * ``"img"`` (optional): image sample itself. It is a ndarrray of  ``(y, x, channels)`` in ``2D`` and
               ``(z, y, x, channels)`` in ``3D``. Provided when ``val_in_memory`` is ``True``.
@@ -437,10 +437,11 @@ def load_and_prepare_train_data(
     # Check that the shape of all images match
     if train_mask_path is not None:
         if len(X_train) != len(Y_train):
-            raise ValueError(
-                f"Mistmatch between number of raw samples ({len(X_train)}) and number of corresponding "
-                f"masks ({len(Y_train)}). Please, check that the data is of the same shape."
-            )
+            mistmatch_message = shape_mismatch_message(X_train, Y_train)
+            m = f"Mistmatch between number of raw samples ({len(X_train)}) and number of corresponding "\
+                f"masks ({len(Y_train)}). Please, check that the raw and labels have same shape. {mistmatch_message}"
+            raise ValueError(m)
+        
         for i in range(len(X_train)):
             xshape = X_train[i]["shape"]
             if "gt_associated_id" in X_train[i]:
@@ -1574,7 +1575,7 @@ def samples_from_image_list(
                 * ``"y_end"``: end point of the patch in Y axis.
                 * ``"x_start"``: starting point of the patch in X axis.
                 * ``"x_end"``: end point of the patch in X axis.
-            * ``"original_data_shape"``: shape of the image where the samples is extracted (useful for reconstructing it later)
+            * ``"original_data_shape"``: shape of the image where the samples are extracted (useful for reconstructing it later)
             * ``"shape"``: shape of the sample.
     """
     if preprocess_f is not None and preprocess_cfg is None:
@@ -1714,7 +1715,7 @@ def samples_from_zarr(list_of_data, data_path, zarr_data_info, crop_shape, ov, p
                 * ``"y_end"``: end point of the patch in Y axis.
                 * ``"x_start"``: starting point of the patch in X axis.
                 * ``"x_end"``: end point of the patch in X axis.
-            * ``"original_data_shape"``: shape of the image where the samples is extracted (useful for reconstructing it later).
+            * ``"original_data_shape"``: shape of the image where the samples are extracted (useful for reconstructing it later).
             * ``"shape"``: shape of the sample.
             * ``"parallel_data"``: to ``True`` always as the sample is a Zarr/H5 file.
             * ``"input_axes"``: order of the axes in Zarr.
@@ -1899,7 +1900,7 @@ def samples_from_image_list_multiple_raw_one_gt(
                 * ``"y_end"``: end point of the patch in Y axis.
                 * ``"x_start"``: starting point of the patch in X axis.
                 * ``"x_end"``: end point of the patch in X axis.
-            * ``"original_data_shape"``: shape of the image where the samples is extracted (useful for reconstructing it later).
+            * ``"original_data_shape"``: shape of the image where the samples are extracted (useful for reconstructing it later).
             * ``"shape"``: shape of the sample.
             * ``"gt_associated_id"``: position of associated ground truth of the sample within its list.
 
@@ -1915,7 +1916,7 @@ def samples_from_image_list_multiple_raw_one_gt(
                 * ``"y_end"``: end point of the patch in Y axis.
                 * ``"x_start"``: starting point of the patch in X axis.
                 * ``"x_end"``: end point of the patch in X axis.
-            * ``"original_data_shape"``: shape of the image where the samples is extracted (useful for reconstructing it later).
+            * ``"original_data_shape"``: shape of the image where the samples are extracted (useful for reconstructing it later).
             * ``"shape"``: shape of the sample.
             * ``"gt_associated_id"``: position of associated ground truth of the sample within its list.
     """
@@ -2250,7 +2251,7 @@ def filter_samples_by_properties(
                 * ``"y_end"``: end point of the patch in Y axis.
                 * ``"x_start"``: starting point of the patch in X axis.
                 * ``"x_end"``: end point of the patch in X axis.
-            * ``"original_data_shape"``: shape of the image where the samples is extracted (useful for reconstructing it later),
+            * ``"original_data_shape"``: shape of the image where the samples are extracted (useful for reconstructing it later).
             * ``"shape"``: shape of the sample.
             * ``"img"`` (optional): image sample itself. It is a ndarrray of  ``(y, x, channels)`` in ``2D`` and
               ``(z, y, x, channels)`` in ``3D``. Provided when ``train_in_memory`` is ``True``.
@@ -2592,7 +2593,7 @@ def load_images_to_sample_list(
                 * ``"y_end"``: end point of the patch in Y axis.
                 * ``"x_start"``: starting point of the patch in X axis.
                 * ``"x_end"``: end point of the patch in X axis.
-            * ``"original_data_shape"``: shape of the image where the samples is extracted (useful for reconstructing it later),
+            * ``"original_data_shape"``: shape of the image where the samples are extracted (useful for reconstructing it later).
             * ``"shape"``: shape of the sample.
             * ``"img"``: image sample itself. It is a ndarrray of  ``(y, x, channels)`` in ``2D`` and
               ``(z, y, x, channels)`` in ``3D``.
@@ -3048,3 +3049,55 @@ def check_masks(path, n_classes=2, is_3d=False):
             "values 'MODEL.N_CLASSES' should be 3.\nCorrect the errors in the masks above to continue"
         )
         raise ValueError(m)
+
+def shape_mismatch_message(X_data, Y_data):
+    """
+    Builds an error message with the shape mismatch between two provided data ``X_data`` and ``Y_data``.
+
+    Parameters
+    ----------
+    X_data : list of dict
+        X data. Each item in the list represents a sample of the dataset. Expected keys:
+            * ``"filename"``: name of the image to extract the data sample from.
+            * ``"original_data_shape"``: shape of the image where the samples are extracted.
+
+    Y_data : list of dict
+        Y data. Each item in the list represents a sample of the dataset. Expected keys:
+            * ``"filename"``: name of the image to extract the data sample from.
+            * ``"original_data_shape"``: shape of the image where the samples are extracted.
+              
+    Returns
+    -------
+    mistmatch_message : str
+        Message containing which samples mismatch.
+    """
+    # X files
+    x_unique_files = []
+    x_unique_shapes = []
+    for i in range(len(X_data)):
+        if X_data[i]["filename"] not in x_unique_files:
+            x_unique_files.append(X_data[i]["filename"])
+            x_unique_shapes.append(X_data[i]["original_data_shape"])
+
+    # Y files
+    y_unique_files = []
+    y_unique_shapes = []
+    for i in range(len(Y_data)):
+        if Y_data[i]["filename"] not in y_unique_files:
+            y_unique_files.append(Y_data[i]["filename"])
+            y_unique_shapes.append(Y_data[i]["original_data_shape"])
+
+    mistmatch_message = ""
+    for xfile, yfile, xshape, yshape in zip(x_unique_files,y_unique_files,x_unique_shapes,y_unique_shapes):
+        if xshape[:-1] != yshape[:-1]:
+            mistmatch_message += "\n"
+            mistmatch_message += f"Raw file: '{xfile}'\n"
+            mistmatch_message += f"Corresponding label file: '{yfile}'\n"
+            mistmatch_message += f"Raw shape: {xshape}\n"
+            mistmatch_message += f"Label shape: {yshape}\n"
+            mistmatch_message += "--\n"
+            
+    if mistmatch_message != "": 
+        mistmatch_message = f"Here is a list of the pair raw and label that does not match in shape:\n{mistmatch_message}"
+    
+    return mistmatch_message
