@@ -912,7 +912,13 @@ class Base_Workflow(metaclass=ABCMeta):
             # Call the model directly to avoid using Numpy transpose() function, as it changes something internally that
             # leds to slightly different results and the BMZ test will not pass
             pred = self.apply_model_activations(self.model(torch.from_numpy(self.bmz_config["test_input_norm"]).to(self.device)))
-            self.bmz_config["test_output"] = pred.clone().cpu().detach().numpy()
+            # Multi-head concatenation
+            if isinstance(pred, list):
+                pred = torch.cat((pred[0], torch.argmax(pred[1], axis=1).unsqueeze(1)), dim=1)
+            self.prepare_bmz_sample(
+                "test_output", 
+                pred.clone().cpu().detach().numpy().astype(np.float32)
+            )
 
             # Check activations to be inserted as postprocessing in BMZ
             self.bmz_config["postprocessing"] = []
@@ -1609,20 +1615,13 @@ class Base_Workflow(metaclass=ABCMeta):
         if "test_output" not in self.bmz_config:
             # Generate prediction and save test_output
             self.prepare_bmz_sample("test_input_norm", self.current_sample["X"])
-            p = self.model(to_pytorch_format(
-                self.bmz_config["test_input_norm"],
-                self.axis_order,
-                self.device,
-                dtype=self.loss_dtype,
-            ))
+            p = self.apply_model_activations(self.model(torch.from_numpy(self.bmz_config["test_input_norm"]).to(self.device)))
             # Multi-head concatenation
             if isinstance(p, list):
                 p = torch.cat((p[0], torch.argmax(p[1], axis=1).unsqueeze(1)), dim=1)
             self.prepare_bmz_sample(
                 "test_output", 
-                self.apply_model_activations(
-                    p.clone()
-                ).cpu().detach().numpy().astype(np.float32)
+                p.clone().cpu().detach().numpy().astype(np.float32)
             )
 
             # Save test_input without the normalization 
