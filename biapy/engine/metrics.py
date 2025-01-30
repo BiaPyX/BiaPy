@@ -188,7 +188,7 @@ class jaccard_index:
             if len(y_pred.shape) - 2 == len(y_true.shape):
                 y_true = y_true.unsqueeze(0)
 
-            return self.jaccard(y_pred, y_true)
+        return self.jaccard(y_pred, y_true)
 
 
 class multiple_metrics:

@@ -130,7 +130,6 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             self.post_processing["instance_post"] = False
         self.instances_already_created = False
 
-
     def define_activations_and_channels(self):
         """
         This function must define the following variables:
@@ -140,9 +139,9 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
         self.multihead : List of str
             Names of the metrics calculated during training.
-        
+
         self.activations : List of dicts
-            Activations to be applied to the model output. Each dict will 
+            Activations to be applied to the model output. Each dict will
             match an output channel of the model. If ':' is used the activation
             will be applied to all channels at once. "Linear" and "CE_Sigmoid"
             will not be applied. E.g. [{":": "Linear"}].
@@ -192,6 +191,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         else:
             self.activations = [self.activations]
             self.model_output_channels["channels"] = [self.model_output_channels["channels"]]
+            self.multihead = False
 
         super().define_activations_and_channels()
 
@@ -977,9 +977,8 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 verbose=self.cfg.TEST.VERBOSE,
             )
 
-        # Create the synapses by fusing the channels
+        # TODO: Create the synapses by fusing the channels
 
-        
         ###################
         # Post-processing #
         ###################

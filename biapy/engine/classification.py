@@ -67,7 +67,7 @@ class Classification_Workflow(Base_Workflow):
         """
         self.model_output_channels = {
             "type": "mask",
-            "channels": self.cfg.MODEL.N_CLASSES,
+            "channels": [self.cfg.MODEL.N_CLASSES],
         }
         self.multihead = False 
         self.activations = [{":": "Linear"}]
