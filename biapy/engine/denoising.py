@@ -186,8 +186,8 @@ class Denoising_Workflow(Base_Workflow):
         # Save BMZ input/output so the user could export the model to BMZ later
         if "test_output" not in self.bmz_config:
             # Generate prediction and save test_output
-            self.prepare_bmz_sample("test_input", self.current_sample["X"])
-            p = self.model(torch.from_numpy(self.bmz_config["test_input"]).to(self.device))
+            self.prepare_bmz_sample("test_input_norm", self.current_sample["X"])
+            p = self.model(torch.from_numpy(self.bmz_config["test_input_norm"]).to(self.device))
             self.prepare_bmz_sample(
                 "test_output", 
                 self.apply_model_activations(

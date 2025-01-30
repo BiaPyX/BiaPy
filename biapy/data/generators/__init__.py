@@ -412,22 +412,21 @@ def create_train_val_augmentors(
 
     # Save a sample to export the model to BMZ
     bmz_input_sample, bmz_input_sample_norm = None, None
-    if cfg.MODEL.BMZ.EXPORT.ENABLE:
-        # Extract sample from generator
-        bmz_input_sample, _ = train_generator.load_sample(0, first_load=True)
-        bmz_input_sample = bmz_input_sample.astype(np.float32).squeeze()
-        bmz_input_sample_norm, _ = train_generator.load_sample(0)
-        bmz_input_sample_norm = bmz_input_sample_norm.astype(np.float32).squeeze()
+    # Extract sample from generator
+    bmz_input_sample, _ = train_generator.load_sample(0, first_load=True)
+    bmz_input_sample = bmz_input_sample.astype(np.float32).squeeze()
+    bmz_input_sample_norm, _ = train_generator.load_sample(0)
+    bmz_input_sample_norm = bmz_input_sample_norm.astype(np.float32).squeeze()
 
-        # Ensure dimensions without doing a transpose() as the resutls after that are slightly different.
-        if (
-            (cfg.PROBLEM.NDIM == "2D" and bmz_input_sample.ndim == 2)
-            or (cfg.PROBLEM.NDIM == "3D" and bmz_input_sample.ndim == 3)
-        ):
-            bmz_input_sample = np.expand_dims(bmz_input_sample, 0)
-            bmz_input_sample_norm = np.expand_dims(bmz_input_sample_norm, 0)
-        bmz_input_sample = np.expand_dims(bmz_input_sample, 0) # Add batch size 
-        bmz_input_sample_norm = np.expand_dims(bmz_input_sample_norm, 0) # Add batch size 
+    # Ensure dimensions without doing a transpose() as the resutls after that are slightly different.
+    if (
+        (cfg.PROBLEM.NDIM == "2D" and bmz_input_sample.ndim == 2)
+        or (cfg.PROBLEM.NDIM == "3D" and bmz_input_sample.ndim == 3)
+    ):
+        bmz_input_sample = np.expand_dims(bmz_input_sample, 0)
+        bmz_input_sample_norm = np.expand_dims(bmz_input_sample_norm, 0)
+    bmz_input_sample = np.expand_dims(bmz_input_sample, 0) # Add batch size 
+    bmz_input_sample_norm = np.expand_dims(bmz_input_sample_norm, 0) # Add batch size 
 
     # Validation dataset
     sampler_val = None

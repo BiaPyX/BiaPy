@@ -1016,8 +1016,8 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             # Save BMZ input/output so the user could export the model to BMZ later
             if "test_output" not in self.bmz_config:
                 # Generate prediction and save test_output
-                self.prepare_bmz_sample("test_input", self.current_sample["X"])
-                p = self.model(torch.from_numpy(self.bmz_config["test_input"]).to(self.device))
+                self.prepare_bmz_sample("test_input_norm", self.current_sample["X"])
+                p = self.model(torch.from_numpy(self.bmz_config["test_input_norm"]).to(self.device))
                 self.prepare_bmz_sample(
                     "test_output", self.apply_model_activations(p.clone()).cpu().detach().numpy().astype(np.float32)
                 )
@@ -1369,7 +1369,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             val_channel_dir = self.cfg.DATA.VAL.PATH
             val_channel_mask_dir = self.cfg.DATA.VAL.INSTANCE_CHANNELS_DIR
             test_channel_dir = self.cfg.DATA.TEST.PATH
-            test_channel_mask_dir = self.cfg.DATA.TEST.INSTANCE_CHANNELS_DIR
+            test_channel_mask_dir = self.cfg.DATA.TEST.PATH
             test_instance_mask_dir = self.cfg.DATA.TEST.PATH
 
         opts = []

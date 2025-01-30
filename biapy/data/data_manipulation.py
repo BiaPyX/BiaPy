@@ -876,6 +876,7 @@ def load_and_prepare_test_data(
         Additional information when using Zarr/H5 files for test. The following keys are expected:
             * ``"raw_path"``: path where the raw images reside within the zarr.
             * ``"gt_path"``: path where the mask images reside within the zarr.
+            * ``"use_gt_path"``: whether the GT that should be used or not.
 
     Returns
     -------
@@ -942,7 +943,10 @@ def load_and_prepare_test_data(
                     "dir": test_mask_path,
                 }
                 if test_zarr_data_information is not None:
-                    sample_dict["path_in_zarr"] = test_zarr_data_information["raw_path"]
+                    if test_zarr_data_information["use_gt_path"]:
+                        sample_dict["path_in_zarr"] = test_zarr_data_information["gt_path"]
+                    else:
+                        sample_dict["path_in_zarr"] = test_zarr_data_information["raw_path"]
                 Y_test.append(sample_dict)
     else:
         test_filenames = sorted(next(os.walk(test_path))[1])

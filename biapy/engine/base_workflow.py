@@ -451,7 +451,6 @@ class Base_Workflow(metaclass=ABCMeta):
             print("##############################")
             print("#  PREPARE TRAIN GENERATORS  #")
             print("##############################")
-            import pdb; pdb.set_trace()
             (
                 self.train_generator,
                 self.val_generator,
@@ -905,7 +904,7 @@ class Base_Workflow(metaclass=ABCMeta):
             _ = load_model_checkpoint(
                 cfg=self.cfg,
                 jobname=self.job_identifier,
-                model_without_ddp=self.model,
+                model_without_ddp=self.model_without_ddp,
                 device=self.device,
             )
             self.model.eval()
@@ -951,7 +950,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 test_zarr_data_information = {
                     "raw_path": self.cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH,
                     "gt_path": self.cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_GT_PATH,
-                    "multiple_data_within_zarr": self.cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA,
+                    "use_gt_path": self.cfg.PROBLEM.TYPE != "INSTANCE_SEG",
                 }
                             
             (
@@ -1567,7 +1566,7 @@ class Base_Workflow(metaclass=ABCMeta):
         img : Numpy array
             Image to extract the sample from. 
         """
-        assert sample_key in ["test_input", "test_output"]
+        assert sample_key in ["test_input", "test_output", "test_input_norm"]
         if self.cfg.PROBLEM.NDIM == "2D":
             self.bmz_config[sample_key] = img[
                 0,
@@ -1609,8 +1608,16 @@ class Base_Workflow(metaclass=ABCMeta):
         # Save BMZ input/output so the user could export the model to BMZ later
         if "test_output" not in self.bmz_config:
             # Generate prediction and save test_output
-            self.prepare_bmz_sample("test_input", self.current_sample["X"])
-            p = self.model(torch.from_numpy(self.bmz_config["test_input"]).to(self.device))
+            self.prepare_bmz_sample("test_input_norm", self.current_sample["X"])
+            p = self.model(to_pytorch_format(
+                self.bmz_config["test_input_norm"],
+                self.axis_order,
+                self.device,
+                dtype=self.loss_dtype,
+            ))
+            # Multi-head concatenation
+            if isinstance(p, list):
+                p = torch.cat((p[0], torch.argmax(p[1], axis=1).unsqueeze(1)), dim=1)
             self.prepare_bmz_sample(
                 "test_output", 
                 self.apply_model_activations(
