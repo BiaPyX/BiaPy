@@ -436,7 +436,7 @@ def load_and_prepare_train_data(
     
     # Check that the shape of all images match
     if train_mask_path is not None:
-        if len(X_train) != len(Y_train):
+        if not multiple_raw_images and len(X_train) != len(Y_train):
             mistmatch_message = shape_mismatch_message(X_train, Y_train)
             m = f"Mistmatch between number of raw samples ({len(X_train)}) and number of corresponding "\
                 f"masks ({len(Y_train)}). Please, check that the raw and labels have same shape. {mistmatch_message}"
