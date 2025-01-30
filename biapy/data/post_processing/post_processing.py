@@ -1212,7 +1212,7 @@ def detection_watershed(
         Path to load the image paired with seeds.
 
     first_dilation : str
-        Each class seed's dilation before watershed.
+        Seed dilation before watershed.
 
     ndim : int, optional
         Number of dimensions. E.g. for ``2D`` set it to ``2`` and for ``3D`` to ``3``.
@@ -1245,20 +1245,19 @@ def detection_watershed(
     # Dilate first the seeds if needed
     print("Dilating a bit the seeds . . .")
     seeds = seeds.squeeze()
-    new_seeds = np.zeros(seeds.shape, dtype=seeds.dtype)
-    if all(x != 0 for x in first_dilation[i]):
-        new_seeds += (binary_dilation(seeds, structure=np.ones(first_dilation[i]))).astype(
+    if all(x != 0 for x in first_dilation):
+        seeds += (binary_dilation(seeds, structure=np.ones(first_dilation))).astype(
             np.uint8
         )
-    else:
-        new_seeds += ((seeds == i + 1) * (i + 1)).astype(np.uint8)
-
-    seeds = new_seeds
-    del new_seeds
 
     # Background seed
     seeds = label(seeds)
     max_seed = np.max(seeds)
+    if max_seed < 255:
+        seeds = seeds.astype(np.uint8)
+    else:
+        seeds = seeds.astype(np.uint16)
+
     if ndim == 2:
         seeds[:4, :4] = max_seed + 1
         background_label = seeds[1, 1]
@@ -1691,7 +1690,7 @@ def measure_morphological_props_and_filter(
                     else 0
                 )
                 circularities[label_index] = sphericity
-                
+
         # Convert diplib.PyDIP_bin.Image back into numpy array
         img = np.array(img)
 
