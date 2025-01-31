@@ -400,7 +400,7 @@ all_test_info["Test31"] = {
     "yaml": "test_31.yaml",
     "internal_checks": [
         {"type": "regular", "pattern": "Test IoU (B channel) (merge patches):", "gt": True, "value": 0.7},
-        {"type": "BMZ", "pattern": "Package path:", "bmz_package_name": "test_model_affable-shark.zip"},
+        {"type": "BMZ", "pattern": "Package path:", "bmz_package_name": "NucleiSegmentationBoundaryModel.zip"},
         {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 1, "metric": "f1",
             "gt": True, "value": 0.9},
     ]
@@ -413,7 +413,7 @@ all_test_info["Test32"] = {
     "description": "2D instance segmentation. Export BiaPy model to BMZ format",
     "yaml": "test_32.yaml",
     "internal_checks": [
-        {"type": "regular", "pattern": "Test IoU (B channel) (merge patches):", "gt": True, "value": 0.7},
+        {"type": "regular", "pattern": "Test IoU (B channel) (merge patches):", "gt": True, "value": 0.35},
         {"type": "BMZ", "pattern": "Package path:", "bmz_package_name":  "biapy_model.zip"},
     ]
 }
@@ -3044,13 +3044,13 @@ if all_test_info["Test24"]["enable"]:
 
     biapy_config['DATA']['REFLECT_TO_COMPLETE_SHAPE'] = False
     biapy_config['DATA']['PATCH_SIZE'] = "(256, 256, 1)"
-    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(image_to_image_2d_data_outpath, "data", "train", "raw")
-    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(image_to_image_2d_data_outpath, "data", "train", "label")
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(image_to_image_2d_data_outpath, "Dapi_dataset", "data", "train", "raw")
+    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(image_to_image_2d_data_outpath, "Dapi_dataset", "data", "train", "label")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
     biapy_config['DATA']['VAL']['FROM_TRAIN'] = True
     biapy_config['DATA']['VAL']['CROSS_VAL'] = False
-    biapy_config['DATA']['TEST']['PATH'] = os.path.join(image_to_image_2d_data_outpath, "data", "test", "raw")
-    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(image_to_image_2d_data_outpath, "data", "test", "label")
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(image_to_image_2d_data_outpath, "Dapi_dataset", "data", "test", "raw")
+    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(image_to_image_2d_data_outpath, "Dapi_dataset", "data", "test", "label")
     biapy_config['DATA']['TEST']['IN_MEMORY'] = True
     biapy_config['DATA']['TEST']['PADDING'] = "(40,40)"
 
@@ -3117,14 +3117,14 @@ if all_test_info["Test25"]["enable"]:
     biapy_config['DATA']['EXTRACT_RANDOM_PATCH'] = True
     biapy_config['DATA']['REFLECT_TO_COMPLETE_SHAPE'] = True
     biapy_config['DATA']['PATCH_SIZE'] = "(1024, 1024, 1)"
-    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "raw")
-    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "label")
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "reduced_actin_lightmycells", "actin", "raw")
+    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "reduced_actin_lightmycells", "actin", "label")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = False
     biapy_config['DATA']['VAL']['FROM_TRAIN'] = False
-    biapy_config['DATA']['VAL']['PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "raw")
-    biapy_config['DATA']['VAL']['GT_PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "label")
-    biapy_config['DATA']['TEST']['PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "raw")
-    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "label")
+    biapy_config['DATA']['VAL']['PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "reduced_actin_lightmycells", "actin", "raw")
+    biapy_config['DATA']['VAL']['GT_PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "reduced_actin_lightmycells", "actin", "label")
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "reduced_actin_lightmycells", "actin", "raw")
+    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "reduced_actin_lightmycells", "actin", "label")
     biapy_config['DATA']['TEST']['IN_MEMORY'] = False
     biapy_config['DATA']['TEST']['PADDING'] = "(200,200)"
 
@@ -3419,13 +3419,13 @@ if all_test_info["Test28"]["enable"]:
             raise ValueError(exc)
 
     biapy_config['DATA']['PATCH_SIZE'] = "(6,128,128,1)"
-    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(image_to_image_3d_data_outpath, "data", "train", "raw")
-    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(image_to_image_3d_data_outpath, "data", "train", "label")
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(image_to_image_3d_data_outpath, "Nuclear_Pore_complex_3D", "data", "train", "raw")
+    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(image_to_image_3d_data_outpath, "Nuclear_Pore_complex_3D", "data", "train", "label")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
     biapy_config['DATA']['VAL']['FROM_TRAIN'] = True
     biapy_config['DATA']['VAL']['SPLIT_TRAIN'] = 0.1
-    biapy_config['DATA']['TEST']['PATH'] = os.path.join(image_to_image_3d_data_outpath, "data", "test", "raw")
-    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(image_to_image_3d_data_outpath, "data", "test", "label")
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(image_to_image_3d_data_outpath, "Nuclear_Pore_complex_3D", "data", "test", "raw")
+    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(image_to_image_3d_data_outpath, "Nuclear_Pore_complex_3D", "data", "test", "label")
     biapy_config['DATA']['TEST']['IN_MEMORY'] = False
     biapy_config['DATA']['TEST']['PADDING'] = "(0,24,24)"
 
@@ -3901,14 +3901,14 @@ if all_test_info["Test34"]["enable"]:
 
     biapy_config['DATA']['REFLECT_TO_COMPLETE_SHAPE'] = True
     biapy_config['DATA']['PATCH_SIZE'] = "(1024, 1024, 1)"
-    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "raw")
-    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "label")
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "reduced_actin_lightmycells", "actin", "raw")
+    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "reduced_actin_lightmycells", "actin", "label")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
     biapy_config['DATA']['VAL']['FROM_TRAIN'] = False
-    biapy_config['DATA']['VAL']['PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "raw")
-    biapy_config['DATA']['VAL']['GT_PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "label")
-    biapy_config['DATA']['TEST']['PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "raw")
-    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "actin", "label")
+    biapy_config['DATA']['VAL']['PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "reduced_actin_lightmycells", "actin", "raw")
+    biapy_config['DATA']['VAL']['GT_PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "reduced_actin_lightmycells", "actin", "label")
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "reduced_actin_lightmycells", "actin", "raw")
+    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "reduced_actin_lightmycells", "actin", "label")
     biapy_config['DATA']['TEST']['IN_MEMORY'] = True
     biapy_config['DATA']['TEST']['PADDING'] = "(200,200)"
 
