@@ -1626,7 +1626,7 @@ class Base_Workflow(metaclass=ABCMeta):
         # Save test_input without the normalization 
         if "test_input" not in self.bmz_config:
             self.bmz_config["test_input"] = undo_sample_normalization(
-                self.current_sample["X"], 
+                img, 
                 self.current_sample["X_norm"]
             ).astype(np.float32)
             prepare_bmz_sample("test_input", self.bmz_config["test_input"])
