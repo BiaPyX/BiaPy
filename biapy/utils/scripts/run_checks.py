@@ -1517,11 +1517,11 @@ if all_test_info["Test5"]["enable"]:
     biapy_config['PROBLEM']['INSTANCE_SEG']['DATA_CHECK_MW'] = True
     biapy_config['PROBLEM']['INSTANCE_SEG']['WATERSHED_BY_2D_SLICES'] = True
 
-    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(instance_seg_3d_data_outpath, "data", "train", "x")
-    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(instance_seg_3d_data_outpath, "data", "train", "y")
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(instance_seg_3d_data_outpath, "data", "train", "raw")
+    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(instance_seg_3d_data_outpath, "data", "train", "label")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
-    biapy_config['DATA']['TEST']['PATH'] = os.path.join(instance_seg_3d_data_outpath, "data", "test", "x")
-    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(instance_seg_3d_data_outpath, "data", "test", "y")
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(instance_seg_3d_data_outpath, "data", "test", "raw")
+    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(instance_seg_3d_data_outpath, "data", "test", "label")
     biapy_config['DATA']['TEST']['IN_MEMORY'] = False
     biapy_config['DATA']['TEST']['LOAD_GT'] = True
 
@@ -1599,15 +1599,15 @@ if all_test_info["Test6"]["enable"]:
 
     biapy_config['DATA']['REFLECT_TO_COMPLETE_SHAPE'] = True
     biapy_config['DATA']['PATCH_SIZE'] = "(80, 80, 80, 1)"
-    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(instance_seg_cyst_data_outpath, "train_M2", "raw")
-    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(instance_seg_cyst_data_outpath, "train_M2", "label")
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(instance_seg_cyst_data_outpath, "train_M2", "x")
+    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(instance_seg_cyst_data_outpath, "train_M2", "y")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
-    biapy_config['DATA']['VAL']['PATH'] = os.path.join(instance_seg_cyst_data_outpath, "validation", "raw")
-    biapy_config['DATA']['VAL']['GT_PATH'] = os.path.join(instance_seg_cyst_data_outpath, "validation", "label")
+    biapy_config['DATA']['VAL']['PATH'] = os.path.join(instance_seg_cyst_data_outpath, "validation", "x")
+    biapy_config['DATA']['VAL']['GT_PATH'] = os.path.join(instance_seg_cyst_data_outpath, "validation", "y")
     biapy_config['DATA']['VAL']['IN_MEMORY'] = True
     biapy_config['DATA']['VAL']['FROM_TRAIN'] = False
-    biapy_config['DATA']['TEST']['PATH'] = os.path.join(instance_seg_cyst_data_outpath, "validation", "raw")
-    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(instance_seg_cyst_data_outpath, "validation", "label")
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(instance_seg_cyst_data_outpath, "validation", "x")
+    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(instance_seg_cyst_data_outpath, "validation", "y")
     biapy_config['DATA']['TEST']['IN_MEMORY'] = True
     biapy_config['DATA']['TEST']['LOAD_GT'] = True
 
@@ -3575,8 +3575,8 @@ if all_test_info["Test30"]["enable"]:
     biapy_config['PROBLEM']['INSTANCE_SEG']['DATA_MW_TH_TYPE'] = "auto"
     biapy_config['PROBLEM']['INSTANCE_SEG']['DATA_CHANNEL_WEIGHTS'] = "(0.5, 1)"
 
-    biapy_config['DATA']['TEST']['PATH'] = os.path.join(instance_seg_mitoem_data_outpath, "toy", "train", "raw")
-    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(instance_seg_mitoem_data_outpath, "toy", "train", "label")
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(instance_seg_mitoem_data_outpath, "MitoEM_human_2d_toy_data", "toy", "train", "raw")
+    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(instance_seg_mitoem_data_outpath, "MitoEM_human_2d_toy_data", "toy", "train", "label")
     biapy_config['DATA']['TEST']['IN_MEMORY'] = False
     biapy_config['DATA']['TEST']['LOAD_GT'] = True
 
@@ -3743,11 +3743,11 @@ if all_test_info["Test32"]["enable"]:
     biapy_config['PROBLEM']['INSTANCE_SEG']['DATA_MW_TH_TYPE'] = "auto"
     biapy_config['PROBLEM']['INSTANCE_SEG']['DATA_CHANNEL_WEIGHTS'] = "(0.5, 1)"
 
-    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(instance_seg_mitoem_data_outpath, "toy", "train", "raw")
-    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(instance_seg_mitoem_data_outpath, "toy", "train", "label")
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(instance_seg_mitoem_data_outpath, "MitoEM_human_2d_toy_data", "toy", "train", "raw")
+    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(instance_seg_mitoem_data_outpath, "MitoEM_human_2d_toy_data", "toy", "train", "label")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
-    biapy_config['DATA']['TEST']['PATH'] = os.path.join(instance_seg_mitoem_data_outpath, "toy", "train", "raw")
-    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(instance_seg_mitoem_data_outpath, "toy", "train", "label")
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(instance_seg_mitoem_data_outpath, "MitoEM_human_2d_toy_data", "toy", "train", "raw")
+    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(instance_seg_mitoem_data_outpath, "MitoEM_human_2d_toy_data", "toy", "train", "label")
     biapy_config['DATA']['TEST']['IN_MEMORY'] = False
     biapy_config['DATA']['TEST']['LOAD_GT'] = True
 
