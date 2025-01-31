@@ -45,7 +45,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         else:  # synapses
             if cfg.PROBLEM.NDIM != "3D":
                 raise ValueError("'PROBLEM.INSTANCE_SEG.TYPE' == 'synapse' can only be used for 3D data")
-            
+
             channels_provided = 1 + dim_count  # BF
 
         if len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS) != channels_provided:
@@ -582,14 +582,18 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     "'MODEL.SOURCE' must be one between ['deeplabv3_mobilenet_v3_large', 'deeplabv3_resnet101', "
                     "'deeplabv3_resnet50', 'fcn_resnet101', 'fcn_resnet50', 'lraspp_mobilenet_v3_large' ]"
                 )
-            if cfg.MODEL.TORCHVISION_MODEL_NAME in [
-                "deeplabv3_mobilenet_v3_large", 
-                "deeplabv3_resnet101", 
-                "deeplabv3_resnet50",
-                "fcn_resnet101",
-                "fcn_resnet50",
-                "lraspp_mobilenet_v3_large",
-                ] and cfg.DATA.PATCH_SIZE[-1] != 3:
+            if (
+                cfg.MODEL.TORCHVISION_MODEL_NAME
+                in [
+                    "deeplabv3_mobilenet_v3_large",
+                    "deeplabv3_resnet101",
+                    "deeplabv3_resnet50",
+                    "fcn_resnet101",
+                    "fcn_resnet50",
+                    "lraspp_mobilenet_v3_large",
+                ]
+                and cfg.DATA.PATCH_SIZE[-1] != 3
+            ):
                 raise ValueError(
                     "'deeplabv3_mobilenet_v3_large' model expects 3 channel data (RGB). "
                     f"'DATA.PATCH_SIZE' set is {cfg.DATA.PATCH_SIZE}"
@@ -614,8 +618,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "BF",
             ], "PROBLEM.INSTANCE_SEG.DATA_CHANNELS not in ['BF']"
             if not cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA or cfg.PROBLEM.NDIM != "3D":
-                raise ValueError("Synapse detection is only available for 3D Zarr/H5 data. Please set 'DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA' "
-                                 "and PROBLEM.NDIM == '3D'")
+                raise ValueError(
+                    "Synapse detection is only available for 3D Zarr/H5 data. Please set 'DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA' "
+                    "and PROBLEM.NDIM == '3D'"
+                )
         if len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS) != channels_provided:
             raise ValueError(
                 "'PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS' needs to be of the same length as the channels selected in 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'. "
@@ -1115,7 +1121,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                         "'DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_RESOLUTION_PATH' needs to be set when 'DATA.VAL.INPUT_ZARR_MULTIPLE_DATA' is used "
                         "and PROBLEM.INSTANCE_SEG.TYPE == 'synapses'"
                     )
-                
+
     if cfg.TEST.ENABLE and not cfg.DATA.TEST.USE_VAL_AS_TEST and check_data_paths:
         if not os.path.exists(cfg.DATA.TEST.PATH):
             raise ValueError("Test data not found: {}".format(cfg.DATA.TEST.PATH))
@@ -1182,7 +1188,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                             "'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_RESOLUTION_PATH' needs to be set when 'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA' is used "
                             "and PROBLEM.INSTANCE_SEG.TYPE == 'synapses'"
                         )
-                    
 
     if cfg.TRAIN.ENABLE:
         if cfg.DATA.EXTRACT_RANDOM_PATCH and cfg.DATA.PROBABILITY_MAP:
@@ -1917,6 +1922,46 @@ def convert_old_model_cfg_to_current_version(old_cfg):
                         "TEST"
                     ]["POST_PROCESSING"]["REMOVE_BY_PROPERTIES_SIGN"]
                     del old_cfg["TEST"]["POST_PROCESSING"]["REMOVE_BY_PROPERTIES_SIGN"]
+
+            if "REMOVE_CLOSE_POINTS_RADIUS" in old_cfg["TEST"]["POST_PROCESSING"]:
+                if isinstance(old_cfg["TEST"]["POST_PROCESSING"]["REMOVE_CLOSE_POINTS_RADIUS"], list):
+                    if len(old_cfg["TEST"]["POST_PROCESSING"]["REMOVE_CLOSE_POINTS_RADIUS"]) > 0:
+                        old_cfg["TEST"]["POST_PROCESSING"]["REMOVE_CLOSE_POINTS_RADIUS"] = old_cfg["TEST"][
+                            "POST_PROCESSING"
+                        ]["REMOVE_CLOSE_POINTS_RADIUS"][0]
+                    else:
+                        del old_cfg["TEST"]["POST_PROCESSING"]["REMOVE_CLOSE_POINTS_RADIUS"]
+                else:
+                    del old_cfg["TEST"]["POST_PROCESSING"]["REMOVE_CLOSE_POINTS_RADIUS"]
+
+            if "DET_WATERSHED_FIRST_DILATION" in old_cfg["TEST"]["POST_PROCESSING"]:
+                if isinstance(old_cfg["TEST"]["POST_PROCESSING"]["DET_WATERSHED_FIRST_DILATION"], list):
+                    if len(old_cfg["TEST"]["POST_PROCESSING"]["DET_WATERSHED_FIRST_DILATION"]) > 0:
+                        old_cfg["TEST"]["POST_PROCESSING"]["DET_WATERSHED_FIRST_DILATION"] = old_cfg["TEST"][
+                            "POST_PROCESSING"
+                        ]["DET_WATERSHED_FIRST_DILATION"][0]
+                    else:
+                        del old_cfg["TEST"]["POST_PROCESSING"]["DET_WATERSHED_FIRST_DILATION"]
+                else:
+                    del old_cfg["TEST"]["POST_PROCESSING"]["DET_WATERSHED_FIRST_DILATION"]
+
+        if "DET_MIN_TH_TO_BE_PEAK" in old_cfg["TEST"]:
+            if isinstance(old_cfg["TEST"]["DET_MIN_TH_TO_BE_PEAK"], list):
+                if len(old_cfg["TEST"]["DET_MIN_TH_TO_BE_PEAK"]) > 0:
+                    old_cfg["TEST"]["DET_MIN_TH_TO_BE_PEAK"] = old_cfg["TEST"]["DET_MIN_TH_TO_BE_PEAK"][0]
+                else:
+                    del old_cfg["TEST"]["DET_MIN_TH_TO_BE_PEAK"]
+            else:
+                del old_cfg["TEST"]["DET_MIN_TH_TO_BE_PEAK"]
+
+        if "DET_TOLERANCE" in old_cfg["TEST"]:
+            if isinstance(old_cfg["TEST"]["DET_TOLERANCE"], list):
+                if len(old_cfg["TEST"]["DET_TOLERANCE"]) > 0:
+                    old_cfg["TEST"]["DET_TOLERANCE"] = old_cfg["TEST"]["DET_TOLERANCE"][0]
+                else:
+                    del old_cfg["TEST"]["DET_TOLERANCE"]
+            else:
+                del old_cfg["TEST"]["DET_MIN_TH_TO_BE_PEAK"]
 
     if "PROBLEM" in old_cfg:
         ndim = 3 if "NDIM" in old_cfg["PROBLEM"] and old_cfg["PROBLEM"]["NDIM"] == "3D" else 2
