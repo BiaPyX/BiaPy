@@ -909,23 +909,7 @@ class Base_Workflow(metaclass=ABCMeta):
             )
             self.model.eval()
 
-            # Call the model directly to avoid using Numpy transpose() function, as it changes something internally that
-            # leds to slightly different results and the BMZ test will not pass
-            pred = self.apply_model_activations(self.model(torch.from_numpy(self.bmz_config["test_input_norm"]).to(self.device)))
-            # Multi-head concatenation
-            if isinstance(pred, list):
-                pred = torch.cat((pred[0], torch.argmax(pred[1], axis=1).unsqueeze(1)), dim=1)
-            self.prepare_bmz_sample(
-                "test_output", 
-                pred.clone().cpu().detach().numpy().astype(np.float32)
-            )
-
-            # Check activations to be inserted as postprocessing in BMZ
-            self.bmz_config["postprocessing"] = []
-            act = list(self.activations[0].values())
-            for ac in act:
-                if ac in ["CE_Sigmoid","Sigmoid"]:
-                    self.bmz_config["postprocessing"].append("sigmoid")
+            self.prepare_bmz_data(self.bmz_config["test_input_norm"])
 
         self.destroy_train_data()
 
@@ -1559,40 +1543,93 @@ class Base_Workflow(metaclass=ABCMeta):
             if self.cfg.TEST.VERBOSE:
                 print(f"[Rank {get_rank()} ({os.getpid()})] Synched with main thread. Go for the next sample")
     
-    def prepare_bmz_sample(self, sample_key, img):
+    def prepare_bmz_data(self, img):
         """
-        Prepare a sample from the given ``img`` using the patch size in the configuration. It also saves
-        the sample in ``self.bmz_config`` using the ``sample_key``. 
+        Prepare required data for exporting a model into BMZ.
 
         Parameters
         ----------
-        sample_key : str
-            Key to store the sample into. Must be one between: ``["test_input", "test_output"]``
-
-        img : Numpy array
-            Image to extract the sample from. 
+        img : 4D/5D Numpy array
+            Image to save. The axes must be in Torch format already, i.e. ``(b,c,y,x)`` for 2D or 
+            ``(b,c,z,y,x)`` for 3D.
         """
-        assert sample_key in ["test_input", "test_output", "test_input_norm"]
-        if self.cfg.PROBLEM.NDIM == "2D":
-            self.bmz_config[sample_key] = img[
-                0,
-                :self.cfg.DATA.PATCH_SIZE[0], 
-                :self.cfg.DATA.PATCH_SIZE[1]
-            ].copy().squeeze()
-        else:
-            self.bmz_config[sample_key] = img[
-                0,
-                :self.cfg.DATA.PATCH_SIZE[0], 
-                :self.cfg.DATA.PATCH_SIZE[1], 
-                :self.cfg.DATA.PATCH_SIZE[2]
-            ].copy().squeeze()
+
+        def prepare_bmz_sample(sample_key, img):
+            """
+            Prepare a sample from the given ``img`` using the patch size in the configuration. It also saves
+            the sample in ``self.bmz_config`` using the ``sample_key``. 
+
+            Parameters
+            ----------
+            sample_key : str
+                Key to store the sample into. Must be one between: ``["test_input", "test_output"]``
+
+            img : 4D/5D Numpy array
+                Image to extract the sample from. The axes must be in Torch format already, i.e. 
+                ``(b,c,y,x)`` for 2D or ``(b,c,z,y,x)`` for 3D.
+            """
+            if self.cfg.PROBLEM.TYPE != "CLASSIFICATION":
+                if self.cfg.PROBLEM.NDIM == "2D":
+                    self.bmz_config[sample_key] = img[
+                        0,
+                        :,
+                        :self.cfg.DATA.PATCH_SIZE[0], 
+                        :self.cfg.DATA.PATCH_SIZE[1]
+                    ].copy()
+                else:
+                    self.bmz_config[sample_key] = img[
+                        0,
+                        :,
+                        :self.cfg.DATA.PATCH_SIZE[0], 
+                        :self.cfg.DATA.PATCH_SIZE[1], 
+                        :self.cfg.DATA.PATCH_SIZE[2]
+                    ].copy()
+                
+                # Ensure dimensions
+                if self.cfg.PROBLEM.NDIM == "2D":
+                    if self.bmz_config[sample_key].ndim == 3:
+                        self.bmz_config[sample_key] = np.expand_dims(self.bmz_config[sample_key], 0)
+                else: # 3D
+                    if self.bmz_config[sample_key].ndim == 4:
+                        self.bmz_config[sample_key] = np.expand_dims(self.bmz_config[sample_key], 0)
+
+        # Normalized input
+        if "test_input_norm" not in self.bmz_config:
+            prepare_bmz_sample("test_input_norm", img)
         
-        if (
-            (self.cfg.PROBLEM.NDIM == "2D" and self.bmz_config[sample_key].ndim == 2)
-            or (self.cfg.PROBLEM.NDIM == "3D" and self.bmz_config[sample_key].ndim == 3)
-        ):
-            self.bmz_config[sample_key] = np.expand_dims(self.bmz_config[sample_key], 0)
-        self.bmz_config[sample_key] = np.expand_dims(self.bmz_config[sample_key], 0) # Add batch size 
+        # Model prediction
+        pred = self.model(torch.from_numpy(self.bmz_config["test_input_norm"]).to(self.device))
+
+        # MAE
+        if isinstance(pred, tuple):
+            _, pred, mask = pred
+            pred = self.apply_model_activations(pred)
+            pred, _, _ = self.model_without_ddp.save_images(
+                torch.from_numpy(self.bmz_config["test_input_norm"]).to(self.device),
+                pred,
+                mask,
+                self.dtype,
+            )
+            pred = torch.from_numpy(pred)
+        else:
+            pred = self.apply_model_activations(pred)
+            # Multi-head concatenation
+            if isinstance(pred, list):
+                pred = torch.cat((pred[0], torch.argmax(pred[1], axis=1).unsqueeze(1)), dim=1)
+ 
+        # Save output
+        prepare_bmz_sample(
+            "test_output", 
+            pred.clone().cpu().detach().numpy().astype(np.float32)
+        )
+
+        # Save test_input without the normalization 
+        if "test_input" not in self.bmz_config:
+            self.bmz_config["test_input"] = undo_sample_normalization(
+                self.current_sample["X"], 
+                self.current_sample["X_norm"]
+            ).astype(np.float32)
+            prepare_bmz_sample("test_input", self.bmz_config["test_input"])
         
         if "postprocessing" not in self.bmz_config:
             # Check activations to be inserted as postprocessing in BMZ
@@ -1613,23 +1650,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
         # Save BMZ input/output so the user could export the model to BMZ later
         if "test_output" not in self.bmz_config:
-            # Generate prediction and save test_output
-            self.prepare_bmz_sample("test_input_norm", self.current_sample["X"])
-            p = self.apply_model_activations(self.model(torch.from_numpy(self.bmz_config["test_input_norm"]).to(self.device)))
-            # Multi-head concatenation
-            if isinstance(p, list):
-                p = torch.cat((p[0], torch.argmax(p[1], axis=1).unsqueeze(1)), dim=1)
-            self.prepare_bmz_sample(
-                "test_output", 
-                p.clone().cpu().detach().numpy().astype(np.float32)
-            )
-
-            # Save test_input without the normalization 
-            self.bmz_config["test_input"] = undo_sample_normalization(
-                self.current_sample["X"], 
-                self.current_sample["X_norm"]
-            ).astype(np.float32)
-            self.prepare_bmz_sample("test_input", self.bmz_config["test_input"])
+            self.prepare_bmz_data(self.current_sample["X"].transpose(self.axis_order))
 
         #################
         ### PER PATCH ###

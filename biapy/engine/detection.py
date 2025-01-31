@@ -1194,18 +1194,7 @@ class Detection_Workflow(Base_Workflow):
 
             # Save BMZ input/output so the user could export the model to BMZ later
             if "test_output" not in self.bmz_config:
-                # Generate prediction and save test_output
-                self.prepare_bmz_sample("test_input_norm", self.current_sample["X"])
-                p = self.model(torch.from_numpy(self.bmz_config["test_input_norm"]).to(self.device))
-                self.prepare_bmz_sample(
-                    "test_output", self.apply_model_activations(p.clone()).cpu().detach().numpy().astype(np.float32)
-                )
-
-                # Save test_input without the normalization
-                self.bmz_config["test_input"] = undo_sample_normalization(
-                    self.current_sample["X"], self.current_sample["X_norm"]
-                ).astype(np.float32)
-                self.prepare_bmz_sample("test_input", self.bmz_config["test_input"])
+                self.prepare_bmz_data(self.current_sample["X"].transpose(self.axis_order))
 
             ##################
             ### FULL IMAGE ###
