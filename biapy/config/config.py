@@ -1474,7 +1474,8 @@ def update_dependencies(cfg) -> None:
             + "_" 
             + post_d_dil
         )
-    call.DATA.TRAIN.DETECTION_MASK_DIR = call.DATA.TRAIN.GT_PATH + "_detection_masks"
+    cpd = '_'.join([str(x) for x in call.PROBLEM.DETECTION.CENTRAL_POINT_DILATION])
+    call.DATA.TRAIN.DETECTION_MASK_DIR = call.DATA.TRAIN.GT_PATH + "_detection_masks_" + str(cpd)
     call.DATA.TRAIN.SSL_SOURCE_DIR = call.DATA.TRAIN.PATH + "_ssl_source"
     if call.PROBLEM.INSTANCE_SEG.TYPE == "regular":
         call.DATA.VAL.INSTANCE_CHANNELS_DIR = (
@@ -1512,7 +1513,7 @@ def update_dependencies(cfg) -> None:
         )
     
     # If value is not the default
-    call.DATA.VAL.DETECTION_MASK_DIR = call.DATA.VAL.GT_PATH + "_detection_masks"
+    call.DATA.VAL.DETECTION_MASK_DIR = call.DATA.VAL.GT_PATH + "_detection_masks_" + str(cpd)
     call.DATA.VAL.SSL_SOURCE_DIR = call.DATA.VAL.PATH + "_ssl_source"
     if call.PROBLEM.INSTANCE_SEG.TYPE == "regular":
         call.DATA.TEST.INSTANCE_CHANNELS_DIR = (
@@ -1552,7 +1553,7 @@ def update_dependencies(cfg) -> None:
     # If value is not the default
     if call.DATA.TEST.BINARY_MASKS == os.path.join("user_data", "test", "bin_mask"):
         call.DATA.TEST.BINARY_MASKS = os.path.join(call.DATA.TEST.PATH, "..", "bin_mask")
-    call.DATA.TEST.DETECTION_MASK_DIR = call.DATA.TEST.GT_PATH + "_detection_masks"
+    call.DATA.TEST.DETECTION_MASK_DIR = call.DATA.TEST.GT_PATH + "_detection_masks_" + str(cpd)
     call.DATA.TEST.SSL_SOURCE_DIR = call.DATA.TEST.PATH + "_ssl_source"
     call.PATHS.TEST_FULL_GT_H5 = os.path.join(call.DATA.TEST.GT_PATH, "h5")
 
