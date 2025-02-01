@@ -2,7 +2,7 @@ FROM andrewseidl/nvidia-cuda:10.2-base-ubuntu20.04
 
 MAINTAINER Daniel Franco-Barranco "daniel.franco@dipc.org"
 
-ARG DEBIAN_FRONTEND=noninteractiveS
+ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A4B469963BF863CC
 RUN apt-get update && apt-get install -y \
     wget \
@@ -32,16 +32,18 @@ RUN conda update -qy conda \
 SHELL ["conda", "run", "-n", "BiaPy_env", "/bin/bash", "-c"]
 
 # Install BiaPy
-RUN pip install biapy==3.5.5
+RUN pip install biapy
 
 # Install Pytorch 1.12.1 + CUDA 10.2
 RUN conda install pytorch==1.12.1 torchvision==0.13.1 torchaudio==0.12.1 cudatoolkit=10.2 -c pytorch
 RUN pip install timm pytorch-msssim torchmetrics[image]
 
-# Clone BiaPy, as running it with python -c "" stops the container with no error after a few seconds running
-RUN git clone --depth 1 https://github.com/BiaPyX/BiaPy.git --branch v3.5.5 /installations/BiaPy
+# Clone BiaPy, as running it with python -c "" stops the container with no error after a few seconds running 
+ARG REPO=https://github.com/BiaPyX/BiaPy.git
+RUN git clone --depth 1 $REPO --branch $(git ls-remote --tags $REPO | cut -d/ -f3 | sort -V | tail -n1) /installations/BiaPy
+
 # This time clone the last commit (25729c ; v3.5.2) as some minor bugs were solved but not created a new release yet
-# RUN git clone --depth 1 https://github.com/BiaPyX/BiaPy.git /installations/BiaPy
+#RUN git clone --depth 1 https://github.com/BiaPyX/BiaPy.git /installations/BiaPy
 
 # User home directory
 RUN mkdir -p /home/user
