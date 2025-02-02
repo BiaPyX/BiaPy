@@ -588,12 +588,13 @@ class Base_Workflow(metaclass=ABCMeta):
         if self.cfg.MODEL.SOURCE == "biapy":
             # Obtain model spec from checkpoint
             if self.cfg.MODEL.LOAD_CHECKPOINT and self.cfg.MODEL.LOAD_MODEL_FROM_CHECKPOINT:
+                # Take cfg from the checkpoint
                 saved_cfg, biapy_ckpt_version = load_model_checkpoint(
                     cfg=self.cfg,
                     jobname=self.job_identifier,
                     model_without_ddp=None,
                     device=self.device,
-                    just_extract_model=True,
+                    just_extract_checkpoint_info=True,
                 )
                 if saved_cfg is not None:
                     # Checks that this config and previous represent same workflow
@@ -892,9 +893,14 @@ class Base_Workflow(metaclass=ABCMeta):
                 print("Validation {}: {}".format(self.train_metric_names[i], self.val_best_metric[i]))
 
         print("Finished Training")
+        
+        if is_dist_avail_and_initialized():
+            print(f"[Rank {get_rank()} ({os.getpid()})] Process waiting (train finished, step 1) . . . ")
+            dist.barrier()
 
         # Save output sample to export the model to BMZ
-        if "test_output" not in self.bmz_config:
+        if "test_output" not in self.bmz_config: 
+            self.model_without_ddp.eval()
             # Load best checkpoint on validation to ensure it 
             _ = load_model_checkpoint(
                 cfg=self.cfg,
@@ -902,7 +908,6 @@ class Base_Workflow(metaclass=ABCMeta):
                 model_without_ddp=self.model_without_ddp,
                 device=self.device,
             )
-            self.model.eval()
 
             self.prepare_bmz_data(self.bmz_config["test_input_norm"])
 

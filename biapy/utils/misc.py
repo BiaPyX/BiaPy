@@ -132,7 +132,10 @@ def init_devices(args, cfg):
     )
     dist.barrier()
     setup_for_distributed(args.rank == 0)
-    device = torch.device("cuda" if torch.cuda.is_available() else cfg.SYSTEM.DEVICE)
+    if args.rank == 0:
+        device = torch.device("cuda" if torch.cuda.is_available() else cfg.SYSTEM.DEVICE)
+    else:
+        device = torch.device(f"cuda:{args.rank}" if torch.cuda.is_available() else cfg.SYSTEM.DEVICE)
     return device
 
 
@@ -216,7 +219,7 @@ def get_checkpoint_path(cfg, jobname):
 
     return resume
 
-def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=None, just_extract_model=False):
+def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=None, just_extract_checkpoint_info=False):
     start_epoch = 0
 
     resume = get_checkpoint_path(cfg, jobname)
@@ -224,7 +227,7 @@ def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=Non
     if not os.path.exists(resume):
         raise FileNotFoundError(f"Checkpoint file {resume} not found")
     else:
-        if just_extract_model:
+        if just_extract_checkpoint_info:
             print("Extracting model from checkpoint file {}".format(resume))
         else:
             print("Loading checkpoint from file {}".format(resume))
@@ -239,7 +242,7 @@ def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=Non
     else:
         checkpoint = torch.load(resume, map_location=device, weights_only=True)
 
-    if just_extract_model:
+    if just_extract_checkpoint_info:
         if 'cfg' not in checkpoint:
             print("Checkpoint seems to not be from BiaPy (v3.5.1 or later) as model building args couldn't be extracted. Thus, "
                   "the model will be built based on the current configuration")
