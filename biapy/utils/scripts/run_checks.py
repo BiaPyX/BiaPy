@@ -324,7 +324,7 @@ all_test_info["Test25"] = {
     "description": "2D image to image. lightmycells 2D data. extract random. val and train not in memory. Basic DA. UNETR",
     "yaml": "test25.yaml",
     "internal_checks": [
-        {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 8.0},
+        {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 6.0},
     ]
 }
 

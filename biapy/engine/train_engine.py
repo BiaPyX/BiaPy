@@ -16,7 +16,6 @@ def train_one_epoch(
     data_loader,
     optimizer,
     device,
-    loss_scaler,
     epoch,
     log_writer=None,
     lr_scheduler=None,
@@ -55,9 +54,8 @@ def train_one_epoch(
 
         # Pass the images through the model
         # TODO: control autocast and mixed precision
-        with torch.cuda.amp.autocast(enabled=False):
-            outputs = activations(model_call_func(batch, is_train=True), training=True)
-            loss = loss_function(outputs, targets)
+        outputs = activations(model_call_func(batch, is_train=True), training=True)
+        loss = loss_function(outputs, targets)
 
         loss_value = loss.item()
         if not math.isfinite(loss_value):

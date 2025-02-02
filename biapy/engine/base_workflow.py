@@ -121,7 +121,6 @@ class Base_Workflow(metaclass=ABCMeta):
         self.model_build_kwargs = None
         self.checkpoint_path = None
         self.optimizer = None
-        self.loss_scaler = None
         self.model_prepared = False
         self.dtype = np.float32 if not self.cfg.TEST.REDUCE_MEMORY else np.float16
         self.dtype_str = "float32" if not self.cfg.TEST.REDUCE_MEMORY else "float16"
@@ -673,7 +672,6 @@ class Base_Workflow(metaclass=ABCMeta):
                 model_without_ddp=self.model_without_ddp,
                 device=self.device,
                 optimizer=self.optimizer,
-                loss_scaler=self.loss_scaler,
             )
         else:
             self.start_epoch = 0
@@ -717,7 +715,7 @@ class Base_Workflow(metaclass=ABCMeta):
         self.prepare_logging_tool()
         self.early_stopping = build_callbacks(self.cfg)
 
-        self.optimizer, self.lr_scheduler, self.loss_scaler = prepare_optimizer(
+        self.optimizer, self.lr_scheduler = prepare_optimizer(
             self.cfg, self.model_without_ddp, len(self.train_generator)
         )
 
@@ -750,7 +748,6 @@ class Base_Workflow(metaclass=ABCMeta):
                 data_loader=self.train_generator,
                 optimizer=self.optimizer,
                 device=self.device,
-                loss_scaler=self.loss_scaler,
                 epoch=epoch,
                 log_writer=self.log_writer,
                 lr_scheduler=self.lr_scheduler,
@@ -771,7 +768,6 @@ class Base_Workflow(metaclass=ABCMeta):
                         jobname=self.job_identifier,
                         model_without_ddp=self.model_without_ddp,
                         optimizer=self.optimizer,
-                        loss_scaler=self.loss_scaler,
                         epoch=epoch + 1,
                         model_build_kwargs=self.model_build_kwargs,
                     )
@@ -815,7 +811,6 @@ class Base_Workflow(metaclass=ABCMeta):
                             jobname=self.job_identifier,
                             model_without_ddp=self.model_without_ddp,
                             optimizer=self.optimizer,
-                            loss_scaler=self.loss_scaler,
                             epoch="best",
                             model_build_kwargs=self.model_build_kwargs,
                         )

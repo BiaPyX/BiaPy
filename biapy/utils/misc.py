@@ -169,9 +169,8 @@ def get_grad_norm_(parameters, norm_type: float = 2.0) -> torch.Tensor:
     return total_norm
 
 
-def save_model(cfg, biapy_version, jobname, epoch, model_without_ddp, optimizer, loss_scaler, model_build_kwargs=None):
+def save_model(cfg, biapy_version, jobname, epoch, model_without_ddp, optimizer, model_build_kwargs=None):
     output_dir = Path(cfg.PATHS.CHECKPOINT)
-    sc = loss_scaler.state_dict() if loss_scaler is not None else "NONE"
     checkpoint_paths = [output_dir / "{}-checkpoint-{}.pth".format(jobname, str(epoch))]
 
     for checkpoint_path in checkpoint_paths:
@@ -180,7 +179,6 @@ def save_model(cfg, biapy_version, jobname, epoch, model_without_ddp, optimizer,
             "model": model_without_ddp.state_dict(),
             "optimizer": optimizer.state_dict(),
             "epoch": epoch,
-            "scaler": sc,
             "cfg": cfg,
             "biapy_version": biapy_version,
         }
@@ -218,8 +216,7 @@ def get_checkpoint_path(cfg, jobname):
 
     return resume
 
-def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=None, loss_scaler=None,
-    just_extract_model=False):
+def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=None, just_extract_model=False):
     start_epoch = 0
 
     resume = get_checkpoint_path(cfg, jobname)
@@ -268,10 +265,6 @@ def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=Non
             start_epoch = 0
         print("Epoch loaded!")
 
-    if "scaler" in checkpoint and loss_scaler is not None:
-        loss_scaler.load_state_dict(checkpoint["scaler"])
-        print("Scaler info loaded!")
-
     return start_epoch, resume
 
 
@@ -304,44 +297,6 @@ def time_text(t):
         return "{:.1f}m".format(t / 60)
     else:
         return "{:.1f}s".format(t)
-
-
-class NativeScalerWithGradNormCount:
-    state_dict_key = "amp_scaler"
-
-    def __init__(self):
-        self._scaler = torch.cuda.amp.GradScaler()
-
-    def __call__(
-        self,
-        loss,
-        optimizer,
-        clip_grad=None,
-        parameters=None,
-        create_graph=False,
-        update_grad=True,
-    ):
-        self._scaler.scale(loss).backward(create_graph=create_graph)
-        if update_grad:
-            if clip_grad is not None:
-                assert parameters is not None
-                self._scaler.unscale_(optimizer)  # unscale the gradients of optimizer's assigned params in-place
-                norm = torch.nn.utils.clip_grad_norm_(parameters, clip_grad)
-            else:
-                self._scaler.unscale_(optimizer)
-                norm = get_grad_norm_(parameters)
-            self._scaler.step(optimizer)
-            self._scaler.update()
-        else:
-            norm = None
-        return norm
-
-    def state_dict(self):
-        return self._scaler.state_dict()
-
-    def load_state_dict(self, state_dict):
-        self._scaler.load_state_dict(state_dict)
-
 
 class TensorboardLogger(object):
     def __init__(self, log_dir):
