@@ -58,9 +58,9 @@ class Classification_Workflow(Base_Workflow):
 
         self.multihead : List of str
             Names of the metrics calculated during training.
-        
+
         self.activations : List of dicts
-            Activations to be applied to the model output. Each dict will 
+            Activations to be applied to the model output. Each dict will
             match an output channel of the model. If ':' is used the activation
             will be applied to all channels at once. "Linear" and "CE_Sigmoid"
             will not be applied. E.g. [{":": "Linear"}].
@@ -69,7 +69,7 @@ class Classification_Workflow(Base_Workflow):
             "type": "mask",
             "channels": [self.cfg.MODEL.N_CLASSES],
         }
-        self.multihead = False 
+        self.multihead = False
         self.activations = [{":": "Linear"}]
 
         super().define_activations_and_channels()
@@ -159,6 +159,7 @@ class Classification_Workflow(Base_Workflow):
 
         with torch.no_grad():
             for i, metric in enumerate(list_to_use):
+                print(f"output: {output.shape} - targets: {targets.shape}")
                 val = metric(output, targets)
                 if torch.is_tensor(val):
                     val = val.item() if not torch.isnan(val) else 0
@@ -235,8 +236,8 @@ class Classification_Workflow(Base_Workflow):
             convert_to_rgb=self.cfg.DATA.FORCE_RGB,
             is_3d=(self.cfg.PROBLEM.NDIM == "3D"),
         )
-        self.Y_train, self.Y_val = None, None 
-        
+        self.Y_train, self.Y_val = None, None
+
     def load_test_data(self):
         """
         Load test data.
@@ -275,8 +276,8 @@ class Classification_Workflow(Base_Workflow):
         """
         Function to process a sample in the inference phase.
         """
-        # Skip processing image 
-        if "discard" in self.current_sample["X"] and self.current_sample["X"]["discard"]: 
+        # Skip processing image
+        if "discard" in self.current_sample["X"] and self.current_sample["X"]["discard"]:
             return True
 
         # Save BMZ input/output so the user could export the model to BMZ later
