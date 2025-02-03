@@ -159,7 +159,6 @@ class Classification_Workflow(Base_Workflow):
 
         with torch.no_grad():
             for i, metric in enumerate(list_to_use):
-                print(f"output: {output.shape} - targets: {targets.shape}")
                 val = metric(output, targets)
                 if torch.is_tensor(val):
                     val = val.item() if not torch.isnan(val) else 0
