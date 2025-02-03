@@ -20,11 +20,6 @@ from biapy.data.pre_processing import (
     norm_range01,
     undo_sample_normalization,
 )
-from biapy.utils.util import (
-    save_tif,
-    read_chunked_data,
-    read_chunked_nested_data,
-)
 from biapy.utils.matching import matching, wrapper_matching_dataset_lazy
 from biapy.engine.metrics import (
     jaccard_index,
@@ -33,8 +28,8 @@ from biapy.engine.metrics import (
 )
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.utils.misc import is_main_process, is_dist_avail_and_initialized
-from biapy.data.data_manipulation import read_img_as_ndarray
-
+from biapy.data.data_manipulation import read_img_as_ndarray, save_tif
+from biapy.data.data_3D_manipulation import read_chunked_data, read_chunked_nested_data
 
 class Instance_Segmentation_Workflow(Base_Workflow):
     """

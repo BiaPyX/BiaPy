@@ -2,7 +2,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau, OneCycleLR
 import timm.optim.optim_factory as optim_factory
 
 from biapy.engine.schedulers.warmup_cosine_decay import WarmUpCosineDecayScheduler
-from biapy.utils.callbacks import EarlyStopping
+from biapy.utils.callbacks import EarlyStopping 
 
 
 def prepare_optimizer(cfg, model_without_ddp, steps_per_epoch):

@@ -22,7 +22,7 @@ from biapy.data.post_processing.post_processing import (
     ensemble8_2d_predictions,
     ensemble16_3d_predictions,
 )
-from biapy.utils.util import save_tif
+from biapy.data.data_manipulation import save_tif
 from biapy.utils.misc import (
     to_pytorch_format,
     to_numpy_format,

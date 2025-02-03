@@ -1,7 +1,6 @@
 import os
 import sys
 import numpy as np
-from skimage.io import imread
 from tqdm import tqdm
 
 code_dir = "/home/user/BiaPy"
@@ -18,7 +17,7 @@ input_dir_y = os.path.join(input_dir, 'y')
 
 sys.path.insert(0, code_dir)
 from biapy.data.data_2D_manipulation import crop_data_with_overlap
-from biapy.utils.util import save_tif_pair_discard
+from biapy.data.data_manipulation import save_tif_pair_discard, imread
 
 ids = sorted(next(os.walk(input_dir_x))[2])
 for n, id_ in tqdm(enumerate(ids), total=len(ids)):

@@ -1,6 +1,6 @@
 import numpy as np
 
-from biapy.utils.util import save_tif
+from biapy.data.data_manipulation import save_tif
 from biapy.data.generators.single_base_data_generator import SingleBaseDataGenerator
 
 

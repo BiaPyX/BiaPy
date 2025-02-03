@@ -17,11 +17,6 @@ from biapy.utils.misc import (
     is_main_process,
     is_dist_avail_and_initialized,
 )
-from biapy.utils.util import (
-    save_tif,
-    write_chunked_data,
-    read_chunked_data,
-)
 from biapy.engine.metrics import (
     detection_metrics,
     multiple_metrics,
@@ -31,7 +26,8 @@ from biapy.engine.metrics import (
 )
 from biapy.data.pre_processing import create_detection_masks, norm_range01, undo_sample_normalization
 from biapy.engine.base_workflow import Base_Workflow
-from biapy.data.data_3D_manipulation import order_dimensions
+from biapy.data.data_3D_manipulation import order_dimensions, write_chunked_data, read_chunked_data
+from biapy.data.data_manipulation import save_tif
 
 
 class Detection_Workflow(Base_Workflow):

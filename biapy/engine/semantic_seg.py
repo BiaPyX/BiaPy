@@ -4,8 +4,7 @@ from skimage.transform import resize
 
 from biapy.data.post_processing.post_processing import apply_binary_mask
 from biapy.engine.base_workflow import Base_Workflow
-from biapy.utils.util import save_tif
-from biapy.data.data_manipulation import check_masks
+from biapy.data.data_manipulation import check_masks, save_tif
 from biapy.utils.misc import to_pytorch_format, to_numpy_format
 from biapy.engine.metrics import (
     jaccard_index,

@@ -3,7 +3,7 @@ import random
 from PIL import Image
 from typing import Union, Tuple
 
-from biapy.utils.util import save_tif
+from biapy.data.data_manipulation import save_tif
 from biapy.data.generators.pair_base_data_generator import PairBaseDataGenerator
 
 

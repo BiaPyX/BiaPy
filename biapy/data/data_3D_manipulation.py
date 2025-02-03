@@ -3,10 +3,6 @@ import h5py
 import numpy as np
 from tqdm import tqdm
 
-from biapy.utils.util import (
-    read_chunked_data,
-    read_chunked_nested_data,
-)
 from biapy.utils.misc import is_main_process
 
 
@@ -1126,3 +1122,146 @@ def ensure_3d_shape(img, path=None):
             ]
             img = img.transpose(new_pos)
     return img
+
+
+def write_chunked_data(data, data_dir, filename, dtype_str="float32", verbose=True):
+    """
+    Save images in the given directory.
+
+    Parameters
+    ----------
+    data : 5D numpy array
+        Data to save. E.g. ``(1, z, y, x, channels)``.
+
+    data_dir : str
+        Path to store X images.
+
+    filename : str
+        Filename of the data to use.
+
+    dtype_str : str, optional
+        Data type to use when saving.
+
+    verbose : bool, optional
+        To print saving information.
+    """
+    if data.ndim != 5:
+        raise ValueError(f"Expected data needs to have 5 dimensions (in 'TZYXC' order). Given data shape: {data.shape}")
+
+    # Change to TZCYX
+    data = data.transpose((0, 1, 4, 2, 3))
+
+    ext = os.path.splitext(filename)[1]
+    if verbose:
+        print("Saving {} data as {} in folder: {}".format(data.shape, ext, data_dir))
+
+    os.makedirs(data_dir, exist_ok=True)
+
+    if ext in [".hdf5", ".hdf", ".h5"]:
+        fid = h5py.File(os.path.join(data_dir, filename), "w")
+        data = fid.create_dataset("data", data=data, dtype=dtype_str, compression="gzip")
+    # Zarr
+    else:
+        fid = zarr.open_group(os.path.join(data_dir, filename), mode="w")
+        data = fid.create_dataset("data", data=data, dtype=dtype_str)
+
+
+def read_chunked_nested_data(file, data_path=""):
+    """
+    Find recursively raw and ground truth data within a H5/Zarr file.
+    """
+    if any(file.endswith(x) for x in [".h5", ".hdf5", ".hdf"]):
+        return read_chunked_nested_h5(file, data_path)
+    elif file.endswith(".zarr"):
+        return read_chunked_nested_zarr(file, data_path)
+
+
+def read_chunked_nested_zarr(zarrfile, data_path=""):
+    """
+    Find recursively raw and ground truth data within a Zarr file.
+    """
+    if not zarrfile.endswith(".zarr"):
+        raise ValueError("Not implemented for other filetypes than Zarr")
+    fid = zarr.open(zarrfile, "r")
+
+    def find_obj(path, fid):
+        obj = None
+        rpath = path.split(".")
+        if len(rpath) == 0:
+            return None
+        else:
+            if len(rpath) > 1:
+                groups = list(fid.group_keys())
+                if rpath[0] not in groups:
+                    return None
+                obj = find_obj(".".join(rpath[1:]), fid[rpath[0]])
+            else:
+                arrays = list(fid.array_keys())
+                if rpath[0] not in arrays:
+                    return None
+                return fid[rpath[0]]
+        return obj
+
+    data = find_obj(data_path, fid)
+
+    if data is None and data_path != "":
+        raise ValueError(f"'{data_path}' not found in Zarr: {zarrfile}.")
+
+    return fid, data
+
+
+def read_chunked_nested_h5(h5file, data_path=""):
+    """
+    Find recursively raw and ground truth data within a Zarr file.
+    """
+    if not any(h5file.endswith(x) for x in [".h5", ".hdf5", ".hdf"]):
+        raise ValueError("Not implemented for other filetypes than H5")
+    
+    fid = h5py.File(h5file, "r")
+
+    def find_obj(path, fid):
+        obj = None
+        rpath = path.split(".")
+        if len(rpath) == 0:
+            return None
+        else:
+            if len(rpath) > 1:
+                groups = list(fid.keys())
+                if rpath[0] not in groups:
+                    return None
+                obj = find_obj(".".join(rpath[1:]), fid[rpath[0]])
+            else:
+                arrays = list(fid.keys())
+                if rpath[0] not in arrays:
+                    return None
+                return fid[rpath[0]]
+        return obj
+    data = find_obj(data_path, fid)    
+    if data is None and data_path != "":
+        raise ValueError(f"'{data_path}' not found in H5: {h5file}.")
+    return fid, data
+
+
+def read_chunked_data(filename):
+    if isinstance(filename, str):
+        if not os.path.exists(filename):
+            raise ValueError(f"File {filename} does not exist.")
+        
+        if any(filename.endswith(x) for x in [".h5", ".hdf5", ".hdf"]):
+            fid = h5py.File(filename, "r")
+            data = fid[list(fid)[0]]
+        elif filename.endswith(".zarr"):
+            fid = zarr.open(filename, "r")
+            if len(list((fid.group_keys()))) != 0:  # if the zarr has groups
+                fid = fid[list(fid.group_keys())[0]]
+            if len(list((fid.array_keys()))) != 0:  # if the zarr has arrays
+                data = fid[list(fid.array_keys())[0]]
+            else:
+                data = fid
+        else:
+            raise ValueError(f"File extension {filename} not recognized")
+
+        return fid, data
+    else:
+        raise ValueError("'filename' is expected to be a str")
+

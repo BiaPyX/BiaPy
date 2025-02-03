@@ -1,12 +1,12 @@
 import os
 import h5py
 import torch
+import tifffile
+import imageio
 import numpy as np
 from tqdm import tqdm
-from skimage.io import imread
 from sklearn.model_selection import train_test_split, StratifiedKFold
 
-from biapy.utils.util import read_chunked_data, read_chunked_nested_data
 from biapy.utils.misc import is_main_process
 from biapy.data.data_2D_manipulation import crop_data_with_overlap, ensure_2d_shape
 from biapy.data.data_3D_manipulation import (
@@ -2913,6 +2913,10 @@ def load_img_data(path, is_3d=False, data_within_zarr_path=None):
         File of the data read. Useful to close it in case it is an H5 file.
     """
     if any(path.endswith(x) for x in [".zarr", ".h5", ".hdf5", ".hdf"]):
+        from biapy.data.data_manipulation import (
+            read_chunked_data,
+            read_chunked_nested_data,
+        )
         if data_within_zarr_path:
             file, data = read_chunked_nested_data(path, data_within_zarr_path)
         else:
@@ -2950,6 +2954,7 @@ def read_img_as_ndarray(path, is_3d=False):
         img = h5py.File(path, "r")
         img = np.array(img[list(img)[0]])
     elif path.endswith(".zarr"):
+        from biapy.data.data_manipulation import read_chunked_data
         _, img = read_chunked_data(path)
         img = np.array(img)
     else:
@@ -2963,6 +2968,52 @@ def read_img_as_ndarray(path, is_3d=False):
 
     return img
 
+def imread(path):
+    """
+    Read an image from a given path. In the past from ``skimage.io import imread`` 
+    was used but now it is deprecated. 
+
+    Parameters
+    ----------
+    path : str
+        Path to the image to read.
+
+    Returns
+    -------
+    img : Numpy array
+        Image read. 
+    """
+    if path.lower().endswith(('.tiff', '.tif')):
+        return tifffile.imread(path)
+    else:
+        return imageio.imread(path)
+
+def imwrite(path, image):
+    """
+    Writes ``data`` in the given ``path``. In the past from ``skimage.io import imsave`` 
+    was used but now it is deprecated. 
+
+    Parameters
+    ----------
+    path : str
+        Path to the image to read.
+
+    image : Numpy array
+        Image to store. 
+    """
+    image = np.array(image)
+    assert image.ndim == 6, f"Image to write needs to have 6 dimensions (axes: TZCYXS). Image shape: {image.shape}"
+    if path.lower().endswith(('.tiff', '.tif')):
+        try:
+            tifffile.imwrite(
+                path, image, imagej=True, metadata={"axes": "TZCYXS"}, compression='zlib', compressionargs={'level': 8},
+            )
+        except:
+            tifffile.imwrite(
+                path, image, imagej=True, metadata={"axes": "TZCYXS"}
+            )
+    else:
+        imageio.imwrite(path, image)
 
 def check_value(value, value_range=(0, 1)):
     """
@@ -3105,3 +3156,167 @@ def shape_mismatch_message(X_data, Y_data):
         mistmatch_message = f"Here is a list of the pair raw and label that does not match in shape:\n{mistmatch_message}"
     
     return mistmatch_message
+
+
+def save_tif(X, data_dir=None, filenames=None, verbose=True):
+    """
+    Save images in the given directory.
+
+    Parameters
+    ----------
+    X : 4D/5D numpy array
+        Data to save as images. The first dimension must be the number of images. E.g.
+        ``(num_of_images, y, x, channels)`` or ``(num_of_images, z, y, x, channels)``.
+
+    data_dir : str, optional
+        Path to store X images.
+
+    filenames : List, optional
+        Filenames that should be used when saving each image.
+
+    verbose : bool, optional
+         To print saving information.
+    """
+
+    if verbose:
+        s = X.shape if not isinstance(X, list) else X[0].shape
+        print("Saving {} data as .tif in folder: {}".format(s, data_dir))
+
+    os.makedirs(data_dir, exist_ok=True)
+    if filenames is not None:
+        if len(filenames) != len(X):
+            raise ValueError(
+                "Filenames array and length of X have different shapes: {} vs {}".format(len(filenames), len(X))
+            )
+
+    if not isinstance(X, list):
+        _dtype = X.dtype if X.dtype in [np.uint8, np.uint16, np.float32] else np.float32
+        ndims = X.ndim
+    else:
+        _dtype = X[0].dtype if X[0].dtype in [np.uint8, np.uint16, np.float32] else np.float32
+        ndims = X[0].ndim
+
+    d = len(str(len(X)))
+    for i in tqdm(range(len(X)), leave=False, disable=not is_main_process()):
+        if filenames is None:
+            f = os.path.join(data_dir, str(i).zfill(d) + ".tif")
+        else:
+            f = os.path.join(data_dir, os.path.splitext(filenames[i])[0] + ".tif")
+        if ndims == 4:
+            if not isinstance(X, list):
+                aux = np.expand_dims(np.expand_dims(X[i], 0).transpose((0, 3, 1, 2)), -1).astype(_dtype)
+            else:
+                aux = np.expand_dims(np.expand_dims(X[i][0], 0).transpose((0, 3, 1, 2)), -1).astype(_dtype)
+        else:
+            if not isinstance(X, list):
+                aux = np.expand_dims(X[i].transpose((0, 3, 1, 2)), -1).astype(_dtype)
+            else:
+                aux = np.expand_dims(X[i][0].transpose((0, 3, 1, 2)), -1).astype(_dtype)
+        imwrite(f, np.expand_dims(aux, 0))
+
+
+def save_tif_pair_discard(X, Y, data_dir=None, suffix="", filenames=None, discard=True, verbose=True):
+    """
+    Save images in the given directory.
+
+    Parameters
+    ----------
+    X : 4D/5D numpy array
+        Data to save as images. The first dimension must be the number of images. E.g.
+        ``(num_of_images, y, x, channels)`` or ``(num_of_images, z, y, x, channels)``.
+
+    Y : 4D/5D numpy array
+        Data mask to save. The first dimension must be the number of images. E.g.
+        ``(num_of_images, y, x, channels)`` or ``(num_of_images, z, y, x, channels)``.
+
+    data_dir : str, optional
+        Path to store X images.
+
+    suffix : str, optional
+        Suffix to apply on output directory.
+
+    filenames : List, optional
+        Filenames that should be used when saving each image.
+
+    discard : bool, optional
+        Whether to discard image/mask pairs if the mask has no label information.
+
+    verbose : bool, optional
+         To print saving information.
+    """
+
+    if verbose:
+        s = X.shape if not isinstance(X, list) else X[0].shape
+        print("Saving {} data as .tif in folder: {}".format(s, data_dir))
+
+    os.makedirs(os.path.join(data_dir, "x" + suffix), exist_ok=True)
+    os.makedirs(os.path.join(data_dir, "y" + suffix), exist_ok=True)
+    if filenames is not None:
+        if len(filenames) != len(X):
+            raise ValueError(
+                "Filenames array and length of X have different shapes: {} vs {}".format(len(filenames), len(X))
+            )
+
+    _dtype = X.dtype if X.dtype in [np.uint8, np.uint16, np.float32] else np.float32
+    d = len(str(len(X)))
+    for i in tqdm(range(X.shape[0]), leave=False, disable=not is_main_process()):
+        if len(np.unique(Y[i])) >= 2 or not discard:
+            if filenames is None:
+                f1 = os.path.join(data_dir, "x" + suffix, str(i).zfill(d) + ".tif")
+                f2 = os.path.join(data_dir, "y" + suffix, str(i).zfill(d) + ".tif")
+            else:
+                f1 = os.path.join(data_dir, "x" + suffix, os.path.splitext(filenames[i])[0] + ".tif")
+                f2 = os.path.join(data_dir, "y" + suffix, os.path.splitext(filenames[i])[0] + ".tif")
+            if X.ndim == 4:
+                aux = np.expand_dims(np.expand_dims(X[i], 0).transpose((0, 3, 1, 2)), -1).astype(_dtype)
+            else:
+                aux = np.expand_dims(X[i].transpose((0, 3, 1, 2)), -1).astype(_dtype)
+            imwrite(f1,np.expand_dims(aux, 0))
+            if Y.ndim == 4:
+                aux = np.expand_dims(np.expand_dims(Y[i], 0).transpose((0, 3, 1, 2)), -1).astype(_dtype)
+            else:
+                aux = np.expand_dims(Y[i].transpose((0, 3, 1, 2)), -1).astype(_dtype)
+            imwrite(f2, np.expand_dims(aux, 0))
+
+
+def save_npy_files(X, data_dir=None, filenames=None, verbose=True):
+    """
+    Save images in the given directory.
+
+    Parameters
+    ----------
+    X : 4D/5D numpy array
+        Data to save as images. The first dimension must be the number of images. E.g.
+        ``(num_of_images, y, x, channels)`` or ``(num_of_images, z, y, x, channels)``.
+
+    data_dir : str, optional
+        Path to store X images.
+
+    filenames : List, optional
+        Filenames that should be used when saving each image.
+
+    verbose : bool, optional
+         To print saving information.
+    """
+
+    if verbose:
+        s = X.shape if not isinstance(X, list) else X[0].shape
+        print("Saving {} data as .npy in folder: {}".format(s, data_dir))
+
+    os.makedirs(data_dir, exist_ok=True)
+    if filenames is not None:
+        if len(filenames) != len(X):
+            raise ValueError(
+                "Filenames array and length of X have different shapes: {} vs {}".format(len(filenames), len(X))
+            )
+
+    d = len(str(len(X)))
+    for i in tqdm(range(len(X)), leave=False, disable=not is_main_process()):
+        if filenames is None:
+            f = os.path.join(data_dir, str(i).zfill(d) + ".npy")
+        else:
+            f = os.path.join(data_dir, os.path.splitext(filenames[i])[0] + ".npy")
+        if isinstance(X, list):
+            np.save(f, X[i][0])
+        else:
+            np.save(f, X[i])

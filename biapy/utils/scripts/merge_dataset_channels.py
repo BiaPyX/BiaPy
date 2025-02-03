@@ -1,7 +1,6 @@
 import os
 import sys
 import numpy as np
-from skimage.io import imread
 from tqdm import tqdm
 
 code_dir = "/data/BiaPy"
@@ -14,7 +13,7 @@ padding = (0, 0, 0)
 median_padding = False
 
 sys.path.insert(0, code_dir)
-from biapy.utils.util import save_tif
+from biapy.data.data_manipulation import save_tif, imread
 ids = sorted(next(os.walk(input_dir))[2])
 ids2 = sorted(next(os.walk(input2_dir))[2])
 for n, id_ in tqdm(enumerate(ids), total=len(ids)):

@@ -49,9 +49,7 @@ from biapy.utils.misc import (
 )
 from biapy.utils.util import (
     create_plots,
-    save_tif,
     check_downsample_division,
-    read_chunked_data,
 )
 from biapy.engine.train_engine import train_one_epoch, evaluate
 from biapy.data.data_2D_manipulation import (
@@ -63,12 +61,14 @@ from biapy.data.data_3D_manipulation import (
     merge_3D_data_with_overlap,
     extract_3D_patch_with_overlap_yield,
     order_dimensions,
+    read_chunked_data,
 )
 from biapy.data.data_manipulation import (
     load_and_prepare_train_data,
     load_and_prepare_test_data,
     read_img_as_ndarray,
     sample_satisfy_conds,
+    save_tif,
 )
 from biapy.data.post_processing.post_processing import (
     ensemble8_2d_predictions,

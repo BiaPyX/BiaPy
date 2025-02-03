@@ -1,6 +1,5 @@
 import os
 import sys
-from skimage.io import imread
 import numpy as np
 import argparse
 from tqdm import tqdm
@@ -21,7 +20,7 @@ args = vars(parser.parse_args())
 # --BiaPy_dir /scratch/dfranco/thesis/data2/dfranco/BiaPy 
 
 sys.path.insert(0, args['BiaPy_dir'])
-from biapy.utils.util import save_tif
+from biapy.data.data_manipulation import save_tif, imread
 
 data_dir = args['input_dir']
 out_dir = args['output_dir']

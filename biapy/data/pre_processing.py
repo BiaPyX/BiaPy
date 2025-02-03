@@ -18,20 +18,23 @@ from skimage.color import rgb2gray
 from skimage.filters import gaussian, median
 
 from biapy.utils.util import (
-    save_tif,
     seg2aff_pni,
     seg_widen_border,
-    read_chunked_data,
-    read_chunked_nested_data,
-    write_chunked_data,
 )
 from biapy.utils.misc import is_main_process
 from biapy.data.data_3D_manipulation import (
     load_3D_efficient_files,
     load_img_part_from_efficient_file,
     order_dimensions,
+    read_chunked_data,
+    read_chunked_nested_data, 
+    write_chunked_data
 )
-from biapy.data.data_manipulation import read_img_as_ndarray, load_data_from_dir
+from biapy.data.data_manipulation import (
+    read_img_as_ndarray, 
+    load_data_from_dir, 
+    save_tif,     
+)
 
 numpy_torch_dtype_dict = {
     "bool": [torch.bool, bool],

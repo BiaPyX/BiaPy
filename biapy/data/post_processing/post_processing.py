@@ -19,14 +19,12 @@ from skimage.morphology import disk, ball, remove_small_objects, dilation, erosi
 from skimage.segmentation import watershed, relabel_sequential
 from skimage.filters import rank, threshold_otsu
 from skimage.measure import label, regionprops_table
-from skimage.io import imread
 from skimage.exposure import equalize_adapthist
 import diplib as dip
 
-from biapy.utils.util import save_tif
 from biapy.data.pre_processing import reduce_dtype
 from biapy.utils.misc import to_numpy_format, to_pytorch_format
-from biapy.data.data_manipulation import read_img_as_ndarray
+from biapy.data.data_manipulation import read_img_as_ndarray, save_tif, imread
 
 def watershed_by_channels(
     data,

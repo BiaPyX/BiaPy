@@ -23,9 +23,9 @@ os.makedirs(gt_partial_files_dir, exist_ok=True)
 
 sys.path.insert(0, code_dir)
 from biapy.utils.matching import matching, match_using_segCompare
-from biapy.utils.util import save_tif_pair_discard, wrapper_matching_dataset_lazy, wrapper_matching_segCompare
+from biapy.utils.util import wrapper_matching_dataset_lazy, wrapper_matching_segCompare
 from biapy.engine.metrics import jaccard_index_numpy, voc_calculation
-
+from biapy.data.data_manipulation import save_tif_pair_discard
 if iou:
     all_iou = 0
     all_ov_iou = 0  # (overall IoU)

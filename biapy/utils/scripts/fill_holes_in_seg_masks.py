@@ -2,7 +2,6 @@ import argparse
 import os
 import sys
 import numpy as np
-from skimage.io import imread
 from tqdm import tqdm
 import fill_voids
 
@@ -18,7 +17,7 @@ args = vars(parser.parse_args())
 #   --output_label_dir /scratch/dfranco/thesis/data2/dfranco/datasets/oocyte/arturo_instances/v3/y --BiaPy_dir ../../
 
 sys.path.insert(0, args['BiaPy_dir'])
-from biapy.utils.util import save_tif
+from biapy.data.data_manipulation import save_tif, imread
 
 data_dir = args['input_label_dir']
 out_dir = args['output_label_dir']

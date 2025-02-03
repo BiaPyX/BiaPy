@@ -1,7 +1,6 @@
 import os
 import sys
 import numpy as np
-from skimage.io import imread
 from tqdm import tqdm
 from scipy import ndimage
 
@@ -12,7 +11,7 @@ out_dir = "/home/user/datasets/lightmycells/BiaPy_data_structure/"+organelle
 
 
 sys.path.insert(0, code_dir)
-from biapy.utils.util import save_tif
+from biapy.data.data_manipulation import save_tif, imread
 
 folders = sorted(next(os.walk(input_dir))[1])
 for i, fol in tqdm(enumerate(folders), total=len(folders)):

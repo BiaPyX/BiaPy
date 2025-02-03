@@ -18,7 +18,7 @@ from biapy.data.post_processing.post_processing import (
     ensemble16_3d_predictions,
 )
 from biapy.engine.base_workflow import Base_Workflow
-from biapy.utils.util import save_tif
+from biapy.data.data_manipulation import save_tif
 from biapy.utils.misc import to_pytorch_format, to_numpy_format, is_main_process
 from biapy.data.pre_processing import undo_sample_normalization
 from biapy.engine.metrics import n2v_loss_mse

@@ -9,10 +9,8 @@ from torch.utils.data import (
 import numpy as np
 from tqdm import tqdm
 
-from biapy.utils.util import save_tif
 from biapy.data.pre_processing import (
     calculate_volume_prob_map,
-    save_tif,
     percentile_clip,
 )
 from biapy.data.generators.pair_data_2D_generator import Pair2DImageDataGenerator
@@ -23,6 +21,7 @@ from biapy.data.generators.test_pair_data_generators import test_pair_data_gener
 from biapy.data.generators.test_single_data_generator import test_single_data_generator
 from biapy.config.config import Config
 from biapy.data.pre_processing import preprocess_data
+from biapy.data.data_manipulation import save_tif
 
 
 def create_train_val_augmentors(

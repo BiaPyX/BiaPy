@@ -1,7 +1,6 @@
 import csv
 import sys
 import numpy as np
-from skimage.io import imread
 from tqdm import tqdm
 from skimage.feature import peak_local_max
 from tqdm import tqdm
@@ -16,6 +15,7 @@ tolerance=10
 
 sys.path.insert(0, code_dir)
 from biapy.engine.metrics import detection_metrics
+from biapy.data.data_manipulation import imread
 
 cfile = open(gt_csv_file)
 csvreader = csv.reader(cfile, delimiter=',')

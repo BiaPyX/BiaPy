@@ -9,7 +9,6 @@ from torchmetrics.image.fid import FrechetInceptionDistance
 from torchmetrics.image.inception import InceptionScore
 
 from biapy.engine.base_workflow import Base_Workflow
-from biapy.utils.util import save_tif
 from biapy.utils.misc import to_pytorch_format, to_numpy_format
 from biapy.data.pre_processing import undo_sample_normalization
 from biapy.data.post_processing.post_processing import (
@@ -24,6 +23,7 @@ from biapy.data.data_3D_manipulation import (
     crop_3D_data_with_overlap,
     merge_3D_data_with_overlap,
 )
+from biapy.data.data_manipulation import save_tif
 
 class Image_to_Image_Workflow(Base_Workflow):
     """

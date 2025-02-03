@@ -9,7 +9,7 @@ out_dir = "/home/user/out"
 
 # Use a function to save the files
 sys.path.insert(0, code_dir)
-from biapy.utils.util import save_tif
+from biapy.data.data_manipulation import save_tif
 
 # Load H5 file
 h5f = h5py.File(h5file, 'r')
