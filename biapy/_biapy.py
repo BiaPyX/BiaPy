@@ -258,7 +258,7 @@ class BiaPy:
         building_dir : path
             Path to store files and the build of BMZ package.
 
-        bmz_cfg : BMZ configuration, optional
+        bmz_cfg : dict, optional
             BMZ configuration to export the model. Here multiple keys need to be declared:
 
             model_source : str
@@ -881,9 +881,10 @@ class BiaPy:
                 print("Autogenerating documentation . . .")
                 doc = os.path.join(building_dir, "documentation.md")
                 create_model_doc(
-                    self.cfg,
-                    bmz_cfg,
-                    doc,
+                    biapy_cfg=self.cfg,
+                    bmz_cfg=bmz_cfg,
+                    cfg_file=self.cfg_file,
+                    doc_output_path=doc,
                 )
         else:
             doc = self.workflow.bmz_config["original_bmz_config"].documentation

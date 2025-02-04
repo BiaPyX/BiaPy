@@ -248,11 +248,52 @@ def create_model_cover(file_paths, out_path, patch_size=256, is_3d=False, workfl
 def create_model_doc(
     biapy_cfg: CfgNode,
     bmz_cfg: dict,
+    cfg_file: str,
     doc_output_path: str,
 ):
     """
-    Create a documentation file with information of the workflow and model used.
+    Create a documentation file with information of the workflow and model used. It will be saved into
+    ``doc_output_path``.
 
+    Parameters
+    ----------
+    biapy_cfg : CfgNode
+        BiaPy configuration.
+
+    bmz_cfg : dict
+        BMZ configuration to export the model. Expected keys are:
+
+        description : str
+            Description of the model.
+
+        authors : list of dicts
+            Authors of the model. Need to be a list of dicts. E.g. ``[{"name": "Gizmo"}]``.
+
+        model_name : str
+            Name of the model. If not set a name based on the selected configuration
+            will be created.
+
+        license : str
+            A `SPDX license identifier <https://spdx.org/licenses/>`__. E.g. "CC-BY-4.0", "MIT",
+            "BSD-2-Clause".
+
+        tags : List of str
+            Tags to make models more findable on the website. Only set useful information related to
+            the data the model was trained with, as the BiaPy will introduce the rest of the tags for you,
+            such as dimensions, software ("biapy" in this case), workflow used etc.
+            E.g. ``['electron-microscopy','mitochondria']``.
+
+        data : dict
+            Information of the data used to train the model. Expected keys:
+                * ``name``: Name of the dataset.
+                * ``doi``: DOI of the dataset or a reference to find it.
+                * ``image_modality``: image modality of the dataset.
+
+    cfg_file : int, optional
+        Size of the image to create.
+
+    doc_output_path : str
+        Output path for the documentation.
     """
     # Check keys
     needed_info = [
@@ -364,17 +405,20 @@ def create_model_doc(
         train_info = cfg_data["TRAIN"]
         aug_info = cfg_data["AUGMENTOR"]
     except:
-        cfg_data = biapy_cfg
         train_info = dict(biapy_cfg.TRAIN)
         aug_info = dict(biapy_cfg.AUGMENTOR)
 
-    train_params = ""
-    for tparam, val in train_info.items():
-        train_params += f"  {tparam}: {val}\n"
+    def dict_to_str(cfg, message, spaces="  "):
+        for tparam, val in cfg.items():
+            if isinstance(val, CfgNode):
+                message += f"{spaces}{tparam}:\n"
+                message += dict_to_str(val, message, spaces + "  ")
+            else:
+                message += f"{spaces}{tparam}: {val}\n"
+        return message
 
-    aug_params = ""
-    for aparam, val in aug_info.items():
-        aug_params += f"  {aparam}: {val}\n"
+    train_params = dict_to_str(train_info, "")
+    aug_params = dict_to_str(aug_info, "")
 
     message = ""
     message += f'# {bmz_cfg["model_name"]}\n'
@@ -405,7 +449,7 @@ def create_model_doc(
     message += f"{train_params}\n"
     message += "#### Data augmentation\n"
     message += "\n"
-    message += "AUGMENTOR\n"
+    message += "AUGMENTOR:\n"
     message += f"{aug_params}\n"
     message += "## Contact\n"
     message += "For problems with BiaPy library itself checkout our [FAQ & Troubleshooting section](https://biapy.readthedocs.io/en/latest/get_started/faq.html).\n"
