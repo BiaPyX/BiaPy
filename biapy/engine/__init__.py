@@ -1,5 +1,5 @@
 from torch.optim.lr_scheduler import ReduceLROnPlateau, OneCycleLR
-import timm.optim.optim_factory as optim_factory
+import timm.optim
 
 from biapy.engine.schedulers.warmup_cosine_decay import WarmUpCosineDecayScheduler
 from biapy.utils.callbacks import EarlyStopping 
@@ -18,7 +18,7 @@ def prepare_optimizer(cfg, model_without_ddp, steps_per_epoch):
     opt_args = {}
     if cfg.TRAIN.OPTIMIZER in ["ADAM", "ADAMW"]:
         opt_args["betas"] = cfg.TRAIN.OPT_BETAS
-    optimizer = optim_factory.create_optimizer_v2(
+    optimizer = timm.optim.create_optimizer_v2(
         model_without_ddp,
         opt=cfg.TRAIN.OPTIMIZER,
         lr=lr,
