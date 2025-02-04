@@ -44,6 +44,7 @@ from bioimageio.spec.model.v0_5 import (
 from packaging.version import Version
 from bioimageio.spec._internal.io_basics import Sha256
 from bioimageio.spec import save_bioimageio_package
+from bioimageio.spec.dataset.v0_3 import LinkedDataset
 
 from biapy.utils.misc import (
     init_devices,
@@ -289,6 +290,7 @@ class BiaPy:
                     * ``name``: Name of the dataset.
                     * ``doi``: DOI of the dataset or a reference to find it.
                     * ``image_modality``: image modality of the dataset.
+                    * ``dataset_id`` (optional): id of the dataset in `BMZ page <https://bioimage.io/#/?type=dataset>`__.
 
             maintainers : list of dicts, optional
                 Maintainers of the model. Need to be a list of dicts. E.g. ``[{"name": "Gizmo"}]``. If not
@@ -984,6 +986,10 @@ class BiaPy:
         #     parent="pytorch_state_dict", # these weights were converted from the pytorch_state_dict weights ones.
         # ),
 
+        dataset_id = None
+        if "dataset_id" in bmz_cfg["data"]:
+            dataset_id = LinkedDataset(id=bmz_cfg["data"]["dataset_id"])
+
         # Export model to BMZ format
         model_descr = ModelDescr(
             name=model_name,
@@ -1002,6 +1008,7 @@ class BiaPy:
             tags=tags,
             covers=covers,
             maintainers=maintainers,
+            training_data=dataset_id,
         )
 
         # print(f"Building BMZ package: {args}")
