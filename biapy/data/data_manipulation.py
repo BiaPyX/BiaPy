@@ -433,15 +433,17 @@ def load_and_prepare_train_data(
             preprocess_f=train_preprocess_f if train_shape_will_change else None,
             preprocess_cfg=train_preprocess_cfg if train_shape_will_change else None,
         )
-    
+
     # Check that the shape of all images match
     if train_mask_path is not None:
         if not multiple_raw_images and len(X_train) != len(Y_train):
             mistmatch_message = shape_mismatch_message(X_train, Y_train)
-            m = f"Mistmatch between number of raw samples ({len(X_train)}) and number of corresponding "\
+            m = (
+                f"Mistmatch between number of raw samples ({len(X_train)}) and number of corresponding "
                 f"masks ({len(Y_train)}). Please, check that the raw and labels have same shape. {mistmatch_message}"
+            )
             raise ValueError(m)
-        
+
         for i in range(len(X_train)):
             xshape = X_train[i]["shape"]
             if "gt_associated_id" in X_train[i]:
@@ -2917,6 +2919,7 @@ def load_img_data(path, is_3d=False, data_within_zarr_path=None):
             read_chunked_data,
             read_chunked_nested_data,
         )
+
         if data_within_zarr_path:
             file, data = read_chunked_nested_data(path, data_within_zarr_path)
         else:
@@ -2955,6 +2958,7 @@ def read_img_as_ndarray(path, is_3d=False):
         img = np.array(img[list(img)[0]])
     elif path.endswith(".zarr"):
         from biapy.data.data_3D_manipulation import read_chunked_data
+
         _, img = read_chunked_data(path)
         img = np.array(img)
     else:
@@ -2968,10 +2972,11 @@ def read_img_as_ndarray(path, is_3d=False):
 
     return img
 
+
 def imread(path):
     """
-    Read an image from a given path. In the past from ``skimage.io import imread`` 
-    was used but now it is deprecated. 
+    Read an image from a given path. In the past from ``skimage.io import imread``
+    was used but now it is deprecated.
 
     Parameters
     ----------
@@ -2981,17 +2986,18 @@ def imread(path):
     Returns
     -------
     img : Numpy array
-        Image read. 
+        Image read.
     """
-    if path.lower().endswith(('.tiff', '.tif')):
+    if path.lower().endswith((".tiff", ".tif")):
         return tifffile.imread(path)
     else:
         return imageio.imread(path)
 
+
 def imwrite(path, image):
     """
-    Writes ``data`` in the given ``path``. In the past from ``skimage.io import imsave`` 
-    was used but now it is deprecated. 
+    Writes ``data`` in the given ``path``. In the past from ``skimage.io import imsave``
+    was used but now it is deprecated.
 
     Parameters
     ----------
@@ -2999,21 +3005,25 @@ def imwrite(path, image):
         Path to the image to read.
 
     image : Numpy array
-        Image to store. 
+        Image to store.
     """
     image = np.array(image)
-    if path.lower().endswith(('.tiff', '.tif')):
+    if path.lower().endswith((".tiff", ".tif")):
         assert image.ndim == 6, f"Image to write needs to have 6 dimensions (axes: TZCYXS). Image shape: {image.shape}"
         try:
             tifffile.imwrite(
-                path, image, imagej=True, metadata={"axes": "TZCYXS"}, compression='zlib', compressionargs={'level': 8},
+                path,
+                image,
+                imagej=True,
+                metadata={"axes": "TZCYXS"},
+                compression="zlib",
+                compressionargs={"level": 8},
             )
         except:
-            tifffile.imwrite(
-                path, image, imagej=True, metadata={"axes": "TZCYXS"}
-            )
+            tifffile.imwrite(path, image, imagej=True, metadata={"axes": "TZCYXS"})
     else:
         imageio.imwrite(path, image)
+
 
 def check_value(value, value_range=(0, 1)):
     """
@@ -3105,6 +3115,7 @@ def check_masks(path, n_classes=2, is_3d=False):
         )
         raise ValueError(m)
 
+
 def shape_mismatch_message(X_data, Y_data):
     """
     Builds an error message with the shape mismatch between two provided data ``X_data`` and ``Y_data``.
@@ -3120,7 +3131,7 @@ def shape_mismatch_message(X_data, Y_data):
         Y data. Each item in the list represents a sample of the dataset. Expected keys:
             * ``"filename"``: name of the image to extract the data sample from.
             * ``"original_data_shape"``: shape of the image where the samples are extracted.
-              
+
     Returns
     -------
     mistmatch_message : str
@@ -3143,7 +3154,7 @@ def shape_mismatch_message(X_data, Y_data):
             y_unique_shapes.append(Y_data[i]["original_data_shape"])
 
     mistmatch_message = ""
-    for xfile, yfile, xshape, yshape in zip(x_unique_files,y_unique_files,x_unique_shapes,y_unique_shapes):
+    for xfile, yfile, xshape, yshape in zip(x_unique_files, y_unique_files, x_unique_shapes, y_unique_shapes):
         if xshape[:-1] != yshape[:-1]:
             mistmatch_message += "\n"
             mistmatch_message += f"Raw file: '{xfile}'\n"
@@ -3151,10 +3162,12 @@ def shape_mismatch_message(X_data, Y_data):
             mistmatch_message += f"Raw shape: {xshape}\n"
             mistmatch_message += f"Label shape: {yshape}\n"
             mistmatch_message += "--\n"
-            
-    if mistmatch_message != "": 
-        mistmatch_message = f"Here is a list of the pair raw and label that does not match in shape:\n{mistmatch_message}"
-    
+
+    if mistmatch_message != "":
+        mistmatch_message = (
+            f"Here is a list of the pair raw and label that does not match in shape:\n{mistmatch_message}"
+        )
+
     return mistmatch_message
 
 
@@ -3271,7 +3284,7 @@ def save_tif_pair_discard(X, Y, data_dir=None, suffix="", filenames=None, discar
                 aux = np.expand_dims(np.expand_dims(X[i], 0).transpose((0, 3, 1, 2)), -1).astype(_dtype)
             else:
                 aux = np.expand_dims(X[i].transpose((0, 3, 1, 2)), -1).astype(_dtype)
-            imwrite(f1,np.expand_dims(aux, 0))
+            imwrite(f1, np.expand_dims(aux, 0))
             if Y.ndim == 4:
                 aux = np.expand_dims(np.expand_dims(Y[i], 0).transpose((0, 3, 1, 2)), -1).astype(_dtype)
             else:

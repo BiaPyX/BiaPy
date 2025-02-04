@@ -3,8 +3,10 @@ import os
 import math
 from PIL import Image
 
-def crop_data_with_overlap(data, crop_shape, data_mask=None, overlap=(0, 0), padding=(0, 0), verbose=True,
-                           load_data=True):
+
+def crop_data_with_overlap(
+    data, crop_shape, data_mask=None, overlap=(0, 0), padding=(0, 0), verbose=True, load_data=True
+):
     """
     Crop data into small square pieces with overlap. The difference with :func:`~crop_data` is that this function
     allows you to create patches with overlap.
@@ -33,7 +35,7 @@ def crop_data_with_overlap(data, crop_shape, data_mask=None, overlap=(0, 0), pad
          To print information about the crop to be made.
 
     load_data : bool, optional
-        Whether to create the patches or not. It saves memory in case you only need the coordiantes of the cropped patches. 
+        Whether to create the patches or not. It saves memory in case you only need the coordiantes of the cropped patches.
 
     Returns
     -------
@@ -42,7 +44,7 @@ def crop_data_with_overlap(data, crop_shape, data_mask=None, overlap=(0, 0), pad
 
     cropped_data_mask : 4D Numpy array, optional
         Cropped image data masks. E.g. ``(num_of_images, y, x, channels)``. Returned if ``load_data`` is ``True``
-        and ``data_mask`` is provided. 
+        and ``data_mask`` is provided.
 
     crop_coords : list of dict
         Coordinates of each crop where the following keys are available:
@@ -227,11 +229,11 @@ def crop_data_with_overlap(data, crop_shape, data_mask=None, overlap=(0, 0), pad
                         y * step_y - d_y : y * step_y + crop_shape[0] - d_y,
                         x * step_x - d_x : x * step_x + crop_shape[1] - d_x,
                     ]
-                
+
                 crop_coords.append(
                     {
                         "z": z,
-                        "y_start": y * step_y - d_y, 
+                        "y_start": y * step_y - d_y,
                         "y_end": y * step_y + crop_shape[0] - d_y,
                         "x_start": x * step_x - d_x,
                         "x_end": x * step_x + crop_shape[1] - d_x,
@@ -251,6 +253,7 @@ def crop_data_with_overlap(data, crop_shape, data_mask=None, overlap=(0, 0), pad
             return cropped_data, crop_coords
     else:
         return crop_coords
+
 
 def merge_data_with_overlap(
     data,
@@ -564,6 +567,7 @@ def merge_data_with_overlap(
         return merged_data, merged_data_mask
     else:
         return merged_data
+
 
 def ensure_2d_shape(img, path=None):
     """

@@ -1,7 +1,7 @@
 import numpy as np
 import random
 from PIL import Image
-from typing import Union, Tuple
+from typing import Tuple
 
 from biapy.data.data_manipulation import save_tif
 from biapy.data.generators.pair_base_data_generator import PairBaseDataGenerator

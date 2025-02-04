@@ -44,7 +44,7 @@ class ResUNetPlusPlus(nn.Module):
         Downsampling used in z dimension. Set it to ``1`` if the dataset is not isotropic.
 
     output_channels : list of int, optional
-        Output channels of the network. It must be a list of lenght ``1`` or ``2``. When two 
+        Output channels of the network. It must be a list of lenght ``1`` or ``2``. When two
         numbers are provided two task to be done is expected (multi-head). Possible scenarios are:
             * instances + classification on instance segmentation
             * points + classification in detection.
@@ -86,7 +86,7 @@ class ResUNetPlusPlus(nn.Module):
         upsampling_position="pre",
     ):
         super(ResUNetPlusPlus, self).__init__()
-        
+
         if len(output_channels) == 0:
             raise ValueError("'output_channels' needs to has at least one value")
         if len(output_channels) != 1 and len(output_channels) != 2:
@@ -219,9 +219,9 @@ class ResUNetPlusPlus(nn.Module):
             )
 
         self.last_block = conv(feature_maps[0], output_channels[0], kernel_size=1, padding="same")
-        # Multi-head: 
+        # Multi-head:
         #   Instance segmentation: instances + classification
-        #   Detection: points + classification 
+        #   Detection: points + classification
         self.last_class_head = None
         if self.multihead:
             self.last_class_head = conv(feature_maps[0], output_channels[1], kernel_size=1, padding="same")

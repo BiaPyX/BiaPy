@@ -5,7 +5,7 @@ from torch.hub import load_state_dict_from_url
 import torch.nn as nn
 
 
-def efficientnet(efficientnet_name, image_shape, n_classes=2, load_imagenet_weights=True):
+def efficientnet(efficientnet_name, n_classes=2, load_imagenet_weights=True):
     """
     Create EfficientNet.
 
@@ -16,11 +16,11 @@ def efficientnet(efficientnet_name, image_shape, n_classes=2, load_imagenet_weig
     efficientnet_name : str, optional
         Efficientnet model name to be loaded. Available options: "efficientnet_b[0-7]"
 
-    image_shape : 2D tuple
-        Dimensions of the input image.
-
     n_classes: int, optional
         Number of classes.
+
+    load_imagenet_weights : bool, optional
+        Whether to load IMAGENET weights or not. 
 
     Returns
     -------

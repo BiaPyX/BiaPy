@@ -266,7 +266,7 @@ class MultiResUnet(torch.nn.Module):
         Downsampling used in z dimension. Set it to ``1`` if the dataset is not isotropic.
 
     output_channels : list of int, optional
-        Output channels of the network. It must be a list of lenght ``1`` or ``2``. When two 
+        Output channels of the network. It must be a list of lenght ``1`` or ``2``. When two
         numbers are provided two task to be done is expected (multi-head). Possible scenarios are:
             * instances + classification on instance segmentation
             * points + classification in detection.
@@ -298,7 +298,7 @@ class MultiResUnet(torch.nn.Module):
             raise ValueError("'output_channels' needs to has at least one value")
         if len(output_channels) != 1 and len(output_channels) != 2:
             raise ValueError(f"'output_channels' must be a list of one or two values at max, not {output_channels}")
-        
+
         if self.ndim == 3:
             conv = nn.Conv3d
             convtranspose = nn.ConvTranspose3d
@@ -406,9 +406,9 @@ class MultiResUnet(torch.nn.Module):
             activation="None",
         )
 
-        # Multi-head: 
+        # Multi-head:
         #   Instance segmentation: instances + classification
-        #   Detection: points + classification 
+        #   Detection: points + classification
         self.last_class_head = None
         if self.multihead:
             self.last_class_head = conv(self.in_filters9, output_channels[1], kernel_size=1, padding="same")

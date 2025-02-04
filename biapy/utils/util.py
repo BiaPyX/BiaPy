@@ -1,8 +1,6 @@
 import os
 import math
 import numpy as np
-import h5py
-import zarr
 import matplotlib.pyplot as plt
 import scipy.ndimage
 import copy
@@ -13,6 +11,7 @@ from hashlib import sha256
 
 from biapy.engine.metrics import jaccard_index_numpy
 from biapy.utils.misc import is_main_process
+
 
 def create_plots(results, metrics, job_id, chartOutDir):
     """
@@ -117,8 +116,8 @@ def threshold_plots(preds_test, Y_test, n_dig, job_id, job_file, char_dir, r_val
             preds_test, Y_test, det_eval_ge_path, det_eval_path, det_bin,
             n_dig, args.job_id, '278_3', char_dir)
 
-    Will generate one chart for the IoU. In the x axis represents the 9 different thresholds applied, that is: 
-    ``0.1, 0.2, 0.3, ..., 0.9``. The y axis is the value of the metric in each chart. For instance, the Jaccard/IoU 
+    Will generate one chart for the IoU. In the x axis represents the 9 different thresholds applied, that is:
+    ``0.1, 0.2, 0.3, ..., 0.9``. The y axis is the value of the metric in each chart. For instance, the Jaccard/IoU
     chart will look like this:
 
     .. image:: ../../img/278_3_threshold_Jaccard.png
@@ -493,6 +492,7 @@ def save_filters_of_convlayer(model, out_dir, l_num=None, name=None, prefix="", 
     plt.savefig(os.path.join(out_dir, prefix + "f_layer" + str(l_num) + ".png"))
     plt.clf()
 
+
 def check_downsample_division(X, d_levels):
     """
     Ensures ``X`` shape is divisible by ``2`` times ``d_levels`` adding padding if necessary.
@@ -531,7 +531,7 @@ def check_downsample_division(X, d_levels):
         print("Data has been padded to be downsampled {} times. Its shape now is: {}".format(d_levels, X.shape))
     return X, o_shape
 
-    
+
 def seg2aff_pni(img, dz=1, dy=1, dx=1, dtype="float32"):
     # Adapted from PyTorch for Connectomics:
     # https://github.com/zudi-lin/pytorch_connectomics/commit/6fbd5457463ae178ecd93b2946212871e9c617ee

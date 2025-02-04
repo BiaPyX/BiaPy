@@ -9,10 +9,7 @@ from torch.utils.data import (
 import numpy as np
 from tqdm import tqdm
 
-from biapy.data.pre_processing import (
-    calculate_volume_prob_map,
-    percentile_clip,
-)
+from biapy.data.pre_processing import calculate_volume_prob_map
 from biapy.data.generators.pair_data_2D_generator import Pair2DImageDataGenerator
 from biapy.data.generators.pair_data_3D_generator import Pair3DImageDataGenerator
 from biapy.data.generators.single_data_2D_generator import Single2DImageDataGenerator
@@ -143,7 +140,7 @@ def create_train_val_augmentors(
     if cfg.DATA.NORMALIZATION.PERC_CLIP:
         norm_dict["lower_bound"] = cfg.DATA.NORMALIZATION.PERC_LOWER
         norm_dict["upper_bound"] = cfg.DATA.NORMALIZATION.PERC_UPPER
-        
+
     if cfg.DATA.NORMALIZATION.TYPE == "custom":
         if cfg.DATA.NORMALIZATION.CUSTOM_MEAN != -1:
             norm_dict["mean"] = cfg.DATA.NORMALIZATION.CUSTOM_MEAN
@@ -422,15 +419,15 @@ def create_train_val_augmentors(
             bmz_input_sample = np.expand_dims(bmz_input_sample, 0)
         if bmz_input_sample_norm.ndim == 3:
             bmz_input_sample_norm = np.expand_dims(bmz_input_sample_norm, 0)
-        bmz_input_sample = bmz_input_sample.transpose(0,3,1,2) # Numpy -> Torch
-        bmz_input_sample_norm = bmz_input_sample_norm.transpose(0,3,1,2) # Numpy -> Torch
-    else: # 3D
+        bmz_input_sample = bmz_input_sample.transpose(0, 3, 1, 2)  # Numpy -> Torch
+        bmz_input_sample_norm = bmz_input_sample_norm.transpose(0, 3, 1, 2)  # Numpy -> Torch
+    else:  # 3D
         if bmz_input_sample.ndim == 4:
             bmz_input_sample = np.expand_dims(bmz_input_sample, 0)
         if bmz_input_sample_norm.ndim == 4:
             bmz_input_sample_norm = np.expand_dims(bmz_input_sample_norm, 0)
-        bmz_input_sample = bmz_input_sample.transpose(0,4,1,2,3) # Numpy -> Torch
-        bmz_input_sample_norm = bmz_input_sample_norm.transpose(0,4,1,2,3) # Numpy -> Torch
+        bmz_input_sample = bmz_input_sample.transpose(0, 4, 1, 2, 3)  # Numpy -> Torch
+        bmz_input_sample_norm = bmz_input_sample_norm.transpose(0, 4, 1, 2, 3)  # Numpy -> Torch
 
     # Validation dataset
     sampler_val = None
@@ -519,13 +516,13 @@ def create_test_augmentor(
         norm_dict=norm_dict,
         reduce_mem=cfg.TEST.REDUCE_MEMORY,
         convert_to_rgb=cfg.DATA.FORCE_RGB,
-        filter_props= cfg.DATA.TEST.FILTER_SAMPLES.PROPS,
+        filter_props=cfg.DATA.TEST.FILTER_SAMPLES.PROPS,
         filter_vals=cfg.DATA.TEST.FILTER_SAMPLES.VALUES,
         filter_signs=cfg.DATA.TEST.FILTER_SAMPLES.SIGNS,
-        preprocess_data = preprocess_data if cfg.DATA.PREPROCESS.TEST else None,
-        preprocess_cfg = cfg.DATA.PREPROCESS if cfg.DATA.PREPROCESS.TEST else None,
-        reflect_to_complete_shape = cfg.DATA.REFLECT_TO_COMPLETE_SHAPE,
-        data_shape = cfg.DATA.PATCH_SIZE,
+        preprocess_data=preprocess_data if cfg.DATA.PREPROCESS.TEST else None,
+        preprocess_cfg=cfg.DATA.PREPROCESS if cfg.DATA.PREPROCESS.TEST else None,
+        reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE,
+        data_shape=cfg.DATA.PATCH_SIZE,
     )
 
     if cfg.PROBLEM.TYPE == "CLASSIFICATION" or (

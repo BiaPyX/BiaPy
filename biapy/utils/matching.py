@@ -34,11 +34,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import numpy as np
 
-from tqdm import tqdm
 from scipy.optimize import linear_sum_assignment
 from collections import namedtuple
-import pandas as pd
-import networkx as nx
 from skimage.segmentation import relabel_sequential
 
 matching_criteria = dict()

@@ -31,7 +31,7 @@ class U_NeXt_V2(nn.Module):
         Downsampling used in z dimension. Set it to ``1`` if the dataset is not isotropic.
 
     output_channels : list of int, optional
-        Output channels of the network. It must be a list of lenght ``1`` or ``2``. When two 
+        Output channels of the network. It must be a list of lenght ``1`` or ``2``. When two
         numbers are provided two task to be done is expected (multi-head). Possible scenarios are:
             * instances + classification on instance segmentation
             * points + classification in detection.
@@ -84,7 +84,7 @@ class U_NeXt_V2(nn.Module):
         stochastic_depth_prob=0.1,
         cn_layers=[2, 2, 2, 2],
         isotropy=True,
-        stem_k_size=2
+        stem_k_size=2,
     ):
         super(U_NeXt_V2, self).__init__()
 
@@ -92,18 +92,18 @@ class U_NeXt_V2(nn.Module):
             raise ValueError("'output_channels' needs to has at least one value")
         if len(output_channels) != 1 and len(output_channels) != 2:
             raise ValueError(f"'output_channels' must be a list of one or two values at max, not {output_channels}")
-        
+
         self.depth = len(feature_maps) - 1
         self.ndim = 3 if len(image_shape) == 4 else 2
         self.z_down = z_down
         self.output_channels = output_channels
         self.multihead = len(output_channels) == 2
         layer_norm = nn.LayerNorm
-        
+
         # convert isotropy to list if it is a single bool
         if type(isotropy) == bool:
             isotropy = isotropy * len(feature_maps)
-        
+
         if self.ndim == 3:
             conv = nn.Conv3d
             convtranspose = nn.ConvTranspose3d
@@ -130,7 +130,7 @@ class U_NeXt_V2(nn.Module):
         in_channels = image_shape[-1]
 
         # STEM
-        z_factor = int( min( z_down[0]/stem_k_size, 1 ) )
+        z_factor = int(min(z_down[0] / stem_k_size, 1))
         mpool = (stem_k_size * z_factor, stem_k_size, stem_k_size) if self.ndim == 3 else (stem_k_size, stem_k_size)
         self.down_path.append(
             nn.Sequential(
@@ -151,7 +151,7 @@ class U_NeXt_V2(nn.Module):
         for i in range(self.depth):
             stage = nn.ModuleList()
             sd_probs_stage = []
-            
+
             # adjust depthwise kernel size if needed
             if isotropy[i] is False and self.ndim == 3:
                 kernel_size = (1, 7, 7)
@@ -160,14 +160,7 @@ class U_NeXt_V2(nn.Module):
             for _ in range(cn_layers[i]):
                 sd_prob = stochastic_depth_prob * stage_block_id / (total_stage_blocks - 1.0)
                 stage.append(
-                    ConvNeXtBlock_V2(
-                        self.ndim,
-                        conv,
-                        feature_maps[i],
-                        sd_prob,
-                        layer_norm,
-                        k_size=kernel_size
-                    )
+                    ConvNeXtBlock_V2(self.ndim, conv, feature_maps[i], sd_prob, layer_norm, k_size=kernel_size)
                 )
                 stage_block_id += 1
                 sd_probs_stage.append(sd_prob)
@@ -193,7 +186,7 @@ class U_NeXt_V2(nn.Module):
         # BOTTLENECK
         stage = nn.ModuleList()
         if isotropy[-1] is False and self.ndim == 3:
-                kernel_size = (1, 7, 7)
+            kernel_size = (1, 7, 7)
         for _ in range(cn_layers[-1]):
             sd_prob = stochastic_depth_prob * stage_block_id / (total_stage_blocks - 1.0)
             stage.append(ConvNeXtBlock_V2(self.ndim, conv, feature_maps[-1], sd_prob, layer_norm, k_size=kernel_size))
@@ -220,7 +213,7 @@ class U_NeXt_V2(nn.Module):
                     cn_layers=cn_layers[i],
                     sd_probs=sd_probs[i],
                     layer_norm=layer_norm,
-                    k_size=kernel_size
+                    k_size=kernel_size,
                 )
             )
             in_channels = feature_maps[i]
@@ -247,9 +240,9 @@ class U_NeXt_V2(nn.Module):
             )
 
         self.last_block = conv(feature_maps[0], output_channels[0], kernel_size=1, padding="same")
-        # Multi-head: 
+        # Multi-head:
         #   Instance segmentation: instances + classification
-        #   Detection: points + classification 
+        #   Detection: points + classification
         self.last_class_head = None
         if self.multihead:
             self.last_class_head = conv(feature_maps[0], output_channels[1], kernel_size=1, padding="same")

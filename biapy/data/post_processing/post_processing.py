@@ -26,6 +26,7 @@ from biapy.data.pre_processing import reduce_dtype
 from biapy.utils.misc import to_numpy_format, to_pytorch_format
 from biapy.data.data_manipulation import read_img_as_ndarray, save_tif, imread
 
+
 def watershed_by_channels(
     data,
     channels,
@@ -1200,7 +1201,7 @@ def detection_watershed(
     Parameters
     ----------
     seeds : 3D/4D Numpy array
-        Binary foreground labels and contours data to apply watershed into. E.g. ``(1450, 2000, 1)`` 
+        Binary foreground labels and contours data to apply watershed into. E.g. ``(1450, 2000, 1)``
         for ``2D`` and ``(397, 1450, 2000, 1)`` for ``3D``.
 
     coords : List of 3 ints
@@ -1244,9 +1245,7 @@ def detection_watershed(
     print("Dilating a bit the seeds . . .")
     seeds = seeds.squeeze()
     if all(x != 0 for x in first_dilation):
-        seeds += (binary_dilation(seeds, structure=np.ones(first_dilation))).astype(
-            np.uint8
-        )
+        seeds += (binary_dilation(seeds, structure=np.ones(first_dilation))).astype(np.uint8)
 
     # Background seed
     seeds = label(seeds)
@@ -1581,14 +1580,14 @@ def measure_morphological_props_and_filter(
 
         elongations : Array of ints
             Elongation of each instance. It is the inverse of the circularity. The values of elongation range from
-            ``1`` for round particles and increase for elongated particles. In 2D it is calculated as: 
+            ``1`` for round particles and increase for elongated particles. In 2D it is calculated as:
             ``(perimeter^2)/(4 * PI * area)``. In 3D: ``(sqrt(surface area^3))/ (6 * volume * sqrt(PI))`` where ``sqrt``
-            is the square root. For the 3D `diplib library <https://diplib.org/diplib-docs/features.html#shape_features_P2A>`__ 
+            is the square root. For the 3D `diplib library <https://diplib.org/diplib-docs/features.html#shape_features_P2A>`__
             is used (corresponds to 'P2A' metric in diplib).
 
         perimeter : Array of ints
             In 2D, approximates the contour as a line through the centers of border pixels using a 4-connectivity.
-            In 3D, it is the surface area computed using 
+            In 3D, it is the surface area computed using
             `the diplib library <https://diplib.org/diplib-docs/features.html#shape_features_P2A>`__.
 
         comment : List of str
@@ -1683,9 +1682,7 @@ def measure_morphological_props_and_filter(
                 perimeters[label_index] = measurement["SurfaceArea"][lbl]
                 pixels = npixels[label_index]
                 sphericity = (
-                    (36 * math.pi * pixels**2) / (perimeters[label_index]**3)
-                    if perimeters[label_index] > 0
-                    else 0
+                    (36 * math.pi * pixels**2) / (perimeters[label_index] ** 3) if perimeters[label_index] > 0 else 0
                 )
                 circularities[label_index] = sphericity
 

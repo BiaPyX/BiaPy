@@ -45,7 +45,7 @@ class UNETR(nn.Module):
         Normalization layer to use in ViT backbone.
 
     output_channels : list of int, optional
-        Output channels of the network. It must be a list of lenght ``1`` or ``2``. When two 
+        Output channels of the network. It must be a list of lenght ``1`` or ``2``. When two
         numbers are provided two task to be done is expected (multi-head). Possible scenarios are:
             * instances + classification on instance segmentation
             * points + classification in detection.
@@ -91,12 +91,12 @@ class UNETR(nn.Module):
         k_size=3,
     ):
         super().__init__()
-        
+
         if len(output_channels) == 0:
             raise ValueError("'output_channels' needs to has at least one value")
         if len(output_channels) != 1 and len(output_channels) != 2:
             raise ValueError(f"'output_channels' must be a list of one or two values at max, not {output_channels}")
-        
+
         self.input_shape = input_shape
         self.embed_dim = embed_dim
         self.patch_size = patch_size
@@ -248,9 +248,9 @@ class UNETR(nn.Module):
         )
 
         self.last_block = conv(num_filters, output_channels[0], kernel_size=1, padding="same")
-        # Multi-head: 
+        # Multi-head:
         #   Instance segmentation: instances + classification
-        #   Detection: points + classification 
+        #   Detection: points + classification
         self.last_class_head = None
         if self.multihead:
             self.last_class_head = conv(num_filters, output_channels[1], kernel_size=1, padding="same")

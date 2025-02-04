@@ -24,7 +24,7 @@ class test_pair_data_generator(Dataset):
         X data. Each item in the list represents a sample of the dataset. Each sample is represented as follows:
             * ``"filename"``: name of the image to extract the data sample from.
             * ``"dir"``: directory where the image resides.
-            * ``"coords"``: dictionary with the coordinates to extract the sample from the image. If ``None`` it implies that a random 
+            * ``"coords"``: dictionary with the coordinates to extract the sample from the image. If ``None`` it implies that a random
               patch needs to be extracted. Following keys are avaialable:
                 * ``"z_start"``: starting point of the patch in Z axis.
                 * ``"z_end"``: end point of the patch in Z axis.
@@ -36,18 +36,18 @@ class test_pair_data_generator(Dataset):
             * ``"shape"``: shape of the sample.
             * ``"img"`` (optional): image sample itself. It is a ndarrray of  ``(y, x, channels)`` in ``2D`` and
               ``(z, y, x, channels)`` in ``3D``. Provided when ``train_in_memory`` is ``True``.
-            * ``"gt_associated_id"`` (optional): position of associated ground truth of the sample within its list. Present if the 
+            * ``"gt_associated_id"`` (optional): position of associated ground truth of the sample within its list. Present if the
               user selected ``PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER`` to be ``True``.
             * ``"parallel_data"``(optional): to ``True`` is the sample is a Zarr/H5 file. Not present otherwise.
             * ``"input_axes"`` (optional): order of the axes in Zarr. Not present in non-Zarr/H5 files.
-            * ``"path_in_zarr"``(optional): path where the data resides within the Zarr. Provided when ``multiple_data_within_zarr`` was 
-              set in ``train_zarr_data_information``.  
+            * ``"path_in_zarr"``(optional): path where the data resides within the Zarr. Provided when ``multiple_data_within_zarr`` was
+              set in ``train_zarr_data_information``.
 
     Y : list of dict
         Y data. Each item in the list represents a sample of the dataset. Each sample is represented as follows:
             * ``"filename"``: name of the image to extract the data sample from.
             * ``"dir"``: directory where the image resides.
-            * ``"coords"``: dictionary with the coordinates to extract the sample from the image. If ``None`` it implies that a random 
+            * ``"coords"``: dictionary with the coordinates to extract the sample from the image. If ``None`` it implies that a random
               patch needs to be extracted. Following keys are avaialable:
                 * ``"z_start"``: starting point of the patch in Z axis.
                 * ``"z_end"``: end point of the patch in Z axis.
@@ -59,12 +59,12 @@ class test_pair_data_generator(Dataset):
             * ``"shape"``: shape of the sample.
             * ``"img"`` (optional): image sample itself. It is a ndarrray of  ``(y, x, channels)`` in ``2D`` and
               ``(z, y, x, channels)`` in ``3D``. Provided if the user selected to load images into memory.
-            * ``"gt_associated_id"`` (optional): position of associated ground truth of the sample within its list. Present if the 
+            * ``"gt_associated_id"`` (optional): position of associated ground truth of the sample within its list. Present if the
               user selected ``PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER`` to be ``True``.
             * ``"parallel_data"``(optional): to ``True`` is the sample is a Zarr/H5 file. Not present otherwise.
             * ``"input_axes"`` (optional): order of the axes in Zarr. Not present in non-Zarr/H5 files.
-            * ``"path_in_zarr"``(optional): path where the data resides within the Zarr. Provided when ``multiple_data_within_zarr`` was 
-              set in ``train_zarr_data_information``.  
+            * ``"path_in_zarr"``(optional): path where the data resides within the Zarr. Provided when ``multiple_data_within_zarr`` was
+              set in ``train_zarr_data_information``.
 
     ndim : int
         Dimensions of the data (``2`` for 2D and ``3`` for 3D).
@@ -299,7 +299,7 @@ class test_pair_data_generator(Dataset):
         sample : dict
             * ``"filename"``: name of the image to extract the data sample from.
             * ``"dir"``: directory where the image resides.
-            * ``"coords"``: dictionary with the coordinates to extract the sample from the image. If ``None`` it implies that a random 
+            * ``"coords"``: dictionary with the coordinates to extract the sample from the image. If ``None`` it implies that a random
               patch needs to be extracted. Following keys are avaialable:
                 * ``"z_start"``: starting point of the patch in Z axis.
                 * ``"z_end"``: end point of the patch in Z axis.
@@ -311,7 +311,7 @@ class test_pair_data_generator(Dataset):
             * ``"shape"``: shape of the sample.
             * ``"img"`` (optional): image sample itself. It is a ndarrray of  ``(y, x, channels)`` in ``2D`` and
               ``(z, y, x, channels)`` in ``3D``. Provided when ``train_in_memory`` is ``True``.
-            * ``"gt_associated_id"`` (optional): position of associated ground truth of the sample within its list. Present if the 
+            * ``"gt_associated_id"`` (optional): position of associated ground truth of the sample within its list. Present if the
               user selected ``PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER`` to be ``True``.
             * ``"discard"`` (optional): whether the sample should be discarded or not. Present if ``filter_conds``,``filter_vals``
               and ``filter_signs`` were provided.
@@ -321,8 +321,8 @@ class test_pair_data_generator(Dataset):
             * ``"mask_file_to_close"`` (optional): file of the image to close. Present if the loaded file is H5.
             * ``"parallel_data"``(optional): to ``True`` is the sample is a Zarr/H5 file. Not present otherwise.
             * ``"input_axes"`` (optional): order of the axes in Zarr. Not present in non-Zarr/H5 files.
-            * ``"path_in_zarr"``(optional): path where the data resides within the Zarr. Provided when ``multiple_data_within_zarr`` was 
-              set in ``train_zarr_data_information``.  
+            * ``"path_in_zarr"``(optional): path where the data resides within the Zarr. Provided when ``multiple_data_within_zarr`` was
+              set in ``train_zarr_data_information``.
         """
         mask, ynorm = None, None
 
@@ -334,7 +334,7 @@ class test_pair_data_generator(Dataset):
             data_within_zarr_path=sample["path_in_zarr"] if "path_in_zarr" in sample else None,
         )
 
-        if (any(sample["filename"].endswith(x) for x in [".zarr", ".h5", ".hdf5", ".hdf"])):
+        if any(sample["filename"].endswith(x) for x in [".zarr", ".h5", ".hdf5", ".hdf"]):
             if not self.test_by_chunks:
                 raise ValueError(
                     "If you are using Zarr images please set 'TEST.BY_CHUNKS.ENABLE' and configure " "its options."
@@ -347,7 +347,8 @@ class test_pair_data_generator(Dataset):
             if "gt_associated_id" in sample:
                 msample = self.Y[sample["gt_associated_id"]]
                 mask, mask_file = load_img_data(
-                    os.path.join(msample["dir"], msample["filename"]), is_3d=(self.ndim == 3),
+                    os.path.join(msample["dir"], msample["filename"]),
+                    is_3d=(self.ndim == 3),
                 )
             else:
                 mask, mask_file = load_img_data(
@@ -455,7 +456,7 @@ class test_pair_data_generator(Dataset):
             * ``"Y_norm"``: Y element normalization steps.
             * ``"filename"``: name of the image to extract the data sample from.
             * ``"dir"``: directory where the image resides.
-            * ``"gt_associated_id"`` (optional): position of associated ground truth of the sample within its list. Present if the 
+            * ``"gt_associated_id"`` (optional): position of associated ground truth of the sample within its list. Present if the
               user selected ``PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER`` to be ``True``.
             * ``"discard"``: whether the sample should be discarded or not. Present if ``filter_conds``,``filter_vals`` and
             ``filter_signs`` were provided.

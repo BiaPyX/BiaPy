@@ -27,13 +27,13 @@ from biapy.data.data_3D_manipulation import (
     load_img_part_from_efficient_file,
     order_dimensions,
     read_chunked_data,
-    read_chunked_nested_data, 
-    write_chunked_data
+    read_chunked_nested_data,
+    write_chunked_data,
 )
 from biapy.data.data_manipulation import (
-    read_img_as_ndarray, 
-    load_data_from_dir, 
-    save_tif,     
+    read_img_as_ndarray,
+    load_data_from_dir,
+    save_tif,
 )
 
 numpy_torch_dtype_dict = {
@@ -1616,7 +1616,7 @@ def calculate_volume_prob_map(Y, is_3d=False, w_foreground=0.94, w_background=0.
             * ``"img"``: image sample itself. It is a ndarrray of  ``(y, x, channels)`` in ``2D`` and
               ``(z, y, x, channels)``in ``3D``. Provided if the user selected to load data into memory.
         If ``"img"`` is provided ``"filename"`` and ``"filename"`` are not necessary, and vice versa.
-        
+
     w_foreground : float, optional
         Weight of the foreground. This value plus ``w_background`` must be equal ``1``.
 

@@ -945,7 +945,8 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         if "gt_associated_id" in sample:
             msample = self.Y[sample["gt_associated_id"]]
             mask, _ = load_img_data(
-                os.path.join(msample["dir"], msample["filename"]), is_3d=(self.ndim == 3),
+                os.path.join(msample["dir"], msample["filename"]),
+                is_3d=(self.ndim == 3),
             )
             # Extract the sample within the image
             if msample["coords"] is not None:
@@ -1013,7 +1014,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             img = self.norm_X(img)
         if self.norm_dict["enable"] and not first_load:
             mask = self.norm_Y(mask)
-        
+
         return img, mask
 
     def norm_X(self, img: np.ndarray) -> np.ndarray:

@@ -53,10 +53,10 @@ from biapy.utils.misc import (
     setup_for_distributed,
 )
 from biapy.models.bmz_utils import (
-    create_model_doc, 
-    create_environment_file_for_model, 
-    create_model_cover, 
-    get_bmz_model_info
+    create_model_doc,
+    create_environment_file_for_model,
+    create_model_cover,
+    get_bmz_model_info,
 )
 
 from biapy.config.config import Config, update_dependencies
@@ -158,16 +158,16 @@ class BiaPy:
             self.cfg._C.merge_from_file(self.cfg_file)
         except:
             # Read the configuration file
-            with open(self.cfg_file, "r", encoding='utf8') as stream:
+            with open(self.cfg_file, "r", encoding="utf8") as stream:
                 temp_cfg = yaml.safe_load(stream)
 
-            # Translate it to current version 
+            # Translate it to current version
             temp_cfg = convert_old_model_cfg_to_current_version(temp_cfg)
 
             # Create temporal config file
             os.makedirs(self.tmp_log_dir, exist_ok=True)
             tmp_cfg_file = os.path.join(self.tmp_log_dir, "temp_config.yaml")
-            with open(tmp_cfg_file, 'w', encoding='utf8') as outfile:
+            with open(tmp_cfg_file, "w", encoding="utf8") as outfile:
                 yaml.dump(temp_cfg, outfile, default_flow_style=False)
             self.cfg._C.merge_from_file(tmp_cfg_file)
 
@@ -288,7 +288,7 @@ class BiaPy:
                 Information of the data used to train the model. Expected keys:
                     * ``name``: Name of the dataset.
                     * ``doi``: DOI of the dataset or a reference to find it.
-                    * ``image_modality``: image modality of the dataset. 
+                    * ``image_modality``: image modality of the dataset.
 
             maintainers : list of dicts, optional
                 Maintainers of the model. Need to be a list of dicts. E.g. ``[{"name": "Gizmo"}]``. If not
@@ -305,11 +305,11 @@ class BiaPy:
                 Axis order of the output file. E.g. ["bcyx"].
 
             test_input : 4D/5D Torch tensor, optional
-                Test input image sample. It is crucial to give the expected axes as follows: 
+                Test input image sample. It is crucial to give the expected axes as follows:
                 E.g. ``(batch, channels, y, x)`` or ``(batch, channels, z, y, x)``.
 
             test_output : 4D/5D Torch tensor, optional
-                Test output image sample. It is crucial to give the expected axes as follows: 
+                Test output image sample. It is crucial to give the expected axes as follows:
                 E.g. ``(batch, channels, y, x)`` or ``(batch, channels, z, y, x)``.
 
             covers : List of str, optional
@@ -427,9 +427,7 @@ class BiaPy:
                             "'bmz_cfg['tags']' must be a list of str. E.g. ['electron-microscopy', 'mitochondria']"
                         )
             if not isinstance(bmz_cfg["data"], dict):
-                raise ValueError(
-                    "'bmz_cfg['data']' needs to be a dict."
-                )
+                raise ValueError("'bmz_cfg['data']' needs to be a dict.")
             else:
                 needed_info = [
                     "name",
@@ -444,7 +442,9 @@ class BiaPy:
                 if not os.path.exists(bmz_cfg["doc_path"]):
                     raise ValueError("Documentation file {} does not exist".format(bmz_cfg["doc_path"]))
                 if not bmz_cfg["doc_path"].endswith(".md"):
-                    raise ValueError("Documentation file {} has no .md extension, please change it".format(bmz_cfg["doc_path"]))
+                    raise ValueError(
+                        "Documentation file {} has no .md extension, please change it".format(bmz_cfg["doc_path"])
+                    )
 
             if "maintainers" in bmz_cfg:
                 if len(bmz_cfg["maintainers"]) == 0:
@@ -542,7 +542,7 @@ class BiaPy:
         #         "min_percentile": min_percentile,
         #     }
         #     preprocessing[0]["kwargs"].update(perc_instructions)
-            
+
         if self.cfg.DATA.NORMALIZATION.TYPE == "div":
             max_val = 255
             if not reuse_original_bmz_config:
@@ -555,7 +555,7 @@ class BiaPy:
             preprocessing = [
                 {
                     "id": "scale_linear",
-                    "kwargs": {"gain": float(1/max_val), "offset": 0},
+                    "kwargs": {"gain": float(1 / max_val), "offset": 0},
                 }
             ]
         elif self.cfg.DATA.NORMALIZATION.TYPE == "scale_range":
@@ -739,8 +739,8 @@ class BiaPy:
                             try:
                                 file_paths["input"] = input.test_tensor.download().path
                             except:
-                                pass 
-    
+                                pass
+
             outputs = []
             for i, output in enumerate(self.workflow.bmz_config["original_bmz_config"].outputs):
                 if type(output) != OutputTensorDescr:
@@ -797,7 +797,7 @@ class BiaPy:
                             try:
                                 file_paths["output"] = output.test_tensor.download().path
                             except:
-                                pass 
+                                pass
 
         # Name of the model
         if not reuse_original_bmz_config:
@@ -884,7 +884,7 @@ class BiaPy:
                     self.cfg,
                     bmz_cfg,
                     doc,
-                    )
+                )
         else:
             doc = self.workflow.bmz_config["original_bmz_config"].documentation
 
@@ -930,8 +930,10 @@ class BiaPy:
             and "covers" in self.workflow.bmz_config["original_bmz_config"]
         ):
             covers = self.workflow.bmz_config["original_bmz_config"].covers
-        else: # create_model_cover
-            cover_path = create_model_cover(file_paths, building_dir, is_3d=self.cfg.PROBLEM.NDIM == "3D", workflow=workflow)
+        else:  # create_model_cover
+            cover_path = create_model_cover(
+                file_paths, building_dir, is_3d=self.cfg.PROBLEM.NDIM == "3D", workflow=workflow
+            )
             covers.append(Path(cover_path))
 
         # Change dir as the building process copies to the current directory the files used to create the BMZ model
@@ -951,11 +953,11 @@ class BiaPy:
             )
             state_dict_source = Path(self.workflow.checkpoint_path)
             state_dict_sha256 = None
-            
-            # Isolate pytorch_state_dict from checkpoint 
+
+            # Isolate pytorch_state_dict from checkpoint
             checkpoint = torch.load(state_dict_source, map_location="cpu", weights_only=True)
             if "model" in checkpoint:
-                state_dict_source = os.path.join(building_dir,"checkpoint.pth")
+                state_dict_source = os.path.join(building_dir, "checkpoint.pth")
                 os.makedirs(building_dir, exist_ok=True)
                 torch.save(checkpoint["model"], state_dict_source)
         else:
@@ -971,12 +973,9 @@ class BiaPy:
             sha256=state_dict_sha256,
             architecture=pytorch_architecture,
             pytorch_version=torch.__version__,
-            dependencies=EnvironmentFileDescr(
-                source=Path(env_file_path), 
-                sha256=create_file_sha256sum(env_file_path)
-            ), 
+            dependencies=EnvironmentFileDescr(source=Path(env_file_path), sha256=create_file_sha256sum(env_file_path)),
         )
-        
+
         # torchscript = TorchscriptWeightsDescr(
         #     source=self.workflow.bmz_config['original_bmz_config'].weights.torchscript.source,
         #     sha256=self.workflow.bmz_config['original_bmz_config'].weights.torchscript.sha256,
@@ -1009,11 +1008,8 @@ class BiaPy:
 
         # Checking model consistency
         from bioimageio.core import test_model
-        summary = test_model(
-            model_descr,
-            absolute_tolerance=1e-3,
-            relative_tolerance=1e-3
-        )
+
+        summary = test_model(model_descr, absolute_tolerance=1e-3, relative_tolerance=1e-3)
         summary.display()
 
         # Saving the model into BMZ format

@@ -223,8 +223,8 @@ def extract_patch_from_efficient_file(data, patch_coords, data_axis_order="ZYXC"
             slices.append(slice(0, patch_coords[j] + 1))
         else:
             slices.append(slice(patch_coords[j][0], patch_coords[j][1]))
-    slices.append(slice(None)) # Channel
-    
+    slices.append(slice(None))  # Channel
+
     # Convert slices into Zarr axis position
     data_ordered_slices = order_dimensions(
         tuple(slices), input_order="ZYXC", output_order=data_axis_order, default_value=0
@@ -1110,9 +1110,11 @@ def ensure_3d_shape(img, path=None):
         min_val = min(img.shape)
         z_pos = img.shape.index(min_val)
         if z_pos != 0:
-            new_pos = [z_pos,] + [x for x in range(3) if x != z_pos]
+            new_pos = [
+                z_pos,
+            ] + [x for x in range(3) if x != z_pos]
             img = img.transpose(new_pos)
-            
+
         img = np.expand_dims(img, -1)
     else:
         # Ensure channel axis is always in the first position (assuming Z is already set)
@@ -1218,7 +1220,7 @@ def read_chunked_nested_h5(h5file, data_path=""):
     """
     if not any(h5file.endswith(x) for x in [".h5", ".hdf5", ".hdf"]):
         raise ValueError("Not implemented for other filetypes than H5")
-    
+
     fid = h5py.File(h5file, "r")
 
     def find_obj(path, fid):
@@ -1238,7 +1240,8 @@ def read_chunked_nested_h5(h5file, data_path=""):
                     return None
                 return fid[rpath[0]]
         return obj
-    data = find_obj(data_path, fid)    
+
+    data = find_obj(data_path, fid)
     if data is None and data_path != "":
         raise ValueError(f"'{data_path}' not found in H5: {h5file}.")
     return fid, data
@@ -1248,7 +1251,7 @@ def read_chunked_data(filename):
     if isinstance(filename, str):
         if not os.path.exists(filename):
             raise ValueError(f"File {filename} does not exist.")
-        
+
         if any(filename.endswith(x) for x in [".h5", ".hdf5", ".hdf"]):
             fid = h5py.File(filename, "r")
             data = fid[list(fid)[0]]
@@ -1266,4 +1269,3 @@ def read_chunked_data(filename):
         return fid, data
     else:
         raise ValueError("'filename' is expected to be a str")
-

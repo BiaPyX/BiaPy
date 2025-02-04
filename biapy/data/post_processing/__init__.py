@@ -13,7 +13,7 @@ def apply_post_processing(cfg, data):
     data : 4D/5D Numpy array
         Data to apply post_proccessing. E.g. ``(num_of_images, y, x, channels)`` for 2D and
         ``(num_of_images, z, y, x, channels)`` for 3D.
-    
+
     Returns
     -------
     data : 4D/5D Numpy array

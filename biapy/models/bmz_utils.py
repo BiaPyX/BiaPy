@@ -1,7 +1,7 @@
 import os
 import yaml
 import numpy as np
-from typing import Optional, Dict, Tuple, List, Literal
+from typing import Tuple
 from packaging.version import Version
 from yacs.config import CfgNode
 
@@ -18,6 +18,7 @@ from bioimageio.spec.utils import download
 from biapy.data.pre_processing import reduce_dtype, calculate_volume_prob_map
 from biapy.data.data_manipulation import read_img_as_ndarray, imwrite
 from biapy.data.generators.augmentors import random_crop_pair
+
 
 def get_bmz_model_info(
     model: ModelDescr_v0_4 | ModelDescr_v0_5, spec_version: Version = Version("0.4.0")
@@ -85,15 +86,16 @@ def get_bmz_model_info(
 
     return state_dict_source, state_dict_sha256, pytorch_architecture
 
+
 def create_environment_file_for_model(building_dir):
     """
-    Create a conda environment file (environment.yaml) with the necessary dependencies to build a model 
+    Create a conda environment file (environment.yaml) with the necessary dependencies to build a model
     with BiaPy.
 
     Parameters
     ----------
     building_dir : str
-        Directory to save the environment.yaml file. 
+        Directory to save the environment.yaml file.
 
     Returns
     -------
@@ -101,29 +103,30 @@ def create_environment_file_for_model(building_dir):
         Path to the environment.yaml file created.
     """
     import biapy
+
     env = dict(
-        name = 'biapy',
-        channels = ['conda-forge', 'pytorch', 'nodefaults'],
-        dependencies = [
-            'python>=3.10',
-            'pip', 
-            'pytorch >=2.4.0,<3',
+        name="biapy",
+        channels=["conda-forge", "pytorch", "nodefaults"],
+        dependencies=[
+            "python>=3.10",
+            "pip",
+            "pytorch >=2.4.0,<3",
             {
-             'pip': [
-                'biapy=={}'.format(biapy.__version__), 
-                'torchvision==0.19.0',
-                'torchaudio==2.4.0',
-                'timm==1.0.8',
-                'pytorch-msssim==1.0.0',
-                "torchmetrics[image]==1.4.*",
+                "pip": [
+                    "biapy=={}".format(biapy.__version__),
+                    "torchvision==0.19.0",
+                    "torchaudio==2.4.0",
+                    "timm==1.0.8",
+                    "pytorch-msssim==1.0.0",
+                    "torchmetrics[image]==1.4.*",
                 ]
             },
         ],
     )
-    
+
     os.makedirs(building_dir, exist_ok=True)
     env_file = os.path.join(building_dir, "environment.yaml")
-    with open(env_file, 'w', encoding='utf8') as outfile:
+    with open(env_file, "w", encoding="utf8") as outfile:
         yaml.dump(env, outfile, default_flow_style=False)
 
     return env_file
@@ -131,7 +134,7 @@ def create_environment_file_for_model(building_dir):
 
 def create_model_cover(file_paths, out_path, patch_size=256, is_3d=False, workflow="semantic-segmentation"):
     """
-    Create a cover based on the files that will be read from ``file_paths``. 
+    Create a cover based on the files that will be read from ``file_paths``.
 
     Parameters
     ----------
@@ -141,17 +144,17 @@ def create_model_cover(file_paths, out_path, patch_size=256, is_3d=False, workfl
             * ``"output"`` (str): path to the output image to be loaded
 
     out_path : str
-        Directory to save the cover. 
+        Directory to save the cover.
 
     patch_size : int, optional
-        Size of the image to create. 
-    
+        Size of the image to create.
+
     is_3d : bool, optional
-        Whether if the images to load are 3D or not. 
+        Whether if the images to load are 3D or not.
 
     workflow : str, optional
-        Workflow to create the cover to. Options are: [``"semantic-segmentation"``, ``"instance-segmentation"``, 
-        ``"detection"``, ``"denoising"``, ``"super-resolution"``, ``"self-supervised"``, ``"classification"``, 
+        Workflow to create the cover to. Options are: [``"semantic-segmentation"``, ``"instance-segmentation"``,
+        ``"detection"``, ``"denoising"``, ``"super-resolution"``, ``"self-supervised"``, ``"classification"``,
         ``"image-to-image"``]
 
     Returns
@@ -160,15 +163,15 @@ def create_model_cover(file_paths, out_path, patch_size=256, is_3d=False, workfl
         Path to the cover.
     """
     assert workflow in [
-        "semantic-segmentation", 
-        "instance-segmentation", 
-        "detection", 
-        "denoising", 
-        "super-resolution", 
-        "self-supervised", 
-        "classification", 
-        "image-to-image"
-    ]    
+        "semantic-segmentation",
+        "instance-segmentation",
+        "detection",
+        "denoising",
+        "super-resolution",
+        "self-supervised",
+        "classification",
+        "image-to-image",
+    ]
     assert "input" in file_paths
     assert "output" in file_paths
     img = read_img_as_ndarray(str(file_paths["input"]), is_3d=is_3d)
@@ -177,46 +180,46 @@ def create_model_cover(file_paths, out_path, patch_size=256, is_3d=False, workfl
     # Take a random patch from the image
     prob_map = None
     if workflow in ["semantic-segmentation", "instance-segmentation", "detection"]:
-        prob_map = calculate_volume_prob_map([{"img": mask>0.5}], is_3d, 1, 0)[0]
-    img, mask = random_crop_pair(img, mask, (patch_size,patch_size), img_prob=prob_map)
-    
+        prob_map = calculate_volume_prob_map([{"img": mask > 0.5}], is_3d, 1, 0)[0]
+    img, mask = random_crop_pair(img, mask, (patch_size, patch_size), img_prob=prob_map)
+
     # If 3D just take middle slice.
     if is_3d and img.ndim == 4:
-        img = img[img.shape[0]//2]
-    if is_3d and mask.ndim == 4:    
-        mask = mask[mask.shape[0]//2]    
+        img = img[img.shape[0] // 2]
+    if is_3d and mask.ndim == 4:
+        mask = mask[mask.shape[0] // 2]
 
     # Convert to RGB
     if img.shape[-1] == 1:
-        img = np.stack((img[...,0],)*3, axis=-1)
+        img = np.stack((img[..., 0],) * 3, axis=-1)
     elif img.shape[-1] == 2:
-        img = np.stack((np.zeros(img.shape, dtype=img.dtype), img), axis=-1)   
-    elif img.shape[-1] > 3: 
-        img = img[...,:3]
+        img = np.stack((np.zeros(img.shape, dtype=img.dtype), img), axis=-1)
+    elif img.shape[-1] > 3:
+        img = img[..., :3]
 
     # Normalize image
     img = reduce_dtype(img, img.min(), img.max(), out_min=0, out_max=255, out_type=np.uint8)
 
-    # Same procedure with the mask in those workflows where the target is also an image 
-    if workflow in ["super-resolution","image-to-image","denoising","self-supervised"]:
+    # Same procedure with the mask in those workflows where the target is also an image
+    if workflow in ["super-resolution", "image-to-image", "denoising", "self-supervised"]:
         # Convert to RGB
         if mask.shape[-1] == 1:
-            mask = np.stack((mask[...,0],)*3, axis=-1)
+            mask = np.stack((mask[..., 0],) * 3, axis=-1)
         elif mask.shape[-1] == 2:
-            mask = np.stack((np.zeros(mask.shape, dtype=mask.dtype), mask), axis=-1)   
-        elif mask.shape[-1] > 3: 
-            mask = mask[...,:3]
+            mask = np.stack((np.zeros(mask.shape, dtype=mask.dtype), mask), axis=-1)
+        elif mask.shape[-1] > 3:
+            mask = mask[..., :3]
 
         # Normalize mask, as in this workflow case it is also a raw image
         mask = reduce_dtype(mask, mask.min(), mask.max(), out_min=0, out_max=255, out_type=np.uint8)
 
         # Create cover with image and mask side-by-side
-        out = np.ones((patch_size, patch_size*2, 3), dtype=img.dtype)
+        out = np.ones((patch_size, patch_size * 2, 3), dtype=img.dtype)
         out[:, :patch_size] = img.copy()
         out[:, patch_size:] = mask.copy()
     else:
         if mask.max() <= 1:
-            mask = (mask*255).astype(np.uint8)
+            mask = (mask * 255).astype(np.uint8)
 
         # Create cover with image and mask split by the diagonal
         if mask.shape[-1] == 1:
@@ -228,12 +231,12 @@ def create_model_cover(file_paths, out_path, patch_size=256, is_3d=False, workfl
                 out[..., c] = outc
         else:
             # Create cover with image and mask side-by-side considering all channels of the mask
-            out = np.ones((patch_size, patch_size*(mask.shape[-1]+1), 3), dtype=img.dtype)
+            out = np.ones((patch_size, patch_size * (mask.shape[-1] + 1), 3), dtype=img.dtype)
             out[:, :patch_size] = img.copy()
             for c in range(mask.shape[-1]):
-                out[:, patch_size*(c+1):patch_size*(c+2)] = np.stack((mask[...,c],)*3, axis=-1)
-    
-    # Save the cover 
+                out[:, patch_size * (c + 1) : patch_size * (c + 2)] = np.stack((mask[..., c],) * 3, axis=-1)
+
+    # Save the cover
     os.makedirs(out_path, exist_ok=True)
     cover_path = os.path.join(out_path, "cover.png")
     print(f"Creating cover: {cover_path}")
@@ -248,8 +251,8 @@ def create_model_doc(
     doc_output_path: str,
 ):
     """
-    Create a documentation file with information of the workflow and model used. 
-    
+    Create a documentation file with information of the workflow and model used.
+
     """
     # Check keys
     needed_info = [
@@ -263,11 +266,9 @@ def create_model_doc(
     for x in needed_info:
         if x not in bmz_cfg:
             raise ValueError(f"'{x}' property must be declared in 'bmz_cfg'")
-        
+
     if not isinstance(bmz_cfg["data"], dict):
-        raise ValueError(
-            "'bmz_cfg['data']' needs to be a dict."
-        )
+        raise ValueError("'bmz_cfg['data']' needs to be a dict.")
     else:
         needed_info = [
             "name",
@@ -335,7 +336,9 @@ def create_model_doc(
         workflow_tag = "image_to_image"
 
     if biapy_cfg.PROBLEM.TYPE in ["DENOISING", "SUPER_RESOLUTION", "IMAGE_TO_IMAGE"]:
-        metrics_used = "Metrics to measure the similarity between the prediction and the ground truth in different ways:"
+        metrics_used = (
+            "Metrics to measure the similarity between the prediction and the ground truth in different ways:"
+        )
         metrics_used += "\n- Mean Squared Error (MSE): [https://lightning.ai/docs/torchmetrics/stable/regression/mean_squared_error.html](https://lightning.ai/docs/torchmetrics/stable/regression/mean_squared_error.html)"
         metrics_used += "\n- Mean Absolute Error (MAE): [https://lightning.ai/docs/torchmetrics/stable/regression/mean_absolute_error.html](https://lightning.ai/docs/torchmetrics/stable/regression/mean_absolute_error.html)"
         if biapy_cfg.PROBLEM.TYPE in ["SUPER_RESOLUTION", "IMAGE_TO_IMAGE"]:
@@ -345,7 +348,7 @@ def create_model_doc(
             metrics_used += "\n- Learned Perceptual Image Patch Similarity (LPIPS): [https://lightning.ai/docs/torchmetrics/stable/image/learned_perceptual_image_patch_similarity.html](https://lightning.ai/docs/torchmetrics/stable/image/learned_perceptual_image_patch_similarity.html)"
 
     author_mes = ""
-    for aut in bmz_cfg['authors']:
+    for aut in bmz_cfg["authors"]:
         author_mes += f"- {aut['name']} (github: {aut['github_user']})"
         if "email" in aut:
             author_mes += f" , {aut['email']}"
@@ -354,9 +357,9 @@ def create_model_doc(
         if "orcid" in aut:
             author_mes += f" - ORCID: {aut['orcid']}"
         author_mes += "\n"
-    
+
     try:
-        with open(cfg_file, 'r') as file:
+        with open(cfg_file, "r") as file:
             cfg_data = yaml.safe_load(file)
         train_info = cfg_data["TRAIN"]
         aug_info = cfg_data["AUGMENTOR"]
@@ -374,45 +377,45 @@ def create_model_doc(
         aug_params += f"  {aparam}: {val}\n"
 
     message = ""
-    message +=f'# {bmz_cfg["model_name"]}\n'
-    message +='\n'
-    message +='This model segments mitochondria in electron microscopy images.\n'
-    message +='\n' 
-    message +='## Training\n'
-    message +='\n'
-    message +=f'Complete information on how to train this model can be found in BiaPy documentation, specifically under [{workflow_name.lower()} workflow](https://biapy.readthedocs.io/en/latest/workflows/{workflow_tag}.html) description.\n'
-    message +='\n'
-    message +='### Training Data\n'
-    message +='\n'
-    message +='- Imaging modality: {}\n'.format(bmz_cfg['data']['image_modality'])
-    message +=f'- Dimensionality: {biapy_cfg.PROBLEM.NDIM}\n'
-    message +='- Source: {} ; DOI:{}\n'.format(bmz_cfg['data']['name'], bmz_cfg['data']['doi'])
-    message +='\n'
-    message +='### Validation (recommended)\n'
-    message +='\n'
-    message +=f'In the case of {workflow_name.lower()} the following metrics are calculated:\n' 
-    message +=f'{metrics_used}\n'
-    message +=f'\nMore info in [BiaPy documentation](https://biapy.readthedocs.io/en/latest/workflows/{workflow_tag}.html#metrics).\n' 
-    message +='\n'
-    message +='### Training Schedule (BiaPy variables)\n'
-    message +='\n'
-    message +='#### Training setup\n'
-    message +='\n'
-    message +='TRAIN:\n'
-    message +=f'{train_params}\n'
-    message +='#### Data augmentation\n'
-    message +='\n'
-    message +='AUGMENTOR\n'
-    message +=f'{aug_params}\n'   
-    message +='## Contact\n'
-    message +='For problems with BiaPy library itself checkout our [FAQ & Troubleshooting section](https://biapy.readthedocs.io/en/latest/get_started/faq.html).\n'
-    message +='\n'
-    message +='For questions or issues with this models, please reach out by:\n'
-    message +='- Opening a topic with tags bioimageio and biapy on [image.sc](https://forum.image.sc/)\n'
-    message +='- Creating an issue in https://github.com/BiaPyX/BiaPy\n'
-    message +='\n'
-    message +='Model created by:\n'
-    message +=f'{author_mes}\n'
+    message += f'# {bmz_cfg["model_name"]}\n'
+    message += "\n"
+    message += "This model segments mitochondria in electron microscopy images.\n"
+    message += "\n"
+    message += "## Training\n"
+    message += "\n"
+    message += f"Complete information on how to train this model can be found in BiaPy documentation, specifically under [{workflow_name.lower()} workflow](https://biapy.readthedocs.io/en/latest/workflows/{workflow_tag}.html) description.\n"
+    message += "\n"
+    message += "### Training Data\n"
+    message += "\n"
+    message += "- Imaging modality: {}\n".format(bmz_cfg["data"]["image_modality"])
+    message += f"- Dimensionality: {biapy_cfg.PROBLEM.NDIM}\n"
+    message += "- Source: {} ; DOI:{}\n".format(bmz_cfg["data"]["name"], bmz_cfg["data"]["doi"])
+    message += "\n"
+    message += "### Validation (recommended)\n"
+    message += "\n"
+    message += f"In the case of {workflow_name.lower()} the following metrics are calculated:\n"
+    message += f"{metrics_used}\n"
+    message += f"\nMore info in [BiaPy documentation](https://biapy.readthedocs.io/en/latest/workflows/{workflow_tag}.html#metrics).\n"
+    message += "\n"
+    message += "### Training Schedule (BiaPy variables)\n"
+    message += "\n"
+    message += "#### Training setup\n"
+    message += "\n"
+    message += "TRAIN:\n"
+    message += f"{train_params}\n"
+    message += "#### Data augmentation\n"
+    message += "\n"
+    message += "AUGMENTOR\n"
+    message += f"{aug_params}\n"
+    message += "## Contact\n"
+    message += "For problems with BiaPy library itself checkout our [FAQ & Troubleshooting section](https://biapy.readthedocs.io/en/latest/get_started/faq.html).\n"
+    message += "\n"
+    message += "For questions or issues with this models, please reach out by:\n"
+    message += "- Opening a topic with tags bioimageio and biapy on [image.sc](https://forum.image.sc/)\n"
+    message += "- Creating an issue in https://github.com/BiaPyX/BiaPy\n"
+    message += "\n"
+    message += "Model created by:\n"
+    message += f"{author_mes}\n"
 
     f = open(doc_output_path, "w")
     f.write(message)

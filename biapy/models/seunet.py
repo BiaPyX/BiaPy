@@ -38,7 +38,7 @@ class SE_U_Net(nn.Module):
         Downsampling used in z dimension. Set it to ``1`` if the dataset is not isotropic.
 
     output_channels : list of int, optional
-        Output channels of the network. It must be a list of lenght ``1`` or ``2``. When two 
+        Output channels of the network. It must be a list of lenght ``1`` or ``2``. When two
         numbers are provided two task to be done is expected (multi-head). Possible scenarios are:
             * instances + classification on instance segmentation
             * points + classification in detection.
@@ -87,12 +87,12 @@ class SE_U_Net(nn.Module):
         larger_io=True,
     ):
         super(SE_U_Net, self).__init__()
-        
+
         if len(output_channels) == 0:
             raise ValueError("'output_channels' needs to has at least one value")
         if len(output_channels) != 1 and len(output_channels) != 2:
             raise ValueError(f"'output_channels' must be a list of one or two values at max, not {output_channels}")
-        
+
         self.depth = len(feature_maps) - 1
         self.ndim = 3 if len(image_shape) == 4 else 2
         self.z_down = z_down
@@ -225,7 +225,7 @@ class SE_U_Net(nn.Module):
             )
 
         self.last_block = conv(feature_maps[0], output_channels[0], kernel_size=1, padding="same")
-        # Multi-head: 
+        # Multi-head:
         #   Instance segmentation: instances + classification
         #   Detection: points + classification
         self.last_class_head = None

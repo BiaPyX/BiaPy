@@ -2,7 +2,6 @@ import os
 import builtins
 import time
 import glob
-import random
 import datetime
 import numpy as np
 from collections import defaultdict, deque
@@ -219,6 +218,7 @@ def get_checkpoint_path(cfg, jobname):
 
     return resume
 
+
 def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=None, just_extract_checkpoint_info=False):
     start_epoch = 0
 
@@ -243,14 +243,16 @@ def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=Non
         checkpoint = torch.load(resume, map_location=device, weights_only=True)
 
     if just_extract_checkpoint_info:
-        if 'cfg' not in checkpoint:
-            print("Checkpoint seems to not be from BiaPy (v3.5.1 or later) as model building args couldn't be extracted. Thus, "
-                  "the model will be built based on the current configuration")
-        return (
-            checkpoint["cfg"] if 'cfg' in checkpoint else None, 
-            checkpoint["biapy_version"] if 'biapy_version' in checkpoint else None
+        if "cfg" not in checkpoint:
+            print(
+                "Checkpoint seems to not be from BiaPy (v3.5.1 or later) as model building args couldn't be extracted. Thus, "
+                "the model will be built based on the current configuration"
             )
-    
+        return (
+            checkpoint["cfg"] if "cfg" in checkpoint else None,
+            checkpoint["biapy_version"] if "biapy_version" in checkpoint else None,
+        )
+
     model_without_ddp.load_state_dict(checkpoint["model"], strict=False)
     print("Model weights loaded!")
 
@@ -300,6 +302,7 @@ def time_text(t):
         return "{:.1f}m".format(t / 60)
     else:
         return "{:.1f}s".format(t)
+
 
 class TensorboardLogger(object):
     def __init__(self, log_dir):
@@ -476,22 +479,26 @@ class MetricLogger(object):
         total_time_str = str(datetime.timedelta(seconds=int(total_time)))
         print("{} Total time: {} ({:.4f} s / it)".format(header, total_time_str, total_time / len(iterable)))
 
+
 def update_dict_with_existing_keys(d, u, not_recognized_keys=[], not_recognized_key_vals=[]):
     for k, v in u.items():
         if k in d:
             if isinstance(v, collections.abc.Mapping):
-                d[k], _, _ = update_dict_with_existing_keys(d.get(k, {}), v, not_recognized_keys, not_recognized_key_vals)
+                d[k], _, _ = update_dict_with_existing_keys(
+                    d.get(k, {}), v, not_recognized_keys, not_recognized_key_vals
+                )
             else:
                 if k in d:
                     d[k] = v
-                else: 
+                else:
                     not_recognized_keys.append(k)
                     not_recognized_key_vals.append(v)
-        else: 
+        else:
             not_recognized_keys.append(k)
             not_recognized_key_vals.append(v)
 
     return d, not_recognized_keys, not_recognized_key_vals
+
 
 def convert_old_model_cfg_to_current_version(keys_to_convert, values_to_check, biapy_old_version=None):
     new_cfg_list = []
@@ -506,11 +513,11 @@ def convert_old_model_cfg_to_current_version(keys_to_convert, values_to_check, b
         # BiaPy version less than 3.5.5
         if biapy_old_version is None:
             if k == "BATCH_NORMALIZATION" and v == True:
-                new_cfg_list += ["MODEL.NORMALIZATION", 'bn']
+                new_cfg_list += ["MODEL.NORMALIZATION", "bn"]
             if k == "SOURCE_MODEL_DOI" and v != "":
                 new_cfg_list += ["MODEL.BMZ.SOURCE_MODEL_ID", v]
 
-    if len(new_cfg_list) > 0:     
+    if len(new_cfg_list) > 0:
         print(f"Configuration to be translated: {new_cfg_list}")
 
     return new_cfg_list

@@ -225,7 +225,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.val = val
         self.preprocess_f = preprocess_f
         self.preprocess_cfg = preprocess_cfg
-        
+
         # X data analysis
         img, _ = self.load_sample(0, first_load=True)
         if norm_dict["enable"]:
@@ -381,11 +381,9 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
             if "parallel_data" not in sample:
                 # Apply preprocessing
                 if self.preprocess_f is not None:
-                    img = self.preprocess_f(self.preprocess_cfg, x_data=[img], is_2d=(self.ndim == 2))[0]                
+                    img = self.preprocess_f(self.preprocess_cfg, x_data=[img], is_2d=(self.ndim == 2))[0]
             else:
-                img = extract_patch_from_efficient_file(
-                    img, sample["coords"], data_axis_order=sample["input_axes"]
-                )
+                img = extract_patch_from_efficient_file(img, sample["coords"], data_axis_order=sample["input_axes"])
 
                 # Apply preprocessing after extract sample
                 if "parallel_data" in sample:

@@ -22,6 +22,7 @@ from bioimageio.core.digest_spec import get_test_inputs
 
 from biapy.config.config import Config
 
+
 def build_model(cfg, output_channels, device):
     """
     Build selected model
@@ -32,7 +33,7 @@ def build_model(cfg, output_channels, device):
         Configuration.
 
     output_channels : int
-        Number of output channels. 
+        Number of output channels.
 
     device : Torch device
         Using device. Most commonly "cpu" or "cuda" for GPU, but also potentially "mps",
@@ -104,8 +105,8 @@ def build_model(cfg, output_channels, device):
                 cn_layers=cfg.MODEL.CONVNEXT_LAYERS,
                 layer_scale=cfg.MODEL.CONVNEXT_LAYER_SCALE,
                 stochastic_depth_prob=cfg.MODEL.CONVNEXT_SD_PROB,
-                isotropy = cfg.MODEL.ISOTROPY,
-                stem_k_size = cfg.MODEL.CONVNEXT_STEM_K_SIZE,
+                isotropy=cfg.MODEL.ISOTROPY,
+                stem_k_size=cfg.MODEL.CONVNEXT_STEM_K_SIZE,
             )
             callable_model = U_NeXt_V1
         elif modelname == "unext_v2":
@@ -116,8 +117,8 @@ def build_model(cfg, output_channels, device):
                 z_down=cfg.MODEL.Z_DOWN,
                 cn_layers=cfg.MODEL.CONVNEXT_LAYERS,
                 stochastic_depth_prob=cfg.MODEL.CONVNEXT_SD_PROB,
-                isotropy = cfg.MODEL.ISOTROPY,
-                stem_k_size = cfg.MODEL.CONVNEXT_STEM_K_SIZE,
+                isotropy=cfg.MODEL.ISOTROPY,
+                stem_k_size=cfg.MODEL.CONVNEXT_STEM_K_SIZE,
             )
             callable_model = U_NeXt_V2
 
@@ -135,13 +136,8 @@ def build_model(cfg, output_channels, device):
             model = simple_CNN(**args)
             callable_model = simple_CNN
         elif "efficientnet" in modelname:
-            shape = (
-                (224, 224) + (cfg.DATA.PATCH_SIZE[-1],)
-                if cfg.DATA.PATCH_SIZE[:-1] != (224, 224)
-                else cfg.DATA.PATCH_SIZE
-            )
             args = dict(
-                efficientnet_name=cfg.MODEL.ARCHITECTURE.lower(), image_shape=shape, n_classes=cfg.MODEL.N_CLASSES
+                efficientnet_name=cfg.MODEL.ARCHITECTURE.lower(), n_classes=cfg.MODEL.N_CLASSES
             )
             model = efficientnet(**args)
             callable_model = efficientnet
@@ -376,11 +372,12 @@ def check_bmz_args(
     model_urls = [
         entry
         for entry in collection["collection"]
-        if entry["type"] == "model" and (
-            ("nickname" in entry and model_ID in entry["nickname"]) or
-            ("id" in entry and model_ID in entry["id"]) or
-            ("rdf_source" in entry and model_ID in entry["rdf_source"])
-            )
+        if entry["type"] == "model"
+        and (
+            ("nickname" in entry and model_ID in entry["nickname"])
+            or ("id" in entry and model_ID in entry["id"])
+            or ("rdf_source" in entry and model_ID in entry["rdf_source"])
+        )
     ]
 
     if len(model_urls) == 0:
@@ -441,13 +438,13 @@ def check_bmz_model_compatibility(
 
     # Accepting models that are exported in pytorch_state_dict and with just one input
     if (
-        "pytorch_state_dict" in model_rdf["weights"] 
+        "pytorch_state_dict" in model_rdf["weights"]
         and model_rdf["weights"]["pytorch_state_dict"] is not None
         and len(model_rdf["inputs"]) == 1
     ):
 
-        # TODO: control model.weights.pytorch_state_dict.dependencies conda env to check if all 
-        # dependencies are installed 
+        # TODO: control model.weights.pytorch_state_dict.dependencies conda env to check if all
+        # dependencies are installed
         # https://github.com/bioimage-io/collection-bioimage-io/issues/609
 
         model_version = Version("0.5")
@@ -461,29 +458,31 @@ def check_bmz_model_compatibility(
         elif (
             "architecture" in model_rdf["weights"]["pytorch_state_dict"]
             and "kwargs" in model_rdf["weights"]["pytorch_state_dict"]["architecture"]
-            ):
+        ):
             model_kwargs = model_rdf["weights"]["pytorch_state_dict"]["architecture"]["kwargs"]
-        else: 
+        else:
             return preproc_info, True, f"[{specific_workflow}] Couldn't extract kwargs from model description.\n"
-        
+
         # Check problem type
         if (specific_workflow in ["all", "SEMANTIC_SEG"]) and (
-            "semantic-segmentation" in model_rdf["tags"] or 
-            ("segmentation" in model_rdf["tags"] and "instance-segmentation" not in model_rdf["tags"])
+            "semantic-segmentation" in model_rdf["tags"]
+            or ("segmentation" in model_rdf["tags"] and "instance-segmentation" not in model_rdf["tags"])
         ):
             # Check number of classes
             classes = -1
-            if "n_classes" in model_kwargs: # BiaPy
+            if "n_classes" in model_kwargs:  # BiaPy
                 classes = model_kwargs["n_classes"]
             elif "out_channels" in model_kwargs:
                 classes = model_kwargs["out_channels"]
             elif "classes" in model_kwargs:
                 classes = model_kwargs["classes"]
-            if isinstance(classes, list): 
-                classes = classes[0]   
+            if isinstance(classes, list):
+                classes = classes[0]
 
             if not isinstance(classes, int):
-                reason_message = f"[{specific_workflow}] 'MODEL.N_CLASSES' not extracted. Obtained {classes}. Please check it!\n"
+                reason_message = (
+                    f"[{specific_workflow}] 'MODEL.N_CLASSES' not extracted. Obtained {classes}. Please check it!\n"
+                )
                 return preproc_info, True, reason_message
 
             if isinstance(classes, int) and classes != -1:
@@ -496,7 +495,7 @@ def check_bmz_model_compatibility(
                 return preproc_info, True, reason_message
 
         elif specific_workflow in ["all", "INSTANCE_SEG"] and "instance-segmentation" in model_rdf["tags"]:
-            # TODO: add cellpose tag and create flow post-processing to create images 
+            # TODO: add cellpose tag and create flow post-processing to create images
             pass
         elif specific_workflow in ["all", "DETECTION"] and "detection" in model_rdf["tags"]:
             pass
@@ -524,30 +523,34 @@ def check_bmz_model_compatibility(
         if isinstance(axes_order, list):
             _axes_order = ""
             for axis in axes_order:
-                if 'type' in axis:
-                    if axis['type'] == "batch":
+                if "type" in axis:
+                    if axis["type"] == "batch":
                         _axes_order += "b"
-                    elif axis['type'] == "channel":
+                    elif axis["type"] == "channel":
                         _axes_order += "c"
-                    elif 'id' in axis:
-                        _axes_order += axis['id']
-                elif 'id' in axis:
-                    if axis['id'] == "channel":
+                    elif "id" in axis:
+                        _axes_order += axis["id"]
+                elif "id" in axis:
+                    if axis["id"] == "channel":
                         _axes_order += "c"
                     else:
-                        _axes_order += axis['id']
+                        _axes_order += axis["id"]
             axes_order = _axes_order
 
         if specific_dims == "2D":
             if axes_order != "bcyx":
-                reason_message = f"[{specific_workflow}] In a 2D problem the axes need to be 'bcyx', found {axes_order}\n"
+                reason_message = (
+                    f"[{specific_workflow}] In a 2D problem the axes need to be 'bcyx', found {axes_order}\n"
+                )
                 return preproc_info, True, reason_message
             elif "2d" not in model_rdf["tags"] and "3d" in model_rdf["tags"]:
                 reason_message = f"[{specific_workflow}] Selected model seems to not be 2D\n"
                 return preproc_info, True, reason_message
         elif specific_dims == "3D":
             if axes_order != "bczyx":
-                reason_message = f"[{specific_workflow}] In a 3D problem the axes need to be 'bczyx', found {axes_order}\n"
+                reason_message = (
+                    f"[{specific_workflow}] In a 3D problem the axes need to be 'bczyx', found {axes_order}\n"
+                )
                 return preproc_info, True, reason_message
             elif "3d" not in model_rdf["tags"] and "2d" in model_rdf["tags"]:
                 reason_message = f"[{specific_workflow}] Selected model seems to not be 3D\n"
@@ -565,13 +568,20 @@ def check_bmz_model_compatibility(
                 # Remove "ensure_dtype" preprocessing when casting to float, as BiaPy will always do it like that
                 new_preproc_info = []
                 for preproc in preproc_info:
-                    if key_to_find in preproc and not (preproc[key_to_find] == "ensure_dtype" and 'kwargs' in preproc and 'dtype' in preproc['kwargs'] and 'float' in preproc['kwargs']['dtype']):
+                    if key_to_find in preproc and not (
+                        preproc[key_to_find] == "ensure_dtype"
+                        and "kwargs" in preproc
+                        and "dtype" in preproc["kwargs"]
+                        and "float" in preproc["kwargs"]["dtype"]
+                    ):
                         new_preproc_info.append(preproc)
                 preproc_info = new_preproc_info.copy()
-                
+
                 # Then if there is still more than one preprocessing not continue as it is not implemented yet
                 if len(preproc_info) > 1:
-                    reason_message = f"[{specific_workflow}] More than one preprocessing from BMZ not implemented yet {axes_order}\n"
+                    reason_message = (
+                        f"[{specific_workflow}] More than one preprocessing from BMZ not implemented yet {axes_order}\n"
+                    )
                     return preproc_info, True, reason_message
                 elif len(preproc_info) == 1:
                     preproc_info = preproc_info[0]
@@ -585,15 +595,13 @@ def check_bmz_model_compatibility(
                             reason_message = f"[{specific_workflow}] Not recognized preprocessing found: {preproc_info[key_to_find]}\n"
                             return preproc_info, True, reason_message
                     else:
-                        reason_message = f"[{specific_workflow}] Not recognized preprocessing structure found: {preproc_info}\n"
+                        reason_message = (
+                            f"[{specific_workflow}] Not recognized preprocessing structure found: {preproc_info}\n"
+                        )
                         return preproc_info, True, reason_message
 
         # Check post-processing
-        if (
-            model_kwargs is not None
-            and "postprocessing" in model_kwargs
-            and model_kwargs["postprocessing"] is not None
-        ):
+        if model_kwargs is not None and "postprocessing" in model_kwargs and model_kwargs["postprocessing"] is not None:
             reason_message = f"[{specific_workflow}] Currently no postprocessing is supported. Found: {model_kwargs['postprocessing']}\n"
             return preproc_info, True, reason_message
     else:
@@ -601,6 +609,7 @@ def check_bmz_model_compatibility(
         return preproc_info, True, reason_message
 
     return preproc_info, False, ""
+
 
 def check_model_restrictions(cfg, bmz_config, workflow_specs):
     """
@@ -640,7 +649,7 @@ def check_model_restrictions(cfg, bmz_config, workflow_specs):
         input_image_shape = inputs.members["input0"]._data.shape
     elif "raw" in inputs.members:
         input_image_shape = inputs.members["raw"]._data.shape
-    else: # ambitious-sloth case
+    else:  # ambitious-sloth case
         input_image_shape = inputs.members[list(inputs.members.keys())[0]]._data.shape
     if input_image_shape is None:
         raise ValueError(f"Couldn't load input info from BMZ model's RDF: {inputs}")
@@ -648,42 +657,41 @@ def check_model_restrictions(cfg, bmz_config, workflow_specs):
         opts["DATA.PATCH_SIZE"] = input_image_shape[2:] + (input_image_shape[1],)
 
     # Capture model kwargs
-    if hasattr(bmz_config["original_bmz_config"].weights.pytorch_state_dict, 'kwargs'):
+    if hasattr(bmz_config["original_bmz_config"].weights.pytorch_state_dict, "kwargs"):
         model_kwargs = bmz_config["original_bmz_config"].weights.pytorch_state_dict.kwargs
-    elif (
-        hasattr(bmz_config["original_bmz_config"].weights.pytorch_state_dict, 'architecture')
-        and hasattr(bmz_config["original_bmz_config"].weights.pytorch_state_dict.architecture, 'kwargs')
+    elif hasattr(bmz_config["original_bmz_config"].weights.pytorch_state_dict, "architecture") and hasattr(
+        bmz_config["original_bmz_config"].weights.pytorch_state_dict.architecture, "kwargs"
     ):
         model_kwargs = bmz_config["original_bmz_config"].weights.pytorch_state_dict.architecture.kwargs
-    else: 
+    else:
         raise ValueError(f"Couldn't extract kwargs from model description.")
-        
-    # 2) Workflow specific restrictions 
+
+    # 2) Workflow specific restrictions
     # Classes in semantic segmentation
     if specific_workflow in ["SEMANTIC_SEG"]:
         # Check number of classes
         classes = -1
-        if "n_classes" in model_kwargs: # BiaPy
+        if "n_classes" in model_kwargs:  # BiaPy
             classes = model_kwargs["n_classes"]
         elif "out_channels" in model_kwargs:
             classes = model_kwargs["out_channels"]
         elif "classes" in model_kwargs:
             classes = model_kwargs["classes"]
-        
-        if isinstance(classes, list): 
-            classes = classes[0]    
+
+        if isinstance(classes, list):
+            classes = classes[0]
 
         if not isinstance(classes, int):
             raise ValueError(f"Classes not extracted correctly. Obtained {classes}")
         if classes == -1:
             raise ValueError("Classes not found for semantic segmentation dir.")
-        
-        opts["MODEL.N_CLASSES"] = max(2,classes)
+
+        opts["MODEL.N_CLASSES"] = max(2, classes)
 
     elif specific_workflow in ["INSTANCE_SEG"]:
         # Assumed it's BC. This needs a more elaborated process. Still deciding this:
         # https://github.com/bioimage-io/spec-bioimage-io/issues/621
-        channels = 2 
+        channels = 2
         if "out_channels" in model_kwargs:
             channels = model_kwargs["out_channels"]
         if channels == 1:
@@ -692,30 +700,27 @@ def check_model_restrictions(cfg, bmz_config, workflow_specs):
             channel_code = "BC"
         elif channels == 3:
             channel_code = "BCM"
-            
+
         if channels > 3:
             raise ValueError(f"Not recognized number of channels for instance segmentation. Obtained {channels}")
-        
+
         opts["PROBLEM.INSTANCE_SEG.DATA_CHANNELS"] = channel_code
 
     # 3) Change preprocessing to the one stablished by BMZ by translate BMZ keywords into BiaPy's
     # 'zero_mean_unit_variance' and 'fixed_zero_mean_unit_variance' norms of BMZ can be translated to our 'custom' norm
     # providing mean and std
-    print( f"[BMZ] Overriding preprocessing steps to the ones fixed in BMZ model: {bmz_config['preprocessing']}")
+    print(f"[BMZ] Overriding preprocessing steps to the ones fixed in BMZ model: {bmz_config['preprocessing']}")
     key_to_find = "id" if model_version > Version("0.5.0") else "name"
     if key_to_find in bmz_config["preprocessing"]:
         if bmz_config["preprocessing"][key_to_find] in ["fixed_zero_mean_unit_variance", "zero_mean_unit_variance"]:
-            if (
-                "kwargs" in bmz_config["preprocessing"]
-                and "mean" in bmz_config["preprocessing"]["kwargs"]
-            ):
+            if "kwargs" in bmz_config["preprocessing"] and "mean" in bmz_config["preprocessing"]["kwargs"]:
                 mean = bmz_config["preprocessing"]["kwargs"]["mean"]
                 std = bmz_config["preprocessing"]["kwargs"]["std"]
             elif "mean" in bmz_config["preprocessing"]:
                 mean = bmz_config["preprocessing"]["mean"]
                 std = bmz_config["preprocessing"]["std"]
             else:
-                mean, std = -1., -1.
+                mean, std = -1.0, -1.0
 
             opts["DATA.NORMALIZATION.TYPE"] = "custom"
             opts["DATA.NORMALIZATION.CUSTOM_MEAN"] = mean
@@ -746,10 +751,13 @@ def check_model_restrictions(cfg, bmz_config, workflow_specs):
 
     return option_list
 
+
 def get_cfg_key_value(obj, attr, *args):
     def _getattr(obj, attr):
         return getattr(obj, attr, *args)
-    return functools.reduce(_getattr, [obj] + attr.split('.'))
+
+    return functools.reduce(_getattr, [obj] + attr.split("."))
+
 
 def build_torchvision_model(cfg, device):
     # Find model in TorchVision
@@ -840,7 +848,7 @@ def build_torchvision_model(cfg, device):
             model.classifier[-1] = head
             head = torch.nn.Conv2d(model.aux_classifier[-1].in_channels, out_classes, kernel_size=1, stride=1)
             model.aux_classifier[-1] = head
-        
+
     elif cfg.PROBLEM.TYPE == "INSTANCE_SEG":
         # MaskRCNN
         if cfg.MODEL.N_CLASSES != 91:  # 91 classes are the ones by default in MaskRCNN
