@@ -1,6 +1,7 @@
 import os
 import math
 import h5py
+import zarr
 import numpy as np
 from tqdm import tqdm
 

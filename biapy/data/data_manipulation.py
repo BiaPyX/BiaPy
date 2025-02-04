@@ -2913,7 +2913,7 @@ def load_img_data(path, is_3d=False, data_within_zarr_path=None):
         File of the data read. Useful to close it in case it is an H5 file.
     """
     if any(path.endswith(x) for x in [".zarr", ".h5", ".hdf5", ".hdf"]):
-        from biapy.data.data_manipulation import (
+        from biapy.data.data_3D_manipulation import (
             read_chunked_data,
             read_chunked_nested_data,
         )
@@ -2954,7 +2954,7 @@ def read_img_as_ndarray(path, is_3d=False):
         img = h5py.File(path, "r")
         img = np.array(img[list(img)[0]])
     elif path.endswith(".zarr"):
-        from biapy.data.data_manipulation import read_chunked_data
+        from biapy.data.data_3D_manipulation import read_chunked_data
         _, img = read_chunked_data(path)
         img = np.array(img)
     else:
@@ -3002,8 +3002,8 @@ def imwrite(path, image):
         Image to store. 
     """
     image = np.array(image)
-    assert image.ndim == 6, f"Image to write needs to have 6 dimensions (axes: TZCYXS). Image shape: {image.shape}"
     if path.lower().endswith(('.tiff', '.tif')):
+        assert image.ndim == 6, f"Image to write needs to have 6 dimensions (axes: TZCYXS). Image shape: {image.shape}"
         try:
             tifffile.imwrite(
                 path, image, imagej=True, metadata={"axes": "TZCYXS"}, compression='zlib', compressionargs={'level': 8},

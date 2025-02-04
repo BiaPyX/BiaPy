@@ -52,9 +52,15 @@ from biapy.utils.misc import (
     get_rank,
     setup_for_distributed,
 )
+from biapy.models.bmz_utils import (
+    create_model_doc, 
+    create_environment_file_for_model, 
+    create_model_cover, 
+    get_bmz_model_info
+)
+
 from biapy.config.config import Config, update_dependencies
 from biapy.engine.check_configuration import check_configuration, convert_old_model_cfg_to_current_version
-from biapy.models import get_bmz_model_info, create_environment_file_for_model, create_model_cover
 from biapy.utils.util import create_file_sha256sum
 from biapy.data.data_manipulation import ensure_2d_shape, ensure_3d_shape
 
@@ -278,6 +284,12 @@ class BiaPy:
                 such as dimensions, software ("biapy" in this case), workflow used etc.
                 E.g. ``['electron-microscopy','mitochondria']``.
 
+            data : dict
+                Information of the data used to train the model. Expected keys:
+                    * ``name``: Name of the dataset.
+                    * ``doi``: DOI of the dataset or a reference to find it.
+                    * ``image_modality``: image modality of the dataset. 
+
             maintainers : list of dicts, optional
                 Maintainers of the model. Need to be a list of dicts. E.g. ``[{"name": "Gizmo"}]``. If not
                 provided the authors will be set as maintainers.
@@ -305,6 +317,9 @@ class BiaPy:
                 a hyperlink starting with 'http[s]'. Please use an image smaller than 500KB and an
                 aspect ratio width to height of 2:1. The supported image formats are: 'jpg', 'png', 'gif'.
 
+            doc_path : str, optional
+                Path to the documentation file.
+
         reuse_original_bmz_config : bool, optional
             Whether to reuse the original BMZ fields. This option can only be used if the model to export
             was previously loaded from BMZ.
@@ -322,14 +337,15 @@ class BiaPy:
 
         # Check keys
         if not reuse_original_bmz_config:
-            need_info = [
+            needed_info = [
                 "description",
                 "authors",
                 "license",
                 "tags",
                 "model_name",
+                "data",
             ]
-            for x in need_info:
+            for x in needed_info:
                 if x not in bmz_cfg:
                     raise ValueError(f"'{x}' property must be declared in 'bmz_cfg'")
 
@@ -410,6 +426,26 @@ class BiaPy:
                         raise ValueError(
                             "'bmz_cfg['tags']' must be a list of str. E.g. ['electron-microscopy', 'mitochondria']"
                         )
+            if not isinstance(bmz_cfg["data"], dict):
+                raise ValueError(
+                    "'bmz_cfg['data']' needs to be a dict."
+                )
+            else:
+                needed_info = [
+                    "name",
+                    "doi",
+                    "image_modality",
+                ]
+                for x in needed_info:
+                    if x not in bmz_cfg["data"]:
+                        raise ValueError(f"'{x}' property must be declared in 'bmz_cfg['data']'")
+
+            if "doc_path" in bmz_cfg:
+                if not os.path.exists(bmz_cfg["doc_path"]):
+                    raise ValueError("Documentation file {} does not exist".format(bmz_cfg["doc_path"]))
+                if not bmz_cfg["doc_path"].endswith(".md"):
+                    raise ValueError("Documentation file {} has no .md extension, please change it".format(bmz_cfg["doc_path"]))
+
             if "maintainers" in bmz_cfg:
                 if len(bmz_cfg["maintainers"]) == 0:
                     raise ValueError("'bmz_cfg['maintainers']' can not be empty.")
@@ -839,11 +875,16 @@ class BiaPy:
 
         # Doc
         if not reuse_original_bmz_config:
-            doc = (
-                HttpUrl("https://github.com/BiaPyX/BiaPy/blob/master/README.md")
-                if bmz_cfg["doc"] == ""
-                else bmz_cfg["doc"]
-            )
+            if "doc_path" in bmz_cfg:
+                doc = bmz_cfg["doc_path"]
+            else:
+                print("Autogenerating documentation . . .")
+                doc = os.path.join(building_dir, "documentation.md")
+                create_model_doc(
+                    self.cfg,
+                    bmz_cfg,
+                    doc,
+                    )
         else:
             doc = self.workflow.bmz_config["original_bmz_config"].documentation
 
@@ -967,9 +1008,13 @@ class BiaPy:
         print(f"Created '{model_descr.name}'")
 
         # Checking model consistency
-        # from bioimageio.core import test_model
-        # summary = test_model(model_descr)
-        # summary.display()
+        from bioimageio.core import test_model
+        summary = test_model(
+            model_descr,
+            absolute_tolerance=1e-3,
+            relative_tolerance=1e-3
+        )
+        summary.display()
 
         # Saving the model into BMZ format
         model_path = os.path.join(building_dir, model_name + ".zip")
@@ -989,7 +1034,7 @@ class BiaPy:
             self.train()
 
         if is_dist_avail_and_initialized():
-            print(f"[Rank {get_rank()} ({os.getpid()})] Process waiting (train finished) . . . ")
+            print(f"[Rank {get_rank()} ({os.getpid()})] Process waiting (train finished, step 2) . . . ")
             dist.barrier()
 
         if self.cfg.TEST.ENABLE:
