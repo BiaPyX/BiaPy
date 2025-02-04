@@ -15,7 +15,7 @@ from bioimageio.spec.model.v0_5 import (
 )
 from bioimageio.spec.utils import download
 
-from biapy.data.pre_processing import reduce_dtype
+from biapy.data.pre_processing import reduce_dtype, calculate_volume_prob_map
 from biapy.data.data_manipulation import read_img_as_ndarray, imwrite
 from biapy.data.generators.augmentors import random_crop_pair
 
@@ -174,15 +174,18 @@ def create_model_cover(file_paths, out_path, patch_size=256, is_3d=False, workfl
     img = read_img_as_ndarray(str(file_paths["input"]), is_3d=is_3d)
     mask = read_img_as_ndarray(str(file_paths["output"]), is_3d=is_3d)
 
-    # If 3D just take middle slice. TODO: better choose the slice based on mask
+    # Take a random patch from the image
+    prob_map = None
+    if workflow in ["semantic-segmentation", "instance-segmentation", "detection"]:
+        prob_map = calculate_volume_prob_map([{"img": mask>0.5}], is_3d, 1, 0)[0]
+    img, mask = random_crop_pair(img, mask, (patch_size,patch_size), img_prob=prob_map)
+    
+    # If 3D just take middle slice.
     if is_3d and img.ndim == 4:
         img = img[img.shape[0]//2]
     if is_3d and mask.ndim == 4:    
-        mask = mask[mask.shape[0]//2]
+        mask = mask[mask.shape[0]//2]    
 
-    # Take a random patch from the image. TODO: better choose the crop based on mask 
-    img, mask = random_crop_pair(img, mask, (patch_size,patch_size))
-    
     # Convert to RGB
     if img.shape[-1] == 1:
         img = np.stack((img[...,0],)*3, axis=-1)

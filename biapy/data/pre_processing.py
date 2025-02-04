@@ -1610,16 +1610,13 @@ def calculate_volume_prob_map(Y, is_3d=False, w_foreground=0.94, w_background=0.
     ----------
     Y : list of dict
         Data to calculate the probability map from. Each item in the list represents a sample of the dataset.
-        Each sample is represented as follows:
+        Expected keys:
             * ``"filename"``: name of the image to extract the data sample from.
             * ``"dir"``: directory where the image resides.
-            * ``"coords"``: coordinates to extract the sample from the image. If ``None`` it implies that a random patch needs to
-              be extracted.
-            * ``"original_data_shape"``: shape of the image where the samples is extracted (useful for reconstructing it later),
-            * ``"shape"``: shape of the sample.
-            * ``"img"`` (optional): image sample itself. It is a ndarrray of  ``(y, x, channels)`` in ``2D`` and
+            * ``"img"``: image sample itself. It is a ndarrray of  ``(y, x, channels)`` in ``2D`` and
               ``(z, y, x, channels)``in ``3D``. Provided if the user selected to load data into memory.
-
+        If ``"img"`` is provided ``"filename"`` and ``"filename"`` are not necessary, and vice versa.
+        
     w_foreground : float, optional
         Weight of the foreground. This value plus ``w_background`` must be equal ``1``.
 
@@ -1684,13 +1681,14 @@ def calculate_volume_prob_map(Y, is_3d=False, w_foreground=0.94, w_background=0.
             diff_shape = True
         maps.append(_map)
 
+    if not diff_shape:
+        for i in range(len(maps)):
+            maps[i] = np.expand_dims(maps[i], 0)
+        maps = np.concatenate(maps)
+
     if save_dir is not None:
         os.makedirs(save_dir, exist_ok=True)
-
         if not diff_shape:
-            for i in range(len(maps)):
-                maps[i] = np.expand_dims(maps[i], 0)
-            maps = np.concatenate(maps)
             print("Saving the probability map in {}".format(save_dir))
             np.save(os.path.join(save_dir, "prob_map.npy"), maps)
             return maps
@@ -1703,7 +1701,7 @@ def calculate_volume_prob_map(Y, is_3d=False, w_foreground=0.94, w_background=0.
             for i in range(Ylen):
                 f = os.path.join(save_dir, "prob_map" + str(i).zfill(d) + ".npy")
                 np.save(f, maps[i])
-            return save_dir
+    return maps
 
 
 ###########
