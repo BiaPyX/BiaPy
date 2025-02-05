@@ -671,41 +671,57 @@ if not os.path.exists(semantic_3d_data_outpath) and all_test_info["Test2"]["enab
 ###############
 
 # General things: 2D Data + YAML donwload
-if (
-    (
-        not os.path.exists(instance_seg_2d_data_outpath) 
-        or not os.path.exists(instance_seg_2d_affable_shark_data_outpath)
-        or not os.path.exists(instance_seg_conic_data_outpath)
-    )
-    and
+if ( not os.path.exists(instance_seg_2d_data_outpath) and
     (
         all_test_info["Test4"]["enable"] 
-        or all_test_info["Test29"]["enable"] 
         or all_test_info["Test31"]["enable"]
-        or all_test_info["Test35"]["enable"]
     )
+):
+    print("Downloading 2D instance seg. data [Test3/Test31] . . .")
+    os.makedirs(inst_seg_folder, exist_ok=True)
+    os.chdir(inst_seg_folder)
+
+    download_drive_file(instance_seg_2d_data_drive_link, instance_seg_2d_data_filename)
+
+    with ZipFile(os.path.join(inst_seg_folder, instance_seg_2d_data_filename), 'r') as zObject:
+        zObject.extractall(path=instance_seg_2d_data_outpath)
+
+if (
+    not os.path.exists(instance_seg_2d_affable_shark_data_outpath)
+    and all_test_info["Test29"]["enable"] 
+):
+    print("Downloading 2D instance seg. data [Test29] (affable-shark data) . . .")
+    os.makedirs(inst_seg_folder, exist_ok=True)
+    os.chdir(inst_seg_folder)
+
+    _, _ = urllib.request.urlretrieve(instance_seg_2d_affable_shark_data_link, filename=instance_seg_2d_affable_shark_data_filename)
+
+    with ZipFile(os.path.join(inst_seg_folder, instance_seg_2d_affable_shark_data_filename), 'r') as zObject:
+        zObject.extractall(path=instance_seg_2d_affable_shark_data_outpath)
+
+if (
+    not os.path.exists(instance_seg_conic_data_outpath)
+    and all_test_info["Test35"]["enable"]
+):
+    print("Downloading 2D instance seg. data [Test35] (CoNIC data) . . .")
+    os.makedirs(inst_seg_folder, exist_ok=True)
+    os.chdir(inst_seg_folder)
+
+    download_drive_file(instance_seg_conic_data_drive_link, instance_seg_conic_data_filename)
+
+    with ZipFile(os.path.join(inst_seg_folder, instance_seg_conic_data_filename), 'r') as zObject:
+        zObject.extractall(path=instance_seg_conic_data_outpath)
+
+if (
+    (all_test_info["Test4"]["enable"] 
+    or all_test_info["Test29"]["enable"] 
+    or all_test_info["Test31"]["enable"]
+    or all_test_info["Test35"]["enable"])
+    and not os.path.exists(instance_seg_2d_template_local)
 ):
     print("Downloading 2D instance seg. data . . .")
     os.makedirs(inst_seg_folder, exist_ok=True)
     os.chdir(inst_seg_folder)
-
-    if all_test_info["Test4"]["enable"] or all_test_info["Test31"]["enable"]:
-        download_drive_file(instance_seg_2d_data_drive_link, instance_seg_2d_data_filename)
-
-        with ZipFile(os.path.join(inst_seg_folder, instance_seg_2d_data_filename), 'r') as zObject:
-            zObject.extractall(path=instance_seg_2d_data_outpath)
-
-    if all_test_info["Test29"]["enable"]:
-        _, _ = urllib.request.urlretrieve(instance_seg_2d_affable_shark_data_link, filename=instance_seg_2d_affable_shark_data_filename)
-
-        with ZipFile(os.path.join(inst_seg_folder, instance_seg_2d_affable_shark_data_filename), 'r') as zObject:
-            zObject.extractall(path=inst_seg_folder)
-
-    if all_test_info["Test35"]["enable"]:
-        download_drive_file(instance_seg_conic_data_drive_link, instance_seg_conic_data_filename)
-
-        with ZipFile(os.path.join(inst_seg_folder, instance_seg_conic_data_filename), 'r') as zObject:
-            zObject.extractall(path=instance_seg_conic_data_outpath)
 
     if not os.path.exists(instance_seg_2d_template_local):
         print("Downloading instance seg. YAML . . .")
@@ -1030,7 +1046,7 @@ def check_finished(test_info, jobname):
     jobout_file = os.path.join(jobdir, test_info["jobname"]+"_1")
     logfile = open(jobout_file, 'r')
     last_lines = logfile.readlines()
-    last_lines = last_lines[-min(110,len(last_lines)):]
+    last_lines = last_lines[-min(300,len(last_lines)):]
 
     # Check if the final message appears there
     finished_good = False
