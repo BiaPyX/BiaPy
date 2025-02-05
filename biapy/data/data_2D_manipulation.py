@@ -596,6 +596,12 @@ def ensure_2d_shape(img, path=None):
     if img.ndim == 2:
         img = np.expand_dims(img, -1)
     else:
-        if img.shape[0] <= 3:
-            img = img.transpose((1, 2, 0))
+        # Ensure channel axis is always in the first position (assuming Z is already set)
+        min_val = min(img.shape)
+        channel_pos = img.shape.index(min_val)
+        if channel_pos != 2:
+            new_pos = [x for x in range(3) if x != channel_pos] + [
+                channel_pos,
+            ]
+            img = img.transpose(new_pos)
     return img
