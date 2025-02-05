@@ -48,5 +48,9 @@ else:
         ]
     bmz_cfg["doc"] = args["doc_file"]
     bmz_cfg["model_name"] = args["model_name"]
-
+    bmz_cfg["data"] = {
+        "name": "blablabla",
+        "doi": "blablabla",
+        "image_modality": "blablabla",
+    }
     biapy.export_model_to_bmz(args["bmz_folder"], bmz_cfg=bmz_cfg)
