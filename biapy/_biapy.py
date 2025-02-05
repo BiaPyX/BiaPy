@@ -987,7 +987,7 @@ class BiaPy:
         # ),
 
         dataset_id = None
-        if "dataset_id" in bmz_cfg["data"]:
+        if "data" in bmz_cfg and "dataset_id" in bmz_cfg["data"]:
             dataset_id = LinkedDataset(id=bmz_cfg["data"]["dataset_id"])
 
         # Export model to BMZ format
