@@ -180,7 +180,7 @@ def create_model_cover(file_paths, out_path, patch_size=256, is_3d=False, workfl
     # Take a random patch from the image
     prob_map = None
     if workflow in ["semantic-segmentation", "instance-segmentation", "detection"]:
-        prob_map = calculate_volume_prob_map([{"img": mask > 0.5}], is_3d, 1, 0)[0]
+        prob_map = calculate_volume_prob_map([{"img": np.expand_dims(mask[...,0],-1) > 0.5}], is_3d, 1, 0)[0]
     img, mask = random_crop_pair(img, mask, (patch_size, patch_size), img_prob=prob_map)
 
     # If 3D just take middle slice.
