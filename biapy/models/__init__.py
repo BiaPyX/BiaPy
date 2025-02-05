@@ -311,7 +311,7 @@ def build_bmz_model(cfg: type[Config], model: ModelDescr_v0_4 | ModelDescr_v0_5,
 
     model_instance = PytorchModelAdapter.get_network(model.weights.pytorch_state_dict)
     model_instance = model_instance.to(device)
-    state = torch.load(download(model.weights.pytorch_state_dict).path, map_location=device)
+    state = torch.load(download(model.weights.pytorch_state_dict).path, map_location=device, weights_only=True)
     model_instance.load_state_dict(state)
 
     # Check the network created
