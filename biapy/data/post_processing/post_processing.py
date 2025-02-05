@@ -502,8 +502,7 @@ def ensemble8_2d_predictions(
     l = int(math.ceil(total_img.shape[0] / batch_size_value))
     for i in range(l):
         top = (i + 1) * batch_size_value if (i + 1) * batch_size_value < total_img.shape[0] else total_img.shape[0]
-        with torch.cuda.amp.autocast():
-            r_aux = pred_func(total_img[i * batch_size_value : top])
+        r_aux = pred_func(total_img[i * batch_size_value : top])
 
         # Take just the last output of the network in case it returns more than one output
         channel_split = None
@@ -685,8 +684,7 @@ def ensemble16_3d_predictions(vol, pred_func, axis_order_back, axis_order, devic
     l = int(math.ceil(total_vol.shape[0] / batch_size_value))
     for i in range(l):
         top = (i + 1) * batch_size_value if (i + 1) * batch_size_value < total_vol.shape[0] else total_vol.shape[0]
-        with torch.cuda.amp.autocast():
-            r_aux = pred_func(total_vol[i * batch_size_value : top])
+        r_aux = pred_func(total_vol[i * batch_size_value : top])
 
         # Take just the last output of the network in case it returns more than one output
         channel_split = None

@@ -162,8 +162,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
             ### FULL IMAGE ###
             ##################
             # Make the prediction
-            with torch.cuda.amp.autocast():
-                pred = self.model_call_func(self.current_sample["X"])
+            pred = self.model_call_func(self.current_sample["X"])
             pred = to_numpy_format(pred, self.axis_order_back)
             del self.current_sample["X"]
 

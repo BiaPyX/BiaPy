@@ -1272,8 +1272,7 @@ class Base_Workflow(metaclass=ABCMeta):
                             mode=self.cfg.TEST.AUGMENTATION_MODE,
                         )
                     else:
-                        with torch.cuda.amp.autocast():
-                            p = self.model_call_func(img)
+                        p = self.model_call_func(img)
                     p = self.apply_model_activations(p)
                     # Multi-head concatenation
                     if isinstance(p, list):
@@ -1783,16 +1782,15 @@ class Base_Workflow(metaclass=ABCMeta):
                             if (k + 1) * self.cfg.TRAIN.BATCH_SIZE < self.current_sample["X"].shape[0]
                             else self.current_sample["X"].shape[0]
                         )
-                        with torch.cuda.amp.autocast():
-                            p = self.apply_model_activations(
-                                self.model_call_func(self.current_sample["X"][k * self.cfg.TRAIN.BATCH_SIZE : top])
+                        p = self.apply_model_activations(
+                            self.model_call_func(self.current_sample["X"][k * self.cfg.TRAIN.BATCH_SIZE : top])
+                        )
+                        # Multi-head concatenation
+                        if isinstance(p, list):
+                            p = torch.cat(
+                                (p[0], torch.argmax(p[1], axis=1).unsqueeze(1)),
+                                dim=1,
                             )
-                            # Multi-head concatenation
-                            if isinstance(p, list):
-                                p = torch.cat(
-                                    (p[0], torch.argmax(p[1], axis=1).unsqueeze(1)),
-                                    dim=1,
-                                )
 
                         # Calculate the metrics
                         if self.current_sample["Y"] is not None:
@@ -2001,8 +1999,7 @@ class Base_Workflow(metaclass=ABCMeta):
                         mode=self.cfg.TEST.AUGMENTATION_MODE,
                     )
                 else:
-                    with torch.cuda.amp.autocast():
-                        pred = self.model_call_func(self.current_sample["X"])
+                    pred = self.model_call_func(self.current_sample["X"])
                 pred = self.apply_model_activations(pred)
                 # Multi-head concatenation
                 if isinstance(pred, list):

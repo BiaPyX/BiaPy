@@ -324,8 +324,7 @@ class Super_resolution_Workflow(Base_Workflow):
                     if (k + 1) * self.cfg.TRAIN.BATCH_SIZE < self.current_sample["X"].shape[0]
                     else self.current_sample["X"].shape[0]
                 )
-                with torch.cuda.amp.autocast():
-                    p = self.model(self.current_sample["X"][k * self.cfg.TRAIN.BATCH_SIZE : top])
+                p = self.model(self.current_sample["X"][k * self.cfg.TRAIN.BATCH_SIZE : top])
                 p = to_numpy_format(self.apply_model_activations(p), self.axis_order_back)
                 if "pred" not in locals():
                     pred = np.zeros((self.current_sample["X"].shape[0],) + p.shape[1:], dtype=self.dtype)

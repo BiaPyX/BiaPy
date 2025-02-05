@@ -1018,8 +1018,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             ### FULL IMAGE ###
             ##################
             # Make the prediction
-            with torch.cuda.amp.autocast():
-                pred = self.model_call_func(self.current_sample["X"])
+            pred = self.model_call_func(self.current_sample["X"])
             del self.current_sample["X"]
 
             # In Torchvision the output is a collection of bboxes so there is nothing else to do here

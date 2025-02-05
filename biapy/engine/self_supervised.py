@@ -365,30 +365,29 @@ class Self_supervised_Workflow(Base_Workflow):
                     if (k + 1) * self.cfg.TRAIN.BATCH_SIZE < self.current_sample["X"].shape[0]
                     else self.current_sample["X"].shape[0]
                 )
-                with torch.cuda.amp.autocast():
-                    p = self.model(
+                p = self.model(
+                    to_pytorch_format(
+                        self.current_sample["X"][k * self.cfg.TRAIN.BATCH_SIZE : top],
+                        self.axis_order,
+                        self.device,
+                    )
+                )
+                if self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
+                    loss, p, mask = p
+                    p = self.apply_model_activations(p)
+                    p, m, pv = self.model_without_ddp.save_images(
                         to_pytorch_format(
                             self.current_sample["X"][k * self.cfg.TRAIN.BATCH_SIZE : top],
                             self.axis_order,
                             self.device,
-                        )
+                        ),
+                        p,
+                        mask,
+                        self.dtype,
                     )
-                    if self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
-                        loss, p, mask = p
-                        p = self.apply_model_activations(p)
-                        p, m, pv = self.model_without_ddp.save_images(
-                            to_pytorch_format(
-                                self.current_sample["X"][k * self.cfg.TRAIN.BATCH_SIZE : top],
-                                self.axis_order,
-                                self.device,
-                            ),
-                            p,
-                            mask,
-                            self.dtype,
-                        )
-                    else:
-                        p = self.apply_model_activations(p)
-                        p = to_numpy_format(p, self.axis_order_back)
+                else:
+                    p = self.apply_model_activations(p)
+                    p = to_numpy_format(p, self.axis_order_back)
 
                 if "pred" not in locals():
                     pred = np.zeros((self.current_sample["X"].shape[0],) + p.shape[1:], dtype=self.dtype)

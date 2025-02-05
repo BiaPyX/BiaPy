@@ -291,8 +291,7 @@ class Classification_Workflow(Base_Workflow):
                 if (k + 1) * self.cfg.TRAIN.BATCH_SIZE < self.current_sample["X"].shape[0]
                 else self.current_sample["X"].shape[0]
             )
-            with torch.cuda.amp.autocast():
-                p = self.model_call_func(self.current_sample["X"][k * self.cfg.TRAIN.BATCH_SIZE : top]).cpu().numpy()
+            p = self.model_call_func(self.current_sample["X"][k * self.cfg.TRAIN.BATCH_SIZE : top]).cpu().numpy()
             p = np.argmax(p, axis=1)
             self.all_pred.append(p)
 
