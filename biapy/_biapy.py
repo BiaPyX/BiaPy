@@ -886,6 +886,7 @@ class BiaPy:
                     biapy_cfg=self.cfg,
                     bmz_cfg=bmz_cfg,
                     cfg_file=self.cfg_file,
+                    task_description=description,
                     doc_output_path=doc,
                 )
         else:
