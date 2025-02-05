@@ -249,6 +249,7 @@ def create_model_doc(
     biapy_cfg: CfgNode,
     bmz_cfg: dict,
     cfg_file: str,
+    task_description: str,
     doc_output_path: str,
 ):
     """
@@ -289,8 +290,11 @@ def create_model_doc(
                 * ``doi``: DOI of the dataset or a reference to find it.
                 * ``image_modality``: image modality of the dataset.
 
-    cfg_file : int, optional
-        Size of the image to create.
+    cfg_file : str
+        Path to the YAML configuration file used.
+
+    task_description : str
+        Description of the task.
 
     doc_output_path : str
         Output path for the documentation.
@@ -423,7 +427,7 @@ def create_model_doc(
     message = ""
     message += f'# {bmz_cfg["model_name"]}\n'
     message += "\n"
-    message += "This model segments mitochondria in electron microscopy images.\n"
+    message += f"{task_description}.\n"
     message += "\n"
     message += "## Training\n"
     message += "\n"
