@@ -108,7 +108,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         self.mask_path = cfg.DATA.TRAIN.GT_PATH
         self.is_y_mask = True
         self.load_Y_val = True
-        if self.cfg.DATA.TEST.LOAD_GT:
+        if self.cfg.TEST.ENABLE and self.cfg.DATA.TEST.LOAD_GT:
             self.test_gt_filenames = sorted(next(os.walk(self.original_test_mask_path))[2])
             if len(self.test_gt_filenames) == 0:
                 self.test_gt_filenames = sorted(next(os.walk(self.original_test_mask_path))[1])
