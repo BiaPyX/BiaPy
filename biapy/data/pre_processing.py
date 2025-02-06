@@ -137,9 +137,10 @@ def create_instance_channels(cfg, data_type="train"):
     print("Creating Y_{} channels . . .".format(data_type))
     # Create the mask patch by patch (Zarr/H5)
     if working_with_zarr_h5_files and isinstance(Y, dict):
-        savepath = data_path + "_" + cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS + "_"
+        savepath = data_path + "_" + cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
         if cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
-            savepath += cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
+            if "C" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
+                savepath += "_" + cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         else:
             post_dil = "".join(str(cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.POSTSITE_DILATION)[1:-1].replace(",", "")).replace(
                 " ", "_"
@@ -147,7 +148,7 @@ def create_instance_channels(cfg, data_type="train"):
             post_d_dil = "".join(
                 str(cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.POSTSITE_DILATION_DISTANCE_CHANNELS)[1:-1].replace(",", "")
             ).replace(" ", "_")
-            savepath += post_dil + "_" + post_d_dil
+            savepath += "_" + post_dil + "_" + post_d_dil
 
         if "D" in cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE:
             dtype_str = "float32"

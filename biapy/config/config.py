@@ -1445,16 +1445,15 @@ def update_dependencies(cfg) -> None:
             call.DATA.TRAIN.PATH
             + "_"
             + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
-            + "_"
-            + call.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         )
         call.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR = (
             call.DATA.TRAIN.GT_PATH
             + "_"
             + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
-            + "_"
-            + call.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         )
+        if "C" in call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
+            call.DATA.TRAIN.INSTANCE_CHANNELS_DIR += "_" + call.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
+            call.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR += "_" + call.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
     else: 
         call.DATA.TRAIN.INSTANCE_CHANNELS_DIR = (
             call.DATA.TRAIN.PATH
@@ -1482,16 +1481,15 @@ def update_dependencies(cfg) -> None:
             call.DATA.VAL.PATH
             + "_"
             + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
-            + "_"
-            + call.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         )
         call.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR = (
             call.DATA.VAL.GT_PATH
             + "_"
             + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
-            + "_"
-            + call.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         )
+        if "C" in call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
+            call.DATA.VAL.INSTANCE_CHANNELS_DIR += "_" + call.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
+            call.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR += "_" + call.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
     else: 
         call.DATA.VAL.INSTANCE_CHANNELS_DIR = (
             call.DATA.VAL.PATH
@@ -1520,16 +1518,15 @@ def update_dependencies(cfg) -> None:
             call.DATA.TEST.PATH
             + "_"
             + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
-            + "_"
-            + call.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         )
         call.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR = (
             call.DATA.TEST.GT_PATH
             + "_"
             + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
-            + "_"
-            + call.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
         )
+        if "C" in call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
+            call.DATA.TEST.INSTANCE_CHANNELS_DIR += "_" + call.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
+            call.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR += "_" + call.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
     else: 
         call.DATA.TEST.INSTANCE_CHANNELS_DIR = (
             call.DATA.TEST.PATH
