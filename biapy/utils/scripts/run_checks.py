@@ -1506,7 +1506,7 @@ if all_test_info["Test5"]["enable"]:
     biapy_config['TRAIN']['EPOCHS'] = 20
     biapy_config['TRAIN']['PATIENCE'] = -1
 
-    biapy_config['MODEL']['ARCHITECTURE'] = 'resunet'
+    biapy_config['MODEL']['ARCHITECTURE'] = 'unext_v2'
 
     biapy_config['TEST']['ENABLE'] = True
     biapy_config['TEST']['FULL_IMG'] = False
