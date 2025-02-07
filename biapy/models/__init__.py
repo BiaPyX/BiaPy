@@ -107,6 +107,7 @@ def build_model(cfg, output_channels, device):
                 stochastic_depth_prob=cfg.MODEL.CONVNEXT_SD_PROB,
                 isotropy=cfg.MODEL.ISOTROPY,
                 stem_k_size=cfg.MODEL.CONVNEXT_STEM_K_SIZE,
+                output_channels=output_channels,
             )
             callable_model = U_NeXt_V1
         elif modelname == "unext_v2":
@@ -119,6 +120,7 @@ def build_model(cfg, output_channels, device):
                 stochastic_depth_prob=cfg.MODEL.CONVNEXT_SD_PROB,
                 isotropy=cfg.MODEL.ISOTROPY,
                 stem_k_size=cfg.MODEL.CONVNEXT_STEM_K_SIZE,
+                output_channels=output_channels,
             )
             callable_model = U_NeXt_V2
 
