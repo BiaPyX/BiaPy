@@ -51,7 +51,7 @@ from biapy.utils.misc import (
     is_dist_avail_and_initialized,
     set_seed,
     get_rank,
-    setup_for_distributed,
+    is_main_process,
 )
 from biapy.models.bmz_utils import (
     create_model_doc,
@@ -333,7 +333,7 @@ class BiaPy:
 
         """
         # Stop DDP in case it is there 
-        if self.args.rank != 0:
+        if not is_main_process():
             self.wait_and_stop_ddp()
             return
 
@@ -1042,7 +1042,7 @@ class BiaPy:
         os.chdir(cwd)
 
         # Stop DDP in case it is there 
-        if self.args.rank == 0:
+        if is_main_process():
             self.wait_and_stop_ddp()
         
         print("FINISHED JOB {} !!".format(self.job_identifier))
