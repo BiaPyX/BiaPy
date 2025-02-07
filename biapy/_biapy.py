@@ -79,6 +79,7 @@ class BiaPy:
         dist_on_itp: Optional[bool] = False,
         dist_url: Optional[str] = "env://",
         dist_backend: Optional[str] = "nccl",
+        stop_ddp: Optional[bool] = True, 
     ):
         """
         Run the main functionality of the job.
@@ -114,6 +115,9 @@ class BiaPy:
 
         dist_backend: str, optional
             Backend to use in distributed mode. Should be either 'nccl' or 'gloo'. Defaults to 'nccl'.
+        
+        stop_ddp : bool, optional
+            Whether to stop DDP after train/test is done.
         """
         result_dir = result_dir if result_dir != "" else str(os.getenv("HOME"))
 
@@ -194,6 +198,7 @@ class BiaPy:
         self.device = init_devices(self.args, self.cfg.get_cfg_defaults())
         self.cfg._C.merge_from_list(opts)
         self.cfg = self.cfg.get_cfg_defaults()
+        self.stop_ddp = stop_ddp
 
         # Reproducibility
         set_seed(self.cfg.SYSTEM.SEED)
@@ -327,6 +332,11 @@ class BiaPy:
             was previously loaded from BMZ.
 
         """
+        # Stop DDP in case it is there 
+        if self.args.rank != 0:
+            self.wait_and_stop_ddp()
+            return
+
         if bmz_cfg is None:
             bmz_cfg = {}
         if reuse_original_bmz_config and "original_bmz_config" not in self.workflow.bmz_config:
@@ -1031,7 +1041,17 @@ class BiaPy:
         # Recover the original working path
         os.chdir(cwd)
 
+        # Stop DDP in case it is there 
+        if self.args.rank == 0:
+            self.wait_and_stop_ddp()
+        
         print("FINISHED JOB {} !!".format(self.job_identifier))
+
+    def wait_and_stop_ddp(self):
+        if is_dist_avail_and_initialized():
+            dist.barrier()
+            if self.stop_ddp:
+                dist.destroy_process_group()
 
     def run_job(self):
         """Run a complete BiaPy workflow."""
@@ -1047,9 +1067,7 @@ class BiaPy:
 
         if is_dist_avail_and_initialized():
             print(f"[Rank {get_rank()} ({os.getpid()})] Process waiting (test finished) . . . ")
-            setup_for_distributed(self.args.rank == 0)
-            dist.barrier()
-            dist.destroy_process_group()
+            self.wait_and_stop_ddp()
 
         if self.cfg.MODEL.BMZ.EXPORT.ENABLE:
             if self.cfg.MODEL.BMZ.EXPORT.REUSE_BMZ_CONFIG:

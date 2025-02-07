@@ -122,13 +122,14 @@ def init_devices(args, cfg):
     else:
         timeout_ms = 1800000
 
-    dist.init_process_group(
-        backend=args.dist_backend,
-        init_method=args.dist_url,
-        world_size=args.world_size,
-        rank=args.rank,
-        timeout=timedelta(seconds=timeout_ms),
-    )
+    if not is_dist_avail_and_initialized():
+        dist.init_process_group(
+            backend=args.dist_backend,
+            init_method=args.dist_url,
+            world_size=args.world_size,
+            rank=args.rank,
+            timeout=timedelta(seconds=timeout_ms),
+        )
     dist.barrier()
     setup_for_distributed(args.rank == 0)
     if args.rank == 0:
