@@ -802,6 +802,16 @@ class Config:
         # [{"text": "training library", "doi": "10.1101/2024.02.03.576026"}, {"text": "architecture", "doi": "10.1109/LGRS.2018.2802944"},
         #  {"text": "data", "doi": "10.48550/arXiv.1812.06024"}]
         _C.MODEL.BMZ.EXPORT.CITE = []
+        # Information of the dataset. It must be a list of just one dict item with keys "name", "doi" and "image_modality". It can have 
+        # also "dataset_id" key but it is optional (must match a dataset in the BioImage Model Zoo). E.g: 
+        #   [{
+        #       "name": "CartoCell", 
+        #       "doi": "10.1016/j.crmeth.2023.100597", 
+        #       "image_modality": "fluorescence microscopy", 
+        #       "dataset_id": "biapy/cartocell_cyst_segmentation",
+        #   }]
+        _C.MODEL.BMZ.EXPORT.DATASET_INFO = [{}]
+
         # If you are loading a BMZ model you can enable this option to avoid setting all above variables and instead reuse the same
         # information that was present in that model. You need still to set 'MODEL.BMZ.EXPORT.ENABLE' to 'True' and nothing else.
         _C.MODEL.BMZ.EXPORT.REUSE_BMZ_CONFIG = False

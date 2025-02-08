@@ -1082,6 +1082,7 @@ class BiaPy:
                 bmz_cfg["cite"] = self.cfg.MODEL.BMZ.EXPORT.CITE
                 bmz_cfg["doc"] = self.cfg.MODEL.BMZ.EXPORT.DOCUMENTATION
                 bmz_cfg["model_name"] = self.cfg.MODEL.BMZ.EXPORT.MODEL_NAME
+                bmz_cfg["data"] = self.cfg.MODEL.BMZ.EXPORT.DATASET_INFO[0]
 
                 self.export_model_to_bmz(self.cfg.PATHS.BMZ_EXPORT_PATH, bmz_cfg=bmz_cfg)
 

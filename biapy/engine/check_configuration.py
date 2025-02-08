@@ -1781,7 +1781,22 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                                 raise ValueError(
                                     f"'MODEL.BMZ.EXPORT.CITE' malformed. Cite dictionary available keys are: ['text', 'doi', 'url']. Provided {k}. E.g. {'text': 'Gizmo et al.', 'doi': '10.1002/xyzacab123'}"
                                 )
-
+            if isinstance(cfg.MODEL.BMZ.EXPORT.DATASET_INFO, list):
+                raise ValueError(
+                    "'MODEL.BMZ.EXPORT.DATASET_INFO' must be a list with a single dictionary inside. Keys that must be set in that dict are: ['name', 'doi', 'image_modality'] and optionallly 'dataset_id'"
+                )
+            elif len(cfg.MODEL.BMZ.EXPORT.DATASET_INFO) != 1:
+                raise ValueError(
+                    "'MODEL.BMZ.EXPORT.DATASET_INFO' must be a list with a single dictionary inside. Keys that must be set in that dict are: ['name', 'doi', 'image_modality'] and optionallly 'dataset_id'. "
+                    "E.g. [{ 'name': 'CartoCell', 'doi': '10.1016/j.crmeth.2023.100597', 'image_modality': 'fluorescence microscopy',  'dataset_id': 'biapy/cartocell_cyst_segmentation' }]"                
+                    )
+            else:
+                for k in cfg.MODEL.BMZ.EXPORT.DATASET_INFO[0].keys():
+                    if k not in ["name", "doi", "image_modality", 'dataset_id']:
+                        raise ValueError(
+                            f"'MODEL.BMZ.EXPORT.DATASET_INFO' malformed. Cite dictionary available keys are: ['name', 'doi', 'image_modality', 'dataset_id']. Provided {k}. "
+                            "E.g. [{ 'name': 'CartoCell', 'doi': '10.1016/j.crmeth.2023.100597', 'image_modality': 'fluorescence microscopy',  'dataset_id': 'biapy/cartocell_cyst_segmentation' }]"
+                        )
             if cfg.MODEL.BMZ.EXPORT.DOCUMENTATION == "":
                 print(
                     "WARNING: 'MODEL.BMZ.EXPORT.DOCUMENTATION' not set so the model documentation will point to BiaPy doc: https://github.com/BiaPyX/BiaPy/blob/master/README.md"
