@@ -4,6 +4,7 @@ import numpy as np
 from typing import Tuple
 from packaging.version import Version
 from yacs.config import CfgNode
+from skimage.transform import resize
 
 from bioimageio.spec.model.v0_4 import ModelDescr as ModelDescr_v0_4
 from bioimageio.spec.model.v0_5 import ModelDescr as ModelDescr_v0_5
@@ -180,7 +181,7 @@ def create_model_cover(file_paths, out_path, patch_size=256, is_3d=False, workfl
     # Take a random patch from the image
     prob_map = None
     if workflow in ["semantic-segmentation", "instance-segmentation", "detection"]:
-        prob_map = calculate_volume_prob_map([{"img": np.expand_dims(mask[...,0],-1) > 0.5}], is_3d, 1, 0)[0]
+        prob_map = calculate_volume_prob_map([{"img": np.expand_dims(mask[..., 0], -1) > 0.5}], is_3d, 1, 0)[0]
     img, mask = random_crop_pair(img, mask, (patch_size, patch_size), img_prob=prob_map)
 
     # If 3D just take middle slice.
@@ -197,8 +198,18 @@ def create_model_cover(file_paths, out_path, patch_size=256, is_3d=False, workfl
     elif img.shape[-1] > 3:
         img = img[..., :3]
 
-    # Normalize image
+    # Resize the images if neccesary
+    if img.shape[:-1] != (patch_size, patch_size):
+        img = resize(img, (patch_size, patch_size), order=1, clip=True, preserve_range=True, anti_aliasing=True)
+    if mask.shape[:-1] != (patch_size, patch_size):
+        order = 1 if workflow in ["super-resolution", "image-to-image", "denoising", "self-supervised"] else 0
+        mask = resize(mask, (patch_size, patch_size), order=order, clip=True, preserve_range=True, anti_aliasing=True)
+    
+    # Normalization
     img = reduce_dtype(img, img.min(), img.max(), out_min=0, out_max=255, out_type=np.uint8)
+    if workflow in ["super-resolution", "image-to-image", "denoising", "self-supervised"]:
+        # Normalize mask, as in this workflow case it is also a raw image
+        mask = reduce_dtype(mask, mask.min(), mask.max(), out_min=0, out_max=255, out_type=np.uint8)
 
     # Same procedure with the mask in those workflows where the target is also an image
     if workflow in ["super-resolution", "image-to-image", "denoising", "self-supervised"]:
@@ -209,9 +220,6 @@ def create_model_cover(file_paths, out_path, patch_size=256, is_3d=False, workfl
             mask = np.stack((np.zeros(mask.shape, dtype=mask.dtype), mask), axis=-1)
         elif mask.shape[-1] > 3:
             mask = mask[..., :3]
-
-        # Normalize mask, as in this workflow case it is also a raw image
-        mask = reduce_dtype(mask, mask.min(), mask.max(), out_min=0, out_max=255, out_type=np.uint8)
 
         # Create cover with image and mask side-by-side
         out = np.ones((patch_size, patch_size * 2, 3), dtype=img.dtype)
