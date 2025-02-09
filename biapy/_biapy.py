@@ -52,6 +52,7 @@ from biapy.utils.misc import (
     set_seed,
     get_rank,
     is_main_process,
+    setup_for_distributed,
 )
 from biapy.models.bmz_utils import (
     create_model_doc,
@@ -234,17 +235,33 @@ class BiaPy:
 
     def train(self):
         """Call training phase."""
+        if is_dist_avail_and_initialized():
+            setup_for_distributed(is_main_process())
+
         if self.cfg.TRAIN.ENABLE:
             self.workflow.train()
         else:
             raise ValueError("Train was not enabled ('TRAIN.ENABLE')")
 
+        if is_dist_avail_and_initialized():
+            setup_for_distributed(True)
+            print(f"[Rank {get_rank()} ({os.getpid()})] Process waiting (train finished, step 2) . . . ")
+            dist.barrier()
+
     def test(self):
         """Call test phase."""
+        if is_dist_avail_and_initialized():
+            setup_for_distributed(is_main_process())
+
         if self.cfg.TEST.ENABLE:
             self.workflow.test()
         else:
             raise ValueError("Test was not enabled ('TEST.ENABLE')")
+
+        if is_dist_avail_and_initialized():
+            setup_for_distributed(True)
+            print(f"[Rank {get_rank()} ({os.getpid()})] Process waiting (test finished) . . . ")
+            self.wait_and_stop_ddp()
 
     def prepare_model(self):
         """Build up the model based on the selected configuration."""
@@ -332,9 +349,7 @@ class BiaPy:
             was previously loaded from BMZ.
 
         """
-        # Stop DDP in case it is there 
         if not is_main_process():
-            self.wait_and_stop_ddp()
             return
 
         if bmz_cfg is None:
@@ -1041,16 +1056,13 @@ class BiaPy:
         # Recover the original working path
         os.chdir(cwd)
 
-        # Stop DDP in case it is there 
-        if is_main_process():
-            self.wait_and_stop_ddp()
-        
         print("FINISHED JOB {} !!".format(self.job_identifier))
 
     def wait_and_stop_ddp(self):
         if is_dist_avail_and_initialized():
             dist.barrier()
             if self.stop_ddp:
+                print(f"[Rank {get_rank()} ({os.getpid()})] stopping DDP . . . ")
                 dist.destroy_process_group()
 
     def run_job(self):
@@ -1058,16 +1070,8 @@ class BiaPy:
         if self.cfg.TRAIN.ENABLE:
             self.train()
 
-        if is_dist_avail_and_initialized():
-            print(f"[Rank {get_rank()} ({os.getpid()})] Process waiting (train finished, step 2) . . . ")
-            dist.barrier()
-
         if self.cfg.TEST.ENABLE:
             self.test()
-
-        if is_dist_avail_and_initialized():
-            print(f"[Rank {get_rank()} ({os.getpid()})] Process waiting (test finished) . . . ")
-            self.wait_and_stop_ddp()
 
         if self.cfg.MODEL.BMZ.EXPORT.ENABLE:
             if self.cfg.MODEL.BMZ.EXPORT.REUSE_BMZ_CONFIG:
@@ -1085,5 +1089,8 @@ class BiaPy:
                 bmz_cfg["data"] = self.cfg.MODEL.BMZ.EXPORT.DATASET_INFO[0]
 
                 self.export_model_to_bmz(self.cfg.PATHS.BMZ_EXPORT_PATH, bmz_cfg=bmz_cfg)
+                    
+            # Wait until the main process is done
+            self.wait_and_stop_ddp()
 
         print("FINISHED JOB {} !!".format(self.job_identifier))
