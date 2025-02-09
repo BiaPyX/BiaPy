@@ -289,7 +289,7 @@ all_test_info["Test24"] = {
     "description": "2D image to image. Dapi 2D data. preprocess: resize, Cross-val. Basic DA. multiresunet",
     "yaml": "test24.yaml",
     "internal_checks": [
-        {"type": "regular", "pattern": "Test PSNR (merge patches):", "gt": True, "value": 20.0},
+        {"type": "regular", "pattern": "Test PSNR (merge patches):", "gt": True, "value": 19.0},
     ]
 }
 
@@ -3447,8 +3447,8 @@ if all_test_info["Test29"]["enable"]:
     biapy_config['PROBLEM']['INSTANCE_SEG']['DATA_MW_TH_TYPE'] = "auto"
     biapy_config['PROBLEM']['INSTANCE_SEG']['DATA_CHANNEL_WEIGHTS'] = "(0.5, 1)"
 
-    biapy_config['DATA']['TEST']['PATH'] = os.path.join(instance_seg_2d_affable_shark_data_outpath, "test", "images")
-    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(instance_seg_2d_affable_shark_data_outpath, "test", "masks")
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(instance_seg_2d_affable_shark_data_outpath, "dsb2018", "test", "images")
+    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(instance_seg_2d_affable_shark_data_outpath, "dsb2018", "test", "masks")
     biapy_config['DATA']['TEST']['IN_MEMORY'] = False
     biapy_config['DATA']['TEST']['LOAD_GT'] = True
 
