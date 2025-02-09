@@ -134,7 +134,7 @@ class U_NeXt_V1(nn.Module):
         in_channels = image_shape[-1]
 
         # STEM
-        z_factor = int(min(z_down[0] / stem_k_size, 1))
+        z_factor = int(max(z_down[0] / stem_k_size, 1))
         mpool = (stem_k_size * z_factor, stem_k_size, stem_k_size) if self.ndim == 3 else (stem_k_size, stem_k_size)
         self.down_path.append(
             nn.Sequential(
