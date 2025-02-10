@@ -107,7 +107,6 @@ def create_environment_file_for_model(building_dir):
 
     env = dict(
         name="biapy",
-        channels=["conda-forge", "pytorch", "nodefaults"],
         dependencies=[
             "python=3.10",
             "pytorch=2.4.0",
