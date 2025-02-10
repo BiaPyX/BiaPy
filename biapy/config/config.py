@@ -811,7 +811,8 @@ class Config:
         #       "dataset_id": "biapy/cartocell_cyst_segmentation",
         #   }]
         _C.MODEL.BMZ.EXPORT.DATASET_INFO = [{}]
-
+        # Version of the model
+        _C.MODEL.BMZ.EXPORT.MODEL_VERSION = "0.1.0"
         # If you are loading a BMZ model you can enable this option to avoid setting all above variables and instead reuse the same
         # information that was present in that model. You need still to set 'MODEL.BMZ.EXPORT.ENABLE' to 'True' and nothing else.
         _C.MODEL.BMZ.EXPORT.REUSE_BMZ_CONFIG = False

@@ -344,6 +344,9 @@ class BiaPy:
             doc_path : str, optional
                 Path to the documentation file.
 
+            version : str, optional
+                Version of the model. If not provided it will be ``"0.1.0"``.
+
         reuse_original_bmz_config : bool, optional
             Whether to reuse the original BMZ fields. This option can only be used if the model to export
             was previously loaded from BMZ.
@@ -1013,8 +1016,12 @@ class BiaPy:
         # ),
 
         dataset_id = None
-        if "data" in bmz_cfg and "dataset_id" in bmz_cfg["data"]:
+        if "data" in bmz_cfg and "dataset_id" in bmz_cfg["data"] and isinstance(bmz_cfg["data"]["dataset_id"], str):
             dataset_id = LinkedDataset(id=bmz_cfg["data"]["dataset_id"])
+        
+        version = "0.1.0"
+        if "version" in bmz_cfg and isinstance(bmz_cfg["version"], str):
+            version = bmz_cfg["version"]
 
         # Export model to BMZ format
         model_descr = ModelDescr(
@@ -1035,6 +1042,7 @@ class BiaPy:
             covers=covers,
             maintainers=maintainers,
             training_data=dataset_id,
+            version=version,
         )
 
         # print(f"Building BMZ package: {args}")
@@ -1087,6 +1095,7 @@ class BiaPy:
                 bmz_cfg["doc"] = self.cfg.MODEL.BMZ.EXPORT.DOCUMENTATION
                 bmz_cfg["model_name"] = self.cfg.MODEL.BMZ.EXPORT.MODEL_NAME
                 bmz_cfg["data"] = self.cfg.MODEL.BMZ.EXPORT.DATASET_INFO[0]
+                bmz_cfg["version"] = self.cfg.MODEL.BMZ.EXPORT.MODEL_VERSION
 
                 self.export_model_to_bmz(self.cfg.PATHS.BMZ_EXPORT_PATH, bmz_cfg=bmz_cfg)
                     
