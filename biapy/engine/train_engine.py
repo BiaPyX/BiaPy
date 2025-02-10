@@ -128,10 +128,8 @@ def evaluate(
         targets = prepare_targets(targets, images)
 
         # Pass the images through the model
-        # TODO: control autocast and mixed precision
-        with torch.cuda.amp.autocast(enabled=False):
-            outputs = activations(model_call_func(images, is_train=True), training=True)
-            loss = loss_function(outputs, targets)
+        outputs = activations(model_call_func(images, is_train=True), training=True)
+        loss = loss_function(outputs, targets)
 
         # Calculate the metrics
         metric_function(outputs, targets, metric_logger=metric_logger)
