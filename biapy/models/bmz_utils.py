@@ -109,17 +109,14 @@ def create_environment_file_for_model(building_dir):
         name="biapy",
         channels=["conda-forge", "pytorch", "nodefaults"],
         dependencies=[
-            "python>=3.10",
+            "python=3.10",
+            "pytorch=2.4.0",
+            "torchvision=0.19.0",
+            "timm",
             "pip",
-            "pytorch >=2.4.0,<3",
             {
                 "pip": [
                     "biapy=={}".format(biapy.__version__),
-                    "torchvision==0.19.0",
-                    "torchaudio==2.4.0",
-                    "timm==1.0.8",
-                    "pytorch-msssim==1.0.0",
-                    "torchmetrics[image]==1.4.*",
                 ]
             },
         ],
@@ -447,7 +444,7 @@ def create_model_doc(
     message += f"- Dimensionality: {biapy_cfg.PROBLEM.NDIM}\n"
     message += "- Source: {} ; DOI:{}\n".format(bmz_cfg["data"]["name"], bmz_cfg["data"]["doi"])
     message += "\n"
-    message += "### Validation (recommended)\n"
+    message += "### Validation\n"
     message += "\n"
     message += f"In the case of {workflow_name.lower()} the following metrics are calculated:\n"
     message += f"{metrics_used}\n"
