@@ -510,7 +510,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         assert loss in [
             "MAE",
             "MSE",
-        ], "LOSS.TYPE not in ['MAE', 'MSE']"
+            "SSIM"
+        ], "LOSS.TYPE not in ['MAE', 'MSE', 'SSIM']"
+        if cfg.LOSS.TYPE == "SSIM" and cfg.DATA.NORMALIZATION.TYPE not in ["div", "scale_range"]:
+            raise ValueError("'DATA.NORMALIZATION.TYPE' needs to be one between ['div','scale_range'] when 'LOSS.TYPE' is SSIM")
     elif cfg.PROBLEM.TYPE == "DENOISING":
         loss = "MSE" if cfg.LOSS.TYPE == "" else cfg.LOSS.TYPE
         assert loss == "MSE", "LOSS.TYPE must be 'MSE'"
@@ -1375,6 +1378,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "mae",
                 "unext_v1",
                 "unext_v2",
+                "dfcan",
             ]
             and cfg.PROBLEM.NDIM == "3D"
             and cfg.PROBLEM.TYPE != "CLASSIFICATION"
@@ -1394,6 +1398,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                         "mae",
                         "unext_v1",
                         "unext_v2",
+                        "dfcan",
                     ]
                 )
             )

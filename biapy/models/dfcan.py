@@ -15,16 +15,32 @@ def fftshift2d(img, size_psc=128):
     return output
 
 
+def fftshift3d(img, size_psc=128):
+    bs, ch, z, h, w = img.shape
+    fs111 = img[:, :, z // 2 :, h // 2 :, w // 2 :]
+    fs121 = img[:, :, z // 2 :, h // 2 :, : w // 2]
+    fs211 = img[:, :, z // 2 :, : h // 2, w // 2 :]
+    fs221 = img[:, :, z // 2 :, : h // 2, : w // 2]
+    fs112 = img[:, :, : z // 2, h // 2 :, w // 2 :]
+    fs122 = img[:, :, : z // 2, h // 2 :, : w // 2]
+    fs212 = img[:, :, : z // 2, : h // 2, w // 2 :]
+    fs222 = img[:, :, : z // 2, : h // 2, : w // 2]
+    output1 = torch.cat([torch.cat([fs111, fs211], dim=3), torch.cat([fs121, fs221], dim=3)], dim=4)
+    output2 = torch.cat([torch.cat([fs112, fs212], dim=3), torch.cat([fs122, fs222], dim=3)], dim=4)
+    return torch.cat([output1, output2], dim=2)
+
+
 class RCAB(nn.Module):
-    def __init__(self, size_psc=128):  # size_psc：crop_size input_shape：depth
+    def __init__(self, size_psc=128, conv=nn.Conv2d):  # size_psc：crop_size input_shape：depth
         super().__init__()
         self.size_psc = size_psc
-        self.conv_gelu1 = nn.Sequential(nn.Conv2d(64, 64, kernel_size=3, stride=1, padding="same"), nn.GELU())
-        self.conv_gelu2 = nn.Sequential(nn.Conv2d(64, 64, kernel_size=3, stride=1, padding="same"), nn.GELU())
-        self.conv_relu1 = nn.Sequential(nn.Conv2d(64, 64, kernel_size=3, stride=1, padding="same"), nn.ReLU())
-        self.avg_pool = nn.AdaptiveAvgPool2d(1)
-        self.conv_relu2 = nn.Sequential(nn.Conv2d(64, 4, kernel_size=1, stride=1, padding=0), nn.ReLU())
-        self.conv_sigmoid = nn.Sequential(nn.Conv2d(4, 64, kernel_size=1, stride=1, padding=0), nn.Sigmoid())
+        self.conv_gelu1 = nn.Sequential(conv(64, 64, kernel_size=3, stride=1, padding="same"), nn.GELU())
+        self.conv_gelu2 = nn.Sequential(conv(64, 64, kernel_size=3, stride=1, padding="same"), nn.GELU())
+        self.conv_relu1 = nn.Sequential(conv(64, 64, kernel_size=3, stride=1, padding="same"), nn.ReLU())
+        self.avg_pool = nn.AdaptiveAvgPool2d(1) if conv == nn.Conv2d else nn.AdaptiveAvgPool3d(1)
+        self.conv_relu2 = nn.Sequential(conv(64, 4, kernel_size=1, stride=1, padding=0), nn.ReLU())
+        self.conv_sigmoid = nn.Sequential(conv(4, 64, kernel_size=1, stride=1, padding=0), nn.Sigmoid())
+        self.fftshiffunc = fftshift2d if conv == nn.Conv2d else fftshift3d
 
     def forward(self, x, gamma=0.8):
         x0 = x.to(torch.float32)
@@ -33,7 +49,7 @@ class RCAB(nn.Module):
         x1 = x.to(torch.float32)
         x = torch.fft.fftn(x.to(torch.float32), dim=(2, 3))
         x = torch.pow(torch.abs(x) + 1e-8, gamma)  # abs
-        x = fftshift2d(x, self.size_psc)
+        x = self.fftshiffunc(x, self.size_psc)
         x = self.conv_relu1(x)
         x = self.avg_pool(x)
         x = self.conv_relu2(x)
@@ -44,11 +60,11 @@ class RCAB(nn.Module):
 
 
 class ResGroup(nn.Module):
-    def __init__(self, n_RCAB=4, size_psc=128):  # size_psc：crop_size input_shape：depth
+    def __init__(self, n_RCAB=4, size_psc=128, conv=nn.Conv2d):
         super().__init__()
         RCABs = []
         for _ in range(n_RCAB):
-            RCABs.append(RCAB(size_psc))
+            RCABs.append(RCAB(size_psc, conv=conv))
         self.RCABs = nn.Sequential(*RCABs)
 
     def forward(self, x):
@@ -72,21 +88,23 @@ class DFCAN(nn.Module):
             scale = scale[0]
         self.ndim = ndim
         size_psc = input_shape[0]
+        conv = nn.Conv3d if self.ndim == 3 else nn.Conv2d
+
         self.input = nn.Sequential(
-            nn.Conv2d(input_shape[-1], 64, kernel_size=3, stride=1, padding="same"),
+            conv(input_shape[-1], 64, kernel_size=3, stride=1, padding="same"),
             nn.GELU(),
         )
         ResGroups = []
         for _ in range(n_ResGroup):
-            ResGroups.append(ResGroup(n_RCAB=n_RCAB, size_psc=size_psc))
+            ResGroups.append(ResGroup(n_RCAB=n_RCAB, size_psc=size_psc, conv=conv))
         self.RGs = nn.Sequential(*ResGroups)
         self.conv_gelu = nn.Sequential(
-            nn.Conv2d(64, 64 * (scale**2), kernel_size=3, stride=1, padding="same"),
+            conv(64, 64 * (scale**2), kernel_size=3, stride=1, padding="same"),
             nn.GELU(),
         )
         self.pixel_shuffle = nn.PixelShuffle(scale)
         self.conv_sigmoid = nn.Sequential(
-            nn.Conv2d(64, input_shape[-1], kernel_size=3, stride=1, padding="same"),
+            conv(64, input_shape[-1], kernel_size=3, stride=1, padding="same"),
             nn.Sigmoid(),
         )
 

@@ -8,6 +8,7 @@ from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
 from torchmetrics.image.fid import FrechetInceptionDistance
 from torchmetrics.image.inception import InceptionScore
 
+from biapy.engine.metrics import SSIM_loss
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.utils.misc import to_pytorch_format, to_numpy_format
 from biapy.data.pre_processing import undo_sample_normalization
@@ -165,7 +166,8 @@ class Image_to_Image_Workflow(Base_Workflow):
             self.loss = torch.nn.MSELoss().to(self.device)
         elif self.cfg.LOSS.TYPE == "MAE":
             self.loss = torch.nn.L1Loss().to(self.device)
-
+        elif self.cfg.LOSS.TYPE == "SSIM":
+            self.loss = SSIM_loss(data_range=1, device=self.device)
         super().define_metrics()
 
     def metric_calculation(self, output, targets, train=True, metric_logger=None):

@@ -934,7 +934,14 @@ def detection_metrics(
         }
     return r_dict, df, df_fp
 
-
+class SSIM_loss(torch.nn.Module):
+    def __init__(self, data_range, device):
+        super(SSIM_loss, self).__init__()
+        self.ssim = StructuralSimilarityIndexMeasure(data_range=data_range).to(device, non_blocking=True)
+    
+    def forward(self, input, target):
+        return 1 - self.ssim(input, target)
+    
 ## Loss function definition used in the paper from nature methods:
 ### [Chang Qiao](https://github.com/qc17-THU/DL-SR/tree/main/src) (MIT license).
 class dfcan_loss(torch.nn.Module):
