@@ -656,7 +656,10 @@ class Base_Workflow(metaclass=ABCMeta):
 
         self.model_without_ddp = self.model
         if self.args.distributed:
-            find_unused_parameters = True if self.cfg.MODEL.ARCHITECTURE.lower() == "unetr" else False
+            if self.cfg.MODEL.ARCHITECTURE.lower() in ["unetr", "resunet_se"]:
+                find_unused_parameters = True  
+            else:
+                find_unused_parameters = False
             self.model = torch.nn.parallel.DistributedDataParallel(
                 self.model,
                 device_ids=[self.args.gpu],
