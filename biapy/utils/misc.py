@@ -13,6 +13,7 @@ from pathlib import Path
 from yacs.config import CfgNode
 from functools import partial
 import collections.abc
+import gc 
 
 # from torch._six import inf
 from torch import inf
@@ -130,6 +131,12 @@ def init_devices(args, cfg):
             rank=args.rank,
             timeout=timedelta(seconds=timeout_ms),
         )
+    else:
+        # If it was initialized means that something may have been running in the past so here 
+        # we are trying to clean all the cache as much as possible
+        torch.cuda.empty_cache() 
+        gc.collect()
+
     dist.barrier()
     setup_for_distributed(args.rank == 0)
     if args.rank == 0:
