@@ -111,6 +111,7 @@ def create_environment_file_for_model(building_dir):
             "python=3.10",
             "pytorch=2.4.0",
             "torchvision=0.19.0",
+            "torchmetrics[image]=1.4",
             "timm",
             "pip",
             {
