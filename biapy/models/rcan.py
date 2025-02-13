@@ -2,13 +2,19 @@ from torch import nn
 
 
 class ChannelAttention(nn.Module):
-    def __init__(self, num_features, reduction):
+    def __init__(self, num_features, reduction, ndim=2):
         super(ChannelAttention, self).__init__()
+        if ndim == 2:
+            conv = nn.Conv2d
+            avg_pool = nn.AdaptiveAvgPool2d
+        else:
+            conv = nn.Conv3d
+            avg_pool = nn.AdaptiveAvgPool3d
         self.module = nn.Sequential(
-            nn.AdaptiveAvgPool2d(1),
-            nn.Conv2d(num_features, num_features // reduction, kernel_size=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(num_features // reduction, num_features, kernel_size=1),
+            avg_pool(1),
+            conv(num_features, num_features // reduction, kernel_size=1),
+            nn.SiLU(inplace=True),
+            conv(num_features // reduction, num_features, kernel_size=1),
             nn.Sigmoid(),
         )
 
@@ -17,13 +23,18 @@ class ChannelAttention(nn.Module):
 
 
 class RCAB(nn.Module):
-    def __init__(self, num_features, reduction):
+    def __init__(self, num_features, reduction, ndim=2):
         super(RCAB, self).__init__()
+        if ndim == 2:
+            conv = nn.Conv2d
+        else:
+            conv = nn.Conv3d
+            
         self.module = nn.Sequential(
-            nn.Conv2d(num_features, num_features, kernel_size=3, padding="same"),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(num_features, num_features, kernel_size=3, padding="same"),
-            ChannelAttention(num_features, reduction),
+            conv(num_features, num_features, kernel_size=3, padding="same"),
+            nn.SiLU(inplace=True),
+            conv(num_features, num_features, kernel_size=3, padding="same"),
+            ChannelAttention(num_features, reduction, ndim=ndim),
         )
 
     def forward(self, x):
@@ -31,10 +42,16 @@ class RCAB(nn.Module):
 
 
 class RG(nn.Module):
-    def __init__(self, num_features, num_rcab, reduction):
+    def __init__(self, num_features, num_rcab, reduction, ndim=2):
         super(RG, self).__init__()
-        self.module = [RCAB(num_features, reduction) for _ in range(num_rcab)]
-        self.module.append(nn.Conv2d(num_features, num_features, kernel_size=3, padding="same"))
+        if ndim == 2:
+            conv = nn.Conv2d
+            avg_pool = nn.AdaptiveAvgPool2d
+        else:
+            conv = nn.Conv3d
+            avg_pool = nn.AdaptiveAvgPool3d
+        self.module = [RCAB(num_features, reduction, ndim=ndim) for _ in range(num_rcab)]
+        self.module.append(conv(num_features, num_features, kernel_size=3, padding="same"))
         self.module = nn.Sequential(*self.module)
 
     def forward(self, x):
@@ -65,14 +82,18 @@ class rcan(nn.Module):
         if type(scale) is tuple:
             scale = scale[0]
         self.ndim = ndim
-        self.sf = nn.Conv2d(num_channels, filters, kernel_size=3, padding="same")
-        self.rgs = nn.Sequential(*[RG(filters, num_rcab, reduction) for _ in range(num_rg)])
-        self.conv1 = nn.Conv2d(filters, filters, kernel_size=3, padding="same")
+        if ndim == 2:
+            conv = nn.Conv2d
+        else:
+            conv = nn.Conv3d
+        self.sf = conv(num_channels, filters, kernel_size=3, padding="same")
+        self.rgs = nn.Sequential(*[RG(filters, num_rcab, reduction, ndim=ndim) for _ in range(num_rg)])
+        self.conv1 = conv(filters, filters, kernel_size=3, padding="same")
         self.upscale = nn.Sequential(
-            nn.Conv2d(filters, filters * (scale**2), kernel_size=3, padding="same"),
+            conv(filters, filters * (scale**2), kernel_size=3, padding="same"),
             nn.PixelShuffle(scale),
         )
-        self.conv2 = nn.Conv2d(filters, num_channels, kernel_size=3, padding="same")
+        self.conv2 = conv(filters, num_channels, kernel_size=3, padding="same")
 
     def forward(self, x):
         x = self.sf(x)

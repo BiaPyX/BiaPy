@@ -1379,6 +1379,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "unext_v1",
                 "unext_v2",
                 "dfcan",
+                "rcan",
             ]
             and cfg.PROBLEM.NDIM == "3D"
             and cfg.PROBLEM.TYPE != "CLASSIFICATION"
@@ -1399,6 +1400,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                         "unext_v1",
                         "unext_v2",
                         "dfcan",
+                        "rcan",
                     ]
                 )
             )
