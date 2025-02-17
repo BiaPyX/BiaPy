@@ -334,6 +334,7 @@ def load_and_prepare_train_data(
         ids = sorted(next(os.walk(train_path))[2])
         fids = sorted(next(os.walk(train_path))[1])
 
+        print("Gathering raw images for training data . . .")
         if len(ids) == 0 or (len(ids) > 0 and any(ids[0].endswith(x) for x in [".h5", ".hdf5", ".hdf"])):  # Zarr
             if len(ids) == 0 and len(fids) == 0:  # Trying Zarr
                 raise ValueError("No images found in dir {}".format(train_path))
@@ -371,6 +372,7 @@ def load_and_prepare_train_data(
 
         # Extract a list of all training gt images
         if train_mask_path is not None:
+            print("Gathering labels for training data . . .")
             ids = sorted(next(os.walk(train_mask_path))[2])
             fids = sorted(next(os.walk(train_mask_path))[1])
             if len(ids) == 0 or (len(ids) > 0 and any(ids[0].endswith(x) for x in [".h5", ".hdf5", ".hdf"])):  # Zarr
@@ -420,6 +422,7 @@ def load_and_prepare_train_data(
         if train_mask_path is None:
             raise ValueError("Implementation error. Contact BiaPy team")
 
+        print("Gathering raw and label images train information . . .")
         X_train, Y_train = samples_from_image_list_multiple_raw_one_gt(
             data_path=train_path,
             gt_path=train_mask_path,
@@ -436,6 +439,7 @@ def load_and_prepare_train_data(
 
     # Check that the shape of all images match
     if train_mask_path is not None:
+        print("Checking training raw and label images' shapes . . .")
         if not multiple_raw_images and len(X_train) != len(Y_train):
             mistmatch_message = shape_mismatch_message(X_train, Y_train)
             m = (
@@ -489,6 +493,7 @@ def load_and_prepare_train_data(
 
     val_using_zarr = False
     if create_val_from_train:
+        print("Creating validation data from train . . .")
         # Create IDs based on images or samples, depending if we are working with Zarr images or not. This is required to
         # create the validation data
         x_train_files = list(set([os.path.join(x["dir"], x["filename"]) for x in X_train]))
@@ -586,6 +591,7 @@ def load_and_prepare_train_data(
                 Y_train = [x for x in Y_train if os.path.join(x["dir"], x["filename"]) in y_train_files]
     else:
         if not multiple_raw_images:
+            print("Gathering raw images for validation data . . .")
             # Extract a list of all validation images
             val_ids = sorted(next(os.walk(val_path))[2])
             val_fids = sorted(next(os.walk(val_path))[1])
@@ -626,6 +632,7 @@ def load_and_prepare_train_data(
 
             # Extract a list of all validation gt images
             if val_mask_path is not None:
+                print("Gathering labels for validation data . . .")
                 val_ids = sorted(next(os.walk(val_mask_path))[2])
                 val_fids = sorted(next(os.walk(val_mask_path))[1])
                 if len(val_ids) == 0:
@@ -679,6 +686,7 @@ def load_and_prepare_train_data(
             if val_mask_path is None:
                 raise ValueError("Implementation error. Contact BiaPy team")
 
+            print("Gathering raw and label images for validation data . . .")
             X_val, Y_val = samples_from_image_list_multiple_raw_one_gt(
                 data_path=val_path,
                 gt_path=val_mask_path,
@@ -695,7 +703,7 @@ def load_and_prepare_train_data(
 
         # Check that the shape of all images match
         if val_mask_path is not None:
-            gt_id = 0
+            print("Checking validation raw and label images' shapes . . .")
             for i in range(len(X_val)):
                 xshape = X_val[i]["shape"]
                 if "gt_associated_id" in X_val[i]:
