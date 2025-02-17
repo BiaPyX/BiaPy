@@ -100,12 +100,13 @@ class Image_to_Image_Workflow(Base_Workflow):
         self.loss : Function
             Loss function used during training and test.
         """
+        data_range = (0,1) if self.cfg.DATA.NORMALIZATION.TYPE in ["div", "scale_range"] else None
         self.train_metrics = []
         self.train_metric_names = []
         self.train_metric_best = []
         for metric in list(set(self.cfg.TRAIN.METRICS)):
             if metric == "psnr":
-                self.train_metrics.append(PeakSignalNoiseRatio().to(self.device))
+                self.train_metrics.append(PeakSignalNoiseRatio(data_range=data_range).to(self.device))
                 self.train_metric_names.append("PSNR")
                 self.train_metric_best.append("max")
             elif metric == "mse":
@@ -117,7 +118,7 @@ class Image_to_Image_Workflow(Base_Workflow):
                 self.train_metric_names.append("MAE")
                 self.train_metric_best.append("min")
             elif metric == "ssim":
-                self.train_metrics.append(StructuralSimilarityIndexMeasure().to(self.device))
+                self.train_metrics.append(StructuralSimilarityIndexMeasure(data_range=data_range).to(self.device))
                 self.train_metric_names.append("SSIM")
                 self.train_metric_best.append("max")
             elif metric == "fid":
@@ -139,7 +140,7 @@ class Image_to_Image_Workflow(Base_Workflow):
         self.test_metric_names = []
         for metric in list(set(self.cfg.TEST.METRICS)):
             if metric == "psnr":
-                self.test_metrics.append(PeakSignalNoiseRatio().to(self.device))
+                self.test_metrics.append(PeakSignalNoiseRatio(data_range=data_range).to(self.device))
                 self.test_metric_names.append("PSNR")
             elif metric == "mse":
                 self.test_metrics.append(MeanSquaredError().to(self.device))
@@ -148,7 +149,7 @@ class Image_to_Image_Workflow(Base_Workflow):
                 self.test_metrics.append(MeanAbsoluteError().to(self.device))
                 self.test_metric_names.append("MAE")
             elif metric == "ssim":
-                self.test_metrics.append(StructuralSimilarityIndexMeasure().to(self.device))
+                self.test_metrics.append(StructuralSimilarityIndexMeasure(data_range=data_range).to(self.device))
                 self.test_metric_names.append("SSIM")
             elif metric == "fid":
                 self.test_metrics.append(FrechetInceptionDistance(normalize=True).to(self.device))
@@ -167,7 +168,7 @@ class Image_to_Image_Workflow(Base_Workflow):
         elif self.cfg.LOSS.TYPE == "MAE":
             self.loss = torch.nn.L1Loss().to(self.device)
         elif self.cfg.LOSS.TYPE == "SSIM":
-            self.loss = SSIM_loss(data_range=1, device=self.device)
+            self.loss = SSIM_loss(data_range=data_range, device=self.device)
         super().define_metrics()
 
     def metric_calculation(self, output, targets, train=True, metric_logger=None):
