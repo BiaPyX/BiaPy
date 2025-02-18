@@ -222,6 +222,9 @@ class Super_resolution_Workflow(Base_Workflow):
                     if self.cfg.DATA.NORMALIZATION.TYPE not in ["div", "scale_range"]:
                         norm_output = (output - torch.min(output)) / (torch.max(output) - torch.min(output) + 1e-8)
                         norm_targets = (targets - torch.min(targets)) / (torch.max(targets) - torch.min(targets) + 1e-8)
+                    else:
+                        norm_output = output
+                        norm_targets = targets
                     norm_output *= 255
                     norm_targets *= 255
                     val = metric(norm_output, norm_targets)
@@ -230,6 +233,9 @@ class Super_resolution_Workflow(Base_Workflow):
                     if self.cfg.DATA.NORMALIZATION.TYPE not in ["div", "scale_range"]:
                         norm_output = (output - torch.min(output)) / (torch.max(output) - torch.min(output) + 1e-8)
                         norm_targets = (targets - torch.min(targets)) / (torch.max(targets) - torch.min(targets) + 1e-8)
+                    else:
+                        norm_output = output
+                        norm_targets = targets
                     norm_3c_output = torch.cat([norm_output, norm_output, norm_output], dim=1)
                     norm_3c_targets = torch.cat([norm_targets, norm_targets, norm_targets], dim=1)
                     if m_name == "fid":
