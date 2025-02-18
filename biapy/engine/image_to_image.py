@@ -26,6 +26,7 @@ from biapy.data.data_3D_manipulation import (
 )
 from biapy.data.data_manipulation import save_tif
 
+
 class Image_to_Image_Workflow(Base_Workflow):
     """
     Image to image workflow where the goal is ..
@@ -62,9 +63,9 @@ class Image_to_Image_Workflow(Base_Workflow):
 
         self.multihead : List of str
             Names of the metrics calculated during training.
-        
+
         self.activations : List of dicts
-            Activations to be applied to the model output. Each dict will 
+            Activations to be applied to the model output. Each dict will
             match an output channel of the model. If ':' is used the activation
             will be applied to all channels at once. "Linear" and "CE_Sigmoid"
             will not be applied. E.g. [{":": "Linear"}].
@@ -73,7 +74,7 @@ class Image_to_Image_Workflow(Base_Workflow):
             "type": "image",
             "channels": [self.cfg.DATA.PATCH_SIZE[-1]],
         }
-        self.multihead = False 
+        self.multihead = False
         self.activations = [{":": "Linear"}]
 
         super().define_activations_and_channels()
@@ -100,7 +101,7 @@ class Image_to_Image_Workflow(Base_Workflow):
         self.loss : Function
             Loss function used during training and test.
         """
-        data_range = (0,1) if self.cfg.DATA.NORMALIZATION.TYPE in ["div", "scale_range"] else None
+        data_range = (0, 1) if self.cfg.DATA.NORMALIZATION.TYPE in ["div", "scale_range"] else None
         self.train_metrics = []
         self.train_metric_names = []
         self.train_metric_best = []
@@ -200,6 +201,10 @@ class Image_to_Image_Workflow(Base_Workflow):
 
         with torch.no_grad():
             for i, metric in enumerate(list_to_use):
+                if self.cfg.DATA.NORMALIZATION.TYPE in ["div", "scale_range"]:
+                    output = torch.clamp(output, min=0, max=1)
+                    targets = torch.clamp(targets, min=0, max=1)
+
                 m_name = list_names_to_use[i].lower()
                 if m_name in ["mse", "mae"]:
                     val = metric(output, targets)
@@ -207,15 +212,17 @@ class Image_to_Image_Workflow(Base_Workflow):
                     val = metric(output.to(torch.float32), targets.to(torch.float32))
                 elif m_name == "psnr":
                     # Normalize values to be between 0-255 range so PSNR value its more meaningful
-                    norm_output = ((output - torch.min(output)) / (torch.max(output) - torch.min(output) + 1e-8)) * 255
-                    norm_targets = (
-                        (targets - torch.min(targets)) / (torch.max(targets) - torch.min(targets) + 1e-8)
-                    ) * 255
+                    if self.cfg.DATA.NORMALIZATION.TYPE not in ["div", "scale_range"]:
+                        norm_output = (output - torch.min(output)) / (torch.max(output) - torch.min(output) + 1e-8)
+                        norm_targets = (targets - torch.min(targets)) / (torch.max(targets) - torch.min(targets) + 1e-8)
+                    norm_output *= 255
+                    norm_targets *= 255
                     val = metric(norm_output, norm_targets)
                 elif m_name in ["is", "lpips", "fid"]:
                     # These metrics need to have normalized (between 0 and 1) images with 3 channels
-                    norm_output = (output - torch.min(output)) / (torch.max(output) - torch.min(output) + 1e-8)
-                    norm_targets = (targets - torch.min(targets)) / (torch.max(targets) - torch.min(targets) + 1e-8)
+                    if self.cfg.DATA.NORMALIZATION.TYPE not in ["div", "scale_range"]:
+                        norm_output = (output - torch.min(output)) / (torch.max(output) - torch.min(output) + 1e-8)
+                        norm_targets = (targets - torch.min(targets)) / (torch.max(targets) - torch.min(targets) + 1e-8)
                     norm_3c_output = torch.cat([norm_output, norm_output, norm_output], dim=1)
                     norm_3c_targets = torch.cat([norm_targets, norm_targets, norm_targets], dim=1)
                     if m_name == "fid":
@@ -240,8 +247,8 @@ class Image_to_Image_Workflow(Base_Workflow):
         """
         Function to process a sample in the inference phase.
         """
-        # Skip processing image 
-        if "discard" in self.current_sample["X"] and self.current_sample["X"]["discard"]: 
+        # Skip processing image
+        if "discard" in self.current_sample["X"] and self.current_sample["X"]["discard"]:
             return True
 
         # Save BMZ input/output so the user could export the model to BMZ later
@@ -409,10 +416,7 @@ class Image_to_Image_Workflow(Base_Workflow):
                         ]
 
         # Undo normalization
-        pred = undo_sample_normalization(
-            pred, 
-            self.current_sample["X_norm"]
-        )
+        pred = undo_sample_normalization(pred, self.current_sample["X_norm"])
 
         # Save image
         if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
