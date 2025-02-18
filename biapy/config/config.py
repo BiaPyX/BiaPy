@@ -967,6 +967,18 @@ class Config:
         # Specific for SR models based on U-Net architectures. Options are ["pre", "post"]
         _C.MODEL.UNET_SR_UPSAMPLE_POSITION = "pre"
 
+        # RCAN
+        # Number of RG modules
+        _C.MODEL.RCAN_RG_BLOCK_NUM = 10
+        # Number of RCAB modules in each RG block
+        _C.MODEL.RCAN_RCAB_BLOCK_NUM = 20
+        # Filters in the convolutions
+        _C.MODEL.RCAN_CONV_FILTERS = 16
+        # Channel reduction ratio for channel attention
+        _C.MODEL.RCAN_REDUCTION_RATIO = 16
+        # Whether to maintain or not the upscaling layer. 
+        _C.MODEL.RCAN_UPSCALING_LAYER = True
+
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Loss
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

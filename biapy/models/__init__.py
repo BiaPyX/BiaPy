@@ -214,9 +214,13 @@ def build_model(cfg, output_channels, device):
                 scale = scale[0]
             args = dict(
                 ndim=ndim,
-                filters=16,
+                filters=cfg.MODEL.RCAN_CONV_FILTERS,
                 scale=scale,
+                num_rg=cfg.MODEL.RCAN_RG_BLOCK_NUM,
+                num_rcab=cfg.MODEL.RCAN_RCAB_BLOCK_NUM,
+                reduction=cfg.MODEL.RCAN_REDUCTION_RATIO,
                 num_channels=cfg.DATA.PATCH_SIZE[-1],
+                upscaling_layer=cfg.MODEL.RCAN_UPSCALING_LAYER,
             )
             model = rcan(**args)
             callable_model = rcan
