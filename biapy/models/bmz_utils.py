@@ -117,6 +117,7 @@ def create_environment_file_for_model(building_dir):
             {
                 "pip": [
                     "biapy=={}".format(biapy.__version__),
+                    "pytorch_msssim",
                 ]
             },
         ],
