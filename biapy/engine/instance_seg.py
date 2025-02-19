@@ -147,7 +147,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         }
         if self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
             if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "C":
-                self.activations = {"0": "Linear"}
+                self.activations = {"0": "CE_Sigmoid"}
                 self.model_output_channels["channels"] = 1
             if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "Dv2":
                 self.activations = {"0": "Linear"}
