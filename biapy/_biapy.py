@@ -845,8 +845,11 @@ class BiaPy:
                 tags += ["pytorch"]
             if "biapy" not in tags:
                 tags += ["biapy"]
-            tags += [workflow]
-            tags += [self.cfg.MODEL.ARCHITECTURE.lower().replace("_", "-")]
+            if workflow not in tags:
+                tags += [workflow]
+            arch_used = self.cfg.MODEL.ARCHITECTURE.lower().replace("_", "-")
+            if arch_used not in tags:
+                tags += [arch_used]
         else:
             tags = self.workflow.bmz_config["original_bmz_config"].tags
 
