@@ -1792,7 +1792,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                                 raise ValueError(
                                     f"'MODEL.BMZ.EXPORT.CITE' malformed. Cite dictionary available keys are: ['text', 'doi', 'url']. Provided {k}. E.g. {'text': 'Gizmo et al.', 'doi': '10.1002/xyzacab123'}"
                                 )
-            if isinstance(cfg.MODEL.BMZ.EXPORT.DATASET_INFO, list):
+            if not isinstance(cfg.MODEL.BMZ.EXPORT.DATASET_INFO, list):
                 raise ValueError(
                     "'MODEL.BMZ.EXPORT.DATASET_INFO' must be a list with a single dictionary inside. Keys that must be set in that dict are: ['name', 'doi', 'image_modality'] and optionallly 'dataset_id'"
                 )
