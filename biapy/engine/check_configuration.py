@@ -1987,7 +1987,7 @@ def convert_old_model_cfg_to_current_version(old_cfg):
                 else:
                     del old_cfg["TEST"]["DET_TOLERANCE"]
             else:
-                del old_cfg["TEST"]["DET_MIN_TH_TO_BE_PEAK"]
+                del old_cfg["TEST"]["DET_TOLERANCE"]
 
     if "PROBLEM" in old_cfg:
         ndim = 3 if "NDIM" in old_cfg["PROBLEM"] and old_cfg["PROBLEM"]["NDIM"] == "3D" else 2
