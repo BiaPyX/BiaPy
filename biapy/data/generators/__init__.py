@@ -29,6 +29,7 @@ def create_train_val_augmentors(
     global_rank: int,
     Y_train: List | None = None,
     Y_val: List | None = None,
+    norm_dict= None,
 ) -> Tuple[DataLoader, DataLoader, Dict, int]:
     """
     Create training and validation generators.
@@ -129,24 +130,6 @@ def create_train_val_augmentors(
                 cfg.DATA.W_BACKGROUND,
                 save_dir=cfg.PATHS.PROB_MAP_DIR,
             )
-
-    # Normalization checks
-    norm_dict = {}
-    norm_dict["type"] = cfg.DATA.NORMALIZATION.TYPE
-    norm_dict["mask_norm"] = "as_mask"
-    norm_dict["enable"] = True
-
-    # Percentile clipping
-    if cfg.DATA.NORMALIZATION.PERC_CLIP:
-        norm_dict["lower_bound"] = cfg.DATA.NORMALIZATION.PERC_LOWER
-        norm_dict["upper_bound"] = cfg.DATA.NORMALIZATION.PERC_UPPER
-
-    if cfg.DATA.NORMALIZATION.TYPE == "custom":
-        if cfg.DATA.NORMALIZATION.CUSTOM_MEAN != -1:
-            norm_dict["mean"] = cfg.DATA.NORMALIZATION.CUSTOM_MEAN
-            norm_dict["std"] = cfg.DATA.NORMALIZATION.CUSTOM_STD
-        if "mean" in norm_dict:
-            print("Train/Val normalization: using mean {} and std: {}".format(norm_dict["mean"], norm_dict["std"]))
 
     if cfg.PROBLEM.NDIM == "2D":
         if cfg.PROBLEM.TYPE == "CLASSIFICATION" or (
@@ -311,10 +294,6 @@ def create_train_val_augmentors(
             dic["zflip"] = cfg.AUGMENTOR.ZFLIP
         if cfg.PROBLEM.TYPE == "INSTANCE_SEG":
             dic["instance_problem"] = True
-        elif cfg.PROBLEM.TYPE in ["SELF_SUPERVISED", "SUPER_RESOLUTION"]:
-            norm_dict["mask_norm"] = "as_image"
-        elif cfg.PROBLEM.TYPE == "IMAGE_TO_IMAGE":
-            norm_dict["mask_norm"] = "as_image"
         elif cfg.PROBLEM.TYPE == "DENOISING":
             dic["n2v"] = True
             dic["n2v_perc_pix"] = cfg.PROBLEM.DENOISING.N2V_PERC_PIX
@@ -362,8 +341,6 @@ def create_train_val_augmentors(
         )
         if cfg.PROBLEM.TYPE == "INSTANCE_SEG":
             dic["instance_problem"] = True
-        elif cfg.PROBLEM.TYPE in ["SELF_SUPERVISED", "SUPER_RESOLUTION" "IMAGE_TO_IMAGE"]:
-            norm_dict["mask_norm"] = "as_image"
         elif cfg.PROBLEM.TYPE == "DENOISING":
             dic["n2v"] = True
             dic["n2v_perc_pix"] = cfg.PROBLEM.DENOISING.N2V_PERC_PIX
@@ -458,6 +435,7 @@ def create_test_augmentor(
     cfg: type[Config],
     X_test: Any,
     Y_test: Any,
+    norm_dict=None,
 ) -> Tuple[Union[test_pair_data_generator, test_single_data_generator], Dict]:
     """
     Create test data generator.
@@ -482,30 +460,10 @@ def create_test_augmentor(
     data_norm : dict
         Normalization of the data.
     """
-    norm_dict = {}
-    norm_dict["type"] = cfg.DATA.NORMALIZATION.TYPE
-    norm_dict["mask_norm"] = "as_mask"
-    norm_dict["enable"] = True
-
-    # Percentile clipping
-    if cfg.DATA.NORMALIZATION.PERC_CLIP:
-        norm_dict["lower_bound"] = cfg.DATA.NORMALIZATION.PERC_LOWER
-        norm_dict["upper_bound"] = cfg.DATA.NORMALIZATION.PERC_UPPER
-        norm_dict["clipped"] = X_test is not None
-
-    if cfg.DATA.NORMALIZATION.TYPE == "custom":
-        if cfg.DATA.NORMALIZATION.CUSTOM_MEAN != -1:
-            norm_dict["mean"] = cfg.DATA.NORMALIZATION.CUSTOM_MEAN
-            norm_dict["std"] = cfg.DATA.NORMALIZATION.CUSTOM_STD
-        if "mean" in norm_dict:
-            print("Test normalization: using mean {} and std: {}".format(norm_dict["mean"], norm_dict["std"]))
-
     if cfg.PROBLEM.TYPE == "SELF_SUPERVISED" and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
         provide_Y = False
     else:
         provide_Y = cfg.DATA.TEST.LOAD_GT or cfg.DATA.TEST.USE_VAL_AS_TEST
-    if cfg.PROBLEM.TYPE in ["SUPER_RESOLUTION", "IMAGE_TO_IMAGE", "SELF_SUPERVISED"]:
-        norm_dict["mask_norm"] = "none"
 
     ndim: int = 3 if cfg.PROBLEM.NDIM == "3D" else 2
     dic = dict(

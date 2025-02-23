@@ -296,13 +296,15 @@ class Config:
         # Its three variables (PROPS, VALUES and SIGNS) define a set of conditions to remove the images from the training set. If an image satisfies any of the 
         # conditions, the image won't be used for training.
         #
-        # In PROPS, we define the property to look at to establish the condition. The available properties are: ['foreground', 'mean', 'min', 'max'].
+        # In PROPS, we define the property to look at to establish the condition. The available properties are: ['foreground', 'mean', 'min', 'max', 
+        # 'target_mean', 'target_min', 'target_max', 'diff'].
         #
         #   * 'foreground' is defined as the percentage of pixels/voxels corresponding to the foreground mask. This option is only valid for
         #     SEMANTIC_SEG, INSTANCE_SEG and DETECTION.
         #   * 'mean' is defined as the mean intensity value.
         #   * 'min' is defined as the min intensity value.
         #   * 'max' is defined as the max intensity value.
+        #   * 'diff' is defined as the differences between ground truth and raw images. 
         #
         # With VALUES and SIGNS, we define the specific values and the comparison operators of each property, respectively.
         # The available operators are: ['gt', 'ge', 'lt', 'le'], that corresponds to "greather than" (or ">"), "greather equal" (or ">="), "less than" (or "<"),
@@ -324,7 +326,7 @@ class Config:
         _C.DATA.TRAIN.FILTER_SAMPLES = CN()
         # Whether to enable or not the filtering by properties
         _C.DATA.TRAIN.FILTER_SAMPLES.ENABLE = False
-        # List of lists of properties to apply a filter. Available properties are: ['foreground', 'mean', 'min', 'max']
+        # List of lists of properties to apply a filter. Available properties are: ['foreground', 'mean', 'min', 'max', 'target_mean', 'target_min', 'target_max', 'diff']
         _C.DATA.TRAIN.FILTER_SAMPLES.PROPS = []
         # List of ints/float that represent the values of the properties listed in 'DATA.TRAIN.FILTER_SAMPLES.PROPS'
         # that the images need to satisfy to not be dropped.
@@ -332,6 +334,8 @@ class Config:
         # List of list of signs to do the comparison. Options: ['gt', 'ge', 'lt', 'le'] that corresponds to "greather than", e.g. ">",
         # "greather equal", e.g. ">=", "less than", e.g. "<", and "less equal" e.g. "<=" comparisons.
         _C.DATA.TRAIN.FILTER_SAMPLES.SIGNS = []
+        # Whether to normalize the samples before comparison
+        _C.DATA.TRAIN.FILTER_SAMPLES.NORM_BEFORE = False
 
         # PREPROCESSING
         # Same preprocessing will be applied to all selected datasets
@@ -455,7 +459,8 @@ class Config:
         # The three variables, DATA.TEST.FILTER_SAMPLES.PROPS, DATA.TEST.FILTER_SAMPLES.VALUES and DATA.TEST.FILTER_SAMPLES.SIGNS will compose a 
         # list of conditions to remove the images. They are list of list of conditions. For instance, the conditions can be like this: [['A'], ['B','C']]. 
         # Then, if the image satisfies the first list of conditions, only 'A' in this first case (from ['A'] list), or satisfy 'B' and 'C' (from ['B','C'] list) 
-        # it will be removed from the image. In each sublist all the conditions must be satisfied. Available properties are: ['foreground', 'mean', 'min', 'max'].
+        # it will be removed from the image. In each sublist all the conditions must be satisfied. Available properties are: ['foreground', 'mean', 'min', 'max', 
+        # 'target_mean', 'target_min', 'target_max', 'diff'].
         #
         # Each property descrition:
         #   * 'foreground' is defined as the mask foreground percentage. This option is only valid for SEMANTIC_SEG, INSTANCE_SEG and DETECTION.
@@ -479,7 +484,7 @@ class Config:
         _C.DATA.TEST.FILTER_SAMPLES = CN()
         # Whether to enable or not the filtering by properties
         _C.DATA.TEST.FILTER_SAMPLES.ENABLE = False
-        # List of lists of properties to apply a filter. Available properties are: ['foreground', 'mean', 'min', 'max']
+        # List of lists of properties to apply a filter. Available properties are: ['foreground', 'mean', 'min', 'max', 'target_mean', 'target_min', 'target_max', 'diff']
         _C.DATA.TEST.FILTER_SAMPLES.PROPS = []
         # List of ints/float that represent the values of the properties listed in 'DATA.TEST.FILTER_SAMPLES.PROPS'
         # that the images need to satisfy to not be dropped.
@@ -487,6 +492,8 @@ class Config:
         # List of list of signs to do the comparison. Options: ['gt', 'ge', 'lt', 'le'] that corresponds to "greather than", e.g. ">",
         # "greather equal", e.g. ">=", "less than", e.g. "<", and "less equal" e.g. "<=" comparisons.
         _C.DATA.TEST.FILTER_SAMPLES.SIGNS = []
+        # Whether to normalize the samples before comparison
+        _C.DATA.TEST.FILTER_SAMPLES.NORM_BEFORE = False
 
         # Validation
         _C.DATA.VAL = CN()
@@ -559,7 +566,8 @@ class Config:
         # The three variables, DATA.VAL.FILTER_SAMPLES.PROPS, DATA.VAL.FILTER_SAMPLES.VALUES and DATA.VAL.FILTER_SAMPLES.SIGNS will compose a list of 
         # conditions to remove the images. They are list of list of conditions. For instance, the conditions can be like this: [['A'], ['B','C']]. Then, 
         # if the image satisfies the first list of conditions, only 'A' in this first case (from ['A'] list), or satisfy 'B' and 'C' (from ['B','C'] list) 
-        # it will be removed from the image. In each sublist all the conditions must be satisfied. Available properties are: ['foreground', 'mean', 'min', 'max'].
+        # it will be removed from the image. In each sublist all the conditions must be satisfied. Available properties are: ['foreground', 'mean', 'min', 'max', 
+        # 'target_mean', 'target_min', 'target_max', 'diff'].
         #
         # Each property descrition:
         #   * 'foreground' is defined as the mask foreground percentage. This option is only valid for SEMANTIC_SEG, INSTANCE_SEG and DETECTION.
@@ -583,7 +591,7 @@ class Config:
         _C.DATA.VAL.FILTER_SAMPLES = CN()
         # Whether to enable or not the filtering by properties
         _C.DATA.VAL.FILTER_SAMPLES.ENABLE = False
-        # List of lists of properties to apply a filter. Available properties are: ['foreground', 'mean', 'min', 'max']
+        # List of lists of properties to apply a filter. Available properties are: ['foreground', 'mean', 'min', 'max', 'target_mean', 'target_min', 'target_max', 'diff']
         _C.DATA.VAL.FILTER_SAMPLES.PROPS = []
         # List of ints/float that represent the values of the properties listed in 'DATA.VAL.FILTER_SAMPLES.PROPS'
         # that the images need to satisfy to not be dropped.
@@ -591,6 +599,9 @@ class Config:
         # List of list of signs to do the comparison. Options: ['gt', 'ge', 'lt', 'le'] that corresponds to "greather than", e.g. ">",
         # "greather equal", e.g. ">=", "less than", e.g. "<", and "less equal" e.g. "<=" comparisons.
         _C.DATA.VAL.FILTER_SAMPLES.SIGNS = []
+        # Whether to normalize the samples before comparison
+        _C.DATA.VAL.FILTER_SAMPLES.NORM_BEFORE = False
+
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Data augmentation (DA)
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

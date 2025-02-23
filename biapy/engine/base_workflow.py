@@ -214,6 +214,25 @@ class Base_Workflow(metaclass=ABCMeta):
         # Define metrics
         self.define_metrics()
 
+        # Normalization checks
+        self.norm_dict = {}
+        self.norm_dict["type"] = cfg.DATA.NORMALIZATION.TYPE
+        self.norm_dict["mask_norm"] = "as_mask"
+        self.norm_dict["enable"] = True
+
+        # Percentile clipping
+        if cfg.DATA.NORMALIZATION.PERC_CLIP:
+            self.norm_dict["lower_bound"] = cfg.DATA.NORMALIZATION.PERC_LOWER
+            self.norm_dict["upper_bound"] = cfg.DATA.NORMALIZATION.PERC_UPPER
+
+        if cfg.DATA.NORMALIZATION.TYPE == "custom":
+            if cfg.DATA.NORMALIZATION.CUSTOM_MEAN != -1:
+                self.norm_dict["mean"] = cfg.DATA.NORMALIZATION.CUSTOM_MEAN
+                self.norm_dict["std"] = cfg.DATA.NORMALIZATION.CUSTOM_STD
+            if "mean" in self.norm_dict:
+                print("Train/Val normalization: using mean {} and std: {}".format(self.norm_dict["mean"], self.norm_dict["std"]))
+        self.test_norm_dict = self.norm_dict.copy()
+
     def define_activations_and_channels(self):
         """
         This function must define the following variables:
@@ -405,6 +424,8 @@ class Base_Workflow(metaclass=ABCMeta):
             ),
             random_crops_in_DA=self.cfg.DATA.EXTRACT_RANDOM_PATCH,
             filter_by_entire_image=self.cfg.DATA.FILTER_BY_IMAGE,
+            norm_before_filter=self.cfg.DATA.TRAIN.FILTER_SAMPLES.NORM_BEFORE,
+            norm_dict=self.norm_dict,
             crop_shape=self.cfg.DATA.PATCH_SIZE,
             y_upscaling=self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
             reflect_to_complete_shape=self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE,
@@ -465,6 +486,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 global_rank=self.global_rank,
                 Y_train=self.Y_train,
                 Y_val=self.Y_val,
+                norm_dict=self.norm_dict,
             )
             if self.cfg.DATA.CHECK_GENERATORS and self.cfg.PROBLEM.TYPE != "CLASSIFICATION":
                 check_generator_consistence(
@@ -982,7 +1004,12 @@ class Base_Workflow(metaclass=ABCMeta):
             print("############################")
             print("#  PREPARE TEST GENERATOR  #")
             print("############################")
-            self.test_generator, self.data_norm = create_test_augmentor(self.cfg, self.X_test, self.Y_test)
+            self.test_generator, self.data_norm = create_test_augmentor(
+                self.cfg, 
+                self.X_test, 
+                self.Y_test, 
+                norm_dict=self.test_norm_dict,
+                )
 
     def apply_model_activations(self, pred, training=False):
         """

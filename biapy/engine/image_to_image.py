@@ -54,6 +54,9 @@ class Image_to_Image_Workflow(Base_Workflow):
         self.mask_path = cfg.DATA.TRAIN.GT_PATH
         self.is_y_mask = False
 
+        self.norm_dict["mask_norm"] = "as_image"
+        self.test_norm_dict["mask_norm"] = "none" 
+
     def define_activations_and_channels(self):
         """
         This function must define the following variables:

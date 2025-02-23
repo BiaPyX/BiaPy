@@ -135,10 +135,19 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 ):
                     raise ValueError("Non repeated values are allowed in 'DATA.TRAIN.FILTER_SAMPLES'")
                 for j in range(len(getattr(cfg.DATA, phase).FILTER_SAMPLES.PROPS[i])):
-                    if getattr(cfg.DATA, phase).FILTER_SAMPLES.PROPS[i][j] not in ["foreground", "mean", "min", "max"]:
+                    if getattr(cfg.DATA, phase).FILTER_SAMPLES.PROPS[i][j] not in ["foreground", "mean", "min", "max", "target_mean", "target_min", "target_max", "diff"]:
                         raise ValueError(
-                            "'DATA.TRAIN.FILTER_SAMPLES.PROPS' can only be one among these: ['foreground', 'mean', 'min', 'max']"
+                            "'DATA.TRAIN.FILTER_SAMPLES.PROPS' can only be one among these: ['foreground', 'mean', 'min', 'max', 'target_mean', 'target_min', 'target_max', 'diff']"
                         )
+                    if getattr(cfg.DATA, phase).FILTER_SAMPLES.PROPS[i][j] == "diff":
+                        if cfg.PROBLEM.TYPE == "SUPER_RESOLUTION":
+                            raise ValueError(
+                                "'DATA.TRAIN.FILTER_SAMPLES.PROPS' can not have a 'diff' condition in super-resolution workflow"
+                            )
+                        if phase == "TEST" and not cfg.DATA.TEST.LOAD_GT:
+                            raise ValueError(
+                                "'DATA.TRAIN.FILTER_SAMPLES.PROPS' can not have a 'diff' condition for test data if 'DATA.TEST.LOAD_GT' is False"
+                            )
                     if getattr(cfg.DATA, phase).FILTER_SAMPLES.SIGNS[i][j] not in [
                         "gt",
                         "ge",

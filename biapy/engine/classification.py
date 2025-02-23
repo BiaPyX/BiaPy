@@ -234,6 +234,8 @@ class Classification_Workflow(Base_Workflow):
             reflect_to_complete_shape=self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE,
             convert_to_rgb=self.cfg.DATA.FORCE_RGB,
             is_3d=(self.cfg.PROBLEM.NDIM == "3D"),
+            norm_before_filter=self.cfg.DATA.TRAIN.FILTER_SAMPLES.NORM_BEFORE,
+            norm_dict=self.norm_dict,
         )
         self.Y_train, self.Y_val = None, None
 

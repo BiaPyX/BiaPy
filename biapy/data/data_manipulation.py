@@ -45,6 +45,8 @@ def load_and_prepare_train_data(
     val_filter_vals=None,
     val_filter_signs=None,
     filter_by_entire_image=True,
+    norm_before_filter=False,
+    norm_dict=None,
     random_crops_in_DA=False,
     crop_shape=None,
     y_upscaling=(1, 1),
@@ -483,6 +485,8 @@ def load_and_prepare_train_data(
             train_filter_signs,
             y_filenames=Y_train,
             filter_by_entire_image=filter_by_entire_image if not random_crops_in_DA else True,
+            norm_before_filter=norm_before_filter,
+            norm_dict=norm_dict,
             zarr_data_information=train_zarr_data_information if train_using_zarr else None,
         )
         if train_mask_path is not None:
@@ -744,6 +748,8 @@ def load_and_prepare_train_data(
                 val_filter_signs,
                 y_filenames=Y_val,
                 filter_by_entire_image=filter_by_entire_image if not random_crops_in_DA else True,
+                norm_before_filter=norm_before_filter,
+                norm_dict=norm_dict,
                 zarr_data_information=val_zarr_data_information if val_using_zarr else None,
             )
             if val_mask_path is not None:
@@ -1276,6 +1282,8 @@ def load_and_prepare_train_data_cls(
     val_filter_conds=[],
     val_filter_vals=None,
     val_filter_signs=None,
+    norm_before_filter=False,
+    norm_dict=None,
     crop_shape=None,
     reflect_to_complete_shape=False,
     convert_to_rgb=False,
@@ -1433,6 +1441,8 @@ def load_and_prepare_train_data_cls(
             train_filter_conds,
             train_filter_vals,
             train_filter_signs,
+            norm_before_filter=norm_before_filter,
+            norm_dict=norm_dict,
         )
 
     x_train_ids = np.array(range(0, len(X_train)))
@@ -1484,6 +1494,8 @@ def load_and_prepare_train_data_cls(
                 val_filter_conds,
                 val_filter_vals,
                 val_filter_signs,
+                norm_before_filter=norm_before_filter,
+                norm_dict=norm_dict,
             )
 
         x_val_ids = np.array(range(0, len(X_val)))
@@ -2248,6 +2260,8 @@ def filter_samples_by_properties(
     filter_vals,
     filter_signs,
     filter_by_entire_image=True,
+    norm_before_filter=False,
+    norm_dict=None,
     y_filenames=None,
     zarr_data_information=None,
 ):
@@ -2322,6 +2336,9 @@ def filter_samples_by_properties(
     new_y_filenames : list of dict, optional
         ``y_filenames`` list filtered.
     """
+    if norm_before_filter and norm_dict is None:
+        raise ValueError("'norm_dict' can not be None when 'norm_before_filter' is active")
+
     # Filter samples by properties
     print("Applying filtering to data samples . . .")
 
@@ -2329,8 +2346,12 @@ def filter_samples_by_properties(
     if y_filenames is not None:
         new_y_filenames = []
 
-    foreground_filter_requested = any([True for cond in filter_conds if "foreground" in cond])
-    if foreground_filter_requested:
+    use_Y_data = False
+    for cond in filter_conds:
+        if "foreground" in cond or "diff" in cond or "target_mean" in cond or "target_min" in cond or "target_max" in cond:
+            use_Y_data = True
+
+    if use_Y_data:
         if y_filenames is None:
             raise ValueError("'foreground' condition can not be used for filtering when 'y_filenames' was not provided")
 
@@ -2343,7 +2364,7 @@ def filter_samples_by_properties(
         if filter_by_entire_image:
             images = list(set([os.path.join(x["dir"], x["filename"]) for x in x_filenames]))
             images.sort()
-            if foreground_filter_requested:
+            if use_Y_data:
                 masks = list(set([os.path.join(x["dir"], x["filename"]) for x in y_filenames]))
                 masks.sort()
             print(f"Number of samples before filtering: {len(images)}")
@@ -2357,11 +2378,16 @@ def filter_samples_by_properties(
             img, _ = load_img_data(image_path, is_3d=is_3d)
 
             # Load Y data
-            if foreground_filter_requested:
+            if use_Y_data:
                 mask, _ = load_img_data(masks[n], is_3d=is_3d)
             else:
                 mask = None
 
+            if norm_before_filter:
+                img = norm_X(img, norm_dict)
+                if use_Y_data:
+                    mask = norm_Y(mask, norm_dict)
+                    
             satisfy_conds = sample_satisfy_conds(img, filter_conds, filter_vals, filter_signs, mask=mask)
 
             if not satisfy_conds:
@@ -2395,7 +2421,7 @@ def filter_samples_by_properties(
                 xdata, file = load_img_data(img_path, is_3d=is_3d, data_within_zarr_path=data_within_zarr_path)
 
                 # Load Y data
-                if foreground_filter_requested:
+                if use_Y_data:
                     filepath = os.path.join(y_filenames[n]["dir"], y_filenames[n]["filename"])
                     mask_path = filepath
                     if mfile is not None and isinstance(mfile, h5py.File):
@@ -2409,9 +2435,14 @@ def filter_samples_by_properties(
                 else:
                     ydata, mfile = None, None
 
+                if norm_before_filter:
+                    xdata = norm_X(xdata, norm_dict)
+                    if use_Y_data:
+                        ydata = norm_Y(ydata, norm_dict)
+
             # Capture patches within image/mask
             coords = sample["coords"]
-            if foreground_filter_requested:
+            if use_Y_data:
                 mcoords = y_filenames[n]["coords"]
 
             # Prepare slices to extract the patch
@@ -2440,33 +2471,34 @@ def filter_samples_by_properties(
             else:
                 xdata_ordered_slices = tuple([x for x in xslices if x != slice(None)])
 
-            if is_3d:
-                yslices = (
-                    slice(None),
-                    slice(mcoords["z_start"], mcoords["z_end"]),
-                    slice(mcoords["y_start"], mcoords["y_end"]),
-                    slice(mcoords["x_start"], mcoords["x_end"]),
-                    slice(None),
-                )
-            else:
-                yslices = (
-                    slice(None),
-                    slice(mcoords["y_start"], mcoords["y_end"]),
-                    slice(mcoords["x_start"], mcoords["x_end"]),
-                    slice(None),
-                )
-            if zarr_data_information is not None:
-                ydata_ordered_slices = order_dimensions(
-                    yslices,
-                    input_order="TZYXC",
-                    output_order=zarr_data_information["input_mask_axes"],
-                    default_value=0,
-                )
-            else:
-                ydata_ordered_slices = tuple([x for x in yslices if x != slice(None)])
+            if use_Y_data:
+                if is_3d:
+                    yslices = (
+                        slice(None),
+                        slice(mcoords["z_start"], mcoords["z_end"]),
+                        slice(mcoords["y_start"], mcoords["y_end"]),
+                        slice(mcoords["x_start"], mcoords["x_end"]),
+                        slice(None),
+                    )
+                else:
+                    yslices = (
+                        slice(None),
+                        slice(mcoords["y_start"], mcoords["y_end"]),
+                        slice(mcoords["x_start"], mcoords["x_end"]),
+                        slice(None),
+                    )
+                if zarr_data_information is not None:
+                    ydata_ordered_slices = order_dimensions(
+                        yslices,
+                        input_order="TZYXC",
+                        output_order=zarr_data_information["input_mask_axes"],
+                        default_value=0,
+                    )
+                else:
+                    ydata_ordered_slices = tuple([x for x in yslices if x != slice(None)])
 
             img = xdata[xdata_ordered_slices]
-            if foreground_filter_requested:
+            if use_Y_data:
                 mask = ydata[ydata_ordered_slices]
 
             satisfy_conds = sample_satisfy_conds(img, filter_conds, filter_vals, filter_signs, mask=mask)
@@ -2545,13 +2577,21 @@ def sample_satisfy_conds(img, filter_conds, filter_vals, filter_signs, mask=None
                 if labels[0] == 0:
                     npixels = npixels[1:]
                 value_to_compare = sum(npixels) / total_pixels
-            else:
-                if c == "min":
-                    value_to_compare = img.min()
-                elif c == "max":
-                    value_to_compare = img.max()
-                elif c == "mean":
-                    value_to_compare = img.mean()
+            elif c == "diff":
+                value_to_compare = np.sum(abs(img-mask))
+                
+            elif c == "min":
+                value_to_compare = img.min()
+            elif c == "max":
+                value_to_compare = img.max()
+            elif c == "mean":
+                value_to_compare = img.mean()
+            elif c == "target_min":
+                value_to_compare = mask.min()
+            elif c == "target_max":
+                value_to_compare = mask.max()
+            elif c == "target_mean":
+                value_to_compare = mask.mean()
 
             # Check each list of conditions
             if filter_signs[i][j] == "gt":
@@ -3346,3 +3386,89 @@ def save_npy_files(X, data_dir=None, filenames=None, verbose=True):
             np.save(f, X[i][0])
         else:
             np.save(f, X[i])
+
+def norm_X(img, norm_dict) -> np.ndarray:
+    """
+    X data normalization.
+
+    Parameters
+    ----------
+    img : 3D/4D Numpy array
+        X element, for instance, an image. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
+
+    Returns
+    -------
+    img : 3D/4D Numpy array
+        X element normalized. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
+    """
+    assert norm_dict["type"] in ['div', 'scale_range', 'custom']
+    if norm_dict["type"] == "custom" and norm_dict["mean"] is not None and norm_dict["std"] is None:
+        raise ValueError("norm_dict['std'] must be provided with norm_dict['mean']")
+
+    from biapy.data.pre_processing import zero_mean_unit_variance_normalization, norm_range01, percentile_clip
+
+    # Percentile clipping
+    if "lower_bound" in norm_dict:
+        img, _, _ = percentile_clip(
+            img,
+            lower=norm_dict["lower_bound"],
+            upper=norm_dict["upper_bound"],
+        )
+
+    if norm_dict["type"] == "div":
+        img, _ = norm_range01(img)
+    elif norm_dict["type"] == "scale_range":
+        img, _ = norm_range01(img, div_using_max_and_scale=True)
+    elif norm_dict["type"] == "custom":
+        if norm_dict["mean"] is not None:
+            img = zero_mean_unit_variance_normalization(img, norm_dict["mean"], norm_dict["std"])
+        else:
+            img = zero_mean_unit_variance_normalization(img)
+    return img
+
+def norm_Y(mask, norm_dict) -> np.ndarray:
+    """
+    Y data normalization.
+
+    Parameters
+    ----------
+    mask : 3D/4D Numpy array
+        Y element, for instance, an image's mask. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in
+        ``3D``.
+
+    Returns
+    -------
+    mask : 3D/4D Numpy array
+        Y element normalized. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
+    """
+    assert norm_dict["type"] in ['div', 'scale_range', 'custom']
+    assert norm_dict["mask_norm"] in ['as_mask', 'as_image']
+
+    from biapy.data.pre_processing import zero_mean_unit_variance_normalization, norm_range01, percentile_clip
+
+    if norm_dict["type"] == "custom" and norm_dict["mean"] is not None and norm_dict["std"] is None:
+        raise ValueError("norm_dict['std'] must be provided with norm_dict['mean']")
+        
+    if norm_dict["mask_norm"] == "as_mask":
+        for j in range(channels_to_analize):
+            if channel_info[j]["div"]:
+                mask[..., j] = mask[..., j] / 255
+    elif norm_dict["mask_norm"] == "as_image":
+        # Percentile clipping
+        if "lower_bound" in norm_dict:
+            mask, _, _ = percentile_clip(
+                mask,
+                lower=norm_dict["lower_bound"],
+                upper=norm_dict["upper_bound"],
+            )
+
+        if norm_dict["type"] == "div":
+            mask, _ = norm_range01(mask)
+        elif norm_dict["type"] == "scale_range":
+            mask, _ = norm_range01(mask, div_using_max_and_scale=True)
+        elif norm_dict["type"] == "custom":
+            if norm_dict["mean"] is not None:
+                mask = zero_mean_unit_variance_normalization(mask, norm_dict["mean"], norm_dict["std"])
+            else:
+                mask = zero_mean_unit_variance_normalization(mask)
+    return mask
