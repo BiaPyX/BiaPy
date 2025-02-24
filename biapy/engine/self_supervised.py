@@ -184,7 +184,7 @@ class Self_supervised_Workflow(Base_Workflow):
                 )
                 self.test_metric_names.append("LPIPS")
 
-        if self.cfg.MODEL.ARCHITECTURE == "mae":
+        if self.cfg.MODEL.ARCHITECTURE.lower() == "mae":
             print("Overriding 'LOSS.TYPE' to set it to MSE loss (masking patches)")
             self.loss = self.MaskedAutoencoderViT_loss_wrapper
         else:
@@ -226,8 +226,7 @@ class Self_supervised_Workflow(Base_Workflow):
         out_metrics : dict
             Value of the metrics for the given prediction.
         """
-        # Calculate PSNR
-        if self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
+        if self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK.lower() == "masking":
             _, pred, _ = output
             pred = self.model_without_ddp.unpatchify(pred)
         else:
@@ -240,7 +239,7 @@ class Self_supervised_Workflow(Base_Workflow):
         with torch.no_grad():
             for i, metric in enumerate(list_to_use):
                 if self.cfg.DATA.NORMALIZATION.TYPE in ["div", "scale_range"]:
-                    output = torch.clamp(output, min=0, max=1)
+                    pred = torch.clamp(pred, min=0, max=1)
                     targets = torch.clamp(targets, min=0, max=1)
 
                 m_name = list_names_to_use[i].lower()
@@ -251,10 +250,10 @@ class Self_supervised_Workflow(Base_Workflow):
                 elif m_name == "psnr":
                     # Normalize values to be between 0-255 range so PSNR value its more meaningful
                     if self.cfg.DATA.NORMALIZATION.TYPE not in ["div", "scale_range"]:
-                        norm_output = (output - torch.min(output)) / (torch.max(output) - torch.min(output) + 1e-8)
+                        norm_output = (pred - torch.min(pred)) / (torch.max(pred) - torch.min(pred) + 1e-8)
                         norm_targets = (targets - torch.min(targets)) / (torch.max(targets) - torch.min(targets) + 1e-8)
                     else:
-                        norm_output = output
+                        norm_output = pred
                         norm_targets = targets
                     norm_output *= 255
                     norm_targets *= 255
@@ -262,10 +261,10 @@ class Self_supervised_Workflow(Base_Workflow):
                 elif m_name in ["is", "lpips", "fid"]:
                     # These metrics need to have normalized (between 0 and 1) images with 3 channels
                     if self.cfg.DATA.NORMALIZATION.TYPE not in ["div", "scale_range"]:
-                        norm_output = (output - torch.min(output)) / (torch.max(output) - torch.min(output) + 1e-8)
+                        norm_output = (pred - torch.min(pred)) / (torch.max(pred) - torch.min(pred) + 1e-8)
                         norm_targets = (targets - torch.min(targets)) / (torch.max(targets) - torch.min(targets) + 1e-8)
                     else:
-                        norm_output = output
+                        norm_output = pred
                         norm_targets = targets
                     norm_3c_pred = torch.cat([norm_output, norm_output, norm_output], dim=1)
                     norm_3c_targets = torch.cat([norm_targets, norm_targets, norm_targets], dim=1)
