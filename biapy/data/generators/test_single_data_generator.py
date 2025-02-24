@@ -221,9 +221,6 @@ class test_single_data_generator(Dataset):
                     )
                     sample["reflected_orig_shape"] = reflected_orig_shape
 
-                if self.convert_to_rgb and img.shape[-1] == 1:
-                    img = np.repeat(img, 3, axis=-1)
-
                 # Data channel check
                 if self.data_shape[-1] != img.shape[-1]:
                     raise ValueError(
@@ -256,6 +253,9 @@ class test_single_data_generator(Dataset):
                 xnorm["mean"] = img.mean() if "mean" not in self.norm_dict else self.norm_dict["mean"]
                 xnorm["std"] = img.std() if "std" not in self.norm_dict else self.norm_dict["std"]
                 img = zero_mean_unit_variance_normalization(img, xnorm["mean"], xnorm["std"], out_type=self.dtype_str)
+
+        if self.convert_to_rgb and img.shape[-1] == 1:
+            img = np.repeat(img, 3, axis=-1)
 
         img = np.expand_dims(img, 0).astype(self.dtype)
         return img, img_class, xnorm, sample

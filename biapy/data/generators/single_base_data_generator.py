@@ -419,6 +419,9 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 else:
                     img = zero_mean_unit_variance_normalization(img)
 
+        if self.convert_to_rgb and img.shape[-1] == 1:
+            img = np.repeat(img, 3, axis=-1)
+
         return img, img_class
 
     def getitem(self, index: int) -> Tuple[torch.Tensor, int]:

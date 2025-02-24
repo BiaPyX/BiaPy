@@ -1015,6 +1015,12 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         if self.norm_dict["enable"] and not first_load:
             mask = self.norm_Y(mask)
 
+        if self.convert_to_rgb:
+            if img.shape[-1] == 1:
+                img = np.repeat(img, 3, axis=-1)
+            if self.norm_dict["mask_norm"] == "as_image" and mask.shape[-1] == 1:
+                mask = np.repeat(mask, 3, axis=-1)
+
         return img, mask
 
     def norm_X(self, img: np.ndarray) -> np.ndarray:

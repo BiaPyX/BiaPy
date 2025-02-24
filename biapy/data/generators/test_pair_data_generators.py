@@ -406,9 +406,6 @@ class test_pair_data_generator(Dataset):
                         )
                     sample["reflected_orig_shape"] = reflected_orig_shape
 
-                if self.convert_to_rgb and img.shape[-1] == 1:
-                    img = np.repeat(img, 3, axis=-1)
-
                 # Data channel check
                 if self.data_shape[-1] != img.shape[-1]:
                     raise ValueError(
@@ -430,6 +427,12 @@ class test_pair_data_generator(Dataset):
                 mask = np.expand_dims(np.array(mask), 0)
                 if self.norm_dict["mask_norm"] == "as_mask":
                     mask = mask.astype(np.uint8)
+
+        if self.convert_to_rgb:
+            if img.shape[-1] == 1:
+                img = np.repeat(img, 3, axis=-1)
+            if self.norm_dict["mask_norm"] == "as_image" and mask.shape[-1] == 1:
+                mask = np.repeat(mask, 3, axis=-1)
 
         return img, mask, xnorm, ynorm, sample
 
