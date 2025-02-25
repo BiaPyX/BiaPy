@@ -479,6 +479,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         n2v_manipulator="uniform_withCP",
         n2v_neighborhood_radius: int = 5,
         n2v_structMask=np.array([[0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0]]),
+        n2v_load_gt: bool = False,
         norm_dict: Dict | None = None,
         instance_problem: bool = False,
         random_crop_scale: Tuple[int, ...] = (1, 1),
@@ -559,7 +560,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             print("Checking which channel of the mask needs normalization . . .")
             n_samples = min(1000, len(self.X))
             analized = False
-            for i in range(n_samples):
+            for i in tqdm(range(n_samples), total=n_samples):
                 _, mask = self.load_sample(i)
                 # Store which channels are binary or not (e.g. distance transform channel is not binary)
                 if not analized:
@@ -686,6 +687,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             self.get_stratified_coords = get_stratified_coords2D if self.ndim == 2 else get_stratified_coords3D
             self.value_manipulation = get_value_manipulation(n2v_manipulator, n2v_neighborhood_radius)
             self.n2v_structMask = n2v_structMask
+            self.n2v_load_gt = n2v_load_gt
             self.apply_structN2Vmask_func = apply_structN2Vmask if self.ndim == 2 else apply_structN2Vmask3D
 
         if extra_data_factor > 1:
@@ -1142,7 +1144,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         # Prepare mask when denoising with Noise2Void
         if self.n2v:
-            img, mask = self.prepare_n2v(img)
+            img, mask = self.prepare_n2v(img, mask)
 
         # If no normalization was applied, as is done with torchvision models, it can be an image of uint16
         # so we need to convert it to
@@ -1610,7 +1612,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 sample_x[i], sample_y[i] = self.apply_transform(sample_x[i], sample_y[i], e_im=e_img, e_mask=e_mask)
 
             if self.n2v and not self.val:
-                img, mask = self.prepare_n2v(img)
+                img, mask = self.prepare_n2v(img, mask)
                 sample_y[i] = mask
 
             if save_to_dir:
@@ -1649,7 +1651,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                     im[k, j] = [v] * im.shape[-1]
         return im
 
-    def prepare_n2v(self, _img):
+    def prepare_n2v(self, _img, _mask):
         """
         Creates Noise2Void mask.
 
@@ -1657,6 +1659,10 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         ----------
         _img : 3D/4D Numpy array
             Image to wipe some pixels from. E.g. ``(y, x, channels)`` in ``2D`` or ``(z, y, x, channels)`` in ``3D``.
+
+        _mask : 3D/4D Numpy array
+            Mask to use values from. Only used when the ground truth is loaded with ``self.n2v_load_gt``. 
+            E.g. ``(y, x, channels)`` in ``2D`` or ``(z, y, x, channels)`` in ``3D``.
 
         Returns
         -------
@@ -1676,7 +1682,10 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             coords = self.get_stratified_coords(box_size=self.box_size, shape=self.shape)
             indexing = coords + (c,)
             indexing_mask = coords + (c + self.Y_channels,)
-            y_val = img[indexing]
+            if self.n2v_load_gt:
+                y_val = _mask[indexing]
+            else:
+                y_val = img[indexing]
             x_val = self.value_manipulation(img[..., c], coords, self.ndim, self.n2v_structMask)
 
             mask[indexing] = y_val

@@ -302,6 +302,7 @@ def create_train_val_augmentors(
             dic["n2v_structMask"] = (
                 np.array([[0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0]]) if cfg.PROBLEM.DENOISING.N2V_STRUCTMASK else None
             )
+            dic["n2v_load_gt"] = cfg.PROBLEM.DENOISING.LOAD_GT_DATA
 
     print("Initializing train data generator . . .")
     train_generator = f_name(**dic)  # type: ignore

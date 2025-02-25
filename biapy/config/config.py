@@ -160,6 +160,8 @@ class Config:
         # To apply a structured mask as is proposed in Noise2Void to alleviate the limitation of the method of not removing effectively
         # the structured noise (section 4.4 of their paper).
         _C.PROBLEM.DENOISING.N2V_STRUCTMASK = False
+        # Whether to load ground truth data in denoising
+        _C.PROBLEM.DENOISING.LOAD_GT_DATA = False
 
         ### SUPER_RESOLUTION
         _C.PROBLEM.SUPER_RESOLUTION = CN()
