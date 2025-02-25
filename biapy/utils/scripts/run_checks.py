@@ -1970,7 +1970,7 @@ if all_test_info["Test9"]["enable"]:
     biapy_config['DATA']['NORMALIZATION']['TYPE'] = 'custom'
 
     biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(denoising_2d_data_outpath, "data", "train")
-    biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
+    biapy_config['DATA']['TRAIN']['IN_MEMORY'] = False
     biapy_config['DATA']['TEST']['PATH'] = os.path.join(denoising_2d_data_outpath, "data", "test")
     biapy_config['DATA']['TEST']['IN_MEMORY'] = False
 

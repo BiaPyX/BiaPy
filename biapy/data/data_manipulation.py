@@ -595,9 +595,11 @@ def load_and_prepare_train_data(
                 Y_train = [x for x in Y_train if os.path.join(x["dir"], x["filename"]) in y_train_files]
 
             print(f"Raw images chosen for training: {x_train_files}")
-            print(f"Labels chosen for training: {y_train_files}")
+            if train_mask_path is not None:
+                print(f"Labels chosen for training: {y_train_files}")
             print(f"Raw images chosen for validation: {x_val_files}")
-            print(f"Labels chosen for validation: {y_val_files}")
+            if train_mask_path is not None:
+                print(f"Labels chosen for validation: {y_val_files}")
     else:
         if not multiple_raw_images:
             print("Gathering raw images for validation data . . .")
