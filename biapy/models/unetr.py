@@ -296,7 +296,7 @@ class UNETR(nn.Module):
         # UNETR output
         x = self.two_yellow_layers[-1](x)
         class_head_out = torch.empty(())
-        if self.multihead and self.last_class_head is not None:
+        if self.multihead and self.last_class_head:
             class_head_out = self.last_class_head(x)
         x = self.last_block(x)
 

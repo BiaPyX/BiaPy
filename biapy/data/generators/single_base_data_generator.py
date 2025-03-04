@@ -9,17 +9,18 @@ from tqdm import tqdm
 import imgaug as ia
 from imgaug import augmenters as iaa
 from typing import (
-    List,
     Tuple,
     Literal,
     Dict,
 )
+from numpy.typing import NDArray
 
-from biapy.data.pre_processing import zero_mean_unit_variance_normalization, norm_range01, percentile_clip
 from biapy.data.generators.augmentors import *
 from biapy.utils.misc import is_main_process
 from biapy.data.data_manipulation import load_img_data
 from biapy.data.data_3D_manipulation import extract_patch_from_efficient_file
+from biapy.data.dataset import BiaPyDataset
+from biapy.data.norm import Normalization
 
 
 class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
@@ -36,15 +37,11 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
     ndim : int
         Dimensions of the data (``2`` for 2D and ``3`` for 3D).
 
-    X : list of dict
-        X data. Each item in the list represents a sample of the dataset. Each sample is represented as follows:
-            * ``"filename"``: name of the image to extract the data sample from.
-            * ``"dir"``: directory where the image resides.
-            * ``"shape"``: shape of the sample.
-            * ``"class_name"``: name of the class.
-            * ``"class"``: integer that represents the class.
-            * ``"img"`` (optional): image sample itself. It is a ndarrray of  ``(y, x, channels)`` in ``2D`` and
-              ``(z, y, x, channels)`` in ``3D``. Provided if the user selected to load images into memory.
+    X : BiaPyDataset
+        X data.
+
+    norm_module : Normalization
+        Normalization module that defines the normalization steps to apply.
 
     n_classes : int
         Number of classes to predict.
@@ -148,9 +145,6 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
     resize_shape : tuple of ints, optional
         If defined the input samples will be scaled into that shape.
 
-    norm_dict : dict, optional
-        Normalization instructions.
-
     convert_to_rgb : bool, optional
         In case RGB images are expected, e.g. if ``crop_shape`` channel is 3, those images that are grayscale are
         converted into RGB.
@@ -166,7 +160,8 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
     def __init__(
         self,
         ndim: int,
-        X: List,
+        X: BiaPyDataset,
+        norm_module: Normalization,
         n_classes: int = 2,
         seed: int = 0,
         da: bool = True,
@@ -200,26 +195,23 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         drop_range: Tuple[float, float] = (0, 0.2),
         val: bool = False,
         resize_shape: Tuple[int, ...] = (256, 256, 1),
-        norm_dict: Dict | None = None,
         convert_to_rgb: bool = False,
         preprocess_f=None,
         preprocess_cfg=None,
     ):
-        if preprocess_f is not None and preprocess_cfg is None:
+        if preprocess_f and preprocess_cfg is None:
             raise ValueError("'preprocess_cfg' needs to be provided with 'preprocess_f'")
 
-        assert norm_dict != None, "Normalization instructions must be provided with 'norm_dict'"
-        assert norm_dict["mask_norm"] in ["as_mask", "as_image", "none"]
-
-        if len(X[0]["shape"]) != (ndim + 1):
-            raise ValueError("Samples in X must be have {} dimensions. Provided: {}".format(ndim + 1, X[0]["shape"]))
+        sshape = X.sample_list[0].get_shape()
+        if sshape and len(sshape) != ndim:
+            raise ValueError("Samples in X must be have {} dimensions. Provided: {}".format(ndim, sshape))
 
         self.ndim = ndim
         self.z_size = -1
         self.convert_to_rgb = convert_to_rgb
-        self.norm_dict = norm_dict
+        self.norm_module = norm_module
         self.X = X
-        self.length = len(self.X)
+        self.length = len(self.X.sample_list)
         self.shape = resize_shape
         self.random_crop_func = random_3D_crop_single if ndim == 3 else random_crop_single
         self.val = val
@@ -228,23 +220,15 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         # X data analysis
         img, _ = self.load_sample(0, first_load=True)
-        if norm_dict["enable"]:
-            self.norm_dict["orig_dtype"] = img.dtype
-            if norm_dict["type"] in ["div", "scale_range"]:
-                if norm_dict["type"] == "div":
-                    img, nsteps = norm_range01(img)
-                else:
-                    img, nsteps = norm_range01(img, div_using_max_and_scale=True)
-                self.norm_dict.update(nsteps)
-                if resize_shape[-1] != img.shape[-1]:
-                    raise ValueError(
-                        "Channel of the patch size given {} does not correspond with the loaded image {}. "
-                        "Please, check the channels of the images!".format(resize_shape[-1], img.shape[-1])
-                    )
+        if resize_shape[-1] != img.shape[-1]:
+            raise ValueError(
+                "Channel of the patch size given {} does not correspond with the loaded image {}. "
+                "Please, check the channels of the images!".format(resize_shape[-1], img.shape[-1])
+            )
 
-        print("Normalization config used for X: {}".format(self.norm_dict))
+        print("Normalization config used for X: {}".format(self.norm_module))
 
-        self.shape = resize_shape if resize_shape is not None else img.shape
+        self.shape = resize_shape if resize_shape else img.shape
         self.o_indexes = np.arange(self.length)
         self.n_classes = n_classes
         self.da = da
@@ -311,7 +295,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
     @abstractmethod
     def save_aug_samples(
         self,
-        img: np.ndarray,
+        img: NDArray,
         orig_images: Dict,
         i: int,
         pos: int,
@@ -347,7 +331,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         """Defines the number of samples per epoch."""
         return self.length
 
-    def load_sample(self, idx: int, first_load: bool = False) -> Tuple[np.ndarray, int]:
+    def load_sample(self, idx: int, first_load: bool = False) -> Tuple[NDArray, int]:
         """
         Load one data sample given its corresponding index.
 
@@ -367,57 +351,47 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         img_class : int
             Class of the image.
         """
-        sample = self.X[idx]
+        sample = self.X.sample_list[idx]
 
-        if "img" in sample:
-            img = sample["img"].copy()
+        if sample.img_is_loaded():
+            img = sample.img.copy()
         else:
             img, img_file = load_img_data(
-                os.path.join(sample["dir"], sample["filename"]),
+                self.X.dataset_info[sample.fid].path,
                 is_3d=(self.ndim == 3),
-                data_within_zarr_path=sample["path_in_zarr"] if "path_in_zarr" in sample else None,
+                data_within_zarr_path=sample.get_path_in_zarr(),
             )
 
-            if "parallel_data" not in sample:
+            if self.X.dataset_info[sample.fid].is_parallel():
                 # Apply preprocessing
-                if self.preprocess_f is not None:
+                if self.preprocess_f:
                     img = self.preprocess_f(self.preprocess_cfg, x_data=[img], is_2d=(self.ndim == 2))[0]
             else:
-                img = extract_patch_from_efficient_file(img, sample["coords"], data_axis_order=sample["input_axes"])
+                coords = sample.coords
+                data_axis_order = sample.get_input_axes()
+                assert coords
+                assert data_axis_order
+                img = extract_patch_from_efficient_file(img, coords, data_axis_order=data_axis_order)
 
                 # Apply preprocessing after extract sample
-                if "parallel_data" in sample:
-                    if self.preprocess_f is not None:
+                if self.X.dataset_info[sample.fid].is_parallel():
+                    if self.preprocess_f:
                         img = self.preprocess_f(self.preprocess_cfg, x_data=[img], is_2d=(self.ndim == 2))[0]
 
                     if isinstance(img_file, h5py.File):
                         img_file.close()
 
-        img_class = sample["class"] if "class" in sample else 0  # For SSL just put 0 class
+        img_class = sample.get_class_num()
 
         if img.shape[:-1] != self.shape[:-1]:
             img = self.random_crop_func(img, self.shape[:-1], self.val)
             img = resize_img(img, self.shape[:-1])  # type: ignore
 
         # X normalization
-        if self.norm_dict["enable"] and not first_load:
-            # Percentile clipping
-            if "lower_bound" in self.norm_dict:
-                img, _, _ = percentile_clip(
-                    img,
-                    lower=self.norm_dict["lower_bound"],
-                    upper=self.norm_dict["upper_bound"],
-                )
-
-            if self.norm_dict["type"] == "div":
-                img, _ = norm_range01(img)
-            elif self.norm_dict["type"] == "scale_range":
-                img, _ = norm_range01(img, div_using_max_and_scale=True)
-            elif self.norm_dict["type"] == "custom":
-                if "mean" in self.norm_dict:
-                    img = zero_mean_unit_variance_normalization(img, self.norm_dict["mean"], self.norm_dict["std"])
-                else:
-                    img = zero_mean_unit_variance_normalization(img)
+        if not first_load:
+            self.norm_module.set_stats_from_DatasetFile(self.X.dataset_info[sample.fid])
+            img, _ = self.norm_module.apply_image_norm(img)
+            assert isinstance(img, np.ndarray)
 
         if self.convert_to_rgb and img.shape[-1] == 1:
             img = np.repeat(img, 3, axis=-1)
@@ -471,7 +445,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         return img, img_class
 
-    def apply_transform(self, image: np.ndarray) -> np.ndarray:
+    def apply_transform(self, image: NDArray) -> NDArray:
         """
         Transform the input image with one of the selected choices based on a probability.
 
@@ -495,7 +469,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 zoom_range=self.zoom_range,
                 zoom_in_z=self.zoom_in_z,
                 mode=self.affine_mode,
-                mask_type=self.norm_dict["mask_norm"],
+                mask_type=self.norm_module.mask_norm,
             )  # type: ignore
 
         # Apply random rotations
@@ -522,7 +496,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         return image
 
-    def draw_grid(self, im: np.ndarray, grid_width: int | None = None) -> np.ndarray:
+    def draw_grid(self, im: NDArray, grid_width: Optional[int] = None) -> NDArray:
         """
         Draw grid of the specified size on an image.
 
@@ -535,7 +509,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
             Grid's width.
         """
         v = np.max(im)
-        if grid_width is not None:
+        if grid_width:
             grid_y = grid_width
             grid_x = grid_width
         else:
@@ -636,4 +610,4 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         return sample_x
 
     def get_data_normalization(self):
-        return self.norm_dict
+        return self.norm_module

@@ -16,7 +16,15 @@ from skimage.feature import canny
 from skimage.exposure import equalize_adapthist
 from skimage.color import rgb2gray
 from skimage.filters import gaussian, median
+from numpy.typing import NDArray
+from typing import (
+    List,
+    Optional,
+    Dict,
+    Tuple
+)
 
+from biapy.data.dataset import BiaPyDataset
 from biapy.utils.util import (
     seg2aff_pni,
     seg_widen_border,
@@ -35,26 +43,15 @@ from biapy.data.data_manipulation import (
     load_data_from_dir,
     save_tif,
 )
-
-numpy_torch_dtype_dict = {
-    "bool": [torch.bool, bool],
-    "uint8": [torch.uint8, np.uint8],
-    "int8": [torch.int8, np.int8],
-    "int16": [torch.int16, np.int16],
-    "int32": [torch.int32, np.int32],
-    "int64": [torch.int64, np.int64],
-    "float16": [torch.float16, np.float16],
-    "float32": [torch.float32, np.float32],
-    "float64": [torch.float64, np.float64],
-    "complex64": [torch.complex64, np.complex64],
-    "complex128": [torch.complex128, np.complex128],
-}
-
+from biapy.config.config import Config
 
 #########################
 # INSTANCE SEGMENTATION #
 #########################
-def create_instance_channels(cfg, data_type="train"):
+def create_instance_channels(
+    cfg: Config, 
+    data_type: str="train"
+):
     """
     Create training and validation new data with appropiate channels based on ``PROBLEM.INSTANCE_SEG.DATA_CHANNELS``
     for instance segmentation.
@@ -66,11 +63,6 @@ def create_instance_channels(cfg, data_type="train"):
 
     data_type: str, optional
         Wheter to create training or validation instance channels.
-
-    Returns
-    -------
-    filenames: List of str
-        Image paths.
     """
 
     assert data_type in ["train", "val"]
@@ -137,7 +129,7 @@ def create_instance_channels(cfg, data_type="train"):
     print("Creating Y_{} channels . . .".format(data_type))
     # Create the mask patch by patch (Zarr/H5)
     if working_with_zarr_h5_files and isinstance(Y, dict):
-        savepath = data_path + "_" + cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
+        savepath = str(data_path) + "_" + cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
         if cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
             if "C" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
                 savepath += "_" + cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
@@ -216,7 +208,7 @@ def create_instance_channels(cfg, data_type="train"):
                     last_parallel_file = os.path.basename(Y[i]["filepath"])
 
                     # Close last open H5 file
-                    if mask is not None and isinstance(fid_mask, h5py.File):
+                    if mask and isinstance(fid_mask, h5py.File):
                         fid_mask.close()
 
                     if path_to_gt_data:
@@ -246,7 +238,7 @@ def create_instance_channels(cfg, data_type="train"):
                         channel_pos = getattr(cfg.DATA, tag).INPUT_IMG_AXES_ORDER.index("C")
 
                     if any(fname.endswith(x) for x in [".h5", ".hdf5", ".hdf"]):
-                        mask = fid_mask.create_dataset("data", out_data_shape, dtype=dtype_str)
+                        mask = fid_mask.create_dataset("data", shape=out_data_shape, dtype=dtype_str)
                         # mask = fid_mask.create_dataset("data", out_data_shape, compression="lzf", dtype=dtype_str)
                     else:
                         mask = fid_mask.create_dataset("data", shape=out_data_shape, dtype=dtype_str)
@@ -280,13 +272,14 @@ def create_instance_channels(cfg, data_type="train"):
                     output_order=out_data_order,
                     default_value=np.nan,
                 )
+                assert isinstance(transpose_order, np.ndarray)
                 transpose_order = [x for x in transpose_order if not np.isnan(x)]
 
                 # Place the patch into the Zarr
                 mask[data_ordered_slices] = img.transpose(transpose_order)
 
             # Close last open H5 file
-            if mask is not None and isinstance(imgfile, h5py.File):
+            if mask and isinstance(imgfile, h5py.File):
                 imgfile.close()
     else:
         for i in tqdm(range(len(Y)), disable=not is_main_process()):
@@ -344,7 +337,9 @@ def create_instance_channels(cfg, data_type="train"):
                 )
 
 
-def create_test_instance_channels(cfg):
+def create_test_instance_channels(
+    cfg: Config
+):
     """
     Create test new data with appropiate channels based on ``PROBLEM.INSTANCE_SEG.DATA_CHANNELS`` for instance segmentation.
 
@@ -395,7 +390,12 @@ def create_test_instance_channels(cfg):
             )
 
 
-def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
+def labels_into_channels(
+    data_mask: NDArray, 
+    mode: str="BC", 
+    fb_mode: str="outer", 
+    save_dir: Optional[str]=None
+) -> NDArray:
     """
     Converts input semantic or instance segmentation data masks into different binary channels to train an instance segmentation
     problem.
@@ -555,7 +555,7 @@ def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
         elif mode == "Dv2":
             new_mask = np.expand_dims(new_mask[..., 2], -1)
 
-    if save_dir is not None:
+    if save_dir:
         os.makedirs(save_dir, exist_ok=True)
         suffix = []
         if mode == "Dv2":
@@ -590,13 +590,13 @@ def labels_into_channels(data_mask, mode="BC", fb_mode="outer", save_dir=None):
 
 
 def synapse_channel_creation(
-    data_info,
-    zarr_data_information,
-    savepath,
-    mode="BF",
-    postsite_dilation=[2, 4, 4],
-    postsite_distance_channel_dilation=[3, 10, 10],
-    normalize_values=False,
+    data_info: Dict,
+    zarr_data_information: Dict,
+    savepath: str,
+    mode: str="BF",
+    postsite_dilation: List[int]=[2, 4, 4],
+    postsite_distance_channel_dilation: List[int]=[3, 10, 10],
+    normalize_values: bool=False,
 ):
     """
     Creates different channels that represent a synapse segmentation problem to train an instance segmentation
@@ -682,7 +682,7 @@ def synapse_channel_creation(
         # Take all the information within the dataset
         files = []
         file, ids = read_chunked_nested_data(filename, zarr_data_information["id_path"])
-        ids = list(ids)
+        ids = list(np.array(ids))
         files.append(file)
         # file, types = read_chunked_nested_data(filename, cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_TYPES_PATH)
         # files.append(file)
@@ -774,7 +774,7 @@ def synapse_channel_creation(
                 c_axe_pos = zarr_data_information["axis_order"].index("C")
 
             if any(fname.endswith(x) for x in [".h5", ".hdf5", ".hdf"]):
-                mask = fid_mask.create_dataset("data", out_data_shape, dtype=dtype_str)
+                mask = fid_mask.create_dataset("data", shape=out_data_shape, dtype=dtype_str)
                 # mask = fid_mask.create_dataset("data", out_data_shape, compression="lzf", dtype=dtype_str)
             else:
                 mask = fid_mask.create_dataset("data", shape=out_data_shape, dtype=dtype_str)
@@ -823,6 +823,7 @@ def synapse_channel_creation(
                             ),
                         ]
 
+                assert patch_coords
                 patch_coords = [int(x) for x in patch_coords]
                 patch_shape = (
                     patch_coords[1] - patch_coords[0],
@@ -883,6 +884,7 @@ def synapse_channel_creation(
                 )
                 for z in range(len(seeds)):
                     semantic = distance_transform_edt(mask_to_grow[z])
+                    assert isinstance(semantic, np.ndarray)
                     seeds[z] = watershed(-semantic, seeds[z], mask=mask_to_grow[z])
 
                 # Flow channel creation
@@ -919,6 +921,7 @@ def synapse_channel_creation(
                     output_order=out_data_order,
                     default_value=np.nan,
                 )
+                assert isinstance(transpose_order, np.ndarray)
                 transpose_order = [x for x in transpose_order if not np.isnan(x)]
 
                 # Place the patch into the Zarr
@@ -929,7 +932,12 @@ def synapse_channel_creation(
                 fid_mask.close()
 
 
-def create_flow_channels(data, ref_point="center", label_to_pre_site=None, normalize_values=True):
+def create_flow_channels(
+    data: NDArray, 
+    ref_point: str="center", 
+    label_to_pre_site: Optional[Dict]=None, 
+    normalize_values: bool=True
+):
     """
     Obtain the horizontal and vertical distance maps for each instance. Depth distance is also calculated if
     the ``data`` provided is 3D.
@@ -1020,6 +1028,7 @@ def create_flow_channels(data, ref_point="center", label_to_pre_site=None, norma
                     props["centroid-2"][k],
                 ]
         else:  # presynaptic
+            assert label_to_pre_site
             if inst_id not in label_to_pre_site:
                 raise ValueError(f"Label {inst_id} not in 'label_to_pre_site'")
             inst_com = label_to_pre_site[inst_id]
@@ -1116,7 +1125,7 @@ def create_flow_channels(data, ref_point="center", label_to_pre_site=None, norma
 #############
 def generate_ellipse_footprint(
     shape=[1, 1, 1],
-) -> tuple:
+) -> NDArray:
     """
     Generate footprint of an ellipse in a n-dimensional image.
 
@@ -1147,7 +1156,10 @@ def generate_ellipse_footprint(
     return distances.astype(bool)
 
 
-def create_detection_masks(cfg, data_type="train"):
+def create_detection_masks(
+    cfg: Config, 
+    data_type: str="train"
+):
     """
     Create detection masks based on CSV files.
 
@@ -1410,10 +1422,10 @@ def create_detection_masks(cfg, data_type="train"):
                     disable=not is_main_process(),
                 ):
                     _, index, counts = np.unique(
-                        label(clear_border(mask[..., ch])),
+                        label(clear_border(mask[..., ch])),# type: ignore
                         return_counts=True,
                         return_index=True,
-                    )
+                    ) # type: ignore
                     # 0 is background so valid element is 1. We will compare that value with the rest
                     if len(counts) > 1:
                         ref_value = counts[1]
@@ -1464,7 +1476,10 @@ def create_detection_masks(cfg, data_type="train"):
 #######
 # SSL #
 #######
-def create_ssl_source_data_masks(cfg, data_type="train"):
+def create_ssl_source_data_masks(
+    cfg: Config, 
+    data_type: str ="train"
+):
     """
     Create SSL source data.
 
@@ -1502,7 +1517,13 @@ def create_ssl_source_data_masks(cfg, data_type="train"):
             print("Source file {} found".format(os.path.join(img_dir, ids[i])))
 
 
-def crappify(input_img, resizing_factor, add_noise=True, noise_level=None, Down_up=True):
+def crappify(
+    input_img: NDArray, 
+    resizing_factor: float, 
+    add_noise: bool=True, 
+    noise_level: Optional[float]=None, 
+    Down_up: bool=True
+):
     """
     Crappifies input image by adding Gaussian noise and downsampling and upsampling it so the resolution
     gets worsen.
@@ -1549,6 +1570,7 @@ def crappify(input_img, resizing_factor, add_noise=True, noise_level=None, Down_
 
     img = input_img.copy()
     if add_noise:
+        assert noise_level
         img = add_gaussian_noise(img, noise_level)
 
     img = resize(
@@ -1575,7 +1597,10 @@ def crappify(input_img, resizing_factor, add_noise=True, noise_level=None, Down_
     return img.astype(input_img.dtype)
 
 
-def add_gaussian_noise(image, percentage_of_noise):
+def add_gaussian_noise(
+    image: NDArray, 
+    percentage_of_noise: float
+) -> NDArray:
     """
     Adds Gaussian noise to an input image.
 
@@ -1603,7 +1628,13 @@ def add_gaussian_noise(image, percentage_of_noise):
 ################
 # SEMANTIC SEG #
 ################
-def calculate_volume_prob_map(Y, is_3d=False, w_foreground=0.94, w_background=0.06, save_dir=None):
+def calculate_volume_prob_map(
+    Y: BiaPyDataset, 
+    is_3d: bool=False, 
+    w_foreground: float=0.94, 
+    w_background: float=0.06, 
+    save_dir=None
+) -> List[NDArray] | NDArray:
     """
     Calculate the probability map of the given data.
 
@@ -1629,21 +1660,19 @@ def calculate_volume_prob_map(Y, is_3d=False, w_foreground=0.94, w_background=0.
 
     Returns
     -------
-    Array : Str or 4D Numpy array
-        Path where the probability map/s is/are stored if ``Y_path`` was given and there are images of different
-        shapes. Otherwise, an array that represents the probability map of ``Y`` or all loaded data files from
-        ``Y_path`` will be returned.
+    maps : NDArray or list of NDArray
+        Probability map(s) of all samples in ``Y.sample_list``.
     """
     print("Constructing the probability map . . .")
     maps = []
     diff_shape = False
     first_shape = None
-    Ylen = len(Y)
+    Ylen = len(Y.sample_list)
     for i in tqdm(range(Ylen), disable=not is_main_process()):
-        if "img" in Y[i]:
-            _map = Y[i]["img"].copy().astype(np.float32)
+        if Y.sample_list[i].img_is_loaded():
+            _map = Y.sample_list[i].img.copy().astype(np.float32)
         else:
-            path = os.path.join(Y[i]["dir"], Y[i]["filename"])
+            path = Y.dataset_info[Y.sample_list[i].fid].path
             _map = read_img_as_ndarray(path, is_3d=is_3d).astype(np.float32)
 
         for k in range(_map.shape[-1]):
@@ -1687,7 +1716,7 @@ def calculate_volume_prob_map(Y, is_3d=False, w_foreground=0.94, w_background=0.
             maps[i] = np.expand_dims(maps[i], 0)
         maps = np.concatenate(maps)
 
-    if save_dir is not None:
+    if save_dir:
         os.makedirs(save_dir, exist_ok=True)
         if not diff_shape:
             print("Saving the probability map in {}".format(save_dir))
@@ -1708,178 +1737,17 @@ def calculate_volume_prob_map(Y, is_3d=False, w_foreground=0.94, w_background=0.
 ###########
 # GENERAL #
 ###########
-def norm_range01(
-    x, dtype=np.float32, div_using_max_and_scale=False, div_using_max_and_scale_per_channel=False, eps=1e-6
-):
-    norm_steps = {}
-    norm_steps["orig_dtype"] = x.dtype
 
-    if div_using_max_and_scale:
-        norm_steps["min_val_scale"] = x.min()
-        norm_steps["max_val_scale"] = x.max()
-
-    # Changing dtype to floating tensor
-    if torch.is_tensor(x):
-        if not torch.is_floating_point(x):
-            x = x.to(torch.float32)
-    else:
-        if not isinstance(x, np.floating):
-            x = x.astype(np.float32)
-
-    if x.dtype in [np.uint8, torch.uint8]:
-        if div_using_max_and_scale_per_channel:
-            if not div_using_max_and_scale:
-                x = x * (1 / 255)
-            else:
-                for c in range(x.shape[-1]):
-                    x[..., c] = (x[..., c] - x[..., c].min()) / (x[..., c].max() - x[..., c].min() + eps)
-        else:
-            x = x * (1 / 255) if not div_using_max_and_scale else (x - x.min()) / (x.max() - x.min() + eps)
-        norm_steps["div"] = 1
-    else:
-        if (isinstance(x, np.ndarray) and np.max(x) > 255) or (torch.is_tensor(x) and torch.max(x) > 255):
-            norm_steps["reduced_{}".format(x.dtype)] = 1
-            if div_using_max_and_scale_per_channel:
-                for c in range(x.shape[-1]):
-                    x[..., c] = reduce_dtype(
-                        x[..., c],
-                        0 if not div_using_max_and_scale else x[..., c].min(),
-                        65535 if not div_using_max_and_scale else x[..., c].max(),
-                        out_min=0,
-                        out_max=1,
-                        out_type=dtype,
-                    )
-            else:
-                x = reduce_dtype(
-                    x,
-                    0 if not div_using_max_and_scale else x.min(),
-                    65535 if not div_using_max_and_scale else x.max(),
-                    out_min=0,
-                    out_max=1,
-                    out_type=dtype,
-                )
-        elif (isinstance(x, np.ndarray) and np.max(x) > 2) or (torch.is_tensor(x) and torch.max(x) > 2):
-            if div_using_max_and_scale_per_channel:
-                if not div_using_max_and_scale:
-                    x = x * (1 / 255)
-                else:
-                    for c in range(x.shape[-1]):
-                        x[..., c] = (x[..., c] - x[..., c].min()) / (x[..., c].max() - x[..., c].min() + eps)
-            else:
-                x = x * (1 / 255) if not div_using_max_and_scale else (x - x.min()) / (x.max() - x.min() + eps)
-            norm_steps["div"] = 1
-
-    if torch.is_tensor(x):
-        x = x.to(dtype)
-    else:
-        x = x.astype(dtype)
-    return x, norm_steps
-
-
-def undo_norm_range01(x, xnorm, min_val_scale=None, max_val_scale=None):
-    if min_val_scale is not None and max_val_scale is None:
-        raise ValueError("max_val_scale can not be None when min_val_scale is provided")
-    if max_val_scale is not None and min_val_scale is None:
-        raise ValueError("min_val_scale can not be None when max_val_scale is provided")
-
-    if "div" == xnorm["type"]:
-        # Prevent values go outside expected range
-        if isinstance(x, np.ndarray):
-            x = np.clip(x, 0, 1)
-        else:
-            x = torch.clamp(x, 0, 1)
-        if "div" in xnorm:
-            x = (x * 255) if max_val_scale is None else (x * max_val_scale) + min_val_scale
-            if isinstance(x, np.ndarray):
-                x = x.astype(np.uint8)
-            else:
-                x = x.to(torch.uint8)
-        else:
-            reductions = [key for key, value in xnorm.items() if "reduced" in key.lower()]
-            if len(reductions) > 0:
-                reductions = reductions[0]
-                reductions = reductions.replace("reduced_", "")
-                x = (x * 65535) if max_val_scale is None else (x * max_val_scale) + min_val_scale
-                if isinstance(x, np.ndarray):
-                    x = x.astype(eval("np.{}".format(reductions)))
-                else:
-                    x = x.to(eval("torch.{}".format(reductions)))
-    return x
-
-
-def reduce_dtype(x, x_min, x_max, out_min=0, out_max=1, out_type=np.float32, eps=1e-6):
-    if isinstance(x, np.ndarray):
-        if not isinstance(x, np.floating):
-            x = x.astype(np.float32)
-        return ((np.array((x - x_min) / (x_max - x_min + eps)) * (out_max - out_min)) + out_min).astype(out_type)
-    else:  # Tensor considered
-        if not torch.is_floating_point(x):
-            x = x.to(torch.float32)
-        return ((((x - x_min) / (x_max - x_min + eps)) * (out_max - out_min)) + out_min).to(out_type)
-
-
-def zero_mean_unit_variance_normalization(data, means=None, stds=None, out_type="float32", eps=1e-6):
-    if torch.is_tensor(data):
-        if not torch.is_floating_point(data):
-            data = data.to(torch.float32)
-    else:
-        if not isinstance(data, np.floating):
-            data = data.astype(np.float32)
-
-    if means is None:
-        means = data.mean()
-    if stds is None:
-        stds = data.std()
-    if torch.is_tensor(data):
-        return ((data - means) / (stds + eps)).to(numpy_torch_dtype_dict[out_type][0])
-    else:
-        return ((data - means) / (stds + eps)).astype(numpy_torch_dtype_dict[out_type][1])
-
-
-def undo_zero_mean_unit_variance_normalization(data, means, stds, out_type="float32"):
-    if torch.is_tensor(data):
-        return ((data * stds) + means).to(numpy_torch_dtype_dict[out_type][0])
-    else:
-        return ((data * stds) + means).astype(numpy_torch_dtype_dict[out_type][1])
-
-
-def percentile_clip(x, lower=0.1, upper=99.9, lwr_perc_val=None, uppr_perc_val=None):
-    x_lwr = float(np.percentile(x, lower)) if lwr_perc_val is None else lwr_perc_val
-    x_upr = float(np.percentile(x, upper)) if uppr_perc_val is None else uppr_perc_val
-    if "float" not in str(x.dtype):
-        x_lwr = int(x_lwr)
-        x_upr = int(x_upr)
-    return np.clip(x, x_lwr, x_upr, out=x), x_lwr, x_upr
-
-
-def undo_sample_normalization(pred, x_norm):
-    if x_norm["type"] == "div":
-        pred = undo_norm_range01(pred, x_norm)
-    elif x_norm["type"] == "scale_range":
-        pred = undo_norm_range01(pred, x_norm, x_norm["min_val_scale"], x_norm["max_val_scale"])
-    else:
-        pred = undo_zero_mean_unit_variance_normalization(pred, x_norm["mean"], x_norm["std"])
-
-        if x_norm["orig_dtype"] not in [
-            np.dtype("float64"),
-            np.dtype("float32"),
-            np.dtype("float16"),
-        ]:
-            pred = np.round(pred)
-            minpred = np.min(pred)
-            pred = pred + abs(minpred)
-
-        pred = pred.astype(x_norm["orig_dtype"])
-    return pred
-
-
-def resize_images(images, **kwards):
+def resize_images(
+    images: List[NDArray], 
+    **kwards
+) -> List[NDArray]:
     """
     The function resizes all the images using the specified parameters or default values if not provided.
 
     Parameters
     ----------
-    images: Numpy array or list of numpy arrays
+    images: list of Numpy arrays
         The `images` parameter is the list of all input images that you want to resize.
 
     output_shape: iterable
@@ -1891,24 +1759,24 @@ def resize_images(images, **kwards):
 
     Returns
     -------
-    resized_images: Numpy array or list of numpy arrays
+    resized_images: list of Numpy arrays
         The resized images. The returned data will use the same data type as the given `images`.
 
     """
-
     resized_images = [resize(img, **kwards).astype(img.dtype) for img in images]
-    if isinstance(images, np.ndarray):
-        resized_images = np.array(resized_images, dtype=images.dtype)
     return resized_images
 
 
-def apply_gaussian_blur(images, **kwards):
+def apply_gaussian_blur(
+    images: List[NDArray], 
+    **kwards
+) -> List[NDArray]:
     """
     The function applies a Gaussian blur to all images.
 
     Parameters
     ----------
-    images: Numpy array or list of numpy arrays
+    images: list of Numpy arrays
         The input images on which the Gaussian blur will be applied.
 
     (kwards): optional
@@ -1917,7 +1785,7 @@ def apply_gaussian_blur(images, **kwards):
 
     Returns
     -------
-    blurred_images: Numpy array or list of numpy arrays
+    blurred_images: list of Numpy arrays
         A Gaussian blurred images. The returned data will use the same data type as the given `images`.
 
     """
@@ -1930,18 +1798,19 @@ def apply_gaussian_blur(images, **kwards):
         return im
 
     blurred_images = [_process(img, **kwards) for img in images]
-    if isinstance(images, np.ndarray):
-        blurred_images = np.array(blurred_images, dtype=images.dtype)
     return blurred_images
 
 
-def apply_median_blur(images, **kwards):
+def apply_median_blur(
+    images: List[NDArray], 
+    **kwards
+) -> List[NDArray]:
     """
     The function applies a median blur filter to all images.
 
     Parameters
     ----------
-    image: Numpy array or list of numpy arrays
+    image: list of Numpy arrays
         The input image on which the median blur operation will be applied.
 
     (kwards): optional
@@ -1950,25 +1819,25 @@ def apply_median_blur(images, **kwards):
 
     Returns
     -------
-    blurred_images: Numpy array or list of numpy arrays
+    blurred_images: list of Numpy arrays
         The median-blurred images. The returned data will use the same data type as the given `images`.
 
     """
-
     blurred_images = [median(img, **kwards).astype(img.dtype) for img in images]
-    if isinstance(images, np.ndarray):
-        blurred_images = np.array(blurred_images, dtype=images.dtype)
     return blurred_images
 
 
-def detect_edges(images, **kwards):
+def detect_edges(
+    images: List[NDArray], 
+    **kwards
+) -> List[NDArray]:
     """
     The function `detect_edges` takes the 2D images as input, converts it to grayscale if necessary, and
     applies the Canny edge detection algorithm to detect edges in the image.
 
     Parameters
     ----------
-    images: Numpy array or list of numpy arrays
+    images: list of Numpy arrays
         The list of all input images on which the edge detection will be performed. It can be either a color image with
         shape (height, width, 3) or a grayscale image with shape (height, width, 1).
 
@@ -1978,9 +1847,9 @@ def detect_edges(images, **kwards):
 
     Returns
     -------
-    edges: Numpy array or list of numpy arrays
-        The edges of the input images. The returned numpy arrays will be uint8, where background is black (0) and edges white (255).
-        The returned data will use the same structure as the given `images` (list[numpy array] or numpy array).
+    edges: list of Numpy arrays
+        The edges of the input images. The returned Numpy arrays will be uint8, where background is black (0) and edges white (255).
+        The returned data will use the same structure as the given `images` (list[Numpy array] or Numpy array).
 
     """
 
@@ -2004,27 +1873,28 @@ def detect_edges(images, **kwards):
         return im
 
     edges = [set_uint8(canny(to_gray(img), **kwards)) for img in images]
-    if isinstance(images, np.ndarray):
-        edges = np.array(edges, dtype=np.uint8)
     return edges
 
 
-def _histogram_matching(source_imgs, target_imgs):
+def _histogram_matching(
+    source_imgs: List[NDArray], 
+    target_imgs: List[NDArray]
+) -> List[NDArray]:
     """
     Given a set of target images, it will obtain their mean histogram
     and applies histogram matching to all images from sorce images.
 
     Parameters
     ----------
-    source_imgs: Numpy array or list of numpy arrays
+    source_imgs: list of Numpy arrays
         The images of the source domain, to which the histogram matching is to be applied.
 
-    target_imgs: Numpy array
+    target_imgs: list of Numpy array
         The target domain images, from which mean histogram will be obtained.
 
     Returns
     -------
-    matched_images : list of numpy arrays
+    matched_images : list of Numpy arrays
         A set of source images with target's histogram
     """
 
@@ -2054,16 +1924,20 @@ def _histogram_matching(source_imgs, target_imgs):
     return results
 
 
-def apply_histogram_matching(images, reference_path, is_2d):
+def apply_histogram_matching(
+    images: List[NDArray], 
+    reference_path: str, 
+    is_2d: bool
+):
     """
     The function returns the images with their histogram matched to the histogram of the reference images,
     loaded from the given reference_path.
 
     Parameters
     ----------
-    images: Numpy array or list of numpy arrays
+    images: list of Numpy arrays
         The list of input images whose histogram needs to be matched to the reference histogram. It should be a
-        numpy array representing the image.
+        Numpy array representing the image.
 
     reference_path: str
         The reference_path is the directory path to the reference images. From reference images, we will extract
@@ -2076,26 +1950,26 @@ def apply_histogram_matching(images, reference_path, is_2d):
 
     Returns
     -------
-    matched_images : Numpy array or list of numpy arrays
+    matched_images : list of Numpy arrays
         The result of matching the histogram of the input images to the histogram of the reference image.
         The returned data will use the same data type as the given `images`.
     """
     references = load_data_from_dir(reference_path, is_3d=not is_2d)
-
-    matched_images = _histogram_matching(images, references)
-    if isinstance(images, np.ndarray):
-        matched_images = np.array(matched_images, dtype=images.dtype)
+    matched_images = _histogram_matching(images, [x.img for x in references.sample_list if x.img_is_loaded()])
     return matched_images
 
 
-def apply_clahe(images, **kwards):
+def apply_clahe(
+    images: List[NDArray], 
+    **kwards
+) -> List[NDArray] :
     """
     The function applies Contrast Limited Adaptive Histogram Equalization (CLAHE) to an image and
     returns the result.
 
     Parameters
     ----------
-    images: Numpy array or list of numpy arrays
+    images: list of Numpy arrays
         The list of input images that you want to apply the CLAHE (Contrast Limited Adaptive Histogram Equalization)
         algorithm to.
 
@@ -2105,7 +1979,7 @@ def apply_clahe(images, **kwards):
 
     Returns
     -------
-    processed_images: Numpy array or list of numpy arrays
+    processed_images: list of Numpy arrays
         The images after applying the Contrast Limited Adaptive Histogram Equalization (CLAHE) algorithm.
         The returned data will use the same data type as the given `images`.
     """
@@ -2118,12 +1992,16 @@ def apply_clahe(images, **kwards):
         return im
 
     processed_images = [_process(img, **kwards) for img in images]
-    if isinstance(images, np.ndarray):
-        processed_images = np.array(processed_images, dtype=images.dtype)
     return processed_images
 
 
-def preprocess_data(cfg, x_data=[], y_data=[], is_2d=True, is_y_mask=False):
+def preprocess_data(
+    cfg: Config, 
+    x_data: List[NDArray]=[], 
+    y_data: List[NDArray]=[], 
+    is_2d: bool=True, 
+    is_y_mask: bool=False
+) -> List[NDArray] | Tuple[List[NDArray], List[NDArray]]:
     """
     The function preprocesses data by applying various image processing techniques.
 
@@ -2134,13 +2012,13 @@ def preprocess_data(cfg, x_data=[], y_data=[], is_2d=True, is_y_mask=False):
         preprocessing the data. It is used to control the behavior of different preprocessing techniques
         such as image resizing, blurring, histogram matching, etc.
 
-    x_data: 4D/5D numpy array or list of 3D/4D numpy arrays, optional
+    x_data: list of 3D/4D Numpy arrays, optional
         The input data (images) to be preprocessed. The first dimension must be the number of images.
         E.g. ``(num_of_images, y, x, channels)`` or ``(num_of_images, z, y, x, channels)``.
         In case of using a list, the format of the images remains the same. Each item in the list
         corresponds to a different image.
 
-    y_data: 4D/5D numpy array or list of 3D/4D numpy arrays, optional
+    y_data: list of 3D/4D Numpy arrays, optional
         The target data that corresponds to the x_data. The first dimension must be the number of images.
         E.g. ``(num_of_images, y, x, channels)`` or ``(num_of_images, z, y, x, channels)``.
         In case of using a list, the format of the images remains the same. Each item in the list
@@ -2157,10 +2035,10 @@ def preprocess_data(cfg, x_data=[], y_data=[], is_2d=True, is_y_mask=False):
 
     Returns
     -------
-    x_data: 4D/5D numpy array or list of 3D/4D numpy arrays, optional
+    x_data: list of 3D/4D Numpy arrays, optional
         Preprocessed data. The same structure and dimensionality of the given data will be returned.
 
-    y_data: 4D/5D numpy array or list of 3D/4D numpy arrays, optional
+    y_data: list of 3D/4D Numpy arrays, optional
         Preprocessed data. The same structure and dimensionality of the given data will be returned.
     """
 

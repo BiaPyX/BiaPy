@@ -2,6 +2,7 @@ import numpy as np
 import os
 from PIL import Image
 from typing import Dict
+from numpy.typing import NDArray
 
 from biapy.data.data_manipulation import save_tif
 from biapy.data.generators.pair_base_data_generator import PairBaseDataGenerator
@@ -21,8 +22,8 @@ class Pair2DImageDataGenerator(PairBaseDataGenerator):
 
     def save_aug_samples(
         self,
-        img: np.ndarray,
-        mask: np.ndarray,
+        img: NDArray,
+        mask: NDArray,
         orig_images: Dict,
         i: int,
         pos: int,

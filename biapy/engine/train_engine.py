@@ -38,7 +38,7 @@ def train_one_epoch(
 
         # Apply warmup cosine decay scheduler if selected
         # (notice we use a per iteration (instead of per epoch) lr scheduler)
-        if epoch % cfg.TRAIN.ACCUM_ITER == 0 and cfg.TRAIN.LR_SCHEDULER.NAME == "warmupcosine":
+        if epoch % cfg.TRAIN.ACCUM_ITER == 0 and cfg.TRAIN.LR_SCHEDULER.NAME == "warmupcosine" and lr_scheduler:
             lr_scheduler.adjust_learning_rate(optimizer, step / len(data_loader) + epoch)
 
         it = start_steps + step  # global training iteration
@@ -71,7 +71,7 @@ def train_one_epoch(
             loss.backward()
             optimizer.step()  # update weight
             optimizer.zero_grad()
-            if lr_scheduler is not None and cfg.TRAIN.LR_SCHEDULER.NAME == "onecycle":
+            if lr_scheduler and cfg.TRAIN.LR_SCHEDULER.NAME == "onecycle":
                 lr_scheduler.step()
 
         if device.type != "cpu":
@@ -80,7 +80,7 @@ def train_one_epoch(
         # Update loss in loggers
         metric_logger.update(loss=loss_value)
         loss_value_reduce = all_reduce_mean(loss_value)
-        if log_writer is not None:
+        if log_writer:
             log_writer.update(loss=loss_value_reduce, head="loss")
 
         # Update lr in loggers
@@ -90,7 +90,7 @@ def train_one_epoch(
         if step == 0:
             metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value:.6f}"))
         metric_logger.update(lr=max_lr)
-        if log_writer is not None:
+        if log_writer:
             log_writer.update(lr=max_lr, head="opt")
 
     # Gather the stats from all processes
@@ -142,6 +142,6 @@ def evaluate(
     print("[Val] averaged stats:", metric_logger)
 
     # Apply reduceonplateau scheduler if the global validation has been reduced
-    if lr_scheduler is not None and cfg.TRAIN.LR_SCHEDULER.NAME == "reduceonplateau":
+    if lr_scheduler and cfg.TRAIN.LR_SCHEDULER.NAME == "reduceonplateau":
         lr_scheduler.step(metric_logger.meters["loss"].global_avg)
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}

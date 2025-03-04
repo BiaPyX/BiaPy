@@ -8,6 +8,7 @@ from PIL import Image
 from tqdm import tqdm
 from skimage import measure
 from hashlib import sha256
+from numpy.typing import NDArray, DTypeLike
 
 from biapy.engine.metrics import jaccard_index_numpy
 from biapy.utils.misc import is_main_process
@@ -211,7 +212,6 @@ def make_weight_map(label, binary=True, w0=10, sigma=5):
     rows, cols = lab.shape
 
     if binary:
-
         # Converts the label into a binary image with background = 0
         # and cells = 1.
         lab[lab == 255] = 1
@@ -224,9 +224,10 @@ def make_weight_map(label, binary=True, w0=10, sigma=5):
         w_c[w_c == 0] = 0.5
 
         # Converts the labels to have one class per object (cell).
-        lab_multi = measure.label(lab, neighbors=8, background=0)
+        lab_multi = measure.label(lab, connectivity=8, background=0)
+        assert isinstance(lab_multi, np.ndarray)
+        components = np.unique(lab_multi)
     else:
-
         # Converts the label into a binary image with background = 0.
         # and cells = 1.
         lab[lab > 0] = 1
@@ -237,7 +238,7 @@ def make_weight_map(label, binary=True, w0=10, sigma=5):
         w_c = np.array(lab, dtype=float)
         w_c[w_c == 1] = 1
         w_c[w_c == 0] = 0.5
-    components = np.unique(lab_multi)
+        components = np.unique(lab)
 
     n_comp = len(components) - 1
 
@@ -532,7 +533,8 @@ def check_downsample_division(X, d_levels):
     return X, o_shape
 
 
-def seg2aff_pni(img, dz=1, dy=1, dx=1, dtype="float32"):
+def seg2aff_pni(img, dz=1, dy=1, dx=1, 
+    dtype: DTypeLike = np.float32):
     # Adapted from PyTorch for Connectomics:
     # https://github.com/zudi-lin/pytorch_connectomics/commit/6fbd5457463ae178ecd93b2946212871e9c617ee
     """

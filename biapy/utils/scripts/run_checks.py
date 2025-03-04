@@ -107,7 +107,7 @@ all_test_info["Test6"] = {
 all_test_info["Test7"] = {
     "enable": True,
     "jobname": "test7",
-    "description": "2D Detection. Stardist v2 2D data. custom norm, percentile clip. Basic DA. "
+    "description": "2D Detection. Stardist v2 2D data. zero_mean_unit_variance norm, percentile clip. Basic DA. "
         "multiresunet. Post-proc: remove close points + det weatershed",
     "yaml": "test_7.yaml",
     "internal_checks": [
@@ -119,7 +119,7 @@ all_test_info["Test7"] = {
 all_test_info["Test8"] = {
     "enable": True,
     "jobname": "test8",
-    "description": "3D Detection. NucMM-Z 3D data. custom norm, percentile clip. Basic DA. "
+    "description": "3D Detection. NucMM-Z 3D data. zero_mean_unit_variance norm, percentile clip. Basic DA. "
         "unetr. Post-proc: remove close points + det weatershed",
     "yaml": "test_8.yaml",
     "internal_checks": [
@@ -130,7 +130,7 @@ all_test_info["Test8"] = {
 all_test_info["Test11"] = {
     "enable": True,
     "jobname": "test11",
-    "description": "3D Detection. Zarr 3D data (Brainglobe). custom norm, percentile norm, per image. "
+    "description": "3D Detection. Zarr 3D data (Brainglobe). zero_mean_unit_variance norm, percentile norm, per image. "
         "filter samples: foreground + mean. warmupcosine. Basic DA. resunet. test by chunks: Zarr. Post-proc: remove close points",
     "yaml": "test_11.yaml",
     "internal_checks": [
@@ -141,7 +141,7 @@ all_test_info["Test11"] = {
 all_test_info["Test9"] = {
     "enable": True,
     "jobname": "test9",
-    "description": "2D Denoising. Convallaria data. custom norm. Basic DA."
+    "description": "2D Denoising. Convallaria data. zero_mean_unit_variance norm. Basic DA."
         "unetr. Post-proc: remove close points + det weatershed",
     "yaml": "test_9.yaml",
     "internal_checks": [
@@ -152,7 +152,7 @@ all_test_info["Test9"] = {
 all_test_info["Test10"] = {
     "enable": True,
     "jobname": "test10",
-    "description": "3D Denoising. Flywing 3D data. custom norm. Basic DA. "
+    "description": "3D Denoising. Flywing 3D data. zero_mean_unit_variance norm. Basic DA. "
         "resunet. Post-proc: remove close points + det weatershed",
     "yaml": "test_10.yaml",
     "internal_checks": [
@@ -306,7 +306,7 @@ all_test_info["Test25"] = {
 all_test_info["Test26"] = {
     "enable": True,
     "jobname": "test26",
-    "description": "3D Detection. Zarr 3D data (Brainglobe). in memory false. custom norm, percentile norm, per image. "
+    "description": "3D Detection. Zarr 3D data (Brainglobe). in memory false. zero_mean_unit_variance norm, percentile norm, per image. "
         "filter_samples: foreground. warmupcosine. Basic DA. resunet. test by chunks: Zarr. Post-proc: remove close points",
     "yaml": "test_26.yaml",
     "internal_checks": [
@@ -1664,10 +1664,11 @@ if all_test_info["Test7"]["enable"]:
     biapy_config['PROBLEM']['DETECTION']['DATA_CHECK_MW'] = True
 
     biapy_config['DATA']['NORMALIZATION'] = {}
-    biapy_config['DATA']['NORMALIZATION']['PERC_CLIP'] = True
-    biapy_config['DATA']['NORMALIZATION']['PERC_LOWER'] = 0.1
-    biapy_config['DATA']['NORMALIZATION']['PERC_UPPER'] = 99.8
-    biapy_config['DATA']['NORMALIZATION']['TYPE'] = 'custom'
+    biapy_config['DATA']['NORMALIZATION']['PERC_CLIP'] = {}
+    biapy_config['DATA']['NORMALIZATION']['PERC_CLIP']['ENABLE'] = True
+    biapy_config['DATA']['NORMALIZATION']['PERC_CLIP']['LOWER_PERC'] = 0.1
+    biapy_config['DATA']['NORMALIZATION']['PERC_CLIP']['UPPER_PERC'] = 99.8
+    biapy_config['DATA']['NORMALIZATION']['TYPE'] = 'zero_mean_unit_variance'
 
     biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(detection_2d_data_outpath, "data", "train", "raw")
     biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(detection_2d_data_outpath, "data", "train", "label")
@@ -1760,10 +1761,11 @@ if all_test_info["Test8"]["enable"]:
     biapy_config['PROBLEM']['DETECTION']['DATA_CHECK_MW'] = True
 
     biapy_config['DATA']['NORMALIZATION'] = {}
-    biapy_config['DATA']['NORMALIZATION']['PERC_CLIP'] = True
-    biapy_config['DATA']['NORMALIZATION']['PERC_LOWER'] = 0.1
-    biapy_config['DATA']['NORMALIZATION']['PERC_UPPER'] = 99.8
-    biapy_config['DATA']['NORMALIZATION']['TYPE'] = 'custom'
+    biapy_config['DATA']['NORMALIZATION']['PERC_CLIP'] = {}
+    biapy_config['DATA']['NORMALIZATION']['PERC_CLIP']['ENABLE'] = True
+    biapy_config['DATA']['NORMALIZATION']['PERC_CLIP']['LOWER_PERC'] = 0.1
+    biapy_config['DATA']['NORMALIZATION']['PERC_CLIP']['UPPER_PERC'] = 99.8
+    biapy_config['DATA']['NORMALIZATION']['TYPE'] = 'zero_mean_unit_variance'
 
     biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(detection_3d_data_outpath, "data", "train", "raw")
     biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(detection_3d_data_outpath, "data", "train", "label")
@@ -1857,9 +1859,10 @@ if all_test_info["Test11"]["enable"]:
 
     biapy_config['DATA']['PATCH_SIZE'] = "(20, 128, 128, 2)"
     biapy_config['DATA']['NORMALIZATION'] = {}
-    biapy_config['DATA']['NORMALIZATION']['PERC_CLIP'] = True
-    biapy_config['DATA']['NORMALIZATION']['PERC_LOWER'] = 0.1
-    biapy_config['DATA']['NORMALIZATION']['PERC_UPPER'] = 99.8
+    biapy_config['DATA']['NORMALIZATION']['PERC_CLIP'] = {}
+    biapy_config['DATA']['NORMALIZATION']['PERC_CLIP']['ENABLE'] = True
+    biapy_config['DATA']['NORMALIZATION']['PERC_CLIP']['LOWER_PERC'] = 0.1
+    biapy_config['DATA']['NORMALIZATION']['PERC_CLIP']['UPPER_PERC'] = 99.8
 
     biapy_config['DATA']['TRAIN']['INPUT_IMG_AXES_ORDER'] = 'ZYXC'
     biapy_config['DATA']['TRAIN']['FILTER_SAMPLES'] = {}
@@ -1967,7 +1970,7 @@ if all_test_info["Test9"]["enable"]:
     biapy_config['PROBLEM']['DENOISING']['N2V_STRUCTMASK'] = True
 
     biapy_config['DATA']['NORMALIZATION'] = {}
-    biapy_config['DATA']['NORMALIZATION']['TYPE'] = 'custom'
+    biapy_config['DATA']['NORMALIZATION']['TYPE'] = 'zero_mean_unit_variance'
 
     biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(denoising_2d_data_outpath, "data", "train")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = False
@@ -2037,7 +2040,7 @@ if all_test_info["Test10"]["enable"]:
     biapy_config['PROBLEM']['DENOISING']['N2V_STRUCTMASK'] = False
 
     biapy_config['DATA']['NORMALIZATION'] = {}
-    biapy_config['DATA']['NORMALIZATION']['TYPE'] = 'custom'
+    biapy_config['DATA']['NORMALIZATION']['TYPE'] = 'zero_mean_unit_variance'
 
     biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(denoising_3d_data_outpath, "data", "train")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
@@ -3156,9 +3159,10 @@ if all_test_info["Test26"]["enable"]:
 
     biapy_config['DATA']['PATCH_SIZE'] = "(20, 128, 128, 2)"
     biapy_config['DATA']['NORMALIZATION'] = {}
-    biapy_config['DATA']['NORMALIZATION']['PERC_CLIP'] = True
-    biapy_config['DATA']['NORMALIZATION']['PERC_LOWER'] = 0.1
-    biapy_config['DATA']['NORMALIZATION']['PERC_UPPER'] = 99.8
+    biapy_config['DATA']['NORMALIZATION']['PERC_CLIP'] = {}
+    biapy_config['DATA']['NORMALIZATION']['PERC_CLIP']['ENABLE'] = True
+    biapy_config['DATA']['NORMALIZATION']['PERC_CLIP']['LOWER_PERC'] = 0.1
+    biapy_config['DATA']['NORMALIZATION']['PERC_CLIP']['UPPER_PERC'] = 99.8
 
     biapy_config['DATA']['TRAIN']['INPUT_IMG_AXES_ORDER'] = 'ZYXC'
     biapy_config['DATA']['TRAIN']['INPUT_MASK_AXES_ORDER'] = 'TZCYX'
@@ -3930,7 +3934,7 @@ if all_test_info["Test35"]["enable"]:
 
     biapy_config['DATA']['PATCH_SIZE'] = "(256,256,3)"
     biapy_config['DATA']['NORMALIZATION'] = {}
-    biapy_config['DATA']['NORMALIZATION']['TYPE'] = 'custom'
+    biapy_config['DATA']['NORMALIZATION']['TYPE'] = 'zero_mean_unit_variance'
 
     biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(instance_seg_conic_data_outpath, "conic_instance_subset", "train", "raw")
     biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(instance_seg_conic_data_outpath, "conic_instance_subset", "train", "label")

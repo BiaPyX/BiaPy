@@ -2,11 +2,25 @@ import numpy as np
 import os
 import math
 from PIL import Image
+from typing import (
+    List,
+    Tuple,
+    Optional,
+)
+from numpy.typing import NDArray
+
+from biapy.data.dataset import PatchCoords
 
 
 def crop_data_with_overlap(
-    data, crop_shape, data_mask=None, overlap=(0, 0), padding=(0, 0), verbose=True, load_data=True
-):
+    data: NDArray,
+    crop_shape: Tuple[int, ...],
+    data_mask: Optional[NDArray] = None,
+    overlap: Tuple[float, ...] = (0, 0),
+    padding: Tuple[int, ...] = (0, 0),
+    verbose: bool = True,
+    load_data: bool = True,
+) -> Tuple[NDArray, NDArray, List[PatchCoords]] | Tuple[NDArray, List[PatchCoords]] | List[PatchCoords]:
     """
     Crop data into small square pieces with overlap. The difference with :func:`~crop_data` is that this function
     allows you to create patches with overlap.
@@ -231,13 +245,12 @@ def crop_data_with_overlap(
                     ]
 
                 crop_coords.append(
-                    {
-                        "z": z,
-                        "y_start": y * step_y - d_y,
-                        "y_end": y * step_y + crop_shape[0] - d_y,
-                        "x_start": x * step_x - d_x,
-                        "x_end": x * step_x + crop_shape[1] - d_x,
-                    }
+                    PatchCoords(
+                        y_start=y * step_y - d_y,
+                        y_end=y * step_y + crop_shape[0] - d_y,
+                        x_start=x * step_x - d_x,
+                        x_end=x * step_x + crop_shape[1] - d_x,
+                    )
                 )
 
                 c += 1
@@ -256,15 +269,15 @@ def crop_data_with_overlap(
 
 
 def merge_data_with_overlap(
-    data,
-    original_shape,
-    data_mask=None,
-    overlap=(0, 0),
-    padding=(0, 0),
-    verbose=True,
-    out_dir=None,
-    prefix="",
-):
+    data: NDArray,
+    original_shape: Tuple[int, ...],
+    data_mask: Optional[NDArray] = None,
+    overlap: Tuple[float, ...] = (0, 0),
+    padding: Tuple[int, ...] = (0, 0),
+    verbose: bool = True,
+    out_dir: Optional[str] = None,
+    prefix: str = "",
+) -> NDArray | Tuple[NDArray, Optional[NDArray]]:
     """
     Merge data with an amount of overlap.
 
@@ -431,7 +444,7 @@ def merge_data_with_overlap(
         ]
 
     ov_map_counter = np.zeros(original_shape[:-1] + (1,), dtype=np.int32)
-    if out_dir is not None:
+    if out_dir:
         crop_grid = np.zeros(original_shape[1:], dtype=np.int32)
 
     # Calculate overlapping variables
@@ -500,7 +513,7 @@ def merge_data_with_overlap(
                     x * step_x - d_x : x * step_x + data.shape[2] - d_x,
                 ] += 1
 
-                if z == 0 and out_dir is not None:
+                if z == 0 and out_dir:
                     crop_grid[
                         y * step_y - d_y : y * step_y + data.shape[1] - d_y,
                         x * step_x - d_x,
@@ -526,7 +539,7 @@ def merge_data_with_overlap(
 
     # Save a copy of the merged data with the overlapped regions colored as: green when 2 crops overlap, yellow when
     # (2 < x < 6) and red when more than 6 overlaps are merged
-    if out_dir is not None:
+    if out_dir:
         os.makedirs(out_dir, exist_ok=True)
 
         ov_map = ov_map_counter[0]
@@ -546,16 +559,16 @@ def merge_data_with_overlap(
             for im_j in range(height):
                 # White borders
                 if ov_map[im_j, im_i, 0] == -4:
-                    px[im_i, im_j] = (255, 255, 255, 255)
+                    px[im_i, im_j] = (255, 255, 255, 255)  # type: ignore
                 # Overlap zone
                 elif ov_map[im_j, im_i, 0] == -3:
-                    px[im_i, im_j] = tuple(map(sum, zip((0, 74, 0, 125), px[im_i, im_j])))
+                    px[im_i, im_j] = tuple(map(sum, zip((0, 74, 0, 125), px[im_i, im_j])))  # type: ignore
                 # 2 < x < 6 overlaps
                 elif ov_map[im_j, im_i, 0] == -2:
-                    px[im_i, im_j] = tuple(map(sum, zip((74, 74, 0, 125), px[im_i, im_j])))
+                    px[im_i, im_j] = tuple(map(sum, zip((74, 74, 0, 125), px[im_i, im_j])))  # type: ignore
                 # 6 >= overlaps
                 elif ov_map[im_j, im_i, 0] == -1:
-                    px[im_i, im_j] = tuple(map(sum, zip((74, 0, 0, 125), px[im_i, im_j])))
+                    px[im_i, im_j] = tuple(map(sum, zip((74, 0, 0, 125), px[im_i, im_j])))  # type: ignore
 
         im.save(os.path.join(out_dir, prefix + "merged_ov_map.png"))
 
@@ -569,7 +582,7 @@ def merge_data_with_overlap(
         return merged_data
 
 
-def ensure_2d_shape(img, path=None):
+def ensure_2d_shape(img: NDArray, path: Optional[str] = None) -> NDArray:
     """
     Read an image from a given path.
 
@@ -587,7 +600,7 @@ def ensure_2d_shape(img, path=None):
         Image read. E.g. ``(y, x, channels)``.
     """
     if img.ndim > 3:
-        if path is not None:
+        if path:
             m = "Read image seems to be 3D: {}. Path: {}".format(img.shape, path)
         else:
             m = "Read image seems to be 3D: {}".format(img.shape)

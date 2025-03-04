@@ -1,5 +1,5 @@
 import os
-from typing import List, Dict, Any, Tuple, Union
+from typing import List, Dict, Any, Tuple, Optional
 from torch.utils.data import (
     DistributedSampler,
     DataLoader,
@@ -7,6 +7,7 @@ from torch.utils.data import (
     SequentialSampler,
 )
 import numpy as np
+from numpy.typing import NDArray
 from tqdm import tqdm
 
 from biapy.data.pre_processing import calculate_volume_prob_map
@@ -19,18 +20,20 @@ from biapy.data.generators.test_single_data_generator import test_single_data_ge
 from biapy.config.config import Config
 from biapy.data.pre_processing import preprocess_data
 from biapy.data.data_manipulation import save_tif
+from biapy.data.dataset import BiaPyDataset
+from biapy.data.norm import Normalization
 
 
 def create_train_val_augmentors(
-    cfg: type[Config],
-    X_train: List,
-    X_val: List,
+    cfg: Config,
+    X_train: BiaPyDataset,
+    X_val: BiaPyDataset,
     world_size: int,
     global_rank: int,
-    Y_train: List | None = None,
-    Y_val: List | None = None,
-    norm_dict= None,
-) -> Tuple[DataLoader, DataLoader, Dict, int]:
+    norm_module: Normalization,
+    Y_train: Optional[BiaPyDataset] = None,
+    Y_val: Optional[BiaPyDataset] = None,
+) -> Tuple[DataLoader, DataLoader, Normalization, int, NDArray, NDArray]:
     """
     Create training and validation generators.
 
@@ -39,33 +42,11 @@ def create_train_val_augmentors(
     cfg : Config
         BiaPy configuration.
 
-    X_train : list of dict
-        Loaded train X data. Each item in the list represents a sample of the dataset. Each sample is represented as follows:
-            * ``"filename"``: name of the image to extract the data sample from.
-            * ``"dir"``: directory where the image resides.
-            * ``"coords"``: coordinates to extract the sample from the image. If ``None`` it implies that a random patch needs to
-              be extracted.
-            * ``"original_data_shape"``: shape of the image where the samples is extracted (useful for reconstructing it later),
-            * ``"shape"``: shape of the sample.
-            * ``"img"`` (optional): image sample itself. It is a ndarrray of  ``(y, x, channels)`` in ``2D`` and
-              ``(z, y, x, channels)`` in ``3D``. Provided if the user selected to load images into memory.
-            * ``"gt_associated"`` (optional): path to the associated ground truth of the sample. Present if the user selected
-              ``PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER`` to be ``True``.
-            * ``"class_name"`` (optional): name of the class. In classification workflow.
-            * ``"class"`` (optional): integer that represents the class. In classification workflow.
+    X_train : BiaPyDataset
+        Loaded train X data.
 
-    X_val : list of dict
-        Loaded train Y data. Each item in the list represents a sample of the dataset. Each sample is represented as follows:
-            * ``"filename"``: name of the image to extract the data sample from.
-            * ``"dir"``: directory where the image resides.
-            * ``"coords"``: coordinates to extract the sample from the image. If ``None`` it implies that a random patch needs to
-              be extracted.
-            * ``"original_data_shape"``: shape of the image where the samples is extracted (useful for reconstructing it later),
-            * ``"shape"``: shape of the sample.
-            * ``"img"`` (optional): image sample itself. It is a ndarrray of  ``(y, x, channels)`` in ``2D`` and
-              ``(z, y, x, channels)`` in ``3D``. Provided if the user selected to load images into memory.
-            * ``"gt_associated"`` (optional): path to the associated ground truth of the sample. Present if the user selected
-              ``PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER`` to be ``True``.
+    X_val : BiaPyDataset
+        Loaded train Y data.
 
     world_size: int
         Number of processes participating in the training.
@@ -73,31 +54,14 @@ def create_train_val_augmentors(
     global_rank: int
         Rank of the current process.
 
-    Y_train : list of dict, optional
-        Loaded train Y data. Each item in the list represents a sample of the dataset. Each sample is represented as follows:
-            * ``"filename"``: name of the image to extract the data sample from.
-            * ``"dir"``: directory where the image resides.
-            * ``"coords"``: coordinates to extract the sample from the image. If ``None`` it implies that a random patch needs to
-              be extracted.
-            * ``"original_data_shape"``: shape of the image where the samples is extracted (useful for reconstructing it later),
-            * ``"shape"``: shape of the sample.
-            * ``"img"`` (optional): image sample itself. It is a ndarrray of  ``(y, x, channels)`` in ``2D`` and
-              ``(z, y, x, channels)`` in ``3D``. Provided if the user selected to load images into memory.
-            * ``"gt_associated"`` (optional): path to the associated ground truth of the sample. Present if the user selected
-              ``PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER`` to be ``True``.
+    norm_module : Normalization
+        Normalization module that defines the normalization steps to apply.
 
-    Y_val : list of dict, optional
-        Loaded validation Y data. Each item in the list represents a sample of the dataset. Each sample is represented as follows:
-            * ``"filename"``: name of the image to extract the data sample from.
-            * ``"dir"``: directory where the image resides.
-            * ``"coords"``: coordinates to extract the sample from the image. If ``None`` it implies that a random patch needs to
-              be extracted.
-            * ``"original_data_shape"``: shape of the image where the samples is extracted (useful for reconstructing it later),
-            * ``"shape"``: shape of the sample.
-            * ``"img"`` (optional): image sample itself. It is a ndarrray of  ``(y, x, channels)`` in ``2D`` and
-              ``(z, y, x, channels)`` in ``3D``. Provided if the user selected to load images into memory.
-            * ``"gt_associated"`` (optional): path to the associated ground truth of the sample. Present if the user selected
-              ``PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER`` to be ``True``.
+    Y_train : BiaPyDataset, optional
+        Loaded train Y data.
+
+    Y_val : BiaPyDataset, optional
+        Loaded validation Y data.
 
     Returns
     -------
@@ -107,7 +71,7 @@ def create_train_val_augmentors(
     val_generator : DataLoader
         Validation data generator.
 
-    data_norm: dict
+    data_norm : Normalization
         Normalization of the data.
 
     num_training_steps_per_epoch: int
@@ -123,6 +87,7 @@ def create_train_val_augmentors(
             num_files = len(next(os.walk(cfg.PATHS.PROB_MAP_DIR))[2])
             prob_map = cfg.PATHS.PROB_MAP_DIR if num_files > 1 else np.load(prob_map_file)
         else:
+            assert Y_train
             prob_map = calculate_volume_prob_map(
                 Y_train,
                 (cfg.PROBLEM.NDIM == "3D"),
@@ -192,7 +157,7 @@ def create_train_val_augmentors(
             dropout=cfg.AUGMENTOR.DROPOUT,
             drop_range=cfg.AUGMENTOR.DROP_RANGE,
             resize_shape=r_shape,
-            norm_dict=norm_dict,
+            norm_module=norm_module,
             convert_to_rgb=cfg.DATA.FORCE_RGB,
             preprocess_f=preprocess_data if cfg.DATA.PREPROCESS.TRAIN else None,
             preprocess_cfg=cfg.DATA.PREPROCESS if cfg.DATA.PREPROCESS.TRAIN else None,
@@ -283,7 +248,7 @@ def create_train_val_augmentors(
             prob_map=prob_map,
             n_classes=cfg.MODEL.N_CLASSES,
             extra_data_factor=cfg.DATA.TRAIN.REPLICATE,
-            norm_dict=norm_dict,
+            norm_module=norm_module,
             random_crop_scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
             convert_to_rgb=cfg.DATA.FORCE_RGB,
             preprocess_f=preprocess_data if cfg.DATA.PREPROCESS.TRAIN else None,
@@ -319,7 +284,7 @@ def create_train_val_augmentors(
             seed=cfg.SYSTEM.SEED,
             da=False,
             resize_shape=r_shape,
-            norm_dict=norm_dict,
+            norm_module=norm_module,
             preprocess_f=preprocess_data if cfg.DATA.PREPROCESS.VAL else None,
             preprocess_cfg=cfg.DATA.PREPROCESS if cfg.DATA.PREPROCESS.VAL else None,
         )
@@ -334,7 +299,7 @@ def create_train_val_augmentors(
             val=True,
             n_classes=cfg.MODEL.N_CLASSES,
             seed=cfg.SYSTEM.SEED,
-            norm_dict=norm_dict,
+            norm_module=norm_module,
             resolution=cfg.DATA.VAL.RESOLUTION,
             random_crop_scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
             preprocess_f=preprocess_data if cfg.DATA.PREPROCESS.VAL else None,
@@ -433,11 +398,11 @@ def create_train_val_augmentors(
 
 
 def create_test_augmentor(
-    cfg: type[Config],
+    cfg: Config,
     X_test: Any,
     Y_test: Any,
-    norm_dict=None,
-) -> Tuple[Union[test_pair_data_generator, test_single_data_generator], Dict]:
+    norm_module: Normalization,
+) -> Tuple[test_pair_data_generator | test_single_data_generator, Normalization]:
     """
     Create test data generator.
 
@@ -453,12 +418,15 @@ def create_test_augmentor(
         Test data mask/class. E.g. ``(num_of_images, y, x, channels)`` for ``2D`` or ``(num_of_images, z, y, x, channels)`` for ``3D``
         in all the workflows except classification. For this last the shape is ``(num_of_images, class)`` for both ``2D`` and ``3D``.
 
+    norm_module : Normalization
+        Normalization module that defines the normalization steps to apply.
+
     Returns
     -------
     test_generator : test_pair_data_generator/test_single_data_generator
         Test data generator.
 
-    data_norm : dict
+    data_norm : Normalization
         Normalization of the data.
     """
     if cfg.PROBLEM.TYPE == "SELF_SUPERVISED" and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
@@ -472,8 +440,7 @@ def create_test_augmentor(
         provide_Y=provide_Y,
         ndim=ndim,
         seed=cfg.SYSTEM.SEED,
-        norm_dict=norm_dict,
-        reduce_mem=cfg.TEST.REDUCE_MEMORY,
+        norm_module=norm_module,
         convert_to_rgb=cfg.DATA.FORCE_RGB,
         filter_props=cfg.DATA.TEST.FILTER_SAMPLES.PROPS,
         filter_vals=cfg.DATA.TEST.FILTER_SAMPLES.VALUES,
@@ -539,7 +506,7 @@ def check_generator_consistence(
         X_test, Y_test = sample
 
         for k in range(len(X_test)):
-            fil = filenames[c] if filenames is not None else ["sample_" + str(c) + ".tif"]
+            fil = [filenames[c]] if filenames else ["sample_" + str(c) + ".tif"]
             save_tif(np.expand_dims(X_test[k], 0), data_out_dir, fil, verbose=False)
             save_tif(np.expand_dims(Y_test[k], 0), mask_out_dir, fil, verbose=False)
             c += 1

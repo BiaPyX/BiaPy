@@ -415,7 +415,7 @@ class MultiResUnet(torch.nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor | List[torch.Tensor]:
         # Super-resolution
-        if self.pre_upsampling is not None:
+        if self.pre_upsampling:
             x = self.pre_upsampling(x)
 
         x_multires1 = self.multiresblock1(x)
@@ -449,11 +449,11 @@ class MultiResUnet(torch.nn.Module):
         x_multires9 = self.multiresblock9(up9)
 
         # Super-resolution
-        if self.post_upsampling is not None:
+        if self.post_upsampling:
             x_multires9 = self.post_upsampling(x_multires9)
 
         class_head_out = torch.empty(())
-        if self.multihead and self.last_class_head is not None:
+        if self.multihead and self.last_class_head:
             class_head_out = self.last_class_head(x_multires9)
 
         out = self.last_block(x_multires9)

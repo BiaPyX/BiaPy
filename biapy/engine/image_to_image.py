@@ -11,7 +11,6 @@ from torchmetrics.image.inception import InceptionScore
 from biapy.engine.metrics import SSIM_loss
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.utils.misc import to_pytorch_format, to_numpy_format
-from biapy.data.pre_processing import undo_sample_normalization
 from biapy.data.post_processing.post_processing import (
     ensemble8_2d_predictions,
     ensemble16_3d_predictions,
@@ -54,8 +53,7 @@ class Image_to_Image_Workflow(Base_Workflow):
         self.mask_path = cfg.DATA.TRAIN.GT_PATH
         self.is_y_mask = False
 
-        self.norm_dict["mask_norm"] = "as_image"
-        self.test_norm_dict["mask_norm"] = "none" 
+        self.norm_module.mask_norm = "as_image"
 
     def define_activations_and_channels(self):
         """
@@ -202,12 +200,12 @@ class Image_to_Image_Workflow(Base_Workflow):
         list_to_use = self.train_metrics if train else self.test_metrics
         list_names_to_use = self.train_metric_names if train else self.test_metric_names
 
+        if self.cfg.DATA.NORMALIZATION.TYPE in ["div", "scale_range"]:
+            output = torch.clamp(output, min=0, max=1)
+            targets = torch.clamp(targets, min=0, max=1)
+
         with torch.no_grad():
             for i, metric in enumerate(list_to_use):
-                if self.cfg.DATA.NORMALIZATION.TYPE in ["div", "scale_range"]:
-                    output = torch.clamp(output, min=0, max=1)
-                    targets = torch.clamp(targets, min=0, max=1)
-
                 m_name = list_names_to_use[i].lower()
                 if m_name in ["mse", "mae"]:
                     val = metric(output, targets)
@@ -245,10 +243,10 @@ class Image_to_Image_Workflow(Base_Workflow):
                     raise NotImplementedError
 
                 if m_name in ["mse", "mae", "ssim", "psnr"]:
-                    val = val.item() if not torch.isnan(val) else 0
+                    val = val.item() if not torch.isnan(val) else 0 # type: ignore
                     out_metrics[m_name] = val
 
-                if metric_logger is not None:
+                if metric_logger:
                     metric_logger.meters[list_names_to_use[i]].update(val)
         return out_metrics
 
@@ -256,6 +254,8 @@ class Image_to_Image_Workflow(Base_Workflow):
         """
         Function to process a sample in the inference phase.
         """
+        assert self.model 
+
         # Skip processing image
         if "discard" in self.current_sample["X"] and self.current_sample["X"]["discard"]:
             return True
@@ -278,15 +278,15 @@ class Image_to_Image_Workflow(Base_Workflow):
                     verbose=self.cfg.TEST.VERBOSE,
                 )
                 if self.current_sample["Y"] is not None:
-                    self.current_sample["X"], self.current_sample["Y"], _ = obj
+                    self.current_sample["X"], self.current_sample["Y"], _ = obj # type: ignore
                 else:
-                    self.current_sample["X"], _ = obj
+                    self.current_sample["X"], _ = obj # type: ignore
                 del obj
             else:
                 if self.current_sample["Y"] is not None:
                     self.current_sample["Y"] = self.current_sample["Y"][0]
                 if self.cfg.TEST.REDUCE_MEMORY:
-                    self.current_sample["X"], _ = crop_3D_data_with_overlap(
+                    self.current_sample["X"], _ = crop_3D_data_with_overlap( # type: ignore
                         self.current_sample["X"][0],
                         self.cfg.DATA.PATCH_SIZE,
                         overlap=self.cfg.DATA.TEST.OVERLAP,
@@ -294,7 +294,7 @@ class Image_to_Image_Workflow(Base_Workflow):
                         verbose=self.cfg.TEST.VERBOSE,
                         median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING,
                     )
-                    self.current_sample["Y"], _ = crop_3D_data_with_overlap(
+                    self.current_sample["Y"], _ = crop_3D_data_with_overlap( # type: ignore
                         self.current_sample["Y"],
                         self.cfg.DATA.PATCH_SIZE,
                         overlap=self.cfg.DATA.TEST.OVERLAP,
@@ -313,9 +313,9 @@ class Image_to_Image_Workflow(Base_Workflow):
                         median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING,
                     )
                     if self.current_sample["Y"] is not None:
-                        self.current_sample["X"], self.current_sample["Y"], _ = obj
+                        self.current_sample["X"], self.current_sample["Y"], _ = obj # type: ignore
                     else:
-                        self.current_sample["X"], _ = obj
+                        self.current_sample["X"], _ = obj # type: ignore
                     del obj
 
         # Predict each patch
@@ -396,6 +396,7 @@ class Image_to_Image_Workflow(Base_Workflow):
                 del obj
 
             if self.cfg.PROBLEM.NDIM == "3D":
+                assert isinstance(pred, np.ndarray)
                 pred = np.expand_dims(pred, 0)
                 if self.current_sample["Y"] is not None:
                     self.current_sample["Y"] = np.expand_dims(self.current_sample["Y"], 0)
@@ -404,7 +405,7 @@ class Image_to_Image_Workflow(Base_Workflow):
             reflected_orig_shape = (1,) + self.current_sample["reflected_orig_shape"]
             if reflected_orig_shape != pred.shape:
                 if self.cfg.PROBLEM.NDIM == "2D":
-                    pred = pred[:, -reflected_orig_shape[1] :, -reflected_orig_shape[2] :]
+                    pred = pred[:, -reflected_orig_shape[1] :, -reflected_orig_shape[2] :] # type: ignore
                     if self.current_sample["Y"] is not None:
                         self.current_sample["Y"] = self.current_sample["Y"][
                             :, -reflected_orig_shape[1] :, -reflected_orig_shape[2] :
@@ -415,7 +416,7 @@ class Image_to_Image_Workflow(Base_Workflow):
                         -reflected_orig_shape[1] :,
                         -reflected_orig_shape[2] :,
                         -reflected_orig_shape[3] :,
-                    ]
+                    ]  # type: ignore
                     if self.current_sample["Y"] is not None:
                         self.current_sample["Y"] = self.current_sample["Y"][
                             :,
@@ -425,10 +426,12 @@ class Image_to_Image_Workflow(Base_Workflow):
                         ]
 
         # Undo normalization
-        pred = undo_sample_normalization(pred, self.current_sample["X_norm"])
+        assert isinstance(pred, np.ndarray)
+        pred = self.norm_module.undo_image_norm(pred, self.current_sample["X_norm"])
 
         # Save image
         if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
+            assert isinstance(pred, np.ndarray)
             save_tif(
                 pred,
                 self.cfg.PATHS.RESULT_DIR.PER_IMAGE,

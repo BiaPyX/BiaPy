@@ -12,7 +12,6 @@ from biapy.engine.metrics import (
     DiceBCELoss,
     DiceLoss,
 )
-from biapy.data.pre_processing import norm_range01, undo_sample_normalization
 
 
 class Semantic_Segmentation_Workflow(Base_Workflow):
@@ -218,10 +217,12 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         prediction : Tensor
             Image prediction.
         """
+        assert self.torchvision_preprocessing and self.model
+
         # Convert first to 0-255 range if uint16
         if in_img.dtype == torch.float32:
             if torch.max(in_img) > 1:
-                in_img = (norm_range01(in_img, torch.uint8)[0] * 255).to(torch.uint8)
+                in_img = (self.torchvision_norm.apply_image_norm(in_img)[0] * 255).to(torch.uint8)
             in_img = in_img.to(torch.uint8)
 
         # Apply TorchVision pre-processing
@@ -275,7 +276,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
                 val = val.item() if not torch.isnan(val) else 0
                 out_metrics[list_names_to_use[i]] = val
 
-                if metric_logger is not None:
+                if metric_logger:
                     metric_logger.meters[list_names_to_use[i]].update(val)
         return out_metrics
 

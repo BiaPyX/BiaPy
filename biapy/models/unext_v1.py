@@ -262,7 +262,7 @@ class U_NeXt_V1(nn.Module):
 
     def forward(self, x) -> torch.Tensor | List[torch.Tensor]:
         # Super-resolution
-        if self.pre_upsampling is not None:
+        if self.pre_upsampling:
             x = self.pre_upsampling(x)
 
         # Down
@@ -283,11 +283,11 @@ class U_NeXt_V1(nn.Module):
 
         x = self.up_path[-1](x)
 
-        if self.post_upsampling is not None:
+        if self.post_upsampling:
             x = self.post_upsampling(x)
 
         class_head_out = torch.empty(())
-        if self.multihead and self.last_class_head is not None:
+        if self.multihead and self.last_class_head:
             class_head_out = self.last_class_head(x)
 
         x = self.last_block(x)

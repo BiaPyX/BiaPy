@@ -1,7 +1,8 @@
 import numpy as np
 import random
 from PIL import Image
-from typing import Tuple
+from typing import Tuple, Optional
+from numpy.typing import NDArray
 
 from biapy.data.data_manipulation import save_tif
 from biapy.data.generators.pair_base_data_generator import PairBaseDataGenerator
@@ -23,7 +24,9 @@ class Pair3DImageDataGenerator(PairBaseDataGenerator):
 
     def __init__(self, zflip: bool = False, **kwars):
         super().__init__(**kwars)
-        self.z_size = self.X[0]["shape"][0]
+        sshape = self.X.sample_list[0].get_shape()
+        assert sshape is not None
+        self.z_size = sshape[0]
         self.zflip = zflip
         self.grid_d_size = (
             self.shape[1] * self.grid_d_range[0],
@@ -34,11 +37,11 @@ class Pair3DImageDataGenerator(PairBaseDataGenerator):
 
     def apply_transform(
         self,
-        image: np.ndarray,
-        mask: np.ndarray,
-        e_im: np.ndarray | None = None,
-        e_mask: np.ndarray | None = None,
-    ) -> Tuple[np.ndarray, np.ndarray]:
+        image: NDArray,
+        mask: NDArray,
+        e_im: Optional[NDArray] = None,
+        e_mask: Optional[NDArray] = None,
+    ) -> Tuple[NDArray, NDArray]:
         """
         Transform the input image and its mask at the same time with one of the selected choices based on a
         probability.

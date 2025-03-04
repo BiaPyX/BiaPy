@@ -103,7 +103,7 @@ class SR_upsampling(nn.Module):
     def forward(self, x):
         out = self.conv1(x)
         out = torch.nn.functional.pixel_shuffle(out, upscale_factor=self.f)
-        if self.conv2 is not None:
+        if self.conv2:
             out = self.conv2(out)
             out = torch.nn.functional.pixel_shuffle(out, upscale_factor=self.f)
         return out

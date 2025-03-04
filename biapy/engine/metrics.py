@@ -699,10 +699,10 @@ def detection_metrics(
         assert [len(x) == 2 for x in bbox_to_consider], (
             "'bbox_to_consider' needs to be a list of " "two element array/tuple. E.g. [[1,1],[15,100],[10,200]]"
         )
-    if true_classes is not None and pred_classes is None:
+    if true_classes and pred_classes is None:
         raise ValueError("'pred_classes' must be provided when 'true_classes' is set")
 
-    if true_classes is not None and pred_classes is not None:
+    if true_classes and pred_classes:
         if len(true_classes) != len(true):
             raise ValueError("'true' and 'true_classes' length must be the same")
         if len(pred_classes) != len(pred_classes):
@@ -864,11 +864,11 @@ def detection_metrics(
         F1 = 0
 
     if not class_metrics:
-        if df is not None:
+        if df:
             df = df.drop(columns=["gt_class", "pred_class"])
             df_fp = df_fp.drop(columns=["pred_class"])
     else:
-        if df is not None:
+        if df:
             gt_matched_classes = df["gt_class"].tolist()
             pred_matched_classes = df["pred_class"].tolist()
             TP_classes = len([1 for x, y in zip(gt_matched_classes, pred_matched_classes) if x == y])

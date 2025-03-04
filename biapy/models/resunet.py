@@ -237,11 +237,11 @@ class ResUNet(nn.Module):
 
     def forward(self, x) -> torch.Tensor | List[torch.Tensor]:
         # Super-resolution
-        if self.pre_upsampling is not None:
+        if self.pre_upsampling:
             x = self.pre_upsampling(x)
 
         # extra large-kernel input layer
-        if self.conv_in is not None:
+        if self.conv_in:
             x = self.conv_in(x)
 
         # Down
@@ -260,15 +260,15 @@ class ResUNet(nn.Module):
             x = up(x, blocks[-i - 1])
 
         # extra large-kernel output layer
-        if self.conv_out is not None:
+        if self.conv_out:
             x = self.conv_out(x)
 
         # Super-resolution
-        if self.post_upsampling is not None:
+        if self.post_upsampling:
             x = self.post_upsampling(x)
 
         class_head_out = torch.empty(())
-        if self.multihead and self.last_class_head is not None:
+        if self.multihead and self.last_class_head:
             class_head_out = self.last_class_head(x)
 
         x = self.last_block(x)

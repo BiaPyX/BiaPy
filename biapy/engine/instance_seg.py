@@ -17,8 +17,6 @@ from biapy.data.post_processing.post_processing import (
 from biapy.data.pre_processing import (
     create_instance_channels,
     create_test_instance_channels,
-    norm_range01,
-    undo_sample_normalization,
 )
 from biapy.utils.matching import matching, wrapper_matching_dataset_lazy
 from biapy.engine.metrics import (
@@ -144,6 +142,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         self.activations = {}
         self.model_output_channels = {
             "type": "mask",
+            "channels": 1
         }
         if self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
             if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "C":
@@ -399,13 +398,13 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     for m in val:
                         v = val[m].item() if not torch.isnan(val[m]) else 0
                         out_metrics[list_names_to_use[k]] = v
-                        if metric_logger is not None:
+                        if metric_logger:
                             metric_logger.meters[list_names_to_use[k]].update(v)
                         k += 1
                 else:
                     val = val.item() if not torch.isnan(val) else 0
                     out_metrics[list_names_to_use[i]] = val
-                    if metric_logger is not None:
+                    if metric_logger:
                         metric_logger.meters[list_names_to_use[i]].update(val)
         return out_metrics
 
@@ -560,7 +559,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     error_shape = (256, 256, 2)
                 elif self.cfg.PROBLEM.NDIM == "3D" and _Y.ndim != 4:
                     error_shape = (40, 256, 256, 2)
-                if error_shape is not None:
+                if error_shape:
                     raise ValueError(
                         f"Image {test_file} wrong dimension. In instance segmentation, when 'MODEL.N_CLASSES' are "
                         f"more than 2 labels need to have two channels, e.g. {error_shape}, containing the instance "
@@ -1069,13 +1068,13 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,
                         resolution,
                     )
-                    if r is not None:
+                    if r:
                         self.all_matching_stats_merge_patches.append(r)
-                    if r_post is not None:
+                    if r_post:
                         self.all_matching_stats_merge_patches_post.append(r_post)
-                    if rcls is not None:
+                    if rcls:
                         self.all_class_stats_merge_patches.append(rcls)
-                    if rcls_post is not None:
+                    if rcls_post:
                         self.all_class_stats_merge_patches_post.append(rcls_post)
                 else:  # synapses
                     self.synapse_seg_process(
@@ -1127,13 +1126,13 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_POST_PROCESSING,
                         resolution,
                     )
-                    if r is not None:
+                    if r:
                         self.all_matching_stats.append(r)
-                    if r_post is not None:
+                    if r_post:
                         self.all_matching_stats_post.append(r_post)
-                    if rcls is not None:
+                    if rcls:
                         self.all_class_stats.append(rcls)
-                    if rcls_post is not None:
+                    if rcls_post:
                         self.all_class_stats_post.append(rcls_post)
                 else:  # synapses
                     self.synapse_seg_process(
@@ -1168,13 +1167,13 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     self.cfg.PATHS.RESULT_DIR.AS_3D_STACK_POST_PROCESSING,
                     resolution,
                 )
-                if r is not None:
+                if r:
                     self.all_matching_stats_as_3D_stack.append(r)
-                if r_post is not None:
+                if r_post:
                     self.all_matching_stats_as_3D_stack_post.append(r_post)
-                if rcls is not None:
+                if rcls:
                     self.all_class_stats_as_3D_stack.append(rcls)
-                if rcls_post is not None:
+                if rcls_post:
                     self.all_class_stats_as_3D_stack_post.append(rcls_post)
             else:  # synapses
                 self.synapse_seg_process(
@@ -1277,57 +1276,57 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 for i in range(len(self.cfg.TEST.MATCHING_STATS_THS)):
                     print("IoU TH={}".format(self.cfg.TEST.MATCHING_STATS_THS[i]))
                     # Merge patches
-                    if self.stats["inst_stats_merge_patches"] is not None:
+                    if self.stats["inst_stats_merge_patches"]:
                         print("      Merge patches:")
                         print(f"      {self.stats['inst_stats_merge_patches'][i]}")
                     # As 3D stack
-                    if self.stats["inst_stats_as_3D_stack"] is not None:
+                    if self.stats["inst_stats_as_3D_stack"]:
                         print("      As 3D stack:")
                         print(f"      {self.stats['inst_stats_as_3D_stack'][i]}")
                     # Full image
-                    if self.stats["inst_stats"] is not None:
+                    if self.stats["inst_stats"]:
                         print("      Full image:")
                         print(f"      {self.stats['inst_stats'][i]}")
                     if self.post_processing["instance_post"]:
                         print("IoU (post-processing) TH={}".format(self.cfg.TEST.MATCHING_STATS_THS[i]))
                         # Merge patches
-                        if self.stats["inst_stats_merge_patches_post"] is not None:
+                        if self.stats["inst_stats_merge_patches_post"]:
                             print("      Merge patches (post-processing):")
                             print(f"      {self.stats['inst_stats_merge_patches_post'][i]}")
                         # As 3D stack
-                        if self.stats["inst_stats_as_3D_stack_post"] is not None:
+                        if self.stats["inst_stats_as_3D_stack_post"]:
                             print("      As 3D stack (post-processing):")
                             print(f"      {self.stats['inst_stats_as_3D_stack_post'][i]}")
                         # Full image
-                        if self.stats["inst_stats_post"] is not None:
+                        if self.stats["inst_stats_post"]:
                             print("      Full image (post-processing):")
                             print(f"      {self.stats['inst_stats_post'][i]}")
 
                 # Multi-head: instances + classification
                 if self.multihead:
                     # Merge patches
-                    if self.stats["class_stats_merge_patches"] is not None:
+                    if self.stats["class_stats_merge_patches"]:
                         print(f"      Merge patches classification IoU: {self.stats['class_stats_merge_patches']}")
                     # As 3D stack
-                    if self.stats["class_stats_as_3D_stack"] is not None:
+                    if self.stats["class_stats_as_3D_stack"]:
                         print(f"      As 3D stack classification IoU: {self.stats['class_stats_as_3D_stack']}")
                     # Full image
-                    if self.stats["class_stats"] is not None:
+                    if self.stats["class_stats"]:
                         print(f"      Full image classification IoU: {self.stats['class_stats']}")
 
                     if self.post_processing["instance_post"]:
                         # Merge patches
-                        if self.stats["class_stats_merge_patches_post"] is not None:
+                        if self.stats["class_stats_merge_patches_post"]:
                             print(
                                 f"      Merge patches classification IoU (post-processing): {self.stats['class_stats_merge_patches_post']}"
                             )
                         # As 3D stack
-                        if self.stats["class_stats_as_3D_stack_post"] is not None:
+                        if self.stats["class_stats_as_3D_stack_post"]:
                             print(
                                 f"      As 3D stack classification IoU (post-processing): {self.stats['class_stats_as_3D_stack_post']}"
                             )
                         # Full image
-                        if self.stats["class_stats_post"] is not None:
+                        if self.stats["class_stats_post"]:
                             print(
                                 f"      Full image classification IoU (post-processing): {self.stats['class_stats_post']}"
                             )
@@ -1535,12 +1534,13 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         prediction : Tensor
             Image prediction.
         """
+        assert self.torchvision_preprocessing and self.model
         filename, file_extension = os.path.splitext(self.current_sample["filename"])
 
         # Convert first to 0-255 range if uint16
         if in_img.dtype == torch.float32:
             if torch.max(in_img) > 1:
-                in_img = (norm_range01(in_img, torch.uint8)[0] * 255).to(torch.uint8)
+                in_img = (self.torchvision_norm.apply_image_norm(in_img)[0] * 255).to(torch.uint8)
             in_img = in_img.to(torch.uint8)
 
         # Apply TorchVision pre-processing

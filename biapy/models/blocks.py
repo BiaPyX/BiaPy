@@ -56,7 +56,7 @@ class ConvBlock(nn.Module):
                 block.append(get_norm_2d(norm, out_size))
             else:
                 block.append(get_norm_3d(norm, out_size))
-        if act is not None:
+        if act:
             block.append(get_activation(act))
         if dropout > 0:
             block.append(nn.Dropout(dropout))
@@ -208,7 +208,7 @@ class ConvNeXtBlock_V1(nn.Module):
 
     def forward(self, x):
         result = self.block(x)
-        if self.layer_scale is not None:
+        if self.layer_scale:
             result = self.layer_scale * result
         result = x + self.stochastic_depth(result)
         return result
@@ -369,7 +369,7 @@ class UpBlock(nn.Module):
                 block.append(get_norm_2d(norm, out_size))
             else:
                 block.append(get_norm_3d(norm, out_size))
-        if act is not None:
+        if act:
             block.append(get_activation(act))
         self.up = nn.Sequential(*block)
 
@@ -390,7 +390,7 @@ class UpBlock(nn.Module):
 
     def forward(self, x, bridge):
         up = self.up(x)
-        if self.attention_gate is not None:
+        if self.attention_gate:
             attn = self.attention_gate(up, bridge)
             out = torch.cat([up, attn], 1)
         else:
@@ -478,7 +478,7 @@ class UpConvNeXtBlock_V1(nn.Module):
             pre_ln_permutation = Permute([0, 2, 3, 1])
             post_ln_permutation = Permute([0, 3, 1, 2])
 
-        if layer_norm is not None:
+        if layer_norm:
             block.append(nn.Sequential(pre_ln_permutation, layer_norm(in_size), post_ln_permutation))
         else:
             layer_norm = nn.LayerNorm
@@ -512,7 +512,7 @@ class UpConvNeXtBlock_V1(nn.Module):
 
     def forward(self, x, bridge):
         up = self.up(x)
-        if self.attention_gate is not None:
+        if self.attention_gate:
             attn = self.attention_gate(up, bridge)
             out = torch.cat([up, attn], 1)
         else:
@@ -598,7 +598,7 @@ class UpConvNeXtBlock_V2(nn.Module):
             pre_ln_permutation = Permute([0, 2, 3, 1])
             post_ln_permutation = Permute([0, 3, 1, 2])
 
-        if layer_norm is not None:
+        if layer_norm:
             block.append(nn.Sequential(pre_ln_permutation, layer_norm(in_size), post_ln_permutation))
         else:
             layer_norm = nn.LayerNorm
@@ -630,7 +630,7 @@ class UpConvNeXtBlock_V2(nn.Module):
 
     def forward(self, x, bridge):
         up = self.up(x)
-        if self.attention_gate is not None:
+        if self.attention_gate:
             attn = self.attention_gate(up, bridge)
             out = torch.cat([up, attn], 1)
         else:
@@ -801,7 +801,7 @@ class ResConvBlock(nn.Module):
                         block.append(get_norm_2d(norm, in_size))
                     else:
                         block.append(get_norm_3d(norm, in_size))
-                if act is not None:
+                if act:
                     block.append(get_activation(act))
             else:
                 if norm != "none":
@@ -809,7 +809,7 @@ class ResConvBlock(nn.Module):
                         pre_conv.append(get_norm_2d(norm, in_size))
                     else:
                         pre_conv.append(get_norm_3d(norm, in_size))
-                if act is not None:
+                if act:
                     pre_conv.append(get_activation(act))
         if extra_conv:
             pre_conv.append(
@@ -863,7 +863,7 @@ class ResConvBlock(nn.Module):
             self.se_block = nn.Identity()
 
     def forward(self, x):
-        if self.pre_conv is not None:
+        if self.pre_conv:
             x = self.pre_conv(x)
         out = self.block(x) + self.shortcut(x)
         return out

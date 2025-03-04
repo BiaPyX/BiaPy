@@ -8,7 +8,7 @@ from sklearn.metrics import accuracy_score, confusion_matrix, classification_rep
 from torchmetrics import Accuracy
 
 from biapy.engine.base_workflow import Base_Workflow
-from biapy.data.pre_processing import norm_range01, preprocess_data, undo_sample_normalization
+from biapy.data.pre_processing import preprocess_data
 from biapy.data.data_manipulation import load_and_prepare_train_data_cls, load_and_prepare_cls_test_data
 from biapy.utils.misc import is_main_process
 
@@ -164,7 +164,7 @@ class Classification_Workflow(Base_Workflow):
                     val = val.item() if not torch.isnan(val) else 0
                 out_metrics[list_names_to_use[i]] = val
 
-                if metric_logger is not None:
+                if metric_logger:
                     metric_logger.meters[list_names_to_use[i]].update(val)
         return out_metrics
 
@@ -235,7 +235,7 @@ class Classification_Workflow(Base_Workflow):
             convert_to_rgb=self.cfg.DATA.FORCE_RGB,
             is_3d=(self.cfg.PROBLEM.NDIM == "3D"),
             norm_before_filter=self.cfg.DATA.TRAIN.FILTER_SAMPLES.NORM_BEFORE,
-            norm_dict=self.norm_dict,
+            norm_module=self.norm_module,
         )
         self.Y_train, self.Y_val = None, None
 
@@ -300,7 +300,7 @@ class Classification_Workflow(Base_Workflow):
         if self.current_sample["Y"] is not None:
             self.all_gt.append(self.current_sample["Y"])
 
-    def torchvision_model_call(self, in_img, is_train=False):
+    def torchvision_model_call(self, in_img: torch.Tensor, is_train: bool = False):
         """
         Call a regular Pytorch model.
 
@@ -320,10 +320,11 @@ class Classification_Workflow(Base_Workflow):
         # Convert first to 0-255 range if uint16
         if in_img.dtype == torch.float32:
             if torch.max(in_img) > 255:
-                in_img = (norm_range01(in_img, torch.uint8)[0] * 255).to(torch.uint8)
+                in_img = (self.torchvision_norm.apply_image_norm(in_img)[0] * 255).to(torch.uint8)
             in_img = in_img.to(torch.uint8)
 
         # Apply TorchVision pre-processing
+        assert self.torchvision_preprocessing and self.model
         in_img = self.torchvision_preprocessing(in_img)
 
         return self.model(in_img)
@@ -364,14 +365,14 @@ class Classification_Workflow(Base_Workflow):
                     if metric == "Confusion matrix":
                         print("Confusion matrix: ")
                         print(self.stats["full_image"][metric.lower()])
-                        if self.class_names is not None:
+                        if self.class_names:
                             display_labels = [
                                 "Category {} ({})".format(i, self.class_names[i])
                                 for i in range(self.cfg.MODEL.N_CLASSES)
                             ]
                         else:
                             display_labels = ["Category {}".format(i) for i in range(self.cfg.MODEL.N_CLASSES)]
-                        print("\n" + classification_report(self.all_gt, self.all_pred, target_names=display_labels))
+                        print("\n" + classification_report(self.all_gt, self.all_pred, target_names=display_labels))  # type: ignore
                     else:
                         print(
                             "Test {}: {}".format(

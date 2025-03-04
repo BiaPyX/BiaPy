@@ -1322,25 +1322,21 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     assert cfg.DATA.NORMALIZATION.TYPE in [
         "div",
         "scale_range",
-        "custom",
-    ], "DATA.NORMALIZATION.TYPE not in ['div', 'scale_range', 'custom']"
-    if cfg.DATA.NORMALIZATION.CUSTOM_MEAN != -1 and cfg.DATA.NORMALIZATION.CUSTOM_STD == -1:
-        raise ValueError(
-            "'DATA.NORMALIZATION.CUSTOM_STD' needs to be provided when 'DATA.NORMALIZATION.CUSTOM_MEAN' is provided too"
-        )
-    if cfg.DATA.NORMALIZATION.PERC_CLIP:
-        if cfg.DATA.NORMALIZATION.PERC_LOWER == -1:
+        "zero_mean_unit_variance",
+    ], "DATA.NORMALIZATION.TYPE not in ['div', 'scale_range', 'zero_mean_unit_variance']"
+    if cfg.DATA.NORMALIZATION.PERC_CLIP.ENABLE:
+        if cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC == -1 and cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_VALUE == -1:
             raise ValueError(
-                "'DATA.NORMALIZATION.PERC_LOWER' needs to be set when DATA.NORMALIZATION.PERC_CLIP == 'True'"
+                "'DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC' or 'DATA.NORMALIZATION.PERC_CLIP.LOWER_VALUE' need to be set when DATA.NORMALIZATION.PERC_CLIP.ENABLE == 'True'"
             )
-        if cfg.DATA.NORMALIZATION.PERC_UPPER == -1:
+        if cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC == -1 and cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_VALUE == -1:
             raise ValueError(
-                "'DATA.NORMALIZATION.PERC_UPPER' needs to be set when DATA.NORMALIZATION.PERC_CLIP == 'True'"
+                "'DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC' or 'DATA.NORMALIZATION.PERC_CLIP.UPPER_VALUE' need to be set when DATA.NORMALIZATION.PERC_CLIP.ENABLE == 'True'"
             )
-        if not check_value(cfg.DATA.NORMALIZATION.PERC_LOWER, value_range=(0, 100)):
-            raise ValueError("'DATA.NORMALIZATION.PERC_LOWER' not in [0, 100] range")
-        if not check_value(cfg.DATA.NORMALIZATION.PERC_UPPER, value_range=(0, 100)):
-            raise ValueError("'DATA.NORMALIZATION.PERC_UPPER' not in [0, 100] range")
+        if not check_value(cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC, value_range=(0, 100)):
+            raise ValueError("'DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC' not in [0, 100] range")
+        if not check_value(cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC, value_range=(0, 100)):
+            raise ValueError("'DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC' not in [0, 100] range")
     if cfg.DATA.TRAIN.REPLICATE:
         if cfg.PROBLEM.TYPE == "CLASSIFICATION" or (
             cfg.PROBLEM.TYPE == "SELF_SUPERVISED" and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"
@@ -1755,9 +1751,9 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "wrap",
             "symmetric",
         ], "'AUGMENTOR.AFFINE_MODE' needs to be one between ['constant', 'reflect', 'wrap', 'symmetric']"
-        if cfg.AUGMENTOR.GAMMA_CONTRAST and cfg.DATA.NORMALIZATION.TYPE == "custom":
+        if cfg.AUGMENTOR.GAMMA_CONTRAST and cfg.DATA.NORMALIZATION.TYPE == "zero_mean_unit_variance":
             raise ValueError(
-                "'AUGMENTOR.GAMMA_CONTRAST' doesn't work correctly on images with negative values, which 'custom' "
+                "'AUGMENTOR.GAMMA_CONTRAST' doesn't work correctly on images with negative values, which 'zero_mean_unit_variance' "
                 "normalization will lead to"
             )
 

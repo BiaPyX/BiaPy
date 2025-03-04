@@ -4,6 +4,11 @@ import numpy as np
 import numpy.ma as ma
 from tqdm import tqdm
 from torchmetrics.regression import MeanSquaredError, MeanAbsoluteError
+from typing import (
+    Tuple,
+    Callable,
+)
+from numpy.typing import NDArray
 
 from biapy.data.data_2D_manipulation import (
     crop_data_with_overlap,
@@ -20,7 +25,6 @@ from biapy.data.post_processing.post_processing import (
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.data.data_manipulation import save_tif
 from biapy.utils.misc import to_pytorch_format, to_numpy_format, is_main_process
-from biapy.data.pre_processing import undo_sample_normalization
 from biapy.engine.metrics import n2v_loss_mse
 
 class Denoising_Workflow(Base_Workflow):
@@ -54,8 +58,7 @@ class Denoising_Workflow(Base_Workflow):
         self.is_y_mask = False
         self.load_Y_val = cfg.PROBLEM.DENOISING.LOAD_GT_DATA
 
-        self.norm_dict["mask_norm"] = "as_image"
-        self.test_norm_dict["mask_norm"] = "none" 
+        self.norm_module.mask_norm = "as_image"
         
     def define_activations_and_channels(self):
         """
@@ -174,7 +177,7 @@ class Denoising_Workflow(Base_Workflow):
                 val = val.item() if not torch.isnan(val) else 0
                 out_metrics[list_names_to_use[i]] = val
 
-                if metric_logger is not None:
+                if metric_logger:
                     metric_logger.meters[list_names_to_use[i]].update(val)
         return out_metrics
 
@@ -182,6 +185,7 @@ class Denoising_Workflow(Base_Workflow):
         """
         Function to process a sample in the inference phase.
         """
+        assert self.model is not None
         # Skip processing image 
         if "discard" in self.current_sample["X"] and self.current_sample["X"]["discard"]: 
             return True
@@ -195,7 +199,7 @@ class Denoising_Workflow(Base_Workflow):
         # Crop if necessary
         if self.current_sample["X"].shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
             if self.cfg.PROBLEM.NDIM == "2D":
-                self.current_sample["X"], _ = crop_data_with_overlap(
+                self.current_sample["X"], _ = crop_data_with_overlap( # type: ignore
                     self.current_sample["X"],
                     self.cfg.DATA.PATCH_SIZE,
                     overlap=self.cfg.DATA.TEST.OVERLAP,
@@ -203,7 +207,7 @@ class Denoising_Workflow(Base_Workflow):
                     verbose=self.cfg.TEST.VERBOSE,
                 )
             else:
-                self.current_sample["X"], _ = crop_3D_data_with_overlap(
+                self.current_sample["X"], _ = crop_3D_data_with_overlap( # type: ignore
                     self.current_sample["X"][0],
                     self.cfg.DATA.PATCH_SIZE,
                     overlap=self.cfg.DATA.TEST.OVERLAP,
@@ -279,29 +283,29 @@ class Denoising_Workflow(Base_Workflow):
                 del obj
 
             if self.cfg.PROBLEM.NDIM == "3D":
+                assert isinstance(pred, np.ndarray)
                 pred = np.expand_dims(pred, 0)
 
         if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE:
             reflected_orig_shape = (1,) + self.current_sample["reflected_orig_shape"]
             if reflected_orig_shape != pred.shape:
                 if self.cfg.PROBLEM.NDIM == "2D":
-                    pred = pred[:, -reflected_orig_shape[1] :, -reflected_orig_shape[2] :]
+                    pred = pred[:, -reflected_orig_shape[1] :, -reflected_orig_shape[2] :] # type: ignore
                 else:
                     pred = pred[
                         :,
-                        -reflected_orig_shape[1] :,
+                        -reflected_orig_shape[1] :,  
                         -reflected_orig_shape[2] :,
                         -reflected_orig_shape[3] :,
-                    ]
+                    ] # type: ignore
 
         # Undo normalization
-        pred = undo_sample_normalization(
-            pred, 
-            self.current_sample["X_norm"]
-        )
+        assert isinstance(pred, np.ndarray)
+        pred = self.norm_module.undo_image_norm(pred, self.current_sample["X_norm"])
 
         # Save image
         if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
+            assert isinstance(pred, np.ndarray)
             save_tif(
                 pred,
                 self.cfg.PATHS.RESULT_DIR.PER_IMAGE,
@@ -309,7 +313,11 @@ class Denoising_Workflow(Base_Workflow):
                 verbose=self.cfg.TEST.VERBOSE,
             )
 
-    def torchvision_model_call(self, in_img, is_train=False):
+    def torchvision_model_call(
+        self, 
+        in_img: torch.Tensor, 
+        is_train: bool=False
+    ) -> torch.Tensor | None:
         """
         Call a regular Pytorch model.
 
@@ -328,7 +336,7 @@ class Denoising_Workflow(Base_Workflow):
         """
         pass
 
-    def after_merge_patches(self, pred):
+    def after_merge_patches(self, pred: torch.Tensor):
         """
         Steps need to be done after merging all predicted patches into the original image.
 
@@ -339,7 +347,7 @@ class Denoising_Workflow(Base_Workflow):
         """
         pass
 
-    def after_merge_patches_by_chunks_proccess_patch(self, filename):
+    def after_merge_patches_by_chunks_proccess_patch(self, filename: str):
         """
         Place any code that needs to be done after merging all predicted patches into the original image
         but in the process made chunk by chunk. This function will operate patch by patch defined by
@@ -352,7 +360,7 @@ class Denoising_Workflow(Base_Workflow):
         """
         pass
 
-    def after_full_image(self, pred):
+    def after_full_image(self, pred: torch.Tensor):
         """
         Steps that must be executed after generating the prediction by supplying the entire image to the model.
 
@@ -450,7 +458,7 @@ def pm_mean(local_sub_patch_radius):
         vals = []
         for coord in zip(*coords):
             sub_patch, crop_neg, crop_pos = get_subpatch(patch, coord, local_sub_patch_radius)
-            slices = [slice(-n, s - p) for n, p, s in zip(crop_neg, crop_pos, patch_wo_center.shape)]
+            slices = [slice(-n, s - p) for n, p, s in zip(crop_neg, crop_pos, patch_wo_center.shape)] # type: ignore
             sub_patch_mask = (structN2Vmask or patch_wo_center)[tuple(slices)]
             vals.append(np.mean(sub_patch[sub_patch_mask]))
         return vals
@@ -464,7 +472,7 @@ def pm_median(local_sub_patch_radius):
         vals = []
         for coord in zip(*coords):
             sub_patch, crop_neg, crop_pos = get_subpatch(patch, coord, local_sub_patch_radius)
-            slices = [slice(-n, s - p) for n, p, s in zip(crop_neg, crop_pos, patch_wo_center.shape)]
+            slices = [slice(-n, s - p) for n, p, s in zip(crop_neg, crop_pos, patch_wo_center.shape)] # type: ignore
             sub_patch_mask = (structN2Vmask or patch_wo_center)[tuple(slices)]
             vals.append(np.median(sub_patch[sub_patch_mask]))
         return vals
@@ -490,7 +498,7 @@ def pm_uniform_withoutCP(local_sub_patch_radius):
         vals = []
         for coord in zip(*coords):
             sub_patch, crop_neg, crop_pos = get_subpatch(patch, coord, local_sub_patch_radius)
-            slices = [slice(-n, s - p) for n, p, s in zip(crop_neg, crop_pos, patch_wo_center.shape)]
+            slices = [slice(-n, s - p) for n, p, s in zip(crop_neg, crop_pos, patch_wo_center.shape)] # type: ignore
             sub_patch_mask = (structN2Vmask or patch_wo_center)[tuple(slices)]
             vals.append(np.random.permutation(sub_patch[sub_patch_mask])[0])
         return vals
@@ -617,18 +625,18 @@ def apply_structN2Vmask3D(patch, coords, mask):
 
 
 def manipulate_val_data(
-    X_val,
-    Y_val,
-    perc_pix=0.198,
-    shape=(64, 64),
-    value_manipulation=pm_uniform_withCP(5),
+    X_val: NDArray,
+    Y_val: NDArray,
+    perc_pix: float=0.198,
+    shape: Tuple[int,...]=(64, 64),
+    value_manipulation: Callable =pm_uniform_withCP(5),
 ):
     dims = len(shape)
     if dims == 2:
-        box_size = np.round(np.sqrt(100 / perc_pix), dtype=int)
+        box_size = np.round(np.sqrt(100 / perc_pix), dtype=int) # type: ignore
         get_stratified_coords = get_stratified_coords2D
     elif dims == 3:
-        box_size = np.round(np.sqrt(100 / perc_pix), dtype=int)
+        box_size = np.round(np.sqrt(100 / perc_pix), dtype=int) # type: ignore
         get_stratified_coords = get_stratified_coords3D
 
     n_chan = X_val.shape[-1]

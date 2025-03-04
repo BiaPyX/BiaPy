@@ -76,9 +76,9 @@ from biapy.data.post_processing.post_processing import (
     apply_binary_mask,
 )
 from biapy.data.post_processing import apply_post_processing
-from biapy.data.pre_processing import preprocess_data, undo_sample_normalization
+from biapy.data.pre_processing import preprocess_data
 from biapy.engine.check_configuration import check_configuration, compare_configurations_without_model
-
+from biapy.data.norm import Normalization
 
 class Base_Workflow(metaclass=ABCMeta):
     """
@@ -101,10 +101,10 @@ class Base_Workflow(metaclass=ABCMeta):
 
     def __init__(
         self,
-        cfg: type[Config],
+        cfg: Config,
         job_identifier: str,
-        device: type[torch.device],
-        args: type[argparse.Namespace],
+        device: torch.device,
+        args: argparse.Namespace,
     ):
         self.cfg = cfg
         self.args = args
@@ -215,23 +215,33 @@ class Base_Workflow(metaclass=ABCMeta):
         self.define_metrics()
 
         # Normalization checks
-        self.norm_dict = {}
-        self.norm_dict["type"] = cfg.DATA.NORMALIZATION.TYPE
-        self.norm_dict["mask_norm"] = "as_mask"
-        self.norm_dict["enable"] = True
-
-        # Percentile clipping
-        if cfg.DATA.NORMALIZATION.PERC_CLIP:
-            self.norm_dict["lower_bound"] = cfg.DATA.NORMALIZATION.PERC_LOWER
-            self.norm_dict["upper_bound"] = cfg.DATA.NORMALIZATION.PERC_UPPER
-
-        if cfg.DATA.NORMALIZATION.TYPE == "custom":
-            if cfg.DATA.NORMALIZATION.CUSTOM_MEAN != -1:
-                self.norm_dict["mean"] = cfg.DATA.NORMALIZATION.CUSTOM_MEAN
-                self.norm_dict["std"] = cfg.DATA.NORMALIZATION.CUSTOM_STD
-            if "mean" in self.norm_dict:
-                print("Train/Val normalization: using mean {} and std: {}".format(self.norm_dict["mean"], self.norm_dict["std"]))
-        self.test_norm_dict = self.norm_dict.copy()
+        print("Creating normalization module . . .")
+        self.norm_module = Normalization(
+            type = cfg.DATA.NORMALIZATION.TYPE,
+            measure_by = cfg.DATA.NORMALIZATION.MEASURE_BY,
+            mask_norm = "as_mask",
+            out_dtype = "float32" if not cfg.TEST.REDUCE_MEMORY else "float16",
+            percentile_clip=cfg.DATA.NORMALIZATION.PERC_CLIP.ENABLE,
+            per_lower_bound = cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC,
+            per_upper_bound = cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC,
+            lower_bound_val = cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_VALUE,
+            upper_bound_val = cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_VALUE,
+            mean = cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.MEAN_VAL,
+            std = cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.STD_VAL,
+        )
+        if self.cfg.MODEL.SOURCE == "torchvision":
+            print("Creating normalization module . . .")
+            self.torchvision_norm = Normalization(
+                type = "scale_range",
+                measure_by = "image",
+                mask_norm = "as_mask",
+                out_dtype = "float32" if not cfg.TEST.REDUCE_MEMORY else "float16",
+                percentile_clip=cfg.DATA.NORMALIZATION.PERC_CLIP.ENABLE,
+                per_lower_bound = cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC,
+                per_upper_bound = cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC,
+                lower_bound_val = cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_VALUE,
+                upper_bound_val = cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_VALUE,
+            )
 
     def define_activations_and_channels(self):
         """
@@ -394,6 +404,8 @@ class Base_Workflow(metaclass=ABCMeta):
             val_in_memory=self.cfg.DATA.VAL.IN_MEMORY,
             val_ov=self.cfg.DATA.VAL.OVERLAP,
             val_padding=self.cfg.DATA.VAL.PADDING,
+            norm_module=self.norm_module,
+            crop_shape=self.cfg.DATA.PATCH_SIZE,
             cross_val=self.cfg.DATA.VAL.CROSS_VAL,
             cross_val_nsplits=self.cfg.DATA.VAL.CROSS_VAL_NFOLD,
             cross_val_fold=self.cfg.DATA.VAL.CROSS_VAL_FOLD,
@@ -425,8 +437,6 @@ class Base_Workflow(metaclass=ABCMeta):
             random_crops_in_DA=self.cfg.DATA.EXTRACT_RANDOM_PATCH,
             filter_by_entire_image=self.cfg.DATA.FILTER_BY_IMAGE,
             norm_before_filter=self.cfg.DATA.TRAIN.FILTER_SAMPLES.NORM_BEFORE,
-            norm_dict=self.norm_dict,
-            crop_shape=self.cfg.DATA.PATCH_SIZE,
             y_upscaling=self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
             reflect_to_complete_shape=self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE,
             convert_to_rgb=self.cfg.DATA.FORCE_RGB,
@@ -438,7 +448,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.cfg.PROBLEM.TYPE == "IMAGE_TO_IMAGE"
                 and self.cfg.PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER
             ),
-        )
+        ) # type: ignore
 
         # Ensure all the processes have read the data
         if is_dist_avail_and_initialized():
@@ -486,7 +496,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 global_rank=self.global_rank,
                 Y_train=self.Y_train,
                 Y_val=self.Y_val,
-                norm_dict=self.norm_dict,
+                norm_module=self.norm_module,
             )
             if self.cfg.DATA.CHECK_GENERATORS and self.cfg.PROBLEM.TYPE != "CLASSIFICATION":
                 check_generator_consistence(
@@ -542,12 +552,13 @@ class Base_Workflow(metaclass=ABCMeta):
         #     prediction = torch.from_numpy(np.array(prediction)).to(self.device)
 
         ##### OPTION 2: Just a normal model call, but the pre and post need to be done in BiaPy
+        assert self.model
         prediction = self.model(in_img)
 
         return prediction
 
     @abstractmethod
-    def torchvision_model_call(self, in_img, is_train=False):
+    def torchvision_model_call(self, in_img: torch.Tensor, is_train: bool=False):
         """
         Call a regular Pytorch model.
 
@@ -566,7 +577,7 @@ class Base_Workflow(metaclass=ABCMeta):
         """
         raise NotImplementedError
 
-    def model_call_func(self, in_img, to_pytorch=True, is_train=False):
+    def model_call_func(self, in_img: torch.Tensor, to_pytorch: bool=True, is_train: bool=False):
         """
         Call a regular Pytorch model.
 
@@ -589,6 +600,7 @@ class Base_Workflow(metaclass=ABCMeta):
         if to_pytorch:
             in_img = to_pytorch_format(in_img, self.axis_order, self.device)
         if self.cfg.MODEL.SOURCE == "biapy":
+            assert self.model
             p = self.model(in_img)
         elif self.cfg.MODEL.SOURCE == "bmz":
             p = self.bmz_model_call(in_img, is_train)
@@ -618,7 +630,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     device=self.device,
                     just_extract_checkpoint_info=True,
                 )
-                if saved_cfg is not None:
+                if saved_cfg:
                     # Checks that this config and previous represent same workflow
                     header_message = "There is an inconsistency between the configuration loaded from checkpoint and the actual one. Error:\n"
                     compare_configurations_without_model(
@@ -626,8 +638,8 @@ class Base_Workflow(metaclass=ABCMeta):
                     )
 
                     # Override model specs
-                    self.cfg["MODEL"], not_recognized_keys, not_recognized_keys_values = update_dict_with_existing_keys(
-                        self.cfg["MODEL"], saved_cfg["MODEL"]
+                    self.cfg["MODEL"], not_recognized_keys, not_recognized_keys_values = update_dict_with_existing_keys( # type: ignore
+                        self.cfg["MODEL"], saved_cfg["MODEL"] # type: ignore
                     )
                     if len(not_recognized_keys) > 0:
                         print(
@@ -641,7 +653,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     # Check if the merge is coherent
                     updated_config = self.cfg.clone()
                     updated_config["MODEL"]["LOAD_MODEL_FROM_CHECKPOINT"] = False
-                    self.cfg["MODEL"]["LOAD_CHECKPOINT"] = True
+                    self.cfg["MODEL"]["LOAD_CHECKPOINT"] = True # type: ignore
                     check_configuration(updated_config, self.job_identifier)
             (
                 self.model,
@@ -748,7 +760,7 @@ class Base_Workflow(metaclass=ABCMeta):
         print("#####################")
         print("#  TRAIN THE MODEL  #")
         print("#####################")
-
+        assert self.start_epoch is not None
         print(f"Start training in epoch {self.start_epoch+1} - Total: {self.cfg.TRAIN.EPOCHS}")
         start_time = time.time()
         self.val_best_metric = np.zeros(len(self.train_metric_names), dtype=np.float32)
@@ -759,7 +771,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
             if self.args.distributed:
                 self.train_generator.sampler.set_epoch(epoch)
-            if self.log_writer is not None:
+            if self.log_writer:
                 self.log_writer.set_step(epoch * self.num_training_steps_per_epoch)
 
             # Train
@@ -799,7 +811,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     )
 
             # Validation
-            if self.val_generator is not None:
+            if self.val_generator:
                 test_stats = evaluate(
                     self.cfg,
                     model=self.model,
@@ -843,7 +855,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 print(f"[Val] best loss: {self.val_best_loss:.4f} best " + m)
 
                 # Store validation stats
-                if self.log_writer is not None:
+                if self.log_writer:
                     self.log_writer.update(test_loss=test_stats["loss"], head="perf", step=epoch)
                     for i in range(len(self.train_metric_names)):
                         self.log_writer.update(
@@ -866,18 +878,18 @@ class Base_Workflow(metaclass=ABCMeta):
             # Write statistics in the logging file
             if is_main_process():
                 # Log epoch stats
-                if self.log_writer is not None:
+                if self.log_writer:
                     self.log_writer.flush()
                 with open(self.log_file, mode="a", encoding="utf-8") as f:
                     f.write(json.dumps(log_stats) + "\n")
 
                 # Create training plot
                 self.plot_values["loss"].append(train_stats["loss"])
-                if self.val_generator is not None:
+                if self.val_generator:
                     self.plot_values["val_loss"].append(test_stats["loss"])
                 for i in range(len(self.train_metric_names)):
                     self.plot_values[self.train_metric_names[i]].append(train_stats[self.train_metric_names[i]])
-                    if self.val_generator is not None:
+                    if self.val_generator:
                         self.plot_values["val_" + self.train_metric_names[i]].append(
                             test_stats[self.train_metric_names[i]]
                         )
@@ -889,7 +901,7 @@ class Base_Workflow(metaclass=ABCMeta):
                         self.cfg.PATHS.CHARTS,
                     )
 
-            if self.val_generator is not None and self.early_stopping is not None:
+            if self.val_generator and self.early_stopping:
                 self.early_stopping(test_stats["loss"])
                 if self.early_stopping.early_stop:
                     print("Early stopping")
@@ -912,7 +924,7 @@ class Base_Workflow(metaclass=ABCMeta):
         print("Train loss: {}".format(train_stats["loss"]))
         for i in range(len(self.train_metric_names)):
             print("Train {}: {}".format(self.train_metric_names[i], train_stats[self.train_metric_names[i]]))
-        if self.val_generator is not None:
+        if self.val_generator:
             print("Validation loss: {}".format(self.val_best_loss))
             for i in range(len(self.train_metric_names)):
                 print("Validation {}: {}".format(self.train_metric_names[i], self.val_best_metric[i]))
@@ -925,6 +937,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
         # Save output sample to export the model to BMZ
         if "test_output" not in self.bmz_config: 
+            assert self.model_without_ddp
             self.model_without_ddp.eval()
             # Load best checkpoint on validation to ensure it 
             _ = load_model_checkpoint(
@@ -951,13 +964,9 @@ class Base_Workflow(metaclass=ABCMeta):
             print("Loading train data information to extract the validation to be used as test")
             self.cfg.merge_from_list(["DATA.TRAIN.IN_MEMORY", False, "DATA.VAL.IN_MEMORY", False])
             self.load_train_data()
-            self.X_test = list(set([os.path.join(x["dir"], x["filename"]) for x in self.X_val]))
-            self.X_test.sort()
-            self.X_test = [{"dir": os.path.dirname(x), "filename": os.path.basename(x)} for x in self.X_test]
-            if self.Y_val is not None:
-                self.Y_test = list(set([os.path.join(x["dir"], x["filename"]) for x in self.Y_val]))
-                self.Y_test.sort()
-                self.Y_test = [{"dir": os.path.dirname(x), "filename": os.path.basename(x)} for x in self.Y_test]
+            self.X_test = self.X_val.model_copy()
+            if self.Y_val:
+                self.Y_test = self.Y_val.model_copy()
         else:
             # Paths to the raw and gt within the Zarr file. Only used when 'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA' is True.
             test_zarr_data_information = None
@@ -1008,7 +1017,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.cfg, 
                 self.X_test, 
                 self.Y_test, 
-                norm_dict=self.test_norm_dict,
+                norm_module=self.norm_module,
                 )
 
     def apply_model_activations(self, pred, training=False):
@@ -1072,6 +1081,7 @@ class Base_Workflow(metaclass=ABCMeta):
         self.prepare_test_generators()
 
         # Switch to evaluation mode
+        assert self.model_without_ddp
         if self.cfg.MODEL.SOURCE != "bmz":
             self.model_without_ddp.eval()
 
@@ -1100,8 +1110,8 @@ class Base_Workflow(metaclass=ABCMeta):
             setup_for_distributed(True)
 
         # Process all the images
-        for i, self.current_sample in tqdm(
-            enumerate(self.test_generator),
+        for i, self.current_sample in tqdm( # type: ignore
+            enumerate(self.test_generator), # type: ignore
             total=len(self.test_generator),
             disable=not is_main_process(),
         ):
@@ -1306,7 +1316,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     p = self.apply_model_activations(p)
                     # Multi-head concatenation
                     if isinstance(p, list):
-                        p = torch.cat((p[0], torch.argmax(p[1], axis=1).unsqueeze(1)), dim=1)
+                        p = torch.cat((p[0], torch.argmax(p[1], dim=1).unsqueeze(1)), dim=1)
                     p = to_numpy_format(p, self.axis_order_back)
                 else:
                     if self.model_output_channels["type"] == "image":
@@ -1320,7 +1330,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     p = np.zeros(shape)
 
                 t_dim, z_dim, y_dim, x_dim, c_dim = order_dimensions(
-                    self.cfg.DATA.PREPROCESS.ZOOM.ZOOM_FACTOR,
+                    list(self.cfg.DATA.PREPROCESS.ZOOM.ZOOM_FACTOR),
                     input_order=self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
                     output_order="TZYXC",
                     default_value=1,
@@ -1423,10 +1433,10 @@ class Base_Workflow(metaclass=ABCMeta):
                         for j, k in enumerate(list_of_vols_in_z[i]):
 
                             slices = (
-                                slice(z_vol_info[k][0], z_vol_info[k][1]),  # z (only z axis is distributed across GPUs)
-                                slice(None),  # y
-                                slice(None),  # x
-                                slice(None),  # Channel
+                                slice(z_vol_info[k][0], z_vol_info[k][1]), # z (only z axis is distributed across GPUs)
+                                slice(None), # y
+                                slice(None), # x
+                                slice(None), # Channel
                             )
 
                             data_ordered_slices = order_dimensions(
@@ -1439,14 +1449,15 @@ class Base_Workflow(metaclass=ABCMeta):
                             if self.cfg.TEST.VERBOSE:
                                 print(f"Filling {k} [{z_vol_info[k][0]}:{z_vol_info[k][1]}]")
                             data[data_ordered_slices] = (
-                                data_part[data_ordered_slices] / data_mask_part[data_ordered_slices]
+                                data_part[data_ordered_slices] / data_mask_part[data_ordered_slices] # type: ignore
                             )
 
-                            if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
+                            if isinstance(allfile, h5py.File):
                                 allfile.flush()
 
-                        if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
+                        if isinstance(data_part_file, h5py.File):
                             data_part_file.close()
+                        if isinstance(data_mask_part_file, h5py.File):
                             data_mask_part_file.close()
 
                     # Save image
@@ -1458,6 +1469,7 @@ class Base_Workflow(metaclass=ABCMeta):
                             output_order="TZYXC",
                             default_value=np.nan,
                         )
+                        assert isinstance(transpose_order, np.ndarray)
                         transpose_order = [x for x in transpose_order if not np.isnan(x)]
                         data = np.array(data, dtype=self.dtype).transpose(transpose_order)
                         if "T" not in out_data_order:
@@ -1470,7 +1482,7 @@ class Base_Workflow(metaclass=ABCMeta):
                             verbose=self.cfg.TEST.VERBOSE,
                         )
 
-                    if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
+                    if isinstance(allfile, h5py.File):
                         allfile.close()
 
                 # Just make the division with the overlap
@@ -1495,6 +1507,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     z_vols = math.ceil(z_dim / self.cfg.DATA.PATCH_SIZE[0])
                     y_vols = math.ceil(y_dim / self.cfg.DATA.PATCH_SIZE[1])
                     x_vols = math.ceil(x_dim / self.cfg.DATA.PATCH_SIZE[2])
+                    assert isinstance(z_dim, int) and isinstance(y_dim, int) and isinstance(x_dim, int)
                     for z in tqdm(range(z_vols), disable=not is_main_process()):
                         for y in range(y_vols):
                             for x in range(x_vols):
@@ -1512,7 +1525,7 @@ class Base_Workflow(metaclass=ABCMeta):
                                         x * self.cfg.DATA.PATCH_SIZE[2],
                                         min(x_dim, self.cfg.DATA.PATCH_SIZE[2] * (x + 1)),
                                     ),
-                                    slice(0, pred.shape[c_index]),  # Channel
+                                    slice(0, pred.shape[c_index]), # Channel
                                 )
 
                                 data_ordered_slices = order_dimensions(
@@ -1521,9 +1534,9 @@ class Base_Workflow(metaclass=ABCMeta):
                                     output_order=out_data_order,
                                     default_value=0,
                                 )
-                                pred_div[data_ordered_slices] = pred[data_ordered_slices] / mask[data_ordered_slices]
+                                pred_div[data_ordered_slices] = pred[data_ordered_slices] / mask[data_ordered_slices] # type: ignore
 
-                        if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
+                        if isinstance(fid_div, h5py.File):
                             fid_div.flush()
 
                     # Save image
@@ -1535,6 +1548,7 @@ class Base_Workflow(metaclass=ABCMeta):
                             output_order="TZYXC",
                             default_value=np.nan,
                         )
+                        assert isinstance(transpose_order, np.ndarray)
                         transpose_order = [x for x in transpose_order if not np.isnan(x)]
                         pred_div = np.array(pred_div, dtype=self.dtype).transpose(transpose_order)
                         if "T" not in out_data_order:
@@ -1552,9 +1566,11 @@ class Base_Workflow(metaclass=ABCMeta):
                             verbose=self.cfg.TEST.VERBOSE,
                         )
 
-                    if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
+                    if isinstance(pred_file, h5py.File):
                         pred_file.close()
+                    if isinstance(mask_file, h5py.File):
                         mask_file.close()
+                    if isinstance(fid_div, h5py.File):
                         fid_div.close()
 
             if self.cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS:
@@ -1597,7 +1613,9 @@ class Base_Workflow(metaclass=ABCMeta):
                 Image to extract the sample from. The axes must be in Torch format already, i.e. 
                 ``(b,c,y,x)`` for 2D or ``(b,c,z,y,x)`` for 3D.
             """
-            if self.cfg.PROBLEM.TYPE != "CLASSIFICATION":
+            if len(img.shape) == 2: # Classification
+                self.bmz_config[sample_key] = img[0]
+            else:
                 if self.cfg.PROBLEM.NDIM == "2D":
                     self.bmz_config[sample_key] = img[
                         0,
@@ -1613,20 +1631,22 @@ class Base_Workflow(metaclass=ABCMeta):
                         :self.cfg.DATA.PATCH_SIZE[1], 
                         :self.cfg.DATA.PATCH_SIZE[2]
                     ].copy()
-                
-                # Ensure dimensions
-                if self.cfg.PROBLEM.NDIM == "2D":
-                    if self.bmz_config[sample_key].ndim == 3:
-                        self.bmz_config[sample_key] = np.expand_dims(self.bmz_config[sample_key], 0)
-                else: # 3D
-                    if self.bmz_config[sample_key].ndim == 4:
-                        self.bmz_config[sample_key] = np.expand_dims(self.bmz_config[sample_key], 0)
+            
+            # Ensure dimensions
+            if self.cfg.PROBLEM.NDIM == "2D":
+                if self.bmz_config[sample_key].ndim == 3:
+                    self.bmz_config[sample_key] = np.expand_dims(self.bmz_config[sample_key], 0)
+            else: # 3D
+                if self.bmz_config[sample_key].ndim == 4:
+                    self.bmz_config[sample_key] = np.expand_dims(self.bmz_config[sample_key], 0)
 
         # Normalized input
         if "test_input_norm" not in self.bmz_config:
             prepare_bmz_sample("test_input_norm", img)
         
         # Model prediction
+        assert self.model and self.model_without_ddp
+        assert isinstance(self.bmz_config["test_input_norm"], np.ndarray)
         pred = self.model(torch.from_numpy(self.bmz_config["test_input_norm"]).to(self.device))
 
         # MAE
@@ -1644,7 +1664,7 @@ class Base_Workflow(metaclass=ABCMeta):
             pred = self.apply_model_activations(pred)
             # Multi-head concatenation
             if isinstance(pred, list):
-                pred = torch.cat((pred[0], torch.argmax(pred[1], axis=1).unsqueeze(1)), dim=1)
+                pred = torch.cat((pred[0], torch.argmax(pred[1], dim=1).unsqueeze(1)), dim=1)
  
         # Save output
         prepare_bmz_sample(
@@ -1654,7 +1674,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
         # Save test_input without the normalization 
         if "test_input" not in self.bmz_config:
-            self.bmz_config["test_input"] = undo_sample_normalization(
+            self.bmz_config["test_input"] = self.norm_module.undo_image_norm(
                 img, 
                 self.current_sample["X_norm"]
             ).astype(np.float32)
@@ -1714,13 +1734,13 @@ class Base_Workflow(metaclass=ABCMeta):
                             verbose=self.cfg.TEST.VERBOSE,
                         )
                         if self.current_sample["Y"] is not None:
-                            self.current_sample["X"], self.current_sample["Y"], _ = obj
+                            self.current_sample["X"], self.current_sample["Y"], _ = obj # type: ignore
                         else:
-                            self.current_sample["X"], _ = obj
+                            self.current_sample["X"], _ = obj # type: ignore
                         del obj
                     else:
                         if self.cfg.TEST.REDUCE_MEMORY:
-                            self.current_sample["X"], _ = crop_3D_data_with_overlap(
+                            self.current_sample["X"], _ = crop_3D_data_with_overlap( # type: ignore
                                 self.current_sample["X"][0],
                                 self.cfg.DATA.PATCH_SIZE,
                                 overlap=self.cfg.DATA.TEST.OVERLAP,
@@ -1729,7 +1749,7 @@ class Base_Workflow(metaclass=ABCMeta):
                                 median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING,
                             )
                             if self.current_sample["Y"] is not None:
-                                self.current_sample["Y"], _ = crop_3D_data_with_overlap(
+                                self.current_sample["Y"], _ = crop_3D_data_with_overlap( # type: ignore
                                     self.current_sample["Y"][0],
                                     self.cfg.DATA.PATCH_SIZE[:-1] + (self.current_sample["Y"].shape[-1],),
                                     overlap=self.cfg.DATA.TEST.OVERLAP,
@@ -1750,9 +1770,9 @@ class Base_Workflow(metaclass=ABCMeta):
                                 median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING,
                             )
                             if self.current_sample["Y"] is not None:
-                                self.current_sample["X"], self.current_sample["Y"], _ = obj
+                                self.current_sample["X"], self.current_sample["Y"], _ = obj # type: ignore
                             else:
-                                self.current_sample["X"], _ = obj
+                                self.current_sample["X"], _ = obj # type: ignore
                             del obj
 
                 # Predict each patch
@@ -1780,7 +1800,7 @@ class Base_Workflow(metaclass=ABCMeta):
                         p = self.apply_model_activations(p)
                         # Multi-head concatenation
                         if isinstance(p, list):
-                            p = torch.cat((p[0], torch.argmax(p[1], axis=1).unsqueeze(1)), dim=1)
+                            p = torch.cat((p[0], torch.argmax(p[1], dim=1).unsqueeze(1)), dim=1)
 
                         # Calculate the metrics
                         if self.current_sample["Y"] is not None:
@@ -1818,7 +1838,7 @@ class Base_Workflow(metaclass=ABCMeta):
                         # Multi-head concatenation
                         if isinstance(p, list):
                             p = torch.cat(
-                                (p[0], torch.argmax(p[1], axis=1).unsqueeze(1)),
+                                (p[0], torch.argmax(p[1], dim=1).unsqueeze(1)),
                                 dim=1,
                             )
 
@@ -1885,6 +1905,7 @@ class Base_Workflow(metaclass=ABCMeta):
                         else:
                             pred = obj
                         del obj
+                    assert isinstance(pred, np.ndarray)
                     if self.cfg.PROBLEM.NDIM != "3D":
                         self.current_sample["X"] = X_original.copy()
                         del X_original
@@ -1994,7 +2015,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     if self.post_processing["per_image"]
                     else self.cfg.PATHS.RESULT_DIR.PER_IMAGE
                 )
-                test_file = os.path.join(folder, [self.current_sample["filename"]])
+                test_file = os.path.join(folder, self.current_sample["filename"])
                 pred = read_img_as_ndarray(test_file, is_3d=self.cfg.PROBLEM.NDIM == "3D")
                 pred = np.expand_dims(pred, 0)  # expand dimensions to include "batch"
 
@@ -2002,7 +2023,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
             if self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
                 self.all_pred.append(pred)
-                if self.current_sample["Y"] is not None:
+                if self.current_sample["Y"] is not None and self.all_gt:
                     self.all_gt.append(self.current_sample["Y"])
 
         ##################
@@ -2033,7 +2054,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 pred = self.apply_model_activations(pred)
                 # Multi-head concatenation
                 if isinstance(pred, list):
-                    pred = torch.cat((pred[0], torch.argmax(pred[1], axis=1).unsqueeze(1)), dim=1)
+                    pred = torch.cat((pred[0], torch.argmax(pred[1], dim=1).unsqueeze(1)), dim=1)
                 pred = to_numpy_format(pred, self.axis_order_back)
                 del self.current_sample["X"]
 
@@ -2080,16 +2101,13 @@ class Base_Workflow(metaclass=ABCMeta):
                         self.stats["full_image"][str(metric).lower()] += metric_values[metric]
             else:
                 # load prediction from file
-                test_file = os.path.join(
-                    self.cfg.PATHS.RESULT_DIR.FULL_IMAGE,
-                    [self.current_sample["filename"]],
-                )
+                test_file = os.path.join(self.cfg.PATHS.RESULT_DIR.FULL_IMAGE, self.current_sample["filename"])
                 pred = read_img_as_ndarray(test_file, is_3d=self.cfg.PROBLEM.NDIM == "3D")
                 pred = np.expand_dims(pred, 0)  # expand dimensions to include "batch"
 
             if self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
                 self.all_pred.append(pred)
-                if self.current_sample["Y"] is not None:
+                if self.current_sample["Y"] is not None and self.all_gt:
                     self.all_gt.append(self.current_sample["Y"])
 
             self.after_full_image(pred)
@@ -2254,11 +2272,11 @@ class Base_Workflow(metaclass=ABCMeta):
             raise ValueError("Read image seems to be 2D: {}. Path: {}".format(pred.shape, filename))
         if pred.ndim == 3:
             # Ensure Z axis is always in the first position
-            min_val = min(img.shape)
-            z_pos = img.shape.index(min_val)
+            min_val = min(pred.shape)
+            z_pos = pred.shape.index(min_val)
             if z_pos != 0:
                 new_pos = [z_pos,] + [x for x in range(3) if x != z_pos]
-                img = img.transpose(new_pos)
+                pred = pred.transpose(new_pos)
                 
             pred = np.expand_dims(pred, -1)
         else:
@@ -2313,7 +2331,9 @@ class Base_Workflow(metaclass=ABCMeta):
         ############################
         if self.post_processing["as_3D_stack"]:
             self.all_pred = np.expand_dims(np.concatenate(self.all_pred), 0)
-            self.all_gt = np.expand_dims(np.concatenate(self.all_gt), 0) if self.cfg.DATA.TEST.LOAD_GT else None
+            if self.cfg.DATA.TEST.LOAD_GT and self.all_gt:
+                self.all_gt = np.expand_dims(np.concatenate(self.all_gt), 0) 
+
             save_tif(
                 self.all_pred,
                 self.cfg.PATHS.RESULT_DIR.AS_3D_STACK,
@@ -2397,10 +2417,10 @@ def extract_patch_from_dataset(data, cfg, input_queue, extract_info_queue, verbo
     ):
 
         if is_main_process():
-            img, patch_coords, total_vol, z_vol_info, list_of_vols_in_z = obj
+            img, patch_coords, total_vol, z_vol_info, list_of_vols_in_z = obj # type: ignore
         else:
-            img, patch_coords, total_vol = obj
-
+            img, patch_coords, total_vol = obj # type: ignore
+        assert isinstance(img, np.ndarray)
         img = np.expand_dims(img, 0)
 
         t_dim, z_dim, y_dim, x_dim, c_dim = order_dimensions(
@@ -2411,9 +2431,9 @@ def extract_patch_from_dataset(data, cfg, input_queue, extract_info_queue, verbo
         )
         patch_coords = np.array(
             [
-                [patch_coords["z_start"], patch_coords["z_end"]],
-                [patch_coords["y_start"], patch_coords["y_end"]],
-                [patch_coords["x_start"], patch_coords["x_end"]],
+                [patch_coords.z_start, patch_coords.z_end],
+                [patch_coords.y_start, patch_coords.y_end],
+                [patch_coords.x_start, patch_coords.x_end],
             ]
         )
         patch_coords = (np.array([z_dim, y_dim, x_dim]) * patch_coords.T).T
@@ -2520,8 +2540,8 @@ def insert_patch_into_dataset(
                 out_data_order = cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER
 
             if file_type == "h5":
-                data = fid.create_dataset("data", out_data_shape, dtype=dtype_str, compression="gzip")
-                mask = fid_mask.create_dataset("data", out_data_shape, dtype=dtype_str, compression="gzip")
+                data = fid.create_dataset("data", shape=out_data_shape, dtype=dtype_str, compression="gzip")
+                mask = fid_mask.create_dataset("data", shape=out_data_shape, dtype=dtype_str, compression="gzip")
             else:
                 data = fid.create_dataset("data", shape=out_data_shape, dtype=dtype_str)
                 mask = fid_mask.create_dataset("data", shape=out_data_shape, dtype=dtype_str)
@@ -2551,6 +2571,7 @@ def insert_patch_into_dataset(
             output_order=out_data_order,
             default_value=np.nan,
         )
+        assert isinstance(transpose_order, np.ndarray)
         transpose_order = [x for x in transpose_order if not np.isnan(x)]
 
         data[data_ordered_slices] += p.transpose(transpose_order)
@@ -2558,8 +2579,10 @@ def insert_patch_into_dataset(
 
         # Force flush after some iterations
         if i % cfg.TEST.BY_CHUNKS.FLUSH_EACH == 0 and file_type == "h5":
-            fid.flush()
-            fid_mask.flush()
+            if isinstance(fid, h5py.File):
+                fid.flush()
+            if isinstance(fid_mask, h5py.File):
+                fid_mask.flush()
 
     # Save image
     if cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF and cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
@@ -2570,6 +2593,7 @@ def insert_patch_into_dataset(
             output_order="TZYXC",
             default_value=np.nan,
         )
+        assert isinstance(transpose_order, np.ndarray)
         transpose_order = [x for x in transpose_order if not np.isnan(x)]
         data = np.array(data, dtype=dtype).transpose(transpose_order)
         mask = np.array(mask, dtype=dtype).transpose(transpose_order)
@@ -2584,8 +2608,10 @@ def insert_patch_into_dataset(
             verbose=verbose,
         )
     if file_type == "h5":
-        fid.close()
-        fid_mask.close()
+        if isinstance(fid, h5py.File):
+            fid.close()
+        if isinstance(fid_mask, h5py.File):
+            fid_mask.close()
 
     if verbose and cfg.SYSTEM.NUM_GPUS > 1:
         print(f"[Rank {get_rank()} ({os.getpid()})] Finish inserting patches into data . . .")

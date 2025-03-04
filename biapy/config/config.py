@@ -224,19 +224,26 @@ class Config:
 
         _C.DATA.NORMALIZATION = CN()
         # Whether to apply or not a percentile clipping before normalizing the data
-        _C.DATA.NORMALIZATION.PERC_CLIP = False
+        _C.DATA.NORMALIZATION.PERC_CLIP = CN()
+        _C.DATA.NORMALIZATION.PERC_CLIP.ENABLE = False
         # Lower and upper bound for percentile clip. Must be set when DATA.NORMALIZATION.PERC_CLIP = 'True'
-        _C.DATA.NORMALIZATION.PERC_LOWER = -1.0
-        _C.DATA.NORMALIZATION.PERC_UPPER = -1.0
+        _C.DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC = -1.0
+        _C.DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC = -1.0
+        # 
+        _C.DATA.NORMALIZATION.PERC_CLIP.LOWER_VALUE = -1.0
+        _C.DATA.NORMALIZATION.PERC_CLIP.UPPER_VALUE = -1.0
         # Normalization type to use. Possible options:
         #   'div' to divide values from 0/255 (or 0/65535 if uint16) in [0,1] range
         #   'scale_range' same as 'div' but scaling the range to [0-max] and then dividing by the maximum value of the data
         #    and not by 255 or 65535
-        #   'custom' to use DATA.NORMALIZATION.CUSTOM_MEAN and DATA.NORMALIZATION.CUSTOM_STD to normalize
+        #   'zero_mean_unit_variance' to substract the mean and divide by std. 
         _C.DATA.NORMALIZATION.TYPE = "div"
+        # Options: ['image', 'patch']
+        _C.DATA.NORMALIZATION.MEASURE_BY = "image"
         # Custom normalization variables: mean and std (they are calculated if not provided)
-        _C.DATA.NORMALIZATION.CUSTOM_MEAN = -1.0
-        _C.DATA.NORMALIZATION.CUSTOM_STD = -1.0
+        _C.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR = CN()
+        _C.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.MEAN_VAL = -1.0
+        _C.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.STD_VAL = -1.0
 
         # Train
         _C.DATA.TRAIN = CN()

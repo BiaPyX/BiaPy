@@ -38,6 +38,12 @@ from scipy.optimize import linear_sum_assignment
 from collections import namedtuple
 from skimage.segmentation import relabel_sequential
 
+from typing import (
+    Tuple,
+    Literal,
+    Dict,
+)
+
 matching_criteria = dict()
 
 
@@ -156,7 +162,7 @@ def f1(tp, fp, fn):
     return (2 * tp) / (2 * tp + fp + fn) if tp > 0 else 0
 
 
-def matching(y_true, y_pred, thresh=0.5, criterion="iou", report_matches=False):
+def matching(y_true, y_pred, thresh=0.5, criterion="iou", report_matches=False) -> Dict | Tuple[Dict]:
     """
     Calculate detection/instance segmentation metrics between ground truth and predicted label images.
 

@@ -16,8 +16,8 @@ from bioimageio.spec.model.v0_5 import (
 )
 from bioimageio.spec.utils import download
 
-from biapy.data.pre_processing import reduce_dtype, calculate_volume_prob_map
-from biapy.data.data_manipulation import read_img_as_ndarray, imwrite
+from biapy.data.pre_processing import calculate_volume_prob_map
+from biapy.data.data_manipulation import read_img_as_ndarray, imwrite, reduce_dtype
 from biapy.data.generators.augmentors import random_crop_pair
 
 
@@ -42,7 +42,7 @@ def get_bmz_model_info(
     """
 
     assert (
-        model.weights.pytorch_state_dict is not None
+        model.weights.pytorch_state_dict
     ), "Seems that the original BMZ model has no pytorch_state_dict object. Aborting"
 
     if spec_version > Version("0.5.0"):
@@ -204,10 +204,10 @@ def create_model_cover(file_paths, out_path, patch_size=256, is_3d=False, workfl
         mask = resize(mask, (patch_size, patch_size), order=order, clip=True, preserve_range=True, anti_aliasing=True)
     
     # Normalization
-    img = reduce_dtype(img, img.min(), img.max(), out_min=0, out_max=255, out_type=np.uint8)
+    img = reduce_dtype(img, img.min(), img.max(), out_min=0, out_max=255, out_type="uint8")
     if workflow in ["super-resolution", "image-to-image", "denoising", "self-supervised"]:
         # Normalize mask, as in this workflow case it is also a raw image
-        mask = reduce_dtype(mask, mask.min(), mask.max(), out_min=0, out_max=255, out_type=np.uint8)
+        mask = reduce_dtype(mask, mask.min(), mask.max(), out_min=0, out_max=255, out_type="uint8")
 
     # Same procedure with the mask in those workflows where the target is also an image
     if workflow in ["super-resolution", "image-to-image", "denoising", "self-supervised"]:

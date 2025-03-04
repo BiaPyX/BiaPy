@@ -9,7 +9,7 @@ import functools
 import torch.nn as nn
 import numpy as np
 from torchinfo import summary
-from typing import Optional, Dict, Tuple, List, Literal
+from typing import Optional, Dict, Tuple, List, Literal, Callable, Any
 from packaging.version import Version
 from functools import partial
 
@@ -23,7 +23,10 @@ from bioimageio.core.digest_spec import get_test_inputs
 from biapy.config.config import Config
 
 
-def build_model(cfg, output_channels, device):
+def build_model(
+    cfg: Config, output_channels: int, device: torch.device
+) -> Tuple[nn.Module, str, Callable, Dict]:
+    # model, model_file, model_name, args
     """
     Build selected model
 
@@ -41,7 +44,7 @@ def build_model(cfg, output_channels, device):
 
     Returns
     -------
-    model : Keras model
+    model : Pytorch model
         Selected model.
     """
     # Import the model
@@ -50,7 +53,7 @@ def build_model(cfg, output_channels, device):
     else:
         modelname = str(cfg.MODEL.ARCHITECTURE).lower()
     mdl = importlib.import_module("biapy.models." + modelname)
-    model_file = os.path.abspath(mdl.__file__)
+    model_file = os.path.abspath(mdl.__file__)  # type: ignore
     names = [x for x in mdl.__dict__ if not x.startswith("_")]
     globals().update({k: getattr(mdl, k) for k in names})
 
@@ -79,21 +82,21 @@ def build_model(cfg, output_channels, device):
             output_channels=output_channels,
         )
         if modelname == "unet":
-            callable_model = U_Net
+            callable_model = U_Net  # type: ignore
         elif modelname == "resunet":
-            callable_model = ResUNet
+            callable_model = ResUNet  # type: ignore
             args["isotropy"] = cfg.MODEL.ISOTROPY
             args["larger_io"] = cfg.MODEL.LARGER_IO
         elif modelname == "resunet++":
-            callable_model = ResUNetPlusPlus
+            callable_model = ResUNetPlusPlus  # type: ignore
         elif modelname == "attention_unet":
-            callable_model = Attention_U_Net
+            callable_model = Attention_U_Net  # type: ignore
         elif modelname == "seunet":
-            callable_model = SE_U_Net
+            callable_model = SE_U_Net  # type: ignore
             args["isotropy"] = cfg.MODEL.ISOTROPY
             args["larger_io"] = cfg.MODEL.LARGER_IO
         elif modelname == "resunet_se":
-            callable_model = ResUNet_SE
+            callable_model = ResUNet_SE  # type: ignore
             args["isotropy"] = cfg.MODEL.ISOTROPY
             args["larger_io"] = cfg.MODEL.LARGER_IO
         elif modelname == "unext_v1":
@@ -109,7 +112,7 @@ def build_model(cfg, output_channels, device):
                 stem_k_size=cfg.MODEL.CONVNEXT_STEM_K_SIZE,
                 output_channels=output_channels,
             )
-            callable_model = U_NeXt_V1
+            callable_model = U_NeXt_V1  # type: ignore
         elif modelname == "unext_v2":
             args = dict(
                 image_shape=cfg.DATA.PATCH_SIZE,
@@ -122,7 +125,7 @@ def build_model(cfg, output_channels, device):
                 stem_k_size=cfg.MODEL.CONVNEXT_STEM_K_SIZE,
                 output_channels=output_channels,
             )
-            callable_model = U_NeXt_V2
+            callable_model = U_NeXt_V2  # type: ignore
 
         if cfg.PROBLEM.TYPE == "SUPER_RESOLUTION":
             args["upsampling_factor"] = cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING
@@ -135,14 +138,12 @@ def build_model(cfg, output_channels, device):
                 activation=cfg.MODEL.ACTIVATION.lower(),
                 n_classes=cfg.MODEL.N_CLASSES,
             )
-            model = simple_CNN(**args)
-            callable_model = simple_CNN
+            model = simple_CNN(**args)  # type: ignore
+            callable_model = simple_CNN  # type: ignore
         elif "efficientnet" in modelname:
-            args = dict(
-                efficientnet_name=cfg.MODEL.ARCHITECTURE.lower(), n_classes=cfg.MODEL.N_CLASSES
-            )
-            model = efficientnet(**args)
-            callable_model = efficientnet
+            args = dict(efficientnet_name=cfg.MODEL.ARCHITECTURE.lower(), n_classes=cfg.MODEL.N_CLASSES)
+            model = efficientnet(**args)  # type: ignore
+            callable_model = efficientnet  # type: ignore
         elif modelname == "vit":
             args = dict(
                 img_size=cfg.DATA.PATCH_SIZE[0],
@@ -161,8 +162,8 @@ def build_model(cfg, output_channels, device):
                     drop_rate=cfg.MODEL.DROPOUT_VALUES[0],
                 )
                 args.update(args2)
-                model = VisionTransformer(**args)
-                callable_model = VisionTransformer
+                model = VisionTransformer(**args)  # type: ignore
+                callable_model = VisionTransformer  # type: ignore
             else:
                 model = eval(cfg.MODEL.VIT_MODEL)(**args)
                 callable_model = eval(cfg.MODEL.VIT_MODEL)
@@ -178,8 +179,8 @@ def build_model(cfg, output_channels, device):
                 args["upsampling_factor"] = cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING
                 args["upsampling_position"] = cfg.MODEL.UNET_SR_UPSAMPLE_POSITION
 
-            model = MultiResUnet(**args)
-            callable_model = MultiResUnet
+            model = MultiResUnet(**args)  # type: ignore
+            callable_model = MultiResUnet  # type: ignore
         elif modelname == "unetr":
             args = dict(
                 input_shape=cfg.DATA.PATCH_SIZE,
@@ -196,8 +197,8 @@ def build_model(cfg, output_channels, device):
                 dropout=cfg.MODEL.DROPOUT_VALUES[0],
                 k_size=cfg.MODEL.UNETR_DEC_KERNEL_SIZE,
             )
-            model = UNETR(**args)
-            callable_model = UNETR
+            model = UNETR(**args)  # type: ignore
+            callable_model = UNETR  # type: ignore
         elif modelname == "edsr":
             args = dict(
                 ndim=ndim,
@@ -206,8 +207,8 @@ def build_model(cfg, output_channels, device):
                 upsampling_factor=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
                 num_channels=cfg.DATA.PATCH_SIZE[-1],
             )
-            model = EDSR(args)
-            callable_model = EDSR
+            model = EDSR(args)  # type: ignore
+            callable_model = EDSR  # type: ignore
         elif modelname == "rcan":
             scale = cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING
             if type(scale) is tuple:
@@ -222,8 +223,8 @@ def build_model(cfg, output_channels, device):
                 num_channels=cfg.DATA.PATCH_SIZE[-1],
                 upscaling_layer=cfg.MODEL.RCAN_UPSCALING_LAYER,
             )
-            model = rcan(**args)
-            callable_model = rcan
+            model = rcan(**args)  # type: ignore
+            callable_model = rcan  # type: ignore
         elif modelname == "dfcan":
             args = dict(
                 ndim=ndim,
@@ -232,8 +233,8 @@ def build_model(cfg, output_channels, device):
                 n_ResGroup=4,
                 n_RCAB=4,
             )
-            model = DFCAN(**args)
-            callable_model = DFCAN
+            model = DFCAN(**args)  # type: ignore
+            callable_model = DFCAN  # type: ignore
         elif modelname == "wdsr":
             args = dict(
                 scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
@@ -242,8 +243,8 @@ def build_model(cfg, output_channels, device):
                 res_block_expansion=6,
                 num_channels=cfg.DATA.PATCH_SIZE[-1],
             )
-            model = wdsr(**args)
-            callable_model = wdsr
+            model = wdsr(**args)  # type: ignore
+            callable_model = wdsr  # type: ignore
         elif modelname == "mae":
             args = dict(
                 img_size=cfg.DATA.PATCH_SIZE[0],
@@ -262,8 +263,8 @@ def build_model(cfg, output_channels, device):
                 mask_ratio=cfg.MODEL.MAE_MASK_RATIO,
                 device=device,
             )
-            model = MaskedAutoencoderViT(**args)
-            callable_model = MaskedAutoencoderViT
+            model = MaskedAutoencoderViT(**args)  # type: ignore
+            callable_model = MaskedAutoencoderViT  # type: ignore
     # Check the network created
     model.to(device)
     if cfg.PROBLEM.NDIM == "2D":
@@ -294,7 +295,11 @@ def build_model(cfg, output_channels, device):
     return model, model_file, model_name, args
 
 
-def build_bmz_model(cfg: type[Config], model: ModelDescr_v0_4 | ModelDescr_v0_5, device: type[torch.device]):
+def build_bmz_model(
+    cfg: Config, 
+    model: ModelDescr_v0_4 | ModelDescr_v0_5, 
+    device: torch.device
+) -> nn.Module:
     """
     Build a model from Bioimage Model Zoo (BMZ).
 
@@ -314,10 +319,10 @@ def build_bmz_model(cfg: type[Config], model: ModelDescr_v0_4 | ModelDescr_v0_5,
     model_instance : Torch model
         Torch model.
     """
-
+    assert model.weights.pytorch_state_dict
     model_instance = PytorchModelAdapter.get_network(model.weights.pytorch_state_dict)
     model_instance = model_instance.to(device)
-    state = torch.load(download(model.weights.pytorch_state_dict).path, map_location=device, weights_only=True)
+    state = torch.load(str(download(model.weights.pytorch_state_dict).path), map_location=device, weights_only=True)
     model_instance.load_state_dict(state)
 
     # Check the network created
@@ -349,8 +354,8 @@ def build_bmz_model(cfg: type[Config], model: ModelDescr_v0_4 | ModelDescr_v0_5,
 
 def check_bmz_args(
     model_ID: str,
-    cfg: Optional[type[Config]],
-) -> List[str]:
+    cfg: Config,
+) -> List:
     """
     Check user's provided BMZ arguments.
 
@@ -364,7 +369,7 @@ def check_bmz_args(
 
     Returns
     -------
-    preproc_info: dict of str
+    preproc_info: dict
         Preprocessing names that the model is using.
     """
     # Checking BMZ model compatibility using the available model list provided by BMZ
@@ -412,7 +417,7 @@ def check_bmz_args(
 def check_bmz_model_compatibility(
     model_rdf: Dict,
     workflow_specs: Optional[Dict] = None,
-) -> Tuple[List[str], bool, str]:
+) -> Tuple[List, bool, str]:
     """
     Checks one model compatibility with BiaPy by looking at its RDF file provided by BMZ. This function is the one
     used in BMZ's continuous integration with BiaPy.
@@ -427,7 +432,7 @@ def check_bmz_model_compatibility(
 
     Returns
     -------
-    preproc_info: dict of str
+    preproc_info: dict
         Preprocessing names that the model is using.
 
     error : bool
@@ -440,7 +445,7 @@ def check_bmz_model_compatibility(
     specific_dims = "all" if workflow_specs is None else workflow_specs["ndim"]
     ref_classes = "all" if workflow_specs is None else workflow_specs["nclasses"]
 
-    preproc_info = {}
+    preproc_info = []
 
     # Accepting models that are exported in pytorch_state_dict and with just one input
     if (
@@ -617,7 +622,7 @@ def check_bmz_model_compatibility(
     return preproc_info, False, ""
 
 
-def check_model_restrictions(cfg, bmz_config, workflow_specs):
+def check_model_restrictions(cfg: Config, bmz_config: Dict, workflow_specs: Dict) -> List[str]:
     """
     Checks model restrictions to be applied into the current configuration.
 
@@ -652,9 +657,9 @@ def check_model_restrictions(cfg, bmz_config, workflow_specs):
     inputs = get_test_inputs(bmz_config["original_bmz_config"])
     input_image_shape = None
     if "input0" in inputs.members:
-        input_image_shape = inputs.members["input0"]._data.shape
+        input_image_shape = inputs.members["input0"]._data.shape  # type: ignore
     elif "raw" in inputs.members:
-        input_image_shape = inputs.members["raw"]._data.shape
+        input_image_shape = inputs.members["raw"]._data.shape  # type: ignore
     else:  # ambitious-sloth case
         input_image_shape = inputs.members[list(inputs.members.keys())[0]]._data.shape
     if input_image_shape is None:
@@ -765,7 +770,10 @@ def get_cfg_key_value(obj, attr, *args):
     return functools.reduce(_getattr, [obj] + attr.split("."))
 
 
-def build_torchvision_model(cfg, device):
+def build_torchvision_model(
+    cfg: Config, 
+    device: torch.device
+) -> Tuple[nn.Module, Callable]:
     # Find model in TorchVision
     if "quantized_" in cfg.MODEL.TORCHVISION_MODEL_NAME:
         mdl = importlib.import_module("torchvision.models.quantization", cfg.MODEL.TORCHVISION_MODEL_NAME)
@@ -799,7 +807,6 @@ def build_torchvision_model(cfg, device):
 
     # Load model and weights
     model_torchvision_weights = eval(weight_name).DEFAULT
-    args = {}
     model = eval(tc_model_name)(weights=model_torchvision_weights)
 
     # Create new head

@@ -1,8 +1,7 @@
-import torch
-import cv2
 import os
 import math
 import time
+import torch
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.transforms as transforms
@@ -21,28 +20,35 @@ from skimage.filters import rank, threshold_otsu
 from skimage.measure import label, regionprops_table
 from skimage.exposure import equalize_adapthist
 import diplib as dip
+from typing import (
+    Tuple,
+    Optional,
+    Dict,
+    List,
+    Callable
+)
+from numpy.typing import NDArray
 
-from biapy.data.pre_processing import reduce_dtype
 from biapy.utils.misc import to_numpy_format, to_pytorch_format
-from biapy.data.data_manipulation import read_img_as_ndarray, save_tif, imread
+from biapy.data.data_manipulation import read_img_as_ndarray, save_tif, imread, reduce_dtype
 
 
 def watershed_by_channels(
-    data,
-    channels,
-    ths={},
-    remove_before=False,
-    thres_small_before=10,
-    seed_morph_sequence=[],
-    seed_morph_radius=[],
-    erode_and_dilate_foreground=False,
-    fore_erosion_radius=5,
-    fore_dilation_radius=5,
-    rmv_close_points=False,
-    remove_close_points_radius=-1,
-    resolution=[1, 1, 1],
-    watershed_by_2d_slices=False,
-    save_dir=None,
+    data: NDArray,
+    channels: str,
+    ths: Dict={},
+    remove_before: bool=False,
+    thres_small_before: int=10,
+    seed_morph_sequence: List[str]=[],
+    seed_morph_radius: List[int]=[],
+    erode_and_dilate_foreground: bool=False,
+    fore_erosion_radius: int=5,
+    fore_dilation_radius: int=5,
+    rmv_close_points: bool=False,
+    remove_close_points_radius: int=-1,
+    resolution: Tuple[float,...]=(1., 1., 1.),
+    watershed_by_2d_slices: bool=False,
+    save_dir: Optional[str]=None,
 ):
     """
     Convert binary foreground probability maps and instance contours to instance masks via watershed segmentation
@@ -122,6 +128,8 @@ def watershed_by_channels(
     def erode_seed_and_foreground():
         nonlocal seed_map
         nonlocal foreground
+        assert isinstance(seed_map, np.ndarray) and isinstance(foreground, np.ndarray) 
+
         if len(seed_morph_sequence) != 0:
             print("Applying {} to seeds . . .".format(seed_morph_sequence))
         if erode_and_dilate_foreground:
@@ -211,6 +219,7 @@ def watershed_by_channels(
 
         print("Creating the central points . . .")
         seed_map = label(seed_map, connectivity=1)
+        assert isinstance(seed_map, np.ndarray)
         instances = np.unique(seed_map)[1:]
         seed_coordinates = center_of_mass(seed_map, label(seed_map), instances)
         seed_coordinates = np.round(seed_coordinates).astype(int)
@@ -276,7 +285,8 @@ def watershed_by_channels(
                 ((data[..., 0] > ths["TH_BINARY_MASK"]) + (data[..., 1] > ths["TH_CONTOUR"])).astype(np.uint8),
                 iterations=2,
             )
-            seed_map, num = label(seed_map, connectivity=1, return_num=True)
+            assert isinstance(seed_map, np.ndarray)
+            seed_map, num = label(seed_map, connectivity=1, return_num=True) # type: ignore
 
             # Create background seed and label correctly
             background_seed = 1 - background_seed
@@ -290,6 +300,7 @@ def watershed_by_channels(
             background_seed = binary_dilation((data[..., 1] < ths["TH_DISTANCE"]).astype(np.uint8), iterations=2)
             seed_map = label(seed_map, connectivity=1)
             background_seed = label(background_seed, connectivity=1)
+            assert isinstance(background_seed, np.ndarray) and isinstance(seed_map, np.ndarray)
 
             props = regionprops_table(seed_map, properties=("area", "centroid"))
             for n in range(len(props["centroid-0"])):
@@ -318,6 +329,8 @@ def watershed_by_channels(
         seed_map = remove_small_objects(seed_map, thres_small_before)
         seed_map, _, _ = relabel_sequential(seed_map)
 
+    assert isinstance(seed_map, np.ndarray) and foreground
+
     # Choose appropiate dtype
     max_value = np.max(seed_map)
     if max_value < 255:
@@ -336,7 +349,7 @@ def watershed_by_channels(
         segm = watershed(-semantic, seed_map, mask=foreground)
         segm = segm.astype(appropiate_dtype)
 
-    if save_dir is not None:
+    if save_dir:
         save_tif(
             np.expand_dims(np.expand_dims(seed_map, -1), 0).astype(segm.dtype),
             save_dir,
@@ -359,7 +372,11 @@ def watershed_by_channels(
     return segm
 
 
-def apply_median_filtering(data, axes="xy", mf_size=5):
+def apply_median_filtering(
+    data: NDArray, 
+    axes: str="xy", 
+    mf_size: int=5
+) -> NDArray:
     """
     Applies a median filtering to the specified axes of the provided data.
 
@@ -408,14 +425,14 @@ def apply_median_filtering(data, axes="xy", mf_size=5):
 
 
 def ensemble8_2d_predictions(
-    o_img,
-    pred_func,
-    axis_order_back,
-    axis_order,
-    device,
-    batch_size_value=1,
+    o_img: NDArray,
+    pred_func: Callable,
+    axis_order_back: Tuple[int,...],
+    axis_order: Tuple[int,...],
+    device: torch.device,
+    batch_size_value: int=1,
     mode="mean",
-):
+) -> NDArray | Tuple[NDArray, NDArray]:
     """
     Outputs the mean prediction of a given image generating its 8 possible rotations and flips.
 
@@ -580,13 +597,21 @@ def ensemble8_2d_predictions(
     out = np.expand_dims(funct(out, axis=0), 0)
     out = to_pytorch_format(out, axis_order, device)
 
-    if channel_split is not None:
-        return [out[:, :channel_split], out[:, channel_split:]]
+    if channel_split:
+        return out[:, :channel_split], out[:, channel_split:]
     else:
         return out
 
 
-def ensemble16_3d_predictions(vol, pred_func, axis_order_back, axis_order, device, batch_size_value=1, mode="mean"):
+def ensemble16_3d_predictions(
+    vol: NDArray, 
+    pred_func: Callable, 
+    axis_order_back: Tuple[int,...], 
+    axis_order: Tuple[int,...], 
+    device: torch.device, 
+    batch_size_value: int=1, 
+    mode: str="mean"
+) -> NDArray | Tuple[NDArray, NDArray]:
     """
     Outputs the mean prediction of a given image generating its 16 possible rotations and flips.
 
@@ -900,19 +925,19 @@ def ensemble16_3d_predictions(vol, pred_func, axis_order_back, axis_order, devic
     out = np.expand_dims(funct(out, axis=0), 0)
     out = to_pytorch_format(out, axis_order, device)
 
-    if channel_split is not None:
-        return [out[:, :channel_split], out[:, channel_split:]]
+    if channel_split:
+        return out[:, :channel_split], out[:, channel_split:]
     else:
         return out
 
 
 def create_th_plot(
-    ths,
-    y_list,
-    th_name="TH_BINARY_MASK",
-    chart_dir=None,
-    per_sample=True,
-    ideal_value=None,
+    ths: List[float],
+    y_list: list[int|float],
+    chart_dir: str,
+    th_name: str="TH_BINARY_MASK",
+    per_sample: bool=True,
+    ideal_value: Optional[int|float]=None,
 ):
     """Create plots for threshold value calculation.
 
@@ -924,11 +949,11 @@ def create_th_plot(
     y_list : List of ints/floats
         Values of ``y`` axis.
 
-    th_name : str, optional
-        Name of the threshold.
-
     chart_dir : str, optional
         Path where the charts are stored.
+
+    th_name : str, optional
+        Name of the threshold.
 
     per_sample : bool, optional
         Create the plot per list in ``y_list``.
@@ -945,7 +970,7 @@ def create_th_plot(
         "TH_DIST_FOREGROUND",
     ]
     fig, ax = plt.subplots(figsize=(25, 10))
-    ths = [str(i) for i in ths]
+    ths = [str(i) for i in ths] # type: ignore
     num_points = len(ths)
 
     N = len(y_list)
@@ -958,16 +983,16 @@ def create_th_plot(
 
         # Shrink current axis by 20%
         box = ax.get_position()
-        ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
+        ax.set_position([box.x0, box.y0, box.width * 0.8, box.height]) # type: ignore
         # Put a legend to the right of the current axis
         ax.legend(loc="center left", bbox_to_anchor=(1, 0.5))
     else:
-        y_list = np.array(y_list)
+        y_list = np.array(y_list) # type: ignore
         y_mean = np.mean(y_list, axis=0)
         y_std = np.std(y_list, axis=0)
         ax.plot(ths, y_mean, label="sample (mean)")
         plt.fill_between(ths, y_mean - y_std, y_mean + y_std, alpha=0.25)
-        if ideal_value is not None:
+        if ideal_value:
             plt.axhline(ideal_value, color="r")
             trans = transforms.blended_transform_factory(ax.get_yticklabels()[0].get_transform(), ax.transData)
             ax.text(
@@ -985,7 +1010,7 @@ def create_th_plot(
     plt.xticks(ths)
     a = np.arange(num_points)
     ax.xaxis.set_ticks(a)
-    ax.xaxis.set_ticklabels(ths)
+    ax.xaxis.set_ticklabels(ths) # type: ignore
 
     plt.title("Threshold " + str(th_name))
     plt.xlabel("Threshold")
@@ -998,8 +1023,14 @@ def create_th_plot(
     plt.show()
 
 
-def voronoi_on_mask(data, mask, th=0, verbose=False):
-    """Apply Voronoi to the voxels not labeled yet marked by the mask. It is done using distances from the un-labeled
+def voronoi_on_mask(
+    data:NDArray, 
+    mask: NDArray, 
+    th: float=0, 
+    verbose: bool=False
+) -> NDArray:
+    """
+    Apply Voronoi to the voxels not labeled yet marked by the mask. It is done using distances from the un-labeled
     voxels to the cell perimeters.
 
     Parameters
@@ -1092,7 +1123,14 @@ def voronoi_on_mask(data, mask, th=0, verbose=False):
     return voronoiCyst
 
 
-def remove_close_points(points, radius, resolution, classes=None, ndim=3, return_drops=False):
+def remove_close_points(
+    points: NDArray | List[List[int | float]], 
+    radius: float, 
+    resolution: Tuple[float, ...], 
+    classes: Optional[List[int]]=None, 
+    ndim: int=3, 
+    return_drops: bool=False
+) -> List[List[int | float]] | Tuple[List[List[int | float]], List[int]] | Tuple[List[List[int | float]], List[int], List[bool]]:
     """
     Remove all points from ``point_list`` that are at a ``radius``
     or less distance from each other.
@@ -1117,7 +1155,7 @@ def remove_close_points(points, radius, resolution, classes=None, ndim=3, return
 
     Returns
     -------
-    new_point_list : List of floats
+    new_point_list : List of lists of floats
         New list of points after removing those at a distance of ``radius``
         or less from each other.
     """
@@ -1125,8 +1163,6 @@ def remove_close_points(points, radius, resolution, classes=None, ndim=3, return
     print("Initial number of points: " + str(len(points)))
 
     point_list = points.copy()
-    if classes is not None:
-        class_list = classes.copy()
 
     # Resolution adjust
     for i in range(len(point_list)):
@@ -1166,10 +1202,10 @@ def remove_close_points(points, radius, resolution, classes=None, ndim=3, return
             discard.update(neighbors.get(node, set()))  # add node's neighbors to discard set
 
     # points to keep
-    new_point_list = [points[i] for i in keep]
+    new_point_list = [list(points[i]) for i in keep]
     print("Final number of points: " + str(len(new_point_list)))
 
-    if classes is not None:
+    if classes:
         new_class_list = [classes[i] for i in keep]
         if return_drops:
             return new_point_list, new_class_list, list(discard)
@@ -1183,16 +1219,16 @@ def remove_close_points(points, radius, resolution, classes=None, ndim=3, return
 
 
 def detection_watershed(
-    seeds,
-    coords,
-    data_filename,
-    first_dilation,
-    ndim=3,
-    donuts_classes=[-1],
-    donuts_patch=[13, 120, 120],
-    donuts_nucleus_diameter=30,
-    save_dir=None,
-):
+    seeds: NDArray,
+    coords: List[List[int | float]],
+    data_filename: str,
+    first_dilation: List[float|int],
+    ndim: int=3,
+    donuts_classes: List[int]=[-1],
+    donuts_patch: List[int]=[13, 120, 120],
+    donuts_nucleus_diameter: int=30,
+    save_dir: Optional[str] = None,
+) -> NDArray:
     """
     Grow given detection seeds.
 
@@ -1202,13 +1238,13 @@ def detection_watershed(
         Binary foreground labels and contours data to apply watershed into. E.g. ``(1450, 2000, 1)``
         for ``2D`` and ``(397, 1450, 2000, 1)`` for ``3D``.
 
-    coords : List of 3 ints
+    coords : List of list of 3 ints
         Coordinates of all detected points.
 
     data_filename : str
         Path to load the image paired with seeds.
 
-    first_dilation : str
+    first_dilation : List of float
         Seed dilation before watershed.
 
     ndim : int, optional
@@ -1236,17 +1272,17 @@ def detection_watershed(
 
     # Read the test image
     img = read_img_as_ndarray(data_filename, is_3d=(ndim == 3)).squeeze()
-    img = reduce_dtype(img, np.min(img), np.max(img), out_min=0, out_max=255, out_type=np.uint8)
+    img = reduce_dtype(img, np.min(img), np.max(img), out_min=0, out_max=255, out_type="uint8")
     img = equalize_adapthist(img)
 
     # Dilate first the seeds if needed
     print("Dilating a bit the seeds . . .")
     seeds = seeds.squeeze()
     if all(x != 0 for x in first_dilation):
-        seeds += (binary_dilation(seeds, structure=np.ones(first_dilation))).astype(np.uint8)
+        seeds += (binary_dilation(seeds, structure=np.ones(first_dilation))).astype(np.uint8) # type: ignore
 
     # Background seed
-    seeds = label(seeds)
+    seeds = label(seeds) # type: ignore
     max_seed = np.max(seeds)
     if max_seed < 255:
         seeds = seeds.astype(np.uint8)
@@ -1261,46 +1297,44 @@ def detection_watershed(
         background_label = seeds[0, 1, 1]
 
     # Try to dilate those instances that have 'donuts' like shape and that might have problems with the watershed
-    if donuts_classes[0] != -1:
-        for dclass in donuts_classes:
-            class_coords = coords[dclass - 1]
-            nticks = [x // 8 for x in donuts_patch]
-            nticks = [x + (1 - x % 2) for x in nticks]
-            half_spatch = [x // 2 for x in donuts_patch]
+    assert donuts_classes[0] != -1
+    for dclass in donuts_classes:
+        nticks = [x // 8 for x in donuts_patch]
+        nticks = [x + (1 - x % 2) for x in nticks]
+        half_spatch = [x // 2 for x in donuts_patch]
 
-            class_check_dir = os.path.join(save_dir, "class_{}_check".format(dclass))
+        for i in tqdm(range(len(coords)), leave=False):
+            c = coords[i]
 
-            for i in tqdm(range(len(class_coords)), leave=False):
-                c = class_coords[i]
+            # Patch coordinates
+            l = seeds[c[0], c[1], c[2]] # type: ignore
+            if ndim == 2:
+                y1, y2 = max(c[0] - half_spatch[0], 0), min(c[0] + half_spatch[0], img.shape[0])
+                x1, x2 = max(c[1] - half_spatch[1], 0), min(c[1] + half_spatch[1], img.shape[1])
+                img_patch = img[y1:y2, x1:x2]
+                seed_patch = seeds[y1:y2, x1:x2]
 
-                # Patch coordinates
-                l = seeds[c[0], c[1], c[2]]
-                if ndim == 2:
-                    y1, y2 = max(c[0] - half_spatch[0], 0), min(c[0] + half_spatch[0], img.shape[0])
-                    x1, x2 = max(c[1] - half_spatch[1], 0), min(c[1] + half_spatch[1], img.shape[1])
-                    img_patch = img[y1:y2, x1:x2]
-                    seed_patch = seeds[y1:y2, x1:x2]
+                # Extract horizontal and vertical line
+                line_y = img_patch[:, half_spatch[1]]
+                line_x = img_patch[half_spatch[0], :]
+            else:
+                z1, z2 = max(c[0] - half_spatch[0], 0), min(c[0] + half_spatch[0], img.shape[0])
+                y1, y2 = max(c[1] - half_spatch[1], 0), min(c[1] + half_spatch[1], img.shape[1])
+                x1, x2 = max(c[2] - half_spatch[2], 0), min(c[2] + half_spatch[2], img.shape[2])
+                img_patch = img[z1:z2, y1:y2, x1:x2]
+                seed_patch = seeds[z1:z2, y1:y2, x1:x2]
 
-                    # Extract horizontal and vertical line
-                    line_y = img_patch[:, half_spatch[1]]
-                    line_x = img_patch[half_spatch[0], :]
-                else:
-                    z1, z2 = max(c[0] - half_spatch[0], 0), min(c[0] + half_spatch[0], img.shape[0])
-                    y1, y2 = max(c[1] - half_spatch[1], 0), min(c[1] + half_spatch[1], img.shape[1])
-                    x1, x2 = max(c[2] - half_spatch[2], 0), min(c[2] + half_spatch[2], img.shape[2])
-                    img_patch = img[z1:z2, y1:y2, x1:x2]
-                    seed_patch = seeds[z1:z2, y1:y2, x1:x2]
+                # Extract horizontal and vertical line
+                line_y = img_patch[half_spatch[0], :, half_spatch[2]]
+                line_x = img_patch[half_spatch[0], half_spatch[1], :]
 
-                    # Extract horizontal and vertical line
-                    line_y = img_patch[half_spatch[0], :, half_spatch[2]]
-                    line_x = img_patch[half_spatch[0], half_spatch[1], :]
+            fillable_patch = seed_patch.copy()
+            seed_patch = (seed_patch == l) * l
+            fillable_patch = fillable_patch == 0
 
-                fillable_patch = seed_patch.copy()
-                seed_patch = (seed_patch == l) * l
-                fillable_patch = fillable_patch == 0
-
+            if save_dir:
                 aux = np.expand_dims(np.expand_dims((img_patch).astype(np.float32), -1), 0)
-                save_tif(aux, class_check_dir, ["{}_patch.tif".format(l)], verbose=False)
+                save_tif(aux, save_dir, ["{}_patch.tif".format(l)], verbose=False)
 
                 # Save the verticial and horizontal lines in the patch to debug
                 patch_y = np.zeros(img_patch.shape, dtype=np.float32)
@@ -1310,7 +1344,7 @@ def detection_watershed(
                     patch_y[half_spatch[0], :, half_spatch[2]] = img_patch[half_spatch[0], :, half_spatch[2]]
 
                 aux = np.expand_dims(np.expand_dims((patch_y).astype(np.float32), -1), 0)
-                save_tif(aux, class_check_dir, ["{}_y_line.tif".format(l)], verbose=False)
+                save_tif(aux, save_dir, ["{}_y_line.tif".format(l)], verbose=False)
 
                 patch_x = np.zeros(img_patch.shape, dtype=np.float32)
                 if ndim == 2:
@@ -1318,145 +1352,146 @@ def detection_watershed(
                 else:
                     patch_x[half_spatch[0], half_spatch[1], :] = img_patch[half_spatch[0], half_spatch[1], :]
                 aux = np.expand_dims(np.expand_dims((patch_x).astype(np.float32), -1), 0)
-                save_tif(aux, class_check_dir, ["{}_x_line.tif".format(l)], verbose=False)
+                save_tif(aux, save_dir, ["{}_x_line.tif".format(l)], verbose=False)
                 # Save vertical and horizontal line plots to debug
                 plt.title("Line graph")
                 plt.plot(list(range(len(line_y))), line_y, color="red")
-                plt.savefig(os.path.join(class_check_dir, "{}_line_y.png".format(l)))
+                plt.savefig(os.path.join(save_dir, "{}_line_y.png".format(l)))
                 plt.clf()
                 plt.title("Line graph")
                 plt.plot(list(range(len(line_x))), line_x, color="red")
-                plt.savefig(os.path.join(class_check_dir, "{}_line_x.png".format(l)))
+                plt.savefig(os.path.join(save_dir, "{}_line_x.png".format(l)))
                 plt.clf()
 
-                # Smooth them to analize easily
-                line_y = savgol_filter(line_y, nticks[1], 2)
-                line_x = savgol_filter(line_x, nticks[2], 2)
+            # Smooth them to analize easily
+            line_y = savgol_filter(line_y, nticks[1], 2)
+            line_x = savgol_filter(line_x, nticks[2], 2)
 
+            if save_dir:
                 # Save vertical and horizontal lines again but now filtered
                 plt.title("Line graph")
                 plt.plot(list(range(len(line_y))), line_y, color="red")
-                plt.savefig(os.path.join(class_check_dir, "{}_line_y_filtered.png".format(l)))
+                plt.savefig(os.path.join(save_dir, "{}_line_y_filtered.png".format(l)))
                 plt.clf()
                 plt.title("Line graph")
                 plt.plot(list(range(len(line_x))), line_x, color="red")
-                plt.savefig(os.path.join(class_check_dir, "{}_line_x_filtered.png".format(l)))
+                plt.savefig(os.path.join(save_dir, "{}_line_x_filtered.png".format(l)))
                 plt.clf()
 
-                # Find maximums
-                peak_y, _ = find_peaks(line_y)
-                peak_x, _ = find_peaks(line_x)
+            # Find maximums
+            peak_y, _ = find_peaks(line_y)
+            peak_x, _ = find_peaks(line_x)
 
-                # Find minimums
-                mins_y, _ = find_peaks(-line_y)
-                mins_x, _ = find_peaks(-line_x)
+            # Find minimums
+            mins_y, _ = find_peaks(-line_y)
+            mins_x, _ = find_peaks(-line_x)
 
-                # Find the donuts shape cells
-                # Vertical line
-                mid = len(line_y) // 2
-                mid_value = line_y[min(mins_y, key=lambda x: abs(x - mid))]
-                found_left_peak, found_right_peak = False, False
-                max_right, max_left = 0.0, 0.0
-                max_right_pos, max_left_pos = -1, -1
-                for peak_pos in peak_y:
-                    if line_y[peak_pos] >= mid_value * 1.5:
-                        # Left side
-                        if peak_pos <= mid:
-                            found_left_peak = True
-                            if line_y[peak_pos] > max_left:
-                                max_left = line_y[peak_pos]
-                                max_left_pos = peak_pos
-                        # Right side
-                        else:
-                            found_right_peak = True
-                            if line_y[peak_pos] > max_right:
-                                max_right = line_y[peak_pos]
-                                max_right_pos = peak_pos
-                ushape_in_liney = found_left_peak and found_right_peak
-                y_diff_dilation = max_right_pos - max_left_pos
-                if ushape_in_liney:
-                    y_left_gradient = min(line_y[:max_left_pos]) < max_left * 0.7
-                    y_right_gradient = min(line_y[max_right_pos:]) < max_right * 0.7
-
-                # Horizontal line
-                mid = len(line_x) // 2
-                mid_value = line_x[min(mins_x, key=lambda x: abs(x - mid))]
-                found_left_peak, found_right_peak = False, False
-                max_right, max_left = 0.0, 0.0
-                max_right_pos, max_left_pos = -1, -1
-                for peak_pos in peak_x:
-                    if line_x[peak_pos] >= mid_value * 1.5:
-                        # Left side
-                        if peak_pos <= mid:
-                            found_left_peak = True
-                            if line_x[peak_pos] > max_left:
-                                max_left = line_x[peak_pos]
-                                max_left_pos = peak_pos
-                        # Right side
-                        else:
-                            found_right_peak = True
-                            if line_x[peak_pos] > max_right:
-                                max_right = line_x[peak_pos]
-                                max_right_pos = peak_pos
-                ushape_in_linex = found_left_peak and found_right_peak
-                x_diff_dilation = max_right_pos - max_left_pos
-                if ushape_in_linex:
-                    x_left_gradient = min(line_x[:max_left_pos]) < max_left * 0.7
-                    x_right_gradient = min(line_x[max_right_pos:]) < max_right * 0.7
-
-                # Donuts shape cell found
-                if ushape_in_liney and ushape_in_linex:
-                    # Calculate the dilation to be made based on the nucleus size
-                    if ndim == 2:
-                        donuts_cell_dilation = [
-                            y_diff_dilation - first_dilation[dclass - 1][0],
-                            x_diff_dilation - first_dilation[dclass - 1][1],
-                        ]
-                        donuts_cell_dilation = [
-                            donuts_cell_dilation[0] - int(donuts_cell_dilation[0] * 0.4),
-                            donuts_cell_dilation[1] - int(donuts_cell_dilation[1] * 0.4),
-                        ]
+            # Find the donuts shape cells
+            # Vertical line
+            mid = len(line_y) // 2
+            mid_value = line_y[min(mins_y, key=lambda x: abs(x - mid))]
+            found_left_peak, found_right_peak = False, False
+            max_right, max_left = 0.0, 0.0
+            max_right_pos, max_left_pos = -1, -1
+            for peak_pos in peak_y:
+                if line_y[peak_pos] >= mid_value * 1.5:
+                    # Left side
+                    if peak_pos <= mid:
+                        found_left_peak = True
+                        if line_y[peak_pos] > max_left:
+                            max_left = line_y[peak_pos]
+                            max_left_pos = peak_pos
+                    # Right side
                     else:
-                        donuts_cell_dilation = [
-                            first_dilation[dclass - 1][0],
-                            y_diff_dilation - first_dilation[dclass - 1][1],
-                            x_diff_dilation - first_dilation[dclass - 1][2],
-                        ]
-                        donuts_cell_dilation = [
-                            donuts_cell_dilation[0],
-                            donuts_cell_dilation[1] - int(donuts_cell_dilation[1] * 0.4),
-                            donuts_cell_dilation[2] - int(donuts_cell_dilation[2] * 0.4),
-                        ]
+                        found_right_peak = True
+                        if line_y[peak_pos] > max_right:
+                            max_right = line_y[peak_pos]
+                            max_right_pos = peak_pos
+            ushape_in_liney = found_left_peak and found_right_peak
+            y_diff_dilation = max_right_pos - max_left_pos
+            if ushape_in_liney:
+                y_left_gradient = min(line_y[:max_left_pos]) < max_left * 0.7
+                y_right_gradient = min(line_y[max_right_pos:]) < max_right * 0.7
 
-                    # If the center is not wide the cell is not very large
-                    dilate = True
-                    if x_diff_dilation + y_diff_dilation < donuts_nucleus_diameter * 2:
-                        print("Instance {} has 'donuts' shape but it seems to be not very large!".format(l))
+            # Horizontal line
+            mid = len(line_x) // 2
+            mid_value = line_x[min(mins_x, key=lambda x: abs(x - mid))]
+            found_left_peak, found_right_peak = False, False
+            max_right, max_left = 0.0, 0.0
+            max_right_pos, max_left_pos = -1, -1
+            for peak_pos in peak_x:
+                if line_x[peak_pos] >= mid_value * 1.5:
+                    # Left side
+                    if peak_pos <= mid:
+                        found_left_peak = True
+                        if line_x[peak_pos] > max_left:
+                            max_left = line_x[peak_pos]
+                            max_left_pos = peak_pos
+                    # Right side
                     else:
-                        print("Instance {} has 'donuts' shape!".format(l))
-                        if not y_left_gradient:
-                            print("    - Its vertical left part seems to have low gradient")
-                            dilate = False
-                        if not y_right_gradient:
-                            print("    - Its vertical right part seems to have low gradient")
-                            dilate = False
-                        if not x_left_gradient:
-                            print("    - Its horizontal left part seems to have low gradient")
-                            dilate = False
-                        if not x_right_gradient:
-                            print("    - Its horizontal right part seems to have low gradient")
-                            dilate = False
-                    if dilate:
-                        if all(x > 0 for x in donuts_cell_dilation):
-                            seed_patch = grey_dilation(seed_patch, footprint=np.ones((donuts_cell_dilation)))
-                            if ndim == 2:
-                                seeds[y1:y2, x1:x2] += seed_patch * fillable_patch
-                            else:
-                                seeds[z1:z2, y1:y2, x1:x2] += seed_patch * fillable_patch
-                    else:
-                        print("    - Not dilating it!")
+                        found_right_peak = True
+                        if line_x[peak_pos] > max_right:
+                            max_right = line_x[peak_pos]
+                            max_right_pos = peak_pos
+            ushape_in_linex = found_left_peak and found_right_peak
+            x_diff_dilation = max_right_pos - max_left_pos
+            if ushape_in_linex:
+                x_left_gradient = min(line_x[:max_left_pos]) < max_left * 0.7
+                x_right_gradient = min(line_x[max_right_pos:]) < max_right * 0.7
+
+            # Donuts shape cell found
+            if ushape_in_liney and ushape_in_linex:
+                # Calculate the dilation to be made based on the nucleus size
+                if ndim == 2:
+                    donuts_cell_dilation = [
+                        y_diff_dilation - first_dilation[0],
+                        x_diff_dilation - first_dilation[1],
+                    ]
+                    donuts_cell_dilation = [
+                        donuts_cell_dilation[0] - int(donuts_cell_dilation[0] * 0.4),
+                        donuts_cell_dilation[1] - int(donuts_cell_dilation[1] * 0.4),
+                    ]
                 else:
-                    print("Instance {} checked".format(l))
+                    donuts_cell_dilation = [
+                        first_dilation[0],
+                        y_diff_dilation - first_dilation[1],
+                        x_diff_dilation - first_dilation[2],
+                    ]
+                    donuts_cell_dilation = [
+                        donuts_cell_dilation[0],
+                        donuts_cell_dilation[1] - int(donuts_cell_dilation[1] * 0.4),
+                        donuts_cell_dilation[2] - int(donuts_cell_dilation[2] * 0.4),
+                    ]
+
+                # If the center is not wide the cell is not very large
+                dilate = True
+                if x_diff_dilation + y_diff_dilation < donuts_nucleus_diameter * 2:
+                    print("Instance {} has 'donuts' shape but it seems to be not very large!".format(l))
+                else:
+                    print("Instance {} has 'donuts' shape!".format(l))
+                    if not y_left_gradient:
+                        print("    - Its vertical left part seems to have low gradient")
+                        dilate = False
+                    if not y_right_gradient:
+                        print("    - Its vertical right part seems to have low gradient")
+                        dilate = False
+                    if not x_left_gradient:
+                        print("    - Its horizontal left part seems to have low gradient")
+                        dilate = False
+                    if not x_right_gradient:
+                        print("    - Its horizontal right part seems to have low gradient")
+                        dilate = False
+                if dilate:
+                    if all(x > 0 for x in donuts_cell_dilation):
+                        seed_patch = grey_dilation(seed_patch, footprint=np.ones((donuts_cell_dilation))) # type: ignore
+                        if ndim == 2:
+                            seeds[y1:y2, x1:x2] += seed_patch * fillable_patch
+                        else:
+                            seeds[z1:z2, y1:y2, x1:x2] += seed_patch * fillable_patch
+                else:
+                    print("    - Not dilating it!")
+            else:
+                print("Instance {} checked".format(l))
 
     print("Calculating gradient . . .")
     start = time.time()
@@ -1485,7 +1520,7 @@ def detection_watershed(
             segm[i] += dil_slice
             segm[i] = erosion(segm[i], disk(2))
 
-    if save_dir is not None:
+    if save_dir:
         os.makedirs(save_dir, exist_ok=True)
 
         aux = np.expand_dims(np.expand_dims((img).astype(np.float32), -1), 0)
@@ -1504,10 +1539,10 @@ def detection_watershed(
 
 
 def measure_morphological_props_and_filter(
-    img,
-    resolution,
-    filter_instances=False,
-    properties=[[]],
+    img: NDArray,
+    resolution: Tuple[float,...],
+    filter_instances: bool=False,
+    properties: List[List[str]]=[[]],
     prop_values=[[]],
     comp_signs=[[]],
 ):
