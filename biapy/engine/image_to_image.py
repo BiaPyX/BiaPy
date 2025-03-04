@@ -54,6 +54,7 @@ class Image_to_Image_Workflow(Base_Workflow):
         self.is_y_mask = False
 
         self.norm_module.mask_norm = "as_image"
+        self.test_norm_module.mask_norm = "as_image"
 
     def define_activations_and_channels(self):
         """

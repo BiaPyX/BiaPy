@@ -241,7 +241,7 @@ class Detection_Workflow(Base_Workflow):
                             metric_logger.meters[list_names_to_use[k]].update(v)
                         k += 1
                 else:
-                    val = val.item() if not torch.isnan(val) else 0
+                    val = val.item() if not torch.isnan(val) else 0 # type: ignore
                     out_metrics[list_names_to_use[i]] = val
                     if metric_logger:
                         metric_logger.meters[list_names_to_use[i]].update(val)
@@ -658,18 +658,18 @@ class Detection_Workflow(Base_Workflow):
                     all_channel_d_metrics[9] += d_metrics["FN (class)"]
 
                 # Save csv files with the associations between GT points and predicted ones
-                if gt_assoc:
+                if gt_assoc is not None:
                     gt_assoc_orig = gt_assoc.copy()
-                if fp:
+                if fp is not None:
                     fp_orig = fp.copy()   
                 if self.cfg.PROBLEM.NDIM == "2D":
-                    if gt_assoc:
+                    if gt_assoc is not None:
                         gt_assoc = gt_assoc.drop(columns=["axis-0"])
                         gt_assoc = gt_assoc.rename(columns={"axis-1": "axis-0", "axis-2": "axis-1"})
-                    if fp:
+                    if fp is not None:
                         fp = fp.drop(columns=["axis-0"])
                         fp = fp.rename(columns={"axis-1": "axis-0", "axis-2": "axis-1"})
-                if gt_assoc:
+                if gt_assoc is not None:
                     os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, exist_ok=True)
                     gt_assoc.to_csv(
                         os.path.join(
@@ -677,7 +677,7 @@ class Detection_Workflow(Base_Workflow):
                             os.path.splitext(filenames[0])[0] + "_gt_assoc.csv",
                         )
                     )
-                if fp:
+                if fp is not None:
                     os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, exist_ok=True)
                     fp.to_csv(
                         os.path.join(
@@ -685,9 +685,9 @@ class Detection_Workflow(Base_Workflow):
                             os.path.splitext(filenames[0])[0] + "_fp.csv",
                         )
                     )
-                if gt_assoc:
+                if gt_assoc is not None:
                     gt_assoc = gt_assoc_orig
-                if fp:
+                if fp is not None:
                     fp = fp_orig  
             else:
                 if self.cfg.TEST.VERBOSE:
@@ -711,7 +711,7 @@ class Detection_Workflow(Base_Workflow):
                 for j, cor in enumerate(gt_coordinates):
                     z, y, x = cor
                     z, y, x = int(z), int(y), int(x)
-                    if gt_assoc:
+                    if gt_assoc is not None:
                         if gt_assoc[gt_assoc["gt_id"] == j + 1]["tag"].iloc[0] == "TP":
                             points_pred_mask_color[z, y, x] = (0, 255, 0)  # Green
                         elif gt_assoc[gt_assoc["gt_id"] == j + 1]["tag"].iloc[0] == "NC":
@@ -743,7 +743,7 @@ class Detection_Workflow(Base_Workflow):
                     )
 
                 # FP
-                if fp:
+                if fp is not None:
                     for cor in zip(
                         fp["axis-0"].tolist(),
                         fp["axis-1"].tolist(),

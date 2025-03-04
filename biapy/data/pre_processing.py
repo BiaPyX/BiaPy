@@ -250,9 +250,9 @@ def create_instance_channels(
                     del data, fname
 
                 slices = (
-                    slice(patch_coords["z_start"], patch_coords["z_end"]),
-                    slice(patch_coords["y_start"], patch_coords["y_end"]),
-                    slice(patch_coords["x_start"], patch_coords["x_end"]),
+                    slice(patch_coords.z_start, patch_coords.z_end),
+                    slice(patch_coords.y_start, patch_coords.y_end),
+                    slice(patch_coords.x_start, patch_coords.x_end),
                     slice(0, out_data_shape[channel_pos]),
                 )
                 data_ordered_slices = tuple(

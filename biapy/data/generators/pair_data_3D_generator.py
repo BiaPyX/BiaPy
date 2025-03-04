@@ -25,7 +25,8 @@ class Pair3DImageDataGenerator(PairBaseDataGenerator):
     def __init__(self, zflip: bool = False, **kwars):
         super().__init__(**kwars)
         sshape = self.X.sample_list[0].get_shape()
-        assert sshape is not None
+        if sshape is None:
+            sshape = self.shape
         self.z_size = sshape[0]
         self.zflip = zflip
         self.grid_d_size = (

@@ -116,7 +116,7 @@ class test_pair_data_generator(Dataset):
         self.ndim = ndim
         self.len = len(X.sample_list)
 
-        img, mask, _, sample_extra_info, _ = self.load_sample(0)
+        img, mask, _, sample_extra_info, _ = self.load_sample(0, first_load=True)
         if "img_file_to_close" in sample_extra_info:
             sample_extra_info["img_file_to_close"].close()
         if "mask_file_to_close" in sample_extra_info:
@@ -131,7 +131,11 @@ class test_pair_data_generator(Dataset):
                 instance_problem=instance_problem
             )
 
-    def load_sample(self, idx: int) -> Tuple[NDArray, NDArray | None, DataSample, Dict, Dict]:
+    def load_sample(
+        self, 
+        idx: int, 
+        first_load: bool = False,
+    ) -> Tuple[NDArray, NDArray | None, DataSample, Dict, Dict | None]:
         """
         Load one data sample given its corresponding index.
 
@@ -139,6 +143,9 @@ class test_pair_data_generator(Dataset):
         ----------
         idx : int
             Sample index counter.
+
+        first_load : bool, optional
+            Whether its the first time a sample is loaded to prevent normalizing it.
 
         Returns
         -------
@@ -187,7 +194,7 @@ class test_pair_data_generator(Dataset):
         if self.provide_Y:
             # "gt_associated_id" available only in PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER
             associated_id = sample.get_gt_associated_id()
-            if associated_id:
+            if associated_id is not None:
                 msample = self.Y.sample_list[associated_id]
                 mask, mask_file = load_img_data(
                     self.Y.dataset_info[msample.fid].path,
@@ -244,7 +251,7 @@ class test_pair_data_generator(Dataset):
                         verbose=True,
                     )
                     if self.provide_Y:
-                        assert mask
+                        assert mask is not None
                         mask = pad_and_reflect(
                             mask,
                             self.data_shape,
@@ -259,7 +266,8 @@ class test_pair_data_generator(Dataset):
                         "Please, check the channels of the images!".format(self.data_shape[-1], img.shape[-1])
                     )
 
-        if not self.test_by_chunks:
+        norm_extra_info = None
+        if not self.test_by_chunks and not first_load:
             # Normalization
             img = np.array(img)
             self.norm_module.set_stats_from_image(img)
@@ -268,7 +276,7 @@ class test_pair_data_generator(Dataset):
             if self.provide_Y:
                 mask = np.array(mask)
                 self.norm_module.set_stats_from_DatasetFile(self.X.dataset_info[sample.fid])
-                mask, _ = self.norm_module.apply_image_norm(mask)
+                mask, _ = self.norm_module.apply_mask_norm(mask)
                 assert isinstance(mask, np.ndarray)
 
             img = np.expand_dims(img, 0)

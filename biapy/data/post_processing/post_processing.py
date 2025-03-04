@@ -329,7 +329,7 @@ def watershed_by_channels(
         seed_map = remove_small_objects(seed_map, thres_small_before)
         seed_map, _, _ = relabel_sequential(seed_map)
 
-    assert isinstance(seed_map, np.ndarray) and foreground
+    assert isinstance(seed_map, np.ndarray) and foreground is not None
 
     # Choose appropiate dtype
     max_value = np.max(seed_map)
@@ -1297,201 +1297,201 @@ def detection_watershed(
         background_label = seeds[0, 1, 1]
 
     # Try to dilate those instances that have 'donuts' like shape and that might have problems with the watershed
-    assert donuts_classes[0] != -1
-    for dclass in donuts_classes:
-        nticks = [x // 8 for x in donuts_patch]
-        nticks = [x + (1 - x % 2) for x in nticks]
-        half_spatch = [x // 2 for x in donuts_patch]
+    if donuts_classes[0] != -1:
+        for dclass in donuts_classes:
+            nticks = [x // 8 for x in donuts_patch]
+            nticks = [x + (1 - x % 2) for x in nticks]
+            half_spatch = [x // 2 for x in donuts_patch]
 
-        for i in tqdm(range(len(coords)), leave=False):
-            c = coords[i]
+            for i in tqdm(range(len(coords)), leave=False):
+                c = coords[i]
 
-            # Patch coordinates
-            l = seeds[c[0], c[1], c[2]] # type: ignore
-            if ndim == 2:
-                y1, y2 = max(c[0] - half_spatch[0], 0), min(c[0] + half_spatch[0], img.shape[0])
-                x1, x2 = max(c[1] - half_spatch[1], 0), min(c[1] + half_spatch[1], img.shape[1])
-                img_patch = img[y1:y2, x1:x2]
-                seed_patch = seeds[y1:y2, x1:x2]
-
-                # Extract horizontal and vertical line
-                line_y = img_patch[:, half_spatch[1]]
-                line_x = img_patch[half_spatch[0], :]
-            else:
-                z1, z2 = max(c[0] - half_spatch[0], 0), min(c[0] + half_spatch[0], img.shape[0])
-                y1, y2 = max(c[1] - half_spatch[1], 0), min(c[1] + half_spatch[1], img.shape[1])
-                x1, x2 = max(c[2] - half_spatch[2], 0), min(c[2] + half_spatch[2], img.shape[2])
-                img_patch = img[z1:z2, y1:y2, x1:x2]
-                seed_patch = seeds[z1:z2, y1:y2, x1:x2]
-
-                # Extract horizontal and vertical line
-                line_y = img_patch[half_spatch[0], :, half_spatch[2]]
-                line_x = img_patch[half_spatch[0], half_spatch[1], :]
-
-            fillable_patch = seed_patch.copy()
-            seed_patch = (seed_patch == l) * l
-            fillable_patch = fillable_patch == 0
-
-            if save_dir:
-                aux = np.expand_dims(np.expand_dims((img_patch).astype(np.float32), -1), 0)
-                save_tif(aux, save_dir, ["{}_patch.tif".format(l)], verbose=False)
-
-                # Save the verticial and horizontal lines in the patch to debug
-                patch_y = np.zeros(img_patch.shape, dtype=np.float32)
+                # Patch coordinates
+                l = seeds[c[0], c[1], c[2]] # type: ignore
                 if ndim == 2:
-                    patch_y[:, half_spatch[1]] = img_patch[:, half_spatch[1]]
+                    y1, y2 = max(c[0] - half_spatch[0], 0), min(c[0] + half_spatch[0], img.shape[0])
+                    x1, x2 = max(c[1] - half_spatch[1], 0), min(c[1] + half_spatch[1], img.shape[1])
+                    img_patch = img[y1:y2, x1:x2]
+                    seed_patch = seeds[y1:y2, x1:x2]
+
+                    # Extract horizontal and vertical line
+                    line_y = img_patch[:, half_spatch[1]]
+                    line_x = img_patch[half_spatch[0], :]
                 else:
-                    patch_y[half_spatch[0], :, half_spatch[2]] = img_patch[half_spatch[0], :, half_spatch[2]]
+                    z1, z2 = max(c[0] - half_spatch[0], 0), min(c[0] + half_spatch[0], img.shape[0])
+                    y1, y2 = max(c[1] - half_spatch[1], 0), min(c[1] + half_spatch[1], img.shape[1])
+                    x1, x2 = max(c[2] - half_spatch[2], 0), min(c[2] + half_spatch[2], img.shape[2])
+                    img_patch = img[z1:z2, y1:y2, x1:x2]
+                    seed_patch = seeds[z1:z2, y1:y2, x1:x2]
 
-                aux = np.expand_dims(np.expand_dims((patch_y).astype(np.float32), -1), 0)
-                save_tif(aux, save_dir, ["{}_y_line.tif".format(l)], verbose=False)
+                    # Extract horizontal and vertical line
+                    line_y = img_patch[half_spatch[0], :, half_spatch[2]]
+                    line_x = img_patch[half_spatch[0], half_spatch[1], :]
 
-                patch_x = np.zeros(img_patch.shape, dtype=np.float32)
-                if ndim == 2:
-                    patch_x[half_spatch[0], :] = img_patch[half_spatch[0], :]
-                else:
-                    patch_x[half_spatch[0], half_spatch[1], :] = img_patch[half_spatch[0], half_spatch[1], :]
-                aux = np.expand_dims(np.expand_dims((patch_x).astype(np.float32), -1), 0)
-                save_tif(aux, save_dir, ["{}_x_line.tif".format(l)], verbose=False)
-                # Save vertical and horizontal line plots to debug
-                plt.title("Line graph")
-                plt.plot(list(range(len(line_y))), line_y, color="red")
-                plt.savefig(os.path.join(save_dir, "{}_line_y.png".format(l)))
-                plt.clf()
-                plt.title("Line graph")
-                plt.plot(list(range(len(line_x))), line_x, color="red")
-                plt.savefig(os.path.join(save_dir, "{}_line_x.png".format(l)))
-                plt.clf()
+                fillable_patch = seed_patch.copy()
+                seed_patch = (seed_patch == l) * l
+                fillable_patch = fillable_patch == 0
 
-            # Smooth them to analize easily
-            line_y = savgol_filter(line_y, nticks[1], 2)
-            line_x = savgol_filter(line_x, nticks[2], 2)
+                if save_dir:
+                    aux = np.expand_dims(np.expand_dims((img_patch).astype(np.float32), -1), 0)
+                    save_tif(aux, save_dir, ["{}_patch.tif".format(l)], verbose=False)
 
-            if save_dir:
-                # Save vertical and horizontal lines again but now filtered
-                plt.title("Line graph")
-                plt.plot(list(range(len(line_y))), line_y, color="red")
-                plt.savefig(os.path.join(save_dir, "{}_line_y_filtered.png".format(l)))
-                plt.clf()
-                plt.title("Line graph")
-                plt.plot(list(range(len(line_x))), line_x, color="red")
-                plt.savefig(os.path.join(save_dir, "{}_line_x_filtered.png".format(l)))
-                plt.clf()
-
-            # Find maximums
-            peak_y, _ = find_peaks(line_y)
-            peak_x, _ = find_peaks(line_x)
-
-            # Find minimums
-            mins_y, _ = find_peaks(-line_y)
-            mins_x, _ = find_peaks(-line_x)
-
-            # Find the donuts shape cells
-            # Vertical line
-            mid = len(line_y) // 2
-            mid_value = line_y[min(mins_y, key=lambda x: abs(x - mid))]
-            found_left_peak, found_right_peak = False, False
-            max_right, max_left = 0.0, 0.0
-            max_right_pos, max_left_pos = -1, -1
-            for peak_pos in peak_y:
-                if line_y[peak_pos] >= mid_value * 1.5:
-                    # Left side
-                    if peak_pos <= mid:
-                        found_left_peak = True
-                        if line_y[peak_pos] > max_left:
-                            max_left = line_y[peak_pos]
-                            max_left_pos = peak_pos
-                    # Right side
+                    # Save the verticial and horizontal lines in the patch to debug
+                    patch_y = np.zeros(img_patch.shape, dtype=np.float32)
+                    if ndim == 2:
+                        patch_y[:, half_spatch[1]] = img_patch[:, half_spatch[1]]
                     else:
-                        found_right_peak = True
-                        if line_y[peak_pos] > max_right:
-                            max_right = line_y[peak_pos]
-                            max_right_pos = peak_pos
-            ushape_in_liney = found_left_peak and found_right_peak
-            y_diff_dilation = max_right_pos - max_left_pos
-            if ushape_in_liney:
-                y_left_gradient = min(line_y[:max_left_pos]) < max_left * 0.7
-                y_right_gradient = min(line_y[max_right_pos:]) < max_right * 0.7
+                        patch_y[half_spatch[0], :, half_spatch[2]] = img_patch[half_spatch[0], :, half_spatch[2]]
 
-            # Horizontal line
-            mid = len(line_x) // 2
-            mid_value = line_x[min(mins_x, key=lambda x: abs(x - mid))]
-            found_left_peak, found_right_peak = False, False
-            max_right, max_left = 0.0, 0.0
-            max_right_pos, max_left_pos = -1, -1
-            for peak_pos in peak_x:
-                if line_x[peak_pos] >= mid_value * 1.5:
-                    # Left side
-                    if peak_pos <= mid:
-                        found_left_peak = True
-                        if line_x[peak_pos] > max_left:
-                            max_left = line_x[peak_pos]
-                            max_left_pos = peak_pos
-                    # Right side
+                    aux = np.expand_dims(np.expand_dims((patch_y).astype(np.float32), -1), 0)
+                    save_tif(aux, save_dir, ["{}_y_line.tif".format(l)], verbose=False)
+
+                    patch_x = np.zeros(img_patch.shape, dtype=np.float32)
+                    if ndim == 2:
+                        patch_x[half_spatch[0], :] = img_patch[half_spatch[0], :]
                     else:
-                        found_right_peak = True
-                        if line_x[peak_pos] > max_right:
-                            max_right = line_x[peak_pos]
-                            max_right_pos = peak_pos
-            ushape_in_linex = found_left_peak and found_right_peak
-            x_diff_dilation = max_right_pos - max_left_pos
-            if ushape_in_linex:
-                x_left_gradient = min(line_x[:max_left_pos]) < max_left * 0.7
-                x_right_gradient = min(line_x[max_right_pos:]) < max_right * 0.7
+                        patch_x[half_spatch[0], half_spatch[1], :] = img_patch[half_spatch[0], half_spatch[1], :]
+                    aux = np.expand_dims(np.expand_dims((patch_x).astype(np.float32), -1), 0)
+                    save_tif(aux, save_dir, ["{}_x_line.tif".format(l)], verbose=False)
+                    # Save vertical and horizontal line plots to debug
+                    plt.title("Line graph")
+                    plt.plot(list(range(len(line_y))), line_y, color="red")
+                    plt.savefig(os.path.join(save_dir, "{}_line_y.png".format(l)))
+                    plt.clf()
+                    plt.title("Line graph")
+                    plt.plot(list(range(len(line_x))), line_x, color="red")
+                    plt.savefig(os.path.join(save_dir, "{}_line_x.png".format(l)))
+                    plt.clf()
 
-            # Donuts shape cell found
-            if ushape_in_liney and ushape_in_linex:
-                # Calculate the dilation to be made based on the nucleus size
-                if ndim == 2:
-                    donuts_cell_dilation = [
-                        y_diff_dilation - first_dilation[0],
-                        x_diff_dilation - first_dilation[1],
-                    ]
-                    donuts_cell_dilation = [
-                        donuts_cell_dilation[0] - int(donuts_cell_dilation[0] * 0.4),
-                        donuts_cell_dilation[1] - int(donuts_cell_dilation[1] * 0.4),
-                    ]
-                else:
-                    donuts_cell_dilation = [
-                        first_dilation[0],
-                        y_diff_dilation - first_dilation[1],
-                        x_diff_dilation - first_dilation[2],
-                    ]
-                    donuts_cell_dilation = [
-                        donuts_cell_dilation[0],
-                        donuts_cell_dilation[1] - int(donuts_cell_dilation[1] * 0.4),
-                        donuts_cell_dilation[2] - int(donuts_cell_dilation[2] * 0.4),
-                    ]
+                # Smooth them to analize easily
+                line_y = savgol_filter(line_y, nticks[1], 2)
+                line_x = savgol_filter(line_x, nticks[2], 2)
 
-                # If the center is not wide the cell is not very large
-                dilate = True
-                if x_diff_dilation + y_diff_dilation < donuts_nucleus_diameter * 2:
-                    print("Instance {} has 'donuts' shape but it seems to be not very large!".format(l))
-                else:
-                    print("Instance {} has 'donuts' shape!".format(l))
-                    if not y_left_gradient:
-                        print("    - Its vertical left part seems to have low gradient")
-                        dilate = False
-                    if not y_right_gradient:
-                        print("    - Its vertical right part seems to have low gradient")
-                        dilate = False
-                    if not x_left_gradient:
-                        print("    - Its horizontal left part seems to have low gradient")
-                        dilate = False
-                    if not x_right_gradient:
-                        print("    - Its horizontal right part seems to have low gradient")
-                        dilate = False
-                if dilate:
-                    if all(x > 0 for x in donuts_cell_dilation):
-                        seed_patch = grey_dilation(seed_patch, footprint=np.ones((donuts_cell_dilation))) # type: ignore
-                        if ndim == 2:
-                            seeds[y1:y2, x1:x2] += seed_patch * fillable_patch
+                if save_dir:
+                    # Save vertical and horizontal lines again but now filtered
+                    plt.title("Line graph")
+                    plt.plot(list(range(len(line_y))), line_y, color="red")
+                    plt.savefig(os.path.join(save_dir, "{}_line_y_filtered.png".format(l)))
+                    plt.clf()
+                    plt.title("Line graph")
+                    plt.plot(list(range(len(line_x))), line_x, color="red")
+                    plt.savefig(os.path.join(save_dir, "{}_line_x_filtered.png".format(l)))
+                    plt.clf()
+
+                # Find maximums
+                peak_y, _ = find_peaks(line_y)
+                peak_x, _ = find_peaks(line_x)
+
+                # Find minimums
+                mins_y, _ = find_peaks(-line_y)
+                mins_x, _ = find_peaks(-line_x)
+
+                # Find the donuts shape cells
+                # Vertical line
+                mid = len(line_y) // 2
+                mid_value = line_y[min(mins_y, key=lambda x: abs(x - mid))]
+                found_left_peak, found_right_peak = False, False
+                max_right, max_left = 0.0, 0.0
+                max_right_pos, max_left_pos = -1, -1
+                for peak_pos in peak_y:
+                    if line_y[peak_pos] >= mid_value * 1.5:
+                        # Left side
+                        if peak_pos <= mid:
+                            found_left_peak = True
+                            if line_y[peak_pos] > max_left:
+                                max_left = line_y[peak_pos]
+                                max_left_pos = peak_pos
+                        # Right side
                         else:
-                            seeds[z1:z2, y1:y2, x1:x2] += seed_patch * fillable_patch
+                            found_right_peak = True
+                            if line_y[peak_pos] > max_right:
+                                max_right = line_y[peak_pos]
+                                max_right_pos = peak_pos
+                ushape_in_liney = found_left_peak and found_right_peak
+                y_diff_dilation = max_right_pos - max_left_pos
+                if ushape_in_liney:
+                    y_left_gradient = min(line_y[:max_left_pos]) < max_left * 0.7
+                    y_right_gradient = min(line_y[max_right_pos:]) < max_right * 0.7
+
+                # Horizontal line
+                mid = len(line_x) // 2
+                mid_value = line_x[min(mins_x, key=lambda x: abs(x - mid))]
+                found_left_peak, found_right_peak = False, False
+                max_right, max_left = 0.0, 0.0
+                max_right_pos, max_left_pos = -1, -1
+                for peak_pos in peak_x:
+                    if line_x[peak_pos] >= mid_value * 1.5:
+                        # Left side
+                        if peak_pos <= mid:
+                            found_left_peak = True
+                            if line_x[peak_pos] > max_left:
+                                max_left = line_x[peak_pos]
+                                max_left_pos = peak_pos
+                        # Right side
+                        else:
+                            found_right_peak = True
+                            if line_x[peak_pos] > max_right:
+                                max_right = line_x[peak_pos]
+                                max_right_pos = peak_pos
+                ushape_in_linex = found_left_peak and found_right_peak
+                x_diff_dilation = max_right_pos - max_left_pos
+                if ushape_in_linex:
+                    x_left_gradient = min(line_x[:max_left_pos]) < max_left * 0.7
+                    x_right_gradient = min(line_x[max_right_pos:]) < max_right * 0.7
+
+                # Donuts shape cell found
+                if ushape_in_liney and ushape_in_linex:
+                    # Calculate the dilation to be made based on the nucleus size
+                    if ndim == 2:
+                        donuts_cell_dilation = [
+                            y_diff_dilation - first_dilation[0],
+                            x_diff_dilation - first_dilation[1],
+                        ]
+                        donuts_cell_dilation = [
+                            donuts_cell_dilation[0] - int(donuts_cell_dilation[0] * 0.4),
+                            donuts_cell_dilation[1] - int(donuts_cell_dilation[1] * 0.4),
+                        ]
+                    else:
+                        donuts_cell_dilation = [
+                            first_dilation[0],
+                            y_diff_dilation - first_dilation[1],
+                            x_diff_dilation - first_dilation[2],
+                        ]
+                        donuts_cell_dilation = [
+                            donuts_cell_dilation[0],
+                            donuts_cell_dilation[1] - int(donuts_cell_dilation[1] * 0.4),
+                            donuts_cell_dilation[2] - int(donuts_cell_dilation[2] * 0.4),
+                        ]
+
+                    # If the center is not wide the cell is not very large
+                    dilate = True
+                    if x_diff_dilation + y_diff_dilation < donuts_nucleus_diameter * 2:
+                        print("Instance {} has 'donuts' shape but it seems to be not very large!".format(l))
+                    else:
+                        print("Instance {} has 'donuts' shape!".format(l))
+                        if not y_left_gradient:
+                            print("    - Its vertical left part seems to have low gradient")
+                            dilate = False
+                        if not y_right_gradient:
+                            print("    - Its vertical right part seems to have low gradient")
+                            dilate = False
+                        if not x_left_gradient:
+                            print("    - Its horizontal left part seems to have low gradient")
+                            dilate = False
+                        if not x_right_gradient:
+                            print("    - Its horizontal right part seems to have low gradient")
+                            dilate = False
+                    if dilate:
+                        if all(x > 0 for x in donuts_cell_dilation):
+                            seed_patch = grey_dilation(seed_patch, footprint=np.ones((donuts_cell_dilation))) # type: ignore
+                            if ndim == 2:
+                                seeds[y1:y2, x1:x2] += seed_patch * fillable_patch
+                            else:
+                                seeds[z1:z2, y1:y2, x1:x2] += seed_patch * fillable_patch
+                    else:
+                        print("    - Not dilating it!")
                 else:
-                    print("    - Not dilating it!")
-            else:
-                print("Instance {} checked".format(l))
+                    print("Instance {} checked".format(l))
 
     print("Calculating gradient . . .")
     start = time.time()

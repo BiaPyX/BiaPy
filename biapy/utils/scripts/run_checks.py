@@ -3074,6 +3074,7 @@ if all_test_info["Test25"]["enable"]:
         except yaml.YAMLError as exc:
             raise ValueError(exc)
 
+    biapy_config['DATA']['NORMALIZATION']['TYPE'] = "zero_mean_unit_variance"
     biapy_config['DATA']['EXTRACT_RANDOM_PATCH'] = True
     biapy_config['DATA']['REFLECT_TO_COMPLETE_SHAPE'] = True
     biapy_config['DATA']['PATCH_SIZE'] = "(1024, 1024, 1)"
@@ -3851,6 +3852,7 @@ if all_test_info["Test34"]["enable"]:
         except yaml.YAMLError as exc:
             raise ValueError(exc)
 
+    biapy_config['DATA']['NORMALIZATION']['TYPE'] = "zero_mean_unit_variance"
     biapy_config['DATA']['REFLECT_TO_COMPLETE_SHAPE'] = True
     biapy_config['DATA']['PATCH_SIZE'] = "(1024, 1024, 1)"
     biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "reduced_actin_lightmycells", "actin", "raw")

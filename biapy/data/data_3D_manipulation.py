@@ -128,12 +128,7 @@ def load_3D_efficient_files(
             data_info[c] = {}
             data_info[c]["filepath"] = filename
             data_info[c]["full_shape"] = data.shape
-            data_info[c]["patch_coords"] = order_dimensions(
-                patch_coords.extract_shape_from_coords(),
-                input_order="ZYX",
-                output_order=input_axes,
-                default_value=img.shape[c_index],
-            )
+            data_info[c]["patch_coords"] = patch_coords
 
             c += 1
 
@@ -223,6 +218,7 @@ def extract_patch_from_efficient_file(
             [patch_coords.x_start, patch_coords.x_end],
         ]
     )
+
     # Prepare slices to extract the patch
     slices = []
     for j in range(len(pcoords)):
@@ -351,7 +347,7 @@ def crop_3D_data_with_overlap(
 
     if data.ndim != 4:
         raise ValueError("data expected to be 4 dimensional, given {}".format(data.shape))
-    if data_mask:
+    if data_mask is not None:
         if data_mask.ndim != 4:
             raise ValueError("data_mask expected to be 4 dimensional, given {}".format(data_mask.shape))
         if data.shape[:-1] != data_mask.shape[:-1]:
@@ -407,7 +403,7 @@ def crop_3D_data_with_overlap(
         ),
         "reflect",
     )
-    if data_mask:
+    if data_mask is not None:
         padded_data_mask = np.pad(
             data_mask,
             (
@@ -476,7 +472,7 @@ def crop_3D_data_with_overlap(
     total_vol = vols_per_z * vols_per_y * vols_per_x
     if load_data:
         cropped_data = np.zeros((total_vol,) + padded_vol_shape, dtype=data.dtype)
-        if data_mask:
+        if data_mask is not None:
             cropped_data_mask = np.zeros(
                 (total_vol,) + padded_vol_shape[:3] + (data_mask.shape[-1],),
                 dtype=data_mask.dtype,
@@ -508,7 +504,7 @@ def crop_3D_data_with_overlap(
                         x_end=x * step_x + vol_shape[2] - d_x,
                     )
                 )
-                if load_data and data_mask:
+                if load_data and data_mask is not None:
                     cropped_data_mask[c] = padded_data_mask[
                         z * step_z - d_z : (z * step_z) + vol_shape[0] - d_z,
                         y * step_y - d_y : y * step_y + vol_shape[1] - d_y,
@@ -521,7 +517,7 @@ def crop_3D_data_with_overlap(
         print("### END 3D-OV-CROP ###")
 
     if load_data:
-        if data_mask:
+        if data_mask is not None:
             return cropped_data, cropped_data_mask, crop_coords
         else:
             return cropped_data, crop_coords
@@ -608,7 +604,7 @@ def merge_3D_data_with_overlap(
         # The function will print the shape of the generated arrays. In this example:
         #     **** New data shape is: (165, 768, 1024, 1)
     """
-    if data_mask:
+    if data_mask is not None:
         if data.shape[:-1] != data_mask.shape[:-1]:
             raise ValueError(
                 "data and data_mask shapes mismatch: {} vs {}".format(data.shape[:-1], data_mask.shape[:-1])
@@ -638,7 +634,7 @@ def merge_3D_data_with_overlap(
     ]
 
     merged_data = np.zeros((orig_vol_shape), dtype=np.float32)
-    if data_mask:
+    if data_mask is not None:
         data_mask = data_mask[
             :,
             padding[0] : data_mask.shape[1] - padding[0],
@@ -716,7 +712,7 @@ def merge_3D_data_with_overlap(
                     x * step_x - d_x : x * step_x + data.shape[3] - d_x,
                 ] += data[c]
 
-                if data_mask:
+                if data_mask is not None:
                     merged_data_mask[
                         z * step_z - d_z : (z * step_z) + data.shape[1] - d_z,
                         y * step_y - d_y : y * step_y + data.shape[2] - d_y,
@@ -736,7 +732,7 @@ def merge_3D_data_with_overlap(
         print("**** New data shape is: {}".format(merged_data.shape))
         print("### END MERGE-3D-OV-CROP ###")
 
-    if data_mask:
+    if data_mask is not None:
         merged_data_mask = np.true_divide(merged_data_mask, ov_map_counter).astype(data_mask.dtype)
         return merged_data, merged_data_mask
     else:
@@ -1004,8 +1000,7 @@ def extract_3D_patch_with_overlap_yield(
                     )
 
                     # determine the transpose order
-                    assert isinstance(transpose_order, np.ndarray)
-                    transpose_order = [x for x in transpose_order if not np.isnan(x)]
+                    transpose_order = [x for x in np.array(transpose_order) if not np.isnan(x)]
                     transpose_order = np.argsort(transpose_order)
                     transpose_order = current_order[transpose_order]
 

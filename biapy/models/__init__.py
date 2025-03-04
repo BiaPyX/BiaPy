@@ -733,24 +733,26 @@ def check_model_restrictions(cfg: Config, bmz_config: Dict, workflow_specs: Dict
             else:
                 mean, std = -1.0, -1.0
 
-            opts["DATA.NORMALIZATION.TYPE"] = "custom"
-            opts["DATA.NORMALIZATION.CUSTOM_MEAN"] = mean
-            opts["DATA.NORMALIZATION.CUSTOM_STD"] = std
+            opts["DATA.NORMALIZATION.TYPE"] = "zero_mean_unit_variance"
+            opts["DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.MEAN_VAL"] = mean
+            opts["DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.STD_VAL"]  = std
 
         # 'scale_linear' norm of BMZ is close to our 'div' norm (TODO: we need to control the "gain" arg)
         elif bmz_config["preprocessing"][key_to_find] == "scale_linear":
             opts["DATA.NORMALIZATION.TYPE"] = "div"
 
-        # 'scale_range' norm of BMZ is as our PERC_CLIP + 'scale_range' norm
+        # 'scale_range' norm of BMZ is as our 'scale_range' norm too
         elif bmz_config["preprocessing"][key_to_find] == "scale_range":
             opts["DATA.NORMALIZATION.TYPE"] = "scale_range"
+
+            # Check if there is percentile clippign
             if (
                 float(bmz_config["preprocessing"]["kwargs"]["min_percentile"]) != 0
                 or float(bmz_config["preprocessing"]["kwargs"]["max_percentile"]) != 100
             ):
-                opts["DATA.NORMALIZATION.PERC_CLIP"] = True
-                opts["DATA.NORMALIZATION.PERC_LOWER"] = float(bmz_config["preprocessing"]["kwargs"]["min_percentile"])
-                opts["DATA.NORMALIZATION.PERC_UPPER"] = float(bmz_config["preprocessing"]["kwargs"]["max_percentile"])
+                opts["DATA.NORMALIZATION.PERC_CLIP.ENABLE"] = True
+                opts["DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC"] = float(bmz_config["preprocessing"]["kwargs"]["min_percentile"])
+                opts["DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC"] = float(bmz_config["preprocessing"]["kwargs"]["max_percentile"])
 
     option_list = []
     for key, val in opts.items():

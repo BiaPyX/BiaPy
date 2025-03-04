@@ -867,7 +867,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             else:
                 coords = sample.coords
                 data_axis_order = self.X.dataset_info[sample.fid].get_input_axes()
-                assert coords and data_axis_order
+                assert coords  is not None and data_axis_order is not None 
                 img = extract_patch_from_efficient_file(img, coords, data_axis_order=data_axis_order)
 
                 # Apply preprocessing after extract sample
@@ -880,9 +880,8 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         # Y data
         # "gt_associated_id" available only in PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER
-        if sample.get_gt_associated_id():
-            id = sample.get_gt_associated_id()
-            assert id
+        id = sample.get_gt_associated_id()
+        if id is not None:
             msample = self.Y.sample_list[id]
             mask, _ = load_img_data(
                 self.Y.dataset_info[msample.fid].path,
@@ -915,12 +914,12 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                     # Extract the sample within the image
                     if msample.coords:
                         coords = msample.coords
-                        assert coords
+                        assert coords is not None 
                         mask = self.extract_patch_within_image(mask, coords, is_3d=(self.ndim == 3))
                 else:
                     coords = msample.coords
                     data_axis_order = self.Y.dataset_info[msample.fid].get_input_axes()
-                    assert coords and data_axis_order
+                    assert coords is not None and data_axis_order is not None 
                     mask = extract_patch_from_efficient_file(
                         mask,
                         coords,
@@ -957,28 +956,13 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 scale=self.random_crop_scale,
             )
 
-        # print("######")
-        # print(f"before: {img.min()} {img.max()} {mask.min()} {mask.max()}")
-        # print(f"self.norm_module: {self.norm_module}")
         if not first_load:
-            # print(self.X.dataset_info[sample.fid])
-            # print(f"before img: {img.min()} {img.max()} {img.mean()}")
             self.norm_module.set_stats_from_DatasetFile(self.X.dataset_info[sample.fid])
             img, _ = self.norm_module.apply_image_norm(img)
-            # print(f"after img: {img.min()} {img.max()} {img.mean()}")
-            # print("######")
 
-            # print(self.Y.dataset_info[msample.fid])
-            # print(f"before mask: {mask.min()} {mask.max()} {mask.mean()}")
             self.norm_module.set_stats_from_DatasetFile(self.Y.dataset_info[msample.fid])
             mask, _ = self.norm_module.apply_mask_norm(mask)
-            # print(f"after mask: {mask.min()} {mask.max()} {mask.mean()}")
-            # print("######")
-
-            # print("self.Y_norm: {}".format(self.norm_module["Y_norm"]))
             assert isinstance(img, np.ndarray) and isinstance(mask, np.ndarray)
-        # print(f"after: {img.min()} {img.max()} {mask.min()} {mask.max()}")
-        # print("######")
 
         if self.convert_to_rgb:
             if img.shape[-1] == 1:
@@ -1174,7 +1158,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         # Apply cutmix
         if self.cutmix and random.uniform(0, 1) < self.da_prob:
-            assert e_im and e_mask
+            assert e_im is not None and e_mask is not None 
             image, mask = cutmix(image, e_im, mask, e_mask, self.cmix_size)
 
         # Apply cutnoise

@@ -96,7 +96,7 @@ def weight_binary_ratio(target):
 
     ww = torch.clamp(ww, min=min_ratio, max=1 - min_ratio)
 
-    weight_factor = max(ww, 1 - ww) / min(ww, 1 - ww)
+    weight_factor = max(ww, 1 - ww) / min(ww, 1 - ww) # type: ignore
 
     # Case 1 -- Affinity Map
     # In that case, ww is large (i.e., ww > 1 - ww), which means the high weight
@@ -251,7 +251,7 @@ class multiple_metrics:
         if isinstance(y_pred, list):
             num_channels = y_pred[0].shape[1] + 1
             _y_pred = y_pred[0]
-            _y_pred_class = torch.argmax(y_pred[1], axis=1)
+            _y_pred_class = torch.argmax(y_pred[1], dim=1)
         else:
             num_channels = y_pred.shape[1]
             _y_pred = y_pred
@@ -699,10 +699,10 @@ def detection_metrics(
         assert [len(x) == 2 for x in bbox_to_consider], (
             "'bbox_to_consider' needs to be a list of " "two element array/tuple. E.g. [[1,1],[15,100],[10,200]]"
         )
-    if true_classes and pred_classes is None:
+    if true_classes is not None and pred_classes is None:
         raise ValueError("'pred_classes' must be provided when 'true_classes' is set")
 
-    if true_classes and pred_classes:
+    if true_classes is not None and pred_classes is not None:
         if len(true_classes) != len(true):
             raise ValueError("'true' and 'true_classes' length must be the same")
         if len(pred_classes) != len(pred_classes):
@@ -790,6 +790,7 @@ def detection_metrics(
         # Capture FP coords
         fp_coords = np.zeros((len(fp_preds), _pred.shape[-1]))
         pred_fp_class = [-1] * len(fp_preds)
+        assert pred_classes is not None
         for i in range(len(fp_preds)):
             fp_coords[i] = _pred[fp_preds[i] - 1]
             if class_metrics:
@@ -817,12 +818,12 @@ def detection_metrics(
                 _true[..., 0],
                 _true[..., 1],
                 _true[..., 2],
-                true_classes,
+                true_classes,  # type: ignore
                 pred_coords[..., 0],
                 pred_coords[..., 1],
                 pred_coords[..., 2],
                 pred_class,
-            ),
+            ),  # type: ignore
             columns=[
                 "gt_id",
                 "pred_id",
@@ -864,11 +865,12 @@ def detection_metrics(
         F1 = 0
 
     if not class_metrics:
-        if df:
+        if df is not None:
             df = df.drop(columns=["gt_class", "pred_class"])
+        if df_fp is not None:
             df_fp = df_fp.drop(columns=["pred_class"])
     else:
-        if df:
+        if df is not None:
             gt_matched_classes = df["gt_class"].tolist()
             pred_matched_classes = df["pred_class"].tolist()
             TP_classes = len([1 for x, y in zip(gt_matched_classes, pred_matched_classes) if x == y])

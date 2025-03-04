@@ -405,7 +405,7 @@ def load_and_prepare_train_data(
         for i in range(len(X_train.sample_list)):
             xshape = X_train.sample_list[i].get_shape()
             gt_associated_id = X_train.sample_list[i].get_gt_associated_id()
-            if gt_associated_id:
+            if gt_associated_id is not None:
                 yshape = Y_train.sample_list[gt_associated_id].get_shape()
             else:
                 yshape = Y_train.sample_list[i].get_shape()
@@ -672,12 +672,17 @@ def load_and_prepare_train_data(
             for i in range(len(X_val.sample_list)):
                 xshape = X_val.sample_list[i].get_shape()
                 gt_associated_id = X_val.sample_list[i].get_gt_associated_id()
-                if gt_associated_id:
+                if gt_associated_id is not None:
                     yshape = Y_val.sample_list[gt_associated_id].get_shape()
                 else:
                     yshape = Y_val.sample_list[i].get_shape()
-
-                assert xshape and yshape
+                
+                # The shape is not saved when 'DATA.EXTRACT_RANDOM_PATCH' is activated so set the crop_shape
+                if not xshape:
+                    xshape = crop_shape[:-1]
+                if not yshape:
+                    yshape = crop_shape[:-1]
+                    
                 if is_3d:
                     assert len(y_upscaling) == 3 and len(xshape) == 3
                     upsampled_x_shape = (
@@ -1085,7 +1090,7 @@ def load_and_prepare_cls_test_data(
                     )
                 )
 
-        if use_val_as_test_info["cross_val_samples_ids"]:
+        if use_val_as_test_info["cross_val_samples_ids"] is not None:
             X_test.clean_dataset(use_val_as_test_info["cross_val_samples_ids"])
             test_filenames = [test_filenames[i] for i in use_val_as_test_info["cross_val_samples_ids"]]
 
@@ -1818,14 +1823,14 @@ def samples_from_zarr(
             # Create crop_shape from coords as the sample is not loaded to speed up the process
             if is_3d:
                 crop_shape = (
-                    coords.x_end - coords.z_start,
-                    coords.x_end - coords.y_start,
+                    coords.z_end - coords.z_start,
+                    coords.y_end - coords.y_start,
                     coords.x_end - coords.x_start,
                     channel,
                 )
             else:
                 crop_shape = (
-                    coords.x_end - coords.y_start,
+                    coords.y_end - coords.y_start,
                     coords.x_end - coords.x_start,
                     channel,
                 )
@@ -2015,11 +2020,14 @@ def samples_from_image_list_multiple_raw_one_gt(
         norm_module.set_stats_from_image(gt_sample)
         norm_module.set_DatasetFile_from_stats(data_file)
         gt_dataset_info.append(data_file)
-        assert isinstance(crop_coords, list)
         for i in range(gt_tot_samples_to_insert):
+            coords = None
+            if crop_coords is not None:
+                coords = crop_coords[i]
+                assert isinstance(coords, PatchCoords)
             data_sample = DataSample(
                 fid=len(gt_dataset_info) - 1,
-                coords=crop_coords[i] if crop_coords else None,
+                coords=coords,
             )
             gt_sample_list.append(data_sample)
 
@@ -2353,7 +2361,7 @@ def filter_samples_by_properties(
                 mask = None
 
             if norm_before_filter:
-                assert norm_module
+                assert norm_module is not None 
                 img, _ = norm_module.apply_image_norm(img)
                 if use_Y_data:
                     assert mask is not None
@@ -2387,7 +2395,7 @@ def filter_samples_by_properties(
 
                 # Load Y data
                 if use_Y_data:
-                    assert y_dataset
+                    assert y_dataset is not None 
                     filepath = y_dataset.dataset_info[sample.fid].path
                     mask_path = filepath
                     if mfile and isinstance(mfile, h5py.File):
@@ -2402,7 +2410,7 @@ def filter_samples_by_properties(
                     ydata, mfile = None, None
 
                 if norm_before_filter:
-                    assert norm_module
+                    assert norm_module is not None 
                     xdata, _ = norm_module.apply_image_norm(xdata)
                     if use_Y_data:
                         assert ydata is not None
@@ -2411,23 +2419,23 @@ def filter_samples_by_properties(
             # Capture patches within image/mask
             coords = sample.coords
             if use_Y_data:
-                assert y_dataset
+                assert y_dataset is not None 
                 mcoords = y_dataset.sample_list[n].coords
 
             # Prepare slices to extract the patch
-            assert coords
+            assert coords is not None 
             if is_3d:
                 xslices = (
                     slice(None),
-                    slice(coords.z_start, coords.x_end),
-                    slice(coords.y_start, coords.x_end),
+                    slice(coords.z_start, coords.z_end),
+                    slice(coords.y_start, coords.y_end),
                     slice(coords.x_start, coords.x_end),
                     slice(None),
                 )
             else:
                 xslices = (
                     slice(None),
-                    slice(coords.y_start, coords.x_end),
+                    slice(coords.y_start, coords.y_end),
                     slice(coords.x_start, coords.x_end),
                     slice(None),
                 )
@@ -2442,19 +2450,19 @@ def filter_samples_by_properties(
                 xdata_ordered_slices = tuple([x for x in xslices if x != slice(None)])
 
             if use_Y_data:
-                assert mcoords
+                assert mcoords is not None 
                 if is_3d:
                     yslices = (
                         slice(None),
-                        slice(mcoords.z_start, mcoords.x_end),
-                        slice(mcoords.y_start, mcoords.x_end),
+                        slice(mcoords.z_start, mcoords.z_end),
+                        slice(mcoords.y_start, mcoords.y_end),
                         slice(mcoords.x_start, mcoords.x_end),
                         slice(None),
                     )
                 else:
                     yslices = (
                         slice(None),
-                        slice(mcoords.y_start, mcoords.x_end),
+                        slice(mcoords.y_start, mcoords.y_end),
                         slice(mcoords.x_start, mcoords.x_end),
                         slice(None),
                     )

@@ -59,7 +59,8 @@ class Super_resolution_Workflow(Base_Workflow):
         self.load_Y_val = True
 
         self.norm_module.mask_norm = "as_image"
-        
+        self.test_norm_module.mask_norm = "as_image"
+
     def define_activations_and_channels(self):
         """
         This function must define the following variables:

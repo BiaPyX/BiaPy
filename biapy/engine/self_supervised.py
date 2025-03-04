@@ -73,6 +73,7 @@ class Self_supervised_Workflow(Base_Workflow):
             self.load_Y_val = True
 
         self.norm_module.mask_norm = "as_image"
+        self.test_norm_module.mask_norm = "as_image"
 
     def define_activations_and_channels(self):
         """
@@ -498,7 +499,7 @@ class Self_supervised_Workflow(Base_Workflow):
         # Save image
         if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
             fname, fext = os.path.splitext(self.current_sample["filename"])
-            assert isinstance(pred, np.ndarray) and isinstance(pred_mask, np.ndarray) and isinstance(pred_visi, np.ndarray)
+            assert isinstance(pred, np.ndarray)
             save_tif(
                 pred,
                 self.cfg.PATHS.RESULT_DIR.PER_IMAGE,
@@ -506,6 +507,7 @@ class Self_supervised_Workflow(Base_Workflow):
                 verbose=self.cfg.TEST.VERBOSE,
             )
             if self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
+                assert isinstance(pred_mask, np.ndarray) and isinstance(pred_visi, np.ndarray)
                 save_tif(
                     pred_mask,
                     self.cfg.PATHS.RESULT_DIR.PER_IMAGE,

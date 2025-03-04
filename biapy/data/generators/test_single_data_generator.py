@@ -190,7 +190,7 @@ class test_single_data_generator(Dataset):
             # Skip processing image
             discard = False
             if self.filter_samples:
-                assert self.filter_vals and self.filter_signs
+                assert self.filter_vals is not None and self.filter_signs is not None 
                 discard = sample_satisfy_conds(
                     img,
                     self.filter_props,

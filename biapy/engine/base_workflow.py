@@ -229,6 +229,8 @@ class Base_Workflow(metaclass=ABCMeta):
             mean = cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.MEAN_VAL,
             std = cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.STD_VAL,
         )
+        self.test_norm_module = self.norm_module.copy()
+        self.test_norm_module.expect_precomputed_stats = False
         if self.cfg.MODEL.SOURCE == "torchvision":
             print("Creating normalization module . . .")
             self.torchvision_norm = Normalization(
@@ -964,9 +966,9 @@ class Base_Workflow(metaclass=ABCMeta):
             print("Loading train data information to extract the validation to be used as test")
             self.cfg.merge_from_list(["DATA.TRAIN.IN_MEMORY", False, "DATA.VAL.IN_MEMORY", False])
             self.load_train_data()
-            self.X_test = self.X_val.model_copy()
+            self.X_test = self.X_val.copy()
             if self.Y_val:
-                self.Y_test = self.Y_val.model_copy()
+                self.Y_test = self.Y_val.copy()
         else:
             # Paths to the raw and gt within the Zarr file. Only used when 'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA' is True.
             test_zarr_data_information = None
@@ -1017,7 +1019,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.cfg, 
                 self.X_test, 
                 self.Y_test, 
-                norm_module=self.norm_module,
+                norm_module=self.test_norm_module,
                 )
 
     def apply_model_activations(self, pred, training=False):
@@ -1674,7 +1676,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
         # Save test_input without the normalization 
         if "test_input" not in self.bmz_config:
-            self.bmz_config["test_input"] = self.norm_module.undo_image_norm(
+            self.bmz_config["test_input"] = self.test_norm_module.undo_image_norm(
                 img, 
                 self.current_sample["X_norm"]
             ).astype(np.float32)
@@ -2023,7 +2025,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
             if self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
                 self.all_pred.append(pred)
-                if self.current_sample["Y"] is not None and self.all_gt:
+                if self.current_sample["Y"] is not None and self.all_gt is not None:
                     self.all_gt.append(self.current_sample["Y"])
 
         ##################
@@ -2107,7 +2109,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
             if self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
                 self.all_pred.append(pred)
-                if self.current_sample["Y"] is not None and self.all_gt:
+                if self.current_sample["Y"] is not None and self.all_gt is not None:
                     self.all_gt.append(self.current_sample["Y"])
 
             self.after_full_image(pred)
@@ -2331,7 +2333,7 @@ class Base_Workflow(metaclass=ABCMeta):
         ############################
         if self.post_processing["as_3D_stack"]:
             self.all_pred = np.expand_dims(np.concatenate(self.all_pred), 0)
-            if self.cfg.DATA.TEST.LOAD_GT and self.all_gt:
+            if self.cfg.DATA.TEST.LOAD_GT and self.all_gt is not None:
                 self.all_gt = np.expand_dims(np.concatenate(self.all_gt), 0) 
 
             save_tif(

@@ -75,6 +75,7 @@ class Normalization:
         std: float = -1,
         channels_to_analize: Optional[int] = None,
         channel_info: Optional[Dict] = None,
+        expect_precomputed_stats: bool=True,
         eps: float = 1e-6,
     ):
         assert type in ["div", "scale_range", "zero_mean_unit_variance"]
@@ -89,6 +90,7 @@ class Normalization:
         self.do_percentile_clipping = percentile_clip
         self.channels_to_analize = channels_to_analize
         self.channel_info = channel_info
+        self.expect_precomputed_stats = expect_precomputed_stats
         self.eps = eps
 
         if percentile_clip:
@@ -233,14 +235,14 @@ class Normalization:
         if self.type == "div":
             img, xnorm = self.__norm_range01(img, div_using_max_and_scale=False)
         elif self.type == "scale_range":
-            if self.measure_by == "image":
+            if self.measure_by == "image" and self.expect_precomputed_stats:
                 assert self.scale_range_min_val is not None or self.scale_range_max_val is not None, (
                     "'scale_range_max_val' and 'scale_range_min_val' should not be None. Please call "
                     "'Normalization.stats_from_image' before"
                 )
             img, xnorm = self.__norm_range01(img, div_using_max_and_scale=True)
         elif self.type == "zero_mean_unit_variance":
-            if self.measure_by == "image":
+            if self.measure_by == "image" and self.expect_precomputed_stats:
                 assert (
                     self.mean is not None or self.std is not None
                 ), "'mean' and 'std' should not be None. Please call 'Normalization.stats_from_image' before"
@@ -428,8 +430,6 @@ class Normalization:
 
         if per_channel:
             if div_using_max_and_scale:  # "scale_range" normalization type
-                assert scale_range_min_val
-                assert scale_range_max_val
                 for c in range(data.shape[-1]):
                     scale_range_max_val.append(float(data[..., c].max()))
                     scale_range_min_val.append(float(data[..., c].min()))
@@ -445,8 +445,6 @@ class Normalization:
                 norm_steps["div_value"] = div_value
         else:
             if div_using_max_and_scale:  # "scale_range" normalization type
-                assert scale_range_min_val
-                assert scale_range_max_val
                 data = (data - scale_range_min_val[0]) / (scale_range_max_val[0] - scale_range_min_val[0] + self.eps)
             else:  # "div" normalization type
                 if data.max() > 255:
@@ -539,7 +537,7 @@ class Normalization:
                     data = np.round(data)
                 else:  # torch.Tensor
                     data = torch.round(data)
-                mindata = data.min
+                mindata = data.min()
                 data = data + abs(mindata)  # type: ignore
 
         if isinstance(data, np.ndarray):

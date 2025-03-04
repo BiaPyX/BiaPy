@@ -369,8 +369,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
             else:
                 coords = sample.coords
                 data_axis_order = sample.get_input_axes()
-                assert coords
-                assert data_axis_order
+                assert coords is not None and data_axis_order is not None 
                 img = extract_patch_from_efficient_file(img, coords, data_axis_order=data_axis_order)
 
                 # Apply preprocessing after extract sample
