@@ -11,7 +11,7 @@ from numpy.typing import NDArray
 from biapy.data.post_processing.post_processing import apply_binary_mask
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.data.data_manipulation import check_masks, save_tif
-from biapy.utils.misc import to_pytorch_format, to_numpy_format, MetricLogger
+from biapy.utils.misc import to_pytorch_format, to_numpy_format, to_pytorch_format, MetricLogger
 from biapy.engine.metrics import (
     jaccard_index,
     CrossEntropyLoss_wrapper,
@@ -273,13 +273,33 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         out_metrics : dict
             Value of the metrics for the given prediction.
         """
+        if isinstance(output, np.ndarray):
+            _output = to_pytorch_format(
+                output.copy(),
+                self.axis_order,
+                self.device,
+                dtype=self.loss_dtype,
+            )
+        else:  # torch.Tensor
+            _output = output.clone()
+
+        if isinstance(targets, np.ndarray):
+            _targets = to_pytorch_format(
+                targets.copy(),
+                self.axis_order,
+                self.device,
+                dtype=self.loss_dtype,
+            )
+        else:  # torch.Tensor
+            _targets = targets.clone()
+
         out_metrics = {}
         list_to_use = self.train_metrics if train else self.test_metrics
         list_names_to_use = self.train_metric_names if train else self.test_metric_names
 
         with torch.no_grad():
             for i, metric in enumerate(list_to_use):
-                val = metric(output, targets)
+                val = metric(_output, _targets)
                 val = val.item() if not torch.isnan(val) else 0
                 out_metrics[list_names_to_use[i]] = val
 

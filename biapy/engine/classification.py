@@ -15,7 +15,7 @@ from numpy.typing import NDArray
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.data.pre_processing import preprocess_data
 from biapy.data.data_manipulation import load_and_prepare_train_data_cls, load_and_prepare_cls_test_data
-from biapy.utils.misc import is_main_process, MetricLogger
+from biapy.utils.misc import is_main_process, to_pytorch_format, MetricLogger
 
 
 class Classification_Workflow(Base_Workflow):
@@ -164,13 +164,33 @@ class Classification_Workflow(Base_Workflow):
         out_metrics : dict
             Value of the metrics for the given prediction.
         """
+        if isinstance(output, np.ndarray):
+            _output = to_pytorch_format(
+                output.copy(),
+                self.axis_order,
+                self.device,
+                dtype=self.loss_dtype,
+            )
+        else:  # torch.Tensor
+            _output = output.clone()
+
+        if isinstance(targets, np.ndarray):
+            _targets = to_pytorch_format(
+                targets.copy(),
+                self.axis_order,
+                self.device,
+                dtype=self.loss_dtype,
+            )
+        else:  # torch.Tensor
+            _targets = targets.clone()
+
         out_metrics = {}
         list_to_use = self.train_metrics if train else self.test_metrics
         list_names_to_use = self.train_metric_names if train else self.test_metric_names
 
         with torch.no_grad():
             for i, metric in enumerate(list_to_use):
-                val = metric(output, targets)
+                val = metric(_output, _targets)
                 if torch.is_tensor(val):
                     val = val.item() if not torch.isnan(val) else 0
                 out_metrics[list_names_to_use[i]] = val

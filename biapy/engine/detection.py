@@ -22,6 +22,7 @@ from biapy.data.post_processing.post_processing import (
 from biapy.utils.misc import (
     is_main_process,
     is_dist_avail_and_initialized,
+    to_pytorch_format,
     MetricLogger
 )
 from biapy.engine.metrics import (
@@ -238,6 +239,26 @@ class Detection_Workflow(Base_Workflow):
         out_metrics : dict
             Value of the metrics for the given prediction.
         """
+        if isinstance(output, np.ndarray):
+            _output = to_pytorch_format(
+                output.copy(),
+                self.axis_order,
+                self.device,
+                dtype=self.loss_dtype,
+            )
+        else:  # torch.Tensor
+            _output = output.clone()
+
+        if isinstance(targets, np.ndarray):
+            _targets = to_pytorch_format(
+                targets.copy(),
+                self.axis_order,
+                self.device,
+                dtype=self.loss_dtype,
+            )
+        else:  # torch.Tensor
+            _targets = targets.clone()
+
         out_metrics = {}
         list_to_use = self.train_metrics if train else self.test_metrics
         list_names_to_use = self.train_metric_names if train else self.test_metric_names
@@ -245,7 +266,7 @@ class Detection_Workflow(Base_Workflow):
         with torch.no_grad():
             k = 0
             for i, metric in enumerate(list_to_use):
-                val = metric(output, targets)
+                val = metric(_output, _targets)
                 if isinstance(val, dict):
                     for m in val:
                         v = val[m].item() if not torch.isnan(val[m]) else 0
