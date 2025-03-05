@@ -114,6 +114,16 @@ class test_pair_data_generator(Dataset):
         self.data_shape = data_shape
         self.seed = seed
         self.ndim = ndim
+
+        # As in test entire images are processed one by one X.sample_list and X.dataset_info must match in length. If not
+        # means that validation data is being used as test, so we need to clean the sample_list.
+        if len(X.dataset_info) != len(X.sample_list):
+            new_sample_list = []
+            for i in range(len(X.dataset_info)):
+                new_sample_list.append(DataSample(fid = i, coords = None))            
+            X.sample_list = new_sample_list
+            if self.provide_Y:
+                Y.sample_list = new_sample_list.copy()
         self.len = len(X.sample_list)
 
         img, mask, _, sample_extra_info, _ = self.load_sample(0, first_load=True)
@@ -326,11 +336,16 @@ class test_pair_data_generator(Dataset):
         """
         img, mask, sample, sample_extra_info, norm_extra_info = self.load_sample(index)
 
+        if isinstance(img, np.ndarray):
+            img.flags.writeable = False
+
         test_sample = {
             "X": img,
             "X_norm": norm_extra_info,
         }
-        if self.provide_Y:
+        if self.provide_Y and mask is not None:
+            if isinstance(mask, np.ndarray):
+                mask.flags.writeable = False
             test_sample["Y"] = mask
 
         path = self.X.dataset_info[sample.fid].path

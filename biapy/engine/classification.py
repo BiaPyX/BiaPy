@@ -6,11 +6,16 @@ import pandas as pd
 from tqdm import tqdm
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 from torchmetrics import Accuracy
+from typing import (
+    Dict,
+    Optional
+)
+from numpy.typing import NDArray
 
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.data.pre_processing import preprocess_data
 from biapy.data.data_manipulation import load_and_prepare_train_data_cls, load_and_prepare_cls_test_data
-from biapy.utils.misc import is_main_process
+from biapy.utils.misc import is_main_process, MetricLogger
 
 
 class Classification_Workflow(Base_Workflow):
@@ -130,7 +135,13 @@ class Classification_Workflow(Base_Workflow):
 
         super().define_metrics()
 
-    def metric_calculation(self, output, targets, train=True, metric_logger=None):
+    def metric_calculation(
+        self, 
+        output: NDArray | torch.Tensor, 
+        targets: NDArray | torch.Tensor, 
+        train: bool=True, 
+        metric_logger: Optional[MetricLogger]=None
+    ) -> Dict :
         """
         Execution of the metrics defined in :func:`~define_metrics` function.
 
@@ -297,16 +308,20 @@ class Classification_Workflow(Base_Workflow):
             p = np.argmax(p, axis=1)
             self.all_pred.append(p)
 
-        if self.current_sample["Y"] is not None:
+        if self.current_sample["Y"] is not None and self.all_gt is not None:
             self.all_gt.append(self.current_sample["Y"])
 
-    def torchvision_model_call(self, in_img: torch.Tensor, is_train: bool = False):
+    def torchvision_model_call(
+        self, 
+        in_img: torch.Tensor, 
+        is_train: bool=False
+    ) -> torch.Tensor | None:
         """
         Call a regular Pytorch model.
 
         Parameters
         ----------
-        in_img : Tensors
+        in_img : torch.Tensors
             Input image to pass through the model.
 
         is_train : bool, optional
@@ -314,7 +329,7 @@ class Classification_Workflow(Base_Workflow):
 
         Returns
         -------
-        prediction : Tensor
+        prediction : torch.Tensor
             Image prediction.
         """
         # Convert first to 0-255 range if uint16
@@ -333,18 +348,22 @@ class Classification_Workflow(Base_Workflow):
         """
         Steps that must be done after predicting all images.
         """
+        self.all_pred = np.array(self.all_pred).squeeze()
+        if self.cfg.DATA.TEST.LOAD_GT and self.all_gt is not None:
+            self.all_gt = np.array(self.all_gt).squeeze()
+            
         # Save predictions in a csv file
         df = pd.DataFrame(self.test_filenames, columns=["filename"])
-        df["class"] = np.array(self.all_pred).squeeze()
+        df["class"] = self.all_pred
         f = os.path.join(self.cfg.PATHS.RESULT_DIR.PATH, "predictions.csv")
         os.makedirs(self.cfg.PATHS.RESULT_DIR.PATH, exist_ok=True)
         df.to_csv(f, index=False, header=True)
 
         # Calculate the metrics
-        if self.cfg.DATA.TEST.LOAD_GT:
+        if self.cfg.DATA.TEST.LOAD_GT and self.all_gt is not None:
             metric_values = self.metric_calculation(
                 self.all_pred,
-                self.all_gt,
+                self.all_gt, # type: ignore
                 train=False,
             )
             for metric in metric_values:

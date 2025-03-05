@@ -7,6 +7,8 @@ from torchmetrics.regression import MeanSquaredError, MeanAbsoluteError
 from typing import (
     Tuple,
     Callable,
+    Dict,
+    Optional
 )
 from numpy.typing import NDArray
 
@@ -24,7 +26,7 @@ from biapy.data.post_processing.post_processing import (
 )
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.data.data_manipulation import save_tif
-from biapy.utils.misc import to_pytorch_format, to_numpy_format, is_main_process
+from biapy.utils.misc import to_pytorch_format, to_numpy_format, is_main_process, MetricLogger
 from biapy.engine.metrics import n2v_loss_mse
 
 class Denoising_Workflow(Base_Workflow):
@@ -145,7 +147,13 @@ class Denoising_Workflow(Base_Workflow):
 
         super().define_metrics()
 
-    def metric_calculation(self, output, targets, train=True, metric_logger=None):
+    def metric_calculation(
+        self, 
+        output: NDArray | torch.Tensor, 
+        targets: NDArray | torch.Tensor, 
+        train: bool=True, 
+        metric_logger: Optional[MetricLogger]=None
+    ) -> Dict :
         """
         Execution of the metrics defined in :func:`~define_metrics` function.
 
@@ -324,7 +332,7 @@ class Denoising_Workflow(Base_Workflow):
 
         Parameters
         ----------
-        in_img : Tensor
+        in_img : torch.Tensor
             Input image to pass through the model.
 
         is_train : bool, optional
@@ -332,7 +340,7 @@ class Denoising_Workflow(Base_Workflow):
 
         Returns
         -------
-        prediction : Tensor
+        prediction : torch.Tensor
             Image prediction.
         """
         pass

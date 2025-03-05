@@ -11,7 +11,6 @@ from typing import (
     Type,
     Any,
     Sequence,
-    Dict
 )
 from numpy.typing import NDArray
 
@@ -1000,8 +999,8 @@ def extract_3D_patch_with_overlap_yield(
                     )
 
                     # determine the transpose order
-                    transpose_order = [x for x in np.array(transpose_order) if not np.isnan(x)]
-                    transpose_order = np.argsort(transpose_order)
+                    transpose_order = [x for x in transpose_order if not np.isnan(x)] # type: ignore
+                    transpose_order = np.argsort(transpose_order) # type: ignore
                     transpose_order = current_order[transpose_order]
 
                     img = np.transpose(img, transpose_order)

@@ -1,4 +1,5 @@
 import os
+import sys
 import builtins
 import time
 import glob
@@ -14,6 +15,12 @@ from yacs.config import CfgNode
 from functools import partial
 import collections.abc
 import gc 
+from typing import (
+    Tuple,
+    Literal,
+    Dict,
+)
+from numpy.typing import NDArray
 
 # from torch._six import inf
 from torch import inf
@@ -292,7 +299,12 @@ def all_reduce_mean(x):
         return x
 
 
-def to_pytorch_format(x, axis_order, device, dtype=torch.float32):
+def to_pytorch_format(
+    x: torch.Tensor | NDArray, 
+    axis_order: Tuple, 
+    device: torch.device, 
+    dtype=torch.float32
+):
     if torch.is_tensor(x):
         return x.to(dtype).permute(axis_order).to(device, non_blocking=True)
     else:
@@ -349,6 +361,7 @@ class SmoothedValue(object):
         self.total = 0.0
         self.count = 0
         self.fmt = fmt
+        self.eps = sys.float_info.epsilon
 
     def update(self, value, n=1):
         self.deque.append(value)
@@ -379,8 +392,8 @@ class SmoothedValue(object):
         return d.mean().item()
 
     @property
-    def global_avg(self):
-        return self.total / self.count
+    def global_avg(self) -> float:
+        return self.total / (self.count + self.eps)
 
     @property
     def max(self):

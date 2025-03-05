@@ -9,6 +9,12 @@ from torchmetrics.image import PeakSignalNoiseRatio, StructuralSimilarityIndexMe
 from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
 from torchmetrics.image.fid import FrechetInceptionDistance
 from torchmetrics.image.inception import InceptionScore
+from typing import (
+    Dict,
+    Optional
+)
+from numpy.typing import NDArray
+
 
 from biapy.data.data_2D_manipulation import (
     crop_data_with_overlap,
@@ -28,6 +34,7 @@ from biapy.utils.misc import (
     to_numpy_format,
     is_main_process,
     is_dist_avail_and_initialized,
+    MetricLogger
 )
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.data.pre_processing import create_ssl_source_data_masks
@@ -122,12 +129,13 @@ class Self_supervised_Workflow(Base_Workflow):
         self.loss : Function
             Loss function used during training and test.
         """
+        data_range = (0, 1) if self.cfg.DATA.NORMALIZATION.TYPE in ["div", "scale_range"] else None
         self.train_metrics = []
         self.train_metric_names = []
         self.train_metric_best = []
         for metric in list(set(self.cfg.TRAIN.METRICS)):
             if metric == "psnr":
-                self.train_metrics.append(PeakSignalNoiseRatio().to(self.device))
+                self.train_metrics.append(PeakSignalNoiseRatio(data_range=(0,255)).to(self.device))
                 self.train_metric_names.append("PSNR")
                 self.train_metric_best.append("max")
             elif metric == "mse":
@@ -139,7 +147,7 @@ class Self_supervised_Workflow(Base_Workflow):
                 self.train_metric_names.append("MAE")
                 self.train_metric_best.append("min")
             elif metric == "ssim":
-                self.train_metrics.append(StructuralSimilarityIndexMeasure().to(self.device))
+                self.train_metrics.append(StructuralSimilarityIndexMeasure(data_range=data_range).to(self.device))
                 self.train_metric_names.append("SSIM")
                 self.train_metric_best.append("max")
             elif metric == "fid":
@@ -203,7 +211,13 @@ class Self_supervised_Workflow(Base_Workflow):
         loss, pred, mask = output
         return loss
 
-    def metric_calculation(self, output, targets, train=True, metric_logger=None):
+    def metric_calculation(
+        self, 
+        output: NDArray | torch.Tensor, 
+        targets: NDArray | torch.Tensor, 
+        train: bool=True, 
+        metric_logger: Optional[MetricLogger]=None
+    ) -> Dict :
         """
         Execution of the metrics defined in :func:`~define_metrics` function.
 
@@ -227,64 +241,113 @@ class Self_supervised_Workflow(Base_Workflow):
             Value of the metrics for the given prediction.
         """
         if self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK.lower() == "masking":
-            _, pred, _ = output
+            _, _output, _ = output
             assert self.model_without_ddp
-            pred = self.model_without_ddp.unpatchify(pred)
+            _output = self.model_without_ddp.unpatchify(_output)
         else:
-            pred = output
+            _output = output
+
+        if isinstance(_output, np.ndarray):
+            _output = to_pytorch_format(
+                _output.copy(),
+                self.axis_order,
+                self.device,
+                dtype=self.loss_dtype,
+            )
+        else:  # torch.Tensor
+            _output = _output.clone()
+
+        if isinstance(targets, np.ndarray):
+            _targets = to_pytorch_format(
+                targets.copy(),
+                self.axis_order,
+                self.device,
+                dtype=self.loss_dtype,
+            )
+        else:  # torch.Tensor
+            _targets = targets.clone()
 
         out_metrics = {}
         list_to_use = self.train_metrics if train else self.test_metrics
         list_names_to_use = self.train_metric_names if train else self.test_metric_names
+        list_names_to_use_lower = [x.lower() for x in list_names_to_use]
 
-        if self.cfg.DATA.NORMALIZATION.TYPE in ["div", "scale_range"]:
-            pred = torch.clamp(pred, min=0, max=1)
-            targets = torch.clamp(targets, min=0, max=1)
+        # First metrics that do not require normalization, e.g. MAE and MSE
+        metrics_without_norm = ["mae", "mse"] if train else ["mae", "mse", "ssim"]
+        not_norm_metrics_pos = [list_names_to_use_lower.index(x) for x in metrics_without_norm if x in list_names_to_use_lower]
+        not_norm_metrics = [list_to_use[i] for i in not_norm_metrics_pos]
+        not_norm_metrics_names = [list_names_to_use_lower[i] for i in not_norm_metrics_pos]
         with torch.no_grad():
-            for i, metric in enumerate(list_to_use):
-                m_name = list_names_to_use[i].lower()
+            for i, metric in enumerate(not_norm_metrics):
+                m_name = not_norm_metrics_names[i]
+                m_name_real = list_names_to_use[not_norm_metrics_pos[i]]
                 if m_name in ["mse", "mae"]:
-                    val = metric(pred, targets)
+                    val = metric(_output, _targets)
                 elif m_name == "ssim":
-                    val = metric(pred.to(torch.float32), targets.to(torch.float32))
-                elif m_name == "psnr":
-                    # Normalize values to be between 0-255 range so PSNR value its more meaningful
-                    if self.cfg.DATA.NORMALIZATION.TYPE not in ["div", "scale_range"]:
-                        norm_output = (pred - torch.min(pred)) / (torch.max(pred) - torch.min(pred) + 1e-8)
-                        norm_targets = (targets - torch.min(targets)) / (torch.max(targets) - torch.min(targets) + 1e-8)
-                    else:
-                        norm_output = pred
-                        norm_targets = targets
-                    norm_output *= 255
-                    norm_targets *= 255
-                    val = metric(norm_output, norm_targets)
-                elif m_name in ["is", "lpips", "fid"]:
-                    # These metrics need to have normalized (between 0 and 1) images with 3 channels
-                    if self.cfg.DATA.NORMALIZATION.TYPE not in ["div", "scale_range"]:
-                        norm_output = (pred - torch.min(pred)) / (torch.max(pred) - torch.min(pred) + 1e-8)
-                        norm_targets = (targets - torch.min(targets)) / (torch.max(targets) - torch.min(targets) + 1e-8)
-                    else:
-                        norm_output = pred
-                        norm_targets = targets
-                    norm_3c_pred = torch.cat([norm_output, norm_output, norm_output], dim=1)
-                    norm_3c_targets = torch.cat([norm_targets, norm_targets, norm_targets], dim=1)
-                    if m_name == "fid":
-                        metric.update(norm_3c_pred, real=True)
-                        metric.update(norm_3c_targets, real=False)
-                    elif m_name == "is":
-                        metric.update(norm_3c_targets)
-                    else:  # lpips
-                        metric.update(norm_3c_pred, norm_3c_targets)
+                    val = metric(_output, _targets)
                 else:
                     raise NotImplementedError
 
                 if m_name in ["mse", "mae", "ssim", "psnr"]:
                     val = val.item() if not torch.isnan(val) else 0 # type: ignore
-                    out_metrics[m_name] = val
+                    out_metrics[m_name_real] = val
 
                 if metric_logger:
-                    metric_logger.meters[list_names_to_use[i]].update(val)
+                    metric_logger.meters[m_name_real].update(val)
+
+        # Ensure values between 0 and 1 in training. For test it is  not done as the values are calculated
+        # with the original test image values and the unnormalized prediction
+        if train:
+            if self.cfg.DATA.NORMALIZATION.TYPE in ["div", "scale_range"]:
+                _output = torch.clamp(_output, min=0, max=1)
+                _targets = torch.clamp(_targets, min=0, max=1)
+            elif self.cfg.DATA.NORMALIZATION.TYPE == "zero_mean_unit_variance":
+                _output = (_output - torch.min(_output)) / (torch.max(_output) - torch.min(_output) + 1e-8)
+                _targets = (_targets - torch.min(_targets)) / (torch.max(_targets) - torch.min(_targets) + 1e-8)
+
+        metrics_with_norm = ["ssim", "psnr", "is", "lpips", "fid"] if train else ["psnr", "is", "lpips", "fid"]
+        norm_metrics_pos = [list_names_to_use_lower.index(x) for x in metrics_with_norm if x in list_names_to_use_lower]
+        norm_metrics = [list_to_use[i] for i in norm_metrics_pos]
+        norm_metrics_names = [list_names_to_use_lower[i] for i in norm_metrics_pos]
+        with torch.no_grad():
+            for i, metric in enumerate(norm_metrics):
+                m_name = norm_metrics_names[i]
+                m_name_real = list_names_to_use[norm_metrics_pos[i]]
+                if m_name == "ssim":
+                    val = metric(_output, _targets)
+                elif m_name == "psnr":
+                    if train:
+                        # Set values to be between 0-255 range so PSNR value its more meaningful
+                        val = metric(_output * 255, _targets * 255)
+                    else:
+                        # In test the values against the original values are calculated
+                        val = metric(_output, _targets)
+                elif m_name in ["is", "lpips", "fid"]:
+                    # As these metrics are going to be calculated at the end we can modify _output and _targets
+                    if _output.shape[1] == 1:
+                        _output = torch.cat([_output, _output, _output], dim=1)
+                    if _targets.shape[1] == 1:
+                        _targets = torch.cat([_targets, _targets, _targets], dim=1)
+
+                    if m_name == "fid":
+                        metric.update(_output, real=True)
+                        metric.update(_targets, real=False)
+                    elif m_name == "is":
+                        metric.update(_targets)
+                    else:  # lpips
+                        metric.update(_output, _targets)
+                else:
+                    raise NotImplementedError
+
+                if m_name in ["mse", "mae", "ssim", "psnr"]:
+                    val = val.item() if not torch.isnan(val) else 0 # type: ignore
+                    out_metrics[m_name_real] = val
+
+                if metric_logger:
+                    metric_logger.meters[m_name_real].update(val)
+
         return out_metrics
+
 
     def prepare_targets(self, targets, batch):
         """
@@ -529,28 +592,23 @@ class Self_supervised_Workflow(Base_Workflow):
             if self.current_sample["Y"].dtype == np.dtype("uint16"):
                 self.current_sample["Y"] = self.current_sample["Y"].astype(np.float32)
 
-            metric_values = self.metric_calculation(
-                to_pytorch_format(pred, self.axis_order, self.device),
-                to_pytorch_format(
-                    self.current_sample["Y"],
-                    self.axis_order,
-                    self.device,
-                    dtype=self.loss_dtype,
-                ),
-                train=False,
-            )
+            metric_values = self.metric_calculation(output=pred, targets=self.current_sample["Y"], train=False)
             for metric in metric_values:
                 if str(metric).lower() not in self.stats["merge_patches"]:
                     self.stats["merge_patches"][str(metric).lower()] = 0
                 self.stats["merge_patches"][str(metric).lower()] += metric_values[metric]
 
-    def torchvision_model_call(self, in_img, is_train=False):
+    def torchvision_model_call(
+        self, 
+        in_img: torch.Tensor, 
+        is_train: bool=False
+    ) -> torch.Tensor | None:
         """
         Call a regular Pytorch model.
 
         Parameters
         ----------
-        in_img : Tensor
+        in_img : torch.Tensor
             Input image to pass through the model.
 
         is_train : bool, optional
@@ -558,7 +616,7 @@ class Self_supervised_Workflow(Base_Workflow):
 
         Returns
         -------
-        prediction : Tensor
+        prediction : torch.Tensor
             Image prediction.
         """
         pass

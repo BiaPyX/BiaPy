@@ -1,5 +1,7 @@
 import numpy as np
-
+from typing import (
+    Callable,
+)
 
 class EarlyStopping:
     """
@@ -7,7 +9,12 @@ class EarlyStopping:
     Copied from: https://github.com/Bjarten/early-stopping-pytorch/blob/master/pytorchtools.py
     """
 
-    def __init__(self, patience=7, delta=0, trace_func=print):
+    def __init__(
+        self, 
+        patience: int=7, 
+        delta: float=0, 
+        trace_func: Callable=print
+    ):
         """
         Parameters
         ----------
@@ -28,7 +35,7 @@ class EarlyStopping:
         self.delta = delta
         self.trace_func = trace_func
 
-    def __call__(self, val_loss):
+    def __call__(self, val_loss: float):
 
         score = -val_loss
 

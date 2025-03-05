@@ -917,7 +917,7 @@ def load_and_prepare_test_data(
                 sample_data.path_in_zarr = test_zarr_data_information["raw_path"]
             sample_list.append(sample_data)
 
-        # Extract a list of all training gt images
+        # Extract a list of all gt images
         if test_mask_path:
             y_dataset_info = []
             y_sample_list = []

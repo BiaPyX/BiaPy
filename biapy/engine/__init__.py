@@ -1,11 +1,23 @@
-from torch.optim.lr_scheduler import ReduceLROnPlateau, OneCycleLR
 import timm.optim
+from torch.optim.optimizer import Optimizer
+from torch.optim.lr_scheduler import ReduceLROnPlateau, OneCycleLR
+from torch import nn
+from typing import (
+    Tuple,
+    Union
+)
 
+from biapy.config.config import Config
 from biapy.engine.schedulers.warmup_cosine_decay import WarmUpCosineDecayScheduler
 from biapy.utils.callbacks import EarlyStopping 
 
+Scheduler = Union[ReduceLROnPlateau, WarmUpCosineDecayScheduler, OneCycleLR]
 
-def prepare_optimizer(cfg, model_without_ddp, steps_per_epoch):
+def prepare_optimizer(
+    cfg: Config, 
+    model_without_ddp: nn.Module | nn.parallel.DistributedDataParallel, 
+    steps_per_epoch: int,
+) -> Tuple[Optimizer, Scheduler | None]:
     """
     Select the optimizer, loss and metrics for the given model.
 
@@ -55,7 +67,7 @@ def prepare_optimizer(cfg, model_without_ddp, steps_per_epoch):
     return optimizer, lr_scheduler
 
 
-def build_callbacks(cfg):
+def build_callbacks(cfg: Config) -> EarlyStopping | None:
     """
     Create training and validation generators.
 

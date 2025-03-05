@@ -1,11 +1,17 @@
 import torch
 import numpy as np
 from skimage.transform import resize
+from typing import (
+    Dict,
+    Optional
+)
+from numpy.typing import NDArray
+
 
 from biapy.data.post_processing.post_processing import apply_binary_mask
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.data.data_manipulation import check_masks, save_tif
-from biapy.utils.misc import to_pytorch_format, to_numpy_format
+from biapy.utils.misc import to_pytorch_format, to_numpy_format, MetricLogger
 from biapy.engine.metrics import (
     jaccard_index,
     CrossEntropyLoss_wrapper,
@@ -185,28 +191,23 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
                 if pred.shape != self.current_sample["Y"].shape:
                     self.current_sample["Y"] = resize(self.current_sample["Y"], pred.shape, order=0)
 
-                metric_values = self.metric_calculation(
-                    to_pytorch_format(pred, self.axis_order, self.device),
-                    to_pytorch_format(
-                        self.current_sample["Y"],
-                        self.axis_order,
-                        self.device,
-                        dtype=self.loss_dtype,
-                    ),
-                    train=False,
-                )
+                metric_values = self.metric_calculation(output=pred, targets=self.current_sample["Y"], train=False)
                 for metric in metric_values:
                     if str(metric).lower() not in self.stats["full_image"]:
                         self.stats["full_image"][str(metric).lower()] = 0
                     self.stats["full_image"][str(metric).lower()] += metric_values[metric]
 
-    def torchvision_model_call(self, in_img, is_train=False):
+    def torchvision_model_call(
+        self, 
+        in_img: torch.Tensor, 
+        is_train=False
+    ) -> torch.Tensor:
         """
         Call a regular Pytorch model.
 
         Parameters
         ----------
-        in_img : Tensor
+        in_img : torch.Tensor
             Input image to pass through the model.
 
         is_train : bool, optional
@@ -214,7 +215,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
 
         Returns
         -------
-        prediction : Tensor
+        prediction : torch.Tensor
             Image prediction.
         """
         assert self.torchvision_preprocessing and self.model
@@ -243,7 +244,13 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
 
         return pred[key]
 
-    def metric_calculation(self, output, targets, train=True, metric_logger=None):
+    def metric_calculation(
+        self, 
+        output: NDArray | torch.Tensor, 
+        targets: NDArray | torch.Tensor, 
+        train: bool=True, 
+        metric_logger: Optional[MetricLogger]=None
+    ) -> Dict :
         """
         Execution of the metrics defined in :func:`~define_metrics` function.
 

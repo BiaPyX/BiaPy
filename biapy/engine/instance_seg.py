@@ -6,6 +6,12 @@ from tqdm import tqdm
 from skimage.segmentation import clear_border
 from skimage.transform import resize
 import torch.distributed as dist
+from typing import (
+    Dict,
+    Optional
+)
+from numpy.typing import NDArray
+
 
 from biapy.data.post_processing.post_processing import (
     watershed_by_channels,
@@ -25,7 +31,7 @@ from biapy.engine.metrics import (
     multiple_metrics,
 )
 from biapy.engine.base_workflow import Base_Workflow
-from biapy.utils.misc import is_main_process, is_dist_avail_and_initialized
+from biapy.utils.misc import is_main_process, is_dist_avail_and_initialized, MetricLogger
 from biapy.data.data_manipulation import read_img_as_ndarray, save_tif
 from biapy.data.data_3D_manipulation import read_chunked_data, read_chunked_nested_data
 
@@ -363,7 +369,13 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
         super().define_metrics()
 
-    def metric_calculation(self, output, targets, train=True, metric_logger=None):
+    def metric_calculation(
+        self, 
+        output: NDArray | torch.Tensor, 
+        targets: NDArray | torch.Tensor, 
+        train: bool=True, 
+        metric_logger: Optional[MetricLogger]=None
+    ) -> Dict :
         """
         Execution of the metrics defined in :func:`~define_metrics` function.
 
@@ -1517,13 +1529,17 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
         return original_test_path, original_test_mask_path
 
-    def torchvision_model_call(self, in_img, is_train=False):
+    def torchvision_model_call(
+        self, 
+        in_img: torch.Tensor, 
+        is_train: bool=False
+    ) -> torch.Tensor | None:
         """
         Call a regular Pytorch model.
 
         Parameters
         ----------
-        in_img : Tensor
+        in_img : torch.Tensor
             Input image to pass through the model.
 
         is_train : bool, optional
@@ -1531,7 +1547,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
         Returns
         -------
-        prediction : Tensor
+        prediction : torch.Tensor
             Image prediction.
         """
         assert self.torchvision_preprocessing and self.model

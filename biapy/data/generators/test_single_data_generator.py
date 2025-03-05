@@ -31,15 +31,8 @@ class test_single_data_generator(Dataset):
     ndim : int
         Dimensions of the data (``2`` for 2D and ``3`` for 3D).
 
-    X : list of dict
-        X data. Each item in the list represents a sample of the dataset. Each sample is represented as follows:
-            * ``"filename"``, str: name of the image to extract the data sample from.
-            * ``"dir"``, str: directory where the image resides.
-            * ``"shape"``, tuple of int: shape of the sample.
-            * ``"class_name"``, str: name of the class.
-            * ``"class"``, int: represents the class.
-            * ``"img"``, ndarray (optional): image sample itself. It is of``(y, x, channels)`` in ``2D`` and
-              ``(z, y, x, channels)`` in ``3D``. Provided if the user selected to load images into memory.
+    X : BiaPyDataset
+        X data.
 
     norm_module : Normalization
         Normalization module that defines the normalization steps to apply.
@@ -124,7 +117,14 @@ class test_single_data_generator(Dataset):
         self.reflect_to_complete_shape = reflect_to_complete_shape
         self.data_shape = data_shape
         self.crop_center = crop_center
-        self.len = len(self.X.sample_list)
+        # As in test entire images are processed one by one X.sample_list and X.dataset_info must match in length. If not
+        # means that validation data is being used as test, so we need to clean the sample_list.
+        if len(X.dataset_info) != len(X.sample_list):
+            new_sample_list = []
+            for i in range(len(X.dataset_info)):
+                new_sample_list.append(DataSample(fid = i, coords = None))            
+            X.sample_list = new_sample_list
+        self.len = len(X.sample_list)
         self.seed = seed
         self.ndim = ndim
         self.o_indexes = np.arange(self.len)
@@ -136,6 +136,7 @@ class test_single_data_generator(Dataset):
             sample_extra_info["img_file_to_close"].close()
         if "mask_file_to_close" in sample_extra_info:
             sample_extra_info["mask_file_to_close"].close()
+        self.norm_module.orig_dtype = img.dtype if isinstance(img, np.ndarray) else "Zarr"
 
     # img, img_class, xnorm, filename
     def load_sample(self, idx: int) -> Tuple[NDArray, int, DataSample, Dict, Dict]:

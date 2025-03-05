@@ -445,9 +445,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             opts.extend(["TRAIN.METRICS", ["psnr", "mae", "mse", "ssim"]])
         if set_test_metrics:
             metric_default_list = ["psnr", "mae", "mse", "ssim"]
-            # IS, FID and LPIPS implementations only works for 2D images and when data range is in [0,1]
-            if cfg.PROBLEM.NDIM == "2D" and cfg.DATA.NORMALIZATION.TYPE in ["div", "scale_range"]:
-                metric_default_list += ["is", "fid", "lpips"]
             opts.extend(["TEST.METRICS", metric_default_list])
 
         assert len(cfg.TRAIN.METRICS) == 0 or all(
@@ -462,10 +459,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
         if any([True for x in cfg.TEST.METRICS if x.lower() in ["is", "fid", "lpips"]]):
             if cfg.PROBLEM.NDIM == "3D":
-                raise ValueError("IS, FID and LPIPS metrics can only be measured when PROBLEM.NDIM == '3D'")
-            if cfg.DATA.NORMALIZATION.TYPE not in ["div", "scale_range"]:
-                raise ValueError("'DATA.NORMALIZATION.TYPE' needs to be one between ['div','scale_range'] when 'TEST.METRICS' has one of ['is', 'fid', 'lpips']")
-        
+                raise ValueError("IS, FID and LPIPS metrics can only be measured when PROBLEM.NDIM == '2D'")
     elif cfg.PROBLEM.TYPE == "DENOISING":
         if set_train_metrics:
             opts.extend(["TRAIN.METRICS", ["mae", "mse"]])

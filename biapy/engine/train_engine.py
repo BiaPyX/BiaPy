@@ -1,26 +1,33 @@
 import torch
 import math
 import sys
+import torch.nn as nn
+from torch.optim.optimizer import Optimizer
+from typing import Callable, Optional
+from torch.utils.data import DataLoader
 
-from biapy.utils.misc import MetricLogger, SmoothedValue, all_reduce_mean
+from biapy.utils.misc import MetricLogger, SmoothedValue, TensorboardLogger, all_reduce_mean
+from biapy.config.config import Config
+from biapy.engine import Scheduler
+from torch.optim.lr_scheduler import ReduceLROnPlateau, OneCycleLR
+from biapy.engine.schedulers.warmup_cosine_decay import WarmUpCosineDecayScheduler
 
 
 def train_one_epoch(
-    cfg,
-    model,
-    model_call_func,
-    loss_function,
-    activations,
-    metric_function,
-    prepare_targets,
-    data_loader,
-    optimizer,
-    device,
-    epoch,
-    log_writer=None,
-    lr_scheduler=None,
-    start_steps=0,
-    verbose=False,
+    cfg: Config,
+    model: nn.Module | nn.parallel.DistributedDataParallel,
+    model_call_func: Callable,
+    loss_function: Callable,
+    activations: Callable,
+    metric_function: Callable,
+    prepare_targets: Callable,
+    data_loader: DataLoader,
+    optimizer: Optimizer,
+    device: torch.device,
+    epoch: int,
+    log_writer: Optional[TensorboardLogger] = None,
+    lr_scheduler: Optional[Scheduler] = None,
+    verbose: bool = False,
 ):
 
     model.train(True)
@@ -38,10 +45,13 @@ def train_one_epoch(
 
         # Apply warmup cosine decay scheduler if selected
         # (notice we use a per iteration (instead of per epoch) lr scheduler)
-        if epoch % cfg.TRAIN.ACCUM_ITER == 0 and cfg.TRAIN.LR_SCHEDULER.NAME == "warmupcosine" and lr_scheduler:
+        if (
+            epoch % cfg.TRAIN.ACCUM_ITER == 0
+            and cfg.TRAIN.LR_SCHEDULER.NAME == "warmupcosine"
+            and lr_scheduler
+            and isinstance(lr_scheduler, WarmUpCosineDecayScheduler)
+        ):
             lr_scheduler.adjust_learning_rate(optimizer, step / len(data_loader) + epoch)
-
-        it = start_steps + step  # global training iteration
 
         # Gather inputs
         targets = prepare_targets(targets, batch)
@@ -71,7 +81,7 @@ def train_one_epoch(
             loss.backward()
             optimizer.step()  # update weight
             optimizer.zero_grad()
-            if lr_scheduler and cfg.TRAIN.LR_SCHEDULER.NAME == "onecycle":
+            if lr_scheduler and isinstance(lr_scheduler, OneCycleLR) and cfg.TRAIN.LR_SCHEDULER.NAME == "onecycle":
                 lr_scheduler.step()
 
         if device.type != "cpu":
@@ -101,16 +111,16 @@ def train_one_epoch(
 
 @torch.no_grad()
 def evaluate(
-    cfg,
-    model,
-    model_call_func,
-    loss_function,
-    activations,
-    metric_function,
-    prepare_targets,
-    epoch,
-    data_loader,
-    lr_scheduler,
+    cfg: Config,
+    model: nn.Module | nn.parallel.DistributedDataParallel,
+    model_call_func: Callable,
+    loss_function: Callable,
+    activations: Callable,
+    metric_function: Callable,
+    prepare_targets: Callable,
+    epoch: int,
+    data_loader: DataLoader,
+    lr_scheduler: Optional[Scheduler] = None,
 ):
 
     # Ensure correct order of each epoch info by adding loss first
@@ -142,6 +152,10 @@ def evaluate(
     print("[Val] averaged stats:", metric_logger)
 
     # Apply reduceonplateau scheduler if the global validation has been reduced
-    if lr_scheduler and cfg.TRAIN.LR_SCHEDULER.NAME == "reduceonplateau":
-        lr_scheduler.step(metric_logger.meters["loss"].global_avg)
+    if (
+        lr_scheduler
+        and isinstance(lr_scheduler, ReduceLROnPlateau)
+        and cfg.TRAIN.LR_SCHEDULER.NAME == "reduceonplateau"
+    ):
+        lr_scheduler.step(metric_logger.meters["loss"].global_avg, epoch=epoch)
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}

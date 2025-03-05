@@ -272,8 +272,7 @@ def create_instance_channels(
                     output_order=out_data_order,
                     default_value=np.nan,
                 )
-                assert isinstance(transpose_order, np.ndarray)
-                transpose_order = [x for x in transpose_order if not np.isnan(x)]
+                transpose_order = [x for x in np.array(transpose_order) if not np.isnan(x)]
 
                 # Place the patch into the Zarr
                 mask[data_ordered_slices] = img.transpose(transpose_order)
@@ -921,8 +920,7 @@ def synapse_channel_creation(
                     output_order=out_data_order,
                     default_value=np.nan,
                 )
-                assert isinstance(transpose_order, np.ndarray)
-                transpose_order = [x for x in transpose_order if not np.isnan(x)]
+                transpose_order = [x for x in np.array(transpose_order) if not np.isnan(x)]
 
                 # Place the patch into the Zarr
                 mask[data_ordered_slices] += hv_map.transpose(transpose_order) * (mask[data_ordered_slices] == 0)

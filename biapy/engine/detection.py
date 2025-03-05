@@ -8,6 +8,12 @@ from skimage.feature import peak_local_max, blob_log
 from skimage.morphology import disk, dilation
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
+from typing import (
+    Dict,
+    Optional
+)
+from numpy.typing import NDArray
+
 from biapy.data.post_processing.post_processing import (
     remove_close_points,
     detection_watershed,
@@ -16,6 +22,7 @@ from biapy.data.post_processing.post_processing import (
 from biapy.utils.misc import (
     is_main_process,
     is_dist_avail_and_initialized,
+    MetricLogger
 )
 from biapy.engine.metrics import (
     detection_metrics,
@@ -202,7 +209,13 @@ class Detection_Workflow(Base_Workflow):
 
         super().define_metrics()
 
-    def metric_calculation(self, output, targets, train=True, metric_logger=None):
+    def metric_calculation(
+        self, 
+        output: NDArray | torch.Tensor, 
+        targets: NDArray | torch.Tensor, 
+        train: bool=True, 
+        metric_logger: Optional[MetricLogger]=None
+    ) -> Dict :
         """
         Execution of the metrics defined in :func:`~define_metrics` function.
 
@@ -938,15 +951,14 @@ class Detection_Workflow(Base_Workflow):
             output_order="TZYXC",
             default_value=np.nan,
         )
-        assert isinstance(transpose_order, np.ndarray)
-        transpose_order = [x for x in transpose_order if not np.isnan(x)]
-        transpose_order = current_order[np.array(transpose_order)]
+        transpose_order = [x for x in transpose_order if not np.isnan(x)] # type: ignore
+        transpose_order = current_order[np.array(transpose_order)] # type: ignore
         raw_patch = pred[data_ordered_slices]
         patch = raw_patch.transpose(transpose_order)
 
         patch_pos = [(k.start, k.stop) for k in slices[1:]]
         df_patch = self.detection_process(patch, [fname], patch_pos=patch_pos)
-        if df_patch:  # if there is at least one point detected
+        if df_patch is not None:  # if there is at least one point detected
 
             if z * self.cfg.DATA.PATCH_SIZE[0] - self.cfg.DATA.TEST.PADDING[0] >= 0:  # if a patch was added
                 df_patch["axis-0"] = (
@@ -1055,7 +1067,7 @@ class Detection_Workflow(Base_Workflow):
                 try:
                     data = future.result()
                     df_patch, fname = data
-                    if df_patch:
+                    if df_patch is not None:
                         df_patch["file"] = fname
                         all_patches.append(df_patch)
                         print("Current total patch with detection: {}".format(len(all_patches)))
@@ -1218,13 +1230,17 @@ class Detection_Workflow(Base_Workflow):
                             -reflected_orig_shape[3] :,
                         ]
 
-    def torchvision_model_call(self, in_img, is_train=False):
+    def torchvision_model_call(
+        self, 
+        in_img: torch.Tensor, 
+        is_train: bool=False
+    ) -> torch.Tensor | None:
         """
         Call a regular Pytorch model.
 
         Parameters
         ----------
-        in_img : Tensor
+        in_img : torch.Tensor
             Input image to pass through the model.
 
         is_train : bool, optional
@@ -1232,7 +1248,7 @@ class Detection_Workflow(Base_Workflow):
 
         Returns
         -------
-        prediction : Tensor
+        prediction : torch.Tensor
             Image prediction.
         """
         assert self.model and self.torchvision_preprocessing

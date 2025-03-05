@@ -155,15 +155,15 @@ class jaccard_index:
 
         Parameters
         ----------
-        y_true : Tensor
+        y_true : torch.Tensor
             Ground truth masks.
 
-        y_pred : Tensor
+        y_pred : torch.Tensor
             Predicted masks.
 
         Returns
         -------
-        loss : Tensor
+        loss : torch.Tensor
             Loss value.
         """
         # If image shape has changed due to TorchVision or BMZ preprocessing then the mask needs
@@ -236,10 +236,10 @@ class multiple_metrics:
 
         Parameters
         ----------
-        y_true : Tensor
+        y_true : torch.Tensor
             Ground truth masks.
 
-        y_pred : Tensor or list of Tensors
+        y_pred : torch.Tensor or list of Tensors
             Prediction.
 
         Returns
@@ -323,15 +323,15 @@ class CrossEntropyLoss_wrapper:
 
         Parameters
         ----------
-        y_true : Tensor
+        y_true : torch.Tensor
             Ground truth masks.
 
-        y_pred : Tensor
+        y_pred : torch.Tensor
             Predicted masks.
 
         Returns
         -------
-        loss : Tensor
+        loss : torch.Tensor
             Loss value.
         """
         if self.multihead:
@@ -483,15 +483,15 @@ class instance_segmentation_loss:
 
         Parameters
         ----------
-        y_true : Tensor
+        y_true : torch.Tensor
             Ground truth masks.
 
-        y_pred : Tensor or list of Tensors
+        y_pred : torch.Tensor or list of Tensors
             Predictions.
 
         Returns
         -------
-        loss : Tensor
+        loss : torch.Tensor
             Loss value.
         """
         if isinstance(y_pred, list):
@@ -790,10 +790,10 @@ def detection_metrics(
         # Capture FP coords
         fp_coords = np.zeros((len(fp_preds), _pred.shape[-1]))
         pred_fp_class = [-1] * len(fp_preds)
-        assert pred_classes is not None
         for i in range(len(fp_preds)):
             fp_coords[i] = _pred[fp_preds[i] - 1]
             if class_metrics:
+                assert pred_classes is not None
                 pred_fp_class[i] = int(pred_classes[fp_preds[i] - 1])
 
         # Capture prediction coords
@@ -805,6 +805,7 @@ def detection_metrics(
             if pred_id_assoc[i] != -1:
                 pred_coords[i] = _pred[pred_id_assoc[i] - 1]
                 if class_metrics:
+                    assert pred_classes is not None
                     pred_class[i] = int(pred_classes[pred_id_assoc[i] - 1])
             else:
                 pred_coords[i] = [0, 0, 0]
@@ -977,15 +978,15 @@ class SSIM_wrapper:
 
         Parameters
         ----------
-        y_true : Tensor
+        y_true : torch.Tensor
             Ground truth masks.
 
-        y_pred : Tensor or list of Tensors
+        y_pred : torch.Tensor or list of Tensors
             Predictions.
 
         Returns
         -------
-        loss : Tensor
+        loss : torch.Tensor
             Loss value.
         """
         return 1 - self.loss(y_pred, y_true)
