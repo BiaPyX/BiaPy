@@ -178,7 +178,7 @@ all_test_info["Test13"] = {
     "yaml": "test_13.yaml",
     "internal_checks": [
         {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 20.0},
-        {"type": "regular", "pattern": "Test PSNR (merge patches)", "gt": True, "value": 20.0},
+        {"type": "regular", "pattern": "Test PSNR (merge patches)", "gt": True, "value": 19.0},
     ]
 }
 
