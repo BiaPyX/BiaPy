@@ -226,10 +226,11 @@ class Config:
         # Whether to apply or not a percentile clipping before normalizing the data
         _C.DATA.NORMALIZATION.PERC_CLIP = CN()
         _C.DATA.NORMALIZATION.PERC_CLIP.ENABLE = False
-        # Lower and upper bound for percentile clip. Must be set when DATA.NORMALIZATION.PERC_CLIP = 'True'
+        # Lower and upper bound for percentile clip. Must be set when DATA.NORMALIZATION.PERC_CLIP.ENABLE = 'True'
         _C.DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC = -1.0
         _C.DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC = -1.0
-        # 
+        # Lower and upper values to clip. If these are provided the percentiles are not calculated with the variable above, e.g.
+        # 'DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC' and 'DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC' 
         _C.DATA.NORMALIZATION.PERC_CLIP.LOWER_VALUE = -1.0
         _C.DATA.NORMALIZATION.PERC_CLIP.UPPER_VALUE = -1.0
         # Normalization type to use. Possible options:
@@ -238,7 +239,9 @@ class Config:
         #    and not by 255 or 65535
         #   'zero_mean_unit_variance' to substract the mean and divide by std. 
         _C.DATA.NORMALIZATION.TYPE = "div"
-        # Options: ['image', 'patch']
+        # Whether to based the normalization on values extracted from the complete image or from each patch. When working with 
+        # large images such as Zarr or H5 it is done by patch automatically. The values are also applied for the percentage
+        # clipping. Options: ['image', 'patch']
         _C.DATA.NORMALIZATION.MEASURE_BY = "image"
         # Custom normalization variables: mean and std (they are calculated if not provided)
         _C.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR = CN()
