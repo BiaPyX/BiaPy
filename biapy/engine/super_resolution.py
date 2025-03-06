@@ -26,7 +26,7 @@ from biapy.data.post_processing.post_processing import (
 from biapy.data.data_manipulation import save_tif
 from biapy.utils.misc import to_pytorch_format, to_numpy_format, is_main_process, MetricLogger
 from biapy.engine.base_workflow import Base_Workflow
-from biapy.engine.metrics import dfcan_loss
+from biapy.engine.metrics import SSIM_loss, W_MAE_SSIM_loss, W_MSE_SSIM_loss
 
 
 class Super_resolution_Workflow(Base_Workflow):
@@ -173,14 +173,16 @@ class Super_resolution_Workflow(Base_Workflow):
                 )
                 self.test_metric_names.append("LPIPS")
 
-        if self.cfg.MODEL.ARCHITECTURE == "dfcan":
-            print("Overriding 'LOSS.TYPE' to set it to DFCAN loss")
-            self.loss = dfcan_loss(self.device)
-        else:
             if self.cfg.LOSS.TYPE == "MSE":
                 self.loss = torch.nn.MSELoss().to(self.device)
             elif self.cfg.LOSS.TYPE == "MAE":
                 self.loss = torch.nn.L1Loss().to(self.device)
+            elif self.cfg.LOSS.TYPE == "SSIM":
+                self.loss = SSIM_loss(data_range=data_range, device=self.device)
+            elif self.cfg.LOSS.TYPE == "W_MAE_SSIM":
+                self.loss = W_MAE_SSIM_loss(data_range=data_range, device=self.device, w_mae=self.cfg.LOSS.WEIGHTS[0], w_ssim=self.cfg.LOSS.WEIGHTS[1])
+            elif self.cfg.LOSS.TYPE == "W_MSE_SSIM":
+                self.loss = W_MSE_SSIM_loss(data_range=data_range, device=self.device, w_mse=self.cfg.LOSS.WEIGHTS[0], w_ssim=self.cfg.LOSS.WEIGHTS[1])
 
         super().define_metrics()
 

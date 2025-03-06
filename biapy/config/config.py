@@ -1024,8 +1024,7 @@ class Config:
         #       * "MAE" (default): mean absolute error. Ref: https://pytorch.org/docs/stable/generated/torch.nn.L1Loss.html#torch.nn.L1Loss
         #       * "MSE": mean square error. Ref: https://pytorch.org/docs/stable/generated/torch.nn.MSELoss.html#torch.nn.MSELoss
         _C.LOSS.TYPE = ""
-        # Wights to be apply in multiple loss combination cases. Currently only available when LOSS.TYPE == "W_CE_DICE" where
-        # it needs to be a list of two floats (one for CE loss and the other for DICE loss). They must sum 1. E.g. [0.3, 0.7].
+        # Weights to be applied in multiple loss combination cases. They must sum 1. E.g. [0.3, 0.7].
         _C.LOSS.WEIGHTS = [0.66, 0.34]
         # To adjust the loss function based on the imbalance between classes. Used when LOSS.TYPE == "CE" in detection and
         # semantic segmentation and if using B,C,M,P or A channels in instance segmentation workflow.

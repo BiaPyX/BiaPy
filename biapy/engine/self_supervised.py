@@ -38,6 +38,7 @@ from biapy.utils.misc import (
 )
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.data.pre_processing import create_ssl_source_data_masks
+from biapy.engine.metrics import SSIM_loss, W_MAE_SSIM_loss, W_MSE_SSIM_loss
 
 
 class Self_supervised_Workflow(Base_Workflow):
@@ -200,6 +201,12 @@ class Self_supervised_Workflow(Base_Workflow):
                 self.loss = torch.nn.MSELoss().to(self.device)
             elif self.cfg.LOSS.TYPE == "MAE":
                 self.loss = torch.nn.L1Loss().to(self.device)
+            elif self.cfg.LOSS.TYPE == "SSIM":
+                self.loss = SSIM_loss(data_range=data_range, device=self.device)
+            elif self.cfg.LOSS.TYPE == "W_MAE_SSIM":
+                self.loss = W_MAE_SSIM_loss(data_range=data_range, device=self.device, w_mae=self.cfg.LOSS.WEIGHTS[0], w_ssim=self.cfg.LOSS.WEIGHTS[1])
+            elif self.cfg.LOSS.TYPE == "W_MSE_SSIM":
+                self.loss = W_MSE_SSIM_loss(data_range=data_range, device=self.device, w_mse=self.cfg.LOSS.WEIGHTS[0], w_ssim=self.cfg.LOSS.WEIGHTS[1])
 
         super().define_metrics()
 

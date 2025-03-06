@@ -36,7 +36,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         assert cfg.PROBLEM.INSTANCE_SEG.TYPE in [
             "regular",
             "synapses",
-        ], "'PROBLEM.INSTANCE_SEG.TYPE' needs to be one between ['regular', 'synapses']"
+        ], "'PROBLEM.INSTANCE_SEG.TYPE' needs to be in ['regular', 'synapses']"
 
         if cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
             channels_provided = len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS.replace("Dv2", "D"))
@@ -507,7 +507,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             assert (
                 len(cfg.LOSS.WEIGHTS) == 2
             ), "'LOSS.WEIGHTS' needs to be a list of two floats when using LOSS.TYPE == 'W_CE_DICE'"
-            assert sum(cfg.LOSS.WEIGHTS) != 1, "'LOSS.WEIGHTS' values need to sum 1"
+            assert sum(cfg.LOSS.WEIGHTS) == 1, "'LOSS.WEIGHTS' values need to sum 1"
     elif cfg.PROBLEM.TYPE in [
         "SUPER_RESOLUTION",
         "SELF_SUPERVISED",
@@ -517,10 +517,15 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         assert loss in [
             "MAE",
             "MSE",
-            "SSIM"
-        ], "LOSS.TYPE not in ['MAE', 'MSE', 'SSIM']"
-        if cfg.LOSS.TYPE == "SSIM" and cfg.DATA.NORMALIZATION.TYPE not in ["div", "scale_range"]:
-            raise ValueError("'DATA.NORMALIZATION.TYPE' needs to be one between ['div','scale_range'] when 'LOSS.TYPE' is SSIM")
+            "SSIM",
+            "W_MAE_SSIM",
+            "W_MSE_SSIM",
+        ], "LOSS.TYPE not in ['MAE', 'MSE', 'SSIM', 'W_MAE_SSIM', 'W_MSE_SSIM']"
+        if loss in ["W_MAE_SSIM", "W_MSE_SSIM"]:
+            assert (
+                len(cfg.LOSS.WEIGHTS) == 2
+            ), "'LOSS.WEIGHTS' needs to be a list of two floats when using LOSS.TYPE is in ['W_MAE_SSIM', 'W_MSE_SSIM']"
+            assert sum(cfg.LOSS.WEIGHTS) == 1, "'LOSS.WEIGHTS' values need to sum 1"
     elif cfg.PROBLEM.TYPE == "DENOISING":
         loss = "MSE" if cfg.LOSS.TYPE == "" else cfg.LOSS.TYPE
         assert loss == "MSE", "LOSS.TYPE must be 'MSE'"
@@ -533,7 +538,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         raise ValueError("'TEST.ANALIZE_2D_IMGS_AS_3D_STACK' makes no sense when the problem is 3D. Disable it.")
 
     if cfg.MODEL.SOURCE not in ["biapy", "bmz", "torchvision"]:
-        raise ValueError("'MODEL.SOURCE' needs to be one between ['biapy', 'bmz', 'torchvision']")
+        raise ValueError("'MODEL.SOURCE' needs to be in ['biapy', 'bmz', 'torchvision']")
 
     if cfg.MODEL.SOURCE == "bmz":
         if cfg.MODEL.BMZ.SOURCE_MODEL_ID == "":
@@ -589,7 +594,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "lraspp_mobilenet_v3_large",
             ]:
                 raise ValueError(
-                    "'MODEL.SOURCE' must be one between ['deeplabv3_mobilenet_v3_large', 'deeplabv3_resnet101', "
+                    "'MODEL.SOURCE' must be in ['deeplabv3_mobilenet_v3_large', 'deeplabv3_resnet101', "
                     "'deeplabv3_resnet50', 'fcn_resnet101', 'fcn_resnet50', 'lraspp_mobilenet_v3_large' ]"
                 )
             if (
@@ -648,7 +653,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "BCDv2",
             ]:
                 raise ValueError(
-                    "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS' needs to be one between ['C', 'BC', 'BCM', 'BCD', 'BCDv2'] "
+                    "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS' needs to be in ['C', 'BC', 'BCM', 'BCD', 'BCDv2'] "
                     "when 'TEST.POST_PROCESSING.VORONOI_ON_MASK' is enabled"
                 )
             if not check_value(cfg.TEST.POST_PROCESSING.VORONOI_TH):
@@ -678,7 +683,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "dense",
         ]:
             raise ValueError(
-                "'PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE' must be one between ['thick', 'inner', 'outer', 'subpixel', 'dense']"
+                "'PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE' must be in ['thick', 'inner', 'outer', 'subpixel', 'dense']"
             )
         if cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
             if (
@@ -701,7 +706,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "maskrcnn_resnet50_fpn_v2",
             ]:
                 raise ValueError(
-                    "'MODEL.SOURCE' must be one between ['maskrcnn_resnet50_fpn', 'maskrcnn_resnet50_fpn_v2']"
+                    "'MODEL.SOURCE' must be in ['maskrcnn_resnet50_fpn', 'maskrcnn_resnet50_fpn_v2']"
                 )
             if cfg.PROBLEM.NDIM == "3D":
                 raise ValueError("TorchVision model's for instance segmentation are only available for 2D images")
@@ -768,7 +773,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "retinanet_resnet50_fpn_v2",
             ]:
                 raise ValueError(
-                    "'MODEL.SOURCE' must be one between ['fasterrcnn_mobilenet_v3_large_320_fpn', 'fasterrcnn_mobilenet_v3_large_fpn', "
+                    "'MODEL.SOURCE' must be in ['fasterrcnn_mobilenet_v3_large_320_fpn', 'fasterrcnn_mobilenet_v3_large_fpn', "
                     "'fasterrcnn_resnet50_fpn', 'fasterrcnn_resnet50_fpn_v2', 'fcos_resnet50_fpn', 'ssd300_vgg16', 'ssdlite320_mobilenet_v3_large', "
                     "'retinanet_resnet50_fpn', 'retinanet_resnet50_fpn_v2']"
                 )
@@ -797,7 +802,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         if cfg.MODEL.SOURCE == "torchvision":
             raise ValueError("'MODEL.SOURCE' as 'torchvision' is not available in super-resolution workflow")
         if cfg.DATA.NORMALIZATION.TYPE not in ["div", "scale_range"]:
-            raise ValueError("'DATA.NORMALIZATION.TYPE' in SR workflow needs to be one between ['div','scale_range']")
+            raise ValueError("'DATA.NORMALIZATION.TYPE' in SR workflow needs to be in ['div','scale_range']")
 
     #### Self-supervision ####
     elif cfg.PROBLEM.TYPE == "SELF_SUPERVISED":
@@ -818,7 +823,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             assert cfg.MODEL.MAE_MASK_TYPE in [
                 "random",
                 "grid",
-            ], "'MODEL.MAE_MASK_TYPE' needs to be one between ['random', 'grid']"
+            ], "'MODEL.MAE_MASK_TYPE' needs to be in ['random', 'grid']"
             if cfg.MODEL.MAE_MASK_TYPE == "random" and not check_value(cfg.MODEL.MAE_MASK_RATIO):
                 raise ValueError("'MODEL.MAE_MASK_RATIO' not in [0, 1] range")
         else:
@@ -940,7 +945,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "wide_resnet50_2",
             ]:
                 raise ValueError(
-                    "'MODEL.SOURCE' must be one between [ "
+                    "'MODEL.SOURCE' must be in [ "
                     "'alexnet', 'convnext_base', 'convnext_large', 'convnext_small', 'convnext_tiny', 'densenet121', 'densenet161', "
                     "'densenet169', 'densenet201', 'efficientnet_b0', 'efficientnet_b1', 'efficientnet_b2', 'efficientnet_b3', "
                     "'efficientnet_b4', 'efficientnet_b5', 'efficientnet_b6', 'efficientnet_b7', 'efficientnet_v2_l', 'efficientnet_v2_m', "
@@ -1148,13 +1153,13 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         assert cfg.TEST.BY_CHUNKS.FORMAT.lower() in [
             "h5",
             "zarr",
-        ], "'TEST.BY_CHUNKS.FORMAT' needs to be one between ['H5', 'Zarr']"
+        ], "'TEST.BY_CHUNKS.FORMAT' needs to be in ['H5', 'Zarr']"
         opts.extend(["TEST.BY_CHUNKS.FORMAT", cfg.TEST.BY_CHUNKS.FORMAT.lower()])
         if cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.ENABLE:
             assert cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE in [
                 "chunk_by_chunk",
                 "entire_pred",
-            ], "'TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE' needs to be one between ['chunk_by_chunk', 'entire_pred']"
+            ], "'TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE' needs to be in ['chunk_by_chunk', 'entire_pred']"
         if len(cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER) < 3:
             raise ValueError("'TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER' needs to be at least of length 3, e.g., 'ZYX'")
         if cfg.MODEL.N_CLASSES > 2:
@@ -1487,7 +1492,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
         if cfg.MODEL.UPSAMPLE_LAYER.lower() not in ["upsampling", "convtranspose"]:
             raise ValueError(
-                "cfg.MODEL.UPSAMPLE_LAYER' needs to be one between ['upsampling', 'convtranspose']. Provided {}".format(
+                "cfg.MODEL.UPSAMPLE_LAYER' needs to be in ['upsampling', 'convtranspose']. Provided {}".format(
                     cfg.MODEL.UPSAMPLE_LAYER
                 )
             )
@@ -1659,7 +1664,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "onecycle",
         ]:
             raise ValueError(
-                "'TRAIN.LR_SCHEDULER.NAME' must be one between ['reduceonplateau', 'warmupcosine', 'onecycle']"
+                "'TRAIN.LR_SCHEDULER.NAME' must be in ['reduceonplateau', 'warmupcosine', 'onecycle']"
             )
         if cfg.TRAIN.LR_SCHEDULER.MIN_LR == -1.0 and cfg.TRAIN.LR_SCHEDULER.NAME != "onecycle":
             raise ValueError(
@@ -1744,7 +1749,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "reflect",
             "wrap",
             "symmetric",
-        ], "'AUGMENTOR.AFFINE_MODE' needs to be one between ['constant', 'reflect', 'wrap', 'symmetric']"
+        ], "'AUGMENTOR.AFFINE_MODE' needs to be in ['constant', 'reflect', 'wrap', 'symmetric']"
         if cfg.AUGMENTOR.GAMMA_CONTRAST and cfg.DATA.NORMALIZATION.TYPE == "zero_mean_unit_variance":
             raise ValueError(
                 "'AUGMENTOR.GAMMA_CONTRAST' doesn't work correctly on images with negative values, which 'zero_mean_unit_variance' "

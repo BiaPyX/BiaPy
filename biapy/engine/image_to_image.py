@@ -14,7 +14,7 @@ from typing import (
 from numpy.typing import NDArray
 
 
-from biapy.engine.metrics import SSIM_loss
+from biapy.engine.metrics import SSIM_loss, W_MAE_SSIM_loss, W_MSE_SSIM_loss
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.utils.misc import to_pytorch_format, to_numpy_format, MetricLogger
 from biapy.data.post_processing.post_processing import (
@@ -178,6 +178,11 @@ class Image_to_Image_Workflow(Base_Workflow):
             self.loss = torch.nn.L1Loss().to(self.device)
         elif self.cfg.LOSS.TYPE == "SSIM":
             self.loss = SSIM_loss(data_range=data_range, device=self.device)
+        elif self.cfg.LOSS.TYPE == "W_MAE_SSIM":
+            self.loss = W_MAE_SSIM_loss(data_range=data_range, device=self.device, w_mae=self.cfg.LOSS.WEIGHTS[0], w_ssim=self.cfg.LOSS.WEIGHTS[1])
+        elif self.cfg.LOSS.TYPE == "W_MSE_SSIM":
+            self.loss = W_MSE_SSIM_loss(data_range=data_range, device=self.device, w_mse=self.cfg.LOSS.WEIGHTS[0], w_ssim=self.cfg.LOSS.WEIGHTS[1])
+
         super().define_metrics()
 
     def metric_calculation(

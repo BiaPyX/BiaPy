@@ -945,19 +945,28 @@ class SSIM_loss(torch.nn.Module):
     def forward(self, input, target):
         return 1 - self.ssim(input, target)
     
-## Loss function definition used in the paper from nature methods:
-### [Chang Qiao](https://github.com/qc17-THU/DL-SR/tree/main/src) (MIT license).
-class dfcan_loss(torch.nn.Module):
-    def __init__(self, device, max_val=1):
-        super(dfcan_loss, self).__init__()
-        self.max_val = max_val
-        self.mse = torch.nn.MSELoss().to(device, non_blocking=True)
-        self.ssim = StructuralSimilarityIndexMeasure(data_range=max_val).to(device, non_blocking=True)
-
+class W_MAE_SSIM_loss(torch.nn.Module):
+    def __init__(self, data_range, device, w_mae=0.5, w_ssim=0.5):
+        super(W_MAE_SSIM_loss, self).__init__()
+        self.w_mae = w_mae
+        self.w_ssim = w_ssim
+        self.mse = torch.nn.L1Loss().to(device, non_blocking=True)
+        self.ssim = StructuralSimilarityIndexMeasure(data_range=data_range).to(device, non_blocking=True)
+    
     def forward(self, input, target):
-        return self.mse(input, target) + 0.1 * (1 - self.ssim(input, target))
+        return (self.mse(input, target) * self.w_mae) + ((1 - self.ssim(input, target)) * self.w_ssim)
 
-
+class W_MSE_SSIM_loss(torch.nn.Module):
+    def __init__(self, data_range, device, w_mse=0.5, w_ssim=0.5):
+        super(W_MSE_SSIM_loss, self).__init__()
+        self.w_mse = w_mse
+        self.w_ssim = w_ssim
+        self.mse = torch.nn.MSELoss().to(device, non_blocking=True)
+        self.ssim = StructuralSimilarityIndexMeasure(data_range=data_range).to(device, non_blocking=True)
+    
+    def forward(self, input, target):
+        return (self.mse(input, target) * self.w_mse) + ((1 - self.ssim(input, target)) * self.w_ssim)
+    
 def n2v_loss_mse(y_pred, y_true):
     target = y_true[:, 0].squeeze()
     mask = y_true[:, 1].squeeze()
