@@ -249,16 +249,16 @@ class Self_supervised_Workflow(Base_Workflow):
 
         if isinstance(_output, np.ndarray):
             _output = to_pytorch_format(
-                output.copy(),
+                _output.copy(),
                 self.axis_order,
                 self.device,
                 dtype=self.loss_dtype,
             )
         else:  # torch.Tensor
             if not train:
-                _output = output.clone()
+                _output = _output.clone()
             else:
-                _output = output
+                _output = _output
 
         if isinstance(targets, np.ndarray):
             _targets = to_pytorch_format(
