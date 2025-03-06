@@ -20,6 +20,7 @@ from biapy.data.pre_processing import calculate_volume_prob_map
 from biapy.data.data_manipulation import read_img_as_ndarray, imwrite, reduce_dtype
 from biapy.data.generators.augmentors import random_crop_pair
 from biapy.config.config import Config
+from biapy.data.dataset import BiaPyDataset, DataSample, DatasetFile
 
 def get_bmz_model_info(
     model: ModelDescr_v0_4 | ModelDescr_v0_5, spec_version: Version = Version("0.4.0")
@@ -179,8 +180,12 @@ def create_model_cover(file_paths, out_path, patch_size=256, is_3d=False, workfl
     # Take a random patch from the image
     prob_map = None
     if workflow in ["semantic-segmentation", "instance-segmentation", "detection"]:
-        prob_map = calculate_volume_prob_map([{"img": np.expand_dims(mask[..., 0], -1) > 0.5}], is_3d, 1, 0)[0]
-    img, mask = random_crop_pair(img, mask, (patch_size, patch_size), img_prob=prob_map)
+        quick_dataset = BiaPyDataset(
+            dataset_info=[DatasetFile(str(file_paths["output"]))],
+            sample_list=[DataSample(fid=0, coords=None, img=np.expand_dims(mask[..., 0], -1) > 0.5)]
+        )
+        prob_map = calculate_volume_prob_map(quick_dataset, is_3d, 1, 0)[0]
+    img, mask = random_crop_pair(img, mask, (patch_size, patch_size), img_prob=prob_map) # type: ignore
 
     # If 3D just take middle slice.
     if is_3d and img.ndim == 4:

@@ -1443,7 +1443,7 @@ def load_and_prepare_train_data_cls(
         )
 
     x_train_ids = np.array(range(0, len(X_train.sample_list)))
-    y_train_ids = np.array([x.class_num for x in X_train.sample_list])
+    y_train_ids = np.array([x.class_num for x in X_train.dataset_info])
     if create_val_from_train:
         val_path = train_path
         if not cross_val:
@@ -2177,6 +2177,7 @@ def samples_from_class_list(
 
     xsample_list = []
     xdataset_info = []
+    data_file_count = 0
     for c_num, class_name in enumerate(list_of_classes):
         class_folder = os.path.join(data_path, class_name)
 
@@ -2235,11 +2236,12 @@ def samples_from_class_list(
                 )
             )
             sample_dict = DataSample(
-                fid=j,
+                fid=data_file_count,
                 coords=None,
             )
 
             xsample_list.append(sample_dict)
+            data_file_count += 1
 
     return BiaPyDataset(dataset_info=xdataset_info, sample_list=xsample_list)
 

@@ -1135,7 +1135,8 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.process_test_sample_by_chunks()
             else:
                 if is_main_process():
-                    print("Processing image: {}".format(self.current_sample["filename"]))
+                    if self.cfg.PROBLEM.TYPE != "CLASSIFICATION":
+                        print("Processing image: {}".format(self.current_sample["filename"]))
                     discarded = self.process_test_sample()
 
             # If process_test_sample() returns True means that the sample was skipped due to filter set
