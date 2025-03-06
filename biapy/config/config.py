@@ -272,9 +272,6 @@ class Config:
         _C.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_RESOLUTION_PATH = 'volumes.raw'
         # File to load/save data prepared with the appropiate channels in a instance segmentation problem.
         # E.g. _C.PROBLEM.TYPE ='INSTANCE_SEG' and _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS != 'B'
-        _C.DATA.TRAIN.INSTANCE_CHANNELS_DIR = os.path.join(
-            "user_data", "train", "x_" + _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
-        )
         _C.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR = os.path.join(
             "user_data", "train", "y_" + _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
         )
@@ -439,9 +436,6 @@ class Config:
         _C.DATA.TEST.GT_PATH = os.path.join("user_data", "test", "y")
         # File to load/save data prepared with the appropiate channels in a instance segmentation problem.
         # E.g. _C.PROBLEM.TYPE ='INSTANCE_SEG' and _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS != 'B'
-        _C.DATA.TEST.INSTANCE_CHANNELS_DIR = os.path.join(
-            "user_data", "test", "x_" + _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
-        )
         _C.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR = os.path.join(
             "user_data", "test", "y_" + _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
         )
@@ -546,9 +540,6 @@ class Config:
         _C.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA_RESOLUTION_PATH = 'volumes.raw'
         # File to load/save data prepared with the appropiate channels in a instance segmentation problem.
         # E.g. _C.PROBLEM.TYPE ='INSTANCE_SEG' and _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS != 'B'
-        _C.DATA.VAL.INSTANCE_CHANNELS_DIR = os.path.join(
-            "user_data", "val", "x_" + _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
-        )
         _C.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR = os.path.join(
             "user_data", "val", "y_" + _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
         )
@@ -1484,29 +1475,14 @@ def update_dependencies(cfg) -> None:
     post_dil = "".join(str(call.PROBLEM.INSTANCE_SEG.SYNAPSES.POSTSITE_DILATION)[1:-1].replace(",","")).replace(" ","_")
     post_d_dil = "".join(str(call.PROBLEM.INSTANCE_SEG.SYNAPSES.POSTSITE_DILATION_DISTANCE_CHANNELS)[1:-1].replace(",","")).replace(" ","_")
     if call.PROBLEM.INSTANCE_SEG.TYPE == "regular":
-        call.DATA.TRAIN.INSTANCE_CHANNELS_DIR = (
-            call.DATA.TRAIN.PATH
-            + "_"
-            + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
-        )
         call.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR = (
             call.DATA.TRAIN.GT_PATH
             + "_"
             + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
         )
         if "C" in call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
-            call.DATA.TRAIN.INSTANCE_CHANNELS_DIR += "_" + call.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
             call.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR += "_" + call.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
     else: 
-        call.DATA.TRAIN.INSTANCE_CHANNELS_DIR = (
-            call.DATA.TRAIN.PATH
-            + "_"
-            + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
-            + "_"
-            + post_dil
-            + "_" 
-            + post_d_dil
-        )
         call.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR = (
             call.DATA.TRAIN.GT_PATH
             + "_"
@@ -1520,29 +1496,14 @@ def update_dependencies(cfg) -> None:
     call.DATA.TRAIN.DETECTION_MASK_DIR = call.DATA.TRAIN.GT_PATH + "_detection_masks_" + str(cpd)
     call.DATA.TRAIN.SSL_SOURCE_DIR = call.DATA.TRAIN.PATH + "_ssl_source"
     if call.PROBLEM.INSTANCE_SEG.TYPE == "regular":
-        call.DATA.VAL.INSTANCE_CHANNELS_DIR = (
-            call.DATA.VAL.PATH
-            + "_"
-            + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
-        )
         call.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR = (
             call.DATA.VAL.GT_PATH
             + "_"
             + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
         )
         if "C" in call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
-            call.DATA.VAL.INSTANCE_CHANNELS_DIR += "_" + call.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
             call.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR += "_" + call.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
     else: 
-        call.DATA.VAL.INSTANCE_CHANNELS_DIR = (
-            call.DATA.VAL.PATH
-            + "_"
-            + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
-            + "_"
-            + post_dil 
-            + "_" 
-            + post_d_dil
-        )
         call.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR = (
             call.DATA.VAL.GT_PATH
             + "_"
@@ -1557,29 +1518,14 @@ def update_dependencies(cfg) -> None:
     call.DATA.VAL.DETECTION_MASK_DIR = call.DATA.VAL.GT_PATH + "_detection_masks_" + str(cpd)
     call.DATA.VAL.SSL_SOURCE_DIR = call.DATA.VAL.PATH + "_ssl_source"
     if call.PROBLEM.INSTANCE_SEG.TYPE == "regular":
-        call.DATA.TEST.INSTANCE_CHANNELS_DIR = (
-            call.DATA.TEST.PATH
-            + "_"
-            + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
-        )
         call.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR = (
             call.DATA.TEST.GT_PATH
             + "_"
             + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
         )
         if "C" in call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
-            call.DATA.TEST.INSTANCE_CHANNELS_DIR += "_" + call.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
             call.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR += "_" + call.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
     else: 
-        call.DATA.TEST.INSTANCE_CHANNELS_DIR = (
-            call.DATA.TEST.PATH
-            + "_"
-            + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
-            + "_"
-            + post_dil
-            + "_" 
-            + post_d_dil
-        )
         call.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR = (
             call.DATA.TEST.GT_PATH
             + "_"

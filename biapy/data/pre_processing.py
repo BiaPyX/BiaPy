@@ -216,7 +216,7 @@ def create_instance_channels(
                     else:
                         imgfile, data = read_chunked_data(Y[i]["filepath"])
                     fname = os.path.join(
-                        getattr(cfg.DATA, tag).INSTANCE_CHANNELS_DIR, os.path.basename(Y[i]["filepath"])
+                        getattr(cfg.DATA, tag).PATH, os.path.basename(Y[i]["filepath"])
                     )
 
                     os.makedirs(savepath, exist_ok=True)
@@ -312,29 +312,6 @@ def create_instance_channels(
                 verbose=False,
             )
 
-        X = sorted(next(os.walk(getattr(cfg.DATA, tag).PATH))[2])
-        print("Creating X_{} channels . . .".format(data_type))
-        for i in tqdm(range(len(X)), disable=not is_main_process()):
-            img = read_img_as_ndarray(
-                os.path.join(getattr(cfg.DATA, tag).PATH, X[i]),
-                is_3d=not cfg.PROBLEM.NDIM == "2D",
-            )
-            save_tif(
-                np.expand_dims(img, 0),
-                data_dir=getattr(cfg.DATA, tag).INSTANCE_CHANNELS_DIR,
-                filenames=[X[i]],
-                verbose=False,
-            )
-
-            # Save just three images to check everything was generated correctly
-            if i < 3:
-                save_tif(
-                    np.expand_dims(img, 0),
-                    getattr(cfg.PATHS, tag + "_INSTANCE_CHANNELS_CHECK"),
-                    filenames=["vol" + str(i) + ".tif"],
-                    verbose=False,
-                )
-
 
 def create_test_instance_channels(
     cfg: Config
@@ -365,26 +342,6 @@ def create_test_instance_channels(
                 np.expand_dims(img, 0),
                 data_dir=cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR,
                 filenames=[Y[i]],
-                verbose=False,
-            )
-
-    X = sorted(next(os.walk(cfg.DATA.TEST.PATH))[2])
-    print("Creating X_test channels . . .")
-    for i in tqdm(range(len(X)), disable=not is_main_process()):
-        img = read_img_as_ndarray(os.path.join(cfg.DATA.TEST.PATH, X[i]), is_3d=not cfg.PROBLEM.NDIM == "2D")
-        save_tif(
-            np.expand_dims(img, 0),
-            data_dir=cfg.DATA.TEST.INSTANCE_CHANNELS_DIR,
-            filenames=[X[i]],
-            verbose=False,
-        )
-
-        # Save just three images to check everything was generated correctly
-        if i < 3:
-            save_tif(
-                np.expand_dims(img, 0),
-                cfg.PATHS.TEST_INSTANCE_CHANNELS_CHECK,
-                filenames=["vol" + str(i) + ".tif"],
                 verbose=False,
             )
 
