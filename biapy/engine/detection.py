@@ -364,9 +364,18 @@ class Detection_Workflow(Base_Workflow):
                         max(0, point[0] - 1) : min(pred.shape[0], point[0] + 1),
                         max(0, point[1] - 1) : min(pred.shape[1], point[1] + 1),
                     ]
-                instances, counter = np.unique(point_area, return_counts=True)
-                most_voted_class = instances[np.argmax(counter)]
-                pred_points_classes.append(int(most_voted_class))
+                instance_classes, instance_classes_count = np.unique(point_area, return_counts=True)
+                # Remove background
+                if instance_classes[0] == 0:
+                    instance_classes = instance_classes[1:]
+                    instance_classes_count = instance_classes_count[1:]
+
+                if len(instance_classes) > 0:
+                    label_selected = int(instance_classes[np.argmax(instance_classes_count)])
+                else:  # Label by default with class 1 in case there was no class info
+                    label_selected = 1
+
+                pred_points_classes.append(label_selected)
         else:
             pred_points_classes = [0]*len(pred_points)
 
@@ -385,9 +394,25 @@ class Detection_Workflow(Base_Workflow):
                 # Dilate and save the detected point image
                 for i in range(points_pred_mask.shape[0]):
                     points_pred_mask[i] = dilation(points_pred_mask[i], disk(3))
+                
+                if self.multihead:
+                    class_channel = np.zeros(points_pred_mask.shape, dtype=np.uint8)
+                    for n in range(len(pred_points)):
+                        class_channel = np.where(points_pred_mask == n+1, pred_points_classes[n], class_channel)  
+
+                    points_pred_mask = np.concatenate(
+                        [
+                            np.expand_dims(points_pred_mask, -1),
+                            np.expand_dims(class_channel, -1),
+                        ],
+                        axis=-1,
+                    )
+                else:
+                    points_pred_mask = np.expand_dims(points_pred_mask, -1)
+
                 if file_ext in [".hdf5", ".hdf", ".h5", ".zarr"]:
                     write_chunked_data(
-                        np.expand_dims(np.expand_dims(points_pred_mask, -1), 0),
+                        np.expand_dims(points_pred_mask, 0),
                         self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
                         filenames[0],
                         dtype_str="uint8",
@@ -395,11 +420,16 @@ class Detection_Workflow(Base_Workflow):
                     )
                 else:
                     save_tif(
-                        np.expand_dims(np.expand_dims(points_pred_mask, 0), -1),
+                        np.expand_dims(points_pred_mask, 0),
                         self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
                         filenames,
                         verbose=self.cfg.TEST.VERBOSE,
                     )
+
+                if self.multihead:
+                    points_pred_mask = points_pred_mask[...,0]
+                else:
+                    points_pred_mask = points_pred_mask.squeeze()
 
             # Detection watershed
             if self.cfg.TEST.POST_PROCESSING.DET_WATERSHED:
