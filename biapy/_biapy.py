@@ -16,6 +16,7 @@ import yaml
 import multiprocessing
 from typing import (
     Optional,
+    Dict,
 )
 from bioimageio.spec.model.v0_5 import (
     Author,
@@ -270,7 +271,7 @@ class BiaPy:
     def export_model_to_bmz(
         self,
         building_dir: str,
-        bmz_cfg: Optional[dict] = {},
+        bmz_cfg: Optional[Dict] = {},
         reuse_original_bmz_config: Optional[bool] = False,
     ):
         """
@@ -601,9 +602,9 @@ class BiaPy:
                     },
                 }
             ]
-        else:  # custom
-            custom_mean = self.cfg.DATA.NORMALIZATION.CUSTOM_MEAN
-            custom_std = self.cfg.DATA.NORMALIZATION.CUSTOM_STD
+        else:  # zero_mean_unit_variance
+            custom_mean = self.cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.MEAN_VAL
+            custom_std = self.cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.STD_VAL
 
             if custom_mean != -1 and custom_std != -1:
                 preprocessing = [
@@ -632,7 +633,7 @@ class BiaPy:
         # Post-processing
         # if self.cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'DETECTION', "SUPER_RESOLUTION", "SELF_SUPERVISED"]:
         #     postprocessing = [{"name": "binarize", "kwargs": {"threshold": 0.5}}]
-        postprocessing = None
+        postprocessing = []
         if len(self.workflow.bmz_config["postprocessing"]) > 0:
             postprocessing = []
             for post in self.workflow.bmz_config["postprocessing"]:
@@ -642,7 +643,7 @@ class BiaPy:
                             "id": "sigmoid",
                         }
                     )
-        if postprocessing is not None:
+        if len(postprocessing) > 0:
             print("Post-processing: {}".format(postprocessing))
         else:
             print("Post-processing: any")
@@ -764,7 +765,7 @@ class BiaPy:
                     inputs.append(input)
                     if i == 0:
                         try:
-                            file_paths["input"] = input.sample_tensor.download().path
+                            file_paths["input"] = input.sample_tensor.download().path # type: ignore
                         except:
                             try:
                                 file_paths["input"] = input.test_tensor.download().path
@@ -822,7 +823,7 @@ class BiaPy:
                     outputs.append(output)
                     if i == 0:
                         try:
-                            file_paths["output"] = output.sample_tensor.download().path
+                            file_paths["output"] = output.sample_tensor.download().path # type: ignore
                         except:
                             try:
                                 file_paths["output"] = output.test_tensor.download().path
@@ -1004,11 +1005,14 @@ class BiaPy:
 
         # Only exporting in pytorch_state_dict
         pytorch_state_dict = PytorchStateDictWeightsDescr(
-            source=state_dict_source,
+            source=state_dict_source, # type: ignore
             sha256=state_dict_sha256,
             architecture=pytorch_architecture,
-            pytorch_version=torch.__version__,
-            dependencies=EnvironmentFileDescr(source=Path(env_file_path), sha256=create_file_sha256sum(env_file_path)),
+            pytorch_version=torch.__version__, # type: ignore
+            dependencies=EnvironmentFileDescr(
+                source=Path(env_file_path), 
+                sha256=Sha256(create_file_sha256sum(env_file_path))
+            ),
         )
 
         # torchscript = TorchscriptWeightsDescr(
@@ -1033,7 +1037,7 @@ class BiaPy:
             authors=authors,
             cite=citations,
             license=license,
-            documentation=doc,
+            documentation=Path(doc),
             git_repo=HttpUrl("https://github.com/BiaPyX/BiaPy"),
             inputs=inputs,
             outputs=outputs,
@@ -1045,7 +1049,7 @@ class BiaPy:
             covers=covers,
             maintainers=maintainers,
             training_data=dataset_id,
-            version=version,
+            version=version, # type: ignore
         )
 
         # print(f"Building BMZ package: {args}")

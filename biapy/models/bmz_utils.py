@@ -19,7 +19,7 @@ from bioimageio.spec.utils import download
 from biapy.data.pre_processing import calculate_volume_prob_map
 from biapy.data.data_manipulation import read_img_as_ndarray, imwrite, reduce_dtype
 from biapy.data.generators.augmentors import random_crop_pair
-
+from biapy.config.config import Config
 
 def get_bmz_model_info(
     model: ModelDescr_v0_4 | ModelDescr_v0_5, spec_version: Version = Version("0.4.0")
@@ -54,7 +54,7 @@ def get_bmz_model_info(
             arch_kwargs = arch.kwargs
 
             pytorch_architecture = ArchitectureFromFileDescr(
-                source=arch_file_path,
+                source=arch_file_path, # type: ignore
                 sha256=arch_file_sha256,
                 callable=arch_name,
                 kwargs=arch_kwargs,
@@ -77,7 +77,7 @@ def get_bmz_model_info(
         ).path
         arch_name = model.weights.pytorch_state_dict.architecture.callable_name
         pytorch_architecture = ArchitectureFromFileDescr(
-            source=arch_file_path,
+            source=arch_file_path, # type: ignore
             sha256=arch_file_sha256,
             callable=arch_name,
             kwargs=model.weights.pytorch_state_dict.kwargs,
@@ -252,7 +252,7 @@ def create_model_cover(file_paths, out_path, patch_size=256, is_3d=False, workfl
 
 
 def create_model_doc(
-    biapy_cfg: CfgNode,
+    biapy_cfg: Config | CfgNode,
     bmz_cfg: dict,
     cfg_file: str,
     task_description: str,

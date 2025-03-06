@@ -641,7 +641,9 @@ def seg_widen_border(seg, tsz_h=1):
     return seg
 
 
-def create_file_sha256sum(filename):
+def create_file_sha256sum(
+    filename: str
+) -> str:
     h = sha256()
     b = bytearray(128 * 1024)
     mv = memoryview(b)
