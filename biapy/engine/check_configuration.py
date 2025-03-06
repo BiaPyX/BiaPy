@@ -2018,6 +2018,34 @@ def convert_old_model_cfg_to_current_version(old_cfg):
             if "BINARY_MASKS" in old_cfg["DATA"]["VAL"]:
                 del old_cfg["DATA"]["VAL"]["BINARY_MASKS"]
 
+        if "NORMALIZATION" in old_cfg["DATA"]:
+            if "PERC_CLIP" in old_cfg["DATA"]["NORMALIZATION"]:
+                val = old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"]
+                if isinstance(val, bool) and val:
+                    del old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"]
+                    old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"] = {}
+                    old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"]["ENABLE"] = True
+                    if "PERC_LOWER" in old_cfg["DATA"]["NORMALIZATION"]:
+                        old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"]["LOWER_PERC"] = old_cfg["DATA"]["NORMALIZATION"]["PERC_LOWER"]
+                        del old_cfg["DATA"]["NORMALIZATION"]["PERC_LOWER"]
+                    if "PERC_UPPER" in old_cfg["DATA"]["NORMALIZATION"]:
+                        old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"]["UPPER_PERC"] = old_cfg["DATA"]["NORMALIZATION"]["PERC_UPPER"]
+                        del old_cfg["DATA"]["NORMALIZATION"]["PERC_UPPER"]
+
+            if old_cfg["DATA"]["NORMALIZATION"]["TYPE"] == "custom":
+                old_cfg["DATA"]["NORMALIZATION"]["TYPE"] = "zero_mean_unit_variance"
+                if "CUSTOM_MEAN" in old_cfg["DATA"]["NORMALIZATION"]:
+                    old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"] = {}
+                    mean = old_cfg["DATA"]["NORMALIZATION"]["CUSTOM_MEAN"] 
+                    old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"]["MEAN_VAL"] = mean 
+                    del old_cfg["DATA"]["NORMALIZATION"]["CUSTOM_MEAN"]      
+                if "CUSTOM_STD" in old_cfg["DATA"]["NORMALIZATION"]:
+                    if "ZERO_MEAN_UNIT_VAR" not in old_cfg["DATA"]["NORMALIZATION"]:
+                        old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"] = {}
+                    std = old_cfg["DATA"]["NORMALIZATION"]["CUSTOM_STD"] 
+                    old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"]["STD_VAL"] = std
+                    del old_cfg["DATA"]["NORMALIZATION"]["CUSTOM_STD"]
+
     if "AUGMENTOR" in old_cfg:
         if "BRIGHTNESS_EM" in old_cfg["AUGMENTOR"]:
             del old_cfg["AUGMENTOR"]["BRIGHTNESS_EM"]
