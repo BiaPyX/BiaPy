@@ -226,7 +226,7 @@ class test_single_data_generator(Dataset):
                         "Please, check the channels of the images!".format(self.data_shape[-1], img.shape[-1])
                     )
 
-        img_class = sample.get_class_num()
+        img_class = self.X.dataset_info[sample.fid].get_class_num()
 
         # Normalization
         self.norm_module.set_stats_from_DatasetFile(self.X.dataset_info[sample.fid])

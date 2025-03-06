@@ -2230,14 +2230,15 @@ def samples_from_class_list(
                 DatasetFile(
                     path=img_path,
                     shape=img.shape,
+                    class_name=class_name,
+                    class_num=c_num if gt_loaded else -1,
                 )
             )
             sample_dict = DataSample(
                 fid=j,
                 coords=None,
-                class_name=class_name,
-                class_num=c_num if gt_loaded else -1,
             )
+
             xsample_list.append(sample_dict)
 
     return BiaPyDataset(dataset_info=xdataset_info, sample_list=xsample_list)

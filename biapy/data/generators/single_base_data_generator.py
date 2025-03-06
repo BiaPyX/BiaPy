@@ -368,7 +368,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
                     img = self.preprocess_f(self.preprocess_cfg, x_data=[img], is_2d=(self.ndim == 2))[0]
             else:
                 coords = sample.coords
-                data_axis_order = sample.get_input_axes()
+                data_axis_order = self.X.dataset_info[sample.fid].get_input_axes()
                 assert coords is not None and data_axis_order is not None 
                 img = extract_patch_from_efficient_file(img, coords, data_axis_order=data_axis_order)
 
@@ -380,7 +380,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
                     if isinstance(img_file, h5py.File):
                         img_file.close()
 
-        img_class = sample.get_class_num()
+        img_class = self.X.dataset_info[sample.fid].get_class_num()
 
         if img.shape[:-1] != self.shape[:-1]:
             img = self.random_crop_func(img, self.shape[:-1], self.val)

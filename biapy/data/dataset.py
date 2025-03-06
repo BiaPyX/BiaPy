@@ -129,6 +129,8 @@ class DatasetFile:
         scale_range_max_val: Optional[List[float]] = None,
         mean: Optional[float] = None,
         std: Optional[float] = None,
+        class_num: Optional[int] = None,
+        class_name: Optional[str] = None,
     ):
         self.path = path
         self.shape = shape
@@ -142,6 +144,10 @@ class DatasetFile:
             self.input_axes = input_axes
         if parallel_data is not None:
             self.parallel_data = parallel_data
+        if class_num is not None:
+            self.class_num = class_num
+        if class_name is not None:
+            self.class_name = class_name
 
     def is_parallel(self) -> bool:
         if hasattr(self, "parallel_data"):
@@ -157,6 +163,12 @@ class DatasetFile:
 
     def do_percentile_clipping(self) -> bool:
         return hasattr(self, "lower_bound_val")
+
+    def get_class_num(self) -> int:
+        if hasattr(self, "class_num"):
+            return self.class_num
+        else:
+            return -1
 
     def __str__(self):
         return str(self.__dict__)
@@ -208,8 +220,6 @@ class DataSample:
         gt_associated_id: Optional[int] = None,
         input_axes: Optional[str] = None,
         path_in_zarr: Optional[str] = None,
-        class_num: Optional[int] = None,
-        class_name: Optional[str] = None,
     ):
         self.fid = fid
         self.coords = coords
@@ -221,10 +231,6 @@ class DataSample:
             self.input_axes = input_axes
         if path_in_zarr is not None:
             self.path_in_zarr = path_in_zarr
-        if class_num is not None:
-            self.class_num = class_num
-        if class_name is not None:
-            self.class_name = class_name
 
     def img_is_loaded(self):
         return hasattr(self, "img")
@@ -246,12 +252,6 @@ class DataSample:
             return self.gt_associated_id
         else:
             return None
-
-    def get_class_num(self) -> int:
-        if hasattr(self, "class_num"):
-            return self.class_num
-        else:
-            return -1
 
     def __str__(self):
         return str(self.__dict__)
