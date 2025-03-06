@@ -256,8 +256,8 @@ class Base_Workflow(metaclass=ABCMeta):
         self.model_output_channels : List of functions
             Metrics to be calculated during model's training.
 
-        self.multihead : List of str
-            Names of the metrics calculated during training.
+        self.multihead : bool
+            Whether if the output of the model has more than one head.
 
         self.activations : List of dicts
             Activations to be applied to the model output. Each dict will

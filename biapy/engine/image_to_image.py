@@ -69,8 +69,8 @@ class Image_to_Image_Workflow(Base_Workflow):
         self.model_output_channels : List of functions
             Metrics to be calculated during model's training.
 
-        self.multihead : List of str
-            Names of the metrics calculated during training.
+        self.multihead : bool
+            Whether if the output of the model has more than one head.
 
         self.activations : List of dicts
             Activations to be applied to the model output. Each dict will
@@ -217,7 +217,10 @@ class Image_to_Image_Workflow(Base_Workflow):
                 dtype=self.loss_dtype,
             )
         else:  # torch.Tensor
-            _output = output.clone()
+            if not train:
+                _output = output.clone()
+            else:
+                _output = output
 
         if isinstance(targets, np.ndarray):
             _targets = to_pytorch_format(
@@ -227,7 +230,10 @@ class Image_to_Image_Workflow(Base_Workflow):
                 dtype=self.loss_dtype,
             )
         else:  # torch.Tensor
-            _targets = targets.clone()
+            if not train:
+                _targets = targets.clone()
+            else:
+                _targets = targets
 
         out_metrics = {}
         list_to_use = self.train_metrics if train else self.test_metrics
