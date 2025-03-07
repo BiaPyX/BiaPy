@@ -447,9 +447,9 @@ class MaskedAutoencoderViT(nn.Module):
             ``C`` are the channels, ``Z`` image depth, ``H`` image height and ``W`` image's width.
 
         _y : Torch tensor
-            Input images. In 2D: ``(N, L, patch_size**2 *C)``, in 3D: ``(N, L, patch_size**3 *C)``.
+            MAE model prediction. In 2D: ``(N, L, patch_size**2 *C)``, in 3D: ``(N, L, patch_size**3 *C)``.
             Where ``N`` is the batch size, ``L`` is the multiplication of dimension (i.e. ``Z``,
-            ``H`` and ``W``) and ``C`` are the channels.
+            ``H`` and ``W``) and ``C`` represents the channels.
 
         _mask : 2d array
             Information of which patches will be retain and masked. Shape is: ``(N, L)`` where ``0`` is keep
