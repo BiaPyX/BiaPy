@@ -76,10 +76,25 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     raise ValueError(
                         "'foreground' property can only be used in SEMANTIC_SEG, INSTANCE_SEG and DETECTION workflows"
                     )
-                if phase == "TEST" and not cfg.DATA.TEST.LOAD_GT and cfg.DATA.TEST.USE_VAL_AS_TEST:
-                    raise ValueError(
-                        "'foreground' condition can not be used for filtering when test ground truth is not provided"
+
+            target_required = any(
+                [
+                    True
+                    for cond in getattr(cfg.DATA, phase).FILTER_SAMPLES.PROPS
+                    if cond in ["foreground", "target_mean", "target_min", "target_max", "diff"]
+                ]
+            )
+            if target_required and cfg.PROBLEM.TYPE not in ["DENOISING", "SELF_SUPERVISED"]:
+                raise ValueError(
+                    "Target data is required to apply some of the filters you selected, i.e. the property is one of ['foreground', 'target_mean', 'target_min', 'target_max', 'diff']. Provided is {} . This is not possible in 'DENOISING', 'SELF_SUPERVISED' workflows as no target data is required".format(
+                        getattr(cfg.DATA, phase).FILTER_SAMPLES.PROPS
                     )
+                )
+
+            if target_required and phase == "TEST" and not cfg.DATA.TEST.LOAD_GT and not cfg.DATA.TEST.USE_VAL_AS_TEST:
+                raise ValueError(
+                    "['foreground', 'target_mean', 'target_min', 'target_max', 'diff'] properties can not be used for filtering when test ground truth is not provided"
+                )
 
             if len(getattr(cfg.DATA, phase).FILTER_SAMPLES.PROPS) == 0:
                 raise ValueError(
@@ -135,7 +150,16 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 ):
                     raise ValueError("Non repeated values are allowed in 'DATA.TRAIN.FILTER_SAMPLES'")
                 for j in range(len(getattr(cfg.DATA, phase).FILTER_SAMPLES.PROPS[i])):
-                    if getattr(cfg.DATA, phase).FILTER_SAMPLES.PROPS[i][j] not in ["foreground", "mean", "min", "max", "target_mean", "target_min", "target_max", "diff"]:
+                    if getattr(cfg.DATA, phase).FILTER_SAMPLES.PROPS[i][j] not in [
+                        "foreground",
+                        "mean",
+                        "min",
+                        "max",
+                        "target_mean",
+                        "target_min",
+                        "target_max",
+                        "diff",
+                    ]:
                         raise ValueError(
                             "'DATA.TRAIN.FILTER_SAMPLES.PROPS' can only be one among these: ['foreground', 'mean', 'min', 'max', 'target_mean', 'target_min', 'target_max', 'diff']"
                         )
@@ -705,9 +729,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "maskrcnn_resnet50_fpn",
                 "maskrcnn_resnet50_fpn_v2",
             ]:
-                raise ValueError(
-                    "'MODEL.SOURCE' must be in ['maskrcnn_resnet50_fpn', 'maskrcnn_resnet50_fpn_v2']"
-                )
+                raise ValueError("'MODEL.SOURCE' must be in ['maskrcnn_resnet50_fpn', 'maskrcnn_resnet50_fpn_v2']")
             if cfg.PROBLEM.NDIM == "3D":
                 raise ValueError("TorchVision model's for instance segmentation are only available for 2D images")
             if cfg.TRAIN.ENABLE:
@@ -1663,9 +1685,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "warmupcosine",
             "onecycle",
         ]:
-            raise ValueError(
-                "'TRAIN.LR_SCHEDULER.NAME' must be in ['reduceonplateau', 'warmupcosine', 'onecycle']"
-            )
+            raise ValueError("'TRAIN.LR_SCHEDULER.NAME' must be in ['reduceonplateau', 'warmupcosine', 'onecycle']")
         if cfg.TRAIN.LR_SCHEDULER.MIN_LR == -1.0 and cfg.TRAIN.LR_SCHEDULER.NAME != "onecycle":
             raise ValueError(
                 "'TRAIN.LR_SCHEDULER.MIN_LR' needs to be set when 'TRAIN.LR_SCHEDULER.NAME' is between ['reduceonplateau', 'warmupcosine']"
@@ -1803,11 +1823,11 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             elif len(cfg.MODEL.BMZ.EXPORT.DATASET_INFO) != 1:
                 raise ValueError(
                     "'MODEL.BMZ.EXPORT.DATASET_INFO' must be a list with a single dictionary inside. Keys that must be set in that dict are: ['name', 'doi', 'image_modality'] and optionallly 'dataset_id'. "
-                    "E.g. [{ 'name': 'CartoCell', 'doi': '10.1016/j.crmeth.2023.100597', 'image_modality': 'fluorescence microscopy',  'dataset_id': 'biapy/cartocell_cyst_segmentation' }]"                
-                    )
+                    "E.g. [{ 'name': 'CartoCell', 'doi': '10.1016/j.crmeth.2023.100597', 'image_modality': 'fluorescence microscopy',  'dataset_id': 'biapy/cartocell_cyst_segmentation' }]"
+                )
             else:
                 for k in cfg.MODEL.BMZ.EXPORT.DATASET_INFO[0].keys():
-                    if k not in ["name", "doi", "image_modality", 'dataset_id']:
+                    if k not in ["name", "doi", "image_modality", "dataset_id"]:
                         raise ValueError(
                             f"'MODEL.BMZ.EXPORT.DATASET_INFO' malformed. Cite dictionary available keys are: ['name', 'doi', 'image_modality', 'dataset_id']. Provided {k}. "
                             "E.g. [{ 'name': 'CartoCell', 'doi': '10.1016/j.crmeth.2023.100597', 'image_modality': 'fluorescence microscopy',  'dataset_id': 'biapy/cartocell_cyst_segmentation' }]"
@@ -2031,23 +2051,27 @@ def convert_old_model_cfg_to_current_version(old_cfg):
                     old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"] = {}
                     old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"]["ENABLE"] = True
                     if "PERC_LOWER" in old_cfg["DATA"]["NORMALIZATION"]:
-                        old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"]["LOWER_PERC"] = old_cfg["DATA"]["NORMALIZATION"]["PERC_LOWER"]
+                        old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"]["LOWER_PERC"] = old_cfg["DATA"]["NORMALIZATION"][
+                            "PERC_LOWER"
+                        ]
                         del old_cfg["DATA"]["NORMALIZATION"]["PERC_LOWER"]
                     if "PERC_UPPER" in old_cfg["DATA"]["NORMALIZATION"]:
-                        old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"]["UPPER_PERC"] = old_cfg["DATA"]["NORMALIZATION"]["PERC_UPPER"]
+                        old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"]["UPPER_PERC"] = old_cfg["DATA"]["NORMALIZATION"][
+                            "PERC_UPPER"
+                        ]
                         del old_cfg["DATA"]["NORMALIZATION"]["PERC_UPPER"]
 
             if old_cfg["DATA"]["NORMALIZATION"]["TYPE"] == "custom":
                 old_cfg["DATA"]["NORMALIZATION"]["TYPE"] = "zero_mean_unit_variance"
                 if "CUSTOM_MEAN" in old_cfg["DATA"]["NORMALIZATION"]:
                     old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"] = {}
-                    mean = old_cfg["DATA"]["NORMALIZATION"]["CUSTOM_MEAN"] 
-                    old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"]["MEAN_VAL"] = mean 
-                    del old_cfg["DATA"]["NORMALIZATION"]["CUSTOM_MEAN"]      
+                    mean = old_cfg["DATA"]["NORMALIZATION"]["CUSTOM_MEAN"]
+                    old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"]["MEAN_VAL"] = mean
+                    del old_cfg["DATA"]["NORMALIZATION"]["CUSTOM_MEAN"]
                 if "CUSTOM_STD" in old_cfg["DATA"]["NORMALIZATION"]:
                     if "ZERO_MEAN_UNIT_VAR" not in old_cfg["DATA"]["NORMALIZATION"]:
                         old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"] = {}
-                    std = old_cfg["DATA"]["NORMALIZATION"]["CUSTOM_STD"] 
+                    std = old_cfg["DATA"]["NORMALIZATION"]["CUSTOM_STD"]
                     old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"]["STD_VAL"] = std
                     del old_cfg["DATA"]["NORMALIZATION"]["CUSTOM_STD"]
 

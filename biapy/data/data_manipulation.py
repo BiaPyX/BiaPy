@@ -409,7 +409,7 @@ def load_and_prepare_train_data(
                 yshape = Y_train.sample_list[gt_associated_id].get_shape()
             else:
                 yshape = Y_train.sample_list[i].get_shape()
-            
+
             # The shape is not saved when 'DATA.EXTRACT_RANDOM_PATCH' is activated so set the crop_shape
             if not xshape:
                 xshape = crop_shape[:-1]
@@ -537,8 +537,14 @@ def load_and_prepare_train_data(
             Y_train.clean_dataset(x_train_ids, clean_by=clean_by)
 
         if clean_by == "sample":
-            print("Raw samples chosen for training (first 10 only): {}".format(str(x_train_ids[:10]).replace("]", "...]")))
-            print("Raw samples chosen for validation (first 10 only): {}".format(str(x_val_ids[:10]).replace("]", " ...]")))
+            print(
+                "Raw samples chosen for training (first 10 only): {}".format(str(x_train_ids[:10]).replace("]", "...]"))
+            )
+            print(
+                "Raw samples chosen for validation (first 10 only): {}".format(
+                    str(x_val_ids[:10]).replace("]", " ...]")
+                )
+            )
         else:
             print("Raw images chosen for training: {}".format([x.path for x in X_train.dataset_info]))
             print("Raw images chosen for validation: {}".format([x.path for x in X_val.dataset_info]))
@@ -676,13 +682,13 @@ def load_and_prepare_train_data(
                     yshape = Y_val.sample_list[gt_associated_id].get_shape()
                 else:
                     yshape = Y_val.sample_list[i].get_shape()
-                
+
                 # The shape is not saved when 'DATA.EXTRACT_RANDOM_PATCH' is activated so set the crop_shape
                 if not xshape:
                     xshape = crop_shape[:-1]
                 if not yshape:
                     yshape = crop_shape[:-1]
-                    
+
                 if is_3d:
                     assert len(y_upscaling) == 3 and len(xshape) == 3
                     upsampled_x_shape = (
@@ -2276,11 +2282,16 @@ def filter_samples_by_properties(
         list of conditions to remove the images from the list. They are list of list of conditions. For instance, the conditions can
         be like this: ``[['A'], ['B','C']]``. Then, if the sample satisfies the first list of conditions, only 'A' in this first case
         (from ['A'] list), or satisfy 'B' and 'C' (from ['B','C'] list) it will be removed. In each sublist all the conditions must be
-        satisfied. Available properties are: [``'foreground'``, ``'mean'``, ``'min'``, ``'max'``]. Each property descrition:
+        satisfied. Available properties are: [``'foreground'``, ``'mean'``, ``'min'``, ``'max'``, ``diff``, ``target_mean``,
+        ``target_min``, ``target_max``]. Each property descrition:
           * ``'foreground'`` is defined as the mask foreground percentage.
           * ``'mean'`` is defined as the mean value.
           * ``'min'`` is defined as the min value.
           * ``'max'`` is defined as the max value.
+          * ``'diff'`` is defined as the differences between ground truth and raw images. Require ``y_dataset`` to be provided.
+          * ``'target_mean'`` is defined as the mean intensity value of the raw image targets. Require ``y_dataset`` to be provided.
+          * ``'target_min'`` is defined as the min intensity value of the raw image targets. Require ``y_dataset`` to be provided.
+          * ``'target_max'`` is defined as the max intensity value of the raw image targets. Require ``y_dataset`` to be provided.
 
     filter_vals : list of int/float
         Represent the values of the properties listed in ``filter_conds`` that the images need to satisfy to not be dropped.
@@ -2330,9 +2341,8 @@ def filter_samples_by_properties(
         ):
             use_Y_data = True
 
-    if use_Y_data:
-        if y_dataset is None:
-            raise ValueError("'foreground' condition can not be used for filtering when 'y_dataset' was not provided")
+    if use_Y_data and y_dataset is None:
+        raise ValueError("Check filtering conditions as some of them require 'y_dataset' that was not provided")
 
     using_zarr = False
     if zarr_data_information:
@@ -2353,7 +2363,7 @@ def filter_samples_by_properties(
     if not using_zarr and filter_by_entire_image:
         clean_by = "image"
         samples_to_maintain = []
-        for n, image_path in tqdm(enumerate(images), disable=not is_main_process()):
+        for n, image_path in tqdm(enumerate(images), total=len(images), disable=not is_main_process()):
             # Load X data
             img, _ = load_img_data(image_path, is_3d=is_3d)
 
@@ -2364,7 +2374,7 @@ def filter_samples_by_properties(
                 mask = None
 
             if norm_before_filter:
-                assert norm_module is not None 
+                assert norm_module is not None
                 img, _ = norm_module.apply_image_norm(img)
                 if use_Y_data:
                     assert mask is not None
@@ -2381,8 +2391,8 @@ def filter_samples_by_properties(
         img_path, mask_path = "", ""
         clean_by = "sample"
         samples_to_maintain = []
-        file, mfile = None, None
-        for n, sample in tqdm(enumerate(x_dataset.sample_list), disable=not is_main_process()):
+        file, mfile, mask = None, None, None
+        for n, sample in tqdm(enumerate(x_dataset.sample_list), total=len(x_dataset.sample_list), disable=not is_main_process()):
             # Load X data
             filepath = x_dataset.dataset_info[sample.fid].path
             if img_path != filepath:
@@ -2398,7 +2408,7 @@ def filter_samples_by_properties(
 
                 # Load Y data
                 if use_Y_data:
-                    assert y_dataset is not None 
+                    assert y_dataset is not None
                     filepath = y_dataset.dataset_info[sample.fid].path
                     mask_path = filepath
                     if mfile and isinstance(mfile, h5py.File):
@@ -2413,7 +2423,7 @@ def filter_samples_by_properties(
                     ydata, mfile = None, None
 
                 if norm_before_filter:
-                    assert norm_module is not None 
+                    assert norm_module is not None
                     xdata, _ = norm_module.apply_image_norm(xdata)
                     if use_Y_data:
                         assert ydata is not None
@@ -2422,11 +2432,11 @@ def filter_samples_by_properties(
             # Capture patches within image/mask
             coords = sample.coords
             if use_Y_data:
-                assert y_dataset is not None 
+                assert y_dataset is not None
                 mcoords = y_dataset.sample_list[n].coords
 
             # Prepare slices to extract the patch
-            assert coords is not None 
+            assert coords is not None
             if is_3d:
                 xslices = (
                     slice(None),
@@ -2453,7 +2463,7 @@ def filter_samples_by_properties(
                 xdata_ordered_slices = tuple([x for x in xslices if x != slice(None)])
 
             if use_Y_data:
-                assert mcoords is not None 
+                assert mcoords is not None
                 if is_3d:
                     yslices = (
                         slice(None),
@@ -2483,8 +2493,9 @@ def filter_samples_by_properties(
             if use_Y_data:
                 assert ydata is not None
                 mask = ydata[ydata_ordered_slices]  # type: ignore
+                assert isinstance(mask, np.ndarray)
 
-            assert isinstance(img, np.ndarray) and isinstance(mask, np.ndarray)
+            assert isinstance(img, np.ndarray)
             satisfy_conds = sample_satisfy_conds(img, filter_conds, filter_vals, filter_signs, mask=mask)
 
             if not satisfy_conds:
@@ -2786,7 +2797,11 @@ def load_images_to_dataset(
         data_shape = (len(dataset.sample_list),) + sshape
         print("*** Loaded data shape is {}".format(data_shape))
     else:
-        print("Samples of shape {} will be randomly extracted. Number of samples: {}".format(crop_shape, len(dataset.sample_list)))
+        print(
+            "Samples of shape {} will be randomly extracted. Number of samples: {}".format(
+                crop_shape, len(dataset.sample_list)
+            )
+        )
 
 
 def pad_and_reflect(img: NDArray, crop_shape: Tuple[int, ...], verbose: bool = False) -> NDArray:

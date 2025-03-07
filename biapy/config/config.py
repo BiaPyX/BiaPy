@@ -310,10 +310,13 @@ class Config:
         #
         #   * 'foreground' is defined as the percentage of pixels/voxels corresponding to the foreground mask. This option is only valid for
         #     SEMANTIC_SEG, INSTANCE_SEG and DETECTION.
-        #   * 'mean' is defined as the mean intensity value.
-        #   * 'min' is defined as the min intensity value.
-        #   * 'max' is defined as the max intensity value.
-        #   * 'diff' is defined as the differences between ground truth and raw images. 
+        #   * 'mean' is defined as the mean intensity value of the raw image inputs.
+        #   * 'min' is defined as the min intensity value of the raw image inputs.
+        #   * 'max' is defined as the max intensity value of the raw image inputs.
+        #   * 'diff' is defined as the differences between ground truth and raw images. Available for all workflows but SELF_SUPERVISED and DENOISING. 
+        #   * 'target_mean is defined as the mean intensity value of the raw image targets. Available for all workflows but SELF_SUPERVISED and DENOISING.
+        #   * 'target_min' is defined as the min intensity value of the raw image targets. Available for all workflows but SELF_SUPERVISED and DENOISING. 
+        #   * 'target_max' is defined as the max intensity value of the raw image targets. Available for all workflows but SELF_SUPERVISED and DENOISING.  
         #
         # With VALUES and SIGNS, we define the specific values and the comparison operators of each property, respectively.
         # The available operators are: ['gt', 'ge', 'lt', 'le'], that corresponds to "greather than" (or ">"), "greather equal" (or ">="), "less than" (or "<"),
