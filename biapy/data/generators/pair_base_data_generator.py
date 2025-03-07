@@ -871,12 +871,11 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 img = extract_patch_from_efficient_file(img, coords, data_axis_order=data_axis_order)
 
                 # Apply preprocessing after extract sample
-                if self.X.dataset_info[sample.fid].is_parallel():
-                    if self.preprocess_f:
-                        img = self.preprocess_f(self.preprocess_cfg, x_data=[img], is_2d=(self.ndim == 2))[0]
+                if self.preprocess_f:
+                    img = self.preprocess_f(self.preprocess_cfg, x_data=[img], is_2d=(self.ndim == 2))[0]
 
-                    if isinstance(img_file, h5py.File):
-                        img_file.close()
+                if isinstance(img_file, h5py.File):
+                    img_file.close()
 
         # Y data
         # "gt_associated_id" available only in PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER
