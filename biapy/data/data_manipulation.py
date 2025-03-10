@@ -69,6 +69,9 @@ def load_and_prepare_train_data(
     train_zarr_data_information: Optional[Dict] = None,
     val_zarr_data_information: Optional[Dict] = None,
     multiple_raw_images: bool = False,
+    save_filtered_images: bool = True,
+    save_filtered_images_dir: Optional[str] = None,
+    save_filtered_images_num: int = 3,
 ) -> Tuple[BiaPyDataset, BiaPyDataset, BiaPyDataset, BiaPyDataset]:
     """
     Load training and validation data.
@@ -228,6 +231,15 @@ def load_and_prepare_train_data(
         are placed. Visit the following tutorial for a real use case and a more detailed description:
         `Light My Cells <https://biapy.readthedocs.io/en/latest/tutorials/image-to-image/lightmycells.html>`_.
         This is used when ``PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER`` is selected.
+
+    save_filtered_images : bool, optional
+        Whether to save or not filtered images.
+
+    save_filtered_images_dir : str, optional
+        Directory to save filtered images.
+
+    save_filtered_images_num : int, optional
+        Number of filtered images to save. Only work when ``save_filtered_images`` is ``True``.
 
     Returns
     -------
@@ -438,6 +450,9 @@ def load_and_prepare_train_data(
                 )
 
     if len(train_filter_conds) > 0:
+        save_example_dir = None
+        if save_filtered_images and save_filtered_images_dir:
+            save_example_dir = os.path.join(save_filtered_images_dir, "train")
         filter_samples_by_properties(
             X_train,
             is_3d,
@@ -445,10 +460,15 @@ def load_and_prepare_train_data(
             train_filter_vals,
             train_filter_signs,
             y_dataset=Y_train,
+            crop_shape=crop_shape,
+            reflect_to_complete_shape=reflect_to_complete_shape,
             filter_by_entire_image=filter_by_entire_image if not random_crops_in_DA else True,
             norm_before_filter=norm_before_filter,
             norm_module=norm_module,
             zarr_data_information=train_zarr_data_information if train_using_zarr else None,
+            save_filtered_images=save_filtered_images,
+            save_filtered_images_dir=save_example_dir,
+            save_filtered_images_num=save_filtered_images_num,
         )
 
     val_using_zarr = False
@@ -711,6 +731,9 @@ def load_and_prepare_train_data(
                     )
 
         if len(val_filter_conds) > 0:
+            save_example_dir = None
+            if save_filtered_images and save_filtered_images_dir:
+                save_example_dir = os.path.join(save_filtered_images_dir, "val")
             filter_samples_by_properties(
                 X_val,
                 is_3d,
@@ -718,10 +741,15 @@ def load_and_prepare_train_data(
                 val_filter_vals,
                 val_filter_signs,
                 y_dataset=Y_val,
+                crop_shape=crop_shape,
+                reflect_to_complete_shape=reflect_to_complete_shape,
                 filter_by_entire_image=filter_by_entire_image if not random_crops_in_DA else True,
                 norm_before_filter=norm_before_filter,
                 norm_module=norm_module,
                 zarr_data_information=val_zarr_data_information if val_using_zarr else None,
+                save_filtered_images=save_filtered_images,
+                save_filtered_images_dir=save_example_dir,
+                save_filtered_images_num=save_filtered_images_num,
             )
 
         x_val_ids = np.array(range(0, len(X_val.sample_list)))
@@ -1004,10 +1032,10 @@ def load_and_prepare_cls_test_data(
     use_val_as_test : bool
         Whether to use validation data as test.
 
-    expected_classes : int, optional
+    expected_classes : int
         Expected number of classes to be loaded.
 
-    crop_shape : 3D/4D int tuple, optional
+    crop_shape : 3D/4D int tuple
         Shape of the crops. E.g. ``(y, x, channels)`` for 2D and ``(z, y, x, channels)`` for 3D.
 
     is_3d: bool, optional
@@ -1311,10 +1339,10 @@ def load_and_prepare_train_data_cls(
     val_in_memory : str
         Whether the validation data must be loaded in memory or not.
 
-    expected_classes : int, optional
+    expected_classes : int
         Expected number of classes to be loaded.
 
-    crop_shape : 3D/4D int tuple, optional
+    crop_shape : 3D/4D int tuple
         Shape of the crops. E.g. ``(y, x, channels)`` for 2D and ``(z, y, x, channels)`` for 3D.
 
     cross_val : bool, optional
@@ -1444,6 +1472,8 @@ def load_and_prepare_train_data_cls(
             train_filter_conds,
             train_filter_vals,
             train_filter_signs,
+            crop_shape=crop_shape,
+            reflect_to_complete_shape=reflect_to_complete_shape,
             norm_before_filter=norm_before_filter,
             norm_module=norm_module,
         )
@@ -1496,6 +1526,8 @@ def load_and_prepare_train_data_cls(
                 val_filter_conds,
                 val_filter_vals,
                 val_filter_signs,
+                crop_shape=crop_shape,
+                reflect_to_complete_shape=reflect_to_complete_shape,
                 norm_before_filter=norm_before_filter,
                 norm_module=norm_module,
             )
@@ -1662,7 +1694,9 @@ def samples_from_image_list(
         original_data_shape = img.shape
         crop_coords = None
 
-        if crop and img.shape != crop_shape[:-1] + (img.shape[-1],):
+        if crop and (
+            img.shape <= crop_shape[:-1] + (img.shape[-1],) or img.shape >= crop_shape[:-1] + (img.shape[-1],)
+        ):
             crop_coords = crop_funct(
                 np.expand_dims(img, axis=0) if not is_3d else img,
                 crop_shape[:-1] + (img.shape[-1],),
@@ -1882,14 +1916,14 @@ def samples_from_image_list_multiple_raw_one_gt(
     gt_path : str
         Directory to read ground truth images from.
 
-    crop_shape : 3D/4D int tuple, optional
+    crop_shape : 3D/4D int tuple
         Shape of the crops. E.g. ``(y, x, channels)`` for 2D and ``(z, y, x, channels)`` for 3D.
 
-    ov : 2D/3D float tuple, optional
+    ov : 2D/3D float tuple
         Amount of minimum overlap on x and y dimensions. The values must be on range ``[0, 1)``,
         that is, ``0%`` or ``99%`` of overlap. Shape is ``(y, x)`` for 2D or ``(z, y, x)`` for 3D.
 
-    padding : 2D/3D int tuple, optional
+    padding : 2D/3D int tuple
         Size of padding to be added on each axis. Shape is ``(y, x)`` for 2D or ``(z, y, x)`` for 3D.
 
     norm_module : dict
@@ -2009,7 +2043,10 @@ def samples_from_image_list_multiple_raw_one_gt(
         original_data_shape = gt_sample.shape
         crop_coords = None
 
-        if crop and gt_sample.shape != crop_shape[:-1] + (gt_sample.shape[-1],):
+        if crop and (
+            gt_sample.shape <= crop_shape[:-1] + (gt_sample.shape[-1],)
+            or gt_sample.shape >= crop_shape[:-1] + (gt_sample.shape[-1],)
+        ):
             crop_coords = crop_funct(
                 np.expand_dims(gt_sample, axis=0) if not is_3d else gt_sample,
                 crop_shape[:-1] + (gt_sample.shape[-1],),
@@ -2258,11 +2295,16 @@ def filter_samples_by_properties(
     filter_conds: List[List[str]],
     filter_vals: List[List[int | float]],
     filter_signs: List[List[str]],
+    crop_shape: Tuple[int, ...],
+    reflect_to_complete_shape: bool = False,
     filter_by_entire_image: bool = True,
     norm_before_filter: bool = False,
     norm_module: Optional[Normalization] = None,
     y_dataset: Optional[BiaPyDataset] = None,
     zarr_data_information: Optional[Dict] = None,
+    save_filtered_images: bool = True,
+    save_filtered_images_dir: Optional[str] = None,
+    save_filtered_images_num: int = 3,
 ):
     """
     Filter samples from ``x_dataset`` using defined conditions. The filtering will be done using the images each sample is extracted
@@ -2300,6 +2342,13 @@ def filter_samples_by_properties(
         Signs to do the comparison. Options: [``'gt'``, ``'ge'``, ``'lt'``, ``'le'``] that corresponds to "greather than", e.g. ">",
         "greather equal", e.g. ">=", "less than", e.g. "<", and "less equal" e.g. "<=" comparisons.
 
+    crop_shape : 3D/4D int tuple
+        Shape of the crops. E.g. ``(y, x, channels)`` for 2D and ``(z, y, x, channels)`` for 3D.
+
+    reflect_to_complete_shape : bool, optional
+        Wheter to increase the shape of the dimension that have less size than selected patch size padding it with
+        'reflect'.
+
     filter_by_entire_image : bool, optional
         This decides how the filtering is done:
             * ``True``: apply filter image by image.
@@ -2316,6 +2365,15 @@ def filter_samples_by_properties(
             * ``"input_img_axes"``: order of the axes of the images.
             * ``"input_mask_axes"``: order of the axes of the masks.
 
+    save_filtered_images : bool, optional
+        Whether to save or not filtered images.
+
+    save_filtered_images_dir : str, optional
+        Directory to save filtered images.
+
+    save_filtered_images_num : int, optional
+        Number of filtered images to save. Only work when ``save_filtered_images`` is ``True``.
+
     Returns
     -------
     new_x_filenames : list of dict
@@ -2326,6 +2384,12 @@ def filter_samples_by_properties(
     """
     if norm_before_filter and norm_module is None:
         raise ValueError("'norm_module' can not be None when 'norm_before_filter' is active")
+
+    if save_filtered_images:
+        if not save_filtered_images_dir:
+            raise ValueError("'save_filtered_images_dir' can not be None when 'save_filtered_images' is enabled")
+        save_filtered_images_count = 0
+        save_not_filtered_images_count = 0
 
     # Filter samples by properties
     print("Applying filtering to data samples . . .")
@@ -2385,17 +2449,44 @@ def filter_samples_by_properties(
 
             if not satisfy_conds:
                 samples_to_maintain.append(n)
+                if (
+                    save_filtered_images
+                    and save_filtered_images_dir
+                    and save_not_filtered_images_count < save_filtered_images_num
+                ):
+                    save_tif(
+                        np.expand_dims(img, 0),
+                        os.path.join(save_filtered_images_dir, "not-filtered"),
+                        [os.path.basename(image_path)],
+                        verbose=False,
+                    )
+                    save_not_filtered_images_count += 1
             else:
                 print(f"Discarding file {image_path}")
+                if (
+                    save_filtered_images
+                    and save_filtered_images_dir
+                    and save_filtered_images_count < save_filtered_images_num
+                ):
+                    save_tif(
+                        np.expand_dims(img, 0),
+                        os.path.join(save_filtered_images_dir, "filtered"),
+                        [os.path.basename(image_path)],
+                        verbose=False,
+                    )
+                    save_filtered_images_count += 1
     else:
         img_path, mask_path = "", ""
         clean_by = "sample"
         samples_to_maintain = []
         file, mfile, mask = None, None, None
-        for n, sample in tqdm(enumerate(x_dataset.sample_list), total=len(x_dataset.sample_list), disable=not is_main_process()):
+        for n, sample in tqdm(
+            enumerate(x_dataset.sample_list), total=len(x_dataset.sample_list), disable=not is_main_process()
+        ):
             # Load X data
             filepath = x_dataset.dataset_info[sample.fid].path
             if img_path != filepath:
+                old_img_path = img_path
                 img_path = filepath
                 if file and isinstance(file, h5py.File):
                     file.close()
@@ -2405,6 +2496,9 @@ def filter_samples_by_properties(
                     else None
                 )
                 xdata, file = load_img_data(img_path, is_3d=is_3d, data_within_zarr_path=data_within_zarr_path)
+
+                if reflect_to_complete_shape and crop_shape:
+                    xdata = pad_and_reflect(xdata, crop_shape, verbose=False)
 
                 # Load Y data
                 if use_Y_data:
@@ -2419,15 +2513,36 @@ def filter_samples_by_properties(
                             zarr_data_information["gt_path"] if zarr_data_information["use_gt_path"] else None
                         )
                     ydata, mfile = load_img_data(mask_path, is_3d=is_3d, data_within_zarr_path=data_within_zarr_path)
+
+                    if reflect_to_complete_shape and crop_shape:
+                        ydata = pad_and_reflect(ydata, crop_shape, verbose=False)
+
                 else:
                     ydata, mfile = None, None
 
                 if norm_before_filter:
                     assert norm_module is not None
+                    norm_module.set_stats_from_DatasetFile(x_dataset.dataset_info[sample.fid])
                     xdata, _ = norm_module.apply_image_norm(xdata)
                     if use_Y_data:
-                        assert ydata is not None
+                        assert ydata is not None and y_dataset is not None
+                        norm_module.set_stats_from_DatasetFile(y_dataset.dataset_info[sample.fid])
                         ydata, _ = norm_module.apply_mask_norm(ydata)
+
+                if save_filtered_images and save_filtered_images_dir:
+                    if "xdata_fil_example" in locals():
+                        save_tif(
+                            np.expand_dims(xdata_fil_example, 0),
+                            save_filtered_images_dir,
+                            [os.path.basename(old_img_path)],
+                            verbose=True,
+                        )
+                        save_filtered_images_count += 1
+                    if save_filtered_images_count == save_filtered_images_num:
+                        del xdata_fil_example
+                        save_filtered_images_count += 1
+                    elif save_filtered_images_count < save_filtered_images_num:
+                        xdata_fil_example = np.zeros(xdata.shape, dtype=xdata.dtype)  # type: ignore
 
             # Capture patches within image/mask
             coords = sample.coords
@@ -2497,9 +2612,11 @@ def filter_samples_by_properties(
 
             assert isinstance(img, np.ndarray)
             satisfy_conds = sample_satisfy_conds(img, filter_conds, filter_vals, filter_signs, mask=mask)
-
+            
             if not satisfy_conds:
                 samples_to_maintain.append(n)
+                if save_filtered_images and "xdata_fil_example" in locals():
+                    xdata_fil_example[xdata_ordered_slices] = img
 
     x_dataset.clean_dataset(samples_to_maintain, clean_by=clean_by)
     if y_dataset:
@@ -2577,6 +2694,7 @@ def sample_satisfy_conds(
                     npixels = npixels[1:]
                 value_to_compare = sum(npixels) / total_pixels
             elif c == "diff":
+                assert mask is not None
                 value_to_compare = np.sum(abs(img - mask))
             elif c == "min":
                 value_to_compare = img.min()

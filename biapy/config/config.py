@@ -221,6 +221,10 @@ class Config:
         #   * True: apply filter image by image. 
         #   * False: apply filtering sample by sample. Each sample represents a patch within an image.
         _C.DATA.FILTER_BY_IMAGE = True
+        # Whether to save or not filtered images
+        _C.DATA.SAVE_FILTERED_IMAGES = False
+        # Number of filtered images to save. Only work when 'DATA.SAVE_FILTERED_IMAGES' is True
+        _C.DATA.SAVE_FILTERED_IMAGES_NUM = 3 
 
         _C.DATA.NORMALIZATION = CN()
         # Whether to apply or not a percentile clipping before normalizing the data
@@ -1435,6 +1439,8 @@ class Config:
         _C.PATHS.UPR_Y_FILE = os.path.join(_C.PATHS.CHECKPOINT, "upper_bound_Y_perc.npy")
         # Path where the images used in MAE will be saved suring inference
         _C.PATHS.MAE_OUT_DIR = os.path.join(_C.PATHS.RESULT_DIR.PATH, "MAE_checks")
+        # Directory to save filtered images.
+        _C.PATHS.FIL_SAMPLES_DIR = os.path.join(_C.PATHS.RESULT_DIR.PATH, "filtering_information")
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Logging

@@ -462,7 +462,10 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.cfg.PROBLEM.TYPE == "IMAGE_TO_IMAGE"
                 and self.cfg.PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER
             ),
-        )  # type: ignore
+            save_filtered_images=self.cfg.DATA.SAVE_FILTERED_IMAGES,
+            save_filtered_images_dir=self.cfg.PATHS.FIL_SAMPLES_DIR ,
+            save_filtered_images_num=self.cfg.DATA.SAVE_FILTERED_IMAGES_NUM,
+        )
 
         # Ensure all the processes have read the data
         if is_dist_avail_and_initialized():
