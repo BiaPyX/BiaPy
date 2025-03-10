@@ -81,19 +81,19 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 [
                     True
                     for cond in getattr(cfg.DATA, phase).FILTER_SAMPLES.PROPS
-                    if cond in ["foreground", "target_mean", "target_min", "target_max", "diff"]
+                    if cond in ["foreground", "target_mean", "target_min", "target_max", "diff", "diff_by_min_max_ratio", "diff_by_target_min_max_ratio"]
                 ]
             )
             if target_required and cfg.PROBLEM.TYPE not in ["DENOISING", "SELF_SUPERVISED"]:
                 raise ValueError(
-                    "Target data is required to apply some of the filters you selected, i.e. the property is one of ['foreground', 'target_mean', 'target_min', 'target_max', 'diff']. Provided is {} . This is not possible in 'DENOISING', 'SELF_SUPERVISED' workflows as no target data is required".format(
+                    "Target data is required to apply some of the filters you selected, i.e. the property is one of ['foreground', 'target_mean', 'target_min', 'target_max', 'diff', 'diff_by_min_max_ratio', 'diff_by_target_min_max_ratio']. Provided is {} . This is not possible in 'DENOISING', 'SELF_SUPERVISED' workflows as no target data is required".format(
                         getattr(cfg.DATA, phase).FILTER_SAMPLES.PROPS
                     )
                 )
 
             if target_required and phase == "TEST" and not cfg.DATA.TEST.LOAD_GT and not cfg.DATA.TEST.USE_VAL_AS_TEST:
                 raise ValueError(
-                    "['foreground', 'target_mean', 'target_min', 'target_max', 'diff'] properties can not be used for filtering when test ground truth is not provided"
+                    "['foreground', 'target_mean', 'target_min', 'target_max', 'diff', 'diff_by_min_max_ratio', 'diff_by_target_min_max_ratio'] properties can not be used for filtering when test ground truth is not provided"
                 )
 
             if len(getattr(cfg.DATA, phase).FILTER_SAMPLES.PROPS) == 0:
@@ -159,18 +159,20 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                         "target_min",
                         "target_max",
                         "diff",
+                        'diff_by_min_max_ratio', 
+                        'diff_by_target_min_max_ratio',
                     ]:
                         raise ValueError(
-                            "'DATA.TRAIN.FILTER_SAMPLES.PROPS' can only be one among these: ['foreground', 'mean', 'min', 'max', 'target_mean', 'target_min', 'target_max', 'diff']"
+                            "'DATA.TRAIN.FILTER_SAMPLES.PROPS' can only be one among these: ['foreground', 'mean', 'min', 'max', 'target_mean', 'target_min', 'target_max', 'diff', 'diff_by_min_max_ratio', 'diff_by_target_min_max_ratio']"
                         )
-                    if getattr(cfg.DATA, phase).FILTER_SAMPLES.PROPS[i][j] == "diff":
+                    if getattr(cfg.DATA, phase).FILTER_SAMPLES.PROPS[i][j] in ["diff", 'diff_by_min_max_ratio', 'diff_by_target_min_max_ratio']:
                         if cfg.PROBLEM.TYPE == "SUPER_RESOLUTION":
                             raise ValueError(
-                                "'DATA.TRAIN.FILTER_SAMPLES.PROPS' can not have a 'diff' condition in super-resolution workflow"
+                                "'DATA.TRAIN.FILTER_SAMPLES.PROPS' can not have a condition between ['diff', 'diff_by_min_max_ratio', 'diff_by_target_min_max_ratio'] in super-resolution workflow"
                             )
                         if phase == "TEST" and not cfg.DATA.TEST.LOAD_GT:
                             raise ValueError(
-                                "'DATA.TRAIN.FILTER_SAMPLES.PROPS' can not have a 'diff' condition for test data if 'DATA.TEST.LOAD_GT' is False"
+                                "'DATA.TRAIN.FILTER_SAMPLES.PROPS' can not have a condition between ['diff', 'diff_by_min_max_ratio', 'diff_by_target_min_max_ratio'] for test data if 'DATA.TEST.LOAD_GT' is False"
                             )
                     if getattr(cfg.DATA, phase).FILTER_SAMPLES.SIGNS[i][j] not in [
                         "gt",

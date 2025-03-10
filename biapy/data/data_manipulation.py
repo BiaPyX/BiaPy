@@ -151,6 +151,14 @@ def load_and_prepare_train_data(
         * ``'mean'`` is defined as the mean value.
         * ``'min'`` is defined as the min value.
         * ``'max'`` is defined as the max value.
+        * ``'diff'`` is defined as the difference between ground truth and raw images. Require ``y_dataset`` to be provided.
+        * ``'diff_by_min_max_ratio'`` is defined as the difference between ground truth and raw images multiplied by the ratio
+          between raw image max and min.
+        * ``'target_mean'`` is defined as the mean intensity value of the raw image targets. Require ``y_dataset`` to be provided.
+        * ``'target_min'`` is defined as the min intensity value of the raw image targets. Require ``y_dataset`` to be provided.
+        * ``'target_max'`` is defined as the max intensity value of the raw image targets. Require ``y_dataset`` to be provided.
+        * ``'diff_by_target_min_max_ratio'`` is defined as the difference between ground truth and raw images multiplied by the
+          ratio between ground truth image max and min.
 
     train_filter_vals : list of int/float
         Represent the values of the properties listed in ``train_filter_conds`` that the images need to satisfy to not be dropped.
@@ -176,6 +184,14 @@ def load_and_prepare_train_data(
         * ``'mean'`` is defined as the mean value.
         * ``'min'`` is defined as the min value.
         * ``'max'`` is defined as the max value.
+        * ``'diff'`` is defined as the difference between ground truth and raw images. Require ``y_dataset`` to be provided.
+        * ``'diff_by_min_max_ratio'`` is defined as the difference between ground truth and raw images multiplied by the ratio
+          between raw image max and min.
+        * ``'target_mean'`` is defined as the mean intensity value of the raw image targets. Require ``y_dataset`` to be provided.
+        * ``'target_min'`` is defined as the min intensity value of the raw image targets. Require ``y_dataset`` to be provided.
+        * ``'target_max'`` is defined as the max intensity value of the raw image targets. Require ``y_dataset`` to be provided.
+        * ``'diff_by_target_min_max_ratio'`` is defined as the difference between ground truth and raw images multiplied by the
+          ratio between ground truth image max and min.
 
     val_filter_vals : list of int/float
         Represent the values of the properties listed in ``val_filter_conds`` that the images need to satisfy to not be dropped.
@@ -1376,10 +1392,18 @@ def load_and_prepare_train_data_cls(
         in this first case (from ['A'] list), or satisfy 'B' and 'C' (from ['B','C'] list) it will be removed. In each sublist all the
         conditions must be satisfied. Available properties are: [``'foreground'``, ``'mean'``, ``'min'``, ``'max'``].
         Each property descrition:
-          * ``'foreground'`` is defined as the mask foreground percentage.
-          * ``'mean'`` is defined as the mean value.
-          * ``'min'`` is defined as the min value.
-          * ``'max'`` is defined as the max value.
+        * ``'foreground'`` is defined as the mask foreground percentage.
+        * ``'mean'`` is defined as the mean value.
+        * ``'min'`` is defined as the min value.
+        * ``'max'`` is defined as the max value.
+        * ``'diff'`` is defined as the difference between ground truth and raw images. Require ``y_dataset`` to be provided.
+        * ``'diff_by_min_max_ratio'`` is defined as the difference between ground truth and raw images multiplied by the ratio
+          between raw image max and min.
+        * ``'target_mean'`` is defined as the mean intensity value of the raw image targets. Require ``y_dataset`` to be provided.
+        * ``'target_min'`` is defined as the min intensity value of the raw image targets. Require ``y_dataset`` to be provided.
+        * ``'target_max'`` is defined as the max intensity value of the raw image targets. Require ``y_dataset`` to be provided.
+        * ``'diff_by_target_min_max_ratio'`` is defined as the difference between ground truth and raw images multiplied by the
+          ratio between ground truth image max and min.
 
     train_filter_vals : list of int/float
         Represent the values of the properties listed in ``train_filter_conds`` that the images need to satisfy to not be dropped.
@@ -1401,10 +1425,18 @@ def load_and_prepare_train_data_cls(
         in this first case (from ['A'] list), or satisfy 'B' and 'C' (from ['B','C'] list) it will be removed. In each sublist all
         the conditions must be satisfied. Available properties are: [``'foreground'``, ``'mean'``, ``'min'``, ``'max'``].
         Each property descrition:
-          * ``'foreground'`` is defined as the mask foreground percentage.
-          * ``'mean'`` is defined as the mean value.
-          * ``'min'`` is defined as the min value.
-          * ``'max'`` is defined as the max value.
+        * ``'foreground'`` is defined as the mask foreground percentage.
+        * ``'mean'`` is defined as the mean value.
+        * ``'min'`` is defined as the min value.
+        * ``'max'`` is defined as the max value.
+        * ``'diff'`` is defined as the difference between ground truth and raw images. Require ``y_dataset`` to be provided.
+        * ``'diff_by_min_max_ratio'`` is defined as the difference between ground truth and raw images multiplied by the ratio
+          between raw image max and min.
+        * ``'target_mean'`` is defined as the mean intensity value of the raw image targets. Require ``y_dataset`` to be provided.
+        * ``'target_min'`` is defined as the min intensity value of the raw image targets. Require ``y_dataset`` to be provided.
+        * ``'target_max'`` is defined as the max intensity value of the raw image targets. Require ``y_dataset`` to be provided.
+        * ``'diff_by_target_min_max_ratio'`` is defined as the difference between ground truth and raw images multiplied by the
+          ratio between ground truth image max and min.
 
     val_filter_vals : list of int/float
         Represent the values of the properties listed in ``val_filter_conds`` that the images need to satisfy to not be dropped.
@@ -2326,14 +2358,18 @@ def filter_samples_by_properties(
         (from ['A'] list), or satisfy 'B' and 'C' (from ['B','C'] list) it will be removed. In each sublist all the conditions must be
         satisfied. Available properties are: [``'foreground'``, ``'mean'``, ``'min'``, ``'max'``, ``diff``, ``target_mean``,
         ``target_min``, ``target_max``]. Each property descrition:
-          * ``'foreground'`` is defined as the mask foreground percentage.
-          * ``'mean'`` is defined as the mean value.
-          * ``'min'`` is defined as the min value.
-          * ``'max'`` is defined as the max value.
-          * ``'diff'`` is defined as the differences between ground truth and raw images. Require ``y_dataset`` to be provided.
-          * ``'target_mean'`` is defined as the mean intensity value of the raw image targets. Require ``y_dataset`` to be provided.
-          * ``'target_min'`` is defined as the min intensity value of the raw image targets. Require ``y_dataset`` to be provided.
-          * ``'target_max'`` is defined as the max intensity value of the raw image targets. Require ``y_dataset`` to be provided.
+        * ``'foreground'`` is defined as the mask foreground percentage.
+        * ``'mean'`` is defined as the mean value.
+        * ``'min'`` is defined as the min value.
+        * ``'max'`` is defined as the max value.
+        * ``'diff'`` is defined as the difference between ground truth and raw images. Require ``y_dataset`` to be provided.
+        * ``'diff_by_min_max_ratio'`` is defined as the difference between ground truth and raw images multiplied by the ratio
+          between raw image max and min.
+        * ``'target_mean'`` is defined as the mean intensity value of the raw image targets. Require ``y_dataset`` to be provided.
+        * ``'target_min'`` is defined as the min intensity value of the raw image targets. Require ``y_dataset`` to be provided.
+        * ``'target_max'`` is defined as the max intensity value of the raw image targets. Require ``y_dataset`` to be provided.
+        * ``'diff_by_target_min_max_ratio'`` is defined as the difference between ground truth and raw images multiplied by the
+          ratio between ground truth image max and min.
 
     filter_vals : list of int/float
         Represent the values of the properties listed in ``filter_conds`` that the images need to satisfy to not be dropped.
@@ -2399,6 +2435,8 @@ def filter_samples_by_properties(
         if (
             "foreground" in cond
             or "diff" in cond
+            or "diff_by_min_max_ratio" in cond
+            or "diff_by_target_min_max_ratio" in cond
             or "target_mean" in cond
             or "target_min" in cond
             or "target_max" in cond
@@ -2445,7 +2483,15 @@ def filter_samples_by_properties(
                     mask, _ = norm_module.apply_mask_norm(mask)
                     assert isinstance(mask, np.ndarray)
             assert isinstance(img, np.ndarray)
-            satisfy_conds = sample_satisfy_conds(img, filter_conds, filter_vals, filter_signs, mask=mask)
+            satisfy_conds = sample_satisfy_conds(
+                img,
+                filter_conds,
+                filter_vals,
+                filter_signs,
+                mask=mask,
+                img_ratio=float(img.max())-float(img.min()),
+                mask_ratio=(float(mask.max()) - float(mask.min())) if mask is not None else 0,
+            )
 
             if not satisfy_conds:
                 samples_to_maintain.append(n)
@@ -2611,12 +2657,34 @@ def filter_samples_by_properties(
                 assert isinstance(mask, np.ndarray)
 
             assert isinstance(img, np.ndarray)
-            satisfy_conds = sample_satisfy_conds(img, filter_conds, filter_vals, filter_signs, mask=mask)
-            
+            satisfy_conds = sample_satisfy_conds(
+                img,
+                filter_conds,
+                filter_vals,
+                filter_signs,
+                mask=mask,
+                img_ratio=(float(xdata.max())-float(xdata.min())),
+                mask_ratio=(float(ydata.max())-float(ydata.min())) if ydata is not None else 0,
+            )
+
             if not satisfy_conds:
                 samples_to_maintain.append(n)
                 if save_filtered_images and "xdata_fil_example" in locals():
                     xdata_fil_example[xdata_ordered_slices] = img
+
+    if (
+        save_filtered_images
+        and save_filtered_images_dir
+        and "xdata_fil_example" in locals()
+        and save_filtered_images_count <= save_filtered_images_num
+    ):
+        save_tif(
+            np.expand_dims(xdata_fil_example, 0),
+            save_filtered_images_dir,
+            [os.path.basename(img_path)],
+            verbose=True,
+        )
+    del xdata_fil_example
 
     x_dataset.clean_dataset(samples_to_maintain, clean_by=clean_by)
     if y_dataset:
@@ -2641,6 +2709,8 @@ def sample_satisfy_conds(
     filter_vals: List[List[float | int]],
     filter_signs: List[List[str]],
     mask: Optional[NDArray] = None,
+    img_ratio: float = 0,
+    mask_ratio: float = 0,
 ) -> bool:
     """
     Whether ``img`` satisfy at least one of the conditions composed by ``filter_conds``, ``filter_vals``, ``filter_sings``.
@@ -2656,10 +2726,18 @@ def sample_satisfy_conds(
         be like this: ``[['A'], ['B','C']]``. Then, if the sample satisfies the first list of conditions, only 'A' in this first case
         (from ['A'] list), or satisfy 'B' and 'C' (from ['B','C'] list) it will be removed. In each sublist all the conditions must
         be satisfied. Available properties are: [``'foreground'``, ``'mean'``, ``'min'``, ``'max'``]. Each property descrition:
-          * ``'foreground'`` is defined as the mask foreground percentage.
-          * ``'mean'`` is defined as the mean value.
-          * ``'min'`` is defined as the min value.
-          * ``'max'`` is defined as the max value.
+        * ``'foreground'`` is defined as the mask foreground percentage.
+        * ``'mean'`` is defined as the mean value of the input.
+        * ``'min'`` is defined as the min value of the input.
+        * ``'max'`` is defined as the max value of the input.
+        * ``'diff'`` is defined as the difference between ground truth and raw images. Require ``y_dataset`` to be provided.
+        * ``'diff_by_min_max_ratio'`` is defined as the difference between ground truth and raw images multiplied by the ratio
+          between raw image max and min.
+        * ``'target_mean'`` is defined as the mean intensity value of the raw image targets. Require ``y_dataset`` to be provided.
+        * ``'target_min'`` is defined as the min intensity value of the raw image targets. Require ``y_dataset`` to be provided.
+        * ``'target_max'`` is defined as the max intensity value of the raw image targets. Require ``y_dataset`` to be provided.
+        * ``'diff_by_target_min_max_ratio'`` is defined as the difference between ground truth and raw images multiplied by the
+          ratio between ground truth image max and min.
 
     filter_vals : list of int/float
         Represent the values of the properties listed in ``filter_conds`` that the images need to satisfy to not be dropped.
@@ -2671,6 +2749,12 @@ def sample_satisfy_conds(
     mask : 4D/5D Numpy array, optional
         Mask to check if satisfy "foreground" condition in ``filter_conds``. E.g. ``(z, y, x, num_classes)`` for 3D or
         ``(y, x, num_classes)`` for 2D.
+
+    img_ratio : float, optional
+        Ratio of the input image. Expected to be ``(img.max - img.min)`` of the entire image. 
+
+    mask_ratio : float, optional
+        Minimum value of the entire image. Expected to be ``(mask.max - mask.min)`` of the entire image.
 
     Returns
     -------
@@ -2696,6 +2780,12 @@ def sample_satisfy_conds(
             elif c == "diff":
                 assert mask is not None
                 value_to_compare = np.sum(abs(img - mask))
+            elif c == "diff_by_min_max_ratio":
+                assert mask is not None
+                value_to_compare = np.sum(abs(img - mask)) * img_ratio
+            elif c == "diff_by_target_min_max_ratio":
+                assert mask is not None
+                value_to_compare = np.sum(abs(img - mask)) * mask_ratio
             elif c == "min":
                 value_to_compare = img.min()
             elif c == "max":

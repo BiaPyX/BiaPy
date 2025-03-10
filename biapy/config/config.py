@@ -317,10 +317,12 @@ class Config:
         #   * 'mean' is defined as the mean intensity value of the raw image inputs.
         #   * 'min' is defined as the min intensity value of the raw image inputs.
         #   * 'max' is defined as the max intensity value of the raw image inputs.
-        #   * 'diff' is defined as the differences between ground truth and raw images. Available for all workflows but SELF_SUPERVISED and DENOISING. 
+        #   * 'diff' is defined as the difference between ground truth and raw images. Available for all workflows but SELF_SUPERVISED and DENOISING. 
+        #   * 'diff_by_min_max_ratio' is defined as the difference between ground truth and raw images multiplied by the ratio between raw image max and min. Available for all workflows but SELF_SUPERVISED and DENOISING. 
         #   * 'target_mean is defined as the mean intensity value of the raw image targets. Available for all workflows but SELF_SUPERVISED and DENOISING.
         #   * 'target_min' is defined as the min intensity value of the raw image targets. Available for all workflows but SELF_SUPERVISED and DENOISING. 
         #   * 'target_max' is defined as the max intensity value of the raw image targets. Available for all workflows but SELF_SUPERVISED and DENOISING.  
+        #   * 'diff_by_target_min_max_ratio' is defined as the difference between ground truth and raw images multiplied by the ratio between ground truth image max and min. Available for all workflows but SELF_SUPERVISED and DENOISING. 
         #
         # With VALUES and SIGNS, we define the specific values and the comparison operators of each property, respectively.
         # The available operators are: ['gt', 'ge', 'lt', 'le'], that corresponds to "greather than" (or ">"), "greather equal" (or ">="), "less than" (or "<"),
@@ -476,10 +478,18 @@ class Config:
         # 'target_mean', 'target_min', 'target_max', 'diff'].
         #
         # Each property descrition:
-        #   * 'foreground' is defined as the mask foreground percentage. This option is only valid for SEMANTIC_SEG, INSTANCE_SEG and DETECTION.
-        #   * 'mean' is defined as the mean value.
-        #   * 'min' is defined as the min value.
-        #   * 'max' is defined as the max value.
+        #   * 'foreground' is defined as the percentage of pixels/voxels corresponding to the foreground mask. This option is only valid for
+        #     SEMANTIC_SEG, INSTANCE_SEG and DETECTION.
+        #   * 'mean' is defined as the mean intensity value of the raw image inputs.
+        #   * 'min' is defined as the min intensity value of the raw image inputs.
+        #   * 'max' is defined as the max intensity value of the raw image inputs.
+        #   * 'diff' is defined as the difference between ground truth and raw images. Available for all workflows but SELF_SUPERVISED and DENOISING. 
+        #   * 'diff_by_min_max_ratio' is defined as the difference between ground truth and raw images multiplied by the ratio between raw image max and min. Available for all workflows but SELF_SUPERVISED and DENOISING. 
+        #   * 'target_mean is defined as the mean intensity value of the raw image targets. Available for all workflows but SELF_SUPERVISED and DENOISING.
+        #   * 'target_min' is defined as the min intensity value of the raw image targets. Available for all workflows but SELF_SUPERVISED and DENOISING. 
+        #   * 'target_max' is defined as the max intensity value of the raw image targets. Available for all workflows but SELF_SUPERVISED and DENOISING.  
+        #   * 'diff_by_target_min_max_ratio' is defined as the difference between ground truth and raw images multiplied by the ratio between ground truth image max and min. Available for all workflows but SELF_SUPERVISED and DENOISING. 
+        #
         #
         # A full example of this filtering:
         # If you want to remove those samples that have less than 0.00001 and a mean average more than 100 (you need to know image data type) you should
@@ -580,10 +590,17 @@ class Config:
         # 'target_mean', 'target_min', 'target_max', 'diff'].
         #
         # Each property descrition:
-        #   * 'foreground' is defined as the mask foreground percentage. This option is only valid for SEMANTIC_SEG, INSTANCE_SEG and DETECTION.
-        #   * 'mean' is defined as the mean value.
-        #   * 'min' is defined as the min value.
-        #   * 'max' is defined as the max value.
+        #   * 'foreground' is defined as the percentage of pixels/voxels corresponding to the foreground mask. This option is only valid for
+        #     SEMANTIC_SEG, INSTANCE_SEG and DETECTION.
+        #   * 'mean' is defined as the mean intensity value of the raw image inputs.
+        #   * 'min' is defined as the min intensity value of the raw image inputs.
+        #   * 'max' is defined as the max intensity value of the raw image inputs.
+        #   * 'diff' is defined as the difference between ground truth and raw images. Available for all workflows but SELF_SUPERVISED and DENOISING. 
+        #   * 'diff_by_min_max_ratio' is defined as the difference between ground truth and raw images multiplied by the ratio between raw image max and min. Available for all workflows but SELF_SUPERVISED and DENOISING. 
+        #   * 'target_mean is defined as the mean intensity value of the raw image targets. Available for all workflows but SELF_SUPERVISED and DENOISING.
+        #   * 'target_min' is defined as the min intensity value of the raw image targets. Available for all workflows but SELF_SUPERVISED and DENOISING. 
+        #   * 'target_max' is defined as the max intensity value of the raw image targets. Available for all workflows but SELF_SUPERVISED and DENOISING.  
+        #   * 'diff_by_target_min_max_ratio' is defined as the difference between ground truth and raw images multiplied by the ratio between ground truth image max and min. Available for all workflows but SELF_SUPERVISED and DENOISING. 
         #
         # A full example of this filtering:
         # If you want to remove those samples that have less than 0.00001 and a mean average more than 100 (you need to know image data type) you should
