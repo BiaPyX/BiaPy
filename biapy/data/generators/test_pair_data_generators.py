@@ -285,7 +285,7 @@ class test_pair_data_generator(Dataset):
             assert isinstance(img, np.ndarray)
             if self.provide_Y:
                 mask = np.array(mask)
-                self.norm_module.set_stats_from_DatasetFile(self.X.dataset_info[sample.fid])
+                self.norm_module.set_stats_from_mask(mask)
                 mask, _ = self.norm_module.apply_mask_norm(mask)
                 assert isinstance(mask, np.ndarray)
 

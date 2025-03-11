@@ -229,7 +229,7 @@ class test_single_data_generator(Dataset):
         img_class = self.X.dataset_info[sample.fid].get_class_num()
 
         # Normalization
-        self.norm_module.set_stats_from_DatasetFile(self.X.dataset_info[sample.fid])
+        self.norm_module.set_stats_from_image(np.array(img))
         img, norm_extra_info = self.norm_module.apply_image_norm(np.array(img))
         assert isinstance(img, np.ndarray)
 
