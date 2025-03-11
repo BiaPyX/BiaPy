@@ -166,19 +166,19 @@ all_test_info["Test12"] = {
     "description": "2D super-resolution. SR 2D data. Cross-val. Basic DA. DFCAN",
     "yaml": "test_12.yaml",
     "internal_checks": [
-        {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 17.0},
-        {"type": "regular", "pattern": "Test PSNR (merge patches)", "gt": True, "value": 19.0},
+        {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 22.0},
+        {"type": "regular", "pattern": "Test PSNR (merge patches)", "gt": True, "value": 23.0},
     ]
 }
 
 all_test_info["Test13"] = {
     "enable": True,
     "jobname": "test13",
-    "description": "3D super-resolution. SR 3D data. Cross-val. Basic DA. resunet++. one-cycle",
+    "description": "3D super-resolution. SR 3D data. Cross-val. Basic DA. resunet. one-cycle",
     "yaml": "test_13.yaml",
     "internal_checks": [
         {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 20.0},
-        {"type": "regular", "pattern": "Test PSNR (merge patches)", "gt": True, "value": 19.0},
+        {"type": "regular", "pattern": "Test PSNR (merge patches)", "gt": True, "value": 18.0},
     ]
 }
 
@@ -1280,7 +1280,8 @@ if all_test_info["Test2"]["enable"]:
     biapy_config['MODEL']['ARCHITECTURE'] = 'attention_unet'
 
     biapy_config['TEST']['ENABLE'] = True
-
+    biapy_config['TEST']['REDUCE_MEMORY'] = True
+    
     # Save file
     test_file = os.path.join(semantic_folder, all_test_info["Test2"]["yaml"])
     with open(test_file, 'w') as outfile:
@@ -2200,11 +2201,12 @@ if all_test_info["Test13"]["enable"]:
     biapy_config['TRAIN']['ENABLE'] = True
     biapy_config['TRAIN']['EPOCHS'] = 20
     biapy_config['TRAIN']['PATIENCE'] = -1
-    biapy_config['TRAIN']['PATIENCE'] = -1
     biapy_config['TRAIN']['LR_SCHEDULER'] = {}
+    biapy_config['TRAIN']['LR_SCHEDULER']['NAME'] = 'onecycle'
     biapy_config['TRAIN']['LR'] = 0.001
+    biapy_config['TRAIN']['BATCH_SIZE'] = 16
 
-    biapy_config['MODEL']['ARCHITECTURE'] = 'resunet++'
+    biapy_config['MODEL']['ARCHITECTURE'] = 'resunet'
     biapy_config['MODEL']['Z_DOWN'] = [1,1]
     biapy_config['MODEL']['LOAD_CHECKPOINT'] = False
     biapy_config['MODEL']['UNET_SR_UPSAMPLE_POSITION'] = "post"

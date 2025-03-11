@@ -1037,7 +1037,7 @@ class BiaPy:
             authors=authors,
             cite=citations,
             license=license,
-            documentation=Path(doc),
+            documentation=doc, # type: ignore
             git_repo=HttpUrl("https://github.com/BiaPyX/BiaPy"),
             inputs=inputs,
             outputs=outputs,
@@ -1060,7 +1060,7 @@ class BiaPy:
 
         summary = test_model(model_descr, absolute_tolerance=1e-3, relative_tolerance=1e-3)
         summary.display()
-
+        
         # Saving the model into BMZ format
         model_path = os.path.join(building_dir, model_name + ".zip")
         print(
