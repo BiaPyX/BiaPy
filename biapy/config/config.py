@@ -220,8 +220,10 @@ class Config:
         # If filtering is done, with any of DATA.*.FILTER_SAMPLES.* variables, this will decide how this filtering will be done:
         #   * True: apply filter image by image. 
         #   * False: apply filtering sample by sample. Each sample represents a patch within an image.
-        _C.DATA.FILTER_BY_IMAGE = True
-        # Whether to save or not filtered images
+        _C.DATA.FILTER_BY_IMAGE = False
+        # Determines whether to save filtered images. If 'DATA.FILTER_BY_IMAGE' is enabled, two subfolders will be created: one for 
+        # filtered images and another for non-filtered images. Otherwise, no subfolders will be created, and the images will 
+        # display filtered patches as black (all zero values) while retaining original patch values in non-filtered areas. 
         _C.DATA.SAVE_FILTERED_IMAGES = False
         # Number of filtered images to save. Only work when 'DATA.SAVE_FILTERED_IMAGES' is True
         _C.DATA.SAVE_FILTERED_IMAGES_NUM = 3 
