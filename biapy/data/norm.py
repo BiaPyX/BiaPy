@@ -75,7 +75,7 @@ class Normalization:
         std: float = -1,
         channels_to_analize: Optional[int] = None,
         channel_info: Optional[Dict] = None,
-        train_normalization: bool=True,
+        train_normalization: bool = True,
         eps: float = 1e-6,
     ):
         assert type in ["div", "scale_range", "zero_mean_unit_variance"]
@@ -99,9 +99,9 @@ class Normalization:
             self.lower_bound_val = lower_bound_val if lower_bound_val != -1 else None
             self.upper_bound_val = upper_bound_val if upper_bound_val != -1 else None
             if self.lower_bound_val:
-                print("Percentile clipping [{},{}]".format(self.lower_bound_val,self.lower_bound_val))
+                print("Percentile clipping [{},{}]".format(self.lower_bound_val, self.lower_bound_val))
             else:
-                print("Percentile clipping [{},{}]".format(self.per_lower_bound,self.per_upper_bound))
+                print("Percentile clipping [{},{}]".format(self.per_lower_bound, self.per_upper_bound))
 
         if type == "scale_range":
             self.scale_range_min_val = None
@@ -133,12 +133,7 @@ class Normalization:
                 self.mean = float(image.mean())
                 self.std = float(image.std())
 
-    def set_stats_from_mask(
-        self, 
-        mask: NDArray | torch.Tensor, 
-        n_classes: int = 1, 
-        instance_problem: bool = False
-    ):
+    def set_stats_from_mask(self, mask: NDArray | torch.Tensor, n_classes: int = 1, instance_problem: bool = False):
         """
         Set normalization values from the given mask. The mask analysis is done by channel, as some of them may be normalized,
         such as distance channels, while others no e.g. foreground binary channel.
@@ -168,8 +163,9 @@ class Normalization:
                         self.channel_info[j]["div"] = True
                 else:  # In semantic seg, maybe the mask are in 255
                     if np.max(mask[..., j]) > n_classes:
-                        self.channel_info[j]["div"] = True            
-
+                        self.channel_info[j]["div"] = True
+        elif self.mask_norm == "as_image":
+            self.set_stats_from_image(mask)
 
     def set_stats_from_DatasetFile(self, dataset_file: DatasetFile):
         """
@@ -454,7 +450,7 @@ class Normalization:
                 else:
                     div_value = 255
                 data = data * (1 / div_value)
-                
+
         if div_using_max_and_scale:
             norm_steps["scale_range_min_val"] = scale_range_min_val
             norm_steps["scale_range_max_val"] = scale_range_max_val
