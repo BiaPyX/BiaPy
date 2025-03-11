@@ -6,9 +6,8 @@ from PIL import Image
 from skimage.transform import resize
 from skimage.draw import line
 from skimage.exposure import adjust_gamma
-from skimage.measure import label
 from scipy.ndimage import binary_dilation as binary_dilation_scipy
-from scipy.ndimage import rotate
+from scipy.ndimage import rotate, label
 from typing import Tuple, Any, Union, Optional, List
 from numpy.typing import NDArray
 
