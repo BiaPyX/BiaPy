@@ -1622,6 +1622,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 Image to extract the sample from. The axes must be in Torch format already, i.e.
                 ``(b,c,y,x)`` for 2D or ``(b,c,z,y,x)`` for 3D.
             """
+            img = img.astype(np.float32)
             if len(img.shape) == 2:  # Classification
                 self.bmz_config[sample_key] = img[0]
             else:

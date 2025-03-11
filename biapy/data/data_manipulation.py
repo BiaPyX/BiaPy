@@ -3417,7 +3417,9 @@ def shape_mismatch_message(X_data: BiaPyDataset, Y_data: BiaPyDataset) -> str:
 
 def save_tif(X: NDArray, data_dir: str, filenames: Optional[List[str]] = None, verbose: bool = True):
     """
-    Save images in the given directory.
+    Save images in the given directory. If the input file has a different dtype than np.uint8, np.uint16, 
+    np.float32 it is casted into np.float32 automatically. This is done because if not the axes are not 
+    correctly set when opening resulting images in Fiji/ImageJ. 
 
     Parameters
     ----------
