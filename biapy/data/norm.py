@@ -126,6 +126,9 @@ class Normalization:
                 else:
                     self.lower_bound_val = float(self.torch_percentile(image, self.per_lower_bound))
                     self.upper_bound_val = float(self.torch_percentile(image, self.per_upper_bound))
+
+                image, _, _ = self.__percentile_clip(image)
+
             if self.type == "scale_range":
                 self.scale_range_min_val = [image.min()]
                 self.scale_range_max_val = [image.max()]
