@@ -1506,7 +1506,7 @@ def update_dependencies(cfg) -> None:
     post_d_dil = "".join(str(call.PROBLEM.INSTANCE_SEG.SYNAPSES.POSTSITE_DILATION_DISTANCE_CHANNELS)[1:-1].replace(",","")).replace(" ","_")
     if call.PROBLEM.INSTANCE_SEG.TYPE == "regular":
         call.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR = (
-            call.DATA.TRAIN.GT_PATH
+            call.DATA.TRAIN.GT_PATH if not call.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA else call.DATA.TRAIN.PATH
             + "_"
             + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
         )
@@ -1514,7 +1514,7 @@ def update_dependencies(cfg) -> None:
             call.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR += "_" + call.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
     else: 
         call.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR = (
-            call.DATA.TRAIN.GT_PATH
+            call.DATA.TRAIN.GT_PATH if not call.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA else call.DATA.TRAIN.PATH
             + "_"
             + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
             + "_"
@@ -1527,7 +1527,7 @@ def update_dependencies(cfg) -> None:
     call.DATA.TRAIN.SSL_SOURCE_DIR = call.DATA.TRAIN.PATH + "_ssl_source"
     if call.PROBLEM.INSTANCE_SEG.TYPE == "regular":
         call.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR = (
-            call.DATA.VAL.GT_PATH
+            call.DATA.VAL.GT_PATH if not call.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA else call.DATA.VAL.PATH
             + "_"
             + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
         )
@@ -1535,7 +1535,7 @@ def update_dependencies(cfg) -> None:
             call.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR += "_" + call.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
     else: 
         call.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR = (
-            call.DATA.VAL.GT_PATH
+            call.DATA.VAL.GT_PATH if not call.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA else call.DATA.VAL.PATH
             + "_"
             + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
             + "_"
@@ -1549,7 +1549,7 @@ def update_dependencies(cfg) -> None:
     call.DATA.VAL.SSL_SOURCE_DIR = call.DATA.VAL.PATH + "_ssl_source"
     if call.PROBLEM.INSTANCE_SEG.TYPE == "regular":
         call.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR = (
-            call.DATA.TEST.GT_PATH
+            call.DATA.TEST.GT_PATH if not call.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA else call.DATA.TEST.PATH
             + "_"
             + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
         )
@@ -1557,7 +1557,7 @@ def update_dependencies(cfg) -> None:
             call.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR += "_" + call.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
     else: 
         call.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR = (
-            call.DATA.TEST.GT_PATH
+            call.DATA.TEST.GT_PATH if not call.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA else call.DATA.TEST.PATH
             + "_"
             + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
             + "_"

@@ -216,9 +216,8 @@ def create_instance_channels(
                     else:
                         imgfile, data = read_chunked_data(Y[i]["filepath"])
                     fname = os.path.join(
-                        getattr(cfg.DATA, tag).PATH, os.path.basename(Y[i]["filepath"])
+                        savepath, os.path.basename(Y[i]["filepath"])
                     )
-
                     os.makedirs(savepath, exist_ok=True)
                     if any(fname.endswith(x) for x in [".h5", ".hdf5", ".hdf"]):
                         fid_mask = h5py.File(fname, "w")
