@@ -323,26 +323,26 @@ def create_test_instance_channels(
     cfg : YACS CN object
         Configuration.
     """
-    if cfg.DATA.TEST.LOAD_GT:
-        Y = sorted(next(os.walk(cfg.DATA.TEST.GT_PATH))[2])
-        print("Creating Y_test channels . . .")
-        for i in tqdm(range(len(Y)), disable=not is_main_process()):
-            img = read_img_as_ndarray(
-                os.path.join(cfg.DATA.TEST.GT_PATH, Y[i]),
-                is_3d=not cfg.PROBLEM.NDIM == "2D",
-            )
-            img = labels_into_channels(
-                np.expand_dims(img, 0),
-                mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
-                save_dir=cfg.PATHS.TEST_INSTANCE_CHANNELS_CHECK,
-                fb_mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE,
-            )[0]
-            save_tif(
-                np.expand_dims(img, 0),
-                data_dir=cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR,
-                filenames=[Y[i]],
-                verbose=False,
-            )
+    path = cfg.DATA.TEST.PATH if cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA else cfg.DATA.TEST.GT_PATH
+    Y = sorted(next(os.walk(path))[2])
+    print("Creating Y_test channels . . .")
+    for i in tqdm(range(len(Y)), disable=not is_main_process()):
+        img = read_img_as_ndarray(
+            os.path.join(path, Y[i]),
+            is_3d=not cfg.PROBLEM.NDIM == "2D",
+        )
+        img = labels_into_channels(
+            np.expand_dims(img, 0),
+            mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
+            save_dir=cfg.PATHS.TEST_INSTANCE_CHANNELS_CHECK,
+            fb_mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE,
+        )[0]
+        save_tif(
+            np.expand_dims(img, 0),
+            data_dir=cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR,
+            filenames=[Y[i]],
+            verbose=False,
+        )
 
 
 def labels_into_channels(
