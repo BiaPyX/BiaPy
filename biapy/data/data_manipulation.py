@@ -2657,14 +2657,22 @@ def filter_samples_by_properties(
                 assert isinstance(mask, np.ndarray)
 
             assert isinstance(img, np.ndarray)
+            img_max = float(xdata.max()) if isinstance(xdata, np.ndarray) else float(img.max())
+            img_min = float(xdata.min()) if isinstance(xdata, np.ndarray) else float(img.min())
+            img_ratio = img_max-img_min
+            mask_ratio = None
+            if ydata is not None and mask is not None:
+                mask_max = float(ydata.max()) if isinstance(ydata, np.ndarray) else float(mask.max())
+                mask_min = float(ydata.min()) if isinstance(ydata, np.ndarray) else float(mask.min())
+                mask_ratio = mask_max-mask_min
             satisfy_conds = sample_satisfy_conds(
                 img,
                 filter_conds,
                 filter_vals,
                 filter_signs,
                 mask=mask,
-                img_ratio=(float(xdata.max())-float(xdata.min())),
-                mask_ratio=(float(ydata.max())-float(ydata.min())) if ydata is not None else 0,
+                img_ratio=img_ratio,
+                mask_ratio=mask_ratio,
             )
 
             if not satisfy_conds:
@@ -2684,7 +2692,7 @@ def filter_samples_by_properties(
             [os.path.basename(img_path)],
             verbose=True,
         )
-    del xdata_fil_example
+        del xdata_fil_example
 
     x_dataset.clean_dataset(samples_to_maintain, clean_by=clean_by)
     if y_dataset:
@@ -2710,7 +2718,7 @@ def sample_satisfy_conds(
     filter_signs: List[List[str]],
     mask: Optional[NDArray] = None,
     img_ratio: float = 0,
-    mask_ratio: float = 0,
+    mask_ratio: Optional[float] = 0,
 ) -> bool:
     """
     Whether ``img`` satisfy at least one of the conditions composed by ``filter_conds``, ``filter_vals``, ``filter_sings``.
@@ -2784,7 +2792,7 @@ def sample_satisfy_conds(
                 assert mask is not None
                 value_to_compare = np.sum(abs(img - mask)) * img_ratio
             elif c == "diff_by_target_min_max_ratio":
-                assert mask is not None
+                assert mask is not None and mask_ratio is not None
                 value_to_compare = np.sum(abs(img - mask)) * mask_ratio
             elif c == "min":
                 value_to_compare = img.min()
