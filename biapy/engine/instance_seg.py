@@ -1378,12 +1378,14 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         original_test_path, original_test_mask_path = None, None
         train_channel_mask_dir = self.cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR
         val_channel_mask_dir = self.cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR
-        test_channel_mask_dir = self.cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR
+        
 
         if not self.cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA:
             test_instance_mask_dir = self.cfg.DATA.TEST.GT_PATH
+            test_channel_mask_dir = self.cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR
         else:
             test_instance_mask_dir = self.cfg.DATA.TEST.PATH
+            test_channel_mask_dir = self.cfg.DATA.TEST.PATH
 
         opts = []
         print("###########################")
