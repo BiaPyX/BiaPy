@@ -6,9 +6,8 @@ from PIL import Image
 from skimage.transform import resize
 from skimage.draw import line
 from skimage.exposure import adjust_gamma
-from skimage.measure import label
 from scipy.ndimage import binary_dilation as binary_dilation_scipy
-from scipy.ndimage import rotate
+from scipy.ndimage import rotate, label
 from typing import Tuple, Any, Union, Optional, List
 from numpy.typing import NDArray
 
@@ -1651,18 +1650,56 @@ def rotation(
         raise ValueError("Not a list/tuple provided in 'angles'")
 
     _mode = mode if mode != "symmetric" else "mirror"
-    img = rotate(img, angle=angle, mode=_mode, reshape=False)
-
+    img = _rotate(img, angle=angle, mode=_mode, reshape=False)
     if mask is not None:
         mask_order = 0 if mask_type == "as_mask" else 1
-        mask = rotate(mask, angle=angle, order=mask_order, mode=_mode, reshape=False)
+        mask = _rotate(mask, angle=angle, order=mask_order, mode=_mode, reshape=False)
     if heat is not None:
-        heat = rotate(heat, angle=angle, mode=_mode, reshape=False)
+        heat = _rotate(heat, angle=angle, mode=_mode, reshape=False)
     if mask is None:
         return img
     else:
         return img, mask, heat
 
+def _rotate(
+    img: NDArray,
+    angle: int,
+    mode: str = "reflect",
+    reshape: bool = False, 
+    order: int = 1,
+) -> NDArray:
+    """
+    Wrap of scipy's ``rotate`` function changing data type when necessary.
+
+    Parameters
+    ----------
+    img : 3D/4D Numpy array
+        Image to rotate. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+
+    angle : ints
+        Rotation to be made.
+
+    mode : str, optional
+        How to fill up the new values created. Options: ``constant``, ``reflect``, ``wrap``, ``symmetric``.
+
+    reshape : str, optional
+        Whether to reshape the output or not. 
+
+    order : int, optional
+        Interpolation order.
+
+    Returns
+    -------
+    img : 3D/4D Numpy array
+        Rotated image. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+    """
+    old_dtype = img.dtype
+    if old_dtype == np.float16:
+        img = img.astype(np.float32)
+    img = rotate(img, angle=angle, order=order, mode=mode, reshape=reshape)
+    if old_dtype == np.float16:
+        img = img.astype(np.float16)
+    return img 
 
 def zoom(
     img: NDArray,
