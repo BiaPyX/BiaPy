@@ -1986,6 +1986,14 @@ class Base_Workflow(metaclass=ABCMeta):
                 pred = read_img_as_ndarray(test_file, is_3d=self.cfg.PROBLEM.NDIM == "3D")
                 pred = np.expand_dims(pred, 0)  # expand dimensions to include "batch"
 
+                # Calculate the metrics
+                if self.current_sample["Y"] is not None:
+                    metric_values = self.metric_calculation(output=pred, targets=self.current_sample["Y"], train=False)
+                    for metric in metric_values:
+                        if str(metric).lower() not in self.stats["merge_patches"]:
+                            self.stats["merge_patches"][str(metric).lower()] = 0
+                        self.stats["merge_patches"][str(metric).lower()] += metric_values[metric]
+
             self.after_merge_patches(pred)
 
             if self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
@@ -2046,18 +2054,19 @@ class Base_Workflow(metaclass=ABCMeta):
                 if self.cfg.TEST.POST_PROCESSING.APPLY_MASK:
                     pred = apply_binary_mask(pred, self.cfg.DATA.TEST.BINARY_MASKS)
 
-                # Calculate the metrics
-                if self.current_sample["Y"] is not None:
-                    metric_values = self.metric_calculation(output=pred, targets=self.current_sample["Y"], train=False)
-                    for metric in metric_values:
-                        if str(metric).lower() not in self.stats["full_image"]:
-                            self.stats["full_image"][str(metric).lower()] = 0
-                        self.stats["full_image"][str(metric).lower()] += metric_values[metric]
             else:
                 # load prediction from file
                 test_file = os.path.join(self.cfg.PATHS.RESULT_DIR.FULL_IMAGE, self.current_sample["filename"])
                 pred = read_img_as_ndarray(test_file, is_3d=self.cfg.PROBLEM.NDIM == "3D")
                 pred = np.expand_dims(pred, 0)  # expand dimensions to include "batch"
+
+            # Calculate the metrics
+            if self.current_sample["Y"] is not None:
+                metric_values = self.metric_calculation(output=pred, targets=self.current_sample["Y"], train=False)
+                for metric in metric_values:
+                    if str(metric).lower() not in self.stats["full_image"]:
+                        self.stats["full_image"][str(metric).lower()] = 0
+                    self.stats["full_image"][str(metric).lower()] += metric_values[metric]
 
             if self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
                 self.all_pred.append(pred)
@@ -2117,7 +2126,7 @@ class Base_Workflow(metaclass=ABCMeta):
             Number of images to call ``normalize_stats``.
         """
         self.normalize_stats(image_counter)
-        if self.cfg.DATA.TEST.LOAD_GT and not self.cfg.TEST.REUSE_PREDICTIONS:
+        if self.cfg.DATA.TEST.LOAD_GT:
             if self.by_chunks:
                 if len(self.stats["by_chunks"]) > 0:
                     for metric in self.test_metric_names:
