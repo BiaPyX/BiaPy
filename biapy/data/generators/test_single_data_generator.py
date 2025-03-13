@@ -139,7 +139,7 @@ class test_single_data_generator(Dataset):
         self.norm_module.orig_dtype = img.dtype if isinstance(img, np.ndarray) else "Zarr"
 
     # img, img_class, xnorm, filename
-    def load_sample(self, idx: int) -> Tuple[NDArray, int, DataSample, Dict, Dict]:
+    def load_sample(self, idx: int, first_load: bool = False) -> Tuple[NDArray, int, DataSample, Dict, Dict]:
         """
         Load one data sample given its corresponding index.
 
@@ -148,6 +148,9 @@ class test_single_data_generator(Dataset):
         idx : int
             Sample index counter.
 
+        first_load : bool, optional
+            Whether its the first time a sample is loaded to prevent normalizing it.
+            
         Returns
         -------
         img : 3D/4D ndarray array
@@ -229,9 +232,10 @@ class test_single_data_generator(Dataset):
         img_class = self.X.dataset_info[sample.fid].get_class_num()
 
         # Normalization
-        self.norm_module.set_stats_from_image(np.array(img))
-        img, norm_extra_info = self.norm_module.apply_image_norm(np.array(img))
-        assert isinstance(img, np.ndarray)
+        if not first_load:
+            self.norm_module.set_stats_from_image(np.array(img))
+            img, norm_extra_info = self.norm_module.apply_image_norm(np.array(img))
+            assert isinstance(img, np.ndarray)
 
         if self.convert_to_rgb and img.shape[-1] == 1:
             img = np.repeat(img, 3, axis=-1)

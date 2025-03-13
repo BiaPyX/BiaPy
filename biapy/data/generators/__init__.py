@@ -33,7 +33,7 @@ def create_train_val_augmentors(
     norm_module: Normalization,
     Y_train: Optional[BiaPyDataset] = None,
     Y_val: Optional[BiaPyDataset] = None,
-) -> Tuple[DataLoader, DataLoader, Normalization, int, NDArray, NDArray]:
+) -> Tuple[DataLoader, DataLoader, Normalization, int, NDArray]:
     """
     Create training and validation generators.
 
@@ -350,27 +350,19 @@ def create_train_val_augmentors(
     )
 
     # Save a sample to export the model to BMZ
-    bmz_input_sample, bmz_input_sample_norm = None, None
+    bmz_input_sample = None
     bmz_input_sample, _ = train_generator.load_sample(0, first_load=True)
     bmz_input_sample = bmz_input_sample.astype(np.float32)
-    bmz_input_sample_norm, _ = train_generator.load_sample(0)
-    bmz_input_sample_norm = bmz_input_sample_norm.astype(np.float32)
 
     # Ensure dimensions
     if cfg.PROBLEM.NDIM == "2D":
         if bmz_input_sample.ndim == 3:
             bmz_input_sample = np.expand_dims(bmz_input_sample, 0)
-        if bmz_input_sample_norm.ndim == 3:
-            bmz_input_sample_norm = np.expand_dims(bmz_input_sample_norm, 0)
         bmz_input_sample = bmz_input_sample.transpose(0, 3, 1, 2)  # Numpy -> Torch
-        bmz_input_sample_norm = bmz_input_sample_norm.transpose(0, 3, 1, 2)  # Numpy -> Torch
     else:  # 3D
         if bmz_input_sample.ndim == 4:
             bmz_input_sample = np.expand_dims(bmz_input_sample, 0)
-        if bmz_input_sample_norm.ndim == 4:
-            bmz_input_sample_norm = np.expand_dims(bmz_input_sample_norm, 0)
         bmz_input_sample = bmz_input_sample.transpose(0, 4, 1, 2, 3)  # Numpy -> Torch
-        bmz_input_sample_norm = bmz_input_sample_norm.transpose(0, 4, 1, 2, 3)  # Numpy -> Torch
 
     # Validation dataset
     sampler_val = None
@@ -394,7 +386,7 @@ def create_train_val_augmentors(
         drop_last=False,
     )
 
-    return train_dataset, val_dataset, data_norm, num_training_steps_per_epoch, bmz_input_sample, bmz_input_sample_norm
+    return train_dataset, val_dataset, data_norm, num_training_steps_per_epoch, bmz_input_sample
 
 
 def create_test_augmentor(
@@ -402,7 +394,7 @@ def create_test_augmentor(
     X_test: Any,
     Y_test: Any,
     norm_module: Normalization,
-) -> Tuple[test_pair_data_generator | test_single_data_generator, Normalization]:
+) -> Tuple[test_pair_data_generator | test_single_data_generator, Normalization, NDArray]:
     """
     Create test data generator.
 
@@ -473,7 +465,23 @@ def create_test_augmentor(
 
     test_generator = gen_name(**dic)
     data_norm = test_generator.get_data_normalization()
-    return test_generator, data_norm
+
+    # Save a sample to export the model to BMZ
+    bmz_input_sample = None
+    bmz_input_sample, _, _, _, _ = test_generator.load_sample(0, first_load=True)
+    bmz_input_sample = bmz_input_sample.astype(np.float32)
+
+    # Ensure dimensions
+    if cfg.PROBLEM.NDIM == "2D":
+        if bmz_input_sample.ndim == 3:
+            bmz_input_sample = np.expand_dims(bmz_input_sample, 0)
+        bmz_input_sample = bmz_input_sample.transpose(0, 3, 1, 2)  # Numpy -> Torch
+    else:  # 3D
+        if bmz_input_sample.ndim == 4:
+            bmz_input_sample = np.expand_dims(bmz_input_sample, 0)
+        bmz_input_sample = bmz_input_sample.transpose(0, 4, 1, 2, 3)  # Numpy -> Torch
+
+    return test_generator, data_norm, bmz_input_sample
 
 
 def check_generator_consistence(

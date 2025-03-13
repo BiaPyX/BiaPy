@@ -386,31 +386,22 @@ all_test_info["Test32"] = {
     ]
 }
 
+
 all_test_info["Test33"] = {
     "enable": True,
     "jobname": "test33",
-    "description": "2D Semantic seg. Lucchi++. Basic DA. unet. validation from train when not in memory. preprocess resize train and test",
+    "description": "2D image to image. lightmycells 2D data. preprocess: resize. Val in memory, train not in memory. Basic DA. attention_unet",
     "yaml": "test_33.yaml",
     "internal_checks": [
-        {"type": "regular", "pattern": "Test Foreground IoU (merge patches)", "gt": True, "value": 0.5},
+        {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 9.0},
     ]
 }
 
 all_test_info["Test34"] = {
     "enable": True,
     "jobname": "test34",
-    "description": "2D image to image. lightmycells 2D data. preprocess: resize. Val in memory, train not in memory. Basic DA. attention_unet",
-    "yaml": "test34.yaml",
-    "internal_checks": [
-        {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 9.0},
-    ]
-}
-
-all_test_info["Test35"] = {
-    "enable": True,
-    "jobname": "test35",
     "description": "2D Instance seg. Conic 2D data (multihead). Basic DA. BC (auto). resunet++. ",
-    "yaml": "test_35.yaml",
+    "yaml": "test_34.yaml",
     "internal_checks": [
         {"type": "regular", "pattern": "Test IoU (B channel) (merge patches):", "gt": True, "value": 0.35},
         {"type": "regular", "pattern": "Merge patches classification IoU:", "gt": True, "value": 0.1},
@@ -636,7 +627,7 @@ if not os.path.exists(biapy_folder):
 
 # General things: 2D Data + YAML donwload
 if not os.path.exists(semantic_2d_data_outpath) and (all_test_info["Test1"]["enable"] or\
-    all_test_info["Test3"]["enable"] or all_test_info["Test33"]["enable"]):
+    all_test_info["Test3"]["enable"]):
     print("Downloading 2D semantic seg. data . . .")
 
     os.makedirs(semantic_folder, exist_ok=True)
@@ -701,9 +692,9 @@ if (
 
 if (
     not os.path.exists(instance_seg_conic_data_outpath)
-    and all_test_info["Test35"]["enable"]
+    and all_test_info["Test34"]["enable"]
 ):
-    print("Downloading 2D instance seg. data [Test35] (CoNIC data) . . .")
+    print("Downloading 2D instance seg. data [Test34] (CoNIC data) . . .")
     os.makedirs(inst_seg_folder, exist_ok=True)
     os.chdir(inst_seg_folder)
 
@@ -716,7 +707,7 @@ if (
     (all_test_info["Test4"]["enable"] 
     or all_test_info["Test29"]["enable"] 
     or all_test_info["Test31"]["enable"]
-    or all_test_info["Test35"]["enable"])
+    or all_test_info["Test34"]["enable"])
     and not os.path.exists(instance_seg_2d_template_local)
 ):
     print("Downloading 2D instance seg. data . . .")
@@ -990,7 +981,7 @@ if not os.path.exists(classification_3d_data_outpath) and all_test_info["Test22"
 
 # General things: 2D Data + YAML donwload
 if not os.path.exists(image_to_image_2d_data_outpath) and (all_test_info["Test24"]["enable"] \
-    or all_test_info["Test25"]["enable"] or all_test_info["Test34"]["enable"]):
+    or all_test_info["Test25"]["enable"] or all_test_info["Test33"]["enable"]):
     print("Downloading 2D image_to_image data . . .")
 
     os.makedirs(image_to_image_folder, exist_ok=True)
@@ -3759,6 +3750,7 @@ if all_test_info["Test32"]["enable"]:
     print_result(results, all_test_info["Test32"]["jobname"], int_checks)
     test_results.append(correct)
 
+
 #~~~~~~~~~~~~
 # Test 33
 #~~~~~~~~~~~~
@@ -3766,83 +3758,6 @@ if all_test_info["Test33"]["enable"]:
     print("######")
     print("Running Test 33")
     print_inventory(all_test_info["Test33"])
-
-    #*******************
-    # File preparation
-    #*******************
-    # Open config file
-    with open(semantic_2d_template_local, 'r') as stream:
-        try:
-            biapy_config = yaml.safe_load(stream)
-        except yaml.YAMLError as exc:
-            raise ValueError(exc)
-
-    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(semantic_2d_data_outpath, "data", "train", "raw")
-    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(semantic_2d_data_outpath, "data", "train", "label")
-    biapy_config['DATA']['TRAIN']['IN_MEMORY'] = False
-    biapy_config['DATA']['VAL']['FROM_TRAIN'] = True
-    biapy_config['DATA']['VAL']['SPLIT_TRAIN'] = 0.1
-    biapy_config['DATA']['VAL']['IN_MEMORY'] = True
-    biapy_config['DATA']['TEST']['PATH'] = os.path.join(semantic_2d_data_outpath, "data", "test", "raw")
-    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(semantic_2d_data_outpath, "data", "test", "label")
-    biapy_config['DATA']['TEST']['IN_MEMORY'] = True
-    biapy_config['DATA']['TEST']['LOAD_GT'] = True
-
-    biapy_config['DATA']['PREPROCESS'] = {}
-    biapy_config['DATA']['PREPROCESS']["TRAIN"] = True
-    biapy_config['DATA']['PREPROCESS']["TEST"] = True
-    biapy_config['DATA']['PREPROCESS']["RESIZE"] = {}
-    biapy_config['DATA']['PREPROCESS']["RESIZE"]["ENABLE"] = True
-    biapy_config['DATA']['PREPROCESS']["RESIZE"]["OUTPUT_SHAPE"] = "(512, 512)"
-
-    biapy_config['AUGMENTOR']['CONTRAST'] = True
-    biapy_config['AUGMENTOR']['BRIGHTNESS'] = True
-
-    biapy_config['TRAIN']['ENABLE'] = True
-    biapy_config['TRAIN']['EPOCHS'] = 50
-    biapy_config['TRAIN']['PATIENCE'] = -1
-
-    biapy_config['MODEL']['ARCHITECTURE'] = 'unet'
-
-    biapy_config['TEST']['ENABLE'] = True
-    biapy_config['TEST']['AUGMENTATION'] = False
-    biapy_config['TEST']['FULL_IMG'] = False
-
-    # Save file
-    test_file = os.path.join(semantic_folder, all_test_info["Test33"]["yaml"])
-    with open(test_file, 'w') as outfile:
-        yaml.dump(biapy_config, outfile, default_flow_style=False)
-
-    # Run
-    runjob(all_test_info["Test33"], results_folder, test_file, biapy_folder)
-
-    # Check
-    results = []
-    correct = True
-    res, last_lines = check_finished(all_test_info["Test33"], "Test 1")
-    if not res:
-        correct = False
-        print("Internal check not passed: seems that it didn't finish")
-    results.append(res)
-    int_checks = 1
-    for checks in all_test_info["Test33"]["internal_checks"]:
-        results.append(check_value(last_lines, checks["pattern"], checks["value"], checks["gt"]))
-        int_checks += 1
-        if not results[-1]:
-            correct = False
-            print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
-
-    # Test result
-    print_result(results, all_test_info["Test33"]["jobname"], int_checks)
-    test_results.append(correct)
-
-#~~~~~~~~~~~~
-# Test 34
-#~~~~~~~~~~~~
-if all_test_info["Test34"]["enable"]:
-    print("######")
-    print("Running Test 34")
-    print_inventory(all_test_info["Test34"])
 
     #*******************
     # File preparation
@@ -3884,23 +3799,23 @@ if all_test_info["Test34"]["enable"]:
     del biapy_config['PATHS']
 
     # Save file
-    test_file = os.path.join(image_to_image_folder, all_test_info["Test34"]["yaml"])
+    test_file = os.path.join(image_to_image_folder, all_test_info["Test33"]["yaml"])
     with open(test_file, 'w') as outfile:
         yaml.dump(biapy_config, outfile, default_flow_style=False)
 
     # Run
-    runjob(all_test_info["Test34"], results_folder, test_file, biapy_folder)
+    runjob(all_test_info["Test33"], results_folder, test_file, biapy_folder)
 
     # Check
     results = []
     correct = True
-    res, last_lines = check_finished(all_test_info["Test34"], "Test 34")
+    res, last_lines = check_finished(all_test_info["Test33"], "Test 33")
     if not res:
         correct = False
         print("Internal check not passed: seems that it didn't finish")
     results.append(res)
     int_checks = 1
-    for checks in all_test_info["Test34"]["internal_checks"]:
+    for checks in all_test_info["Test33"]["internal_checks"]:
         if checks["type"] == "regular":
             results.append(check_value(last_lines, checks["pattern"], checks["value"], checks["gt"]))
         else:
@@ -3912,16 +3827,16 @@ if all_test_info["Test34"]["enable"]:
             print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
 
     # Test result
-    print_result(results, all_test_info["Test34"]["jobname"], int_checks)
+    print_result(results, all_test_info["Test33"]["jobname"], int_checks)
     test_results.append(correct)
 
 #~~~~~~~~~~~~
-# Test 35
+# Test 34
 #~~~~~~~~~~~~
-if all_test_info["Test35"]["enable"]:
+if all_test_info["Test34"]["enable"]:
     print("######")
-    print("Running Test 35")
-    print_inventory(all_test_info["Test35"])
+    print("Running Test 34")
+    print_inventory(all_test_info["Test34"])
 
     #*******************
     # File preparation
@@ -3960,23 +3875,23 @@ if all_test_info["Test35"]["enable"]:
     biapy_config['TEST']['FULL_IMG'] = False
 
     # Save file
-    test_file = os.path.join(inst_seg_folder, all_test_info["Test35"]["yaml"])
+    test_file = os.path.join(inst_seg_folder, all_test_info["Test34"]["yaml"])
     with open(test_file, 'w') as outfile:
         yaml.dump(biapy_config, outfile, default_flow_style=False)
 
     # Run
-    runjob(all_test_info["Test35"], results_folder, test_file, biapy_folder, multigpu=True)
+    runjob(all_test_info["Test34"], results_folder, test_file, biapy_folder, multigpu=True)
 
     # Check
     results = []
     correct = True
-    res, last_lines = check_finished(all_test_info["Test35"], "Test 35")
+    res, last_lines = check_finished(all_test_info["Test34"], "Test 34")
     if not res:
         correct = False
         print("Internal check not passed: seems that it didn't finish")
     results.append(res)
     int_checks = 1
-    for checks in all_test_info["Test35"]["internal_checks"]:
+    for checks in all_test_info["Test34"]["internal_checks"]:
         if checks["type"] == "regular":
             results.append(check_value(last_lines, checks["pattern"], checks["value"], checks["gt"]))
         else:
@@ -3988,7 +3903,7 @@ if all_test_info["Test35"]["enable"]:
             print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
 
     # Test result
-    print_result(results, all_test_info["Test35"]["jobname"], int_checks)
+    print_result(results, all_test_info["Test34"]["jobname"], int_checks)
     test_results.append(correct)
 
 print("Finish tests!!")

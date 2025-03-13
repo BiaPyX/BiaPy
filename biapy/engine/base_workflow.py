@@ -504,7 +504,6 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.data_norm,
                 self.num_training_steps_per_epoch,
                 self.bmz_config["test_input"],
-                self.bmz_config["test_input_norm"],
             ) = create_train_val_augmentors(
                 self.cfg,
                 X_train=self.X_train,
@@ -956,7 +955,8 @@ class Base_Workflow(metaclass=ABCMeta):
                 device=self.device,
             )
 
-            self.prepare_bmz_data(self.bmz_config["test_input_norm"])
+            # Save BMZ input/output so the user could export the model to BMZ later
+            self.prepare_bmz_data(self.bmz_config["test_input"])
 
         self.destroy_train_data()
 
@@ -1022,7 +1022,11 @@ class Base_Workflow(metaclass=ABCMeta):
             print("############################")
             print("#  PREPARE TEST GENERATOR  #")
             print("############################")
-            self.test_generator, self.data_norm = create_test_augmentor(
+            (
+                self.test_generator, 
+                self.data_norm, 
+                self.bmz_config["test_input"]
+            ) = create_test_augmentor(
                 self.cfg,
                 self.X_test,
                 self.Y_test,
@@ -1085,9 +1089,14 @@ class Base_Workflow(metaclass=ABCMeta):
         Test/Inference step.
         """
         self.load_test_data()
-        if not self.model_prepared:
+        if not self.model_prepared: 
             self.prepare_model()
         self.prepare_test_generators()
+
+        # When not training was done
+        if "test_output" not in self.bmz_config:
+            # Save BMZ input/output so the user could export the model to BMZ later
+            self.prepare_bmz_data(self.bmz_config["test_input"])
 
         # Switch to evaluation mode
         assert self.model_without_ddp
@@ -1604,11 +1613,11 @@ class Base_Workflow(metaclass=ABCMeta):
         Parameters
         ----------
         img : 4D/5D Numpy array
-            Image to save. The axes must be in Torch format already, i.e. ``(b,c,y,x)`` for 2D or
+            Image to save (unnormalized). The axes must be in Torch format already, i.e. ``(b,c,y,x)`` for 2D or
             ``(b,c,z,y,x)`` for 3D.
         """
 
-        def prepare_bmz_sample(sample_key, img):
+        def _prepare_bmz_sample(sample_key, img, apply_norm=True):
             """
             Prepare a sample from the given ``img`` using the patch size in the configuration. It also saves
             the sample in ``self.bmz_config`` using the ``sample_key``.
@@ -1647,9 +1656,17 @@ class Base_Workflow(metaclass=ABCMeta):
                 if self.bmz_config[sample_key].ndim == 4:
                     self.bmz_config[sample_key] = np.expand_dims(self.bmz_config[sample_key], 0)
 
-        # Normalized input
+            # Apply normalization
+            if apply_norm:
+                self.norm_module.set_stats_from_image(self.bmz_config[sample_key])
+                self.bmz_config[sample_key], _ = self.norm_module.apply_image_norm(self.bmz_config[sample_key])
+
+        # Save test_input without the normalization
+        _prepare_bmz_sample("test_input", img, apply_norm=False)
+
+        # Save test_input with the normalization
         if "test_input_norm" not in self.bmz_config:
-            prepare_bmz_sample("test_input_norm", img)
+            _prepare_bmz_sample("test_input_norm", img)
 
         # Model prediction
         assert self.model and self.model_without_ddp
@@ -1674,18 +1691,11 @@ class Base_Workflow(metaclass=ABCMeta):
                 pred = torch.cat((pred[0], torch.argmax(pred[1], dim=1).unsqueeze(1)), dim=1)
 
         # Save output
-        prepare_bmz_sample("test_output", pred.clone().cpu().detach().numpy().astype(np.float32))
-
-        # Save test_input without the normalization
-        if "test_input" not in self.bmz_config:
-            self.bmz_config["test_input"] = self.test_norm_module.undo_image_norm(
-                img, self.current_sample["X_norm"]
-            ).astype(np.float32)
-            prepare_bmz_sample("test_input", self.bmz_config["test_input"])
-
-        if "postprocessing" not in self.bmz_config:
-            # Check activations to be inserted as postprocessing in BMZ
-            self.bmz_config["postprocessing"] = []
+        _prepare_bmz_sample("test_output", pred.clone().cpu().detach().numpy().astype(np.float32), apply_norm=False)
+        
+        self.bmz_config["postprocessing"] = []
+        if "postprocessing" not in self.bmz_config and self.cfg.MODEL.SOURCE == "biapy":
+            # Check activations to be inserted as postprocessing in BMZ        
             act = list(self.activations[0].values())
             for ac in act:
                 if ac in ["CE_Sigmoid", "Sigmoid"]:
@@ -1698,10 +1708,6 @@ class Base_Workflow(metaclass=ABCMeta):
         # Skip processing image
         if "discard" in self.current_sample["X"] and self.current_sample["X"]["discard"]:
             return True
-
-        # Save BMZ input/output so the user could export the model to BMZ later
-        if "test_output" not in self.bmz_config:
-            self.prepare_bmz_data(self.current_sample["X"].transpose(self.axis_order))
 
         #################
         ### PER PATCH ###

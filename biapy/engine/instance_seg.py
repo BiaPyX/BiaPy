@@ -1046,10 +1046,6 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             if "discard" in self.current_sample["X"] and self.current_sample["X"]["discard"]:
                 return True
 
-            # Save BMZ input/output so the user could export the model to BMZ later
-            if "test_output" not in self.bmz_config:
-                self.prepare_bmz_data(self.current_sample["X"].transpose(self.axis_order))
-
             self.instances_already_created = True
 
             ##################
