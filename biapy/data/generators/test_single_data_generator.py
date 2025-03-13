@@ -122,7 +122,7 @@ class test_single_data_generator(Dataset):
         if len(X.dataset_info) != len(X.sample_list):
             new_sample_list = []
             for i in range(len(X.dataset_info)):
-                new_sample_list.append(DataSample(fid = i, coords = None))            
+                new_sample_list.append(DataSample(fid=i, coords=None))
             X.sample_list = new_sample_list
         self.len = len(X.sample_list)
         self.seed = seed
@@ -139,7 +139,7 @@ class test_single_data_generator(Dataset):
         self.norm_module.orig_dtype = img.dtype if isinstance(img, np.ndarray) else "Zarr"
 
     # img, img_class, xnorm, filename
-    def load_sample(self, idx: int, first_load: bool = False) -> Tuple[NDArray, int, DataSample, Dict, Dict]:
+    def load_sample(self, idx: int, first_load: bool = False) -> Tuple[NDArray, int, DataSample, Dict, Optional[Dict]]:
         """
         Load one data sample given its corresponding index.
 
@@ -150,7 +150,7 @@ class test_single_data_generator(Dataset):
 
         first_load : bool, optional
             Whether its the first time a sample is loaded to prevent normalizing it.
-            
+
         Returns
         -------
         img : 3D/4D ndarray array
@@ -194,7 +194,7 @@ class test_single_data_generator(Dataset):
             # Skip processing image
             discard = False
             if self.filter_samples:
-                assert self.filter_vals is not None and self.filter_signs is not None 
+                assert self.filter_vals is not None and self.filter_signs is not None
                 discard = sample_satisfy_conds(
                     img,
                     self.filter_props,
@@ -232,6 +232,7 @@ class test_single_data_generator(Dataset):
         img_class = self.X.dataset_info[sample.fid].get_class_num()
 
         # Normalization
+        norm_extra_info = None
         if not first_load:
             self.norm_module.set_stats_from_image(np.array(img))
             img, norm_extra_info = self.norm_module.apply_image_norm(np.array(img))
