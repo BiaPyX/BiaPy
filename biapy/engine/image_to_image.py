@@ -319,8 +319,6 @@ class Image_to_Image_Workflow(Base_Workflow):
                 if metric_logger:
                     metric_logger.meters[m_name_real].update(val)
 
-        if math.isinf(out_metrics["PSNR"]):
-            import pdb; pdb.set_trace()
         return out_metrics
 
 
