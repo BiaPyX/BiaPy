@@ -1914,12 +1914,16 @@ def compare_configurations_without_model(actual_cfg, old_cfg, header_message="",
             ) * dim_count
 
     for var_to_compare in vars_to_compare:
-        if get_attribute_recursive(actual_cfg, var_to_compare) != get_attribute_recursive(old_cfg, var_to_compare):
-            raise ValueError(
-                header_message
-                + f"The '{var_to_compare}' value of the compared configurations does not match: "
-                + f"{get_attribute_recursive(actual_cfg, var_to_compare)} (current configuration) vs {get_attribute_recursive(old_cfg, var_to_compare)} (from loaded configuration)"
-            )
+        current_value = get_attribute_recursive(actual_cfg, var_to_compare)
+        old_value = get_attribute_recursive(old_cfg, var_to_compare)
+        if current_value != old_value:
+            # Allow SSL pretrainings
+            if not (var_to_compare == "PROBLEM.TYPE" and old_value == "SELF_SUPERVISED"):
+                raise ValueError(
+                    header_message
+                    + f"The '{var_to_compare}' value of the compared configurations does not match: "
+                    + f"{current_value} (current configuration) vs {old_value} (from loaded configuration)"
+                )
 
     print("Configurations seem to be compatible. Continuing . . .")
 
