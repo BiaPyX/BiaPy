@@ -20,8 +20,9 @@ from biapy.data.generators.test_single_data_generator import test_single_data_ge
 from biapy.config.config import Config
 from biapy.data.pre_processing import preprocess_data
 from biapy.data.data_manipulation import save_tif
-from biapy.data.dataset import BiaPyDataset
+from biapy.data.dataset import BiaPyDataset, PatchCoords
 from biapy.data.norm import Normalization
+from biapy.data.data_3D_manipulation import extract_patch_from_efficient_file
 
 
 def create_train_val_augmentors(
@@ -469,6 +470,22 @@ def create_test_augmentor(
     # Save a sample to export the model to BMZ
     bmz_input_sample = None
     bmz_input_sample, _, _, _, _ = test_generator.load_sample(0, first_load=True)
+
+    # Ensure a patch when working with Zarr/H5 files 
+    if not isinstance(bmz_input_sample, np.ndarray):
+        patch = PatchCoords(
+            z_start=0 if cfg.PROBLEM.NDIM == "3D" else None,
+            z_end=cfg.DATA.PATCH_SIZE[0] if cfg.PROBLEM.NDIM == "3D" else None,
+            y_start=0,
+            y_end=cfg.DATA.PATCH_SIZE[-3],
+            x_start=0,
+            x_end=cfg.DATA.PATCH_SIZE[-2],
+        )
+        bmz_input_sample = extract_patch_from_efficient_file(
+            bmz_input_sample, 
+            patch, 
+            data_axis_order=cfg.DATA.TEST.INPUT_IMG_AXES_ORDER
+        )
     bmz_input_sample = bmz_input_sample.astype(np.float32)
 
     # Ensure dimensions
