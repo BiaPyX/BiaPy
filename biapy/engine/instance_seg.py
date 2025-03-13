@@ -579,10 +579,10 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 print(f"Its respective image seems to be: {test_file}")
 
                 if test_file.endswith(".zarr"):
-                    if self.cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA:
+                    if self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA:
                         _, _Y = read_chunked_nested_data(
                             test_file,
-                            self.cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_GT_PATH,
+                            self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_GT_PATH,
                         )
                     else:
                         _, _Y = read_chunked_data(test_file)
@@ -1376,7 +1376,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         val_channel_mask_dir = self.cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR
         
 
-        if not self.cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA:
+        if not self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA:
             test_instance_mask_dir = self.cfg.DATA.TEST.GT_PATH
             test_channel_mask_dir = self.cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR
         else:
@@ -1462,18 +1462,18 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 )
                 create_test_instance_channels(self.cfg)
 
-            # Change the value of TEST.BY_CHUNKS.INPUT_MASK_AXES_ORDER as we have created the instance mask and maybe the user doesn't
+            # Change the value of DATA.TEST.INPUT_MASK_AXES_ORDER as we have created the instance mask and maybe the user doesn't
             # know the data order that is created.
-            if self.cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA:
-                out_data_order = self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER
-                if "C" not in self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER:
+            if self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA:
+                out_data_order = self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER
+                if "C" not in self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER:
                     out_data_order += "C"
                 print(
-                    "TEST.BY_CHUNKS.INPUT_MASK_AXES_ORDER changed from {} to {}".format(
-                        self.cfg.TEST.BY_CHUNKS.INPUT_MASK_AXES_ORDER, out_data_order
+                    "DATA.TEST.INPUT_MASK_AXES_ORDER changed from {} to {}".format(
+                        self.cfg.DATA.TEST.INPUT_MASK_AXES_ORDER, out_data_order
                     )
                 )
-                opts.extend([f"TEST.BY_CHUNKS.INPUT_MASK_AXES_ORDER", out_data_order])
+                opts.extend([f"DATA.TEST.INPUT_MASK_AXES_ORDER", out_data_order])
 
         if is_dist_avail_and_initialized():
             dist.barrier()

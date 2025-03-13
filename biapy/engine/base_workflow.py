@@ -977,12 +977,12 @@ class Base_Workflow(metaclass=ABCMeta):
             if self.Y_val:
                 self.Y_test = self.Y_val.copy()
         else:
-            # Paths to the raw and gt within the Zarr file. Only used when 'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA' is True.
+            # Paths to the raw and gt within the Zarr file. Only used when 'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA' is True.
             test_zarr_data_information = None
-            if self.cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA:
+            if self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA:
                 test_zarr_data_information = {
-                    "raw_path": self.cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH,
-                    "gt_path": self.cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_GT_PATH,
+                    "raw_path": self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH,
+                    "gt_path": self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_GT_PATH,
                     "use_gt_path": self.cfg.PROBLEM.TYPE != "INSTANCE_SEG",
                 }
 
@@ -1202,7 +1202,7 @@ class Base_Workflow(metaclass=ABCMeta):
     def process_test_sample_by_chunks(self):
         """
         Function to process a sample in the inference phase. A final H5/Zarr file is created in "TZCYX" or "TZYXC" order
-        depending on ``TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER`` ('T' is always included).
+        depending on ``DATA.TEST.INPUT_IMG_AXES_ORDER`` ('T' is always included).
         """
         filename, file_extension = os.path.splitext(self.current_sample["filename"])
         ext = ".h5" if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5" else ".zarr"
@@ -1217,7 +1217,7 @@ class Base_Workflow(metaclass=ABCMeta):
             # Load data
             if file_extension not in [".hdf5", ".hdf", ".h5", ".zarr"]:  # Numpy array
                 if self.current_sample["X"].ndim == 3:
-                    c_pos = -1 if self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER[-1] == "C" else 1
+                    c_pos = -1 if self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER[-1] == "C" else 1
                     self.current_sample["X"] = np.expand_dims(self.current_sample["X"], c_pos)
 
             if is_main_process():
@@ -1233,11 +1233,11 @@ class Base_Workflow(metaclass=ABCMeta):
                     )
                 )
 
-            if len(self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER) != self.current_sample["X"].ndim:
+            if len(self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER) != self.current_sample["X"].ndim:
                 raise ValueError(
-                    "'TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER' value {} does not match the number of dimensions of the loaded H5/Zarr "
+                    "'DATA.TEST.INPUT_IMG_AXES_ORDER' value {} does not match the number of dimensions of the loaded H5/Zarr "
                     "file {} (ndim: {})".format(
-                        self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
+                        self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER,
                         self.current_sample["X"].shape,
                         self.current_sample["X"].ndim,
                     )
@@ -1351,7 +1351,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
                 t_dim, z_dim, y_dim, x_dim, c_dim = order_dimensions(
                     list(self.cfg.DATA.PREPROCESS.ZOOM.ZOOM_FACTOR),
-                    input_order=self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
+                    input_order=self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER,
                     output_order="TZYXC",
                     default_value=1,
                 )
@@ -1390,11 +1390,11 @@ class Base_Workflow(metaclass=ABCMeta):
         # Create the final H5/Zarr file that contains all the individual parts
         if is_main_process():
             if not self.cfg.TEST.REUSE_PREDICTIONS:
-                if "C" not in self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER:
-                    out_data_order = self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER + "C"
+                if "C" not in self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER:
+                    out_data_order = self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER + "C"
                     c_index = -1
                 else:
-                    out_data_order = self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER
+                    out_data_order = self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER
                     c_index = out_data_order.index("C")
 
                 if self.cfg.SYSTEM.NUM_GPUS > 1:
@@ -1519,7 +1519,7 @@ class Base_Workflow(metaclass=ABCMeta):
                         pred_div = fid_div.create_dataset("data", shape=pred.shape, dtype=pred.dtype)
 
                     t_dim, z_dim, c_dim, y_dim, x_dim = order_dimensions(
-                        out_data_shape, self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER
+                        out_data_shape, self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER
                     )
 
                     # Fill the new data
@@ -2370,7 +2370,7 @@ def extract_patch_from_dataset(data, cfg, input_queue, extract_info_queue, verbo
     for obj in extract_3D_patch_with_overlap_yield(
         data,
         cfg.DATA.PATCH_SIZE,
-        cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
+        cfg.DATA.TEST.INPUT_IMG_AXES_ORDER,
         overlap=cfg.DATA.TEST.OVERLAP,
         padding=cfg.DATA.TEST.PADDING,
         total_ranks=max(1, cfg.SYSTEM.NUM_GPUS),
@@ -2387,7 +2387,7 @@ def extract_patch_from_dataset(data, cfg, input_queue, extract_info_queue, verbo
 
         t_dim, z_dim, y_dim, x_dim, c_dim = order_dimensions(
             cfg.DATA.PREPROCESS.ZOOM.ZOOM_FACTOR,
-            input_order=cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
+            input_order=cfg.DATA.TEST.INPUT_IMG_AXES_ORDER,
             output_order="TZYXC",
             default_value=1,
         )
@@ -2493,13 +2493,13 @@ def insert_patch_into_dataset(
         if "data" not in locals():
             # Channel dimension should be equal to the number of channel of the prediction
             out_data_shape = np.array(data_shape)
-            if "C" not in cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER:
+            if "C" not in cfg.DATA.TEST.INPUT_IMG_AXES_ORDER:
                 out_data_shape = tuple(out_data_shape) + (p.shape[-1],)
-                out_data_order = cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER + "C"
+                out_data_order = cfg.DATA.TEST.INPUT_IMG_AXES_ORDER + "C"
             else:
-                out_data_shape[cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER.index("C")] = p.shape[-1]
+                out_data_shape[cfg.DATA.TEST.INPUT_IMG_AXES_ORDER.index("C")] = p.shape[-1]
                 out_data_shape = tuple(out_data_shape)
-                out_data_order = cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER
+                out_data_order = cfg.DATA.TEST.INPUT_IMG_AXES_ORDER
 
             if file_type == "h5":
                 data = fid.create_dataset("data", shape=out_data_shape, dtype=dtype_str, compression="gzip")
@@ -2520,7 +2520,7 @@ def insert_patch_into_dataset(
             order_dimensions(
                 slices,
                 input_order="ZYXC",
-                output_order=cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
+                output_order=cfg.DATA.TEST.INPUT_IMG_AXES_ORDER,
                 default_value=0,
             )
         )

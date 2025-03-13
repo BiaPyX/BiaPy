@@ -323,7 +323,7 @@ def create_test_instance_channels(
     cfg : YACS CN object
         Configuration.
     """
-    path = cfg.DATA.TEST.PATH if cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA else cfg.DATA.TEST.GT_PATH
+    path = cfg.DATA.TEST.PATH if cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA else cfg.DATA.TEST.GT_PATH
     Y = sorted(next(os.walk(path))[2])
     print("Creating Y_test channels . . .")
     for i in tqdm(range(len(Y)), disable=not is_main_process()):

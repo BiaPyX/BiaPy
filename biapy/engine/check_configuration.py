@@ -81,7 +81,16 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 [
                     True
                     for cond in getattr(cfg.DATA, phase).FILTER_SAMPLES.PROPS
-                    if cond in ["foreground", "target_mean", "target_min", "target_max", "diff", "diff_by_min_max_ratio", "diff_by_target_min_max_ratio"]
+                    if cond
+                    in [
+                        "foreground",
+                        "target_mean",
+                        "target_min",
+                        "target_max",
+                        "diff",
+                        "diff_by_min_max_ratio",
+                        "diff_by_target_min_max_ratio",
+                    ]
                 ]
             )
             if target_required and cfg.PROBLEM.TYPE not in ["DENOISING", "SELF_SUPERVISED"]:
@@ -159,13 +168,17 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                         "target_min",
                         "target_max",
                         "diff",
-                        'diff_by_min_max_ratio', 
-                        'diff_by_target_min_max_ratio',
+                        "diff_by_min_max_ratio",
+                        "diff_by_target_min_max_ratio",
                     ]:
                         raise ValueError(
                             "'DATA.TRAIN.FILTER_SAMPLES.PROPS' can only be one among these: ['foreground', 'mean', 'min', 'max', 'target_mean', 'target_min', 'target_max', 'diff', 'diff_by_min_max_ratio', 'diff_by_target_min_max_ratio']"
                         )
-                    if getattr(cfg.DATA, phase).FILTER_SAMPLES.PROPS[i][j] in ["diff", 'diff_by_min_max_ratio', 'diff_by_target_min_max_ratio']:
+                    if getattr(cfg.DATA, phase).FILTER_SAMPLES.PROPS[i][j] in [
+                        "diff",
+                        "diff_by_min_max_ratio",
+                        "diff_by_target_min_max_ratio",
+                    ]:
                         if cfg.PROBLEM.TYPE == "SUPER_RESOLUTION":
                             raise ValueError(
                                 "'DATA.TRAIN.FILTER_SAMPLES.PROPS' can not have a condition between ['diff', 'diff_by_min_max_ratio', 'diff_by_target_min_max_ratio'] in super-resolution workflow"
@@ -1057,10 +1070,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         if cfg.DATA.PREPROCESS.ZOOM.ENABLE and not cfg.TEST.BY_CHUNKS.ENABLE:
             raise ValueError("'DATA.PREPROCESS.ZOOM.ENABLE' can only be activated when 'TEST.BY_CHUNKS.ENABLE' is True")
         if cfg.DATA.PREPROCESS.ZOOM.ENABLE and len(cfg.DATA.PREPROCESS.ZOOM.ZOOM_FACTOR) != len(
-            cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER
+            cfg.DATA.TEST.INPUT_IMG_AXES_ORDER
         ):
             raise ValueError(
-                "'DATA.PREPROCESS.ZOOM.ZOOM_FACTOR' needs to have the same length as 'TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER'"
+                "'DATA.PREPROCESS.ZOOM.ZOOM_FACTOR' needs to have the same length as 'DATA.TEST.INPUT_IMG_AXES_ORDER'"
             )
 
     #### Data ####
@@ -1168,7 +1181,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             cfg.DATA.TEST.LOAD_GT
             and not os.path.exists(cfg.DATA.TEST.GT_PATH)
             and cfg.PROBLEM.TYPE not in ["CLASSIFICATION", "SELF_SUPERVISED"]
-            and not cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA
+            and not cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA
         ):
             raise ValueError("Test data mask not found: {}".format(cfg.DATA.TEST.GT_PATH))
     if cfg.TEST.ENABLE and cfg.TEST.BY_CHUNKS.ENABLE:
@@ -1184,47 +1197,47 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "chunk_by_chunk",
                 "entire_pred",
             ], "'TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE' needs to be in ['chunk_by_chunk', 'entire_pred']"
-        if len(cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER) < 3:
-            raise ValueError("'TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER' needs to be at least of length 3, e.g., 'ZYX'")
+        if len(cfg.DATA.TEST.INPUT_IMG_AXES_ORDER) < 3:
+            raise ValueError("'DATA.TEST.INPUT_IMG_AXES_ORDER' needs to be at least of length 3, e.g., 'ZYX'")
         if cfg.MODEL.N_CLASSES > 2:
             raise ValueError("Not implemented pipeline option: 'MODEL.N_CLASSES' > 2 and 'TEST.BY_CHUNKS'")
-        if cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA:
-            if cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH == "":
+        if cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA:
+            if cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH == "":
                 raise ValueError(
-                    "'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH' needs to be set when "
-                    "'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA' is used."
+                    "'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH' needs to be set when "
+                    "'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA' is used."
                 )
             if cfg.DATA.TEST.LOAD_GT:
                 if cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
-                    if cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_GT_PATH == "":
+                    if cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_GT_PATH == "":
                         raise ValueError(
-                            "'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_GT_PATH' needs to be set when "
-                            "'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA' is used."
+                            "'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_GT_PATH' needs to be set when "
+                            "'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA' is used."
                         )
                 else:  # synapses
-                    if cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_ID_PATH == "":
+                    if cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_ID_PATH == "":
                         raise ValueError(
-                            "'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_ID_PATH' needs to be set when 'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA' is used "
+                            "'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_ID_PATH' needs to be set when 'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA' is used "
                             "and PROBLEM.INSTANCE_SEG.TYPE == 'synapses'"
                         )
-                    # if cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_TYPES_PATH == "":
+                    # if cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_TYPES_PATH == "":
                     #     raise ValueError(
-                    #         "'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_TYPES_PATH' needs to be set when 'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA' is used "
+                    #         "'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_TYPES_PATH' needs to be set when 'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA' is used "
                     #         "and PROBLEM.INSTANCE_SEG.TYPE == 'synapses'"
                     #     )
-                    if cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_PARTNERS_PATH == "":
+                    if cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_PARTNERS_PATH == "":
                         raise ValueError(
-                            "'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_PARTNERS_PATH' needs to be set when 'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA' is used "
+                            "'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_PARTNERS_PATH' needs to be set when 'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA' is used "
                             "and PROBLEM.INSTANCE_SEG.TYPE == 'synapses'"
                         )
-                    if cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_LOCATIONS_PATH == "":
+                    if cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_LOCATIONS_PATH == "":
                         raise ValueError(
-                            "'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_LOCATIONS_PATH' needs to be set when 'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA' is used "
+                            "'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_LOCATIONS_PATH' needs to be set when 'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA' is used "
                             "and PROBLEM.INSTANCE_SEG.TYPE == 'synapses'"
                         )
-                    if cfg.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_RESOLUTION_PATH == "":
+                    if cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_RESOLUTION_PATH == "":
                         raise ValueError(
-                            "'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_RESOLUTION_PATH' needs to be set when 'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA' is used "
+                            "'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_RESOLUTION_PATH' needs to be set when 'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA' is used "
                             "and PROBLEM.INSTANCE_SEG.TYPE == 'synapses'"
                         )
 
@@ -1996,6 +2009,29 @@ def convert_old_model_cfg_to_current_version(old_cfg):
                         del old_cfg["TEST"]["POST_PROCESSING"]["DET_WATERSHED_FIRST_DILATION"]
                 else:
                     del old_cfg["TEST"]["POST_PROCESSING"]["DET_WATERSHED_FIRST_DILATION"]
+
+        if "BY_CHUNKS" in old_cfg["TEST"]:
+            for i, x in enumerate(old_cfg["TEST"]["BY_CHUNKS"].copy()):
+                if x in [
+                    "INPUT_IMG_AXES_ORDER",
+                    "INPUT_MASK_AXES_ORDER",
+                    "INPUT_ZARR_MULTIPLE_DATA",
+                    "INPUT_ZARR_MULTIPLE_DATA_RAW_PATH",
+                    "INPUT_ZARR_MULTIPLE_DATA_GT_PATH",
+                    "INPUT_ZARR_MULTIPLE_DATA_ID_PATH",
+                    "INPUT_ZARR_MULTIPLE_DATA_PARTNERS_PATH",
+                    "INPUT_ZARR_MULTIPLE_DATA_LOCATIONS_PATH",
+                    "INPUT_ZARR_MULTIPLE_DATA_RESOLUTION_PATH",
+                ]:
+                    # Ensure ["DATA"]["TEST"] exists
+                    if i == 0:
+                        if "DATA" not in old_cfg:
+                            old_cfg["DATA"] = {}
+                        if "TEST" not in old_cfg["DATA"]:
+                            old_cfg["DATA"]["TEST"] = {}
+
+                    old_cfg["DATA"]["TEST"][x] = old_cfg["TEST"]["BY_CHUNKS"][x]
+                    del old_cfg["TEST"]["BY_CHUNKS"][x]
 
         if "DET_MIN_TH_TO_BE_PEAK" in old_cfg["TEST"]:
             if isinstance(old_cfg["TEST"]["DET_MIN_TH_TO_BE_PEAK"], list):

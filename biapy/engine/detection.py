@@ -992,14 +992,14 @@ class Detection_Workflow(Base_Workflow):
         data_ordered_slices = order_dimensions(
             slices,
             input_order="TZYXC",
-            output_order=self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
+            output_order=self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER,
             default_value=0,
         )
 
-        if "C" not in self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER:
-            expected_out_data_order = self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER + "C"
+        if "C" not in self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER:
+            expected_out_data_order = self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER + "C"
         else:
-            expected_out_data_order = self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER
+            expected_out_data_order = self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER
 
         current_order = np.array(range(len(pred.shape)))
         transpose_order = order_dimensions(
@@ -1082,7 +1082,7 @@ class Detection_Workflow(Base_Workflow):
         # Load H5/Zarr
         pred_file, pred = read_chunked_data(filename)
 
-        t_dim, z_dim, c_dim, y_dim, x_dim = order_dimensions(pred.shape, self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER)
+        t_dim, z_dim, c_dim, y_dim, x_dim = order_dimensions(pred.shape, self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER)
         pred_shape = [z_dim, y_dim, x_dim]
 
         # Fill the new data
@@ -1161,7 +1161,7 @@ class Detection_Workflow(Base_Workflow):
 
         t_dim, z_dim, y_dim, x_dim, c_dim = order_dimensions(
             self.cfg.DATA.PREPROCESS.ZOOM.ZOOM_FACTOR,
-            input_order=self.cfg.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER,
+            input_order=self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER,
             output_order="TZYXC",
             default_value=1,
         )

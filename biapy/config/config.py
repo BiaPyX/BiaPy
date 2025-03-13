@@ -391,7 +391,7 @@ class Config:
         # WARNING: Only implemented for _C.TEST.BY_CHUNKS = True. It will change the zoom of each patch individually.
         # This is useful when the input image has a different resolution than the one used in the training. The value
         # is the zoom factor to be applied to each patch using scipy.ndimage.zoom.
-        # "E.g. [1,2,1,3,3] that needs to match _C.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER axes"
+        # "E.g. [1,2,1,3,3] that needs to match _C.DATA.TEST.INPUT_IMG_AXES_ORDER axes"
         _C.DATA.PREPROCESS.ZOOM.ZOOM_FACTOR = [1, 1, 1, 1, 1]
 
         # Gaussian blur
@@ -471,6 +471,28 @@ class Config:
         _C.DATA.TEST.RESOLUTION = (-1,)
         # Whether to apply argmax to the predicted images
         _C.DATA.TEST.ARGMAX_TO_OUTPUT = True
+        # Order of the axes of the image when using Zarr/H5 images in test data.
+        _C.DATA.TEST.INPUT_IMG_AXES_ORDER = "TZCYX"
+        # Order of the axes of the mask when using Zarr/H5 images in test data.
+        _C.DATA.TEST.INPUT_MASK_AXES_ORDER = "TZCYX"
+        # Whether your input Zarr contains the raw images and labels together or not. Use 'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH'
+        # and 'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_GT_PATH' to determine the tag to find within the Zarr
+        _C.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA = False
+        # Paths to the raw and gt within the Zarr file. Only used when 'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA' is True.
+        # E.g. 'volumes.raw' for raw and 'volumes.labels.neuron_ids' for GT path.
+        _C.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH = ""
+        _C.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_GT_PATH = ""
+        # For synapse detection. The information must be stored as CREMI dataset (https://cremi.org/data/)
+        # Path within the file where the ``ids`` are stored. Reference in CREMI: ``annotations/ids``
+        _C.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_ID_PATH = "annotations.ids"
+        # Path within the file where the ``types`` are stored (not used). Reference in CREMI: ``annotations/types``
+        # _C.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_TYPES_PATH = "annotations.types"
+        # Path within the file where the ``partners`` are stored. Reference in CREMI: ``annotations/partners``
+        _C.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_PARTNERS_PATH = "annotations.presynaptic_site.partners"
+        # Path within the file where the ``locations`` are stored. Reference in CREMI: ``annotations/locations``
+        _C.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_LOCATIONS_PATH = "annotations.locations"
+        # Path within the file where the ``resolution`` is stored. Reference in CREMI: ``["volumes/raw"].attrs["offset"]``
+        _C.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_RESOLUTION_PATH = 'volumes.raw'
         # Remove test images by the conditions based on their properties. When using Zarr each patch within the Zarr will be processed and will
         # not depend on 'DATA.FILTER_BY_IMAGE' variable
         # The three variables, DATA.TEST.FILTER_SAMPLES.PROPS, DATA.TEST.FILTER_SAMPLES.VALUES and DATA.TEST.FILTER_SAMPLES.SIGNS will compose a 
@@ -1150,28 +1172,6 @@ class Config:
         _C.TEST.BY_CHUNKS.SAVE_OUT_TIF = False
         # In how many iterations the H5 writer needs to flush the data. No need to do so with Zarr files.
         _C.TEST.BY_CHUNKS.FLUSH_EACH = 100
-        # Order of the axes of the image when using Zarr/H5 images in test data.
-        _C.TEST.BY_CHUNKS.INPUT_IMG_AXES_ORDER = "TZCYX"
-        # Order of the axes of the mask when using Zarr/H5 images in test data.
-        _C.TEST.BY_CHUNKS.INPUT_MASK_AXES_ORDER = "TZCYX"
-        # Whether your input Zarr contains the raw images and labels together or not. Use 'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH'
-        # and 'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_GT_PATH' to determine the tag to find within the Zarr
-        _C.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA = False
-        # Paths to the raw and gt within the Zarr file. Only used when 'TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA' is True.
-        # E.g. 'volumes.raw' for raw and 'volumes.labels.neuron_ids' for GT path.
-        _C.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH = ""
-        _C.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_GT_PATH = ""
-        # For synapse detection. The information must be stored as CREMI dataset (https://cremi.org/data/)
-        # Path within the file where the ``ids`` are stored. Reference in CREMI: ``annotations/ids``
-        _C.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_ID_PATH = "annotations.ids"
-        # Path within the file where the ``types`` are stored (not used). Reference in CREMI: ``annotations/types``
-        # _C.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_TYPES_PATH = "annotations.types"
-        # Path within the file where the ``partners`` are stored. Reference in CREMI: ``annotations/partners``
-        _C.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_PARTNERS_PATH = "annotations.presynaptic_site.partners"
-        # Path within the file where the ``locations`` are stored. Reference in CREMI: ``annotations/locations``
-        _C.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_LOCATIONS_PATH = "annotations.locations"
-        # Path within the file where the ``resolution`` is stored. Reference in CREMI: ``["volumes/raw"].attrs["offset"]``
-        _C.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA_RESOLUTION_PATH = 'volumes.raw'
 
         # Whether after reconstructing the prediction the pipeline will continue each workflow specific steps. For this process
         # the prediction image needs to be loaded into memory so be sure that it can fit in you memory. E.g. in instance
@@ -1549,7 +1549,7 @@ def update_dependencies(cfg) -> None:
     # If value is not the default
     call.DATA.VAL.DETECTION_MASK_DIR = call.DATA.VAL.GT_PATH + "_detection_masks_" + str(cpd)
     call.DATA.VAL.SSL_SOURCE_DIR = call.DATA.VAL.PATH + "_ssl_source"
-    tdata = call.DATA.TEST.GT_PATH if not call.TEST.BY_CHUNKS.INPUT_ZARR_MULTIPLE_DATA else call.DATA.TEST.PATH
+    tdata = call.DATA.TEST.GT_PATH if not call.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA else call.DATA.TEST.PATH
     if call.PROBLEM.INSTANCE_SEG.TYPE == "regular":
         call.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR = (
             tdata
