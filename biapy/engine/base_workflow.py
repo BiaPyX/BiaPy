@@ -1660,6 +1660,7 @@ class Base_Workflow(metaclass=ABCMeta):
             if apply_norm:
                 self.norm_module.set_stats_from_image(self.bmz_config[sample_key])
                 self.bmz_config[sample_key], _ = self.norm_module.apply_image_norm(self.bmz_config[sample_key])
+                self.bmz_config[sample_key] = self.bmz_config[sample_key].astype(np.float32)
 
         # Save test_input without the normalization
         _prepare_bmz_sample("test_input", img, apply_norm=False)
