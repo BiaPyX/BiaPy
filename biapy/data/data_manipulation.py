@@ -3086,6 +3086,45 @@ def pad_and_reflect(img: NDArray, crop_shape: Tuple[int, ...], verbose: bool = F
                 print("Reflected from {} to {}".format(o_shape, img.shape))
     return img
 
+def extract_patch_within_image(img: NDArray, coords: PatchCoords, is_3d=False) -> NDArray:
+    """
+    Extract patch within the image.
+
+    Parameters
+    ----------
+    img : 3D/4D Numpy array
+        Input image to extract the patch from. E.g. ``(y, x, channels)`` in ``2D`` and
+        ``(z, y, x, channels)`` in ``3D``.
+
+    coords : dict
+        Coordinates of the crop where the following keys are expected:
+            * ``"z_start"``: starting point of the patch in Z axis.
+            * ``"z_end"``: end point of the patch in Z axis.
+            * ``"y_start"``: starting point of the patch in Y axis.
+            * ``"y_end"``: end point of the patch in Y axis.
+            * ``"x_start"``: starting point of the patch in X axis.
+            * ``"x_end"``: end point of the patch in X axis.
+
+    is_3d : bool, optional
+        Whether if the expected image to read is 3D or not.
+
+    Returns
+    -------
+    img : 3D/4D Numpy array
+        X element. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
+    """
+    if not is_3d:
+        img = img[
+            coords.y_start : coords.y_end,
+            coords.x_start : coords.x_end,
+        ]
+    else:
+        img = img[
+            coords.z_start : coords.z_end,
+            coords.y_start : coords.y_end,
+            coords.x_start : coords.x_end,
+        ]
+    return img
 
 def img_to_onehot_encoding(img: NDArray, num_classes: int = 2) -> NDArray:
     """

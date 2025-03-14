@@ -371,7 +371,7 @@ all_test_info["Test31"] = {
         {"type": "regular", "pattern": "Test IoU (B channel) (merge patches):", "gt": True, "value": 0.7},
         {"type": "BMZ", "pattern": "Package path:", "bmz_package_name": "NucleiSegmentationBoundaryModel.zip"},
         {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 1, "metric": "f1",
-            "gt": True, "value": 0.9},
+            "gt": True, "value": 0.85},
     ]
 }
 

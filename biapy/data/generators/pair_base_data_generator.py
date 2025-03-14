@@ -21,9 +21,9 @@ from numpy.typing import NDArray
 
 from biapy.data.generators.augmentors import *
 from biapy.utils.misc import is_main_process
-from biapy.data.data_manipulation import pad_and_reflect, load_img_data
+from biapy.data.data_manipulation import pad_and_reflect, load_img_data, extract_patch_within_image
 from biapy.data.data_3D_manipulation import extract_patch_from_efficient_file
-from biapy.data.dataset import BiaPyDataset, PatchCoords
+from biapy.data.dataset import BiaPyDataset
 from biapy.data.norm import Normalization
 
 
@@ -781,46 +781,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         """Defines the number of samples per epoch."""
         return self.length
 
-    def extract_patch_within_image(self, img: NDArray, coords: PatchCoords, is_3d=False):
-        """
-        Extract patch within the image.
-
-        Parameters
-        ----------
-        img : 3D/4D Numpy array
-            Input image to extract the patch from. E.g. ``(y, x, channels)`` in ``2D`` and
-            ``(z, y, x, channels)`` in ``3D``.
-
-        coords : dict
-            Coordinates of the crop where the following keys are expected:
-                * ``"z_start"``: starting point of the patch in Z axis.
-                * ``"z_end"``: end point of the patch in Z axis.
-                * ``"y_start"``: starting point of the patch in Y axis.
-                * ``"y_end"``: end point of the patch in Y axis.
-                * ``"x_start"``: starting point of the patch in X axis.
-                * ``"x_end"``: end point of the patch in X axis.
-
-        is_3d : bool, optional
-            Whether if the expected image to read is 3D or not.
-
-        Returns
-        -------
-        img : 3D/4D Numpy array
-            X element. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
-        """
-        if not is_3d:
-            img = img[
-                coords.y_start : coords.y_end,
-                coords.x_start : coords.x_end,
-            ]
-        else:
-            img = img[
-                coords.z_start : coords.z_end,
-                coords.y_start : coords.y_end,
-                coords.x_start : coords.x_end,
-            ]
-        return img
-
     def load_sample(self, _idx: int, first_load: bool = False) -> Tuple[NDArray, NDArray]:
         """
         Load one data sample given its corresponding index.
@@ -863,7 +823,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
                 # Extract the sample within the image
                 if sample.coords:
-                    img = self.extract_patch_within_image(img, sample.coords, is_3d=(self.ndim == 3))
+                    img = extract_patch_within_image(img, sample.coords, is_3d=(self.ndim == 3))
             else:
                 coords = sample.coords
                 data_axis_order = self.X.dataset_info[sample.fid].get_input_axes()
@@ -888,7 +848,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             )
             # Extract the sample within the image
             if msample.coords:
-                mask = self.extract_patch_within_image(mask, msample.coords, is_3d=(self.ndim == 3))
+                mask = extract_patch_within_image(mask, msample.coords, is_3d=(self.ndim == 3))
         else:
             msample = self.Y.sample_list[idx]
             if msample.img_is_loaded():
@@ -914,7 +874,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                     if msample.coords:
                         coords = msample.coords
                         assert coords is not None 
-                        mask = self.extract_patch_within_image(mask, coords, is_3d=(self.ndim == 3))
+                        mask = extract_patch_within_image(mask, coords, is_3d=(self.ndim == 3))
                 else:
                     coords = msample.coords
                     data_axis_order = self.Y.dataset_info[msample.fid].get_input_axes()

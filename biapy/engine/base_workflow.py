@@ -1025,13 +1025,17 @@ class Base_Workflow(metaclass=ABCMeta):
             (
                 self.test_generator, 
                 self.data_norm, 
-                self.bmz_config["test_input"]
+                test_input
             ) = create_test_augmentor(
                 self.cfg,
                 self.X_test,
                 self.Y_test,
                 norm_module=self.test_norm_module,
             )
+            # Only save it if it was not done before
+            if "test_input" not in self.bmz_config:
+                self.bmz_config["test_input"] = test_input
+
 
     def apply_model_activations(self, pred, training=False):
         """
@@ -1662,8 +1666,9 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.bmz_config[sample_key], _ = self.norm_module.apply_image_norm(self.bmz_config[sample_key])
                 self.bmz_config[sample_key] = self.bmz_config[sample_key].astype(np.float32)
 
-        # Save test_input without the normalization
-        _prepare_bmz_sample("test_input", img, apply_norm=False)
+        # Save test_input without the normalization if not already saved
+        if "test_input" not in self.bmz_config:
+            _prepare_bmz_sample("test_input", img, apply_norm=False)
 
         # Save test_input with the normalization
         if "test_input_norm" not in self.bmz_config:
@@ -1693,9 +1698,9 @@ class Base_Workflow(metaclass=ABCMeta):
 
         # Save output
         _prepare_bmz_sample("test_output", pred.clone().cpu().detach().numpy().astype(np.float32), apply_norm=False)
-        
+
         self.bmz_config["postprocessing"] = []
-        if "postprocessing" not in self.bmz_config and self.cfg.MODEL.SOURCE == "biapy":
+        if self.cfg.MODEL.SOURCE == "biapy":
             # Check activations to be inserted as postprocessing in BMZ        
             act = list(self.activations[0].values())
             for ac in act:

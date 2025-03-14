@@ -19,7 +19,7 @@ from biapy.data.generators.test_pair_data_generators import test_pair_data_gener
 from biapy.data.generators.test_single_data_generator import test_single_data_generator
 from biapy.config.config import Config
 from biapy.data.pre_processing import preprocess_data
-from biapy.data.data_manipulation import save_tif
+from biapy.data.data_manipulation import save_tif, extract_patch_within_image
 from biapy.data.dataset import BiaPyDataset, PatchCoords
 from biapy.data.norm import Normalization
 from biapy.data.data_3D_manipulation import extract_patch_from_efficient_file
@@ -471,16 +471,22 @@ def create_test_augmentor(
     bmz_input_sample = None
     bmz_input_sample, _, _, _, _ = test_generator.load_sample(0, first_load=True)
 
-    # Ensure a patch when working with Zarr/H5 files 
-    if not isinstance(bmz_input_sample, np.ndarray):
-        patch = PatchCoords(
-            z_start=0 if cfg.PROBLEM.NDIM == "3D" else None,
-            z_end=cfg.DATA.PATCH_SIZE[0] if cfg.PROBLEM.NDIM == "3D" else None,
-            y_start=0,
-            y_end=cfg.DATA.PATCH_SIZE[-3],
-            x_start=0,
-            x_end=cfg.DATA.PATCH_SIZE[-2],
+    # Ensure a patch size
+    patch = PatchCoords(
+        z_start=0 if cfg.PROBLEM.NDIM == "3D" else None,
+        z_end=cfg.DATA.PATCH_SIZE[0] if cfg.PROBLEM.NDIM == "3D" else None,
+        y_start=0,
+        y_end=cfg.DATA.PATCH_SIZE[-3],
+        x_start=0,
+        x_end=cfg.DATA.PATCH_SIZE[-2],
+    )
+    if isinstance(bmz_input_sample, np.ndarray):
+        bmz_input_sample = extract_patch_within_image(
+            bmz_input_sample, 
+            patch, 
+            is_3d=True if cfg.PROBLEM.NDIM == "3D" else False
         )
+    else:
         bmz_input_sample = extract_patch_from_efficient_file(
             bmz_input_sample, 
             patch, 
