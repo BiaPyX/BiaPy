@@ -1876,7 +1876,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             )
         if cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS == 0:
             raise ValueError(
-                "'TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS' needs to be set when 'TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS' is True"
+                "'TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS' needs to be set when 'TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS' is True"
             )
 
 
@@ -2000,8 +2000,6 @@ def convert_old_model_cfg_to_current_version(old_cfg):
                         ]["REMOVE_CLOSE_POINTS_RADIUS"][0]
                     else:
                         del old_cfg["TEST"]["POST_PROCESSING"]["REMOVE_CLOSE_POINTS_RADIUS"]
-                else:
-                    del old_cfg["TEST"]["POST_PROCESSING"]["REMOVE_CLOSE_POINTS_RADIUS"]
 
             if "DET_WATERSHED_FIRST_DILATION" in old_cfg["TEST"]["POST_PROCESSING"]:
                 if isinstance(old_cfg["TEST"]["POST_PROCESSING"]["DET_WATERSHED_FIRST_DILATION"], list):
@@ -2011,8 +2009,6 @@ def convert_old_model_cfg_to_current_version(old_cfg):
                         ]["DET_WATERSHED_FIRST_DILATION"][0]
                     else:
                         del old_cfg["TEST"]["POST_PROCESSING"]["DET_WATERSHED_FIRST_DILATION"]
-                else:
-                    del old_cfg["TEST"]["POST_PROCESSING"]["DET_WATERSHED_FIRST_DILATION"]
 
         if "BY_CHUNKS" in old_cfg["TEST"]:
             for i, x in enumerate(old_cfg["TEST"]["BY_CHUNKS"].copy()):
@@ -2043,8 +2039,6 @@ def convert_old_model_cfg_to_current_version(old_cfg):
                     old_cfg["TEST"]["DET_MIN_TH_TO_BE_PEAK"] = old_cfg["TEST"]["DET_MIN_TH_TO_BE_PEAK"][0]
                 else:
                     del old_cfg["TEST"]["DET_MIN_TH_TO_BE_PEAK"]
-            else:
-                del old_cfg["TEST"]["DET_MIN_TH_TO_BE_PEAK"]
 
         if "DET_TOLERANCE" in old_cfg["TEST"]:
             if isinstance(old_cfg["TEST"]["DET_TOLERANCE"], list):
@@ -2052,8 +2046,6 @@ def convert_old_model_cfg_to_current_version(old_cfg):
                     old_cfg["TEST"]["DET_TOLERANCE"] = old_cfg["TEST"]["DET_TOLERANCE"][0]
                 else:
                     del old_cfg["TEST"]["DET_TOLERANCE"]
-            else:
-                del old_cfg["TEST"]["DET_TOLERANCE"]
 
     if "PROBLEM" in old_cfg:
         ndim = 3 if "NDIM" in old_cfg["PROBLEM"] and old_cfg["PROBLEM"]["NDIM"] == "3D" else 2
@@ -2103,7 +2095,7 @@ def convert_old_model_cfg_to_current_version(old_cfg):
                         ]
                         del old_cfg["DATA"]["NORMALIZATION"]["PERC_UPPER"]
 
-            if old_cfg["DATA"]["NORMALIZATION"]["TYPE"] == "custom":
+            if "TYPE" in old_cfg["DATA"]["NORMALIZATION"] and old_cfg["DATA"]["NORMALIZATION"]["TYPE"] == "custom":
                 old_cfg["DATA"]["NORMALIZATION"]["TYPE"] = "zero_mean_unit_variance"
                 if "CUSTOM_MEAN" in old_cfg["DATA"]["NORMALIZATION"]:
                     old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"] = {}
