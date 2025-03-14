@@ -1892,7 +1892,6 @@ def compare_configurations_without_model(actual_cfg, old_cfg, header_message="",
         "PROBLEM.NDIM",
         "DATA.PATCH_SIZE",
         "PROBLEM.INSTANCE_SEG.DATA_CHANNELS",
-        "PROBLEM.SELF_SUPERVISED.PRETEXT_TASK",
         "PROBLEM.SUPER_RESOLUTION.UPSCALING",
         "MODEL.N_CLASSES",
     ]
