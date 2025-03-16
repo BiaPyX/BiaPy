@@ -312,7 +312,7 @@ class Config:
         # conditions, the image won't be used for training.
         #
         # In PROPS, we define the property to look at to establish the condition. The available properties are: ['foreground', 'mean', 'min', 'max', 
-        # 'target_mean', 'target_min', 'target_max', 'diff'].
+        # 'target_mean', 'target_min', 'target_max', 'diff', 'diff_by_min_max_ratio', 'diff_by_target_min_max_ratio'].
         #
         #   * 'foreground' is defined as the percentage of pixels/voxels corresponding to the foreground mask. This option is only valid for
         #     SEMANTIC_SEG, INSTANCE_SEG and DETECTION.
@@ -346,7 +346,8 @@ class Config:
         _C.DATA.TRAIN.FILTER_SAMPLES = CN()
         # Whether to enable or not the filtering by properties
         _C.DATA.TRAIN.FILTER_SAMPLES.ENABLE = False
-        # List of lists of properties to apply a filter. Available properties are: ['foreground', 'mean', 'min', 'max', 'target_mean', 'target_min', 'target_max', 'diff']
+        # List of lists of properties to apply a filter. Available properties are: ['foreground', 'mean', 'min', 'max', 
+        # 'target_mean', 'target_min', 'target_max', 'diff', 'diff_by_min_max_ratio', 'diff_by_target_min_max_ratio']
         _C.DATA.TRAIN.FILTER_SAMPLES.PROPS = []
         # List of ints/float that represent the values of the properties listed in 'DATA.TRAIN.FILTER_SAMPLES.PROPS'
         # that the images need to satisfy to not be dropped.
@@ -499,7 +500,7 @@ class Config:
         # list of conditions to remove the images. They are list of list of conditions. For instance, the conditions can be like this: [['A'], ['B','C']]. 
         # Then, if the image satisfies the first list of conditions, only 'A' in this first case (from ['A'] list), or satisfy 'B' and 'C' (from ['B','C'] list) 
         # it will be removed from the image. In each sublist all the conditions must be satisfied. Available properties are: ['foreground', 'mean', 'min', 'max', 
-        # 'target_mean', 'target_min', 'target_max', 'diff'].
+        # 'target_mean', 'target_min', 'target_max', 'diff', 'diff_by_min_max_ratio', 'diff_by_target_min_max_ratio'].
         #
         # Each property descrition:
         #   * 'foreground' is defined as the percentage of pixels/voxels corresponding to the foreground mask. This option is only valid for
@@ -531,7 +532,8 @@ class Config:
         _C.DATA.TEST.FILTER_SAMPLES = CN()
         # Whether to enable or not the filtering by properties
         _C.DATA.TEST.FILTER_SAMPLES.ENABLE = False
-        # List of lists of properties to apply a filter. Available properties are: ['foreground', 'mean', 'min', 'max', 'target_mean', 'target_min', 'target_max', 'diff']
+        # List of lists of properties to apply a filter. Available properties are: ['foreground', 'mean', 'min', 'max', 
+        # 'target_mean', 'target_min', 'target_max', 'diff', 'diff_by_min_max_ratio', 'diff_by_target_min_max_ratio']
         _C.DATA.TEST.FILTER_SAMPLES.PROPS = []
         # List of ints/float that represent the values of the properties listed in 'DATA.TEST.FILTER_SAMPLES.PROPS'
         # that the images need to satisfy to not be dropped.
@@ -611,7 +613,7 @@ class Config:
         # conditions to remove the images. They are list of list of conditions. For instance, the conditions can be like this: [['A'], ['B','C']]. Then, 
         # if the image satisfies the first list of conditions, only 'A' in this first case (from ['A'] list), or satisfy 'B' and 'C' (from ['B','C'] list) 
         # it will be removed from the image. In each sublist all the conditions must be satisfied. Available properties are: ['foreground', 'mean', 'min', 'max', 
-        # 'target_mean', 'target_min', 'target_max', 'diff'].
+        # 'target_mean', 'target_min', 'target_max', 'diff', 'diff_by_min_max_ratio', 'diff_by_target_min_max_ratio'].
         #
         # Each property descrition:
         #   * 'foreground' is defined as the percentage of pixels/voxels corresponding to the foreground mask. This option is only valid for
@@ -642,7 +644,8 @@ class Config:
         _C.DATA.VAL.FILTER_SAMPLES = CN()
         # Whether to enable or not the filtering by properties
         _C.DATA.VAL.FILTER_SAMPLES.ENABLE = False
-        # List of lists of properties to apply a filter. Available properties are: ['foreground', 'mean', 'min', 'max', 'target_mean', 'target_min', 'target_max', 'diff']
+        # List of lists of properties to apply a filter. Available properties are: ['foreground', 'mean', 'min', 'max', 
+        # 'target_mean', 'target_min', 'target_max', 'diff', 'diff_by_min_max_ratio', 'diff_by_target_min_max_ratio']
         _C.DATA.VAL.FILTER_SAMPLES.PROPS = []
         # List of ints/float that represent the values of the properties listed in 'DATA.VAL.FILTER_SAMPLES.PROPS'
         # that the images need to satisfy to not be dropped.

@@ -1557,7 +1557,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     )
                 )
         elif cfg.PROBLEM.TYPE == "SUPER_RESOLUTION":
-            if cfg.PROBLEM.NDIM == "2D" and model_arch not in [
+            if model_arch not in [
                 "edsr",
                 "rcan",
                 "dfcan",
@@ -1573,26 +1573,16 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "unext_v2",
             ]:
                 raise ValueError(
-                    "Architectures available for 2D 'SUPER_RESOLUTION' are: ['edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'multiresunet', 'unext_v1', 'unext_v2']"
+                    "Architectures available for 'SUPER_RESOLUTION' are: ['edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'multiresunet', 'unext_v1', 'unext_v2']"
                 )
-            elif cfg.PROBLEM.NDIM == "3D":
-                if model_arch not in [
-                    "unet",
-                    "resunet",
-                    "resunet++",
-                    "seunet",
-                    "attention_unet",
-                    "multiresunet",
-                    "unext_v1",
-                    "unext_v2",
-                ]:
-                    raise ValueError(
-                        "Architectures available for 3D 'SUPER_RESOLUTION' are: ['unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'multiresunet', 'unext_v1', 'unext_v2']"
-                    )
-                assert cfg.MODEL.UNET_SR_UPSAMPLE_POSITION in [
-                    "pre",
-                    "post",
-                ], "'MODEL.UNET_SR_UPSAMPLE_POSITION' not in ['pre', 'post']"
+
+            # Not allowed archs
+            if cfg.PROBLEM.NDIM == "3D" and model_arch == "wdsr":
+                raise ValueError("'wdsr' architecture is not available for 3D 'SUPER_RESOLUTION'")
+            assert cfg.MODEL.UNET_SR_UPSAMPLE_POSITION in [
+                "pre",
+                "post",
+            ], "'MODEL.UNET_SR_UPSAMPLE_POSITION' not in ['pre', 'post']"
         elif cfg.PROBLEM.TYPE == "IMAGE_TO_IMAGE":
             if model_arch not in [
                 "edsr",
@@ -1613,6 +1603,9 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 raise ValueError(
                     "Architectures available for 'IMAGE_TO_IMAGE' are: ['edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'resunet_se', 'seunet', 'attention_unet', 'unetr', 'multiresunet', 'unext_v1', 'unext_v2']"
                 )
+            # Not allowed archs
+            if cfg.PROBLEM.NDIM == "3D" and model_arch == "wdsr":
+                raise ValueError("'wdsr' architecture is not available for 3D 'IMAGE_TO_IMAGE'")
         elif cfg.PROBLEM.TYPE == "SELF_SUPERVISED":
             if model_arch not in [
                 "unet",
@@ -1636,6 +1629,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     "'SELF_SUPERVISED' models available are these: ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'resunet_se', "
                     "'unetr', 'unext_v1', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae']"
                 )
+
+            # Not allowed archs
+            if cfg.PROBLEM.NDIM == "3D" and model_arch == "wdsr":
+                raise ValueError("'wdsr' architecture is not available for 3D 'SELF_SUPERVISED'")
         elif cfg.PROBLEM.TYPE == "CLASSIFICATION":
             if model_arch not in ["simple_cnn", "vit"] and "efficientnet" not in model_arch:
                 raise ValueError(
