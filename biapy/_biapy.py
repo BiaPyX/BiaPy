@@ -161,22 +161,20 @@ class BiaPy:
         # Merge conf file with the default settings. If there is an error it tries to translate old keys to current BiaPy version.
         self.cfg = Config(self.job_dir, self.job_identifier)
         self.tmp_log_dir = os.path.join(tempfile._get_default_tempdir(), "BiaPy")
-        try:
-            self.cfg._C.merge_from_file(self.cfg_file)
-        except:
-            # Read the configuration file
-            with open(self.cfg_file, "r", encoding="utf8") as stream:
-                temp_cfg = yaml.safe_load(stream)
 
-            # Translate it to current version
-            temp_cfg = convert_old_model_cfg_to_current_version(temp_cfg)
+        # Read the configuration file
+        with open(self.cfg_file, "r", encoding="utf8") as stream:
+            temp_cfg = yaml.safe_load(stream)
 
-            # Create temporal config file
-            os.makedirs(self.tmp_log_dir, exist_ok=True)
-            tmp_cfg_file = os.path.join(self.tmp_log_dir, "temp_config.yaml")
-            with open(tmp_cfg_file, "w", encoding="utf8") as outfile:
-                yaml.dump(temp_cfg, outfile, default_flow_style=False)
-            self.cfg._C.merge_from_file(tmp_cfg_file)
+        # Translate it to current version
+        temp_cfg = convert_old_model_cfg_to_current_version(temp_cfg)
+
+        # Create temporal config file
+        os.makedirs(self.tmp_log_dir, exist_ok=True)
+        tmp_cfg_file = os.path.join(self.tmp_log_dir, "temp_config.yaml")
+        with open(tmp_cfg_file, "w", encoding="utf8") as outfile:
+            yaml.dump(temp_cfg, outfile, default_flow_style=False)
+        self.cfg._C.merge_from_file(tmp_cfg_file)
 
         update_dependencies(self.cfg)
         # self.cfg.freeze()
