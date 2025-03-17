@@ -23,9 +23,7 @@ from bioimageio.core.digest_spec import get_test_inputs
 from biapy.config.config import Config
 
 
-def build_model(
-    cfg: Config, output_channels: int, device: torch.device
-) -> Tuple[nn.Module, str, Callable, Dict]:
+def build_model(cfg: Config, output_channels: int, device: torch.device) -> Tuple[nn.Module, str, Callable, Dict]:
     # model, model_file, model_name, args
     """
     Build selected model
@@ -295,11 +293,7 @@ def build_model(
     return model, model_file, model_name, args
 
 
-def build_bmz_model(
-    cfg: Config, 
-    model: ModelDescr_v0_4 | ModelDescr_v0_5, 
-    device: torch.device
-) -> nn.Module:
+def build_bmz_model(cfg: Config, model: ModelDescr_v0_4 | ModelDescr_v0_5, device: torch.device) -> nn.Module:
     """
     Build a model from Bioimage Model Zoo (BMZ).
 
@@ -485,10 +479,12 @@ def check_bmz_model_compatibility(
                 classes = model_kwargs["n_classes"]
             elif "out_channels" in model_kwargs:
                 classes = model_kwargs["out_channels"]
+            elif "output_channels" in model_kwargs:
+                classes = model_kwargs["output_channels"]
             elif "classes" in model_kwargs:
                 classes = model_kwargs["classes"]
             if isinstance(classes, list):
-                classes = classes[0]
+                classes = classes[-1]
 
             if not isinstance(classes, int):
                 reason_message = (
@@ -686,11 +682,12 @@ def check_model_restrictions(cfg: Config, bmz_config: Dict, workflow_specs: Dict
             classes = model_kwargs["n_classes"]
         elif "out_channels" in model_kwargs:
             classes = model_kwargs["out_channels"]
+        elif "output_channels" in model_kwargs:
+            classes = model_kwargs["output_channels"]
         elif "classes" in model_kwargs:
             classes = model_kwargs["classes"]
-
         if isinstance(classes, list):
-            classes = classes[0]
+            classes = classes[-1]
 
         if not isinstance(classes, int):
             raise ValueError(f"Classes not extracted correctly. Obtained {classes}")
@@ -702,20 +699,49 @@ def check_model_restrictions(cfg: Config, bmz_config: Dict, workflow_specs: Dict
     elif specific_workflow in ["INSTANCE_SEG"]:
         # Assumed it's BC. This needs a more elaborated process. Still deciding this:
         # https://github.com/bioimage-io/spec-bioimage-io/issues/621
+        
+        # Defaults
         channels = 2
+        channel_code = "BC" 
+        classes = 2
+
         if "out_channels" in model_kwargs:
             channels = model_kwargs["out_channels"]
-        if channels == 1:
-            channel_code = "C"
-        elif channels == 2:
-            channel_code = "BC"
-        elif channels == 3:
-            channel_code = "BCM"
+        elif "output_channels" in model_kwargs:
+            channels = model_kwargs["output_channels"]
+
+        if "biapy" in bmz_config["original_bmz_config"].tags:
+            # CartoCell models
+            if (
+                "cyst" in bmz_config["original_bmz_config"].tags
+                and "3d" in bmz_config["original_bmz_config"].tags
+                and "fluorescence" in bmz_config["original_bmz_config"].tags
+            ):
+                channel_code = "BCM"
+
+            # Handle multihead
+            assert isinstance(channels, list)
+            if len(channels) == 2:
+                classes = channels[-1]
+            channels = channels[0]
+
+        else: # for other models set some defaults
+            if isinstance(channels, list):
+                channels = channels[-1]
+            if channels == 1:
+                channel_code = "C"
+            elif channels == 2:
+                channel_code = "BC"
+            elif channels == 3:
+                channel_code = "A"
 
         if channels > 3:
             raise ValueError(f"Not recognized number of channels for instance segmentation. Obtained {channels}")
 
         opts["PROBLEM.INSTANCE_SEG.DATA_CHANNELS"] = channel_code
+        opts["PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS"] = [1,]*channels
+        if classes != 2:
+            opts["MODEL.N_CLASSES"] = max(2, classes)
 
     # 3) Change preprocessing to the one stablished by BMZ by translate BMZ keywords into BiaPy's
     # 'zero_mean_unit_variance' and 'fixed_zero_mean_unit_variance' norms of BMZ can be translated to our 'custom' norm
@@ -735,7 +761,7 @@ def check_model_restrictions(cfg: Config, bmz_config: Dict, workflow_specs: Dict
 
             opts["DATA.NORMALIZATION.TYPE"] = "zero_mean_unit_variance"
             opts["DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.MEAN_VAL"] = mean
-            opts["DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.STD_VAL"]  = std
+            opts["DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.STD_VAL"] = std
 
         # 'scale_linear' norm of BMZ is close to our 'div' norm (TODO: we need to control the "gain" arg)
         elif bmz_config["preprocessing"][key_to_find] == "scale_linear":
@@ -751,8 +777,12 @@ def check_model_restrictions(cfg: Config, bmz_config: Dict, workflow_specs: Dict
                 or float(bmz_config["preprocessing"]["kwargs"]["max_percentile"]) != 100
             ):
                 opts["DATA.NORMALIZATION.PERC_CLIP.ENABLE"] = True
-                opts["DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC"] = float(bmz_config["preprocessing"]["kwargs"]["min_percentile"])
-                opts["DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC"] = float(bmz_config["preprocessing"]["kwargs"]["max_percentile"])
+                opts["DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC"] = float(
+                    bmz_config["preprocessing"]["kwargs"]["min_percentile"]
+                )
+                opts["DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC"] = float(
+                    bmz_config["preprocessing"]["kwargs"]["max_percentile"]
+                )
 
     option_list = []
     for key, val in opts.items():
@@ -772,10 +802,7 @@ def get_cfg_key_value(obj, attr, *args):
     return functools.reduce(_getattr, [obj] + attr.split("."))
 
 
-def build_torchvision_model(
-    cfg: Config, 
-    device: torch.device
-) -> Tuple[nn.Module, Callable]:
+def build_torchvision_model(cfg: Config, device: torch.device) -> Tuple[nn.Module, Callable]:
     # Find model in TorchVision
     if "quantized_" in cfg.MODEL.TORCHVISION_MODEL_NAME:
         mdl = importlib.import_module("torchvision.models.quantization", cfg.MODEL.TORCHVISION_MODEL_NAME)
