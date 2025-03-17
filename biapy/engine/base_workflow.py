@@ -682,13 +682,13 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.bmz_pipeline = create_prediction_pipeline(
                     self.bmz_config["original_bmz_config"],
                     devices=None,
-                    weight_format="torchscript",
+                    weight_format="pytorch_state_dict",
                 )
             except Exception as e:
                 print(f"The error thrown during the BMZ model load was:\n{e}")
                 raise ValueError(
                     "An error ocurred when creating the BMZ model (see above). "
-                    "BiaPy only supports models prepared with Torchscript."
+                    "BiaPy only supports models prepared with pytorch_state_dict."
                 )
 
             if self.args.distributed:
