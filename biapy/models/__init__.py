@@ -732,16 +732,15 @@ def check_model_restrictions(cfg: Config, bmz_config: Dict, workflow_specs: Dict
                 channel_code = "C"
             elif channels == 2:
                 channel_code = "BC"
-            elif channels == 3:
+            elif channels == 8:
                 channel_code = "A"
-
-        if channels > 3:
-            raise ValueError(f"Not recognized number of channels for instance segmentation. Obtained {channels}")
 
         opts["PROBLEM.INSTANCE_SEG.DATA_CHANNELS"] = channel_code
         opts["PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS"] = [1,]*channels
         if classes != 2:
             opts["MODEL.N_CLASSES"] = max(2, classes)
+        if channel_code == "A":
+            opts["LOSS.CLASS_REBALANCE"] = True
 
     # 3) Change preprocessing to the one stablished by BMZ by translate BMZ keywords into BiaPy's
     # 'zero_mean_unit_variance' and 'fixed_zero_mean_unit_variance' norms of BMZ can be translated to our 'custom' norm
