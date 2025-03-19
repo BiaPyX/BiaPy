@@ -1670,7 +1670,7 @@ def measure_morphological_props_and_filter(
         pixels = npixels[label_index]
 
         if image3d:
-            vol = pixels * (resolution[0] + resolution[1] + resolution[2])
+            vol = pixels * (resolution[0] * resolution[1] * resolution[2])
             diam = max(
                 props["bbox-3"][k] - props["bbox-0"][k],
                 props["bbox-4"][k] - props["bbox-1"][k],
@@ -1682,7 +1682,7 @@ def measure_morphological_props_and_filter(
                 props["bbox-2"][k] + ((props["bbox-5"][k] - props["bbox-2"][k]) // 2),
             ]
         else:
-            vol = pixels * (resolution[0] + resolution[1])
+            vol = pixels * (resolution[0] * resolution[1])
             diam = max(
                 props["bbox-2"][k] - props["bbox-0"][k],
                 props["bbox-3"][k] - props["bbox-1"][k],
