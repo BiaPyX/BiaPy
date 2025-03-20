@@ -1,9 +1,12 @@
 import os
 import numpy as np
 import collections
+from typing import Dict
+from yacs.config import CfgNode as CN
+
 from biapy.utils.misc import get_checkpoint_path
 from biapy.data.data_manipulation import check_value
-
+from biapy.config import Config
 
 def check_configuration(cfg, jobname, check_data_paths=True):
     """
@@ -1924,10 +1927,20 @@ def compare_configurations_without_model(actual_cfg, old_cfg, header_message="",
     print("Configurations seem to be compatible. Continuing . . .")
 
 
-def convert_old_model_cfg_to_current_version(old_cfg):
+def convert_old_model_cfg_to_current_version(old_cfg: dict):
     """
     Backward compatibility until commit 6aa291baa9bc5d7fb410454bfcea3a3da0c23604 (version 3.2.0)
     Commit url: https://github.com/BiaPyX/BiaPy/commit/6aa291baa9bc5d7fb410454bfcea3a3da0c23604
+
+    Parameters
+    ----------
+    old_cfg : dict
+        Configuration to update in case old keys are found.
+
+    Returns
+    -------
+    new_cfg : dict
+        Updated configuration to the current BiaPy version.
     """
     if "TEST" in old_cfg:
         if "STATS" in old_cfg["TEST"]:
@@ -1998,13 +2011,14 @@ def convert_old_model_cfg_to_current_version(old_cfg):
                         del old_cfg["TEST"]["POST_PROCESSING"]["REMOVE_CLOSE_POINTS_RADIUS"]
 
             if "DET_WATERSHED_FIRST_DILATION" in old_cfg["TEST"]["POST_PROCESSING"]:
-                if isinstance(old_cfg["TEST"]["POST_PROCESSING"]["DET_WATERSHED_FIRST_DILATION"], list):
-                    if len(old_cfg["TEST"]["POST_PROCESSING"]["DET_WATERSHED_FIRST_DILATION"]) > 0:
-                        old_cfg["TEST"]["POST_PROCESSING"]["DET_WATERSHED_FIRST_DILATION"] = old_cfg["TEST"][
-                            "POST_PROCESSING"
-                        ]["DET_WATERSHED_FIRST_DILATION"][0]
-                    else:
-                        del old_cfg["TEST"]["POST_PROCESSING"]["DET_WATERSHED_FIRST_DILATION"]
+                if (
+                    isinstance(old_cfg["TEST"]["POST_PROCESSING"]["DET_WATERSHED_FIRST_DILATION"], list)
+                    and len(old_cfg["TEST"]["POST_PROCESSING"]["DET_WATERSHED_FIRST_DILATION"]) > 0
+                    and isinstance(old_cfg["TEST"]["POST_PROCESSING"]["DET_WATERSHED_FIRST_DILATION"][0], list)
+                ):
+                    old_cfg["TEST"]["POST_PROCESSING"]["DET_WATERSHED_FIRST_DILATION"] = old_cfg["TEST"][
+                        "POST_PROCESSING"
+                    ]["DET_WATERSHED_FIRST_DILATION"][0]
 
         if "BY_CHUNKS" in old_cfg["TEST"]:
             for i, x in enumerate(old_cfg["TEST"]["BY_CHUNKS"].copy()):
@@ -2174,13 +2188,47 @@ def convert_old_model_cfg_to_current_version(old_cfg):
                 old_cfg["MODEL"]["BMZ"]["EXPORT"]["CITE"] = cite
                 del old_cfg["MODEL"]["BMZ"]["EXPORT_MODEL"]
 
-    if "LOSS" in old_cfg:
-        if "TYPE" in old_cfg["LOSS"]:
-            del old_cfg["LOSS"]["TYPE"]
-
     try:
         del old_cfg["PATHS"]["RESULT_DIR"]["BMZ_BUILD"]
     except:
         pass
 
     return old_cfg
+
+def diff_between_configs(old_dict: Dict | Config, new_dict: Dict | Config, path: str=""):
+    """
+    Print differences between tow given configurations. 
+
+    Paramaters
+    ----------
+    old_dict : Config or Dict
+        First dictionary to compare against ``new_dict``.
+
+    new_dict : Config or Dict
+        Second dictionary to compare against ``old_dict``.
+
+    path : str
+        Path to record the variables. As this function is recursive this will be used 
+        automatically to complete the path of the variables.
+    """
+    if isinstance(old_dict, Config):
+        old_dict = old_dict.to_dict()
+    if isinstance(new_dict, Config):
+        new_dict = new_dict.to_dict()
+
+    for k in old_dict:
+        if k not in new_dict:
+            print("'" + path + "." + k + "' removed")
+    for k in new_dict:
+        if k not in old_dict:
+            print("'" + path + "." + k + "' added")
+        if new_dict[k] != old_dict[k]:
+            if type(new_dict[k]) not in (dict, list, CN):
+                print("'" + path + "." + k + "' changed from '" + old_dict[k] + "' to '" + str(new_dict[k]) + "'")
+            else:
+                if type(old_dict[k]) != type(new_dict[k]):
+                    print("'" + path + "." + k + "' changed to '" + str(new_dict[k]) + "'")
+                else:
+                    if type(new_dict[k]) in [dict, CN]:
+                        path = path + k if path == "" else path + "." + k 
+                        diff_between_configs(old_dict[k], new_dict[k], path)

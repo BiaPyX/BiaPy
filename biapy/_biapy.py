@@ -11,8 +11,7 @@ import torch.distributed as dist
 from shutil import copyfile
 import numpy as np
 import importlib
-import tempfile
-import yaml
+from yacs.config import CfgNode as CN
 import multiprocessing
 from typing import (
     Optional,
@@ -47,6 +46,7 @@ from bioimageio.spec._internal.io_basics import Sha256
 from bioimageio.spec import save_bioimageio_package
 from bioimageio.spec.dataset.v0_3 import LinkedDataset
 
+import biapy
 from biapy.utils.misc import (
     init_devices,
     is_dist_avail_and_initialized,
@@ -63,7 +63,11 @@ from biapy.models.bmz_utils import (
 )
 
 from biapy.config.config import Config, update_dependencies
-from biapy.engine.check_configuration import check_configuration, convert_old_model_cfg_to_current_version
+from biapy.engine.check_configuration import (
+    check_configuration,
+    convert_old_model_cfg_to_current_version,
+    diff_between_configs,
+)
 from biapy.utils.util import create_file_sha256sum
 from biapy.data.data_manipulation import ensure_2d_shape, ensure_3d_shape
 
@@ -81,7 +85,7 @@ class BiaPy:
         dist_on_itp: Optional[bool] = False,
         dist_url: Optional[str] = "env://",
         dist_backend: Optional[str] = "nccl",
-        stop_ddp: Optional[bool] = True, 
+        stop_ddp: Optional[bool] = True,
     ):
         """
         Run the main functionality of the job.
@@ -117,7 +121,7 @@ class BiaPy:
 
         dist_backend: str, optional
             Backend to use in distributed mode. Should be either 'nccl' or 'gloo'. Defaults to 'nccl'.
-        
+
         stop_ddp : bool, optional
             Whether to stop DDP after train/test is done.
         """
@@ -154,37 +158,31 @@ class BiaPy:
         self.cfg_filename = tail if tail else ntpath.basename(head)
         self.cfg_file = os.path.join(self.cfg_bck_dir, self.cfg_filename)
 
+        now = datetime.datetime.now()
+        print("Date     : {}".format(now.strftime("%Y-%m-%d %H:%M:%S")))
+        print("Arguments: {}".format(self.args))
+        print("Job      : {}".format(self.job_identifier))
+        print("BiaPy    : {}".format(biapy.__version__))
+        print("Python   : {}".format(sys.version.split("\n")[0]))
+        print("PyTorch  : {}".format(torch.__version__))
+
         if not os.path.exists(self.args.config):
             raise FileNotFoundError("Provided {} config file does not exist".format(self.args.config))
         copyfile(self.args.config, self.cfg_file)
 
-        # Merge conf file with the default settings. If there is an error it tries to translate old keys to current BiaPy version.
+        # Merge configuration file with the default settings
         self.cfg = Config(self.job_dir, self.job_identifier)
-        self.tmp_log_dir = os.path.join(tempfile._get_default_tempdir(), "BiaPy")
+        self.cfg._C.merge_from_file(self.cfg_file)
 
-        # Read the configuration file
-        with open(self.cfg_file, "r", encoding="utf8") as stream:
-            temp_cfg = yaml.safe_load(stream)
-
-        # Translate it to current version
-        temp_cfg = convert_old_model_cfg_to_current_version(temp_cfg)
-
-        # Create temporal config file
-        os.makedirs(self.tmp_log_dir, exist_ok=True)
-        tmp_cfg_file = os.path.join(self.tmp_log_dir, "temp_config.yaml")
-        with open(tmp_cfg_file, "w", encoding="utf8") as outfile:
-            yaml.dump(temp_cfg, outfile, default_flow_style=False)
-        self.cfg._C.merge_from_file(tmp_cfg_file)
+        # Translates the input config it to current version
+        temp_cfg = CN(convert_old_model_cfg_to_current_version(self.cfg.copy().to_dict()))
+        if self.cfg._C.PROBLEM.PRINT_OLD_KEY_CHANGES:
+            print("The following changes were made in order to adapt the input configuration:")
+            diff_between_configs(self.cfg, temp_cfg)
+        self.cfg._C.merge_from_other_cfg(temp_cfg)
 
         update_dependencies(self.cfg)
         # self.cfg.freeze()
-
-        now = datetime.datetime.now()
-        print("Date: {}".format(now.strftime("%Y-%m-%d %H:%M:%S")))
-        print("Arguments: {}".format(self.args))
-        print("Job: {}".format(self.job_identifier))
-        print("Python       : {}".format(sys.version.split("\n")[0]))
-        print("PyTorch: ", torch.__version__)
 
         # GPU selection
         os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
@@ -763,7 +761,7 @@ class BiaPy:
                     inputs.append(input)
                     if i == 0:
                         try:
-                            file_paths["input"] = input.sample_tensor.download().path # type: ignore
+                            file_paths["input"] = input.sample_tensor.download().path  # type: ignore
                         except:
                             try:
                                 file_paths["input"] = input.test_tensor.download().path
@@ -821,7 +819,7 @@ class BiaPy:
                     outputs.append(output)
                     if i == 0:
                         try:
-                            file_paths["output"] = output.sample_tensor.download().path # type: ignore
+                            file_paths["output"] = output.sample_tensor.download().path  # type: ignore
                         except:
                             try:
                                 file_paths["output"] = output.test_tensor.download().path
@@ -1003,13 +1001,12 @@ class BiaPy:
 
         # Only exporting in pytorch_state_dict
         pytorch_state_dict = PytorchStateDictWeightsDescr(
-            source=state_dict_source, # type: ignore
+            source=state_dict_source,  # type: ignore
             sha256=state_dict_sha256,
             architecture=pytorch_architecture,
-            pytorch_version=torch.__version__, # type: ignore
+            pytorch_version=torch.__version__,  # type: ignore
             dependencies=EnvironmentFileDescr(
-                source=Path(env_file_path), 
-                sha256=Sha256(create_file_sha256sum(env_file_path))
+                source=Path(env_file_path), sha256=Sha256(create_file_sha256sum(env_file_path))
             ),
         )
 
@@ -1023,7 +1020,7 @@ class BiaPy:
         dataset_id = None
         if "data" in bmz_cfg and "dataset_id" in bmz_cfg["data"] and isinstance(bmz_cfg["data"]["dataset_id"], str):
             dataset_id = LinkedDataset(id=bmz_cfg["data"]["dataset_id"])
-        
+
         version = "0.1.0"
         if "version" in bmz_cfg and isinstance(bmz_cfg["version"], str):
             version = bmz_cfg["version"]
@@ -1035,7 +1032,7 @@ class BiaPy:
             authors=authors,
             cite=citations,
             license=license,
-            documentation=doc, # type: ignore
+            documentation=doc,  # type: ignore
             git_repo=HttpUrl("https://github.com/BiaPyX/BiaPy"),
             inputs=inputs,
             outputs=outputs,
@@ -1047,7 +1044,7 @@ class BiaPy:
             covers=covers,
             maintainers=maintainers,
             training_data=dataset_id,
-            version=version, # type: ignore
+            version=version,  # type: ignore
         )
 
         # print(f"Building BMZ package: {args}")
@@ -1058,7 +1055,7 @@ class BiaPy:
 
         summary = test_model(model_descr, absolute_tolerance=1e-3, relative_tolerance=1e-3)
         summary.display()
-        
+
         # Saving the model into BMZ format
         model_path = os.path.join(building_dir, model_name + ".zip")
         print(
@@ -1103,7 +1100,7 @@ class BiaPy:
                 bmz_cfg["version"] = self.cfg.MODEL.BMZ.EXPORT.MODEL_VERSION
 
                 self.export_model_to_bmz(self.cfg.PATHS.BMZ_EXPORT_PATH, bmz_cfg=bmz_cfg)
-                    
+
             # Wait until the main process is done
             self.wait_and_stop_ddp()
 

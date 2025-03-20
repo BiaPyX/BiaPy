@@ -1,6 +1,9 @@
 import os
 from yacs.config import CfgNode as CN
-
+import copy
+from typing import (
+    Dict,
+)
 
 class Config:
     def __init__(self, job_dir: str, job_identifier: str):
@@ -36,6 +39,9 @@ class Config:
         # Problem specification
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         _C.PROBLEM = CN()
+        # Whether to check what changed to adapt the given input configuration to the newest. Basically to now what 
+        # biapy.engine.check_configuration file's convert_old_model_cfg_to_current_version() function changes
+        _C.PROBLEM.PRINT_OLD_KEY_CHANGES = True
         # Possible options: 'SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION', 'DENOISING', 'SUPER_RESOLUTION',
         # 'SELF_SUPERVISED', 'CLASSIFICATION' and 'IMAGE_TO_IMAGE'
         _C.PROBLEM.TYPE = "SEMANTIC_SEG"
@@ -1480,6 +1486,18 @@ class Config:
         # Return a clone so that the defaults will not be altered
         # This is for the "local variable" use pattern
         return self._C.clone()
+
+    def to_dict(self):
+        return dict(self._C)
+
+    def copy(self):
+        return copy.deepcopy(self)
+
+    def __str__(self):
+        return str(self.__dict__)
+
+    def __repr__(self):
+        return str(self.__dict__)
 
 def update_dependencies(cfg) -> None:
     """Update some variables that depend of changes made after merge the .cfg file provide by the user. That is,
