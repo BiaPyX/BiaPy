@@ -5,6 +5,7 @@ import sys
 import argparse
 import datetime
 import ntpath
+import yaml
 import torch
 import pooch
 import torch.distributed as dist
@@ -172,13 +173,15 @@ class BiaPy:
 
         # Merge configuration file with the default settings
         self.cfg = Config(self.job_dir, self.job_identifier)
-        self.cfg._C.merge_from_file(self.cfg_file)
 
         # Translates the input config it to current version
-        temp_cfg = CN(convert_old_model_cfg_to_current_version(self.cfg.copy().to_dict()))
+        with open(self.cfg_file, "r", encoding="utf8") as stream:
+            original_cfg = yaml.safe_load(stream)
+        temp_cfg = CN(convert_old_model_cfg_to_current_version(original_cfg))
         if self.cfg._C.PROBLEM.PRINT_OLD_KEY_CHANGES:
             print("The following changes were made in order to adapt the input configuration:")
-            diff_between_configs(self.cfg, temp_cfg)
+            diff_between_configs(original_cfg, temp_cfg)
+        del original_cfg
         self.cfg._C.merge_from_other_cfg(temp_cfg)
 
         update_dependencies(self.cfg)
