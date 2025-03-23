@@ -39,6 +39,7 @@ dependencies = [
     "pooch>=1.8.1",
     "diplib>=3.5.1",
     "pydantic>=2.7.0,<2.10",
+    "xarray==2025.1.*",
 ]
 
 [project.scripts]
