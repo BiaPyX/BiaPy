@@ -328,6 +328,7 @@ def load_and_prepare_train_data(
                 is_mask=False,
                 is_3d=is_3d,
             )
+            norm_module.measure_by = "patch"
         else:
             X_train = samples_from_image_list(
                 list_of_data=ids,
@@ -364,6 +365,7 @@ def load_and_prepare_train_data(
                     is_mask=True,
                     is_3d=is_3d,
                 )
+                norm_module.measure_by = "patch"
             else:
 
                 # Calculate shape with upsampling
@@ -615,6 +617,7 @@ def load_and_prepare_train_data(
                     is_mask=False,
                     is_3d=is_3d,
                 )
+                norm_module.measure_by = "patch"
             else:
                 X_val = samples_from_image_list(
                     list_of_data=val_ids,
@@ -656,6 +659,7 @@ def load_and_prepare_train_data(
                         is_mask=True,
                         is_3d=is_3d,
                     )
+                    norm_module.measure_by = "patch"
                 else:
                     # Calculate shape with upsampling
                     if is_3d:
@@ -1958,17 +1962,8 @@ def samples_from_image_list_multiple_raw_one_gt(
     padding : 2D/3D int tuple
         Size of padding to be added on each axis. Shape is ``(y, x)`` for 2D or ``(z, y, x)`` for 3D.
 
-    norm_module : dict
-        Information about the normalization. Expected keys are:
-            * ``"type"``, str: normalization type to use. Possible options:
-                - ``"div"`` to divide values from ``0/255`` (or ``0/65535`` if ``uint16``) in ``[0,1]`` range.
-                - ``"scale_range"`` same as ``"div"`` but scaling the range to ``[0-max]`` and then dividing by the maximum
-                  value of the data and not by ``255`` or ``65535``.
-                - ``"zero_mean_unit_variance"`` to substract the mean and divide by std. In this option ``mean`` and ``std``
-                  can also be provided or they will be calculated from the input.
-            * "measure_by", str: how to measure the values needed for normalization. Possible options:
-                - ``"image"`` to calculate the values per image
-                - ``"patch"`` to calculate the values per patch
+    norm_module : Normalization
+        Information about the normalization.
 
     crop : bool, optional
         Whether if the data needs to be cropped or not.
@@ -2389,6 +2384,12 @@ def filter_samples_by_properties(
         This decides how the filtering is done:
             * ``True``: apply filter image by image.
             * ``False``: apply filtering sample by sample. Each sample represents a patch within an image.
+
+    norm_before_filter : bool, optional
+        Whether to apply normalization before filtering. Be aware then that the values for filtering may change.
+
+    norm_module : Normalization
+        Information about the normalization.
 
     y_dataset : BiaPyDataset, optional
         Y dataset to filter samples from.
