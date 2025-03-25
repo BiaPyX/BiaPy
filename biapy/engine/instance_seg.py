@@ -176,8 +176,11 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 self.activations = {"0": "CE_Sigmoid", "1": "CE_Sigmoid", "2": "Linear"}
                 self.model_output_channels["channels"] = 3
         else:  # synapses
-            if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BF":
-                self.activations = {"0": "CE_Sigmoid", "2": "Linear"}
+            if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "B":
+                self.activations = {"0": "CE_Sigmoid", "1": "CE_Sigmoid"}
+                self.model_output_channels["channels"] = 2
+            elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BF":
+                self.activations = {"0": "CE_Sigmoid", "1": "Linear"}
                 self.model_output_channels["channels"] = 1 + self.dims
 
         if len(self.activations) == 0:
@@ -1374,7 +1377,6 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         original_test_path, original_test_mask_path = None, None
         train_channel_mask_dir = self.cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR
         val_channel_mask_dir = self.cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR
-        
 
         if not self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA:
             test_instance_mask_dir = self.cfg.DATA.TEST.GT_PATH
@@ -1389,11 +1391,8 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         print("###########################")
 
         # Create selected channels for train data
-        if (
-            (self.cfg.TRAIN.ENABLE or self.cfg.DATA.TEST.USE_VAL_AS_TEST) 
-            and not os.path.isdir(train_channel_mask_dir)
-        ):
-            if is_main_process():
+        if self.cfg.TRAIN.ENABLE or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
+            if not os.path.isdir(train_channel_mask_dir) and is_main_process():
                 print(
                     "You select to create {} channels from given instance labels and no file is detected in {}. "
                     "So let's prepare the data. This process will be done just once!".format(
@@ -1420,9 +1419,8 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         if (
             self.cfg.TRAIN.ENABLE
             and not self.cfg.DATA.VAL.FROM_TRAIN
-            and not os.path.isdir(val_channel_mask_dir)
         ):
-            if is_main_process():
+            if not os.path.isdir(val_channel_mask_dir) and is_main_process():
                 print(
                     "You select to create {} channels from given instance labels and no file is detected in {}. "
                     "So let's prepare the data. This process will be done just once!".format(
@@ -1449,10 +1447,9 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         if (
             self.cfg.TEST.ENABLE
             and not self.cfg.DATA.TEST.USE_VAL_AS_TEST
-            and not os.path.isdir(test_channel_mask_dir) 
             and self.cfg.DATA.TEST.LOAD_GT
         ):
-            if is_main_process():
+            if not os.path.isdir(test_channel_mask_dir) and is_main_process():
                 print(
                     "You select to create {} channels from given instance labels and no file is detected in {}. "
                     "So let's prepare the data. This process will be done just once!".format(
