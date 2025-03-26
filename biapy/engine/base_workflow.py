@@ -1306,7 +1306,7 @@ class Base_Workflow(metaclass=ABCMeta):
             if self.cfg.TEST.VERBOSE and self.cfg.SYSTEM.NUM_GPUS > 1:
                 print(f"[Rank {get_rank()} ({os.getpid()})] Doing inference ")
             while True:
-                obj = self.input_queue.get(timeout=60)
+                obj = self.input_queue.get(timeout=360)
                 if obj == None:
                     break
 
@@ -1377,10 +1377,10 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.output_queue.put([p, m, patch_coords])
 
             # Get some auxiliar variables
-            self.stats["patch_by_batch_counter"] = self.extract_info_queue.get(timeout=60)
+            self.stats["patch_by_batch_counter"] = self.extract_info_queue.get(timeout=360)
             if is_main_process():
-                z_vol_info = self.extract_info_queue.get(timeout=60)
-                list_of_vols_in_z = self.extract_info_queue.get(timeout=60)
+                z_vol_info = self.extract_info_queue.get(timeout=360)
+                list_of_vols_in_z = self.extract_info_queue.get(timeout=360)
             load_data_process.join()
             output_handle_proc.join()
 
@@ -2492,9 +2492,9 @@ def insert_patch_into_dataset(
     filename, file_extension = os.path.splitext(os.path.basename(data_filename))
 
     # Obtain the total patches so we can display it for the user
-    total_patches = extract_info_queue.get(timeout=60)
+    total_patches = extract_info_queue.get(timeout=360)
     for i in tqdm(range(total_patches), disable=not is_main_process()):
-        p, m, patch_coords = output_queue.get(timeout=60)
+        p, m, patch_coords = output_queue.get(timeout=360)
 
         if "data" not in locals():
             # Channel dimension should be equal to the number of channel of the prediction
