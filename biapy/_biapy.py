@@ -169,13 +169,14 @@ class BiaPy:
 
         if not os.path.exists(self.args.config):
             raise FileNotFoundError("Provided {} config file does not exist".format(self.args.config))
-        copyfile(self.args.config, self.cfg_file)
+        if is_main_process():
+            copyfile(self.args.config, self.cfg_file)
 
         # Merge configuration file with the default settings
         self.cfg = Config(self.job_dir, self.job_identifier)
 
         # Translates the input config it to current version
-        with open(self.cfg_file, "r", encoding="utf8") as stream:
+        with open(self.args.config, "r", encoding="utf8") as stream:
             original_cfg = yaml.safe_load(stream)
         temp_cfg = CN(convert_old_model_cfg_to_current_version(original_cfg))
         if self.cfg._C.PROBLEM.PRINT_OLD_KEY_CHANGES:
