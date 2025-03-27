@@ -611,9 +611,11 @@ def synapse_channel_creation(
     # assert len(data_shape) in [5, 4]
     # d_shape = data_shape[1:-1]
     # dim = len(d_shape)
-    assert mode in ["BF"]
+    assert mode in ["B", "BF"]
     if mode == "BF":
         channels = 4
+    elif mode == "B":
+        channels = 2
 
     dtype_str = "float32"
     unique_files = []
@@ -628,7 +630,6 @@ def synapse_channel_creation(
         max(postsite_dilation[1], postsite_distance_channel_dilation[1]) + 1,
         max(postsite_dilation[2], postsite_distance_channel_dilation[2]) + 1,
     ]
-    channels = 4
     ellipse_footprint_cpd = generate_ellipse_footprint(postsite_dilation)
     ellipse_footprint_cpd2 = generate_ellipse_footprint(postsite_distance_channel_dilation)
 
@@ -703,9 +704,10 @@ def synapse_channel_creation(
                 )
 
             pre_key = str(pre_loc)
-            if insert_pre and insert_post and pre_key not in pre_post_points:
-                pre_post_points[pre_key] = []
-            pre_post_points[pre_key].append(post_loc)
+            if insert_pre and insert_post:
+                if pre_key not in pre_post_points:
+                    pre_post_points[pre_key] = []
+                pre_post_points[pre_key].append(post_loc)
 
         if len(pre_post_points) > 0:
             # Create the Zarr file where the mask will be placed
@@ -735,6 +737,7 @@ def synapse_channel_creation(
                 mask = fid_mask.create_dataset("data", shape=out_data_shape, dtype=dtype_str)
 
             print("Paiting all postsynaptic sites")
+            width_reference = dilation_width if mode == "BF" else (40,256,256)
             for pre_site, post_sites in tqdm(pre_post_points.items(), disable=not is_main_process()):
                 pre_point_global = [int(float(x)) for x in " ".join(pre_site[1:-1].split()).split(" ")]
 
@@ -743,36 +746,36 @@ def synapse_channel_creation(
                 for post_point in post_sites:
                     if patch_coords is None:
                         patch_coords = [
-                            max(0, post_point[0] - dilation_width[0]),
-                            min(out_data_shape[zarr_data_information["z_axe_pos"]], post_point[0] + dilation_width[0]),
-                            max(0, post_point[1] - dilation_width[1]),
-                            min(out_data_shape[zarr_data_information["y_axe_pos"]], post_point[1] + dilation_width[1]),
-                            max(0, post_point[2] - dilation_width[2]),
-                            min(out_data_shape[zarr_data_information["x_axe_pos"]], post_point[2] + dilation_width[2]),
+                            max(0, post_point[0] - width_reference[0]),
+                            min(out_data_shape[zarr_data_information["z_axe_pos"]], post_point[0] + width_reference[0]),
+                            max(0, post_point[1] - width_reference[1]),
+                            min(out_data_shape[zarr_data_information["y_axe_pos"]], post_point[1] + width_reference[1]),
+                            max(0, post_point[2] - width_reference[2]),
+                            min(out_data_shape[zarr_data_information["x_axe_pos"]], post_point[2] + width_reference[2]),
                         ]
                     else:
                         patch_coords = [
-                            min(max(0, post_point[0] - dilation_width[0]), patch_coords[0]),
+                            min(max(0, post_point[0] - width_reference[0]), patch_coords[0]),
                             max(
                                 min(
                                     out_data_shape[zarr_data_information["z_axe_pos"]],
-                                    post_point[0] + dilation_width[0],
+                                    post_point[0] + width_reference[0],
                                 ),
                                 patch_coords[1],
                             ),
-                            min(max(0, post_point[1] - dilation_width[1]), patch_coords[2]),
+                            min(max(0, post_point[1] - width_reference[1]), patch_coords[2]),
                             max(
                                 min(
                                     out_data_shape[zarr_data_information["y_axe_pos"]],
-                                    post_point[1] + dilation_width[1],
+                                    post_point[1] + width_reference[1],
                                 ),
                                 patch_coords[3],
                             ),
-                            min(max(0, post_point[2] - dilation_width[2]), patch_coords[4]),
+                            min(max(0, post_point[2] - width_reference[2]), patch_coords[4]),
                             max(
                                 min(
                                     out_data_shape[zarr_data_information["x_axe_pos"]],
-                                    post_point[2] + dilation_width[2],
+                                    post_point[2] + width_reference[2],
                                 ),
                                 patch_coords[5],
                             ),
@@ -785,80 +788,14 @@ def synapse_channel_creation(
                     patch_coords[3] - patch_coords[2],
                     patch_coords[5] - patch_coords[4],
                 )
-                seeds = np.zeros(patch_shape, dtype=np.uint64)
-                mask_to_grow = np.zeros(patch_shape, dtype=np.uint8)
 
-                # Paiting each post-synaptic site
-                label_to_pre_site = {}
-                label_count = 1
-                for post_point_global in post_sites:
-                    post_point = [
-                        int(post_point_global[0] - patch_coords[0]),
-                        int(post_point_global[1] - patch_coords[2]),
-                        int(post_point_global[2] - patch_coords[4]),
-                    ]
-                    pre_point = [
-                        int(pre_point_global[0] - patch_coords[0]),
-                        int(pre_point_global[1] - patch_coords[2]),
-                        int(pre_point_global[2] - patch_coords[4]),
-                    ]
-
-                    if (
-                        post_point[0] < seeds.shape[0]
-                        and post_point[1] < seeds.shape[1]
-                        and post_point[2] < seeds.shape[2]
-                    ):
-                        seeds[
-                            max(0, post_point[0] - dilation_width[0]) : min(
-                                post_point[0] + dilation_width[0], seeds.shape[0]
-                            ),
-                            post_point[1],
-                            post_point[2],
-                        ] = label_count
-                        label_to_pre_site[label_count] = list(pre_point)
-                        label_count += 1
-
-                        mask_to_grow[post_point[0], post_point[1], post_point[2]] = 1
-                    else:
-                        raise ValueError(
-                            "Point {} seems to be out of shape: {}".format(
-                                [post_point[0], post_point[1], post_point[2]], seeds.shape
-                            )
-                        )
-
-                # First channel creation
-                channel_0 = binary_dilation_scipy(
-                    mask_to_grow,
-                    iterations=1,
-                    structure=ellipse_footprint_cpd,
-                )
-                mask_to_grow = binary_dilation_scipy(
-                    mask_to_grow,
-                    iterations=1,
-                    structure=ellipse_footprint_cpd2,
-                )
-                for z in range(len(seeds)):
-                    semantic = distance_transform_edt(mask_to_grow[z])
-                    assert isinstance(semantic, np.ndarray)
-                    seeds[z] = watershed(-semantic, seeds[z], mask=mask_to_grow[z])
-
-                # Flow channel creation
-                hv_map = create_flow_channels(
-                    seeds,
-                    ref_point="presynaptic",
-                    label_to_pre_site=label_to_pre_site,
-                    normalize_values=normalize_values,
-                )
-
-                hv_map = np.concatenate([np.expand_dims(channel_0, -1), hv_map], axis=-1)
-                del channel_0
-
+                # Prepare the slices to be used when inserting the data into the generated Zarr/h5 file
                 slices = (
-                    slice(patch_coords[0], patch_coords[1]),
-                    slice(patch_coords[2], patch_coords[3]),
-                    slice(patch_coords[4], patch_coords[5]),
-                    slice(0, out_data_shape[c_axe_pos]),
-                )
+                        slice(patch_coords[0], patch_coords[1]),
+                        slice(patch_coords[2], patch_coords[3]),
+                        slice(patch_coords[4], patch_coords[5]),
+                        slice(0, out_data_shape[c_axe_pos]),
+                    )
                 data_ordered_slices = tuple(
                     order_dimensions(
                         slices,
@@ -868,8 +805,128 @@ def synapse_channel_creation(
                     )
                 )
 
+                # Paiting each post-synaptic site
+                if mode == "BF":
+                    seeds = np.zeros(patch_shape, dtype=np.uint64)
+                    mask_to_grow = np.zeros(patch_shape, dtype=np.uint8)
+                    label_to_pre_site = {}
+                    label_count = 1
+                    for post_point_global in post_sites:
+                        post_point = [
+                            int(post_point_global[0] - patch_coords[0]),
+                            int(post_point_global[1] - patch_coords[2]),
+                            int(post_point_global[2] - patch_coords[4]),
+                        ]
+                        pre_point = [
+                            int(pre_point_global[0] - patch_coords[0]),
+                            int(pre_point_global[1] - patch_coords[2]),
+                            int(pre_point_global[2] - patch_coords[4]),
+                        ]
+
+                        if (
+                            post_point[0] < seeds.shape[0]
+                            and post_point[1] < seeds.shape[1]
+                            and post_point[2] < seeds.shape[2]
+                        ):
+                            seeds[
+                                max(0, post_point[0] - width_reference[0]) : min(
+                                    post_point[0] + width_reference[0], seeds.shape[0]
+                                ),
+                                post_point[1],
+                                post_point[2],
+                            ] = label_count
+                            label_to_pre_site[label_count] = list(pre_point)
+                            label_count += 1
+
+                            mask_to_grow[post_point[0], post_point[1], post_point[2]] = 1
+                        else:
+                            raise ValueError(
+                                "Point {} seems to be out of shape: {}".format(
+                                    [post_point[0], post_point[1], post_point[2]], seeds.shape
+                                )
+                            )
+                        
+                    # First channel creation
+                    channel_0 = binary_dilation_scipy(
+                        mask_to_grow,
+                        iterations=1,
+                        structure=ellipse_footprint_cpd,
+                    )
+                    mask_to_grow = binary_dilation_scipy(
+                        mask_to_grow,
+                        iterations=1,
+                        structure=ellipse_footprint_cpd2,
+                    )
+                    for z in range(len(seeds)):
+                        semantic = distance_transform_edt(mask_to_grow[z])
+                        assert isinstance(semantic, np.ndarray)
+                        seeds[z] = watershed(-semantic, seeds[z], mask=mask_to_grow[z])
+
+                    # Flow channel creation
+                    out_map = create_flow_channels(
+                        seeds,
+                        ref_point="presynaptic",
+                        label_to_pre_site=label_to_pre_site,
+                        normalize_values=normalize_values,
+                    )
+
+                    out_map = np.concatenate([np.expand_dims(channel_0, -1), out_map], axis=-1)
+                    del channel_0
+                else:
+                    out_map = np.zeros(patch_shape + (channels,), dtype=np.uint8)
+
+                    # Paint the pre sites in channel 0 and post sites in channel 1
+                    for post_point_global in post_sites:
+                        post_point = [
+                            int(post_point_global[0] - patch_coords[0]),
+                            int(post_point_global[1] - patch_coords[2]),
+                            int(post_point_global[2] - patch_coords[4]),
+                        ]
+                        pre_point = [
+                            int(pre_point_global[0] - patch_coords[0]),
+                            int(pre_point_global[1] - patch_coords[2]),
+                            int(pre_point_global[2] - patch_coords[4]),
+                        ]
+
+                        if (
+                            post_point[0] < out_map.shape[0]
+                            and post_point[1] < out_map.shape[1]
+                            and post_point[2] < out_map.shape[2]
+                        ):
+                            # Pre
+                            out_map[
+                                max(0, pre_point[0] - 1) : min(
+                                    pre_point[0] +1, out_map.shape[0]
+                                ),
+                                pre_point[1],
+                                pre_point[2],
+                                1,
+                            ] = 1
+
+                            # Post
+                            out_map[
+                                max(0, post_point[0] - 1) : min(
+                                    post_point[0] + 1, out_map.shape[0]
+                                ),
+                                post_point[1],
+                                post_point[2],
+                                0,
+                            ] = 1
+                        else:
+                            raise ValueError(
+                                "Point {} seems to be out of shape: {}".format(
+                                    [post_point[0], post_point[1], post_point[2]], out_map.shape
+                                )
+                            )
+                    for c in range(out_map.shape[-1]):
+                        out_map[...,c] = binary_dilation_scipy(
+                            out_map[...,c],
+                            iterations=1,
+                            structure=ellipse_footprint_cpd,
+                        )
+                
                 # Adjust patch slice to transpose it before inserting intop the final data
-                current_order = np.array(range(len(hv_map.shape)))
+                current_order = np.array(range(len(out_map.shape)))
                 transpose_order = order_dimensions(
                     current_order,
                     input_order="ZYXC",
@@ -879,7 +936,7 @@ def synapse_channel_creation(
                 transpose_order = [x for x in np.array(transpose_order) if not np.isnan(x)]
 
                 # Place the patch into the Zarr
-                mask[data_ordered_slices] += hv_map.transpose(transpose_order) * (mask[data_ordered_slices] == 0)
+                mask[data_ordered_slices] += out_map.transpose(transpose_order) * (mask[data_ordered_slices] == 0)
 
             # Close file
             if isinstance(fid_mask, h5py.File):

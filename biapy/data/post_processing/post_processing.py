@@ -19,6 +19,9 @@ from skimage.segmentation import watershed, relabel_sequential
 from skimage.filters import rank, threshold_otsu
 from skimage.measure import label, regionprops_table
 from skimage.exposure import equalize_adapthist
+from skimage.feature import peak_local_max, blob_log
+from scipy.ndimage import binary_dilation as binary_dilation_scipy
+
 import diplib as dip
 from typing import (
     Tuple,
@@ -31,7 +34,7 @@ from numpy.typing import NDArray
 
 from biapy.utils.misc import to_numpy_format, to_pytorch_format
 from biapy.data.data_manipulation import read_img_as_ndarray, save_tif, imread, reduce_dtype
-
+from biapy.data.pre_processing import generate_ellipse_footprint
 
 def watershed_by_channels(
     data: NDArray,
@@ -371,6 +374,99 @@ def watershed_by_channels(
             )
     return segm
 
+def create_synapses(data: NDArray,
+    channels: str,
+    point_creation_func: str = "peak_local_max",
+    min_th_to_be_peak: float = 0.2,
+    min_distance: int=1,
+    exclude_border: bool = False,
+):
+    """
+    Convert binary foreground probability maps and instance contours to instance masks via watershed segmentation
+    algorithm.
+
+    Implementation based on `PyTorch Connectomics' process.py
+    <https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/utils/process.py>`_.
+
+    Parameters
+    ----------
+    data : 4D Numpy array
+        Binary foreground labels and contours data to apply watershed into. E.g. ``(397, 1450, 2000, 2)``.
+
+    channels : str
+        Channel type used. Possible options: ``A``, ``C``, ``BC``, ``BCM``, ``BCD``, ``BCDv2``, ``Dv2`` and ``BDv2``.
+    """
+    assert channels in [
+        "B",
+        "BF",
+    ]
+    assert point_creation_func in ["peak_local_max", "blob_log"]
+
+    d_result = {}
+    ids, probs = [], []
+    if channels == "BF":
+        print("TODO")
+        import pdb; pdb.set_trace()
+    elif channels == "B":
+        # Take the coords of the predicted points
+        all_coords = []
+        max_value = 0
+        data = data.astype(np.float32)
+        for c in range(data.shape[-1]):
+            if point_creation_func == "peak_local_max":
+                coords = peak_local_max(
+                    data[..., c],
+                    min_distance=min_distance,
+                    threshold_abs=min_th_to_be_peak,
+                    exclude_border=exclude_border,
+                )
+            else:
+                coords = blob_log(
+                    data[..., c] * 255,
+                    min_sigma=5,
+                    max_sigma=10,
+                    num_sigma=2,
+                    threshold=min_th_to_be_peak,
+                    exclude_border=exclude_border,
+                )
+            
+            all_coords.append(coords)
+            if max_value < len(coords):
+                max_value = len(coords)
+        
+        # Choose appropiate dtype
+        max_value = np.max(data)
+        if max_value < 255:
+            appropiate_dtype = np.uint8
+        elif max_value < 65535:
+            appropiate_dtype = np.uint16
+        else:
+            appropiate_dtype = np.uint32
+        new_data = np.zeros(data.shape, dtype=appropiate_dtype)
+
+        lbl_cont = 1
+        ellipse_footprint_cpd = generate_ellipse_footprint([2,4,4])
+        for c, coords in enumerate(all_coords):
+            for coord in coords:
+                z,y,x = coord
+                new_data[int(z), int(y), int(x), c] = lbl_cont
+                probs.append(float(data[z,y,x,c]))
+                ids.append(lbl_cont)
+                lbl_cont += 1
+
+            # Dilate the labels
+            new_data[...,c] = binary_dilation_scipy(
+                new_data[...,c],
+                iterations=1,
+                structure=ellipse_footprint_cpd,
+            )
+
+        d_result["ids"] = ids
+        d_result["tag"] = (["post",]*len(all_coords[0])) + (["pre",]*len(all_coords[1]))
+        d_result["probabilities"] = probs
+        d_result["points"] = np.concatenate(all_coords, axis=0)
+
+        return new_data, d_result
 
 def apply_median_filtering(
     data: NDArray, 

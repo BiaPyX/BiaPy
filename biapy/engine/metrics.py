@@ -642,7 +642,19 @@ class instance_segmentation_loss:
                         )
                     else:
                         loss += self.weights[c] * self.distance_channels_loss(_y_pred[:, c], y_true[:, c])
-
+            elif self.out_channels == "B":
+                if self.class_rebalance:
+                    B_weight_mask = weight_binary_ratio(y_true[:, 0])
+                    B_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=B_weight_mask)
+                    BB_weight_mask = weight_binary_ratio(y_true[:, 1])
+                    BB_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=BB_weight_mask)
+                else:
+                    B_binary_channels_loss = self.binary_channels_loss
+                    BB_binary_channels_loss = self.binary_channels_loss
+                loss = (
+                    self.weights[0] * B_binary_channels_loss(_y_pred[:, 0], y_true[:, 0]) 
+                    + self.weights[1] * BB_binary_channels_loss(_y_pred[:, 1], y_true[:, 1]) 
+                )
         return loss
 
 

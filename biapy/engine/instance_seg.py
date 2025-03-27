@@ -11,6 +11,7 @@ from typing import (
     Optional
 )
 from numpy.typing import NDArray
+from scipy.spatial import distance_matrix
 
 
 from biapy.data.post_processing.post_processing import (
@@ -19,6 +20,7 @@ from biapy.data.post_processing.post_processing import (
     measure_morphological_props_and_filter,
     repare_large_blobs,
     apply_binary_mask,
+    create_synapses
 )
 from biapy.data.pre_processing import (
     create_instance_channels,
@@ -177,7 +179,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 self.model_output_channels["channels"] = 3
         else:  # synapses
             if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "B":
-                self.activations = {"0": "CE_Sigmoid", "1": "CE_Sigmoid"}
+                self.activations = {":": "CE_Sigmoid"}
                 self.model_output_channels["channels"] = 2
             elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BF":
                 self.activations = {"0": "CE_Sigmoid", "1": "Linear"}
@@ -288,6 +290,9 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 else:
                     self.train_metric_names += ["L1 (Y distance)", "L1 (X distance)"]
                     self.train_metric_best += ["max", "max"]
+            elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "B":
+                self.train_metric_names = ["IoU (pre-sites)", "IoU (post-sites)"]
+                self.train_metric_best = ["max", "max"]
 
         self.train_metrics.append(
             multiple_metrics(
@@ -345,6 +350,8 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     ]
                 else:
                     self.test_metric_names += ["L1 (Y distance)", "L1 (X distance)"]
+            elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "B":
+                self.test_metric_names = ["IoU (pre-sites)", "IoU (post-sites)"]  
 
         # Multi-head: instances + classification
         if self.multihead:
@@ -1001,31 +1008,116 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             Output directory to save the post-processed instances.
         """
         assert pred.ndim == 4, f"Prediction doesn't have 4 dim: {pred.shape}"
-
         #############################
         ### INSTANCE SEGMENTATION ###
         #############################
-        if not self.instances_already_created:
-            save_tif(
-                np.expand_dims(pred, 0),
+        pred, d_result = create_synapses(
+            data=pred,
+            channels=self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
+            point_creation_func="blob_log",
+            min_th_to_be_peak=0.7,
+            min_distance=1,
+            exclude_border=False,
+        )
+        save_tif(
+            np.expand_dims(pred, 0),
+            out_dir,
+            filenames,
+            verbose=self.cfg.TEST.VERBOSE,
+        )
+
+        total_pre_points = len([x for x in d_result["tag"] if x == "pre"])
+        pre_points = np.array(d_result["points"][:total_pre_points])
+        pre_points_df = pd.DataFrame(
+            zip(
+                d_result["ids"][:total_pre_points],
+                list(pre_points[:,0]),
+                list(pre_points[:,1]),
+                list(pre_points[:,2]),
+                d_result["probabilities"][:total_pre_points],
+            ),
+            columns=[
+                "pre_id",
+                "axis-0",
+                "axis-1",
+                "axis-2",
+                "probability",
+            ],
+        )
+    
+        # Save just the points and their probabilities
+        pre_points_df.to_csv(
+            os.path.join(
                 out_dir,
-                filenames,
-                verbose=self.cfg.TEST.VERBOSE,
+                "pred_pre_locations.csv",
+            )
+        )
+        
+        total_post_points = len(d_result) - total_pre_points
+        post_points = np.array(d_result["points"][total_post_points:])
+        post_points_df = pd.DataFrame(
+            zip(
+                d_result["ids"][total_post_points:],
+                list(post_points[:,0]),
+                list(post_points[:,1]),
+                list(post_points[:,2]),
+                d_result["probabilities"][total_post_points:],
+            ),
+            columns=[
+                "post_id",
+                "axis-0",
+                "axis-1",
+                "axis-2",
+                "probability",
+            ],
+        )
+    
+        # Save just the points and their probabilities
+        post_points_df.to_csv(
+            os.path.join(
+                out_dir,
+                "pred_post_locations.csv",
+            )
+        )
+
+        import pdb; pdb.set_trace()
+        if len(d_result["points"]) > 0:
+            _true = np.array(pre_points, dtype=np.float32)
+            _pred = np.array(post_points, dtype=np.float32)
+            # Create cost matrix
+            distances = distance_matrix(_pred, _true)
+            
+            pres, posts = []
+            for n, col in enumerate(range(distances.shape[0])):
+                closest_pre_point = np.argmax(distances[col])
+                pres.append(closest_pre_point)
+                posts.append(n)
+
+            pre_post_map_df = pd.DataFrame(
+                zip(
+                    pres,
+                    posts,
+                ),
+                columns=[
+                    "pre_id",
+                    "post_id",
+                ],
             )
 
-        # TODO: Create the synapses by fusing the channels
+            pre_post_map_df.to_csv(
+            os.path.join(
+                out_dir,
+                "pre_post_mapping.csv",
+            )
+        )
+        else:
+            if self.cfg.TEST.VERBOSE:
+                print("No point found to calculate the metrics!")
+
 
         ###################
         # Post-processing #
         ###################
-        if self.cfg.TEST.POST_PROCESSING.CLEAR_BORDER:
-            print("Clearing borders . . .")
-            if self.cfg.PROBLEM.NDIM == "2D":
-                pred = pred[0]
-            pred = clear_border(pred)
-            if self.cfg.PROBLEM.NDIM == "2D":
-                pred = np.expand_dims(pred, 0)
-
         if self.post_processing["instance_post"]:
             if self.cfg.PROBLEM.NDIM == "2D":
                 pred = pred[0]
