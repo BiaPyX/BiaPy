@@ -672,8 +672,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             ], "PROBLEM.INSTANCE_SEG.DATA_CHANNELS not in ['A','C', 'BC', 'BCM', 'BCD', 'BCDv2', 'Dv2', 'BDv2', 'BP', 'BD']"
         else:  # synapses
             assert cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in [
-                "BF",
-            ], "PROBLEM.INSTANCE_SEG.DATA_CHANNELS not in ['BF']"
+                "B", "BF",
+            ], "PROBLEM.INSTANCE_SEG.DATA_CHANNELS not in ['B', 'BF']"
             if not cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA or cfg.PROBLEM.NDIM != "3D":
                 raise ValueError(
                     "Synapse detection is only available for 3D Zarr/H5 data. Please set 'DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA' "
