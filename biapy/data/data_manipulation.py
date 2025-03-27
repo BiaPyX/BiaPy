@@ -13,7 +13,7 @@ from typing import (
     Any,
 )
 from numpy.typing import NDArray
-
+from yacs.config import CfgNode as CN
 from tqdm import tqdm
 from sklearn.model_selection import train_test_split, StratifiedKFold
 
@@ -49,12 +49,12 @@ def load_and_prepare_train_data(
     seed: int = 0,
     shuffle_val: bool = True,
     train_preprocess_f: Optional[Callable] = None,
-    train_preprocess_cfg: Optional[Dict] = None,
+    train_preprocess_cfg: Optional[CN] = None,
     train_filter_conds: List[List[str]] = [],
     train_filter_vals: List[List[float]] = [],
     train_filter_signs: List[List[str]] = [],
     val_preprocess_f: Optional[Callable] = None,
-    val_preprocess_cfg: Optional[Dict] = None,
+    val_preprocess_cfg: Optional[CN] = None,
     val_filter_conds: List[List[str]] = [],
     val_filter_vals: List[List[float]] = [],
     val_filter_signs: List[List[str]] = [],
@@ -1897,6 +1897,7 @@ def samples_from_zarr(
             coords, _, _, _ = obj  # type: ignore
 
             # Create crop_shape from coords as the sample is not loaded to speed up the process
+            assert isinstance(coords, PatchCoords)
             if is_3d:
                 crop_shape = (
                     coords.z_end - coords.z_start,
@@ -1911,7 +1912,6 @@ def samples_from_zarr(
                     channel,
                 )
 
-            assert isinstance(coords, PatchCoords)
             sample_dict = DataSample(
                 fid=i,
                 coords=coords,
@@ -3438,14 +3438,17 @@ def shape_mismatch_message(X_data: BiaPyDataset, Y_data: BiaPyDataset) -> str:
         Message containing which samples mismatch.
     """
     mistmatch_message = ""
-    for xsample, ysample in zip(X_data.dataset_info, Y_data.dataset_info):
-        if xsample.get_shape()[:-1] != ysample.get_shape()[:-1]:
-            mistmatch_message += "\n"
-            mistmatch_message += "Raw file: '{}'\n".format(xsample.path)
-            mistmatch_message += "Corresponding label file: '{}'\n".format(ysample.path)
-            mistmatch_message += "Raw shape: {}\n".format(xsample.get_shape())
-            mistmatch_message += "Label shape: {}\n".format(ysample.get_shape())
-            mistmatch_message += "--\n"
+    for xsample, ysample in zip(X_data.sample_list, Y_data.sample_list):
+        xshape = xsample.get_shape()
+        yshape = ysample.get_shape()
+        if xshape and yshape:
+            if xshape[:-1] != yshape[:-1]:
+                mistmatch_message += "\n"
+                mistmatch_message += "Raw file: '{}'\n".format(X_data.dataset_info[xsample.fid].path)
+                mistmatch_message += "Corresponding label file: '{}'\n".format(Y_data.dataset_info[ysample.fid].path)
+                mistmatch_message += "Raw shape: {}\n".format(xsample.get_shape())
+                mistmatch_message += "Label shape: {}\n".format(ysample.get_shape())
+                mistmatch_message += "--\n"
 
     if mistmatch_message != "":
         mistmatch_message = (
