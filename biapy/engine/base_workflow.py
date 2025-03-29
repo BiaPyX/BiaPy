@@ -4,23 +4,21 @@ import datetime
 import time
 import json
 import torch
-import h5py
 import argparse
-import zarr
 import numpy as np
 from tqdm import tqdm
 from abc import ABCMeta, abstractmethod
 import torch.multiprocessing as mp
 import torch.distributed as dist
-from scipy.ndimage import zoom
 from typing import Dict, Optional
 from numpy.typing import NDArray
+from yacs.config import CfgNode as CN
 
 import biapy
 from bioimageio.core import create_prediction_pipeline
 from bioimageio.spec import load_description
 
-from biapy.config.config import Config, update_dependencies
+from biapy.config.config import update_dependencies
 from biapy.models import (
     build_model,
     build_torchvision_model,
@@ -31,7 +29,8 @@ from biapy.models import (
 from biapy.engine import prepare_optimizer, build_callbacks
 from biapy.data.generators import (
     create_train_val_augmentors,
-    create_test_augmentor,
+    create_test_generator,
+    create_chunked_test_generator,
     check_generator_consistence,
 )
 from biapy.utils.misc import (
@@ -62,15 +61,12 @@ from biapy.data.data_2D_manipulation import (
 from biapy.data.data_3D_manipulation import (
     crop_3D_data_with_overlap,
     merge_3D_data_with_overlap,
-    extract_3D_patch_with_overlap_yield,
-    order_dimensions,
     read_chunked_data,
 )
 from biapy.data.data_manipulation import (
     load_and_prepare_train_data,
     load_and_prepare_test_data,
     read_img_as_ndarray,
-    sample_satisfy_conds,
     save_tif,
 )
 from biapy.data.post_processing.post_processing import (
@@ -82,6 +78,7 @@ from biapy.data.post_processing import apply_post_processing
 from biapy.data.pre_processing import preprocess_data
 from biapy.engine.check_configuration import check_configuration, compare_configurations_without_model
 from biapy.data.norm import Normalization
+from biapy.data.generators.chunked_test_pair_data_generator import chunked_test_pair_data_generator
 
 
 class Base_Workflow(metaclass=ABCMeta):
@@ -105,7 +102,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
     def __init__(
         self,
-        cfg: Config,
+        cfg: CN,
         job_identifier: str,
         device: torch.device,
         args: argparse.Namespace,
@@ -165,13 +162,18 @@ class Base_Workflow(metaclass=ABCMeta):
         # By chunks
         self.stats["by_chunks"] = {}
 
-        self.by_chunks = False
-        if (
-            self.cfg.TEST.BY_CHUNKS.ENABLE
-            and self.cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.ENABLE
-            and self.cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE == "chunk_by_chunk"
-        ):
-            self.by_chunks = True
+        self.mask_path = ""
+        self.is_y_mask = False
+        self.model_output_channels = {}
+        self.activations = []
+        self.multihead = None
+        self.train_metrics = []
+        self.train_metric_best = []
+        self.train_metric_names = []
+        self.test_metrics = []
+        self.test_metric_best = []
+        self.test_metric_names = []
+        self.loss = None
 
         self.world_size = get_world_size()
         self.global_rank = get_rank()
@@ -192,8 +194,8 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.post_processing["per_image"] = True
 
         # Define permute shapes to pass from Numpy axis order (Y,X,C) to Pytorch's (C,Y,X)
-        self.axis_order = (0, 3, 1, 2) if self.cfg.PROBLEM.NDIM == "2D" else (0, 4, 1, 2, 3)
-        self.axis_order_back = (0, 2, 3, 1) if self.cfg.PROBLEM.NDIM == "2D" else (0, 2, 3, 4, 1)
+        self.axes_order = (0, 3, 1, 2) if self.cfg.PROBLEM.NDIM == "2D" else (0, 4, 1, 2, 3)
+        self.axes_order_back = (0, 2, 3, 1) if self.cfg.PROBLEM.NDIM == "2D" else (0, 2, 3, 4, 1)
 
         # Tochvision variables
         self.torchvision_preprocessing = None
@@ -265,9 +267,9 @@ class Base_Workflow(metaclass=ABCMeta):
             will be applied to all channels at once. "Linear" and "CE_Sigmoid"
             will not be applied. E.g. [{":": "Linear"}].
         """
-        if not hasattr(self, "model_output_channels"):
+        if not self.model_output_channels:
             raise ValueError(
-                "'model_output_channels' is not defined. Correct define_activations_and_channels() function"
+                "'model_output_channels' needs to be defined. Correct define_activations_and_channels() function"
             )
         else:
             if not isinstance(self.model_output_channels, dict):
@@ -276,10 +278,10 @@ class Base_Workflow(metaclass=ABCMeta):
                 raise ValueError("'self.model_output_channels' must have 'type' key")
             if "channels" not in self.model_output_channels:
                 raise ValueError("'self.model_output_channels' must have 'channels' key")
-        if not hasattr(self, "multihead"):
-            raise ValueError("'multihead' is not defined. Correct define_activations_and_channels() function")
-        if not hasattr(self, "activations"):
-            raise ValueError("'activations' is not defined. Correct define_activations_and_channels() function")
+        if self.multihead is None:
+            raise ValueError("'multihead' needs to be defined. Correct define_activations_and_channels() function")
+        if not self.activations:
+            raise ValueError("'activations' needs to be defined. Correct define_activations_and_channels() function")
         else:
             if not isinstance(self.activations, list):
                 raise ValueError("'self.activations' must be a list of dicts")
@@ -309,22 +311,22 @@ class Base_Workflow(metaclass=ABCMeta):
         self.loss : Function
             Loss function used during training and test.
         """
-        if not hasattr(self, "train_metrics"):
-            raise ValueError("'train_metrics' is not defined. Correct define_metrics() function")
-        if not hasattr(self, "train_metric_names"):
-            raise ValueError("'train_metric_names' is not defined. Correct define_metrics() function")
-        if not hasattr(self, "train_metric_best"):
-            raise ValueError("'train_metric_best' is not defined. Correct define_metrics() function")
+        if not self.train_metrics:
+            raise ValueError("'train_metrics' needs to be defined. Correct define_metrics() function")
+        if not self.train_metric_names:
+            raise ValueError("'train_metric_names' needs to be defined. Correct define_metrics() function")
+        if not self.train_metric_best:
+            raise ValueError("'train_metric_best' needs to be defined. Correct define_metrics() function")
         else:
             assert all(
                 [True if x in ["max", "min"] else False for x in self.train_metric_best]
             ), "'train_metric_best' needs to be one between ['max', 'min']"
-        if not hasattr(self, "test_metrics"):
-            raise ValueError("'test_metrics' is not defined. Correct define_metrics() function")
-        if not hasattr(self, "test_metric_names"):
-            raise ValueError("'test_metric_names' is not defined. Correct define_metrics() function")
-        if not hasattr(self, "loss"):
-            raise ValueError("'loss' is not defined. Correct define_metrics() function")
+        if not self.test_metrics:
+            raise ValueError("'test_metrics' needs to be defined. Correct define_metrics() function")
+        if not self.test_metric_names:
+            raise ValueError("'test_metric_names' needs to be defined. Correct define_metrics() function")
+        if self.loss is None:
+            raise ValueError("'loss' needs to be defined. Correct define_metrics() function")
 
     @abstractmethod
     def metric_calculation(
@@ -377,7 +379,7 @@ class Base_Workflow(metaclass=ABCMeta):
             Resulting targets.
         """
         # We do not use 'batch' input but in SSL workflow
-        return to_pytorch_format(targets, self.axis_order, self.device)
+        return to_pytorch_format(targets, self.axes_order, self.device)
 
     def load_train_data(self):
         """
@@ -428,7 +430,7 @@ class Base_Workflow(metaclass=ABCMeta):
             shuffle_val=self.cfg.DATA.VAL.RANDOM,
             train_preprocess_f=preprocess_data if self.cfg.DATA.PREPROCESS.TRAIN else None,
             train_preprocess_cfg=self.cfg.DATA.PREPROCESS if self.cfg.DATA.PREPROCESS.TRAIN else None,
-            train_filter_conds=(
+            train_filter_props=(
                 self.cfg.DATA.TRAIN.FILTER_SAMPLES.PROPS if self.cfg.DATA.TRAIN.FILTER_SAMPLES.ENABLE else []
             ),
             train_filter_vals=(
@@ -439,7 +441,7 @@ class Base_Workflow(metaclass=ABCMeta):
             ),
             val_preprocess_f=preprocess_data if self.cfg.DATA.PREPROCESS.VAL else None,
             val_preprocess_cfg=self.cfg.DATA.PREPROCESS if self.cfg.DATA.PREPROCESS.VAL else None,
-            val_filter_conds=(
+            val_filter_props=(
                 self.cfg.DATA.VAL.FILTER_SAMPLES.PROPS if self.cfg.DATA.VAL.FILTER_SAMPLES.ENABLE else []
             ),
             val_filter_vals=(
@@ -463,7 +465,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 and self.cfg.PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER
             ),
             save_filtered_images=self.cfg.DATA.SAVE_FILTERED_IMAGES,
-            save_filtered_images_dir=self.cfg.PATHS.FIL_SAMPLES_DIR ,
+            save_filtered_images_dir=self.cfg.PATHS.FIL_SAMPLES_DIR,
             save_filtered_images_num=self.cfg.DATA.SAVE_FILTERED_IMAGES_NUM,
         )
 
@@ -508,8 +510,6 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.cfg,
                 X_train=self.X_train,
                 X_val=self.X_val,
-                world_size=self.world_size,
-                global_rank=self.global_rank,
                 Y_train=self.Y_train,
                 Y_val=self.Y_val,
                 norm_module=self.norm_module,
@@ -610,7 +610,7 @@ class Base_Workflow(metaclass=ABCMeta):
         prediction : torch.Tensor
             Image prediction.
         """
-        in_img = to_pytorch_format(in_img, self.axis_order, self.device)
+        in_img = to_pytorch_format(in_img, self.axes_order, self.device)
         if self.cfg.MODEL.SOURCE == "biapy":
             assert self.model
             p = self.model(in_img)
@@ -761,7 +761,9 @@ class Base_Workflow(metaclass=ABCMeta):
         self.prepare_logging_tool()
         self.early_stopping = build_callbacks(self.cfg)
 
-        assert self.start_epoch is not None and self.model is not None and self.model_without_ddp is not None
+        assert (
+            self.start_epoch is not None and self.model is not None and self.model_without_ddp is not None and self.loss
+        )
         self.optimizer, self.lr_scheduler = prepare_optimizer(
             self.cfg, self.model_without_ddp, len(self.train_generator)
         )
@@ -779,7 +781,7 @@ class Base_Workflow(metaclass=ABCMeta):
             e_start = time.time()
 
             if self.args.distributed:
-                self.train_generator.sampler.set_epoch(epoch)
+                self.train_generator.sampler.set_epoch(epoch)  # type: ignore
             if self.log_writer:
                 self.log_writer.set_step(epoch * self.num_training_steps_per_epoch)
 
@@ -980,10 +982,13 @@ class Base_Workflow(metaclass=ABCMeta):
             # Paths to the raw and gt within the Zarr file. Only used when 'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA' is True.
             test_zarr_data_information = None
             if self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA:
+                use_gt_path = True
+                if self.cfg.PROBLEM.TYPE != "INSTANCE_SEG" and self.cfg.PROBLEM.INSTANCE_SEG.TYPE != "synapses":
+                    use_gt_path = False
                 test_zarr_data_information = {
                     "raw_path": self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH,
                     "gt_path": self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_GT_PATH,
-                    "use_gt_path": self.cfg.PROBLEM.TYPE != "INSTANCE_SEG",
+                    "use_gt_path": use_gt_path,
                 }
 
             (
@@ -1022,11 +1027,7 @@ class Base_Workflow(metaclass=ABCMeta):
             print("############################")
             print("#  PREPARE TEST GENERATOR  #")
             print("############################")
-            (
-                self.test_generator, 
-                self.data_norm, 
-                test_input
-            ) = create_test_augmentor(
+            (self.test_generator, self.data_norm, test_input) = create_test_generator(
                 self.cfg,
                 self.X_test,
                 self.Y_test,
@@ -1035,7 +1036,6 @@ class Base_Workflow(metaclass=ABCMeta):
             # Only save it if it was not done before
             if "test_input" not in self.bmz_config:
                 self.bmz_config["test_input"] = test_input
-
 
     def apply_model_activations(self, pred, training=False):
         """
@@ -1093,7 +1093,7 @@ class Base_Workflow(metaclass=ABCMeta):
         Test/Inference step.
         """
         self.load_test_data()
-        if not self.model_prepared: 
+        if not self.model_prepared:
             self.prepare_model()
         self.prepare_test_generators()
 
@@ -1132,23 +1132,31 @@ class Base_Workflow(metaclass=ABCMeta):
             setup_for_distributed(True)
 
         # Process all the images
-        for i, self.current_sample in tqdm(  # type: ignore
-            enumerate(self.test_generator),  # type: ignore
-            total=len(self.test_generator),
-            disable=not is_main_process(),
-        ):
+        for i, self.current_sample in enumerate(self.test_generator):  # type: ignore
             self.f_numbers = [i]
             if "Y" not in self.current_sample:
                 self.current_sample["Y"] = None
 
+            # Decide whether to infer by chunks or not
             discarded = False
-            if self.cfg.TEST.BY_CHUNKS.ENABLE and self.cfg.PROBLEM.NDIM == "3D":
+            _, file_extension = os.path.splitext(self.current_sample["filename"])
+            if (
+                file_extension not in [".hdf5", ".hdf", ".h5", ".zarr"]
+                and self.cfg.TEST.BY_CHUNKS.ENABLE
+                and self.cfg.PROBLEM.NDIM == "3D"
+            ):
+                by_chunks = True
+            else:
+                by_chunks = True
+
+            if by_chunks:
                 print(
-                    "[Rank {} ({})] Processing image(s): {}".format(
+                    "[Rank {} ({})] Processing image: {}".format(
                         get_rank(), os.getpid(), self.current_sample["filename"]
                     )
                 )
-                self.process_test_sample_by_chunks()
+                if not self.cfg.TEST.REUSE_PREDICTIONS:
+                    self.process_test_sample_by_chunks()
             else:
                 if is_main_process():
                     if self.cfg.PROBLEM.TYPE != "CLASSIFICATION":
@@ -1203,412 +1211,157 @@ class Base_Workflow(metaclass=ABCMeta):
                     )
             self.print_stats(image_counter)
 
+    def predict_batches_in_test(
+        self, x_batch: NDArray, y_batch: NDArray, stats_name="per_crop", disable_tqdm: bool = False
+    ) -> NDArray:
+        """
+        Predict a batch of data for the test phase.
+
+        Parameters
+        ----------
+        x_batch : NDArray
+            X batch data. Expected axes are: ``(batch, z, y, x, channels)`` for 3D and
+            ``(batch, y, x, channels)`` for 2D.
+
+        y_batch: NDArray
+            Y batch data. Expected axes are: ``(batch, z, y, x, channels)`` for 3D and
+            ``(batch, y, x, channels)`` for 2D.
+
+        stats_name : str, optional
+            Name of the statistics to save.
+
+        disable_tqdm : bool, optional
+            Whether to disable tqdm or not.
+
+        Returns
+        -------
+        pred : NDArray
+            Predicted batch.
+        """
+        if self.cfg.TEST.AUGMENTATION:
+            for k in tqdm(range(x_batch.shape[0]), leave=False, disable=disable_tqdm):
+                if self.cfg.PROBLEM.NDIM == "2D":
+                    p = ensemble8_2d_predictions(
+                        x_batch[k],
+                        axes_order_back=self.axes_order_back,
+                        pred_func=self.model_call_func,
+                        axes_order=self.axes_order,
+                        device=self.device,
+                        mode=self.cfg.TEST.AUGMENTATION_MODE,
+                    )
+                else:
+                    p = ensemble16_3d_predictions(
+                        x_batch[k],
+                        batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
+                        axes_order_back=self.axes_order_back,
+                        pred_func=self.model_call_func,
+                        axes_order=self.axes_order,
+                        device=self.device,
+                        mode=self.cfg.TEST.AUGMENTATION_MODE,
+                    )
+                p = self.apply_model_activations(p)
+                # Multi-head concatenation
+                if isinstance(p, list):
+                    p = torch.cat((p[0], torch.argmax(p[1], dim=1).unsqueeze(1)), dim=1)
+
+                # Calculate the metrics
+                if y_batch is not None:
+                    metric_values = self.metric_calculation(output=p, targets=y_batch[k], train=False)
+                    for metric in metric_values:
+                        if str(metric).lower() not in self.stats[stats_name]:
+                            self.stats[stats_name][str(metric).lower()] = 0
+                        self.stats[stats_name][str(metric).lower()] += metric_values[metric]
+                self.stats["patch_by_batch_counter"] += 1
+
+                p = to_numpy_format(p, self.axes_order_back)
+                if "pred" not in locals():
+                    pred = np.zeros((x_batch.shape[0],) + p.shape[1:], dtype=self.dtype)
+                pred[k] = p
+        else:
+            l = int(math.ceil(x_batch.shape[0] / self.cfg.TRAIN.BATCH_SIZE))
+            for k in tqdm(range(l), leave=False):
+                top = (
+                    (k + 1) * self.cfg.TRAIN.BATCH_SIZE
+                    if (k + 1) * self.cfg.TRAIN.BATCH_SIZE < x_batch.shape[0]
+                    else x_batch.shape[0]
+                )
+                p = self.apply_model_activations(self.model_call_func(x_batch[k * self.cfg.TRAIN.BATCH_SIZE : top]))
+
+                # Multi-head concatenation
+                if isinstance(p, list):
+                    p = torch.cat(
+                        (p[0], torch.argmax(p[1], dim=1).unsqueeze(1)),
+                        dim=1,
+                    )
+
+                # Calculate the metrics
+                if y_batch is not None:
+                    metric_values = self.metric_calculation(
+                        output=p,
+                        targets=y_batch[k * self.cfg.TRAIN.BATCH_SIZE : top],
+                        train=False,
+                    )
+                    for metric in metric_values:
+                        if str(metric).lower() not in self.stats[stats_name]:
+                            self.stats[stats_name][str(metric).lower()] = 0
+                        self.stats[stats_name][str(metric).lower()] += metric_values[metric]
+                self.stats["patch_by_batch_counter"] += 1
+
+                p = to_numpy_format(p, self.axes_order_back)
+                if "pred" not in locals():
+                    pred = np.zeros((x_batch.shape[0],) + p.shape[1:], dtype=self.dtype)
+                pred[k * self.cfg.TRAIN.BATCH_SIZE : top] = p
+
+        return pred
+
     def process_test_sample_by_chunks(self):
         """
         Function to process a sample in the inference phase. A final H5/Zarr file is created in "TZCYX" or "TZYXC" order
         depending on ``DATA.TEST.INPUT_IMG_AXES_ORDER`` ('T' is always included).
         """
-        filename, file_extension = os.path.splitext(self.current_sample["filename"])
-        ext = ".h5" if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5" else ".zarr"
-        out_data_div_filename = os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename + ext)
+        # Create the generator
+        test_dataset = create_chunked_test_generator(
+            self.cfg,
+            current_sample=self.current_sample,
+            norm_module=self.norm_module,
+            out_dir=self.cfg.PATHS.RESULT_DIR.PER_IMAGE,
+            dtype_str=self.dtype_str,
+        )
+        tgen: chunked_test_pair_data_generator = test_dataset.dataset  # type: ignore
+        data_shape = tgen.X_parallel_data.shape
+        for patch_id, obj_list in enumerate(test_dataset):
+            img, mask, patch_in_data, added_pad, norm_extra_info = obj_list
 
-        if not self.cfg.TEST.REUSE_PREDICTIONS:
-            if file_extension not in [".hdf5", ".hdf", ".h5", ".zarr"]:
+            if self.cfg.TEST.VERBOSE:
                 print(
-                    "WARNING: you could have saved more memory by converting input test images into H5 file format (.h5) "
-                    "or Zarr (.zarr) as with 'TEST.BY_CHUNKS.ENABLE' option enabled H5/Zarr files will be processed by chunks"
-                )
-            # Load data
-            if file_extension not in [".hdf5", ".hdf", ".h5", ".zarr"]:  # Numpy array
-                if self.current_sample["X"].ndim == 3:
-                    c_pos = -1 if self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER[-1] == "C" else 1
-                    self.current_sample["X"] = np.expand_dims(self.current_sample["X"], c_pos)
-
-            if is_main_process():
-                print("Loaded image shape is {}".format(self.current_sample["X"].shape))
-
-            data_shape = self.current_sample["X"].shape
-            out_data_shape = [x * y for x, y in zip(data_shape, self.cfg.DATA.PREPROCESS.ZOOM.ZOOM_FACTOR)]
-
-            if self.current_sample["X"].ndim < 3:
-                raise ValueError(
-                    "Loaded image need to have at least 3 dimensions: {} (ndim: {})".format(
-                        self.current_sample["X"].shape, self.current_sample["X"].ndim
+                    "[Rank {} ({})] Patch number {} processing patches {} from {}".format(
+                        get_rank(), os.getpid(), patch_id, patch_in_data, data_shape
                     )
                 )
 
-            if len(self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER) != self.current_sample["X"].ndim:
-                raise ValueError(
-                    "'DATA.TEST.INPUT_IMG_AXES_ORDER' value {} does not match the number of dimensions of the loaded H5/Zarr "
-                    "file {} (ndim: {})".format(
-                        self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER,
-                        self.current_sample["X"].shape,
-                        self.current_sample["X"].ndim,
-                    )
-                )
+            # Pass the batch through the model
+            pred = self.predict_batches_in_test(img, mask, stats_name="by_chunks", disable_tqdm=True)
 
-            # Data paths
-            os.makedirs(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, exist_ok=True)
-            if self.cfg.SYSTEM.NUM_GPUS > 1:
-                out_data_filename = os.path.join(
-                    self.cfg.PATHS.RESULT_DIR.PER_IMAGE,
-                    filename + "_part" + str(get_rank()) + ext,
-                )
-                out_data_mask_filename = os.path.join(
-                    self.cfg.PATHS.RESULT_DIR.PER_IMAGE,
-                    filename + "_part" + str(get_rank()) + "_mask" + ext,
-                )
-            else:
-                out_data_filename = os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename + "_nodiv" + ext)
-                out_data_mask_filename = os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename + "_mask" + ext)
-            in_data = self.current_sample["X"]
-
-            # Process in charge of processing one predicted patch
-            output_handle_proc = mp.Process(
-                target=insert_patch_into_dataset,
-                args=(
-                    out_data_filename,
-                    out_data_mask_filename,
-                    out_data_shape,
-                    self.output_queue,
-                    self.extract_info_queue,
-                    self.cfg,
-                    self.dtype_str,
-                    self.dtype,
-                    self.cfg.TEST.BY_CHUNKS.FORMAT,
-                    self.cfg.TEST.VERBOSE,
-                ),
-            )
-            output_handle_proc.daemon = True
-            output_handle_proc.start()
-
-            # Process in charge of loading part of the data
-            load_data_process = mp.Process(
-                target=extract_patch_from_dataset,
-                args=(
-                    in_data,
-                    self.cfg,
-                    self.input_queue,
-                    self.extract_info_queue,
-                    self.cfg.TEST.VERBOSE,
-                ),
-            )
-            load_data_process.daemon = True
-            load_data_process.start()
-
-            if "img_file_to_close" in self.current_sample and isinstance(
-                self.current_sample["img_file_to_close"], h5py.File
-            ):
-                self.current_sample["img_file_to_close"].close()
-            del in_data
-
-            # Lock the thread inferring until no more patches
-            if self.cfg.TEST.VERBOSE and self.cfg.SYSTEM.NUM_GPUS > 1:
-                print(f"[Rank {get_rank()} ({os.getpid()})] Doing inference ")
-            while True:
-                obj = self.input_queue.get(timeout=360)
-                if obj == None:
-                    break
-
-                img, patch_coords = obj
-
-                # To decide if the patch needs to be processed or not
-                discard = False
-                if self.cfg.DATA.TEST.FILTER_SAMPLES.ENABLE:
-                    discard = sample_satisfy_conds(
-                        img,
-                        self.cfg.DATA.TEST.FILTER_SAMPLES.PROPS,
-                        self.cfg.DATA.TEST.FILTER_SAMPLES.VALUES,
-                        self.cfg.DATA.TEST.FILTER_SAMPLES.SIGNS,
-                    )
-
-                if not discard:
-                    img, _ = self.test_norm_module.apply_image_norm(img)
-                    assert isinstance(img, np.ndarray)
-                    if self.cfg.TEST.AUGMENTATION:
-                        p = ensemble16_3d_predictions(
-                            img[0],
-                            batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
-                            axis_order_back=self.axis_order_back,
-                            pred_func=self.model_call_func,
-                            axis_order=self.axis_order,
-                            device=self.device,
-                            mode=self.cfg.TEST.AUGMENTATION_MODE,
-                        )
-                    else:
-                        p = self.model_call_func(img)
-                    p = self.apply_model_activations(p)
-                    # Multi-head concatenation
-                    if isinstance(p, list):
-                        p = torch.cat((p[0], torch.argmax(p[1], dim=1).unsqueeze(1)), dim=1)
-                    p = to_numpy_format(p, self.axis_order_back)
-                else:
-                    if self.model_output_channels["type"] == "image":
-                        shape = img.shape
-                    else:  # mask
-                        if len(self.model_output_channels["channels"]) == 2:
-                            channels = self.model_output_channels["channels"] + 1
-                        else:
-                            channels = self.model_output_channels["channels"][0]
-                        shape = img.shape[:-1] + (channels,)
-                    p = np.zeros(shape)
-
-                t_dim, z_dim, y_dim, x_dim, c_dim = order_dimensions(
-                    list(self.cfg.DATA.PREPROCESS.ZOOM.ZOOM_FACTOR),
-                    input_order=self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER,
-                    output_order="TZYXC",
-                    default_value=1,
-                )
-
-                # Create a mask with the overlap. Calculate the exact part of the patch that will be inserted in the
-                # final H5/Zarr file
-                p = p[
-                    0,
-                    z_dim * self.cfg.DATA.TEST.PADDING[0] : p.shape[1] - z_dim * self.cfg.DATA.TEST.PADDING[0],
-                    y_dim * self.cfg.DATA.TEST.PADDING[1] : p.shape[2] - y_dim * self.cfg.DATA.TEST.PADDING[1],
-                    x_dim * self.cfg.DATA.TEST.PADDING[2] : p.shape[3] - x_dim * self.cfg.DATA.TEST.PADDING[2],
+            for i in range(pred.shape[0]):
+                # Remove padding if added
+                single_pred = pred[i]
+                single_pred_pad = added_pad[i]
+                single_pred = single_pred[
+                    single_pred_pad[0][0] : single_pred.shape[0] - single_pred_pad[0][1],
+                    single_pred_pad[1][0] : single_pred.shape[1] - single_pred_pad[1][1],
+                    single_pred_pad[2][0] : single_pred.shape[2] - single_pred_pad[2][1],
                 ]
-                m = np.ones(p.shape, dtype=np.uint8)
-                patch_coords = np.array(
-                    [patch_coords[:, 0], patch_coords[:, 0] + np.array(p.shape)[:-1]]
-                ).T  # should not be necessary?
+                # Insert into the data
+                tgen.insert_patch_in_file(single_pred, patch_in_data[i])
 
-                # Put the prediction into queue
-                self.output_queue.put([p, m, patch_coords])
-
-            # Get some auxiliar variables
-            self.stats["patch_by_batch_counter"] = self.extract_info_queue.get(timeout=360)
-            if is_main_process():
-                z_vol_info = self.extract_info_queue.get(timeout=360)
-                list_of_vols_in_z = self.extract_info_queue.get(timeout=360)
-            load_data_process.join()
-            output_handle_proc.join()
+        tgen.close_open_files()
 
         # Wait until all threads are done so the main thread can create the full size image
         if self.cfg.SYSTEM.NUM_GPUS > 1:
             if self.cfg.TEST.VERBOSE:
-                print(f"[Rank {get_rank()} ({os.getpid()})] Finish sample inference ")
+                print(f"[Rank {get_rank()} ({os.getpid()})] Finished predicting sample. Waiting for all ranks . . .")
             if is_dist_avail_and_initialized():
                 dist.barrier()
-
-        # Create the final H5/Zarr file that contains all the individual parts
-        if is_main_process():
-            if not self.cfg.TEST.REUSE_PREDICTIONS:
-                if "C" not in self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER:
-                    out_data_order = self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER + "C"
-                    c_index = -1
-                else:
-                    out_data_order = self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER
-                    c_index = out_data_order.index("C")
-
-                if self.cfg.SYSTEM.NUM_GPUS > 1:
-                    # Obtain parts of the data created by all GPUs
-                    if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
-                        data_parts_filenames = sorted(next(os.walk(self.cfg.PATHS.RESULT_DIR.PER_IMAGE))[2])
-                    else:
-                        data_parts_filenames = sorted(next(os.walk(self.cfg.PATHS.RESULT_DIR.PER_IMAGE))[1])
-                    parts = []
-                    mask_parts = []
-                    for x in data_parts_filenames:
-                        if filename + "_part" in x and x.endswith(self.cfg.TEST.BY_CHUNKS.FORMAT):
-                            if "_mask" not in x:
-                                parts.append(x)
-                            else:
-                                mask_parts.append(x)
-                    data_parts_filenames = parts
-                    data_parts_mask_filenames = mask_parts
-                    del parts, mask_parts
-
-                    if max(1, self.cfg.SYSTEM.NUM_GPUS) != len(data_parts_filenames) != len(list_of_vols_in_z):
-                        raise ValueError("Number of data parts is not the same as number of GPUs")
-
-                    # Compose the large image
-                    for i, data_part_fname in enumerate(data_parts_filenames):
-                        print("Reading {}".format(os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, data_part_fname)))
-                        data_part_file, data_part = read_chunked_data(
-                            os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, data_part_fname)
-                        )
-                        data_mask_part_file, data_mask_part = read_chunked_data(
-                            os.path.join(
-                                self.cfg.PATHS.RESULT_DIR.PER_IMAGE,
-                                data_parts_mask_filenames[i],
-                            )
-                        )
-
-                        if "data" not in locals():
-                            all_data_filename = os.path.join(self.cfg.PATHS.RESULT_DIR.PER_IMAGE, filename + ext)
-                            if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
-                                allfile = h5py.File(all_data_filename, "w")
-                                data = allfile.create_dataset(
-                                    "data",
-                                    data_part.shape,
-                                    dtype=self.dtype_str,
-                                    compression="gzip",
-                                )
-                            else:
-                                allfile = zarr.open_group(all_data_filename, mode="w")
-                                data = allfile.create_dataset(
-                                    "data",
-                                    shape=data_part.shape,
-                                    dtype=self.dtype_str,
-                                    compression="gzip",
-                                )
-
-                        for j, k in enumerate(list_of_vols_in_z[i]):
-
-                            slices = (
-                                slice(z_vol_info[k][0], z_vol_info[k][1]),  # z (only z axis is distributed across GPUs)
-                                slice(None),  # y
-                                slice(None),  # x
-                                slice(None),  # Channel
-                            )
-
-                            data_ordered_slices = order_dimensions(
-                                slices,
-                                input_order="ZYXC",
-                                output_order=out_data_order,
-                                default_value=0,
-                            )
-
-                            if self.cfg.TEST.VERBOSE:
-                                print(f"Filling {k} [{z_vol_info[k][0]}:{z_vol_info[k][1]}]")
-                            data[data_ordered_slices] = (
-                                data_part[data_ordered_slices] / data_mask_part[data_ordered_slices]  # type: ignore
-                            )
-
-                            if isinstance(allfile, h5py.File):
-                                allfile.flush()
-
-                        if isinstance(data_part_file, h5py.File):
-                            data_part_file.close()
-                        if isinstance(data_mask_part_file, h5py.File):
-                            data_mask_part_file.close()
-
-                    # Save image
-                    if self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF and self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
-                        current_order = np.array(range(len(data.shape)))
-                        transpose_order = order_dimensions(
-                            current_order,
-                            input_order=out_data_order,
-                            output_order="TZYXC",
-                            default_value=np.nan,
-                        )
-                        transpose_order = [x for x in transpose_order if not np.isnan(x)]  # type: ignore
-                        data = np.array(data, dtype=self.dtype).transpose(transpose_order)  # type: ignore
-                        if "T" not in out_data_order:
-                            data = np.expand_dims(data, 0)
-
-                        save_tif(
-                            data,
-                            self.cfg.PATHS.RESULT_DIR.PER_IMAGE,
-                            [filename + ".tif"],
-                            verbose=self.cfg.TEST.VERBOSE,
-                        )
-
-                    if isinstance(allfile, h5py.File):
-                        allfile.close()
-
-                # Just make the division with the overlap
-                else:
-                    # Load predictions and overlapping mask
-                    pred_file, pred = read_chunked_data(out_data_filename)
-                    mask_file, mask = read_chunked_data(out_data_mask_filename)
-
-                    # Create new file
-                    if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
-                        fid_div = h5py.File(out_data_div_filename, "w")
-                        pred_div = fid_div.create_dataset("data", pred.shape, dtype=pred.dtype, compression="gzip")
-                    else:
-                        fid_div = zarr.open_group(out_data_div_filename, mode="w")
-                        pred_div = fid_div.create_dataset("data", shape=pred.shape, dtype=pred.dtype)
-
-                    t_dim, z_dim, c_dim, y_dim, x_dim = order_dimensions(
-                        out_data_shape, self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER
-                    )
-
-                    # Fill the new data
-                    z_vols = math.ceil(z_dim / self.cfg.DATA.PATCH_SIZE[0])
-                    y_vols = math.ceil(y_dim / self.cfg.DATA.PATCH_SIZE[1])
-                    x_vols = math.ceil(x_dim / self.cfg.DATA.PATCH_SIZE[2])
-                    assert isinstance(z_dim, int) and isinstance(y_dim, int) and isinstance(x_dim, int)
-                    for z in tqdm(range(z_vols), disable=not is_main_process()):
-                        for y in range(y_vols):
-                            for x in range(x_vols):
-
-                                slices = (
-                                    slice(
-                                        z * self.cfg.DATA.PATCH_SIZE[0],
-                                        min(z_dim, self.cfg.DATA.PATCH_SIZE[0] * (z + 1)),
-                                    ),
-                                    slice(
-                                        y * self.cfg.DATA.PATCH_SIZE[1],
-                                        min(y_dim, self.cfg.DATA.PATCH_SIZE[1] * (y + 1)),
-                                    ),
-                                    slice(
-                                        x * self.cfg.DATA.PATCH_SIZE[2],
-                                        min(x_dim, self.cfg.DATA.PATCH_SIZE[2] * (x + 1)),
-                                    ),
-                                    slice(0, pred.shape[c_index]),  # Channel
-                                )
-
-                                data_ordered_slices = order_dimensions(
-                                    slices,
-                                    input_order="ZYXC",
-                                    output_order=out_data_order,
-                                    default_value=0,
-                                )
-                                pred_div[data_ordered_slices] = pred[data_ordered_slices] / mask[data_ordered_slices]  # type: ignore
-
-                        if isinstance(fid_div, h5py.File):
-                            fid_div.flush()
-
-                    # Save image
-                    if self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF and self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
-                        current_order = np.array(range(len(pred_div.shape)))
-                        transpose_order = order_dimensions(
-                            current_order,
-                            input_order=out_data_order,
-                            output_order="TZYXC",
-                            default_value=np.nan,
-                        )
-                        transpose_order = [x for x in transpose_order if not np.isnan(x)]  # type: ignore
-                        pred_div = np.array(pred_div, dtype=self.dtype).transpose(transpose_order)  # type: ignore
-                        if "T" not in out_data_order:
-                            pred_div = np.expand_dims(pred_div, 0)
-
-                        save_tif(
-                            pred_div,
-                            self.cfg.PATHS.RESULT_DIR.PER_IMAGE,
-                            [
-                                os.path.join(
-                                    self.cfg.PATHS.RESULT_DIR.PER_IMAGE,
-                                    filename + ".tif",
-                                )
-                            ],
-                            verbose=self.cfg.TEST.VERBOSE,
-                        )
-
-                    if isinstance(pred_file, h5py.File):
-                        pred_file.close()
-                    if isinstance(mask_file, h5py.File):
-                        mask_file.close()
-                    if isinstance(fid_div, h5py.File):
-                        fid_div.close()
-
-            if self.cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS:
-                if self.cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE == "chunk_by_chunk":
-                    self.after_merge_patches_by_chunks_proccess_patch(out_data_div_filename)
-                else:
-                    self.after_merge_patches_by_chunks_proccess_entire_pred(out_data_div_filename)
-
-        # Wait until the main thread is done to predict the next sample
-        if self.cfg.SYSTEM.NUM_GPUS > 1:
-            if self.cfg.TEST.VERBOSE:
-                print(f"[Rank {get_rank()} ({os.getpid()})] Process waiting . . . ")
-            if is_dist_avail_and_initialized():
-                dist.barrier()
-            if self.cfg.TEST.VERBOSE:
-                print(f"[Rank {get_rank()} ({os.getpid()})] Synched with main thread. Go for the next sample")
 
     def prepare_bmz_data(self, img):
         """
@@ -1701,7 +1454,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
         self.bmz_config["postprocessing"] = []
         if self.cfg.MODEL.SOURCE == "biapy":
-            # Check activations to be inserted as postprocessing in BMZ        
+            # Check activations to be inserted as postprocessing in BMZ
             act = list(self.activations[0].values())
             for ac in act:
                 if ac in ["CE_Sigmoid", "Sigmoid"]:
@@ -1789,87 +1542,11 @@ class Base_Workflow(metaclass=ABCMeta):
                                 self.current_sample["X"], _ = obj  # type: ignore
                             del obj
 
-                # Predict each patch
-                if self.cfg.TEST.AUGMENTATION:
-                    for k in tqdm(range(self.current_sample["X"].shape[0]), leave=False):
-                        if self.cfg.PROBLEM.NDIM == "2D":
-                            p = ensemble8_2d_predictions(
-                                self.current_sample["X"][k],
-                                axis_order_back=self.axis_order_back,
-                                pred_func=self.model_call_func,
-                                axis_order=self.axis_order,
-                                device=self.device,
-                                mode=self.cfg.TEST.AUGMENTATION_MODE,
-                            )
-                        else:
-                            p = ensemble16_3d_predictions(
-                                self.current_sample["X"][k],
-                                batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
-                                axis_order_back=self.axis_order_back,
-                                pred_func=self.model_call_func,
-                                axis_order=self.axis_order,
-                                device=self.device,
-                                mode=self.cfg.TEST.AUGMENTATION_MODE,
-                            )
-                        p = self.apply_model_activations(p)
-                        # Multi-head concatenation
-                        if isinstance(p, list):
-                            p = torch.cat((p[0], torch.argmax(p[1], dim=1).unsqueeze(1)), dim=1)
-
-                        # Calculate the metrics
-                        if self.current_sample["Y"] is not None:
-                            metric_values = self.metric_calculation(
-                                output=p, targets=self.current_sample["Y"][k], train=False
-                            )
-                            for metric in metric_values:
-                                if str(metric).lower() not in self.stats["per_crop"]:
-                                    self.stats["per_crop"][str(metric).lower()] = 0
-                                self.stats["per_crop"][str(metric).lower()] += metric_values[metric]
-                        self.stats["patch_by_batch_counter"] += 1
-
-                        p = to_numpy_format(p, self.axis_order_back)
-                        if "pred" not in locals():
-                            pred = np.zeros((self.current_sample["X"].shape[0],) + p.shape[1:], dtype=self.dtype)
-                        pred[k] = p
-                else:
-                    l = int(math.ceil(self.current_sample["X"].shape[0] / self.cfg.TRAIN.BATCH_SIZE))
-                    for k in tqdm(range(l), leave=False):
-                        top = (
-                            (k + 1) * self.cfg.TRAIN.BATCH_SIZE
-                            if (k + 1) * self.cfg.TRAIN.BATCH_SIZE < self.current_sample["X"].shape[0]
-                            else self.current_sample["X"].shape[0]
-                        )
-                        p = self.apply_model_activations(
-                            self.model_call_func(self.current_sample["X"][k * self.cfg.TRAIN.BATCH_SIZE : top])
-                        )
-                        # Multi-head concatenation
-                        if isinstance(p, list):
-                            p = torch.cat(
-                                (p[0], torch.argmax(p[1], dim=1).unsqueeze(1)),
-                                dim=1,
-                            )
-
-                        # Calculate the metrics
-                        if self.current_sample["Y"] is not None:
-                            metric_values = self.metric_calculation(
-                                output=p,
-                                targets=self.current_sample["Y"][k * self.cfg.TRAIN.BATCH_SIZE : top],
-                                train=False,
-                            )
-                            for metric in metric_values:
-                                if str(metric).lower() not in self.stats["per_crop"]:
-                                    self.stats["per_crop"][str(metric).lower()] = 0
-                                self.stats["per_crop"][str(metric).lower()] += metric_values[metric]
-                        self.stats["patch_by_batch_counter"] += 1
-
-                        p = to_numpy_format(p, self.axis_order_back)
-                        if "pred" not in locals():
-                            pred = np.zeros((self.current_sample["X"].shape[0],) + p.shape[1:], dtype=self.dtype)
-                        pred[k * self.cfg.TRAIN.BATCH_SIZE : top] = p
+                pred = self.predict_batches_in_test(self.current_sample["X"], self.current_sample["Y"])
 
                 # Delete self.current_sample["X"] as in 3D there is no full image
                 if self.cfg.PROBLEM.NDIM == "3D":
-                    del self.current_sample["X"], p
+                    del self.current_sample["X"]
 
                 # Reconstruct the predictions
                 if original_data_shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
@@ -1976,7 +1653,9 @@ class Base_Workflow(metaclass=ABCMeta):
 
                     # Calculate the metrics
                     if self.current_sample["Y"] is not None:
-                        metric_values = self.metric_calculation(output=pred, targets=self.current_sample["Y"], train=False)
+                        metric_values = self.metric_calculation(
+                            output=pred, targets=self.current_sample["Y"], train=False
+                        )
                         for metric in metric_values:
                             if str(metric).lower() not in self.stats["merge_patches_post"]:
                                 self.stats["merge_patches_post"][str(metric).lower()] = 0
@@ -2010,6 +1689,7 @@ class Base_Workflow(metaclass=ABCMeta):
             self.after_merge_patches(pred)
 
             if self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
+                assert isinstance(self.all_pred, list) and isinstance(self.all_gt, list)
                 self.all_pred.append(pred)
                 if self.current_sample["Y"] is not None and self.all_gt is not None:
                     self.all_gt.append(self.current_sample["Y"])
@@ -2031,9 +1711,9 @@ class Base_Workflow(metaclass=ABCMeta):
                 if self.cfg.TEST.AUGMENTATION:
                     pred = ensemble8_2d_predictions(
                         self.current_sample["X"][0],
-                        axis_order_back=self.axis_order_back,
+                        axes_order_back=self.axes_order_back,
                         pred_func=self.model_call_func,
-                        axis_order=self.axis_order,
+                        axes_order=self.axes_order,
                         device=self.device,
                         mode=self.cfg.TEST.AUGMENTATION_MODE,
                     )
@@ -2043,7 +1723,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 # Multi-head concatenation
                 if isinstance(pred, list):
                     pred = torch.cat((pred[0], torch.argmax(pred[1], dim=1).unsqueeze(1)), dim=1)
-                pred = to_numpy_format(pred, self.axis_order_back)
+                pred = to_numpy_format(pred, self.axes_order_back)
                 del self.current_sample["X"]
 
                 # Recover original shape if padded with check_downsample_division
@@ -2082,6 +1762,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     self.stats["full_image"][str(metric).lower()] += metric_values[metric]
 
             if self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
+                assert isinstance(self.all_pred, list) and isinstance(self.all_gt, list)
                 self.all_pred.append(pred)
                 if self.current_sample["Y"] is not None and self.all_gt is not None:
                     self.all_gt.append(self.current_sample["Y"])
@@ -2120,7 +1801,7 @@ class Base_Workflow(metaclass=ABCMeta):
         # By chunks
         for metric in self.stats["by_chunks"]:
             self.stats["by_chunks"][metric] = (
-                self.stats["by_chunks"][metric] / image_counter if image_counter != 0 else 0
+                self.stats["by_chunks"][metric] / self.stats["patch_by_batch_counter"] if self.stats["patch_by_batch_counter"] != 0 else 0
             )
 
         if self.post_processing["per_image"]:
@@ -2140,13 +1821,14 @@ class Base_Workflow(metaclass=ABCMeta):
         """
         self.normalize_stats(image_counter)
         if self.cfg.DATA.TEST.LOAD_GT:
-            if self.by_chunks:
+            if self.cfg.TEST.BY_CHUNKS.ENABLE:
                 if len(self.stats["by_chunks"]) > 0:
                     for metric in self.test_metric_names:
-                        if metric.lower() in self.stats["by_chunks"]:  # IoU is not calculated
+                        if metric.lower() in self.stats["by_chunks"]:
+                            metric_name = metric.replace("IoU", "Foreground IoU")
                             print(
-                                "Test {} (per image): {}".format(
-                                    str(metric),
+                                "Test {} (per patch): {}".format(
+                                    metric_name,
                                     self.stats["by_chunks"][metric.lower()],
                                 )
                             )
@@ -2335,248 +2017,3 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.cfg.PATHS.RESULT_DIR.AS_3D_STACK_POST_PROCESSING,
                 verbose=self.cfg.TEST.VERBOSE,
             )
-
-
-def extract_patch_from_dataset(data, cfg, input_queue, extract_info_queue, verbose=False):
-    """
-    Extract patches from data and put them into a queue read by each GPU inference process.
-    This function will be run by a child process created for every test sample.
-
-    Parameters
-    ----------
-    data : Str or Numpy array
-        If str it will be consider a path to load a H5/Zarr file. If not, it will be considered as the
-        data to extract patches from.
-
-    cfg : YACS configuration
-        Running configuration.
-
-    input_queue : Multiprocessing queue
-        Queue to put each extracted patch into.
-
-    extract_info_queue : Multiprocessing queue
-        Auxiliary queue to pass information between processes.
-
-    verbose : bool, optional
-        To print useful information for debugging.
-    """
-    if verbose and cfg.SYSTEM.NUM_GPUS > 1:
-        if isinstance(data, str):
-            print(f"[Rank {get_rank()} ({os.getpid()})] In charge of extracting patch from data from {data}")
-        else:
-            print(
-                f"[Rank {get_rank()} ({os.getpid()})] In charge of extracting patch from data from Numpy array {data.shape}"
-            )
-
-    # Load H5/Zarr in case we need it
-    if isinstance(data, str):
-        data_file, data = read_chunked_data(data)
-    # Process of extracting each patch
-    patch_counter = 0
-    for obj in extract_3D_patch_with_overlap_yield(
-        data,
-        cfg.DATA.PATCH_SIZE,
-        cfg.DATA.TEST.INPUT_IMG_AXES_ORDER,
-        overlap=cfg.DATA.TEST.OVERLAP,
-        padding=cfg.DATA.TEST.PADDING,
-        total_ranks=max(1, cfg.SYSTEM.NUM_GPUS),
-        rank=get_rank(),
-        verbose=verbose,
-    ):
-
-        if is_main_process():
-            img, patch_coords, total_vol, z_vol_info, list_of_vols_in_z = obj  # type: ignore
-        else:
-            img, patch_coords, total_vol = obj  # type: ignore
-        assert isinstance(img, np.ndarray)
-        img = np.expand_dims(img, 0)
-
-        t_dim, z_dim, y_dim, x_dim, c_dim = order_dimensions(
-            cfg.DATA.PREPROCESS.ZOOM.ZOOM_FACTOR,
-            input_order=cfg.DATA.TEST.INPUT_IMG_AXES_ORDER,
-            output_order="TZYXC",
-            default_value=1,
-        )
-        patch_coords = np.array(
-            [
-                [patch_coords.z_start, patch_coords.z_end],
-                [patch_coords.y_start, patch_coords.y_end],
-                [patch_coords.x_start, patch_coords.x_end],
-            ]
-        )
-        patch_coords = (np.array([z_dim, y_dim, x_dim]) * patch_coords.T).T
-        img = zoom(img, (t_dim, z_dim, y_dim, x_dim, c_dim), order=0, mode="nearest")
-
-        input_queue.put([img, patch_coords])
-
-        if patch_counter == 0:
-            # This goes for the child process in charge of inserting data patches (insert_patch_into_dataset function)
-            extract_info_queue.put(total_vol)
-        patch_counter += 1
-
-    # Send a sentinel so the main thread knows that there is no more data
-    input_queue.put(None)
-
-    # Send to the main thread patch_counter
-    extract_info_queue.put(patch_counter)
-    if is_main_process():
-        extract_info_queue.put(z_vol_info)
-        extract_info_queue.put(list_of_vols_in_z)
-
-    if verbose and cfg.SYSTEM.NUM_GPUS > 1:
-        if isinstance(data, str):
-            print(f"[Rank {get_rank()} ({os.getpid()})] Finish extracting patches from data {data}")
-        else:
-            print(f"[Rank {get_rank()} ({os.getpid()})] Finish extracting patches from data {data.shape}")
-
-    if "data_file" in locals() and cfg.TEST.BY_CHUNKS.FORMAT == "h5":
-        data_file.close()
-
-
-def insert_patch_into_dataset(
-    data_filename,
-    data_filename_mask,
-    data_shape,
-    output_queue,
-    extract_info_queue,
-    cfg,
-    dtype_str,
-    dtype,
-    file_type,
-    verbose=False,
-):
-    """
-    Insert predicted patches (in ``output_queue``) in its original position in a H5/Zarr file. Each GPU will create
-    a file containing the part it has processed (as we can not write the same H5/Zarr file ar the same time). Then,
-    the main rank will create the final image. This function will be run by a child process created for every
-    test sample.
-
-    Parameters
-    ----------
-    data_filename : Str or Numpy array
-        If str it will be consider a path to load a H5/Zarr file. If not, it will be considered as the
-        data to extract patches from.
-
-    data_shape : YACS configuration
-        Shape of the H5/Zarr file dataset to create.
-
-    output_queue : Multiprocessing queue
-        Queue to get each prediction from.
-
-    extract_info_queue : Multiprocessing queue
-        Auxiliary queue to pass information between processes.
-
-    cfg : YACS configuration
-        Running configuration.
-
-    dtype_str : str
-        Type of the H5/Zarr dataset to create.
-
-    dtype : Numpy dtype
-        Type of the H5/Zarr dataset to create. Only used if a TIF file is created by selected to do so
-        with ``TEST.BY_CHUNKS.SAVE_OUT_TIF`` variable.
-
-    verbose : bool, optional
-        To print useful information for debugging.
-    """
-    if verbose and cfg.SYSTEM.NUM_GPUS > 1:
-        print(f"[Rank {get_rank()} ({os.getpid()})] In charge of inserting patches into data . . .")
-
-    if file_type == "h5":
-        fid = h5py.File(data_filename, "w")
-        fid_mask = h5py.File(data_filename_mask, "w")
-    else:
-        fid = zarr.open_group(data_filename, mode="w")
-        fid_mask = zarr.open_group(data_filename_mask, mode="w")
-
-    filename, file_extension = os.path.splitext(os.path.basename(data_filename))
-
-    # Obtain the total patches so we can display it for the user
-    total_patches = extract_info_queue.get(timeout=360)
-    for i in tqdm(range(total_patches), disable=not is_main_process()):
-        p, m, patch_coords = output_queue.get(timeout=360)
-
-        if "data" not in locals():
-            # Channel dimension should be equal to the number of channel of the prediction
-            out_data_shape = np.array(data_shape)
-            if "C" not in cfg.DATA.TEST.INPUT_IMG_AXES_ORDER:
-                out_data_shape = tuple(out_data_shape) + (p.shape[-1],)
-                out_data_order = cfg.DATA.TEST.INPUT_IMG_AXES_ORDER + "C"
-            else:
-                out_data_shape[cfg.DATA.TEST.INPUT_IMG_AXES_ORDER.index("C")] = p.shape[-1]
-                out_data_shape = tuple(out_data_shape)
-                out_data_order = cfg.DATA.TEST.INPUT_IMG_AXES_ORDER
-
-            if file_type == "h5":
-                data = fid.create_dataset("data", shape=out_data_shape, dtype=dtype_str, compression="gzip")
-                mask = fid_mask.create_dataset("data", shape=out_data_shape, dtype=dtype_str, compression="gzip")
-            else:
-                data = fid.create_dataset("data", shape=out_data_shape, dtype=dtype_str)
-                mask = fid_mask.create_dataset("data", shape=out_data_shape, dtype=dtype_str)
-
-        # Adjust slices to calculate where to insert the predicted patch. This slice does not have into account the
-        # channel so any of them can be inserted
-        slices = (
-            slice(patch_coords[0][0], patch_coords[0][1]),
-            slice(patch_coords[1][0], patch_coords[1][1]),
-            slice(patch_coords[2][0], patch_coords[2][1]),
-            slice(None),
-        )
-        data_ordered_slices = tuple(
-            order_dimensions(
-                slices,
-                input_order="ZYXC",
-                output_order=cfg.DATA.TEST.INPUT_IMG_AXES_ORDER,
-                default_value=0,
-            )
-        )
-
-        # Adjust patch slice to transpose it before inserting intop the final data
-        current_order = np.array(range(len(p.shape)))
-        transpose_order = order_dimensions(
-            current_order,
-            input_order="ZYXC",
-            output_order=out_data_order,
-            default_value=np.nan,
-        )
-        transpose_order = [x for x in transpose_order if not np.isnan(x)]  # type: ignore
-        data[data_ordered_slices] += p.transpose(transpose_order)  # type: ignore
-        mask[data_ordered_slices] += m.transpose(transpose_order)  # type: ignore
-
-        # Force flush after some iterations
-        if i % cfg.TEST.BY_CHUNKS.FLUSH_EACH == 0 and file_type == "h5":
-            if isinstance(fid, h5py.File):
-                fid.flush()
-            if isinstance(fid_mask, h5py.File):
-                fid_mask.flush()
-
-    # Save image
-    if cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF and cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
-        current_order = np.array(range(len(data.shape)))
-        transpose_order = order_dimensions(
-            current_order,
-            input_order=out_data_order,
-            output_order="TZYXC",
-            default_value=np.nan,
-        )
-        transpose_order = [x for x in transpose_order if not np.isnan(x)]  # type: ignore
-        data = np.array(data, dtype=dtype).transpose(transpose_order)  # type: ignore
-        mask = np.array(mask, dtype=dtype).transpose(transpose_order)  # type: ignore
-        if "T" not in out_data_order:
-            data = np.expand_dims(data, 0)
-            mask = np.expand_dims(mask, 0)
-        save_tif(data, cfg.PATHS.RESULT_DIR.PER_IMAGE, [filename + ".tif"], verbose=verbose)
-        save_tif(
-            mask,
-            cfg.PATHS.RESULT_DIR.PER_IMAGE,
-            [filename + "_mask.tif"],
-            verbose=verbose,
-        )
-    if file_type == "h5":
-        if isinstance(fid, h5py.File):
-            fid.close()
-        if isinstance(fid_mask, h5py.File):
-            fid_mask.close()
-
-    if verbose and cfg.SYSTEM.NUM_GPUS > 1:
-        print(f"[Rank {get_rank()} ({os.getpid()})] Finish inserting patches into data . . .")

@@ -23,7 +23,7 @@ from biapy.utils.misc import is_main_process
 from biapy.data.data_2D_manipulation import crop_data_with_overlap, ensure_2d_shape
 from biapy.data.data_3D_manipulation import (
     crop_3D_data_with_overlap,
-    extract_3D_patch_with_overlap_yield,
+    extract_3D_patch_with_overlap_and_padding_yield,
     order_dimensions,
     ensure_3d_shape,
 )
@@ -50,12 +50,12 @@ def load_and_prepare_train_data(
     shuffle_val: bool = True,
     train_preprocess_f: Optional[Callable] = None,
     train_preprocess_cfg: Optional[CN] = None,
-    train_filter_conds: List[List[str]] = [],
+    train_filter_props: List[List[str]] = [],
     train_filter_vals: List[List[float]] = [],
     train_filter_signs: List[List[str]] = [],
     val_preprocess_f: Optional[Callable] = None,
     val_preprocess_cfg: Optional[CN] = None,
-    val_filter_conds: List[List[str]] = [],
+    val_filter_props: List[List[str]] = [],
     val_filter_vals: List[List[float]] = [],
     val_filter_signs: List[List[str]] = [],
     filter_by_entire_image: bool = True,
@@ -140,8 +140,8 @@ def load_and_prepare_train_data(
     train_preprocess_cfg : dict, optional
         Configuration parameters for train preprocessing, is necessary in case you want to apply any preprocessing.
 
-    train_filter_conds : list of lists of str
-        Filter conditions to be applied to the train data. The three variables, ``filter_conds``, ``filter_vals`` and ``filter_vals``
+    train_filter_props : list of lists of str
+        Filter conditions to be applied to the train data. The three variables, ``filter_props``, ``filter_vals`` and ``filter_vals``
         will compose a list of conditions to remove the samples from the list. They are list of list of conditions. For instance, the
         conditions can be like this: ``[['A'], ['B','C']]``. Then, if the sample satisfies the first list of conditions, only 'A'
         in this first case (from ['A'] list), or satisfy 'B' and 'C' (from ['B','C'] list) it will be removed. In each sublist all the
@@ -161,7 +161,7 @@ def load_and_prepare_train_data(
           ratio between ground truth image max and min.
 
     train_filter_vals : list of int/float
-        Represent the values of the properties listed in ``train_filter_conds`` that the images need to satisfy to not be dropped.
+        Represent the values of the properties listed in ``train_filter_props`` that the images need to satisfy to not be dropped.
 
     train_filter_signs : list of list of str
         Signs to do the comparison for train data filtering. Options: [``'gt'``, ``'ge'``, ``'lt'``, ``'le'``] that corresponds to
@@ -173,8 +173,8 @@ def load_and_prepare_train_data(
     val_preprocess_cfg : dict, optional
         Configuration parameters for validation preprocessing, is necessary in case you want to apply any preprocessing.
 
-    val_filter_conds : list of lists of str
-        Filter conditions to be applied to the validation data. The three variables, ``filter_conds``, ``filter_vals`` and ``filter_vals``
+    val_filter_props : list of lists of str
+        Filter conditions to be applied to the validation data. The three variables, ``filter_props``, ``filter_vals`` and ``filter_vals``
         will compose a list of conditions to remove the images from the list. They are list of list of conditions. For instance, the
         conditions can be like this: ``[['A'], ['B','C']]``. Then, if the sample satisfies the first list of conditions, only 'A'
         in this first case (from ['A'] list), or satisfy 'B' and 'C' (from ['B','C'] list) it will be removed. In each sublist all
@@ -194,7 +194,7 @@ def load_and_prepare_train_data(
           ratio between ground truth image max and min.
 
     val_filter_vals : list of int/float
-        Represent the values of the properties listed in ``val_filter_conds`` that the images need to satisfy to not be dropped.
+        Represent the values of the properties listed in ``val_filter_props`` that the images need to satisfy to not be dropped.
 
     val_filter_signs : list of list of str
         Signs to do the comparison for validation data filtering. Options: [``'gt'``, ``'ge'``, ``'lt'``, ``'le'``] that corresponds to
@@ -467,14 +467,14 @@ def load_and_prepare_train_data(
                     f"the file: {filepath})"
                 )
 
-    if len(train_filter_conds) > 0:
+    if len(train_filter_props) > 0:
         save_example_dir = None
         if save_filtered_images and save_filtered_images_dir:
             save_example_dir = os.path.join(save_filtered_images_dir, "train")
         filter_samples_by_properties(
             X_train,
             is_3d,
-            train_filter_conds,
+            train_filter_props,
             train_filter_vals,
             train_filter_signs,
             y_dataset=Y_train,
@@ -750,14 +750,14 @@ def load_and_prepare_train_data(
                         f"the file {filepath})"
                     )
 
-        if len(val_filter_conds) > 0:
+        if len(val_filter_props) > 0:
             save_example_dir = None
             if save_filtered_images and save_filtered_images_dir:
                 save_example_dir = os.path.join(save_filtered_images_dir, "val")
             filter_samples_by_properties(
                 X_val,
                 is_3d,
-                val_filter_conds,
+                val_filter_props,
                 val_filter_vals,
                 val_filter_signs,
                 y_dataset=Y_val,
@@ -1328,12 +1328,12 @@ def load_and_prepare_train_data_cls(
     shuffle_val: bool = True,
     train_preprocess_f: Optional[Callable] = None,
     train_preprocess_cfg: Optional[Dict] = None,
-    train_filter_conds: List[List[str]] = [],
+    train_filter_props: List[List[str]] = [],
     train_filter_vals: List[List[float | int]] = [],
     train_filter_signs: List[List[str]] = [],
     val_preprocess_f: Optional[Callable] = None,
     val_preprocess_cfg: Optional[Dict] = None,
-    val_filter_conds: List[List[str]] = [],
+    val_filter_props: List[List[str]] = [],
     val_filter_vals: List[List[int | float]] = [],
     val_filter_signs: List[List[str]] = [],
     norm_before_filter: bool = False,
@@ -1389,8 +1389,8 @@ def load_and_prepare_train_data_cls(
     train_preprocess_cfg : dict, optional
         Configuration parameters for train preprocessing, is necessary in case you want to apply any preprocessing.
 
-    train_filter_conds : list of lists of str
-        Filter conditions to be applied to the train data. The three variables, ``filter_conds``, ``filter_vals`` and ``filter_vals``
+    train_filter_props : list of lists of str
+        Filter conditions to be applied to the train data. The three variables, ``filter_props``, ``filter_vals`` and ``filter_vals``
         will compose a list of conditions to remove the samples from the list. They are list of list of conditions. For instance, the
         conditions can be like this: ``[['A'], ['B','C']]``. Then, if the sample satisfies the first list of conditions, only 'A'
         in this first case (from ['A'] list), or satisfy 'B' and 'C' (from ['B','C'] list) it will be removed. In each sublist all the
@@ -1410,7 +1410,7 @@ def load_and_prepare_train_data_cls(
           ratio between ground truth image max and min.
 
     train_filter_vals : list of int/float
-        Represent the values of the properties listed in ``train_filter_conds`` that the images need to satisfy to not be dropped.
+        Represent the values of the properties listed in ``train_filter_props`` that the images need to satisfy to not be dropped.
 
     train_filter_signs : list of list of str
         Signs to do the comparison for train data filtering. Options: [``'gt'``, ``'ge'``, ``'lt'``, ``'le'``] that corresponds to
@@ -1422,8 +1422,8 @@ def load_and_prepare_train_data_cls(
     val_preprocess_cfg : dict, optional
         Configuration parameters for validation preprocessing, is necessary in case you want to apply any preprocessing.
 
-    val_filter_conds : list of lists of str
-        Filter conditions to be applied to the validation data. The three variables, ``filter_conds``, ``filter_vals`` and ``filter_vals``
+    val_filter_props : list of lists of str
+        Filter conditions to be applied to the validation data. The three variables, ``filter_props``, ``filter_vals`` and ``filter_vals``
         will compose a list of conditions to remove the images from the list. They are list of list of conditions. For instance, the
         conditions can be like this: ``[['A'], ['B','C']]``. Then, if the sample satisfies the first list of conditions, only 'A'
         in this first case (from ['A'] list), or satisfy 'B' and 'C' (from ['B','C'] list) it will be removed. In each sublist all
@@ -1443,7 +1443,7 @@ def load_and_prepare_train_data_cls(
           ratio between ground truth image max and min.
 
     val_filter_vals : list of int/float
-        Represent the values of the properties listed in ``val_filter_conds`` that the images need to satisfy to not be dropped.
+        Represent the values of the properties listed in ``val_filter_props`` that the images need to satisfy to not be dropped.
 
     val_filter_signs : list of list of str
         Signs to do the comparison for validation data filtering. Options: [``'gt'``, ``'ge'``, ``'lt'``, ``'le'``] that corresponds to
@@ -1501,11 +1501,11 @@ def load_and_prepare_train_data_cls(
         convert_to_rgb=convert_to_rgb,
     )
 
-    if len(train_filter_conds) > 0:
+    if len(train_filter_props) > 0:
         filter_samples_by_properties(
             X_train,
             is_3d,
-            train_filter_conds,
+            train_filter_props,
             train_filter_vals,
             train_filter_signs,
             crop_shape=crop_shape,
@@ -1555,11 +1555,11 @@ def load_and_prepare_train_data_cls(
             convert_to_rgb=convert_to_rgb,
         )
 
-        if len(val_filter_conds) > 0:
+        if len(val_filter_props) > 0:
             filter_samples_by_properties(
                 X_val,
                 is_3d,
-                val_filter_conds,
+                val_filter_props,
                 val_filter_vals,
                 val_filter_signs,
                 crop_shape=crop_shape,
@@ -1853,7 +1853,7 @@ def samples_from_zarr(
                 )
 
         # Get the total patches so we can use tqdm so the user can see the time
-        obj = extract_3D_patch_with_overlap_yield(
+        obj = extract_3D_patch_with_overlap_and_padding_yield(
             data,
             crop_shape[:-1] + (channel,),
             zarr_data_info["input_img_axes"] if not is_mask else zarr_data_info["input_mask_axes"],
@@ -1874,7 +1874,7 @@ def samples_from_zarr(
         del __unnamed_iterator
         total_patches, _, _ = obj  # type: ignore
 
-        for_img_cond = extract_3D_patch_with_overlap_yield(
+        for_img_cond = extract_3D_patch_with_overlap_and_padding_yield(
             data,
             crop_shape[:-1] + (channel,),
             zarr_data_info["input_img_axes"] if not is_mask else zarr_data_info["input_mask_axes"],
@@ -2319,7 +2319,7 @@ def samples_from_class_list(
 def filter_samples_by_properties(
     x_dataset: BiaPyDataset,
     is_3d: bool,
-    filter_conds: List[List[str]],
+    filter_props: List[List[str]],
     filter_vals: List[List[int | float]],
     filter_signs: List[List[str]],
     crop_shape: Tuple[int, ...],
@@ -2346,8 +2346,8 @@ def filter_samples_by_properties(
     is_3d: bool, optional
         Whether the data to load is expected to be 3D or not.
 
-    filter_conds : list of lists of str
-        Filter conditions to be applied. The three variables, ``filter_conds``, ``filter_vals`` and ``filter_vals`` will compose a
+    filter_props : list of lists of str
+        Filter conditions to be applied. The three variables, ``filter_props``, ``filter_vals`` and ``filter_vals`` will compose a
         list of conditions to remove the images from the list. They are list of list of conditions. For instance, the conditions can
         be like this: ``[['A'], ['B','C']]``. Then, if the sample satisfies the first list of conditions, only 'A' in this first case
         (from ['A'] list), or satisfy 'B' and 'C' (from ['B','C'] list) it will be removed. In each sublist all the conditions must be
@@ -2367,7 +2367,7 @@ def filter_samples_by_properties(
           ratio between ground truth image max and min.
 
     filter_vals : list of int/float
-        Represent the values of the properties listed in ``filter_conds`` that the images need to satisfy to not be dropped.
+        Represent the values of the properties listed in ``filter_props`` that the images need to satisfy to not be dropped.
 
     filter_signs  :list of list of str
         Signs to do the comparison. Options: [``'gt'``, ``'ge'``, ``'lt'``, ``'le'``] that corresponds to "greather than", e.g. ">",
@@ -2432,7 +2432,7 @@ def filter_samples_by_properties(
     print("Applying filtering to data samples . . .")
 
     use_Y_data = False
-    for cond in filter_conds:
+    for cond in filter_props:
         if (
             "foreground" in cond
             or "diff" in cond
@@ -2486,11 +2486,11 @@ def filter_samples_by_properties(
             assert isinstance(img, np.ndarray)
             satisfy_conds = sample_satisfy_conds(
                 img,
-                filter_conds,
+                filter_props,
                 filter_vals,
                 filter_signs,
                 mask=mask,
-                img_ratio=float(img.max())-float(img.min()),
+                img_ratio=float(img.max()) - float(img.min()),
                 mask_ratio=(float(mask.max()) - float(mask.min())) if mask is not None else 0,
             )
 
@@ -2660,15 +2660,15 @@ def filter_samples_by_properties(
             assert isinstance(img, np.ndarray)
             img_max = float(xdata.max()) if isinstance(xdata, np.ndarray) else float(img.max())
             img_min = float(xdata.min()) if isinstance(xdata, np.ndarray) else float(img.min())
-            img_ratio = img_max-img_min
+            img_ratio = img_max - img_min
             mask_ratio = None
             if ydata is not None and mask is not None:
                 mask_max = float(ydata.max()) if isinstance(ydata, np.ndarray) else float(mask.max())
                 mask_min = float(ydata.min()) if isinstance(ydata, np.ndarray) else float(mask.min())
-                mask_ratio = mask_max-mask_min
+                mask_ratio = mask_max - mask_min
             satisfy_conds = sample_satisfy_conds(
                 img,
-                filter_conds,
+                filter_props,
                 filter_vals,
                 filter_signs,
                 mask=mask,
@@ -2714,7 +2714,7 @@ def filter_samples_by_properties(
 
 def sample_satisfy_conds(
     img: NDArray,
-    filter_conds: List[List[str]],
+    filter_props: List[List[str]],
     filter_vals: List[List[float | int]],
     filter_signs: List[List[str]],
     mask: Optional[NDArray] = None,
@@ -2722,15 +2722,15 @@ def sample_satisfy_conds(
     mask_ratio: Optional[float] = 0,
 ) -> bool:
     """
-    Whether ``img`` satisfy at least one of the conditions composed by ``filter_conds``, ``filter_vals``, ``filter_sings``.
+    Whether ``img`` satisfy at least one of the conditions composed by ``filter_props``, ``filter_vals``, ``filter_sings``.
 
     Parameters
     ----------
     img : 4D/5D Numpy array
         Image to check if satisfy conditions. E.g. ``(z, y, x, num_classes)`` for 3D or ``(y, x, num_classes)`` for 2D.
 
-    filter_conds : list of lists of str
-        Filter conditions to be applied. The three variables, ``filter_conds``, ``filter_vals`` and ``filter_vals`` will compose a
+    filter_props : list of lists of str
+        Filter conditions to be applied. The three variables, ``filter_props``, ``filter_vals`` and ``filter_vals`` will compose a
         list of conditions to remove the images from the list. They are list of list of conditions. For instance, the conditions can
         be like this: ``[['A'], ['B','C']]``. Then, if the sample satisfies the first list of conditions, only 'A' in this first case
         (from ['A'] list), or satisfy 'B' and 'C' (from ['B','C'] list) it will be removed. In each sublist all the conditions must
@@ -2749,18 +2749,18 @@ def sample_satisfy_conds(
           ratio between ground truth image max and min.
 
     filter_vals : list of int/float
-        Represent the values of the properties listed in ``filter_conds`` that the images need to satisfy to not be dropped.
+        Represent the values of the properties listed in ``filter_props`` that the images need to satisfy to not be dropped.
 
     filter_signs : list of list of str
         Signs to do the comparison. Options: [``'gt'``, ``'ge'``, ``'lt'``, ``'le'``] that corresponds to "greather than", e.g. ">",
         "greather equal", e.g. ">=", "less than", e.g. "<", and "less equal" e.g. "<=" comparisons.
 
     mask : 4D/5D Numpy array, optional
-        Mask to check if satisfy "foreground" condition in ``filter_conds``. E.g. ``(z, y, x, num_classes)`` for 3D or
+        Mask to check if satisfy "foreground" condition in ``filter_props``. E.g. ``(z, y, x, num_classes)`` for 3D or
         ``(y, x, num_classes)`` for 2D.
 
     img_ratio : float, optional
-        Ratio of the input image. Expected to be ``(img.max - img.min)`` of the entire image. 
+        Ratio of the input image. Expected to be ``(img.max - img.min)`` of the entire image.
 
     mask_ratio : float, optional
         Minimum value of the entire image. Expected to be ``(mask.max - mask.min)`` of the entire image.
@@ -2772,7 +2772,7 @@ def sample_satisfy_conds(
     """
     satisfy_conds = False
     # Check if the sample satisfies a condition
-    for i, cond in enumerate(filter_conds):
+    for i, cond in enumerate(filter_props):
         comps = []
         for j, c in enumerate(cond):
             if c == "foreground":
@@ -3087,6 +3087,7 @@ def pad_and_reflect(img: NDArray, crop_shape: Tuple[int, ...], verbose: bool = F
                 print("Reflected from {} to {}".format(o_shape, img.shape))
     return img
 
+
 def extract_patch_within_image(img: NDArray, coords: PatchCoords, is_3d=False) -> NDArray:
     """
     Extract patch within the image.
@@ -3126,6 +3127,7 @@ def extract_patch_within_image(img: NDArray, coords: PatchCoords, is_3d=False) -
             coords.x_start : coords.x_end,
         ]
     return img
+
 
 def img_to_onehot_encoding(img: NDArray, num_classes: int = 2) -> NDArray:
     """
@@ -3460,9 +3462,9 @@ def shape_mismatch_message(X_data: BiaPyDataset, Y_data: BiaPyDataset) -> str:
 
 def save_tif(X: NDArray, data_dir: str, filenames: Optional[List[str]] = None, verbose: bool = True):
     """
-    Save images in the given directory. If the input file has a different dtype than np.uint8, np.uint16, 
-    np.float32 it is casted into np.float32 automatically. This is done because if not the axes are not 
-    correctly set when opening resulting images in Fiji/ImageJ. 
+    Save images in the given directory. If the input file has a different dtype than np.uint8, np.uint16,
+    np.float32 it is casted into np.float32 automatically. This is done because if not the axes are not
+    correctly set when opening resulting images in Fiji/ImageJ.
 
     Parameters
     ----------

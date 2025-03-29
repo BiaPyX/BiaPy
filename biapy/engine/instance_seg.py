@@ -1218,7 +1218,10 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         filename : List of str
             Filename of the predicted image H5/Zarr.
         """
-        pass
+        if self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
+            pass
+        else:  # synapses
+            import pdb; pdb.set_trace()
 
     def after_full_image(self, pred):
         """

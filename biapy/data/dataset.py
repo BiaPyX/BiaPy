@@ -3,6 +3,7 @@ from typing import List, Tuple, Optional
 from numpy.typing import NDArray
 import copy
 
+
 class BiaPyDataset:
     """
     X data. Contains mainly two dicts:
@@ -22,7 +23,7 @@ class BiaPyDataset:
     def clean_dataset(
         self,
         samples_to_maintain: List[int] | NDArray,
-        clean_by: str="image",
+        clean_by: str = "image",
     ):
         """
         Clean dataset by only maintaining the samples that are in ``samples_to_maintain``.
@@ -34,7 +35,7 @@ class BiaPyDataset:
 
         clean_by : str
             Whether to clean the dataset by looking the samples, one by one, or looking at images, which will discard
-            all the samples that belong to them. In another words, represent what is inside of ``samples_to_maintain``, 
+            all the samples that belong to them. In another words, represent what is inside of ``samples_to_maintain``,
             whether the ids of each sample to maintain or the ids of each image to maintain.
         """
         assert clean_by in ["sample", "image"]
@@ -52,7 +53,7 @@ class BiaPyDataset:
             for i, data_sample in enumerate(self.dataset_info):
                 if i in samples_to_maintain:
                     new_x_data_info.append(data_sample)
-        else: # sample
+        else:  # sample
             # Clean "sample_list" first
             new_x_sample_list = []
             for i, x in enumerate(self.sample_list):
@@ -83,7 +84,7 @@ class BiaPyDataset:
         return str(self.__dict__)
 
     def __repr__(self):
-        return str(self.__dict__)
+        return self.__str__()
 
 
 class DatasetFile:
@@ -174,7 +175,7 @@ class DatasetFile:
         return str(self.__dict__)
 
     def __repr__(self):
-        return str(self.__dict__)
+        return self.__str__()
 
     def copy(self):
         return copy.deepcopy(self)
@@ -257,7 +258,7 @@ class DataSample:
         return str(self.__dict__)
 
     def __repr__(self):
-        return str(self.__dict__)
+        return self.__str__()
 
     def copy(self):
         return copy.deepcopy(self)
@@ -313,10 +314,15 @@ class PatchCoords:
         return tuple(shape)
 
     def __str__(self):
-        return str(self.__dict__)
+        if hasattr(self, "z_start"):
+            return "[{}:{},{}:{},{}:{}]".format(
+                self.z_start, self.z_end, self.y_start, self.y_end, self.x_start, self.x_end
+            )
+        else:
+            return "[{}:{},{}:{},{}:{}]".format(self.y_start, self.y_end, self.x_start, self.x_end)
 
     def __repr__(self):
-        return str(self.__dict__)
+        return self.__str__()
 
     def copy(self):
         return copy.deepcopy(self)
