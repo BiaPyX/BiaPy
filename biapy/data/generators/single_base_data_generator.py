@@ -3,7 +3,6 @@ import torch
 from torch.utils.data import Dataset
 import numpy as np
 import random
-import os
 import h5py
 from tqdm import tqdm
 import imgaug as ia
@@ -368,9 +367,9 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
                     img = self.preprocess_f(self.preprocess_cfg, x_data=[img], is_2d=(self.ndim == 2))[0]
             else:
                 coords = sample.coords
-                data_axis_order = self.X.dataset_info[sample.fid].get_input_axes()
-                assert coords is not None and data_axis_order is not None 
-                img = extract_patch_from_efficient_file(img, coords, data_axis_order=data_axis_order)
+                data_axes_order = self.X.dataset_info[sample.fid].get_input_axes()
+                assert coords is not None and data_axes_order is not None
+                img = extract_patch_from_efficient_file(img, coords, data_axes_order=data_axes_order)
 
                 # Apply preprocessing after extract sample
                 if self.preprocess_f:

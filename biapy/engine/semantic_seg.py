@@ -1,10 +1,7 @@
 import torch
 import numpy as np
 from skimage.transform import resize
-from typing import (
-    Dict,
-    Optional
-)
+from typing import Dict, Optional
 from numpy.typing import NDArray
 
 
@@ -69,9 +66,9 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
 
         self.multihead : bool
             Whether if the output of the model has more than one head.
-        
+
         self.activations : List of dicts
-            Activations to be applied to the model output. Each dict will 
+            Activations to be applied to the model output. Each dict will
             match an output channel of the model. If ':' is used the activation
             will be applied to all channels at once. "Linear" and "CE_Sigmoid"
             will not be applied. E.g. [{":": "Linear"}].
@@ -80,7 +77,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
             "type": "mask",
             "channels": [1 if self.cfg.MODEL.N_CLASSES <= 2 else self.cfg.MODEL.N_CLASSES],
         }
-        self.multihead = False 
+        self.multihead = False
         self.activations = [{":": "CE_Sigmoid"}]
 
         super().define_activations_and_channels()
@@ -164,7 +161,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
             ##################
             # Make the prediction
             pred = self.model_call_func(self.current_sample["X"])
-            pred = to_numpy_format(pred, self.axis_order_back)
+            pred = to_numpy_format(pred, self.axes_order_back)
             del self.current_sample["X"]
 
             if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE:
@@ -193,11 +190,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
                         self.stats["full_image"][str(metric).lower()] = 0
                     self.stats["full_image"][str(metric).lower()] += metric_values[metric]
 
-    def torchvision_model_call(
-        self, 
-        in_img: torch.Tensor, 
-        is_train=False
-    ) -> torch.Tensor:
+    def torchvision_model_call(self, in_img: torch.Tensor, is_train=False) -> torch.Tensor:
         """
         Call a regular Pytorch model.
 
@@ -241,12 +234,12 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         return pred[key]
 
     def metric_calculation(
-        self, 
-        output: NDArray | torch.Tensor, 
-        targets: NDArray | torch.Tensor, 
-        train: bool=True, 
-        metric_logger: Optional[MetricLogger]=None
-    ) -> Dict :
+        self,
+        output: NDArray | torch.Tensor,
+        targets: NDArray | torch.Tensor,
+        train: bool = True,
+        metric_logger: Optional[MetricLogger] = None,
+    ) -> Dict:
         """
         Execution of the metrics defined in :func:`~define_metrics` function.
 
@@ -272,7 +265,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         if isinstance(output, np.ndarray):
             _output = to_pytorch_format(
                 output.copy(),
-                self.axis_order,
+                self.axes_order,
                 self.device,
                 dtype=self.loss_dtype,
             )
@@ -285,7 +278,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         if isinstance(targets, np.ndarray):
             _targets = to_pytorch_format(
                 targets.copy(),
-                self.axis_order,
+                self.axes_order,
                 self.device,
                 dtype=self.loss_dtype,
             )
@@ -328,7 +321,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
             Resulting targets.
         """
         # We do not use 'batch' input but in SSL workflow
-        return to_pytorch_format(targets, self.axis_order, self.device, dtype=self.loss_dtype)
+        return to_pytorch_format(targets, self.axes_order, self.device, dtype=self.loss_dtype)
 
     def after_merge_patches(self, pred):
         """

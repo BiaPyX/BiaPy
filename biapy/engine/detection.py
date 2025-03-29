@@ -8,10 +8,7 @@ from skimage.feature import peak_local_max, blob_log
 from skimage.morphology import disk, dilation
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
-from typing import (
-    Dict,
-    Optional
-)
+from typing import Dict, Optional
 from numpy.typing import NDArray
 
 from biapy.data.post_processing.post_processing import (
@@ -19,12 +16,7 @@ from biapy.data.post_processing.post_processing import (
     detection_watershed,
     measure_morphological_props_and_filter,
 )
-from biapy.utils.misc import (
-    is_main_process,
-    is_dist_avail_and_initialized,
-    to_pytorch_format,
-    MetricLogger
-)
+from biapy.utils.misc import is_main_process, is_dist_avail_and_initialized, to_pytorch_format, MetricLogger
 from biapy.engine.metrics import (
     detection_metrics,
     multiple_metrics,
@@ -102,9 +94,9 @@ class Detection_Workflow(Base_Workflow):
 
         self.multihead : bool
             Whether if the output of the model has more than one head.
-        
+
         self.activations : List of dicts
-            Activations to be applied to the model output. Each dict will 
+            Activations to be applied to the model output. Each dict will
             match an output channel of the model. If ':' is used the activation
             will be applied to all channels at once. "Linear" and "CE_Sigmoid"
             will not be applied. E.g. [{":": "Linear"}].
@@ -211,12 +203,12 @@ class Detection_Workflow(Base_Workflow):
         super().define_metrics()
 
     def metric_calculation(
-        self, 
-        output: NDArray | torch.Tensor, 
-        targets: NDArray | torch.Tensor, 
-        train: bool=True, 
-        metric_logger: Optional[MetricLogger]=None
-    ) -> Dict :
+        self,
+        output: NDArray | torch.Tensor,
+        targets: NDArray | torch.Tensor,
+        train: bool = True,
+        metric_logger: Optional[MetricLogger] = None,
+    ) -> Dict:
         """
         Execution of the metrics defined in :func:`~define_metrics` function.
 
@@ -242,7 +234,7 @@ class Detection_Workflow(Base_Workflow):
         if isinstance(output, np.ndarray):
             _output = to_pytorch_format(
                 output.copy(),
-                self.axis_order,
+                self.axes_order,
                 self.device,
                 dtype=self.loss_dtype,
             )
@@ -255,7 +247,7 @@ class Detection_Workflow(Base_Workflow):
         if isinstance(targets, np.ndarray):
             _targets = to_pytorch_format(
                 targets.copy(),
-                self.axis_order,
+                self.axes_order,
                 self.device,
                 dtype=self.loss_dtype,
             )
@@ -281,7 +273,7 @@ class Detection_Workflow(Base_Workflow):
                             metric_logger.meters[list_names_to_use[k]].update(v)
                         k += 1
                 else:
-                    val = val.item() if not torch.isnan(val) else 0 # type: ignore
+                    val = val.item() if not torch.isnan(val) else 0  # type: ignore
                     out_metrics[list_names_to_use[i]] = val
                     if metric_logger:
                         metric_logger.meters[list_names_to_use[i]].update(val)
@@ -314,7 +306,7 @@ class Detection_Workflow(Base_Workflow):
         if self.multihead:
             class_channel = np.expand_dims(pred[..., -1], -1)
             pred = pred[..., :-1]
-            
+
         file_ext = os.path.splitext(filenames[0])[1]
         pred_shape = pred.shape
         if self.cfg.TEST.VERBOSE:
@@ -377,14 +369,14 @@ class Detection_Workflow(Base_Workflow):
 
                 pred_points_classes.append(label_selected)
         else:
-            pred_points_classes = [0]*len(pred_points)
+            pred_points_classes = [0] * len(pred_points)
 
         # Create a file with detected point and other image with predictions ids (if GT given)
         if not self.by_chunks:
             if self.cfg.TEST.VERBOSE:
                 print("Creating the images with detected points . . .")
             points_pred_mask = np.zeros(pred.shape[:-1], dtype=np.uint8)
-    
+
             if len(pred_points) > 0:
                 # Paint the points
                 for n, coord in enumerate(pred_points):
@@ -394,11 +386,11 @@ class Detection_Workflow(Base_Workflow):
                 # Dilate and save the detected point image
                 for i in range(points_pred_mask.shape[0]):
                     points_pred_mask[i] = dilation(points_pred_mask[i], disk(3))
-                
+
                 if self.multihead:
                     class_channel = np.zeros(points_pred_mask.shape, dtype=np.uint8)
                     for n in range(len(pred_points)):
-                        class_channel = np.where(points_pred_mask == n+1, pred_points_classes[n], class_channel)  
+                        class_channel = np.where(points_pred_mask == n + 1, pred_points_classes[n], class_channel)
 
                     points_pred_mask = np.concatenate(
                         [
@@ -427,7 +419,7 @@ class Detection_Workflow(Base_Workflow):
                     )
 
                 if self.multihead:
-                    points_pred_mask = points_pred_mask[...,0]
+                    points_pred_mask = points_pred_mask[..., 0]
                 else:
                     points_pred_mask = points_pred_mask.squeeze()
 
@@ -633,7 +625,7 @@ class Detection_Workflow(Base_Workflow):
                 if "class" not in df_gt:
                     raise ValueError("'class' column not present in the CSV file")
                 gt_points_classes = df_gt["class"].tolist()
-            
+
             # Take only into account the GT points corresponding to the patch at hand
             if patch_pos:
                 patch_gt_coordinates = []
@@ -700,7 +692,7 @@ class Detection_Workflow(Base_Workflow):
             # Calculate detection metrics
             fp, gt_assoc = None, None
             if len(pred_points) > 0:
-                
+
                 d_metrics, gt_assoc, fp = detection_metrics(
                     gt_coordinates,
                     pred_points,
@@ -731,7 +723,7 @@ class Detection_Workflow(Base_Workflow):
                 if gt_assoc is not None:
                     gt_assoc_orig = gt_assoc.copy()
                 if fp is not None:
-                    fp_orig = fp.copy()   
+                    fp_orig = fp.copy()
                 if self.cfg.PROBLEM.NDIM == "2D":
                     if gt_assoc is not None:
                         gt_assoc = gt_assoc.drop(columns=["axis-0"])
@@ -758,7 +750,7 @@ class Detection_Workflow(Base_Workflow):
                 if gt_assoc is not None:
                     gt_assoc = gt_assoc_orig
                 if fp is not None:
-                    fp = fp_orig  
+                    fp = fp_orig
             else:
                 if self.cfg.TEST.VERBOSE:
                     print("No point found to calculate the metrics!")
@@ -773,7 +765,7 @@ class Detection_Workflow(Base_Workflow):
                     if len(gt_coordinates) == 0:
                         print("No points found in GT!")
                     print("Creating the image with a summary of detected points and false positives with colors . . .")
-                    
+
                 points_pred_mask_color = np.zeros(pred_shape[:-1] + (3,), dtype=np.uint8)
 
                 # TP and FN
@@ -1008,8 +1000,8 @@ class Detection_Workflow(Base_Workflow):
             output_order="TZYXC",
             default_value=np.nan,
         )
-        transpose_order = [x for x in transpose_order if not np.isnan(x)] # type: ignore
-        transpose_order = current_order[np.array(transpose_order)] # type: ignore
+        transpose_order = [x for x in transpose_order if not np.isnan(x)]  # type: ignore
+        transpose_order = current_order[np.array(transpose_order)]  # type: ignore
         raw_patch = pred[data_ordered_slices]
         patch = raw_patch.transpose(transpose_order)
 
@@ -1146,7 +1138,7 @@ class Detection_Workflow(Base_Workflow):
 
         # Apply post-processing of removing points
         if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS and self.by_chunks:
-            pred_coordinates, dropped_pos = remove_close_points( # type: ignore
+            pred_coordinates, dropped_pos = remove_close_points(  # type: ignore
                 pred_coordinates,
                 self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS,
                 self.cfg.DATA.TEST.RESOLUTION,
@@ -1166,9 +1158,9 @@ class Detection_Workflow(Base_Workflow):
             default_value=1,
         )
 
-        df["axis-0"] = df["axis-0"] / z_dim # type: ignore
-        df["axis-1"] = df["axis-1"] / y_dim # type: ignore
-        df["axis-2"] = df["axis-2"] / x_dim # type: ignore
+        df["axis-0"] = df["axis-0"] / z_dim  # type: ignore
+        df["axis-1"] = df["axis-1"] / y_dim  # type: ignore
+        df["axis-2"] = df["axis-2"] / x_dim  # type: ignore
         df.to_csv(
             os.path.join(
                 self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
@@ -1283,11 +1275,7 @@ class Detection_Workflow(Base_Workflow):
                             -reflected_orig_shape[3] :,
                         ]
 
-    def torchvision_model_call(
-        self, 
-        in_img: torch.Tensor, 
-        is_train: bool=False
-    ) -> torch.Tensor | None:
+    def torchvision_model_call(self, in_img: torch.Tensor, is_train: bool = False) -> torch.Tensor | None:
         """
         Call a regular Pytorch model.
 

@@ -9,10 +9,7 @@ from torchmetrics.image import PeakSignalNoiseRatio, StructuralSimilarityIndexMe
 from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
 from torchmetrics.image.fid import FrechetInceptionDistance
 from torchmetrics.image.inception import InceptionScore
-from typing import (
-    Dict,
-    Optional
-)
+from typing import Dict, Optional
 from numpy.typing import NDArray
 
 
@@ -34,7 +31,7 @@ from biapy.utils.misc import (
     to_numpy_format,
     is_main_process,
     is_dist_avail_and_initialized,
-    MetricLogger
+    MetricLogger,
 )
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.data.pre_processing import create_ssl_source_data_masks
@@ -136,7 +133,7 @@ class Self_supervised_Workflow(Base_Workflow):
         self.train_metric_best = []
         for metric in list(set(self.cfg.TRAIN.METRICS)):
             if metric == "psnr":
-                self.train_metrics.append(PeakSignalNoiseRatio(data_range=(0,255)).to(self.device))
+                self.train_metrics.append(PeakSignalNoiseRatio(data_range=(0, 255)).to(self.device))
                 self.train_metric_names.append("PSNR")
                 self.train_metric_best.append("max")
             elif metric == "mse":
@@ -204,9 +201,19 @@ class Self_supervised_Workflow(Base_Workflow):
             elif self.cfg.LOSS.TYPE == "SSIM":
                 self.loss = SSIM_loss(data_range=data_range, device=self.device)
             elif self.cfg.LOSS.TYPE == "W_MAE_SSIM":
-                self.loss = W_MAE_SSIM_loss(data_range=data_range, device=self.device, w_mae=self.cfg.LOSS.WEIGHTS[0], w_ssim=self.cfg.LOSS.WEIGHTS[1])
+                self.loss = W_MAE_SSIM_loss(
+                    data_range=data_range,
+                    device=self.device,
+                    w_mae=self.cfg.LOSS.WEIGHTS[0],
+                    w_ssim=self.cfg.LOSS.WEIGHTS[1],
+                )
             elif self.cfg.LOSS.TYPE == "W_MSE_SSIM":
-                self.loss = W_MSE_SSIM_loss(data_range=data_range, device=self.device, w_mse=self.cfg.LOSS.WEIGHTS[0], w_ssim=self.cfg.LOSS.WEIGHTS[1])
+                self.loss = W_MSE_SSIM_loss(
+                    data_range=data_range,
+                    device=self.device,
+                    w_mse=self.cfg.LOSS.WEIGHTS[0],
+                    w_ssim=self.cfg.LOSS.WEIGHTS[1],
+                )
 
         super().define_metrics()
 
@@ -219,12 +226,12 @@ class Self_supervised_Workflow(Base_Workflow):
         return loss
 
     def metric_calculation(
-        self, 
-        output: NDArray | torch.Tensor, 
-        targets: NDArray | torch.Tensor, 
-        train: bool=True, 
-        metric_logger: Optional[MetricLogger]=None
-    ) -> Dict :
+        self,
+        output: NDArray | torch.Tensor,
+        targets: NDArray | torch.Tensor,
+        train: bool = True,
+        metric_logger: Optional[MetricLogger] = None,
+    ) -> Dict:
         """
         Execution of the metrics defined in :func:`~define_metrics` function.
 
@@ -257,7 +264,7 @@ class Self_supervised_Workflow(Base_Workflow):
         if isinstance(_output, np.ndarray):
             _output = to_pytorch_format(
                 _output.copy(),
-                self.axis_order,
+                self.axes_order,
                 self.device,
                 dtype=self.loss_dtype,
             )
@@ -270,7 +277,7 @@ class Self_supervised_Workflow(Base_Workflow):
         if isinstance(targets, np.ndarray):
             _targets = to_pytorch_format(
                 targets.copy(),
-                self.axis_order,
+                self.axes_order,
                 self.device,
                 dtype=self.loss_dtype,
             )
@@ -287,7 +294,9 @@ class Self_supervised_Workflow(Base_Workflow):
 
         # First metrics that do not require normalization, e.g. MAE and MSE
         metrics_without_norm = ["mae", "mse"] if train else ["mae", "mse", "ssim"]
-        not_norm_metrics_pos = [list_names_to_use_lower.index(x) for x in metrics_without_norm if x in list_names_to_use_lower]
+        not_norm_metrics_pos = [
+            list_names_to_use_lower.index(x) for x in metrics_without_norm if x in list_names_to_use_lower
+        ]
         not_norm_metrics = [list_to_use[i] for i in not_norm_metrics_pos]
         not_norm_metrics_names = [list_names_to_use_lower[i] for i in not_norm_metrics_pos]
         with torch.no_grad():
@@ -302,7 +311,7 @@ class Self_supervised_Workflow(Base_Workflow):
                     raise NotImplementedError
 
                 if m_name in ["mse", "mae", "ssim", "psnr"]:
-                    val = val.item() if not torch.isnan(val) else 0 # type: ignore
+                    val = val.item() if not torch.isnan(val) else 0  # type: ignore
                     out_metrics[m_name_real] = val
 
                 if metric_logger:
@@ -353,14 +362,13 @@ class Self_supervised_Workflow(Base_Workflow):
                     raise NotImplementedError
 
                 if m_name in ["mse", "mae", "ssim", "psnr"]:
-                    val = val.item() if not torch.isnan(val) else 0 # type: ignore
+                    val = val.item() if not torch.isnan(val) else 0  # type: ignore
                     out_metrics[m_name_real] = val
 
                 if metric_logger:
                     metric_logger.meters[m_name_real].update(val)
 
         return out_metrics
-
 
     def prepare_targets(self, targets, batch):
         """
@@ -382,9 +390,9 @@ class Self_supervised_Workflow(Base_Workflow):
         """
         if self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
             # Swap with original images so we can calculate PSNR metric afterwards
-            return to_pytorch_format(batch, self.axis_order, self.device, dtype=self.loss_dtype)
+            return to_pytorch_format(batch, self.axes_order, self.device, dtype=self.loss_dtype)
         else:
-            return to_pytorch_format(targets, self.axis_order, self.device, dtype=self.loss_dtype)
+            return to_pytorch_format(targets, self.axes_order, self.device, dtype=self.loss_dtype)
 
     def process_test_sample(self):
         """
@@ -423,22 +431,22 @@ class Self_supervised_Workflow(Base_Workflow):
                 if self.cfg.PROBLEM.NDIM == "2D":
                     p = ensemble8_2d_predictions(
                         self.current_sample["X"][k],
-                        axis_order_back=self.axis_order_back,
+                        axes_order_back=self.axes_order_back,
                         pred_func=self.model_call_func,
-                        axis_order=self.axis_order,
+                        axes_order=self.axes_order,
                         device=self.device,
                     )
                 else:
                     p = ensemble16_3d_predictions(
                         self.current_sample["X"][k],
                         batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
-                        axis_order_back=self.axis_order_back,
+                        axes_order_back=self.axes_order_back,
                         pred_func=self.model_call_func,
-                        axis_order=self.axis_order,
+                        axes_order=self.axes_order,
                         device=self.device,
                     )
                 p = self.apply_model_activations(p)
-                p = to_numpy_format(p, self.axis_order_back)
+                p = to_numpy_format(p, self.axes_order_back)
                 if "pred" not in locals():
                     pred = np.zeros((self.current_sample["X"].shape[0],) + p.shape[1:], dtype=self.dtype)
                 pred[k] = p
@@ -453,7 +461,7 @@ class Self_supervised_Workflow(Base_Workflow):
                 p = self.model(
                     to_pytorch_format(
                         self.current_sample["X"][k * self.cfg.TRAIN.BATCH_SIZE : top],
-                        self.axis_order,
+                        self.axes_order,
                         self.device,
                     )
                 )
@@ -463,7 +471,7 @@ class Self_supervised_Workflow(Base_Workflow):
                     p, m, pv = self.model_without_ddp.save_images(
                         to_pytorch_format(
                             self.current_sample["X"][k * self.cfg.TRAIN.BATCH_SIZE : top],
-                            self.axis_order,
+                            self.axes_order,
                             self.device,
                         ),
                         p,
@@ -472,7 +480,7 @@ class Self_supervised_Workflow(Base_Workflow):
                     )
                 else:
                     p = self.apply_model_activations(p)
-                    p = to_numpy_format(p, self.axis_order_back)
+                    p = to_numpy_format(p, self.axes_order_back)
 
                 if "pred" not in locals():
                     pred = np.zeros((self.current_sample["X"].shape[0],) + p.shape[1:], dtype=self.dtype)
@@ -542,7 +550,7 @@ class Self_supervised_Workflow(Base_Workflow):
                         -reflected_orig_shape[1] :,
                         -reflected_orig_shape[2] :,
                         -reflected_orig_shape[3] :,
-                    ] # type: ignore
+                    ]  # type: ignore
                     if self.current_sample["Y"] is not None:
                         self.current_sample["Y"] = self.current_sample["Y"][
                             :,
@@ -607,11 +615,7 @@ class Self_supervised_Workflow(Base_Workflow):
                     self.stats["merge_patches"][str(metric).lower()] = 0
                 self.stats["merge_patches"][str(metric).lower()] += metric_values[metric]
 
-    def torchvision_model_call(
-        self, 
-        in_img: torch.Tensor, 
-        is_train: bool=False
-    ) -> torch.Tensor | None:
+    def torchvision_model_call(self, in_img: torch.Tensor, is_train: bool = False) -> torch.Tensor | None:
         """
         Call a regular Pytorch model.
 

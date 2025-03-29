@@ -96,7 +96,7 @@ def weight_binary_ratio(target):
 
     ww = torch.clamp(ww, min=min_ratio, max=1 - min_ratio)
 
-    weight_factor = max(ww, 1 - ww) / min(ww, 1 - ww) # type: ignore
+    weight_factor = max(ww, 1 - ww) / min(ww, 1 - ww)  # type: ignore
 
     # Case 1 -- Affinity Map
     # In that case, ww is large (i.e., ww > 1 - ww), which means the high weight
@@ -651,10 +651,9 @@ class instance_segmentation_loss:
                 else:
                     B_binary_channels_loss = self.binary_channels_loss
                     BB_binary_channels_loss = self.binary_channels_loss
-                loss = (
-                    self.weights[0] * B_binary_channels_loss(_y_pred[:, 0], y_true[:, 0]) 
-                    + self.weights[1] * BB_binary_channels_loss(_y_pred[:, 1], y_true[:, 1]) 
-                )
+                loss = self.weights[0] * B_binary_channels_loss(_y_pred[:, 0], y_true[:, 0]) + self.weights[
+                    1
+                ] * BB_binary_channels_loss(_y_pred[:, 1], y_true[:, 1])
         return loss
 
 
@@ -949,14 +948,16 @@ def detection_metrics(
         }
     return r_dict, df, df_fp
 
+
 class SSIM_loss(torch.nn.Module):
     def __init__(self, data_range, device):
         super(SSIM_loss, self).__init__()
         self.ssim = StructuralSimilarityIndexMeasure(data_range=data_range).to(device, non_blocking=True)
-    
+
     def forward(self, input, target):
         return 1 - self.ssim(input, target)
-    
+
+
 class W_MAE_SSIM_loss(torch.nn.Module):
     def __init__(self, data_range, device, w_mae=0.5, w_ssim=0.5):
         super(W_MAE_SSIM_loss, self).__init__()
@@ -964,9 +965,10 @@ class W_MAE_SSIM_loss(torch.nn.Module):
         self.w_ssim = w_ssim
         self.mse = torch.nn.L1Loss().to(device, non_blocking=True)
         self.ssim = StructuralSimilarityIndexMeasure(data_range=data_range).to(device, non_blocking=True)
-    
+
     def forward(self, input, target):
         return (self.mse(input, target) * self.w_mae) + ((1 - self.ssim(input, target)) * self.w_ssim)
+
 
 class W_MSE_SSIM_loss(torch.nn.Module):
     def __init__(self, data_range, device, w_mse=0.5, w_ssim=0.5):
@@ -975,10 +977,11 @@ class W_MSE_SSIM_loss(torch.nn.Module):
         self.w_ssim = w_ssim
         self.mse = torch.nn.MSELoss().to(device, non_blocking=True)
         self.ssim = StructuralSimilarityIndexMeasure(data_range=data_range).to(device, non_blocking=True)
-    
+
     def forward(self, input, target):
         return (self.mse(input, target) * self.w_mse) + ((1 - self.ssim(input, target)) * self.w_ssim)
-    
+
+
 def n2v_loss_mse(y_pred, y_true):
     target = y_true[:, 0].squeeze()
     mask = y_true[:, 1].squeeze()

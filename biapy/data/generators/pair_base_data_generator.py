@@ -517,11 +517,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             for i in tqdm(range(n_samples), total=n_samples):
                 _, mask = self.load_sample(i, first_load=True)
                 # Store which channels are binary or not (e.g. distance transform channel is not binary)
-                self.norm_module.set_stats_from_mask(
-                    mask, 
-                    n_classes=n_classes, 
-                    instance_problem=instance_problem
-                )
+                self.norm_module.set_stats_from_mask(mask, n_classes=n_classes, instance_problem=instance_problem)
 
         _, mask = self.load_sample(0)
         self.Y_channels = mask.shape[-1]
@@ -826,9 +822,9 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                     img = extract_patch_within_image(img, sample.coords, is_3d=(self.ndim == 3))
             else:
                 coords = sample.coords
-                data_axis_order = self.X.dataset_info[sample.fid].get_input_axes()
-                assert coords  is not None and data_axis_order is not None 
-                img = extract_patch_from_efficient_file(img, coords, data_axis_order=data_axis_order)
+                data_axes_order = self.X.dataset_info[sample.fid].get_input_axes()
+                assert coords is not None and data_axes_order is not None
+                img = extract_patch_from_efficient_file(img, coords, data_axes_order=data_axes_order)
 
                 # Apply preprocessing after extract sample
                 if self.preprocess_f:
@@ -873,16 +869,16 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                     # Extract the sample within the image
                     if msample.coords:
                         coords = msample.coords
-                        assert coords is not None 
+                        assert coords is not None
                         mask = extract_patch_within_image(mask, coords, is_3d=(self.ndim == 3))
                 else:
                     coords = msample.coords
-                    data_axis_order = self.Y.dataset_info[msample.fid].get_input_axes()
-                    assert coords is not None and data_axis_order is not None 
+                    data_axes_order = self.Y.dataset_info[msample.fid].get_input_axes()
+                    assert coords is not None and data_axes_order is not None
                     mask = extract_patch_from_efficient_file(
                         mask,
                         coords,
-                        data_axis_order=data_axis_order,
+                        data_axes_order=data_axes_order,
                     )
 
                     # Apply preprocessing after extract sample
@@ -1117,7 +1113,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         # Apply cutmix
         if self.cutmix and random.uniform(0, 1) < self.da_prob:
-            assert e_im is not None and e_mask is not None 
+            assert e_im is not None and e_mask is not None
             image, mask = cutmix(image, e_im, mask, e_mask, self.cmix_size)
 
         # Apply cutnoise
@@ -1212,8 +1208,8 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         else:
             # Apply transformations to both images
             augseq_det = self.seq.to_deterministic()
-            image = augseq_det.augment_image(image)
-            mask = augseq_det.augment_image(mask)
+            image = augseq_det.augment_image(image)  # type: ignore
+            mask = augseq_det.augment_image(mask)  # type: ignore
 
         # Recover the original shape
         image = image.reshape(o_img_shape)

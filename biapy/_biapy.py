@@ -199,7 +199,7 @@ class BiaPy:
         # GPU management
         self.device = init_devices(self.args, self.cfg.get_cfg_defaults())
         self.cfg._C.merge_from_list(opts)
-        self.cfg = self.cfg.get_cfg_defaults()
+        self.cfg : CN = self.cfg.get_cfg_defaults()
         self.stop_ddp = stop_ddp
 
         # Reproducibility

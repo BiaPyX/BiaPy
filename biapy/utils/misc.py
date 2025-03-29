@@ -11,10 +11,10 @@ import torch.distributed as dist
 import torch.backends.cudnn as cudnn
 from tensorboardX import SummaryWriter
 from pathlib import Path
-from yacs.config import CfgNode
+from yacs.config import CfgNode as CN
 from functools import partial
 import collections.abc
-import gc 
+import gc
 from typing import (
     Tuple,
     Literal,
@@ -139,9 +139,9 @@ def init_devices(args, cfg):
             timeout=timedelta(seconds=timeout_ms),
         )
     else:
-        # If it was initialized means that something may have been running in the past so here 
+        # If it was initialized means that something may have been running in the past so here
         # we are trying to clean all the cache as much as possible
-        torch.cuda.empty_cache() 
+        torch.cuda.empty_cache()
         gc.collect()
 
     dist.barrier()
@@ -248,7 +248,7 @@ def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=Non
             print("Loading checkpoint from file {}".format(resume))
 
     # Load checkpoint file
-    torch.serialization.add_safe_globals([CfgNode])
+    torch.serialization.add_safe_globals([CN])
     torch.serialization.add_safe_globals([set])
     torch.serialization.add_safe_globals([partial])
     torch.serialization.add_safe_globals([torch.nn.modules.normalization.LayerNorm])
@@ -299,20 +299,15 @@ def all_reduce_mean(x):
         return x
 
 
-def to_pytorch_format(
-    x: torch.Tensor | NDArray, 
-    axis_order: Tuple, 
-    device: torch.device, 
-    dtype=torch.float32
-):
+def to_pytorch_format(x: torch.Tensor | NDArray, axes_order: Tuple, device: torch.device, dtype=torch.float32):
     if torch.is_tensor(x):
-        return x.to(dtype).permute(axis_order).to(device, non_blocking=True)
+        return x.to(dtype).permute(axes_order).to(device, non_blocking=True)
     else:
-        return torch.from_numpy(x).to(dtype).permute(axis_order).to(device, non_blocking=True)
+        return torch.from_numpy(x).to(dtype).permute(axes_order).to(device, non_blocking=True)
 
 
-def to_numpy_format(x, axis_order_back):
-    return x.permute(axis_order_back).cpu().numpy()
+def to_numpy_format(x, axes_order_back):
+    return x.permute(axes_order_back).cpu().numpy()
 
 
 def time_text(t):

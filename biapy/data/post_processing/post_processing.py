@@ -380,7 +380,7 @@ def create_synapses(data: NDArray,
     min_th_to_be_peak: float = 0.2,
     min_distance: int=1,
     exclude_border: bool = False,
-):
+) -> Tuple[NDArray, Dict]:
     """
     Convert binary foreground probability maps and instance contours to instance masks via watershed segmentation
     algorithm.
@@ -467,6 +467,7 @@ def create_synapses(data: NDArray,
         d_result["points"] = np.concatenate(all_coords, axis=0)
 
         return new_data, d_result
+    return np.zeros((10,10)), {"da":"da"} 
 
 def apply_median_filtering(
     data: NDArray, 
@@ -523,8 +524,8 @@ def apply_median_filtering(
 def ensemble8_2d_predictions(
     o_img: NDArray,
     pred_func: Callable,
-    axis_order_back: Tuple[int,...],
-    axis_order: Tuple[int,...],
+    axes_order_back: Tuple[int,...],
+    axes_order: Tuple[int,...],
     device: torch.device,
     batch_size_value: int=1,
     mode="mean",
@@ -540,10 +541,10 @@ def ensemble8_2d_predictions(
     pred_func : function
         Function to make predictions.
 
-    axis_order_back : tuple
+    axes_order_back : tuple
         Axis order to convert from tensor to numpy. E.g. ``(0,3,1,2)``.
 
-    axis_order : tuple
+    axes_order : tuple
         Axis order to convert from numpy to tensor. E.g. ``(0,3,1,2)``.
 
     device : Torch device
@@ -623,13 +624,13 @@ def ensemble8_2d_predictions(
             channel_split = r_aux[0].shape[1]
             r_aux = np.concatenate(
                 [
-                    to_numpy_format(r_aux[0], axis_order_back),
-                    to_numpy_format(r_aux[1], axis_order_back),
+                    to_numpy_format(r_aux[0], axes_order_back),
+                    to_numpy_format(r_aux[1], axes_order_back),
                 ],
                 axis=-1,
             )
         else:
-            r_aux = to_numpy_format(r_aux, axis_order_back)
+            r_aux = to_numpy_format(r_aux, axes_order_back)
         _decoded_aug_img.append(r_aux)
     _decoded_aug_img = np.concatenate(_decoded_aug_img)
 
@@ -691,7 +692,7 @@ def ensemble8_2d_predictions(
     elif mode == "max":
         funct = np.max
     out = np.expand_dims(funct(out, axis=0), 0)
-    out = to_pytorch_format(out, axis_order, device)
+    out = to_pytorch_format(out, axes_order, device)
 
     if channel_split:
         return out[:, :channel_split], out[:, channel_split:]
@@ -702,8 +703,8 @@ def ensemble8_2d_predictions(
 def ensemble16_3d_predictions(
     vol: NDArray, 
     pred_func: Callable, 
-    axis_order_back: Tuple[int,...], 
-    axis_order: Tuple[int,...], 
+    axes_order_back: Tuple[int,...], 
+    axes_order: Tuple[int,...], 
     device: torch.device, 
     batch_size_value: int=1, 
     mode: str="mean"
@@ -719,10 +720,10 @@ def ensemble16_3d_predictions(
     pred_func : function
         Function to make predictions.
 
-    axis_order_back : tuple
+    axes_order_back : tuple
         Axis order to convert from tensor to numpy. E.g. ``(0,3,1,2,4)``.
 
-    axis_order : tuple
+    axes_order : tuple
         Axis order to convert from numpy to tensor. E.g. ``(0,3,1,2,4)``.
 
     device : Torch device
@@ -813,13 +814,13 @@ def ensemble16_3d_predictions(
             channel_split = r_aux[0].shape[1]
             r_aux = np.concatenate(
                 [
-                    to_numpy_format(r_aux[0], axis_order_back),
-                    to_numpy_format(r_aux[1], axis_order_back),
+                    to_numpy_format(r_aux[0], axes_order_back),
+                    to_numpy_format(r_aux[1], axes_order_back),
                 ],
                 axis=-1,
             )
         else:
-            r_aux = to_numpy_format(r_aux, axis_order_back)
+            r_aux = to_numpy_format(r_aux, axes_order_back)
 
         if r_aux.ndim == 4:
             r_aux = np.expand_dims(r_aux, 0)
@@ -1019,7 +1020,7 @@ def ensemble16_3d_predictions(
     elif mode == "max":
         funct = np.max
     out = np.expand_dims(funct(out, axis=0), 0)
-    out = to_pytorch_format(out, axis_order, device)
+    out = to_pytorch_format(out, axes_order, device)
 
     if channel_split:
         return out[:, :channel_split], out[:, channel_split:]

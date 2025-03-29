@@ -6,16 +6,13 @@ import pandas as pd
 from tqdm import tqdm
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 from torchmetrics import Accuracy
-from typing import (
-    Dict,
-    Optional
-)
+from typing import Dict, Optional
 from numpy.typing import NDArray
 
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.data.pre_processing import preprocess_data
 from biapy.data.data_manipulation import load_and_prepare_train_data_cls, load_and_prepare_cls_test_data
-from biapy.utils.misc import is_main_process, to_pytorch_format, MetricLogger
+from biapy.utils.misc import is_main_process, MetricLogger
 
 
 class Classification_Workflow(Base_Workflow):
@@ -136,12 +133,12 @@ class Classification_Workflow(Base_Workflow):
         super().define_metrics()
 
     def metric_calculation(
-        self, 
-        output: NDArray | torch.Tensor, 
-        targets: NDArray | torch.Tensor, 
-        train: bool=True, 
-        metric_logger: Optional[MetricLogger]=None
-    ) -> Dict :
+        self,
+        output: NDArray | torch.Tensor,
+        targets: NDArray | torch.Tensor,
+        train: bool = True,
+        metric_logger: Optional[MetricLogger] = None,
+    ) -> Dict:
         """
         Execution of the metrics defined in :func:`~define_metrics` function.
 
@@ -221,7 +218,7 @@ class Classification_Workflow(Base_Workflow):
             shuffle_val=self.cfg.DATA.VAL.RANDOM,
             train_preprocess_f=preprocess_data if self.cfg.DATA.PREPROCESS.TRAIN else None,
             train_preprocess_cfg=self.cfg.DATA.PREPROCESS if self.cfg.DATA.PREPROCESS.TRAIN else None,
-            train_filter_conds=(
+            train_filter_props=(
                 self.cfg.DATA.TRAIN.FILTER_SAMPLES.PROPS if self.cfg.DATA.TRAIN.FILTER_SAMPLES.ENABLE else []
             ),
             train_filter_vals=(
@@ -232,7 +229,7 @@ class Classification_Workflow(Base_Workflow):
             ),
             val_preprocess_f=preprocess_data if self.cfg.DATA.PREPROCESS.VAL else None,
             val_preprocess_cfg=self.cfg.DATA.PREPROCESS if self.cfg.DATA.PREPROCESS.VAL else None,
-            val_filter_conds=(
+            val_filter_props=(
                 self.cfg.DATA.VAL.FILTER_SAMPLES.PROPS if self.cfg.DATA.VAL.FILTER_SAMPLES.ENABLE else []
             ),
             val_filter_vals=(
@@ -307,11 +304,7 @@ class Classification_Workflow(Base_Workflow):
         if self.current_sample["Y"] is not None and self.all_gt is not None:
             self.all_gt.append(self.current_sample["Y"])
 
-    def torchvision_model_call(
-        self, 
-        in_img: torch.Tensor, 
-        is_train: bool=False
-    ) -> torch.Tensor | None:
+    def torchvision_model_call(self, in_img: torch.Tensor, is_train: bool = False) -> torch.Tensor | None:
         """
         Call a regular Pytorch model.
 
@@ -347,7 +340,7 @@ class Classification_Workflow(Base_Workflow):
         self.all_pred = np.array(self.all_pred).squeeze()
         if self.cfg.DATA.TEST.LOAD_GT and self.all_gt is not None:
             self.all_gt = np.array(self.all_gt).squeeze()
-            
+
         # Save predictions in a csv file
         df = pd.DataFrame(self.test_filenames, columns=["filename"])
         df["class"] = self.all_pred
@@ -359,7 +352,7 @@ class Classification_Workflow(Base_Workflow):
         if self.cfg.DATA.TEST.LOAD_GT and self.all_gt is not None:
             metric_values = self.metric_calculation(
                 self.all_pred,
-                self.all_gt, # type: ignore
+                self.all_gt,  # type: ignore
                 train=False,
             )
             for metric in metric_values:
