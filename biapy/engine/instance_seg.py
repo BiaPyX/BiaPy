@@ -6,10 +6,7 @@ from tqdm import tqdm
 from skimage.segmentation import clear_border
 from skimage.transform import resize
 import torch.distributed as dist
-from typing import (
-    Dict,
-    Optional
-)
+from typing import Dict, Optional
 from numpy.typing import NDArray
 from scipy.spatial import distance_matrix
 
@@ -20,12 +17,9 @@ from biapy.data.post_processing.post_processing import (
     measure_morphological_props_and_filter,
     repare_large_blobs,
     apply_binary_mask,
-    create_synapses
+    create_synapses,
 )
-from biapy.data.pre_processing import (
-    create_instance_channels,
-    create_test_instance_channels,
-)
+from biapy.data.pre_processing import create_instance_channels
 from biapy.utils.matching import matching, wrapper_matching_dataset_lazy
 from biapy.engine.metrics import (
     jaccard_index,
@@ -36,6 +30,7 @@ from biapy.engine.base_workflow import Base_Workflow
 from biapy.utils.misc import is_main_process, is_dist_avail_and_initialized, to_pytorch_format, MetricLogger
 from biapy.data.data_manipulation import read_img_as_ndarray, save_tif
 from biapy.data.data_3D_manipulation import read_chunked_data, read_chunked_nested_data
+
 
 class Instance_Segmentation_Workflow(Base_Workflow):
     """
@@ -60,7 +55,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
     def __init__(self, cfg, job_identifier, device, args, **kwargs):
         super(Instance_Segmentation_Workflow, self).__init__(cfg, job_identifier, device, args, **kwargs)
 
-        self.original_train_input_mask_axis_order = self.cfg.DATA.TRAIN.INPUT_MASK_AXES_ORDER
+        self.original_train_input_mask_axes_order = self.cfg.DATA.TRAIN.INPUT_MASK_AXES_ORDER
         self.original_test_path, self.original_test_mask_path = self.prepare_instance_data()
 
         # Merging the image
@@ -148,10 +143,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             will not be applied. E.g. [{":": "Linear"}].
         """
         self.activations = {}
-        self.model_output_channels = {
-            "type": "mask",
-            "channels": 1
-        }
+        self.model_output_channels = {"type": "mask", "channels": 1}
         if self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
             if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "C":
                 self.activations = {"0": "CE_Sigmoid"}
@@ -351,7 +343,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 else:
                     self.test_metric_names += ["L1 (Y distance)", "L1 (X distance)"]
             elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "B":
-                self.test_metric_names = ["IoU (pre-sites)", "IoU (post-sites)"]  
+                self.test_metric_names = ["IoU (pre-sites)", "IoU (post-sites)"]
 
         # Multi-head: instances + classification
         if self.multihead:
@@ -380,12 +372,12 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         super().define_metrics()
 
     def metric_calculation(
-        self, 
-        output: NDArray | torch.Tensor, 
-        targets: NDArray | torch.Tensor, 
-        train: bool=True, 
-        metric_logger: Optional[MetricLogger]=None
-    ) -> Dict :
+        self,
+        output: NDArray | torch.Tensor,
+        targets: NDArray | torch.Tensor,
+        train: bool = True,
+        metric_logger: Optional[MetricLogger] = None,
+    ) -> Dict:
         """
         Execution of the metrics defined in :func:`~define_metrics` function.
 
@@ -408,11 +400,11 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         out_metrics : dict
             Value of the metrics for the given prediction.
         """
-        
+
         if isinstance(output, np.ndarray):
             _output = to_pytorch_format(
                 output.copy(),
-                self.axis_order,
+                self.axes_order,
                 self.device,
                 dtype=self.loss_dtype,
             )
@@ -425,7 +417,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         if isinstance(targets, np.ndarray):
             _targets = to_pytorch_format(
                 targets.copy(),
-                self.axis_order,
+                self.axes_order,
                 self.device,
                 dtype=self.loss_dtype,
             )
@@ -1031,9 +1023,9 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         pre_points_df = pd.DataFrame(
             zip(
                 d_result["ids"][:total_pre_points],
-                list(pre_points[:,0]),
-                list(pre_points[:,1]),
-                list(pre_points[:,2]),
+                list(pre_points[:, 0]),
+                list(pre_points[:, 1]),
+                list(pre_points[:, 2]),
                 d_result["probabilities"][:total_pre_points],
             ),
             columns=[
@@ -1044,7 +1036,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 "probability",
             ],
         )
-    
+
         # Save just the points and their probabilities
         pre_points_df.to_csv(
             os.path.join(
@@ -1052,15 +1044,15 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 "pred_pre_locations.csv",
             )
         )
-        
+
         total_post_points = len(d_result) - total_pre_points
         post_points = np.array(d_result["points"][total_post_points:])
         post_points_df = pd.DataFrame(
             zip(
                 d_result["ids"][total_post_points:],
-                list(post_points[:,0]),
-                list(post_points[:,1]),
-                list(post_points[:,2]),
+                list(post_points[:, 0]),
+                list(post_points[:, 1]),
+                list(post_points[:, 2]),
                 d_result["probabilities"][total_post_points:],
             ),
             columns=[
@@ -1071,7 +1063,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 "probability",
             ],
         )
-    
+
         # Save just the points and their probabilities
         post_points_df.to_csv(
             os.path.join(
@@ -1080,13 +1072,12 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             )
         )
 
-        import pdb; pdb.set_trace()
         if len(d_result["points"]) > 0:
             _true = np.array(pre_points, dtype=np.float32)
             _pred = np.array(post_points, dtype=np.float32)
             # Create cost matrix
             distances = distance_matrix(_pred, _true)
-            
+
             pres, posts = []
             for n, col in enumerate(range(distances.shape[0])):
                 closest_pre_point = np.argmax(distances[col])
@@ -1105,15 +1096,14 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             )
 
             pre_post_map_df.to_csv(
-            os.path.join(
-                out_dir,
-                "pre_post_mapping.csv",
+                os.path.join(
+                    out_dir,
+                    "pre_post_mapping.csv",
+                )
             )
-        )
         else:
             if self.cfg.TEST.VERBOSE:
                 print("No point found to calculate the metrics!")
-
 
         ###################
         # Post-processing #
@@ -1475,7 +1465,10 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             test_channel_mask_dir = self.cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR
         else:
             test_instance_mask_dir = self.cfg.DATA.TEST.PATH
-            test_channel_mask_dir = self.cfg.DATA.TEST.PATH
+            if self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "synapses":
+                test_channel_mask_dir = self.cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR
+            else:
+                test_channel_mask_dir = self.cfg.DATA.TEST.PATH
 
         opts = []
         print("###########################")
@@ -1488,8 +1481,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 print(
                     "You select to create {} channels from given instance labels and no file is detected in {}. "
                     "So let's prepare the data. This process will be done just once!".format(
-                        self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
-                        train_channel_mask_dir
+                        self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, train_channel_mask_dir
                     )
                 )
                 create_instance_channels(self.cfg)
@@ -1508,16 +1500,12 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 opts.extend([f"DATA.TRAIN.INPUT_MASK_AXES_ORDER", out_data_order])
 
         # Create selected channels for val data
-        if (
-            self.cfg.TRAIN.ENABLE
-            and not self.cfg.DATA.VAL.FROM_TRAIN
-        ):
+        if self.cfg.TRAIN.ENABLE and not self.cfg.DATA.VAL.FROM_TRAIN:
             if not os.path.isdir(val_channel_mask_dir) and is_main_process():
                 print(
                     "You select to create {} channels from given instance labels and no file is detected in {}. "
                     "So let's prepare the data. This process will be done just once!".format(
-                        self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
-                        val_channel_mask_dir
+                        self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, val_channel_mask_dir
                     )
                 )
                 create_instance_channels(self.cfg, data_type="val")
@@ -1536,11 +1524,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 opts.extend([f"DATA.VAL.INPUT_MASK_AXES_ORDER", out_data_order])
 
         # Create selected channels for test data once
-        if (
-            self.cfg.TEST.ENABLE
-            and not self.cfg.DATA.TEST.USE_VAL_AS_TEST
-            and self.cfg.DATA.TEST.LOAD_GT
-        ):
+        if self.cfg.TEST.ENABLE and not self.cfg.DATA.TEST.USE_VAL_AS_TEST and self.cfg.DATA.TEST.LOAD_GT:
             if not os.path.isdir(test_channel_mask_dir) and is_main_process():
                 print(
                     "You select to create {} channels from given instance labels and no file is detected in {}. "
@@ -1549,7 +1533,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         test_channel_mask_dir,
                     )
                 )
-                create_test_instance_channels(self.cfg)
+                create_instance_channels(self.cfg, data_type="test")
 
             # Change the value of DATA.TEST.INPUT_MASK_AXES_ORDER as we have created the instance mask and maybe the user doesn't
             # know the data order that is created.
@@ -1604,11 +1588,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
         return original_test_path, original_test_mask_path
 
-    def torchvision_model_call(
-        self, 
-        in_img: torch.Tensor, 
-        is_train: bool=False
-    ) -> torch.Tensor | None:
+    def torchvision_model_call(self, in_img: torch.Tensor, is_train: bool = False) -> torch.Tensor | None:
         """
         Call a regular Pytorch model.
 
