@@ -1320,10 +1320,11 @@ def read_chunked_data(
             data = fid[list(fid)[0]]
         elif filename.endswith(".zarr"):
             fid = zarr.open(filename, "r")
-            if len(list((fid.group_keys()))) != 0: # type: ignore
-                fid = fid[list(fid.group_keys())[0]] # type: ignore
-            if len(list((fid.array_keys()))) != 0: # type: ignore
-                data = fid[list(fid.array_keys())[0]]  # type: ignore
+            if isinstance(fid, zarr.hierarchy.Group): # type: ignore
+                if len(list((fid.group_keys()))) != 0: # type: ignore
+                    data = fid[list(fid.group_keys())[0]] # type: ignore
+                elif len(list((fid.array_keys()))) != 0: # type: ignore
+                    data = fid[list(fid.array_keys())[0]]  # type: ignore
             else:
                 data = fid
         else:

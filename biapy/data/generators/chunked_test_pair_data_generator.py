@@ -409,7 +409,8 @@ class chunked_test_pair_data_generator(IterableDataset):
 
     def insert_patch_in_file(self, patch: NDArray, patch_coords: PatchCoords):
         """
-        Insert patch into the output parallel file.
+        Insert patch into the output parallel file. It always creates a Zarr dataset using ``self.crop_shape``
+        as chunk size.
 
         Parameters
         ----------
@@ -430,19 +431,16 @@ class chunked_test_pair_data_generator(IterableDataset):
                 out_data_shape[self.input_axes.index("C")] = patch.shape[-1]
                 out_data_shape = tuple(out_data_shape)
 
-            data_filename = os.path.join(self.out_dir, f"rank_{get_rank()}" + self.filename)
+            data_filename = os.path.join(self.out_dir, os.path.splitext(self.filename)[0] + ".zarr")
             os.makedirs(self.out_dir, exist_ok=True)
-            if self.file_type == "h5":
-                self.out_file = h5py.File(data_filename, "w")
-                self.out_data = self.out_file.create_dataset(
-                    "data",
-                    shape=out_data_shape,
-                    dtype=self.dtype_str,
-                    compression="gzip",
-                )
-            else:
-                self.out_file = zarr.open_group(data_filename, mode="w")
-                self.out_data = self.out_file.create_dataset("data", shape=out_data_shape, dtype=self.dtype_str)
+            self.out_file = data_filename
+            self.out_data = zarr.open_array(
+                data_filename,
+                shape=out_data_shape,
+                mode="w",
+                chunks=self.crop_shape,
+                dtype=self.dtype_str,
+            )
 
         insert_patch_in_efficient_file(
             data=self.out_data,
@@ -476,7 +474,7 @@ class DataParallelIterableDataset(IterableDataset):
         return len(self.generator)
 
     def __iter__(self):
-        worker_info = torch.utils.data.get_worker_info() # type: ignore
+        worker_info = torch.utils.data.get_worker_info()  # type: ignore
         num_workers = worker_info.num_workers if worker_info is not None else 1
         worker_id = worker_info.id if worker_info is not None else 0
 

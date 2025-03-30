@@ -1141,17 +1141,17 @@ class Base_Workflow(metaclass=ABCMeta):
             discarded = False
             _, file_extension = os.path.splitext(self.current_sample["filename"])
             if (
-                file_extension not in [".hdf5", ".hdf", ".h5", ".zarr"]
+                file_extension in [".hdf5", ".hdf", ".h5", ".zarr"]
                 and self.cfg.TEST.BY_CHUNKS.ENABLE
                 and self.cfg.PROBLEM.NDIM == "3D"
             ):
                 by_chunks = True
             else:
-                by_chunks = True
+                by_chunks = False
 
             if by_chunks:
                 print(
-                    "[Rank {} ({})] Processing image: {}".format(
+                    "[Rank {} ({})] Processing image (by chunks): {}".format(
                         get_rank(), os.getpid(), self.current_sample["filename"]
                     )
                 )
@@ -1279,7 +1279,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 pred[k] = p
         else:
             l = int(math.ceil(x_batch.shape[0] / self.cfg.TRAIN.BATCH_SIZE))
-            for k in tqdm(range(l), leave=False):
+            for k in tqdm(range(l), leave=False, disable=disable_tqdm):
                 top = (
                     (k + 1) * self.cfg.TRAIN.BATCH_SIZE
                     if (k + 1) * self.cfg.TRAIN.BATCH_SIZE < x_batch.shape[0]
