@@ -462,32 +462,3 @@ class chunked_test_pair_data_generator(IterableDataset):
 
     def __len__(self):
         return self.len
-
-
-class DataParallelIterableDataset(IterableDataset):
-    def __init__(self, generator: chunked_test_pair_data_generator):
-        self.generator = generator
-
-    def __len__(self):
-        # Caveat: When using DistributedSampler, we need to know the number of samples in our dataset!
-        # Hence, we need to implement `__len__`.
-        return len(self.generator)
-
-    def __iter__(self):
-        worker_info = torch.utils.data.get_worker_info()  # type: ignore
-        num_workers = worker_info.num_workers if worker_info is not None else 1
-        worker_id = worker_info.id if worker_info is not None else 0
-
-        world_size = get_world_size()
-        process_rank = get_rank()
-
-        sampler = DistributedSampler(
-            self.generator,
-            num_replicas=(num_workers * world_size),
-            rank=(process_rank * num_workers + worker_id),
-            shuffle=False,
-        )
-
-        for i in iter(sampler):
-            print(f"I: {i}")
-            yield i

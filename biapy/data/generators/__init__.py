@@ -17,7 +17,7 @@ from biapy.data.generators.single_data_2D_generator import Single2DImageDataGene
 from biapy.data.generators.single_data_3D_generator import Single3DImageDataGenerator
 from biapy.data.generators.test_pair_data_generators import test_pair_data_generator
 from biapy.data.generators.test_single_data_generator import test_single_data_generator
-from biapy.data.generators.chunked_test_pair_data_generator import chunked_test_pair_data_generator, DataParallelIterableDataset
+from biapy.data.generators.chunked_test_pair_data_generator import chunked_test_pair_data_generator
 from biapy.data.pre_processing import preprocess_data
 from biapy.data.data_manipulation import save_tif, extract_patch_within_image
 from biapy.data.dataset import BiaPyDataset, PatchCoords
@@ -522,15 +522,6 @@ def create_chunked_test_generator(
         out_dir=out_dir,
         dtype_str=dtype_str,
     )
-    # chunked_generator = DataParallelIterableDataset(backbone_generator)
-
-    # num_workers = cfg.SYSTEM.NUM_WORKERS
-    # if is_dist_avail_and_initialized() and cfg.SYSTEM.NUM_GPUS >= 1:
-    #     # To not create more than 2 processes per GPU
-    #     num_workers = min(num_workers, 2 * cfg.SYSTEM.NUM_GPUS)
-    #     sampler_test = DistributedSampler(chunked_generator, num_replicas=get_world_size(), rank=get_rank(), shuffle=False)
-    # else:
-    #     sampler_test = None
 
     def by_chunks_collate_fn(data):
         """
@@ -557,7 +548,6 @@ def create_chunked_test_generator(
 
     test_dataset = DataLoader(
         chunked_generator,
-        # sampler=sampler_test,
         batch_size=cfg.TRAIN.BATCH_SIZE,
         num_workers=2 * cfg.SYSTEM.NUM_GPUS,
         collate_fn=by_chunks_collate_fn,
