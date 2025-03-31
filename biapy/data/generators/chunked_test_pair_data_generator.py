@@ -107,10 +107,14 @@ class chunked_test_pair_data_generator(IterableDataset):
         super(chunked_test_pair_data_generator).__init__()
         self.sample_to_process = sample_to_process
         self.X_parallel_data = sample_to_process["X"]
-        self.X_parallel_file = sample_to_process["img_file_to_close"] if "img_file_to_close" in sample_to_process else None
+        self.X_parallel_file = (
+            sample_to_process["img_file_to_close"] if "img_file_to_close" in sample_to_process else None
+        )
         if sample_to_process["Y"] is not None:
             self.Y_parallel_data = sample_to_process["Y"]
-            self.Y_parallel_file = sample_to_process["mask_file_to_close"] if "mask_file_to_close" in sample_to_process else None
+            self.Y_parallel_file = (
+                sample_to_process["mask_file_to_close"] if "mask_file_to_close" in sample_to_process else None
+            )
         else:
             self.Y_parallel_data = None
             self.Y_parallel_file = None
@@ -223,7 +227,12 @@ class chunked_test_pair_data_generator(IterableDataset):
             Added pad on each dimension. E.g. [ [10, 10], [5,5], [0,5]]
         """
         assert extract in ["image", "mask"]
-        input_axes = self.input_axes if extract == "image" else self.mask_input_axes
+        if extract == "image":
+            input_axes = self.input_axes
+            var_tag = "DATA.TEST.INPUT_IMG_AXES_ORDER"
+        else:
+            input_axes = self.mask_input_axes
+            var_tag = "DATA.TEST.INPUT_MASK_AXES_ORDER"
 
         # Extact the patch
         if extract == "image":
@@ -262,7 +271,8 @@ class chunked_test_pair_data_generator(IterableDataset):
 
         assert (
             data.shape[:-1] == self.crop_shape[:-1]
-        ), f"Image shape and expected shape differ: {data.shape} vs {self.crop_shape}"
+        ), f"Image shape and expected shape differ: {data.shape} vs {self.crop_shape}. " \
+           f"Double check that the data is following '{input_axes}' axis order (set in '{var_tag}')"
 
         if self.convert_to_rgb:
             if extract == "image" or (extract == "mask" and self.norm_module.mask_norm == "as_image"):
@@ -438,7 +448,7 @@ class chunked_test_pair_data_generator(IterableDataset):
                 data_filename,
                 shape=out_data_shape,
                 mode="w",
-                chunks=self.crop_shape, # type: ignore
+                chunks=self.crop_shape,  # type: ignore
                 dtype=self.dtype_str,
             )
 
@@ -452,11 +462,11 @@ class chunked_test_pair_data_generator(IterableDataset):
 
     def save_parallel_data_as_tif(self):
         """
-        Saves the parallel data (``self.out_data``) as a tiff file. 
+        Saves the parallel data (``self.out_data``) as a tiff file.
         """
         data = np.array(self.out_data)
         data = ensure_3d_shape(data)
-        save_tif(np.expand_dims(data, 0), self.out_dir, [os.path.splitext(self.filename)[0]+".tif"], verbose=True)
+        save_tif(np.expand_dims(data, 0), self.out_dir, [os.path.splitext(self.filename)[0] + ".tif"], verbose=True)
 
     def close_open_files(self):
         # Input data files

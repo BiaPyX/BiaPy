@@ -1204,6 +1204,9 @@ def write_chunked_data(
     filename : str
         Filename of the data to use.
 
+    crop_shape: tuple/list of int/float
+        Crop shape to be used in determining Zarr chunks.
+     
     dtype_str : str, optional
         Data type to use when saving.
 

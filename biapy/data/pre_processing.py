@@ -1411,6 +1411,7 @@ def create_detection_masks(cfg: CN, data_type: str = "train"):
                     np.expand_dims(mask, 0),
                     out_dir,
                     img_filename,
+                    crop_shape=cfg.DATA.PATCH_SIZE,
                     dtype_str="uint8",
                     verbose=True,
                 )
