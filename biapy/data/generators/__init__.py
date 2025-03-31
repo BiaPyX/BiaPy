@@ -322,13 +322,16 @@ def create_train_val_augmentors(
     # Training dataset
     total_batch_size = cfg.TRAIN.BATCH_SIZE * get_world_size() * cfg.TRAIN.ACCUM_ITER
     training_samples = len(train_generator)
-    # Reduce number of workers in case there is no training data
-    num_workers = min(cfg.SYSTEM.NUM_WORKERS, training_samples)
     if is_dist_avail_and_initialized() and cfg.SYSTEM.NUM_GPUS >= 1:
-        # To not create more than 2 processes per GPU
-        num_workers = min(num_workers, 2 * cfg.SYSTEM.NUM_GPUS)
+        if cfg.SYSTEM.NUM_WORKERS == -1:
+            num_workers = 2 * cfg.SYSTEM.NUM_GPUS
+        else:
+            # To not create more than 2 processes per GPU
+            num_workers = min(cfg.SYSTEM.NUM_WORKERS, 2 * cfg.SYSTEM.NUM_GPUS)
         sampler_train = DistributedSampler(train_generator, num_replicas=get_world_size(), rank=get_rank(), shuffle=True)
     else:
+        # Reduce number of workers in case there is no training data
+        num_workers = min(5, training_samples) if cfg.SYSTEM.NUM_WORKERS == -1 else cfg.SYSTEM.NUM_WORKERS
         sampler_train = None
     num_training_steps_per_epoch = training_samples // total_batch_size
     print(f"Number of workers: {num_workers}")
@@ -546,10 +549,19 @@ def create_chunked_test_generator(
             [x[4] for x in data]
         )
 
+    if is_dist_avail_and_initialized() and cfg.SYSTEM.NUM_GPUS >= 1:
+        if cfg.SYSTEM.NUM_WORKERS == -1:
+            num_workers = 2 * cfg.SYSTEM.NUM_GPUS
+        else:
+            # To not create more than 2 processes per GPU
+            num_workers = min(cfg.SYSTEM.NUM_WORKERS, 2 * cfg.SYSTEM.NUM_GPUS)
+    else:
+        num_workers = 5 if cfg.SYSTEM.NUM_WORKERS == -1 else cfg.SYSTEM.NUM_WORKERS
+
     test_dataset = DataLoader(
         chunked_generator,
         batch_size=cfg.TRAIN.BATCH_SIZE,
-        num_workers=2 * cfg.SYSTEM.NUM_GPUS,
+        num_workers=num_workers,
         collate_fn=by_chunks_collate_fn,
         pin_memory=cfg.SYSTEM.PIN_MEM,
         drop_last=False,
