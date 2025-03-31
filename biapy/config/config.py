@@ -1460,14 +1460,6 @@ class Config:
         _C.PATHS.PROB_MAP_FILENAME = "prob_map.npy"
         # Watershed debugging folder
         _C.PATHS.WATERSHED_DIR = os.path.join(_C.PATHS.RESULT_DIR.PATH, "watershed")
-        # Custom mean normalization paths
-        _C.PATHS.MEAN_INFO_FILE = os.path.join(_C.PATHS.CHECKPOINT, "normalization_mean_value.npy")
-        _C.PATHS.STD_INFO_FILE = os.path.join(_C.PATHS.CHECKPOINT, "normalization_std_value.npy")
-        # Percentile normalization paths
-        _C.PATHS.LWR_X_FILE = os.path.join(_C.PATHS.CHECKPOINT, "lower_bound_X_perc.npy")
-        _C.PATHS.UPR_X_FILE = os.path.join(_C.PATHS.CHECKPOINT, "upper_bound_X_perc.npy")
-        _C.PATHS.LWR_Y_FILE = os.path.join(_C.PATHS.CHECKPOINT, "lower_bound_Y_perc.npy")
-        _C.PATHS.UPR_Y_FILE = os.path.join(_C.PATHS.CHECKPOINT, "upper_bound_Y_perc.npy")
         # Path where the images used in MAE will be saved suring inference
         _C.PATHS.MAE_OUT_DIR = os.path.join(_C.PATHS.RESULT_DIR.PATH, "MAE_checks")
         # Directory to save filtered images.

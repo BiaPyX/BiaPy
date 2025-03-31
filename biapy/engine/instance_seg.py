@@ -1374,7 +1374,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         ndim=self.dims,
                         return_drops=True,
                     )
-                    pre_points_df.drop(pre_points_df.index[pre_dropped_pos], inplace=True)
+                    pre_points_df.drop(pre_points_df.index[pre_dropped_pos], inplace=True)  # type: ignore
                     post_points, post_dropped_pos = remove_close_points(  # type: ignore
                         post_points,
                         self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS,
@@ -1382,7 +1382,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         ndim=self.dims,
                         return_drops=True,
                     )
-                    post_points_df.drop(post_points_df.index[post_dropped_pos], inplace=True)
+                    post_points_df.drop(post_points_df.index[post_dropped_pos], inplace=True)  # type: ignore
 
                     # Save filtered stats
                     os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING, exist_ok=True)

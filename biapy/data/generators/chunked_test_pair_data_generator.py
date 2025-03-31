@@ -437,7 +437,7 @@ class chunked_test_pair_data_generator(IterableDataset):
                 data_filename,
                 shape=out_data_shape,
                 mode="w",
-                chunks=self.crop_shape,
+                chunks=self.crop_shape, # type: ignore
                 dtype=self.dtype_str,
             )
 
