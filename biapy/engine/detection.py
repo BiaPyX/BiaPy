@@ -295,7 +295,7 @@ class Detection_Workflow(Base_Workflow):
             pred = pred[..., :-1]
 
         pred_shape = pred.shape
-        if self.cfg.TEST.VERBOSE:
+        if self.cfg.TEST.VERBOSE and not self.cfg.TEST.BY_CHUNKS.ENABLE:
             print("Capturing the local maxima ")
 
         # Find points
@@ -1207,19 +1207,35 @@ class Detection_Workflow(Base_Workflow):
                 )
             )
             opts.extend(["DATA.TRAIN.GT_PATH", self.cfg.DATA.TRAIN.DETECTION_MASK_DIR])
-            if not self.cfg.DATA.VAL.FROM_TRAIN:
-                print(
-                    "DATA.VAL.GT_PATH changed from {} to {}".format(
-                        self.cfg.DATA.VAL.GT_PATH, self.cfg.DATA.VAL.DETECTION_MASK_DIR
-                    )
+
+            out_data_order = self.cfg.DATA.TRAIN.INPUT_IMG_AXES_ORDER
+            if "C" not in self.cfg.DATA.TRAIN.INPUT_IMG_AXES_ORDER:
+                out_data_order += "C"
+            print(
+                "DATA.TRAIN.INPUT_MASK_AXES_ORDER changed from {} to {}".format(
+                    self.cfg.DATA.TRAIN.INPUT_MASK_AXES_ORDER, out_data_order
                 )
-                opts.extend(["DATA.VAL.GT_PATH", self.cfg.DATA.VAL.DETECTION_MASK_DIR])
-            if create_mask and self.cfg.DATA.TRAIN.INPUT_MASK_AXES_ORDER != "TZCYX":
-                print(
-                    f"DATA.TRAIN.INPUT_MASK_AXES_ORDER changed from '{self.cfg.DATA.TRAIN.INPUT_MASK_AXES_ORDER}' to 'TZCYX'. Remember to set that value "
-                    " in future runs if you reuse the mask created."
+            )
+            opts.extend([f"DATA.TRAIN.INPUT_MASK_AXES_ORDER", out_data_order])
+
+        if not self.cfg.DATA.VAL.FROM_TRAIN:
+            print(
+                "DATA.VAL.GT_PATH changed from {} to {}".format(
+                    self.cfg.DATA.VAL.GT_PATH, self.cfg.DATA.VAL.DETECTION_MASK_DIR
                 )
-                opts.extend(["DATA.TRAIN.INPUT_MASK_AXES_ORDER", "TZCYX"])
+            )
+            opts.extend(["DATA.VAL.GT_PATH", self.cfg.DATA.VAL.DETECTION_MASK_DIR])
+            
+            out_data_order = self.cfg.DATA.VAL.INPUT_IMG_AXES_ORDER
+            if "C" not in self.cfg.DATA.VAL.INPUT_IMG_AXES_ORDER:
+                out_data_order += "C"
+            print(
+                "DATA.VAL.INPUT_MASK_AXES_ORDER changed from {} to {}".format(
+                    self.cfg.DATA.VAL.INPUT_MASK_AXES_ORDER, out_data_order
+                )
+            )
+            opts.extend([f"DATA.VAL.INPUT_MASK_AXES_ORDER", out_data_order])
+
         if self.cfg.TEST.ENABLE and self.cfg.DATA.TEST.LOAD_GT:
             print(
                 "DATA.TEST.GT_PATH changed from {} to {}".format(
@@ -1227,6 +1243,16 @@ class Detection_Workflow(Base_Workflow):
                 )
             )
             opts.extend(["DATA.TEST.GT_PATH", self.cfg.DATA.TEST.DETECTION_MASK_DIR])
+
+            out_data_order = self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER
+            if "C" not in self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER:
+                out_data_order += "C"
+            print(
+                "DATA.TEST.INPUT_MASK_AXES_ORDER changed from {} to {}".format(
+                    self.cfg.DATA.TEST.INPUT_MASK_AXES_ORDER, out_data_order
+                )
+            )
+            opts.extend([f"DATA.TEST.INPUT_MASK_AXES_ORDER", out_data_order])
         self.cfg.merge_from_list(opts)
 
         return original_test_mask_path
