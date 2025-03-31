@@ -14,7 +14,8 @@ from biapy.data.data_3D_manipulation import (
     insert_patch_in_efficient_file,
     order_dimensions,
 )
-from biapy.data.data_manipulation import sample_satisfy_conds
+from biapy.data.data_manipulation import sample_satisfy_conds, save_tif
+from biapy.data.data_3D_manipulation import ensure_3d_shape
 from biapy.utils.misc import get_world_size, get_rank
 from biapy.data.dataset import PatchCoords
 from biapy.data.norm import Normalization
@@ -448,6 +449,14 @@ class chunked_test_pair_data_generator(IterableDataset):
             data_axes_order=self.out_data_order,
             patch_axes_order="ZYXC",
         )
+
+    def save_parallel_data_as_tif(self):
+        """
+        Saves the parallel data (``self.out_data``) as a tiff file. 
+        """
+        data = np.array(self.out_data)
+        data = ensure_3d_shape(data)
+        save_tif(np.expand_dims(data, 0), self.out_dir, [os.path.splitext(self.filename)[0]+".tif"], verbose=True)
 
     def close_open_files(self):
         # Input data files

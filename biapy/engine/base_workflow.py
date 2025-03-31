@@ -1384,6 +1384,9 @@ class Base_Workflow(metaclass=ABCMeta):
 
                     self.after_one_patch_prediction_by_chunks(single_pred, patch_in_data[i])
 
+            if self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF:
+                tgen.save_parallel_data_as_tif()
+
             tgen.close_open_files()
                 
         self.after_all_patch_prediction_by_chunks()
