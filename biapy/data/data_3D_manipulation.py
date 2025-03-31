@@ -233,7 +233,10 @@ def extract_patch_from_efficient_file(
     )
 
     # Extract patch
-    img = np.squeeze(np.array(data[data_ordered_slices]))
+    try:
+        img = np.squeeze(np.array(data[data_ordered_slices]))
+    except: 
+        raise ValueError(f"Read data axes ({data.shape}) do not match the expected axis order ({data_axes_order})")
 
     img = ensure_3d_shape(img.squeeze())
 

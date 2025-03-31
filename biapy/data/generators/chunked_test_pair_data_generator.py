@@ -107,10 +107,10 @@ class chunked_test_pair_data_generator(IterableDataset):
         super(chunked_test_pair_data_generator).__init__()
         self.sample_to_process = sample_to_process
         self.X_parallel_data = sample_to_process["X"]
-        self.X_parallel_file = sample_to_process["img_file_to_close"]
+        self.X_parallel_file = sample_to_process["img_file_to_close"] if "img_file_to_close" in sample_to_process else None
         if sample_to_process["Y"] is not None:
             self.Y_parallel_data = sample_to_process["Y"]
-            self.Y_parallel_file = sample_to_process["mask_file_to_close"]
+            self.Y_parallel_file = sample_to_process["mask_file_to_close"] if "mask_file_to_close" in sample_to_process else None
         else:
             self.Y_parallel_data = None
             self.Y_parallel_file = None
@@ -152,7 +152,7 @@ class chunked_test_pair_data_generator(IterableDataset):
         if sample_to_process["Y"] is not None:
             assert (
                 self.mask_input_axes == self.out_data_order
-            ), f"Expected mask axes does not match the output data axes order to be created ({self.mask_input_axes} vs {self.out_data_order})"
+            ), f"The expected mask axes do not match the order of the output data axes to be created ({self.mask_input_axes} vs {self.out_data_order})"
 
         # Information about the dataset to work with
         _, self.z_dim, _, self.y_dim, self.x_dim = order_dimensions(self.X_parallel_data.shape, self.input_axes)
@@ -460,7 +460,7 @@ class chunked_test_pair_data_generator(IterableDataset):
 
     def close_open_files(self):
         # Input data files
-        if isinstance(self.X_parallel_file, h5py.File):
+        if self.X_parallel_file is not None and isinstance(self.X_parallel_file, h5py.File):
             self.X_parallel_file.close()
         if self.Y_parallel_file is not None and isinstance(self.Y_parallel_file, h5py.File):
             self.Y_parallel_file.close()
