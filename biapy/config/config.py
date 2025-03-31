@@ -22,8 +22,8 @@ class Config:
         _C.SYSTEM = CN()
         # Maximum number of CPUs to use. Set it to "-1" to not set a limit.
         _C.SYSTEM.NUM_CPUS = -1
-        # Maximum number of workers to use. You can disable this option by setting 0.
-        _C.SYSTEM.NUM_WORKERS = 5
+        # Maximum number of workers to use. You can disable this option by setting 0. With a -1 the workers are calculated automatically.
+        _C.SYSTEM.NUM_WORKERS = -1
         # Do not set it as its value will be calculated based in --gpu input arg
         _C.SYSTEM.NUM_GPUS = 0
         # Device to be used when GPU is NOT selected. Most commonly "cpu", but also potentially "mps",

@@ -25,6 +25,7 @@ from biapy.data.norm import Normalization
 from biapy.data.data_3D_manipulation import extract_patch_from_efficient_file
 from biapy.utils.misc import get_rank, get_world_size, is_dist_avail_and_initialized
 
+
 def create_train_val_augmentors(
     cfg: CN,
     X_train: BiaPyDataset,
@@ -322,17 +323,22 @@ def create_train_val_augmentors(
     # Training dataset
     total_batch_size = cfg.TRAIN.BATCH_SIZE * get_world_size() * cfg.TRAIN.ACCUM_ITER
     training_samples = len(train_generator)
+
+    # Set num_workers
     if is_dist_avail_and_initialized() and cfg.SYSTEM.NUM_GPUS >= 1:
         if cfg.SYSTEM.NUM_WORKERS == -1:
             num_workers = 2 * cfg.SYSTEM.NUM_GPUS
         else:
             # To not create more than 2 processes per GPU
             num_workers = min(cfg.SYSTEM.NUM_WORKERS, 2 * cfg.SYSTEM.NUM_GPUS)
-        sampler_train = DistributedSampler(train_generator, num_replicas=get_world_size(), rank=get_rank(), shuffle=True)
+        sampler_train = DistributedSampler(
+            train_generator, num_replicas=get_world_size(), rank=get_rank(), shuffle=True
+        )
     else:
         # Reduce number of workers in case there is no training data
         num_workers = min(5, training_samples) if cfg.SYSTEM.NUM_WORKERS == -1 else cfg.SYSTEM.NUM_WORKERS
         sampler_train = None
+
     num_training_steps_per_epoch = training_samples // total_batch_size
     print(f"Number of workers: {num_workers}")
     print("Accumulate grad iterations: %d" % cfg.TRAIN.ACCUM_ITER)
@@ -344,7 +350,7 @@ def create_train_val_augmentors(
         batch_size=cfg.TRAIN.BATCH_SIZE,
         num_workers=num_workers,
         pin_memory=cfg.SYSTEM.PIN_MEM,
-        drop_last=False, 
+        drop_last=False,
     )
 
     # Save a sample to export the model to BMZ
@@ -480,15 +486,11 @@ def create_test_generator(
     )
     if isinstance(bmz_input_sample, np.ndarray):
         bmz_input_sample = extract_patch_within_image(
-            bmz_input_sample, 
-            patch, 
-            is_3d=True if cfg.PROBLEM.NDIM == "3D" else False
+            bmz_input_sample, patch, is_3d=True if cfg.PROBLEM.NDIM == "3D" else False
         )
     else:
         bmz_input_sample = extract_patch_from_efficient_file(
-            bmz_input_sample, 
-            patch, 
-            data_axes_order=cfg.DATA.TEST.INPUT_IMG_AXES_ORDER
+            bmz_input_sample, patch, data_axes_order=cfg.DATA.TEST.INPUT_IMG_AXES_ORDER
         )
     bmz_input_sample = bmz_input_sample.astype(np.float32)
 
@@ -513,7 +515,7 @@ def create_chunked_test_generator(
     dtype_str: str,
 ) -> DataLoader:
     """
-    Creates a chunked test generator. 
+    Creates a chunked test generator.
     """
     chunked_generator = chunked_test_pair_data_generator(
         sample_to_process=current_sample,
@@ -528,27 +530,28 @@ def create_chunked_test_generator(
 
     def by_chunks_collate_fn(data):
         """
-        Collate function to avoid the default one with type checking. It does nothing speciall but stack the images. 
-        
+        Collate function to avoid the default one with type checking. It does nothing speciall but stack the images.
+
         Parameters
         ----------
         data : tuple
-            Data tuple. 
-        
+            Data tuple.
+
         Returns
         -------
         data : tuple
             Stacked data in batches.
         """
         return (
-            # torch.cat([torch.from_numpy(x[0]) for x in data]), 
+            # torch.cat([torch.from_numpy(x[0]) for x in data]),
             np.stack([x[0] for x in data]),
             np.stack([x[1] for x in data if x is not None]) if len(data) > 0 and data[0][1] is not None else None,
-            [x[2] for x in data], 
+            [x[2] for x in data],
             [x[3] for x in data],
-            [x[4] for x in data]
+            [x[4] for x in data],
         )
 
+    # Set num_workers
     if is_dist_avail_and_initialized() and cfg.SYSTEM.NUM_GPUS >= 1:
         if cfg.SYSTEM.NUM_WORKERS == -1:
             num_workers = 2 * cfg.SYSTEM.NUM_GPUS
