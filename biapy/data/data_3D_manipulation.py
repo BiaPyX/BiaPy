@@ -1152,6 +1152,12 @@ def ensure_3d_shape(
         else:
             m = "Read image seems to be 2D: {}".format(img.shape)
         raise ValueError(m)
+    elif img.ndim == 5: 
+        if img.shape[0] != 1:
+            # It is assumed that the image is already prepared
+            return img
+        else:
+            img = img[0]
 
     if img.ndim == 3:
         # Ensure Z axis is always in the first position
@@ -1180,16 +1186,17 @@ def write_chunked_data(
     data: NDArray, 
     data_dir: str, 
     filename: str, 
+    crop_shape: Optional[Tuple[int|float] | List[int|float]]=None,
     dtype_str: str="float32", 
     verbose: bool=True
 ):
     """
-    Save images in the given directory.
+    Save images in the given directory into 'ZYXC' format.
 
     Parameters
     ----------
-    data : 5D numpy array
-        Data to save. E.g. ``(1, z, y, x, channels)``.
+    data : 4D numpy array
+        Data to save. E.g. ``(z, y, x, channels)``.
 
     data_dir : str
         Path to store X images.
@@ -1203,11 +1210,7 @@ def write_chunked_data(
     verbose : bool, optional
         To print saving information.
     """
-    if data.ndim != 5:
-        raise ValueError(f"Expected data needs to have 5 dimensions (in 'TZYXC' order). Given data shape: {data.shape}")
-
-    # Change to TZCYX
-    data = data.transpose((0, 1, 4, 2, 3))
+    data = ensure_3d_shape(data)
 
     ext = os.path.splitext(filename)[1]
     if verbose:
@@ -1220,8 +1223,14 @@ def write_chunked_data(
         data = fid.create_dataset("data", data=data, dtype=dtype_str, compression="gzip") # type: ignore
     # Zarr
     else:
-        fid = zarr.open_group(os.path.join(data_dir, filename), mode="w")
-        data = fid.create_dataset("data", data=data, dtype=dtype_str) # type: ignore
+        data_zarr = zarr.open_array(
+            os.path.join(data_dir, filename),
+            shape=data.shape,
+            mode="w",
+            chunks=crop_shape, # type: ignore
+            dtype=dtype_str,
+        )
+        data_zarr[:] = data
 
 
 def read_chunked_nested_data(
