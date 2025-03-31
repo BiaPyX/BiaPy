@@ -290,7 +290,6 @@ class chunked_test_pair_data_generator(IterableDataset):
 
         norm_extra_info : dict
             Extra information of the normalization applied ``img``.
-
         """
         assert isinstance(self.z_dim, int) and isinstance(self.x_dim, int) and isinstance(self.y_dim, int)
         worker_info = torch.utils.data.get_worker_info()  # type: ignore

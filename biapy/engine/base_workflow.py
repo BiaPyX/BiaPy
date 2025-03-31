@@ -10,7 +10,7 @@ from tqdm import tqdm
 from abc import ABCMeta, abstractmethod
 import torch.multiprocessing as mp
 import torch.distributed as dist
-from typing import Dict, Optional
+from typing import Dict, Optional, List, Any
 from numpy.typing import NDArray
 from yacs.config import CfgNode as CN
 
@@ -61,7 +61,7 @@ from biapy.data.data_2D_manipulation import (
 from biapy.data.data_3D_manipulation import (
     crop_3D_data_with_overlap,
     merge_3D_data_with_overlap,
-    read_chunked_data,
+    order_dimensions
 )
 from biapy.data.data_manipulation import (
     load_and_prepare_train_data,
@@ -79,6 +79,7 @@ from biapy.data.pre_processing import preprocess_data
 from biapy.engine.check_configuration import check_configuration, compare_configurations_without_model
 from biapy.data.norm import Normalization
 from biapy.data.generators.chunked_test_pair_data_generator import chunked_test_pair_data_generator
+from biapy.data.dataset import PatchCoords
 
 
 class Base_Workflow(metaclass=ABCMeta):
@@ -174,6 +175,12 @@ class Base_Workflow(metaclass=ABCMeta):
         self.test_metric_best = []
         self.test_metric_names = []
         self.loss = None
+
+        self.resolution: List[int | float] = list(self.cfg.DATA.TEST.RESOLUTION)
+        if self.cfg.PROBLEM.NDIM == "2D":
+            self.resolution = [
+                1,
+            ] + self.resolution
 
         self.world_size = get_world_size()
         self.global_rank = get_rank()
@@ -611,6 +618,8 @@ class Base_Workflow(metaclass=ABCMeta):
             Image prediction.
         """
         in_img = to_pytorch_format(in_img, self.axes_order, self.device)
+        assert isinstance(in_img, torch.Tensor)
+
         if self.cfg.MODEL.SOURCE == "biapy":
             assert self.model
             p = self.model(in_img)
@@ -1155,8 +1164,7 @@ class Base_Workflow(metaclass=ABCMeta):
                         get_rank(), os.getpid(), self.current_sample["filename"]
                     )
                 )
-                if not self.cfg.TEST.REUSE_PREDICTIONS:
-                    self.process_test_sample_by_chunks()
+                self.process_test_sample_by_chunks()
             else:
                 if is_main_process():
                     if self.cfg.PROBLEM.TYPE != "CLASSIFICATION":
@@ -1314,47 +1322,71 @@ class Base_Workflow(metaclass=ABCMeta):
 
         return pred
 
+    @abstractmethod
+    def after_one_patch_prediction_by_chunks(self, patch: NDArray, patch_in_data: PatchCoords):
+        """
+        Place any code that needs to be done after predicting one patch in "by chunks" setting.
+
+        Parameters
+        ----------
+        patch : NDArray
+            Predicted patch.
+
+        patch_in_data : PatchCoords
+            Global coordinates of the patch.
+        """
+        raise NotImplementedError
+
     def process_test_sample_by_chunks(self):
         """
         Function to process a sample in the inference phase. A final H5/Zarr file is created in "TZCYX" or "TZYXC" order
         depending on ``DATA.TEST.INPUT_IMG_AXES_ORDER`` ('T' is always included).
         """
-        # Create the generator
-        test_dataset = create_chunked_test_generator(
-            self.cfg,
-            current_sample=self.current_sample,
-            norm_module=self.norm_module,
-            out_dir=self.cfg.PATHS.RESULT_DIR.PER_IMAGE,
-            dtype_str=self.dtype_str,
-        )
-        tgen: chunked_test_pair_data_generator = test_dataset.dataset  # type: ignore
-        data_shape = tgen.X_parallel_data.shape
-        for patch_id, obj_list in enumerate(test_dataset):
-            img, mask, patch_in_data, added_pad, norm_extra_info = obj_list
+        if not self.cfg.TEST.REUSE_PREDICTIONS:
+            # Create the generator
+            test_dataset = create_chunked_test_generator(
+                self.cfg,
+                current_sample=self.current_sample,
+                norm_module=self.norm_module,
+                out_dir=self.cfg.PATHS.RESULT_DIR.PER_IMAGE,
+                dtype_str=self.dtype_str,
+            )
+            tgen: chunked_test_pair_data_generator = test_dataset.dataset  # type: ignore
+            
+            # Get parallel data shape is ZYX
+            _, z_dim, _, y_dim, x_dim = order_dimensions(tgen.X_parallel_data.shape, self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER)
+            self.parallel_data_shape = [z_dim, y_dim, x_dim]
 
-            if self.cfg.TEST.VERBOSE:
-                print(
-                    "[Rank {} ({})] Patch number {} processing patches {} from {}".format(
-                        get_rank(), os.getpid(), patch_id, patch_in_data, data_shape
+            for patch_id, obj_list in enumerate(test_dataset):
+                img, mask, patch_in_data, added_pad, norm_extra_info = obj_list
+
+                if self.cfg.TEST.VERBOSE:
+                    print(
+                        "[Rank {} ({})] Patch number {} processing patches {} from {}".format(
+                            get_rank(), os.getpid(), patch_id, patch_in_data, self.parallel_data_shape
+                        )
                     )
-                )
 
-            # Pass the batch through the model
-            pred = self.predict_batches_in_test(img, mask, stats_name="by_chunks", disable_tqdm=True)
+                # Pass the batch through the model
+                pred = self.predict_batches_in_test(img, mask, stats_name="by_chunks", disable_tqdm=True)
 
-            for i in range(pred.shape[0]):
-                # Remove padding if added
-                single_pred = pred[i]
-                single_pred_pad = added_pad[i]
-                single_pred = single_pred[
-                    single_pred_pad[0][0] : single_pred.shape[0] - single_pred_pad[0][1],
-                    single_pred_pad[1][0] : single_pred.shape[1] - single_pred_pad[1][1],
-                    single_pred_pad[2][0] : single_pred.shape[2] - single_pred_pad[2][1],
-                ]
-                # Insert into the data
-                tgen.insert_patch_in_file(single_pred, patch_in_data[i])
+                for i in range(pred.shape[0]):
+                    # Remove padding if added
+                    single_pred = pred[i]
+                    single_pred_pad = added_pad[i]
+                    single_pred = single_pred[
+                        single_pred_pad[0][0] : single_pred.shape[0] - single_pred_pad[0][1],
+                        single_pred_pad[1][0] : single_pred.shape[1] - single_pred_pad[1][1],
+                        single_pred_pad[2][0] : single_pred.shape[2] - single_pred_pad[2][1],
+                    ]
+                    # Insert into the data
+                    tgen.insert_patch_in_file(single_pred, patch_in_data[i])
 
-        tgen.close_open_files()
+                    self.after_one_patch_prediction_by_chunks(single_pred, patch_in_data[i])
+
+            tgen.close_open_files()
+                
+        self.after_all_patch_prediction_by_chunks()
 
         # Wait until all threads are done so the main thread can create the full size image
         if self.cfg.SYSTEM.NUM_GPUS > 1:
@@ -1801,7 +1833,9 @@ class Base_Workflow(metaclass=ABCMeta):
         # By chunks
         for metric in self.stats["by_chunks"]:
             self.stats["by_chunks"][metric] = (
-                self.stats["by_chunks"][metric] / self.stats["patch_by_batch_counter"] if self.stats["patch_by_batch_counter"] != 0 else 0
+                self.stats["by_chunks"][metric] / self.stats["patch_by_batch_counter"]
+                if self.stats["patch_by_batch_counter"] != 0
+                else 0
             )
 
         if self.post_processing["per_image"]:
@@ -1907,68 +1941,15 @@ class Base_Workflow(metaclass=ABCMeta):
         """
         raise NotImplementedError
 
-    def after_merge_patches_by_chunks_proccess_entire_pred(self, filename):
-        """
-        Place any code that needs to be done after merging all predicted patches into the original image
-        but in the process made chunk by chunk. This function will operate over the entire predicted
-        image.
-
-        Parameters
-        ----------
-        filename : List of str
-            Filename of the predicted image H5/Zarr.
-        """
-        # Load H5/Zarr and convert it into numpy array
-        pred_file, pred = read_chunked_data(filename)
-        pred = np.squeeze(np.array(pred, dtype=self.dtype))
-        if self.cfg.TEST.BY_CHUNKS.FORMAT == "h5":
-            pred_file.close()
-
-        # Adjust shape
-        if pred.ndim < 3:
-            raise ValueError("Read image seems to be 2D: {}. Path: {}".format(pred.shape, filename))
-        if pred.ndim == 3:
-            # Ensure Z axis is always in the first position
-            min_val = min(pred.shape)
-            z_pos = pred.shape.index(min_val)
-            if z_pos != 0:
-                new_pos = [
-                    z_pos,
-                ] + [x for x in range(3) if x != z_pos]
-                pred = pred.transpose(new_pos)
-
-            pred = np.expand_dims(pred, -1)
-        else:
-            # Ensure channel axis is always in the first position (assuming Z is already set)
-            min_val = min(pred.shape)
-            channel_pos = pred.shape.index(min_val)
-            if channel_pos != 3:
-                new_pos = [x for x in range(4) if x != channel_pos] + [
-                    channel_pos,
-                ]
-                pred = pred.transpose(new_pos)
-
-        if pred.ndim == 4:
-            pred = np.expand_dims(pred, 0)
-
-        self.after_merge_patches(pred)
-
     @abstractmethod
-    def after_merge_patches_by_chunks_proccess_patch(self, filename):
+    def after_all_patch_prediction_by_chunks(self):
         """
-        Place any code that needs to be done after merging all predicted patches into the original image
-        but in the process made chunk by chunk. This function will operate patch by patch defined by
-        ``DATA.PATCH_SIZE``.
-
-        Parameters
-        ----------
-        filename : List of str
-            Filename of the predicted image H5/Zarr.
+        Place any code that needs to be done after predicting all the patches, one by one, in the "by chunks" setting.
         """
         raise NotImplementedError
 
     @abstractmethod
-    def after_full_image(self, pred):
+    def after_full_image(self, pred: NDArray):
         """
         Place here any code that must be executed after generating the prediction by supplying the entire image to the model.
         To enable this, the model should be convolutional, and the image(s) should be in a 2D format. Using 3D images as
@@ -1976,7 +1957,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
         Parameters
         ----------
-        pred : Torch Tensor
+        pred : NDArray
             Model prediction.
         """
         raise NotImplementedError

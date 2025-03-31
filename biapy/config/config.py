@@ -1419,6 +1419,9 @@ class Config:
         _C.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK = os.path.join(
             _C.PATHS.RESULT_DIR.PATH, "per_image_local_max_check"
         )
+        _C.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING = os.path.join(
+            _C.PATHS.RESULT_DIR.PATH, "per_image_local_max_check_post_processing"
+        )
         _C.PATHS.RESULT_DIR.DET_ASSOC_POINTS = os.path.join(_C.PATHS.RESULT_DIR.PATH, "point_associations")
         _C.PATHS.RESULT_DIR.INST_ASSOC_POINTS = os.path.join(_C.PATHS.RESULT_DIR.PATH, "instance_associations")
         # Path to store the BMZ model created 

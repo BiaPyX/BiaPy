@@ -15,6 +15,7 @@ from biapy.engine.metrics import (
     DiceBCELoss,
     DiceLoss,
 )
+from biapy.data.dataset import PatchCoords
 
 
 class Semantic_Segmentation_Workflow(Base_Workflow):
@@ -212,7 +213,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         # Convert first to 0-255 range if uint16
         if in_img.dtype == torch.float32:
             if torch.max(in_img) > 1:
-                in_img = (self.torchvision_norm.apply_image_norm(in_img)[0] * 255).to(torch.uint8)
+                in_img = (self.torchvision_norm.apply_image_norm(in_img)[0] * 255).to(torch.uint8)  # type: ignore
             in_img = in_img.to(torch.uint8)
 
         # Apply TorchVision pre-processing
@@ -342,26 +343,33 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
             verbose=self.cfg.TEST.VERBOSE,
         )
 
-    def after_merge_patches_by_chunks_proccess_patch(self, filename):
+    def after_all_patch_prediction_by_chunks(self):
         """
-        Place any code that needs to be done after merging all predicted patches into the original image
-        but in the process made chunk by chunk. This function will operate patch by patch defined by
-        ``DATA.PATCH_SIZE``.
-
-        Parameters
-        ----------
-        filename : List of str
-            Filename of the predicted image H5/Zarr.
+        Place any code that needs to be done after predicting all the patches, one by one, in the "by chunks" setting.
         """
         pass
 
-    def after_full_image(self, pred):
+    def after_one_patch_prediction_by_chunks(self, patch: NDArray, patch_in_data: PatchCoords):
+        """
+        Place any code that needs to be done after predicting one patch in "by chunks" setting.
+
+        Parameters
+        ----------
+        patch : NDArray
+            Predicted patch.
+
+        patch_in_data : PatchCoords
+            Global coordinates of the patch.
+        """
+        pass
+
+    def after_full_image(self, pred: NDArray):
         """
         Steps that must be executed after generating the prediction by supplying the entire image to the model.
 
         Parameters
         ----------
-        pred : Torch Tensor
+        pred : NDArray
             Model prediction.
         """
         # Save simple binarization of predictions

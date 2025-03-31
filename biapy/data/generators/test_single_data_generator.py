@@ -132,9 +132,9 @@ class test_single_data_generator(Dataset):
         self.norm_module = norm_module
         # Check if a division is required
         img, _, _, sample_extra_info, _ = self.load_sample(0)
-        if "img_file_to_close" in sample_extra_info:
+        if "img_file_to_close" in sample_extra_info and isinstance(sample_extra_info["img_file_to_close"], h5py.File):
             sample_extra_info["img_file_to_close"].close()
-        if "mask_file_to_close" in sample_extra_info:
+        if "mask_file_to_close" in sample_extra_info and isinstance(sample_extra_info["mask_file_to_close"], h5py.File):
             sample_extra_info["mask_file_to_close"].close()
         self.norm_module.orig_dtype = img.dtype if isinstance(img, np.ndarray) else "Zarr"  # type: ignore
 

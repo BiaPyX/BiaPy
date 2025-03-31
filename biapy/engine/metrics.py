@@ -10,6 +10,7 @@ import torchvision.transforms as T
 from pytorch_msssim import SSIM
 import torch.nn.functional as F
 import torch.nn as nn
+from typing import Dict, Optional, List
 
 
 def jaccard_index_numpy(y_true, y_pred):
@@ -663,7 +664,7 @@ def detection_metrics(
     true_classes=None,
     pred_classes=None,
     tolerance=10,
-    voxel_size=(1, 1, 1),
+    resolution: List[int|float]=[1, 1, 1],
     bbox_to_consider=[],
     verbose=False,
 ):
@@ -687,7 +688,7 @@ def detection_metrics(
     tolerance : optional, int
         Maximum distance far away from a GT point to consider a point as a true positive.
 
-    voxel_size : List of floats
+    resolution : List of int/float
         Weights to be multiply by each axis. Useful when dealing with anysotropic data to reduce the distance value
         on the axis with less resolution. E.g. ``(1,1,0.5)``.
 
@@ -734,9 +735,9 @@ def detection_metrics(
     TP_not_considered = 0
     if len(_true) > 0:
         # Multiply each axis for the its real value
-        for i in range(len(voxel_size)):
-            _true[:, i] *= voxel_size[i]
-            _pred[:, i] *= voxel_size[i]
+        for i in range(len(resolution)):
+            _true[:, i] *= resolution[i]
+            _pred[:, i] *= resolution[i]
 
         # Create cost matrix
         distances = distance_matrix(_pred, _true)

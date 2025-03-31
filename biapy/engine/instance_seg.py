@@ -1,12 +1,13 @@
 import os
 import torch
+import h5py
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from skimage.segmentation import clear_border
 from skimage.transform import resize
 import torch.distributed as dist
-from typing import Dict, Optional
+from typing import Dict, Optional, List, Tuple, Any
 from numpy.typing import NDArray
 from scipy.spatial import distance_matrix
 
@@ -18,6 +19,7 @@ from biapy.data.post_processing.post_processing import (
     repare_large_blobs,
     apply_binary_mask,
     create_synapses,
+    remove_close_points,
 )
 from biapy.data.pre_processing import create_instance_channels
 from biapy.utils.matching import matching, wrapper_matching_dataset_lazy
@@ -27,9 +29,17 @@ from biapy.engine.metrics import (
     multiple_metrics,
 )
 from biapy.engine.base_workflow import Base_Workflow
-from biapy.utils.misc import is_main_process, is_dist_avail_and_initialized, to_pytorch_format, MetricLogger
+from biapy.utils.misc import (
+    is_main_process,
+    get_rank,
+    is_dist_avail_and_initialized,
+    to_pytorch_format,
+    to_numpy_format,
+    MetricLogger,
+)
 from biapy.data.data_manipulation import read_img_as_ndarray, save_tif
-from biapy.data.data_3D_manipulation import read_chunked_data, read_chunked_nested_data
+from biapy.data.data_3D_manipulation import read_chunked_data, read_chunked_nested_data, ensure_3d_shape
+from biapy.data.dataset import PatchCoords
 
 
 class Instance_Segmentation_Workflow(Base_Workflow):
@@ -449,7 +459,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         metric_logger.meters[list_names_to_use[i]].update(val)
         return out_metrics
 
-    def instance_seg_process(self, pred, filenames, out_dir, out_dir_post_proc, resolution):
+    def instance_seg_process(self, pred, filenames, out_dir, out_dir_post_proc):
         """
         Instance segmentation workflow engine for test/inference. Process model's prediction to prepare
         instance segmentation output and calculate metrics.
@@ -496,7 +506,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 fore_dilation_radius=self.cfg.PROBLEM.INSTANCE_SEG.FORE_DILATION_RADIUS,
                 rmv_close_points=self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS,
                 remove_close_points_radius=self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS,
-                resolution=resolution,
+                resolution=self.resolution,
                 save_dir=check_wa,
                 watershed_by_2d_slices=self.cfg.PROBLEM.INSTANCE_SEG.WATERSHED_BY_2D_SLICES,
             )
@@ -754,7 +764,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 w_pred = w_pred[0]
             w_pred, d_result = measure_morphological_props_and_filter(
                 w_pred,
-                resolution,
+                self.resolution,
                 filter_instances=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.ENABLE,
                 properties=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS,
                 prop_values=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.VALUES,
@@ -980,7 +990,13 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
         return results, results_post_proc, results_class, results_class_post_proc
 
-    def synapse_seg_process(self, pred, filenames, out_dir, out_dir_post_proc, resolution):
+    def synapse_seg_process(
+        self,
+        pred: NDArray,
+        filenames: Optional[List[str]] = None,
+        out_dir: Optional[str] = None,
+        out_dir_post_proc: Optional[str] = None,
+    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
         Synapse segmentation workflow engine for test/inference. Process model's prediction to prepare
         synapse segmentation output and calculate metrics.
@@ -996,7 +1012,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         out_dir : path
             Output directory to save the instances.
 
-        out_dir_post_proc : path
+        out_dir_post_proc : str
             Output directory to save the post-processed instances.
         """
         assert pred.ndim == 4, f"Prediction doesn't have 4 dim: {pred.shape}"
@@ -1011,12 +1027,13 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             min_distance=1,
             exclude_border=False,
         )
-        save_tif(
-            np.expand_dims(pred, 0),
-            out_dir,
-            filenames,
-            verbose=self.cfg.TEST.VERBOSE,
-        )
+        if out_dir is not None:
+            save_tif(
+                np.expand_dims(pred, 0),
+                out_dir,
+                filenames,
+                verbose=self.cfg.TEST.VERBOSE,
+            )
 
         total_pre_points = len([x for x in d_result["tag"] if x == "pre"])
         pre_points = np.array(d_result["points"][:total_pre_points])
@@ -1038,12 +1055,13 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         )
 
         # Save just the points and their probabilities
-        pre_points_df.to_csv(
-            os.path.join(
-                out_dir,
-                "pred_pre_locations.csv",
+        if out_dir is not None:
+            pre_points_df.to_csv(
+                os.path.join(
+                    out_dir,
+                    "pred_pre_locations.csv",
+                )
             )
-        )
 
         total_post_points = len(d_result) - total_pre_points
         post_points = np.array(d_result["points"][total_post_points:])
@@ -1065,59 +1083,31 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         )
 
         # Save just the points and their probabilities
-        post_points_df.to_csv(
-            os.path.join(
-                out_dir,
-                "pred_post_locations.csv",
-            )
-        )
-
-        if len(d_result["points"]) > 0:
-            _true = np.array(pre_points, dtype=np.float32)
-            _pred = np.array(post_points, dtype=np.float32)
-            # Create cost matrix
-            distances = distance_matrix(_pred, _true)
-
-            pres, posts = []
-            for n, col in enumerate(range(distances.shape[0])):
-                closest_pre_point = np.argmax(distances[col])
-                pres.append(closest_pre_point)
-                posts.append(n)
-
-            pre_post_map_df = pd.DataFrame(
-                zip(
-                    pres,
-                    posts,
-                ),
-                columns=[
-                    "pre_id",
-                    "post_id",
-                ],
-            )
-
-            pre_post_map_df.to_csv(
+        if out_dir is not None:
+            post_points_df.to_csv(
                 os.path.join(
                     out_dir,
-                    "pre_post_mapping.csv",
+                    "pred_post_locations.csv",
                 )
             )
-        else:
-            if self.cfg.TEST.VERBOSE:
-                print("No point found to calculate the metrics!")
 
         ###################
         # Post-processing #
         ###################
         if self.post_processing["instance_post"]:
+            print("TODO: post-processing")
             if self.cfg.PROBLEM.NDIM == "2D":
                 pred = pred[0]
 
-            save_tif(
-                np.expand_dims(np.expand_dims(pred, -1), 0),
-                out_dir_post_proc,
-                filenames,
-                verbose=self.cfg.TEST.VERBOSE,
-            )
+            if out_dir_post_proc is not None:
+                save_tif(
+                    np.expand_dims(np.expand_dims(pred, -1), 0),
+                    out_dir_post_proc,
+                    filenames,
+                    verbose=self.cfg.TEST.VERBOSE,
+                )
+
+        return pre_points_df, post_points_df
 
     def process_test_sample(self):
         """
@@ -1138,6 +1128,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             ##################
             # Make the prediction
             pred = self.model_call_func(self.current_sample["X"])
+            pred = to_numpy_format(pred, self.axes_order_back)
             del self.current_sample["X"]
 
             # In Torchvision the output is a collection of bboxes so there is nothing else to do here
@@ -1175,18 +1166,12 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             if self.cfg.PROBLEM.NDIM == "3D":
                 pred = pred[0]
             if not self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
-                resolution = (
-                    self.cfg.DATA.TEST.RESOLUTION
-                    if len(self.cfg.DATA.TEST.RESOLUTION) == 2
-                    else self.cfg.DATA.TEST.RESOLUTION[1:]
-                )
                 if self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
                     r, r_post, rcls, rcls_post = self.instance_seg_process(
                         pred,
                         [self.current_sample["filename"]],
                         self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
                         self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,
-                        resolution,
                     )
                     if r:
                         self.all_matching_stats_merge_patches.append(r)
@@ -1202,52 +1187,295 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         [self.current_sample["filename"]],
                         self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
                         self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,
-                        resolution,
                     )
         else:
             raise NotImplementedError
 
-    def after_merge_patches_by_chunks_proccess_patch(self, filename):
+    def after_one_patch_prediction_by_chunks(self, patch: NDArray, patch_in_data: PatchCoords):
         """
-        Place any code that needs to be done after merging all predicted patches into the original image
-        but in the process made chunk by chunk. This function will operate patch by patch defined by
-        ``DATA.PATCH_SIZE``.
+        Place any code that needs to be done after predicting one patch in "by chunks" setting.
 
         Parameters
         ----------
-        filename : List of str
-            Filename of the predicted image H5/Zarr.
+        patch : NDArray
+            Predicted patch.
+
+        patch_in_data : PatchCoords
+            Global coordinates of the patch.
         """
         if self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
             pass
         else:  # synapses
-            import pdb; pdb.set_trace()
+            pre_points_df, post_points_df = self.synapse_seg_process(patch)
 
-    def after_full_image(self, pred):
+            if pre_points_df is not None:
+                # Add the patch shift to the detected coordinates so they become into global coords
+                pre_points_df["axis-0"] = pre_points_df["axis-0"] + patch_in_data.z_start
+                pre_points_df["axis-1"] = pre_points_df["axis-1"] + patch_in_data.y_start
+                pre_points_df["axis-2"] = pre_points_df["axis-2"] + patch_in_data.x_start
+
+            if post_points_df is not None:
+                # Add the patch shift to the detected coordinates so they become into global coords
+                post_points_df["axis-0"] = post_points_df["axis-0"] + patch_in_data.z_start
+                post_points_df["axis-1"] = post_points_df["axis-1"] + patch_in_data.y_start
+                post_points_df["axis-2"] = post_points_df["axis-2"] + patch_in_data.x_start
+
+            assert isinstance(self.all_pred, list)
+            self.all_pred.append([pre_points_df, post_points_df])
+
+    def after_all_patch_prediction_by_chunks(self):
+        """
+        Place any code that needs to be done after predicting all the patches, one by one, in the "by chunks" setting.
+        """
+        assert isinstance(self.all_pred, list) and isinstance(self.all_gt, list)
+        if self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
+            if self.cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE == "chunk_by_chunk":
+                raise NotImplementedError
+            else:
+                # Load H5/Zarr and convert it into numpy array
+                pred_file, pred = read_chunked_data(self.current_sample["filename"])
+                pred = np.squeeze(np.array(pred, dtype=self.dtype))
+                if isinstance(pred_file, h5py.File):
+                    pred_file.close()
+
+                pred = ensure_3d_shape(pred, self.current_sample["filename"])
+
+                self.after_merge_patches(pred)
+        else:
+            # In this case we need only to merge all local points so it will be done by the main thread. The rest will wait
+            if is_main_process():
+                if not self.cfg.TEST.REUSE_PREDICTIONS:
+                    # For synapses we need to map the pre to the post points. It needs to be done here and not patch by patch as
+                    # some pre points may lay in other chunks of the data.
+                    all_pre_dfs, all_post_dfs = [], []
+                    pre_id_counter, post_id_counter = 0, 0
+                    for pre_df, post_dt in self.all_pred:
+                        if len(pre_df["pre_id"]) > 0:
+                            pre_df["pre_id"] = pre_df["pre_id"] + pre_id_counter
+                            pre_id_counter += len(pre_df["pre_id"])
+                            all_pre_dfs.append(pre_df)
+                        if len(post_dt["post_id"]) > 0:
+                            post_dt["post_id"] = post_dt["post_id"] + post_id_counter
+                            post_id_counter += len(post_dt["post_id"])
+                            all_post_dfs.append(post_dt)
+
+                    pre_points_df = pd.concat(all_pre_dfs, ignore_index=True)
+                    post_points_df = pd.concat(all_post_dfs, ignore_index=True)
+
+                    # Save then the pre and post sites separately
+                    os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, exist_ok=True)
+                    pre_points_df.to_csv(
+                        os.path.join(
+                            self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
+                            "pred_pre_locations.csv",
+                        ),
+                        index=False,
+                    )
+                    post_points_df.to_csv(
+                        os.path.join(
+                            self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
+                            "pred_post_locations.csv",
+                        ),
+                        index=False,
+                    )
+
+                    # Create coordinate arrays
+                    pre_points, post_points = [], []
+                    for coord in zip(pre_points_df["axis-0"], pre_points_df["axis-1"], pre_points_df["axis-2"]):
+                        pre_points.append(list(coord))
+                    for coord in zip(post_points_df["axis-0"], post_points_df["axis-1"], post_points_df["axis-2"]):
+                        post_points.append(list(coord))
+                    pre_points = np.array(pre_points)
+                    post_points = np.array(post_points)
+
+                    pre_post_mapping = {}
+                    pres, posts = [], []
+                    pre_ids = pre_points_df["pre_id"].to_list()
+                    if len(pre_points) > 0:
+                        for i in range(len(pre_points)):
+                            pre_post_mapping[pre_ids[i]] = []
+
+                        # Match each post with a pre
+                        distances = distance_matrix(post_points, pre_points)
+                        for i in range(len(post_points)):
+                            closest_pre_point = np.argmax(distances[i])
+                            closest_pre_point = pre_ids[closest_pre_point]
+                            pre_post_mapping[closest_pre_point].append(i)
+
+                        # Create pre/post lists so we can create the final dataframe
+                        for i in pre_post_mapping.keys():
+                            if len(pre_post_mapping[i]) > 0:
+                                for post_site in pre_post_mapping[i]:
+                                    pres.append(i)
+                                    posts.append(post_site)
+                            else:
+                                # For those pre points that do not have any post points assigned just put a -1 value
+                                pres.append(i)
+                                posts.append(-1)
+                    else:
+                        if self.cfg.TEST.VERBOSE:
+                            print("No pre synaptic points found!")
+
+                    # Create a mapping dataframe
+                    pre_post_map_df = pd.DataFrame(
+                        zip(
+                            pres,
+                            posts,
+                        ),
+                        columns=[
+                            "pre_id",
+                            "post_id",
+                        ],
+                    )
+
+                    pre_post_map_df.to_csv(
+                        os.path.join(
+                            self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
+                            "pre_post_mapping.csv",
+                        ),
+                        index=False,
+                    )
+                else:
+                    # Read the dataframes
+                    pre_points_df = pd.read_csv(
+                        os.path.join(
+                            self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
+                            "pred_pre_locations.csv",
+                        )
+                    )
+                    post_points_df = pd.read_csv(
+                        os.path.join(
+                            self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
+                            "pred_post_locations.csv",
+                        )
+                    )
+                    pre_post_map_df = pd.read_csv(
+                        os.path.join(
+                            self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
+                            "pre_post_mapping.csv",
+                        )
+                    )
+
+                    # Create coordinate arrays
+                    pre_points, post_points = [], []
+                    for coord in zip(pre_points_df["axis-0"], pre_points_df["axis-1"], pre_points_df["axis-2"]):
+                        pre_points.append(list(coord))
+                    for coord in zip(post_points_df["axis-0"], post_points_df["axis-1"], post_points_df["axis-2"]):
+                        post_points.append(list(coord))
+                    pre_points = np.array(pre_points)
+                    post_points = np.array(post_points)
+
+                # Remove close points
+                if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS:
+                    pre_points, pre_dropped_pos = remove_close_points(  # type: ignore
+                        pre_points,
+                        self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS,
+                        self.resolution,
+                        ndim=self.dims,
+                        return_drops=True,
+                    )
+                    pre_points_df.drop(pre_points_df.index[pre_dropped_pos], inplace=True)
+                    post_points, post_dropped_pos = remove_close_points(  # type: ignore
+                        post_points,
+                        self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS,
+                        self.resolution,
+                        ndim=self.dims,
+                        return_drops=True,
+                    )
+                    post_points_df.drop(post_points_df.index[post_dropped_pos], inplace=True)
+
+                    # Save filtered stats
+                    os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING, exist_ok=True)
+                    pre_points_df.to_csv(
+                        os.path.join(
+                            self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
+                            "pred_pre_locations.csv",
+                        ),
+                        index=False,
+                    )
+                    post_points_df.to_csv(
+                        os.path.join(
+                            self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
+                            "pred_post_locations.csv",
+                        ),
+                        index=False,
+                    )
+
+                    pre_post_mapping = {}
+                    pres, posts = [], []
+                    pre_ids = pre_points_df["pre_id"].to_list()
+                    if len(pre_points) > 0:
+                        for i in range(len(pre_points)):
+                            pre_post_mapping[pre_ids[i]] = []
+
+                        # Match each post with a pre
+                        distances = distance_matrix(post_points, pre_points)
+                        for i in range(len(post_points)):
+                            closest_pre_point = np.argmax(distances[i])
+                            closest_pre_point = pre_ids[closest_pre_point]
+                            pre_post_mapping[closest_pre_point].append(i)
+
+                        # Create pre/post lists so we can create the final dataframe
+                        for i in pre_post_mapping.keys():
+                            if len(pre_post_mapping[i]) > 0:
+                                for post_site in pre_post_mapping[i]:
+                                    pres.append(i)
+                                    posts.append(post_site)
+                            else:
+                                # For those pre points that do not have any post points assigned just put a -1 value
+                                pres.append(i)
+                                posts.append(-1)
+                    else:
+                        if self.cfg.TEST.VERBOSE:
+                            print("No pre synaptic points found!")
+
+                    # Create a mapping dataframe
+                    pre_post_map_df = pd.DataFrame(
+                        zip(
+                            pres,
+                            posts,
+                        ),
+                        columns=[
+                            "pre_id",
+                            "post_id",
+                        ],
+                    )
+                    pre_post_map_df.to_csv(
+                        os.path.join(
+                            self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
+                            "pre_post_mapping.csv",
+                        ),
+                        index=False,
+                    )
+
+            # Wait until the main thread is done
+            if self.cfg.SYSTEM.NUM_GPUS > 1:
+                if self.cfg.TEST.VERBOSE:
+                    print(f"[Rank {get_rank()} ({os.getpid()})] Process waiting . . . ")
+                if is_dist_avail_and_initialized():
+                    dist.barrier()
+                if self.cfg.TEST.VERBOSE:
+                    print(f"[Rank {get_rank()} ({os.getpid()})] Synched with main thread. Go for the next sample")
+
+    def after_full_image(self, pred: NDArray):
         """
         Steps that must be executed after generating the prediction by supplying the entire image to the model.
 
         Parameters
         ----------
-        pred : Torch Tensor
+        pred : NDArray
             Model prediction.
         """
         if pred.shape[0] == 1:
             if self.cfg.PROBLEM.NDIM == "3D":
                 pred = pred[0]
             if not self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
-                resolution = (
-                    self.cfg.DATA.TEST.RESOLUTION
-                    if len(self.cfg.DATA.TEST.RESOLUTION) == 2
-                    else self.cfg.DATA.TEST.RESOLUTION[1:]
-                )
                 if self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
                     r, r_post, rcls, rcls_post = self.instance_seg_process(
                         pred,
                         [self.current_sample["filename"]],
                         self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_INSTANCES,
                         self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_POST_PROCESSING,
-                        resolution,
                     )
                     if r:
                         self.all_matching_stats.append(r)
@@ -1263,7 +1491,6 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         [self.current_sample["filename"]],
                         self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_INSTANCES,
                         self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_POST_PROCESSING,
-                        resolution,
                     )
         else:
             raise NotImplementedError
@@ -1273,22 +1500,16 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         Steps that must be done after predicting all images.
         """
         super().after_all_images()
+        assert isinstance(self.all_pred, list) and isinstance(self.all_gt, list)
         if self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
             print("Analysing all images as a 3D stack . . .")
-            if type(self.all_pred) is list:
-                self.all_pred = np.concatenate(self.all_pred)
-            resolution = (
-                self.cfg.DATA.TEST.RESOLUTION
-                if len(self.cfg.DATA.TEST.RESOLUTION) == 3
-                else (self.cfg.DATA.TEST.RESOLUTION[0],) + self.cfg.DATA.TEST.RESOLUTION
-            )
+            self.all_pred = np.concatenate(self.all_pred)
             if self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
                 r, r_post, rcls, rcls_post = self.instance_seg_process(
                     self.all_pred,
                     ["3D_stack_instances.tif"],
                     self.cfg.PATHS.RESULT_DIR.AS_3D_STACK,
                     self.cfg.PATHS.RESULT_DIR.AS_3D_STACK_POST_PROCESSING,
-                    resolution,
                 )
                 if r:
                     self.all_matching_stats_as_3D_stack.append(r)
@@ -1304,7 +1525,6 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     ["3D_stack_instances.tif"],
                     self.cfg.PATHS.RESULT_DIR.AS_3D_STACK,
                     self.cfg.PATHS.RESULT_DIR.AS_3D_STACK_POST_PROCESSING,
-                    resolution,
                 )
 
     def normalize_stats(self, image_counter):
@@ -1614,7 +1834,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         # Convert first to 0-255 range if uint16
         if in_img.dtype == torch.float32:
             if torch.max(in_img) > 1:
-                in_img = (self.torchvision_norm.apply_image_norm(in_img)[0] * 255).to(torch.uint8)
+                in_img = (self.torchvision_norm.apply_image_norm(in_img)[0] * 255).to(torch.uint8)  # type: ignore
             in_img = in_img.to(torch.uint8)
 
         # Apply TorchVision pre-processing

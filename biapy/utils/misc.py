@@ -299,8 +299,8 @@ def all_reduce_mean(x):
         return x
 
 
-def to_pytorch_format(x: torch.Tensor | NDArray, axes_order: Tuple, device: torch.device, dtype=torch.float32):
-    if torch.is_tensor(x):
+def to_pytorch_format(x: torch.Tensor | NDArray, axes_order: Tuple, device: torch.device, dtype=torch.float32) -> torch.Tensor | NDArray:
+    if isinstance(x, torch.Tensor) and torch.is_tensor(x):
         return x.to(dtype).permute(axes_order).to(device, non_blocking=True)
     else:
         return torch.from_numpy(x).to(dtype).permute(axes_order).to(device, non_blocking=True)

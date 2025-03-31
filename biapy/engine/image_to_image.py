@@ -27,6 +27,7 @@ from biapy.data.data_3D_manipulation import (
     merge_3D_data_with_overlap,
 )
 from biapy.data.data_manipulation import save_tif
+from biapy.data.dataset import PatchCoords
 
 
 class Image_to_Image_Workflow(Base_Workflow):
@@ -279,7 +280,7 @@ class Image_to_Image_Workflow(Base_Workflow):
 
         # Ensure values between 0 and 1 in training. For test it is  not done as the values are calculated
         # with the original test image values and the unnormalized prediction
-        if train:
+        if train and isinstance(_output, torch.Tensor) and isinstance(_targets, torch.Tensor):
             if self.cfg.DATA.NORMALIZATION.TYPE in ["div", "scale_range"]:
                 _output = torch.clamp(_output, min=0, max=1)
                 _targets = torch.clamp(_targets, min=0, max=1)
@@ -306,6 +307,9 @@ class Image_to_Image_Workflow(Base_Workflow):
                         val = metric(_output, _targets)
                 elif m_name in ["is", "lpips", "fid"]:
                     # As these metrics are going to be calculated at the end we can modify _output and _targets
+                    assert isinstance(_output, torch.Tensor) and isinstance(
+                        _targets, torch.Tensor
+                    ), "'is', 'lpips', 'fid' inputs are expected to be tensors"
                     if _output.shape[1] == 1:
                         _output = torch.cat([_output, _output, _output], dim=1)
                     if _targets.shape[1] == 1:
@@ -471,8 +475,8 @@ class Image_to_Image_Workflow(Base_Workflow):
                     pred = obj
                 del obj
 
+            assert isinstance(pred, np.ndarray)
             if self.cfg.PROBLEM.NDIM == "3D":
-                assert isinstance(pred, np.ndarray)
                 pred = np.expand_dims(pred, 0)
                 if self.current_sample["Y"] is not None:
                     self.current_sample["Y"] = np.expand_dims(self.current_sample["Y"], 0)
@@ -502,12 +506,11 @@ class Image_to_Image_Workflow(Base_Workflow):
                         ]
 
         # Undo normalization
-        assert isinstance(pred, np.ndarray)
         pred = self.norm_module.undo_image_norm(pred, self.current_sample["X_norm"])
+        assert isinstance(pred, np.ndarray)
 
         # Save image
         if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
-            assert isinstance(pred, np.ndarray)
             save_tif(
                 pred,
                 self.cfg.PATHS.RESULT_DIR.PER_IMAGE,
@@ -559,26 +562,33 @@ class Image_to_Image_Workflow(Base_Workflow):
         """
         pass
 
-    def after_merge_patches_by_chunks_proccess_patch(self, filename):
+    def after_all_patch_prediction_by_chunks(self):
         """
-        Place any code that needs to be done after merging all predicted patches into the original image
-        but in the process made chunk by chunk. This function will operate patch by patch defined by
-        ``DATA.PATCH_SIZE``.
+        Place any code that needs to be done after predicting all the patches, one by one, in the "by chunks" setting. 
+        """
+        pass
+    
+    def after_one_patch_prediction_by_chunks(self, patch: NDArray, patch_in_data: PatchCoords):
+        """
+        Place any code that needs to be done after predicting one patch in "by chunks" setting.
 
         Parameters
         ----------
-        filename : List of str
-            Filename of the predicted image H5/Zarr.
+        patch : NDArray
+            Predicted patch.
+
+        patch_in_data : PatchCoords
+            Global coordinates of the patch.
         """
         pass
 
-    def after_full_image(self, pred):
+    def after_full_image(self, pred: NDArray):
         """
         Steps that must be executed after generating the prediction by supplying the entire image to the model.
 
         Parameters
         ----------
-        pred : Torch Tensor
+        pred : NDArray
             Model prediction.
         """
         pass
