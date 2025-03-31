@@ -1174,8 +1174,6 @@ class Config:
         # optimizing memory usage.
         _C.TEST.BY_CHUNKS = CN()
         _C.TEST.BY_CHUNKS.ENABLE = False
-        # Type of format used to write data. Options available: ["H5", "Zarr"]
-        _C.TEST.BY_CHUNKS.FORMAT = "H5"
         # In the process of 'TEST.BY_CHUNKS' you can enable this variable to save the reconstructed prediction as a TIF too.
         # Be aware of this option and be sure that the prediction can fit in you memory entirely, as it is needed for saving as TIF.
         _C.TEST.BY_CHUNKS.SAVE_OUT_TIF = False

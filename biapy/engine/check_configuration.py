@@ -1190,11 +1190,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     if cfg.TEST.ENABLE and cfg.TEST.BY_CHUNKS.ENABLE:
         if cfg.PROBLEM.NDIM == "2D":
             raise ValueError("'TEST.BY_CHUNKS' can not be activated when 'PROBLEM.NDIM' is 2D")
-        assert cfg.TEST.BY_CHUNKS.FORMAT.lower() in [
-            "h5",
-            "zarr",
-        ], "'TEST.BY_CHUNKS.FORMAT' needs to be in ['H5', 'Zarr']"
-        opts.extend(["TEST.BY_CHUNKS.FORMAT", cfg.TEST.BY_CHUNKS.FORMAT.lower()])
         if cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.ENABLE:
             assert cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE in [
                 "chunk_by_chunk",
@@ -2133,6 +2128,9 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict):
         if "CONTRAST_EM_MODE" in old_cfg["AUGMENTOR"]:
             del old_cfg["AUGMENTOR"]["CONTRAST_EM_MODE"]
 
+    if "TEST" in old_cfg and "BY_CHUNKS" in old_cfg["TEST"] and "FORMAT" in old_cfg["TEST"]["BY_CHUNKS"]:
+        del old_cfg["TEST"]["BY_CHUNKS"]["FORMAT"]
+
     if "MODEL" in old_cfg:
         if "BATCH_NORMALIZATION" in old_cfg["MODEL"]:
             if old_cfg["MODEL"]["BATCH_NORMALIZATION"]:
@@ -2193,6 +2191,20 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict):
     except:
         pass
 
+    if "PATHS" in old_cfg:
+        if "MEAN_INFO_FILE" in old_cfg["PATHS"]:
+            del old_cfg["PATHS"]["MEAN_INFO_FILE"]
+        if "STD_INFO_FILE" in old_cfg["PATHS"]:
+            del old_cfg["PATHS"]["STD_INFO_FILE"]
+        if "LWR_X_FILE" in old_cfg["PATHS"]:
+            del old_cfg["PATHS"]["LWR_X_FILE"]
+        if "UPR_X_FILE" in old_cfg["PATHS"]:
+            del old_cfg["PATHS"]["UPR_X_FILE"]
+        if "LWR_Y_FILE" in old_cfg["PATHS"]:
+            del old_cfg["PATHS"]["MEAN_LWR_Y_FILEINFO_FILE"]
+        if "UPR_Y_FILE" in old_cfg["PATHS"]:
+            del old_cfg["PATHS"]["UPR_Y_FILE"]  
+        
     return old_cfg
 
 def diff_between_configs(old_dict: Dict | Config, new_dict: Dict | Config, path: str=""):
