@@ -58,11 +58,7 @@ from biapy.data.data_2D_manipulation import (
     crop_data_with_overlap,
     merge_data_with_overlap,
 )
-from biapy.data.data_3D_manipulation import (
-    crop_3D_data_with_overlap,
-    merge_3D_data_with_overlap,
-    order_dimensions
-)
+from biapy.data.data_3D_manipulation import crop_3D_data_with_overlap, merge_3D_data_with_overlap, order_dimensions
 from biapy.data.data_manipulation import (
     load_and_prepare_train_data,
     load_and_prepare_test_data,
@@ -1352,9 +1348,11 @@ class Base_Workflow(metaclass=ABCMeta):
                 dtype_str=self.dtype_str,
             )
             tgen: chunked_test_pair_data_generator = test_dataset.dataset  # type: ignore
-            
+
             # Get parallel data shape is ZYX
-            _, z_dim, _, y_dim, x_dim = order_dimensions(tgen.X_parallel_data.shape, self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER)
+            _, z_dim, _, y_dim, x_dim = order_dimensions(
+                tgen.X_parallel_data.shape, self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER
+            )
             self.parallel_data_shape = [z_dim, y_dim, x_dim]
 
             for patch_id, obj_list in enumerate(test_dataset):
@@ -1390,12 +1388,14 @@ class Base_Workflow(metaclass=ABCMeta):
             # Wait until all threads are done so the main thread can create the full size image
             if self.cfg.SYSTEM.NUM_GPUS > 1:
                 if self.cfg.TEST.VERBOSE:
-                    print(f"[Rank {get_rank()} ({os.getpid()})] Finished predicting sample. Waiting for all ranks . . .")
+                    print(
+                        f"[Rank {get_rank()} ({os.getpid()})] Finished predicting sample. Waiting for all ranks . . ."
+                    )
                 if is_dist_avail_and_initialized():
                     dist.barrier()
 
             tgen.close_open_files()
-                
+
         self.after_all_patch_prediction_by_chunks()
 
         # Wait until all threads are done so the main thread can create the full size image

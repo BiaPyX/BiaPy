@@ -269,10 +269,10 @@ class chunked_test_pair_data_generator(IterableDataset):
         pad_to_add[2][0] = max(pad_to_add[2][0], self.padding[2])
         pad_to_add[2][1] = max(pad_to_add[2][1], self.padding[2])
 
-        assert (
-            data.shape[:-1] == self.crop_shape[:-1]
-        ), f"Image shape and expected shape differ: {data.shape} vs {self.crop_shape}. " \
-           f"Double check that the data is following '{input_axes}' axis order (set in '{var_tag}')"
+        assert data.shape[:-1] == self.crop_shape[:-1], (
+            f"Image shape and expected shape differ: {data.shape} vs {self.crop_shape}. "
+            f"Double check that the data is following '{input_axes}' axis order (set in '{var_tag}')"
+        )
 
         if self.convert_to_rgb:
             if extract == "image" or (extract == "mask" and self.norm_module.mask_norm == "as_image"):
@@ -313,109 +313,95 @@ class chunked_test_pair_data_generator(IterableDataset):
             self, num_replicas=(n_workers * world_size), rank=(process_rank * n_workers + worker_id), shuffle=False
         )
 
-        for i in sampler:
-            if worker_info is None:
-                self.z_vols_to_process = list(range(self.vols_per_z))
-            else:
-                units = n_workers * world_size
-                vols_per_worker = self.vols_per_z // units
-                first_block = vols_per_worker * i
-                if self.vols_per_z % units > i:
-                    vols_per_worker += 1
-                    extra_z_vols = i
-                else:
-                    extra_z_vols = self.vols_per_z % units
-                self.z_vols_to_process = list(
-                    range(
-                        first_block + extra_z_vols,
-                        min(first_block + extra_z_vols + vols_per_worker, self.vols_per_z),
-                    )
+        for vol_id in sampler:
+            mask = None
+
+            z, y, x = np.unravel_index(vol_id, (self.vols_per_z, self.vols_per_y, self.vols_per_x))
+            z = int(z)
+            y = int(y)
+            x = int(x)
+
+            start_z = max(0, z * self.step_z - self.padding[0])
+            finish_z = min((z + 1) * self.step_z + self.padding[0], self.z_dim)
+            start_y = max(0, y * self.step_y - self.padding[1])
+            finish_y = min((y + 1) * self.step_y + self.padding[1], self.y_dim)
+            start_x = max(0, x * self.step_x - self.padding[2])
+            finish_x = min((x + 1) * self.step_x + self.padding[2], self.x_dim)
+            patch_to_extract = PatchCoords(
+                y_start=start_y,
+                y_end=finish_y,
+                x_start=start_x,
+                x_end=finish_x,
+                z_start=start_z,
+                z_end=finish_z,
+            )
+
+            # The real data that is being processed. This doesn't take into account the adding pad.
+            # This coordinates are useful to know after where to insert the data
+            real_patch_in_data = PatchCoords(
+                z_start=z * self.step_z,
+                z_end=min((z + 1) * self.step_z, self.z_dim),
+                y_start=y * self.step_y,
+                y_end=min((y + 1) * self.step_y, self.y_dim),
+                x_start=x * self.step_x,
+                x_end=min((x + 1) * self.step_x, self.x_dim),
+            )
+
+            img, added_pad = self.extract_and_prepare_sample(z, y, x, patch_to_extract)
+            if self.Y_parallel_data is not None:
+                mask, _ = self.extract_and_prepare_sample(z, y, x, patch_to_extract, extract="mask")
+
+            # Skip processing image
+            discard = False
+            if self.filter_samples:
+                foreground_filter_requested = False
+                for cond in self.filter_props:
+                    if (
+                        "foreground" in cond
+                        or "diff" in cond
+                        or "diff_by_min_max_ratio" in cond
+                        or "diff_by_target_min_max_ratio" in cond
+                        or "target_mean" in cond
+                        or "target_min" in cond
+                        or "target_max" in cond
+                    ):
+                        foreground_filter_requested = True
+                assert self.filter_vals and self.filter_signs
+                discard = sample_satisfy_conds(
+                    img,
+                    self.filter_props,
+                    self.filter_vals,
+                    self.filter_signs,
+                    mask=mask if foreground_filter_requested else None,
                 )
 
-            mask = None
-            for z in self.z_vols_to_process:
-                for y in range(self.vols_per_y):
-                    for x in range(self.vols_per_x):
-                        start_z = max(0, z * self.step_z - self.padding[0])
-                        finish_z = min((z + 1) * self.step_z + self.padding[0], self.z_dim)
-                        start_y = max(0, y * self.step_y - self.padding[1])
-                        finish_y = min((y + 1) * self.step_y + self.padding[1], self.y_dim)
-                        start_x = max(0, x * self.step_x - self.padding[2])
-                        finish_x = min((x + 1) * self.step_x + self.padding[2], self.x_dim)
-                        patch_to_extract = PatchCoords(
-                            y_start=start_y,
-                            y_end=finish_y,
-                            x_start=start_x,
-                            x_end=finish_x,
-                            z_start=start_z,
-                            z_end=finish_z,
-                        )
+            if not discard:
+                # Preprocess test data
+                if self.preprocess_data:
+                    img = self.preprocess_data(
+                        self.preprocess_cfg,
+                        x_data=[img],
+                        is_2d=(img.ndim == 3),
+                    )[0]
+                    if self.Y_parallel_data:
+                        mask = self.preprocess_data(
+                            self.preprocess_cfg,
+                            y_data=[mask],
+                            is_2d=(img.ndim == 3),
+                            is_y_mask=True,
+                        )[0]
 
-                        # The real data that is being processed. This doesn't take into account the adding pad.
-                        # This coordinates are useful to know after where to insert the data
-                        real_patch_in_data = PatchCoords(
-                            z_start=z * self.step_z,
-                            z_end=min((z + 1) * self.step_z, self.z_dim),
-                            y_start=y * self.step_y,
-                            y_end=min((y + 1) * self.step_y, self.y_dim),
-                            x_start=x * self.step_x,
-                            x_end=min((x + 1) * self.step_x, self.x_dim),
-                        )
+                # Normalization
+                self.norm_module.set_stats_from_image(img)
+                img, norm_extra_info = self.norm_module.apply_image_norm(img)
+                norm_extra_info = {}
+                if mask is not None:
+                    mask = np.array(mask)
+                    self.norm_module.set_stats_from_mask(mask)
+                    mask, _ = self.norm_module.apply_mask_norm(mask)
+                    assert isinstance(mask, np.ndarray)
 
-                        img, added_pad = self.extract_and_prepare_sample(z, y, x, patch_to_extract)
-                        if self.Y_parallel_data is not None:
-                            mask, _ = self.extract_and_prepare_sample(z, y, x, patch_to_extract, extract="mask")
-
-                        # Skip processing image
-                        discard = False
-                        if self.filter_samples:
-                            foreground_filter_requested = False
-                            for cond in self.filter_props:
-                                if (
-                                    "foreground" in cond
-                                    or "diff" in cond
-                                    or "diff_by_min_max_ratio" in cond
-                                    or "diff_by_target_min_max_ratio" in cond
-                                    or "target_mean" in cond
-                                    or "target_min" in cond
-                                    or "target_max" in cond
-                                ):
-                                    foreground_filter_requested = True
-                            assert self.filter_vals and self.filter_signs
-                            discard = sample_satisfy_conds(
-                                img,
-                                self.filter_props,
-                                self.filter_vals,
-                                self.filter_signs,
-                                mask=mask if foreground_filter_requested else None,
-                            )
-
-                        if not discard:
-                            # Preprocess test data
-                            if self.preprocess_data:
-                                img = self.preprocess_data(
-                                    self.preprocess_cfg,
-                                    x_data=[img],
-                                    is_2d=(img.ndim == 3),
-                                )[0]
-                                if self.Y_parallel_data:
-                                    mask = self.preprocess_data(
-                                        self.preprocess_cfg,
-                                        y_data=[mask],
-                                        is_2d=(img.ndim == 3),
-                                        is_y_mask=True,
-                                    )[0]
-
-                            # Normalization
-                            self.norm_module.set_stats_from_image(img)
-                            img, norm_extra_info = self.norm_module.apply_image_norm(img)
-                            if mask is not None:
-                                mask = np.array(mask)
-                                self.norm_module.set_stats_from_mask(mask)
-                                mask, _ = self.norm_module.apply_mask_norm(mask)
-                                assert isinstance(mask, np.ndarray)
-
-                            yield img, mask, real_patch_in_data, added_pad, norm_extra_info
+                yield img, mask, real_patch_in_data, added_pad, norm_extra_info
 
     def insert_patch_in_file(self, patch: NDArray, patch_coords: PatchCoords):
         """
