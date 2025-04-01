@@ -248,6 +248,7 @@ def insert_patch_in_efficient_file(
     patch_coords: PatchCoords, 
     data_axes_order: str="ZYXC",
     patch_axes_order: str="ZYXC",
+    mode="replace",
 ):
     """
     Loads from ``filepath`` the patch determined by ``patch_coords``.
@@ -263,12 +264,17 @@ def insert_patch_in_efficient_file(
     patch_coords : PatchCoords
         Coordinates of the patch.
 
-    data_axes_order : str
+    data_axes_order : str, optional
         Order of axes of ``data``. E.g. 'TZCYX', 'TZYXC', 'ZCYX', 'ZYXC'.
 
-    patch_axes_order : str
+    patch_axes_order : str, optional
         Order of axes of ``patch``. E.g. 'TZCYX', 'TZYXC', 'ZCYX', 'ZYXC'.
+    
+    mode : str, optional
+        What to do with the patch data when inserting it. Options: ["sum", "replace"]
     """
+    assert mode in ["add", "replace"]
+
     # Adjust slices to calculate where to insert the predicted patch. This slice does not have into account the
     # channel so any of them can be inserted
     slices = (
@@ -297,7 +303,10 @@ def insert_patch_in_efficient_file(
     transpose_order = [x for x in transpose_order if not np.isnan(x)]  # type: ignore
     
     # Insert the patch into the correspoding position
-    data[data_ordered_slices] = patch.transpose(transpose_order) # type: ignore
+    if mode == "replace":
+        data[data_ordered_slices] = patch.transpose(transpose_order) # type: ignore
+    else: # add
+        data[data_ordered_slices] += patch.transpose(transpose_order) # type: ignore
 
 def crop_3D_data_with_overlap(
     data: NDArray,

@@ -544,11 +544,12 @@ def create_chunked_test_generator(
         """
         return (
             # torch.cat([torch.from_numpy(x[0]) for x in data]),
-            np.stack([x[0] for x in data]),
-            np.stack([x[1] for x in data if x is not None]) if len(data) > 0 and data[0][1] is not None else None,
-            [x[2] for x in data],
+            [x[0] for x in data],
+            np.stack([x[1] for x in data]),
+            np.stack([x[2] for x in data if x is not None]) if len(data) > 0 and data[0][2] is not None else None,
             [x[3] for x in data],
             [x[4] for x in data],
+            [x[5] for x in data],
         )
 
     # Set num_workers

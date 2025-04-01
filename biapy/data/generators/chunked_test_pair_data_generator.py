@@ -8,6 +8,7 @@ import zarr
 import numpy as np
 from typing import Tuple, Optional, Dict, List, Callable
 from numpy.typing import NDArray
+from tqdm import tqdm
 
 from biapy.data.data_3D_manipulation import (
     extract_patch_from_efficient_file,
@@ -392,8 +393,8 @@ class chunked_test_pair_data_generator(IterableDataset):
                         )[0]
 
                 # Normalization
-                self.norm_module.set_stats_from_image(img)
-                img, norm_extra_info = self.norm_module.apply_image_norm(img)
+                # self.norm_module.set_stats_from_image(img)
+                # img, norm_extra_info = self.norm_module.apply_image_norm(img)
                 norm_extra_info = {}
                 if mask is not None:
                     mask = np.array(mask)
@@ -401,7 +402,7 @@ class chunked_test_pair_data_generator(IterableDataset):
                     mask, _ = self.norm_module.apply_mask_norm(mask)
                     assert isinstance(mask, np.ndarray)
 
-                yield img, mask, real_patch_in_data, added_pad, norm_extra_info
+                yield vol_id, img, mask, real_patch_in_data, added_pad, norm_extra_info
 
     def insert_patch_in_file(self, patch: NDArray, patch_coords: PatchCoords):
         """
@@ -426,8 +427,11 @@ class chunked_test_pair_data_generator(IterableDataset):
             else:
                 out_data_shape[self.input_axes.index("C")] = patch.shape[-1]
                 out_data_shape = tuple(out_data_shape)
+            self.out_data_shape = out_data_shape
 
-            data_filename = os.path.join(self.out_dir, os.path.splitext(self.filename)[0] + ".zarr")
+            data_filename = os.path.join(
+                self.out_dir, f"rank{get_rank()}_" + os.path.splitext(self.filename)[0] + ".zarr"
+            )
             os.makedirs(self.out_dir, exist_ok=True)
             self.out_file = data_filename
             self.out_data = zarr.open_array(
@@ -446,15 +450,69 @@ class chunked_test_pair_data_generator(IterableDataset):
             patch_axes_order="ZYXC",
         )
 
+    def merge_zarr_parts_into_one(self):
+        """
+        Merges all parts of the Zarr data, created by each rank, into just one file. 
+        """
+        # Creates the final Zarr dataset
+        data_filename = os.path.join(self.out_dir, os.path.splitext(self.filename)[0] + ".zarr")
+        final_data = zarr.open_array(
+            data_filename,
+            shape=self.out_data_shape,
+            mode="w",
+            chunks=self.crop_shape,  # type: ignore
+            dtype=self.dtype_str,
+        )
+
+        for i in tqdm(range(get_world_size())):
+            zarr_of_rank_filename = os.path.join(
+                self.out_dir, f"rank{i}_" + os.path.splitext(self.filename)[0] + ".zarr"
+            )
+            print("[Rank {} ({})] Reading file {}".format(get_rank(), os.getpid(), zarr_of_rank_filename))
+            data = zarr.open_array(zarr_of_rank_filename, mode="r")
+
+            for z in range(math.ceil(data.shape[0] / self.crop_shape[0])):
+                for y in range(math.ceil(data.shape[1] / self.crop_shape[1])):
+                    for x in range(math.ceil(data.shape[2] / self.crop_shape[2])):
+                        coords = PatchCoords(
+                            z_start=z * self.crop_shape[0],
+                            z_end=min((z + 1) * self.crop_shape[0], data.shape[0]),
+                            y_start=y * self.crop_shape[1],
+                            y_end=min((y + 1) * self.crop_shape[1], data.shape[1]),
+                            x_start=x * self.crop_shape[2],
+                            x_end=min((x + 1) * self.crop_shape[2], data.shape[2]),
+                        )
+                        patch = data[
+                            coords.z_start : coords.z_end,
+                            coords.y_start : coords.y_end,
+                            coords.x_start : coords.x_end,
+                        ]
+                        patch = np.array(patch)
+
+                        # If the patch contains something
+                        if patch.max() != patch.min():
+                            insert_patch_in_efficient_file(
+                                data=final_data,
+                                patch=patch,
+                                patch_coords=coords,
+                                data_axes_order=self.out_data_order,
+                                patch_axes_order="ZYXC",
+                                mode="add"
+                            )
+
     def save_parallel_data_as_tif(self):
         """
-        Saves the parallel data (``self.out_data``) as a tiff file.
+        Saves the final zarr into a tiff file.
         """
-        data = np.array(self.out_data)
+        final_zarr_file = os.path.join(self.out_dir, os.path.splitext(self.filename)[0] + ".zarr")
+        data = np.array(zarr.open_array(final_zarr_file, mode="r"))
         data = ensure_3d_shape(data)
         save_tif(np.expand_dims(data, 0), self.out_dir, [os.path.splitext(self.filename)[0] + ".tif"], verbose=True)
 
     def close_open_files(self):
+        """
+        Closes all files that may be open in the generator.
+        """
         # Input data files
         if self.X_parallel_file is not None and isinstance(self.X_parallel_file, h5py.File):
             self.X_parallel_file.close()

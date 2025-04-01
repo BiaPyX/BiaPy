@@ -8,9 +8,8 @@ import argparse
 import numpy as np
 from tqdm import tqdm
 from abc import ABCMeta, abstractmethod
-import torch.multiprocessing as mp
 import torch.distributed as dist
-from typing import Dict, Optional, List, Any
+from typing import Dict, Optional, List
 from numpy.typing import NDArray
 from yacs.config import CfgNode as CN
 
@@ -180,11 +179,6 @@ class Base_Workflow(metaclass=ABCMeta):
 
         self.world_size = get_world_size()
         self.global_rank = get_rank()
-        if self.cfg.TEST.BY_CHUNKS.ENABLE and self.cfg.PROBLEM.NDIM == "3D":
-            maxsize = min(10, self.cfg.SYSTEM.NUM_GPUS * 10)
-            self.output_queue = mp.Queue(maxsize=maxsize)
-            self.input_queue = mp.Queue(maxsize=maxsize)
-            self.extract_info_queue = mp.Queue()
 
         # Test variables
         if self.cfg.TEST.POST_PROCESSING.MEDIAN_FILTER:
@@ -1354,14 +1348,13 @@ class Base_Workflow(metaclass=ABCMeta):
                 tgen.X_parallel_data.shape, self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER
             )
             self.parallel_data_shape = [z_dim, y_dim, x_dim]
-
-            for patch_id, obj_list in enumerate(test_dataset):
-                img, mask, patch_in_data, added_pad, norm_extra_info = obj_list
+            for obj_list in test_dataset:
+                sampler_ids, img, mask, patch_in_data, added_pad, norm_extra_info = obj_list
 
                 if self.cfg.TEST.VERBOSE:
                     print(
                         "[Rank {} ({})] Patch number {} processing patches {} from {}".format(
-                            get_rank(), os.getpid(), patch_id, patch_in_data, self.parallel_data_shape
+                            get_rank(), os.getpid(), sampler_ids, patch_in_data, self.parallel_data_shape
                         )
                     )
 
@@ -1369,6 +1362,10 @@ class Base_Workflow(metaclass=ABCMeta):
                 pred = self.predict_batches_in_test(img, mask, stats_name="by_chunks", disable_tqdm=True)
 
                 for i in range(pred.shape[0]):
+                    # Break the loop as those samples were created just to complete the last batch
+                    if sampler_ids[i] < sampler_ids[0]:
+                        break
+
                     # Remove padding if added
                     single_pred = pred[i]
                     single_pred_pad = added_pad[i]
@@ -1382,19 +1379,27 @@ class Base_Workflow(metaclass=ABCMeta):
 
                     self.after_one_patch_prediction_by_chunks(single_pred, patch_in_data[i])
 
-            if self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF and is_main_process():
-                tgen.save_parallel_data_as_tif()
-
             # Wait until all threads are done so the main thread can create the full size image
-            if self.cfg.SYSTEM.NUM_GPUS > 1:
+            if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
                 if self.cfg.TEST.VERBOSE:
                     print(
-                        f"[Rank {get_rank()} ({os.getpid()})] Finished predicting sample. Waiting for all ranks . . ."
+                        f"[Rank {get_rank()} ({os.getpid()})] Finished predicting patches. Waiting for all ranks . . ."
                     )
-                if is_dist_avail_and_initialized():
-                    dist.barrier()
+                dist.barrier()
+
+                if is_main_process():
+                    tgen.merge_zarr_parts_into_one()
+
+                if self.cfg.TEST.VERBOSE:
+                    print(
+                        f"[Rank {get_rank()} ({os.getpid()})] Waiting for master rank to create the final Zarr from all the parts . . ."
+                    )
+                dist.barrier()
 
             tgen.close_open_files()
+
+            if self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF and is_main_process():
+                tgen.save_parallel_data_as_tif()
 
         self.after_all_patch_prediction_by_chunks()
 
