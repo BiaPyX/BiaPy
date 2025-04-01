@@ -897,9 +897,6 @@ class Detection_Workflow(Base_Workflow):
             # Remove points from dataframe
             df = df.drop(dropped_pos)
 
-        # Save large csv with all point of all patches
-        df = df.sort_values(by=["file"])
-
         t_dim, z_dim, y_dim, x_dim, c_dim = order_dimensions(
             self.cfg.DATA.PREPROCESS.ZOOM.ZOOM_FACTOR,
             input_order=self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER,
