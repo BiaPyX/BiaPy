@@ -1384,8 +1384,15 @@ class Base_Workflow(metaclass=ABCMeta):
 
                     self.after_one_patch_prediction_by_chunks(single_pred, patch_in_data[i])
 
-            if self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF:
+            if self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF and is_main_process():
                 tgen.save_parallel_data_as_tif()
+
+            # Wait until all threads are done so the main thread can create the full size image
+            if self.cfg.SYSTEM.NUM_GPUS > 1:
+                if self.cfg.TEST.VERBOSE:
+                    print(f"[Rank {get_rank()} ({os.getpid()})] Finished predicting sample. Waiting for all ranks . . .")
+                if is_dist_avail_and_initialized():
+                    dist.barrier()
 
             tgen.close_open_files()
                 
