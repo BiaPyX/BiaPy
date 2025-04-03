@@ -12,11 +12,11 @@ from tqdm import tqdm
 
 from biapy.data.data_3D_manipulation import (
     extract_patch_from_efficient_file,
+    ensure_3d_shape,
     insert_patch_in_efficient_file,
     order_dimensions,
 )
-from biapy.data.data_manipulation import sample_satisfy_conds, save_tif
-from biapy.data.data_3D_manipulation import ensure_3d_shape
+from biapy.data.data_manipulation import sample_satisfy_conds, save_tif, extract_patch_within_image
 from biapy.utils.misc import get_world_size, get_rank
 from biapy.data.dataset import PatchCoords
 from biapy.data.norm import Normalization
@@ -236,17 +236,18 @@ class chunked_test_pair_data_generator(IterableDataset):
             var_tag = "DATA.TEST.INPUT_MASK_AXES_ORDER"
 
         # Extact the patch
-        if extract == "image":
-            data = extract_patch_from_efficient_file(self.X_parallel_data, patch_coords, input_axes)
-        else:  # mask
-            data = extract_patch_from_efficient_file(self.Y_parallel_data, patch_coords, input_axes)
+        data_to_process = self.X_parallel_data if extract == "image" else self.Y_parallel_data
+        if not isinstance(data_to_process, np.ndarray):
+            data = extract_patch_from_efficient_file(data_to_process, patch_coords, input_axes)
+        else:
+            data = extract_patch_within_image(data_to_process, patch_coords, is_3d=True)
 
         # Ensure the shape of the extracted patch is as the crop_shape
-        pad_z_left = self.padding[0] if z * self.step_z - self.padding[0] < 0 else 0
+        pad_z_left = abs(z * self.step_z - self.padding[0]) if z * self.step_z - self.padding[0] < 0 else 0
         pad_z_right = self.crop_shape[0] - (patch_coords.z_end - patch_coords.z_start) - pad_z_left
-        pad_y_left = self.padding[1] if y * self.step_y - self.padding[1] < 0 else 0
+        pad_y_left = abs(y * self.step_y - self.padding[1]) if y * self.step_y - self.padding[1] < 0 else 0
         pad_y_right = self.crop_shape[1] - (patch_coords.y_end - patch_coords.y_start) - pad_y_left
-        pad_x_left = self.padding[2] if x * self.step_x - self.padding[2] < 0 else 0
+        pad_x_left = abs(x * self.step_x - self.padding[2]) if x * self.step_x - self.padding[2] < 0 else 0
         pad_x_right = self.crop_shape[2] - (patch_coords.x_end - patch_coords.x_start) - pad_x_left
         pad_to_add = [
             [pad_z_left, pad_z_right],
@@ -452,7 +453,7 @@ class chunked_test_pair_data_generator(IterableDataset):
 
     def merge_zarr_parts_into_one(self):
         """
-        Merges all parts of the Zarr data, created by each rank, into just one file. 
+        Merges all parts of the Zarr data, created by each rank, into just one file.
         """
         # Creates the final Zarr dataset
         data_filename = os.path.join(self.out_dir, os.path.splitext(self.filename)[0] + ".zarr")
@@ -497,7 +498,7 @@ class chunked_test_pair_data_generator(IterableDataset):
                                 patch_coords=coords,
                                 data_axes_order=self.out_data_order,
                                 patch_axes_order="ZYXC",
-                                mode="add"
+                                mode="add",
                             )
 
     def save_parallel_data_as_tif(self):
