@@ -18,7 +18,6 @@ def train_one_epoch(
     model: nn.Module | nn.parallel.DistributedDataParallel,
     model_call_func: Callable,
     loss_function: Callable,
-    activations: Callable,
     metric_function: Callable,
     prepare_targets: Callable,
     data_loader: DataLoader,
@@ -63,8 +62,7 @@ def train_one_epoch(
             )
 
         # Pass the images through the model
-        # TODO: control autocast and mixed precision
-        outputs = activations(model_call_func(batch, is_train=True), training=True)
+        outputs = model_call_func(batch, is_train=True)
         loss = loss_function(outputs, targets)
 
         loss_value = loss.item()
@@ -115,7 +113,6 @@ def evaluate(
     model: nn.Module | nn.parallel.DistributedDataParallel,
     model_call_func: Callable,
     loss_function: Callable,
-    activations: Callable,
     metric_function: Callable,
     prepare_targets: Callable,
     epoch: int,
@@ -138,7 +135,7 @@ def evaluate(
         targets = prepare_targets(targets, images)
 
         # Pass the images through the model
-        outputs = activations(model_call_func(images, is_train=True), training=True)
+        outputs = model_call_func(images, is_train=True)
         loss = loss_function(outputs, targets)
 
         # Calculate the metrics

@@ -406,8 +406,6 @@ class Image_to_Image_Workflow(Base_Workflow):
                         self.current_sample["X"][k],
                         axes_order_back=self.axes_order_back,
                         pred_func=self.model_call_func,
-                        axes_order=self.axes_order,
-                        device=self.device,
                     )
                 else:
                     p = ensemble16_3d_predictions(
@@ -415,10 +413,7 @@ class Image_to_Image_Workflow(Base_Workflow):
                         batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
                         axes_order_back=self.axes_order_back,
                         pred_func=self.model_call_func,
-                        axes_order=self.axes_order,
-                        device=self.device,
                     )
-                p = self.apply_model_activations(p)
                 p = to_numpy_format(p, self.axes_order_back)
                 if "pred" not in locals():
                     pred = np.zeros((self.current_sample["X"].shape[0],) + p.shape[1:], dtype=self.dtype)
@@ -432,8 +427,8 @@ class Image_to_Image_Workflow(Base_Workflow):
                     if (k + 1) * self.cfg.TRAIN.BATCH_SIZE < self.current_sample["X"].shape[0]
                     else self.current_sample["X"].shape[0]
                 )
-                p = self.model(self.current_sample["X"][k * self.cfg.TRAIN.BATCH_SIZE : top])
-                p = to_numpy_format(self.apply_model_activations(p), self.axes_order_back)
+                p = self.model_call_func(self.current_sample["X"][k * self.cfg.TRAIN.BATCH_SIZE : top])
+                p = to_numpy_format(p, self.axes_order_back)
                 if "pred" not in locals():
                     pred = np.zeros((self.current_sample["X"].shape[0],) + p.shape[1:], dtype=self.dtype)
                 pred[k * self.cfg.TRAIN.BATCH_SIZE : top] = p

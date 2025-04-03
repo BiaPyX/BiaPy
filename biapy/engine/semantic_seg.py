@@ -219,7 +219,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         # Apply TorchVision pre-processing
         in_img = self.torchvision_preprocessing(in_img)
 
-        pred = self.model(in_img)
+        pred = self.model_call_func(in_img)
         key = "aux" if "aux" in pred else "out"
 
         # Save masks

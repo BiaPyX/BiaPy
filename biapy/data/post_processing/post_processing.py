@@ -525,11 +525,9 @@ def ensemble8_2d_predictions(
     o_img: NDArray,
     pred_func: Callable,
     axes_order_back: Tuple[int,...],
-    axes_order: Tuple[int,...],
-    device: torch.device,
     batch_size_value: int=1,
     mode="mean",
-) -> NDArray | Tuple[NDArray, NDArray]:
+) -> NDArray:
     """
     Outputs the mean prediction of a given image generating its 8 possible rotations and flips.
 
@@ -543,12 +541,6 @@ def ensemble8_2d_predictions(
 
     axes_order_back : tuple
         Axis order to convert from tensor to numpy. E.g. ``(0,3,1,2)``.
-
-    axes_order : tuple
-        Axis order to convert from numpy to tensor. E.g. ``(0,3,1,2)``.
-
-    device : Torch device
-        Device used.
 
     batch_size_value : int, optional
         Batch size value.
@@ -618,17 +610,9 @@ def ensemble8_2d_predictions(
         top = (i + 1) * batch_size_value if (i + 1) * batch_size_value < total_img.shape[0] else total_img.shape[0]
         r_aux = pred_func(total_img[i * batch_size_value : top])
 
-        # Take just the last output of the network in case it returns more than one output
-        channel_split = None
+        # Take just the first output of the network in case it returns more than one output
         if isinstance(r_aux, list):
-            channel_split = r_aux[0].shape[1]
-            r_aux = np.concatenate(
-                [
-                    to_numpy_format(r_aux[0], axes_order_back),
-                    to_numpy_format(r_aux[1], axes_order_back),
-                ],
-                axis=-1,
-            )
+            r_aux = to_numpy_format(r_aux[0], axes_order_back)
         else:
             r_aux = to_numpy_format(r_aux, axes_order_back)
         _decoded_aug_img.append(r_aux)
@@ -692,24 +676,17 @@ def ensemble8_2d_predictions(
     elif mode == "max":
         funct = np.max
     out = np.expand_dims(funct(out, axis=0), 0)
-    out = to_pytorch_format(out, axes_order, device)
-
     assert isinstance(out, np.ndarray)
-    if channel_split:
-        return out[:, :channel_split], out[:, channel_split:]
-    else:
-        return out
+    return out
 
 
 def ensemble16_3d_predictions(
     vol: NDArray, 
     pred_func: Callable, 
     axes_order_back: Tuple[int,...], 
-    axes_order: Tuple[int,...], 
-    device: torch.device, 
     batch_size_value: int=1, 
     mode: str="mean"
-) -> NDArray | Tuple[NDArray, NDArray]:
+) -> NDArray:
     """
     Outputs the mean prediction of a given image generating its 16 possible rotations and flips.
 
@@ -723,12 +700,6 @@ def ensemble16_3d_predictions(
 
     axes_order_back : tuple
         Axis order to convert from tensor to numpy. E.g. ``(0,3,1,2,4)``.
-
-    axes_order : tuple
-        Axis order to convert from numpy to tensor. E.g. ``(0,3,1,2,4)``.
-
-    device : Torch device
-        Device used.
 
     batch_size_value : int, optional
         Batch size value.
@@ -809,17 +780,9 @@ def ensemble16_3d_predictions(
         top = (i + 1) * batch_size_value if (i + 1) * batch_size_value < total_vol.shape[0] else total_vol.shape[0]
         r_aux = pred_func(total_vol[i * batch_size_value : top])
 
-        # Take just the last output of the network in case it returns more than one output
-        channel_split = None
+        # Take just the first output of the network in case it returns more than one output
         if isinstance(r_aux, list):
-            channel_split = r_aux[0].shape[1]
-            r_aux = np.concatenate(
-                [
-                    to_numpy_format(r_aux[0], axes_order_back),
-                    to_numpy_format(r_aux[1], axes_order_back),
-                ],
-                axis=-1,
-            )
+            r_aux = to_numpy_format(r_aux[0], axes_order_back)
         else:
             r_aux = to_numpy_format(r_aux, axes_order_back)
 
@@ -1021,13 +984,8 @@ def ensemble16_3d_predictions(
     elif mode == "max":
         funct = np.max
     out = np.expand_dims(funct(out, axis=0), 0)
-    out = to_pytorch_format(out, axes_order, device)
-
     assert isinstance(out, np.ndarray)
-    if channel_split:
-        return out[:, :channel_split], out[:, channel_split:]
-    else:
-        return out
+    return out
 
 
 def create_th_plot(

@@ -590,7 +590,7 @@ class Base_Workflow(metaclass=ABCMeta):
         """
         raise NotImplementedError
 
-    def model_call_func(self, in_img: NDArray | torch.Tensor, is_train: bool = False) -> torch.Tensor:
+    def model_call_func(self, in_img: NDArray | torch.Tensor, is_train: bool = False, apply_act: bool = True) -> torch.Tensor:
         """
         Call a regular Pytorch model.
 
@@ -601,6 +601,9 @@ class Base_Workflow(metaclass=ABCMeta):
 
         is_train : bool, optional
             Whether if the call is during training or inference.
+
+        apply_act : bool, optional
+            Whether to apply activations or not.
 
         Returns
         -------
@@ -613,6 +616,8 @@ class Base_Workflow(metaclass=ABCMeta):
         if self.cfg.MODEL.SOURCE == "biapy":
             assert self.model
             p = self.model(in_img)
+            if apply_act:
+                p = self.apply_model_activations(p, training=is_train)
         elif self.cfg.MODEL.SOURCE == "bmz":
             p = self.bmz_model_call(in_img, is_train)
         elif self.cfg.MODEL.SOURCE == "torchvision":
@@ -790,7 +795,6 @@ class Base_Workflow(metaclass=ABCMeta):
                 model=self.model,
                 model_call_func=self.model_call_func,
                 loss_function=self.loss,
-                activations=self.apply_model_activations,
                 metric_function=self.metric_calculation,
                 prepare_targets=self.prepare_targets,
                 data_loader=self.train_generator,
@@ -826,7 +830,6 @@ class Base_Workflow(metaclass=ABCMeta):
                     model=self.model,
                     model_call_func=self.model_call_func,
                     loss_function=self.loss,
-                    activations=self.apply_model_activations,
                     metric_function=self.metric_calculation,
                     prepare_targets=self.prepare_targets,
                     epoch=epoch,
@@ -1036,7 +1039,7 @@ class Base_Workflow(metaclass=ABCMeta):
             if "test_input" not in self.bmz_config:
                 self.bmz_config["test_input"] = test_input
 
-    def apply_model_activations(self, pred, training=False):
+    def apply_model_activations(self, pred: torch.Tensor, training=False) -> torch.Tensor:
         """
         Function that apply the last activation (if any) to the model's output.
 
@@ -1062,7 +1065,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
         if not isinstance(pred, list):
             multiple_heads = False
-            pred = [pred]
+            pred = [pred] # type: ignore
         else:
             multiple_heads = True
             assert len(pred) == len(
@@ -1212,7 +1215,7 @@ class Base_Workflow(metaclass=ABCMeta):
             self.print_stats(image_counter)
 
     def predict_batches_in_test(
-        self, x_batch: NDArray, y_batch: NDArray, stats_name="per_crop", disable_tqdm: bool = False
+        self, x_batch: NDArray, y_batch: Optional[NDArray], stats_name="per_crop", disable_tqdm: bool = False
     ) -> NDArray:
         """
         Predict a batch of data for the test phase.
@@ -1245,8 +1248,6 @@ class Base_Workflow(metaclass=ABCMeta):
                         x_batch[k],
                         axes_order_back=self.axes_order_back,
                         pred_func=self.model_call_func,
-                        axes_order=self.axes_order,
-                        device=self.device,
                         mode=self.cfg.TEST.AUGMENTATION_MODE,
                     )
                 else:
@@ -1255,11 +1256,9 @@ class Base_Workflow(metaclass=ABCMeta):
                         batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
                         axes_order_back=self.axes_order_back,
                         pred_func=self.model_call_func,
-                        axes_order=self.axes_order,
-                        device=self.device,
                         mode=self.cfg.TEST.AUGMENTATION_MODE,
                     )
-                p = self.apply_model_activations(p)
+
                 # Multi-head concatenation
                 if isinstance(p, list):
                     p = torch.cat((p[0], torch.argmax(p[1], dim=1).unsqueeze(1)), dim=1)
@@ -1285,7 +1284,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     if (k + 1) * self.cfg.TRAIN.BATCH_SIZE < x_batch.shape[0]
                     else x_batch.shape[0]
                 )
-                p = self.apply_model_activations(self.model_call_func(x_batch[k * self.cfg.TRAIN.BATCH_SIZE : top]))
+                p = self.model_call_func(x_batch[k * self.cfg.TRAIN.BATCH_SIZE : top])
 
                 # Multi-head concatenation
                 if isinstance(p, list):
@@ -1768,7 +1767,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     )
                 else:
                     pred = self.model_call_func(self.current_sample["X"])
-                pred = self.apply_model_activations(pred)
+
                 # Multi-head concatenation
                 if isinstance(pred, list):
                     pred = torch.cat((pred[0], torch.argmax(pred[1], dim=1).unsqueeze(1)), dim=1)

@@ -19,12 +19,8 @@ from biapy.data.data_3D_manipulation import (
     crop_3D_data_with_overlap,
     merge_3D_data_with_overlap,
 )
-from biapy.data.post_processing.post_processing import (
-    ensemble8_2d_predictions,
-    ensemble16_3d_predictions,
-)
 from biapy.data.data_manipulation import save_tif
-from biapy.utils.misc import to_pytorch_format, to_numpy_format, is_main_process, MetricLogger
+from biapy.utils.misc import to_pytorch_format, MetricLogger
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.engine.metrics import SSIM_loss, W_MAE_SSIM_loss, W_MSE_SSIM_loss
 from biapy.data.dataset import PatchCoords
@@ -382,46 +378,8 @@ class Super_resolution_Workflow(Base_Workflow):
                     verbose=self.cfg.TEST.VERBOSE,
                 )
 
-        # Predict each patch
-        if self.cfg.TEST.AUGMENTATION:
-            for k in tqdm(range(self.current_sample["X"].shape[0]), leave=False, disable=not is_main_process()):
-                if self.cfg.PROBLEM.NDIM == "2D":
-                    p = ensemble8_2d_predictions(
-                        self.current_sample["X"][k],
-                        axes_order_back=self.axes_order_back,
-                        pred_func=self.model_call_func,
-                        axes_order=self.axes_order,
-                        device=self.device,
-                    )
-                else:
-                    p = ensemble16_3d_predictions(
-                        self.current_sample["X"][k],
-                        batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
-                        axes_order_back=self.axes_order_back,
-                        pred_func=self.model_call_func,
-                        axes_order=self.axes_order,
-                        device=self.device,
-                    )
-                p = self.apply_model_activations(p)
-                p = to_numpy_format(p, self.axes_order_back)
-                if "pred" not in locals():
-                    pred = np.zeros((self.current_sample["X"].shape[0],) + p.shape[1:], dtype=self.dtype)
-                pred[k] = p
-        else:
-            self.current_sample["X"] = to_pytorch_format(self.current_sample["X"], self.axes_order, self.device)
-            l = int(math.ceil(self.current_sample["X"].shape[0] / self.cfg.TRAIN.BATCH_SIZE))
-            for k in tqdm(range(l), leave=False, disable=not is_main_process()):
-                top = (
-                    (k + 1) * self.cfg.TRAIN.BATCH_SIZE
-                    if (k + 1) * self.cfg.TRAIN.BATCH_SIZE < self.current_sample["X"].shape[0]
-                    else self.current_sample["X"].shape[0]
-                )
-                p = self.model(self.current_sample["X"][k * self.cfg.TRAIN.BATCH_SIZE : top])
-                p = to_numpy_format(self.apply_model_activations(p), self.axes_order_back)
-                if "pred" not in locals():
-                    pred = np.zeros((self.current_sample["X"].shape[0],) + p.shape[1:], dtype=self.dtype)
-                pred[k * self.cfg.TRAIN.BATCH_SIZE : top] = p
-        del self.current_sample["X"], p
+        pred = self.predict_batches_in_test(self.current_sample["X"], None)
+        del self.current_sample["X"]
 
         # Reconstruct the predictions
         if original_data_shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:

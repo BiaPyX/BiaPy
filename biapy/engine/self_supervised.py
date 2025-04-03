@@ -9,7 +9,7 @@ from torchmetrics.image import PeakSignalNoiseRatio, StructuralSimilarityIndexMe
 from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
 from torchmetrics.image.fid import FrechetInceptionDistance
 from torchmetrics.image.inception import InceptionScore
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple, Any
 from numpy.typing import NDArray
 from biapy.data.dataset import PatchCoords
 
@@ -437,8 +437,6 @@ class Self_supervised_Workflow(Base_Workflow):
                         self.current_sample["X"][k],
                         axes_order_back=self.axes_order_back,
                         pred_func=self.model_call_func,
-                        axes_order=self.axes_order,
-                        device=self.device,
                     )
                 else:
                     p = ensemble16_3d_predictions(
@@ -446,10 +444,7 @@ class Self_supervised_Workflow(Base_Workflow):
                         batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
                         axes_order_back=self.axes_order_back,
                         pred_func=self.model_call_func,
-                        axes_order=self.axes_order,
-                        device=self.device,
                     )
-                p = self.apply_model_activations(p)
                 p = to_numpy_format(p, self.axes_order_back)
                 if "pred" not in locals():
                     pred = np.zeros((self.current_sample["X"].shape[0],) + p.shape[1:], dtype=self.dtype)
@@ -462,17 +457,18 @@ class Self_supervised_Workflow(Base_Workflow):
                     if (k + 1) * self.cfg.TRAIN.BATCH_SIZE < self.current_sample["X"].shape[0]
                     else self.current_sample["X"].shape[0]
                 )
-                p = self.model(
+                p = self.model_call_func(
                     to_pytorch_format(
                         self.current_sample["X"][k * self.cfg.TRAIN.BATCH_SIZE : top],
                         self.axes_order,
                         self.device,
-                    )
+                    ),
+                    apply_act=False
                 )
                 if self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
                     loss, p, mask = p
                     p = self.apply_model_activations(p)
-                    p, m, pv = self.model_without_ddp.save_images(
+                    p, m, pv = self.model_call_func.save_images(
                         to_pytorch_format(
                             self.current_sample["X"][k * self.cfg.TRAIN.BATCH_SIZE : top],
                             self.axes_order,
