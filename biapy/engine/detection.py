@@ -872,116 +872,120 @@ class Detection_Workflow(Base_Workflow):
         assert isinstance(self.all_pred, list) and isinstance(self.all_gt, list)
         filename, _ = os.path.splitext(self.current_sample["filename"])
 
-        df = pd.concat(self.all_pred, ignore_index=True)
+        # Check that there are points 
+        if any([True for x in self.all_pred if x is not None]):
+            df = pd.concat(self.all_pred, ignore_index=True)
 
-        # Take point coords
-        pred_coordinates = []
-        if df is None:
-            print("No points created, skipping evaluation . . .")
-            return
-        coordz = df["axis-0"].tolist()
-        coordy = df["axis-1"].tolist()
-        coordx = df["axis-2"].tolist()
-        for z, y, x in zip(coordz, coordy, coordx):
-            pred_coordinates.append([z, y, x])
+            # Take point coords
+            pred_coordinates = []
+            if df is None:
+                print("No points created, skipping evaluation . . .")
+                return
+            coordz = df["axis-0"].tolist()
+            coordy = df["axis-1"].tolist()
+            coordx = df["axis-2"].tolist()
+            for z, y, x in zip(coordz, coordy, coordx):
+                pred_coordinates.append([z, y, x])
 
-        # Apply post-processing of removing points
-        if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS and self.cfg.TEST.BY_CHUNKS.ENABLE:
-            pred_coordinates, dropped_pos = remove_close_points(  # type: ignore
-                pred_coordinates,
-                self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS,
-                self.resolution,
-                ndim=self.dims,
-                return_drops=True,
-            )
-            # Remove points from dataframe
-            df = df.drop(dropped_pos)
-
-        t_dim, z_dim, y_dim, x_dim, c_dim = order_dimensions(
-            self.cfg.DATA.PREPROCESS.ZOOM.ZOOM_FACTOR,
-            input_order=self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER,
-            output_order="TZYXC",
-            default_value=1,
-        )
-
-        df["axis-0"] = df["axis-0"] / z_dim  # type: ignore
-        df["axis-1"] = df["axis-1"] / y_dim  # type: ignore
-        df["axis-2"] = df["axis-2"] / x_dim  # type: ignore
-        df.to_csv(
-            os.path.join(
-                self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
-                filename + "_all_points.csv",
-            )
-        )
-
-        # Calculate metrics with all the points
-        if self.use_gt:
-            print("Calculating detection metrics with all the points found . . .")
-
-            # Read the GT coordinates from the CSV file
-            csv_filename = os.path.join(self.original_test_mask_path, os.path.splitext(filename[0])[0] + ".csv")
-            if not os.path.exists(csv_filename):
-                if self.cfg.TEST.VERBOSE:
-                    print(
-                        "WARNING: The CSV file seems to have different name than image. Using the CSV file "
-                        "with the same position as the CSV in the directory. Check if it is correct!"
-                    )
-                csv_filename = os.path.join(self.original_test_mask_path, self.csv_files[self.f_numbers[0]])
-                if self.cfg.TEST.VERBOSE:
-                    print("Its respective CSV file seems to be: {}".format(csv_filename))
-            if self.cfg.TEST.VERBOSE:
-                print("Reading GT data from: {}".format(csv_filename))
-            df_gt = pd.read_csv(csv_filename)
-            df_gt = df_gt.rename(columns=lambda x: x.strip())
-            gt_coordinates = [
-                [z, y, x]
-                for z, y, x in zip(
-                    df_gt["axis-0"].tolist(),
-                    df_gt["axis-1"].tolist(),
-                    df_gt["axis-2"].tolist(),
+            # Apply post-processing of removing points
+            if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS and self.cfg.TEST.BY_CHUNKS.ENABLE:
+                pred_coordinates, dropped_pos = remove_close_points(  # type: ignore
+                    pred_coordinates,
+                    self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS,
+                    self.resolution,
+                    ndim=self.dims,
+                    return_drops=True,
                 )
-            ]
+                # Remove points from dataframe
+                df = df.drop(dropped_pos)
 
-            # Measure metrics
-            roi_to_consider = []
-            if self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX:
-                roi_to_consider = [
-                    [
-                        self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[0],
-                        max(
-                            self.parallel_data_shape[0] - self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[0],
-                            0,
-                        ),
-                    ],
-                    [
-                        self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[1],
-                        max(
-                            self.parallel_data_shape[1] - self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[1],
-                            0,
-                        ),
-                    ],
-                    [
-                        self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[2],
-                        max(
-                            self.parallel_data_shape[2] - self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[2],
-                            0,
-                        ),
-                    ],
-                ]
-            d_metrics, _, _ = detection_metrics(
-                gt_coordinates,
-                pred_coordinates,
-                tolerance=self.cfg.TEST.DET_TOLERANCE,
-                resolution=self.resolution,
-                bbox_to_consider=roi_to_consider,
-                verbose=self.cfg.TEST.VERBOSE,
+            t_dim, z_dim, y_dim, x_dim, c_dim = order_dimensions(
+                self.cfg.DATA.PREPROCESS.ZOOM.ZOOM_FACTOR,
+                input_order=self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER,
+                output_order="TZYXC",
+                default_value=1,
             )
-            print("Detection metrics: {}".format(d_metrics))
 
-            for metric in self.test_extra_metrics:
-                if str(metric).lower() not in self.stats["by_chunks"]:
-                    self.stats["by_chunks"][str(metric).lower()] = 0
-                self.stats["by_chunks"][str(metric).lower()] += d_metrics[str(metric)]
+            df["axis-0"] = df["axis-0"] / z_dim  # type: ignore
+            df["axis-1"] = df["axis-1"] / y_dim  # type: ignore
+            df["axis-2"] = df["axis-2"] / x_dim  # type: ignore
+            df.to_csv(
+                os.path.join(
+                    self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
+                    filename + "_all_points.csv",
+                )
+            )
+
+            # Calculate metrics with all the points
+            if self.use_gt:
+                print("Calculating detection metrics with all the points found . . .")
+
+                # Read the GT coordinates from the CSV file
+                csv_filename = os.path.join(self.original_test_mask_path, os.path.splitext(filename[0])[0] + ".csv")
+                if not os.path.exists(csv_filename):
+                    if self.cfg.TEST.VERBOSE:
+                        print(
+                            "WARNING: The CSV file seems to have different name than image. Using the CSV file "
+                            "with the same position as the CSV in the directory. Check if it is correct!"
+                        )
+                    csv_filename = os.path.join(self.original_test_mask_path, self.csv_files[self.f_numbers[0]])
+                    if self.cfg.TEST.VERBOSE:
+                        print("Its respective CSV file seems to be: {}".format(csv_filename))
+                if self.cfg.TEST.VERBOSE:
+                    print("Reading GT data from: {}".format(csv_filename))
+                df_gt = pd.read_csv(csv_filename)
+                df_gt = df_gt.rename(columns=lambda x: x.strip())
+                gt_coordinates = [
+                    [z, y, x]
+                    for z, y, x in zip(
+                        df_gt["axis-0"].tolist(),
+                        df_gt["axis-1"].tolist(),
+                        df_gt["axis-2"].tolist(),
+                    )
+                ]
+
+                # Measure metrics
+                roi_to_consider = []
+                if self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX:
+                    roi_to_consider = [
+                        [
+                            self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[0],
+                            max(
+                                self.parallel_data_shape[0] - self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[0],
+                                0,
+                            ),
+                        ],
+                        [
+                            self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[1],
+                            max(
+                                self.parallel_data_shape[1] - self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[1],
+                                0,
+                            ),
+                        ],
+                        [
+                            self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[2],
+                            max(
+                                self.parallel_data_shape[2] - self.cfg.TEST.DET_IGNORE_POINTS_OUTSIDE_BOX[2],
+                                0,
+                            ),
+                        ],
+                    ]
+                d_metrics, _, _ = detection_metrics(
+                    gt_coordinates,
+                    pred_coordinates,
+                    tolerance=self.cfg.TEST.DET_TOLERANCE,
+                    resolution=self.resolution,
+                    bbox_to_consider=roi_to_consider,
+                    verbose=self.cfg.TEST.VERBOSE,
+                )
+                print("Detection metrics: {}".format(d_metrics))
+
+                for metric in self.test_extra_metrics:
+                    if str(metric).lower() not in self.stats["by_chunks"]:
+                        self.stats["by_chunks"][str(metric).lower()] = 0
+                    self.stats["by_chunks"][str(metric).lower()] += d_metrics[str(metric)]
+        else:
+            print("No points created for the given sample")
 
     def process_test_sample(self):
         """
