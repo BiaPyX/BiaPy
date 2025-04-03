@@ -393,8 +393,8 @@ class chunked_test_pair_data_generator(IterableDataset):
                         )[0]
 
                 # Normalization
-                # self.norm_module.set_stats_from_image(img)
-                # img, norm_extra_info = self.norm_module.apply_image_norm(img)
+                self.norm_module.set_stats_from_image(img)
+                img, norm_extra_info = self.norm_module.apply_image_norm(img)
                 norm_extra_info = {}
                 if mask is not None:
                     mask = np.array(mask)
