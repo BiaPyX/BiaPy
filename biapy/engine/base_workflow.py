@@ -1402,7 +1402,8 @@ class Base_Workflow(metaclass=ABCMeta):
             if self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF and is_main_process():
                 tgen.save_parallel_data_as_tif()
 
-        self.after_all_patch_prediction_by_chunks()
+        if is_main_process():
+            self.after_all_patch_prediction_by_chunks()
 
         # Wait until all threads are done so the main thread can create the full size image
         if self.cfg.SYSTEM.NUM_GPUS > 1:

@@ -1233,229 +1233,223 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 raise NotImplementedError
             else:
                 # Load H5/Zarr and convert it into numpy array
-                pred_file, pred = read_chunked_data(self.current_sample["filename"])
+                fpath = os.path.join(
+                    self.cfg.PATHS.RESULT_DIR.PER_IMAGE, 
+                    os.path.splitext(self.current_sample["filename"])[0]+".zarr"
+                )
+                pred_file, pred = read_chunked_data(fpath)
                 pred = np.squeeze(np.array(pred, dtype=self.dtype))
                 if isinstance(pred_file, h5py.File):
                     pred_file.close()
 
-                pred = ensure_3d_shape(pred, self.current_sample["filename"])
+                pred = ensure_3d_shape(pred, fpath)
 
                 self.after_merge_patches(pred)
         else:
             # In this case we need only to merge all local points so it will be done by the main thread. The rest will wait
-            if is_main_process():
-                if not self.cfg.TEST.REUSE_PREDICTIONS:
-                    # For synapses we need to map the pre to the post points. It needs to be done here and not patch by patch as
-                    # some pre points may lay in other chunks of the data.
-                    all_pre_dfs, all_post_dfs = [], []
-                    pre_id_counter, post_id_counter = 0, 0
-                    for pre_df, post_dt in self.all_pred:
-                        if len(pre_df["pre_id"]) > 0:
-                            pre_df["pre_id"] = pre_df["pre_id"] + pre_id_counter
-                            pre_id_counter += len(pre_df["pre_id"])
-                            all_pre_dfs.append(pre_df)
-                        if len(post_dt["post_id"]) > 0:
-                            post_dt["post_id"] = post_dt["post_id"] + post_id_counter
-                            post_id_counter += len(post_dt["post_id"])
-                            all_post_dfs.append(post_dt)
+            if not self.cfg.TEST.REUSE_PREDICTIONS:
+                # For synapses we need to map the pre to the post points. It needs to be done here and not patch by patch as
+                # some pre points may lay in other chunks of the data.
+                all_pre_dfs, all_post_dfs = [], []
+                pre_id_counter, post_id_counter = 0, 0
+                for pre_df, post_dt in self.all_pred:
+                    if len(pre_df["pre_id"]) > 0:
+                        pre_df["pre_id"] = pre_df["pre_id"] + pre_id_counter
+                        pre_id_counter += len(pre_df["pre_id"])
+                        all_pre_dfs.append(pre_df)
+                    if len(post_dt["post_id"]) > 0:
+                        post_dt["post_id"] = post_dt["post_id"] + post_id_counter
+                        post_id_counter += len(post_dt["post_id"])
+                        all_post_dfs.append(post_dt)
 
-                    pre_points_df = pd.concat(all_pre_dfs, ignore_index=True)
-                    post_points_df = pd.concat(all_post_dfs, ignore_index=True)
+                pre_points_df = pd.concat(all_pre_dfs, ignore_index=True)
+                post_points_df = pd.concat(all_post_dfs, ignore_index=True)
 
-                    # Save then the pre and post sites separately
-                    os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, exist_ok=True)
-                    pre_points_df.to_csv(
-                        os.path.join(
-                            self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
-                            "pred_pre_locations.csv",
-                        ),
-                        index=False,
-                    )
-                    post_points_df.to_csv(
-                        os.path.join(
-                            self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
-                            "pred_post_locations.csv",
-                        ),
-                        index=False,
-                    )
+                # Save then the pre and post sites separately
+                os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, exist_ok=True)
+                pre_points_df.to_csv(
+                    os.path.join(
+                        self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
+                        "pred_pre_locations.csv",
+                    ),
+                    index=False,
+                )
+                post_points_df.to_csv(
+                    os.path.join(
+                        self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
+                        "pred_post_locations.csv",
+                    ),
+                    index=False,
+                )
 
-                    # Create coordinate arrays
-                    pre_points, post_points = [], []
-                    for coord in zip(pre_points_df["axis-0"], pre_points_df["axis-1"], pre_points_df["axis-2"]):
-                        pre_points.append(list(coord))
-                    for coord in zip(post_points_df["axis-0"], post_points_df["axis-1"], post_points_df["axis-2"]):
-                        post_points.append(list(coord))
-                    pre_points = np.array(pre_points)
-                    post_points = np.array(post_points)
+                # Create coordinate arrays
+                pre_points, post_points = [], []
+                for coord in zip(pre_points_df["axis-0"], pre_points_df["axis-1"], pre_points_df["axis-2"]):
+                    pre_points.append(list(coord))
+                for coord in zip(post_points_df["axis-0"], post_points_df["axis-1"], post_points_df["axis-2"]):
+                    post_points.append(list(coord))
+                pre_points = np.array(pre_points)
+                post_points = np.array(post_points)
 
-                    pre_post_mapping = {}
-                    pres, posts = [], []
-                    pre_ids = pre_points_df["pre_id"].to_list()
-                    if len(pre_points) > 0:
-                        for i in range(len(pre_points)):
-                            pre_post_mapping[pre_ids[i]] = []
+                pre_post_mapping = {}
+                pres, posts = [], []
+                pre_ids = pre_points_df["pre_id"].to_list()
+                if len(pre_points) > 0:
+                    for i in range(len(pre_points)):
+                        pre_post_mapping[pre_ids[i]] = []
 
-                        # Match each post with a pre
-                        distances = distance_matrix(post_points, pre_points)
-                        for i in range(len(post_points)):
-                            closest_pre_point = np.argmax(distances[i])
-                            closest_pre_point = pre_ids[closest_pre_point]
-                            pre_post_mapping[closest_pre_point].append(i)
+                    # Match each post with a pre
+                    distances = distance_matrix(post_points, pre_points)
+                    for i in range(len(post_points)):
+                        closest_pre_point = np.argmax(distances[i])
+                        closest_pre_point = pre_ids[closest_pre_point]
+                        pre_post_mapping[closest_pre_point].append(i)
 
-                        # Create pre/post lists so we can create the final dataframe
-                        for i in pre_post_mapping.keys():
-                            if len(pre_post_mapping[i]) > 0:
-                                for post_site in pre_post_mapping[i]:
-                                    pres.append(i)
-                                    posts.append(post_site)
-                            else:
-                                # For those pre points that do not have any post points assigned just put a -1 value
+                    # Create pre/post lists so we can create the final dataframe
+                    for i in pre_post_mapping.keys():
+                        if len(pre_post_mapping[i]) > 0:
+                            for post_site in pre_post_mapping[i]:
                                 pres.append(i)
-                                posts.append(-1)
-                    else:
-                        if self.cfg.TEST.VERBOSE:
-                            print("No pre synaptic points found!")
-
-                    # Create a mapping dataframe
-                    pre_post_map_df = pd.DataFrame(
-                        zip(
-                            pres,
-                            posts,
-                        ),
-                        columns=[
-                            "pre_id",
-                            "post_id",
-                        ],
-                    )
-
-                    pre_post_map_df.to_csv(
-                        os.path.join(
-                            self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
-                            "pre_post_mapping.csv",
-                        ),
-                        index=False,
-                    )
+                                posts.append(post_site)
+                        else:
+                            # For those pre points that do not have any post points assigned just put a -1 value
+                            pres.append(i)
+                            posts.append(-1)
                 else:
-                    # Read the dataframes
-                    pre_points_df = pd.read_csv(
-                        os.path.join(
-                            self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
-                            "pred_pre_locations.csv",
-                        )
-                    )
-                    post_points_df = pd.read_csv(
-                        os.path.join(
-                            self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
-                            "pred_post_locations.csv",
-                        )
-                    )
-                    pre_post_map_df = pd.read_csv(
-                        os.path.join(
-                            self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
-                            "pre_post_mapping.csv",
-                        )
-                    )
+                    if self.cfg.TEST.VERBOSE:
+                        print("No pre synaptic points found!")
 
-                    # Create coordinate arrays
-                    pre_points, post_points = [], []
-                    for coord in zip(pre_points_df["axis-0"], pre_points_df["axis-1"], pre_points_df["axis-2"]):
-                        pre_points.append(list(coord))
-                    for coord in zip(post_points_df["axis-0"], post_points_df["axis-1"], post_points_df["axis-2"]):
-                        post_points.append(list(coord))
-                    pre_points = np.array(pre_points)
-                    post_points = np.array(post_points)
+                # Create a mapping dataframe
+                pre_post_map_df = pd.DataFrame(
+                    zip(
+                        pres,
+                        posts,
+                    ),
+                    columns=[
+                        "pre_id",
+                        "post_id",
+                    ],
+                )
 
-                # Remove close points
-                if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS:
-                    pre_points, pre_dropped_pos = remove_close_points(  # type: ignore
-                        pre_points,
-                        self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS,
-                        self.resolution,
-                        ndim=self.dims,
-                        return_drops=True,
+                pre_post_map_df.to_csv(
+                    os.path.join(
+                        self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
+                        "pre_post_mapping.csv",
+                    ),
+                    index=False,
+                )
+            else:
+                # Read the dataframes
+                pre_points_df = pd.read_csv(
+                    os.path.join(
+                        self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
+                        "pred_pre_locations.csv",
                     )
-                    pre_points_df.drop(pre_points_df.index[pre_dropped_pos], inplace=True)  # type: ignore
-                    post_points, post_dropped_pos = remove_close_points(  # type: ignore
-                        post_points,
-                        self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS,
-                        self.resolution,
-                        ndim=self.dims,
-                        return_drops=True,
+                )
+                post_points_df = pd.read_csv(
+                    os.path.join(
+                        self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
+                        "pred_post_locations.csv",
                     )
-                    post_points_df.drop(post_points_df.index[post_dropped_pos], inplace=True)  # type: ignore
-
-                    # Save filtered stats
-                    os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING, exist_ok=True)
-                    pre_points_df.to_csv(
-                        os.path.join(
-                            self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
-                            "pred_pre_locations.csv",
-                        ),
-                        index=False,
+                )
+                pre_post_map_df = pd.read_csv(
+                    os.path.join(
+                        self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
+                        "pre_post_mapping.csv",
                     )
-                    post_points_df.to_csv(
-                        os.path.join(
-                            self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
-                            "pred_post_locations.csv",
-                        ),
-                        index=False,
-                    )
+                )
 
-                    pre_post_mapping = {}
-                    pres, posts = [], []
-                    pre_ids = pre_points_df["pre_id"].to_list()
-                    if len(pre_points) > 0:
-                        for i in range(len(pre_points)):
-                            pre_post_mapping[pre_ids[i]] = []
+                # Create coordinate arrays
+                pre_points, post_points = [], []
+                for coord in zip(pre_points_df["axis-0"], pre_points_df["axis-1"], pre_points_df["axis-2"]):
+                    pre_points.append(list(coord))
+                for coord in zip(post_points_df["axis-0"], post_points_df["axis-1"], post_points_df["axis-2"]):
+                    post_points.append(list(coord))
+                pre_points = np.array(pre_points)
+                post_points = np.array(post_points)
 
-                        # Match each post with a pre
-                        distances = distance_matrix(post_points, pre_points)
-                        for i in range(len(post_points)):
-                            closest_pre_point = np.argmax(distances[i])
-                            closest_pre_point = pre_ids[closest_pre_point]
-                            pre_post_mapping[closest_pre_point].append(i)
+            # Remove close points
+            if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS:
+                pre_points, pre_dropped_pos = remove_close_points(  # type: ignore
+                    pre_points,
+                    self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS,
+                    self.resolution,
+                    ndim=self.dims,
+                    return_drops=True,
+                )
+                pre_points_df.drop(pre_points_df.index[pre_dropped_pos], inplace=True)  # type: ignore
+                post_points, post_dropped_pos = remove_close_points(  # type: ignore
+                    post_points,
+                    self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS,
+                    self.resolution,
+                    ndim=self.dims,
+                    return_drops=True,
+                )
+                post_points_df.drop(post_points_df.index[post_dropped_pos], inplace=True)  # type: ignore
 
-                        # Create pre/post lists so we can create the final dataframe
-                        for i in pre_post_mapping.keys():
-                            if len(pre_post_mapping[i]) > 0:
-                                for post_site in pre_post_mapping[i]:
-                                    pres.append(i)
-                                    posts.append(post_site)
-                            else:
-                                # For those pre points that do not have any post points assigned just put a -1 value
+                # Save filtered stats
+                os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING, exist_ok=True)
+                pre_points_df.to_csv(
+                    os.path.join(
+                        self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
+                        "pred_pre_locations.csv",
+                    ),
+                    index=False,
+                )
+                post_points_df.to_csv(
+                    os.path.join(
+                        self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
+                        "pred_post_locations.csv",
+                    ),
+                    index=False,
+                )
+
+                pre_post_mapping = {}
+                pres, posts = [], []
+                pre_ids = pre_points_df["pre_id"].to_list()
+                if len(pre_points) > 0:
+                    for i in range(len(pre_points)):
+                        pre_post_mapping[pre_ids[i]] = []
+
+                    # Match each post with a pre
+                    distances = distance_matrix(post_points, pre_points)
+                    for i in range(len(post_points)):
+                        closest_pre_point = np.argmax(distances[i])
+                        closest_pre_point = pre_ids[closest_pre_point]
+                        pre_post_mapping[closest_pre_point].append(i)
+
+                    # Create pre/post lists so we can create the final dataframe
+                    for i in pre_post_mapping.keys():
+                        if len(pre_post_mapping[i]) > 0:
+                            for post_site in pre_post_mapping[i]:
                                 pres.append(i)
-                                posts.append(-1)
-                    else:
-                        if self.cfg.TEST.VERBOSE:
-                            print("No pre synaptic points found!")
+                                posts.append(post_site)
+                        else:
+                            # For those pre points that do not have any post points assigned just put a -1 value
+                            pres.append(i)
+                            posts.append(-1)
+                else:
+                    if self.cfg.TEST.VERBOSE:
+                        print("No pre synaptic points found!")
 
-                    # Create a mapping dataframe
-                    pre_post_map_df = pd.DataFrame(
-                        zip(
-                            pres,
-                            posts,
-                        ),
-                        columns=[
-                            "pre_id",
-                            "post_id",
-                        ],
-                    )
-                    pre_post_map_df.to_csv(
-                        os.path.join(
-                            self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
-                            "pre_post_mapping.csv",
-                        ),
-                        index=False,
-                    )
-
-            # Wait until the main thread is done
-            if self.cfg.SYSTEM.NUM_GPUS > 1:
-                if self.cfg.TEST.VERBOSE:
-                    print(f"[Rank {get_rank()} ({os.getpid()})] Process waiting . . . ")
-                if is_dist_avail_and_initialized():
-                    dist.barrier()
-                if self.cfg.TEST.VERBOSE:
-                    print(f"[Rank {get_rank()} ({os.getpid()})] Synched with main thread. Go for the next sample")
+                # Create a mapping dataframe
+                pre_post_map_df = pd.DataFrame(
+                    zip(
+                        pres,
+                        posts,
+                    ),
+                    columns=[
+                        "pre_id",
+                        "post_id",
+                    ],
+                )
+                pre_post_map_df.to_csv(
+                    os.path.join(
+                        self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
+                        "pre_post_mapping.csv",
+                    ),
+                    index=False,
+                )
 
     def after_full_image(self, pred: NDArray):
         """
