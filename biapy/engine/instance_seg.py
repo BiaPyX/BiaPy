@@ -33,7 +33,6 @@ from biapy.engine.metrics import (
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.utils.misc import (
     is_main_process,
-    get_rank,
     is_dist_avail_and_initialized,
     to_pytorch_format,
     to_numpy_format,
@@ -1477,8 +1476,8 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     pred_file.close()
 
                 pred = ensure_3d_shape(pred, fpath)
-
-                self.after_merge_patches(pred)
+                
+                self.after_merge_patches(np.expand_dims(pred,0))
         else:
             # In this case we need only to merge all local points so it will be done by the main thread. The rest will wait
             if not self.cfg.TEST.REUSE_PREDICTIONS:
