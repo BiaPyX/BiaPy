@@ -1056,14 +1056,14 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             )
 
         total_pre_points = len([x for x in d_result["tag"] if x == "pre"])
-        pre_points = np.array(d_result["points"][:total_pre_points])
+        pre_points = np.array(d_result["points"][total_pre_points:])
         pre_points_df = pd.DataFrame(
             zip(
-                d_result["ids"][:total_pre_points],
+                d_result["ids"][total_pre_points:],
                 list(pre_points[:, 0]),
                 list(pre_points[:, 1]),
                 list(pre_points[:, 2]),
-                d_result["probabilities"][:total_pre_points],
+                d_result["probabilities"][total_pre_points:],
             ),
             columns=[
                 "pre_id",
@@ -1085,14 +1085,14 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             )
 
         total_post_points = len(d_result) - total_pre_points
-        post_points = np.array(d_result["points"][total_post_points:])
+        post_points = np.array(d_result["points"][:total_post_points])
         post_points_df = pd.DataFrame(
             zip(
-                d_result["ids"][total_post_points:],
+                d_result["ids"][:total_post_points],
                 list(post_points[:, 0]),
                 list(post_points[:, 1]),
                 list(post_points[:, 2]),
-                d_result["probabilities"][total_post_points:],
+                d_result["probabilities"][:total_post_points],
             ),
             columns=[
                 "post_id",
@@ -1852,14 +1852,14 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             for j, cor in enumerate(pre_points):
                 z, y, x = cor  # type: ignore
                 z, y, x = int(z), int(y), int(x)
-                mask[z, y, x, 1] = pre_ids[j]
+                mask[z, y, x, 0] = pre_ids[j]
 
             # Paint post points
             post_ids = post_points_df["post_id"].to_list()
             for j, cor in enumerate(post_points):
                 z, y, x = cor  # type: ignore
                 z, y, x = int(z), int(y), int(x)
-                mask[z, y, x, 0] = post_ids[j]
+                mask[z, y, x, 1] = post_ids[j]
 
             # Dilate and save the predicted points for the current class
             for i in range(mask.shape[0]):

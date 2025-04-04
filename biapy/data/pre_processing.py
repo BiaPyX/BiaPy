@@ -692,51 +692,82 @@ def synapse_channel_creation(
                 mask = fid_mask.create_dataset("data", shape=out_data_shape, dtype=dtype_str)
 
             print("Paiting all postsynaptic sites")
-            width_reference = dilation_width if mode == "BF" else (40, 256, 256)
+            width_reference = dilation_width
             for pre_site, post_sites in tqdm(pre_post_points.items(), disable=not is_main_process()):
                 pre_point_global = [int(float(x)) for x in " ".join(pre_site[1:-1].split()).split(" ")]
 
-                # Take the patch to extract so to draw all the postsynaptic sites using the minimun patch size
-                patch_coords = None
-                for post_point in post_sites:
-                    if patch_coords is None:
-                        patch_coords = [
-                            max(0, post_point[0] - width_reference[0]),
-                            min(out_data_shape[zarr_data_information["z_axe_pos"]], post_point[0] + width_reference[0]),
-                            max(0, post_point[1] - width_reference[1]),
-                            min(out_data_shape[zarr_data_information["y_axe_pos"]], post_point[1] + width_reference[1]),
-                            max(0, post_point[2] - width_reference[2]),
-                            min(out_data_shape[zarr_data_information["x_axe_pos"]], post_point[2] + width_reference[2]),
-                        ]
-                    else:
-                        patch_coords = [
-                            min(max(0, post_point[0] - width_reference[0]), patch_coords[0]),
-                            max(
-                                min(
-                                    out_data_shape[zarr_data_information["z_axe_pos"]],
-                                    post_point[0] + width_reference[0],
-                                ),
-                                patch_coords[1],
+                # Do not draw those pre that do not have post associated as they may be errors
+                if len(post_sites) == 0:
+                    continue
+                ref_point = post_sites[0]
+                patch_coords = [
+                    max(0, ref_point[0] - width_reference[0]),
+                    min(out_data_shape[zarr_data_information["z_axe_pos"]], ref_point[0] + width_reference[0]),
+                    max(0, ref_point[1] - width_reference[1]),
+                    min(out_data_shape[zarr_data_information["y_axe_pos"]], ref_point[1] + width_reference[1]),
+                    max(0, ref_point[2] - width_reference[2]),
+                    min(out_data_shape[zarr_data_information["x_axe_pos"]], ref_point[2] + width_reference[2]),
+                ]
+                # Take into account the pre point too
+                if mode == "B":
+                    ref_point = pre_point_global
+                    patch_coords = [
+                        min(max(0, ref_point[0] - width_reference[0]), patch_coords[0]),
+                        max(
+                            min(
+                                out_data_shape[zarr_data_information["z_axe_pos"]],
+                                ref_point[0] + width_reference[0],
                             ),
-                            min(max(0, post_point[1] - width_reference[1]), patch_coords[2]),
-                            max(
-                                min(
-                                    out_data_shape[zarr_data_information["y_axe_pos"]],
-                                    post_point[1] + width_reference[1],
-                                ),
-                                patch_coords[3],
+                            patch_coords[1],
+                        ),
+                        min(max(0, ref_point[1] - width_reference[1]), patch_coords[2]),
+                        max(
+                            min(
+                                out_data_shape[zarr_data_information["y_axe_pos"]],
+                                ref_point[1] + width_reference[1],
                             ),
-                            min(max(0, post_point[2] - width_reference[2]), patch_coords[4]),
-                            max(
-                                min(
-                                    out_data_shape[zarr_data_information["x_axe_pos"]],
-                                    post_point[2] + width_reference[2],
-                                ),
-                                patch_coords[5],
+                            patch_coords[3],
+                        ),
+                        min(max(0, ref_point[2] - width_reference[2]), patch_coords[4]),
+                        max(
+                            min(
+                                out_data_shape[zarr_data_information["x_axe_pos"]],
+                                ref_point[2] + width_reference[2],
                             ),
-                        ]
+                            patch_coords[5],
+                        ),
+                    ]
 
-                assert patch_coords
+                # Take the patch to extract so to draw all the postsynaptic sites using the minimun patch size
+                for post_point in post_sites:
+                    ref_point = post_point
+                    patch_coords = [
+                        min(max(0, ref_point[0] - width_reference[0]), patch_coords[0]),
+                        max(
+                            min(
+                                out_data_shape[zarr_data_information["z_axe_pos"]],
+                                ref_point[0] + width_reference[0],
+                            ),
+                            patch_coords[1],
+                        ),
+                        min(max(0, ref_point[1] - width_reference[1]), patch_coords[2]),
+                        max(
+                            min(
+                                out_data_shape[zarr_data_information["y_axe_pos"]],
+                                ref_point[1] + width_reference[1],
+                            ),
+                            patch_coords[3],
+                        ),
+                        min(max(0, ref_point[2] - width_reference[2]), patch_coords[4]),
+                        max(
+                            min(
+                                out_data_shape[zarr_data_information["x_axe_pos"]],
+                                ref_point[2] + width_reference[2],
+                            ),
+                            patch_coords[5],
+                        ),
+                    ]
+
                 patch_coords = [int(x) for x in patch_coords]
                 patch_shape = (
                     patch_coords[1] - patch_coords[0],
@@ -760,6 +791,12 @@ def synapse_channel_creation(
                     )
                 )
 
+                pre_point = [
+                    int(pre_point_global[0] - patch_coords[0]),
+                    int(pre_point_global[1] - patch_coords[2]),
+                    int(pre_point_global[2] - patch_coords[4]),
+                ]
+
                 # Paiting each post-synaptic site
                 if mode == "BF":
                     seeds = np.zeros(patch_shape, dtype=np.uint64)
@@ -771,11 +808,6 @@ def synapse_channel_creation(
                             int(post_point_global[0] - patch_coords[0]),
                             int(post_point_global[1] - patch_coords[2]),
                             int(post_point_global[2] - patch_coords[4]),
-                        ]
-                        pre_point = [
-                            int(pre_point_global[0] - patch_coords[0]),
-                            int(pre_point_global[1] - patch_coords[2]),
-                            int(pre_point_global[2] - patch_coords[4]),
                         ]
 
                         if (
@@ -830,6 +862,14 @@ def synapse_channel_creation(
                 else:
                     out_map = np.zeros(patch_shape + (channels,), dtype=np.uint8)
 
+                    # Pre point
+                    out_map[
+                        max(0, pre_point[0] - 1) : min(pre_point[0] + 1, out_map.shape[0]),
+                        pre_point[1],
+                        pre_point[2],
+                        0,
+                    ] = 1
+
                     # Paint the pre sites in channel 0 and post sites in channel 1
                     for post_point_global in post_sites:
                         post_point = [
@@ -837,31 +877,18 @@ def synapse_channel_creation(
                             int(post_point_global[1] - patch_coords[2]),
                             int(post_point_global[2] - patch_coords[4]),
                         ]
-                        pre_point = [
-                            int(pre_point_global[0] - patch_coords[0]),
-                            int(pre_point_global[1] - patch_coords[2]),
-                            int(pre_point_global[2] - patch_coords[4]),
-                        ]
 
                         if (
                             post_point[0] < out_map.shape[0]
                             and post_point[1] < out_map.shape[1]
                             and post_point[2] < out_map.shape[2]
                         ):
-                            # Pre
-                            out_map[
-                                max(0, pre_point[0] - 1) : min(pre_point[0] + 1, out_map.shape[0]),
-                                pre_point[1],
-                                pre_point[2],
-                                1,
-                            ] = 1
-
-                            # Post
+                            # Post point
                             out_map[
                                 max(0, post_point[0] - 1) : min(post_point[0] + 1, out_map.shape[0]),
                                 post_point[1],
                                 post_point[2],
-                                0,
+                                1,
                             ] = 1
                         else:
                             raise ValueError(

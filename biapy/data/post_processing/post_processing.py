@@ -465,7 +465,7 @@ def create_synapses(data: NDArray,
             )
 
         d_result["ids"] = ids
-        d_result["tag"] = (["post",]*len(all_coords[0])) + (["pre",]*len(all_coords[1]))
+        d_result["tag"] = (["pre",]*len(all_coords[0])) + (["post",]*len(all_coords[1]))
         d_result["probabilities"] = probs
         d_result["points"] = np.concatenate(all_coords, axis=0)
 
