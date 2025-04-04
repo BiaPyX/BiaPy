@@ -566,10 +566,6 @@ def synapse_channel_creation(
     patch_offset : list of list
         Pixels used on each axis to pad the patch in order to not cut some of the values in the edges.
     """
-    # TODO: seguir con esta funcion
-    # assert len(data_shape) in [5, 4]
-    # d_shape = data_shape[1:-1]
-    # dim = len(d_shape)
     assert mode in ["B", "BF"]
     if mode == "BF":
         channels = 4

@@ -139,7 +139,27 @@ class Config:
         _C.PROBLEM.INSTANCE_SEG.SYNAPSES.POSTSITE_DILATION_DISTANCE_CHANNELS = [3,10,10] 
         # Whether to normalize or not the distances of channel 'F'
         _C.PROBLEM.INSTANCE_SEG.SYNAPSES.NORMALIZE_DISTANCES = False
-        
+        _C.PROBLEM.INSTANCE_SEG.SYNAPSES.POINT_CREATION_FUNCTION = "peak_local_max"
+        # The minimal allowed distance separating peaks. To find the maximum number of peaks, use min_distance=1.
+        _C.PROBLEM.INSTANCE_SEG.SYNAPSES.PEAK_LOCAL_MAX_MIN_DISTANCE = 1
+        # Minimun value to consider a point as a peak. Corresponds to 'threshold_abs' argument of the function
+        # 'peak_local_max' of skimage.feature
+        _C.PROBLEM.INSTANCE_SEG.SYNAPSES.MIN_TH_TO_BE_PEAK = 0.2
+        # Corresponds to 'exclude_border' argument of 'peak_local_max' or 'blob_log' function of skimage. If True it will exclude
+        # peaks from the border of the image to avoid partial detection.
+        _C.PROBLEM.INSTANCE_SEG.SYNAPSES.EXCLUDE_BORDER = False
+        # Corresponds to 'min_sigma' argument of 'blob_log' function. It is the minimum standard deviation for Gaussian kernel.
+        # Keep this low to detect smaller blobs. The standard deviations of the Gaussian filter are given for each axis as a
+        # sequence, or as a single number, in which case it is equal for all axes.
+        _C.PROBLEM.INSTANCE_SEG.SYNAPSES.BLOB_LOG_MIN_SIGMA = 5
+        # Corresponds to 'max_sigma' argument of 'blob_log' function. It is the maximum standard deviation for Gaussian kernel.
+        # Keep this high to detect larger blobs. The standard deviations of the Gaussian filter are given for each axis as a
+        # sequence, or as a single number, in which case it is equal for all axes.
+        _C.PROBLEM.INSTANCE_SEG.SYNAPSES.BLOB_LOG_MAX_SIGMA = 10
+        # Corresponds to 'num_sigma' argument of 'blob_log' function. The number of intermediate values of standard deviations
+        # to consider between min_sigma and max_sigma.
+        _C.PROBLEM.INSTANCE_SEG.SYNAPSES.BLOB_LOG_NUM_SIGMA = 2
+
         ### DETECTION
         _C.PROBLEM.DETECTION = CN()
         # Shape of the ellipse that will be used to dilate the central point created from the CSV file. 0 to not dilate and only create a 3x3 square.

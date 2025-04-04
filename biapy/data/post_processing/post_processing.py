@@ -377,6 +377,9 @@ def create_synapses(data: NDArray,
     point_creation_func: str = "peak_local_max",
     min_th_to_be_peak: float = 0.2,
     min_distance: int=1,
+    min_sigma: int=5,
+    max_sigma: int=10,
+    num_sigma: int=2,
     exclude_border: bool = False,
 ) -> Tuple[NDArray, Dict]:
     """
@@ -422,9 +425,9 @@ def create_synapses(data: NDArray,
             else:
                 coords = blob_log(
                     data[..., c] * 255,
-                    min_sigma=5,
-                    max_sigma=10,
-                    num_sigma=2,
+                    min_sigma=min_sigma,
+                    max_sigma=max_sigma,
+                    num_sigma=num_sigma,
                     threshold=min_th_to_be_peak,
                     exclude_border=exclude_border,
                 )
