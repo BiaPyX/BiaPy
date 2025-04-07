@@ -318,7 +318,9 @@ class Detection_Workflow(Base_Workflow):
             pred_points = pred_points[:, :3].astype(int)  # Remove sigma
 
         # Remove close points per class as post-processing method
+        out_dir = self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK
         if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS and not self.cfg.TEST.BY_CHUNKS.ENABLE:
+            out_dir = self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING
             pred_points = remove_close_points(
                 pred_points,
                 self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS,
@@ -392,7 +394,7 @@ class Detection_Workflow(Base_Workflow):
                 if file_ext in [".hdf5", ".hdf", ".h5", ".zarr"]:
                     write_chunked_data(
                         np.expand_dims(points_pred_mask, 0),
-                        self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
+                        out_dir,
                         self.current_sample["filename"],
                         dtype_str="uint8",
                         verbose=self.cfg.TEST.VERBOSE,
@@ -400,7 +402,7 @@ class Detection_Workflow(Base_Workflow):
                 else:
                     save_tif(
                         np.expand_dims(points_pred_mask, 0),
-                        self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
+                        out_dir,
                         [self.current_sample["filename"]],
                         verbose=self.cfg.TEST.VERBOSE,
                     )
@@ -568,10 +570,10 @@ class Detection_Workflow(Base_Workflow):
 
             if not self.cfg.TEST.BY_CHUNKS.ENABLE:
                 # Save just the points and their probabilities
-                os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, exist_ok=True)
+                os.makedirs(out_dir, exist_ok=True)
                 df.to_csv(
                     os.path.join(
-                        self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
+                        out_dir,
                         os.path.splitext(self.current_sample["filename"])[0] + "_points.csv",
                     ),
                     index=False,
@@ -903,12 +905,17 @@ class Detection_Workflow(Base_Workflow):
         Place any code that needs to be done after predicting all the patches, one by one, in the "by chunks" setting.
         """
         filename, _ = os.path.splitext(self.current_sample["filename"])
-        all_pred_files = sorted(next(os.walk(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK))[2])
+        input_dir = (
+            self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK
+            if self.post_processing["detection_post"]
+            else self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK
+        )
+        all_pred_files = sorted(next(os.walk(input_dir))[2])
         all_pred_files = [x for x in all_pred_files if "_points.csv" in x and "all_points.csv" not in x]
         if len(all_pred_files) > 0:
             point_counter = 0
             for pred_file in all_pred_files:
-                pred_file_path = os.path.join(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, pred_file)
+                pred_file_path = os.path.join(input_dir, pred_file)
                 pred_df = pd.read_csv(pred_file_path, index_col=False)
                 pred_df["pred_id"] = pred_df["pred_id"] + point_counter
                 point_counter += len(pred_df)
