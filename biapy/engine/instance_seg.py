@@ -1443,13 +1443,13 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             pre_points_df, post_points_df = self.synapse_seg_process(patch, calculate_metrics=False)
 
             if pre_points_df is not None:
-                # Add the patch shift to the detected coordinates so they become into global coords
+                # Add the patch shift to the detected coordinates so they represent global coords
                 pre_points_df["axis-0"] = pre_points_df["axis-0"] + patch_in_data.z_start
                 pre_points_df["axis-1"] = pre_points_df["axis-1"] + patch_in_data.y_start
                 pre_points_df["axis-2"] = pre_points_df["axis-2"] + patch_in_data.x_start
 
             if post_points_df is not None:
-                # Add the patch shift to the detected coordinates so they become into global coords
+                # Add the patch shift to the detected coordinates so they represent global coords
                 post_points_df["axis-0"] = post_points_df["axis-0"] + patch_in_data.z_start
                 post_points_df["axis-1"] = post_points_df["axis-1"] + patch_in_data.y_start
                 post_points_df["axis-2"] = post_points_df["axis-2"] + patch_in_data.x_start

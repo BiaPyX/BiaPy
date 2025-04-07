@@ -1366,6 +1366,8 @@ class Base_Workflow(metaclass=ABCMeta):
                     # Break the loop as those samples were created just to complete the last batch
                     if sampler_ids[i] < sampler_ids[0]:
                         break
+                    
+                    self.after_one_patch_prediction_by_chunks(single_pred, patch_in_data[i])
 
                     # Remove padding if added
                     single_pred = pred[i]
@@ -1377,8 +1379,6 @@ class Base_Workflow(metaclass=ABCMeta):
                     ]
                     # Insert into the data
                     tgen.insert_patch_in_file(single_pred, patch_in_data[i])
-
-                    self.after_one_patch_prediction_by_chunks(single_pred, patch_in_data[i])
 
             # Wait until all threads are done so the main thread can create the full size image
             if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
@@ -1762,8 +1762,6 @@ class Base_Workflow(metaclass=ABCMeta):
                         self.current_sample["X"][0],
                         axes_order_back=self.axes_order_back,
                         pred_func=self.model_call_func,
-                        axes_order=self.axes_order,
-                        device=self.device,
                         mode=self.cfg.TEST.AUGMENTATION_MODE,
                     )
                 else:

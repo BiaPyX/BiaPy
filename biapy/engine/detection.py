@@ -857,7 +857,7 @@ class Detection_Workflow(Base_Workflow):
         df_patch = self.detection_process(patch, patch_pos=patch_in_data)
 
         if df_patch is not None:
-            # Add the patch shift to the detected coordinates so they become into global coords
+            # Add the patch shift to the detected coordinates so they represent global coords
             df_patch["axis-0"] = df_patch["axis-0"] + patch_in_data.z_start
             df_patch["axis-1"] = df_patch["axis-1"] + patch_in_data.y_start
             df_patch["axis-2"] = df_patch["axis-2"] + patch_in_data.x_start
