@@ -329,26 +329,6 @@ class Denoising_Workflow(Base_Workflow):
         """
         pass
 
-    def after_one_patch_prediction_by_chunks(self, patch: NDArray, patch_in_data: PatchCoords):
-        """
-        Place any code that needs to be done after predicting one patch in "by chunks" setting.
-
-        Parameters
-        ----------
-        patch : NDArray
-            Predicted patch.
-
-        patch_in_data : PatchCoords
-            Global coordinates of the patch.
-        """
-        pass
-    
-    def after_all_patch_prediction_by_chunks(self):
-        """
-        Place any code that needs to be done after predicting all the patches, one by one, in the "by chunks" setting. 
-        """
-        pass
-
     def after_full_image(self, pred: NDArray):
         """
         Steps that must be executed after generating the prediction by supplying the entire image to the model.

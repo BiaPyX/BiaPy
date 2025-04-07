@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from skimage.feature import peak_local_max, blob_log
 from skimage.morphology import disk, dilation
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 from numpy.typing import NDArray
 
 from biapy.data.post_processing.post_processing import (
@@ -23,7 +23,7 @@ from biapy.engine.metrics import (
 )
 from biapy.data.pre_processing import create_detection_masks
 from biapy.engine.base_workflow import Base_Workflow
-from biapy.data.data_3D_manipulation import order_dimensions, write_chunked_data, read_chunked_data
+from biapy.data.data_3D_manipulation import order_dimensions, write_chunked_data
 from biapy.data.data_manipulation import save_tif
 from biapy.data.dataset import PatchCoords
 
@@ -566,14 +566,16 @@ class Detection_Workflow(Base_Workflow):
             if not self.multihead:
                 df = df.drop(columns=["class"])
 
-            # Save just the points and their probabilities
-            os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, exist_ok=True)
-            df.to_csv(
-                os.path.join(
-                    self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
-                    os.path.splitext(self.current_sample["filename"])[0] + "_points.csv",
+            if not self.cfg.TEST.BY_CHUNKS.ENABLE:
+                # Save just the points and their probabilities
+                os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, exist_ok=True)
+                df.to_csv(
+                    os.path.join(
+                        self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
+                        os.path.splitext(self.current_sample["filename"])[0] + "_points.csv",
+                    ),
+                    index=False,
                 )
-            )
 
         # Calculate detection metrics
         if self.use_gt and not self.cfg.TEST.BY_CHUNKS.ENABLE:
@@ -582,7 +584,9 @@ class Detection_Workflow(Base_Workflow):
                 all_channel_d_metrics += [0, 0, 0, 0, 0]
 
             # Read the GT coordinates from the CSV file
-            csv_filename = os.path.join(self.original_test_mask_path, os.path.splitext(self.current_sample["filename"])[0] + ".csv")
+            csv_filename = os.path.join(
+                self.original_test_mask_path, os.path.splitext(self.current_sample["filename"])[0] + ".csv"
+            )
             if not os.path.exists(csv_filename):
                 if self.cfg.TEST.VERBOSE:
                     print(
@@ -723,7 +727,8 @@ class Detection_Workflow(Base_Workflow):
                         os.path.join(
                             self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
                             os.path.splitext(self.current_sample["filename"])[0] + "_gt_assoc.csv",
-                        )
+                        ),
+                        index=False,
                     )
                 if fp is not None:
                     os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, exist_ok=True)
@@ -731,7 +736,8 @@ class Detection_Workflow(Base_Workflow):
                         os.path.join(
                             self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
                             os.path.splitext(self.current_sample["filename"])[0] + "_fp.csv",
-                        )
+                        ),
+                        index=False,
                     )
                 if gt_assoc is not None:
                     gt_assoc = gt_assoc_orig
@@ -842,38 +848,70 @@ class Detection_Workflow(Base_Workflow):
         else:
             raise NotImplementedError
 
-    def after_one_patch_prediction_by_chunks(self, patch: NDArray, patch_in_data: PatchCoords):
+    def after_one_patch_prediction_by_chunks(
+        self, patch_id: int, patch: NDArray, patch_in_data: PatchCoords, added_pad: List[List[int]]
+    ):
         """
         Place any code that needs to be done after predicting one patch in "by chunks" setting.
 
         Parameters
         ----------
+        patch_id: int
+            Patch identifier.
+
         patch : NDArray
             Predicted patch.
 
         patch_in_data : PatchCoords
             Global coordinates of the patch.
+
+        added_pad: List of list of ints
+            Padding added to the patch that should be not taken into account when processing the patch.
         """
         df_patch = self.detection_process(patch, patch_pos=patch_in_data)
 
-        if df_patch is not None:
+        if df_patch is not None and len(df_patch) > 0:
+            # Remove possible points in the padded area
+            df_patch = df_patch[df_patch["axis-0"] >= added_pad[0][0]]
+            df_patch = df_patch[df_patch["axis-0"] < patch.shape[0] - added_pad[0][1]]
+            df_patch = df_patch[df_patch["axis-1"] >= added_pad[1][0]]
+            df_patch = df_patch[df_patch["axis-1"] < patch.shape[1] - added_pad[1][1]]
+            df_patch = df_patch[df_patch["axis-2"] >= added_pad[2][0]]
+            df_patch = df_patch[df_patch["axis-2"] < patch.shape[2] - added_pad[2][1]]
+
             # Add the patch shift to the detected coordinates so they represent global coords
             df_patch["axis-0"] = df_patch["axis-0"] + patch_in_data.z_start
             df_patch["axis-1"] = df_patch["axis-1"] + patch_in_data.y_start
             df_patch["axis-2"] = df_patch["axis-2"] + patch_in_data.x_start
 
-        assert isinstance(self.all_pred, list)
-        self.all_pred.append(df_patch)
+            # Save the csv file
+            os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, exist_ok=True)
+            _filename, __loader__ = os.path.splitext(os.path.basename(self.current_sample["filename"]))
+            df_patch.to_csv(
+                os.path.join(
+                    self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
+                    _filename + "_patch" + str(patch_id).zfill(len(str(len(self.test_generator)))) + "_points.csv",
+                ),
+                index=False,
+            )
 
     def after_all_patch_prediction_by_chunks(self):
         """
         Place any code that needs to be done after predicting all the patches, one by one, in the "by chunks" setting.
         """
-        assert isinstance(self.all_pred, list) and isinstance(self.all_gt, list)
         filename, _ = os.path.splitext(self.current_sample["filename"])
+        all_pred_files = sorted(next(os.walk(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK))[2])
+        all_pred_files = [x for x in all_pred_files if "_points.csv" in x]
+        if len(all_pred_files) > 0:
+            point_counter = 0
+            for pred_file in all_pred_files:
+                pred_file_path = os.path.join(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, pred_file)
+                pred_df = pd.read_csv(pred_file_path, index_col=False)
+                pred_df["pred_id"] = pred_df["pred_id"] + point_counter
+                point_counter += len(pred_df)
+                self.all_pred.append(pred_df)
 
-        # Check that there are points 
-        if any([True for x in self.all_pred if x is not None]):
+        if len(self.all_pred) > 0:
             df = pd.concat(self.all_pred, ignore_index=True)
 
             # Take point coords
@@ -913,7 +951,8 @@ class Detection_Workflow(Base_Workflow):
                 os.path.join(
                     self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
                     filename + "_all_points.csv",
-                )
+                ),
+                index=False,
             )
 
             # Calculate metrics with all the points
@@ -1226,7 +1265,7 @@ class Detection_Workflow(Base_Workflow):
                 )
             )
             opts.extend(["DATA.VAL.GT_PATH", self.cfg.DATA.VAL.DETECTION_MASK_DIR])
-            
+
             out_data_order = self.cfg.DATA.VAL.INPUT_IMG_AXES_ORDER
             if "C" not in self.cfg.DATA.VAL.INPUT_IMG_AXES_ORDER:
                 out_data_order += "C"

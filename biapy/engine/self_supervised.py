@@ -463,7 +463,7 @@ class Self_supervised_Workflow(Base_Workflow):
                         self.axes_order,
                         self.device,
                     ),
-                    apply_act=False
+                    apply_act=False,
                 )
                 if self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
                     loss, p, mask = p
@@ -641,26 +641,6 @@ class Self_supervised_Workflow(Base_Workflow):
         ----------
         pred : Torch Tensor
             Model prediction.
-        """
-        pass
-
-    def after_all_patch_prediction_by_chunks(self):
-        """
-        Place any code that needs to be done after predicting all the patches, one by one, in the "by chunks" setting. 
-        """
-        pass
-    
-    def after_one_patch_prediction_by_chunks(self, patch: NDArray, patch_in_data: PatchCoords):
-        """
-        Place any code that needs to be done after predicting one patch in "by chunks" setting.
-
-        Parameters
-        ----------
-        patch : NDArray
-            Predicted patch.
-
-        patch_in_data : PatchCoords
-            Global coordinates of the patch.
         """
         pass
 

@@ -1422,23 +1422,31 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         else:
             raise NotImplementedError
 
-    def after_one_patch_prediction_by_chunks(self, patch: NDArray, patch_in_data: PatchCoords):
+    def after_one_patch_prediction_by_chunks(
+        self, patch_id: int, patch: NDArray, patch_in_data: PatchCoords, added_pad: List[List[int]]
+    ):
         """
         Place any code that needs to be done after predicting one patch in "by chunks" setting.
 
         Parameters
         ----------
+        patch_id: int
+            Patch identifier.
+
         patch : NDArray
             Predicted patch.
 
         patch_in_data : PatchCoords
             Global coordinates of the patch.
+        
+        added_pad: List of list of ints
+            Padding added to the patch that should be not taken into account when processing the patch. 
         """
         if self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
             pass
             # Important to maintain calculate_metrics=False in the future call here
             # pre_points_df, post_points_df = self.instance_seg_process(patch, filenames, out_dir, out_dir_post_proc, calculate_metrics=False)
-            
+
         else:  # synapses
             pre_points_df, post_points_df = self.synapse_seg_process(patch, calculate_metrics=False)
 
@@ -1476,8 +1484,8 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     pred_file.close()
 
                 pred = ensure_3d_shape(pred, fpath)
-                
-                self.after_merge_patches(np.expand_dims(pred,0))
+
+                self.after_merge_patches(np.expand_dims(pred, 0))
         else:
             # In this case we need only to merge all local points so it will be done by the main thread. The rest will wait
             if not self.cfg.TEST.REUSE_PREDICTIONS:
@@ -1659,13 +1667,15 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         os.path.join(
                             self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
                             "pred_pre_locations_gt_assoc.csv",
-                        )
+                        ),
+                        index=False,
                     )
                     fp.to_csv(
                         os.path.join(
                             self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
                             "pred_pre_locations_fp.csv",
-                        )
+                        ),
+                        index=False,
                     )
 
                     d_metrics, gt_assoc, fp = detection_metrics(
@@ -1685,13 +1695,15 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         os.path.join(
                             self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
                             "pred_post_locations_gt_assoc.csv",
-                        )
+                        ),
+                        index=False,
                     )
                     fp.to_csv(
                         os.path.join(
                             self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
                             "pred_post_locations_fp.csv",
-                        )
+                        ),
+                        index=False,
                     )
 
             # Remove close points
@@ -1800,13 +1812,15 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                             os.path.join(
                                 self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
                                 "pred_pre_locations_gt_assoc.csv",
-                            )
+                            ),
+                            index=False,
                         )
                         fp.to_csv(
                             os.path.join(
                                 self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
                                 "pred_pre_locations_fp.csv",
-                            )
+                            ),
+                            index=False,
                         )
 
                         d_metrics, gt_assoc, fp = detection_metrics(
@@ -1826,13 +1840,15 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                             os.path.join(
                                 self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
                                 "pred_post_locations_gt_assoc.csv",
-                            )
+                            ),
+                            index=False,
                         )
                         fp.to_csv(
                             os.path.join(
                                 self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
                                 "pred_post_locations_fp.csv",
-                            )
+                            ),
+                            index=False,
                         )
 
             sshape = list(self.current_sample["X"].shape)

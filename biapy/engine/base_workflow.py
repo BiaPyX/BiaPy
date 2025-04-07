@@ -587,7 +587,9 @@ class Base_Workflow(metaclass=ABCMeta):
         """
         raise NotImplementedError
 
-    def model_call_func(self, in_img: NDArray | torch.Tensor, is_train: bool = False, apply_act: bool = True) -> torch.Tensor:
+    def model_call_func(
+        self, in_img: NDArray | torch.Tensor, is_train: bool = False, apply_act: bool = True
+    ) -> torch.Tensor:
         """
         Call a regular Pytorch model.
 
@@ -1062,7 +1064,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
         if not isinstance(pred, list):
             multiple_heads = False
-            pred = [pred] # type: ignore
+            pred = [pred]  # type: ignore
         else:
             multiple_heads = True
             assert len(pred) == len(
@@ -1139,14 +1141,13 @@ class Base_Workflow(metaclass=ABCMeta):
             # Decide whether to infer by chunks or not
             discarded = False
             _, file_extension = os.path.splitext(self.current_sample["filename"])
-            if ( 
-                self.cfg.TEST.BY_CHUNKS.ENABLE
-                and self.cfg.PROBLEM.NDIM == "3D"
-            ):
+            if self.cfg.TEST.BY_CHUNKS.ENABLE and self.cfg.PROBLEM.NDIM == "3D":
                 by_chunks = True
                 if file_extension not in [".hdf5", ".hdf", ".h5", ".zarr"]:
-                    print("WARNING: You are not using an image format that can extract patches without loading it entirely into memory. "\
-                          "The image formats that support this are: '.hdf5', '.hdf', '.h5' and '.zarr'. ")
+                    print(
+                        "WARNING: You are not using an image format that can extract patches without loading it entirely into memory. "
+                        "The image formats that support this are: '.hdf5', '.hdf', '.h5' and '.zarr'. "
+                    )
             else:
                 by_chunks = False
 
@@ -1310,18 +1311,25 @@ class Base_Workflow(metaclass=ABCMeta):
 
         return pred
 
-    @abstractmethod
-    def after_one_patch_prediction_by_chunks(self, patch: NDArray, patch_in_data: PatchCoords):
+    def after_one_patch_prediction_by_chunks(
+        self, patch_id: int, patch: NDArray, patch_in_data: PatchCoords, added_pad: List[List[int]]
+    ):
         """
         Place any code that needs to be done after predicting one patch in "by chunks" setting.
 
         Parameters
         ----------
+        patch_id: int
+            Patch identifier.
+
         patch : NDArray
             Predicted patch.
 
         patch_in_data : PatchCoords
             Global coordinates of the patch.
+        
+        added_pad: List of list of ints
+            Padding added to the patch that should be not taken into account when processing the patch. 
         """
         raise NotImplementedError
 
@@ -1332,21 +1340,22 @@ class Base_Workflow(metaclass=ABCMeta):
         """
         if not self.cfg.TEST.REUSE_PREDICTIONS:
             # Create the generator
-            test_dataset = create_chunked_test_generator(
+            self.test_generator = create_chunked_test_generator(
                 self.cfg,
                 current_sample=self.current_sample,
                 norm_module=self.norm_module,
                 out_dir=self.cfg.PATHS.RESULT_DIR.PER_IMAGE,
                 dtype_str=self.dtype_str,
             )
-            tgen: chunked_test_pair_data_generator = test_dataset.dataset  # type: ignore
+            tgen: chunked_test_pair_data_generator = self.test_generator.dataset  # type: ignore
 
             # Get parallel data shape is ZYX
             _, z_dim, _, y_dim, x_dim = order_dimensions(
                 tgen.X_parallel_data.shape, self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER
             )
             self.parallel_data_shape = [z_dim, y_dim, x_dim]
-            for obj_list in test_dataset:
+            last_sample = -1
+            for obj_list in self.test_generator:
                 sampler_ids, img, mask, patch_in_data, added_pad, norm_extra_info = obj_list
 
                 if self.cfg.TEST.VERBOSE:
@@ -1361,21 +1370,42 @@ class Base_Workflow(metaclass=ABCMeta):
 
                 for i in range(pred.shape[0]):
                     # Break the loop as those samples were created just to complete the last batch
-                    if sampler_ids[i] < sampler_ids[0]:
+                    if sampler_ids[i] < sampler_ids[0] or sampler_ids[i] < last_sample:
+                        print(
+                            "[Rank {} ({})] Patch {} discarded".format(
+                                get_rank(),
+                                os.getpid(),
+                                sampler_ids[i],
+                            )
+                        )
                         break
-                    
-                    self.after_one_patch_prediction_by_chunks(pred[i], patch_in_data[i])
 
-                    # Remove padding if added
                     single_pred = pred[i]
                     single_pred_pad = added_pad[i]
+                    single_patch_in_data = patch_in_data[i]
+                    self.after_one_patch_prediction_by_chunks(
+                        sampler_ids[i], single_pred, single_patch_in_data, single_pred_pad
+                    )
+
+                    # Remove padding if added
                     single_pred = single_pred[
                         single_pred_pad[0][0] : single_pred.shape[0] - single_pred_pad[0][1],
                         single_pred_pad[1][0] : single_pred.shape[1] - single_pred_pad[1][1],
                         single_pred_pad[2][0] : single_pred.shape[2] - single_pred_pad[2][1],
                     ]
                     # Insert into the data
-                    tgen.insert_patch_in_file(single_pred, patch_in_data[i])
+                    tgen.insert_patch_in_file(single_pred, single_patch_in_data)
+
+                if sampler_ids[-1] < last_sample:
+                    print(
+                        "[Rank {} ({})] Finishing the loop. Seems that the patches are starting to repeat".format(
+                            get_rank(),
+                            os.getpid(),
+                        )
+                    )
+                    break
+                else:
+                    last_sample = sampler_ids[-1]
 
             # Wait until all threads are done so the main thread can create the full size image
             if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
@@ -1859,9 +1889,7 @@ class Base_Workflow(metaclass=ABCMeta):
         """
         self.normalize_stats(image_counter)
         if self.cfg.DATA.TEST.LOAD_GT:
-            if not self.cfg.TEST.FULL_IMG or (
-                len(self.stats["per_crop"]) > 0 or len(self.stats["merge_patches"]) > 0
-            ):
+            if not self.cfg.TEST.FULL_IMG or (len(self.stats["per_crop"]) > 0 or len(self.stats["merge_patches"]) > 0):
                 if len(self.stats["per_crop"]) > 0:
                     for metric in self.test_metric_names:
                         if metric.lower() in self.stats["per_crop"]:
@@ -1934,13 +1962,6 @@ class Base_Workflow(metaclass=ABCMeta):
         raise NotImplementedError
 
     @abstractmethod
-    def after_all_patch_prediction_by_chunks(self):
-        """
-        Place any code that needs to be done after predicting all the patches, one by one, in the "by chunks" setting.
-        """
-        raise NotImplementedError
-
-    @abstractmethod
     def after_full_image(self, pred: NDArray):
         """
         Place here any code that must be executed after generating the prediction by supplying the entire image to the model.
@@ -1990,3 +2011,9 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.cfg.PATHS.RESULT_DIR.AS_3D_STACK_POST_PROCESSING,
                 verbose=self.cfg.TEST.VERBOSE,
             )
+
+    def after_all_patch_prediction_by_chunks(self):
+        """
+        Place any code that needs to be done after predicting all the patches, one by one, in the "by chunks" setting.
+        """
+        raise NotImplementedError
