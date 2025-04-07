@@ -506,9 +506,12 @@ class chunked_test_pair_data_generator(IterableDataset):
         Saves the final zarr into a tiff file.
         """
         final_zarr_file = os.path.join(self.out_dir, os.path.splitext(self.filename)[0] + ".zarr")
-        data = np.array(zarr.open_array(final_zarr_file, mode="r"))
-        data = ensure_3d_shape(data)
-        save_tif(np.expand_dims(data, 0), self.out_dir, [os.path.splitext(self.filename)[0] + ".tif"], verbose=True)
+        if not os.path.exists(final_zarr_file):
+            print(f"Couldn't load Zarr data for saving. File {final_zarr_file} not found!")
+        else:
+            data = np.array(zarr.open_array(final_zarr_file, mode="r"))
+            data = ensure_3d_shape(data)
+            save_tif(np.expand_dims(data, 0), self.out_dir, [os.path.splitext(self.filename)[0] + ".tif"], verbose=True)
 
     def close_open_files(self):
         """
