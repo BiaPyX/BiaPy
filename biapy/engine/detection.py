@@ -906,7 +906,7 @@ class Detection_Workflow(Base_Workflow):
         """
         filename, _ = os.path.splitext(self.current_sample["filename"])
         input_dir = (
-            self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK
+            self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING
             if self.post_processing["detection_post"]
             else self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK
         )
