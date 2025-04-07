@@ -430,9 +430,14 @@ class chunked_test_pair_data_generator(IterableDataset):
                 out_data_shape = tuple(out_data_shape)
             self.out_data_shape = out_data_shape
 
-            data_filename = os.path.join(
-                self.out_dir, f"rank{get_rank()}_" + os.path.splitext(self.filename)[0] + ".zarr"
-            )
+            if get_world_size() > 1:
+                data_filename = os.path.join(
+                    self.out_dir, f"rank{get_rank()}_" + os.path.splitext(self.filename)[0] + ".zarr"
+                )
+            else:
+                data_filename = os.path.join(
+                    self.out_dir, os.path.splitext(self.filename)[0] + ".zarr"
+                )
             os.makedirs(self.out_dir, exist_ok=True)
             self.out_file = data_filename
             self.out_data = zarr.open_array(

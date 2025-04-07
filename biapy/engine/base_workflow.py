@@ -1433,7 +1433,7 @@ class Base_Workflow(metaclass=ABCMeta):
             self.after_all_patch_prediction_by_chunks()
 
         # Wait until all threads are done so the main thread can create the full size image
-        if self.cfg.SYSTEM.NUM_GPUS > 1:
+        if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
             if self.cfg.TEST.VERBOSE:
                 print(f"[Rank {get_rank()} ({os.getpid()})] Finished predicting sample. Waiting for all ranks . . .")
             if is_dist_avail_and_initialized():
