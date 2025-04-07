@@ -1086,20 +1086,30 @@ class Config:
         #       * "DICE": Dice loss. Ref: https://www.kaggle.com/code/bigironsphere/loss-function-library-keras-pytorch
         #       * "W_CE_DICE": CE and Dice (with a weight term on each one that must sum 1). Ref: https://www.kaggle.com/code/bigironsphere/loss-function-library-keras-pytorch
         #   * Denoising:
-        #       * "MSE" (default): mean square error. Ref: https://pytorch.org/docs/stable/generated/torch.nn.MSELoss.html#torch.nn.MSELoss
+        #       * "MAE": mean absolute error (MAE or L1 loss). Ref: https://pytorch.org/docs/stable/generated/torch.nn.L1Loss.html#torch.nn.L1Loss
+        #       * "MSE" (default): mean square error (MSE). Ref: https://pytorch.org/docs/stable/generated/torch.nn.MSELoss.html#torch.nn.MSELoss
         #   * Super-resolution:
-        #       * "MAE" (default): mean absolute error. Ref: https://pytorch.org/docs/stable/generated/torch.nn.L1Loss.html#torch.nn.L1Loss
-        #       * "MSE": mean square error. Ref: https://pytorch.org/docs/stable/generated/torch.nn.MSELoss.html#torch.nn.MSELoss
+        #       * "MAE" (default): mean absolute error (MAE or L1 loss). Ref: https://pytorch.org/docs/stable/generated/torch.nn.L1Loss.html#torch.nn.L1Loss
+        #       * "MSE": mean square error (MSE). Ref: https://pytorch.org/docs/stable/generated/torch.nn.MSELoss.html#torch.nn.MSELoss
+        #       * "SSIM": structural similarity index measure (SSIM). Ref: https://lightning.ai/docs/torchmetrics/stable/image/structural_similarity.html#torchmetrics.image.StructuralSimilarityIndexMeasure
+        #       * "W_MAE_SSIM": MAE and SSIM (with a weight term on each one that must sum 1).
+        #       * "W_MSE_SSIM": MSE and SSIM (with a weight term on each one that must sum 1).
         #   * Self-supervision:
         #       These losses can only be set when PROBLEM.SELF_SUPERVISED.PRETEXT_TASK = "crappify". Otherwise it will be automatically set to MSE when
         #       PROBLEM.SELF_SUPERVISED.PRETEXT_TASK = "masking".
-        #       * "MAE" (default): mean absolute error. Ref: https://pytorch.org/docs/stable/generated/torch.nn.L1Loss.html#torch.nn.L1Loss
-        #       * "MSE": mean square error. Ref: https://pytorch.org/docs/stable/generated/torch.nn.MSELoss.html#torch.nn.MSELoss
+        #       * "MAE" (default): mean absolute error (MAE or L1 loss). Ref: https://pytorch.org/docs/stable/generated/torch.nn.L1Loss.html#torch.nn.L1Loss
+        #       * "MSE": mean square error (MSE). Ref: https://pytorch.org/docs/stable/generated/torch.nn.MSELoss.html#torch.nn.MSELoss
+        #       * "SSIM": structural similarity index measure (SSIM). Ref: https://lightning.ai/docs/torchmetrics/stable/image/structural_similarity.html#torchmetrics.image.StructuralSimilarityIndexMeasure
+        #       * "W_MAE_SSIM": MAE and SSIM (with a weight term on each one that must sum 1).
+        #       * "W_MSE_SSIM": MSE and SSIM (with a weight term on each one that must sum 1).
         #   * Classification:
         #       * "CE" (default): cross entropy. Ref: https://pytorch.org/docs/stable/generated/torch.nn.CrossEntropyLoss.html
         #   * Image to image:
-        #       * "MAE" (default): mean absolute error. Ref: https://pytorch.org/docs/stable/generated/torch.nn.L1Loss.html#torch.nn.L1Loss
-        #       * "MSE": mean square error. Ref: https://pytorch.org/docs/stable/generated/torch.nn.MSELoss.html#torch.nn.MSELoss
+        #       * "MAE" (default): mean absolute error (MAE or L1 loss). Ref: https://pytorch.org/docs/stable/generated/torch.nn.L1Loss.html#torch.nn.L1Loss
+        #       * "MSE": mean square error (MSE). Ref: https://pytorch.org/docs/stable/generated/torch.nn.MSELoss.html#torch.nn.MSELoss
+        #       * "SSIM": structural similarity index measure (SSIM). Ref: https://lightning.ai/docs/torchmetrics/stable/image/structural_similarity.html#torchmetrics.image.StructuralSimilarityIndexMeasure
+        #       * "W_MAE_SSIM": MAE and SSIM (with a weight term on each one that must sum 1).
+        #       * "W_MSE_SSIM": MSE and SSIM (with a weight term on each one that must sum 1).
         _C.LOSS.TYPE = ""
         # Weights to be applied in multiple loss combination cases. They must sum 1. E.g. [0.3, 0.7].
         _C.LOSS.WEIGHTS = [0.66, 0.34]
