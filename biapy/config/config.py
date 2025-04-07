@@ -347,7 +347,7 @@ class Config:
         #   * 'max' is defined as the max intensity value of the raw image inputs.
         #   * 'diff' is defined as the difference between ground truth and raw images. Available for all workflows but SELF_SUPERVISED and DENOISING. 
         #   * 'diff_by_min_max_ratio' is defined as the difference between ground truth and raw images multiplied by the ratio between raw image max and min. Available for all workflows but SELF_SUPERVISED and DENOISING. 
-        #   * 'target_mean is defined as the mean intensity value of the raw image targets. Available for all workflows but SELF_SUPERVISED and DENOISING.
+        #   * 'target_mean' is defined as the mean intensity value of the raw image targets. Available for all workflows but SELF_SUPERVISED and DENOISING.
         #   * 'target_min' is defined as the min intensity value of the raw image targets. Available for all workflows but SELF_SUPERVISED and DENOISING. 
         #   * 'target_max' is defined as the max intensity value of the raw image targets. Available for all workflows but SELF_SUPERVISED and DENOISING.  
         #   * 'diff_by_target_min_max_ratio' is defined as the difference between ground truth and raw images multiplied by the ratio between ground truth image max and min. Available for all workflows but SELF_SUPERVISED and DENOISING. 
@@ -536,7 +536,7 @@ class Config:
         #   * 'max' is defined as the max intensity value of the raw image inputs.
         #   * 'diff' is defined as the difference between ground truth and raw images. Available for all workflows but SELF_SUPERVISED and DENOISING. 
         #   * 'diff_by_min_max_ratio' is defined as the difference between ground truth and raw images multiplied by the ratio between raw image max and min. Available for all workflows but SELF_SUPERVISED and DENOISING. 
-        #   * 'target_mean is defined as the mean intensity value of the raw image targets. Available for all workflows but SELF_SUPERVISED and DENOISING.
+        #   * 'target_mean' is defined as the mean intensity value of the raw image targets. Available for all workflows but SELF_SUPERVISED and DENOISING.
         #   * 'target_min' is defined as the min intensity value of the raw image targets. Available for all workflows but SELF_SUPERVISED and DENOISING. 
         #   * 'target_max' is defined as the max intensity value of the raw image targets. Available for all workflows but SELF_SUPERVISED and DENOISING.  
         #   * 'diff_by_target_min_max_ratio' is defined as the difference between ground truth and raw images multiplied by the ratio between ground truth image max and min. Available for all workflows but SELF_SUPERVISED and DENOISING. 
@@ -649,7 +649,7 @@ class Config:
         #   * 'max' is defined as the max intensity value of the raw image inputs.
         #   * 'diff' is defined as the difference between ground truth and raw images. Available for all workflows but SELF_SUPERVISED and DENOISING. 
         #   * 'diff_by_min_max_ratio' is defined as the difference between ground truth and raw images multiplied by the ratio between raw image max and min. Available for all workflows but SELF_SUPERVISED and DENOISING. 
-        #   * 'target_mean is defined as the mean intensity value of the raw image targets. Available for all workflows but SELF_SUPERVISED and DENOISING.
+        #   * 'target_mean' is defined as the mean intensity value of the raw image targets. Available for all workflows but SELF_SUPERVISED and DENOISING.
         #   * 'target_min' is defined as the min intensity value of the raw image targets. Available for all workflows but SELF_SUPERVISED and DENOISING. 
         #   * 'target_max' is defined as the max intensity value of the raw image targets. Available for all workflows but SELF_SUPERVISED and DENOISING.  
         #   * 'diff_by_target_min_max_ratio' is defined as the difference between ground truth and raw images multiplied by the ratio between ground truth image max and min. Available for all workflows but SELF_SUPERVISED and DENOISING. 

@@ -891,7 +891,7 @@ class Detection_Workflow(Base_Workflow):
 
             # Save the csv file
             os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, exist_ok=True)
-            _filename, __loader__ = os.path.splitext(os.path.basename(self.current_sample["filename"]))
+            _filename, _ = os.path.splitext(os.path.basename(self.current_sample["filename"]))
             df_patch.to_csv(
                 os.path.join(
                     self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
