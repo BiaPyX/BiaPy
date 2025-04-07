@@ -280,13 +280,13 @@ class Detection_Workflow(Base_Workflow):
             Model predictions. E.g. ``(z, y, x, channels)`` for both 2D and 3D.
 
         inference_type : str, optional
-            Type of inference. Options: ["per_crop", "merge_patches", "as_3D_stack", "full_image", "by_chunks"].
+            Type of inference. Options: ["per_crop", "merge_patches", "as_3D_stack", "full_image"].
 
         patch_pos : PatchCoords, optional
             Position of the patch to analize. By setting this the function will take only into account the GT points
             corresponding to the patch at hand.
         """
-        assert inference_type in ["per_crop", "merge_patches", "as_3D_stack", "full_image", "by_chunks"]
+        assert inference_type in ["per_crop", "merge_patches", "as_3D_stack", "full_image"]
         assert pred.ndim == 4, f"Prediction doesn't have 4 dim: {pred.shape}"
 
         # Multi-head: points + classification
@@ -981,9 +981,9 @@ class Detection_Workflow(Base_Workflow):
                 print("Detection metrics: {}".format(d_metrics))
 
                 for metric in self.test_extra_metrics:
-                    if str(metric).lower() not in self.stats["by_chunks"]:
-                        self.stats["by_chunks"][str(metric).lower()] = 0
-                    self.stats["by_chunks"][str(metric).lower()] += d_metrics[str(metric)]
+                    if str(metric).lower() not in self.stats["merge_patches"]:
+                        self.stats["merge_patches"][str(metric).lower()] = 0
+                    self.stats["merge_patches"][str(metric).lower()] += d_metrics[str(metric)]
         else:
             print("No points created for the given sample")
 

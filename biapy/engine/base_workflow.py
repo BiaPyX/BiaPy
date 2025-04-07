@@ -155,9 +155,6 @@ class Base_Workflow(metaclass=ABCMeta):
         self.stats["full_image"] = {}
         self.stats["full_image_post"] = {}
 
-        # By chunks
-        self.stats["by_chunks"] = {}
-
         self.mask_path = ""
         self.is_y_mask = False
         self.model_output_channels = {}
@@ -1110,7 +1107,7 @@ class Base_Workflow(metaclass=ABCMeta):
             self.model_without_ddp.eval()
 
         # Load best checkpoint on validation
-        if self.cfg.TRAIN.ENABLE and self.cfg.MODEL.SOURCE == "biapy":
+        if self.cfg.TRAIN.ENABLE:
             self.start_epoch, self.checkpoint_path = load_model_checkpoint(
                 cfg=self.cfg,
                 jobname=self.job_identifier,
@@ -1360,14 +1357,14 @@ class Base_Workflow(metaclass=ABCMeta):
                     )
 
                 # Pass the batch through the model
-                pred = self.predict_batches_in_test(img, mask, stats_name="by_chunks", disable_tqdm=True)
+                pred = self.predict_batches_in_test(img, mask, disable_tqdm=True)
 
                 for i in range(pred.shape[0]):
                     # Break the loop as those samples were created just to complete the last batch
                     if sampler_ids[i] < sampler_ids[0]:
                         break
                     
-                    self.after_one_patch_prediction_by_chunks(single_pred, patch_in_data[i])
+                    self.after_one_patch_prediction_by_chunks(pred[i], patch_in_data[i])
 
                     # Remove padding if added
                     single_pred = pred[i]
@@ -1845,14 +1842,6 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.stats["full_image"][metric] / image_counter if image_counter != 0 else 0
             )
 
-        # By chunks
-        for metric in self.stats["by_chunks"]:
-            self.stats["by_chunks"][metric] = (
-                self.stats["by_chunks"][metric] / self.stats["patch_by_batch_counter"]
-                if self.stats["patch_by_batch_counter"] != 0
-                else 0
-            )
-
         if self.post_processing["per_image"]:
             for metric in self.stats["merge_patches_post"]:
                 self.stats["merge_patches_post"][metric] = (
@@ -1870,53 +1859,41 @@ class Base_Workflow(metaclass=ABCMeta):
         """
         self.normalize_stats(image_counter)
         if self.cfg.DATA.TEST.LOAD_GT:
-            if self.cfg.TEST.BY_CHUNKS.ENABLE:
-                if len(self.stats["by_chunks"]) > 0:
+            if not self.cfg.TEST.FULL_IMG or (
+                len(self.stats["per_crop"]) > 0 or len(self.stats["merge_patches"]) > 0
+            ):
+                if len(self.stats["per_crop"]) > 0:
                     for metric in self.test_metric_names:
-                        if metric.lower() in self.stats["by_chunks"]:
-                            metric_name = metric.replace("IoU", "Foreground IoU")
+                        if metric.lower() in self.stats["per_crop"]:
+                            metric_name = "Foreground IoU" if metric == "IoU" else metric
                             print(
                                 "Test {} (per patch): {}".format(
                                     metric_name,
-                                    self.stats["by_chunks"][metric.lower()],
+                                    self.stats["per_crop"][metric.lower()],
+                                )
+                            )
+
+                if len(self.stats["merge_patches"]) > 0:
+                    for metric in self.test_metric_names:
+                        if metric.lower() in self.stats["merge_patches"]:
+                            metric_name = "Foreground IoU" if metric == "IoU" else metric
+                            print(
+                                "Test {} (merge patches): {}".format(
+                                    metric_name,
+                                    self.stats["merge_patches"][metric.lower()],
                                 )
                             )
             else:
-                if not self.cfg.TEST.FULL_IMG or (
-                    len(self.stats["per_crop"]) > 0 or len(self.stats["merge_patches"]) > 0
-                ):
-                    if len(self.stats["per_crop"]) > 0:
-                        for metric in self.test_metric_names:
-                            if metric.lower() in self.stats["per_crop"]:
-                                metric_name = "Foreground IoU" if metric == "IoU" else metric
-                                print(
-                                    "Test {} (per patch): {}".format(
-                                        metric_name,
-                                        self.stats["per_crop"][metric.lower()],
-                                    )
+                if len(self.stats["full_image"]) > 0:
+                    for metric in self.test_metric_names:
+                        if metric.lower() in self.stats["full_image"]:
+                            metric_name = "Foreground IoU" if metric == "IoU" else metric
+                            print(
+                                "Test {} (per image): {}".format(
+                                    metric_name,
+                                    self.stats["full_image"][metric.lower()],
                                 )
-
-                    if len(self.stats["merge_patches"]) > 0:
-                        for metric in self.test_metric_names:
-                            if metric.lower() in self.stats["merge_patches"]:
-                                metric_name = "Foreground IoU" if metric == "IoU" else metric
-                                print(
-                                    "Test {} (merge patches): {}".format(
-                                        metric_name,
-                                        self.stats["merge_patches"][metric.lower()],
-                                    )
-                                )
-                else:
-                    if len(self.stats["full_image"]) > 0:
-                        for metric in self.test_metric_names:
-                            if metric.lower() in self.stats["full_image"]:
-                                metric_name = "Foreground IoU" if metric == "IoU" else metric
-                                print(
-                                    "Test {} (per image): {}".format(
-                                        metric_name,
-                                        self.stats["full_image"][metric.lower()],
-                                    )
-                                )
+                            )
 
             print(" ")
 

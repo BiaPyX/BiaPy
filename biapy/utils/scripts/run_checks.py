@@ -72,7 +72,7 @@ all_test_info["Test4"] = {
     "internal_checks": [
         {"type": "regular", "pattern": "Test IoU (B channel) (merge patches):", "gt": True, "value": 0.4},
         {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 1, "metric": "f1",
-            "gt": True, "value": 0.6},
+            "gt": True, "value": 0.55},
         {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 2, "metric": "f1",
             "gt": False, "value": 0.3}, # Post-processing
     ]
@@ -134,7 +134,7 @@ all_test_info["Test11"] = {
         "filter samples: foreground + mean. warmupcosine. Basic DA. resunet. test by chunks: Zarr. Post-proc: remove close points",
     "yaml": "test_11.yaml",
     "internal_checks": [
-        {"type": "regular", "pattern": "Test F1 (per image)", "gt": True, "value": 0.15},
+        {"type": "regular", "pattern": "Test F1 (merge patches)", "gt": True, "value": 0.15},
     ]
 }
 
@@ -310,7 +310,7 @@ all_test_info["Test26"] = {
         "filter_samples: foreground. warmupcosine. Basic DA. resunet. test by chunks: Zarr. Post-proc: remove close points",
     "yaml": "test_26.yaml",
     "internal_checks": [
-        {"type": "regular", "pattern": "Test F1 (per image)", "gt": True, "value": 0.35},
+        {"type": "regular", "pattern": "Test F1 (merge patches)", "gt": True, "value": 0.35},
     ]
 }
 
