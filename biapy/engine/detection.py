@@ -872,12 +872,15 @@ class Detection_Workflow(Base_Workflow):
 
         if df_patch is not None and len(df_patch) > 0:
             # Remove possible points in the padded area
-            df_patch = df_patch[df_patch["axis-0"] >= added_pad[0][0]]
             df_patch = df_patch[df_patch["axis-0"] < patch.shape[0] - added_pad[0][1]]
-            df_patch = df_patch[df_patch["axis-1"] >= added_pad[1][0]]
             df_patch = df_patch[df_patch["axis-1"] < patch.shape[1] - added_pad[1][1]]
-            df_patch = df_patch[df_patch["axis-2"] >= added_pad[2][0]]
             df_patch = df_patch[df_patch["axis-2"] < patch.shape[2] - added_pad[2][1]]
+            df_patch["axis-0"] = df_patch["axis-0"] - added_pad[0][0]
+            df_patch["axis-1"] = df_patch["axis-1"] - added_pad[1][0]
+            df_patch["axis-2"] = df_patch["axis-2"] - added_pad[2][0]
+            df_patch = df_patch[df_patch["axis-0"] >= 0]
+            df_patch = df_patch[df_patch["axis-1"] >= 0]
+            df_patch = df_patch[df_patch["axis-2"] >= 0]
 
             # Add the patch shift to the detected coordinates so they represent global coords
             df_patch["axis-0"] = df_patch["axis-0"] + patch_in_data.z_start
@@ -901,7 +904,7 @@ class Detection_Workflow(Base_Workflow):
         """
         filename, _ = os.path.splitext(self.current_sample["filename"])
         all_pred_files = sorted(next(os.walk(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK))[2])
-        all_pred_files = [x for x in all_pred_files if "_points.csv" in x]
+        all_pred_files = [x for x in all_pred_files if "_points.csv" in x and "all_points.csv" not in x]
         if len(all_pred_files) > 0:
             point_counter = 0
             for pred_file in all_pred_files:
@@ -1009,7 +1012,7 @@ class Detection_Workflow(Base_Workflow):
                             ),
                         ],
                     ]
-                d_metrics, _, _ = detection_metrics(
+                d_metrics, gt_assoc, fp = detection_metrics(
                     gt_coordinates,
                     pred_coordinates,
                     tolerance=self.cfg.TEST.DET_TOLERANCE,
@@ -1018,6 +1021,25 @@ class Detection_Workflow(Base_Workflow):
                     verbose=self.cfg.TEST.VERBOSE,
                 )
                 print("Detection metrics: {}".format(d_metrics))
+
+                if gt_assoc is not None:
+                    os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, exist_ok=True)
+                    gt_assoc.to_csv(
+                        os.path.join(
+                            self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
+                            filename + "_gt_assoc.csv",
+                        ),
+                        index=False,
+                    )
+                if fp is not None:
+                    os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS, exist_ok=True)
+                    fp.to_csv(
+                        os.path.join(
+                            self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
+                            filename + "_fp.csv",
+                        ),
+                        index=False,
+                    )
 
                 for metric in self.test_extra_metrics:
                     if str(metric).lower() not in self.stats["merge_patches"]:
