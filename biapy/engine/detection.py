@@ -929,7 +929,9 @@ class Detection_Workflow(Base_Workflow):
                 pred_coordinates.append([z, y, x])
 
             # Apply post-processing of removing points
-            if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS and self.cfg.TEST.BY_CHUNKS.ENABLE:
+            out_dir = self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK
+            if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS:
+                out_dir = self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING
                 pred_coordinates, dropped_pos = remove_close_points(  # type: ignore
                     pred_coordinates,
                     self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS,
@@ -950,9 +952,10 @@ class Detection_Workflow(Base_Workflow):
             df["axis-0"] = df["axis-0"] / z_dim  # type: ignore
             df["axis-1"] = df["axis-1"] / y_dim  # type: ignore
             df["axis-2"] = df["axis-2"] / x_dim  # type: ignore
+            os.makedirs(out_dir, exist_ok=True)
             df.to_csv(
                 os.path.join(
-                    self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
+                    out_dir,
                     filename + "_all_points.csv",
                 ),
                 index=False,
