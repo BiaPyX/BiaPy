@@ -6,7 +6,7 @@ import pandas as pd
 from tqdm import tqdm
 from skimage.segmentation import clear_border
 from skimage.transform import resize
-from skimage.morphology import disk, dilation
+from skimage.morphology import disk, ball, dilation
 import torch.distributed as dist
 from typing import Dict, Optional, List, Tuple, Any
 from numpy.typing import NDArray
@@ -1124,7 +1124,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         pre_post_mapping = {}
         pres, posts = [], []
         pre_ids = pre_points_df["pre_id"].to_list()
-        if len(pre_points) > 0:
+        if len(pre_points) > 0 and len(post_points) > 0:
             for i in range(len(pre_points)):
                 pre_post_mapping[pre_ids[i]] = []
 
@@ -1147,7 +1147,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     posts.append(-1)
         else:
             if self.cfg.TEST.VERBOSE:
-                print("No pre synaptic points found!")
+                print("No pre/post synaptic points found!")
 
         # Create a mapping dataframe
         pre_post_map_df = pd.DataFrame(
@@ -1450,20 +1450,60 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         else:  # synapses
             pre_points_df, post_points_df = self.synapse_seg_process(patch, calculate_metrics=False)
 
-            if pre_points_df is not None:
+            _filename, _ = os.path.splitext(os.path.basename(self.current_sample["filename"]))
+            if pre_points_df is not None and len(pre_points_df) > 0:
+                # Remove possible points in the padded area
+                pre_points_df = pre_points_df[pre_points_df["axis-0"] < patch.shape[0] - added_pad[0][1]]
+                pre_points_df = pre_points_df[pre_points_df["axis-1"] < patch.shape[1] - added_pad[1][1]]
+                pre_points_df = pre_points_df[pre_points_df["axis-2"] < patch.shape[2] - added_pad[2][1]]
+                pre_points_df["axis-0"] = pre_points_df["axis-0"] - added_pad[0][0]
+                pre_points_df["axis-1"] = pre_points_df["axis-1"] - added_pad[1][0]
+                pre_points_df["axis-2"] = pre_points_df["axis-2"] - added_pad[2][0]
+                pre_points_df = pre_points_df[pre_points_df["axis-0"] >= 0]
+                pre_points_df = pre_points_df[pre_points_df["axis-1"] >= 0]
+                pre_points_df = pre_points_df[pre_points_df["axis-2"] >= 0]
+                
                 # Add the patch shift to the detected coordinates so they represent global coords
                 pre_points_df["axis-0"] = pre_points_df["axis-0"] + patch_in_data.z_start
                 pre_points_df["axis-1"] = pre_points_df["axis-1"] + patch_in_data.y_start
                 pre_points_df["axis-2"] = pre_points_df["axis-2"] + patch_in_data.x_start
 
-            if post_points_df is not None:
+                # Save the csv file
+                os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, exist_ok=True)
+                pre_points_df.to_csv(
+                    os.path.join(
+                        self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
+                        _filename + "_patch" + str(patch_id).zfill(len(str(len(self.test_generator)))) + "_pre_points.csv",
+                    ),
+                    index=False,
+                )
+                
+            if post_points_df is not None and len(post_points_df) > 0:
+                # Remove possible points in the padded area
+                post_points_df = post_points_df[post_points_df["axis-0"] < patch.shape[0] - added_pad[0][1]]
+                post_points_df = post_points_df[post_points_df["axis-1"] < patch.shape[1] - added_pad[1][1]]
+                post_points_df = post_points_df[post_points_df["axis-2"] < patch.shape[2] - added_pad[2][1]]
+                post_points_df["axis-0"] = post_points_df["axis-0"] - added_pad[0][0]
+                post_points_df["axis-1"] = post_points_df["axis-1"] - added_pad[1][0]
+                post_points_df["axis-2"] = post_points_df["axis-2"] - added_pad[2][0]
+                post_points_df = post_points_df[post_points_df["axis-0"] >= 0]
+                post_points_df = post_points_df[post_points_df["axis-1"] >= 0]
+                post_points_df = post_points_df[post_points_df["axis-2"] >= 0]
+
                 # Add the patch shift to the detected coordinates so they represent global coords
                 post_points_df["axis-0"] = post_points_df["axis-0"] + patch_in_data.z_start
                 post_points_df["axis-1"] = post_points_df["axis-1"] + patch_in_data.y_start
                 post_points_df["axis-2"] = post_points_df["axis-2"] + patch_in_data.x_start
 
-            assert isinstance(self.all_pred, list)
-            self.all_pred.append([pre_points_df, post_points_df])
+                # Save the csv file
+                os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, exist_ok=True)
+                post_points_df.to_csv(
+                    os.path.join(
+                        self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
+                        _filename + "_patch" + str(patch_id).zfill(len(str(len(self.test_generator)))) + "_post_points.csv",
+                    ),
+                    index=False,
+                )
 
     def after_all_patch_prediction_by_chunks(self):
         """
@@ -1488,54 +1528,75 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 self.after_merge_patches(np.expand_dims(pred, 0))
         else:
             # In this case we need only to merge all local points so it will be done by the main thread. The rest will wait
-            if not self.cfg.TEST.REUSE_PREDICTIONS:
+            filename = os.path.splitext(self.current_sample["filename"])[0]
+            pre_points_df, post_points_df, pre_post_map_df = None, None, None
+            if self.cfg.TEST.REUSE_PREDICTIONS:
                 # For synapses we need to map the pre to the post points. It needs to be done here and not patch by patch as
                 # some pre points may lay in other chunks of the data.
+                input_dir = self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK
+                all_pred_files = sorted(next(os.walk(input_dir))[2])
+                all_pred_files = [x for x in all_pred_files if filename + "_patch" in x]
+                all_pre_point_files = [x for x in all_pred_files if "_pre_points.csv" in x and "all_points.csv" not in x]
+                all_post_point_files = [x for x in all_pred_files if "_post_points.csv" in x and "all_points.csv" not in x]
                 all_pre_dfs, all_post_dfs = [], []
-                pre_id_counter, post_id_counter = 0, 0
-                for pre_df, post_dt in self.all_pred:
-                    if len(pre_df["pre_id"]) > 0:
-                        pre_df["pre_id"] = pre_df["pre_id"] + pre_id_counter
-                        pre_id_counter += len(pre_df["pre_id"])
-                        all_pre_dfs.append(pre_df)
-                    if len(post_dt["post_id"]) > 0:
-                        post_dt["post_id"] = post_dt["post_id"] + post_id_counter
-                        post_id_counter += len(post_dt["post_id"])
-                        all_post_dfs.append(post_dt)
 
-                pre_points_df = pd.concat(all_pre_dfs, ignore_index=True)
-                post_points_df = pd.concat(all_post_dfs, ignore_index=True)
+                # Collect pre dataframes 
+                if len(all_pre_point_files) > 0:
+                    for pre_file in all_pre_point_files:
+                        pre_file_path = os.path.join(input_dir, pre_file)
+                        pred_pre_df = pd.read_csv(pre_file_path, index_col=False)
+                        if len(pred_pre_df) > 0:
+                            all_pre_dfs.append(pred_pre_df)
+
+                # Collect post dataframes 
+                if len(all_post_point_files) > 0:
+                    for post_file in all_post_point_files:
+                        post_file_path = os.path.join(input_dir, post_file)
+                        pred_post_df = pd.read_csv(post_file_path, index_col=False)
+                        if len(pred_post_df) > 0:
+                            all_post_dfs.append(pred_post_df)      
 
                 # Save then the pre and post sites separately
-                os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, exist_ok=True)
-                pre_points_df.to_csv(
-                    os.path.join(
-                        self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
-                        "pred_pre_locations.csv",
-                    ),
-                    index=False,
-                )
-                post_points_df.to_csv(
-                    os.path.join(
-                        self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
-                        "pred_post_locations.csv",
-                    ),
-                    index=False,
-                )
+                if len(all_pre_dfs) > 0:
+                    pre_points_df = pd.concat(all_pre_dfs, ignore_index=True)
+                    pre_points_df.sort_values(by=["axis-0"])
+                    pre_points_df["pre_id"] = list(range(1, len(pre_points_df)+1))
+                    os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, exist_ok=True)
+                    pre_points_df.to_csv(
+                        os.path.join(
+                            self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
+                            filename+"_pred_pre_locations.csv",
+                        ),
+                        index=False,
+                    )
+                if len(all_post_dfs) > 0:
+                    post_points_df = pd.concat(all_post_dfs, ignore_index=True)
+                    post_points_df.sort_values(by=["axis-0"])
+                    post_points_df["post_id"] = list(range(1, len(post_points_df)+1))
+                    os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, exist_ok=True)
+                    post_points_df.to_csv(
+                        os.path.join(
+                            self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
+                            filename+"_pred_post_locations.csv",
+                        ),
+                        index=False,
+                    )
 
                 # Create coordinate arrays
                 pre_points, post_points = [], []
-                for coord in zip(pre_points_df["axis-0"], pre_points_df["axis-1"], pre_points_df["axis-2"]):
-                    pre_points.append(list(coord))
-                for coord in zip(post_points_df["axis-0"], post_points_df["axis-1"], post_points_df["axis-2"]):
-                    post_points.append(list(coord))
+                if len(all_pre_dfs) > 0 and pre_points_df is not None:
+                    for coord in zip(pre_points_df["axis-0"], pre_points_df["axis-1"], pre_points_df["axis-2"]):
+                        pre_points.append(list(coord))
+                if len(all_post_dfs) > 0 and post_points_df is not None:
+                    for coord in zip(post_points_df["axis-0"], post_points_df["axis-1"], post_points_df["axis-2"]):
+                        post_points.append(list(coord))
                 pre_points = np.array(pre_points)
                 post_points = np.array(post_points)
 
                 pre_post_mapping = {}
                 pres, posts = [], []
-                pre_ids = pre_points_df["pre_id"].to_list()
-                if len(pre_points) > 0:
+                if len(pre_points) > 0 and pre_points_df is not None:
+                    pre_ids = pre_points_df["pre_id"].to_list()
                     for i in range(len(pre_points)):
                         pre_post_mapping[pre_ids[i]] = []
 
@@ -1560,43 +1621,44 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     if self.cfg.TEST.VERBOSE:
                         print("No pre synaptic points found!")
 
-                # Create a mapping dataframe
-                pre_post_map_df = pd.DataFrame(
-                    zip(
-                        pres,
-                        posts,
-                    ),
-                    columns=[
-                        "pre_id",
-                        "post_id",
-                    ],
-                )
-
-                pre_post_map_df.to_csv(
-                    os.path.join(
-                        self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
-                        "pre_post_mapping.csv",
-                    ),
-                    index=False,
-                )
+                if len(pres) > 0 and len(posts) > 0:
+                    # Create a mapping dataframe
+                    pre_post_map_df = pd.DataFrame(
+                        zip(
+                            pres,
+                            posts,
+                        ),
+                        columns=[
+                            "pre_id",
+                            "post_id",
+                        ],
+                    )
+                    pre_post_map_df.sort_values(by=["pre_id", "post_id"])
+                    pre_post_map_df.to_csv(
+                        os.path.join(
+                            self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
+                            filename+"_pre_post_mapping.csv",
+                        ),
+                        index=False,
+                    )
             else:
                 # Read the dataframes
                 pre_points_df = pd.read_csv(
                     os.path.join(
                         self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
-                        "pred_pre_locations.csv",
+                        filename+"_pred_pre_locations.csv",
                     )
                 )
                 post_points_df = pd.read_csv(
                     os.path.join(
                         self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
-                        "pred_post_locations.csv",
+                        filename+"_pred_post_locations.csv",
                     )
                 )
                 pre_post_map_df = pd.read_csv(
                     os.path.join(
                         self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
-                        "pre_post_mapping.csv",
+                        filename+"_pre_post_mapping.csv",
                     )
                 )
 
@@ -1615,14 +1677,14 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 resolution_path = self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_RESOLUTION_PATH
                 partners_path = self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_PARTNERS_PATH
                 id_path = self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_ID_PATH
-                filename = os.path.join(self.current_sample["dir"], self.current_sample["filename"])
-                file, ids = read_chunked_nested_data(filename, id_path)
+                data_filename = os.path.join(self.current_sample["dir"], self.current_sample["filename"])
+                file, ids = read_chunked_nested_data(data_filename, id_path)
                 ids = list(np.array(ids))
-                _, partners = read_chunked_nested_data(filename, partners_path)
+                _, partners = read_chunked_nested_data(data_filename, partners_path)
                 partners = np.array(partners)
-                _, locations = read_chunked_nested_data(filename, locations_path)
+                _, locations = read_chunked_nested_data(data_filename, locations_path)
                 locations = np.array(locations)
-                _, resolution = read_chunked_nested_data(filename, resolution_path)
+                _, resolution = read_chunked_nested_data(data_filename, resolution_path)
                 try:
                     resolution = resolution.attrs["resolution"]
                 except:
@@ -1666,14 +1728,14 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     gt_assoc.to_csv(
                         os.path.join(
                             self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
-                            "pred_pre_locations_gt_assoc.csv",
+                            filename+"_pred_pre_locations_gt_assoc.csv",
                         ),
                         index=False,
                     )
                     fp.to_csv(
                         os.path.join(
                             self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
-                            "pred_pre_locations_fp.csv",
+                            filename+"_pred_pre_locations_fp.csv",
                         ),
                         index=False,
                     )
@@ -1694,14 +1756,14 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     gt_assoc.to_csv(
                         os.path.join(
                             self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
-                            "pred_post_locations_gt_assoc.csv",
+                            filename+"_pred_post_locations_gt_assoc.csv",
                         ),
                         index=False,
                     )
                     fp.to_csv(
                         os.path.join(
                             self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
-                            "pred_post_locations_fp.csv",
+                            filename+"_pred_post_locations_fp.csv",
                         ),
                         index=False,
                     )
@@ -1710,44 +1772,46 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             post_proc = False
             if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS:
                 post_proc = True
-                pre_points, pre_dropped_pos = remove_close_points(  # type: ignore
-                    pre_points,
-                    self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS,
-                    self.resolution,
-                    ndim=self.dims,
-                    return_drops=True,
-                )
-                pre_points_df.drop(pre_points_df.index[pre_dropped_pos], inplace=True)  # type: ignore
-                post_points, post_dropped_pos = remove_close_points(  # type: ignore
-                    post_points,
-                    self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS,
-                    self.resolution,
-                    ndim=self.dims,
-                    return_drops=True,
-                )
-                post_points_df.drop(post_points_df.index[post_dropped_pos], inplace=True)  # type: ignore
+                if len(pre_points) > 0 and pre_points_df is not None:
+                    pre_points, pre_dropped_pos = remove_close_points(  # type: ignore
+                        pre_points,
+                        self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS,
+                        self.resolution,
+                        ndim=self.dims,
+                        return_drops=True,
+                    )
+                    pre_points_df.drop(pre_points_df.index[pre_dropped_pos], inplace=True)  # type: ignore
+                    os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING, exist_ok=True)
+                    pre_points_df.to_csv(
+                        os.path.join(
+                            self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
+                            filename+"_pred_pre_locations.csv",
+                        ),
+                        index=False,
+                    )
 
-                # Save filtered stats
-                os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING, exist_ok=True)
-                pre_points_df.to_csv(
-                    os.path.join(
-                        self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
-                        "pred_pre_locations.csv",
-                    ),
-                    index=False,
-                )
-                post_points_df.to_csv(
-                    os.path.join(
-                        self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
-                        "pred_post_locations.csv",
-                    ),
-                    index=False,
-                )
+                if len(post_points) > 0 and post_points_df is not None:   
+                    post_points, post_dropped_pos = remove_close_points(  # type: ignore
+                        post_points,
+                        self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS,
+                        self.resolution,
+                        ndim=self.dims,
+                        return_drops=True,
+                    )
+                    post_points_df.drop(post_points_df.index[post_dropped_pos], inplace=True)  # type: ignore
+                    os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING, exist_ok=True)
+                    post_points_df.to_csv(
+                        os.path.join(
+                            self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
+                            filename+"_pred_post_locations.csv",
+                        ),
+                        index=False,
+                    )
 
                 pre_post_mapping = {}
                 pres, posts = [], []
-                pre_ids = pre_points_df["pre_id"].to_list()
-                if len(pre_points) > 0:
+                if len(pre_points) > 0 and pre_points_df is not None:
+                    pre_ids = pre_points_df["pre_id"].to_list()
                     for i in range(len(pre_points)):
                         pre_post_mapping[pre_ids[i]] = []
 
@@ -1786,7 +1850,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 pre_post_map_df.to_csv(
                     os.path.join(
                         self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
-                        "pre_post_mapping.csv",
+                        filename+"_pre_post_mapping.csv",
                     ),
                     index=False,
                 )
@@ -1811,14 +1875,14 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         gt_assoc.to_csv(
                             os.path.join(
                                 self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
-                                "pred_pre_locations_gt_assoc.csv",
+                                filename+"_pred_pre_locations_gt_assoc.csv",
                             ),
                             index=False,
                         )
                         fp.to_csv(
                             os.path.join(
                                 self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
-                                "pred_pre_locations_fp.csv",
+                                filename+"_pred_pre_locations_fp.csv",
                             ),
                             index=False,
                         )
@@ -1839,14 +1903,14 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         gt_assoc.to_csv(
                             os.path.join(
                                 self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
-                                "pred_post_locations_gt_assoc.csv",
+                                filename+"_pred_post_locations_gt_assoc.csv",
                             ),
                             index=False,
                         )
                         fp.to_csv(
                             os.path.join(
                                 self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
-                                "pred_post_locations_fp.csv",
+                                filename+"pred_post_locations_fp.csv",
                             ),
                             index=False,
                         )
@@ -1859,39 +1923,71 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 ]
             else:
                 sshape[-1] = 2
-            mask = np.zeros(sshape, dtype=np.uint8)
 
+            mask = np.zeros(sshape, dtype=np.uint16)
             # Paint pre points
-            pre_ids = pre_points_df["pre_id"].to_list()
-            assert len(pre_points) == len(pre_ids)
-            for j, cor in enumerate(pre_points):
-                z, y, x = cor  # type: ignore
-                z, y, x = int(z), int(y), int(x)
-                mask[z, y, x, 0] = pre_ids[j]
+            if pre_points_df is not None:
+                pre_ids = pre_points_df["pre_id"].to_list()
+                assert len(pre_points) == len(pre_ids)
+                for j, cor in enumerate(pre_points):
+                    z, y, x = cor  # type: ignore
+                    z, y, x = int(z), int(y), int(x)
+                    mask[z, y, x, 0] = pre_ids[j]
+                    mask[z, y, x, 0] = pre_ids[j]
 
             # Paint post points
-            post_ids = post_points_df["post_id"].to_list()
-            for j, cor in enumerate(post_points):
-                z, y, x = cor  # type: ignore
-                z, y, x = int(z), int(y), int(x)
-                mask[z, y, x, 1] = post_ids[j]
+            if post_points_df is not None:
+                post_ids = post_points_df["post_id"].to_list()
+                assert len(post_points) == len(post_ids)
+                for j, cor in enumerate(post_points):
+                    z, y, x = cor  # type: ignore
+                    z, y, x = int(z), int(y), int(x)
+                    mask[z, y, x, 1] = post_ids[j]
 
-            # Dilate and save the predicted points for the current class
-            for i in range(mask.shape[0]):
-                for c in range(mask.shape[-1]):
-                    mask[i, ..., c] = dilation(mask[i, ..., c], disk(3))
 
             out_dir = (
                 self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING
                 if post_proc
                 else self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK
             )
+            if pre_points_df is not None or post_points_df is not None:
+                # Dilate and save the predicted points
+                for c in range(mask.shape[-1]):
+                    mask[..., c] = dilation(mask[..., c], ball(3))
+
+                save_tif(
+                    np.expand_dims(mask, 0),
+                    out_dir,
+                    [filename + "_points.tif"],
+                    verbose=self.cfg.TEST.VERBOSE,
+                )
+
+            gt_ids = np.zeros(sshape, dtype=np.uint16)
+            for j, cor in enumerate(gt_pre_points):
+                z, y, x = cor  # type: ignore
+                z, y, x = int(z)-1, int(y)-1, int(x)-1
+                try:
+                    gt_ids[z, y, x, 0] = j+1
+                except:
+                    pass
+            for j, cor in enumerate(gt_post_points):
+                z, y, x = cor  # type: ignore
+                z, y, x = int(z)-1, int(y)-1, int(x)-1
+                try:
+                    gt_ids[z, y, x, 1] = j+1
+                except:
+                    pass
+            
+            for c in range(gt_ids.shape[-1]):
+                gt_ids[..., c] = dilation(gt_ids[..., c], ball(3))
+                
             save_tif(
-                np.expand_dims(mask, 0),
+                np.expand_dims(gt_ids, 0),
                 out_dir,
-                [os.path.splitext(self.current_sample["filename"])[0] + "_points.tif"],
+                [filename + "_gt_ids.tif"],
                 verbose=self.cfg.TEST.VERBOSE,
-            )
+            )        
+            import pdb; pdb.set_trace()
 
     def after_full_image(self, pred: NDArray):
         """

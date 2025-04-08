@@ -794,7 +794,7 @@ class Detection_Workflow(Base_Workflow):
                     save_tif(
                         np.expand_dims(np.expand_dims(gt_id_img, 0), -1),
                         self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
-                        [os.path.splitext(self.current_sample["filename"])[0] + "_gt_ids.csv"],
+                        [os.path.splitext(self.current_sample["filename"])[0] + "_gt_ids" + file_ext],
                         verbose=self.cfg.TEST.VERBOSE,
                     )
 
