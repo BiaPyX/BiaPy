@@ -423,7 +423,6 @@ class Image_to_Image_Workflow(Base_Workflow):
                     pred = np.zeros((self.current_sample["X"].shape[0],) + p.shape[1:], dtype=self.dtype)
                 pred[k] = p
         else:
-            self.current_sample["X"] = to_pytorch_format(self.current_sample["X"], self.axes_order, self.device)
             l = int(math.ceil(self.current_sample["X"].shape[0] / self.cfg.TRAIN.BATCH_SIZE))
             for k in tqdm(range(l), leave=False):
                 top = (
