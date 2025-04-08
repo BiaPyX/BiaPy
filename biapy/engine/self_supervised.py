@@ -462,17 +462,13 @@ class Self_supervised_Workflow(Base_Workflow):
                     else self.current_sample["X"].shape[0]
                 )
                 p = self.model_call_func(
-                    to_pytorch_format(
-                        self.current_sample["X"][k * self.cfg.TRAIN.BATCH_SIZE : top],
-                        self.axes_order,
-                        self.device,
-                    ),
+                    self.current_sample["X"][k * self.cfg.TRAIN.BATCH_SIZE : top], 
                     apply_act=False,
                 )
                 if self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
                     loss, p, mask = p
                     p = self.apply_model_activations(p)
-                    p, m, pv = self.model_call_func.save_images(
+                    p, m, pv = self.model.save_images(
                         to_pytorch_format(
                             self.current_sample["X"][k * self.cfg.TRAIN.BATCH_SIZE : top],
                             self.axes_order,
