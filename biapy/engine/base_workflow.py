@@ -1245,6 +1245,8 @@ class Base_Workflow(metaclass=ABCMeta):
                     p = ensemble8_2d_predictions(
                         x_batch[k],
                         axes_order_back=self.axes_order_back,
+                        axes_order=self.axes_order,
+                        device=self.device,
                         pred_func=self.model_call_func,
                         mode=self.cfg.TEST.AUGMENTATION_MODE,
                     )
@@ -1253,6 +1255,8 @@ class Base_Workflow(metaclass=ABCMeta):
                         x_batch[k],
                         batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
                         axes_order_back=self.axes_order_back,
+                        axes_order=self.axes_order,
+                        device=self.device,
                         pred_func=self.model_call_func,
                         mode=self.cfg.TEST.AUGMENTATION_MODE,
                     )
@@ -1789,6 +1793,8 @@ class Base_Workflow(metaclass=ABCMeta):
                         self.current_sample["X"][0],
                         axes_order_back=self.axes_order_back,
                         pred_func=self.model_call_func,
+                        axes_order=self.axes_order,
+                        device=self.device,
                         mode=self.cfg.TEST.AUGMENTATION_MODE,
                     )
                 else:

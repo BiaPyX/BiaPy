@@ -528,9 +528,11 @@ def ensemble8_2d_predictions(
     o_img: NDArray,
     pred_func: Callable,
     axes_order_back: Tuple[int,...],
+    axes_order: Tuple[int,...],
+    device: torch.device,
     batch_size_value: int=1,
     mode="mean",
-) -> NDArray:
+) -> torch.Tensor:
     """
     Outputs the mean prediction of a given image generating its 8 possible rotations and flips.
 
@@ -545,6 +547,12 @@ def ensemble8_2d_predictions(
     axes_order_back : tuple
         Axis order to convert from tensor to numpy. E.g. ``(0,3,1,2)``.
 
+    axes_order : tuple
+        Axis order to convert from numpy to tensor. E.g. ``(0,3,1,2)``.
+ 
+    device : Torch device
+        Device used.
+ 
     batch_size_value : int, optional
         Batch size value.
 
@@ -679,7 +687,7 @@ def ensemble8_2d_predictions(
     elif mode == "max":
         funct = np.max
     out = np.expand_dims(funct(out, axis=0), 0)
-    assert isinstance(out, np.ndarray)
+    out = to_pytorch_format(out, axes_order, device)
     return out
 
 
@@ -687,9 +695,11 @@ def ensemble16_3d_predictions(
     vol: NDArray, 
     pred_func: Callable, 
     axes_order_back: Tuple[int,...], 
+    axes_order: Tuple[int,...],
+    device: torch.device,
     batch_size_value: int=1, 
     mode: str="mean"
-) -> NDArray:
+) -> torch.Tensor:
     """
     Outputs the mean prediction of a given image generating its 16 possible rotations and flips.
 
@@ -703,6 +713,12 @@ def ensemble16_3d_predictions(
 
     axes_order_back : tuple
         Axis order to convert from tensor to numpy. E.g. ``(0,3,1,2,4)``.
+
+    axes_order : tuple
+        Axis order to convert from numpy to tensor. E.g. ``(0,3,1,2)``.
+ 
+    device : Torch device
+        Device used.
 
     batch_size_value : int, optional
         Batch size value.
@@ -987,7 +1003,7 @@ def ensemble16_3d_predictions(
     elif mode == "max":
         funct = np.max
     out = np.expand_dims(funct(out, axis=0), 0)
-    assert isinstance(out, np.ndarray)
+    out = to_pytorch_format(out, axes_order, device)
     return out
 
 

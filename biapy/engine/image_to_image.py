@@ -405,6 +405,8 @@ class Image_to_Image_Workflow(Base_Workflow):
                     p = ensemble8_2d_predictions(
                         self.current_sample["X"][k],
                         axes_order_back=self.axes_order_back,
+                        axes_order=self.axes_order,
+                        device=self.device,
                         pred_func=self.model_call_func,
                     )
                 else:
@@ -412,6 +414,8 @@ class Image_to_Image_Workflow(Base_Workflow):
                         self.current_sample["X"][k],
                         batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
                         axes_order_back=self.axes_order_back,
+                        axes_order=self.axes_order,
+                        device=self.device,
                         pred_func=self.model_call_func,
                     )
                 p = to_numpy_format(p, self.axes_order_back)
