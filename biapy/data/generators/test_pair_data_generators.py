@@ -114,6 +114,7 @@ class test_pair_data_generator(Dataset):
         self.data_shape = data_shape
         self.seed = seed
         self.ndim = ndim
+        self.instance_problem = instance_problem
 
         # As in test entire images are processed one by one X.sample_list and X.dataset_info must match in length. If not
         # means that validation data is being used as test, so we need to clean the sample_list.
@@ -212,7 +213,7 @@ class test_pair_data_generator(Dataset):
                 mask, mask_file = load_img_data(
                     self.Y.dataset_info[msample.fid].path,
                     is_3d=(self.ndim == 3),
-                    data_within_zarr_path=msample.get_path_in_zarr(),
+                    data_within_zarr_path=msample.get_path_in_zarr() if not self.instance_problem else None,
                 )
                 if mask_file and isinstance(mask_file, h5py.File):
                     sample_extra_info["mask_file_to_close"] = mask_file

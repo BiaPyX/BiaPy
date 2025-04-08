@@ -2124,10 +2124,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             test_channel_mask_dir = self.cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR
         else:
             test_instance_mask_dir = self.cfg.DATA.TEST.PATH
-            if self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "synapses":
-                test_channel_mask_dir = self.cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR
-            else:
-                test_channel_mask_dir = self.cfg.DATA.TEST.PATH
+            test_channel_mask_dir = self.cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR
 
         opts = []
         print("###########################")
