@@ -1,5 +1,4 @@
 import os
-import torch
 import scipy
 import h5py
 import zarr
@@ -16,13 +15,9 @@ from skimage.feature import canny
 from skimage.exposure import equalize_adapthist
 from skimage.color import rgb2gray
 from skimage.filters import gaussian, median
+from yacs.config import CfgNode as CN
 from numpy.typing import NDArray
-from typing import (
-    List,
-    Optional,
-    Dict,
-    Tuple
-)
+from typing import List, Optional, Dict, Tuple
 
 from biapy.data.dataset import BiaPyDataset
 from biapy.utils.util import (
@@ -43,15 +38,12 @@ from biapy.data.data_manipulation import (
     load_data_from_dir,
     save_tif,
 )
-from biapy.config.config import Config
+
 
 #########################
 # INSTANCE SEGMENTATION #
 #########################
-def create_instance_channels(
-    cfg: Config, 
-    data_type: str="train"
-):
+def create_instance_channels(cfg: CN, data_type: str = "train"):
     """
     Create training and validation new data with appropiate channels based on ``PROBLEM.INSTANCE_SEG.DATA_CHANNELS``
     for instance segmentation.
@@ -65,8 +57,13 @@ def create_instance_channels(
         Wheter to create training or validation instance channels.
     """
 
-    assert data_type in ["train", "val"]
-    tag = "TRAIN" if data_type == "train" else "VAL"
+    assert data_type in ["train", "val", "test"]
+    if data_type == "train":
+        tag = "TRAIN"
+    elif data_type == "val":
+        tag = "VAL"
+    else:  # test
+        tag = "TEST"
 
     # Checking if the user inputted Zarr/H5 files
     if getattr(cfg.DATA, tag).INPUT_ZARR_MULTIPLE_DATA:
@@ -110,14 +107,14 @@ def create_instance_channels(
             data_within_zarr_path=path_to_gt_data,
         )
         zarr_data_information = {
-            "axis_order": getattr(cfg.DATA, tag).INPUT_IMG_AXES_ORDER,
+            "axes_order": getattr(cfg.DATA, tag).INPUT_IMG_AXES_ORDER,
             "z_axe_pos": getattr(cfg.DATA, tag).INPUT_IMG_AXES_ORDER.index("Z"),
             "y_axe_pos": getattr(cfg.DATA, tag).INPUT_IMG_AXES_ORDER.index("Y"),
             "x_axe_pos": getattr(cfg.DATA, tag).INPUT_IMG_AXES_ORDER.index("X"),
-            "id_path": cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_ID_PATH,
-            "partners_path": cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_PARTNERS_PATH,
-            "locations_path": cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_LOCATIONS_PATH,
-            "resolution_path": cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA_RESOLUTION_PATH,
+            "id_path": getattr(cfg.DATA, tag).INPUT_ZARR_MULTIPLE_DATA_ID_PATH,
+            "partners_path": getattr(cfg.DATA, tag).INPUT_ZARR_MULTIPLE_DATA_PARTNERS_PATH,
+            "locations_path": getattr(cfg.DATA, tag).INPUT_ZARR_MULTIPLE_DATA_LOCATIONS_PATH,
+            "resolution_path": getattr(cfg.DATA, tag).INPUT_ZARR_MULTIPLE_DATA_RESOLUTION_PATH,
         }
 
     else:
@@ -170,7 +167,7 @@ def create_instance_channels(
                 img = load_img_part_from_efficient_file(
                     Y[i]["filepath"],
                     patch_coords,
-                    data_axis_order=getattr(cfg.DATA, tag).INPUT_IMG_AXES_ORDER,
+                    data_axes_order=getattr(cfg.DATA, tag).INPUT_IMG_AXES_ORDER,
                     data_path=getattr(cfg.DATA, tag).INPUT_ZARR_MULTIPLE_DATA_GT_PATH,
                 )
                 if img.ndim == 3:
@@ -215,9 +212,7 @@ def create_instance_channels(
                         imgfile, data = read_chunked_nested_data(Y[i]["filepath"], path_to_gt_data)
                     else:
                         imgfile, data = read_chunked_data(Y[i]["filepath"])
-                    fname = os.path.join(
-                        savepath, os.path.basename(Y[i]["filepath"])
-                    )
+                    fname = os.path.join(savepath, os.path.basename(Y[i]["filepath"]))
                     os.makedirs(savepath, exist_ok=True)
                     if any(fname.endswith(x) for x in [".h5", ".hdf5", ".hdf"]):
                         fid_mask = h5py.File(fname, "w")
@@ -312,44 +307,8 @@ def create_instance_channels(
             )
 
 
-def create_test_instance_channels(
-    cfg: Config
-):
-    """
-    Create test new data with appropiate channels based on ``PROBLEM.INSTANCE_SEG.DATA_CHANNELS`` for instance segmentation.
-
-    Parameters
-    ----------
-    cfg : YACS CN object
-        Configuration.
-    """
-    path = cfg.DATA.TEST.PATH if cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA else cfg.DATA.TEST.GT_PATH
-    Y = sorted(next(os.walk(path))[2])
-    print("Creating Y_test channels . . .")
-    for i in tqdm(range(len(Y)), disable=not is_main_process()):
-        img = read_img_as_ndarray(
-            os.path.join(path, Y[i]),
-            is_3d=not cfg.PROBLEM.NDIM == "2D",
-        )
-        img = labels_into_channels(
-            np.expand_dims(img, 0),
-            mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
-            save_dir=cfg.PATHS.TEST_INSTANCE_CHANNELS_CHECK,
-            fb_mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE,
-        )[0]
-        save_tif(
-            np.expand_dims(img, 0),
-            data_dir=cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR,
-            filenames=[Y[i]],
-            verbose=False,
-        )
-
-
 def labels_into_channels(
-    data_mask: NDArray, 
-    mode: str="BC", 
-    fb_mode: str="outer", 
-    save_dir: Optional[str]=None
+    data_mask: NDArray, mode: str = "BC", fb_mode: str = "outer", save_dir: Optional[str] = None
 ) -> NDArray:
     """
     Converts input semantic or instance segmentation data masks into different binary channels to train an instance segmentation
@@ -548,10 +507,10 @@ def synapse_channel_creation(
     data_info: Dict,
     zarr_data_information: Dict,
     savepath: str,
-    mode: str="BF",
-    postsite_dilation: List[int]=[2, 4, 4],
-    postsite_distance_channel_dilation: List[int]=[3, 10, 10],
-    normalize_values: bool=False,
+    mode: str = "BF",
+    postsite_dilation: List[int] = [2, 4, 4],
+    postsite_distance_channel_dilation: List[int] = [3, 10, 10],
+    normalize_values: bool = False,
 ):
     """
     Creates different channels that represent a synapse segmentation problem to train an instance segmentation
@@ -607,13 +566,11 @@ def synapse_channel_creation(
     patch_offset : list of list
         Pixels used on each axis to pad the patch in order to not cut some of the values in the edges.
     """
-    # TODO: seguir con esta funcion
-    # assert len(data_shape) in [5, 4]
-    # d_shape = data_shape[1:-1]
-    # dim = len(d_shape)
-    assert mode in ["BF"]
+    assert mode in ["B", "BF"]
     if mode == "BF":
         channels = 4
+    elif mode == "B":
+        channels = 2
 
     dtype_str = "float32"
     unique_files = []
@@ -628,7 +585,6 @@ def synapse_channel_creation(
         max(postsite_dilation[1], postsite_distance_channel_dilation[1]) + 1,
         max(postsite_dilation[2], postsite_distance_channel_dilation[2]) + 1,
     ]
-    channels = 4
     ellipse_footprint_cpd = generate_ellipse_footprint(postsite_dilation)
     ellipse_footprint_cpd2 = generate_ellipse_footprint(postsite_distance_channel_dilation)
 
@@ -703,9 +659,10 @@ def synapse_channel_creation(
                 )
 
             pre_key = str(pre_loc)
-            if insert_pre and insert_post and pre_key not in pre_post_points:
-                pre_post_points[pre_key] = []
-            pre_post_points[pre_key].append(post_loc)
+            if insert_pre and insert_post:
+                if pre_key not in pre_post_points:
+                    pre_post_points[pre_key] = []
+                pre_post_points[pre_key].append(post_loc)
 
         if len(pre_post_points) > 0:
             # Create the Zarr file where the mask will be placed
@@ -718,15 +675,15 @@ def synapse_channel_creation(
 
             # Determine data shape
             out_data_shape = np.array(data_shape)
-            if "C" not in zarr_data_information["axis_order"]:
+            if "C" not in zarr_data_information["axes_order"]:
                 out_data_shape = tuple(out_data_shape) + (channels,)
-                out_data_order = zarr_data_information["axis_order"] + "C"
+                out_data_order = zarr_data_information["axes_order"] + "C"
                 c_axe_pos = -1
             else:
-                out_data_shape[zarr_data_information["axis_order"].index("C")] = channels
+                out_data_shape[zarr_data_information["axes_order"].index("C")] = channels
                 out_data_shape = tuple(out_data_shape)
-                out_data_order = zarr_data_information["axis_order"]
-                c_axe_pos = zarr_data_information["axis_order"].index("C")
+                out_data_order = zarr_data_information["axes_order"]
+                c_axe_pos = zarr_data_information["axes_order"].index("C")
 
             if any(fname.endswith(x) for x in [".h5", ".hdf5", ".hdf"]):
                 mask = fid_mask.create_dataset("data", shape=out_data_shape, dtype=dtype_str)
@@ -735,124 +692,90 @@ def synapse_channel_creation(
                 mask = fid_mask.create_dataset("data", shape=out_data_shape, dtype=dtype_str)
 
             print("Paiting all postsynaptic sites")
+            width_reference = dilation_width
             for pre_site, post_sites in tqdm(pre_post_points.items(), disable=not is_main_process()):
                 pre_point_global = [int(float(x)) for x in " ".join(pre_site[1:-1].split()).split(" ")]
 
-                # Take the patch to extract so to draw all the postsynaptic sites using the minimun patch size
-                patch_coords = None
-                for post_point in post_sites:
-                    if patch_coords is None:
-                        patch_coords = [
-                            max(0, post_point[0] - dilation_width[0]),
-                            min(out_data_shape[zarr_data_information["z_axe_pos"]], post_point[0] + dilation_width[0]),
-                            max(0, post_point[1] - dilation_width[1]),
-                            min(out_data_shape[zarr_data_information["y_axe_pos"]], post_point[1] + dilation_width[1]),
-                            max(0, post_point[2] - dilation_width[2]),
-                            min(out_data_shape[zarr_data_information["x_axe_pos"]], post_point[2] + dilation_width[2]),
-                        ]
-                    else:
-                        patch_coords = [
-                            min(max(0, post_point[0] - dilation_width[0]), patch_coords[0]),
-                            max(
-                                min(
-                                    out_data_shape[zarr_data_information["z_axe_pos"]],
-                                    post_point[0] + dilation_width[0],
-                                ),
-                                patch_coords[1],
+                # Do not draw those pre that do not have post associated as they may be errors
+                if len(post_sites) == 0:
+                    continue
+                ref_point = post_sites[0]
+                patch_coords = [
+                    max(0, ref_point[0] - width_reference[0]),
+                    min(out_data_shape[zarr_data_information["z_axe_pos"]], ref_point[0] + width_reference[0]),
+                    max(0, ref_point[1] - width_reference[1]),
+                    min(out_data_shape[zarr_data_information["y_axe_pos"]], ref_point[1] + width_reference[1]),
+                    max(0, ref_point[2] - width_reference[2]),
+                    min(out_data_shape[zarr_data_information["x_axe_pos"]], ref_point[2] + width_reference[2]),
+                ]
+                # Take into account the pre point too
+                if mode == "B":
+                    ref_point = pre_point_global
+                    patch_coords = [
+                        min(max(0, ref_point[0] - width_reference[0]), patch_coords[0]),
+                        max(
+                            min(
+                                out_data_shape[zarr_data_information["z_axe_pos"]],
+                                ref_point[0] + width_reference[0],
                             ),
-                            min(max(0, post_point[1] - dilation_width[1]), patch_coords[2]),
-                            max(
-                                min(
-                                    out_data_shape[zarr_data_information["y_axe_pos"]],
-                                    post_point[1] + dilation_width[1],
-                                ),
-                                patch_coords[3],
+                            patch_coords[1],
+                        ),
+                        min(max(0, ref_point[1] - width_reference[1]), patch_coords[2]),
+                        max(
+                            min(
+                                out_data_shape[zarr_data_information["y_axe_pos"]],
+                                ref_point[1] + width_reference[1],
                             ),
-                            min(max(0, post_point[2] - dilation_width[2]), patch_coords[4]),
-                            max(
-                                min(
-                                    out_data_shape[zarr_data_information["x_axe_pos"]],
-                                    post_point[2] + dilation_width[2],
-                                ),
-                                patch_coords[5],
+                            patch_coords[3],
+                        ),
+                        min(max(0, ref_point[2] - width_reference[2]), patch_coords[4]),
+                        max(
+                            min(
+                                out_data_shape[zarr_data_information["x_axe_pos"]],
+                                ref_point[2] + width_reference[2],
                             ),
-                        ]
+                            patch_coords[5],
+                        ),
+                    ]
 
-                assert patch_coords
+                # Take the patch to extract so to draw all the postsynaptic sites using the minimun patch size
+                for post_point in post_sites:
+                    ref_point = post_point
+                    patch_coords = [
+                        min(max(0, ref_point[0] - width_reference[0]), patch_coords[0]),
+                        max(
+                            min(
+                                out_data_shape[zarr_data_information["z_axe_pos"]],
+                                ref_point[0] + width_reference[0],
+                            ),
+                            patch_coords[1],
+                        ),
+                        min(max(0, ref_point[1] - width_reference[1]), patch_coords[2]),
+                        max(
+                            min(
+                                out_data_shape[zarr_data_information["y_axe_pos"]],
+                                ref_point[1] + width_reference[1],
+                            ),
+                            patch_coords[3],
+                        ),
+                        min(max(0, ref_point[2] - width_reference[2]), patch_coords[4]),
+                        max(
+                            min(
+                                out_data_shape[zarr_data_information["x_axe_pos"]],
+                                ref_point[2] + width_reference[2],
+                            ),
+                            patch_coords[5],
+                        ),
+                    ]
+
                 patch_coords = [int(x) for x in patch_coords]
                 patch_shape = (
                     patch_coords[1] - patch_coords[0],
                     patch_coords[3] - patch_coords[2],
                     patch_coords[5] - patch_coords[4],
                 )
-                seeds = np.zeros(patch_shape, dtype=np.uint64)
-                mask_to_grow = np.zeros(patch_shape, dtype=np.uint8)
 
-                # Paiting each post-synaptic site
-                label_to_pre_site = {}
-                label_count = 1
-                for post_point_global in post_sites:
-                    post_point = [
-                        int(post_point_global[0] - patch_coords[0]),
-                        int(post_point_global[1] - patch_coords[2]),
-                        int(post_point_global[2] - patch_coords[4]),
-                    ]
-                    pre_point = [
-                        int(pre_point_global[0] - patch_coords[0]),
-                        int(pre_point_global[1] - patch_coords[2]),
-                        int(pre_point_global[2] - patch_coords[4]),
-                    ]
-
-                    if (
-                        post_point[0] < seeds.shape[0]
-                        and post_point[1] < seeds.shape[1]
-                        and post_point[2] < seeds.shape[2]
-                    ):
-                        seeds[
-                            max(0, post_point[0] - dilation_width[0]) : min(
-                                post_point[0] + dilation_width[0], seeds.shape[0]
-                            ),
-                            post_point[1],
-                            post_point[2],
-                        ] = label_count
-                        label_to_pre_site[label_count] = list(pre_point)
-                        label_count += 1
-
-                        mask_to_grow[post_point[0], post_point[1], post_point[2]] = 1
-                    else:
-                        raise ValueError(
-                            "Point {} seems to be out of shape: {}".format(
-                                [post_point[0], post_point[1], post_point[2]], seeds.shape
-                            )
-                        )
-
-                # First channel creation
-                channel_0 = binary_dilation_scipy(
-                    mask_to_grow,
-                    iterations=1,
-                    structure=ellipse_footprint_cpd,
-                )
-                mask_to_grow = binary_dilation_scipy(
-                    mask_to_grow,
-                    iterations=1,
-                    structure=ellipse_footprint_cpd2,
-                )
-                for z in range(len(seeds)):
-                    semantic = distance_transform_edt(mask_to_grow[z])
-                    assert isinstance(semantic, np.ndarray)
-                    seeds[z] = watershed(-semantic, seeds[z], mask=mask_to_grow[z])
-
-                # Flow channel creation
-                hv_map = create_flow_channels(
-                    seeds,
-                    ref_point="presynaptic",
-                    label_to_pre_site=label_to_pre_site,
-                    normalize_values=normalize_values,
-                )
-
-                hv_map = np.concatenate([np.expand_dims(channel_0, -1), hv_map], axis=-1)
-                del channel_0
-
+                # Prepare the slices to be used when inserting the data into the generated Zarr/h5 file
                 slices = (
                     slice(patch_coords[0], patch_coords[1]),
                     slice(patch_coords[2], patch_coords[3]),
@@ -868,8 +791,120 @@ def synapse_channel_creation(
                     )
                 )
 
+                pre_point = [
+                    int(pre_point_global[0] - patch_coords[0]),
+                    int(pre_point_global[1] - patch_coords[2]),
+                    int(pre_point_global[2] - patch_coords[4]),
+                ]
+
+                # Paiting each post-synaptic site
+                if mode == "BF":
+                    seeds = np.zeros(patch_shape, dtype=np.uint64)
+                    mask_to_grow = np.zeros(patch_shape, dtype=np.uint8)
+                    label_to_pre_site = {}
+                    label_count = 1
+                    for post_point_global in post_sites:
+                        post_point = [
+                            int(post_point_global[0] - patch_coords[0]),
+                            int(post_point_global[1] - patch_coords[2]),
+                            int(post_point_global[2] - patch_coords[4]),
+                        ]
+
+                        if (
+                            post_point[0] < seeds.shape[0]
+                            and post_point[1] < seeds.shape[1]
+                            and post_point[2] < seeds.shape[2]
+                        ):
+                            seeds[
+                                max(0, post_point[0] - width_reference[0]) : min(
+                                    post_point[0] + width_reference[0], seeds.shape[0]
+                                ),
+                                post_point[1],
+                                post_point[2],
+                            ] = label_count
+                            label_to_pre_site[label_count] = list(pre_point)
+                            label_count += 1
+
+                            mask_to_grow[post_point[0], post_point[1], post_point[2]] = 1
+                        else:
+                            raise ValueError(
+                                "Point {} seems to be out of shape: {}".format(
+                                    [post_point[0], post_point[1], post_point[2]], seeds.shape
+                                )
+                            )
+
+                    # First channel creation
+                    channel_0 = binary_dilation_scipy(
+                        mask_to_grow,
+                        iterations=1,
+                        structure=ellipse_footprint_cpd,
+                    )
+                    mask_to_grow = binary_dilation_scipy(
+                        mask_to_grow,
+                        iterations=1,
+                        structure=ellipse_footprint_cpd2,
+                    )
+                    for z in range(len(seeds)):
+                        semantic = distance_transform_edt(mask_to_grow[z])
+                        assert isinstance(semantic, np.ndarray)
+                        seeds[z] = watershed(-semantic, seeds[z], mask=mask_to_grow[z])
+
+                    # Flow channel creation
+                    out_map = create_flow_channels(
+                        seeds,
+                        ref_point="presynaptic",
+                        label_to_pre_site=label_to_pre_site,
+                        normalize_values=normalize_values,
+                    )
+
+                    out_map = np.concatenate([np.expand_dims(channel_0, -1), out_map], axis=-1)
+                    del channel_0
+                else:
+                    out_map = np.zeros(patch_shape + (channels,), dtype=np.uint8)
+
+                    # Pre point
+                    out_map[
+                        max(0, pre_point[0] - 1) : min(pre_point[0] + 1, out_map.shape[0]),
+                        pre_point[1],
+                        pre_point[2],
+                        0,
+                    ] = 1
+
+                    # Paint the pre sites in channel 0 and post sites in channel 1
+                    for post_point_global in post_sites:
+                        post_point = [
+                            int(post_point_global[0] - patch_coords[0]),
+                            int(post_point_global[1] - patch_coords[2]),
+                            int(post_point_global[2] - patch_coords[4]),
+                        ]
+
+                        if (
+                            post_point[0] < out_map.shape[0]
+                            and post_point[1] < out_map.shape[1]
+                            and post_point[2] < out_map.shape[2]
+                        ):
+                            # Post point
+                            out_map[
+                                max(0, post_point[0] - 1) : min(post_point[0] + 1, out_map.shape[0]),
+                                post_point[1],
+                                post_point[2],
+                                1,
+                            ] = 1
+                        else:
+                            raise ValueError(
+                                "Point {} seems to be out of shape: {}".format(
+                                    [post_point[0], post_point[1], post_point[2]], out_map.shape
+                                )
+                            )
+                    for c in range(out_map.shape[-1]):
+                        out_map[..., c] = binary_dilation_scipy(
+                            out_map[..., c],
+                            iterations=1,
+                            structure=ellipse_footprint_cpd,
+                        )
+
                 # Adjust patch slice to transpose it before inserting intop the final data
-                current_order = np.array(range(len(hv_map.shape)))
+                current_order = np.array(range(len(out_map.shape)))
                 transpose_order = order_dimensions(
                     current_order,
                     input_order="ZYXC",
@@ -879,7 +914,7 @@ def synapse_channel_creation(
                 transpose_order = [x for x in np.array(transpose_order) if not np.isnan(x)]
 
                 # Place the patch into the Zarr
-                mask[data_ordered_slices] += hv_map.transpose(transpose_order) * (mask[data_ordered_slices] == 0)
+                mask[data_ordered_slices] += out_map.transpose(transpose_order) * (mask[data_ordered_slices] == 0)
 
             # Close file
             if isinstance(fid_mask, h5py.File):
@@ -887,10 +922,7 @@ def synapse_channel_creation(
 
 
 def create_flow_channels(
-    data: NDArray, 
-    ref_point: str="center", 
-    label_to_pre_site: Optional[Dict]=None, 
-    normalize_values: bool=True
+    data: NDArray, ref_point: str = "center", label_to_pre_site: Optional[Dict] = None, normalize_values: bool = True
 ):
     """
     Obtain the horizontal and vertical distance maps for each instance. Depth distance is also calculated if
@@ -1110,10 +1142,7 @@ def generate_ellipse_footprint(
     return distances.astype(bool)
 
 
-def create_detection_masks(
-    cfg: Config, 
-    data_type: str="train"
-):
+def create_detection_masks(cfg: CN, data_type: str = "train"):
     """
     Create detection masks based on CSV files.
 
@@ -1376,10 +1405,10 @@ def create_detection_masks(
                     disable=not is_main_process(),
                 ):
                     _, index, counts = np.unique(
-                        label(clear_border(mask[..., ch])),# type: ignore
+                        label(clear_border(mask[..., ch])),  # type: ignore
                         return_counts=True,
                         return_index=True,
-                    ) # type: ignore
+                    )  # type: ignore
                     # 0 is background so valid element is 1. We will compare that value with the rest
                     if len(counts) > 1:
                         ref_value = counts[1]
@@ -1405,6 +1434,7 @@ def create_detection_masks(
                     np.expand_dims(mask, 0),
                     out_dir,
                     img_filename,
+                    crop_shape=cfg.DATA.PATCH_SIZE,
                     dtype_str="uint8",
                     verbose=True,
                 )
@@ -1430,10 +1460,7 @@ def create_detection_masks(
 #######
 # SSL #
 #######
-def create_ssl_source_data_masks(
-    cfg: Config, 
-    data_type: str ="train"
-):
+def create_ssl_source_data_masks(cfg: CN, data_type: str = "train"):
     """
     Create SSL source data.
 
@@ -1472,11 +1499,11 @@ def create_ssl_source_data_masks(
 
 
 def crappify(
-    input_img: NDArray, 
-    resizing_factor: float, 
-    add_noise: bool=True, 
-    noise_level: Optional[float]=None, 
-    Down_up: bool=True
+    input_img: NDArray,
+    resizing_factor: float,
+    add_noise: bool = True,
+    noise_level: Optional[float] = None,
+    Down_up: bool = True,
 ):
     """
     Crappifies input image by adding Gaussian noise and downsampling and upsampling it so the resolution
@@ -1551,10 +1578,7 @@ def crappify(
     return img.astype(input_img.dtype)
 
 
-def add_gaussian_noise(
-    image: NDArray, 
-    percentage_of_noise: float
-) -> NDArray:
+def add_gaussian_noise(image: NDArray, percentage_of_noise: float) -> NDArray:
     """
     Adds Gaussian noise to an input image.
 
@@ -1583,11 +1607,7 @@ def add_gaussian_noise(
 # SEMANTIC SEG #
 ################
 def calculate_volume_prob_map(
-    Y: BiaPyDataset, 
-    is_3d: bool=False, 
-    w_foreground: float=0.94, 
-    w_background: float=0.06, 
-    save_dir=None
+    Y: BiaPyDataset, is_3d: bool = False, w_foreground: float = 0.94, w_background: float = 0.06, save_dir=None
 ) -> List[NDArray] | NDArray:
     """
     Calculate the probability map of the given data.
@@ -1692,10 +1712,8 @@ def calculate_volume_prob_map(
 # GENERAL #
 ###########
 
-def resize_images(
-    images: List[NDArray], 
-    **kwards
-) -> List[NDArray]:
+
+def resize_images(images: List[NDArray], **kwards) -> List[NDArray]:
     """
     The function resizes all the images using the specified parameters or default values if not provided.
 
@@ -1721,10 +1739,7 @@ def resize_images(
     return resized_images
 
 
-def apply_gaussian_blur(
-    images: List[NDArray], 
-    **kwards
-) -> List[NDArray]:
+def apply_gaussian_blur(images: List[NDArray], **kwards) -> List[NDArray]:
     """
     The function applies a Gaussian blur to all images.
 
@@ -1755,10 +1770,7 @@ def apply_gaussian_blur(
     return blurred_images
 
 
-def apply_median_blur(
-    images: List[NDArray], 
-    **kwards
-) -> List[NDArray]:
+def apply_median_blur(images: List[NDArray], **kwards) -> List[NDArray]:
     """
     The function applies a median blur filter to all images.
 
@@ -1781,10 +1793,7 @@ def apply_median_blur(
     return blurred_images
 
 
-def detect_edges(
-    images: List[NDArray], 
-    **kwards
-) -> List[NDArray]:
+def detect_edges(images: List[NDArray], **kwards) -> List[NDArray]:
     """
     The function `detect_edges` takes the 2D images as input, converts it to grayscale if necessary, and
     applies the Canny edge detection algorithm to detect edges in the image.
@@ -1830,13 +1839,10 @@ def detect_edges(
     return edges
 
 
-def _histogram_matching(
-    source_imgs: List[NDArray], 
-    target_imgs: List[NDArray]
-) -> List[NDArray]:
+def _histogram_matching(source_imgs: List[NDArray], target_imgs: List[NDArray]) -> List[NDArray]:
     """
     Given a set of target images, it will obtain their mean histogram
-    and applies histogram matching to all images from sorce images.
+    and applies histogram matching to all images from source images.
 
     Parameters
     ----------
@@ -1878,14 +1884,10 @@ def _histogram_matching(
     return results
 
 
-def apply_histogram_matching(
-    images: List[NDArray], 
-    reference_path: str, 
-    is_2d: bool
-):
+def apply_histogram_matching(images: List[NDArray], reference_path: str, is_2d: bool):
     """
     The function returns the images with their histogram matched to the histogram of the reference images,
-    loaded from the given reference_path.
+    loaded from the given ``reference_path``.
 
     Parameters
     ----------
@@ -1913,10 +1915,7 @@ def apply_histogram_matching(
     return matched_images
 
 
-def apply_clahe(
-    images: List[NDArray], 
-    **kwards
-) -> List[NDArray] :
+def apply_clahe(images: List[NDArray], **kwards) -> List[NDArray]:
     """
     The function applies Contrast Limited Adaptive Histogram Equalization (CLAHE) to an image and
     returns the result.
@@ -1950,11 +1949,7 @@ def apply_clahe(
 
 
 def preprocess_data(
-    cfg: Config, 
-    x_data: List[NDArray]=[], 
-    y_data: List[NDArray]=[], 
-    is_2d: bool=True, 
-    is_y_mask: bool=False
+    cfg: CN, x_data: List[NDArray] = [], y_data: List[NDArray] = [], is_2d: bool = True, is_y_mask: bool = False
 ) -> List[NDArray] | Tuple[List[NDArray], List[NDArray]]:
     """
     The function preprocesses data by applying various image processing techniques.

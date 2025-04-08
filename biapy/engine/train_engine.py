@@ -5,20 +5,19 @@ import torch.nn as nn
 from torch.optim.optimizer import Optimizer
 from typing import Callable, Optional
 from torch.utils.data import DataLoader
+from yacs.config import CfgNode as CN
 
 from biapy.utils.misc import MetricLogger, SmoothedValue, TensorboardLogger, all_reduce_mean
-from biapy.config.config import Config
 from biapy.engine import Scheduler
 from torch.optim.lr_scheduler import ReduceLROnPlateau, OneCycleLR
 from biapy.engine.schedulers.warmup_cosine_decay import WarmUpCosineDecayScheduler
 
 
 def train_one_epoch(
-    cfg: Config,
+    cfg: CN,
     model: nn.Module | nn.parallel.DistributedDataParallel,
     model_call_func: Callable,
     loss_function: Callable,
-    activations: Callable,
     metric_function: Callable,
     prepare_targets: Callable,
     data_loader: DataLoader,
@@ -63,8 +62,7 @@ def train_one_epoch(
             )
 
         # Pass the images through the model
-        # TODO: control autocast and mixed precision
-        outputs = activations(model_call_func(batch, is_train=True), training=True)
+        outputs = model_call_func(batch, is_train=True)
         loss = loss_function(outputs, targets)
 
         loss_value = loss.item()
@@ -111,11 +109,10 @@ def train_one_epoch(
 
 @torch.no_grad()
 def evaluate(
-    cfg: Config,
+    cfg: CN,
     model: nn.Module | nn.parallel.DistributedDataParallel,
     model_call_func: Callable,
     loss_function: Callable,
-    activations: Callable,
     metric_function: Callable,
     prepare_targets: Callable,
     epoch: int,
@@ -138,7 +135,7 @@ def evaluate(
         targets = prepare_targets(targets, images)
 
         # Pass the images through the model
-        outputs = activations(model_call_func(images, is_train=True), training=True)
+        outputs = model_call_func(images, is_train=True)
         loss = loss_function(outputs, targets)
 
         # Calculate the metrics

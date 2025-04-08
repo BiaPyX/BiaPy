@@ -8,7 +8,7 @@ parser = argparse.ArgumentParser(description="Order 3D image axes into (z,y,x,c)
                                  formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
 parser.add_argument("-input_dir", "--input_dir", required=True, help="Path to the folder with the input images")
-parser.add_argument("-input_axis_order", "--input_axis_order", required=True, help="Axis order. E.g. [y,z,x,c]")
+parser.add_argument("-input_axes_order", "--input_axes_order", required=True, help="Axis order. E.g. [y,z,x,c]")
 parser.add_argument("-output_dir", "--output_dir", required=True, help="Path to the folder with the output images")
 parser.add_argument("-BiaPy_dir", "--BiaPy_dir", required=True, help="BiaPy directory")
 args = vars(parser.parse_args())
@@ -16,7 +16,7 @@ args = vars(parser.parse_args())
 # Call example:
 # python order_axes.py --input_dir /scratch/dfranco/thesis/data2/dfranco/ficheros_BiaPy_GUI/demo3D/data/train/x \
 # --output_dir /scratch/dfranco/thesis/data2/dfranco/ficheros_BiaPy_GUI/demo3D/data/train/x2 \
-# --input_axis_order [y,z,x,c] \
+# --input_axes_order [y,z,x,c] \
 # --BiaPy_dir /scratch/dfranco/thesis/data2/dfranco/BiaPy 
 
 sys.path.insert(0, args['BiaPy_dir'])
@@ -26,13 +26,13 @@ data_dir = args['input_dir']
 out_dir = args['output_dir']
 
 try:
-   order = args['input_axis_order'].strip('][').strip().split(',')
+   order = args['input_axes_order'].strip('][').strip().split(',')
 except:
-    raise ValueError("'input_axis_order' needs to be a list. E.g. [y,z,x,c]")
+    raise ValueError("'input_axes_order' needs to be a list. E.g. [y,z,x,c]")
 
 chars = [x for x in order if str(x) not in ['x', 'y','z','c']]
 if len(chars)>0:
-    raise ValueError("'{}' found in 'input_axis_order'. It needs to have values among these: ['x','y','z','c']".format(chars))
+    raise ValueError("'{}' found in 'input_axes_order'. It needs to have values among these: ['x','y','z','c']".format(chars))
 
 z = order.index("z")
 y = order.index("y")

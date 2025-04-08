@@ -3,12 +3,12 @@ from typing import List, Dict, Any, Tuple, Optional
 from torch.utils.data import (
     DistributedSampler,
     DataLoader,
-    DistributedSampler,
     SequentialSampler,
 )
 import numpy as np
 from numpy.typing import NDArray
 from tqdm import tqdm
+from yacs.config import CfgNode as CN
 
 from biapy.data.pre_processing import calculate_volume_prob_map
 from biapy.data.generators.pair_data_2D_generator import Pair2DImageDataGenerator
@@ -17,20 +17,19 @@ from biapy.data.generators.single_data_2D_generator import Single2DImageDataGene
 from biapy.data.generators.single_data_3D_generator import Single3DImageDataGenerator
 from biapy.data.generators.test_pair_data_generators import test_pair_data_generator
 from biapy.data.generators.test_single_data_generator import test_single_data_generator
-from biapy.config.config import Config
+from biapy.data.generators.chunked_test_pair_data_generator import chunked_test_pair_data_generator
 from biapy.data.pre_processing import preprocess_data
 from biapy.data.data_manipulation import save_tif, extract_patch_within_image
 from biapy.data.dataset import BiaPyDataset, PatchCoords
 from biapy.data.norm import Normalization
 from biapy.data.data_3D_manipulation import extract_patch_from_efficient_file
+from biapy.utils.misc import get_rank, get_world_size, is_dist_avail_and_initialized
 
 
 def create_train_val_augmentors(
-    cfg: Config,
+    cfg: CN,
     X_train: BiaPyDataset,
     X_val: BiaPyDataset,
-    world_size: int,
-    global_rank: int,
     norm_module: Normalization,
     Y_train: Optional[BiaPyDataset] = None,
     Y_val: Optional[BiaPyDataset] = None,
@@ -48,12 +47,6 @@ def create_train_val_augmentors(
 
     X_val : BiaPyDataset
         Loaded train Y data.
-
-    world_size: int
-        Number of processes participating in the training.
-
-    global_rank: int
-        Rank of the current process.
 
     norm_module : Normalization
         Normalization module that defines the normalization steps to apply.
@@ -328,18 +321,28 @@ def create_train_val_augmentors(
         )
 
     # Training dataset
-    total_batch_size = cfg.TRAIN.BATCH_SIZE * world_size * cfg.TRAIN.ACCUM_ITER
+    total_batch_size = cfg.TRAIN.BATCH_SIZE * get_world_size() * cfg.TRAIN.ACCUM_ITER
     training_samples = len(train_generator)
-    # Reduce number of workers in case there is no training data
-    num_workers = min(cfg.SYSTEM.NUM_WORKERS, training_samples)
-    # To not create more than 8 processes per GPU
-    if cfg.SYSTEM.NUM_GPUS >= 1:
-        num_workers = min(num_workers, 8 * cfg.SYSTEM.NUM_GPUS)
+
+    # Set num_workers
+    if is_dist_avail_and_initialized() and cfg.SYSTEM.NUM_GPUS >= 1:
+        if cfg.SYSTEM.NUM_WORKERS == -1:
+            num_workers = 2 * cfg.SYSTEM.NUM_GPUS
+        else:
+            # To not create more than 2 processes per GPU
+            num_workers = min(cfg.SYSTEM.NUM_WORKERS, 2 * cfg.SYSTEM.NUM_GPUS)
+        sampler_train = DistributedSampler(
+            train_generator, num_replicas=get_world_size(), rank=get_rank(), shuffle=True
+        )
+    else:
+        # Reduce number of workers in case there is no training data
+        num_workers = min(5, training_samples) if cfg.SYSTEM.NUM_WORKERS == -1 else cfg.SYSTEM.NUM_WORKERS
+        sampler_train = None
+
     num_training_steps_per_epoch = training_samples // total_batch_size
     print(f"Number of workers: {num_workers}")
     print("Accumulate grad iterations: %d" % cfg.TRAIN.ACCUM_ITER)
     print("Effective batch size: %d" % total_batch_size)
-    sampler_train = DistributedSampler(train_generator, num_replicas=world_size, rank=global_rank, shuffle=True)
     print("Sampler_train = %s" % str(sampler_train))
     train_dataset = DataLoader(
         train_generator,
@@ -368,13 +371,13 @@ def create_train_val_augmentors(
     # Validation dataset
     sampler_val = None
     if cfg.DATA.VAL.DIST_EVAL:
-        if len(val_generator) % world_size != 0:
+        if len(val_generator) % get_world_size() != 0:
             print(
                 "Warning: Enabling distributed evaluation with an eval dataset not divisible by process number. "
                 "This will slightly alter validation results as extra duplicate entries are added to achieve "
                 "equal num of samples per-process."
             )
-        sampler_val = DistributedSampler(val_generator, num_replicas=world_size, rank=global_rank, shuffle=False)
+        sampler_val = DistributedSampler(val_generator, num_replicas=get_world_size(), rank=get_rank(), shuffle=False)
     else:
         sampler_val = SequentialSampler(val_generator)
 
@@ -385,13 +388,14 @@ def create_train_val_augmentors(
         num_workers=num_workers,
         pin_memory=cfg.SYSTEM.PIN_MEM,
         drop_last=False,
+        shuffle=False,
     )
 
     return train_dataset, val_dataset, data_norm, num_training_steps_per_epoch, bmz_input_sample
 
 
-def create_test_augmentor(
-    cfg: Config,
+def create_test_generator(
+    cfg: CN,
     X_test: Any,
     Y_test: Any,
     norm_module: Normalization,
@@ -482,15 +486,11 @@ def create_test_augmentor(
     )
     if isinstance(bmz_input_sample, np.ndarray):
         bmz_input_sample = extract_patch_within_image(
-            bmz_input_sample, 
-            patch, 
-            is_3d=True if cfg.PROBLEM.NDIM == "3D" else False
+            bmz_input_sample, patch, is_3d=True if cfg.PROBLEM.NDIM == "3D" else False
         )
     else:
         bmz_input_sample = extract_patch_from_efficient_file(
-            bmz_input_sample, 
-            patch, 
-            data_axis_order=cfg.DATA.TEST.INPUT_IMG_AXES_ORDER
+            bmz_input_sample, patch, data_axes_order=cfg.DATA.TEST.INPUT_IMG_AXES_ORDER
         )
     bmz_input_sample = bmz_input_sample.astype(np.float32)
 
@@ -505,6 +505,73 @@ def create_test_augmentor(
         bmz_input_sample = bmz_input_sample.transpose(0, 4, 1, 2, 3)  # Numpy -> Torch
 
     return test_generator, data_norm, bmz_input_sample
+
+
+def create_chunked_test_generator(
+    cfg: CN,
+    current_sample: Dict,
+    norm_module: Normalization,
+    out_dir: str,
+    dtype_str: str,
+) -> DataLoader:
+    """
+    Creates a chunked test generator.
+    """
+    chunked_generator = chunked_test_pair_data_generator(
+        sample_to_process=current_sample,
+        norm_module=norm_module,
+        input_axes=cfg.DATA.TEST.INPUT_IMG_AXES_ORDER,
+        mask_input_axes=cfg.DATA.TEST.INPUT_MASK_AXES_ORDER,
+        crop_shape=cfg.DATA.PATCH_SIZE,
+        padding=cfg.DATA.TEST.PADDING,
+        out_dir=out_dir,
+        dtype_str=dtype_str,
+    )
+
+    def by_chunks_collate_fn(data):
+        """
+        Collate function to avoid the default one with type checking. It does nothing speciall but stack the images.
+
+        Parameters
+        ----------
+        data : tuple
+            Data tuple.
+
+        Returns
+        -------
+        data : tuple
+            Stacked data in batches.
+        """
+        return (
+            # torch.cat([torch.from_numpy(x[0]) for x in data]),
+            [x[0] for x in data],
+            np.stack([x[1] for x in data]),
+            np.stack([x[2] for x in data if x is not None]) if len(data) > 0 and data[0][2] is not None else None,
+            [x[3] for x in data],
+            [x[4] for x in data],
+            [x[5] for x in data],
+        )
+
+    # Set num_workers
+    if is_dist_avail_and_initialized() and cfg.SYSTEM.NUM_GPUS >= 1:
+        if cfg.SYSTEM.NUM_WORKERS == -1:
+            num_workers = 2 * cfg.SYSTEM.NUM_GPUS
+        else:
+            # To not create more than 2 processes per GPU
+            num_workers = min(cfg.SYSTEM.NUM_WORKERS, 2 * cfg.SYSTEM.NUM_GPUS)
+    else:
+        num_workers = 5 if cfg.SYSTEM.NUM_WORKERS == -1 else cfg.SYSTEM.NUM_WORKERS
+
+    test_dataset = DataLoader(
+        chunked_generator,
+        batch_size=cfg.TRAIN.BATCH_SIZE,
+        num_workers=num_workers,
+        collate_fn=by_chunks_collate_fn,
+        pin_memory=cfg.SYSTEM.PIN_MEM,
+        drop_last=False,
+    )
+
+    return test_dataset
 
 
 def check_generator_consistence(

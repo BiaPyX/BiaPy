@@ -33,11 +33,11 @@ pred_mask_stack = np.concatenate(pred_mask_stack).astype(mask.dtype)
 
 # Write Zarr 
 os.makedirs(output_dir, exist_ok=True)
-o = zarr.open(os.path.join(output_dir, outfilename), mode='w')
-o[dsx] = pred_stack
-o[dsx].attrs['resolution'] = resolution
-o[dsx].attrs['offset'] = offset
+data = zarr.open(os.path.join(output_dir, outfilename), mode='w')
+data[dsx] = pred_stack
+data[dsx].attrs['resolution'] = resolution
+data[dsx].attrs['offset'] = offset
 
-o[dsy] = pred_mask_stack
-o[dsy].attrs['resolution'] = resolution
-o[dsy].attrs['offset'] = offset
+data[dsy] = pred_mask_stack
+data[dsy].attrs['resolution'] = resolution
+data[dsy].attrs['offset'] = offset

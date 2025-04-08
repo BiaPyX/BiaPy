@@ -55,8 +55,8 @@ class test_single_data_generator(Dataset):
     convert_to_rgb : bool, optional
         Whether to convert images into 3-channel, i.e. RGB, by using the information of the first channel.
 
-    filter_conds : list of lists of str, optional
-        Filter conditions to be applied to the data. The three variables, ``filter_conds``, ``filter_vals`` and ``filter_vals``
+    filter_props : list of lists of str, optional
+        Filter conditions to be applied to the data. The three variables, ``filter_props``, ``filter_vals`` and ``filter_vals``
         will compose a list of conditions to remove the samples from the list. They are list of list of conditions. For instance, the
         conditions can be like this: ``[['A'], ['B','C']]``. Then, if the sample satisfies the first list of conditions, only 'A'
         in this first case (from ['A'] list), or satisfy 'B' and 'C' (from ['B','C'] list) it will be removed. In each sublist all the
@@ -68,7 +68,7 @@ class test_single_data_generator(Dataset):
           * ``'max'`` is defined as the max value.
 
     filter_vals : list of int/float, optional
-        Represent the values of the properties listed in ``filter_conds`` that the images need to satisfy to not be dropped.
+        Represent the values of the properties listed in ``filter_props`` that the images need to satisfy to not be dropped.
 
     filter_signs : list of list of str, optional
         Signs to do the comparison for data filtering. Options: [``'gt'``, ``'ge'``, ``'lt'``, ``'le'``] that corresponds to
@@ -132,11 +132,11 @@ class test_single_data_generator(Dataset):
         self.norm_module = norm_module
         # Check if a division is required
         img, _, _, sample_extra_info, _ = self.load_sample(0)
-        if "img_file_to_close" in sample_extra_info:
+        if "img_file_to_close" in sample_extra_info and isinstance(sample_extra_info["img_file_to_close"], h5py.File):
             sample_extra_info["img_file_to_close"].close()
-        if "mask_file_to_close" in sample_extra_info:
+        if "mask_file_to_close" in sample_extra_info and isinstance(sample_extra_info["mask_file_to_close"], h5py.File):
             sample_extra_info["mask_file_to_close"].close()
-        self.norm_module.orig_dtype = img.dtype if isinstance(img, np.ndarray) else "Zarr"
+        self.norm_module.orig_dtype = img.dtype if isinstance(img, np.ndarray) else "Zarr"  # type: ignore
 
     # img, img_class, xnorm, filename
     def load_sample(self, idx: int, first_load: bool = False) -> Tuple[NDArray, int, DataSample, Dict, Optional[Dict]]:
@@ -164,7 +164,7 @@ class test_single_data_generator(Dataset):
 
         sample_extra_info : dict
             Extra information of the loaded sample. Contains the following keys:
-            * ``"discard"``, bool (optional): whether the sample should be discarded or not. Present if ``filter_conds``,``filter_vals``
+            * ``"discard"``, bool (optional): whether the sample should be discarded or not. Present if ``filter_props``,``filter_vals``
               and ``filter_signs`` were provided.
             * ``"reflected_orig_shape"``, tuple of int (optional): original shape of the image before reflecting. Present if ``reflect_to_complete_shape``
               is ``True``.
@@ -183,11 +183,6 @@ class test_single_data_generator(Dataset):
         )
 
         if any(self.X.dataset_info[sample.fid].path.endswith(x) for x in [".zarr", ".h5", ".hdf5", ".hdf"]):
-            if not self.test_by_chunks:
-                raise ValueError(
-                    "If you are using Zarr images please set 'TEST.BY_CHUNKS.ENABLE' and configure " "its options."
-                )
-
             if img_file and isinstance(img_file, h5py.File):
                 sample_extra_info["img_file_to_close"] = img_file
         else:
@@ -266,7 +261,7 @@ class test_single_data_generator(Dataset):
             * ``"Y"``, ndarray: Y data. It is a ndarray of  ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
             * ``"filename"``: name of the image to extract the data sample from.
             * ``"dir"``, str: directory where the image resides.
-            * ``"discard"``, bool (optional): whether the sample should be discarded or not. Present if ``filter_conds``,``filter_vals``
+            * ``"discard"``, bool (optional): whether the sample should be discarded or not. Present if ``filter_props``,``filter_vals``
               and ``filter_signs`` were provided.
             * ``"reflected_orig_shape"``, tuple of int (optional): original shape of the image before reflecting. Present if ``reflect_to_complete_shape``
               is ``True``.

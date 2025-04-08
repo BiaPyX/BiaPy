@@ -7,10 +7,7 @@ from torchmetrics.image import PeakSignalNoiseRatio, StructuralSimilarityIndexMe
 from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
 from torchmetrics.image.fid import FrechetInceptionDistance
 from torchmetrics.image.inception import InceptionScore
-from typing import (
-    Dict,
-    Optional
-)
+from typing import Dict, Optional
 from numpy.typing import NDArray
 
 
@@ -30,6 +27,7 @@ from biapy.data.data_3D_manipulation import (
     merge_3D_data_with_overlap,
 )
 from biapy.data.data_manipulation import save_tif
+from biapy.data.dataset import PatchCoords
 
 
 class Image_to_Image_Workflow(Base_Workflow):
@@ -179,19 +177,29 @@ class Image_to_Image_Workflow(Base_Workflow):
         elif self.cfg.LOSS.TYPE == "SSIM":
             self.loss = SSIM_loss(data_range=data_range, device=self.device)
         elif self.cfg.LOSS.TYPE == "W_MAE_SSIM":
-            self.loss = W_MAE_SSIM_loss(data_range=data_range, device=self.device, w_mae=self.cfg.LOSS.WEIGHTS[0], w_ssim=self.cfg.LOSS.WEIGHTS[1])
+            self.loss = W_MAE_SSIM_loss(
+                data_range=data_range,
+                device=self.device,
+                w_mae=self.cfg.LOSS.WEIGHTS[0],
+                w_ssim=self.cfg.LOSS.WEIGHTS[1],
+            )
         elif self.cfg.LOSS.TYPE == "W_MSE_SSIM":
-            self.loss = W_MSE_SSIM_loss(data_range=data_range, device=self.device, w_mse=self.cfg.LOSS.WEIGHTS[0], w_ssim=self.cfg.LOSS.WEIGHTS[1])
+            self.loss = W_MSE_SSIM_loss(
+                data_range=data_range,
+                device=self.device,
+                w_mse=self.cfg.LOSS.WEIGHTS[0],
+                w_ssim=self.cfg.LOSS.WEIGHTS[1],
+            )
 
         super().define_metrics()
 
     def metric_calculation(
-        self, 
-        output: NDArray | torch.Tensor, 
-        targets: NDArray | torch.Tensor, 
-        train: bool=True, 
-        metric_logger: Optional[MetricLogger]=None
-    ) -> Dict :
+        self,
+        output: NDArray | torch.Tensor,
+        targets: NDArray | torch.Tensor,
+        train: bool = True,
+        metric_logger: Optional[MetricLogger] = None,
+    ) -> Dict:
         """
         Execution of the metrics defined in :func:`~define_metrics` function.
 
@@ -217,7 +225,7 @@ class Image_to_Image_Workflow(Base_Workflow):
         if isinstance(output, np.ndarray):
             _output = to_pytorch_format(
                 output.copy(),
-                self.axis_order,
+                self.axes_order,
                 self.device,
                 dtype=self.loss_dtype,
             )
@@ -230,7 +238,7 @@ class Image_to_Image_Workflow(Base_Workflow):
         if isinstance(targets, np.ndarray):
             _targets = to_pytorch_format(
                 targets.copy(),
-                self.axis_order,
+                self.axes_order,
                 self.device,
                 dtype=self.loss_dtype,
             )
@@ -247,7 +255,9 @@ class Image_to_Image_Workflow(Base_Workflow):
 
         # First metrics that do not require normalization, e.g. MAE and MSE
         metrics_without_norm = ["mae", "mse"] if train else ["mae", "mse", "ssim"]
-        not_norm_metrics_pos = [list_names_to_use_lower.index(x) for x in metrics_without_norm if x in list_names_to_use_lower]
+        not_norm_metrics_pos = [
+            list_names_to_use_lower.index(x) for x in metrics_without_norm if x in list_names_to_use_lower
+        ]
         not_norm_metrics = [list_to_use[i] for i in not_norm_metrics_pos]
         not_norm_metrics_names = [list_names_to_use_lower[i] for i in not_norm_metrics_pos]
         with torch.no_grad():
@@ -262,7 +272,7 @@ class Image_to_Image_Workflow(Base_Workflow):
                     raise NotImplementedError
 
                 if m_name in ["mse", "mae", "ssim", "psnr"]:
-                    val = val.item() if not torch.isnan(val) else 0 # type: ignore
+                    val = val.item() if not torch.isnan(val) else 0  # type: ignore
                     out_metrics[m_name_real] = val
 
                 if metric_logger:
@@ -270,7 +280,7 @@ class Image_to_Image_Workflow(Base_Workflow):
 
         # Ensure values between 0 and 1 in training. For test it is  not done as the values are calculated
         # with the original test image values and the unnormalized prediction
-        if train:
+        if train and isinstance(_output, torch.Tensor) and isinstance(_targets, torch.Tensor):
             if self.cfg.DATA.NORMALIZATION.TYPE in ["div", "scale_range"]:
                 _output = torch.clamp(_output, min=0, max=1)
                 _targets = torch.clamp(_targets, min=0, max=1)
@@ -297,6 +307,9 @@ class Image_to_Image_Workflow(Base_Workflow):
                         val = metric(_output, _targets)
                 elif m_name in ["is", "lpips", "fid"]:
                     # As these metrics are going to be calculated at the end we can modify _output and _targets
+                    assert isinstance(_output, torch.Tensor) and isinstance(
+                        _targets, torch.Tensor
+                    ), "'is', 'lpips', 'fid' inputs are expected to be tensors"
                     if _output.shape[1] == 1:
                         _output = torch.cat([_output, _output, _output], dim=1)
                     if _targets.shape[1] == 1:
@@ -313,7 +326,7 @@ class Image_to_Image_Workflow(Base_Workflow):
                     raise NotImplementedError
 
                 if m_name in ["mse", "mae", "ssim", "psnr"]:
-                    val = val.item() if not torch.isnan(val) else 0 # type: ignore
+                    val = val.item() if not torch.isnan(val) else 0  # type: ignore
                     out_metrics[m_name_real] = val
 
                 if metric_logger:
@@ -321,12 +334,11 @@ class Image_to_Image_Workflow(Base_Workflow):
 
         return out_metrics
 
-
     def process_test_sample(self):
         """
         Function to process a sample in the inference phase.
         """
-        assert self.model 
+        assert self.model
 
         # Skip processing image
         if "discard" in self.current_sample["X"] and self.current_sample["X"]["discard"]:
@@ -346,15 +358,15 @@ class Image_to_Image_Workflow(Base_Workflow):
                     verbose=self.cfg.TEST.VERBOSE,
                 )
                 if self.current_sample["Y"] is not None:
-                    self.current_sample["X"], self.current_sample["Y"], _ = obj # type: ignore
+                    self.current_sample["X"], self.current_sample["Y"], _ = obj  # type: ignore
                 else:
-                    self.current_sample["X"], _ = obj # type: ignore
+                    self.current_sample["X"], _ = obj  # type: ignore
                 del obj
             else:
                 if self.current_sample["Y"] is not None:
                     self.current_sample["Y"] = self.current_sample["Y"][0]
                 if self.cfg.TEST.REDUCE_MEMORY:
-                    self.current_sample["X"], _ = crop_3D_data_with_overlap( # type: ignore
+                    self.current_sample["X"], _ = crop_3D_data_with_overlap(  # type: ignore
                         self.current_sample["X"][0],
                         self.cfg.DATA.PATCH_SIZE,
                         overlap=self.cfg.DATA.TEST.OVERLAP,
@@ -362,7 +374,7 @@ class Image_to_Image_Workflow(Base_Workflow):
                         verbose=self.cfg.TEST.VERBOSE,
                         median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING,
                     )
-                    self.current_sample["Y"], _ = crop_3D_data_with_overlap( # type: ignore
+                    self.current_sample["Y"], _ = crop_3D_data_with_overlap(  # type: ignore
                         self.current_sample["Y"],
                         self.cfg.DATA.PATCH_SIZE,
                         overlap=self.cfg.DATA.TEST.OVERLAP,
@@ -381,9 +393,9 @@ class Image_to_Image_Workflow(Base_Workflow):
                         median_padding=self.cfg.DATA.TEST.MEDIAN_PADDING,
                     )
                     if self.current_sample["Y"] is not None:
-                        self.current_sample["X"], self.current_sample["Y"], _ = obj # type: ignore
+                        self.current_sample["X"], self.current_sample["Y"], _ = obj  # type: ignore
                     else:
-                        self.current_sample["X"], _ = obj # type: ignore
+                        self.current_sample["X"], _ = obj  # type: ignore
                     del obj
 
         # Predict each patch
@@ -392,27 +404,25 @@ class Image_to_Image_Workflow(Base_Workflow):
                 if self.cfg.PROBLEM.NDIM == "2D":
                     p = ensemble8_2d_predictions(
                         self.current_sample["X"][k],
-                        axis_order_back=self.axis_order_back,
-                        pred_func=self.model_call_func,
-                        axis_order=self.axis_order,
+                        axes_order_back=self.axes_order_back,
+                        axes_order=self.axes_order,
                         device=self.device,
+                        pred_func=self.model_call_func,
                     )
                 else:
                     p = ensemble16_3d_predictions(
                         self.current_sample["X"][k],
                         batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
-                        axis_order_back=self.axis_order_back,
-                        pred_func=self.model_call_func,
-                        axis_order=self.axis_order,
+                        axes_order_back=self.axes_order_back,
+                        axes_order=self.axes_order,
                         device=self.device,
+                        pred_func=self.model_call_func,
                     )
-                p = self.apply_model_activations(p)
-                p = to_numpy_format(p, self.axis_order_back)
+                p = to_numpy_format(p, self.axes_order_back)
                 if "pred" not in locals():
                     pred = np.zeros((self.current_sample["X"].shape[0],) + p.shape[1:], dtype=self.dtype)
                 pred[k] = p
         else:
-            self.current_sample["X"] = to_pytorch_format(self.current_sample["X"], self.axis_order, self.device)
             l = int(math.ceil(self.current_sample["X"].shape[0] / self.cfg.TRAIN.BATCH_SIZE))
             for k in tqdm(range(l), leave=False):
                 top = (
@@ -420,8 +430,8 @@ class Image_to_Image_Workflow(Base_Workflow):
                     if (k + 1) * self.cfg.TRAIN.BATCH_SIZE < self.current_sample["X"].shape[0]
                     else self.current_sample["X"].shape[0]
                 )
-                p = self.model(self.current_sample["X"][k * self.cfg.TRAIN.BATCH_SIZE : top])
-                p = to_numpy_format(self.apply_model_activations(p), self.axis_order_back)
+                p = self.model_call_func(self.current_sample["X"][k * self.cfg.TRAIN.BATCH_SIZE : top])
+                p = to_numpy_format(p, self.axes_order_back)
                 if "pred" not in locals():
                     pred = np.zeros((self.current_sample["X"].shape[0],) + p.shape[1:], dtype=self.dtype)
                 pred[k * self.cfg.TRAIN.BATCH_SIZE : top] = p
@@ -463,8 +473,8 @@ class Image_to_Image_Workflow(Base_Workflow):
                     pred = obj
                 del obj
 
+            assert isinstance(pred, np.ndarray)
             if self.cfg.PROBLEM.NDIM == "3D":
-                assert isinstance(pred, np.ndarray)
                 pred = np.expand_dims(pred, 0)
                 if self.current_sample["Y"] is not None:
                     self.current_sample["Y"] = np.expand_dims(self.current_sample["Y"], 0)
@@ -473,7 +483,7 @@ class Image_to_Image_Workflow(Base_Workflow):
             reflected_orig_shape = (1,) + self.current_sample["reflected_orig_shape"]
             if reflected_orig_shape != pred.shape:
                 if self.cfg.PROBLEM.NDIM == "2D":
-                    pred = pred[:, -reflected_orig_shape[1] :, -reflected_orig_shape[2] :] # type: ignore
+                    pred = pred[:, -reflected_orig_shape[1] :, -reflected_orig_shape[2] :]  # type: ignore
                     if self.current_sample["Y"] is not None:
                         self.current_sample["Y"] = self.current_sample["Y"][
                             :, -reflected_orig_shape[1] :, -reflected_orig_shape[2] :
@@ -494,12 +504,11 @@ class Image_to_Image_Workflow(Base_Workflow):
                         ]
 
         # Undo normalization
-        assert isinstance(pred, np.ndarray)
         pred = self.norm_module.undo_image_norm(pred, self.current_sample["X_norm"])
+        assert isinstance(pred, np.ndarray)
 
         # Save image
         if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
-            assert isinstance(pred, np.ndarray)
             save_tif(
                 pred,
                 self.cfg.PATHS.RESULT_DIR.PER_IMAGE,
@@ -521,11 +530,7 @@ class Image_to_Image_Workflow(Base_Workflow):
                     self.stats["merge_patches"][str(metric).lower()] = 0
                 self.stats["merge_patches"][str(metric).lower()] += metric_values[metric]
 
-    def torchvision_model_call(
-        self, 
-        in_img: torch.Tensor, 
-        is_train: bool=False
-    ) -> torch.Tensor | None:
+    def torchvision_model_call(self, in_img: torch.Tensor, is_train: bool = False) -> torch.Tensor | None:
         """
         Call a regular Pytorch model.
 
@@ -555,26 +560,13 @@ class Image_to_Image_Workflow(Base_Workflow):
         """
         pass
 
-    def after_merge_patches_by_chunks_proccess_patch(self, filename):
-        """
-        Place any code that needs to be done after merging all predicted patches into the original image
-        but in the process made chunk by chunk. This function will operate patch by patch defined by
-        ``DATA.PATCH_SIZE``.
-
-        Parameters
-        ----------
-        filename : List of str
-            Filename of the predicted image H5/Zarr.
-        """
-        pass
-
-    def after_full_image(self, pred):
+    def after_full_image(self, pred: NDArray):
         """
         Steps that must be executed after generating the prediction by supplying the entire image to the model.
 
         Parameters
         ----------
-        pred : Torch Tensor
+        pred : NDArray
             Model prediction.
         """
         pass

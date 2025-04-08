@@ -7,11 +7,11 @@ import yaml
 import torch
 import functools
 import torch.nn as nn
-import numpy as np
 from torchinfo import summary
-from typing import Optional, Dict, Tuple, List, Literal, Callable, Any
+from typing import Optional, Dict, Tuple, List, Callable
 from packaging.version import Version
 from functools import partial
+from yacs.config import CfgNode as CN
 
 from bioimageio.spec.utils import download
 from bioimageio.core.model_adapters._pytorch_model_adapter import PytorchModelAdapter
@@ -20,10 +20,8 @@ from bioimageio.spec.model.v0_5 import ModelDescr as ModelDescr_v0_5
 from bioimageio.spec import InvalidDescr
 from bioimageio.core.digest_spec import get_test_inputs
 
-from biapy.config.config import Config
 
-
-def build_model(cfg: Config, output_channels: int, device: torch.device) -> Tuple[nn.Module, str, Callable, Dict]:
+def build_model(cfg: CN, output_channels: int, device: torch.device) -> Tuple[nn.Module, str, Callable, Dict]:
     # model, model_file, model_name, args
     """
     Build selected model
@@ -293,7 +291,7 @@ def build_model(cfg: Config, output_channels: int, device: torch.device) -> Tupl
     return model, model_file, model_name, args
 
 
-def build_bmz_model(cfg: Config, model: ModelDescr_v0_4 | ModelDescr_v0_5, device: torch.device) -> nn.Module:
+def build_bmz_model(cfg: CN, model: ModelDescr_v0_4 | ModelDescr_v0_5, device: torch.device) -> nn.Module:
     """
     Build a model from Bioimage Model Zoo (BMZ).
 
@@ -348,7 +346,7 @@ def build_bmz_model(cfg: Config, model: ModelDescr_v0_4 | ModelDescr_v0_5, devic
 
 def check_bmz_args(
     model_ID: str,
-    cfg: Config,
+    cfg: CN,
 ) -> List:
     """
     Check user's provided BMZ arguments.
@@ -618,7 +616,7 @@ def check_bmz_model_compatibility(
     return preproc_info, False, ""
 
 
-def check_model_restrictions(cfg: Config, bmz_config: Dict, workflow_specs: Dict) -> List[str]:
+def check_model_restrictions(cfg: CN, bmz_config: Dict, workflow_specs: Dict) -> List[str]:
     """
     Checks model restrictions to be applied into the current configuration.
 
@@ -699,10 +697,10 @@ def check_model_restrictions(cfg: Config, bmz_config: Dict, workflow_specs: Dict
     elif specific_workflow in ["INSTANCE_SEG"]:
         # Assumed it's BC. This needs a more elaborated process. Still deciding this:
         # https://github.com/bioimage-io/spec-bioimage-io/issues/621
-        
+
         # Defaults
         channels = 2
-        channel_code = "BC" 
+        channel_code = "BC"
         classes = 2
 
         if "out_channels" in model_kwargs:
@@ -725,7 +723,7 @@ def check_model_restrictions(cfg: Config, bmz_config: Dict, workflow_specs: Dict
                 classes = channels[-1]
             channels = channels[0]
 
-        else: # for other models set some defaults
+        else:  # for other models set some defaults
             if isinstance(channels, list):
                 channels = channels[-1]
             if channels == 1:
@@ -736,7 +734,9 @@ def check_model_restrictions(cfg: Config, bmz_config: Dict, workflow_specs: Dict
                 channel_code = "A"
 
         opts["PROBLEM.INSTANCE_SEG.DATA_CHANNELS"] = channel_code
-        opts["PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS"] = [1,]*channels
+        opts["PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS"] = [
+            1,
+        ] * channels
         if classes != 2:
             opts["MODEL.N_CLASSES"] = max(2, classes)
         if channel_code == "A":
@@ -801,7 +801,7 @@ def get_cfg_key_value(obj, attr, *args):
     return functools.reduce(_getattr, [obj] + attr.split("."))
 
 
-def build_torchvision_model(cfg: Config, device: torch.device) -> Tuple[nn.Module, Callable]:
+def build_torchvision_model(cfg: CN, device: torch.device) -> Tuple[nn.Module, Callable]:
     # Find model in TorchVision
     if "quantized_" in cfg.MODEL.TORCHVISION_MODEL_NAME:
         mdl = importlib.import_module("torchvision.models.quantization", cfg.MODEL.TORCHVISION_MODEL_NAME)

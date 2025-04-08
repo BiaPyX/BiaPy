@@ -22,8 +22,8 @@ class Config:
         _C.SYSTEM = CN()
         # Maximum number of CPUs to use. Set it to "-1" to not set a limit.
         _C.SYSTEM.NUM_CPUS = -1
-        # Maximum number of workers to use. You can disable this option by setting 0.
-        _C.SYSTEM.NUM_WORKERS = 5
+        # Maximum number of workers to use. You can disable this option by setting 0. With a -1 the workers are calculated automatically.
+        _C.SYSTEM.NUM_WORKERS = -1
         # Do not set it as its value will be calculated based in --gpu input arg
         _C.SYSTEM.NUM_GPUS = 0
         # Device to be used when GPU is NOT selected. Most commonly "cpu", but also potentially "mps",
@@ -139,7 +139,27 @@ class Config:
         _C.PROBLEM.INSTANCE_SEG.SYNAPSES.POSTSITE_DILATION_DISTANCE_CHANNELS = [3,10,10] 
         # Whether to normalize or not the distances of channel 'F'
         _C.PROBLEM.INSTANCE_SEG.SYNAPSES.NORMALIZE_DISTANCES = False
-        
+        _C.PROBLEM.INSTANCE_SEG.SYNAPSES.POINT_CREATION_FUNCTION = "peak_local_max"
+        # The minimal allowed distance separating peaks. To find the maximum number of peaks, use min_distance=1.
+        _C.PROBLEM.INSTANCE_SEG.SYNAPSES.PEAK_LOCAL_MAX_MIN_DISTANCE = 1
+        # Minimun value to consider a point as a peak. Corresponds to 'threshold_abs' argument of the function
+        # 'peak_local_max' of skimage.feature
+        _C.PROBLEM.INSTANCE_SEG.SYNAPSES.MIN_TH_TO_BE_PEAK = 0.2
+        # Corresponds to 'exclude_border' argument of 'peak_local_max' or 'blob_log' function of skimage. If True it will exclude
+        # peaks from the border of the image to avoid partial detection.
+        _C.PROBLEM.INSTANCE_SEG.SYNAPSES.EXCLUDE_BORDER = False
+        # Corresponds to 'min_sigma' argument of 'blob_log' function. It is the minimum standard deviation for Gaussian kernel.
+        # Keep this low to detect smaller blobs. The standard deviations of the Gaussian filter are given for each axis as a
+        # sequence, or as a single number, in which case it is equal for all axes.
+        _C.PROBLEM.INSTANCE_SEG.SYNAPSES.BLOB_LOG_MIN_SIGMA = 5
+        # Corresponds to 'max_sigma' argument of 'blob_log' function. It is the maximum standard deviation for Gaussian kernel.
+        # Keep this high to detect larger blobs. The standard deviations of the Gaussian filter are given for each axis as a
+        # sequence, or as a single number, in which case it is equal for all axes.
+        _C.PROBLEM.INSTANCE_SEG.SYNAPSES.BLOB_LOG_MAX_SIGMA = 10
+        # Corresponds to 'num_sigma' argument of 'blob_log' function. The number of intermediate values of standard deviations
+        # to consider between min_sigma and max_sigma.
+        _C.PROBLEM.INSTANCE_SEG.SYNAPSES.BLOB_LOG_NUM_SIGMA = 2
+
         ### DETECTION
         _C.PROBLEM.DETECTION = CN()
         # Shape of the ellipse that will be used to dilate the central point created from the CSV file. 0 to not dilate and only create a 3x3 square.
@@ -327,7 +347,7 @@ class Config:
         #   * 'max' is defined as the max intensity value of the raw image inputs.
         #   * 'diff' is defined as the difference between ground truth and raw images. Available for all workflows but SELF_SUPERVISED and DENOISING. 
         #   * 'diff_by_min_max_ratio' is defined as the difference between ground truth and raw images multiplied by the ratio between raw image max and min. Available for all workflows but SELF_SUPERVISED and DENOISING. 
-        #   * 'target_mean is defined as the mean intensity value of the raw image targets. Available for all workflows but SELF_SUPERVISED and DENOISING.
+        #   * 'target_mean' is defined as the mean intensity value of the raw image targets. Available for all workflows but SELF_SUPERVISED and DENOISING.
         #   * 'target_min' is defined as the min intensity value of the raw image targets. Available for all workflows but SELF_SUPERVISED and DENOISING. 
         #   * 'target_max' is defined as the max intensity value of the raw image targets. Available for all workflows but SELF_SUPERVISED and DENOISING.  
         #   * 'diff_by_target_min_max_ratio' is defined as the difference between ground truth and raw images multiplied by the ratio between ground truth image max and min. Available for all workflows but SELF_SUPERVISED and DENOISING. 
@@ -516,7 +536,7 @@ class Config:
         #   * 'max' is defined as the max intensity value of the raw image inputs.
         #   * 'diff' is defined as the difference between ground truth and raw images. Available for all workflows but SELF_SUPERVISED and DENOISING. 
         #   * 'diff_by_min_max_ratio' is defined as the difference between ground truth and raw images multiplied by the ratio between raw image max and min. Available for all workflows but SELF_SUPERVISED and DENOISING. 
-        #   * 'target_mean is defined as the mean intensity value of the raw image targets. Available for all workflows but SELF_SUPERVISED and DENOISING.
+        #   * 'target_mean' is defined as the mean intensity value of the raw image targets. Available for all workflows but SELF_SUPERVISED and DENOISING.
         #   * 'target_min' is defined as the min intensity value of the raw image targets. Available for all workflows but SELF_SUPERVISED and DENOISING. 
         #   * 'target_max' is defined as the max intensity value of the raw image targets. Available for all workflows but SELF_SUPERVISED and DENOISING.  
         #   * 'diff_by_target_min_max_ratio' is defined as the difference between ground truth and raw images multiplied by the ratio between ground truth image max and min. Available for all workflows but SELF_SUPERVISED and DENOISING. 
@@ -629,7 +649,7 @@ class Config:
         #   * 'max' is defined as the max intensity value of the raw image inputs.
         #   * 'diff' is defined as the difference between ground truth and raw images. Available for all workflows but SELF_SUPERVISED and DENOISING. 
         #   * 'diff_by_min_max_ratio' is defined as the difference between ground truth and raw images multiplied by the ratio between raw image max and min. Available for all workflows but SELF_SUPERVISED and DENOISING. 
-        #   * 'target_mean is defined as the mean intensity value of the raw image targets. Available for all workflows but SELF_SUPERVISED and DENOISING.
+        #   * 'target_mean' is defined as the mean intensity value of the raw image targets. Available for all workflows but SELF_SUPERVISED and DENOISING.
         #   * 'target_min' is defined as the min intensity value of the raw image targets. Available for all workflows but SELF_SUPERVISED and DENOISING. 
         #   * 'target_max' is defined as the max intensity value of the raw image targets. Available for all workflows but SELF_SUPERVISED and DENOISING.  
         #   * 'diff_by_target_min_max_ratio' is defined as the difference between ground truth and raw images multiplied by the ratio between ground truth image max and min. Available for all workflows but SELF_SUPERVISED and DENOISING. 
@@ -1066,20 +1086,30 @@ class Config:
         #       * "DICE": Dice loss. Ref: https://www.kaggle.com/code/bigironsphere/loss-function-library-keras-pytorch
         #       * "W_CE_DICE": CE and Dice (with a weight term on each one that must sum 1). Ref: https://www.kaggle.com/code/bigironsphere/loss-function-library-keras-pytorch
         #   * Denoising:
-        #       * "MSE" (default): mean square error. Ref: https://pytorch.org/docs/stable/generated/torch.nn.MSELoss.html#torch.nn.MSELoss
+        #       * "MAE": mean absolute error (MAE or L1 loss). Ref: https://pytorch.org/docs/stable/generated/torch.nn.L1Loss.html#torch.nn.L1Loss
+        #       * "MSE" (default): mean square error (MSE). Ref: https://pytorch.org/docs/stable/generated/torch.nn.MSELoss.html#torch.nn.MSELoss
         #   * Super-resolution:
-        #       * "MAE" (default): mean absolute error. Ref: https://pytorch.org/docs/stable/generated/torch.nn.L1Loss.html#torch.nn.L1Loss
-        #       * "MSE": mean square error. Ref: https://pytorch.org/docs/stable/generated/torch.nn.MSELoss.html#torch.nn.MSELoss
+        #       * "MAE" (default): mean absolute error (MAE or L1 loss). Ref: https://pytorch.org/docs/stable/generated/torch.nn.L1Loss.html#torch.nn.L1Loss
+        #       * "MSE": mean square error (MSE). Ref: https://pytorch.org/docs/stable/generated/torch.nn.MSELoss.html#torch.nn.MSELoss
+        #       * "SSIM": structural similarity index measure (SSIM). Ref: https://lightning.ai/docs/torchmetrics/stable/image/structural_similarity.html#torchmetrics.image.StructuralSimilarityIndexMeasure
+        #       * "W_MAE_SSIM": MAE and SSIM (with a weight term on each one that must sum 1).
+        #       * "W_MSE_SSIM": MSE and SSIM (with a weight term on each one that must sum 1).
         #   * Self-supervision:
         #       These losses can only be set when PROBLEM.SELF_SUPERVISED.PRETEXT_TASK = "crappify". Otherwise it will be automatically set to MSE when
         #       PROBLEM.SELF_SUPERVISED.PRETEXT_TASK = "masking".
-        #       * "MAE" (default): mean absolute error. Ref: https://pytorch.org/docs/stable/generated/torch.nn.L1Loss.html#torch.nn.L1Loss
-        #       * "MSE": mean square error. Ref: https://pytorch.org/docs/stable/generated/torch.nn.MSELoss.html#torch.nn.MSELoss
+        #       * "MAE" (default): mean absolute error (MAE or L1 loss). Ref: https://pytorch.org/docs/stable/generated/torch.nn.L1Loss.html#torch.nn.L1Loss
+        #       * "MSE": mean square error (MSE). Ref: https://pytorch.org/docs/stable/generated/torch.nn.MSELoss.html#torch.nn.MSELoss
+        #       * "SSIM": structural similarity index measure (SSIM). Ref: https://lightning.ai/docs/torchmetrics/stable/image/structural_similarity.html#torchmetrics.image.StructuralSimilarityIndexMeasure
+        #       * "W_MAE_SSIM": MAE and SSIM (with a weight term on each one that must sum 1).
+        #       * "W_MSE_SSIM": MSE and SSIM (with a weight term on each one that must sum 1).
         #   * Classification:
         #       * "CE" (default): cross entropy. Ref: https://pytorch.org/docs/stable/generated/torch.nn.CrossEntropyLoss.html
         #   * Image to image:
-        #       * "MAE" (default): mean absolute error. Ref: https://pytorch.org/docs/stable/generated/torch.nn.L1Loss.html#torch.nn.L1Loss
-        #       * "MSE": mean square error. Ref: https://pytorch.org/docs/stable/generated/torch.nn.MSELoss.html#torch.nn.MSELoss
+        #       * "MAE" (default): mean absolute error (MAE or L1 loss). Ref: https://pytorch.org/docs/stable/generated/torch.nn.L1Loss.html#torch.nn.L1Loss
+        #       * "MSE": mean square error (MSE). Ref: https://pytorch.org/docs/stable/generated/torch.nn.MSELoss.html#torch.nn.MSELoss
+        #       * "SSIM": structural similarity index measure (SSIM). Ref: https://lightning.ai/docs/torchmetrics/stable/image/structural_similarity.html#torchmetrics.image.StructuralSimilarityIndexMeasure
+        #       * "W_MAE_SSIM": MAE and SSIM (with a weight term on each one that must sum 1).
+        #       * "W_MSE_SSIM": MSE and SSIM (with a weight term on each one that must sum 1).
         _C.LOSS.TYPE = ""
         # Weights to be applied in multiple loss combination cases. They must sum 1. E.g. [0.3, 0.7].
         _C.LOSS.WEIGHTS = [0.66, 0.34]
@@ -1174,8 +1204,6 @@ class Config:
         # optimizing memory usage.
         _C.TEST.BY_CHUNKS = CN()
         _C.TEST.BY_CHUNKS.ENABLE = False
-        # Type of format used to write data. Options available: ["H5", "Zarr"]
-        _C.TEST.BY_CHUNKS.FORMAT = "H5"
         # In the process of 'TEST.BY_CHUNKS' you can enable this variable to save the reconstructed prediction as a TIF too.
         # Be aware of this option and be sure that the prediction can fit in you memory entirely, as it is needed for saving as TIF.
         _C.TEST.BY_CHUNKS.SAVE_OUT_TIF = False
@@ -1419,6 +1447,9 @@ class Config:
         _C.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK = os.path.join(
             _C.PATHS.RESULT_DIR.PATH, "per_image_local_max_check"
         )
+        _C.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING = os.path.join(
+            _C.PATHS.RESULT_DIR.PATH, "per_image_local_max_check_post_processing"
+        )
         _C.PATHS.RESULT_DIR.DET_ASSOC_POINTS = os.path.join(_C.PATHS.RESULT_DIR.PATH, "point_associations")
         _C.PATHS.RESULT_DIR.INST_ASSOC_POINTS = os.path.join(_C.PATHS.RESULT_DIR.PATH, "instance_associations")
         # Path to store the BMZ model created 
@@ -1457,14 +1488,6 @@ class Config:
         _C.PATHS.PROB_MAP_FILENAME = "prob_map.npy"
         # Watershed debugging folder
         _C.PATHS.WATERSHED_DIR = os.path.join(_C.PATHS.RESULT_DIR.PATH, "watershed")
-        # Custom mean normalization paths
-        _C.PATHS.MEAN_INFO_FILE = os.path.join(_C.PATHS.CHECKPOINT, "normalization_mean_value.npy")
-        _C.PATHS.STD_INFO_FILE = os.path.join(_C.PATHS.CHECKPOINT, "normalization_std_value.npy")
-        # Percentile normalization paths
-        _C.PATHS.LWR_X_FILE = os.path.join(_C.PATHS.CHECKPOINT, "lower_bound_X_perc.npy")
-        _C.PATHS.UPR_X_FILE = os.path.join(_C.PATHS.CHECKPOINT, "upper_bound_X_perc.npy")
-        _C.PATHS.LWR_Y_FILE = os.path.join(_C.PATHS.CHECKPOINT, "lower_bound_Y_perc.npy")
-        _C.PATHS.UPR_Y_FILE = os.path.join(_C.PATHS.CHECKPOINT, "upper_bound_Y_perc.npy")
         # Path where the images used in MAE will be saved suring inference
         _C.PATHS.MAE_OUT_DIR = os.path.join(_C.PATHS.RESULT_DIR.PATH, "MAE_checks")
         # Directory to save filtered images.

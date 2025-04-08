@@ -43,8 +43,8 @@ class test_pair_data_generator(Dataset):
     convert_to_rgb : bool, optional
         Whether to convert images into 3-channel, i.e. RGB, by using the information of the first channel.
 
-    filter_conds : list of lists of str, optional
-        Filter conditions to be applied to the data. The three variables, ``filter_conds``, ``filter_vals`` and ``filter_vals``
+    filter_props : list of lists of str, optional
+        Filter conditions to be applied to the data. The three variables, ``filter_props``, ``filter_vals`` and ``filter_vals``
         will compose a list of conditions to remove the samples from the list. They are list of list of conditions. For instance, the
         conditions can be like this: ``[['A'], ['B','C']]``. Then, if the sample satisfies the first list of conditions, only 'A'
         in this first case (from ['A'] list), or satisfy 'B' and 'C' (from ['B','C'] list) it will be removed. In each sublist all the
@@ -56,7 +56,7 @@ class test_pair_data_generator(Dataset):
           * ``'max'`` is defined as the max value.
 
     filter_vals : list of int/float, optional
-        Represent the values of the properties listed in ``filter_conds`` that the images need to satisfy to not be dropped.
+        Represent the values of the properties listed in ``filter_props`` that the images need to satisfy to not be dropped.
 
     filter_signs : list of list of str, optional
         Signs to do the comparison for data filtering. Options: [``'gt'``, ``'ge'``, ``'lt'``, ``'le'``] that corresponds to
@@ -114,36 +114,33 @@ class test_pair_data_generator(Dataset):
         self.data_shape = data_shape
         self.seed = seed
         self.ndim = ndim
+        self.instance_problem = instance_problem
 
         # As in test entire images are processed one by one X.sample_list and X.dataset_info must match in length. If not
         # means that validation data is being used as test, so we need to clean the sample_list.
         if len(X.dataset_info) != len(X.sample_list):
             new_sample_list = []
             for i in range(len(X.dataset_info)):
-                new_sample_list.append(DataSample(fid = i, coords = None))            
+                new_sample_list.append(DataSample(fid=i, coords=None))
             X.sample_list = new_sample_list
             if self.provide_Y:
                 Y.sample_list = new_sample_list.copy()
         self.len = len(X.sample_list)
 
         img, mask, _, sample_extra_info, _ = self.load_sample(0, first_load=True)
-        if "img_file_to_close" in sample_extra_info:
+        if "img_file_to_close" in sample_extra_info and isinstance(sample_extra_info["img_file_to_close"], h5py.File):
             sample_extra_info["img_file_to_close"].close()
-        if "mask_file_to_close" in sample_extra_info:
+        if "mask_file_to_close" in sample_extra_info and isinstance(sample_extra_info["mask_file_to_close"], h5py.File):
             sample_extra_info["mask_file_to_close"].close()
-        self.norm_module.orig_dtype = img.dtype if isinstance(img, np.ndarray) else "Zarr"
+        self.norm_module.orig_dtype = img.dtype if isinstance(img, np.ndarray) else "Zarr"  # type: ignore
 
         if mask is not None and not test_by_chunks:
             # Store which channels are binary or not (e.g. distance transform channel is not binary)
-            self.norm_module.set_stats_from_mask(
-                mask, 
-                n_classes=n_classes, 
-                instance_problem=instance_problem
-            )
+            self.norm_module.set_stats_from_mask(mask, n_classes=n_classes, instance_problem=instance_problem)
 
     def load_sample(
-        self, 
-        idx: int, 
+        self,
+        idx: int,
         first_load: bool = False,
     ) -> Tuple[NDArray, NDArray | None, DataSample, Dict, Dict | None]:
         """
@@ -172,7 +169,7 @@ class test_pair_data_generator(Dataset):
             Extra information of the loaded sample. Contains the following keys:
             * ``"gt_associated_id"``, int (optional): position of associated ground truth of the sample within its list. Present if the
               user selected ``PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER`` to be ``True``.
-            * ``"discard"``, bool (optional): whether the sample should be discarded or not. Present if ``filter_conds``,``filter_vals``
+            * ``"discard"``, bool (optional): whether the sample should be discarded or not. Present if ``filter_props``,``filter_vals``
               and ``filter_signs`` were provided.
             * ``"reflected_orig_shape"``, tuple of int (optional): original shape of the image before reflecting. Present if ``reflect_to_complete_shape``
               is ``True``.
@@ -210,16 +207,16 @@ class test_pair_data_generator(Dataset):
                     self.Y.dataset_info[msample.fid].path,
                     is_3d=(self.ndim == 3),
                 )
+                sample_extra_info["gt_associated_id"] = associated_id
             else:
                 msample = self.Y.sample_list[idx]
                 mask, mask_file = load_img_data(
                     self.Y.dataset_info[msample.fid].path,
                     is_3d=(self.ndim == 3),
-                    data_within_zarr_path=msample.get_path_in_zarr(),
+                    data_within_zarr_path=msample.get_path_in_zarr() if not self.instance_problem else None,
                 )
                 if mask_file and isinstance(mask_file, h5py.File):
                     sample_extra_info["mask_file_to_close"] = mask_file
-            sample_extra_info["gt_associated_id"] = mask
 
         if not self.test_by_chunks:
             # Skip processing image
@@ -327,7 +324,7 @@ class test_pair_data_generator(Dataset):
             * ``"dir"``, str: directory where the image resides.
             * ``"gt_associated_id"``, int (optional): position of associated ground truth of the sample within its list. Present if the
               user selected ``PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER`` to be ``True``.
-            * ``"discard"``, bool (optional): whether the sample should be discarded or not. Present if ``filter_conds``,``filter_vals`` and
+            * ``"discard"``, bool (optional): whether the sample should be discarded or not. Present if ``filter_props``,``filter_vals`` and
             ``filter_signs`` were provided.
             * ``"reflected_orig_shape"``, tuple of int (optional): original shape of the image before reflecting. Present if ``reflect_to_complete_shape``
               is ``True``.

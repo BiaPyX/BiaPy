@@ -9,7 +9,7 @@ import fill_voids
 import edt
 from tqdm import tqdm
 from scipy.signal import find_peaks
-from scipy.spatial import cKDTree
+from scipy.spatial import cKDTree # type: ignore
 from scipy.spatial.distance import cdist
 from scipy.ndimage import rotate, grey_dilation, binary_erosion, binary_dilation, median_filter, center_of_mass
 from scipy.signal import savgol_filter
@@ -19,6 +19,9 @@ from skimage.segmentation import watershed, relabel_sequential
 from skimage.filters import rank, threshold_otsu
 from skimage.measure import label, regionprops_table
 from skimage.exposure import equalize_adapthist
+from skimage.feature import peak_local_max, blob_log
+from scipy.ndimage import binary_dilation as binary_dilation_scipy
+
 import diplib as dip
 from typing import (
     Tuple,
@@ -31,7 +34,7 @@ from numpy.typing import NDArray
 
 from biapy.utils.misc import to_numpy_format, to_pytorch_format
 from biapy.data.data_manipulation import read_img_as_ndarray, save_tif, imread, reduce_dtype
-
+from biapy.data.pre_processing import generate_ellipse_footprint
 
 def watershed_by_channels(
     data: NDArray,
@@ -46,7 +49,7 @@ def watershed_by_channels(
     fore_dilation_radius: int=5,
     rmv_close_points: bool=False,
     remove_close_points_radius: int=-1,
-    resolution: Tuple[float,...]=(1., 1., 1.),
+    resolution: List[float|int]=[1., 1., 1.],
     watershed_by_2d_slices: bool=False,
     save_dir: Optional[str]=None,
 ):
@@ -101,8 +104,8 @@ def watershed_by_channels(
         Radius from each point to decide what points to keep. Used in 'BP' channel configuration.
         E.g. ``10.0``.
 
-    resolution : ndarray of floats
-        Resolution of the data, in ``(z,y,x)`` to calibrate coordinates. E.g. ``[30,8,8]``.
+    resolution : tuple of int/float
+        Resolution of the data in ``(z,y,x)`` to calibrate coordinates. E.g. ``[30,8,8]``.
 
     watershed_by_2d_slices : bool, optional
         Whether to apply or not the watershed to create instances slice by slice in a 3D problem. This can solve instances invading
@@ -124,6 +127,7 @@ def watershed_by_channels(
         "BP",
         "BD",
     ]
+    assert len(resolution) == 3, "'resolution' must be a list of 3 int/float"
 
     def erode_seed_and_foreground():
         nonlocal seed_map
@@ -173,7 +177,7 @@ def watershed_by_channels(
             erode_seed_and_foreground()
 
         semantic = data[..., 0]
-        # semantic = edt.edt(foreground*(1-seed_map), anisotropy=res[::-1], black_border=False, order='F')
+        # semantic = edt.edt(foreground*(1-seed_map), anisotropy=resolution[::-1], black_border=False, order='F')
         seed_map = label(seed_map, connectivity=1)
     elif channels in ["C"]:
         if ths["TYPE"] == "auto":
@@ -186,8 +190,7 @@ def watershed_by_channels(
         if len(seed_morph_sequence) != 0 or erode_and_dilate_foreground:
             erode_seed_and_foreground()
 
-        # res = (1,)+resolution if len(resolution) == 2 else resolution
-        # semantic = edt.edt(foreground, anisotropy=res[::-1], black_border=False, order='F')
+        # semantic = edt.edt(foreground, anisotropy=resolution[::-1], black_border=False, order='F')
         # use contour channel as input to watershed
         semantic = data[..., 0]
         seed_map = label(seed_map, connectivity=1)
@@ -205,7 +208,6 @@ def watershed_by_channels(
         if len(seed_morph_sequence) != 0 or erode_and_dilate_foreground:
             erode_seed_and_foreground()
 
-        res = (1,) + resolution if len(resolution) == 2 else resolution
         # use contour channel as input to watershed
         semantic = 1 - foreground_probs
         seed_map = label(seed_map, connectivity=1)
@@ -237,8 +239,7 @@ def watershed_by_channels(
             z, y, x = sd
             seed_map[z, y, x] = 1
 
-        res = (1,) + resolution if len(resolution) == 2 else resolution
-        semantic = -edt.edt(1 - seed_map, anisotropy=res[::-1], black_border=False, order="F")
+        semantic = -edt.edt(1 - seed_map, anisotropy=resolution[::-1], black_border=False, order="F")
 
         if len(seed_morph_sequence) != 0 or erode_and_dilate_foreground:
             erode_seed_and_foreground()
@@ -371,6 +372,105 @@ def watershed_by_channels(
             )
     return segm
 
+def create_synapses(data: NDArray,
+    channels: str,
+    point_creation_func: str = "peak_local_max",
+    min_th_to_be_peak: float = 0.2,
+    min_distance: int=1,
+    min_sigma: int=5,
+    max_sigma: int=10,
+    num_sigma: int=2,
+    exclude_border: bool = False,
+) -> Tuple[NDArray, Dict]:
+    """
+    Convert binary foreground probability maps and instance contours to instance masks via watershed segmentation
+    algorithm.
+
+    Implementation based on `PyTorch Connectomics' process.py
+    <https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/utils/process.py>`_.
+
+    Parameters
+    ----------
+    data : 4D Numpy array
+        Binary foreground labels and contours data to apply watershed into. E.g. ``(397, 1450, 2000, 2)``.
+
+    channels : str
+        Channel type used. Possible options: ``A``, ``C``, ``BC``, ``BCM``, ``BCD``, ``BCDv2``, ``Dv2`` and ``BDv2``.
+    """
+    assert channels in [
+        "B",
+        "BF",
+    ]
+    assert point_creation_func in ["peak_local_max", "blob_log"]
+
+    d_result = {}
+    ids, probs = [], []
+    if channels == "BF":
+        print("TODO")
+        import pdb; pdb.set_trace()
+    elif channels == "B":
+        # Take the coords of the predicted points
+        all_coords = []
+        max_value = 0
+        data = data.astype(np.float32)
+        for c in range(data.shape[-1]):
+            if point_creation_func == "peak_local_max":
+                coords = peak_local_max(
+                    data[..., c],
+                    min_distance=min_distance,
+                    threshold_abs=min_th_to_be_peak,
+                    exclude_border=exclude_border,
+                )
+                coords = coords.astype(int)
+            else:
+                coords = blob_log(
+                    data[..., c] * 255,
+                    min_sigma=min_sigma,
+                    max_sigma=max_sigma,
+                    num_sigma=num_sigma,
+                    threshold=min_th_to_be_peak,
+                    exclude_border=exclude_border,
+                )
+                coords = coords[:, :3].astype(int)  # Remove sigma
+
+            all_coords.append(coords)
+            if max_value < len(coords):
+                max_value = len(coords)
+        
+        # Choose appropiate dtype
+        max_value = np.max(data)
+        if max_value < 255:
+            appropiate_dtype = np.uint8
+        elif max_value < 65535:
+            appropiate_dtype = np.uint16
+        else:
+            appropiate_dtype = np.uint32
+        new_data = np.zeros(data.shape, dtype=appropiate_dtype)
+
+        lbl_cont = 1
+        ellipse_footprint_cpd = generate_ellipse_footprint([2,4,4])
+        for c, coords in enumerate(all_coords):
+            for coord in coords:
+                z,y,x = coord
+                new_data[int(z), int(y), int(x), c] = lbl_cont
+                probs.append(float(data[z,y,x,c]))
+                ids.append(lbl_cont)
+                lbl_cont += 1
+
+            # Dilate the labels
+            new_data[...,c] = binary_dilation_scipy(
+                new_data[...,c],
+                iterations=1,
+                structure=ellipse_footprint_cpd,
+            )
+
+        d_result["ids"] = ids
+        d_result["tag"] = (["pre",]*len(all_coords[0])) + (["post",]*len(all_coords[1]))
+        d_result["probabilities"] = probs
+        d_result["points"] = np.concatenate(all_coords, axis=0)
+
+        return new_data, d_result
+    return np.zeros((10,10)), {"da":"da"} 
 
 def apply_median_filtering(
     data: NDArray, 
@@ -427,12 +527,12 @@ def apply_median_filtering(
 def ensemble8_2d_predictions(
     o_img: NDArray,
     pred_func: Callable,
-    axis_order_back: Tuple[int,...],
-    axis_order: Tuple[int,...],
+    axes_order_back: Tuple[int,...],
+    axes_order: Tuple[int,...],
     device: torch.device,
     batch_size_value: int=1,
     mode="mean",
-) -> NDArray | Tuple[NDArray, NDArray]:
+) -> torch.Tensor:
     """
     Outputs the mean prediction of a given image generating its 8 possible rotations and flips.
 
@@ -444,15 +544,15 @@ def ensemble8_2d_predictions(
     pred_func : function
         Function to make predictions.
 
-    axis_order_back : tuple
+    axes_order_back : tuple
         Axis order to convert from tensor to numpy. E.g. ``(0,3,1,2)``.
 
-    axis_order : tuple
+    axes_order : tuple
         Axis order to convert from numpy to tensor. E.g. ``(0,3,1,2)``.
-
+ 
     device : Torch device
         Device used.
-
+ 
     batch_size_value : int, optional
         Batch size value.
 
@@ -521,19 +621,11 @@ def ensemble8_2d_predictions(
         top = (i + 1) * batch_size_value if (i + 1) * batch_size_value < total_img.shape[0] else total_img.shape[0]
         r_aux = pred_func(total_img[i * batch_size_value : top])
 
-        # Take just the last output of the network in case it returns more than one output
-        channel_split = None
+        # Take just the first output of the network in case it returns more than one output
         if isinstance(r_aux, list):
-            channel_split = r_aux[0].shape[1]
-            r_aux = np.concatenate(
-                [
-                    to_numpy_format(r_aux[0], axis_order_back),
-                    to_numpy_format(r_aux[1], axis_order_back),
-                ],
-                axis=-1,
-            )
+            r_aux = to_numpy_format(r_aux[0], axes_order_back)
         else:
-            r_aux = to_numpy_format(r_aux, axis_order_back)
+            r_aux = to_numpy_format(r_aux, axes_order_back)
         _decoded_aug_img.append(r_aux)
     _decoded_aug_img = np.concatenate(_decoded_aug_img)
 
@@ -595,23 +687,19 @@ def ensemble8_2d_predictions(
     elif mode == "max":
         funct = np.max
     out = np.expand_dims(funct(out, axis=0), 0)
-    out = to_pytorch_format(out, axis_order, device)
-
-    if channel_split:
-        return out[:, :channel_split], out[:, channel_split:]
-    else:
-        return out
+    out = to_pytorch_format(out, axes_order, device)
+    return out
 
 
 def ensemble16_3d_predictions(
     vol: NDArray, 
     pred_func: Callable, 
-    axis_order_back: Tuple[int,...], 
-    axis_order: Tuple[int,...], 
-    device: torch.device, 
+    axes_order_back: Tuple[int,...], 
+    axes_order: Tuple[int,...],
+    device: torch.device,
     batch_size_value: int=1, 
     mode: str="mean"
-) -> NDArray | Tuple[NDArray, NDArray]:
+) -> torch.Tensor:
     """
     Outputs the mean prediction of a given image generating its 16 possible rotations and flips.
 
@@ -623,12 +711,12 @@ def ensemble16_3d_predictions(
     pred_func : function
         Function to make predictions.
 
-    axis_order_back : tuple
+    axes_order_back : tuple
         Axis order to convert from tensor to numpy. E.g. ``(0,3,1,2,4)``.
 
-    axis_order : tuple
-        Axis order to convert from numpy to tensor. E.g. ``(0,3,1,2,4)``.
-
+    axes_order : tuple
+        Axis order to convert from numpy to tensor. E.g. ``(0,3,1,2)``.
+ 
     device : Torch device
         Device used.
 
@@ -711,19 +799,11 @@ def ensemble16_3d_predictions(
         top = (i + 1) * batch_size_value if (i + 1) * batch_size_value < total_vol.shape[0] else total_vol.shape[0]
         r_aux = pred_func(total_vol[i * batch_size_value : top])
 
-        # Take just the last output of the network in case it returns more than one output
-        channel_split = None
+        # Take just the first output of the network in case it returns more than one output
         if isinstance(r_aux, list):
-            channel_split = r_aux[0].shape[1]
-            r_aux = np.concatenate(
-                [
-                    to_numpy_format(r_aux[0], axis_order_back),
-                    to_numpy_format(r_aux[1], axis_order_back),
-                ],
-                axis=-1,
-            )
+            r_aux = to_numpy_format(r_aux[0], axes_order_back)
         else:
-            r_aux = to_numpy_format(r_aux, axis_order_back)
+            r_aux = to_numpy_format(r_aux, axes_order_back)
 
         if r_aux.ndim == 4:
             r_aux = np.expand_dims(r_aux, 0)
@@ -923,12 +1003,8 @@ def ensemble16_3d_predictions(
     elif mode == "max":
         funct = np.max
     out = np.expand_dims(funct(out, axis=0), 0)
-    out = to_pytorch_format(out, axis_order, device)
-
-    if channel_split:
-        return out[:, :channel_split], out[:, channel_split:]
-    else:
-        return out
+    out = to_pytorch_format(out, axes_order, device)
+    return out
 
 
 def create_th_plot(
@@ -1126,7 +1202,7 @@ def voronoi_on_mask(
 def remove_close_points(
     points: NDArray | List[List[int | float]], 
     radius: float, 
-    resolution: Tuple[float, ...], 
+    resolution: List[int|float], 
     classes: Optional[List[int]]=None, 
     ndim: int=3, 
     return_drops: bool=False
@@ -1143,9 +1219,8 @@ def remove_close_points(
     radius : float
         Radius from each point to decide what points to keep. E.g. ``10.0``.
 
-    resolution : ndarray of floats
-        Resolution of the data, in ``(z,y,x)`` to calibrate coordinates.
-        E.g. ``[30,8,8]``.
+    resolution : Tuple of int/float
+        Resolution of the data, in ``(z,y,x)`` to calibrate coordinates. E.g. ``[30,8,8]``.
 
     ndim : int, optional
         Number of dimension of the data.
@@ -1159,6 +1234,8 @@ def remove_close_points(
         New list of points after removing those at a distance of ``radius``
         or less from each other.
     """
+    assert len(resolution) == 3, "'resolution' must be a list of 3 int/float"
+
     print("Removing close points . . .")
     print("Initial number of points: " + str(len(points)))
 
@@ -1540,7 +1617,7 @@ def detection_watershed(
 
 def measure_morphological_props_and_filter(
     img: NDArray,
-    resolution: Tuple[float,...],
+    resolution: List[float|int],
     filter_instances: bool=False,
     properties: List[List[str]]=[[]],
     prop_values=[[]],
@@ -1548,7 +1625,7 @@ def measure_morphological_props_and_filter(
 ):
     """
     Measures the properties of input image's instances. It calculates each instance id, number of pixels, area/volume
-    (2D/3D respec. and taking into account the resolution), diameter, perimeter/surface_area (2D/3D respec.),
+    (2D/3D respec. and taking into account the ``resolution``), diameter, perimeter/surface_area (2D/3D respec.),
     circularity/sphericity (2D/3D respec.) and elongation properties. All instances that satisfy the conditions composed
     by ``properties``, ``prop_values`` and ``comp_signs`` variables will be removed from ``img``. Apart from returning
     all properties this function will return also a list identifying those instances that satisfy and not satify the
@@ -1560,8 +1637,8 @@ def measure_morphological_props_and_filter(
     img : 2D/3D Numpy array
         Image with instances. E.g. ``(1450, 2000)`` for 2D and ``(397, 1450, 2000)`` for 3D.
 
-    resolution : str
-        Path to load the image paired with seeds.
+    resolution : tuple of int/float
+        Resolution of the data.
 
     filter_instances : bool, optional
         Whether to do instance filtering or not.
@@ -1597,7 +1674,7 @@ def measure_morphological_props_and_filter(
             Number of pixels of each instance.
 
         areas : Array of ints
-            Area/volume (2D/3D) of each instance based on the given resolution.
+            Area/volume (2D/3D) of each instance based on the given ``resolution``.
 
         circularities : Array of ints
             Circularity/sphericity (2D/3D) of each instance. In 2D, ``circularity`` of an instance is defined
@@ -1631,14 +1708,10 @@ def measure_morphological_props_and_filter(
             List of conditions that each instance has satisfy or not.
     """
     print("Checking the properties of instances . . .")
+    
+    assert len(resolution) == 3, "'resolution' must be a list of 3 int/float" 
 
-    if img.ndim == 3:
-        image3d = True
-        if len(resolution) == 2:
-            resolution = resolution + (resolution[-1],)
-    else:
-        image3d = False
-
+    image3d = True if img.ndim == 3 else False
     correct_str = "Correct"
     unsure_str = "Removed"
 
@@ -1703,10 +1776,10 @@ def measure_morphological_props_and_filter(
         centers[label_index] = center
 
     if total_labels > 0:
-        img = dip.Image(img.astype(img.dtype.name))
+        img = dip.Image(img.astype(img.dtype.name)) # type: ignore
 
         features = ["SurfaceArea", "P2A"] if image3d else ["P2A"]
-        measurement = dip.MeasurementTool.Measure(img, features=features)
+        measurement = dip.MeasurementTool.Measure(img, features=features) # type: ignore
 
         for lbl in measurement.Objects():
             label_index = np.where(label_list == lbl)[0]
@@ -1802,7 +1875,11 @@ def measure_morphological_props_and_filter(
     return img, d_result
 
 
-def find_neighbors(img, label, neighbors=1):
+def find_neighbors(
+    img: NDArray, 
+    label: int, 
+    neighbors: int=1
+):
     """
     Find neighbors of a label in a given image.
 
@@ -1848,7 +1925,10 @@ def find_neighbors(img, label, neighbors=1):
     return list_of_neighbors
 
 
-def repare_large_blobs(img, size_th=10000):
+def repare_large_blobs(
+    img: NDArray, 
+    size_th: int=10000
+):
     """
     Try to repare large instances by merging neighbors ones with it and by removing possible central holes.
 
@@ -1943,7 +2023,10 @@ def repare_large_blobs(img, size_th=10000):
     return img
 
 
-def apply_binary_mask(X, bin_mask_dir):
+def apply_binary_mask(
+    X: NDArray, 
+    bin_mask_dir: str
+):
     """
     Apply a binary mask to remove values outside it.
 

@@ -5,6 +5,7 @@ from typing import Tuple
 from packaging.version import Version
 from yacs.config import CfgNode
 from skimage.transform import resize
+from yacs.config import CfgNode as CN
 
 from bioimageio.spec.model.v0_4 import ModelDescr as ModelDescr_v0_4
 from bioimageio.spec.model.v0_5 import ModelDescr as ModelDescr_v0_5
@@ -19,8 +20,8 @@ from bioimageio.spec.utils import download
 from biapy.data.pre_processing import calculate_volume_prob_map
 from biapy.data.data_manipulation import read_img_as_ndarray, imwrite, reduce_dtype
 from biapy.data.generators.augmentors import random_crop_pair
-from biapy.config.config import Config
 from biapy.data.dataset import BiaPyDataset, DataSample, DatasetFile
+
 
 def get_bmz_model_info(
     model: ModelDescr_v0_4 | ModelDescr_v0_5, spec_version: Version = Version("0.4.0")
@@ -55,7 +56,7 @@ def get_bmz_model_info(
             arch_kwargs = arch.kwargs
 
             pytorch_architecture = ArchitectureFromFileDescr(
-                source=arch_file_path, # type: ignore
+                source=arch_file_path,  # type: ignore
                 sha256=arch_file_sha256,
                 callable=arch_name,
                 kwargs=arch_kwargs,
@@ -78,7 +79,7 @@ def get_bmz_model_info(
         ).path
         arch_name = model.weights.pytorch_state_dict.architecture.callable_name
         pytorch_architecture = ArchitectureFromFileDescr(
-            source=arch_file_path, # type: ignore
+            source=arch_file_path,  # type: ignore
             sha256=arch_file_sha256,
             callable=arch_name,
             kwargs=model.weights.pytorch_state_dict.kwargs,
@@ -182,10 +183,10 @@ def create_model_cover(file_paths, out_path, patch_size=256, is_3d=False, workfl
     if workflow in ["semantic-segmentation", "instance-segmentation", "detection"]:
         quick_dataset = BiaPyDataset(
             dataset_info=[DatasetFile(str(file_paths["output"]))],
-            sample_list=[DataSample(fid=0, coords=None, img=np.expand_dims(mask[..., 0], -1) > 0.5)]
+            sample_list=[DataSample(fid=0, coords=None, img=np.expand_dims(mask[..., 0], -1) > 0.5)],
         )
         prob_map = calculate_volume_prob_map(quick_dataset, is_3d, 1, 0)[0]
-    img, mask = random_crop_pair(img, mask, (patch_size, patch_size), img_prob=prob_map) # type: ignore
+    img, mask = random_crop_pair(img, mask, (patch_size, patch_size), img_prob=prob_map)  # type: ignore
 
     # If 3D just take middle slice.
     if is_3d and img.ndim == 4:
@@ -207,7 +208,7 @@ def create_model_cover(file_paths, out_path, patch_size=256, is_3d=False, workfl
     if mask.shape[:-1] != (patch_size, patch_size):
         order = 1 if workflow in ["super-resolution", "image-to-image", "denoising", "self-supervised"] else 0
         mask = resize(mask, (patch_size, patch_size), order=order, clip=True, preserve_range=True, anti_aliasing=True)
-    
+
     # Normalization
     img = reduce_dtype(img, img.min(), img.max(), out_min=0, out_max=255, out_type="uint8")
     if workflow in ["super-resolution", "image-to-image", "denoising", "self-supervised"]:
@@ -257,7 +258,7 @@ def create_model_cover(file_paths, out_path, patch_size=256, is_3d=False, workfl
 
 
 def create_model_doc(
-    biapy_cfg: Config | CfgNode,
+    biapy_cfg: CN | CfgNode,
     bmz_cfg: dict,
     cfg_file: str,
     task_description: str,
