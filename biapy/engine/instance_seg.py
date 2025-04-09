@@ -135,6 +135,11 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             self.post_processing["instance_post"] = True
         else:
             self.post_processing["instance_post"] = False
+        
+        if self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "synapses":
+            if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS:
+                self.post_processing['per_image'] = True
+
         self.instances_already_created = False
 
     def define_activations_and_channels(self):
@@ -370,6 +375,11 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 model_source=self.cfg.MODEL.SOURCE,
             )
         )
+        
+        if self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "synapses":
+            self.test_extra_metrics = ["Precision (pre-points)", "Recall (pre-points)", "F1 (pre-points)", "TP (pre-points)", "FP (pre-points)", "FN (pre-points)"]
+            self.test_extra_metrics += ["Precision (post-points)", "Recall (post-points)", "F1 (post-points)", "TP (post-points)", "FP (post-points)", "FN (post-points)"]
+        self.test_metric_names += self.test_extra_metrics
 
         self.loss = instance_segmentation_loss(
             self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS,
@@ -1221,6 +1231,11 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     verbose=True,
                 )
                 print("Synapse detection (pre points) metrics: {}".format(d_metrics))
+                for n, item in enumerate(d_metrics.items()):
+                    metric = self.test_extra_metrics[n]
+                    if str(metric).lower() not in self.stats["merge_patches"]:
+                        self.stats["merge_patches"][str(metric.lower())] = 0
+                    self.stats["merge_patches"][str(metric).lower()] += item[1]
 
                 # Save csv files with the associations between GT points and predicted ones
                 if out_dir:
@@ -1242,13 +1257,19 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     post_points,
                     true_classes=None,
                     pred_classes=[],
-                    tolerance=self.cfg.TEST.DET_TOLERANCE,
+                    tolerance=self.cfg.TEST.DET_TOLERANCE, 
                     resolution=resolution,
                     bbox_to_consider=[],
                     verbose=True,
                 )
                 print("Synapse detection (post points) metrics: {}".format(d_metrics))
-
+                previous_pre_keys_num = len(d_metrics)
+                for n, item in enumerate(d_metrics.items()):
+                    metric = self.test_extra_metrics[n+previous_pre_keys_num]
+                    if str(metric).lower() not in self.stats["merge_patches"]:
+                        self.stats["merge_patches"][str(metric.lower())] = 0
+                    self.stats["merge_patches"][str(metric).lower()] += item[1]
+                
                 # Save csv files with the associations between GT points and predicted ones
                 if out_dir:
                     gt_assoc.to_csv(
@@ -1295,7 +1316,12 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         verbose=True,
                     )
                     print("Synapse detection (pre points) metrics (post-processing): {}".format(d_metrics))
-
+                    for n, item in enumerate(d_metrics.items()):
+                        metric = self.test_extra_metrics[n]
+                        if str(metric).lower() not in self.stats["merge_patches_post"]:
+                            self.stats["merge_patches_post"][str(metric.lower())] = 0
+                        self.stats["merge_patches_post"][str(metric).lower()] += item[1]
+                        
                     # Save csv files with the associations between GT points and predicted ones
                     if out_dir_post_proc:
                         gt_assoc.to_csv(
@@ -1322,7 +1348,13 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         verbose=True,
                     )
                     print("Synapse detection (post points) metrics (post-processing): {}".format(d_metrics))
-
+                    previous_pre_keys_num = len(d_metrics)
+                    for n, item in enumerate(d_metrics.items()):
+                        metric = self.test_extra_metrics[n+previous_pre_keys_num]
+                        if str(metric).lower() not in self.stats["merge_patches_post"]:
+                            self.stats["merge_patches_post"][str(metric.lower())] = 0
+                        self.stats["merge_patches_post"][str(metric).lower()] += item[1]
+                        
                     # Save csv files with the associations between GT points and predicted ones
                     if out_dir_post_proc:
                         gt_assoc.to_csv(
@@ -1530,7 +1562,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             # In this case we need only to merge all local points so it will be done by the main thread. The rest will wait
             filename = os.path.splitext(self.current_sample["filename"])[0]
             pre_points_df, post_points_df, pre_post_map_df = None, None, None
-            if self.cfg.TEST.REUSE_PREDICTIONS:
+            if not self.cfg.TEST.REUSE_PREDICTIONS:
                 # For synapses we need to map the pre to the post points. It needs to be done here and not patch by patch as
                 # some pre points may lay in other chunks of the data.
                 input_dir = self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK
@@ -1723,6 +1755,11 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         verbose=True,
                     )
                     print("Synapse detection (pre points) metrics: {}".format(d_metrics))
+                    for n, item in enumerate(d_metrics.items()):
+                        metric = self.test_extra_metrics[n]
+                        if str(metric).lower() not in self.stats["merge_patches"]:
+                            self.stats["merge_patches"][str(metric.lower())] = 0
+                        self.stats["merge_patches"][str(metric).lower()] += item[1]
 
                     # Save csv files with the associations between GT points and predicted ones
                     gt_assoc.to_csv(
@@ -1751,6 +1788,12 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         verbose=True,
                     )
                     print("Synapse detection (post points) metrics: {}".format(d_metrics))
+                    previous_pre_keys_num = len(d_metrics)
+                    for n, item in enumerate(d_metrics.items()):
+                        metric = self.test_extra_metrics[n+previous_pre_keys_num]
+                        if str(metric).lower() not in self.stats["merge_patches"]:
+                            self.stats["merge_patches"][str(metric.lower())] = 0
+                        self.stats["merge_patches"][str(metric).lower()] += item[1]
 
                     # Save csv files with the associations between GT points and predicted ones
                     gt_assoc.to_csv(
@@ -1769,9 +1812,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     )
 
             # Remove close points
-            post_proc = False
             if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS:
-                post_proc = True
                 if len(pre_points) > 0 and pre_points_df is not None:
                     pre_points, pre_dropped_pos = remove_close_points(  # type: ignore
                         pre_points,
@@ -1870,7 +1911,12 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                             verbose=True,
                         )
                         print("Synapse detection (pre points) metrics (post-processing): {}".format(d_metrics))
-
+                        for n, item in enumerate(d_metrics.items()):
+                            metric = self.test_extra_metrics[n]
+                            if str(metric).lower() not in self.stats["merge_patches_post"]:
+                                self.stats["merge_patches_post"][str(metric.lower())] = 0
+                            self.stats["merge_patches_post"][str(metric).lower()] += item[1]
+                            
                         # Save csv files with the associations between GT points and predicted ones
                         gt_assoc.to_csv(
                             os.path.join(
@@ -1898,6 +1944,12 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                             verbose=True,
                         )
                         print("Synapse detection (post points) metrics (post-processing): {}".format(d_metrics))
+                        previous_pre_keys_num = len(d_metrics)
+                        for n, item in enumerate(d_metrics.items()):
+                            metric = self.test_extra_metrics[n+previous_pre_keys_num]
+                            if str(metric).lower() not in self.stats["merge_patches_post"]:
+                                self.stats["merge_patches_post"][str(metric.lower())] = 0
+                            self.stats["merge_patches_post"][str(metric).lower()] += item[1]
 
                         # Save csv files with the associations between GT points and predicted ones
                         gt_assoc.to_csv(
@@ -1915,79 +1967,79 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                             index=False,
                         )
 
-            sshape = list(self.current_sample["X"].shape)
-            assert len(sshape) >= 3
-            if len(sshape) == 3:
-                sshape += [
-                    2,
-                ]
-            else:
-                sshape[-1] = 2
+            if self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF:
+                print("Preparing prediction and GT tiffs as auxiliary images for checking the output. . .")
+                sshape = list(self.current_sample["X"].shape)
+                assert len(sshape) >= 3
+                if len(sshape) == 3:
+                    sshape += [
+                        2,
+                    ]
+                else:
+                    sshape[-1] = 2
 
-            mask = np.zeros(sshape, dtype=np.uint16)
-            # Paint pre points
-            if pre_points_df is not None:
-                pre_ids = pre_points_df["pre_id"].to_list()
-                assert len(pre_points) == len(pre_ids)
-                for j, cor in enumerate(pre_points):
-                    z, y, x = cor  # type: ignore
-                    z, y, x = int(z), int(y), int(x)
-                    mask[z, y, x, 0] = pre_ids[j]
-                    mask[z, y, x, 0] = pre_ids[j]
+                mask = np.zeros(sshape, dtype=np.uint16)
+                # Paint pre points
+                if pre_points_df is not None:
+                    pre_ids = pre_points_df["pre_id"].to_list()
+                    assert len(pre_points) == len(pre_ids)
+                    for j, cor in enumerate(pre_points):
+                        z, y, x = cor  # type: ignore
+                        z, y, x = int(z), int(y), int(x)
+                        mask[z, y, x, 0] = pre_ids[j]
+                        mask[z, y, x, 0] = pre_ids[j]
 
-            # Paint post points
-            if post_points_df is not None:
-                post_ids = post_points_df["post_id"].to_list()
-                assert len(post_points) == len(post_ids)
-                for j, cor in enumerate(post_points):
-                    z, y, x = cor  # type: ignore
-                    z, y, x = int(z), int(y), int(x)
-                    mask[z, y, x, 1] = post_ids[j]
+                # Paint post points
+                if post_points_df is not None:
+                    post_ids = post_points_df["post_id"].to_list()
+                    assert len(post_points) == len(post_ids)
+                    for j, cor in enumerate(post_points):
+                        z, y, x = cor  # type: ignore
+                        z, y, x = int(z), int(y), int(x)
+                        mask[z, y, x, 1] = post_ids[j]
 
-
-            out_dir = (
-                self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING
-                if post_proc
-                else self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK
-            )
-            if pre_points_df is not None or post_points_df is not None:
-                # Dilate and save the predicted points
-                for c in range(mask.shape[-1]):
-                    mask[..., c] = dilation(mask[..., c], ball(3))
-
-                save_tif(
-                    np.expand_dims(mask, 0),
-                    out_dir,
-                    [filename + "_points.tif"],
-                    verbose=self.cfg.TEST.VERBOSE,
+                out_dir = (
+                    self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING
+                    if self.post_processing['per_image']
+                    else self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK
                 )
+                if pre_points_df is not None or post_points_df is not None:
+                    # Dilate and save the predicted points
+                    for c in range(mask.shape[-1]):
+                        mask[..., c] = dilation(mask[..., c], ball(3))
 
-            gt_ids = np.zeros(sshape, dtype=np.uint16)
-            for j, cor in enumerate(gt_pre_points):
-                z, y, x = cor  # type: ignore
-                z, y, x = int(z)-1, int(y)-1, int(x)-1
-                try:
-                    gt_ids[z, y, x, 0] = j+1
-                except:
-                    pass
-            for j, cor in enumerate(gt_post_points):
-                z, y, x = cor  # type: ignore
-                z, y, x = int(z)-1, int(y)-1, int(x)-1
-                try:
-                    gt_ids[z, y, x, 1] = j+1
-                except:
-                    pass
-            
-            for c in range(gt_ids.shape[-1]):
-                gt_ids[..., c] = dilation(gt_ids[..., c], ball(3))
+                    save_tif(
+                        np.expand_dims(mask, 0),
+                        out_dir,
+                        [filename + "_points.tif"],
+                        verbose=self.cfg.TEST.VERBOSE,
+                    )
+
+                gt_ids = np.zeros(sshape, dtype=np.uint16)
+                for j, cor in enumerate(gt_pre_points):
+                    z, y, x = cor  # type: ignore
+                    z, y, x = int(z)-1, int(y)-1, int(x)-1
+                    try:
+                        gt_ids[z, y, x, 0] = j+1
+                    except:
+                        pass
+                for j, cor in enumerate(gt_post_points):
+                    z, y, x = cor  # type: ignore
+                    z, y, x = int(z)-1, int(y)-1, int(x)-1
+                    try:
+                        gt_ids[z, y, x, 1] = j+1
+                    except:
+                        pass
                 
-            save_tif(
-                np.expand_dims(gt_ids, 0),
-                out_dir,
-                [filename + "_gt_ids.tif"],
-                verbose=self.cfg.TEST.VERBOSE,
-            )        
-            import pdb; pdb.set_trace()
+                for c in range(gt_ids.shape[-1]):
+                    gt_ids[..., c] = dilation(gt_ids[..., c], ball(3))
+                    
+                save_tif(
+                    np.expand_dims(gt_ids, 0),
+                    out_dir,
+                    [filename + "_gt_ids.tif"],
+                    verbose=self.cfg.TEST.VERBOSE,
+                )        
 
     def after_full_image(self, pred: NDArray):
         """
@@ -2146,65 +2198,67 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         if self.cfg.MODEL.SOURCE != "torchvision":
             super().print_stats(image_counter)
 
-            print("Instance segmentation specific metrics:")
+            if self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
+                print("Instance segmentation specific metrics:")
             if self.cfg.TEST.MATCHING_STATS and (self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST):
                 for i in range(len(self.cfg.TEST.MATCHING_STATS_THS)):
-                    print("IoU TH={}".format(self.cfg.TEST.MATCHING_STATS_THS[i]))
-                    # Merge patches
-                    if self.stats["inst_stats_merge_patches"]:
-                        print("      Merge patches:")
-                        print(f"      {self.stats['inst_stats_merge_patches'][i]}")
-                    # As 3D stack
-                    if self.stats["inst_stats_as_3D_stack"]:
-                        print("      As 3D stack:")
-                        print(f"      {self.stats['inst_stats_as_3D_stack'][i]}")
-                    # Full image
-                    if self.stats["inst_stats"]:
-                        print("      Full image:")
-                        print(f"      {self.stats['inst_stats'][i]}")
-                    if self.post_processing["instance_post"]:
-                        print("IoU (post-processing) TH={}".format(self.cfg.TEST.MATCHING_STATS_THS[i]))
+                    if self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
+                        print("IoU TH={}".format(self.cfg.TEST.MATCHING_STATS_THS[i]))
                         # Merge patches
-                        if self.stats["inst_stats_merge_patches_post"]:
-                            print("      Merge patches (post-processing):")
-                            print(f"      {self.stats['inst_stats_merge_patches_post'][i]}")
+                        if self.stats["inst_stats_merge_patches"]:
+                            print("      Merge patches:")
+                            print(f"      {self.stats['inst_stats_merge_patches'][i]}")
                         # As 3D stack
-                        if self.stats["inst_stats_as_3D_stack_post"]:
-                            print("      As 3D stack (post-processing):")
-                            print(f"      {self.stats['inst_stats_as_3D_stack_post'][i]}")
+                        if self.stats["inst_stats_as_3D_stack"]:
+                            print("      As 3D stack:")
+                            print(f"      {self.stats['inst_stats_as_3D_stack'][i]}")
                         # Full image
-                        if self.stats["inst_stats_post"]:
-                            print("      Full image (post-processing):")
-                            print(f"      {self.stats['inst_stats_post'][i]}")
+                        if self.stats["inst_stats"]:
+                            print("      Full image:")
+                            print(f"      {self.stats['inst_stats'][i]}")
+                        if self.post_processing["instance_post"]:
+                            print("IoU (post-processing) TH={}".format(self.cfg.TEST.MATCHING_STATS_THS[i]))
+                            # Merge patches
+                            if self.stats["inst_stats_merge_patches_post"]:
+                                print("      Merge patches (post-processing):")
+                                print(f"      {self.stats['inst_stats_merge_patches_post'][i]}")
+                            # As 3D stack
+                            if self.stats["inst_stats_as_3D_stack_post"]:
+                                print("      As 3D stack (post-processing):")
+                                print(f"      {self.stats['inst_stats_as_3D_stack_post'][i]}")
+                            # Full image
+                            if self.stats["inst_stats_post"]:
+                                print("      Full image (post-processing):")
+                                print(f"      {self.stats['inst_stats_post'][i]}")
 
-                # Multi-head: instances + classification
-                if self.multihead:
-                    # Merge patches
-                    if self.stats["class_stats_merge_patches"]:
-                        print(f"      Merge patches classification IoU: {self.stats['class_stats_merge_patches']}")
-                    # As 3D stack
-                    if self.stats["class_stats_as_3D_stack"]:
-                        print(f"      As 3D stack classification IoU: {self.stats['class_stats_as_3D_stack']}")
-                    # Full image
-                    if self.stats["class_stats"]:
-                        print(f"      Full image classification IoU: {self.stats['class_stats']}")
+                        # Multi-head: instances + classification
+                        if self.multihead:
+                            # Merge patches
+                            if self.stats["class_stats_merge_patches"]:
+                                print(f"      Merge patches classification IoU: {self.stats['class_stats_merge_patches']}")
+                            # As 3D stack
+                            if self.stats["class_stats_as_3D_stack"]:
+                                print(f"      As 3D stack classification IoU: {self.stats['class_stats_as_3D_stack']}")
+                            # Full image
+                            if self.stats["class_stats"]:
+                                print(f"      Full image classification IoU: {self.stats['class_stats']}")
 
-                    if self.post_processing["instance_post"]:
-                        # Merge patches
-                        if self.stats["class_stats_merge_patches_post"]:
-                            print(
-                                f"      Merge patches classification IoU (post-processing): {self.stats['class_stats_merge_patches_post']}"
-                            )
-                        # As 3D stack
-                        if self.stats["class_stats_as_3D_stack_post"]:
-                            print(
-                                f"      As 3D stack classification IoU (post-processing): {self.stats['class_stats_as_3D_stack_post']}"
-                            )
-                        # Full image
-                        if self.stats["class_stats_post"]:
-                            print(
-                                f"      Full image classification IoU (post-processing): {self.stats['class_stats_post']}"
-                            )
+                            if self.post_processing["instance_post"]:
+                                # Merge patches
+                                if self.stats["class_stats_merge_patches_post"]:
+                                    print(
+                                        f"      Merge patches classification IoU (post-processing): {self.stats['class_stats_merge_patches_post']}"
+                                    )
+                                # As 3D stack
+                                if self.stats["class_stats_as_3D_stack_post"]:
+                                    print(
+                                        f"      As 3D stack classification IoU (post-processing): {self.stats['class_stats_as_3D_stack_post']}"
+                                    )
+                                # Full image
+                                if self.stats["class_stats_post"]:
+                                    print(
+                                        f"      Full image classification IoU (post-processing): {self.stats['class_stats_post']}"
+                                    )
 
     def prepare_instance_data(self):
         """
