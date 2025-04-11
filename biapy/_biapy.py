@@ -86,7 +86,6 @@ class BiaPy:
         dist_on_itp: Optional[bool] = False,
         dist_url: Optional[str] = "env://",
         dist_backend: Optional[str] = "nccl",
-        stop_ddp: Optional[bool] = True,
     ):
         """
         Run the main functionality of the job.
@@ -122,9 +121,6 @@ class BiaPy:
 
         dist_backend: str, optional
             Backend to use in distributed mode. Should be either 'nccl' or 'gloo'. Defaults to 'nccl'.
-
-        stop_ddp : bool, optional
-            Whether to stop DDP after train/test is done.
         """
         result_dir = result_dir if result_dir != "" else str(os.getenv("HOME"))
 
@@ -200,7 +196,6 @@ class BiaPy:
         self.device = init_devices(self.args, self.cfg.get_cfg_defaults())
         self.cfg._C.merge_from_list(opts)
         self.cfg : CN = self.cfg.get_cfg_defaults()
-        self.stop_ddp = stop_ddp
 
         # Reproducibility
         set_seed(self.cfg.SYSTEM.SEED)
@@ -259,10 +254,10 @@ class BiaPy:
         else:
             raise ValueError("Test was not enabled ('TEST.ENABLE')")
 
-        if is_dist_avail_and_initialized():
-            setup_for_distributed(True)
-            print(f"[Rank {get_rank()} ({os.getpid()})] Process waiting (test finished) . . . ")
-            self.wait_and_stop_ddp()
+        # if is_dist_avail_and_initialized():
+        #     setup_for_distributed(True)
+        #     print(f"[Rank {get_rank()} ({os.getpid()})] Process waiting (test finished) . . . ")
+        #     self.wait_and_stop_ddp()
 
     def prepare_model(self):
         """Build up the model based on the selected configuration."""
@@ -1075,9 +1070,8 @@ class BiaPy:
     def wait_and_stop_ddp(self):
         if is_dist_avail_and_initialized():
             dist.barrier()
-            if self.stop_ddp:
-                print(f"[Rank {get_rank()} ({os.getpid()})] stopping DDP . . . ")
-                dist.destroy_process_group()
+            print(f"[Rank {get_rank()} ({os.getpid()})] stopping DDP . . . ")
+            dist.destroy_process_group()
 
     def run_job(self):
         """Run a complete BiaPy workflow."""
@@ -1106,6 +1100,6 @@ class BiaPy:
                 self.export_model_to_bmz(self.cfg.PATHS.BMZ_EXPORT_PATH, bmz_cfg=bmz_cfg)
 
             # Wait until the main process is done
-            self.wait_and_stop_ddp()
+            # self.wait_and_stop_ddp()
 
         print("FINISHED JOB {} !!".format(self.job_identifier))
