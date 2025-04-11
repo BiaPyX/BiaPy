@@ -1065,14 +1065,14 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             )
 
         total_pre_points = len([x for x in d_result["tag"] if x == "pre"])
-        pre_points = np.array(d_result["points"][total_pre_points:])
+        pre_points = np.array(d_result["points"][:total_pre_points])
         pre_points_df = pd.DataFrame(
             zip(
-                d_result["ids"][total_pre_points:],
+                d_result["ids"][:total_pre_points],
                 list(pre_points[:, 0]),
                 list(pre_points[:, 1]),
                 list(pre_points[:, 2]),
-                d_result["probabilities"][total_pre_points:],
+                d_result["probabilities"][:total_pre_points],
             ),
             columns=[
                 "pre_id",
@@ -1093,15 +1093,14 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 index=False,
             )
 
-        total_post_points = len(d_result) - total_pre_points
-        post_points = np.array(d_result["points"][:total_post_points])
+        post_points = np.array(d_result["points"][total_pre_points:])
         post_points_df = pd.DataFrame(
             zip(
-                d_result["ids"][:total_post_points],
+                d_result["ids"][total_pre_points:],
                 list(post_points[:, 0]),
                 list(post_points[:, 1]),
                 list(post_points[:, 2]),
-                d_result["probabilities"][:total_post_points],
+                d_result["probabilities"][total_pre_points:],
             ),
             columns=[
                 "post_id",
