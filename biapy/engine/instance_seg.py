@@ -379,7 +379,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         if self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "synapses":
             self.test_extra_metrics = ["Precision (pre-points)", "Recall (pre-points)", "F1 (pre-points)", "TP (pre-points)", "FP (pre-points)", "FN (pre-points)"]
             self.test_extra_metrics += ["Precision (post-points)", "Recall (post-points)", "F1 (post-points)", "TP (post-points)", "FP (post-points)", "FN (post-points)"]
-        self.test_metric_names += self.test_extra_metrics
+            self.test_metric_names += self.test_extra_metrics
 
         self.loss = instance_segmentation_loss(
             self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS,
