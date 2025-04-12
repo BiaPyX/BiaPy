@@ -137,7 +137,10 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             self.post_processing["instance_post"] = False
         
         if self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "synapses":
-            if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS:
+            if (
+                self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_POINTS_RADIUS_PRE_POINTS > 0 
+                or self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_POINTS_RADIUS_POST_POINTS > 0
+            ):
                 self.post_processing['per_image'] = True
 
         self.instances_already_created = False
@@ -1743,7 +1746,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
                 # Calculate detection metrics
                 if len(pre_points) > 0:
-                    d_metrics, gt_assoc, fp = detection_metrics(
+                    d_metrics, pre_gt_assoc, pre_fp = detection_metrics(
                         gt_pre_points,
                         pre_points,
                         true_classes=None,
@@ -1761,14 +1764,14 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         self.stats["merge_patches"][str(metric).lower()] += item[1]
 
                     # Save csv files with the associations between GT points and predicted ones
-                    gt_assoc.to_csv(
+                    pre_gt_assoc.to_csv(
                         os.path.join(
                             self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
                             filename+"_pred_pre_locations_gt_assoc.csv",
                         ),
                         index=False,
                     )
-                    fp.to_csv(
+                    pre_fp.to_csv(
                         os.path.join(
                             self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
                             filename+"_pred_pre_locations_fp.csv",
@@ -1776,7 +1779,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         index=False,
                     )
 
-                    d_metrics, gt_assoc, fp = detection_metrics(
+                    d_metrics, post_gt_assoc, post_fp = detection_metrics(
                         gt_post_points,
                         post_points,
                         true_classes=None,
@@ -1795,14 +1798,14 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         self.stats["merge_patches"][str(metric).lower()] += item[1]
 
                     # Save csv files with the associations between GT points and predicted ones
-                    gt_assoc.to_csv(
+                    post_gt_assoc.to_csv(
                         os.path.join(
                             self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
                             filename+"_pred_post_locations_gt_assoc.csv",
                         ),
                         index=False,
                     )
-                    fp.to_csv(
+                    post_fp.to_csv(
                         os.path.join(
                             self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
                             filename+"_pred_post_locations_fp.csv",
@@ -1811,12 +1814,12 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     )
 
             # Remove close points
-            if self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS:
+            if self.post_processing['per_image']:
                 if len(pre_points) > 0 and pre_points_df is not None:
                     pre_points, pre_dropped_pos = remove_close_points(  # type: ignore
                         pre_points,
-                        self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS,
-                        self.resolution,
+                        self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_POINTS_RADIUS_PRE_POINTS,
+                        resolution,
                         ndim=self.dims,
                         return_drops=True,
                     )
@@ -1833,8 +1836,8 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 if len(post_points) > 0 and post_points_df is not None:   
                     post_points, post_dropped_pos = remove_close_points(  # type: ignore
                         post_points,
-                        self.cfg.TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS,
-                        self.resolution,
+                        self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_POINTS_RADIUS_POST_POINTS,
+                        resolution,
                         ndim=self.dims,
                         return_drops=True,
                     )
@@ -1899,7 +1902,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     print("Calculating synapse detection stats after post-processing . . .")
                     # Calculate detection metrics
                     if len(pre_points) > 0:
-                        d_metrics, gt_assoc, fp = detection_metrics(
+                        d_metrics, pre_gt_assoc, pre_fp = detection_metrics(
                             gt_pre_points,
                             pre_points,
                             true_classes=None,
@@ -1917,14 +1920,14 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                             self.stats["merge_patches_post"][str(metric).lower()] += item[1]
                             
                         # Save csv files with the associations between GT points and predicted ones
-                        gt_assoc.to_csv(
+                        pre_gt_assoc.to_csv(
                             os.path.join(
                                 self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
                                 filename+"_pred_pre_locations_gt_assoc.csv",
                             ),
                             index=False,
                         )
-                        fp.to_csv(
+                        pre_fp.to_csv(
                             os.path.join(
                                 self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
                                 filename+"_pred_pre_locations_fp.csv",
@@ -1932,7 +1935,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                             index=False,
                         )
 
-                        d_metrics, gt_assoc, fp = detection_metrics(
+                        d_metrics, post_gt_assoc, post_fp = detection_metrics(
                             gt_post_points,
                             post_points,
                             true_classes=None,
@@ -1951,17 +1954,17 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                             self.stats["merge_patches_post"][str(metric).lower()] += item[1]
 
                         # Save csv files with the associations between GT points and predicted ones
-                        gt_assoc.to_csv(
+                        post_gt_assoc.to_csv(
                             os.path.join(
                                 self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
                                 filename+"_pred_post_locations_gt_assoc.csv",
                             ),
                             index=False,
                         )
-                        fp.to_csv(
+                        post_fp.to_csv(
                             os.path.join(
                                 self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
-                                filename+"pred_post_locations_fp.csv",
+                                filename+"_pred_post_locations_fp.csv",
                             ),
                             index=False,
                         )
@@ -1977,7 +1980,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 else:
                     sshape[-1] = 2
 
-                mask = np.zeros(sshape, dtype=np.uint16)
+                aux_tif = np.zeros(sshape, dtype=np.uint16)
                 # Paint pre points
                 if pre_points_df is not None:
                     pre_ids = pre_points_df["pre_id"].to_list()
@@ -1985,8 +1988,8 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     for j, cor in enumerate(pre_points):
                         z, y, x = cor  # type: ignore
                         z, y, x = int(z), int(y), int(x)
-                        mask[z, y, x, 0] = pre_ids[j]
-                        mask[z, y, x, 0] = pre_ids[j]
+                        aux_tif[z, y, x, 0] = pre_ids[j]
+                        aux_tif[z, y, x, 0] = pre_ids[j]
 
                 # Paint post points
                 if post_points_df is not None:
@@ -1995,7 +1998,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     for j, cor in enumerate(post_points):
                         z, y, x = cor  # type: ignore
                         z, y, x = int(z), int(y), int(x)
-                        mask[z, y, x, 1] = post_ids[j]
+                        aux_tif[z, y, x, 1] = post_ids[j]
 
                 out_dir = (
                     self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING
@@ -2004,41 +2007,112 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 )
                 if pre_points_df is not None or post_points_df is not None:
                     # Dilate and save the predicted points
-                    for c in range(mask.shape[-1]):
-                        mask[..., c] = dilation(mask[..., c], ball(3))
+                    for c in range(aux_tif.shape[-1]):
+                        aux_tif[..., c] = dilation(aux_tif[..., c], ball(3))
 
                     save_tif(
-                        np.expand_dims(mask, 0),
+                        np.expand_dims(aux_tif, 0),
                         out_dir,
                         [filename + "_points.tif"],
                         verbose=self.cfg.TEST.VERBOSE,
                     )
 
-                gt_ids = np.zeros(sshape, dtype=np.uint16)
+                aux_tif = np.zeros(sshape, dtype=np.uint16)
                 for j, cor in enumerate(gt_pre_points):
                     z, y, x = cor  # type: ignore
                     z, y, x = int(z)-1, int(y)-1, int(x)-1
                     try:
-                        gt_ids[z, y, x, 0] = j+1
+                        aux_tif[z, y, x, 0] = j+1
                     except:
                         pass
                 for j, cor in enumerate(gt_post_points):
                     z, y, x = cor  # type: ignore
                     z, y, x = int(z)-1, int(y)-1, int(x)-1
                     try:
-                        gt_ids[z, y, x, 1] = j+1
+                        aux_tif[z, y, x, 1] = j+1
                     except:
                         pass
                 
-                for c in range(gt_ids.shape[-1]):
-                    gt_ids[..., c] = dilation(gt_ids[..., c], ball(3))
+                for c in range(aux_tif.shape[-1]):
+                    aux_tif[..., c] = dilation(aux_tif[..., c], ball(3))
                     
                 save_tif(
-                    np.expand_dims(gt_ids, 0),
+                    np.expand_dims(aux_tif, 0),
                     out_dir,
                     [filename + "_gt_ids.tif"],
                     verbose=self.cfg.TEST.VERBOSE,
                 )        
+                    
+                print(
+                    "Creating the image with a summary of detected points and false positives with colors (pre-points) . . ."
+                )
+                aux_tif = np.zeros(sshape[:-1] + [3,], dtype=np.uint8)
+                
+                print("Painting TPs and FNs (pre-points) . . .")
+                for j, cor in tqdm(enumerate(gt_pre_points), total=len(gt_pre_points)):
+                    z, y, x = cor  # type: ignore
+                    z, y, x = int(z)-1, int(y)-1, int(x)-1
+                    tag = pre_gt_assoc[pre_gt_assoc["gt_id"]==j+1]["tag"].iloc[0]
+                    color = (0, 255, 0) if tag == "TP" else (255, 0, 0)  # Green or red
+                    try:
+                        aux_tif[z, y, x] = color
+                    except:
+                        pass
+
+                print("Painting FPs (pre-points) . . .")
+                for index, row in tqdm(pre_fp.iterrows(), total=len(pre_fp)):
+                    z,y,x = int(row['axis-0']), int(row['axis-1']), int(row['axis-2'])
+                    try:
+                        aux_tif[z, y, x] = (0,0,255) # Blue
+                    except:
+                        pass
+                
+                print("Dilating points (pre-points) . . .")
+                for c in range(aux_tif.shape[-1]):
+                    aux_tif[..., c] = dilation(aux_tif[..., c], ball(3))
+
+                save_tif(
+                    np.expand_dims(aux_tif, 0),
+                    out_dir,
+                    [filename + "_pre_point_assoc.tif"],
+                    verbose=self.cfg.TEST.VERBOSE,
+                )   
+
+                print(
+                    "Creating the image with a summary of detected points and false positives with colors (post-points) . . ."
+                )
+                aux_tif = np.zeros(sshape[:-1] + [3,], dtype=np.uint8)
+                
+                print("Painting TPs and FNs (post-points) . . .")
+                for j, cor in tqdm(enumerate(gt_post_points), total=len(gt_post_points)):
+                    z, y, x = cor  # type: ignore
+                    z, y, x = int(z)-1, int(y)-1, int(x)-1
+                    tag = post_gt_assoc[post_gt_assoc["gt_id"]==j+1]["tag"].iloc[0]
+                    color = (0, 255, 0) if tag == "TP" else (255, 0, 0)  # Green or red
+                    try:
+                        aux_tif[z, y, x] = color
+                    except:
+                        pass
+
+                print("Painting FPs (post-points) . . .")
+                for index, row in tqdm(post_fp.iterrows(), total=len(post_fp)):
+                    z,y,x = int(row['axis-0']), int(row['axis-1']), int(row['axis-2'])
+                    try:
+                        aux_tif[z, y, x] = (0,0,255) # Blue
+                    except:
+                        pass
+                    
+                print("Dilating points (post-points) . . .")
+                for c in range(aux_tif.shape[-1]):
+                    aux_tif[..., c] = dilation(aux_tif[..., c], ball(3))
+
+                save_tif(
+                    np.expand_dims(aux_tif, 0),
+                    out_dir,
+                    [filename + "_post_point_assoc.tif"],
+                    verbose=self.cfg.TEST.VERBOSE,
+                )   
+                del aux_tif
 
     def after_full_image(self, pred: NDArray):
         """

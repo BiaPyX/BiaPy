@@ -159,6 +159,9 @@ class Config:
         # Corresponds to 'num_sigma' argument of 'blob_log' function. The number of intermediate values of standard deviations
         # to consider between min_sigma and max_sigma.
         _C.PROBLEM.INSTANCE_SEG.SYNAPSES.BLOB_LOG_NUM_SIGMA = 2
+        # For removing close points detected
+        _C.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_POINTS_RADIUS_PRE_POINTS = 0
+        _C.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_POINTS_RADIUS_POST_POINTS = 0
 
         ### DETECTION
         _C.PROBLEM.DETECTION = CN()
