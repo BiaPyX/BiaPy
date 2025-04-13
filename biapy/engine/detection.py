@@ -890,11 +890,16 @@ class Detection_Workflow(Base_Workflow):
             df_patch["axis-2"] = df_patch["axis-2"] + patch_in_data.x_start
 
             # Save the csv file
-            os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, exist_ok=True)
+            output_dir = (
+                self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING
+                if self.post_processing["detection_post"]
+                else self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK
+            )
+            os.makedirs(output_dir, exist_ok=True)
             _filename, _ = os.path.splitext(os.path.basename(self.current_sample["filename"]))
             df_patch.to_csv(
                 os.path.join(
-                    self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
+                    output_dir,
                     _filename + "_patch" + str(patch_id).zfill(len(str(len(self.test_generator)))) + "_points.csv",
                 ),
                 index=False,
@@ -904,6 +909,7 @@ class Detection_Workflow(Base_Workflow):
         """
         Place any code that needs to be done after predicting all the patches, one by one, in the "by chunks" setting.
         """
+        assert isinstance(self.all_pred, list)
         filename, _ = os.path.splitext(self.current_sample["filename"])
         input_dir = (
             self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING
