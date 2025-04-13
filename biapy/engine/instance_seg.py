@@ -21,6 +21,7 @@ from biapy.data.post_processing.post_processing import (
     apply_binary_mask,
     create_synapses,
     remove_close_points,
+    remove_close_points_by_mask,
 )
 from biapy.data.pre_processing import create_instance_channels
 from biapy.utils.matching import matching, wrapper_matching_dataset_lazy
@@ -138,8 +139,8 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         
         if self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "synapses":
             if (
-                self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_POINTS_RADIUS_PRE_POINTS > 0 
-                or self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_POINTS_RADIUS_POST_POINTS > 0
+                self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_PRE_POINTS_RADIUS > 0 
+                or self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_POST_POINTS_RADIUS > 0
             ):
                 self.post_processing['per_image'] = True
 
@@ -1815,10 +1816,14 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
             # Remove close points
             if self.post_processing['per_image']:
-                if len(pre_points) > 0 and pre_points_df is not None:
+                if (
+                    len(pre_points) > 0 
+                    and pre_points_df is not None 
+                    and self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_PRE_POINTS_RADIUS > 0
+                ):
                     pre_points, pre_dropped_pos = remove_close_points(  # type: ignore
                         pre_points,
-                        self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_POINTS_RADIUS_PRE_POINTS,
+                        self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_PRE_POINTS_RADIUS,
                         resolution,
                         ndim=self.dims,
                         return_drops=True,
@@ -1833,15 +1838,41 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         index=False,
                     )
 
-                if len(post_points) > 0 and post_points_df is not None:   
-                    post_points, post_dropped_pos = remove_close_points(  # type: ignore
-                        post_points,
-                        self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_POINTS_RADIUS_POST_POINTS,
-                        resolution,
-                        ndim=self.dims,
-                        return_drops=True,
-                    )
+                if (
+                    len(post_points) > 0 
+                    and post_points_df is not None 
+                    and self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_POST_POINTS_RADIUS > 0
+                ):   
+                    if self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_POST_POINTS_RADIUS_BY_MASK:    
+                        # Load H5/Zarr and convert it into numpy array
+                        fpath = os.path.join(
+                            self.cfg.PATHS.RESULT_DIR.PER_IMAGE, os.path.splitext(self.current_sample["filename"])[0] + ".zarr"
+                        )
+                        pred_file, pred = read_chunked_data(fpath) 
+                        
+                        post_points, post_dropped_pos = remove_close_points_by_mask(  # type: ignore
+                            points=post_points,
+                            radius=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_POST_POINTS_RADIUS,
+                            raw_predictions=pred,
+                            bin_th=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.MIN_TH_TO_BE_PEAK,
+                            resolution=resolution,
+                            channel_to_look_into=1, # post channel
+                            ndim=self.dims,
+                            return_drops=True,
+                        )
+
+                        if isinstance(pred_file, h5py.File):
+                            pred_file.close()
+                    else:
+                        post_points, post_dropped_pos = remove_close_points(  # type: ignore
+                            post_points,
+                            self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_POST_POINTS_RADIUS,
+                            resolution,
+                            ndim=self.dims,
+                            return_drops=True,
+                        )
                     post_points_df.drop(post_points_df.index[post_dropped_pos], inplace=True)  # type: ignore
+
                     os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING, exist_ok=True)
                     post_points_df.to_csv(
                         os.path.join(

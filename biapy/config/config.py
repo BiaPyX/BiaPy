@@ -159,9 +159,15 @@ class Config:
         # Corresponds to 'num_sigma' argument of 'blob_log' function. The number of intermediate values of standard deviations
         # to consider between min_sigma and max_sigma.
         _C.PROBLEM.INSTANCE_SEG.SYNAPSES.BLOB_LOG_NUM_SIGMA = 2
-        # For removing close points detected
-        _C.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_POINTS_RADIUS_PRE_POINTS = 0
-        _C.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_POINTS_RADIUS_POST_POINTS = 0
+        # For removing close points detected during synapse prediction
+        _C.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_PRE_POINTS_RADIUS = 0
+        _C.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_POST_POINTS_RADIUS = 0
+        # If this is activated the post points will be remove not only looking the distance between them but the must lay in the same mask.
+        # For creating this mask there can be a few options:
+        #   * Implemented: By creating instances binarizing the predictions (using PROBLEM.INSTANCE_SEG.SYNAPSES.MIN_TH_TO_BE_PEAK) and applying 
+        #     a connected-components
+        #   * TODO: by looking at external neuron segmentation
+        _C.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_POST_POINTS_RADIUS_BY_MASK = False
 
         ### DETECTION
         _C.PROBLEM.DETECTION = CN()

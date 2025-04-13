@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import matplotlib.transforms as transforms
 import fill_voids
 import edt
+import zarr
 from tqdm import tqdm
 from scipy.signal import find_peaks
 from scipy.spatial import cKDTree # type: ignore
@@ -28,7 +29,8 @@ from typing import (
     Optional,
     Dict,
     List,
-    Callable
+    Callable,
+    Type
 )
 from numpy.typing import NDArray
 
@@ -1199,17 +1201,161 @@ def voronoi_on_mask(
     return voronoiCyst
 
 
+def remove_close_points_by_mask(
+    points: NDArray | List[List[int | float]], 
+    radius: float, 
+    raw_predictions: NDArray | Type[zarr.hierarchy.Group] | Type[zarr.core.Array], # type: ignore
+    bin_th: float,
+    resolution: List[int|float], 
+    channel_to_look_into: int = 1,
+    classes: Optional[List[int]]=None, 
+    ndim: int=3, 
+    return_drops: bool=False,
+) -> List[List[int | float]] | Tuple[List[List[int | float]], List[int]] | Tuple[List[List[int | float]], List[int], List[bool]]:
+    """
+    Remove all points from ``point_list`` that are at a ``radius`` or less distance from each other but conditioned that the must 
+    lay in the same mask label. For that last label creation the given ``raw_predictions`` is used, which is expected to be model's 
+    raw prediction. It is binarized using ``bin_th`` threshold and then the labels are created using connected-components.
+
+    Parameters
+    ----------
+    points : ndarray of floats
+        List of 3D points. E.g. ``((0,0,0), (1,1,1)``.
+
+    radius : float
+        Radius from each point to decide what points to keep. E.g. ``10.0``.
+
+    resolution : Tuple of int/float
+        Resolution of the data, in ``(z,y,x)`` to calibrate coordinates. E.g. ``[30,8,8]``.
+
+    ndim : int, optional
+        Number of dimension of the data.
+
+    return_drops : bool, optional
+        Whether to return or not a list containing the positions of the points removed.
+
+    search_in_mask : bool, optional
+    
+    Returns
+    -------
+    new_point_list : List of lists of floats
+        New list of points after removing those at a distance of ``radius``
+        or less from each other.
+    """
+    assert len(resolution) == 3, "'resolution' must be a list of 3 int/float"
+
+    print("Removing close points . . .")
+    print("Initial number of points: " + str(len(points)))
+
+    point_list = points.copy()
+
+    # Resolution adjust
+    for i in range(len(point_list)):
+        point_list[i][0] = point_list[i][0] * resolution[0]
+        point_list[i][1] = point_list[i][1] * resolution[1]
+        if ndim == 3:
+            point_list[i][2] = point_list[i][2] * resolution[2]
+
+    mynumbers = [tuple(point) for point in point_list]
+
+    tree = cKDTree(mynumbers)  # build k-dimensional tree
+    pairs = tree.query_pairs(radius)  # find all pairs closer than radius
+
+    neighbors = {}  # create dictionary of neighbors
+    for i, j in pairs:  # iterate over all pairs
+        if i not in neighbors:
+            neighbors[i] = [j]
+        else:
+            neighbors[i].append(j)
+        if j not in neighbors:
+            neighbors[j] = [i]
+        else:
+            neighbors[j].append(i)
+
+    discard = []
+    keep = {}
+    for i in range(0, len(point_list)):
+        keep[i] = True
+
+    # Iterate over all the groups found
+    for item in neighbors.items():
+        group_of_points = item[1]
+        first_point = points[item[0]]
+        patch_coords = [
+            slice(first_point[0] - 1, first_point[0] + 1),
+            slice(first_point[1] - 1, first_point[1] + 1),
+            slice(first_point[2] - 1, first_point[2] + 1),
+        ]
+
+        # Determine the patch to extract
+        for i in range(len(group_of_points)):
+            point = points[group_of_points[i]]
+            patch_coords = [
+                slice(
+                    max(0, min(patch_coords[0].start - 1, point[0] - 1)),
+                    min(max(patch_coords[0].stop + 1, point[0] + 1), raw_predictions.shape[0]),
+                ),
+                slice(
+                    max(0, min(patch_coords[1].start - 1, point[1] - 1)),
+                    min(max(patch_coords[1].stop + 1, point[1] + 1), raw_predictions.shape[1]),
+                ),
+                slice(
+                    max(0, min(patch_coords[2].start - 1, point[2] - 1)),
+                    min(max(patch_coords[2].stop + 1, point[2] + 1), raw_predictions.shape[2]),
+                ),
+            ]
+        patch_coords += [slice(channel_to_look_into, channel_to_look_into + 1),]
+        patch_coords = tuple(patch_coords)
+
+        # Extract the patch, binarize and apply connected-components
+        patch = np.array(raw_predictions[patch_coords] > bin_th, dtype=np.uint8).squeeze()
+        patch = label(patch)
+
+        # Groups points by labels
+        labels_detected = {}
+        for point_id in group_of_points:
+            point_coord = points[point_id]
+            coord_in_patch = point_coord-[patch_coords[0].start,patch_coords[1].start, patch_coords[2].start]
+            label_of_point = patch[int(coord_in_patch[0]),int(coord_in_patch[1]),int(coord_in_patch[2])]
+            if label_of_point not in labels_detected:
+                labels_detected[label_of_point] = []
+            labels_detected[label_of_point].append(point_id)
+        
+        # TODO: Create a new point coord based on the mean values of all the points 
+        # Take only the first point in case more than one were grouped
+        for item in labels_detected.items():
+            for i in range(1,len(item[1])):
+                if item[1][i] in keep:
+                    del keep[item[1][i]]
+                    discard.append(item[1][i])
+
+    # points to keep
+    keep = list(keep.keys())
+    new_point_list = [list(points[i]) for i in keep]
+    print("Final number of points: " + str(len(new_point_list)))
+
+    if classes:
+        new_class_list = [classes[i] for i in keep]
+        if return_drops:
+            return new_point_list, new_class_list, list(discard)
+        else:
+            return new_point_list, new_class_list
+    else:
+        if return_drops:
+            return new_point_list, list(discard)
+        else:
+            return new_point_list
+
 def remove_close_points(
     points: NDArray | List[List[int | float]], 
     radius: float, 
     resolution: List[int|float], 
     classes: Optional[List[int]]=None, 
     ndim: int=3, 
-    return_drops: bool=False
+    return_drops: bool=False,
 ) -> List[List[int | float]] | Tuple[List[List[int | float]], List[int]] | Tuple[List[List[int | float]], List[int], List[bool]]:
     """
-    Remove all points from ``point_list`` that are at a ``radius``
-    or less distance from each other.
+    Remove all points from ``point_list`` that are at a ``radius`` or less distance from each other.
 
     Parameters
     ----------
@@ -1293,7 +1439,6 @@ def remove_close_points(
             return new_point_list, list(discard)
         else:
             return new_point_list
-
 
 def detection_watershed(
     seeds: NDArray,
