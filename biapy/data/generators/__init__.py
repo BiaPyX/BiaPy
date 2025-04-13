@@ -326,6 +326,7 @@ def create_train_val_augmentors(
 
     # Set num_workers
     if is_dist_avail_and_initialized() and cfg.SYSTEM.NUM_GPUS >= 1:
+        DataLoader_shuffle = None
         if cfg.SYSTEM.NUM_WORKERS == -1:
             num_workers = 2 * cfg.SYSTEM.NUM_GPUS
         else:
@@ -338,6 +339,7 @@ def create_train_val_augmentors(
         # Reduce number of workers in case there is no training data
         num_workers = min(5, training_samples) if cfg.SYSTEM.NUM_WORKERS == -1 else cfg.SYSTEM.NUM_WORKERS
         sampler_train = None
+        DataLoader_shuffle = True
 
     num_training_steps_per_epoch = training_samples // total_batch_size
     print(f"Number of workers: {num_workers}")
@@ -346,6 +348,7 @@ def create_train_val_augmentors(
     print("Sampler_train = %s" % str(sampler_train))
     train_dataset = DataLoader(
         train_generator,
+        shuffle=DataLoader_shuffle,
         sampler=sampler_train,
         batch_size=cfg.TRAIN.BATCH_SIZE,
         num_workers=num_workers,
