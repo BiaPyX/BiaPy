@@ -1442,6 +1442,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 print(f"[Rank {get_rank()} ({os.getpid()})] Finished predicting sample. Waiting for all ranks . . .")
             if is_dist_avail_and_initialized():
                 dist.barrier()
+            setup_for_distributed(is_main_process())
 
     def prepare_bmz_data(self, img):
         """
