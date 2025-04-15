@@ -1137,6 +1137,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         pre_post_mapping = {}
         pres, posts = [], []
         pre_ids = pre_points_df["pre_id"].to_list()
+        post_ids = post_points_df["post_id"].to_list()
         if len(pre_points) > 0 and len(post_points) > 0:
             for i in range(len(pre_points)):
                 pre_post_mapping[pre_ids[i]] = []
@@ -1144,9 +1145,9 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             # Match each post with a pre
             distances = distance_matrix(post_points, pre_points)
             for i in range(len(post_points)):
-                closest_pre_point = np.argmax(distances[i])
+                closest_pre_point = np.argmin(distances[i])
                 closest_pre_point = pre_ids[closest_pre_point]
-                pre_post_mapping[closest_pre_point].append(i)
+                pre_post_mapping[closest_pre_point].append(post_ids[i])
 
             # Create pre/post lists so we can create the final dataframe
             for i in pre_post_mapping.keys():
@@ -1565,7 +1566,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             # In this case we need only to merge all local points so it will be done by the main thread. The rest will wait
             filename = os.path.splitext(self.current_sample["filename"])[0]
             pre_points_df, post_points_df, pre_post_map_df = None, None, None
-            if not self.cfg.TEST.REUSE_PREDICTIONS:
+            if self.cfg.TEST.REUSE_PREDICTIONS:
                 # For synapses we need to map the pre to the post points. It needs to be done here and not patch by patch as
                 # some pre points may lay in other chunks of the data.
                 input_dir = self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK
@@ -1632,15 +1633,17 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 pres, posts = [], []
                 if len(pre_points) > 0 and pre_points_df is not None:
                     pre_ids = pre_points_df["pre_id"].to_list()
+                    if len(post_points) > 0 and post_points_df is not None:
+                        post_ids = post_points_df["post_id"].to_list()
                     for i in range(len(pre_points)):
                         pre_post_mapping[pre_ids[i]] = []
 
                     # Match each post with a pre
                     distances = distance_matrix(post_points, pre_points)
                     for i in range(len(post_points)):
-                        closest_pre_point = np.argmax(distances[i])
+                        closest_pre_point = np.argmin(distances[i])
                         closest_pre_point = pre_ids[closest_pre_point]
-                        pre_post_mapping[closest_pre_point].append(i)
+                        pre_post_mapping[closest_pre_point].append(post_ids[i])
 
                     # Create pre/post lists so we can create the final dataframe
                     for i in pre_post_mapping.keys():
@@ -1886,15 +1889,17 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 pres, posts = [], []
                 if len(pre_points) > 0 and pre_points_df is not None:
                     pre_ids = pre_points_df["pre_id"].to_list()
+                    if len(post_points) > 0 and post_points_df is not None:
+                        post_ids = post_points_df["post_id"].to_list()
                     for i in range(len(pre_points)):
                         pre_post_mapping[pre_ids[i]] = []
 
                     # Match each post with a pre
                     distances = distance_matrix(post_points, pre_points)
                     for i in range(len(post_points)):
-                        closest_pre_point = np.argmax(distances[i])
+                        closest_pre_point = np.argmin(distances[i])
                         closest_pre_point = pre_ids[closest_pre_point]
-                        pre_post_mapping[closest_pre_point].append(i)
+                        pre_post_mapping[closest_pre_point].append(post_ids[i])
 
                     # Create pre/post lists so we can create the final dataframe
                     for i in pre_post_mapping.keys():
