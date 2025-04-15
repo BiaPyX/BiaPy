@@ -238,7 +238,7 @@ def extract_patch_from_efficient_file(
     except: 
         raise ValueError(f"Read data axes ({data.shape}) do not match the expected axis order ({data_axes_order})")
 
-    img = ensure_3d_shape(img.squeeze())
+    img = ensure_3d_shape(img.squeeze(), move_axes_order=False)
 
     return img
 
@@ -1137,7 +1137,8 @@ def order_dimensions(
 
 def ensure_3d_shape(
     img: NDArray, 
-    path: Optional[str]=None
+    path: Optional[str]=None,
+    move_axes_order: bool=True,
 ):
     """
     Read an image from a given path.
@@ -1147,8 +1148,11 @@ def ensure_3d_shape(
     img : NDArray
         Image read.
 
-    path : str
+    path : str, optional
         Path of the image (just use to print possible errors).
+
+    axes_order : bool, optional
+        Whether if the axes need to be ordered or not. 
 
     Returns
     -------
@@ -1169,25 +1173,27 @@ def ensure_3d_shape(
             img = img[0]
 
     if img.ndim == 3:
-        # Ensure Z axis is always in the first position
-        min_val = min(img.shape)
-        z_pos = img.shape.index(min_val)
-        if z_pos != 0:
-            new_pos = [
-                z_pos,
-            ] + [x for x in range(3) if x != z_pos]
-            img = img.transpose(new_pos)
+        if move_axes_order: 
+            # Ensure Z axis is always in the first position
+            min_val = min(img.shape)
+            z_pos = img.shape.index(min_val)
+            if z_pos != 0:
+                new_pos = [
+                    z_pos,
+                ] + [x for x in range(3) if x != z_pos]
+                img = img.transpose(new_pos)
 
         img = np.expand_dims(img, -1)
     else:
-        # Ensure channel axis is always in the first position (assuming Z is already set)
-        min_val = min(img.shape)
-        channel_pos = img.shape.index(min_val)
-        if channel_pos != 3:
-            new_pos = [x for x in range(4) if x != channel_pos] + [
-                channel_pos,
-            ]
-            img = img.transpose(new_pos)
+        if move_axes_order: 
+            # Ensure channel axis is always in the first position (assuming Z is already set)
+            min_val = min(img.shape)
+            channel_pos = img.shape.index(min_val)
+            if channel_pos != 3:
+                new_pos = [x for x in range(4) if x != channel_pos] + [
+                    channel_pos,
+                ]
+                img = img.transpose(new_pos)
     return img
 
 

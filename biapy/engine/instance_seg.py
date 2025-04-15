@@ -1566,7 +1566,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             # In this case we need only to merge all local points so it will be done by the main thread. The rest will wait
             filename = os.path.splitext(self.current_sample["filename"])[0]
             pre_points_df, post_points_df, pre_post_map_df = None, None, None
-            if self.cfg.TEST.REUSE_PREDICTIONS:
+            if not self.cfg.TEST.REUSE_PREDICTIONS:
                 # For synapses we need to map the pre to the post points. It needs to be done here and not patch by patch as
                 # some pre points may lay in other chunks of the data.
                 input_dir = self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK
