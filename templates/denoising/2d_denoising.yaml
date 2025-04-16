@@ -2,7 +2,6 @@
 # We try to mimic here N2Void project parameters 
 SYSTEM:
     NUM_CPUS: -1
-    NUM_WORKERS: -1
 
 PROBLEM:
     TYPE: DENOISING

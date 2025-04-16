@@ -3,7 +3,6 @@
 
 SYSTEM:
     NUM_CPUS: -1
-    NUM_WORKERS: -1
 
 PROBLEM:
     TYPE: DENOISING
