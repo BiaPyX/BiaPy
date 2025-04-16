@@ -1171,6 +1171,10 @@ class Base_Workflow(metaclass=ABCMeta):
             else:
                 image_counter += 1
 
+        # Only enable print for the main rank again
+        if self.cfg.TEST.BY_CHUNKS.ENABLE and self.cfg.PROBLEM.NDIM == "3D":
+            setup_for_distributed(is_main_process())
+
         self.destroy_test_data()
 
         if is_main_process():
@@ -1440,9 +1444,7 @@ class Base_Workflow(metaclass=ABCMeta):
         if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
             if self.cfg.TEST.VERBOSE:
                 print(f"[Rank {get_rank()} ({os.getpid()})] Finished predicting sample. Waiting for all ranks . . .")
-            if is_dist_avail_and_initialized():
-                dist.barrier()
-            setup_for_distributed(is_main_process())
+            dist.barrier()
 
     def prepare_bmz_data(self, img):
         """
