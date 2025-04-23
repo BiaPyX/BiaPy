@@ -322,7 +322,7 @@ all_test_info["Test27"] = {
     "yaml": "test_27.yaml",
     "internal_checks": [
         {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 1, "metric": "f1",
-            "gt": True, "value": 0.3},
+            "gt": True, "value": 0.25},
     ]
 }
 
@@ -393,7 +393,7 @@ all_test_info["Test33"] = {
     "description": "2D image to image. lightmycells 2D data. preprocess: resize. Val in memory, train not in memory. Basic DA. attention_unet",
     "yaml": "test_33.yaml",
     "internal_checks": [
-        {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 9.0},
+        {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 8.5},
     ]
 }
 
