@@ -2920,13 +2920,13 @@ def load_images_to_dataset(
 
             # Channel check within dataset images
             if channel_expected == -1:
-                channel_expected = data.shape[-1]
-            if check_channel and data.shape[-1] != channel_expected:
+                channel_expected = data.shape[-1] if not convert_to_rgb else 3
+            if check_channel and not convert_to_rgb and data.shape[-1] != channel_expected:
                 raise ValueError(
                     f"All images need to have the same number of channels and represent same information to "
                     "ensure the deep learning model can be trained correctly. However, the current image (with "
                     f"{channel_expected} channels) appears to have a different number of channels than the first image"
-                    f"(with {data.shape[-1]} channels) in the folder. Current image: {img_path}"
+                    f" (with {data.shape[-1]} channels) in the folder. Current image: {img_path}"
                 )
 
             # Channel check compared with crop_shape
@@ -3041,13 +3041,13 @@ def pad_and_reflect(img: NDArray, crop_shape: Tuple[int, ...], verbose: bool = F
     img : 3D/4D Numpy array
         Image padded. E.g. ``(y, x, channels)`` for 2D and ``(z, y, x, channels)`` for 3D.
     """
-    if img.ndim == 4 and len(crop_shape) != 4:
+    if img.ndim == 4 and len(crop_shape) < 4:
         raise ValueError(
-            f"'crop_shape' needs to have 4 values as the input array has 4 dims. Provided crop_shape: {crop_shape}"
+            f"'crop_shape' needs to have 4 at least values as the input array has 4 dims. Provided crop_shape: {crop_shape}"
         )
-    if img.ndim == 3 and len(crop_shape) != 3:
+    if img.ndim == 3 and len(crop_shape) < 3:
         raise ValueError(
-            f"'crop_shape' needs to have 3 values as the input array has 3 dims. Provided crop_shape: {crop_shape}"
+            f"'crop_shape' needs to have 3 at least values as the input array has 3 dims. Provided crop_shape: {crop_shape}"
         )
 
     if img.ndim == 4:
