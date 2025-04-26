@@ -345,12 +345,12 @@ def labels_into_channels(
     """
 
     assert data_mask.ndim in [5, 4]
-    assert mode in ["C", "BC", "BCM", "BCD", "BD", "BCDv2", "Dv2", "BDv2", "BP", "A"]
+    assert mode in ["C", "BC", "BCM", "BCD", "BD", "BCDv2", "Dv2", "BDv2", "BP", "BCP", "A"]
 
     d_shape = 4 if data_mask.ndim == 5 else 3
     if mode in ["BCDv2", "Dv2", "BDv2"]:
         c_number = 4
-    elif mode in ["BCD", "BCM"]:
+    elif mode in ["BCD", "BCM", "BCP"]:
         c_number = 3
     elif mode in ["BC", "BP", "BD"]:
         c_number = 2
@@ -399,21 +399,25 @@ def labels_into_channels(
 
         # Central points
         if "P" in mode and instance_count != 1:
+            if mode == "BP":
+                c_channel = 1
+            elif mode == "BCP":
+                c_channel = 2
             coords = center_of_mass(vol > 0, vol, instances[1:])
             coords = np.round(coords).astype(int)
             for coord in coords:
                 if data_mask.ndim == 5:
                     z, y, x = coord
-                    new_mask[img, z, y, x, 1] = 1
+                    new_mask[img, z, y, x, c_channel] = 1
                 else:
                     y, x = coord
-                    new_mask[img, y, x, 1] = 1
+                    new_mask[img, y, x, c_channel] = 1
 
             if data_mask.ndim == 5:
                 for i in range(new_mask.shape[1]):
-                    new_mask[img, i, ..., 1] = dilation(new_mask[img, i, ..., 1], disk(3))
+                    new_mask[img, i, ..., c_channel] = dilation(new_mask[img, i, ..., c_channel], disk(3))
             else:
-                new_mask[img, ..., 1] = dilation(new_mask[img, ..., 1], disk(3))
+                new_mask[img, ..., c_channel] = dilation(new_mask[img, ..., c_channel], disk(3))
 
         # Contour
         if ("C" in mode or "Dv2" in mode) and instance_count != 1:

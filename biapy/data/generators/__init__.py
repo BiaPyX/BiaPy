@@ -120,6 +120,7 @@ def create_train_val_augmentors(
             ndim=ndim,
             X=X_train,
             n_classes=cfg.MODEL.N_CLASSES,
+            ignore_index=None if not cfg.LOSS.IGNORE_VALUES else cfg.LOSS.VALUE_TO_IGNORE,
             seed=cfg.SYSTEM.SEED,
             da=cfg.AUGMENTOR.ENABLE,
             da_prob=cfg.AUGMENTOR.DA_PROB,
@@ -241,6 +242,7 @@ def create_train_val_augmentors(
             random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH,
             prob_map=prob_map,
             n_classes=cfg.MODEL.N_CLASSES,
+            ignore_index=None if not cfg.LOSS.IGNORE_VALUES else cfg.LOSS.VALUE_TO_IGNORE,
             extra_data_factor=cfg.DATA.TRAIN.REPLICATE,
             norm_module=norm_module,
             random_crop_scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
@@ -275,6 +277,7 @@ def create_train_val_augmentors(
             ndim=ndim,
             X=X_val,
             n_classes=cfg.MODEL.N_CLASSES,
+            ignore_index=None if not cfg.LOSS.IGNORE_VALUES else cfg.LOSS.VALUE_TO_IGNORE,
             seed=cfg.SYSTEM.SEED,
             da=False,
             resize_shape=r_shape,
@@ -292,6 +295,7 @@ def create_train_val_augmentors(
             random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH,
             val=True,
             n_classes=cfg.MODEL.N_CLASSES,
+            ignore_index=None if not cfg.LOSS.IGNORE_VALUES else cfg.LOSS.VALUE_TO_IGNORE,
             seed=cfg.SYSTEM.SEED,
             norm_module=norm_module,
             resolution=cfg.DATA.VAL.RESOLUTION,
@@ -449,6 +453,7 @@ def create_test_generator(
         preprocess_cfg=cfg.DATA.PREPROCESS if cfg.DATA.PREPROCESS.TEST else None,
         reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE,
         data_shape=cfg.DATA.PATCH_SIZE,
+        ignore_index=None if not cfg.LOSS.IGNORE_VALUES else cfg.LOSS.VALUE_TO_IGNORE,
     )
 
     if cfg.PROBLEM.TYPE == "CLASSIFICATION" or (
@@ -529,6 +534,9 @@ def create_chunked_test_generator(
         padding=cfg.DATA.TEST.PADDING,
         out_dir=out_dir,
         dtype_str=dtype_str,
+        n_classes=cfg.MODEL.N_CLASSES,
+        ignore_index=None if not cfg.LOSS.IGNORE_VALUES else cfg.LOSS.VALUE_TO_IGNORE,
+        instance_problem = cfg.PROBLEM.TYPE == "INSTANCE_SEG",
     )
 
     def by_chunks_collate_fn(data):

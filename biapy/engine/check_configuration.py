@@ -571,6 +571,9 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         loss = "CE" if cfg.LOSS.TYPE == "" else cfg.LOSS.TYPE
         assert loss == "CE", "LOSS.TYPE must be 'CE'"
     opts.extend(["LOSS.TYPE", loss])
+    if cfg.LOSS.IGNORE_VALUES:
+        if cfg.LOSS.VALUE_TO_IGNORE != -1 and not check_value(cfg.LOSS.VALUE_TO_IGNORE, (0, 254)):
+            raise ValueError("If 'LOSS.VALUE_TO_IGNORE' is set it needs to be a value in [0,254] range")
 
     if cfg.TEST.ENABLE and cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK and cfg.PROBLEM.NDIM == "3D":
         raise ValueError("'TEST.ANALIZE_2D_IMGS_AS_3D_STACK' makes no sense when the problem is 3D. Disable it.")
@@ -661,11 +664,12 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "BCM",
                 "BCD",
                 "BCDv2",
+                "BCP",
                 "Dv2",
                 "BDv2",
                 "BP",
                 "BD",
-            ], "PROBLEM.INSTANCE_SEG.DATA_CHANNELS not in ['A','C', 'BC', 'BCM', 'BCD', 'BCDv2', 'Dv2', 'BDv2', 'BP', 'BD']"
+            ], "PROBLEM.INSTANCE_SEG.DATA_CHANNELS not in ['A','C', 'BC', 'BCM', 'BCD', 'BCDv2', 'Dv2', 'BDv2', 'BP', 'BD', 'BCP']"
         else:  # synapses
             assert cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in [
                 "B", "BF",
@@ -1881,7 +1885,7 @@ def compare_configurations_without_model(actual_cfg, old_cfg, header_message="",
     vars_to_compare = [
         "PROBLEM.TYPE",
         "PROBLEM.NDIM",
-        "DATA.PATCH_SIZE",
+        # "DATA.PATCH_SIZE",
         "PROBLEM.INSTANCE_SEG.DATA_CHANNELS",
         "PROBLEM.SUPER_RESOLUTION.UPSCALING",
         "MODEL.N_CLASSES",

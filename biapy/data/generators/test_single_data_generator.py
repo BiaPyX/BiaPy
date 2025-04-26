@@ -217,13 +217,6 @@ class test_single_data_generator(Dataset):
                     )
                     sample_extra_info["reflected_orig_shape"] = reflected_orig_shape
 
-                # Data channel check
-                if self.data_shape[-1] != img.shape[-1]:
-                    raise ValueError(
-                        "Channel of the DATA.PATCH_SIZE given {} does not correspond with the loaded image {}. "
-                        "Please, check the channels of the images!".format(self.data_shape[-1], img.shape[-1])
-                    )
-
         img_class = self.X.dataset_info[sample.fid].get_class_num()
 
         # Normalization
@@ -236,6 +229,13 @@ class test_single_data_generator(Dataset):
         if self.convert_to_rgb and img.shape[-1] == 1:
             img = np.repeat(img, 3, axis=-1)
 
+        # Data channel check
+        if self.data_shape[-1] != img.shape[-1]:
+            raise ValueError(
+                "Channel of the DATA.PATCH_SIZE given {} does not correspond with the loaded image {}. "
+                "Please, check the channels of the images!".format(self.data_shape[-1], img.shape[-1])
+            )
+            
         img = np.expand_dims(img, 0)
         return img, img_class, sample, sample_extra_info, norm_extra_info
 

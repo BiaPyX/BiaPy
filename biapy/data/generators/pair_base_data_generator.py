@@ -435,6 +435,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         prob_map: Optional[NDArray | str] = None,
         val: bool = False,
         n_classes: int = 1,
+        ignore_index: Optional[int] = None,
         extra_data_factor: int = 1,
         n2v: bool = False,
         n2v_perc_pix: float = 0.198,
@@ -517,7 +518,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             for i in tqdm(range(n_samples), total=n_samples):
                 _, mask = self.load_sample(i, first_load=True)
                 # Store which channels are binary or not (e.g. distance transform channel is not binary)
-                self.norm_module.set_stats_from_mask(mask, n_classes=n_classes, instance_problem=instance_problem)
+                self.norm_module.set_stats_from_mask(mask, n_classes=n_classes, ignore_index=ignore_index, instance_problem=instance_problem)
 
         _, mask = self.load_sample(0)
         self.Y_channels = mask.shape[-1]

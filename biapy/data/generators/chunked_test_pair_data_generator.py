@@ -104,6 +104,9 @@ class chunked_test_pair_data_generator(IterableDataset):
         filter_signs: Optional[List[List[str]]] = None,
         preprocess_data: Optional[Callable] = None,
         preprocess_cfg: Optional[Dict] = None,
+        n_classes: int = 1,
+        ignore_index: Optional[int] = None,
+        instance_problem: bool = False,
     ):
         super(chunked_test_pair_data_generator).__init__()
         self.sample_to_process = sample_to_process
@@ -134,6 +137,9 @@ class chunked_test_pair_data_generator(IterableDataset):
         self.filter_signs = filter_signs
         self.preprocess_data = preprocess_data
         self.preprocess_cfg = preprocess_cfg
+        self.n_classes = n_classes 
+        self.instance_problem = instance_problem
+        self.ignore_index = ignore_index
 
         # Modify crop_shape with the channel
         c_index = -1
@@ -399,7 +405,7 @@ class chunked_test_pair_data_generator(IterableDataset):
                 norm_extra_info = {}
                 if mask is not None:
                     mask = np.array(mask)
-                    self.norm_module.set_stats_from_mask(mask)
+                    self.norm_module.set_stats_from_mask(mask, n_classes=self.n_classes, ignore_index=self.ignore_index, instance_problem=self.instance_problem)
                     mask, _ = self.norm_module.apply_mask_norm(mask)
                     assert isinstance(mask, np.ndarray)
 

@@ -128,6 +128,7 @@ def watershed_by_channels(
         "BDv2",
         "BP",
         "BD",
+        "BCP",
     ]
     assert len(resolution) == 3, "'resolution' must be a list of 3 int/float"
 
@@ -246,6 +247,22 @@ def watershed_by_channels(
         if len(seed_morph_sequence) != 0 or erode_and_dilate_foreground:
             erode_seed_and_foreground()
 
+        seed_map = label(seed_map, connectivity=1)
+    elif channels in ["BCP"]:
+        if ths["TYPE"] == "auto":
+            ths["TH_BINARY_MASK"] = threshold_otsu(data[..., 0])
+            ths["TH_CONTOUR"] = threshold_otsu(data[..., 1])
+            ths["TH_POINTS"] = threshold_otsu(data[..., 2])
+            ths["TH_FOREGROUND"] = ths["TH_BINARY_MASK"] / 2
+
+        seed_map = (data[..., 0] > ths["TH_BINARY_MASK"]) * (data[..., 1] < ths["TH_CONTOUR"]) * (data[..., 2] > ths["TH_POINTS"])
+        foreground = data[..., 0] > ths["TH_FOREGROUND"]
+
+        if len(seed_morph_sequence) != 0 or erode_and_dilate_foreground:
+            erode_seed_and_foreground()
+
+        semantic = data[..., 0]
+        # semantic = edt.edt(foreground*(1-seed_map), anisotropy=resolution[::-1], black_border=False, order='F')
         seed_map = label(seed_map, connectivity=1)
     elif channels in ["BD"]:
         semantic = data[..., 0]

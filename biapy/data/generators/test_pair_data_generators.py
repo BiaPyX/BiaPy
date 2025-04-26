@@ -94,6 +94,7 @@ class test_pair_data_generator(Dataset):
         data_shape: Tuple[int, ...] = (256, 256, 1),
         reflect_to_complete_shape: bool = True,
         n_classes: int = 1,
+        ignore_index: Optional[int]=None,
     ):
         if preprocess_data and preprocess_cfg is None:
             raise ValueError("'preprocess_cfg' must be set when 'preprocess_data' is provided")
@@ -136,7 +137,7 @@ class test_pair_data_generator(Dataset):
 
         if mask is not None and not test_by_chunks:
             # Store which channels are binary or not (e.g. distance transform channel is not binary)
-            self.norm_module.set_stats_from_mask(mask, n_classes=n_classes, instance_problem=instance_problem)
+            self.norm_module.set_stats_from_mask(mask, n_classes=n_classes, ignore_index=ignore_index, instance_problem=instance_problem)
 
     def load_sample(
         self,
@@ -180,7 +181,7 @@ class test_pair_data_generator(Dataset):
             Normalization extra information useful to undo the normalization after.
         """
         mask = None
-
+        norm_extra_info = None
         sample = self.X.sample_list[idx]
         sample_extra_info = {}
 
@@ -266,14 +267,6 @@ class test_pair_data_generator(Dataset):
                         )
                     sample_extra_info["reflected_orig_shape"] = reflected_orig_shape
 
-                # Data channel check
-                if self.data_shape[-1] != img.shape[-1]:
-                    raise ValueError(
-                        "Channel of the DATA.PATCH_SIZE given {} does not correspond with the loaded image {}. "
-                        "Please, check the channels of the images!".format(self.data_shape[-1], img.shape[-1])
-                    )
-
-        norm_extra_info = None
         if not self.test_by_chunks and not first_load:
             # Normalization
             img = np.array(img)
@@ -298,6 +291,13 @@ class test_pair_data_generator(Dataset):
             if self.norm_module.mask_norm == "as_image" and mask and mask.shape[-1] == 1:
                 mask = np.repeat(mask, 3, axis=-1)
 
+        # Data channel check
+        if self.data_shape[-1] != img.shape[-1]:
+            raise ValueError(
+                "Channel of the DATA.PATCH_SIZE given {} does not correspond with the loaded image {}. "
+                "Please, check the channels of the images!".format(self.data_shape[-1], img.shape[-1])
+            )
+            
         return img, mask, sample, sample_extra_info, norm_extra_info
 
     def __len__(self) -> int:

@@ -1125,6 +1125,10 @@ class Config:
         # To adjust the loss function based on the imbalance between classes. Used when LOSS.TYPE == "CE" in detection and
         # semantic segmentation and if using B,C,M,P or A channels in instance segmentation workflow.
         _C.LOSS.CLASS_REBALANCE = False
+        # Whether to ignore a value in the loss and metric calculation
+        _C.LOSS.IGNORE_VALUES = False
+        # Value to ignore when 'LOSS.IGNORE_VALUES' is True
+        _C.LOSS.VALUE_TO_IGNORE = -1
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Training phase

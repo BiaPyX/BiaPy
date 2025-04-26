@@ -136,11 +136,12 @@ class Normalization:
                 self.mean = float(image.mean())
                 self.std = float(image.std())
 
-    def set_stats_from_mask(self, mask: NDArray | torch.Tensor, n_classes: int = 1, instance_problem: bool = False):
+    def set_stats_from_mask(self, mask: NDArray | torch.Tensor, n_classes: int = 1, ignore_index: Optional[int] = None, instance_problem: bool = False):
         """
         Set normalization values from the given mask. The mask analysis is done by channel, as some of them may be normalized,
         such as distance channels, while others no e.g. foreground binary channel.
         """
+        _ignore_index = -1 if ignore_index is None else ignore_index
         if self.mask_norm == "as_mask":
             if not self.channel_info:
                 self.channels_to_analize = -1
@@ -165,7 +166,7 @@ class Normalization:
                     if np.max(mask[..., j]) > 30:
                         self.channel_info[j]["div"] = True
                 else:  # In semantic seg, maybe the mask are in 255
-                    if np.max(mask[..., j]) > n_classes:
+                    if np.max(mask[..., j]) > max(n_classes,_ignore_index):
                         self.channel_info[j]["div"] = True
         elif self.mask_norm == "as_image":
             self.set_stats_from_image(mask)
