@@ -1362,7 +1362,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 tgen.X_parallel_data.shape, self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER
             )
             self.parallel_data_shape = [z_dim, y_dim, x_dim]
-            last_sample = -1
+            samples_visited = {}
             for obj_list in self.test_generator:
                 sampler_ids, img, mask, patch_in_data, added_pad, norm_extra_info = obj_list
 
@@ -1376,9 +1376,10 @@ class Base_Workflow(metaclass=ABCMeta):
                 # Pass the batch through the model
                 pred = self.predict_batches_in_test(img, mask, disable_tqdm=True)
 
+                lbreaked = False
                 for i in range(pred.shape[0]):
                     # Break the loop as those samples were created just to complete the last batch
-                    if sampler_ids[i] < sampler_ids[0] or sampler_ids[i] < last_sample:
+                    if sampler_ids[i] < sampler_ids[0] or sampler_ids[i] in samples_visited:
                         print(
                             "[Rank {} ({})] Patch {} discarded".format(
                                 get_rank(),
@@ -1386,6 +1387,7 @@ class Base_Workflow(metaclass=ABCMeta):
                                 sampler_ids[i],
                             )
                         )
+                        lbreaked = True
                         break
 
                     single_pred = pred[i]
@@ -1404,7 +1406,9 @@ class Base_Workflow(metaclass=ABCMeta):
                     # Insert into the data
                     tgen.insert_patch_in_file(single_pred, single_patch_in_data)
 
-                if sampler_ids[-1] < last_sample:
+                    samples_visited[sampler_ids[i]] = True
+
+                if lbreaked and sampler_ids[i] in samples_visited:
                     print(
                         "[Rank {} ({})] Finishing the loop. Seems that the patches are starting to repeat".format(
                             get_rank(),
@@ -1412,8 +1416,6 @@ class Base_Workflow(metaclass=ABCMeta):
                         )
                     )
                     break
-                else:
-                    last_sample = sampler_ids[-1]
 
             # Wait until all threads are done so the main thread can create the full size image
             if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
