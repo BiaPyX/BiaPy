@@ -2189,6 +2189,21 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict):
                 old_cfg["MODEL"]["BMZ"]["EXPORT"]["CITE"] = cite
                 del old_cfg["MODEL"]["BMZ"]["EXPORT_MODEL"]
 
+            if "EXPORT" in old_cfg["MODEL"]["BMZ"]:
+                dataset_info_keys = []
+                if "DATASET_INFO" in old_cfg["MODEL"]["BMZ"]["EXPORT"]:
+                    if isinstance(old_cfg["MODEL"]["BMZ"]["EXPORT"]["DATASET_INFO"], list) and len(old_cfg["MODEL"]["BMZ"]["EXPORT"]["DATASET_INFO"]) > 0:
+                        dataset_info_keys = list(old_cfg["MODEL"]["BMZ"]["EXPORT"]["DATASET_INFO"][0].keys())
+                    else:
+                        old_cfg["MODEL"]["BMZ"]["EXPORT"]["DATASET_INFO"] = [{}]    
+                else:
+                    old_cfg["MODEL"]["BMZ"]["EXPORT"]["DATASET_INFO"] = [{}]
+
+                # Fill dataset info with necessary keys
+                for key in ["name", "doi", "image_modality", "dataset_id"]:
+                    if key not in dataset_info_keys:
+                        old_cfg["MODEL"]["BMZ"]["EXPORT"]["DATASET_INFO"][0][key] = f'{key}_not_specified'   
+
     try:
         del old_cfg["PATHS"]["RESULT_DIR"]["BMZ_BUILD"]
     except:
@@ -2237,7 +2252,7 @@ def diff_between_configs(old_dict: Dict | Config, new_dict: Dict | Config, path:
     for k in new_dict:
         if k not in old_dict:
             print("'" + path + "." + k + "' added")
-        if new_dict[k] != old_dict[k]:
+        if k in new_dict and k in old_dict and new_dict[k] != old_dict[k]:
             if type(new_dict[k]) not in (dict, list, CN):
                 print("'" + path + "." + k + "' changed from '" + old_dict[k] + "' to '" + str(new_dict[k]) + "'")
             else:
@@ -2247,3 +2262,6 @@ def diff_between_configs(old_dict: Dict | Config, new_dict: Dict | Config, path:
                     if type(new_dict[k]) in [dict, CN]:
                         path = path + k if path == "" else path + "." + k 
                         diff_between_configs(old_dict[k], new_dict[k], path)
+                    elif isinstance(new_dict[k], list):
+                        path = path + k if path == "" else path + "." + k 
+                        diff_between_configs(old_dict[k][0], new_dict[k][0], path)
