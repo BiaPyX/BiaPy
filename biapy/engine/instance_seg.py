@@ -11,6 +11,7 @@ import torch.distributed as dist
 from typing import Dict, Optional, List, Tuple, Any
 from numpy.typing import NDArray
 from scipy.spatial import distance_matrix
+from skimage.filters import threshold_otsu
 
 
 from biapy.data.post_processing.post_processing import (
@@ -1063,11 +1064,18 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         #############################
         ### INSTANCE SEGMENTATION ###
         #############################
+        threshold_abs = []
+        for c in range(pred.shape[-1]): 
+            if self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE == "auto":
+                threshold_abs.append(threshold_otsu(pred[..., c]))
+            else: # Manual
+                threshold_abs.append(self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK)
+        
         pred, d_result = create_synapses(
             data=pred,
             channels=self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
             point_creation_func=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.POINT_CREATION_FUNCTION,
-            min_th_to_be_peak=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.MIN_TH_TO_BE_PEAK,
+            min_th_to_be_peak=threshold_abs,
             min_distance=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.PEAK_LOCAL_MAX_MIN_DISTANCE,
             min_sigma=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.BLOB_LOG_MIN_SIGMA,
             max_sigma=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.BLOB_LOG_MAX_SIGMA,
@@ -1091,6 +1099,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 list(pre_points[:, 1]),
                 list(pre_points[:, 2]),
                 d_result["probabilities"][:total_pre_points],
+                [threshold_abs[0],]*total_pre_points,
             ),
             columns=[
                 "pre_id",
@@ -1098,6 +1107,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 "axis-1",
                 "axis-2",
                 "probability",
+                "pre th",
             ],
         )
 
@@ -1119,6 +1129,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 list(post_points[:, 1]),
                 list(post_points[:, 2]),
                 d_result["probabilities"][total_pre_points:],
+                [threshold_abs[1],]*len(post_points),
             ),
             columns=[
                 "post_id",
@@ -1126,6 +1137,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 "axis-1",
                 "axis-2",
                 "probability",
+                "post th",
             ],
         )
 
@@ -1174,7 +1186,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     pres.append(i)
                     posts.append(-1)
         else:
-            if self.cfg.TEST.VERBOSE:
+            if self.cfg.TEST.VERBOSE and not self.cfg.TEST.BY_CHUNKS.ENABLE:
                 print("No pre/post synaptic points found!")
 
         # Create a mapping dataframe
@@ -1591,11 +1603,19 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 all_pre_dfs, all_post_dfs = [], []
 
                 # Collect pre dataframes 
+                if self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE == "manual":
+                    pre_ths = [self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK]
+                    post_ths = [self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK]
+                else:
+                    pre_ths, post_ths = [], []
                 if len(all_pre_point_files) > 0:
                     for pre_file in all_pre_point_files:
                         pre_file_path = os.path.join(input_dir, pre_file)
                         pred_pre_df = pd.read_csv(pre_file_path, index_col=False)
                         if len(pred_pre_df) > 0:
+                            if "pre th" in pred_pre_df.columns:
+                                pre_ths.append(float(pred_pre_df["pre th"].iloc[0]))
+                                pred_pre_df = pred_pre_df.drop(columns=["pre th"])
                             all_pre_dfs.append(pred_pre_df)
 
                 # Collect post dataframes 
@@ -1604,12 +1624,20 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         post_file_path = os.path.join(input_dir, post_file)
                         pred_post_df = pd.read_csv(post_file_path, index_col=False)
                         if len(pred_post_df) > 0:
+                            if "post th" in pred_post_df.columns:
+                                post_ths.append(float(pred_post_df["post th"].iloc[0]))
+                                pred_post_df = pred_post_df.drop(columns=["post th"])
                             all_post_dfs.append(pred_post_df)      
 
                 # Save then the pre and post sites separately
                 if len(all_pre_dfs) > 0:
                     pre_points_df = pd.concat(all_pre_dfs, ignore_index=True)
                     pre_points_df.sort_values(by=["axis-0"])
+                    # Remove points with the probability value below to the mean probability of all otsu thresholds
+                    if len(pre_ths) > 1 and self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE == "auto":
+                        pre_th_global = np.array(pre_ths).mean()
+                        print(f"Using global threshold (pre-points): {pre_th_global}")
+                        pre_points_df = pre_points_df[pre_points_df["probability"] > pre_th_global]
                     pre_points_df["pre_id"] = list(range(1, len(pre_points_df)+1))
                     os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, exist_ok=True)
                     pre_points_df.to_csv(
@@ -1622,6 +1650,11 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 if len(all_post_dfs) > 0:
                     post_points_df = pd.concat(all_post_dfs, ignore_index=True)
                     post_points_df.sort_values(by=["axis-0"])
+                    # Remove points with the probability value below to the mean probability of all otsu thresholds
+                    if len(post_ths) > 1 and self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE == "auto":
+                        post_th_global = np.array(post_ths).mean()
+                        print(f"Using global threshold (post-points): {post_th_global}")
+                        post_points_df = post_points_df[post_points_df["probability"] > post_th_global]
                     post_points_df["post_id"] = list(range(1, len(post_points_df)+1))
                     os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, exist_ok=True)
                     post_points_df.to_csv(

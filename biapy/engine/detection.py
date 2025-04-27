@@ -304,7 +304,6 @@ class Detection_Workflow(Base_Workflow):
             threshold_abs = threshold_otsu(pred[..., 0])
         else: # manual
             threshold_abs = self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK
-
         if self.cfg.TEST.DET_POINT_CREATION_FUNCTION == "peak_local_max":
             pred_points = peak_local_max(
                 pred[..., 0].astype(np.float32),

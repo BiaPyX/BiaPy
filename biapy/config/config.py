@@ -141,6 +141,9 @@ class Config:
         _C.PROBLEM.INSTANCE_SEG.SYNAPSES.POINT_CREATION_FUNCTION = "peak_local_max"
         # The minimal allowed distance separating peaks. To find the maximum number of peaks, use min_distance=1.
         _C.PROBLEM.INSTANCE_SEG.SYNAPSES.PEAK_LOCAL_MAX_MIN_DISTANCE = 1
+        # Whether the threshold are going to be set as automaticaly (with Otsu thresholding) or manually.
+        # Options available: 'auto' or 'manual'. If this last is used PROBLEM.INSTANCE_SEG.SYNAPSES.MIN_TH_TO_BE_PEAK needs to be set.
+        _C.PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE = "auto"
         # Minimun value to consider a point as a peak. Corresponds to 'threshold_abs' argument of the function
         # 'peak_local_max' of skimage.feature
         _C.PROBLEM.INSTANCE_SEG.SYNAPSES.MIN_TH_TO_BE_PEAK = 0.2

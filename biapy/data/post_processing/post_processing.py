@@ -394,7 +394,7 @@ def watershed_by_channels(
 def create_synapses(data: NDArray,
     channels: str,
     point_creation_func: str = "peak_local_max",
-    min_th_to_be_peak: float = 0.2,
+    min_th_to_be_peak: List[float] = [0.2],
     min_distance: int=1,
     min_sigma: int=5,
     max_sigma: int=10,
@@ -437,7 +437,7 @@ def create_synapses(data: NDArray,
                 coords = peak_local_max(
                     data[..., c],
                     min_distance=min_distance,
-                    threshold_abs=min_th_to_be_peak,
+                    threshold_abs=min_th_to_be_peak[c],
                     exclude_border=exclude_border,
                 )
                 coords = coords.astype(int)
@@ -447,7 +447,7 @@ def create_synapses(data: NDArray,
                     min_sigma=min_sigma,
                     max_sigma=max_sigma,
                     num_sigma=num_sigma,
-                    threshold=min_th_to_be_peak,
+                    threshold=min_th_to_be_peak[c],
                     exclude_border=exclude_border,
                 )
                 coords = coords[:, :3].astype(int)  # Remove sigma
