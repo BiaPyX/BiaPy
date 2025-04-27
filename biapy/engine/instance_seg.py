@@ -1472,12 +1472,24 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     )
                     if r:
                         self.all_matching_stats_merge_patches.append(r)
+                        for i, r_per_th in enumerate(r):
+                            prefix = str(r_per_th['thresh']) + " TH " if 'thresh' in r_per_th else f"TH{i} "
+                            for mkey in ['fp','tp','fn','precision','recall','accuracy','f1','n_true','n_pred','mean_true_score','mean_matched_score','panoptic_quality']:
+                                if mkey in r_per_th:
+                                    self.current_sample_metrics[prefix + mkey] = r_per_th[mkey]
                     if r_post:
                         self.all_matching_stats_merge_patches_post.append(r_post)
+                        for i, r_per_th in enumerate(r_post):
+                            prefix = str(r_per_th['thresh']) + " TH (post)" if 'thresh' in r_per_th else f"TH{i} (post) "
+                            for mkey in ['fp','tp','fn','precision','recall','accuracy','f1','n_true','n_pred','mean_true_score','mean_matched_score','panoptic_quality']:
+                                if mkey in r_per_th:
+                                    self.current_sample_metrics[prefix + mkey] = r_per_th[mkey]
                     if rcls:
                         self.all_class_stats_merge_patches.append(rcls)
+                        self.current_sample_metrics["class iou"] = rcls
                     if rcls_post:
                         self.all_class_stats_merge_patches_post.append(rcls_post)
+                        self.current_sample_metrics["class iou (post)"] = rcls_post
                 else:  # synapses
                     self.synapse_seg_process(
                         pred,
