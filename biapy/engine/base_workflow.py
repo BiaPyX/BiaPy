@@ -12,6 +12,7 @@ import torch.distributed as dist
 from typing import Dict, Optional, List
 from numpy.typing import NDArray
 from yacs.config import CfgNode as CN
+import pandas as pd
 
 import biapy
 from bioimageio.core import create_prediction_pipeline
@@ -46,7 +47,12 @@ from biapy.utils.misc import (
     is_dist_avail_and_initialized,
     setup_for_distributed,
     update_dict_with_existing_keys,
+)
+from biapy.engine.check_configuration import (
     convert_old_model_cfg_to_current_version,
+    diff_between_configs,
+    compare_configurations_without_model,
+    check_configuration,
 )
 from biapy.utils.util import (
     create_plots,
@@ -71,7 +77,6 @@ from biapy.data.post_processing.post_processing import (
 )
 from biapy.data.post_processing import apply_post_processing
 from biapy.data.pre_processing import preprocess_data
-from biapy.engine.check_configuration import check_configuration, compare_configurations_without_model
 from biapy.data.norm import Normalization
 from biapy.data.generators.chunked_test_pair_data_generator import chunked_test_pair_data_generator
 from biapy.data.dataset import PatchCoords
@@ -154,6 +159,9 @@ class Base_Workflow(metaclass=ABCMeta):
         # Full image
         self.stats["full_image"] = {}
         self.stats["full_image_post"] = {}
+
+        # To store all the metrics for each test file in order to create a final csv file with the results
+        self.metrics_per_test_file = [] 
 
         self.mask_path = ""
         self.is_y_mask = False
@@ -653,22 +661,16 @@ class Base_Workflow(metaclass=ABCMeta):
                     )
 
                     # Override model specs
-                    self.cfg["MODEL"], not_recognized_keys, not_recognized_keys_values = update_dict_with_existing_keys(  # type: ignore
-                        self.cfg["MODEL"], saved_cfg["MODEL"]  # type: ignore
-                    )
-                    if len(not_recognized_keys) > 0:
-                        print(
-                            "Seems that a old checkpoint is being used and some not recognized keys have been found. Trying to convert into the current configuration"
-                        )
-                        opts = convert_old_model_cfg_to_current_version(
-                            not_recognized_keys, not_recognized_keys_values, biapy_old_version=biapy_ckpt_version
-                        )
-                        self.cfg.merge_from_list(opts)
+                    tmp_cfg = convert_old_model_cfg_to_current_version(saved_cfg.clone())
+                    if self.cfg.PROBLEM.PRINT_OLD_KEY_CHANGES:
+                        print("The following changes were made in order to adapt the loaded input configuration from checkpoint into the current configuration version:")
+                        diff_between_configs(saved_cfg, tmp_cfg)
+                    update_dict_with_existing_keys(self.cfg["MODEL"], tmp_cfg["MODEL"])
 
                     # Check if the merge is coherent
                     updated_config = self.cfg.clone()
                     updated_config["MODEL"]["LOAD_MODEL_FROM_CHECKPOINT"] = False
-                    self.cfg["MODEL"]["LOAD_CHECKPOINT"] = True  # type: ignore
+                    self.cfg["MODEL"]["LOAD_CHECKPOINT"] = True
                     check_configuration(updated_config, self.job_identifier)
             (
                 self.model,
@@ -1134,6 +1136,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
         # Process all the images
         for i, self.current_sample in enumerate(self.test_generator):  # type: ignore
+            self.current_sample_metrics = {"file": self.current_sample["filename"]}
             self.f_numbers = [i]
             if "Y" not in self.current_sample:
                 self.current_sample["Y"] = None
@@ -1171,6 +1174,8 @@ class Base_Workflow(metaclass=ABCMeta):
             else:
                 image_counter += 1
 
+            self.metrics_per_test_file.append(self.current_sample_metrics)
+            
         # Only enable print for the main rank again
         if self.cfg.TEST.BY_CHUNKS.ENABLE and self.cfg.PROBLEM.NDIM == "3D":
             setup_for_distributed(is_main_process())
@@ -1729,6 +1734,7 @@ class Base_Workflow(metaclass=ABCMeta):
                         if str(metric).lower() not in self.stats["merge_patches"]:
                             self.stats["merge_patches"][str(metric).lower()] = 0
                         self.stats["merge_patches"][str(metric).lower()] += metric_values[metric]
+                        self.current_sample_metrics[str(metric).lower()] = metric_values[metric]
 
                 ############################
                 ### POST-PROCESSING (3D) ###
@@ -1745,7 +1751,7 @@ class Base_Workflow(metaclass=ABCMeta):
                             if str(metric).lower() not in self.stats["merge_patches_post"]:
                                 self.stats["merge_patches_post"][str(metric).lower()] = 0
                             self.stats["merge_patches_post"][str(metric).lower()] += metric_values[metric]
-
+                            self.current_sample_metrics[str(metric).lower() + " (post-processing)"] = metric_values[metric]
                     save_tif(
                         pred,
                         self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,
@@ -1770,6 +1776,7 @@ class Base_Workflow(metaclass=ABCMeta):
                         if str(metric).lower() not in self.stats["merge_patches"]:
                             self.stats["merge_patches"][str(metric).lower()] = 0
                         self.stats["merge_patches"][str(metric).lower()] += metric_values[metric]
+                        self.current_sample_metrics[str(metric).lower()] = metric_values[metric]
 
             self.after_merge_patches(pred)
 
@@ -1845,6 +1852,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     if str(metric).lower() not in self.stats["full_image"]:
                         self.stats["full_image"][str(metric).lower()] = 0
                     self.stats["full_image"][str(metric).lower()] += metric_values[metric]
+                    self.current_sample_metrics[str(metric).lower()] = metric_values[metric]
 
             if self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
                 assert isinstance(self.all_pred, list) and isinstance(self.all_gt, list)
@@ -1960,6 +1968,16 @@ class Base_Workflow(metaclass=ABCMeta):
                         )
                 print(" ")
 
+            df_metrics = pd.DataFrame(self.metrics_per_test_file) 
+            os.makedirs(self.cfg.PATHS.RESULT_DIR.PATH, exist_ok=True)
+            df_metrics.to_csv(
+                os.path.join(
+                    self.cfg.PATHS.RESULT_DIR.PATH,
+                    "test_results_metrics.csv",
+                ),
+                index=False,
+            )
+
     @abstractmethod
     def after_merge_patches(self, pred):
         """
@@ -2016,6 +2034,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 metric_values = self.metric_calculation(output=self.all_pred[0], targets=self.all_gt[0], train=False)
                 for metric in metric_values:
                     self.stats["as_3D_stack_post"][str(metric).lower()] = metric_values[metric]
+                    self.current_sample_metrics[str(metric).lower() + " as 3D stack (post-processing)"] = metric_values[metric]
 
             save_tif(
                 self.all_pred,

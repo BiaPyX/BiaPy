@@ -1266,6 +1266,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     if str(metric).lower() not in self.stats["merge_patches"]:
                         self.stats["merge_patches"][str(metric.lower())] = 0
                     self.stats["merge_patches"][str(metric).lower()] += item[1]
+                    self.current_sample_metrics[str(metric).lower() + " (pre points)"] = item[1]
 
                 # Save csv files with the associations between GT points and predicted ones
                 if out_dir:
@@ -1299,6 +1300,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     if str(metric).lower() not in self.stats["merge_patches"]:
                         self.stats["merge_patches"][str(metric.lower())] = 0
                     self.stats["merge_patches"][str(metric).lower()] += item[1]
+                    self.current_sample_metrics[str(metric).lower() + " (post points)"] = item[1]
                 
                 # Save csv files with the associations between GT points and predicted ones
                 if out_dir:
@@ -1351,6 +1353,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         if str(metric).lower() not in self.stats["merge_patches_post"]:
                             self.stats["merge_patches_post"][str(metric.lower())] = 0
                         self.stats["merge_patches_post"][str(metric).lower()] += item[1]
+                        self.current_sample_metrics[str(metric).lower() + " (pre points, post-processing)"] = item[1]
                         
                     # Save csv files with the associations between GT points and predicted ones
                     if out_dir_post_proc:
@@ -1384,6 +1387,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         if str(metric).lower() not in self.stats["merge_patches_post"]:
                             self.stats["merge_patches_post"][str(metric.lower())] = 0
                         self.stats["merge_patches_post"][str(metric).lower()] += item[1]
+                        self.current_sample_metrics[str(metric).lower() + " (post points, post-processing)"] = item[1]
                         
                     # Save csv files with the associations between GT points and predicted ones
                     if out_dir_post_proc:
@@ -1813,6 +1817,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         if str(metric).lower() not in self.stats["merge_patches"]:
                             self.stats["merge_patches"][str(metric.lower())] = 0
                         self.stats["merge_patches"][str(metric).lower()] += item[1]
+                        self.current_sample_metrics[str(metric).lower() + " (pre points)"] = item[1]
 
                     # Save csv files with the associations between GT points and predicted ones
                     pre_gt_assoc.to_csv(
@@ -1847,6 +1852,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         if str(metric).lower() not in self.stats["merge_patches"]:
                             self.stats["merge_patches"][str(metric.lower())] = 0
                         self.stats["merge_patches"][str(metric).lower()] += item[1]
+                        self.current_sample_metrics[str(metric).lower() + " (post points)"] = item[1]
 
                     # Save csv files with the associations between GT points and predicted ones
                     post_gt_assoc.to_csv(
@@ -2001,6 +2007,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         if str(metric).lower() not in self.stats["merge_patches_post"]:
                             self.stats["merge_patches_post"][str(metric.lower())] = 0
                         self.stats["merge_patches_post"][str(metric).lower()] += item[1]
+                        self.current_sample_metrics[str(metric).lower() + " (pre points, post-processing)"] = item[1]
                         
                     # Save csv files with the associations between GT points and predicted ones
                     pre_gt_assoc.to_csv(
@@ -2035,6 +2042,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         if str(metric).lower() not in self.stats["merge_patches_post"]:
                             self.stats["merge_patches_post"][str(metric.lower())] = 0
                         self.stats["merge_patches_post"][str(metric).lower()] += item[1]
+                        self.current_sample_metrics[str(metric).lower() + " (post points, post-processing)"] = item[1]
 
                     # Save csv files with the associations between GT points and predicted ones
                     post_gt_assoc.to_csv(

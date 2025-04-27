@@ -359,6 +359,7 @@ class Classification_Workflow(Base_Workflow):
             )
             for metric in metric_values:
                 self.stats["full_image"][str(metric).lower()] = metric_values[metric]
+                self.current_sample_metrics[str(metric).lower()] = metric_values[metric]
 
     def print_stats(self, image_counter):
         """

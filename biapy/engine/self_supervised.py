@@ -613,6 +613,7 @@ class Self_supervised_Workflow(Base_Workflow):
                 if str(metric).lower() not in self.stats["merge_patches"]:
                     self.stats["merge_patches"][str(metric).lower()] = 0
                 self.stats["merge_patches"][str(metric).lower()] += metric_values[metric]
+                self.current_sample_metrics[str(metric).lower()] = metric_values[metric]
 
     def torchvision_model_call(self, in_img: torch.Tensor, is_train: bool = False) -> torch.Tensor | None:
         """

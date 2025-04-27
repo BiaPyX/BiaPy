@@ -190,6 +190,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
                     if str(metric).lower() not in self.stats["full_image"]:
                         self.stats["full_image"][str(metric).lower()] = 0
                     self.stats["full_image"][str(metric).lower()] += metric_values[metric]
+                    self.current_sample_metrics[str(metric).lower()] = metric_values[metric]
 
     def torchvision_model_call(self, in_img: torch.Tensor, is_train=False) -> torch.Tensor:
         """

@@ -759,6 +759,7 @@ class Detection_Workflow(Base_Workflow):
                     if str(metric).lower() not in self.stats[inference_type]:
                         self.stats[inference_type][str(metric.lower())] = 0
                     self.stats[inference_type][str(metric).lower()] += all_channel_d_metrics[n]
+                    self.current_sample_metrics[str(metric).lower()] = all_channel_d_metrics[n]
 
                 if self.cfg.TEST.VERBOSE:
                     if len(gt_coordinates) == 0:
@@ -1067,6 +1068,7 @@ class Detection_Workflow(Base_Workflow):
                     if str(metric).lower() not in self.stats["merge_patches"]:
                         self.stats["merge_patches"][str(metric).lower()] = 0
                     self.stats["merge_patches"][str(metric).lower()] += d_metrics[str(metric)]
+                    self.current_sample_metrics[str(metric).lower()] = d_metrics[str(metric)]
         else:
             print("No points created for the given sample")
 
