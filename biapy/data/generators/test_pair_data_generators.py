@@ -267,37 +267,37 @@ class test_pair_data_generator(Dataset):
                         )
                     sample_extra_info["reflected_orig_shape"] = reflected_orig_shape
 
-        if not self.test_by_chunks and not first_load:
-            # Normalization
-            img = np.array(img)
-            self.norm_module.set_stats_from_image(img)
-            img, norm_extra_info = self.norm_module.apply_image_norm(img)
-            assert isinstance(img, np.ndarray)
-            if self.provide_Y:
-                mask = np.array(mask)
-                self.norm_module.set_stats_from_mask(mask)
-                mask, _ = self.norm_module.apply_mask_norm(mask)
-                assert isinstance(mask, np.ndarray)
+            if not first_load:
+                # Normalization
+                img = np.array(img)
+                self.norm_module.set_stats_from_image(img)
+                img, norm_extra_info = self.norm_module.apply_image_norm(img)
+                assert isinstance(img, np.ndarray)
+                if self.provide_Y:
+                    mask = np.array(mask)
+                    self.norm_module.set_stats_from_mask(mask)
+                    mask, _ = self.norm_module.apply_mask_norm(mask)
+                    assert isinstance(mask, np.ndarray)
 
-            img = np.expand_dims(img, 0)
-            if self.provide_Y:
-                mask = np.expand_dims(np.array(mask), 0)
-                if self.norm_module.mask_norm == "as_mask":
-                    mask = mask.astype(np.uint8)
+                img = np.expand_dims(img, 0)
+                if self.provide_Y:
+                    mask = np.expand_dims(np.array(mask), 0)
+                    if self.norm_module.mask_norm == "as_mask":
+                        mask = mask.astype(np.uint8)
 
-        if self.convert_to_rgb:
-            if img.shape[-1] == 1:
-                img = np.repeat(img, 3, axis=-1)
-            if self.norm_module.mask_norm == "as_image" and mask and mask.shape[-1] == 1:
-                mask = np.repeat(mask, 3, axis=-1)
+            if self.convert_to_rgb:
+                if img.shape[-1] == 1:
+                    img = np.repeat(img, 3, axis=-1)
+                if self.norm_module.mask_norm == "as_image" and mask and mask.shape[-1] == 1:
+                    mask = np.repeat(mask, 3, axis=-1)
 
-        # Data channel check
-        if self.data_shape[-1] != img.shape[-1]:
-            raise ValueError(
-                "Channel of the DATA.PATCH_SIZE given {} does not correspond with the loaded image {}. "
-                "Please, check the channels of the images!".format(self.data_shape[-1], img.shape[-1])
-            )
-            
+            # Data channel check
+            if self.data_shape[-1] != img.shape[-1]:
+                raise ValueError(
+                    "Channel of the DATA.PATCH_SIZE given {} does not correspond with the loaded image {}. "
+                    "Please, check the channels of the images!".format(self.data_shape[-1], img.shape[-1])
+                )
+                
         return img, mask, sample, sample_extra_info, norm_extra_info
 
     def __len__(self) -> int:
