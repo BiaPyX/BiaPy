@@ -339,7 +339,6 @@ class Image_to_Image_Workflow(Base_Workflow):
         Function to process a sample in the inference phase.
         """
         assert self.model
-
         # Skip processing image
         if "discard" in self.current_sample["X"] and self.current_sample["X"]["discard"]:
             return True
@@ -398,44 +397,8 @@ class Image_to_Image_Workflow(Base_Workflow):
                         self.current_sample["X"], _ = obj  # type: ignore
                     del obj
 
-        # Predict each patch
-        if self.cfg.TEST.AUGMENTATION:
-            for k in tqdm(range(self.current_sample["X"].shape[0]), leave=False):
-                if self.cfg.PROBLEM.NDIM == "2D":
-                    p = ensemble8_2d_predictions(
-                        self.current_sample["X"][k],
-                        axes_order_back=self.axes_order_back,
-                        axes_order=self.axes_order,
-                        device=self.device,
-                        pred_func=self.model_call_func,
-                    )
-                else:
-                    p = ensemble16_3d_predictions(
-                        self.current_sample["X"][k],
-                        batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
-                        axes_order_back=self.axes_order_back,
-                        axes_order=self.axes_order,
-                        device=self.device,
-                        pred_func=self.model_call_func,
-                    )
-                p = to_numpy_format(p, self.axes_order_back)
-                if "pred" not in locals():
-                    pred = np.zeros((self.current_sample["X"].shape[0],) + p.shape[1:], dtype=self.dtype)
-                pred[k] = p
-        else:
-            l = int(math.ceil(self.current_sample["X"].shape[0] / self.cfg.TRAIN.BATCH_SIZE))
-            for k in tqdm(range(l), leave=False):
-                top = (
-                    (k + 1) * self.cfg.TRAIN.BATCH_SIZE
-                    if (k + 1) * self.cfg.TRAIN.BATCH_SIZE < self.current_sample["X"].shape[0]
-                    else self.current_sample["X"].shape[0]
-                )
-                p = self.model_call_func(self.current_sample["X"][k * self.cfg.TRAIN.BATCH_SIZE : top])
-                p = to_numpy_format(p, self.axes_order_back)
-                if "pred" not in locals():
-                    pred = np.zeros((self.current_sample["X"].shape[0],) + p.shape[1:], dtype=self.dtype)
-                pred[k * self.cfg.TRAIN.BATCH_SIZE : top] = p
-        del self.current_sample["X"], p
+        pred = self.predict_batches_in_test(self.current_sample["X"], self.current_sample["Y"])
+        del self.current_sample["X"]
 
         # Reconstruct the predictions
         if original_data_shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
