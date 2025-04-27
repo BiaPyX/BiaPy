@@ -514,26 +514,3 @@ def update_dict_with_existing_keys(d, u, not_recognized_keys=[], not_recognized_
             not_recognized_key_vals.append(v)
 
     return d, not_recognized_keys, not_recognized_key_vals
-
-
-def convert_old_model_cfg_to_current_version(keys_to_convert, values_to_check, biapy_old_version=None):
-    new_cfg_list = []
-    if biapy_old_version is None:
-        print("There is no BiaPy version information in the checkpoint")
-    else:
-        print(f"Checkpoint in version: {biapy_old_version}")
-
-    for k, v in zip(keys_to_convert, values_to_check):
-        print(f"Trying to convert {k} key from old checkpoint")
-
-        # BiaPy version less than 3.5.5
-        if biapy_old_version is None:
-            if k == "BATCH_NORMALIZATION" and v == True:
-                new_cfg_list += ["MODEL.NORMALIZATION", "bn"]
-            if k == "SOURCE_MODEL_DOI" and v != "":
-                new_cfg_list += ["MODEL.BMZ.SOURCE_MODEL_ID", v]
-
-    if len(new_cfg_list) > 0:
-        print(f"Configuration to be translated: {new_cfg_list}")
-
-    return new_cfg_list
