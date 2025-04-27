@@ -7,6 +7,7 @@ from skimage.feature import peak_local_max, blob_log
 from skimage.morphology import disk, dilation
 from typing import Dict, Optional, List
 from numpy.typing import NDArray
+from skimage.filters import threshold_otsu
 
 from biapy.data.post_processing.post_processing import (
     remove_close_points,
@@ -299,11 +300,16 @@ class Detection_Workflow(Base_Workflow):
             print("Capturing the local maxima ")
 
         # Find points
+        if self.cfg.TEST.DET_TH_TYPE == "auto":
+            threshold_abs = threshold_otsu(pred[..., 0])
+        else: # manual
+            threshold_abs = self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK
+
         if self.cfg.TEST.DET_POINT_CREATION_FUNCTION == "peak_local_max":
             pred_points = peak_local_max(
                 pred[..., 0].astype(np.float32),
                 min_distance=self.cfg.TEST.DET_PEAK_LOCAL_MAX_MIN_DISTANCE,
-                threshold_abs=self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK,
+                threshold_abs=threshold_abs,
                 exclude_border=self.cfg.TEST.DET_EXCLUDE_BORDER,
             )
         else:
@@ -312,7 +318,7 @@ class Detection_Workflow(Base_Workflow):
                 min_sigma=self.cfg.TEST.DET_BLOB_LOG_MIN_SIGMA,
                 max_sigma=self.cfg.TEST.DET_BLOB_LOG_MAX_SIGMA,
                 num_sigma=self.cfg.TEST.DET_BLOB_LOG_NUM_SIGMA,
-                threshold=self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK,
+                threshold=threshold_abs,
                 exclude_border=self.cfg.TEST.DET_EXCLUDE_BORDER,
             )
             pred_points = pred_points[:, :3].astype(int)  # Remove sigma

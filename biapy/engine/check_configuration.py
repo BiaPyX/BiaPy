@@ -656,6 +656,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 )
     #### Instance segmentation ####
     if cfg.PROBLEM.TYPE == "INSTANCE_SEG":
+        assert cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH_TYPE in ["manual", "auto"], "'PROBLEM.INSTANCE_SEG.DATA_MW_TH_TYPE' must be one of ['manual', 'auto']"
         if cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
             assert cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in [
                 "A",
@@ -798,6 +799,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                         "Only 'circularity' or 'sphericity' can be used in 'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS' "
                         "when 'TEST.POST_PROCESSING.DET_WATERSHED' is enabled"
                     )
+        assert cfg.TEST.DET_TH_TYPE in ["manual", "auto"], "'TEST.DET_TH_TYPE' must be one of ['manual', 'auto']"
         if cfg.TEST.DET_POINT_CREATION_FUNCTION not in ["peak_local_max", "blob_log"]:
             raise ValueError("'TEST.DET_POINT_CREATION_FUNCTION' must be one between: ['peak_local_max', 'blob_log']")
         if cfg.MODEL.SOURCE == "torchvision":
