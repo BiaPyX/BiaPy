@@ -189,7 +189,6 @@ def extract_patch_from_efficient_file(
     data: zarr.hierarchy.Group | h5py._hl.dataset.Dataset, # type: ignore
     patch_coords: PatchCoords, 
     data_axes_order: str="ZYXC",
-    move_axes_order: bool = False, 
 ) -> NDArray:
     """
     Loads from ``filepath`` the patch determined by ``patch_coords``.
@@ -204,9 +203,6 @@ def extract_patch_from_efficient_file(
 
     data_axes_order : str
         Order of axes of ``data``. E.g. 'TZCYX', 'TZYXC', 'ZCYX', 'ZYXC'.
-
-    move_axes_order : bool, optional
-        Whether if the axes need to be ordered or not. 
 
     Returns
     -------
@@ -242,7 +238,7 @@ def extract_patch_from_efficient_file(
     except: 
         raise ValueError(f"Read data axes ({data.shape}) do not match the expected axis order ({data_axes_order})")
 
-    img = ensure_3d_shape(img.squeeze(), move_axes_order=move_axes_order)
+    img = ensure_3d_shape(img.squeeze(), data_axes_order=data_axes_order)
 
     return img
 
@@ -1142,7 +1138,7 @@ def order_dimensions(
 def ensure_3d_shape(
     img: NDArray, 
     path: Optional[str]=None,
-    move_axes_order: bool=True,
+    data_axes_order: Optional[str]=None,
 ):
     """
     Read an image from a given path.
@@ -1155,8 +1151,8 @@ def ensure_3d_shape(
     path : str, optional
         Path of the image (just use to print possible errors).
 
-    move_axes_order : bool, optional
-        Whether if the axes need to be ordered or not. 
+    data_axes_order : str, optional
+        Order of axes of ``data``. E.g. 'TZCYX', 'TZYXC', 'ZCYX', 'ZYXC'.
 
     Returns
     -------
@@ -1176,8 +1172,12 @@ def ensure_3d_shape(
         else:
             img = img[0]
 
+    # pop T in data_axes_order
+    if data_axes_order is not None:
+        data_axes_order = data_axes_order.replace("T", "")
+
     if img.ndim == 3:
-        if move_axes_order: 
+        if data_axes_order is None: 
             # Ensure Z axis is always in the first position
             min_val = min(img.shape)
             z_pos = img.shape.index(min_val)
@@ -1185,19 +1185,37 @@ def ensure_3d_shape(
                 new_pos = [
                     z_pos,
                 ] + [x for x in range(3) if x != z_pos]
-                img = img.transpose(new_pos)
-
+        else:
+            # Follows the axes order provided in data_axes_order
+            new_pos = order_dimensions(
+                np.array(range(len(data_axes_order))),
+                input_order=data_axes_order,
+                output_order="ZYX",
+                default_value=np.nan,
+            )
+            new_pos = [x for x in new_pos if not np.isnan(x)] # type: ignore
+        img = img.transpose(new_pos) # type: ignore
         img = np.expand_dims(img, -1)
     else:
-        if move_axes_order: 
-            # Ensure channel axis is always in the first position (assuming Z is already set)
+        if data_axes_order is None: 
+            # Ensure channel axis is always in the last position (assuming Z is already set)
             min_val = min(img.shape)
-            channel_pos = img.shape.index(min_val)
-            if channel_pos != 3:
-                new_pos = [x for x in range(4) if x != channel_pos] + [
-                    channel_pos,
+            z_pos = img.shape.index(min_val)
+            if z_pos != 3:
+                new_pos = [x for x in range(4) if x != z_pos] + [
+                    z_pos,
                 ]
-                img = img.transpose(new_pos)
+        else:
+            # Follows the axes order provided in data_axes_order
+            new_pos = order_dimensions(
+                np.array(range(len(data_axes_order))),
+                input_order=data_axes_order,
+                output_order="ZYXC",
+                default_value=np.nan,
+            )
+            new_pos = [x for x in new_pos if not np.isnan(x)] # type: ignore
+        img = img.transpose(new_pos) # type: ignore
+
     return img
 
 

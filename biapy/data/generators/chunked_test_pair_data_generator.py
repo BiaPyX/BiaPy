@@ -452,7 +452,7 @@ class chunked_test_pair_data_generator(IterableDataset):
                 output_order=self.out_data_order,
                 default_value=np.nan,
             )
-            chunk_shape = tuple([int(val) if not np.isnan(val) else out_data_shape[i] for i, val in enumerate(chunk_shape)])
+            chunk_shape = tuple([int(val) if not np.isnan(val) else out_data_shape[i] for i, val in enumerate(chunk_shape)]) # type: ignore
 
             os.makedirs(self.out_dir, exist_ok=True)
             self.out_file = data_filename
