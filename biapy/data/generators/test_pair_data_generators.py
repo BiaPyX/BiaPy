@@ -73,6 +73,13 @@ class test_pair_data_generator(Dataset):
 
     reflect_to_complete_shape : bool, optional
         Whether to reshape the dimensions that does not satisfy the patch shape selected by padding it with reflect.
+
+    n_classes : int, optional
+        Number of classes to predict.
+
+    ignore_index : int, optional
+        Value to ignore in the loss/metrics. In this generator is not used but added for compatibility
+        with ``PairBaseDataGenerator``.
     """
 
     def __init__(

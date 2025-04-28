@@ -303,6 +303,9 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
     n_classes : int, optional
         Number of classes.
 
+    ignore_index : int, optional
+        Value to ignore in the loss/metrics. 
+
     extra_data_factor : int, optional
         Factor to multiply the batches yielded in a epoch. It acts as if ``X`` and ``Y``` where concatenated
         ``extra_data_factor`` times.

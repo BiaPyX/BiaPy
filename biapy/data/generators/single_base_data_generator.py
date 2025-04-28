@@ -42,9 +42,6 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
     norm_module : Normalization
         Normalization module that defines the normalization steps to apply.
 
-    n_classes : int
-        Number of classes to predict.
-
     seed : int, optional
         Seed for random functions.
 
@@ -161,7 +158,6 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         ndim: int,
         X: BiaPyDataset,
         norm_module: Normalization,
-        n_classes: int = 2,
         seed: int = 0,
         da: bool = True,
         da_prob: float = 0.5,
@@ -229,7 +225,6 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         self.shape = resize_shape if resize_shape else img.shape
         self.o_indexes = np.arange(self.length)
-        self.n_classes = n_classes
         self.da = da
         self.da_prob = da_prob
         self.zoom = zoom

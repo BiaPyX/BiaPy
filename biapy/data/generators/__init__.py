@@ -119,8 +119,6 @@ def create_train_val_augmentors(
         dic = dict(
             ndim=ndim,
             X=X_train,
-            n_classes=cfg.MODEL.N_CLASSES,
-            ignore_index=None if not cfg.LOSS.IGNORE_VALUES else cfg.LOSS.VALUE_TO_IGNORE,
             seed=cfg.SYSTEM.SEED,
             da=cfg.AUGMENTOR.ENABLE,
             da_prob=cfg.AUGMENTOR.DA_PROB,
@@ -276,8 +274,6 @@ def create_train_val_augmentors(
         val_generator = f_name(
             ndim=ndim,
             X=X_val,
-            n_classes=cfg.MODEL.N_CLASSES,
-            ignore_index=None if not cfg.LOSS.IGNORE_VALUES else cfg.LOSS.VALUE_TO_IGNORE,
             seed=cfg.SYSTEM.SEED,
             da=False,
             resize_shape=r_shape,
@@ -453,7 +449,6 @@ def create_test_generator(
         preprocess_cfg=cfg.DATA.PREPROCESS if cfg.DATA.PREPROCESS.TEST else None,
         reflect_to_complete_shape=cfg.DATA.REFLECT_TO_COMPLETE_SHAPE,
         data_shape=cfg.DATA.PATCH_SIZE,
-        ignore_index=None if not cfg.LOSS.IGNORE_VALUES else cfg.LOSS.VALUE_TO_IGNORE,
     )
 
     if cfg.PROBLEM.TYPE == "CLASSIFICATION" or (
@@ -475,7 +470,9 @@ def create_test_generator(
         dic["Y"] = Y_test
         dic["test_by_chunks"] = cfg.TEST.BY_CHUNKS.ENABLE
         dic["instance_problem"] = cfg.PROBLEM.TYPE == "INSTANCE_SEG"
-
+        dic["ignore_index"] = None if not cfg.LOSS.IGNORE_VALUES else cfg.LOSS.VALUE_TO_IGNORE
+        dic["n_classes"] = cfg.MODEL.N_CLASSES
+    
     test_generator = gen_name(**dic)
     data_norm = test_generator.get_data_normalization()
 
