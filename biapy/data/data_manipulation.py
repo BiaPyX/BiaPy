@@ -1152,8 +1152,8 @@ def load_and_prepare_cls_test_data(
 
 
 def load_data_from_dir(
-    data_path: str, is_3d: bool = False, **kwargs
-) -> BiaPyDataset | Tuple[BiaPyDataset, BiaPyDataset]:
+    data_path: str, is_3d: bool = False
+) -> List[NDArray]:
     """
     Create dataset samples from the given list.
 
@@ -1165,83 +1165,27 @@ def load_data_from_dir(
     is_3d : bool, optional
         Whether if the expected images to read are 3D or not.
     """
-    using_zarr = False
-    # Create sample list
-    if "multiple_raw_images" in kwargs and kwargs["multiple_raw_images"]:
-        data_samples = samples_from_image_list_multiple_raw_one_gt(data_path=data_path, **kwargs)
-    else:
-        if not os.path.exists(data_path):
-            raise ValueError(f"{data_path} folder does not exist")
-        ids = sorted(next(os.walk(data_path))[2])
-        fids = sorted(next(os.walk(data_path))[1])
-        if len(ids) == 0:
-            if len(fids) == 0:  # Trying Zarr
-                raise ValueError("No images found in dir {}".format(data_path))
-            else:
-                using_zarr = True
-                # Working with Zarr
-                if not is_3d:
-                    raise ValueError("Zarr image handle is only available for 3D problems")
-                list_of_images = fids
+    if not os.path.exists(data_path):
+        raise ValueError(f"{data_path} folder does not exist")
+    print(f"Loading images from {data_path} . . .")
+
+    ids = sorted(next(os.walk(data_path))[2])
+    fids = sorted(next(os.walk(data_path))[1])
+    if len(ids) == 0:
+        if len(fids) == 0:  # Trying Zarr
+            raise ValueError("No images found in dir {}".format(data_path))
         else:
-            list_of_images = ids
-
-        if list_of_images[0].endswith(".zarr"):
-            fname = samples_from_zarr
-        else:
-            fname = samples_from_image_list
-
-        data_samples = fname(list_of_data=list_of_images, **kwargs)
-
-    print(f"Loading images from {data_path}")
-    if isinstance(data_samples, tuple):
-        x_samples, y_samples = data_samples
-        load_images_to_dataset(
-            dataset=x_samples,
-            crop_shape=kwargs["crop_shape"] if "crop_shape" in kwargs else None,
-            reflect_to_complete_shape=(
-                kwargs["reflect_to_complete_shape"] if "reflect_to_complete_shape" in kwargs else False
-            ),
-            convert_to_rgb=kwargs["convert_to_rgb"] if "convert_to_rgb" in kwargs else False,
-            preprocess_cfg=kwargs["preprocess_cfg"] if "preprocess_cfg" in kwargs else None,
-            preprocess_f=kwargs["preprocess_f"] if "preprocess_f" in kwargs else None,
-            is_3d=is_3d,
-            zarr_data_information=(
-                kwargs["zarr_data_information"] if using_zarr and "zarr_data_information" in kwargs else None
-            ),
-        )
-        load_images_to_dataset(
-            dataset=y_samples,
-            crop_shape=kwargs["crop_shape"] if "crop_shape" in kwargs else None,
-            reflect_to_complete_shape=(
-                kwargs["reflect_to_complete_shape"] if "reflect_to_complete_shape" in kwargs else False
-            ),
-            convert_to_rgb=kwargs["convert_to_rgb"] if "convert_to_rgb" in kwargs else False,
-            preprocess_cfg=kwargs["preprocess_cfg"] if "preprocess_cfg" in kwargs else None,
-            preprocess_f=kwargs["preprocess_f"] if "preprocess_f" in kwargs else None,
-            is_3d=is_3d,
-            zarr_data_information=(
-                kwargs["zarr_data_information"] if using_zarr and "zarr_data_information" in kwargs else None
-            ),
-        )
-        return x_samples, y_samples
+            list_of_images = fids
     else:
-        load_images_to_dataset(
-            dataset=data_samples,
-            crop_shape=kwargs["crop_shape"] if "crop_shape" in kwargs else None,
-            reflect_to_complete_shape=(
-                kwargs["reflect_to_complete_shape"] if "reflect_to_complete_shape" in kwargs else False
-            ),
-            convert_to_rgb=kwargs["convert_to_rgb"] if "convert_to_rgb" in kwargs else False,
-            preprocess_cfg=kwargs["preprocess_cfg"] if "preprocess_cfg" in kwargs else None,
-            preprocess_f=kwargs["preprocess_f"] if "preprocess_f" in kwargs else None,
-            is_3d=is_3d,
-            zarr_data_information=(
-                kwargs["zarr_data_information"] if using_zarr and "zarr_data_information" in kwargs else None
-            ),
-        )
+        list_of_images = ids
 
-        return data_samples
+    all_images = []
+    for id_ in tqdm(list_of_images, total=len(list_of_images)):
+        img_path = os.path.join(data_path, id_)
+        img = read_img_as_ndarray(img_path, is_3d=is_3d)
+        all_images.append(img)
+    
+    return all_images
 
 
 def load_cls_data_from_dir(
