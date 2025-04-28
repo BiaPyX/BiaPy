@@ -1194,7 +1194,7 @@ def ensure_3d_shape(
         img = np.expand_dims(img, -1)
     else:
         if data_axes_order is None: 
-            # Ensure channel axis is always in the first position (assuming Z is already set)
+            # Ensure channel axis is always in the last position (assuming Z is already set)
             min_val = min(img.shape)
             z_pos = img.shape.index(min_val)
             if z_pos != 3:
