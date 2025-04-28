@@ -296,8 +296,8 @@ def insert_patch_in_efficient_file(
     current_order = np.array(range(len(patch.shape)))
     transpose_order = order_dimensions(
         current_order,
-        input_order="ZYXC",
-        output_order=patch_axes_order,
+        input_order=patch_axes_order,
+        output_order=data_axes_order,
         default_value=np.nan,
     )
     transpose_order = [x for x in transpose_order if not np.isnan(x)]  # type: ignore
