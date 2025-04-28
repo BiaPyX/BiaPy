@@ -2248,20 +2248,19 @@ def diff_between_configs(old_dict: Dict | Config, new_dict: Dict | Config, path:
 
     for k in old_dict:
         if k not in new_dict:
-            print("'" + path + "." + k + "' removed")
+            print("'" + path + "." + str(k) + "' removed")
     for k in new_dict:
         if k not in old_dict:
-            print("'" + path + "." + k + "' added")
+            print("'" + path + "." + str(k) + "' added")
         if k in new_dict and k in old_dict and new_dict[k] != old_dict[k]:
             if type(new_dict[k]) not in (dict, list, CN):
-                print("'" + path + "." + k + "' changed from '" + old_dict[k] + "' to '" + str(new_dict[k]) + "'")
+                print("'" + path + "." + str(k) + "' changed from '" + str(old_dict[k]) + "' to '" + str(new_dict[k]) + "'")
             else:
                 if type(old_dict[k]) != type(new_dict[k]):
-                    print("'" + path + "." + k + "' changed to '" + str(new_dict[k]) + "'")
+                    print("'" + path + "." + str(k) + "' changed to '" + str(new_dict[k]) + "'")
                 else:
                     if type(new_dict[k]) in [dict, CN]:
-                        path = path + k if path == "" else path + "." + k 
+                        path = path + str(k) if path == "" else path + "." + str(k) 
                         diff_between_configs(old_dict[k], new_dict[k], path)
                     elif isinstance(new_dict[k], list):
-                        path = path + k if path == "" else path + "." + k 
-                        diff_between_configs(old_dict[k][0], new_dict[k][0], path)
+                        print("'" + path + "." + str(k) + "' changed from '" + str(old_dict[k]) + "' to '" + str(new_dict[k]) + "'")
