@@ -511,6 +511,29 @@ def create_test_generator(
 
     return test_generator, data_norm, bmz_input_sample
 
+def by_chunks_collate_fn(data):
+    """
+    Collate function to avoid the default one with type checking. It does nothing speciall but stack the images.
+
+    Parameters
+    ----------
+    data : tuple
+        Data tuple.
+
+    Returns
+    -------
+    data : tuple
+        Stacked data in batches.
+    """
+    return (
+        # torch.cat([torch.from_numpy(x[0]) for x in data]),
+        [x[0] for x in data],
+        np.stack([x[1] for x in data]),
+        np.stack([x[2] for x in data if x is not None]) if len(data) > 0 and data[0][2] is not None else None,
+        [x[3] for x in data],
+        [x[4] for x in data],
+        [x[5] for x in data],
+    )
 
 def create_chunked_test_generator(
     cfg: CN,
@@ -535,30 +558,6 @@ def create_chunked_test_generator(
         ignore_index=None if not cfg.LOSS.IGNORE_VALUES else cfg.LOSS.VALUE_TO_IGNORE,
         instance_problem = cfg.PROBLEM.TYPE == "INSTANCE_SEG",
     )
-
-    def by_chunks_collate_fn(data):
-        """
-        Collate function to avoid the default one with type checking. It does nothing speciall but stack the images.
-
-        Parameters
-        ----------
-        data : tuple
-            Data tuple.
-
-        Returns
-        -------
-        data : tuple
-            Stacked data in batches.
-        """
-        return (
-            # torch.cat([torch.from_numpy(x[0]) for x in data]),
-            [x[0] for x in data],
-            np.stack([x[1] for x in data]),
-            np.stack([x[2] for x in data if x is not None]) if len(data) > 0 and data[0][2] is not None else None,
-            [x[3] for x in data],
-            [x[4] for x in data],
-            [x[5] for x in data],
-        )
 
     # Set num_workers
     if is_dist_avail_and_initialized() and cfg.SYSTEM.NUM_GPUS >= 1:
