@@ -244,7 +244,7 @@ class chunked_test_pair_data_generator(IterableDataset):
         # Extact the patch
         data_to_process = self.X_parallel_data if extract == "image" else self.Y_parallel_data
         if not isinstance(data_to_process, np.ndarray):
-            data = extract_patch_from_efficient_file(data_to_process, patch_coords, input_axes)
+            data = extract_patch_from_efficient_file(data_to_process, patch_coords, input_axes, move_axes_order=True)
         else:
             data = extract_patch_within_image(data_to_process, patch_coords, is_3d=True)
 
