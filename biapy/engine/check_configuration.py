@@ -2219,7 +2219,7 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict):
         if "UPR_X_FILE" in old_cfg["PATHS"]:
             del old_cfg["PATHS"]["UPR_X_FILE"]
         if "LWR_Y_FILE" in old_cfg["PATHS"]:
-            del old_cfg["PATHS"]["MEAN_LWR_Y_FILEINFO_FILE"]
+            del old_cfg["PATHS"]["LWR_Y_FILE"]
         if "UPR_Y_FILE" in old_cfg["PATHS"]:
             del old_cfg["PATHS"]["UPR_Y_FILE"]  
         
