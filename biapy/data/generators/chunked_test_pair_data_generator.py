@@ -244,7 +244,7 @@ class chunked_test_pair_data_generator(IterableDataset):
         # Extact the patch
         data_to_process = self.X_parallel_data if extract == "image" else self.Y_parallel_data
         if not isinstance(data_to_process, np.ndarray):
-            data = extract_patch_from_efficient_file(data_to_process, patch_coords, input_axes, move_axes_order=True)
+            data = extract_patch_from_efficient_file(data_to_process, patch_coords, input_axes)
         else:
             data = extract_patch_within_image(data_to_process, patch_coords, is_3d=True)
 
@@ -452,7 +452,7 @@ class chunked_test_pair_data_generator(IterableDataset):
                 output_order=self.out_data_order,
                 default_value=np.nan,
             )
-            chunk_shape = tuple([int(val) if not np.isnan(val) else out_data_shape[i] for i, val in enumerate(chunk_shape)])
+            chunk_shape = tuple([int(val) if not np.isnan(val) else out_data_shape[i] for i, val in enumerate(chunk_shape)]) # type: ignore
 
             os.makedirs(self.out_dir, exist_ok=True)
             self.out_file = data_filename
