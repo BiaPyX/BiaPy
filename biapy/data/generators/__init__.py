@@ -495,7 +495,7 @@ def create_test_generator(
         )
     else:
         bmz_input_sample = extract_patch_from_efficient_file(
-            bmz_input_sample, patch, data_axes_order=cfg.DATA.TEST.INPUT_IMG_AXES_ORDER
+            bmz_input_sample, patch, data_axes_order=cfg.DATA.TEST.INPUT_IMG_AXES_ORDER, move_axes_order=True,
         )
     bmz_input_sample = bmz_input_sample.astype(np.float32)
 

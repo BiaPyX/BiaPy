@@ -188,7 +188,8 @@ def load_img_part_from_efficient_file(
 def extract_patch_from_efficient_file(
     data: zarr.hierarchy.Group | h5py._hl.dataset.Dataset, # type: ignore
     patch_coords: PatchCoords, 
-    data_axes_order="ZYXC"
+    data_axes_order: str="ZYXC",
+    move_axes_order: bool = False, 
 ) -> NDArray:
     """
     Loads from ``filepath`` the patch determined by ``patch_coords``.
@@ -203,6 +204,9 @@ def extract_patch_from_efficient_file(
 
     data_axes_order : str
         Order of axes of ``data``. E.g. 'TZCYX', 'TZYXC', 'ZCYX', 'ZYXC'.
+
+    move_axes_order : bool, optional
+        Whether if the axes need to be ordered or not. 
 
     Returns
     -------
@@ -238,7 +242,7 @@ def extract_patch_from_efficient_file(
     except: 
         raise ValueError(f"Read data axes ({data.shape}) do not match the expected axis order ({data_axes_order})")
 
-    img = ensure_3d_shape(img.squeeze(), move_axes_order=False)
+    img = ensure_3d_shape(img.squeeze(), move_axes_order=move_axes_order)
 
     return img
 
@@ -1151,7 +1155,7 @@ def ensure_3d_shape(
     path : str, optional
         Path of the image (just use to print possible errors).
 
-    axes_order : bool, optional
+    move_axes_order : bool, optional
         Whether if the axes need to be ordered or not. 
 
     Returns
