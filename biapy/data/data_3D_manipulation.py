@@ -1172,6 +1172,10 @@ def ensure_3d_shape(
         else:
             img = img[0]
 
+    # pop T in data_axes_order
+    if data_axes_order is not None:
+        data_axes_order = data_axes_order.replace("T", "")
+
     if img.ndim == 3:
         if data_axes_order is None: 
             # Ensure Z axis is always in the first position
