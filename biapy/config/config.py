@@ -143,7 +143,7 @@ class Config:
         _C.PROBLEM.INSTANCE_SEG.SYNAPSES.PEAK_LOCAL_MAX_MIN_DISTANCE = 1
         # Whether the threshold are going to be set as automaticaly (with Otsu thresholding) or manually.
         # Options available: 'auto' or 'manual'. If this last is used PROBLEM.INSTANCE_SEG.SYNAPSES.MIN_TH_TO_BE_PEAK needs to be set.
-        _C.PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE = "manual"
+        _C.PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE = "auto"
         # Minimun value to consider a point as a peak. Corresponds to 'threshold_abs' argument of the function
         # 'peak_local_max' of skimage.feature
         _C.PROBLEM.INSTANCE_SEG.SYNAPSES.MIN_TH_TO_BE_PEAK = 0.2
@@ -1285,7 +1285,7 @@ class Config:
         _C.TEST.DET_PEAK_LOCAL_MAX_MIN_DISTANCE = 1
         # Whether the threshold are going to be set as automaticaly (with Otsu thresholding) or manually.
         # Options available: 'auto' or 'manual'. If this last is used TEST.DET_MIN_TH_TO_BE_PEAK needs to be set.
-        _C.TEST.DET_TH_TYPE = "auto"
+        _C.TEST.DET_TH_TYPE = "manual"
         # Minimun value to consider a point as a peak. Corresponds to 'threshold_abs' argument of the function
         # 'peak_local_max' of skimage.feature
         _C.TEST.DET_MIN_TH_TO_BE_PEAK = 0.2
