@@ -59,7 +59,6 @@ class Config:
         _C.PROBLEM.INSTANCE_SEG.TYPE = "regular" 
 
         #### For "regular" type of instances ####
-        
         # Possible options: 'C', 'BC', 'BP', 'BD', 'BCM', 'BCD', 'BCDv2', 'Dv2', 'BDv2' and 'A'. This variable defines the channels
         # to be used to represent instances based on the input instance masks. The meaning of each letter is a follows:
         #   - 'B' stands for 'Binary mask', it is a binary representation of each instance region without its contour.
@@ -71,6 +70,13 @@ class Config:
         #   - 'P' stands for 'Points' and contains a binary representation of the central points of each instance.
         #   - 'A' stands for 'Affinities" and contains the affinity values for each dimension.
         #   - 'F' stands for 'Flow' where, for each instance, contains the distance values to its center of mass for each dimension.
+        #
+        #### For "synapse" type of instances ####
+        # Possible options: 'BF'. This variable defines the channels to be used to represent synapse instances based on the input 
+        # synapse sites. The meaning of each letter is a follows:
+        #   - 'B' stands for 'Binary mask', it is a binary representation of each postsynaptic site
+        #   - 'F' stands for 'Flow' and contains the distance values to the corresponding presynaptic site (of each postsynaptic 
+        #     site) for each dimension.
         _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS = "BC"
         # Whether to mask the distance channel to only calculate the loss in those regions where the binary mask
         # defined by B channel is present
@@ -126,12 +132,6 @@ class Config:
 
         #### For "synapses" type of instances (only available for 3D H5/Zarr data) ####
         _C.PROBLEM.INSTANCE_SEG.SYNAPSES = CN()
-        # Possible options: 'BF'. This variable defines the channels to be used to represent synapse instances based on the input 
-        # synapse sites. The meaning of each letter is a follows:
-        #   - 'B' stands for 'Binary mask', it is a binary representation of each postsynaptic site
-        #   - 'F' stands for 'Flow' and contains the distance values to the corresponding presynaptic site (of each postsynaptic 
-        #     site) for each dimension.
-        _C.PROBLEM.INSTANCE_SEG.SYNAPSES.DATA_CHANNELS = "BF"
         # Dilation in (z,y,x) to be made for the 'B' channel
         _C.PROBLEM.INSTANCE_SEG.SYNAPSES.POSTSITE_DILATION = [2,4,4]
         # Dilation in (z,y,x) to be made to construct the 'F' channel
