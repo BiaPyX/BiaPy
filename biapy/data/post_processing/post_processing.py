@@ -400,6 +400,7 @@ def create_synapses(data: NDArray,
     max_sigma: int=10,
     num_sigma: int=2,
     exclude_border: bool = False,
+    relative_th_value: bool = False,
 ) -> Tuple[NDArray, Dict]:
     """
     Convert binary foreground probability maps and instance contours to instance masks via watershed segmentation
@@ -433,11 +434,19 @@ def create_synapses(data: NDArray,
         max_value = 0
         data = data.astype(np.float32)
         for c in range(data.shape[-1]):
+            if relative_th_value:
+                threshold_abs = None
+                threshold_rel = min_th_to_be_peak[c]
+            else:
+                threshold_abs = min_th_to_be_peak[c]
+                threshold_rel = None
+
             if point_creation_func == "peak_local_max":
                 coords = peak_local_max(
                     data[..., c],
                     min_distance=min_distance,
-                    threshold_abs=min_th_to_be_peak[c],
+                    threshold_abs=threshold_abs,
+                    threshold_rel=threshold_rel,
                     exclude_border=exclude_border,
                 )
                 coords = coords.astype(int)
@@ -447,7 +456,8 @@ def create_synapses(data: NDArray,
                     min_sigma=min_sigma,
                     max_sigma=max_sigma,
                     num_sigma=num_sigma,
-                    threshold=min_th_to_be_peak[c],
+                    threshold=threshold_abs, # type: ignore
+                    threshold_rel=threshold_rel,
                     exclude_border=exclude_border,
                 )
                 coords = coords[:, :3].astype(int)  # Remove sigma

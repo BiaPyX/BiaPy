@@ -142,7 +142,15 @@ class Config:
         # The minimal allowed distance separating peaks. To find the maximum number of peaks, use min_distance=1.
         _C.PROBLEM.INSTANCE_SEG.SYNAPSES.PEAK_LOCAL_MAX_MIN_DISTANCE = 1
         # Whether the threshold are going to be set as automaticaly (with Otsu thresholding) or manually.
-        # Options available: 'auto' or 'manual'. If this last is used PROBLEM.INSTANCE_SEG.SYNAPSES.MIN_TH_TO_BE_PEAK needs to be set.
+        # Options available: 
+        #   * 'auto' to decide the threshold to be applied by measuring it with Otsu
+        #   * 'manual' to set a fixed threshold defined by 'PROBLEM.INSTANCE_SEG.SYNAPSES.MIN_TH_TO_BE_PEAK'
+        #   * 'relative_by_patch' to use 'PROBLEM.INSTANCE_SEG.SYNAPSES.MIN_TH_TO_BE_PEAK' but relative to the maximum value in the predicted data. 
+        #     More info in https://scikit-image.org/docs/0.25.x/api/skimage.feature.html#skimage.feature.peak_local_max and 
+        #     https://scikit-image.org/docs/0.23.x/api/skimage.feature.html#skimage.feature.blob_log (see 'threshold_rel' argument description)
+        #   * 'relative' to use 'PROBLEM.INSTANCE_SEG.SYNAPSES.MIN_TH_TO_BE_PEAK' but relative to the maximum value in the predicted data. 
+        #     More info in https://scikit-image.org/docs/0.25.x/api/skimage.feature.html#skimage.feature.peak_local_max and 
+        #     https://scikit-image.org/docs/0.23.x/api/skimage.feature.html#skimage.feature.blob_log (see 'threshold_rel' argument description)
         _C.PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE = "auto"
         # Minimun value to consider a point as a peak. Corresponds to 'threshold_abs' argument of the function
         # 'peak_local_max' of skimage.feature

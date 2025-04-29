@@ -672,7 +672,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "BD",
             ], "PROBLEM.INSTANCE_SEG.DATA_CHANNELS not in ['A','C', 'BC', 'BCM', 'BCD', 'BCDv2', 'Dv2', 'BDv2', 'BP', 'BD', 'BCP']"
         else:  # synapses
-            assert cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE in ["manual", "auto"], "'PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE' must be one of ['manual', 'auto']"
+            assert cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE in ["manual", "auto", "relative_by_patch", "relative"], "'PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE' must be one of ['manual', 'auto']"
             assert cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in [
                 "B", "BF",
             ], "PROBLEM.INSTANCE_SEG.DATA_CHANNELS not in ['B', 'BF']"
