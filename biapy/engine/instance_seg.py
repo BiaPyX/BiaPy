@@ -1069,8 +1069,8 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             if self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE == "auto":
                 threshold_abs.append(threshold_otsu(pred[..., c]))
             else: # Manual
-                threshold_abs.append(self.cfg.TEST.DET_MIN_TH_TO_BE_PEAK)
-        
+                threshold_abs.append(self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.MIN_TH_TO_BE_PEAK)
+
         pred, d_result = create_synapses(
             data=pred,
             channels=self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
