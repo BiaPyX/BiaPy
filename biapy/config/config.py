@@ -72,11 +72,14 @@ class Config:
         #   - 'F' stands for 'Flow' where, for each instance, contains the distance values to its center of mass for each dimension.
         #
         #### For "synapse" type of instances ####
-        # Possible options: 'BF'. This variable defines the channels to be used to represent synapse instances based on the input 
+        # Possible options: 'B' and 'BF' (still experimental). This variable defines the channels to be used to represent synapse instances based on the input 
         # synapse sites. The meaning of each letter is a follows:
-        #   - 'B' stands for 'Binary mask', it is a binary representation of each postsynaptic site
-        #   - 'F' stands for 'Flow' and contains the distance values to the corresponding presynaptic site (of each postsynaptic 
-        #     site) for each dimension.
+        #   * In 'B', the first and second channels represent the pre and post points as 3D points, respectively.
+        #
+        #   * In 'BF':
+        #       - 'B' stands for 'Binary mask', it is a binary representation of each postsynaptic site
+        #       - 'F' stands for 'Flow' and contains the distance values to the corresponding presynaptic site (of each postsynaptic 
+        #         site) for each dimension.¡
         _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS = "BC"
         # Whether to mask the distance channel to only calculate the loss in those regions where the binary mask
         # defined by B channel is present
@@ -145,10 +148,10 @@ class Config:
         # Options available: 
         #   * 'auto' to decide the threshold to be applied by measuring it with Otsu
         #   * 'manual' to set a fixed threshold defined by 'PROBLEM.INSTANCE_SEG.SYNAPSES.MIN_TH_TO_BE_PEAK'
-        #   * 'relative_by_patch' to use 'PROBLEM.INSTANCE_SEG.SYNAPSES.MIN_TH_TO_BE_PEAK' but relative to the maximum value in the predicted data. 
-        #     More info in https://scikit-image.org/docs/0.25.x/api/skimage.feature.html#skimage.feature.peak_local_max and 
+        #   * 'relative_by_patch' to use 'PROBLEM.INSTANCE_SEG.SYNAPSES.MIN_TH_TO_BE_PEAK' but relative to the maximum value in the predicted patch 
+        #     data. More info in https://scikit-image.org/docs/0.25.x/api/skimage.feature.html#skimage.feature.peak_local_max and 
         #     https://scikit-image.org/docs/0.23.x/api/skimage.feature.html#skimage.feature.blob_log (see 'threshold_rel' argument description)
-        #   * 'relative' to use 'PROBLEM.INSTANCE_SEG.SYNAPSES.MIN_TH_TO_BE_PEAK' but relative to the maximum value in the predicted data. 
+        #   * 'relative' to use 'PROBLEM.INSTANCE_SEG.SYNAPSES.MIN_TH_TO_BE_PEAK' but relative to the maximum value in the whole predicted data. 
         #     More info in https://scikit-image.org/docs/0.25.x/api/skimage.feature.html#skimage.feature.peak_local_max and 
         #     https://scikit-image.org/docs/0.23.x/api/skimage.feature.html#skimage.feature.blob_log (see 'threshold_rel' argument description)
         _C.PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE = "auto"

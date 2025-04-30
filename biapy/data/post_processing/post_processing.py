@@ -391,7 +391,8 @@ def watershed_by_channels(
             )
     return segm
 
-def create_synapses(data: NDArray,
+def create_synapses(
+    data: NDArray,
     channels: str,
     point_creation_func: str = "peak_local_max",
     min_th_to_be_peak: List[float] = [0.2],
@@ -403,12 +404,13 @@ def create_synapses(data: NDArray,
     relative_th_value: bool = False,
 ) -> Tuple[NDArray, Dict]:
     """
-    Convert binary foreground probability maps and instance contours to instance masks via watershed segmentation
-    algorithm.
+    Creates synapses pre/post points from the given ``data``. 
 
-    Implementation based on `PyTorch Connectomics' process.py
-    <https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/utils/process.py>`_.
-
+    Find more info regarding ``min_distance``, ``min_sigma`` and ``exclude_border`` arguments in 
+    `peak_local_max <https://scikit-image.org/docs/0.25.x/api/skimage.feature.html#skimage.feature.peak_local_max>`__ 
+    and `blob_log <https://scikit-image.org/docs/0.25.x/api/skimage.feature.html#skimage.feature.blob_log>`__ 
+    functions.  
+    
     Parameters
     ----------
     data : 4D Numpy array
@@ -416,6 +418,35 @@ def create_synapses(data: NDArray,
 
     channels : str
         Channel type used. Possible options: ``A``, ``C``, ``BC``, ``BCM``, ``BCD``, ``BCDv2``, ``Dv2`` and ``BDv2``.
+
+    point_creation_func : str, optional
+        Function to be used in the pre/post point creation. Options: ["peak_local_max", "blob_log"]
+    
+    min_th_to_be_peak : List of float, optional
+        Minimum values for each channel in ``data`` to be used as the minimum when creating the points. 
+        
+    min_distance : int, optional
+        The minimal allowed distance separating peaks. To find the maximum number of peaks, use ``min_distance=1``.
+
+    min_sigma : int, optional
+        The minimum standard deviation for Gaussian kernel. Keep this low to detect smaller blobs. The standard deviations
+        of the Gaussian filter are given for each axis as a sequence, or as a single number, in which case it is equal for
+        all axes.
+        
+    max_sigma : int, optional
+        The maximum standard deviation for Gaussian kernel. Keep this high to detect larger blobs. The standard deviations 
+        of the Gaussian filter are given for each axis as a sequence, or as a single number, in which case it is equal for 
+        all axes.
+
+    num_sigma : int, optional
+        The number of intermediate values of standard deviations to consider between ``min_sigma`` and ``max_sigma``.
+
+    exclude_border: bool, optional
+        To exclude border-pixels of the border of the image.
+
+    relative_th_value : bool, optional
+        To use ``min_th_to_be_peak`` as a relative threshold to the maximum value, i.e. ``threshold_rel`` is set instead of 
+        ``threshold_abs`` in the ``peak_local_max`` or ``blob_log`` call. 
     """
     assert channels in [
         "B",
