@@ -13,8 +13,8 @@
       <img src="https://img.shields.io/badge/License-MIT-blue.svg" /></a>
     <a href= "https://biapy.readthedocs.io/en/latest/">
       <img src="https://img.shields.io/badge/Doc-Latest-2BAF2B.svg" /></a>
-    <a href= "https://www.biorxiv.org/content/10.1101/2024.02.03.576026v2">
-      <img src="https://img.shields.io/badge/bioRxiv-Paper-bd2635.svg" /></a>
+    <a href= "https://www.nature.com/articles/s41592-025-02699-y">
+      <img src="https://img.shields.io/badge/Nature_Methods-Paper-bd2635.svg" /></a>
     <a href= "https://ieeexplore.ieee.org/abstract/document/10230593">
       <img src="https://img.shields.io/badge/IEEE-Paper-00629B.svg" /></a>
 </p>
@@ -23,7 +23,9 @@
 [![Upload BiaPy to PyPI](https://github.com/BiaPyX/BiaPy/actions/workflows/upload_biapy_to_pypi.yml/badge.svg)](https://github.com/BiaPyX/BiaPy/actions/workflows/upload_biapy_to_pypi.yml)
 [![Publish Docker image](https://github.com/BiaPyX/BiaPy/actions/workflows/create_release_container.yml/badge.svg)](https://github.com/BiaPyX/BiaPy/actions/workflows/create_release_container.yml)
 
-🔥**NEWS**🔥: We have a new version of our **preprint**! Check it out at bioRxiv: [https://www.biorxiv.org/content/10.1101/2024.02.03.576026v3](https://www.biorxiv.org/content/10.1101/2024.02.03.576026v3)
+🔥**NEWS**🔥: BiaPy's paper is finally out in **Nature Methods**! Check it out at: [https://www.nature.com/articles/s41592-025-02699-y](https://www.nature.com/articles/s41592-025-02699-y)
+
+For those who have no access to Nature Methods, here is the **preprint** at bioRxiv: [https://www.biorxiv.org/content/10.1101/2024.02.03.576026v3](https://www.biorxiv.org/content/10.1101/2024.02.03.576026v3)
 
 [BiaPy](https://biapyx.github.io) is an open source library and application that streamlines the use of common deep-learning workflows for a large variety of bioimage analysis tasks, including 2D and 3D [semantic segmentation](https://biapy.readthedocs.io/en/latest/workflows/semantic_segmentation.html), [instance segmentation](https://biapy.readthedocs.io/en/latest/workflows/instance_segmentation.html), [object detection](https://biapy.readthedocs.io/en/latest/workflows/detection.html), [image denoising](https://biapy.readthedocs.io/en/latest/workflows/denoising.html), [single image super-resolution](https://biapy.readthedocs.io/en/latest/workflows/super_resolution.html), [self-supervised learning](https://biapy.readthedocs.io/en/latest/workflows/self_supervision.html), [image classification](https://biapy.readthedocs.io/en/latest/workflows/classification.html) and [image to image translation](https://biapy.readthedocs.io/en/latest/workflows/image_to_image.html). 
                         
