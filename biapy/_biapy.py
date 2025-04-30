@@ -946,9 +946,9 @@ class BiaPy:
         if not any([True for cite in citations if "biapy" in cite.text.lower()]):
             citations.append(
                 CiteEntry(
-                    text="BiaPy: A unified framework for versatile bioimage analysis with deep learning",
-                    doi=Doi("10.1101/2024.02.03.576026"),
-                    url=HttpUrl("https://www.biorxiv.org/content/10.1101/2024.02.03.576026.abstract"),
+                    text="BiaPy: accessible deep learning on bioimages",
+                    doi=Doi("10.1038/s41592-025-02699-y"),
+                    url=HttpUrl("https://www.nature.com/articles/s41592-025-02699-y"),
                 )
             )
 

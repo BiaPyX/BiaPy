@@ -1817,7 +1817,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 for d in cfg.MODEL.BMZ.EXPORT.CITE:
                     if not isinstance(d, dict):
                         raise ValueError(
-                            "'MODEL.BMZ.EXPORT.CITE' needs to be a list of dicts. E.g. [{'text': 'Gizmo et al.', 'doi': '10.1002/xyzacab123'}, {'text': 'training library', 'doi': '10.1101/2024.02.03.576026'}]"
+                            "'MODEL.BMZ.EXPORT.CITE' needs to be a list of dicts. E.g. [{'text': 'Gizmo et al.', 'doi': '10.1002/xyzacab123'}, {'text': 'training library', 'doi': '10.1038/s41592-025-02699-y'}]"
                         )
                     else:
                         if len(d.keys()) < 2 or "text" not in d:

@@ -14,7 +14,7 @@ from functools import partial
 from yacs.config import CfgNode as CN
 
 from bioimageio.spec.utils import download
-from bioimageio.core.model_adapters._pytorch_model_adapter import PytorchModelAdapter
+from bioimageio.core.backends.pytorch_backend import load_torch_model
 from bioimageio.spec.model.v0_4 import ModelDescr as ModelDescr_v0_4
 from bioimageio.spec.model.v0_5 import ModelDescr as ModelDescr_v0_5
 from bioimageio.spec import InvalidDescr
@@ -312,10 +312,7 @@ def build_bmz_model(cfg: CN, model: ModelDescr_v0_4 | ModelDescr_v0_5, device: t
         Torch model.
     """
     assert model.weights.pytorch_state_dict
-    model_instance = PytorchModelAdapter.get_network(model.weights.pytorch_state_dict)
-    model_instance = model_instance.to(device)
-    state = torch.load(str(download(model.weights.pytorch_state_dict).path), map_location=device, weights_only=True)
-    model_instance.load_state_dict(state)
+    model_instance = load_torch_model(model.weights.pytorch_state_dict, load_state=True, devices=[device])
 
     # Check the network created
     if cfg.PROBLEM.NDIM == "2D":

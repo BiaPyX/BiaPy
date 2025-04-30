@@ -909,7 +909,7 @@ class Config:
         # So, what you can set for instance is: ["electron-microscopy", "mitochondria"]
         _C.MODEL.BMZ.EXPORT.TAGS = []
         # Citations. It must be a list of dictionaries with keys "text" and "doi". E.g.:
-        # [{"text": "training library", "doi": "10.1101/2024.02.03.576026"}, {"text": "architecture", "doi": "10.1109/LGRS.2018.2802944"},
+        # [{"text": "training library", "doi": "10.1038/s41592-025-02699-y"}, {"text": "architecture", "doi": "10.1109/LGRS.2018.2802944"},
         #  {"text": "data", "doi": "10.48550/arXiv.1812.06024"}]
         _C.MODEL.BMZ.EXPORT.CITE = []
         # Information of the dataset. It must be a list of just one dict item with keys "name", "doi" and "image_modality". It can have 

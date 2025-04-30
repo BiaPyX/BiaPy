@@ -42,7 +42,7 @@ else:
     bmz_cfg["license"] = "CC-BY-4.0"
     bmz_cfg["tags"] = ["electron-microscopy", "mitochondria"]
     bmz_cfg["cite"] = [
-        {"text": "training library", "doi": "10.1101/2024.02.03.576026"},
+        {"text": "training library", "doi": "10.1038/s41592-025-02699-y"},
         {"text": "architecture", "doi": "10.1109/LGRS.2018.2802944"},
         {"text": "data", "doi": "10.48550/arXiv.1812.06024"},
         ]
