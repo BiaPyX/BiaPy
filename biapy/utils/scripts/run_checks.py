@@ -2999,12 +2999,12 @@ if all_test_info["Test24"]["enable"]:
     biapy_config['DATA']['REFLECT_TO_COMPLETE_SHAPE'] = False
     biapy_config['DATA']['PATCH_SIZE'] = "(256, 256, 1)"
     biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(image_to_image_2d_data_outpath, "data", "train", "raw")
-    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(image_to_image_2d_data_outpath, "data", "train", "label")
+    biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(image_to_image_2d_data_outpath, "data", "train", "target")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
     biapy_config['DATA']['VAL']['FROM_TRAIN'] = True
     biapy_config['DATA']['VAL']['CROSS_VAL'] = False
     biapy_config['DATA']['TEST']['PATH'] = os.path.join(image_to_image_2d_data_outpath, "data", "test", "raw")
-    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(image_to_image_2d_data_outpath, "data", "test", "label")
+    biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(image_to_image_2d_data_outpath, "data", "test", "target")
     biapy_config['DATA']['TEST']['IN_MEMORY'] = True
     biapy_config['DATA']['TEST']['PADDING'] = "(40,40)"
 
