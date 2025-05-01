@@ -1714,7 +1714,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
                 pre_post_mapping = {}
                 pres, posts = [], []
-                if len(pre_points) > 0 and pre_points_df is not None:
+                if len(pre_points) > 0 and pre_points_df is not None and len(post_points) > 0 and post_points_df is not None:
                     pre_ids = pre_points_df["pre_id"].to_list()
                     if len(post_points) > 0 and post_points_df is not None:
                         post_ids = post_points_df["post_id"].to_list()
@@ -1740,7 +1740,10 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                             posts.append(-1)
                 else:
                     if self.cfg.TEST.VERBOSE:
-                        print("No pre synaptic points found!")
+                        if len(pre_points) == 0:
+                            print("No pre synaptic points found!")
+                        if len(post_points) == 0:
+                            print("No post synaptic points found!")
 
                 if len(pres) > 0 and len(posts) > 0:
                     # Create a mapping dataframe
@@ -1866,7 +1869,8 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         ),
                         index=False,
                     )
-
+                 
+                if len(post_points):
                     d_metrics, post_gt_assoc, post_fp = detection_metrics(
                         gt_post_points,
                         post_points,
@@ -1972,7 +1976,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
                 pre_post_mapping = {}
                 pres, posts = [], []
-                if len(pre_points) > 0 and pre_points_df is not None:
+                if len(pre_points) > 0 and pre_points_df is not None and len(post_points) > 0 and post_points_df is not None:
                     pre_ids = pre_points_df["pre_id"].to_list()
                     if len(post_points) > 0 and post_points_df is not None:
                         post_ids = post_points_df["post_id"].to_list()
@@ -1998,7 +2002,10 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                             posts.append(-1)
                 else:
                     if self.cfg.TEST.VERBOSE:
-                        print("No pre synaptic points found!")
+                        if len(pre_points) == 0:
+                            print("No pre synaptic points found!")
+                        if len(post_points) == 0:
+                            print("No post synaptic points found!")
 
                 # Create a mapping dataframe
                 pre_post_map_df = pd.DataFrame(
@@ -2056,7 +2063,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         ),
                         index=False,
                     )
-
+                if len(post_points):
                     d_metrics, post_gt_assoc, post_fp = detection_metrics(
                         gt_post_points,
                         post_points,
@@ -2165,77 +2172,78 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     [filename + "_gt_ids.tif"],
                     verbose=self.cfg.TEST.VERBOSE,
                 )        
-                if (self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST) and len(pre_points) > 0:   
-                    print(
-                        "Creating the image with a summary of detected points and false positives with colors (pre-points) . . ."
-                    )
-                    aux_tif = np.zeros(sshape[:-1] + [3,], dtype=np.uint8)
-                    
-                    print("Painting TPs and FNs (pre-points) . . .")
-                    for j, cor in tqdm(enumerate(gt_pre_points), total=len(gt_pre_points)):
-                        z, y, x = cor  # type: ignore
-                        z, y, x = int(z)-1, int(y)-1, int(x)-1
-                        tag = pre_gt_assoc[pre_gt_assoc["gt_id"]==j+1]["tag"].iloc[0]
-                        color = (0, 255, 0) if tag == "TP" else (255, 0, 0)  # Green or red
-                        try:
-                            aux_tif[z, y, x] = color
-                        except:
-                            pass
-
-                    print("Painting FPs (pre-points) . . .")
-                    for index, row in tqdm(pre_fp.iterrows(), total=len(pre_fp)):
-                        z,y,x = int(row['axis-0']), int(row['axis-1']), int(row['axis-2'])
-                        try:
-                            aux_tif[z, y, x] = (0,0,255) # Blue
-                        except:
-                            pass
-                    
-                    print("Dilating points (pre-points) . . .")
-                    for c in range(aux_tif.shape[-1]):
-                        aux_tif[..., c] = dilation(aux_tif[..., c], ball(3))
-
-                    save_tif(
-                        np.expand_dims(aux_tif, 0),
-                        out_dir,
-                        [filename + "_pre_point_assoc.tif"],
-                        verbose=self.cfg.TEST.VERBOSE,
-                    )   
-
-                    print(
-                        "Creating the image with a summary of detected points and false positives with colors (post-points) . . ."
-                    )
-                    aux_tif = np.zeros(sshape[:-1] + [3,], dtype=np.uint8)
-                    
-                    print("Painting TPs and FNs (post-points) . . .")
-                    for j, cor in tqdm(enumerate(gt_post_points), total=len(gt_post_points)):
-                        z, y, x = cor  # type: ignore
-                        z, y, x = int(z)-1, int(y)-1, int(x)-1
-                        tag = post_gt_assoc[post_gt_assoc["gt_id"]==j+1]["tag"].iloc[0]
-                        color = (0, 255, 0) if tag == "TP" else (255, 0, 0)  # Green or red
-                        try:
-                            aux_tif[z, y, x] = color
-                        except:
-                            pass
-
-                    print("Painting FPs (post-points) . . .")
-                    for index, row in tqdm(post_fp.iterrows(), total=len(post_fp)):
-                        z,y,x = int(row['axis-0']), int(row['axis-1']), int(row['axis-2'])
-                        try:
-                            aux_tif[z, y, x] = (0,0,255) # Blue
-                        except:
-                            pass
+                if (self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST):
+                    if len(pre_points) > 0:   
+                        print(
+                            "Creating the image with a summary of detected points and false positives with colors (pre-points) . . ."
+                        )
+                        aux_tif = np.zeros(sshape[:-1] + [3,], dtype=np.uint8)
                         
-                    print("Dilating points (post-points) . . .")
-                    for c in range(aux_tif.shape[-1]):
-                        aux_tif[..., c] = dilation(aux_tif[..., c], ball(3))
+                        print("Painting TPs and FNs (pre-points) . . .")
+                        for j, cor in tqdm(enumerate(gt_pre_points), total=len(gt_pre_points)):
+                            z, y, x = cor  # type: ignore
+                            z, y, x = int(z)-1, int(y)-1, int(x)-1
+                            tag = pre_gt_assoc[pre_gt_assoc["gt_id"]==j+1]["tag"].iloc[0]
+                            color = (0, 255, 0) if tag == "TP" else (255, 0, 0)  # Green or red
+                            try:
+                                aux_tif[z, y, x] = color
+                            except:
+                                pass
 
-                    save_tif(
-                        np.expand_dims(aux_tif, 0),
-                        out_dir,
-                        [filename + "_post_point_assoc.tif"],
-                        verbose=self.cfg.TEST.VERBOSE,
-                    )   
-                    del aux_tif
+                        print("Painting FPs (pre-points) . . .")
+                        for index, row in tqdm(pre_fp.iterrows(), total=len(pre_fp)):
+                            z,y,x = int(row['axis-0']), int(row['axis-1']), int(row['axis-2'])
+                            try:
+                                aux_tif[z, y, x] = (0,0,255) # Blue
+                            except:
+                                pass
+                        
+                        print("Dilating points (pre-points) . . .")
+                        for c in range(aux_tif.shape[-1]):
+                            aux_tif[..., c] = dilation(aux_tif[..., c], ball(3))
+
+                        save_tif(
+                            np.expand_dims(aux_tif, 0),
+                            out_dir,
+                            [filename + "_pre_point_assoc.tif"],
+                            verbose=self.cfg.TEST.VERBOSE,
+                        )   
+                    if len(post_points) > 0:
+                        print(
+                            "Creating the image with a summary of detected points and false positives with colors (post-points) . . ."
+                        )
+                        aux_tif = np.zeros(sshape[:-1] + [3,], dtype=np.uint8)
+                        
+                        print("Painting TPs and FNs (post-points) . . .")
+                        for j, cor in tqdm(enumerate(gt_post_points), total=len(gt_post_points)):
+                            z, y, x = cor  # type: ignore
+                            z, y, x = int(z)-1, int(y)-1, int(x)-1
+                            tag = post_gt_assoc[post_gt_assoc["gt_id"]==j+1]["tag"].iloc[0]
+                            color = (0, 255, 0) if tag == "TP" else (255, 0, 0)  # Green or red
+                            try:
+                                aux_tif[z, y, x] = color
+                            except:
+                                pass
+
+                        print("Painting FPs (post-points) . . .")
+                        for index, row in tqdm(post_fp.iterrows(), total=len(post_fp)):
+                            z,y,x = int(row['axis-0']), int(row['axis-1']), int(row['axis-2'])
+                            try:
+                                aux_tif[z, y, x] = (0,0,255) # Blue
+                            except:
+                                pass
+                            
+                        print("Dilating points (post-points) . . .")
+                        for c in range(aux_tif.shape[-1]):
+                            aux_tif[..., c] = dilation(aux_tif[..., c], ball(3))
+
+                        save_tif(
+                            np.expand_dims(aux_tif, 0),
+                            out_dir,
+                            [filename + "_post_point_assoc.tif"],
+                            verbose=self.cfg.TEST.VERBOSE,
+                        )   
+                        del aux_tif
 
     def after_full_image(self, pred: NDArray):
         """
