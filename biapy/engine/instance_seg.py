@@ -1064,13 +1064,12 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         #############################
         ### INSTANCE SEGMENTATION ###
         #############################
-        max_vals, threshold_abs = [], []
+        threshold_abs = []
         for c in range(pred.shape[-1]): 
             if self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE == "auto":
                 threshold_abs.append(threshold_otsu(pred[..., c]))
             else: # "manual", "relative_by_patch", "relative"
                 threshold_abs.append(self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.MIN_TH_TO_BE_PEAK)
-            max_vals.append(pred[..., c].max())
 
         pred, d_result = create_synapses(
             data=pred,
@@ -1102,7 +1101,6 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 list(pre_points[:, 2]),
                 d_result["probabilities"][:total_pre_points],
                 [threshold_abs[0],]*total_pre_points,
-                [max_vals[0],]*total_pre_points,
             ),
             columns=[
                 "pre_id",
@@ -1111,7 +1109,6 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 "axis-2",
                 "probability",
                 "pre th",
-                "max value",
             ],
         )
 
@@ -1134,7 +1131,6 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 list(post_points[:, 2]),
                 d_result["probabilities"][total_pre_points:],
                 [threshold_abs[1],]*len(post_points),
-                [max_vals[1],]*len(post_points),
             ),
             columns=[
                 "post_id",
@@ -1143,7 +1139,6 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 "axis-2",
                 "probability",
                 "post th",
-                "max value",
             ],
         )
 
@@ -1625,17 +1620,12 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 all_pre_dfs, all_post_dfs = [], []
 
                 # Collect pre dataframes 
-                if self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE == "relative":
-                    pre_ref_vals, post_ref_vals = [], []
                 if len(all_pre_point_files) > 0:
                     for pre_file in all_pre_point_files:
                         pre_file_path = os.path.join(input_dir, pre_file)
                         pred_pre_df = pd.read_csv(pre_file_path, index_col=False)
                         if len(pred_pre_df) > 0:
-                            if self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE == "relative":
-                                pre_ref_vals.append(float(pred_pre_df["max value"].iloc[0]))
                             pred_pre_df = pred_pre_df.drop(columns=["pre th"])
-                            pred_pre_df = pred_pre_df.drop(columns=["max value"])
                             all_pre_dfs.append(pred_pre_df)
 
                 # Collect post dataframes 
@@ -1644,11 +1634,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         post_file_path = os.path.join(input_dir, post_file)
                         pred_post_df = pd.read_csv(post_file_path, index_col=False)
                         if len(pred_post_df) > 0:
-                            if "post th" in pred_post_df.columns:
-                                if self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE == "relative":
-                                    post_ref_vals.append(float(pred_post_df["max value"].iloc[0]))
-                                pred_post_df = pred_post_df.drop(columns=["post th"])
-                                pred_post_df = pred_post_df.drop(columns=["max value"])
+                            pred_post_df = pred_post_df.drop(columns=["post th"])
                             all_post_dfs.append(pred_post_df)      
 
                 # Save then the pre and post sites separately
@@ -1656,16 +1642,14 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     pre_points_df = pd.concat(all_pre_dfs, ignore_index=True)
                     pre_points_df.sort_values(by=["axis-0"])
 
-                    pre_th_global = -1
+                    pre_th_global = self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.MIN_TH_TO_BE_PEAK
                     if self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE == "manual":
-                        pre_th_global = self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.MIN_TH_TO_BE_PEAK
                         print(f"Using global threshold (pre-points): {pre_th_global}")
                     elif self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE == "relative":
-                        max_val = np.array(pre_ref_vals).max()
+                        max_val = max(pre_points_df["probability"])
                         pre_th_global = max_val*self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.MIN_TH_TO_BE_PEAK
                         print(f"Using global threshold (pre-points): {pre_th_global} (max: {max_val})")
-                    if pre_th_global != -1:
-                        pre_points_df = pre_points_df[pre_points_df["probability"] > pre_th_global]
+                    pre_points_df = pre_points_df[pre_points_df["probability"] > pre_th_global]
 
                     pre_points_df["pre_id"] = list(range(1, len(pre_points_df)+1))
                     os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, exist_ok=True)
@@ -1680,16 +1664,14 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     post_points_df = pd.concat(all_post_dfs, ignore_index=True)
                     post_points_df.sort_values(by=["axis-0"])
 
-                    post_th_global = -1
+                    post_th_global = self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.MIN_TH_TO_BE_PEAK
                     if self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE == "manual":
-                        post_th_global = self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.MIN_TH_TO_BE_PEAK
                         print(f"Using global threshold (post-points): {post_th_global}")
                     elif self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE == "relative":
-                        max_val = np.array(post_ref_vals).max()
+                        max_val = max(post_points_df["probability"])
                         post_th_global = max_val*self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.MIN_TH_TO_BE_PEAK
                         print(f"Using global threshold (post-points): {post_th_global} (max: {max_val})")
-                    if post_th_global != -1:
-                        post_points_df = post_points_df[post_points_df["probability"] > post_th_global]
+                    post_points_df = post_points_df[post_points_df["probability"] > post_th_global]
 
                     post_points_df["post_id"] = list(range(1, len(post_points_df)+1))
                     os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, exist_ok=True)
@@ -1794,6 +1776,19 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     post_points.append(list(coord))
                 pre_points = np.array(pre_points)
                 post_points = np.array(post_points)
+
+                post_th_global = self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.MIN_TH_TO_BE_PEAK
+                pre_th_global = self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.MIN_TH_TO_BE_PEAK
+                if self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE == "manual":
+                    print(f"Using global threshold (pre-points): {pre_th_global}")
+                    print(f"Using global threshold (post-points): {post_th_global}")
+                elif self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE == "relative":
+                    max_val = max(pre_points_df["probability"]) if len(pre_points_df) > 0 else 1
+                    pre_th_global = max_val*self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.MIN_TH_TO_BE_PEAK
+                    print(f"Using global threshold (pre-points): {pre_th_global} (max: {max_val})")
+                    max_val = max(post_points_df["probability"]) if len(post_points_df) > 0 else 1
+                    post_th_global = max_val*self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.MIN_TH_TO_BE_PEAK
+                    print(f"Using global threshold (post-points): {post_th_global} (max: {max_val})")
 
             if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
                 print("Calculating synapse detection stats . . .")
@@ -1913,13 +1908,34 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     and pre_points_df is not None 
                     and self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_PRE_POINTS_RADIUS > 0
                 ):
-                    pre_points, pre_dropped_pos = remove_close_points(  # type: ignore
-                        pre_points,
-                        self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_PRE_POINTS_RADIUS,
-                        resolution,
-                        ndim=self.dims,
-                        return_drops=True,
-                    )
+                    if self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_POINTS_RADIUS_BY_MASK:    
+                        # Load H5/Zarr and convert it into numpy array
+                        fpath = os.path.join(
+                            self.cfg.PATHS.RESULT_DIR.PER_IMAGE, os.path.splitext(self.current_sample["filename"])[0] + ".zarr"
+                        )
+                        pred_file, pred = read_chunked_data(fpath) 
+                        
+                        pre_points, pre_dropped_pos = remove_close_points_by_mask(  # type: ignore
+                            points=pre_points,
+                            radius=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_PRE_POINTS_RADIUS,
+                            raw_predictions=pred,
+                            bin_th=pre_th_global,
+                            resolution=resolution,
+                            channel_to_look_into=1, # post channel
+                            ndim=self.dims,
+                            return_drops=True,
+                        )
+
+                        if isinstance(pred_file, h5py.File):
+                            pred_file.close()
+                    else:
+                        pre_points, pre_dropped_pos = remove_close_points(  # type: ignore
+                            pre_points,
+                            self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_PRE_POINTS_RADIUS,
+                            resolution,
+                            ndim=self.dims,
+                            return_drops=True,
+                        )
                     pre_points_df.drop(pre_points_df.index[pre_dropped_pos], inplace=True)  # type: ignore
                     os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING, exist_ok=True)
                     pre_points_df.to_csv(
@@ -1935,7 +1951,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     and post_points_df is not None 
                     and self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_POST_POINTS_RADIUS > 0
                 ):   
-                    if self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_POST_POINTS_RADIUS_BY_MASK:    
+                    if self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_POINTS_RADIUS_BY_MASK:    
                         # Load H5/Zarr and convert it into numpy array
                         fpath = os.path.join(
                             self.cfg.PATHS.RESULT_DIR.PER_IMAGE, os.path.splitext(self.current_sample["filename"])[0] + ".zarr"
@@ -1946,7 +1962,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                             points=post_points,
                             radius=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_POST_POINTS_RADIUS,
                             raw_predictions=pred,
-                            bin_th=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.MIN_TH_TO_BE_PEAK,
+                            bin_th=post_th_global,
                             resolution=resolution,
                             channel_to_look_into=1, # post channel
                             ndim=self.dims,

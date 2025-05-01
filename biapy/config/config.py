@@ -180,7 +180,7 @@ class Config:
         #   * Implemented: By creating instances binarizing the predictions (using PROBLEM.INSTANCE_SEG.SYNAPSES.MIN_TH_TO_BE_PEAK) and applying 
         #     a connected-components
         #   * TODO: by looking at external neuron segmentation
-        _C.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_POST_POINTS_RADIUS_BY_MASK = False
+        _C.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_POINTS_RADIUS_BY_MASK = False
 
         ### DETECTION
         _C.PROBLEM.DETECTION = CN()
