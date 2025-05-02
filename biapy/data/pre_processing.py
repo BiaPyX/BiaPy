@@ -1862,8 +1862,13 @@ def _histogram_matching(source_imgs: List[NDArray], target_imgs: List[NDArray]) 
         A set of source images with target's histogram
     """
 
-    hist_mean, _ = np.histogram(target_imgs.ravel(), bins=np.arange(np.iinfo(target_imgs.dtype).max + 1))
-    hist_mean = hist_mean / target_imgs.shape[0]  # number of images
+    # Concatenate all target images to compute the reference histogram
+    target_concat = np.concatenate([img.ravel() for img in target_imgs])
+
+    # Get the data type from the first image (assuming all have same dtype)
+    dtype = target_imgs[0].dtype
+
+    hist_mean, _ = np.histogram(target_concat, bins=np.arange(np.iinfo(dtype).max + 2))  # +2 because bins are edges
 
     # calculate normalized quantiles
     tmpl_size = np.sum(hist_mean)
@@ -1915,7 +1920,7 @@ def apply_histogram_matching(images: List[NDArray], reference_path: str, is_2d: 
         The returned data will use the same data type as the given `images`.
     """
     references = load_data_from_dir(reference_path, is_3d=not is_2d)
-    matched_images = _histogram_matching(images, [x.img for x in references.sample_list if x.img_is_loaded()])
+    matched_images = _histogram_matching(images, references)
     return matched_images
 
 
