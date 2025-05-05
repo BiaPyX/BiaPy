@@ -342,7 +342,7 @@ def create_train_val_augmentors(
         DataLoader_shuffle = True
 
     num_training_steps_per_epoch = training_samples // total_batch_size
-    print(f"Number of workers: {num_workers}")
+    print(f"Train/val generators with {num_workers} workers")
     print("Accumulate grad iterations: %d" % cfg.TRAIN.ACCUM_ITER)
     print("Effective batch size: %d" % total_batch_size)
     print("Sampler_train = %s" % str(sampler_train))
@@ -568,6 +568,7 @@ def create_chunked_test_generator(
             num_workers = min(cfg.SYSTEM.NUM_WORKERS, 2 * cfg.SYSTEM.NUM_GPUS)
     else:
         num_workers = 5 if cfg.SYSTEM.NUM_WORKERS == -1 else cfg.SYSTEM.NUM_WORKERS
+    print(f"Test generator with {num_workers} workers")
 
     test_dataset = DataLoader(
         chunked_generator,
