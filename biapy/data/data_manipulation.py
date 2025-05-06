@@ -2177,8 +2177,8 @@ def samples_from_class_list(
         if expected_classes:
             if expected_classes != len(list_of_classes):
                 raise ValueError(
-                    "Found number of classes ({}) and 'MODEL.N_CLASSES' ({}) must match".format(
-                        len(list_of_classes), expected_classes
+                    "Found {} number of classes (folders: {}) but 'MODEL.N_CLASSES' was set to {}. They must match. Aborting...".format(
+                        len(list_of_classes), list_of_classes, expected_classes
                     )
                 )
             else:
