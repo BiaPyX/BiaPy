@@ -1180,67 +1180,97 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                         "and PROBLEM.INSTANCE_SEG.TYPE == 'synapses'"
                     )
 
-    if cfg.TEST.ENABLE and not cfg.DATA.TEST.USE_VAL_AS_TEST and check_data_paths:
-        if not os.path.exists(cfg.DATA.TEST.PATH):
-            raise ValueError("Test data not found: {}".format(cfg.DATA.TEST.PATH))
-        if (
-            cfg.DATA.TEST.LOAD_GT
-            and not os.path.exists(cfg.DATA.TEST.GT_PATH)
-            and cfg.PROBLEM.TYPE not in ["CLASSIFICATION", "SELF_SUPERVISED"]
-            and not cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA
-        ):
-            raise ValueError("Test data mask not found: {}".format(cfg.DATA.TEST.GT_PATH))
-    if cfg.TEST.ENABLE and cfg.TEST.BY_CHUNKS.ENABLE:
-        if cfg.PROBLEM.NDIM == "2D":
-            raise ValueError("'TEST.BY_CHUNKS' can not be activated when 'PROBLEM.NDIM' is 2D")
-        if cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.ENABLE:
-            assert cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE in [
-                "chunk_by_chunk",
-                "entire_pred",
-            ], "'TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE' needs to be in ['chunk_by_chunk', 'entire_pred']"
-        if len(cfg.DATA.TEST.INPUT_IMG_AXES_ORDER) < 3:
-            raise ValueError("'DATA.TEST.INPUT_IMG_AXES_ORDER' needs to be at least of length 3, e.g., 'ZYX'")
-        if cfg.MODEL.N_CLASSES > 2:
-            raise ValueError("Not implemented pipeline option: 'MODEL.N_CLASSES' > 2 and 'TEST.BY_CHUNKS'")
-        if cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA:
-            if cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH == "":
-                raise ValueError(
-                    "'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH' needs to be set when "
-                    "'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA' is used."
-                )
-            if cfg.DATA.TEST.LOAD_GT:
-                if cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
-                    if cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_GT_PATH == "":
-                        raise ValueError(
-                            "'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_GT_PATH' needs to be set when "
-                            "'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA' is used."
-                        )
-                else:  # synapses
-                    if cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_ID_PATH == "":
-                        raise ValueError(
-                            "'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_ID_PATH' needs to be set when 'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA' is used "
-                            "and PROBLEM.INSTANCE_SEG.TYPE == 'synapses'"
-                        )
-                    # if cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_TYPES_PATH == "":
-                    #     raise ValueError(
-                    #         "'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_TYPES_PATH' needs to be set when 'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA' is used "
-                    #         "and PROBLEM.INSTANCE_SEG.TYPE == 'synapses'"
-                    #     )
-                    if cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_PARTNERS_PATH == "":
-                        raise ValueError(
-                            "'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_PARTNERS_PATH' needs to be set when 'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA' is used "
-                            "and PROBLEM.INSTANCE_SEG.TYPE == 'synapses'"
-                        )
-                    if cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_LOCATIONS_PATH == "":
-                        raise ValueError(
-                            "'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_LOCATIONS_PATH' needs to be set when 'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA' is used "
-                            "and PROBLEM.INSTANCE_SEG.TYPE == 'synapses'"
-                        )
-                    if cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_RESOLUTION_PATH == "":
-                        raise ValueError(
-                            "'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_RESOLUTION_PATH' needs to be set when 'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA' is used "
-                            "and PROBLEM.INSTANCE_SEG.TYPE == 'synapses'"
-                        )
+    if cfg.TEST.ENABLE:
+        if cfg.DATA.TEST.USE_VAL_AS_TEST and check_data_paths:
+            if not os.path.exists(cfg.DATA.TEST.PATH):
+                raise ValueError("Test data not found: {}".format(cfg.DATA.TEST.PATH))
+            if (
+                cfg.DATA.TEST.LOAD_GT
+                and not os.path.exists(cfg.DATA.TEST.GT_PATH)
+                and cfg.PROBLEM.TYPE not in ["CLASSIFICATION", "SELF_SUPERVISED"]
+                and not cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA
+            ):
+                raise ValueError("Test data mask not found: {}".format(cfg.DATA.TEST.GT_PATH))
+
+        if cfg.PROBLEM.TYPE == "CLASSIFICATION":
+            use_gt = False
+            if cfg.DATA.TEST.LOAD_GT or cfg.DATA.TEST.USE_VAL_AS_TEST:
+                use_gt = True
+
+            if cfg.DATA.TEST.USE_VAL_AS_TEST:
+                data_path = cfg.DATA.TEST.PATH
+            else:
+                data_path = cfg.DATA.TRAIN.PATH
+                
+            expected_classes = cfg.MODEL.N_CLASSES if use_gt else 1
+            list_of_classes = sorted(next(os.walk(data_path))[1])
+            if len(list_of_classes) < 1:
+                raise ValueError("There is no folder/class for test in {}".format(data_path))
+
+            if expected_classes:
+                if expected_classes != len(list_of_classes):
+                    if use_gt:
+                        mess = f"Found {len(list_of_classes)} number of classes for test (folders: {list_of_classes}) "\
+                        + f"but 'MODEL.N_CLASSES' was set to {expected_classes}. They must match. Aborting..."
+                    else:
+                        mess = f"Found {len(list_of_classes)} number of classes for test (folders: {list_of_classes}) "\
+                        + f"but 'MODEL.N_CLASSES' was set to 1 because 'DATA.TEST.LOAD_GT' is False, so a unique folder "\
+                        + "containing all the samples is expected. Aborting..."
+                    raise ValueError(mess)
+                else:
+                    print("Found {} test classes".format(len(list_of_classes)))
+            
+        if cfg.TEST.BY_CHUNKS.ENABLE:
+            if cfg.PROBLEM.NDIM == "2D":
+                raise ValueError("'TEST.BY_CHUNKS' can not be activated when 'PROBLEM.NDIM' is 2D")
+            if cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.ENABLE:
+                assert cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE in [
+                    "chunk_by_chunk",
+                    "entire_pred",
+                ], "'TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE' needs to be in ['chunk_by_chunk', 'entire_pred']"
+            if len(cfg.DATA.TEST.INPUT_IMG_AXES_ORDER) < 3:
+                raise ValueError("'DATA.TEST.INPUT_IMG_AXES_ORDER' needs to be at least of length 3, e.g., 'ZYX'")
+            if cfg.MODEL.N_CLASSES > 2:
+                raise ValueError("Not implemented pipeline option: 'MODEL.N_CLASSES' > 2 and 'TEST.BY_CHUNKS'")
+            if cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA:
+                if cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH == "":
+                    raise ValueError(
+                        "'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH' needs to be set when "
+                        "'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA' is used."
+                    )
+                if cfg.DATA.TEST.LOAD_GT:
+                    if cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
+                        if cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_GT_PATH == "":
+                            raise ValueError(
+                                "'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_GT_PATH' needs to be set when "
+                                "'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA' is used."
+                            )
+                    else:  # synapses
+                        if cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_ID_PATH == "":
+                            raise ValueError(
+                                "'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_ID_PATH' needs to be set when 'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA' is used "
+                                "and PROBLEM.INSTANCE_SEG.TYPE == 'synapses'"
+                            )
+                        # if cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_TYPES_PATH == "":
+                        #     raise ValueError(
+                        #         "'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_TYPES_PATH' needs to be set when 'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA' is used "
+                        #         "and PROBLEM.INSTANCE_SEG.TYPE == 'synapses'"
+                        #     )
+                        if cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_PARTNERS_PATH == "":
+                            raise ValueError(
+                                "'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_PARTNERS_PATH' needs to be set when 'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA' is used "
+                                "and PROBLEM.INSTANCE_SEG.TYPE == 'synapses'"
+                            )
+                        if cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_LOCATIONS_PATH == "":
+                            raise ValueError(
+                                "'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_LOCATIONS_PATH' needs to be set when 'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA' is used "
+                                "and PROBLEM.INSTANCE_SEG.TYPE == 'synapses'"
+                            )
+                        if cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_RESOLUTION_PATH == "":
+                            raise ValueError(
+                                "'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_RESOLUTION_PATH' needs to be set when 'DATA.TEST.INPUT_ZARR_MULTIPLE_DATA' is used "
+                                "and PROBLEM.INSTANCE_SEG.TYPE == 'synapses'"
+                            )
 
     if cfg.TRAIN.ENABLE:
         if cfg.DATA.EXTRACT_RANDOM_PATCH and cfg.DATA.PROBABILITY_MAP:
