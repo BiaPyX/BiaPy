@@ -20,7 +20,7 @@ from torch.utils.data import Dataset
 from numpy.typing import NDArray
 
 from biapy.data.generators.augmentors import *
-from biapy.utils.misc import is_main_process
+from biapy.utils.misc import is_main_process, os_walk_clean
 from biapy.data.data_manipulation import pad_and_reflect, load_img_data, extract_patch_within_image
 from biapy.data.data_3D_manipulation import extract_patch_from_efficient_file
 from biapy.data.dataset import BiaPyDataset
@@ -468,7 +468,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.random_crop_func = random_3D_crop_pair if ndim == 3 else random_crop_pair
         if random_crops_in_DA and prob_map is not None:
             if isinstance(prob_map, str):
-                f = sorted(next(os.walk(prob_map))[2])
+                f = sorted(next(os_walk_clean(prob_map))[2])
                 self.prob_map = []
                 for i in range(len(f)):
                     self.prob_map.append(os.path.join(prob_map, f[i]))

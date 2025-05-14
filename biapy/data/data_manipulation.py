@@ -19,7 +19,7 @@ from sklearn.model_selection import train_test_split, StratifiedKFold
 
 from biapy.data.dataset import BiaPyDataset, DatasetFile, DataSample, PatchCoords
 from biapy.data.norm import Normalization
-from biapy.utils.misc import is_main_process
+from biapy.utils.misc import is_main_process, os_walk_clean
 from biapy.data.data_2D_manipulation import crop_data_with_overlap, ensure_2d_shape
 from biapy.data.data_3D_manipulation import (
     crop_3D_data_with_overlap,
@@ -299,8 +299,8 @@ def load_and_prepare_train_data(
     # Create X_train and Y_train
     train_using_zarr = False
     if not multiple_raw_images:
-        ids = sorted(next(os.walk(train_path))[2])
-        fids = sorted(next(os.walk(train_path))[1])
+        ids = sorted(next(os_walk_clean(train_path))[2])
+        fids = sorted(next(os_walk_clean(train_path))[1])
 
         print("Gathering raw images for training data . . .")
         if len(ids) == 0 or (len(ids) > 0 and any(ids[0].endswith(x) for x in [".h5", ".hdf5", ".hdf"])):  # Zarr
@@ -349,8 +349,8 @@ def load_and_prepare_train_data(
         # Extract a list of all training gt images
         if train_mask_path:
             print("Gathering labels for training data . . .")
-            ids = sorted(next(os.walk(train_mask_path))[2])
-            fids = sorted(next(os.walk(train_mask_path))[1])
+            ids = sorted(next(os_walk_clean(train_mask_path))[2])
+            fids = sorted(next(os_walk_clean(train_mask_path))[1])
             if len(ids) == 0 or (len(ids) > 0 and any(ids[0].endswith(x) for x in [".h5", ".hdf5", ".hdf"])):  # Zarr
                 if len(ids) == 0 and len(fids) == 0:  # Trying Zarr
                     raise ValueError("No images found in dir {}".format(train_mask_path))
@@ -590,8 +590,8 @@ def load_and_prepare_train_data(
         if not multiple_raw_images:
             print("Gathering raw images for validation data . . .")
             # Extract a list of all validation images
-            val_ids = sorted(next(os.walk(val_path))[2])
-            val_fids = sorted(next(os.walk(val_path))[1])
+            val_ids = sorted(next(os_walk_clean(val_path))[2])
+            val_fids = sorted(next(os_walk_clean(val_path))[1])
             if len(val_ids) == 0:
                 if len(val_fids) == 0:  # Trying Zarr
                     raise ValueError("No images found in dir {}".format(val_path))
@@ -638,8 +638,8 @@ def load_and_prepare_train_data(
             # Extract a list of all validation gt images
             if val_mask_path:
                 print("Gathering labels for validation data . . .")
-                val_ids = sorted(next(os.walk(val_mask_path))[2])
-                val_fids = sorted(next(os.walk(val_mask_path))[1])
+                val_ids = sorted(next(os_walk_clean(val_mask_path))[2])
+                val_fids = sorted(next(os_walk_clean(val_mask_path))[1])
                 if len(val_ids) == 0:
                     if len(val_fids) == 0:  # Trying Zarr
                         raise ValueError("No images found in dir {}".format(val_mask_path))
@@ -954,9 +954,9 @@ def load_and_prepare_test_data(
     if not os.path.exists(test_path):
         raise ValueError(f"{test_path} doesn't exist")
 
-    ids = sorted(next(os.walk(test_path))[2])
+    ids = sorted(next(os_walk_clean(test_path))[2])
     if not multiple_raw_images or len(ids) > 0:
-        fids = sorted(next(os.walk(test_path))[1])
+        fids = sorted(next(os_walk_clean(test_path))[1])
         if len(ids) == 0:
             if len(fids) == 0:  # Trying Zarr
                 raise ValueError("No images found in dir {}".format(test_path))
@@ -978,8 +978,8 @@ def load_and_prepare_test_data(
             if not os.path.exists(test_mask_path):
                 raise ValueError(f"{test_mask_path} doesn't exist")
 
-            ids = sorted(next(os.walk(test_mask_path))[2])
-            fids = sorted(next(os.walk(test_mask_path))[1])
+            ids = sorted(next(os_walk_clean(test_mask_path))[2])
+            fids = sorted(next(os_walk_clean(test_mask_path))[1])
             if len(ids) == 0:
                 if len(fids) == 0:  # Trying Zarr
                     raise ValueError("No images found in dir {}".format(test_mask_path))
@@ -997,12 +997,12 @@ def load_and_prepare_test_data(
                         sample_data.path_in_zarr = test_zarr_data_information["raw_path"]
                 y_sample_list.append(sample_data)
     else:
-        test_filenames = sorted(next(os.walk(test_path))[1])
+        test_filenames = sorted(next(os_walk_clean(test_path))[1])
         if len(test_filenames) == 0:
             raise ValueError("No folders found in dir {}".format(test_path))
         for folder in test_filenames:
             sample_path = os.path.join(test_path, folder)
-            ids = sorted(next(os.walk(sample_path))[2])
+            ids = sorted(next(os_walk_clean(sample_path))[2])
             if len(ids) == 0:
                 raise ValueError("No images found in dir {}".format(sample_path))
             for i in range(len(ids)):
@@ -1013,12 +1013,12 @@ def load_and_prepare_test_data(
         if test_mask_path:
             y_dataset_info = []
             y_sample_list = []
-            fids = sorted(next(os.walk(test_mask_path))[1])
+            fids = sorted(next(os_walk_clean(test_mask_path))[1])
             if len(fids) == 0:
                 raise ValueError("No folders found in dir {}".format(test_mask_path))
             for folder in fids:
                 sample_path = os.path.join(test_mask_path, folder)
-                ids = sorted(next(os.walk(sample_path))[2])
+                ids = sorted(next(os_walk_clean(sample_path))[2])
                 if len(ids) == 0:
                     raise ValueError("No images found in dir {}".format(sample_path))
                 for i in range(len(ids)):
@@ -1169,8 +1169,8 @@ def load_data_from_dir(
         raise ValueError(f"{data_path} folder does not exist")
     print(f"Loading images from {data_path} . . .")
 
-    ids = sorted(next(os.walk(data_path))[2])
-    fids = sorted(next(os.walk(data_path))[1])
+    ids = sorted(next(os_walk_clean(data_path))[2])
+    fids = sorted(next(os_walk_clean(data_path))[1])
     if len(ids) == 0:
         if len(fids) == 0:  # Trying Zarr
             raise ValueError("No images found in dir {}".format(data_path))
@@ -1941,7 +1941,7 @@ def samples_from_image_list_multiple_raw_one_gt(
         raise ValueError("'preprocess_cfg' needs to be provided with 'preprocess_f'")
 
     crop_funct = crop_3D_data_with_overlap if is_3d else crop_data_with_overlap
-    data_gt_path = sorted(next(os.walk(gt_path))[1])
+    data_gt_path = sorted(next(os_walk_clean(gt_path))[1])
     sample_list = []
     dataset_info = []
     gt_sample_list = []
@@ -1958,7 +1958,7 @@ def samples_from_image_list_multiple_raw_one_gt(
     cont = 0
     for id_ in tqdm(data_gt_path, total=len(data_gt_path), disable=not is_main_process()):
         # Read image
-        gt_id = sorted(next(os.walk(os.path.join(gt_path, id_)))[2])[0]
+        gt_id = sorted(next(os_walk_clean(os.path.join(gt_path, id_)))[2])[0]
         gt_sample_path = os.path.join(gt_path, id_, gt_id)
         filenames.append(gt_sample_path)
         gt_sample, _ = load_img_data(gt_sample_path, is_3d=is_3d)
@@ -2007,7 +2007,7 @@ def samples_from_image_list_multiple_raw_one_gt(
         associated_raw_image_dir = os.path.join(data_path, id_)
         if not os.path.exists(associated_raw_image_dir):
             raise ValueError(f"Folder {associated_raw_image_dir} with multiple raw images not found.")
-        raw_samples = sorted(next(os.walk(associated_raw_image_dir))[2])
+        raw_samples = sorted(next(os_walk_clean(associated_raw_image_dir))[2])
         if len(raw_samples) == 0:
             raise ValueError("No image folder found in dir {}".format(raw_samples))
 
@@ -2170,7 +2170,7 @@ def samples_from_class_list(
         Samples generated out of ``data_path``.
     """
     if expected_classes != -1:
-        list_of_classes = sorted(next(os.walk(data_path))[1])
+        list_of_classes = sorted(next(os_walk_clean(data_path))[1])
         if len(list_of_classes) < 1:
             raise ValueError("There is no folder/class in {}".format(data_path))
 
@@ -2195,7 +2195,7 @@ def samples_from_class_list(
     for c_num, class_name in enumerate(list_of_classes):
         class_folder = os.path.join(data_path, class_name)
 
-        ids = sorted(next(os.walk(class_folder))[2])
+        ids = sorted(next(os_walk_clean(class_folder))[2])
         if len(ids) == 0:
             raise ValueError("There are no images in class {}".format(class_folder))
 
@@ -3329,7 +3329,7 @@ def check_masks(path: str, n_classes: int = 2, is_3d: bool = False):
     """
     print("Checking ground truth classes in {} . . .".format(path))
 
-    ids = sorted(next(os.walk(path))[2])
+    ids = sorted(next(os_walk_clean(path))[2])
     classes_found = []
     m = ""
     error = False

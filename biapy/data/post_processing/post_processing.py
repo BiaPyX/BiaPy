@@ -34,7 +34,7 @@ from typing import (
 )
 from numpy.typing import NDArray
 
-from biapy.utils.misc import to_numpy_format, to_pytorch_format
+from biapy.utils.misc import to_numpy_format, to_pytorch_format, os_walk_clean
 from biapy.data.data_manipulation import read_img_as_ndarray, save_tif, imread, reduce_dtype
 from biapy.data.pre_processing import generate_ellipse_footprint
 
@@ -2252,7 +2252,7 @@ def apply_binary_mask(
 
     print("Applying binary mask(s) from {}".format(bin_mask_dir))
 
-    ids = sorted(next(os.walk(bin_mask_dir))[2])
+    ids = sorted(next(os_walk_clean(bin_mask_dir))[2])
 
     if len(ids) == 1:
         one_file = True

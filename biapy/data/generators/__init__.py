@@ -23,7 +23,7 @@ from biapy.data.data_manipulation import save_tif, extract_patch_within_image
 from biapy.data.dataset import BiaPyDataset, PatchCoords
 from biapy.data.norm import Normalization
 from biapy.data.data_3D_manipulation import extract_patch_from_efficient_file
-from biapy.utils.misc import get_rank, get_world_size, is_dist_avail_and_initialized
+from biapy.utils.misc import get_rank, get_world_size, is_dist_avail_and_initialized, os_walk_clean
 
 
 def create_train_val_augmentors(
@@ -78,7 +78,7 @@ def create_train_val_augmentors(
         if os.path.exists(cfg.PATHS.PROB_MAP_DIR):
             print("Loading probability map")
             prob_map_file = os.path.join(cfg.PATHS.PROB_MAP_DIR, cfg.PATHS.PROB_MAP_FILENAME)
-            num_files = len(next(os.walk(cfg.PATHS.PROB_MAP_DIR))[2])
+            num_files = len(next(os_walk_clean(cfg.PATHS.PROB_MAP_DIR))[2])
             prob_map = cfg.PATHS.PROB_MAP_DIR if num_files > 1 else np.load(prob_map_file)
         else:
             assert Y_train

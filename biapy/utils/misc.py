@@ -514,3 +514,9 @@ def update_dict_with_existing_keys(d, u, not_recognized_keys=[], not_recognized_
             not_recognized_key_vals.append(v)
 
     return d, not_recognized_keys, not_recognized_key_vals
+
+def os_walk_clean(path, exclude_files=["Thumbs.db", "desktop.ini", ".DS_Store"], exclude_dirs=[".git", "__pycache__"]):
+    for root, dirs, files in os.walk(path):
+        files = [f for f in files if f not in exclude_files and not f[0] == '.']
+        dirs[:] = [d for d in dirs if d not in exclude_dirs and not d[0] == '.']        
+        yield root, dirs, files

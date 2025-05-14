@@ -33,6 +33,7 @@ from biapy.utils.misc import (
     is_main_process,
     is_dist_avail_and_initialized,
     MetricLogger,
+    os_walk_clean,
 )
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.data.pre_processing import create_ssl_source_data_masks
@@ -699,8 +700,8 @@ class Self_supervised_Workflow(Base_Workflow):
                     )
                     create_mask = True
                 else:
-                    if len(next(os.walk(self.cfg.DATA.TRAIN.SSL_SOURCE_DIR))[2]) != len(
-                        next(os.walk(self.cfg.DATA.TRAIN.PATH))[2]
+                    if len(next(os_walk_clean(self.cfg.DATA.TRAIN.SSL_SOURCE_DIR))[2]) != len(
+                        next(os_walk_clean(self.cfg.DATA.TRAIN.PATH))[2]
                     ):
                         print(
                             "Different number of files found in {} and {}. Trying to create the the rest again".format(
@@ -725,8 +726,8 @@ class Self_supervised_Workflow(Base_Workflow):
                     )
                     create_mask = True
                 else:
-                    if len(next(os.walk(self.cfg.DATA.VAL.SSL_SOURCE_DIR))[2]) != len(
-                        next(os.walk(self.cfg.DATA.VAL.PATH))[2]
+                    if len(next(os_walk_clean(self.cfg.DATA.VAL.SSL_SOURCE_DIR))[2]) != len(
+                        next(os_walk_clean(self.cfg.DATA.VAL.PATH))[2]
                     ):
                         print(
                             "Different number of files found in {} and {}. Trying to create the the rest again".format(
@@ -751,8 +752,8 @@ class Self_supervised_Workflow(Base_Workflow):
                     )
                     create_mask = True
                 else:
-                    if len(next(os.walk(self.cfg.DATA.TEST.SSL_SOURCE_DIR))[2]) != len(
-                        next(os.walk(self.cfg.DATA.TEST.PATH))[2]
+                    if len(next(os_walk_clean(self.cfg.DATA.TEST.SSL_SOURCE_DIR))[2]) != len(
+                        next(os_walk_clean(self.cfg.DATA.TEST.PATH))[2]
                     ):
                         print(
                             "Different number of files found in {} and {}. Trying to create the the rest again".format(

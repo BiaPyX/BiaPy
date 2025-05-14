@@ -14,7 +14,13 @@ from biapy.data.post_processing.post_processing import (
     detection_watershed,
     measure_morphological_props_and_filter,
 )
-from biapy.utils.misc import is_main_process, is_dist_avail_and_initialized, to_pytorch_format, MetricLogger
+from biapy.utils.misc import (
+    is_main_process, 
+    is_dist_avail_and_initialized, 
+    to_pytorch_format, 
+    MetricLogger, 
+    os_walk_clean
+)
 from biapy.engine.metrics import (
     detection_metrics,
     multiple_metrics,
@@ -55,7 +61,7 @@ class Detection_Workflow(Base_Workflow):
         self.original_test_mask_path = self.prepare_detection_data()
 
         if self.use_gt:
-            self.csv_files = sorted(next(os.walk(self.original_test_mask_path))[2])
+            self.csv_files = sorted(next(os_walk_clean(self.original_test_mask_path))[2])
 
         # From now on, no modification of the cfg will be allowed
         self.cfg.freeze()
@@ -922,7 +928,7 @@ class Detection_Workflow(Base_Workflow):
             if self.post_processing["detection_post"]
             else self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK
         )
-        all_pred_files = sorted(next(os.walk(input_dir))[2])
+        all_pred_files = sorted(next(os_walk_clean(input_dir))[2])
         all_pred_files = [x for x in all_pred_files if filename + "_patch" in x]
         all_pred_files = [x for x in all_pred_files if "_points.csv" in x and "all_points.csv" not in x]
         if len(all_pred_files) > 0:
@@ -1213,10 +1219,10 @@ class Detection_Workflow(Base_Workflow):
                     )
                     create_mask = True
                 else:
-                    if len(next(os.walk(self.cfg.DATA.TRAIN.DETECTION_MASK_DIR))[2]) != len(
-                        next(os.walk(self.cfg.DATA.TRAIN.GT_PATH))[2]
-                    ) and len(next(os.walk(self.cfg.DATA.TRAIN.DETECTION_MASK_DIR))[1]) != len(
-                        next(os.walk(self.cfg.DATA.TRAIN.GT_PATH))[2]
+                    if len(next(os_walk_clean(self.cfg.DATA.TRAIN.DETECTION_MASK_DIR))[2]) != len(
+                        next(os_walk_clean(self.cfg.DATA.TRAIN.GT_PATH))[2]
+                    ) and len(next(os_walk_clean(self.cfg.DATA.TRAIN.DETECTION_MASK_DIR))[1]) != len(
+                        next(os_walk_clean(self.cfg.DATA.TRAIN.GT_PATH))[2]
                     ):
                         print(
                             "Different number of files found in {} and {}. Trying to create the the rest again".format(
@@ -1240,10 +1246,10 @@ class Detection_Workflow(Base_Workflow):
                     )
                     create_mask = True
                 else:
-                    if len(next(os.walk(self.cfg.DATA.VAL.DETECTION_MASK_DIR))[2]) != len(
-                        next(os.walk(self.cfg.DATA.VAL.GT_PATH))[2]
-                    ) and len(next(os.walk(self.cfg.DATA.VAL.DETECTION_MASK_DIR))[1]) != len(
-                        next(os.walk(self.cfg.DATA.VAL.GT_PATH))[2]
+                    if len(next(os_walk_clean(self.cfg.DATA.VAL.DETECTION_MASK_DIR))[2]) != len(
+                        next(os_walk_clean(self.cfg.DATA.VAL.GT_PATH))[2]
+                    ) and len(next(os_walk_clean(self.cfg.DATA.VAL.DETECTION_MASK_DIR))[1]) != len(
+                        next(os_walk_clean(self.cfg.DATA.VAL.GT_PATH))[2]
                     ):
                         print(
                             "Different number of files found in {} and {}. Trying to create the the rest again".format(
@@ -1267,10 +1273,10 @@ class Detection_Workflow(Base_Workflow):
                     )
                     create_mask = True
                 else:
-                    if len(next(os.walk(self.cfg.DATA.TEST.DETECTION_MASK_DIR))[2]) != len(
-                        next(os.walk(self.cfg.DATA.TEST.GT_PATH))[2]
-                    ) and len(next(os.walk(self.cfg.DATA.TEST.DETECTION_MASK_DIR))[1]) != len(
-                        next(os.walk(self.cfg.DATA.TEST.GT_PATH))[2]
+                    if len(next(os_walk_clean(self.cfg.DATA.TEST.DETECTION_MASK_DIR))[2]) != len(
+                        next(os_walk_clean(self.cfg.DATA.TEST.GT_PATH))[2]
+                    ) and len(next(os_walk_clean(self.cfg.DATA.TEST.DETECTION_MASK_DIR))[1]) != len(
+                        next(os_walk_clean(self.cfg.DATA.TEST.GT_PATH))[2]
                     ):
                         print(
                             "Different number of files found in {} and {}. Trying to create the the rest again".format(
