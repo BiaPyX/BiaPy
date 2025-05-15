@@ -1100,15 +1100,15 @@ class Base_Workflow(metaclass=ABCMeta):
             self.prepare_model()
         self.prepare_test_generators()
 
-        # When not training was done
-        if "test_output" not in self.bmz_config:
-            # Save BMZ input/output so the user could export the model to BMZ later
-            self.prepare_bmz_data(self.bmz_config["test_input"])
-
         # Switch to evaluation mode
         assert self.model_without_ddp
         if self.cfg.MODEL.SOURCE != "bmz":
             self.model_without_ddp.eval()
+
+        # When not training was done
+        if "test_output" not in self.bmz_config:
+            # Save BMZ input/output so the user could export the model to BMZ later
+            self.prepare_bmz_data(self.bmz_config["test_input"])
 
         # Load best checkpoint on validation
         if self.cfg.TRAIN.ENABLE:
