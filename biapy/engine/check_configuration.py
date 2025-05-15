@@ -2148,6 +2148,8 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict):
                     del old_cfg["DATA"]["NORMALIZATION"]["CUSTOM_STD"]
                 if "CUSTOM_MODE" in old_cfg["DATA"]["NORMALIZATION"]:
                     del old_cfg["DATA"]["NORMALIZATION"]["CUSTOM_MODE"]
+                if "APPLICATION_MODE" in old_cfg["DATA"]["NORMALIZATION"]:
+                    del old_cfg["DATA"]["NORMALIZATION"]["APPLICATION_MODE"]
 
     if "AUGMENTOR" in old_cfg:
         if "BRIGHTNESS_EM" in old_cfg["AUGMENTOR"]:
