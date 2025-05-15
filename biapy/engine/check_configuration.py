@@ -2146,6 +2146,8 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict):
                     std = old_cfg["DATA"]["NORMALIZATION"]["CUSTOM_STD"]
                     old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"]["STD_VAL"] = std
                     del old_cfg["DATA"]["NORMALIZATION"]["CUSTOM_STD"]
+                if "CUSTOM_MODE" in old_cfg["DATA"]["NORMALIZATION"]:
+                    del old_cfg["DATA"]["NORMALIZATION"]["CUSTOM_MODE"]
 
     if "AUGMENTOR" in old_cfg:
         if "BRIGHTNESS_EM" in old_cfg["AUGMENTOR"]:
@@ -2160,6 +2162,8 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict):
             del old_cfg["AUGMENTOR"]["CONTRAST_EM_FACTOR"]
         if "CONTRAST_EM_MODE" in old_cfg["AUGMENTOR"]:
             del old_cfg["AUGMENTOR"]["CONTRAST_EM_MODE"]
+        if "AFFINE_MODE" in old_cfg["AUGMENTOR"] and old_cfg["AUGMENTOR"]["AFFINE_MODE"] not in ['constant', 'reflect', 'wrap', 'symmetric']:
+            del old_cfg["AUGMENTOR"]["AFFINE_MODE"]
 
     if "TEST" in old_cfg and "BY_CHUNKS" in old_cfg["TEST"] and "FORMAT" in old_cfg["TEST"]["BY_CHUNKS"]:
         del old_cfg["TEST"]["BY_CHUNKS"]["FORMAT"]
