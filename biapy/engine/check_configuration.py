@@ -1196,16 +1196,11 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             use_gt = False
             if cfg.DATA.TEST.LOAD_GT or cfg.DATA.TEST.USE_VAL_AS_TEST:
                 use_gt = True
-
-            if cfg.DATA.TEST.USE_VAL_AS_TEST:
-                data_path = cfg.DATA.TEST.PATH
-            else:
-                data_path = cfg.DATA.TRAIN.PATH
                 
             expected_classes = cfg.MODEL.N_CLASSES if use_gt else 1
-            list_of_classes = sorted(next(os_walk_clean(data_path))[1])
+            list_of_classes = sorted(next(os_walk_clean(cfg.DATA.TEST.PATH))[1])
             if len(list_of_classes) < 1:
-                raise ValueError("There is no folder/class for test in {}".format(data_path))
+                raise ValueError("There is no folder/class for test in {}".format(cfg.DATA.TEST.PATH))
 
             if expected_classes:
                 if expected_classes != len(list_of_classes):
