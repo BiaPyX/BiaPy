@@ -1283,7 +1283,7 @@ def read_chunked_nested_data(
     """
     if any(file.endswith(x) for x in [".h5", ".hdf5", ".hdf"]):
         return read_chunked_nested_h5(file, data_path)
-    elif file.endswith(".zarr"):
+    elif any(file.endswith(x) for x in [".n5", ".zarr"]):
         return read_chunked_nested_zarr(file, data_path)
     else:
         raise ValueError("Input file seems to not be either Zarr or H5")
@@ -1295,7 +1295,7 @@ def read_chunked_nested_zarr(
     """
     Find recursively raw and ground truth data within a Zarr file.
     """
-    if not zarrfile.endswith(".zarr"):
+    if not any(zarrfile.endswith(x) for x in [".n5", ".zarr"]):
         raise ValueError("Not implemented for other filetypes than Zarr")
     fid = zarr.open(zarrfile, "r")
 

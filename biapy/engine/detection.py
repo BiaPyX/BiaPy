@@ -402,7 +402,7 @@ class Detection_Workflow(Base_Workflow):
                 else:
                     points_pred_mask = np.expand_dims(points_pred_mask, -1)
 
-                if file_ext in [".hdf5", ".hdf", ".h5", ".zarr"]:
+                if file_ext in [".hdf5", ".hdf", ".h5", ".zarr", ".n5"]:
                     write_chunked_data(
                         np.expand_dims(points_pred_mask, 0),
                         out_dir,
@@ -450,7 +450,7 @@ class Detection_Workflow(Base_Workflow):
                     comp_signs=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGNS,
                 )
 
-                if file_ext in [".hdf5", ".hdf", ".h5", ".zarr"]:
+                if file_ext in [".hdf5", ".hdf", ".h5", ".zarr", ".n5"]:
                     write_chunked_data(
                         np.expand_dims(np.expand_dims(points_pred_mask, -1), 0),
                         self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
@@ -794,7 +794,7 @@ class Detection_Workflow(Base_Workflow):
                 # Dilate and save the GT ids for the current class
                 for i in range(gt_id_img.shape[0]):
                     gt_id_img[i] = dilation(gt_id_img[i], disk(3))
-                if file_ext in [".hdf5", ".hdf", ".h5", ".zarr"]:
+                if file_ext in [".hdf5", ".hdf", ".h5", ".zarr", ".n5"]:
                     write_chunked_data(
                         np.expand_dims(np.expand_dims(gt_id_img, -1), 0),
                         self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
@@ -825,7 +825,7 @@ class Detection_Workflow(Base_Workflow):
                 for i in range(points_pred_mask_color.shape[0]):
                     for j in range(points_pred_mask_color.shape[-1]):
                         points_pred_mask_color[i, ..., j] = dilation(points_pred_mask_color[i, ..., j], disk(3))
-                if file_ext in [".hdf5", ".hdf", ".h5", ".zarr"]:
+                if file_ext in [".hdf5", ".hdf", ".h5", ".zarr", ".n5"]:
                     write_chunked_data(
                         np.expand_dims(points_pred_mask_color, 0),
                         self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,

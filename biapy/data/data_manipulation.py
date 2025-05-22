@@ -3161,7 +3161,7 @@ def load_img_data(
     file : str
         File of the data read. Useful to close it in case it is an H5 file.
     """
-    if any(path.endswith(x) for x in [".zarr", ".h5", ".hdf5", ".hdf"]):
+    if any(path.endswith(x) for x in [".zarr", ".n5", ".h5", ".hdf5", ".hdf"]):
         from biapy.data.data_3D_manipulation import (
             read_chunked_data,
             read_chunked_nested_data,
@@ -3203,7 +3203,7 @@ def read_img_as_ndarray(path: str, is_3d: bool = False) -> NDArray:
     elif any(path.endswith(x) for x in [".h5", ".hdf5", ".hdf"]):
         img = h5py.File(path, "r")
         img = np.array(img[list(img)[0]])
-    elif path.endswith(".zarr"):
+    elif path.endswith(".zarr") or path.endswith(".n5"):
         from biapy.data.data_3D_manipulation import read_chunked_data
 
         _, img = read_chunked_data(path)
@@ -3334,7 +3334,7 @@ def check_masks(path: str, n_classes: int = 2, is_3d: bool = False):
     m = ""
     error = False
     for i in tqdm(range(len(ids))):
-        if any(ids[i].endswith(x) for x in [".zarr", ".h5", ".hdf5", ".hdf"]):
+        if any(ids[i].endswith(x) for x in [".zarr", ".n5", ".h5", ".hdf5", ".hdf"]):
             raise ValueError(
                 "Mask checking with Zarr not implemented in BiaPy yet. Disable 'DATA.*.CHECK_DATA' variables to continue"
             )

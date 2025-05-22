@@ -198,7 +198,7 @@ class test_pair_data_generator(Dataset):
             data_within_zarr_path=sample.get_path_in_zarr(),
         )
 
-        if any(self.X.dataset_info[sample.fid].path.endswith(x) for x in [".zarr", ".h5", ".hdf5", ".hdf"]):
+        if any(self.X.dataset_info[sample.fid].path.endswith(x) for x in [".zarr", ".n5", ".h5", ".hdf5", ".hdf"]):
             if not self.test_by_chunks:
                 raise ValueError(
                     "If you are using Zarr images please set 'TEST.BY_CHUNKS.ENABLE' and configure " "its options."

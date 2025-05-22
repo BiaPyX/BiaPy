@@ -77,7 +77,7 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
     working_with_zarr_h5_files = False
     if (
         cfg.PROBLEM.NDIM == "3D"
-        and (len(zarr_files) > 0 and ".zarr" in zarr_files[0])
+        and (len(zarr_files) > 0 and any(True for x in [".zarr", ".n5"] if x in zarr_files[0]))
         or (len(h5_files) > 0 and any(h5_files[0].endswith(x) for x in [".h5", ".hdf5", ".hdf"]))
     ):
         working_with_zarr_h5_files = True
@@ -91,7 +91,7 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
             else:
                 path_to_gt_data = getattr(cfg.DATA, tag).INPUT_ZARR_MULTIPLE_DATA_GT_PATH
 
-        if len(zarr_files) > 0 and ".zarr" in zarr_files[0]:
+        if len(zarr_files) > 0 and any(True for x in [".zarr", ".n5"] if x in zarr_files[0]):
             print("Working with Zarr files . . .")
             img_files = [os.path.join(data_path, x) for x in zarr_files]
         elif len(h5_files) > 0 and any(h5_files[0].endswith(x) for x in [".h5", ".hdf5", ".hdf"]):
@@ -1178,7 +1178,7 @@ def create_detection_masks(cfg: CN, data_type: str = "train"):
     if len(img_ids) == 0:
         raise ValueError(f"No data found in folder {img_dir}")
     img_ext = "." + img_ids[0].split(".")[-1]
-    if working_with_chunked_data and ".zarr" != img_ext:
+    if working_with_chunked_data and img_ext not in [".n5", ".zarr"]:
         raise ValueError(f"No data found in folder {img_dir}")
     ids = sorted(next(os_walk_clean(label_dir))[2])
 
@@ -1215,7 +1215,7 @@ def create_detection_masks(cfg: CN, data_type: str = "train"):
 
             df = pd.read_csv(file_path)
             df = df.dropna()
-            if ".zarr" != img_ext:
+            if img_ext not in [".zarr", ".n5"]:
                 img = read_img_as_ndarray(
                     os.path.join(img_dir, img_filename),
                     is_3d=not cfg.PROBLEM.NDIM == "2D",

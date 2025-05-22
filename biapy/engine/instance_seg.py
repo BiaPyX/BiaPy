@@ -628,7 +628,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     )
                 print(f"Its respective image seems to be: {test_file}")
 
-                if test_file.endswith(".zarr"):
+                if test_file.endswith(".zarr") or test_file.endswith(".n5"):
                     if self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA:
                         _, _Y = read_chunked_nested_data(
                             test_file,

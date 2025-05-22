@@ -1146,10 +1146,10 @@ class Base_Workflow(metaclass=ABCMeta):
             _, file_extension = os.path.splitext(self.current_sample["filename"])
             if self.cfg.TEST.BY_CHUNKS.ENABLE and self.cfg.PROBLEM.NDIM == "3D":
                 by_chunks = True
-                if file_extension not in [".hdf5", ".hdf", ".h5", ".zarr"]:
+                if file_extension not in [".hdf5", ".hdf", ".h5", ".zarr", ".n5"]:
                     print(
                         "WARNING: You are not using an image format that can extract patches without loading it entirely into memory. "
-                        "The image formats that support this are: '.hdf5', '.hdf', '.h5' and '.zarr'. "
+                        "The image formats that support this are: '.hdf5', '.hdf', '.h5', '.zarr' and '.n5'. "
                     )
             else:
                 by_chunks = False
