@@ -1549,14 +1549,15 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 pre_points_df["axis-2"] = pre_points_df["axis-2"] + patch_in_data.x_start
 
                 # Save the csv file
-                os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, exist_ok=True)
-                pre_points_df.to_csv(
-                    os.path.join(
-                        self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
-                        _filename + "_patch" + str(patch_id).zfill(len(str(len(self.test_generator)))) + "_pre_points.csv",
-                    ),
-                    index=False,
-                )
+                if len(pre_points_df) > 0:
+                    os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, exist_ok=True)
+                    pre_points_df.to_csv(
+                        os.path.join(
+                            self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
+                            _filename + "_patch" + str(patch_id).zfill(len(str(len(self.test_generator)))) + "_pre_points.csv",
+                        ),
+                        index=False,
+                    )
                 
             if post_points_df is not None and len(post_points_df) > 0:
                 # Remove possible points in the padded area
@@ -1576,14 +1577,15 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 post_points_df["axis-2"] = post_points_df["axis-2"] + patch_in_data.x_start
 
                 # Save the csv file
-                os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, exist_ok=True)
-                post_points_df.to_csv(
-                    os.path.join(
-                        self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
-                        _filename + "_patch" + str(patch_id).zfill(len(str(len(self.test_generator)))) + "_post_points.csv",
-                    ),
-                    index=False,
-                )
+                if len(post_points_df) > 0:
+                    os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, exist_ok=True)
+                    post_points_df.to_csv(
+                        os.path.join(
+                            self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
+                            _filename + "_patch" + str(patch_id).zfill(len(str(len(self.test_generator)))) + "_post_points.csv",
+                        ),
+                        index=False,
+                    )
 
     def after_all_patch_prediction_by_chunks(self):
         """
