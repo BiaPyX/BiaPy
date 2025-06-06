@@ -1005,8 +1005,6 @@ class Config:
         _C.MODEL.UPSAMPLE_LAYER = "convtranspose"
         # Activation function to use along the model
         _C.MODEL.ACTIVATION = "ELU"
-        # Las activation to use. Options 'sigmoid', 'softmax' or 'linear'
-        _C.MODEL.LAST_ACTIVATION = "sigmoid"
         # Number of classes including the background class (that should be using 0 label)
         _C.MODEL.N_CLASSES = 2
         # Downsampling to be made in Z. This value will be the third integer of the MaxPooling operation. When facing

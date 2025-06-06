@@ -1,7 +1,5 @@
-import math
 import torch
 import numpy as np
-from tqdm import tqdm
 from torchmetrics.regression import MeanSquaredError, MeanAbsoluteError
 from torchmetrics.image import PeakSignalNoiseRatio, StructuralSimilarityIndexMeasure
 from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
@@ -13,11 +11,7 @@ from numpy.typing import NDArray
 
 from biapy.engine.metrics import SSIM_loss, W_MAE_SSIM_loss, W_MSE_SSIM_loss
 from biapy.engine.base_workflow import Base_Workflow
-from biapy.utils.misc import to_pytorch_format, to_numpy_format, MetricLogger
-from biapy.data.post_processing.post_processing import (
-    ensemble8_2d_predictions,
-    ensemble16_3d_predictions,
-)
+from biapy.utils.misc import to_pytorch_format, MetricLogger
 from biapy.data.data_2D_manipulation import (
     crop_data_with_overlap,
     merge_data_with_overlap,

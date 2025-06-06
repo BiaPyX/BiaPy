@@ -1540,19 +1540,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         cfg.merge_from_list(opts)
 
     if not model_will_be_read and cfg.MODEL.SOURCE == "biapy":
-        assert cfg.MODEL.LAST_ACTIVATION.lower() in [
-            "relu",
-            "tanh",
-            "leaky_relu",
-            "elu",
-            "gelu",
-            "silu",
-            "sigmoid",
-            "softmax",
-            "linear",
-            "none",
-        ], "Get unknown activation key {}".format(cfg.MODEL.LAST_ACTIVATION.lower())
-
         if cfg.MODEL.UPSAMPLE_LAYER.lower() not in ["upsampling", "convtranspose"]:
             raise ValueError(
                 "cfg.MODEL.UPSAMPLE_LAYER' needs to be in ['upsampling', 'convtranspose']. Provided {}".format(

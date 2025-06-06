@@ -39,7 +39,6 @@ MODEL:
     UPSAMPLE_LAYER: "upsampling"
     DROPOUT_VALUES: [0, 0, 0]
     ACTIVATION: 'relu'
-    LAST_ACTIVATION: 'linear'
     NORMALIZATION: 'bn'
     LOAD_CHECKPOINT: False
   
