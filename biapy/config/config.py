@@ -292,7 +292,7 @@ class Config:
         #   'scale_range' same as 'div' but scaling the range to [0-max] and then dividing by the maximum value of the data
         #    and not by 255 or 65535
         #   'zero_mean_unit_variance' to substract the mean and divide by std. 
-        _C.DATA.NORMALIZATION.TYPE = "div"
+        _C.DATA.NORMALIZATION.TYPE = "zero_mean_unit_variance"
         # Whether to based the normalization on values extracted from the complete image or from each patch. When working with 
         # large images such as Zarr or H5 it is done by patch automatically. The values are also applied for the percentage
         # clipping. Options: ['image', 'patch']
