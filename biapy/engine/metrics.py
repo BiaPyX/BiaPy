@@ -152,7 +152,7 @@ class jaccard_index:
 
     def __call__(self, y_pred, y_true):
         """
-        Calculate CrossEntropyLoss.
+        Calculate Jaccard index (intersection over union).
 
         Parameters
         ----------
