@@ -123,6 +123,8 @@ class test_pair_data_generator(Dataset):
         self.seed = seed
         self.ndim = ndim
         self.instance_problem = instance_problem
+        self.n_classes = n_classes
+        self.ignore_index = ignore_index
 
         # As in test entire images are processed one by one X.sample_list and X.dataset_info must match in length. If not
         # means that validation data is being used as test, so we need to clean the sample_list.
@@ -282,7 +284,8 @@ class test_pair_data_generator(Dataset):
                 assert isinstance(img, np.ndarray)
                 if self.provide_Y:
                     mask = np.array(mask)
-                    self.norm_module.set_stats_from_mask(mask)
+                    self.norm_module.set_stats_from_mask( mask, n_classes=self.n_classes,
+                        ignore_index=self.ignore_index, instance_problem=self.instance_problem)
                     mask, _ = self.norm_module.apply_mask_norm(mask)
                     assert isinstance(mask, np.ndarray)
 
