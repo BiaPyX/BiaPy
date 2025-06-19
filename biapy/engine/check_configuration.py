@@ -1926,13 +1926,22 @@ def compare_configurations_without_model(actual_cfg, old_cfg, header_message="",
         current_value = get_attribute_recursive(actual_cfg, var_to_compare)
         old_value = get_attribute_recursive(old_cfg, var_to_compare)
         if current_value != old_value:
+            full_message = ""
+            if var_to_compare == "MODEL.N_CLASSES":
+                if not actual_cfg.MODEL.SKIP_UNMATCHED_LAYERS:
+                    full_message = header_message \
+                        + f"The '{var_to_compare}' value of the compared configurations does not match: " \
+                        + f"{current_value} (current configuration) vs {old_value} (from loaded configuration). " \
+                        + "If you want to load all weights from the checkpoint that match in shape with your model " \
+                        + "(e.g., to fine-tune the head), set 'MODEL.SKIP_UNMATCHED_LAYERS' to True."
             # Allow SSL pretrainings
-            if not (var_to_compare == "PROBLEM.TYPE" and old_value == "SELF_SUPERVISED"):
-                raise ValueError(
-                    header_message
-                    + f"The '{var_to_compare}' value of the compared configurations does not match: "
+            elif not (var_to_compare == "PROBLEM.TYPE" and old_value == "SELF_SUPERVISED"):
+                full_message = header_message \
+                    + f"The '{var_to_compare}' value of the compared configurations does not match: " \
                     + f"{current_value} (current configuration) vs {old_value} (from loaded configuration)"
-                )
+
+            if full_message != "":
+                raise ValueError( full_message )
 
     print("Configurations seem to be compatible. Continuing . . .")
 
