@@ -27,7 +27,8 @@ from biapy.data.dataset import BiaPyDataset
 from biapy.data.norm import Normalization
 
 ## Added
-from biapy.data.utils_generator import elastic_raw, shear_raw, shift_raw, flip_vertical_raw, flip_horizontal_raw, gaussian_blur_raw, median_blur_raw, motion_blur_raw
+from biapy.data.utils_generator import (elastic_raw, shear_raw, shift_raw, flip_vertical_raw, flip_horizontal_raw, 
+                    gaussian_blur_raw, median_blur_raw, motion_blur_raw)
 
 
 class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
@@ -1214,7 +1215,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
    
         if self.elastic and random.uniform(0, 1) < self.da_prob:
             image, mask, heat = elastic_raw(
-                image, mask, heat=heat,
+                image, mask=mask, heat=heat,
                 alpha=self.e_alpha,  # or pick a value from the tuple, e.g., random.randint(*self.e_alpha)
                 sigma=self.e_sigma,
                 mode=self.e_mode
@@ -1222,43 +1223,43 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         if self.shear and random.uniform(0, 1) < self.da_prob:
             image, mask, heat = shear_raw(
-                image, mask, heat=heat,
+                image, mask=mask, heat=heat,
                 shear=self.shear_range,
                 mode=self.affine_mode
             )
         
         if self.shift and random.uniform(0, 1) < self.da_prob:
             image, mask, heat = shift_raw(
-                image, mask, heat=heat,
+                image, mask=mask, heat=heat,
                 shift_range=self.shift_range,
                 mode=self.affine_mode
             )
 
         if self.vflip and random.uniform(0, 1) < self.da_prob:
             image, mask, heat = flip_vertical_raw(
-                image, mask, heat=heat
+                image, mask=mask, heat=heat
             )
         
         if self.hflip and random.uniform(0, 1) < self.da_prob:
             image, mask, heat = flip_horizontal_raw(
-                image, mask, heat=heat
+                image, mask=mask, heat=heat
             )
         
         if self.g_blur and random.uniform(0, 1) < self.da_prob:
             image, mask, heat = gaussian_blur_raw(
-                image, mask, heat=heat,
+                image, mask=mask, heat=heat,
                 sigma=self.g_sigma
             ) # Mask and heat unchanged
 
         if self.median_blur and random.uniform(0, 1) < self.da_prob:
             image, mask, heat = median_blur_raw(
-                image, mask, heat=heat,
+                image, mask=mask, heat=heat,
                 k_range=self.mb_kernel
             ) # Mask and heat unchanged
 
         if self.motion_blur and random.uniform(0, 1) < self.da_prob:
             image, mask, heat = motion_blur_raw(
-                image, mask, heat=heat,
+                image, mask=mask, heat=heat,
                 k_range=self.motb_k_range
             ) # Mask and heat unchanged
 
