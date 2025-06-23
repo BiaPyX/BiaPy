@@ -26,6 +26,9 @@ from biapy.data.data_3D_manipulation import extract_patch_from_efficient_file
 from biapy.data.dataset import BiaPyDataset
 from biapy.data.norm import Normalization
 
+## Added
+from biapy.data.utils_generator import elastic_raw, shear_raw, shift_raw, flip_vertical_raw, flip_horizontal_raw, gaussian_blur_raw, median_blur_raw, motion_blur_raw
+
 
 class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
     """
@@ -601,6 +604,27 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.gamma_contrast = gamma_contrast
         self.gc_gamma = gc_gamma
 
+        ## |--CHANGED BLOCK START--|
+        self.elastic = elastic
+        self.shear = shear
+        self.shift = shift
+        self.vflip = vflip
+        self.hflip = hflip
+        self.g_blur = g_blur
+        self.median_blur = median_blur
+        self.motion_blur = motion_blur
+
+        self.e_alpha = e_alpha
+        self.e_sigma = e_sigma
+        self.e_mode = e_mode
+        self.shear_range = shear_range
+        self.shift_range = shift_range
+        self.affine_mode = affine_mode
+        self.g_sigma = g_sigma
+        self.mb_kernel = mb_kernel
+        self.motb_k_range = motb_k_range 
+        ## |-- CHANGED BLOCK END --|
+
         # Instance segmentation options
         self.instance_problem = instance_problem
 
@@ -637,35 +661,22 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         if rand_rot:
             self.trans_made += "_rrot" + str(rnd_rot_range)
         if shear:
-            self.da_options.append(iaa.Sometimes(da_prob, iaa.Affine(rotate=shear_range, mode=affine_mode)))
             self.trans_made += "_shear" + str(shear_range)
         if zoom:
             self.trans_made += "_zoom" + str(zoom_range) + "+" + str(zoom_in_z)
         if shift:
-            self.da_options.append(iaa.Sometimes(da_prob, iaa.Affine(translate_percent=shift_range, mode=affine_mode)))
             self.trans_made += "_shift" + str(shift_range)
         if vflip:
-            self.da_options.append(iaa.Flipud(da_prob))  # type: ignore
             self.trans_made += "_vflip"
         if hflip:
-            self.da_options.append(iaa.Fliplr(da_prob))  # type: ignore
             self.trans_made += "_hflip"
         if elastic:
-            self.da_options.append(
-                iaa.Sometimes(
-                    da_prob,
-                    iaa.ElasticTransformation(alpha=e_alpha, sigma=e_sigma, mode=e_mode),
-                )
-            )
             self.trans_made += "_elastic" + str(e_alpha) + "+" + str(e_sigma) + "+" + str(e_mode)
         if g_blur:
-            self.da_options.append(iaa.Sometimes(da_prob, iaa.GaussianBlur(g_sigma)))
             self.trans_made += "_gblur" + str(g_sigma)
         if median_blur:
-            self.da_options.append(iaa.Sometimes(da_prob, iaa.MedianBlur(k=mb_kernel)))
             self.trans_made += "_mblur" + str(mb_kernel)
         if motion_blur:
-            self.da_options.append(iaa.Sometimes(da_prob, iaa.MotionBlur(k=motb_k_range)))
             self.trans_made += "_motb" + str(motb_k_range)
         if gamma_contrast:
             self.trans_made += "_gcontrast" + str(gc_gamma)
@@ -678,7 +689,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             self.contrast_mode = contrast_mode  # Not used
             self.trans_made += "_contrast" + str(contrast_factor)
         if dropout:
-            self.da_options.append(iaa.Sometimes(da_prob, iaa.Dropout(p=drop_range)))
+            self.da_options.append(iaa.Sometimes(da_prob, iaa.Dropout(p=drop_range))) ## ?¿
             self.trans_made += "_drop" + str(drop_range)
 
         if grayscale:
@@ -1050,7 +1061,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         # Save shape
         o_img_shape = image.shape
         o_mask_shape = mask.shape
-
+        
         # Convert to grayscale
         if self.grayscale and random.uniform(0, 1) < self.da_prob:
             image = grayscale(image)
@@ -1200,6 +1211,56 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 self.res_relation,
                 self.cout_apply_to_mask,
             )
+   
+        if self.elastic and random.uniform(0, 1) < self.da_prob:
+            image, mask, heat = elastic_raw(
+                image, mask, heat=heat,
+                alpha=self.e_alpha,  # or pick a value from the tuple, e.g., random.randint(*self.e_alpha)
+                sigma=self.e_sigma,
+                mode=self.e_mode
+            )
+
+        if self.shear and random.uniform(0, 1) < self.da_prob:
+            image, mask, heat = shear_raw(
+                image, mask, heat=heat,
+                shear=self.shear_range,
+                mode=self.affine_mode
+            )
+        
+        if self.shift and random.uniform(0, 1) < self.da_prob:
+            image, mask, heat = shift_raw(
+                image, mask, heat=heat,
+                shift_range=self.shift_range,
+                mode=self.affine_mode
+            )
+
+        if self.vflip and random.uniform(0, 1) < self.da_prob:
+            image, mask, heat = flip_vertical_raw(
+                image, mask, heat=heat
+            )
+        
+        if self.hflip and random.uniform(0, 1) < self.da_prob:
+            image, mask, heat = flip_horizontal_raw(
+                image, mask, heat=heat
+            )
+        
+        if self.g_blur and random.uniform(0, 1) < self.da_prob:
+            image, mask, heat = gaussian_blur_raw(
+                image, mask, heat=heat,
+                sigma=self.g_sigma
+            ) # Mask and heat unchanged
+
+        if self.median_blur and random.uniform(0, 1) < self.da_prob:
+            image, mask, heat = median_blur_raw(
+                image, mask, heat=heat,
+                k_range=self.mb_kernel
+            ) # Mask and heat unchanged
+
+        if self.motion_blur and random.uniform(0, 1) < self.da_prob:
+            image, mask, heat = motion_blur_raw(
+                image, mask, heat=heat,
+                k_range=self.motb_k_range
+            ) # Mask and heat unchanged
 
         # Apply transformations to the volume and its mask
         if self.norm_module.mask_norm == "as_mask":
