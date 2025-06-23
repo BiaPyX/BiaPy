@@ -1023,6 +1023,9 @@ class Config:
         _C.MODEL.LOAD_CHECKPOINT_EPOCH = "best_on_val"
         # Whether to load the model from the checkpoint instead of builiding it following 'MODEL.ARCHITECTURE' when 'MODEL.SOURCE' is "biapy"
         _C.MODEL.LOAD_MODEL_FROM_CHECKPOINT = True
+        # To skip loading those layers that do not match in shape with the given checkpoint. If this is set to False a regular load function will be 
+        # done, which will fail if a layer mismatch is found. Only workes when 'MODEL.LOAD_MODEL_FROM_CHECKPOINT' is True
+        _C.MODEL.SKIP_UNMATCHED_LAYERS = False
         # Epochs to save a checkpoint of the model apart from the ones saved with LOAD_CHECKPOINT_ONLY_WEIGHTS. Set it to -1 to
         # not do it.
         _C.MODEL.SAVE_CKPT_FREQ = -1

@@ -234,7 +234,7 @@ def get_checkpoint_path(cfg, jobname):
     return resume
 
 
-def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=None, just_extract_checkpoint_info=False):
+def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=None, just_extract_checkpoint_info=False, skip_unmatched_layers=False):
     start_epoch = 0
 
     resume = get_checkpoint_path(cfg, jobname)
@@ -268,7 +268,24 @@ def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=Non
             checkpoint["biapy_version"] if "biapy_version" in checkpoint else None,
         )
 
-    model_without_ddp.load_state_dict(checkpoint["model"], strict=False)
+    if not skip_unmatched_layers:
+        model_without_ddp.load_state_dict(checkpoint["model"], strict=False)
+    else:
+        # Filter out layers with mismatched shapes
+        filtered_state_dict = {}
+        model_state_dict = model_without_ddp.state_dict()
+        for k, v in checkpoint["model"].items():
+            if k in model_state_dict:
+                if v.shape == model_state_dict[k].shape:
+                    filtered_state_dict[k] = v
+                else:
+                    print(f"Skipping layer '{k}' due to shape mismatch: checkpoint {v.shape} vs model {model_state_dict[k].shape}")
+            else:
+                print(f"Skipping unexpected layer '{k}' not found in model.")
+
+        # Load only matching parameters
+        model_without_ddp.load_state_dict(filtered_state_dict, strict=False)
+
     print("Model weights loaded!")
 
     if cfg.MODEL.LOAD_CHECKPOINT_ONLY_WEIGHTS:

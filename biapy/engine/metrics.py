@@ -152,7 +152,7 @@ class jaccard_index:
 
     def __call__(self, y_pred, y_true):
         """
-        Calculate CrossEntropyLoss.
+        Calculate Jaccard index (intersection over union).
 
         Parameters
         ----------
@@ -164,8 +164,8 @@ class jaccard_index:
 
         Returns
         -------
-        loss : torch.Tensor
-            Loss value.
+        jaccard : torch.Tensor
+            Jaccard index value.
         """
         # If image shape has changed due to TorchVision or BMZ preprocessing then the mask needs
         # to be resized too

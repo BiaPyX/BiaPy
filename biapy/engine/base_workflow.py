@@ -652,6 +652,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     model_without_ddp=None,
                     device=self.device,
                     just_extract_checkpoint_info=True,
+                    skip_unmatched_layers=self.cfg.MODEL.SKIP_UNMATCHED_LAYERS,
                 )
                 if saved_cfg:
                     # Checks that this config and previous represent same workflow
@@ -723,6 +724,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 model_without_ddp=self.model_without_ddp,
                 device=self.device,
                 optimizer=self.optimizer,
+                skip_unmatched_layers=self.cfg.MODEL.SKIP_UNMATCHED_LAYERS,
             )
         else:
             self.start_epoch = 0
@@ -958,6 +960,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 jobname=self.job_identifier,
                 model_without_ddp=self.model_without_ddp,
                 device=self.device,
+                skip_unmatched_layers=self.cfg.MODEL.SKIP_UNMATCHED_LAYERS,
             )
 
             # Save BMZ input/output so the user could export the model to BMZ later
@@ -1117,6 +1120,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 jobname=self.job_identifier,
                 model_without_ddp=self.model_without_ddp,
                 device=self.device,
+                skip_unmatched_layers=self.cfg.MODEL.SKIP_UNMATCHED_LAYERS,
             )
 
         # Check possible checkpoint problems
