@@ -1,11 +1,9 @@
 import numpy as np
-from scipy import ndimage
-from scipy.ndimage import shift
-from skimage.transform import AffineTransform
 import random
 import cv2
-import skimage.transform as tf
-from scipy.ndimage import median_filter
+from scipy.ndimage import median_filter, interpolation, shift
+from skimage.transform import AffineTransform, warp
+from typing import Optional, Union, Tuple
 
 _MAPPING_MODE_SCIPY_CV2 = {
     "constant": cv2.BORDER_CONSTANT,
@@ -49,9 +47,9 @@ def rotation_raw(image, angle, mask=None, heat=None, backend="cv2", cval=0, orde
     center = (np.array((w, h)) - 1) / 2.0
     angle_rad = np.deg2rad(angle)
     tform = (
-        tf.AffineTransform(translation=-center) +
-        tf.AffineTransform(rotation=angle_rad) +
-        tf.AffineTransform(translation=center)
+        AffineTransform(translation=-center) +
+        AffineTransform(rotation=angle_rad) +
+        AffineTransform(translation=center)
     )
 
     if backend == "skimage":
@@ -138,7 +136,7 @@ def shear_raw(image, shear, mask=None, heat=None, cval=0, order_image=1, order_m
         raise ValueError(f"Unknown backend {backend}")
 
 # Done
-def gaussian_blur_raw(image, sigma, mask=None, heat=None ):
+def gaussian_blur_raw(image, sigma, mask=None, heat=None):
     # If sigma is a range, sample a float value
     if isinstance(sigma, (tuple, list)) and len(sigma) == 2:
         sigma = random.uniform(sigma[0], sigma[1])
@@ -220,6 +218,44 @@ def motion_blur_raw(image, mask=None, heat=None, k_range=None, angle=50, directi
     if heat is not None:
         heat_aug = heat
     return image, mask_aug, heat_aug
+
+# Done
+def dropout_raw(
+    image: np.ndarray,
+    mask: Optional[np.ndarray] = None,
+    heat: Optional[np.ndarray] = None,
+    drop_range: Union[float, Tuple[float, float]] = 0.1,
+    per_channel: bool = False,
+    random_state: Optional[np.random.RandomState] = None
+) -> Tuple[np.ndarray, Optional[np.ndarray], Optional[np.ndarray]]:
+    
+    rng = np.random if random_state is None else random_state
+    p = rng.uniform(*drop_range) if isinstance(drop_range, tuple) else float(drop_range)
+
+    if p == 0:
+        return image, mask, heat
+
+    if per_channel:
+        # Create a separate mask for each channel.
+        mask_shape = image.shape
+    else:
+        # Create a single mask for all channels. This must handle
+        # images with and without a channel axis correctly.
+        if image.ndim == 2:  # Grayscale case: (h, w)
+            mask_shape = image.shape
+        else:  # Multi-channel case: (h, w, c) or (d, h, w, c)
+            mask_shape = image.shape[:-1]
+
+    # Create the dropout mask.
+    keep_mask = rng.binomial(1, 1.0 - p, size=mask_shape).astype(image.dtype)
+
+    # we need to add it back to the mask for broadcasting.
+    if not per_channel and image.ndim > len(mask_shape):
+        keep_mask = np.expand_dims(keep_mask, axis=-1)
+        
+    image_out = image * keep_mask
+
+    return image_out, mask, heat
 
 ## not used
 def zoom_raw(image, factor, mask=None, heat=None, backend="cv2", cval=0, order_image=1,
@@ -329,7 +365,7 @@ def _normalize_cv2_input_arr_(arr):
     return arr
 
 def _warp_affine_arr_skimage(arr, matrix, cval, mode, order, output_shape):
-    image_warped = tf.warp(
+    image_warped = warp(
         arr,
         matrix.inverse,
         order=order,
@@ -467,7 +503,7 @@ def _map_coordinates(image, dx, dy, order=1, cval=0, mode="constant"):
             y_shifted = y + (-1) * dy
 
             for c in sm.xrange(image.shape[2]):
-                remapped_flat = ndimage.interpolation.map_coordinates(
+                remapped_flat = interpolation.map_coordinates(
                     image[..., c],
                     (y_shifted.flatten(), x_shifted.flatten()),
                     order=order,

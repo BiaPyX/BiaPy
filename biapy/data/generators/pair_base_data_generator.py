@@ -9,12 +9,8 @@ import torch
 import os
 import sys
 import h5py
-import imgaug as ia
 from tqdm import tqdm
-from imgaug import augmenters as iaa
 from skimage.util import random_noise
-from imgaug.augmentables.heatmaps import HeatmapsOnImage
-from imgaug.augmentables.segmaps import SegmentationMapsOnImage
 from abc import ABCMeta, abstractmethod
 from torch.utils.data import Dataset
 from numpy.typing import NDArray
@@ -28,7 +24,7 @@ from biapy.data.norm import Normalization
 
 ## Added
 from biapy.data.utils_generator import (elastic_raw, shear_raw, shift_raw, flip_vertical_raw, flip_horizontal_raw, 
-                    gaussian_blur_raw, median_blur_raw, motion_blur_raw)
+                    gaussian_blur_raw, median_blur_raw, motion_blur_raw, dropout_raw)
 
 
 class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
@@ -502,7 +498,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.length = len(self.X.sample_list)
 
         self.real_length = self.length
-        self.no_bin_channel_found = False
+        self.no_bin_channel_found = False 
         self.shape = shape
 
         # X data analysis
@@ -526,6 +522,15 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 _, mask = self.load_sample(i, first_load=True)
                 # Store which channels are binary or not (e.g. distance transform channel is not binary)
                 self.norm_module.set_stats_from_mask(mask, n_classes=n_classes, ignore_index=ignore_index, instance_problem=instance_problem)
+
+        # |-- BEGINNING CHANGED BLOCK --|
+        # Check if any channel is not binary to set no_bin_channel_found to True
+        if self.norm_module.channel_info:
+            self.no_bin_channel_found = any(
+                self.norm_module.get_channel_info(j)["type"] == "no_bin"
+                for j in range(len(self.norm_module.channel_info))
+            )
+        # |-- ENDING CHANGED BLOCK --|
 
         _, mask = self.load_sample(0)
         self.Y_channels = mask.shape[-1]
@@ -614,7 +619,9 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.g_blur = g_blur
         self.median_blur = median_blur
         self.motion_blur = motion_blur
+        self.dropout = dropout
 
+        self.drop_range = drop_range
         self.e_alpha = e_alpha
         self.e_sigma = e_sigma
         self.e_mode = e_mode
@@ -690,7 +697,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             self.contrast_mode = contrast_mode  # Not used
             self.trans_made += "_contrast" + str(contrast_factor)
         if dropout:
-            self.da_options.append(iaa.Sometimes(da_prob, iaa.Dropout(p=drop_range))) ## ?¿
             self.trans_made += "_drop" + str(drop_range)
 
         if grayscale:
@@ -741,9 +747,8 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             self.trans_made += "_salt_and_pepper" + "+" + str(salt_pep_amount) + "+" + str(salt_pep_proportion)
 
         self.trans_made = self.trans_made.replace(" ", "")
-        self.seq = iaa.Sequential(self.da_options)
         self.seed = seed
-        ia.seed(seed)
+        random.seed(seed)
 
         self.indexes = self.o_indexes.copy()
 
@@ -1114,14 +1119,10 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             if e_mask:
                 e_mask = e_mask.reshape(e_mask.shape[:2] + (e_mask.shape[2] * e_mask.shape[3],))
             # if e_heat: e_heat = e_heat.reshape(e_heat.shape[:2]+(e_heat.shape[2]*e_heat.shape[3],))
-        # Convert heatmap into imgaug object
-        if heat:
-            heat = HeatmapsOnImage(
-                heat,
-                shape=heat.shape,
-                min_value=heat.min(),
-                max_value=heat.max() + sys.float_info.epsilon,
-            )
+        
+        # normalize heat
+        if heat is not None:
+            heat = (heat - heat.min()) / (heat.max() + sys.float_info.epsilon - heat.min())
 
         # Apply cblur
         if self.cutblur and random.uniform(0, 1) < self.da_prob:
@@ -1263,19 +1264,12 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 k_range=self.motb_k_range
             ) # Mask and heat unchanged
 
-        # Apply transformations to the volume and its mask
-        if self.norm_module.mask_norm == "as_mask":
-            # Change dtype to supported one by imgaug
-            mask = mask.astype(np.uint8)
+        if self.dropout and random.uniform(0, 1) < self.da_prob:
+            image, mask, heat = dropout_raw(
+                image, mask=mask, heat=heat,
+                drop_range=self.drop_range
+            ) # Mask and heat unchanged
 
-            segmap = SegmentationMapsOnImage(mask, shape=mask.shape)
-            image, vol_mask, heat_out = self.seq(image=image, segmentation_maps=segmap, heatmaps=heat)  # type: ignore
-            mask = vol_mask.get_arr()
-        else:
-            # Apply transformations to both images
-            augseq_det = self.seq.to_deterministic()
-            image = augseq_det.augment_image(image)  # type: ignore
-            mask = augseq_det.augment_image(mask)  # type: ignore
 
         # Recover the original shape
         image = image.reshape(o_img_shape)
@@ -1283,7 +1277,9 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         # Merge heatmaps and masks again
         if self.no_bin_channel_found:
-            heat = heat_out.get_arr()
+            # unnormalize heat
+            heat = heat * (heat.max() + sys.float_info.epsilon - heat.min()) + heat.min()
+            
             if self.ndim == 3:
                 heat = heat.reshape(o_heat_shape)
 

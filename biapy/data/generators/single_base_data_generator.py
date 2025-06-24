@@ -5,8 +5,6 @@ import numpy as np
 import random
 import h5py
 from tqdm import tqdm
-import imgaug as ia
-from imgaug import augmenters as iaa
 from typing import (
     Tuple,
     Literal,
@@ -22,7 +20,7 @@ from biapy.data.dataset import BiaPyDataset
 from biapy.data.norm import Normalization
 
 from biapy.data.utils_generator import (elastic_raw, shear_raw, shift_raw, flip_vertical_raw, 
-                     flip_horizontal_raw, gaussian_blur_raw, median_blur_raw, motion_blur_raw)
+                     flip_horizontal_raw, gaussian_blur_raw, median_blur_raw, motion_blur_raw, dropout_raw)
 
 
 class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
@@ -251,7 +249,8 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.g_blur = g_blur
         self.median_blur = median_blur
         self.motion_blur = motion_blur
-
+        self.dropout = dropout
+        self.drop_range = drop_range
         self.e_alpha = e_alpha
         self.e_sigma = e_sigma
         self.e_mode = e_mode
@@ -290,12 +289,10 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         if gamma_contrast:
             self.trans_made += "_gcontrast" + str(gc_gamma)
         if dropout:
-            self.da_options.append(iaa.Sometimes(da_prob, iaa.Dropout(p=drop_range)))
             self.trans_made += "_drop" + str(drop_range)
 
         self.trans_made = self.trans_made.replace(" ", "")
-        self.seq = iaa.Sequential(self.da_options)
-        ia.seed(seed)
+        random.seed(seed)
 
     @abstractmethod
     def save_aug_samples(
@@ -541,9 +538,11 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 k_range=self.motb_k_range
             )
 
-
-        # Apply transformations to the image
-        image = self.seq(image=image)  # type: ignore
+        if self.dropout and random.uniform(0, 1) < self.da_prob:
+            image, _, _ = dropout_raw(
+                image,
+                drop_range=self.drop_range
+            )
 
         # Recover the original shape
         image = image.reshape(o_img_shape)
