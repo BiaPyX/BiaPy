@@ -1769,7 +1769,8 @@ class Base_Workflow(metaclass=ABCMeta):
                     if self.post_processing["per_image"]
                     else self.cfg.PATHS.RESULT_DIR.PER_IMAGE
                 )
-                test_file = os.path.join(folder, self.current_sample["filename"])
+                # read file created by 'save_tif' (it always has .tif extension)
+                test_file = os.path.join(folder, os.path.splitext(self.current_sample["filename"])[0]+'.tif')
                 pred = read_img_as_ndarray(test_file, is_3d=self.cfg.PROBLEM.NDIM == "3D")
                 pred = np.expand_dims(pred, 0)  # expand dimensions to include "batch"
 
@@ -1845,7 +1846,8 @@ class Base_Workflow(metaclass=ABCMeta):
 
             else:
                 # load prediction from file
-                test_file = os.path.join(self.cfg.PATHS.RESULT_DIR.FULL_IMAGE, self.current_sample["filename"])
+                # read file created by 'save_tif' (it always has .tif extension)
+                test_file = os.path.join(self.cfg.PATHS.RESULT_DIR.FULL_IMAGE, os.path.splitext(self.current_sample["filename"])[0]+'.tif')
                 pred = read_img_as_ndarray(test_file, is_3d=self.cfg.PROBLEM.NDIM == "3D")
                 pred = np.expand_dims(pred, 0)  # expand dimensions to include "batch"
 
