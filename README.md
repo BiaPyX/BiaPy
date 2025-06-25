@@ -94,7 +94,9 @@ Project's page: [[BiaPy GUI](https://github.com/BiaPyX/BiaPy-GUI)]
 ## Citation
 Please note that BiaPy is based on a publication. If you use it successfully for your research please be so kind to cite our work:
 ```
-Franco-Barranco, D., Andrés-San Román, J.A., Gómez-Gálvez, P., Escudero, L.M., Muñoz-Barrutia, A. and
-Arganda-Carreras, I., 2023, April. BiaPy: a ready-to-use library for Bioimage Analysis Pipelines.
-In 2023 IEEE 20th International Symposium on Biomedical Imaging (ISBI) (pp. 1-5). IEEE.
+Franco-Barranco, D., Andrés-San Román, J.A., Hidalgo-Cenalmor, I.,
+Backová, L., González-Marfil, A., Caporal, C., Chessel, A., Gómez-Gálvez, P.,
+Escudero, L.M., Wei, D., Muñoz-Barrutia, A. and Arganda-Carreras, I.
+BiaPy: accessible deep learning on bioimages. Nat Methods 22, 1124–1126 (2025).
+https://doi.org/10.1038/s41592-025-02699-y
 ``` 
