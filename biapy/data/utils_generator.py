@@ -68,26 +68,40 @@ def rotation_raw(image, angle, mask=None, heat=None, backend="cv2", cval=0, orde
 
 # Done
 def shift_raw(image, mask=None, heat=None, x=None, y=None, shift_range=None, cval=0, mode="constant", order_image=1, order_mask=0, order_heat=1):
-    # If shift_range is provided, sample x and y from the range
+
+    # If shift_range is provided, sample x and y from it
     if shift_range is not None:
         if isinstance(shift_range, (tuple, list)) and len(shift_range) == 2:
             x = random.uniform(shift_range[0], shift_range[1])
             y = random.uniform(shift_range[0], shift_range[1])
         else:
             raise ValueError("shift_range must be a tuple or list of length 2")
+
     if x is None or y is None:
         raise ValueError("x and y must be specified if shift_range is not provided")
-    
-    if image.ndim == 2:
-        shift_tuple = (y, x)
-    elif image.ndim == 3:
-        shift_tuple = (y, x, 0)  # do not shift channel dimension
-    else:
-        raise ValueError(f"Unsupported image ndim: {image.ndim}")
 
-    img_aug = shift(image, shift_tuple, order=order_image, mode=mode, cval=cval)
-    mask_aug = shift(mask, shift_tuple, order=order_mask, mode=mode, cval=cval) if mask is not None else None
-    heat_aug = shift(heat, shift_tuple, order=order_heat, mode=mode, cval=cval) if heat is not None else None
+    # Define shift tuples based on actual ndim of each input
+    def get_shift_tuple(array, x, y):
+        if array.ndim == 2:
+            return (y, x)
+        elif array.ndim == 3:
+            return (y, x, 0)  # do not shift channel dimension
+        else:
+            raise ValueError(f"Unsupported ndim: {array.ndim}")
+
+    shift_tuple_image = get_shift_tuple(image, x, y)
+    img_aug = shift(image, shift_tuple_image, order=order_image, mode=mode, cval=cval)
+
+    mask_aug = None
+    if mask is not None:
+        shift_tuple_mask = get_shift_tuple(mask, x, y)
+        mask_aug = shift(mask, shift_tuple_mask, order=order_mask, mode=mode, cval=cval)
+
+    heat_aug = None
+    if heat is not None:
+        shift_tuple_heat = get_shift_tuple(heat, x, y)
+        heat_aug = shift(heat, shift_tuple_heat, order=order_heat, mode=mode, cval=cval)
+
     return img_aug, mask_aug, heat_aug
 
 # Done
@@ -119,18 +133,27 @@ def shear_raw(image, shear, mask=None, heat=None, cval=0, order_image=1, order_m
     else:
         raise ValueError("Invalid shear parameter format. Use a single number, a tuple (x, y), or a dictionary {'x': val_x, 'y': val_y}.")
     
-    h, w = image.shape[:2]
+    def _restore_channels(original, warped):
+        if original is not None and original.ndim == 3 and warped.ndim == 2:
+            return warped[..., np.newaxis]
+        return warped
+
+    h_img, w_img = image.shape[:2]
+    h_mask, w_mask = mask.shape[:2] if mask is not None else (None, None)
+    h_heat, w_heat = heat.shape[:2] if heat is not None else (None, None)
+
     if backend == "skimage":
         tform = build_shear_matrix_skimage(image.shape, np.deg2rad(shear_x), np.deg2rad(shear_y))
-        img_aug = _warp_affine_arr_skimage(image, tform, cval=cval, mode=mode, order=order_image, output_shape=(h, w))
-        mask_aug = _warp_affine_arr_skimage(mask, tform, cval=cval, mode=mode, order=order_mask, output_shape=(h, w)) if mask is not None else None
-        heat_aug = _warp_affine_arr_skimage(heat, tform, cval=cval, mode=mode, order=order_heat, output_shape=(h, w)) if heat is not None else None
+        img_aug = _restore_channels(image, _warp_affine_arr_skimage(image, tform, cval=cval, mode=mode, order=order_image, output_shape=(h_img, w_img)))
+        mask_aug = _restore_channels(mask, _warp_affine_arr_skimage(mask, tform, cval=cval, mode=mode, order=order_mask, output_shape=(h_mask, w_mask))) if mask is not None else None
+        heat_aug = _restore_channels(heat, _warp_affine_arr_skimage(heat, tform, cval=cval, mode=mode, order=order_heat, output_shape=(h_heat, w_heat))) if heat is not None else None
         return img_aug, mask_aug, heat_aug
     elif backend == "cv2":
         tform = build_shear_matrix_cv2(image.shape, np.deg2rad(shear_x), np.deg2rad(shear_y))
-        img_aug = np.squeeze(_warp_affine_arr_cv2(image, tform, cval=cval, mode=mode, order=order_image, output_shape=(h, w)))
-        mask_aug = np.squeeze(_warp_affine_arr_cv2(mask, tform, cval=cval, mode=mode, order=order_mask, output_shape=(h, w))) if mask is not None else None
-        heat_aug = np.squeeze(_warp_affine_arr_cv2(heat, tform, cval=cval, mode=mode, order=order_heat, output_shape=(h, w))) if heat is not None else None
+        img_aug = _restore_channels(image, _warp_affine_arr_cv2(image, tform, cval=cval, mode=mode, order=order_image, output_shape=(h_img, w_img)))
+        mask_aug = _restore_channels(mask, _warp_affine_arr_cv2(mask, tform, cval=cval, mode=mode, order=order_mask, output_shape=(h_mask, w_mask))) if mask is not None else None
+        heat_aug = _restore_channels(heat, _warp_affine_arr_cv2(heat, tform, cval=cval, mode=mode, order=order_heat, output_shape=(h_heat, w_heat))) if heat is not None else None
+
         return img_aug, mask_aug, heat_aug
     else:
         raise ValueError(f"Unknown backend {backend}")
@@ -573,17 +596,26 @@ def elastic_raw(image: np.ndarray,
                 cval: float = 0,
                 mode: str = "constant",
                 random_seed=None):
+
     if random_seed is not None:
         np.random.seed(random_seed)
 
-    alphas, sigmas = _draw_samples(alpha, sigma, nb_images=1)
-    dx, dy = _generate_shift_maps(
-        shape=image.shape[:2],
-        alpha=alphas[0],
-        sigma=sigmas[0]
-    )
+    def warp_with_new_displacement(tensor, alpha, sigma, order, cval, mode):
+        if tensor is None:
+            return None
+        dx, dy = _generate_shift_maps(
+            shape=tensor.shape[:2],
+            alpha=alpha,
+            sigma=sigma
+        )
+        return _map_coordinates(tensor, dx, dy, order=order, cval=cval, mode=mode)
 
-    img_warped3 = _map_coordinates(image, dx, dy, order=order_image, cval=cval, mode=mode) if image is not None else None
-    mask_warped3 = _map_coordinates(mask, dx, dy, order=order_mask, cval=cval, mode=mode) if mask is not None else None
-    heat_warped3 = _map_coordinates(heat, dx, dy, order=order_heat, cval=cval, mode=mode) if heat is not None else None
+    alphas, sigmas = _draw_samples(alpha, sigma, nb_images=1)
+    alpha_val = alphas[0]
+    sigma_val = sigmas[0]
+
+    img_warped3 = warp_with_new_displacement(image, alpha_val, sigma_val, order_image, cval, mode)
+    mask_warped3 = warp_with_new_displacement(mask, alpha_val, sigma_val, order_mask, cval, mode)
+    heat_warped3 = warp_with_new_displacement(heat, alpha_val, sigma_val, order_heat, cval, mode)
+
     return img_warped3, mask_warped3, heat_warped3
