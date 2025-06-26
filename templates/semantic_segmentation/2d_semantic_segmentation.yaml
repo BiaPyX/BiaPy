@@ -1,49 +1,49 @@
-# BiaPy version: 3.5.13
+    # BiaPy version: 3.5.13
 
-SYSTEM:
-    NUM_CPUS: -1
+    SYSTEM:
+        NUM_CPUS: -1
 
-PROBLEM:
-    TYPE: SEMANTIC_SEG
-    NDIM: 2D
-  
-DATA: 
-    PATCH_SIZE: (256, 256, 1)
-    TRAIN:                                                                                                              
-        PATH: /path/to/data
-        GT_PATH: /path/to/data
-        IN_MEMORY: True
-    VAL:
-        SPLIT_TRAIN: 0.1
-    TEST:                                                                                                               
-        PATH: /path/to/data
-        GT_PATH: /path/to/data
-        IN_MEMORY: True
-        LOAD_GT: True
-        PADDING: (32,32)
+    PROBLEM:
+        TYPE: SEMANTIC_SEG
+        NDIM: 2D
+    
+    DATA: 
+        PATCH_SIZE: (256, 256, 1)
+        TRAIN:                                                                                                              
+            PATH: /path/to/data
+            GT_PATH: /path/to/data
+            IN_MEMORY: True
+        VAL:
+            SPLIT_TRAIN: 0.1
+        TEST:                                                                                                               
+            PATH: /path/to/data
+            GT_PATH: /path/to/data
+            IN_MEMORY: True
+            LOAD_GT: True
+            PADDING: (32,32)
 
-AUGMENTOR:
-    ENABLE: True
-    RANDOM_ROT: True
-    VFLIP: True
-    HFLIP: True
+    AUGMENTOR:
+        ENABLE: True
+        RANDOM_ROT: True
+        VFLIP: True
+        HFLIP: True
 
-MODEL:
-    ARCHITECTURE: unet
-    FEATURE_MAPS: [16, 32, 64, 128, 256]
-    LOAD_CHECKPOINT: False
+    MODEL:
+        ARCHITECTURE: unet
+        FEATURE_MAPS: [16, 32, 64, 128, 256]
+        LOAD_CHECKPOINT: False
 
-TRAIN:
-    ENABLE: True
-    OPTIMIZER: ADAMW
-    LR: 1.E-3
-    BATCH_SIZE: 6
-    EPOCHS: 20
-    PATIENCE: 20
-    LR_SCHEDULER:
-        NAME: 'onecycle'    # use one-cycle learning rate scheduler
-  
-TEST:
-    ENABLE: True
-    AUGMENTATION: False
-    FULL_IMG: False
+    TRAIN:
+        ENABLE: True
+        OPTIMIZER: ADAMW
+        LR: 1.E-3
+        BATCH_SIZE: 6
+        EPOCHS: 20
+        PATIENCE: 20
+        LR_SCHEDULER:
+            NAME: 'onecycle'    # use one-cycle learning rate scheduler
+    
+    TEST:
+        ENABLE: True
+        AUGMENTATION: False
+        FULL_IMG: False
