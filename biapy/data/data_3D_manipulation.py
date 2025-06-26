@@ -422,6 +422,13 @@ def crop_3D_data_with_overlap(
             )
     if len(vol_shape) != 4:
         raise ValueError("vol_shape expected to be of length 4, given {}".format(vol_shape))
+    for i, p in enumerate(padding):
+        if p >= vol_shape[i] // 2:
+            raise ValueError(
+                "'Padding' can not be greater than the half of 'vol_shape'. Max value for this {} input shape is {}".format(
+                    vol_shape, ((vol_shape[0] // 2) - 1, (vol_shape[1] // 2) - 1, (vol_shape[2] // 2) - 1)
+                )
+            )
     if vol_shape[0] > data.shape[0]:
         raise ValueError(
             "'vol_shape[0]' {} greater than {} (you can reduce 'DATA.PATCH_SIZE' or use 'DATA.REFLECT_TO_COMPLETE_SHAPE')".format(
@@ -525,6 +532,7 @@ def crop_3D_data_with_overlap(
 
     total_vol = vols_per_z * vols_per_y * vols_per_x
     if load_data:
+        
         cropped_data = np.zeros((total_vol,) + padded_vol_shape, dtype=data.dtype)
         if data_mask is not None:
             cropped_data_mask = np.zeros(
