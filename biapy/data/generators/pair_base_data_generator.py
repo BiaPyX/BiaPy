@@ -22,10 +22,6 @@ from biapy.data.data_3D_manipulation import extract_patch_from_efficient_file
 from biapy.data.dataset import BiaPyDataset
 from biapy.data.norm import Normalization
 
-## Added
-from biapy.data.utils_generator import (elastic_raw, shear_raw, shift_raw, flip_vertical_raw, flip_horizontal_raw, 
-                    gaussian_blur_raw, median_blur_raw, motion_blur_raw, dropout_raw)
-
 
 class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
     """
@@ -523,14 +519,12 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 # Store which channels are binary or not (e.g. distance transform channel is not binary)
                 self.norm_module.set_stats_from_mask(mask, n_classes=n_classes, ignore_index=ignore_index, instance_problem=instance_problem)
 
-        # |-- BEGINNING CHANGED BLOCK --|
         # Check if any channel is not binary to set no_bin_channel_found to True
         if self.norm_module.channel_info:
             self.no_bin_channel_found = any(
                 self.norm_module.get_channel_info(j)["type"] == "no_bin"
                 for j in range(len(self.norm_module.channel_info))
             )
-        # |-- ENDING CHANGED BLOCK --|
 
         _, mask = self.load_sample(0)
         self.Y_channels = mask.shape[-1]
@@ -610,7 +604,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.gamma_contrast = gamma_contrast
         self.gc_gamma = gc_gamma
 
-        ## |--CHANGED BLOCK START--|
         self.elastic = elastic
         self.shear = shear
         self.shift = shift
@@ -631,7 +624,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.g_sigma = g_sigma
         self.mb_kernel = mb_kernel
         self.motb_k_range = motb_k_range 
-        ## |-- CHANGED BLOCK END --|
 
         # Instance segmentation options
         self.instance_problem = instance_problem
@@ -1215,7 +1207,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             )
    
         if self.elastic and random.uniform(0, 1) < self.da_prob:
-            image, mask, heat = elastic_raw(
+            image, mask, heat = elastic(
                 image, mask=mask, heat=heat,
                 alpha=self.e_alpha,  # or pick a value from the tuple, e.g., random.randint(*self.e_alpha)
                 sigma=self.e_sigma,
@@ -1223,53 +1215,52 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             )
 
         if self.shear and random.uniform(0, 1) < self.da_prob:
-            image, mask, heat = shear_raw(
+            image, mask, heat = shear(
                 image, mask=mask, heat=heat,
                 shear=self.shear_range,
                 mode=self.affine_mode
             )
         
         if self.shift and random.uniform(0, 1) < self.da_prob:
-            image, mask, heat = shift_raw(
+            image, mask, heat = shift(
                 image, mask=mask, heat=heat,
                 shift_range=self.shift_range,
                 mode=self.affine_mode
             )
 
         if self.vflip and random.uniform(0, 1) < self.da_prob:
-            image, mask, heat = flip_vertical_raw(
+            image, mask, heat = flip_vertical(
                 image, mask=mask, heat=heat
             )
         
         if self.hflip and random.uniform(0, 1) < self.da_prob:
-            image, mask, heat = flip_horizontal_raw(
+            image, mask, heat = flip_horizontal(
                 image, mask=mask, heat=heat
             )
         
         if self.g_blur and random.uniform(0, 1) < self.da_prob:
-            image, mask, heat = gaussian_blur_raw(
-                image, mask=mask, heat=heat,
+            image = gaussian_blur(
+                image,
                 sigma=self.g_sigma
-            ) # Mask and heat unchanged
+            )
 
         if self.median_blur and random.uniform(0, 1) < self.da_prob:
-            image, mask, heat = median_blur_raw(
-                image, mask=mask, heat=heat,
+            image = median_blur(
+                image,
                 k_range=self.mb_kernel
-            ) # Mask and heat unchanged
+            )
 
         if self.motion_blur and random.uniform(0, 1) < self.da_prob:
-            image, mask, heat = motion_blur_raw(
-                image, mask=mask, heat=heat,
+            image = motion_blur(
+                image,
                 k_range=self.motb_k_range
-            ) # Mask and heat unchanged
+            )
 
         if self.dropout and random.uniform(0, 1) < self.da_prob:
-            image, mask, heat = dropout_raw(
-                image, mask=mask, heat=heat,
+            image = dropout(
+                image,
                 drop_range=self.drop_range
-            ) # Mask and heat unchanged
-
+            )
 
         # Recover the original shape
         image = image.reshape(o_img_shape)

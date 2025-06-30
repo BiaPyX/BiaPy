@@ -19,10 +19,6 @@ from biapy.data.data_3D_manipulation import extract_patch_from_efficient_file
 from biapy.data.dataset import BiaPyDataset
 from biapy.data.norm import Normalization
 
-from biapy.data.utils_generator import (elastic_raw, shear_raw, shift_raw, flip_vertical_raw, 
-                     flip_horizontal_raw, gaussian_blur_raw, median_blur_raw, motion_blur_raw, dropout_raw)
-
-
 class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
     """
     Custom BaseDataGenerator based on `imgaug <https://github.com/aleju/imgaug-doc>`_
@@ -240,7 +236,6 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.seed = seed
         self.indexes = self.o_indexes.copy()
 
-        ## |--CHANGED BLOCK START--|
         self.elastic = elastic
         self.shear = shear
         self.shift = shift
@@ -260,7 +255,6 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.g_sigma = g_sigma
         self.mb_kernel = mb_kernel
         self.motb_k_range = motb_k_range 
-        ## |-- CHANGED BLOCK END --|
 
         self.da_options = []
         self.trans_made = ""
@@ -489,7 +483,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
             image = gamma_contrast(image, gamma=self.gc_gamma)  # type: ignore
 
         if self.elastic and random.uniform(0, 1) < self.da_prob:
-            image, _, _ = elastic_raw(
+            image, _, _ = elastic(
                 image,
                 alpha=self.e_alpha,  # or pick a value from the tuple, e.g., random.randint(*self.e_alpha)
                 sigma=self.e_sigma,
@@ -497,49 +491,49 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
             )
 
         if self.shear and random.uniform(0, 1) < self.da_prob:
-            image, _, _ = shear_raw(
+            image, _, _ = shear(
                 image,
                 shear=self.shear_range,
                 mode=self.affine_mode
             )
         
         if self.shift and random.uniform(0, 1) < self.da_prob:
-            image, _, _ = shift_raw(
+            image, _, _ = shift(
                 image,
                 shift_range=self.shift_range,
                 mode=self.affine_mode
             )
 
         if self.vflip and random.uniform(0, 1) < self.da_prob:
-            image, _, _ = flip_vertical_raw(
+            image, _, _ = flip_vertical(
                 image
             )
         
         if self.hflip and random.uniform(0, 1) < self.da_prob:
-            image, _, _ = flip_horizontal_raw(
+            image, _, _ = flip_horizontal(
                 image
             )
         
         if self.g_blur and random.uniform(0, 1) < self.da_prob:
-            image, _, _ = gaussian_blur_raw(
+            image = gaussian_blur(
                 image,
                 sigma=self.g_sigma
             )
 
         if self.median_blur and random.uniform(0, 1) < self.da_prob:
-            image, _, _ = median_blur_raw(
+            image = median_blur(
                 image,
                 k_range=self.mb_kernel
             )
 
         if self.motion_blur and random.uniform(0, 1) < self.da_prob:
-            image, _, _ = motion_blur_raw(
+            image = motion_blur(
                 image,
                 k_range=self.motb_k_range
             )
 
         if self.dropout and random.uniform(0, 1) < self.da_prob:
-            image, _, _ = dropout_raw(
+            image = dropout(
                 image,
                 drop_range=self.drop_range
             )
