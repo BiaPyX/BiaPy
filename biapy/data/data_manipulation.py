@@ -3196,6 +3196,7 @@ def read_img_as_ndarray(path: str, is_3d: bool = False) -> NDArray:
         Image read. E.g. ``(z, y, x, channels)`` for 3D or ``(y, x, channels)`` for 2D.
     """
     # Read image
+    axes_position = None
     if path.endswith(".npy"):
         img = np.load(path)
     elif path.endswith(".pt"):
@@ -3209,13 +3210,13 @@ def read_img_as_ndarray(path: str, is_3d: bool = False) -> NDArray:
         _, img = read_chunked_data(path)
         img = np.array(img)
     else:
-        img = imread(path)
+        img, axes_position = imread(path)
     img = np.squeeze(img)
 
     if not is_3d:
         img = ensure_2d_shape(img, path)
     else:
-        img = ensure_3d_shape(img, path)
+        img = ensure_3d_shape(img, path, data_axes_order=axes_position)
 
     return img
 
@@ -3236,9 +3237,13 @@ def imread(path: str) -> NDArray:
         Image read.
     """
     if path.lower().endswith((".tiff", ".tif")):
-        return tifffile.imread(path)
+        try:
+            with tifffile.TiffFile(path) as tif:
+                return tif.series[0].asarray(), tif.series[0].axes
+        except:
+            return tifffile.imread(path), None
     else:
-        return imageio.imread(path)
+        return imageio.imread(path), None
 
 
 def imwrite(path: str, image: NDArray):
