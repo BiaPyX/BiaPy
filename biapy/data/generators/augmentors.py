@@ -2028,10 +2028,18 @@ def shift(image: np.ndarray, mask: Optional[np.ndarray] = None, heat: Optional[n
     """
     # Assume shift_range is always a tuple/list of length 2
     if shift_range is not None:
-        x = random.uniform(shift_range[0], shift_range[1])
-        y = random.uniform(shift_range[0], shift_range[1])
-    if x is None or y is None:
-        raise ValueError("x and y must be specified if shift_range is not provided")
+        # Image shape can be 2D or 3D (H, W) or (H, W, C)
+        h, w = image.shape[:2]
+
+        # Randomly pick shift percentage in x and y direction within the range
+        shift_x_perc = random.uniform(shift_range[0], shift_range[1])
+        shift_y_perc = random.uniform(shift_range[0], shift_range[1])
+
+        # Convert percentage to pixel shifts (round or floor)
+        x = int(round(shift_x_perc * w))
+        y = int(round(shift_y_perc * h))
+    else:
+        raise ValueError("shift_range must be provided")
     
     # Define shift tuples based on actual ndim of each input
     def get_shift_tuple(array, x, y):
