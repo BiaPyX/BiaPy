@@ -5,8 +5,6 @@ import numpy as np
 import random
 import h5py
 from tqdm import tqdm
-import imgaug as ia
-from imgaug import augmenters as iaa
 from typing import (
     Tuple,
     Literal,
@@ -20,7 +18,6 @@ from biapy.data.data_manipulation import load_img_data
 from biapy.data.data_3D_manipulation import extract_patch_from_efficient_file
 from biapy.data.dataset import BiaPyDataset
 from biapy.data.norm import Normalization
-
 
 class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
     """
@@ -239,6 +236,26 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.seed = seed
         self.indexes = self.o_indexes.copy()
 
+        self.elastic = elastic
+        self.shear = shear
+        self.shift = shift
+        self.vflip = vflip
+        self.hflip = hflip
+        self.g_blur = g_blur
+        self.median_blur = median_blur
+        self.motion_blur = motion_blur
+        self.dropout = dropout
+        self.drop_range = drop_range
+        self.e_alpha = e_alpha
+        self.e_sigma = e_sigma
+        self.e_mode = e_mode
+        self.shear_range = shear_range
+        self.shift_range = shift_range
+        self.affine_mode = affine_mode
+        self.g_sigma = g_sigma
+        self.mb_kernel = mb_kernel
+        self.motb_k_range = motb_k_range 
+
         self.da_options = []
         self.trans_made = ""
         if rotation90:
@@ -246,45 +263,30 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         if rand_rot:
             self.trans_made += "_rrot" + str(rnd_rot_range)
         if shear:
-            self.da_options.append(iaa.Sometimes(da_prob, iaa.Affine(rotate=shear_range, mode=affine_mode)))
             self.trans_made += "_shear" + str(shear_range)
         if zoom:
             self.trans_made += "_zoom" + str(zoom_range) + "+" + str(zoom_in_z)
         if shift:
-            self.da_options.append(iaa.Sometimes(da_prob, iaa.Affine(translate_percent=shift_range, mode=affine_mode)))
             self.trans_made += "_shift" + str(shift_range)
         if vflip:
-            self.da_options.append(iaa.Flipud(da_prob))  # type: ignore
             self.trans_made += "_vflip"
         if hflip:
-            self.da_options.append(iaa.Fliplr(da_prob))  # type: ignore
             self.trans_made += "_hflip"
         if elastic:
-            self.da_options.append(
-                iaa.Sometimes(
-                    da_prob,
-                    iaa.ElasticTransformation(alpha=e_alpha, sigma=e_sigma, mode=e_mode),
-                )
-            )
             self.trans_made += "_elastic" + str(e_alpha) + "+" + str(e_sigma) + "+" + str(e_mode)
         if g_blur:
-            self.da_options.append(iaa.Sometimes(da_prob, iaa.GaussianBlur(g_sigma)))
             self.trans_made += "_gblur" + str(g_sigma)
         if median_blur:
-            self.da_options.append(iaa.Sometimes(da_prob, iaa.MedianBlur(k=mb_kernel)))
             self.trans_made += "_mblur" + str(mb_kernel)
         if motion_blur:
-            self.da_options.append(iaa.Sometimes(da_prob, iaa.MotionBlur(k=motb_k_range)))
             self.trans_made += "_motb" + str(motb_k_range)
         if gamma_contrast:
             self.trans_made += "_gcontrast" + str(gc_gamma)
         if dropout:
-            self.da_options.append(iaa.Sometimes(da_prob, iaa.Dropout(p=drop_range)))
             self.trans_made += "_drop" + str(drop_range)
 
         self.trans_made = self.trans_made.replace(" ", "")
-        self.seq = iaa.Sequential(self.da_options)
-        ia.seed(seed)
+        random.seed(seed)
 
     @abstractmethod
     def save_aug_samples(
@@ -480,8 +482,61 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         if self.gamma_contrast and random.uniform(0, 1) < self.da_prob:
             image = gamma_contrast(image, gamma=self.gc_gamma)  # type: ignore
 
-        # Apply transformations to the image
-        image = self.seq(image=image)  # type: ignore
+        if self.elastic and random.uniform(0, 1) < self.da_prob:
+            image, _, _ = elastic(
+                image,
+                alpha=self.e_alpha,  # or pick a value from the tuple, e.g., random.randint(*self.e_alpha)
+                sigma=self.e_sigma,
+                mode=self.e_mode
+            )
+
+        if self.shear and random.uniform(0, 1) < self.da_prob:
+            image, _, _ = shear(
+                image,
+                shear=self.shear_range,
+                mode=self.affine_mode
+            )
+        
+        if self.shift and random.uniform(0, 1) < self.da_prob:
+            image, _, _ = shift(
+                image,
+                shift_range=self.shift_range,
+                mode=self.affine_mode
+            )
+
+        if self.vflip and random.uniform(0, 1) < self.da_prob:
+            image, _, _ = flip_vertical(
+                image
+            )
+        
+        if self.hflip and random.uniform(0, 1) < self.da_prob:
+            image, _, _ = flip_horizontal(
+                image
+            )
+        
+        if self.g_blur and random.uniform(0, 1) < self.da_prob:
+            image = gaussian_blur(
+                image,
+                sigma=self.g_sigma
+            )
+
+        if self.median_blur and random.uniform(0, 1) < self.da_prob:
+            image = median_blur(
+                image,
+                k_range=self.mb_kernel
+            )
+
+        if self.motion_blur and random.uniform(0, 1) < self.da_prob:
+            image = motion_blur(
+                image,
+                k_range=self.motb_k_range
+            )
+
+        if self.dropout and random.uniform(0, 1) < self.da_prob:
+            image = dropout(
+                image,
+                drop_range=self.drop_range
+            )
 
         # Recover the original shape
         image = image.reshape(o_img_shape)

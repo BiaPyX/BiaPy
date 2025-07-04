@@ -10,6 +10,8 @@ from scipy.ndimage import binary_dilation as binary_dilation_scipy
 from scipy.ndimage import rotate, label
 from typing import Tuple, Any, Union, Optional, List
 from numpy.typing import NDArray
+from scipy.ndimage import median_filter, interpolation, shift as shift_nd
+from skimage.transform import AffineTransform, warp
 
 
 def cutout(
@@ -728,7 +730,7 @@ def contrast(image: NDArray, contrast_factor: Tuple[float, float] = (0, 0), mode
     return image
 
 
-def missing_sections(img: NDArray, iterations: Tuple[int, int] = (30, 40)) -> NDArray:
+def missing_sections(img: NDArray, iterations: Tuple[int, int] = (30, 40), channel_prob: float = 0.5) -> NDArray:
     """
     Augment the image by creating a black line in a random position.
 
@@ -742,6 +744,9 @@ def missing_sections(img: NDArray, iterations: Tuple[int, int] = (30, 40)) -> ND
 
     iterations : tuple of 2 ints, optional
         Iterations to dilate the missing line with. E.g. ``(30, 40)``.
+    
+    channel_prob : float, optional
+        Probability of applying a missing section to each channel individually. 
 
     Returns
     -------
@@ -780,7 +785,7 @@ def missing_sections(img: NDArray, iterations: Tuple[int, int] = (30, 40)) -> ND
 
     i = 0
     while i < num_section:
-        if np.random.rand() < 0.5:
+        if np.random.rand() < channel_prob:
             transforms[i] = _prepare_deform_slice(slice_shape, it)
             i += 2  # at most one deformed image in any consecutive 3 images
         i += 1
@@ -793,7 +798,6 @@ def missing_sections(img: NDArray, iterations: Tuple[int, int] = (30, 40)) -> ND
             out[:, :, i][line_mask] = mean
 
     return out
-
 
 def _prepare_deform_slice(slice_shape: Tuple[int, ...], iterations: int) -> NDArray:
     """Auxiliary function for missing_sections."""
@@ -1911,3 +1915,638 @@ def gamma_contrast(img: NDArray, gamma: Tuple[float, float] = (0, 1)) -> NDArray
     _gamma = random.uniform(gamma[0], gamma[1])
 
     return adjust_gamma(np.clip(img, 0, 1), gamma=_gamma)  # type: ignore
+
+def shear(image: np.ndarray, shear: tuple, mask: Optional[np.ndarray] = None, heat: Optional[np.ndarray] = None, 
+    cval: float = 0, order_image: int = 1, order_mask: int = 0, order_heat: int = 1, mode: str = "constant"):
+    """
+    Apply a shear transformation to an image (and optional mask/heatmap).
+
+    Parameters
+    ----------
+    image : 3D/4D Numpy array
+        Image to shear. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+
+    mask : 3D/4D Numpy array, optional
+        Mask to shear. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+
+    heat : 3D/4D Numpy array, optional
+        Heatmap (float mask) to shear. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+    
+    shear : tuple
+        Shear range (min, max) in degrees for both x and y directions.
+    
+    cval : float
+        Value used for points outside the boundaries.
+    
+    order_image : int
+        Interpolation order for the image.
+    
+    order_mask : int
+        Interpolation order for the mask.
+    
+    order_heat : int
+        Interpolation order for the heatmap.
+    
+    mode : str
+        Points outside boundaries are filled according to this mode.
+
+    Returns
+    -------
+    img : 3D/4D Numpy array
+        Sheared image. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+
+    mask : 3D/4D Numpy array, optional
+        Sheared mask. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+
+    heat : 3D/4D Numpy array, optional
+        Sheared heatmap. E.g. ``(y, x, channels)`` for ``2D`` or ``(y, x, z, channels)`` for ``3D``.
+
+    """
+    # Get shear values
+    shear_x = random.randint(shear[0], shear[1])
+    shear_y = random.randint(shear[0], shear[1])
+
+    def _restore_channels(original, warped):
+        if original is not None and original.ndim == 3 and warped.ndim == 2:
+            return warped[..., np.newaxis]
+        return warped
+
+    h_img, w_img = image.shape[:2]
+    h_mask, w_mask = mask.shape[:2] if mask is not None else (None, None)
+    h_heat, w_heat = heat.shape[:2] if heat is not None else (None, None)
+
+    tform = build_shear_matrix_skimage(image.shape, np.deg2rad(shear_x), np.deg2rad(shear_y))
+    img = _restore_channels(image, _warp_affine_arr_skimage(image, tform, cval=cval, mode=mode, order=order_image, output_shape=(h_img, w_img)))
+    mask = _restore_channels(mask, _warp_affine_arr_skimage(mask, tform, cval=cval, mode=mode, order=order_mask, output_shape=(h_mask, w_mask))) if mask is not None else None
+    heat = _restore_channels(heat, _warp_affine_arr_skimage(heat, tform, cval=cval, mode=mode, order=order_heat, output_shape=(h_heat, w_heat))) if heat is not None else None
+    
+    return img, mask, heat
+
+def shift(image: np.ndarray, mask: Optional[np.ndarray] = None, heat: Optional[np.ndarray] = None, shift_range: Optional[tuple] = None, cval: float = 0, 
+    mode: str = "constant", order_image: int = 1, order_mask: int = 0, order_heat: int = 1):
+    """
+    Shift an image (and optional mask/heatmap) by a random amount within a range.
+
+    Parameters
+    ----------
+    image : 3D/4D Numpy array
+        Image to shift. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+
+    mask : 3D/4D Numpy array, optional
+        Mask to shift. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+
+    heat : 3D/4D Numpy array, optional
+        Heatmap (float mask) to shift. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+  
+    shift_range : Optional[tuple]
+        Range (min, max) for random shift in both x and y directions.
+    
+    cval : float
+        Value used for points outside the boundaries.
+    
+    mode : str
+        Points outside boundaries are filled according to this mode.
+    
+    order_image : int
+        Interpolation order for the image.
+    
+    order_mask : int
+        Interpolation order for the mask.
+    
+    order_heat : int
+        Interpolation order for the heatmap.
+
+    Returns
+    -------
+    img : 3D/4D Numpy array
+        Shifted image. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+
+    mask : 3D/4D Numpy array, optional
+        Shifted mask. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+
+    heat : 3D/4D Numpy array, optional
+        Shifted heatmap. E.g. ``(y, x, channels)`` for ``2D`` or ``(y, x, z, channels)`` for ``3D``.
+
+    """
+    # Assume shift_range is always a tuple/list of length 2
+    if shift_range is not None:
+        # Image shape can be 2D or 3D (H, W) or (H, W, C)
+        h, w = image.shape[:2]
+
+        # Randomly pick shift percentage in x and y direction within the range
+        shift_perc = random.uniform(shift_range[0], shift_range[1])
+
+        # Convert percentage to pixel shifts (round or floor)
+        x = int(round(shift_perc * w))
+        y = int(round(shift_perc * h))
+    else:
+        raise ValueError("shift_range must be provided")
+    
+    # Define shift tuples based on actual ndim of each input
+    def get_shift_tuple(array, x, y):
+        if array.ndim == 2:
+            return (y, x)
+        elif array.ndim == 3:
+            return (y, x, 0)  # do not shift channel dimension
+        else:
+            raise ValueError(f"Unsupported ndim: {array.ndim}")
+        
+    shift_tuple_image = get_shift_tuple(image, x, y)
+    img = shift_nd(image, shift_tuple_image, order=order_image, mode=mode, cval=cval)
+
+    if mask is not None:
+        shift_tuple_mask = get_shift_tuple(mask, x, y)
+        mask = shift_nd(mask, shift_tuple_mask, order=order_mask, mode=mode, cval=cval)
+
+    if heat is not None:
+        shift_tuple_heat = get_shift_tuple(heat, x, y)
+        heat = shift_nd(heat, shift_tuple_heat, order=order_heat, mode=mode, cval=cval)
+
+    return img, mask, heat
+
+def flip_horizontal(image: np.ndarray, mask: Optional[np.ndarray] = None, heat: Optional[np.ndarray] = None):
+    """
+    Flip an image (and optional mask/heatmap) horizontally (left-right).
+
+    Parameters
+    ----------
+    image : 3D/4D Numpy array
+        Image to flip. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+
+    mask : 3D/4D Numpy array, optional
+        Mask to flip. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+
+    heat : 3D/4D Numpy array, optional
+        Heatmap (float mask) to flip. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+
+    Returns
+    -------
+    img : 3D/4D Numpy array
+        Flipped image. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+    
+    mask : 3D/4D Numpy array or None
+        Flipped mask if provided, else None.
+    
+    heat : 3D/4D Numpy array or None
+        Flipped heatmap if provided, else None.
+    """
+    img = np.fliplr(image)
+    mask = np.fliplr(mask) if mask is not None else None
+    heat = np.fliplr(heat) if heat is not None else None
+    return img, mask, heat
+
+def flip_vertical(image: np.ndarray, mask: Optional[np.ndarray] = None, heat: Optional[np.ndarray] = None):
+    """
+    Flip an image (and optional mask/heatmap) vertically (up-down).
+
+    Parameters
+    ----------
+    image : 3D/4D Numpy array
+        Image to flip. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+
+    mask : 3D/4D Numpy array, optional
+        Mask to flip. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+
+    heat : 3D/4D Numpy array, optional
+        Heatmap (float mask) to flip. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+
+    Returns
+    -------
+    img : 3D/4D Numpy array
+        Flipped image. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+    
+    mask : 3D/4D Numpy array, optional
+        Flipped mask. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+    
+    heat : 3D/4D Numpy array, optional
+        Flipped heatmap. E.g. ``(y, x, channels)`` for ``2D`` or ``(y, x, z, channels)`` for ``3D``.
+    """
+    img = np.flipud(image)
+    mask = np.flipud(mask) if mask is not None else None
+    heat = np.flipud(heat) if heat is not None else None
+    return img, mask, heat
+
+def gaussian_blur(image: np.ndarray, sigma: float):
+    """
+    Apply Gaussian blur to an image.
+
+    Parameters
+    ----------
+    image : 3D/4D Numpy array
+        Image to Blur. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+    
+    sigma : float or tuple
+        Standard deviation for Gaussian kernel. If tuple, a random value is chosen from the range.
+   
+    Returns
+    -------
+    img : np.ndarray
+        Blurred image. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+    
+    """
+    # Needed for elastic as integer
+    if isinstance(sigma, tuple):
+        sigma = random.uniform(sigma[0], sigma[1])
+
+    ksize = int(max(3.3 * sigma if sigma < 3.0 else 2.9 * sigma if sigma < 5.0 else 2.6 * sigma, 5))
+    ksize = ksize + 1 if ksize % 2 == 0 else ksize
+    img = cv2.GaussianBlur(image, (ksize, ksize), sigmaX=float(sigma), sigmaY=float(sigma), borderType=cv2.BORDER_REFLECT_101)
+    return img
+
+def median_blur(image: np.ndarray, k_range: Optional[tuple] = None):
+    """
+    Apply median blur to an image.
+
+    Parameters
+    ----------
+    image : 3D/4D Numpy array
+        Image to Blur. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+    
+    k_range : Optional[tuple]
+        Range (min, max) for random kernel size (must be odd).
+   
+    Returns
+    -------
+    img : np.ndarray
+        Blurred image. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+   
+    """
+    k = random.randint(k_range[0], k_range[1])
+    
+    if k % 2 == 0:
+        k += 1
+    if k <= 1:
+        return image
+    
+    has_zero_sized_axes = (image.size == 0)
+    
+    if k > 1 and not has_zero_sized_axes:
+        if image.ndim == 2:
+            img = median_filter(image, size=k)
+        elif image.ndim == 3 and image.shape[-1] == 1:
+            img = median_filter(image[..., 0], size=k)[..., np.newaxis]
+        else:
+            channels = [median_filter(image[..., c], size=k) for c in range(image.shape[-1])]
+            img = np.stack(channels, axis=-1)
+        return img
+    else:
+        return image, mask, heat
+
+def motion_blur(image: np.ndarray, k_range: Optional[tuple] = None):
+    """
+    Apply motion blur to an image.
+
+    Parameters
+    ----------
+    image : 3D/4D Numpy array
+        Image to flip. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+    
+    k_range : Optional[tuple]
+        Range (min, max) for random kernel size (must be odd).
+
+    Returns
+    -------
+    img : np.ndarray
+        Blurred image. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+    """
+    input_shape = image.shape
+    nb_channels = 1 if len(input_shape) == 2 else input_shape[2]
+    
+    k = random.randint(k_range[0], k_range[1])
+    k_sample = k if k % 2 != 0 else k + 1
+    
+    angle = random.randint(0, 360)
+    direction_sample = random.uniform(-1, 1)
+    
+    matrix = np.zeros((k_sample, k_sample), dtype=np.float32)
+    matrix[:, k_sample // 2] = np.linspace(float(direction_sample), 1.0 - float(direction_sample), num=k_sample)
+    matrix_ours = _rotate(matrix, angle=angle)
+    matrix = matrix_ours.astype(np.float32) / np.sum(matrix_ours)
+    matrix = [matrix] * nb_channels
+
+    if image.size == 0:
+        return image
+    
+    if nb_channels == 1 and len(matrix) == 1:
+        image = cv2.filter2D(image, -1, matrix[0])
+    else:
+        for c in range(nb_channels):
+            arr_channel = np.copy(image[..., c])
+            image[..., c] = cv2.filter2D(arr_channel, -1, matrix[c])
+    
+    if len(input_shape) == 3 and image.ndim == 2:
+        image = image[:, :, np.newaxis]
+    
+    return image
+
+def dropout(image: np.ndarray, drop_range: tuple = (0.1, 0.2), random_state: Optional[np.random.RandomState] = None) -> tuple:
+    """
+    Randomly set a fraction of pixels in the image to zero (dropout).
+
+    Parameters
+    ----------
+    image : 3D/4D Numpy array
+        Image to apply dropout. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+    
+    drop_range : tuple
+        Range for dropout probability. A value is randomly chosen from this range.
+    
+    random_state : Optional[np.random.RandomState]
+        Random state for reproducibility.
+
+    Returns
+    -------
+    img : 3D/4D Numpy array
+        Image after dropout. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+    """
+    rng = np.random if random_state is None else random_state
+    p = rng.uniform(*drop_range)
+    
+    if p == 0:
+        return image
+    
+    if image.ndim == 2:
+        mask_shape = image.shape
+    else:
+        mask_shape = image.shape[:-1]
+    
+    keep_mask = rng.binomial(1, 1.0 - p, size=mask_shape).astype(image.dtype)
+   
+    if image.ndim > len(mask_shape):
+        keep_mask = np.expand_dims(keep_mask, axis=-1)
+    
+    image = image * keep_mask
+    return image
+
+def elastic(image: np.ndarray,
+                mask: Optional[np.ndarray] = None,
+                heat: Optional[np.ndarray] = None,
+                alpha: float = 14,
+                sigma: float = 4,
+                order_image: int = 3,
+                order_mask: int = 0,
+                order_heat: int = 1,
+                cval: float = 0,
+                mode: str = "constant",
+                random_seed = None):
+    """
+    Apply elastic deformation to an image (and optional mask/heatmap).
+
+    Parameters
+    ----------
+    image : 3D/4D Numpy array
+        Image to deform. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+    
+    mask : 3D/4D Numpy array, optional
+        Mask to deform. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+    
+    heat : 3D/4D Numpy array, optional
+        Heatmap (float mask) to deform. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+    
+    alpha : float
+        Scaling factor for deformation intensity.
+    
+    sigma : float
+        Standard deviation for Gaussian filter.
+    
+    order_image : int
+        Interpolation order for the image.
+    
+    order_mask : int
+        Interpolation order for the mask.
+    
+    order_heat : int
+        Interpolation order for the heatmap.
+    
+    cval : float
+        Value used for points outside the boundaries.
+    
+    mode : str
+        Points outside boundaries are filled according to this mode.
+    
+    random_seed : Optional[int]
+        Random seed for reproducibility.
+
+    Returns
+    -------
+    img : 3D/4D Numpy array
+        Deformed image. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+
+    mask : 3D/4D Numpy array, optional
+        Deformed mask. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
+
+    heat : 3D/4D Numpy array, optional
+        Deformed heatmap. E.g. ``(y, x, channels)`` for ``2D`` or ``(y, x, z, channels)`` for ``3D``.
+
+    """
+    if random_seed is not None:
+        np.random.seed(random_seed)
+
+    def warp_with_new_displacement(tensor, alpha, sigma, order, cval, mode):
+        dx, dy = _generate_shift_maps(
+            shape=tensor.shape[:2],
+            alpha=alpha,
+            sigma=sigma
+        )
+        return _map_coordinates(tensor, dx, dy, order=order, cval=cval, mode=mode)
+
+    alphas, sigmas = _draw_samples(alpha, sigma, nb_images=1)
+    alpha_val = alphas[0]
+    sigma_val = sigmas[0]
+
+    img = warp_with_new_displacement(image, alpha_val, sigma_val, order_image, cval, mode)
+    mask = warp_with_new_displacement(mask, alpha_val, sigma_val, order_mask, cval, mode) if mask is not None else mask
+    heat = warp_with_new_displacement(heat, alpha_val, sigma_val, order_heat, cval, mode) if heat is not None else heat
+
+    return img, mask, heat
+
+## Helpers  
+def build_shear_matrix_skimage(image_shape, shear_x_rad, shear_y_rad, shift_add=(0.5, 0.5)):
+    h, w = image_shape[:2]
+    if h == 0 or w == 0:
+        return AffineTransform()
+
+    shift_y = h / 2.0 - shift_add[0]
+    shift_x = w / 2.0 - shift_add[1]
+
+    matrix_to_topleft = AffineTransform(translation=[-shift_x, -shift_y])
+    matrix_to_center = AffineTransform(translation=[shift_x, shift_y])
+
+    matrix_shear_x = AffineTransform(shear=shear_x_rad)
+
+    matrix_shear_y_rot = AffineTransform(rotation=-np.pi / 2)
+    matrix_shear_y = AffineTransform(shear=shear_y_rad)
+    matrix_shear_y_rot_inv = AffineTransform(rotation=np.pi / 2)
+
+    # Correct order: shear_x then shear_y (via rotated frame)
+    matrix = (
+        matrix_to_topleft +
+        matrix_shear_x +
+        matrix_shear_y_rot +
+        matrix_shear_y +
+        matrix_shear_y_rot_inv +
+        matrix_to_center
+    )
+
+    return matrix
+
+def _compute_gaussian_blur_ksize(sigma):
+    if sigma < 3.0:
+        ksize = 3.3 * sigma  # 99% of weight
+    elif sigma < 5.0:
+        ksize = 2.9 * sigma  # 97% of weight
+    else:
+        ksize = 2.6 * sigma  # 95% of weight
+
+    ksize = int(max(ksize, 5))
+    return ksize
+
+def _normalize_cv2_input_arr_(arr):
+    flags = arr.flags
+    if not flags["OWNDATA"]:
+        arr = np.copy(arr)
+        flags = arr.flags
+    if not flags["C_CONTIGUOUS"]:
+        arr = np.ascontiguousarray(arr)
+    return arr
+
+def _warp_affine_arr_skimage(arr, matrix, cval, mode, order, output_shape):
+    image_warped = warp(
+        arr,
+        matrix.inverse,
+        order=order,
+            mode=mode,
+        cval=cval,
+            preserve_range=True,
+        output_shape=output_shape,
+    )
+    # tf.warp will output float64, so just cast to float32
+    return image_warped.astype(np.float32)
+
+def _draw_samples(alpha, sigma, nb_images):
+    # Use np.random for all randomness
+    def draw_param(param, size):
+        if isinstance(param, (int, float)):
+            out = np.full(size, param)
+        elif isinstance(param, str):
+            out = np.array([param] * size[0], dtype=object)
+        elif isinstance(param, tuple):
+            out = np.random.uniform(param[0], param[1], size=size) if len(param) == 2 else np.full(size, param[0])
+        else:
+            out = np.full(size, param)
+        return out
+
+    alphas = draw_param(alpha, (nb_images,))
+    sigmas = draw_param(sigma, (nb_images,))
+
+    return alphas, sigmas
+
+_MAPPING_MODE_SCIPY_CV2 = {
+    "constant": cv2.BORDER_CONSTANT,
+    "edge":     cv2.BORDER_REPLICATE,
+    "symmetric":cv2.BORDER_REFLECT,
+    "reflect":  cv2.BORDER_REFLECT_101,
+    "wrap":     cv2.BORDER_WRAP,
+    "nearest": cv2.BORDER_REPLICATE,
+}
+
+_MAPPING_ORDER_SCIPY_CV2 = {
+    0: cv2.INTER_NEAREST,
+    1: cv2.INTER_LINEAR,
+    2: cv2.INTER_CUBIC,
+    3: cv2.INTER_CUBIC,
+    4: cv2.INTER_CUBIC,
+    5: cv2.INTER_CUBIC
+}
+
+def _generate_shift_maps(shape, alpha, sigma):
+    assert len(shape) == 2, ("Expected 2d shape, got %s." % (shape,))
+    ksize = _compute_gaussian_blur_ksize(sigma)
+    ksize = ksize + 1 if ksize % 2 == 0 else ksize
+    padding = ksize
+    h, w = shape[0:2]
+    h_pad = h + 2*padding
+    w_pad = w + 2*padding
+    dxdy_unsmoothed = np.random.rand(2 * h_pad, w_pad) * 2 - 1
+    dx_unsmoothed = dxdy_unsmoothed[0:h_pad, :]
+    dy_unsmoothed = dxdy_unsmoothed[h_pad:, :]
+    dx = gaussian_blur(dx_unsmoothed, sigma=sigma)
+    dx *= alpha
+    dy = gaussian_blur(dy_unsmoothed, sigma=sigma)
+    dy *= alpha
+    if padding > 0:
+        dx = dx[padding:-padding, padding:-padding]
+        dy = dy[padding:-padding, padding:-padding]
+    return dx, dy
+
+def _map_coordinates(image, dx, dy, order=1, cval=0, mode="constant"):
+
+    if image.size == 0:
+        return np.copy(image)
+
+    dx = dx.astype(np.float32) # from float 64
+    dy = dy.astype(np.float32) # from float 64
+
+    if order == 0 and image.dtype.name in ["uint64", "int64"]:
+        raise Exception(
+            "dtypes uint64 and int64 are only supported in "
+            "ElasticTransformation for order=0, got order=%d with "
+            "dtype=%s." % (order, image.dtype.name))
+
+    shrt_max = 32767  # maximum of datatype `short`
+    backend = "cv2"
+
+
+    assert image.ndim == 3, (
+        "Expected 3-dimensional image, got %d dimensions." % (image.ndim,))
+        
+    result = np.copy(image)
+    height, width = image.shape[0:2]
+    h, w, nb_channels = image.shape
+
+    y, x = np.meshgrid(
+        np.arange(h).astype(np.float32),
+        np.arange(w).astype(np.float32),
+        indexing="ij")
+    x_shifted = x + (-1) * dx
+    y_shifted = y + (-1) * dy
+
+    if image.dtype.kind == "f":
+        cval = float(cval)
+    else:
+        cval = int(cval)
+    border_mode = _MAPPING_MODE_SCIPY_CV2[mode]
+    interpolation = _MAPPING_ORDER_SCIPY_CV2[order]
+
+    is_nearest_neighbour = (interpolation == cv2.INTER_NEAREST)
+    if is_nearest_neighbour:
+        map1, map2 = x_shifted, y_shifted
+    else:
+        map1, map2 = cv2.convertMaps(
+            x_shifted, y_shifted, cv2.CV_32FC1,
+            nninterpolation=is_nearest_neighbour)
+
+    # remap only supports up to 4 channels
+    if nb_channels <= 4:
+        result = cv2.remap(
+            _normalize_cv2_input_arr_(image),
+            map1, map2, interpolation=interpolation,
+            borderMode=border_mode, borderValue=(cval, cval, cval))
+        if image.ndim == 3 and result.ndim == 2:
+            result = result[..., np.newaxis]
+    else:
+        current_chan_idx = 0
+        result = []
+        while current_chan_idx < nb_channels:
+            channels = image[..., current_chan_idx:current_chan_idx+4]
+            result_c = cv2.remap(
+                _normalize_cv2_input_arr_(channels),
+                map1, map2, interpolation=interpolation,
+                borderMode=border_mode, borderValue=(cval, cval, cval))
+            if result_c.ndim == 2:
+                result_c = result_c[..., np.newaxis]
+            result.append(result_c)
+            current_chan_idx += 4
+        result = np.concatenate(result, axis=2)
+
+    return result
