@@ -216,6 +216,7 @@ def create_train_val_augmentors(
             ms_rotate_ratio=cfg.AUGMENTOR.MS_ROTATE_RATIO,
             missing_sections=cfg.AUGMENTOR.MISSING_SECTIONS,
             missp_iterations=cfg.AUGMENTOR.MISSP_ITERATIONS,
+            missp_channel_pb=cfg.AUGMENTOR.MISSP_CHANNEL_PB,
             grayscale=cfg.AUGMENTOR.GRAYSCALE,
             channel_shuffle=cfg.AUGMENTOR.CHANNEL_SHUFFLE,
             gridmask=cfg.AUGMENTOR.GRIDMASK,

@@ -220,6 +220,9 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
     missp_iterations : tuple of 2 ints, optional
         Iterations to dilate the missing line with. E.g. ``(30, 40)``.
 
+    missp_channel_pb : int, optional
+        Probability of applying missing section to each channel. E.g. ``0.5``.
+
     grayscale : bool, optional
         Whether to augment images converting partially in grayscale.
 
@@ -409,6 +412,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         ms_rotate_ratio: float = 0.0,
         missing_sections: bool = False,
         missp_iterations: Tuple[int, int] = (30, 40),
+        missp_channel_pb: int = 0.5,
         grayscale: bool = False,
         channel_shuffle: bool = False,
         gridmask: bool = False,
@@ -571,6 +575,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.contrast = contrast
         self.missing_sections = missing_sections
         self.missp_iterations = missp_iterations
+        self.missp_channel_pb = missp_channel_pb
         self.grayscale = grayscale
         self.gridmask = gridmask
         self.grid_ratio = grid_ratio
@@ -1178,7 +1183,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         # Apply missing parts
         if self.missing_sections and random.uniform(0, 1) < self.da_prob:
-            image = missing_sections(image, self.missp_iterations)
+            image = missing_sections(image, self.missp_iterations, self.missp_channel_pb)
 
         # Apply GridMask
         if self.gridmask and random.uniform(0, 1) < self.da_prob:

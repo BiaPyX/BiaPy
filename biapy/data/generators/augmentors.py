@@ -730,7 +730,7 @@ def contrast(image: NDArray, contrast_factor: Tuple[float, float] = (0, 0), mode
     return image
 
 
-def missing_sections(img: NDArray, iterations: Tuple[int, int] = (30, 40)) -> NDArray:
+def missing_sections(img: NDArray, iterations: Tuple[int, int] = (30, 40), channel_prob: int = 0.5) -> NDArray:
     """
     Augment the image by creating a black line in a random position.
 
@@ -744,6 +744,9 @@ def missing_sections(img: NDArray, iterations: Tuple[int, int] = (30, 40)) -> ND
 
     iterations : tuple of 2 ints, optional
         Iterations to dilate the missing line with. E.g. ``(30, 40)``.
+    
+    channel_prob : float, optional
+        Probability of applying a missing section to each channel individually. 
 
     Returns
     -------
@@ -782,7 +785,7 @@ def missing_sections(img: NDArray, iterations: Tuple[int, int] = (30, 40)) -> ND
 
     i = 0
     while i < num_section:
-        if np.random.rand() < 0.5:
+        if np.random.rand() < channel_prob:
             transforms[i] = _prepare_deform_slice(slice_shape, it)
             i += 2  # at most one deformed image in any consecutive 3 images
         i += 1
@@ -795,7 +798,6 @@ def missing_sections(img: NDArray, iterations: Tuple[int, int] = (30, 40)) -> ND
             out[:, :, i][line_mask] = mean
 
     return out
-
 
 def _prepare_deform_slice(slice_shape: Tuple[int, ...], iterations: int) -> NDArray:
     """Auxiliary function for missing_sections."""

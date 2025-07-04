@@ -744,7 +744,8 @@ class Config:
         # “no change” and 0.5 denotes “half of the axis size”.
         _C.AUGMENTOR.SHIFT_RANGE = (0.1, 0.2)
         # How to fill up the new values created with affine transformations (rotations, shear, shift and zoom).
-        # Same meaning as in numpy.pad() : 'constant', 'reflect', 'wrap', 'symmetric'
+        # Only keep modes common to skimage & scipy: 'constant', 'reflect', 'wrap' and 'symmetric
+        # Dropped 'edge'/'nearest' for simplicity
         _C.AUGMENTOR.AFFINE_MODE = "reflect"
         # Make vertical flips
         _C.AUGMENTOR.VFLIP = False
@@ -837,6 +838,8 @@ class Config:
         _C.AUGMENTOR.MS_ROTATE_RATIO = 0.5
         # Augment the image by creating a black line in a random position
         _C.AUGMENTOR.MISSING_SECTIONS = False
+        # Probability of adding a missing section in each channel
+        _C.AUGMENTOR.MISSP_CHANNEL_PB = 0.5
         # Iterations to dilate the missing line with
         _C.AUGMENTOR.MISSP_ITERATIONS = (10, 30)
         # Convert images in grasycale gradually based on '_C.AUGMENTOR.GRAY_RANGE'
