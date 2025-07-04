@@ -730,7 +730,7 @@ def contrast(image: NDArray, contrast_factor: Tuple[float, float] = (0, 0), mode
     return image
 
 
-def missing_sections(img: NDArray, iterations: Tuple[int, int] = (30, 40), channel_prob: int = 0.5) -> NDArray:
+def missing_sections(img: NDArray, iterations: Tuple[int, int] = (30, 40), channel_prob: float = 0.5) -> NDArray:
     """
     Augment the image by creating a black line in a random position.
 

@@ -220,7 +220,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
     missp_iterations : tuple of 2 ints, optional
         Iterations to dilate the missing line with. E.g. ``(30, 40)``.
 
-    missp_channel_pb : int, optional
+    missp_channel_pb : float, optional
         Probability of applying missing section to each channel. E.g. ``0.5``.
 
     grayscale : bool, optional
@@ -412,7 +412,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         ms_rotate_ratio: float = 0.0,
         missing_sections: bool = False,
         missp_iterations: Tuple[int, int] = (30, 40),
-        missp_channel_pb: int = 0.5,
+        missp_channel_pb: float = 0.5,
         grayscale: bool = False,
         channel_shuffle: bool = False,
         gridmask: bool = False,
