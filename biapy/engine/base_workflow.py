@@ -782,7 +782,7 @@ class Base_Workflow(metaclass=ABCMeta):
         print(f"Start training in epoch {self.start_epoch+1} - Total: {self.cfg.TRAIN.EPOCHS}")
         start_time = time.time()
         self.val_best_metric = np.zeros(len(self.train_metric_names), dtype=np.float32)
-        self.val_best_loss = np.Inf
+        self.val_best_loss = np.inf
         for epoch in range(self.start_epoch, self.cfg.TRAIN.EPOCHS):
             print("~~~ Epoch {}/{} ~~~\n".format(epoch + 1, self.cfg.TRAIN.EPOCHS))
             e_start = time.time()

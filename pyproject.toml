@@ -34,8 +34,6 @@ dependencies = [
     "zarr>=2.16.1",
     "bioimageio.core==0.8.0",
     "imagecodecs>=2024.1.1",
-    "numpy<2",
-    "imgaug>=0.4.0",
     "pooch>=1.8.1",
     "diplib>=3.5.1",
     "xarray==2025.1.*",
