@@ -273,6 +273,7 @@ class Classification_Workflow(Base_Workflow):
                 self.test_filenames,
             ) = load_and_prepare_cls_test_data(
                 test_path=self.cfg.DATA.TEST.PATH,
+                norm_module=self.norm_module,
                 use_val_as_test=self.cfg.DATA.TEST.USE_VAL_AS_TEST,
                 expected_classes=self.cfg.MODEL.N_CLASSES if self.use_gt else 1,
                 crop_shape=self.cfg.DATA.PATCH_SIZE,

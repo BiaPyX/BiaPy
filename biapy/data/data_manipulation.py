@@ -1033,6 +1033,7 @@ def load_and_prepare_test_data(
 
 def load_and_prepare_cls_test_data(
     test_path: str,
+    norm_module: Normalization,
     use_val_as_test: bool,
     expected_classes: int,
     crop_shape: Tuple[int, ...],
@@ -1048,6 +1049,9 @@ def load_and_prepare_cls_test_data(
     ----------
     train_path : str
         Path to the training data.
+
+    norm_module : Normalization
+        Information about the normalization.
 
     use_val_as_test : bool
         Whether to use validation data as test.
@@ -1104,6 +1108,7 @@ def load_and_prepare_cls_test_data(
 
     X_test = samples_from_class_list(
         data_path=path_to_process,
+        norm_module=norm_module,
         expected_classes=expected_classes,
         crop_shape=crop_shape,
         is_3d=is_3d,
@@ -1190,6 +1195,7 @@ def load_data_from_dir(
 
 def load_cls_data_from_dir(
     data_path: str,
+    norm_module: Normalization,
     expected_classes: int,
     crop_shape: Optional[Tuple[int, ...]],
     is_3d: bool = True,
@@ -1205,6 +1211,9 @@ def load_cls_data_from_dir(
     ----------
     data_path : str
         Path to read the images from.
+
+    norm_module : Normalization
+        Information about the normalization.
 
     expected_classes : int
         Expected number of classes to be loaded.
@@ -1236,6 +1245,7 @@ def load_cls_data_from_dir(
     """
     data_samples = samples_from_class_list(
         data_path=data_path,
+        norm_module=norm_module,
         expected_classes=expected_classes,
         crop_shape=crop_shape,
         is_3d=is_3d,
@@ -1263,6 +1273,7 @@ def load_and_prepare_train_data_cls(
     val_path: str,
     val_in_memory: bool,
     expected_classes: int,
+    norm_module: Normalization,
     crop_shape: Tuple[int, ...],
     cross_val: bool = False,
     cross_val_nsplits: int = 5,
@@ -1281,7 +1292,6 @@ def load_and_prepare_train_data_cls(
     val_filter_vals: List[List[int | float]] = [],
     val_filter_signs: List[List[str]] = [],
     norm_before_filter: bool = False,
-    norm_module: Optional[Normalization] = None,
     reflect_to_complete_shape: bool = False,
     convert_to_rgb: bool = False,
     is_3d: bool = False,
@@ -1438,6 +1448,7 @@ def load_and_prepare_train_data_cls(
 
     X_train = samples_from_class_list(
         data_path=train_path,
+        norm_module=norm_module,
         expected_classes=expected_classes,
         crop_shape=crop_shape,
         is_3d=is_3d,
@@ -1497,6 +1508,7 @@ def load_and_prepare_train_data_cls(
             is_3d=is_3d,
             reflect_to_complete_shape=reflect_to_complete_shape,
             convert_to_rgb=convert_to_rgb,
+            norm_module=norm_module,
         )
 
         if len(val_filter_props) > 0:
@@ -1693,8 +1705,10 @@ def samples_from_image_list(
             path=os.path.join(data_path, list_of_data[i]),
             shape=original_data_shape,
         )
+        # Depending on the normalization choosen we need to set the stats into the DatasetFile
         norm_module.set_stats_from_image(img)
         norm_module.set_DatasetFile_from_stats(dataset_file)
+
         dataset_info.append(dataset_file)
         for j in range(tot_samples_to_insert):
             data_sample = DataSample(
@@ -2031,8 +2045,10 @@ def samples_from_image_list_multiple_raw_one_gt(
             gt_tot_samples_to_insert = 1
 
         data_file = DatasetFile(path=os.path.join(gt_path, id_, gt_id), shape=original_data_shape)
+        # Depending on the normalization choosen we need to set the stats into the DatasetFile
         norm_module.set_stats_from_image(gt_sample)
         norm_module.set_DatasetFile_from_stats(data_file)
+
         gt_dataset_info.append(data_file)
         for i in range(gt_tot_samples_to_insert):
             coords = None
@@ -2111,8 +2127,10 @@ def samples_from_image_list_multiple_raw_one_gt(
                 path=os.path.join(associated_raw_image_dir, raw_sample_id),
                 shape=original_data_shape,
             )
+            # Depending on the normalization choosen we need to set the stats into the DatasetFile
             norm_module.set_stats_from_image(raw_sample)
             norm_module.set_DatasetFile_from_stats(dataset_file)
+
             dataset_info.append(dataset_file)
             for i in range(tot_samples_to_insert):
                 data_sample = DataSample(
@@ -2132,6 +2150,7 @@ def samples_from_image_list_multiple_raw_one_gt(
 
 def samples_from_class_list(
     data_path: str,
+    norm_module: Normalization,
     crop_shape: Optional[Tuple[int, ...]] = None,
     expected_classes: int = -1,
     is_3d: bool = True,
@@ -2146,6 +2165,9 @@ def samples_from_class_list(
     ----------
     data_path : str
         Directory of the images to read.
+
+    norm_module : Normalization
+        Information about the normalization.
 
     crop_shape : 3D/4D int tuple, optional
         Shape of the crops. E.g. ``(y, x, channels)`` for 2D and ``(z, y, x, channels)`` for 3D.
@@ -2241,14 +2263,18 @@ def samples_from_class_list(
                     f"of {data_range_expected}) in the folder. Current image: {img_path}"
                 )
 
-            xdataset_info.append(
-                DatasetFile(
+            dataset_file =DatasetFile(
                     path=img_path,
                     shape=img.shape,
                     class_name=class_name,
                     class_num=c_num if gt_loaded else -1,
                 )
-            )
+
+            # Depending on the normalization choosen we need to set the stats into the DatasetFile
+            norm_module.set_stats_from_image(img)
+            norm_module.set_DatasetFile_from_stats(dataset_file)
+
+            xdataset_info.append(dataset_file)
             sample_dict = DataSample(
                 fid=data_file_count,
                 coords=None,
@@ -3221,7 +3247,7 @@ def read_img_as_ndarray(path: str, is_3d: bool = False) -> NDArray:
     return img
 
 
-def imread(path: str) -> NDArray:
+def imread(path: str) -> NDArray | Tuple[NDArray, Optional[str]]:
     """
     Read an image from a given path. In the past from ``skimage.io import imread``
     was used but now it is deprecated.
