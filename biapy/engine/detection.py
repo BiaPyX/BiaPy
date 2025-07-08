@@ -928,7 +928,10 @@ class Detection_Workflow(Base_Workflow):
             if self.post_processing["detection_post"]
             else self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK
         )
-        all_pred_files = sorted(next(os_walk_clean(input_dir))[2])
+        try:
+            all_pred_files = sorted(next(os_walk_clean(input_dir))[2])
+        except:
+            all_pred_files = []
         all_pred_files = [x for x in all_pred_files if filename + "_patch" in x]
         all_pred_files = [x for x in all_pred_files if "_points.csv" in x and "all_points.csv" not in x]
         if len(all_pred_files) > 0:
