@@ -1183,8 +1183,15 @@ def ensure_3d_shape(
     # pop T in data_axes_order
     if data_axes_order is not None:
         data_axes_order = data_axes_order.replace("T", "")
-        if 'Z' not in data_axes_order and 'C' in data_axes_order:
-            data_axes_order = data_axes_order.replace("C", "Z")
+        if 'Z' not in data_axes_order:
+            if 'C' in data_axes_order:
+                data_axes_order = data_axes_order.replace("C", "Z")
+            elif 'I' in data_axes_order:
+                data_axes_order = data_axes_order.replace("I", "Z")
+            elif 'Q' in data_axes_order:
+                data_axes_order = data_axes_order.replace("Q", "Z")
+        if any([x for x in data_axes_order if x not in "ZYXC"]):
+            data_axes_order = None
 
     new_pos = list(range(img.ndim))
     if img.ndim == 3:
