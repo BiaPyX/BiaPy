@@ -25,6 +25,7 @@ dependencies = [
     "tqdm>=4.66.1",
     "scikit-image>=0.21.0",
     "edt>=2.3.2",
+    "numpy>2",
     "fill-voids>=2.0.6",
     "opencv-python>=4.8.0.76",
     "pandas>=1.5.3",
