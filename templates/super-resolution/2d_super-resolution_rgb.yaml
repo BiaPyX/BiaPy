@@ -11,6 +11,8 @@ PROBLEM:
   
 DATA: 
     PATCH_SIZE: (48, 48, 3)
+    NORMALIZATION:
+        TYPE: "div"
     TRAIN:                                                                                                              
         PATH: /path/to/data
         GT_PATH: /path/to/data
