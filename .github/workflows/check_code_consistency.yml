@@ -22,7 +22,7 @@ jobs:
     - name: Installing Pytorch
       run: pip install torch==2.4.0 torchvision==0.19.0 torchaudio==2.4.0 --index-url https://download.pytorch.org/whl/cu118
     - name: Installing last packages that rely on the Pytorch installation
-      run: pip install timm torchmetrics[image]==1.4.* pytorch-msssim
+      run: pip install timm==1.0.14 torchmetrics[image]==1.4.* pytorch-msssim
     - name: Installing dependencies for the run_checks.py script
       run: pip install gdown
     - name: Checking BiaPy code consistency 

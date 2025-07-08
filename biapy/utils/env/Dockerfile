@@ -35,7 +35,7 @@ RUN pip install biapy
 
 # Install Pytorch 2.2.0 + CUDA 11.8
 RUN pip install torch==2.4.0 torchvision==0.19.0 torchaudio==2.4.0 --index-url https://download.pytorch.org/whl/cu118 
-RUN pip install timm pytorch-msssim torchmetrics[image]==1.4.*
+RUN pip install timm==1.0.14 pytorch-msssim torchmetrics[image]==1.4.*
 
 # Clone BiaPy, as running it with python -c "" stops the container with no error after a few seconds running 
 ARG REPO=https://github.com/BiaPyX/BiaPy.git
