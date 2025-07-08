@@ -1851,6 +1851,7 @@ if all_test_info["Test11"]["enable"]:
 
     biapy_config['DATA']['PATCH_SIZE'] = "(20, 128, 128, 2)"
     biapy_config['DATA']['NORMALIZATION'] = {}
+    biapy_config['DATA']['NORMALIZATION']['TYPE'] = "scale_range"
     biapy_config['DATA']['NORMALIZATION']['PERC_CLIP'] = {}
     biapy_config['DATA']['NORMALIZATION']['PERC_CLIP']['ENABLE'] = True
     biapy_config['DATA']['NORMALIZATION']['PERC_CLIP']['LOWER_PERC'] = 0.1
@@ -1892,7 +1893,7 @@ if all_test_info["Test11"]["enable"]:
 
     biapy_config['TEST']['ENABLE'] = True
     biapy_config['TEST']['FULL_IMG'] = False
-    biapy_config['TEST']['DET_MIN_TH_TO_BE_PEAK'] = 0.2
+    biapy_config['TEST']['DET_MIN_TH_TO_BE_PEAK'] = 0.5
     biapy_config['TEST']['DET_TOLERANCE'] = 8
     biapy_config['TEST']['VERBOSE'] = True
 
