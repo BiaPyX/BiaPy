@@ -177,7 +177,7 @@ class Normalization:
         """
         try:
             if self.measure_by == "image":
-                if dataset_file.do_percentile_clipping():
+                if self.do_percentile_clipping:
                     self.lower_bound_val = dataset_file.lower_bound_val
                     self.upper_bound_val = dataset_file.upper_bound_val
                 if self.type == "scale_range":
@@ -238,14 +238,14 @@ class Normalization:
             if self.measure_by == "image" and self.train_normalization:
                 assert self.scale_range_min_val is not None or self.scale_range_max_val is not None, (
                     "'scale_range_max_val' and 'scale_range_min_val' should not be None. Please call "
-                    "'Normalization.stats_from_image' before"
+                    "'Normalization.stats_from_image' or 'Normalization.set_stats_from_DatasetFile' before"
                 )
             img, xnorm = self.__norm_range01(img, div_using_max_and_scale=True)
         elif self.type == "zero_mean_unit_variance":
             if self.measure_by == "image" and self.train_normalization:
                 assert (
                     self.mean is not None or self.std is not None
-                ), "'mean' and 'std' should not be None. Please call 'Normalization.stats_from_image' before"
+                ), "'mean' and 'std' should not be None. Please call 'Normalization.stats_from_image' or 'Normalization.set_stats_from_DatasetFile' before"
             img, xnorm = self.__zero_mean_unit_variance_normalization(img)
 
         if isinstance(img, np.ndarray):

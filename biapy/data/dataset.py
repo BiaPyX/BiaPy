@@ -162,9 +162,6 @@ class DatasetFile:
         else:
             return None
 
-    def do_percentile_clipping(self) -> bool:
-        return hasattr(self, "lower_bound_val")
-
     def get_class_num(self) -> int:
         if hasattr(self, "class_num"):
             return self.class_num
