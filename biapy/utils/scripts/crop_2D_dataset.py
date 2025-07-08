@@ -25,8 +25,8 @@ for n, id_ in tqdm(enumerate(ids), total=len(ids)):
         img = np.load(os.path.join(input_dir_x, id_))
         mask = np.load(os.path.join(input_dir_y, id_))
     else:
-        img = imread(os.path.join(input_dir_x, id_))
-        mask = imread(os.path.join(input_dir_y, id_))
+        img, _ = imread(os.path.join(input_dir_x, id_))
+        mask, _ = imread(os.path.join(input_dir_y, id_))
     img = np.squeeze(img)
     mask = np.squeeze(mask)
 

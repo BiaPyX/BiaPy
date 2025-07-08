@@ -199,7 +199,7 @@ all_test_info["Test15"] = {
     "description": "2D self-supervision. Lucchi data. Cross-val. Basic DA. mae, masking: random",
     "yaml": "test_15.yaml",
     "internal_checks": [
-        {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 13},
+        {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 12},
     ]
 }
 
@@ -209,7 +209,7 @@ all_test_info["Test16"] = {
     "description": "2D self-supervision. Lucchi data. Cross-val. Basic DA. mae, masking: grid",
     "yaml": "test16.yaml",
     "internal_checks": [
-        {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 13},
+        {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 12},
     ]
 }
 

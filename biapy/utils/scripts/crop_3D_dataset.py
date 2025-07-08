@@ -17,7 +17,7 @@ from biapy.data.data_manipulation import save_tif, imread
 
 ids = sorted(next(os.walk(input_dir))[2])
 for n, id_ in tqdm(enumerate(ids), total=len(ids)):
-    img = imread(os.path.join(input_dir, id_))
+    img, _ = imread(os.path.join(input_dir, id_))
 
     if len(img.shape) == 3:
         img = np.expand_dims(img, axis=-1)

@@ -2263,7 +2263,7 @@ def apply_binary_mask(
         one_file = False
 
     if one_file:
-        mask = imread(os.path.join(bin_mask_dir, ids[0]))
+        mask, _ = imread(os.path.join(bin_mask_dir, ids[0]))
         mask = np.squeeze(mask)
 
         if X.ndim != mask.ndim + 1 and X.ndim != mask.ndim + 2:
@@ -2282,7 +2282,7 @@ def apply_binary_mask(
                     X[k, ..., c] = X[k, ..., c] * (mask > 0)
     else:
         for i in tqdm(range(len(ids))):
-            mask = imread(os.path.join(bin_mask_dir, ids[i]))
+            mask, _ = imread(os.path.join(bin_mask_dir, ids[i]))
             mask = np.squeeze(mask)
 
             if X.ndim != mask.ndim + 1 and X.ndim != mask.ndim + 2:

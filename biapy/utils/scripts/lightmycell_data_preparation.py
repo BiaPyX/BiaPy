@@ -32,7 +32,7 @@ for i, fol in tqdm(enumerate(folders), total=len(folders)):
         for n, id_ in tqdm(enumerate(new_images), total=len(new_images)):
             img_folder = os.path.join(input_dir, fol)
 
-            img = imread(os.path.join(img_folder, id_))
+            img, _ = imread(os.path.join(img_folder, id_))
             img = np.squeeze(img)
             if len(img.shape) == 2: img = np.expand_dims(img, axis=-1)
             img = np.expand_dims(img, axis=0)
@@ -45,7 +45,7 @@ for i, fol in tqdm(enumerate(folders), total=len(folders)):
                 verbose=False)
 
             for j, id_2 in enumerate(images_related):
-                img = imread(os.path.join(img_folder, id_2))
+                img, _ = imread(os.path.join(img_folder, id_2))
                 img = np.squeeze(img)
                 if len(img.shape) == 2: img = np.expand_dims(img, axis=-1)
                 img = np.expand_dims(img, axis=0)

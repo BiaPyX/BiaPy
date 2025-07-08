@@ -25,7 +25,7 @@ gt_coords = []
 for row in csvreader:
     gt_coords.append([int(float(row[1])), int(float(row[2])), int(float(row[3]))])
 
-img = imread(pred_file)
+img, _ = imread(pred_file)
 
 d_precision = []
 d_recall = []
