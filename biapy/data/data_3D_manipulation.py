@@ -21,11 +21,11 @@ from biapy.data.dataset import PatchCoords
 def load_3D_efficient_files(
     data_path: List[str],
     input_axes: str,
-    crop_shape: Tuple[int,...],
-    overlap: Tuple[float,...],
-    padding: Tuple[int,...],
-    check_channel: bool=True,
-    data_within_zarr_path: Optional[str]=None,
+    crop_shape: Tuple[int, ...],
+    overlap: Tuple[float, ...],
+    padding: Tuple[int, ...],
+    check_channel: bool = True,
+    data_within_zarr_path: Optional[str] = None,
 ):
     """
     Load information of all patches that can be extracted from all the Zarr/H5 samples in ``data_path``.
@@ -105,7 +105,7 @@ def load_3D_efficient_files(
             except StopIteration:  # StopIteration caught here without inspecting it
                 break
         del __unnamed_iterator
-        total_patches, z_vol_info, list_of_vols_in_z = obj # type: ignore
+        total_patches, z_vol_info, list_of_vols_in_z = obj  # type: ignore
 
         for obj in tqdm(
             extract_3D_patch_with_overlap_and_padding_yield(
@@ -118,11 +118,11 @@ def load_3D_efficient_files(
                 rank=0,
                 verbose=False,
             ),
-            total=total_patches, # type: ignore
+            total=total_patches,  # type: ignore
             disable=not is_main_process(),
-        ): # type: ignore
+        ):  # type: ignore
 
-            img, patch_coords, _, _, _ = obj # type: ignore
+            img, patch_coords, _, _, _ = obj  # type: ignore
 
             data_info[c] = {}
             data_info[c]["filepath"] = filename
@@ -144,11 +144,9 @@ def load_3D_efficient_files(
 
     return data_info, data_total_patches
 
+
 def load_img_part_from_efficient_file(
-    filepath : str,
-    patch_coords: PatchCoords, 
-    data_axes_order: str="ZYXC", 
-    data_path: Optional[str]=None
+    filepath: str, patch_coords: PatchCoords, data_axes_order: str = "ZYXC", data_path: Optional[str] = None
 ):
     """
     Loads from ``filepath`` the patch determined by ``patch_coords``.
@@ -186,9 +184,9 @@ def load_img_part_from_efficient_file(
 
 
 def extract_patch_from_efficient_file(
-    data: zarr.hierarchy.Group | h5py._hl.dataset.Dataset, # type: ignore
-    patch_coords: PatchCoords, 
-    data_axes_order: str="ZYXC",
+    data: zarr.hierarchy.Group | h5py._hl.dataset.Dataset,  # type: ignore
+    patch_coords: PatchCoords,
+    data_axes_order: str = "ZYXC",
 ) -> NDArray:
     """
     Loads from ``filepath`` the patch determined by ``patch_coords``.
@@ -235,19 +233,20 @@ def extract_patch_from_efficient_file(
     # Extract patch
     try:
         img = np.squeeze(np.array(data[data_ordered_slices]))
-    except: 
+    except:
         raise ValueError(f"Read data axes ({data.shape}) do not match the expected axis order ({data_axes_order})")
 
     img = ensure_3d_shape(img.squeeze(), data_axes_order=data_axes_order)
 
     return img
 
-def insert_patch_in_efficient_file( 
-    data: zarr.hierarchy.Group | h5py._hl.dataset.Dataset, # type: ignore
-    patch: NDArray, 
-    patch_coords: PatchCoords, 
-    data_axes_order: str="ZYXC",
-    patch_axes_order: str="ZYXC",
+
+def insert_patch_in_efficient_file(
+    data: zarr.hierarchy.Group | h5py._hl.dataset.Dataset,  # type: ignore
+    patch: NDArray,
+    patch_coords: PatchCoords,
+    data_axes_order: str = "ZYXC",
+    patch_axes_order: str = "ZYXC",
     mode="replace",
 ):
     """
@@ -269,7 +268,7 @@ def insert_patch_in_efficient_file(
 
     patch_axes_order : str, optional
         Order of axes of ``patch``. E.g. 'TZCYX', 'TZYXC', 'ZCYX', 'ZYXC'.
-    
+
     mode : str, optional
         What to do with the patch data when inserting it. Options: ["sum", "replace"]
     """
@@ -301,22 +300,23 @@ def insert_patch_in_efficient_file(
         default_value=np.nan,
     )
     transpose_order = [x for x in transpose_order if not np.isnan(x)]  # type: ignore
-    
+
     # Insert the patch into the correspoding position
     if mode == "replace":
-        data[data_ordered_slices] = patch.transpose(transpose_order) # type: ignore
-    else: # add
-        data[data_ordered_slices] += patch.transpose(transpose_order) # type: ignore
+        data[data_ordered_slices] = patch.transpose(transpose_order)  # type: ignore
+    else:  # add
+        data[data_ordered_slices] += patch.transpose(transpose_order)  # type: ignore
+
 
 def crop_3D_data_with_overlap(
     data: NDArray,
-    vol_shape: Tuple[int,...],
-    data_mask: Optional[NDArray]=None,
-    overlap: Tuple[float,...]=(0, 0, 0),
-    padding: Tuple[int,...]=(0, 0, 0),
-    verbose: bool=True,
-    median_padding: bool=False,
-    load_data: bool=True,
+    vol_shape: Tuple[int, ...],
+    data_mask: Optional[NDArray] = None,
+    overlap: Tuple[float, ...] = (0, 0, 0),
+    padding: Tuple[int, ...] = (0, 0, 0),
+    verbose: bool = True,
+    median_padding: bool = False,
+    load_data: bool = True,
 ) -> Tuple[NDArray, NDArray, List[PatchCoords]] | Tuple[NDArray, List[PatchCoords]] | List[PatchCoords]:
     """
     Crop 3D data into smaller volumes with a defined overlap. The opposite function is :func:`~merge_3D_data_with_overlap`.
@@ -532,7 +532,7 @@ def crop_3D_data_with_overlap(
 
     total_vol = vols_per_z * vols_per_y * vols_per_x
     if load_data:
-        
+
         cropped_data = np.zeros((total_vol,) + padded_vol_shape, dtype=data.dtype)
         if data_mask is not None:
             cropped_data_mask = np.zeros(
@@ -590,10 +590,10 @@ def crop_3D_data_with_overlap(
 def merge_3D_data_with_overlap(
     data: NDArray,
     orig_vol_shape: Tuple,
-    data_mask: Optional[NDArray]=None,
-    overlap: Tuple[float, ...]=(0, 0, 0),
-    padding: Tuple[int, ...]=(0, 0, 0),
-    verbose: bool=True,
+    data_mask: Optional[NDArray] = None,
+    overlap: Tuple[float, ...] = (0, 0, 0),
+    padding: Tuple[int, ...] = (0, 0, 0),
+    verbose: bool = True,
 ) -> NDArray | Tuple[NDArray, Optional[NDArray]]:
     """
     Merge 3D subvolumes in a 3D volume with a defined overlap.
@@ -802,16 +802,16 @@ def merge_3D_data_with_overlap(
 
 
 def extract_3D_patch_with_overlap_and_padding_yield(
-    data: zarr.hierarchy.Group | h5py._hl.dataset.Dataset, # type: ignore
-    vol_shape: Tuple[int,...],
+    data: zarr.hierarchy.Group | h5py._hl.dataset.Dataset,  # type: ignore
+    vol_shape: Tuple[int, ...],
     axes_order: str,
-    overlap: Tuple[float,...]=(0, 0, 0),
-    padding: Tuple[int,...]=(0, 0, 0),
-    total_ranks: int=1,
-    rank: int=0,
-    return_only_stats: bool=False,
-    load_data: bool=True,
-    verbose: bool=False,
+    overlap: Tuple[float, ...] = (0, 0, 0),
+    padding: Tuple[int, ...] = (0, 0, 0),
+    total_ranks: int = 1,
+    rank: int = 0,
+    return_only_stats: bool = False,
+    load_data: bool = True,
+    verbose: bool = False,
 ):
     """
     Extract 3D patches into smaller patches with a defined overlap. Is supports multi-GPU inference
@@ -893,12 +893,7 @@ def extract_3D_patch_with_overlap_and_padding_yield(
         raise ValueError("vol_shape expected to be of length 4, given {}".format(vol_shape))
 
     _, z_dim, c_dim, y_dim, x_dim = order_dimensions(data.shape, axes_order)
-    assert (
-        isinstance(z_dim, int)  
-        and isinstance(x_dim, int) 
-        and isinstance(y_dim, int) 
-        and isinstance(c_dim, int)
-    )
+    assert isinstance(z_dim, int) and isinstance(x_dim, int) and isinstance(y_dim, int) and isinstance(c_dim, int)
     if vol_shape[0] > z_dim:
         raise ValueError(
             "'vol_shape[0]' {} greater than {} (you can reduce 'DATA.PATCH_SIZE')".format(vol_shape[0], z_dim)
@@ -1050,8 +1045,8 @@ def extract_3D_patch_with_overlap_and_padding_yield(
                     )
 
                     # determine the transpose order
-                    transpose_order = [x for x in transpose_order if not np.isnan(x)] # type: ignore
-                    transpose_order = np.argsort(transpose_order) # type: ignore
+                    transpose_order = [x for x in transpose_order if not np.isnan(x)]  # type: ignore
+                    transpose_order = np.argsort(transpose_order)  # type: ignore
                     transpose_order = current_order[transpose_order]
 
                     img = np.transpose(img, transpose_order)
@@ -1102,11 +1097,11 @@ def extract_3D_patch_with_overlap_and_padding_yield(
 
 
 def order_dimensions(
-    data: Sequence[slice] | List[str | int] | Tuple[int,...] | NDArray, 
-    input_order: str, 
-    output_order: str="TZCYX",
-    default_value: int | float=1
-) -> Sequence[slice] | List[str | int] | Tuple[int,...] | NDArray:
+    data: Sequence[slice] | List[str | int] | Tuple[int, ...] | NDArray,
+    input_order: str,
+    output_order: str = "TZCYX",
+    default_value: int | float = 1,
+) -> Sequence[slice] | List[str | int] | Tuple[int, ...] | NDArray:
     """
     Reorder data from any input order to output order.
 
@@ -1144,9 +1139,9 @@ def order_dimensions(
 
 
 def ensure_3d_shape(
-    img: NDArray, 
-    path: Optional[str]=None,
-    data_axes_order: Optional[str]=None,
+    img: NDArray,
+    path: Optional[str] = None,
+    data_axes_order: Optional[str] = None,
 ):
     """
     Read an image from a given path.
@@ -1173,7 +1168,7 @@ def ensure_3d_shape(
         else:
             m = "Read image seems to be 2D: {}".format(img.shape)
         raise ValueError(m)
-    elif img.ndim == 5: 
+    elif img.ndim == 5:
         if img.shape[0] != 1:
             # It is assumed that the image is already prepared
             return img
@@ -1183,19 +1178,19 @@ def ensure_3d_shape(
     # pop T in data_axes_order
     if data_axes_order is not None:
         data_axes_order = data_axes_order.replace("T", "")
-        if 'Z' not in data_axes_order:
-            if 'C' in data_axes_order:
+        if "Z" not in data_axes_order:
+            if "C" in data_axes_order:
                 data_axes_order = data_axes_order.replace("C", "Z")
-            elif 'I' in data_axes_order:
+            elif "I" in data_axes_order:
                 data_axes_order = data_axes_order.replace("I", "Z")
-            elif 'Q' in data_axes_order:
+            elif "Q" in data_axes_order:
                 data_axes_order = data_axes_order.replace("Q", "Z")
         if any([x for x in data_axes_order if x not in "ZYXC"]):
             data_axes_order = None
 
     new_pos = list(range(img.ndim))
     if img.ndim == 3:
-        if data_axes_order is None: 
+        if data_axes_order is None:
             # Ensure Z axis is always in the first position
             min_val = min(img.shape)
             z_pos = img.shape.index(min_val)
@@ -1211,11 +1206,11 @@ def ensure_3d_shape(
                 output_order="ZYX",
                 default_value=np.nan,
             )
-            new_pos = [x for x in new_pos if not np.isnan(x)] # type: ignore
-        img = img.transpose(new_pos) # type: ignore
+            new_pos = [x for x in new_pos if not np.isnan(x)]  # type: ignore
+        img = img.transpose(new_pos)  # type: ignore
         img = np.expand_dims(img, -1)
     else:
-        if data_axes_order is None: 
+        if data_axes_order is None:
             # Ensure channel axis is always in the last position (assuming Z is already set)
             min_val = min(img.shape)
             z_pos = img.shape.index(min_val)
@@ -1231,19 +1226,19 @@ def ensure_3d_shape(
                 output_order="ZYXC",
                 default_value=np.nan,
             )
-            new_pos = [x for x in new_pos if not np.isnan(x)] # type: ignore
-        img = img.transpose(new_pos) # type: ignore
+            new_pos = [x for x in new_pos if not np.isnan(x)]  # type: ignore
+        img = img.transpose(new_pos)  # type: ignore
 
     return img
 
 
 def write_chunked_data(
-    data: NDArray, 
-    data_dir: str, 
-    filename: str, 
-    crop_shape: Optional[Tuple[int|float] | List[int|float]]=None,
-    dtype_str: str="float32", 
-    verbose: bool=True
+    data: NDArray,
+    data_dir: str,
+    filename: str,
+    crop_shape: Optional[Tuple[int | float] | List[int | float]] = None,
+    dtype_str: str = "float32",
+    verbose: bool = True,
 ):
     """
     Save images in the given directory into 'ZYXC' format.
@@ -1261,7 +1256,7 @@ def write_chunked_data(
 
     crop_shape: tuple/list of int/float
         Crop shape to be used in determining Zarr chunks.
-     
+
     dtype_str : str, optional
         Data type to use when saving.
 
@@ -1278,22 +1273,21 @@ def write_chunked_data(
 
     if ext in [".hdf5", ".hdf", ".h5"]:
         fid = h5py.File(os.path.join(data_dir, filename), "w")
-        data = fid.create_dataset("data", data=data, dtype=dtype_str, compression="gzip") # type: ignore
+        data = fid.create_dataset("data", data=data, dtype=dtype_str, compression="gzip")  # type: ignore
     # Zarr
     else:
         data_zarr = zarr.open_array(
             os.path.join(data_dir, filename),
             shape=data.shape,
             mode="w",
-            chunks=crop_shape, # type: ignore
+            chunks=crop_shape,  # type: ignore
             dtype=dtype_str,
         )
         data_zarr[:] = data
 
 
 def read_chunked_nested_data(
-    file: str, 
-    data_path: str=""
+    file: str, data_path: str = ""
 ) -> Tuple[Type[zarr.hierarchy.Group], Type[zarr.core.Array]] | Tuple[Type[h5py._hl.files.File], Type[h5py._hl.dataset.Dataset]]:  # type: ignore
     """
     Find recursively raw and ground truth data within a H5/Zarr file.
@@ -1305,9 +1299,9 @@ def read_chunked_nested_data(
     else:
         raise ValueError("Input file seems to not be either Zarr or H5")
 
+
 def read_chunked_nested_zarr(
-    zarrfile: str, 
-    data_path: str=""
+    zarrfile: str, data_path: str = ""
 ) -> Tuple[Type[zarr.hierarchy.Group], Type[zarr.core.Array]]:  # type: ignore
     """
     Find recursively raw and ground truth data within a Zarr file.
@@ -1339,13 +1333,12 @@ def read_chunked_nested_zarr(
     if data is None and data_path != "":
         raise ValueError(f"'{data_path}' not found in Zarr: {zarrfile}.")
 
-    return fid, data # type: ignore
+    return fid, data  # type: ignore
 
 
 def read_chunked_nested_h5(
-    h5file: str, 
-    data_path: str=""
-) -> Tuple[Type[h5py._hl.files.File], Type[h5py._hl.dataset.Dataset]]: # type: ignore
+    h5file: str, data_path: str = ""
+) -> Tuple[Type[h5py._hl.files.File], Type[h5py._hl.dataset.Dataset]]:  # type: ignore
     """
     Find recursively raw and ground truth data within a Zarr file.
     """
@@ -1354,7 +1347,7 @@ def read_chunked_nested_h5(
 
     fid = h5py.File(h5file, "r")
 
-    def find_obj(path: str, fid: h5py._hl.files.File) -> Optional[NDArray]: # type: ignore
+    def find_obj(path: str, fid: h5py._hl.files.File) -> Optional[NDArray]:  # type: ignore
         obj = None
         rpath = path.split(".")
         if len(rpath) == 0:
@@ -1375,12 +1368,12 @@ def read_chunked_nested_h5(
     data = find_obj(data_path, fid)
     if data is None and data_path != "":
         raise ValueError(f"'{data_path}' not found in H5: {h5file}.")
-    return fid, data # type: ignore
+    return fid, data  # type: ignore
 
 
 def read_chunked_data(
-    filename: str
-) -> Tuple[Type[zarr.hierarchy.Group], Type[zarr.core.Array]] | Tuple[Type[h5py._hl.files.File], Type[h5py._hl.dataset.Dataset]]: # type: ignore
+    filename: str,
+) -> Tuple[Type[zarr.hierarchy.Group], Type[zarr.core.Array]] | Tuple[Type[h5py._hl.files.File], Type[h5py._hl.dataset.Dataset]]:  # type: ignore
     if isinstance(filename, str):
         if not os.path.exists(filename):
             raise ValueError(f"File {filename} does not exist.")
@@ -1390,16 +1383,16 @@ def read_chunked_data(
             data = fid[list(fid)[0]]
         elif filename.endswith(".zarr"):
             fid = zarr.open(filename, "r")
-            if isinstance(fid, zarr.hierarchy.Group): # type: ignore
-                if len(list((fid.group_keys()))) != 0: # type: ignore
-                    data = fid[list(fid.group_keys())[0]] # type: ignore
-                elif len(list((fid.array_keys()))) != 0: # type: ignore
+            if isinstance(fid, zarr.hierarchy.Group):  # type: ignore
+                if len(list((fid.group_keys()))) != 0:  # type: ignore
+                    data = fid[list(fid.group_keys())[0]]  # type: ignore
+                elif len(list((fid.array_keys()))) != 0:  # type: ignore
                     data = fid[list(fid.array_keys())[0]]  # type: ignore
             else:
                 data = fid
         else:
             raise ValueError(f"File extension {filename} not recognized")
 
-        return fid, data # type: ignore
+        return fid, data  # type: ignore
     else:
         raise ValueError("'filename' is expected to be a str")
