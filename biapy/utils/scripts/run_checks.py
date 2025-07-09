@@ -2256,8 +2256,9 @@ if all_test_info["Test14"]["enable"]:
         except yaml.YAMLError as exc:
             raise ValueError(exc)
 
+    biapy_config['DATA']['NORMALIZATION'] = {}
+    biapy_config['DATA']['NORMALIZATION']['TYPE'] = "div"
     biapy_config['DATA']['EXTRACT_RANDOM_PATCH'] = False
-
     biapy_config['DATA']['PATCH_SIZE'] = "(256,256,1)"
     biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(self_supervision_2d_data_outpath, "data", "train", "raw")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
@@ -2997,6 +2998,8 @@ if all_test_info["Test24"]["enable"]:
         except yaml.YAMLError as exc:
             raise ValueError(exc)
 
+    biapy_config['DATA']['NORMALIZATION'] = {}
+    biapy_config['DATA']['NORMALIZATION']['TYPE'] = "div"
     biapy_config['DATA']['REFLECT_TO_COMPLETE_SHAPE'] = False
     biapy_config['DATA']['PATCH_SIZE'] = "(256, 256, 1)"
     biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(image_to_image_2d_data_outpath, "data", "train", "raw")
