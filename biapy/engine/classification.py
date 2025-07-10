@@ -345,7 +345,9 @@ class Classification_Workflow(Base_Workflow):
             self.all_gt = np.array(self.all_gt).squeeze()
 
         # Save predictions in a csv file
-        df = pd.DataFrame(self.test_filenames, columns=["filename"])
+        assert self.test_filenames is not None, "Test filenames must be defined before saving predictions."
+        t_filename = [x.path for x in self.test_filenames]
+        df = pd.DataFrame(t_filename, columns=["filename"])
         df["class"] = self.all_pred
         f = os.path.join(self.cfg.PATHS.RESULT_DIR.PATH, "predictions.csv")
         os.makedirs(self.cfg.PATHS.RESULT_DIR.PATH, exist_ok=True)
