@@ -1289,7 +1289,7 @@ class Config:
         # the process is repeated with each of the threshold values
         _C.TEST.MATCHING_STATS_THS = [0.3, 0.5, 0.75]
         # Decide in which thresholds to create a colored image of the TPs, FNs and FPs
-        _C.TEST.MATCHING_STATS_THS_COLORED_IMG = [0.3]
+        _C.TEST.MATCHING_STATS_THS_COLORED_IMG = []
 
         ### Detection
         # To decide which function is going to be used to create point from probabilities. Options: ['peak_local_max', 'blob_log']
