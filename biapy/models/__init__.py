@@ -503,7 +503,10 @@ def check_bmz_model_compatibility(
             pass
         elif specific_workflow in ["all", "DENOISING"] and "denoising" in model_rdf["tags"]:
             pass
-        elif specific_workflow in ["all", "SUPER_RESOLUTION"] and "super-resolution" in model_rdf["tags"]:
+        elif specific_workflow in ["all", "SUPER_RESOLUTION"] and (
+            "super-resolution" in model_rdf["tags"]
+            or "superresolution" in model_rdf["tags"]
+        ):
             pass
         elif specific_workflow in ["all", "SELF_SUPERVISED"] and "self-supervision" in model_rdf["tags"]:
             pass
