@@ -316,7 +316,7 @@ class PatchCoords:
                 self.z_start, self.z_end, self.y_start, self.y_end, self.x_start, self.x_end
             )
         else:
-            return "[{}:{},{}:{},{}:{}]".format(self.y_start, self.y_end, self.x_start, self.x_end)
+            return "[{}:{},{}:{}]".format(self.y_start, self.y_end, self.x_start, self.x_end)
 
     def __repr__(self):
         return self.__str__()
