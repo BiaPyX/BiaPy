@@ -107,9 +107,10 @@ class Normalization:
             self.scale_range_min_val = None
             self.scale_range_max_val = None
         elif type == "zero_mean_unit_variance":
-            self.mean = mean if mean != -1 else None
-            self.std = std if std != -1 else None
-            print("Normalization: using mean {} and std: {}".format(self.mean, self.std))
+            self.fixed_mean = mean if mean != -1 else None
+            self.fixed_std = std if std != -1 else None
+            self.mean, self.std = None, None
+            print("Normalization: using mean {} and std: {}".format(self.fixed_mean, self.fixed_std))
 
         self.last_X_norm = None
         self.last_Y_norm = None
@@ -133,8 +134,8 @@ class Normalization:
                 self.scale_range_min_val = [image.min()]
                 self.scale_range_max_val = [image.max()]
             elif self.type == "zero_mean_unit_variance":
-                self.mean = float(image.mean())
-                self.std = float(image.std())
+                self.mean = float(image.mean()) if self.fixed_mean is None else self.fixed_mean
+                self.std = float(image.std()) if self.fixed_std is None else self.fixed_std
 
     def set_stats_from_mask(self, mask: NDArray | torch.Tensor, n_classes: int = 1, ignore_index: Optional[int] = None, instance_problem: bool = False):
         """
@@ -184,8 +185,8 @@ class Normalization:
                     self.scale_range_min_val = dataset_file.scale_range_min_val
                     self.scale_range_max_val = dataset_file.scale_range_max_val
                 elif self.type == "zero_mean_unit_variance":
-                    self.mean = dataset_file.mean
-                    self.std = dataset_file.std
+                    self.mean = dataset_file.mean if self.fixed_mean is None else self.fixed_mean
+                    self.std = dataset_file.std if self.fixed_std is None else self.fixed_std
         except Exception as e:
             print(e)
             raise ValueError("Seems that the DatasetFile input was not created using the same normalization steps.")
@@ -202,8 +203,8 @@ class Normalization:
                 dataset_file.scale_range_min_val = self.scale_range_min_val
                 dataset_file.scale_range_max_val = self.scale_range_max_val
             elif self.type == "zero_mean_unit_variance":
-                dataset_file.mean = self.mean
-                dataset_file.std = self.std
+                dataset_file.mean = self.mean if self.fixed_mean is None else self.fixed_mean
+                dataset_file.std = self.std if self.fixed_std is None else self.fixed_std
 
         return dataset_file
 
