@@ -38,6 +38,9 @@ dependencies = [
     "pooch>=1.8.1",
     "diplib>=3.5.1",
     "xarray==2025.1.*",
+    "timm==1.0.14",
+    "pytorch-msssim",
+    "torchmetrics[image]==1.4.*"
 ]
 
 [project.scripts]
