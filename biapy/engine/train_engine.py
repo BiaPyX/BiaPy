@@ -11,6 +11,7 @@ from biapy.utils.misc import MetricLogger, SmoothedValue, TensorboardLogger, all
 from biapy.engine import Scheduler
 from torch.optim.lr_scheduler import ReduceLROnPlateau, OneCycleLR
 from biapy.engine.schedulers.warmup_cosine_decay import WarmUpCosineDecayScheduler
+from biapy.models.memory_bank import MemoryBank
 
 
 def train_one_epoch(
@@ -27,6 +28,9 @@ def train_one_epoch(
     log_writer: Optional[TensorboardLogger] = None,
     lr_scheduler: Optional[Scheduler] = None,
     verbose: bool = False,
+    memory_bank: Optional[MemoryBank] = None,
+    total_iters: int=0,
+    contrast_warmup_iters: int=0,
 ):
 
     model.train(True)
@@ -63,7 +67,31 @@ def train_one_epoch(
 
         # Pass the images through the model
         outputs = model_call_func(batch, is_train=True)
-        loss = loss_function(outputs, targets)
+
+        # Loss function call
+        if memory_bank is not None:
+            if total_iters + step >= contrast_warmup_iters:
+                with_embed = True
+            else:
+                with_embed = False
+
+            outputs = {
+                "seg": outputs["pred"],
+                "embed": outputs["embed"],
+                'key': outputs["embed"].detach(),
+                'pixel_queue': memory_bank.pixel_queue,
+                'segment_queue': memory_bank.segment_queue,
+            }
+
+            loss = loss_function(outputs, targets, with_embed=with_embed)
+
+            memory_bank.dequeue_and_enqueue(
+                outputs['key'], targets.detach(),
+            )
+            outputs = outputs["seg"]
+        else:
+            loss = loss_function(outputs["pred"], targets)
+            outputs = outputs["pred"]
 
         loss_value = loss.item()
         if not math.isfinite(loss_value):
@@ -104,7 +132,7 @@ def train_one_epoch(
     # Gather the stats from all processes
     metric_logger.synchronize_between_processes()
     print("[Train] averaged stats:", metric_logger)
-    return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
+    return {k: meter.global_avg for k, meter in metric_logger.meters.items()}, step
 
 
 @torch.no_grad()
@@ -118,6 +146,7 @@ def evaluate(
     epoch: int,
     data_loader: DataLoader,
     lr_scheduler: Optional[Scheduler] = None,
+    memory_bank: Optional[MemoryBank] = None,
 ):
 
     # Ensure correct order of each epoch info by adding loss first
@@ -136,7 +165,24 @@ def evaluate(
 
         # Pass the images through the model
         outputs = model_call_func(images, is_train=True)
-        loss = loss_function(outputs, targets)
+        
+        # Loss function call
+        if memory_bank is not None:
+            with_embed = False
+
+            outputs = {
+                "seg": outputs["pred"],
+                "embed": outputs["embed"],
+                'key': outputs["pred"].detach(),
+                'pixel_queue': memory_bank.pixel_queue,
+                'segment_queue': memory_bank.segment_queue,
+            }
+
+            loss = loss_function(outputs, targets, with_embed=with_embed)
+            outputs = outputs["seg"]
+        else:
+            loss = loss_function(outputs, targets)
+            outputs = outputs["pred"]
 
         # Calculate the metrics
         metric_function(outputs, targets, metric_logger=metric_logger)

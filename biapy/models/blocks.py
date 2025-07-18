@@ -1,8 +1,9 @@
 import torch
 import torch.nn as nn
-
+import torch.nn.functional as F
 from torchvision.ops.stochastic_depth import StochasticDepth
 from torchvision.ops.misc import Permute
+from typing import Dict, Optional, List, Tuple, Any, Type
 
 
 class ConvBlock(nn.Module):
@@ -12,6 +13,9 @@ class ConvBlock(nn.Module):
         in_size,
         out_size,
         k_size,
+        padding: int | str = "same",
+        stride=1,
+        bias=True,
         act=None,
         norm="none",
         dropout=0,
@@ -34,6 +38,9 @@ class ConvBlock(nn.Module):
         k_size : 3 int tuple
             Height, width and depth of the convolution window.
 
+        bias : bool, optional
+            Whether to apply bias in convolutions.
+
         act : str, optional
             Activation layer to use.
 
@@ -45,12 +52,11 @@ class ConvBlock(nn.Module):
 
         se_block : boolean, optional
             Whether to add Squeeze-and-Excitation blocks or not.
-
         """
         super(ConvBlock, self).__init__()
         block = []
 
-        block.append(conv(in_size, out_size, kernel_size=k_size, padding="same"))
+        block.append(conv(in_size, out_size, kernel_size=k_size, padding=padding, stride=stride, bias=bias))
         if norm != "none":
             if conv == nn.Conv2d:
                 block.append(get_norm_2d(norm, out_size))
@@ -974,6 +980,205 @@ class ResUpBlock(nn.Module):
         return out
 
 
+class HRBasicBlock(nn.Module):
+    """
+    Basic block for high-resolution networks.
+    This block is used in high-resolution networks to maintain high-resolution features.
+
+    Reference: `High-Resolution Representations for Labeling Pixels and Regions <https://arxiv.org/abs/1904.04514>`_.
+
+    Parameters
+    ----------
+    conv : Type[nn.Conv2d | nn.Conv3d]
+        Convolutional layer to use in the residual block.
+
+    in_size : int
+        Input feature maps of the convolutional layers.
+
+    out_size : int
+        Output feature maps of the convolutional layers.
+
+    stride : int, optional
+        Stride of the convolutional layers. Default is 1.
+
+    act : Optional[nn.Module], optional
+        Activation layer to use. Default is None, which means no activation layer is applied.
+
+    norm : str, optional
+        Normalization layer (one of ``'bn'``, ``'sync_bn'``, ``'in'``, ``'gn'`` or ``'none'``). Default is "none".
+
+    dropout : int, optional
+        Dropout value to be fixed. Default is 0, which means no dropout is applied.
+
+    downsample : Optional[nn.Module], optional
+        Downsample layer to apply if the input and output sizes do not match. Default is None
+    """
+
+    expansion = 1
+
+    def __init__(
+        self,
+        conv: Type[nn.Conv2d | nn.Conv3d],
+        in_size: int,
+        out_size: int,
+        stride: int = 1,
+        act: Optional[nn.Module] = None,
+        norm: str = "none",
+        dropout: int = 0,
+        downsample: Optional[nn.Module] = None,
+    ):
+        super(HRBasicBlock, self).__init__()
+        self.conv1_block = ConvBlock(
+            conv=conv,
+            in_size=in_size,
+            out_size=out_size,
+            k_size=3,
+            padding=1,
+            stride=stride,
+            act=act,
+            norm=norm,
+            dropout=dropout,
+            bias=False,
+        )
+
+        self.conv2_block = ConvBlock(
+            conv=conv,
+            in_size=out_size,
+            out_size=out_size,
+            k_size=3,
+            padding=1,
+            stride=1,
+            act=None,
+            norm=norm,
+            dropout=dropout,
+            bias=False,
+        )
+
+        self.relu_in = nn.ReLU(inplace=True)
+        self.downsample = downsample
+        self.stride = stride
+
+    def forward(self, x):
+        residual = x
+
+        out = self.conv1_block(x)
+        out = self.conv2_block(out)
+
+        if self.downsample is not None:
+            residual = self.downsample(x)
+
+        out = out + residual
+        out = self.relu_in(out)
+
+        return out
+
+
+class HRBottleneck(nn.Module):
+    """
+    Bottleneck block for high-resolution networks.
+    Reference: `High-Resolution Representations for Labeling Pixels and Regions <https://arxiv.org/abs/1904.04514>`_.
+
+    Parameters
+    ----------
+    conv : Type[nn.Conv2d | nn.Conv3d]
+        Convolutional layer to use in the residual block.
+
+    in_size : int
+        Input feature maps of the convolutional layers.
+
+    out_size : int
+        Output feature maps of the convolutional layers.
+
+    stride : int, optional
+        Stride of the convolutional layers. Default is 1.
+
+    act : Optional[nn.Module], optional
+        Activation layer to use. Default is None, which means no activation layer is applied.
+
+    norm : str, optional
+        Normalization layer (one of ``'bn'``, ``'sync_bn'`, ``'in'``, ``'gn'`` or ``'none'``). Default
+        is "none".
+
+    dropout : int, optional
+        Dropout value to be fixed. Default is 0, which means no dropout is applied.
+
+    downsample : Optional[nn.Module], optional
+        Downsample layer to apply if the input and output sizes do not match. Default is None.
+    """
+
+    expansion = 4
+
+    def __init__(
+        self,
+        conv: Type[nn.Conv2d | nn.Conv3d],
+        in_size: int,
+        out_size: int,
+        stride: int = 1,
+        act: Optional[nn.Module] = None,
+        norm: str = "none",
+        dropout: int = 0,
+        downsample: Optional[nn.Module] = None,
+    ):
+        super(HRBottleneck, self).__init__()
+        self.conv1_block = ConvBlock(
+            conv=conv,
+            in_size=in_size,
+            out_size=out_size,
+            k_size=1,
+            padding=0,
+            stride=1,
+            act=None,
+            norm=norm,
+            dropout=dropout,
+            bias=False,
+        )
+
+        self.conv2_block = ConvBlock(
+            conv=conv,
+            in_size=out_size,
+            out_size=out_size,
+            k_size=3,
+            padding=1,
+            stride=stride,
+            act=None,
+            norm=norm,
+            dropout=dropout,
+            bias=False,
+        )
+
+        self.conv3_block = ConvBlock(
+            conv=conv,
+            in_size=out_size,
+            out_size=out_size * 4,
+            k_size=1,
+            padding=0,
+            stride=1,
+            act=act,
+            norm=norm,
+            dropout=dropout,
+            bias=False,
+        )
+
+        self.relu_in = nn.ReLU(inplace=True)
+        self.downsample = downsample
+        self.stride = stride
+
+    def forward(self, x):
+        residual = x
+
+        out = self.conv1_block(x)
+        out = self.conv2_block(out)
+        out = self.conv3_block(out)
+
+        if self.downsample is not None:
+            residual = self.downsample(x)
+
+        out = out + residual
+        out = self.relu_in(out)
+
+        return out
+
+
 def get_activation(activation: str = "relu") -> nn.Module:
     """
     Get the specified activation layer.
@@ -1012,16 +1217,12 @@ def get_activation(activation: str = "relu") -> nn.Module:
     return activation_dict[activation]
 
 
-# ----------------------
-# Normalization Layers
-# Code from Pytorch for Connectomics:
-# https://github.com/zudi-lin/pytorch_connectomics/blob/6fbd5457463ae178ecd93b2946212871e9c617ee/connectomics/model/utils/misc.py#L330-L408
-# ----------------------
-
-
 def get_norm_3d(norm: str, out_channels: int, bn_momentum: float = 0.1) -> nn.Module:
     """
     Get the specified normalization layer for a 3D model.
+
+    Code adapted from Pytorch for Connectomics:
+        `<https://github.com/zudi-lin/pytorch_connectomics/blob/6fbd5457463ae178ecd93b2946212871e9c617ee/connectomics/model/utils/misc.py#L330-L408>`_.
 
     Args:
         norm (str): one of ``'bn'``, ``'sync_bn'`` ``'in'``, ``'gn'`` or ``'none'``.
@@ -1039,7 +1240,7 @@ def get_norm_3d(norm: str, out_channels: int, bn_momentum: float = 0.1) -> nn.Mo
     ], "Get unknown normalization layer key {}".format(norm)
     if norm == "gn":
         assert out_channels % 8 == 0, "GN requires channels to separable into 8 groups"
-    norm = {
+    selected_norm = {
         "bn": nn.BatchNorm3d,
         "sync_bn": nn.SyncBatchNorm,
         "in": nn.InstanceNorm3d,
@@ -1047,14 +1248,17 @@ def get_norm_3d(norm: str, out_channels: int, bn_momentum: float = 0.1) -> nn.Mo
         "none": nn.Identity,
     }[norm]
     if norm in ["bn", "sync_bn", "in"]:
-        return norm(out_channels, momentum=bn_momentum)
+        return selected_norm(out_channels, momentum=bn_momentum)
     else:
-        return norm(out_channels)
+        return selected_norm(out_channels)
 
 
 def get_norm_2d(norm: str, out_channels: int, bn_momentum: float = 0.1) -> nn.Module:
     """
     Get the specified normalization layer for a 2D model.
+
+    Code adapted from Pytorch for Connectomics:
+        `<https://github.com/zudi-lin/pytorch_connectomics/blob/6fbd5457463ae178ecd93b2946212871e9c617ee/connectomics/model/utils/misc.py#L330-L408>`_.
 
     Args:
         norm (str): one of ``'bn'``, ``'sync_bn'`` ``'in'``, ``'gn'`` or ``'none'``.
@@ -1070,7 +1274,7 @@ def get_norm_2d(norm: str, out_channels: int, bn_momentum: float = 0.1) -> nn.Mo
         "in",
         "none",
     ], "Get unknown normalization layer key {}".format(norm)
-    norm = {
+    selected_norm = {
         "bn": nn.BatchNorm2d,
         "sync_bn": nn.SyncBatchNorm,
         "in": nn.InstanceNorm2d,
@@ -1078,40 +1282,9 @@ def get_norm_2d(norm: str, out_channels: int, bn_momentum: float = 0.1) -> nn.Mo
         "none": nn.Identity,
     }[norm]
     if norm in ["bn", "sync_bn", "in"]:
-        return norm(out_channels, momentum=bn_momentum)
+        return selected_norm(out_channels, momentum=bn_momentum)
     else:
-        return norm(out_channels)
-
-
-def get_norm_1d(norm: str, out_channels: int, bn_momentum: float = 0.1) -> nn.Module:
-    """
-    Get the specified normalization layer for a 1D model.
-
-    Args:
-        norm (str): one of ``'bn'``, ``'sync_bn'`` ``'in'``, ``'gn'`` or ``'none'``.
-        out_channels (int): channel number.
-        bn_momentum (float): the momentum of normalization layers.
-    Returns:
-        nn.Module: the normalization layer
-    """
-    assert norm in [
-        "bn",
-        "sync_bn",
-        "gn",
-        "in",
-        "none",
-    ], "Get unknown normalization layer key {}".format(norm)
-    norm = {
-        "bn": nn.BatchNorm1d,
-        "sync_bn": nn.BatchNorm1d,
-        "in": nn.InstanceNorm1d,
-        "gn": lambda channels: nn.GroupNorm(16, channels),
-        "none": nn.Identity,
-    }[norm]
-    if norm in ["bn", "sync_bn", "in"]:
-        return norm(out_channels, momentum=bn_momentum)
-    else:
-        return norm(out_channels)
+        return selected_norm(out_channels)
 
 
 class ResUNetPlusPlus_AttentionBlock(nn.Module):
@@ -1215,3 +1388,53 @@ class ASPP(nn.Module):
         x3 = self.aspp_block3(x)
         out = torch.cat([x1, x2, x3], dim=1)
         return self.output(out)
+
+
+class ProjectionHead(nn.Module):
+    """
+    Projection head for self-supervised learning. This module projects the input
+    features into a lower-dimensional space and normalizes the output.
+
+    Parameters
+    ----------
+    ndim : int
+        Number of dimensions of the input data (2 for 2D, 3 for 3D).
+
+    in_channels : int
+        Number of input channels.
+
+    proj_dim : int, optional
+        Dimension of the projected output. Default is 256.
+
+    proj : str, optional
+        Type of projection to use. Can be either 'linear' or 'convmlp'.
+
+        'linear' uses a simple linear projection, while 'convmlp' uses a convolution
+        followed by a multi-layer perceptron (MLP) structure. Default is 'convmlp'.
+
+    bn_type : str, optional
+        Type of batch normalization to use. Can be 'sync_bn' or 'none'. Default is 'sync_bn'.
+    """
+
+    def __init__(self, ndim, in_channels, proj_dim=256, proj="convmlp", bn_type="sync_bn"):
+        super(ProjectionHead, self).__init__()
+        self.ndim = ndim
+        if self.ndim == 3:
+            self.conv_call = nn.Conv3d
+            self.norm_func = get_norm_3d
+        else:
+            self.conv_call = nn.Conv2d
+            self.norm_func = get_norm_2d
+
+        if proj == "linear":
+            self.proj = self.conv_call(in_channels, proj_dim, kernel_size=1)
+        elif proj == "convmlp":
+            self.proj = nn.Sequential(
+                self.conv_call(in_channels, in_channels, kernel_size=1),
+                self.norm_func(bn_type, in_channels),
+                nn.ReLU(inplace=True),
+                self.conv_call(in_channels, proj_dim, kernel_size=1),
+            )
+
+    def forward(self, x):
+        return F.normalize(self.proj(x), p=2, dim=1)

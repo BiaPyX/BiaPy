@@ -14,8 +14,8 @@ from biapy.engine.metrics import (
     CrossEntropyLoss_wrapper,
     DiceBCELoss,
     DiceLoss,
+    ContrastCELoss,
 )
-from biapy.data.dataset import PatchCoords
 
 
 class Semantic_Segmentation_Workflow(Base_Workflow):
@@ -78,6 +78,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
             "type": "mask",
             "channels": [1 if self.cfg.DATA.N_CLASSES <= 2 else self.cfg.DATA.N_CLASSES],
         }
+        self.real_classes = self.cfg.DATA.N_CLASSES
         self.multihead = False
         self.activations = [{":": "CE_Sigmoid"}]
 
@@ -115,6 +116,8 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
                         num_classes=self.cfg.DATA.N_CLASSES,
                         device=self.device,
                         model_source=self.cfg.MODEL.SOURCE,
+                        ndim=self.dims,
+                        ignore_index=self.cfg.LOSS.IGNORE_INDEX,
                     )
                 )
                 self.train_metric_names.append("IoU")
@@ -129,20 +132,33 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
                         num_classes=self.cfg.DATA.N_CLASSES,
                         device=self.device,
                         model_source=self.cfg.MODEL.SOURCE,
+                        ndim=self.dims,
+                        ignore_index=self.cfg.LOSS.IGNORE_INDEX,
                     )
                 )
                 self.test_metric_names.append("IoU")
 
         if self.cfg.LOSS.TYPE == "CE":
-            self.loss = CrossEntropyLoss_wrapper(
+            semantic_loss = CrossEntropyLoss_wrapper(
                 num_classes=self.cfg.DATA.N_CLASSES,
+                ndim=self.dims,
                 model_source=self.cfg.MODEL.SOURCE,
                 class_rebalance=self.cfg.LOSS.CLASS_REBALANCE,
+                ignore_index = self.cfg.LOSS.IGNORE_INDEX
             )
         elif self.cfg.LOSS.TYPE == "DICE":
-            self.loss = DiceLoss()
+            semantic_loss = DiceLoss()
         elif self.cfg.LOSS.TYPE == "W_CE_DICE":
-            self.loss = DiceBCELoss(w_dice=self.cfg.LOSS.WEIGHTS[0], w_bce=self.cfg.LOSS.WEIGHTS[1])
+            semantic_loss = DiceBCELoss(w_dice=self.cfg.LOSS.WEIGHTS[0], w_bce=self.cfg.LOSS.WEIGHTS[1])
+
+        if self.cfg.LOSS.CONTRAST.ENABLE: 
+            self.loss = ContrastCELoss(
+                main_loss=semantic_loss, # type: ignore
+                ndim=self.dims,
+                ignore_index=self.cfg.LOSS.IGNORE_INDEX,
+            )
+        else:
+            self.loss = semantic_loss
 
         super().define_metrics()
 
@@ -182,8 +198,9 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
                 pred = apply_binary_mask(pred, self.cfg.DATA.TEST.BINARY_MASKS)
 
             if self.current_sample["Y"] is not None:
-                if pred.shape != self.current_sample["Y"].shape:
-                    self.current_sample["Y"] = resize(self.current_sample["Y"], pred.shape, order=0)
+                if pred.shape[1:-1] != self.current_sample["Y"].shape[1:-1]:
+                    sshape = (pred.shape[0],) + self.current_sample["Y"].shape[1:-1] + (pred.shape[-1],)
+                    pred = resize(pred, sshape, order=1)
 
                 metric_values = self.metric_calculation(output=pred, targets=self.current_sample["Y"], train=False)
                 for metric in metric_values:

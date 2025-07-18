@@ -5,12 +5,10 @@ from scipy.spatial import distance_matrix
 from scipy.optimize import linear_sum_assignment
 from torchmetrics import JaccardIndex
 from torchmetrics.image import StructuralSimilarityIndexMeasure
-from torchvision.transforms.functional import resize
-import torchvision.transforms as T
 from pytorch_msssim import SSIM
 import torch.nn.functional as F
 import torch.nn as nn
-from typing import Dict, Optional, List
+from typing import Optional, List, Tuple
 
 
 def jaccard_index_numpy(y_true, y_pred):
@@ -116,7 +114,15 @@ def weight_binary_ratio(target):
 
 
 class jaccard_index:
-    def __init__(self, num_classes, device, t=0.5, model_source="biapy"):
+    def __init__(
+        self,
+        num_classes: int,
+        device: torch.device,
+        t: float = 0.5,
+        model_source: str = "biapy",
+        ndim: int = 2,
+        ignore_index: int = -1,
+    ):
         """
         Define Jaccard index.
 
@@ -134,21 +140,28 @@ class jaccard_index:
 
         model_source : str, optional
             Source of the model. It can be "biapy", "bmz" or "torchvision".
+
+        ndim : int, optional
+            Number of dimensions of the input data. 2 for 2D images, 3 for 3D volumes.
+
+        ignore_index : int, optional
+            Value to ignore in the loss calculation. If not provided, no value will be ignored.
         """
         self.model_source = model_source
         self.loss = torch.nn.CrossEntropyLoss()
         self.device = device
         self.num_classes = num_classes
         self.t = t
-
+        self.ndim = ndim
+        self.ignore_index = ignore_index if ignore_index != -1 else None
         if self.num_classes > 2:
-            self.jaccard = JaccardIndex(task="multiclass", threshold=self.t, num_classes=self.num_classes).to(
-                self.device, non_blocking=True
-            )
+            self.jaccard = JaccardIndex(
+                task="multiclass", threshold=self.t, num_classes=self.num_classes, ignore_index=ignore_index
+            ).to(self.device, non_blocking=True)
         else:
-            self.jaccard = JaccardIndex(task="binary", threshold=self.t, num_classes=self.num_classes).to(
-                self.device, non_blocking=True
-            )
+            self.jaccard = JaccardIndex(
+                task="binary", threshold=self.t, num_classes=self.num_classes, ignore_index=ignore_index
+            ).to(self.device, non_blocking=True)
 
     def __call__(self, y_pred, y_true):
         """
@@ -167,21 +180,13 @@ class jaccard_index:
         jaccard : torch.Tensor
             Jaccard index value.
         """
-        # If image shape has changed due to TorchVision or BMZ preprocessing then the mask needs
-        # to be resized too
-        if self.model_source == "torchvision":
-            if y_pred.shape[-2:] != y_true.shape[-2:]:
-                y_true = resize(
-                    y_true,
-                    size=y_pred.shape[-2:],
-                    interpolation=T.InterpolationMode("nearest"),
-                )
-            if torch.max(y_true) > 1 and self.num_classes <= 2:
-                y_true = (y_true / 255).type(torch.long)
         # For those cases that are predicting 2 channels (binary case) we adapt the GT to match.
         # It's supposed to have 0 value as background and 1 as foreground
-        elif self.model_source == "bmz" and self.num_classes <= 2 and y_pred.shape[1] != y_true.shape[1]:
+        if self.model_source == "bmz" and self.num_classes <= 2 and y_pred.shape[1] != y_true.shape[1]:
             y_true = torch.cat((1 - y_true, y_true), 1)
+        else:
+            if y_pred.shape[-self.ndim :] != y_true.shape[-self.ndim :]:
+                y_true = scale_target(y_true, y_pred.shape[-self.ndim :])
 
         if self.num_classes > 2:
             if y_pred.shape[1] > 1:
@@ -193,7 +198,15 @@ class jaccard_index:
 
 
 class multiple_metrics:
-    def __init__(self, num_classes, metric_names, device, val_to_ignore: Optional[int] = None, model_source="biapy"):
+    def __init__(
+        self,
+        num_classes: int,
+        metric_names: List[str],
+        device: torch.device,
+        ignore_index: int = -1,
+        model_source: str = "biapy",
+        ndim: int = 2,
+    ):
         """
         Define instance segmentation workflow metrics.
 
@@ -209,24 +222,33 @@ class multiple_metrics:
             Using device. Most commonly "cpu" or "cuda" for GPU, but also potentially "mps",
             "xpu", "xla" or "meta".
 
+        ignore_index : int, optional
+            Value to ignore in the loss calculation. If not provided, no value will be ignored.
+
         model_source : str, optional
             Source of the model. It can be "biapy", "bmz" or "torchvision".
+
+        ndim : int, optional
+            Number of dimensions of the input data. 2 for 2D images, 3 for 3D volumes.
         """
 
         self.num_classes = num_classes
         self.metric_names = metric_names
         self.device = device
         self.model_source = model_source
-        self.val_to_ignore = val_to_ignore
+        self.ignore_index = ignore_index if ignore_index != -1 else None
+        self.ndim = ndim
 
         self.metric_func = []
         for i in range(len(metric_names)):
             if "IoU (classes)" in metric_names[i]:
-                loss_func = JaccardIndex(task="multiclass", threshold=0.5, num_classes=self.num_classes, ignore_index=self.val_to_ignore).to(
-                    self.device, non_blocking=True
-                )
+                loss_func = JaccardIndex(
+                    task="multiclass", threshold=0.5, num_classes=self.num_classes, ignore_index=self.ignore_index
+                ).to(self.device, non_blocking=True)
             elif "IoU" in metric_names[i]:
-                loss_func = JaccardIndex(task="binary", threshold=0.5, num_classes=2, ignore_index=self.val_to_ignore).to(self.device, non_blocking=True)
+                loss_func = JaccardIndex(
+                    task="binary", threshold=0.5, num_classes=2, ignore_index=self.ignore_index
+                ).to(self.device, non_blocking=True)
             elif metric_names[i] == "L1 (distance channel)":
                 loss_func = torch.nn.L1Loss()
 
@@ -259,17 +281,8 @@ class multiple_metrics:
             _y_pred = y_pred
             _y_pred_class = y_pred[:, -1]
 
-        # If image shape has changed due to TorchVision or BMZ preprocessing then the mask needs
-        # to be resized too
-        if self.model_source == "torchvision":
-            if _y_pred.shape[-2:] != y_true.shape[-2:]:
-                y_true = resize(
-                    y_true,
-                    size=_y_pred.shape[-2:],
-                    interpolation=T.InterpolationMode("nearest"),
-                )
-            if torch.max(y_true) > 1 and self.num_classes <= 2:
-                y_true = (y_true / 255).type(torch.long)
+        if _y_pred.shape[-self.ndim :] != y_true.shape[-self.ndim :]:
+            y_true = scale_target(y_true, _y_pred.shape[-self.ndim :])
 
         res_metrics = {}
         for i in range(num_channels):
@@ -290,8 +303,38 @@ class multiple_metrics:
         return res_metrics
 
 
+def scale_target(targets_: torch.Tensor, scaled_size: Tuple[int, ...]) -> torch.Tensor:
+    """
+    Scale the target masks to match the size of the predictions.
+
+    Parameters
+    ----------
+    targets_ : torch.Tensor
+        Ground truth masks.
+
+    scaled_size : tuple
+        Size to scale the masks to.
+
+    Returns
+    -------
+    targets : torch.Tensor
+        Scaled ground truth masks.
+    """
+    targets = targets_.clone().float()
+    targets = F.interpolate(targets, size=scaled_size, mode="nearest")
+    return targets.long()
+
+
 class CrossEntropyLoss_wrapper:
-    def __init__(self, num_classes, multihead=False, model_source="biapy", class_rebalance=False):
+    def __init__(
+        self,
+        num_classes: int,
+        ndim: int = 2,
+        multihead: bool = False,
+        model_source: str = "biapy",
+        class_rebalance: bool = False,
+        ignore_index: int = -1,
+    ):
         """
         Wrapper to Pytorch's CrossEntropyLoss.
 
@@ -299,6 +342,9 @@ class CrossEntropyLoss_wrapper:
         ----------
         num_classes : int
             Number of classes.
+
+        ndim : int, optional
+            Number of dimensions of the input data. 2 for 2D images, 3 for 3D volumes.
 
         multihead : bool, optional
             For multihead predictions e.g. points + classification in detection.
@@ -308,16 +354,22 @@ class CrossEntropyLoss_wrapper:
 
         class_rebalance: bool, optional
             Whether to reweight classes (inside loss function) or not.
+
+        ignore_index : int, optional
+            Value to ignore in the loss calculation. If not provided, no value will be ignored.
         """
+        self.ndim = ndim
         self.model_source = model_source
         self.multihead = multihead
         self.num_classes = num_classes
         self.class_rebalance = class_rebalance
+        self.ignore_index = ignore_index if ignore_index != -1 else -100  # Default ignore index for CrossEntropyLoss
+
         if num_classes <= 2:
             self.loss = torch.nn.BCEWithLogitsLoss()
         else:
-            self.loss = torch.nn.CrossEntropyLoss()
-        self.class_channel_loss = torch.nn.CrossEntropyLoss()
+            self.loss = torch.nn.CrossEntropyLoss(ignore_index=self.ignore_index)
+        self.class_channel_loss = torch.nn.CrossEntropyLoss(ignore_index=self.ignore_index)
 
     def __call__(self, y_pred, y_true):
         """
@@ -337,29 +389,21 @@ class CrossEntropyLoss_wrapper:
             Loss value.
         """
         if self.multihead:
-            _y_pred = y_pred[0]
-            _y_pred_class = y_pred[1]
+            _y_pred = y_pred["pred"]
+            _y_pred_class = y_pred["class"]
             assert (
                 y_true.shape[1] == 2
             ), f"In multihead setting the ground truth is expected to have 2 channels. Provided {y_true.shape}"
         else:
-            _y_pred = y_pred
+            _y_pred = y_pred["pred"] if isinstance(y_pred, dict) and "pred" in y_pred else y_pred
 
-        # If image shape has changed due to TorchVision or BMZ preprocessing then the mask needs
-        # to be resized too
-        if self.model_source == "torchvision":
-            if _y_pred.shape[-2:] != y_true.shape[-2:]:
-                y_true = resize(
-                    y_true,
-                    size=_y_pred.shape[-2:],
-                    interpolation=T.InterpolationMode("nearest"),
-                )
-            if torch.max(y_true) > 1 and self.num_classes <= 2:
-                y_true = (y_true / 255).type(torch.float32)
         # For those cases that are predicting 2 channels (binary case) we adapt the GT to match.
         # It's supposed to have 0 value as background and 1 as foreground
-        elif self.model_source == "bmz" and self.num_classes <= 2 and _y_pred.shape[1] != y_true.shape[1]:
+        if self.model_source == "bmz" and self.num_classes <= 2 and _y_pred.shape[1] != y_true.shape[1]:
             y_true = torch.cat((1 - y_true, y_true), 1)
+        else:
+            if _y_pred.shape[-self.ndim :] != y_true.shape[-self.ndim :]:
+                y_true = scale_target(y_true, _y_pred.shape[-self.ndim :])
 
         if self.class_rebalance:
             if self.multihead:
@@ -433,6 +477,424 @@ class DiceBCELoss(nn.Module):
         return Dice_BCE
 
 
+class ContrastCELoss(nn.Module):
+    """
+    Contrastive Cross Entropy Loss for semantic segmentation tasks. It mixes the main loss function and the constrastive loss.
+
+    Parameters
+    ----------
+    main_loss : nn.Module
+        The main loss function to be used for the segmentation task.
+
+    ndim : int, optional
+        Number of dimensions of the input data. 2 for 2D images, 3 for 3D volumes. Default is 2.
+
+    weight : float, optional
+        Weight for the contrastive loss. Default is 1.0.
+        This weight is used to balance the contribution of the contrastive loss in the final loss calculation
+        and can be adjusted based on the specific requirements of the task.
+
+    ignore_index : int, optional
+        Label to ignore in the loss calculation. Default is -1.
+    """
+
+    def __init__(
+        self,
+        main_loss: nn.Module,
+        ndim: int = 2,
+        weight: float = 1.0,
+        ignore_index: int = -1,
+    ):
+        super(ContrastCELoss, self).__init__()
+        self.ndim = ndim
+        self.main_loss = main_loss
+        self.contrast_criterion = PixelContrastLoss(ignore_index=ignore_index, ndim=ndim)
+        self.loss_weight = weight
+
+    def forward(self, preds, target, with_embed=False):
+        """
+        Forward pass of the Contrastive Cross Entropy Loss.
+
+        Parameters
+        ----------
+        preds : dict
+            Dictionary containing the predictions from the model. It should contain:
+            - "seg": Segmentation predictions.
+            - "embed": Embedding predictions.
+            - "segment_queue": Segment queues for contrastive learning.
+            - "pixel_queue": Pixel queues for contrastive learning.
+
+        target : torch.Tensor
+            Ground truth segmentation masks.
+
+        with_embed : bool, optional
+            Whether to include the embedding in the loss calculation. Default is False.
+        """
+        assert "seg" in preds, "Segmentation prediction is missing in the input dictionary."
+        assert "embed" in preds, "Embedding prediction is missing in the input dictionary."
+
+        seg = preds["seg"]
+        embedding = preds["embed"]
+
+        segment_queue = preds["segment_queue"] if "segment_queue" in preds else None
+        pixel_queue = preds["pixel_queue"] if "pixel_queue" in preds else None
+
+        if seg.shape[-self.ndim :] != target.shape[-self.ndim :]:
+            pred = F.interpolate(input=seg, size=target.shape[-self.ndim :], mode="bilinear", align_corners=True)
+        else:
+            pred = seg
+
+        loss = self.main_loss(pred, target)
+
+        loss_contrast = 0
+        if segment_queue is not None and pixel_queue is not None:
+            queue = torch.cat((segment_queue, pixel_queue), dim=1)
+
+            # When the classes are less or equal 2 the background class channel is not added in BiaPy
+            # so can't apply directly an argmax/max operation
+            if seg.shape[1] <= 2:
+                _, predict = seg.max(dim=1)
+
+                if predict.ndim == 3:
+                    offsets = torch.tensor([1, 2], device=seg.device).view(1, 2, 1, 1)
+                else:
+                    offsets = torch.tensor([1, 2], device=seg.device).view(1, 2, 1, 1, 1)
+                predict = predict * offsets
+                predict, _ = predict.max(dim=1)
+            else:
+                predict = torch.argmax(seg, 1)
+
+            loss_contrast += self.contrast_criterion(
+                embedding,
+                labels=target,
+                predict=predict,
+                queue=queue,
+            )
+        else:
+            loss_contrast += 0
+
+        if with_embed:
+            return loss + self.loss_weight * loss_contrast
+
+        return loss + 0 * loss_contrast  # just a trick to avoid errors in distributed training
+
+
+class PixelContrastLoss(nn.Module):
+    def __init__(
+        self,
+        temperature: float = 0.07,
+        base_temperature: float = 0.07,
+        ignore_index: int = -1,
+        max_samples: int = 1024,
+        max_views: int = 1,
+        ndim: int = 2,
+    ):
+        """
+        Pixel Contrastive Loss for semantic segmentation tasks.
+
+        Parameters
+        ----------
+        temperature : float, optional
+            Temperature parameter for the contrastive loss. Default is 0.07.
+
+        base_temperature : float, optional
+            Base temperature for the contrastive loss. Default is 0.07.
+
+        ignore_index : int, optional
+            Label to ignore in the loss calculation. Default is -1.
+
+        max_samples : int, optional
+            Maximum number of samples to consider for the contrastive loss. Default is 1024.
+
+        max_views : int, optional
+            Maximum number of views to consider for the contrastive loss. Default is 1.
+
+        ndim : int, optional
+            Number of dimensions of the input data. 2 for 2D images, 3 for 3D volumes. Default is 2.
+        """
+
+        super(PixelContrastLoss, self).__init__()
+
+        self.temperature = temperature
+        self.base_temperature = base_temperature
+        self.ignore_index = ignore_index
+        self.max_samples = max_samples
+        self.max_views = max_views
+        self.ndim = ndim
+
+    def _hard_anchor_sampling(
+        self, X: torch.Tensor, y_hat: torch.Tensor, y: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Sample hard anchors from the input features and their corresponding labels.
+
+        Parameters
+        ----------
+        X : torch.Tensor
+            Input features of shape (batch_size, num_samples, feature_dim).
+            E.g. (2, 32768, 256) for a batch size of 2, 32768 samples and 256 features.
+
+        y_hat : torch.Tensor
+            Ground truth labels of shape (batch_size, num_samples).
+            E.g. (2, 32768) for a batch size of 2 and 32768 samples.
+
+        y : torch.Tensor
+            Predicted labels of shape (batch_size, num_samples).
+            E.g. (2, 32768) for a batch size of 2 and 32768 samples.
+
+        Returns
+        -------
+        X_ : torch.Tensor
+            Sampled features of shape (total_classes, self.max_views, feature_dim).
+            E.g. (82, 1, 256) for 82 classes (this can vary depeding on the classes
+            found in the ground truth), and 256 features.
+
+        y_ : torch.Tensor
+            Sampled labels of shape (total_classes,). E.g. (82,) for 82 classes (this
+            can vary depeding on the classes found in the ground truth).
+        """
+        batch_size, feat_dim = X.shape[0], X.shape[-1]
+
+        classes = []
+        total_classes = 0
+        for ii in range(batch_size):
+            this_y = y_hat[ii]
+            this_classes = torch.unique(this_y)
+            this_classes = [x for x in this_classes if x != self.ignore_index]
+            this_classes = [x for x in this_classes if (this_y == x).nonzero().shape[0] > self.max_views]
+
+            classes.append(this_classes)
+            total_classes += len(this_classes)
+
+        if total_classes == 0:
+            return None, None  # type: ignore
+
+        n_view = self.max_samples // total_classes
+        n_view = min(n_view, self.max_views)
+
+        X_ = torch.zeros((total_classes, n_view, feat_dim), dtype=torch.float).cuda()
+        y_ = torch.zeros(total_classes, dtype=torch.float).cuda()
+
+        X_ptr = 0
+        for ii in range(batch_size):
+            this_y_hat = y_hat[ii]
+            this_y = y[ii]
+            this_classes = classes[ii]
+
+            for cls_id in this_classes:
+                hard_indices = ((this_y_hat == cls_id) & (this_y != cls_id)).nonzero()
+                easy_indices = ((this_y_hat == cls_id) & (this_y == cls_id)).nonzero()
+
+                num_hard = hard_indices.shape[0]
+                num_easy = easy_indices.shape[0]
+
+                if num_hard >= n_view / 2 and num_easy >= n_view / 2:
+                    num_hard_keep = n_view // 2
+                    num_easy_keep = n_view - num_hard_keep
+                elif num_hard >= n_view / 2:
+                    num_easy_keep = num_easy
+                    num_hard_keep = n_view - num_easy_keep
+                elif num_easy >= n_view / 2:
+                    num_hard_keep = num_hard
+                    num_easy_keep = n_view - num_hard_keep
+                else:
+                    raise Exception("this shoud be never touched! {} {} {}".format(num_hard, num_easy, n_view))
+
+                perm = torch.randperm(num_hard)
+                hard_indices = hard_indices[perm[:num_hard_keep]]
+                perm = torch.randperm(num_easy)
+                easy_indices = easy_indices[perm[:num_easy_keep]]
+                indices = torch.cat((hard_indices, easy_indices), dim=0)
+
+                X_[X_ptr, :, :] = X[ii, indices, :].squeeze(1)
+                y_[X_ptr] = cls_id
+                X_ptr += 1
+
+        return X_, y_
+
+    def _sample_negative(self, Q: torch.Tensor):
+        """
+        Sample negative examples from the queue.
+        The queue is expected to be of shape (class_num, cache_size, feat_size), where:
+            - class_num is the number of classes,
+            - cache_size is the number of samples per class,
+            - feat_size is the size of the feature vector.
+
+        Parameters
+        ----------
+        Q : torch.Tensor
+            Queue of shape (class_num, cache_size, feat_size).
+            E.g. (2, 60, 256) for 2 classes, 60 samples per class and 256 features.
+
+        Returns
+        -------
+        X_ : torch.Tensor
+            Sampled negative examples of shape (class_num * cache_size, feat_size).
+            E.g. (120, 256) for 2 classes, 60 samples per class and 256 features.
+
+        y_ : torch.Tensor
+
+        """
+        class_num, cache_size, feat_size = Q.shape
+
+        X_ = torch.zeros((class_num * cache_size, feat_size)).float().cuda()
+        y_ = torch.zeros((class_num * cache_size, 1)).float().cuda()
+        sample_ptr = 0
+        for ii in range(class_num):
+            # if ii == 0: continue
+            this_q = Q[ii, :cache_size, :]
+
+            X_[sample_ptr : sample_ptr + cache_size, ...] = this_q
+            y_[sample_ptr : sample_ptr + cache_size, ...] = ii
+            sample_ptr += cache_size
+
+        return X_, y_
+
+    def _contrastive(
+        self,
+        X_anchor: torch.Tensor,
+        y_anchor: torch.Tensor,
+        queue: Optional[torch.Tensor] = None,
+    ):
+        """
+        Contrastive loss calculation.
+
+        Parameters
+        ----------
+        X_anchor : torch.Tensor
+            Anchor features of shape (total_classes, self.max_views, feature_dim).
+            E.g. (82, 1, 256) for 82 classes (this can vary depeding on the classes
+            found in the ground truth), and 256 features.
+
+        y_anchor : torch.Tensor
+            Anchor labels of shape (total_classes,). E.g. (82,) for 82 classes (this
+            can vary depeding on the classes found in the ground truth).
+
+        queue : torch.Tensor, optional
+            Queue of negative examples of shape (class_num, cache_size, feat_size).
+            E.g. (19, 10000, 256) for 19 classes, 10000 samples per class and 256 features.
+            If not provided, the contrastive loss will be calculated using the anchor features only.
+        """
+        anchor_num, n_view = X_anchor.shape[0], X_anchor.shape[1]
+
+        y_anchor = y_anchor.contiguous().view(-1, 1)
+        anchor_count = n_view
+        anchor_feature = torch.cat(torch.unbind(X_anchor, dim=1), dim=0)
+
+        if queue is not None:
+            X_contrast, y_contrast = self._sample_negative(queue)
+            y_contrast = y_contrast.contiguous().view(-1, 1)
+            contrast_count = 1
+            contrast_feature = X_contrast
+        else:
+            y_contrast = y_anchor
+            contrast_count = n_view
+            contrast_feature = torch.cat(torch.unbind(X_anchor, dim=1), dim=0)
+
+        mask = torch.eq(y_anchor, y_contrast.T).float().cuda()
+
+        anchor_dot_contrast = torch.div(torch.matmul(anchor_feature, contrast_feature.T), self.temperature)
+
+        logits_max, _ = torch.max(anchor_dot_contrast, dim=1, keepdim=True)
+
+        logits = anchor_dot_contrast - logits_max.detach()
+
+        mask = mask.repeat(anchor_count, contrast_count)
+        neg_mask = 1 - mask
+
+        logits_mask = torch.ones_like(mask).scatter_(1, torch.arange(anchor_num * anchor_count).view(-1, 1).cuda(), 0)
+
+        mask = mask * logits_mask
+
+        neg_logits = torch.exp(logits) * neg_mask
+        neg_logits = neg_logits.sum(1, keepdim=True)
+
+        exp_logits = torch.exp(logits)
+
+        log_prob = logits - torch.log(exp_logits + neg_logits)
+
+        mean_log_prob_pos = (mask * log_prob).sum(1) / mask.sum(1)
+
+        loss = -(self.temperature / self.base_temperature) * mean_log_prob_pos
+        loss = loss.mean()
+
+        return loss
+
+    def forward(
+        self,
+        feats: torch.Tensor,
+        labels: torch.Tensor,
+        predict: torch.Tensor,
+        queue: Optional[torch.Tensor] = None,
+    ):
+        """
+        Forward pass of the Pixel Contrastive Loss.
+
+        Parameters
+        ----------
+        feats : torch.Tensor
+            Input features of shape (batch_size, feat_size, H, W) or (batch_size, feat_size, D, H, W).
+            E.g. (2, 256, 128, 256) for a batch size of 2, 256 features and a spatial size of 128x256.
+
+        labels : torch.Tensor
+            Ground truth labels of shape (batch_size, C, H, W) or (batch_size, C, D, H, W).
+            E.g. (2, 1, 128, 256) for a batch size of 2, 1 channel and a
+            spatial size of 128x256. 
+
+        predict : torch.Tensor
+            Predicted labels of shape (batch_size, H, W) or (batch_size, D, H, W).
+            E.g. (2, 128, 256) for a batch size of 2 and a spatial size of 128x256.
+
+        queue : torch.Tensor, optional
+            Queue of negative examples of shape (class_num, cache_size, feat_size).
+            E.g. (2, 60, 256) for 2 classes, 60 samples per class and 256 features.
+            If not provided, the contrastive loss will be calculated using the anchor features only.
+
+        Returns
+        -------
+        loss : torch.Tensor
+            Contrastive loss value.
+        """
+        labels = torch.nn.functional.interpolate(labels.float().clone(), feats.shape[-self.ndim :], mode="nearest")
+
+        # When working in instance segmentation the channels are more than 1 so we need to merge then into 
+        # just one channel. This trick of multiplying an offset is to take into account the background class too.
+        if labels.shape[1] != 1:
+            if labels.ndim == 4:
+                offsets = torch.tensor([1, 2], device=labels.device).view(1, 2, 1, 1)
+            else:
+                offsets = torch.tensor([1, 2], device=labels.device).view(1, 2, 1, 1, 1)
+            labels = labels * offsets
+            labels, _ = labels.max(dim=1)
+        # In semantic the target is already compressed into one channel
+        else:  
+            labels = labels.squeeze(1)
+        labels = labels.long()
+        
+        assert labels.shape[-1] == feats.shape[-1], "Labels ({}) and features ({}) does not match in shape".format(
+            labels.shape, feats.shape
+        )
+
+        batch_size = feats.shape[0]
+
+        labels = labels.contiguous().view(batch_size, -1)
+        predict = predict.contiguous().view(batch_size, -1)
+
+        if feats.ndim == 4:
+            feats = feats.permute(0, 2, 3, 1)
+        else:
+            feats = feats.permute(0, 2, 3, 4, 1)
+        feats = feats.contiguous().view(feats.shape[0], -1, feats.shape[-1])
+
+        feats_, labels_ = self._hard_anchor_sampling(feats, labels, predict)
+
+        if feats_ is not None and labels_ is not None:
+            loss = self._contrastive(feats_, labels_, queue=queue)
+            return loss
+        else:
+            return 0
+
+
 class instance_segmentation_loss:
     def __init__(
         self,
@@ -442,7 +904,7 @@ class instance_segmentation_loss:
         n_classes=2,
         class_rebalance=False,
         instance_type="regular",
-        val_to_ignore: Optional[int] = None,
+        ignore_index: int = -1,
     ):
         """
         Custom loss that mixed BCE and MSE depending on the ``out_channels`` variable.
@@ -465,6 +927,9 @@ class instance_segmentation_loss:
 
         instance_type : str, optional
             Type of instances expected. Options are: ["regular", "synapses"]
+
+        ignore_index : int, optional
+            Value to ignore in the loss calculation.
         """
         assert instance_type in ["regular", "synapses"]
 
@@ -475,8 +940,8 @@ class instance_segmentation_loss:
         self.d_channel = -2 if n_classes > 2 else -1
         self.class_rebalance = class_rebalance
         self.instance_type = instance_type
-        self.val_to_ignore = val_to_ignore
-        self.ignore_values = True if val_to_ignore is not None else False
+        self.ignore_index = ignore_index
+        self.ignore_values = True if ignore_index != -1 else False
         self.binary_channels_loss = torch.nn.BCEWithLogitsLoss()
         self.distance_channels_loss = torch.nn.L1Loss()
         self.class_channel_loss = torch.nn.CrossEntropyLoss()
@@ -521,26 +986,26 @@ class instance_segmentation_loss:
                 if self.class_rebalance:
                     B_weight_mask = weight_binary_ratio(y_true[:, 0])
                     if self.ignore_values:
-                        B_weight_mask = B_weight_mask * (y_true[:, 0] != self.val_to_ignore)
+                        B_weight_mask = B_weight_mask * (y_true[:, 0] != self.ignore_index)
                     B_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=B_weight_mask)
                     C_weight_mask = weight_binary_ratio(y_true[:, 1])
                     if self.ignore_values:
-                        C_weight_mask = C_weight_mask * (y_true[:, 1] != self.val_to_ignore)
+                        C_weight_mask = C_weight_mask * (y_true[:, 1] != self.ignore_index)
                     C_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=C_weight_mask)
                 else:
                     if self.ignore_values:
-                        B_weight_mask = torch.ones((y_true[:, 0].shape)) * (y_true[:, 0] != self.val_to_ignore)
+                        B_weight_mask = torch.ones((y_true[:, 0].shape)) * (y_true[:, 0] != self.ignore_index)
                         B_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=B_weight_mask)
-                        C_weight_mask = torch.ones((y_true[:, 1].shape)) * (y_true[:, 1] != self.val_to_ignore)
+                        C_weight_mask = torch.ones((y_true[:, 1].shape)) * (y_true[:, 1] != self.ignore_index)
                         C_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=C_weight_mask)
                     else:
                         B_binary_channels_loss = self.binary_channels_loss
-                        C_binary_channels_loss = self.binary_channels_loss                        
+                        C_binary_channels_loss = self.binary_channels_loss
 
                 loss = self.weights[0] * B_binary_channels_loss(_y_pred[:, 0], y_true[:, 0]) + self.weights[
                     1
                 ] * C_binary_channels_loss(_y_pred[:, 1], y_true[:, 1])
-            
+
             elif self.out_channels == "BCP":
                 assert (
                     y_true.shape[1] == 3 + extra_channels
@@ -548,34 +1013,36 @@ class instance_segmentation_loss:
                 if self.class_rebalance:
                     B_weight_mask = weight_binary_ratio(y_true[:, 0])
                     if self.ignore_values:
-                        B_weight_mask = B_weight_mask * (y_true[:, 0] != self.val_to_ignore)
+                        B_weight_mask = B_weight_mask * (y_true[:, 0] != self.ignore_index)
                     B_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=B_weight_mask)
 
                     C_weight_mask = weight_binary_ratio(y_true[:, 1])
                     if self.ignore_values:
-                        C_weight_mask = C_weight_mask * (y_true[:, 1] != self.val_to_ignore)
+                        C_weight_mask = C_weight_mask * (y_true[:, 1] != self.ignore_index)
                     C_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=C_weight_mask)
 
                     P_weight_mask = weight_binary_ratio(y_true[:, 2])
                     if self.ignore_values:
-                        P_weight_mask = P_weight_mask * (y_true[:, 2] != self.val_to_ignore)
+                        P_weight_mask = P_weight_mask * (y_true[:, 2] != self.ignore_index)
                     P_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=P_weight_mask)
                 else:
                     if self.ignore_values:
-                        B_weight_mask = torch.ones((y_true[:, 0].shape)) * (y_true[:, 0] != self.val_to_ignore)
+                        B_weight_mask = torch.ones((y_true[:, 0].shape)) * (y_true[:, 0] != self.ignore_index)
                         B_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=B_weight_mask)
-                        C_weight_mask = torch.ones((y_true[:, 1].shape)) * (y_true[:, 1] != self.val_to_ignore)
+                        C_weight_mask = torch.ones((y_true[:, 1].shape)) * (y_true[:, 1] != self.ignore_index)
                         C_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=C_weight_mask)
-                        P_weight_mask = torch.ones((y_true[:, 2].shape)) * (y_true[:, 2] != self.val_to_ignore)
+                        P_weight_mask = torch.ones((y_true[:, 2].shape)) * (y_true[:, 2] != self.ignore_index)
                         P_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=P_weight_mask)
                     else:
                         B_binary_channels_loss = self.binary_channels_loss
-                        C_binary_channels_loss = self.binary_channels_loss  
-                        P_binary_channels_loss = self.binary_channels_loss                       
+                        C_binary_channels_loss = self.binary_channels_loss
+                        P_binary_channels_loss = self.binary_channels_loss
 
-                loss = self.weights[0] * B_binary_channels_loss(_y_pred[:, 0], y_true[:, 0]) \
-                    + self.weights[1] * C_binary_channels_loss(_y_pred[:, 1], y_true[:, 1]) \
-                    + self.weights[2] * P_binary_channels_loss(_y_pred[:, 2], y_true[:, 2])    
+                loss = (
+                    self.weights[0] * B_binary_channels_loss(_y_pred[:, 0], y_true[:, 0])
+                    + self.weights[1] * C_binary_channels_loss(_y_pred[:, 1], y_true[:, 1])
+                    + self.weights[2] * P_binary_channels_loss(_y_pred[:, 2], y_true[:, 2])
+                )
             elif self.out_channels == "BCM":
                 assert (
                     y_true.shape[1] == 3 + extra_channels
@@ -714,7 +1181,7 @@ def detection_metrics(
     true_classes=None,
     pred_classes=None,
     tolerance=10,
-    resolution: List[int|float]=[1, 1, 1],
+    resolution: List[int | float] = [1, 1, 1],
     bbox_to_consider=[],
     verbose=False,
 ):

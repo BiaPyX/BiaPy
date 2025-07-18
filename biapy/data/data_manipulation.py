@@ -16,6 +16,8 @@ from numpy.typing import NDArray
 from yacs.config import CfgNode as CN
 from tqdm import tqdm
 from sklearn.model_selection import train_test_split, StratifiedKFold
+import torch.nn.functional as F
+from skimage.transform import resize as sk_resize
 
 from biapy.data.dataset import BiaPyDataset, DatasetFile, DataSample, PatchCoords
 from biapy.data.norm import Normalization
@@ -3664,3 +3666,35 @@ def reduce_dtype(
         return ((((x - x_min) / (x_max - x_min + eps)) * (out_max - out_min)) + out_min).to(
             torch_numpy_dtype_dict[out_type][0]
         )
+
+# Map common interpolation modes to:
+#   - PyTorch 'mode' string
+#   - scikit-image 'order' int
+interp_mode_map = {
+    'nearest':     {'torch': 'nearest',      'skimage': 0},
+    'linear':      {'torch': 'linear',       'skimage': 1},  # 3D only in PyTorch
+    'bilinear':    {'torch': 'bilinear',     'skimage': 1},
+    'bicubic':     {'torch': 'bicubic',      'skimage': 3},
+    'trilinear':   {'torch': 'trilinear',    'skimage': 1},  # fallback for 3D
+    'area':        {'torch': 'area',         'skimage': 1},  # approximate
+    'nearest-exact': {'torch': 'nearest-exact', 'skimage': 0}
+}
+
+def resize(input_data, size, mode='bilinear', **kwargs):
+    if len(size) != input_data.ndim:
+        raise ValueError("The size provided ({}) needs to be of the same size as the dimensions of the input_data ({})".format(size, input_data.ndim))
+    
+    if mode not in interp_mode_map:
+        raise ValueError(f"Unsupported interpolation mode: {mode}")
+
+    # Assumed B,C,H,W (2D) or B,C,D,H,W (3D)
+    if isinstance(input_data, torch.Tensor):
+        interp_mode = interp_mode_map[mode]['torch']
+        resized = F.interpolate(input_data, size=size[2:], mode=interp_mode, **kwargs)
+        return resized
+    # Assumed B,H,W,C (2D) or B,D,H,W,C (3D)
+    elif isinstance(input_data, np.ndarray):
+        order = interp_mode_map[mode]['skimage']
+        return sk_resize(input_data, size, order=order, **kwargs)
+    else:
+        raise TypeError("Input must be a torch.Tensor or a numpy.ndarray")

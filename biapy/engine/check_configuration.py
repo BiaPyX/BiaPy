@@ -571,10 +571,25 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         loss = "CE" if cfg.LOSS.TYPE == "" else cfg.LOSS.TYPE
         assert loss == "CE", "LOSS.TYPE must be 'CE'"
     opts.extend(["LOSS.TYPE", loss])
-    if cfg.LOSS.IGNORE_VALUES:
-        if cfg.LOSS.VALUE_TO_IGNORE != -1 and not check_value(cfg.LOSS.VALUE_TO_IGNORE, (0, 254)):
-            raise ValueError("If 'LOSS.VALUE_TO_IGNORE' is set it needs to be a value in [0,254] range")
+    if cfg.LOSS.IGNORE_INDEX != -1 and not check_value(cfg.LOSS.IGNORE_INDEX, (0, 255)):
+        raise ValueError("If 'LOSS.IGNORE_INDEX' is set it needs to be a value in [0,255] range")
+    if cfg.LOSS.TYPE != "CE":
+        print("WARNING: 'LOSS.IGNORE_INDEX' will not have effect, as it is only working when LOSS.TYPE is 'CE'")
 
+    if cfg.LOSS.CONTRAST.ENABLE:
+        if cfg.LOSS.CONTRAST.MEMORY_SIZE <= 0:
+            raise ValueError("'LOSS.CONTRAST.MEMORY_SIZE' needs to be greater than 0")
+        if cfg.LOSS.CONTRAST.PROJ_DIM <= 0:
+            raise ValueError("'LOSS.CONTRAST.PROJ_DIM' needs to be greater than 0")
+        if cfg.LOSS.CONTRAST.PIXEL_UPD_FREQ <= 0:
+            raise ValueError("'LOSS.CONTRAST.PIXEL_UPD_FREQ' needs to be greater than 0")
+
+        # The models that support contrastive loss are the ones that can be used in these workflows
+        if cfg.PROBLEM.TYPE not in ["SEMANTIC_SEG", "INSTANCE_SEG", "DETECTION"]:
+            raise ValueError(
+                "'LOSS.CONTRAST.ENABLE' can only be set when 'PROBLEM.TYPE' is in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION']"
+            )
+        
     if cfg.TEST.ENABLE and cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK and cfg.PROBLEM.NDIM == "3D":
         raise ValueError("'TEST.ANALIZE_2D_IMGS_AS_3D_STACK' makes no sense when the problem is 3D. Disable it.")
 
@@ -1433,7 +1448,12 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "mae",
             "unext_v1",
             "unext_v2",
-        ], "MODEL.ARCHITECTURE not in ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'simple_cnn', 'efficientnet_b[0-7]', 'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae', 'unext_v1', 'unext_v2']"
+            "hrnet18",
+            "hrnet32",
+            "hrnet48",
+            "hrnet64",
+            "hrnet2x20",
+        ], "MODEL.ARCHITECTURE not in ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'simple_cnn', 'efficientnet_b[0-7]', 'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae', 'unext_v1', 'unext_v2', 'hrnet18', 'hrnet32', 'hrnet48', 'hrnet64', 'hrnet2x20']"
         if (
             model_arch
             not in [
@@ -1451,6 +1471,11 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "unext_v2",
                 "dfcan",
                 "rcan",
+                "hrnet18",
+                "hrnet32",
+                "hrnet48",
+                "hrnet64",
+                "hrnet2x20",
             ]
             and cfg.PROBLEM.NDIM == "3D"
             and cfg.PROBLEM.TYPE != "CLASSIFICATION"
@@ -1472,6 +1497,11 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                         "unext_v2",
                         "dfcan",
                         "rcan",
+                        "hrnet18",
+                        "hrnet32",
+                        "hrnet48",
+                        "hrnet64",
+                        "hrnet2x20",
                     ]
                 )
             )
@@ -1490,10 +1520,15 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "unetr",
                 "unext_v1",
                 "unext_v2",
+                "hrnet18",
+                "hrnet32",
+                "hrnet48",
+                "hrnet64",
+                "hrnet2x20",
             ]
         ):
             raise ValueError(
-                "'DATA.N_CLASSES' > 2 can only be used with 'MODEL.ARCHITECTURE' in ['unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'multiresunet', 'unetr', 'unext_v1', 'unext_v2']"
+                "'DATA.N_CLASSES' > 2 can only be used with 'MODEL.ARCHITECTURE' in ['unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'multiresunet', 'unetr', 'unext_v1', 'unext_v2', 'hrnet18', 'hrnet32', 'hrnet48', 'hrnet64', 'hrnet2x20']"
             )
 
         assert len(cfg.MODEL.FEATURE_MAPS) > 2, "'MODEL.FEATURE_MAPS' needs to have at least 3 values"
@@ -1563,9 +1598,14 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "multiresunet",
                 "unext_v1",
                 "unext_v2",
+                "hrnet18",
+                "hrnet32",
+                "hrnet48",
+                "hrnet64",
+                "hrnet2x20",
             ]:
                 raise ValueError(
-                    "Architectures available for {} are: ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'resunet_se', 'unetr', 'multiresunet', 'unext_v1', 'unext_v2']".format(
+                    "Architectures available for {} are: ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'resunet_se', 'unetr', 'multiresunet', 'unext_v1', 'unext_v2', 'hrnet18', 'hrnet32', 'hrnet48', 'hrnet64', 'hrnet2x20']".format(
                         cfg.PROBLEM.TYPE
                     )
                 )
@@ -1612,9 +1652,14 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "multiresunet",
                 "unext_v1",
                 "unext_v2",
+                "hrnet18",
+                "hrnet32",
+                "hrnet48",
+                "hrnet64",
+                "hrnet2x20",
             ]:
                 raise ValueError(
-                    "Architectures available for 'IMAGE_TO_IMAGE' are: ['edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'resunet_se', 'seunet', 'attention_unet', 'unetr', 'multiresunet', 'unext_v1', 'unext_v2']"
+                    "Architectures available for 'IMAGE_TO_IMAGE' are: ['edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'resunet_se', 'seunet', 'attention_unet', 'unetr', 'multiresunet', 'unext_v1', 'unext_v2', 'hrnet18', 'hrnet32', 'hrnet48', 'hrnet64', 'hrnet2x20']"
                 )
             # Not allowed archs
             if cfg.PROBLEM.NDIM == "3D" and model_arch == "wdsr":
@@ -1637,10 +1682,15 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "wdsr",
                 "vit",
                 "mae",
+                "hrnet18",
+                "hrnet32",
+                "hrnet48",
+                "hrnet64",
+                "hrnet2x20",
             ]:
                 raise ValueError(
                     "'SELF_SUPERVISED' models available are these: ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'resunet_se', "
-                    "'unetr', 'unext_v1', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae']"
+                    "'unetr', 'unext_v1', 'unext_v2', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae', 'hrnet18', 'hrnet32', 'hrnet48', 'hrnet64', 'hrnet2x20']"
                 )
 
             # Not allowed archs
@@ -1674,6 +1724,11 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "multiresunet",
             "unext_v1",
             "unext_v2",
+            "hrnet18",
+            "hrnet32",
+            "hrnet48",
+            "hrnet64",
+            "hrnet2x20",
         ]:
             z_size = cfg.DATA.PATCH_SIZE[0]
             sizes = cfg.DATA.PATCH_SIZE[1:-1]

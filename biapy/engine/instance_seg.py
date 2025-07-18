@@ -31,6 +31,7 @@ from biapy.engine.metrics import (
     instance_segmentation_loss,
     multiple_metrics,
     detection_metrics,
+    ContrastCELoss,
 )
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.utils.misc import (
@@ -215,6 +216,8 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             self.model_output_channels["channels"] = [self.model_output_channels["channels"]]
             self.multihead = False
 
+        self.real_classes = self.model_output_channels["channels"][0] + 1
+
         super().define_activations_and_channels()
 
     def define_metrics(self):
@@ -299,7 +302,12 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 self.train_metric_names.append("IoU (classes)")
                 self.train_metric_best += ["max"]
                 # Used to calculate IoU with the classification results
-                self.jaccard_index_matching = jaccard_index(device=self.device, num_classes=self.cfg.DATA.N_CLASSES)
+                self.jaccard_index_matching = jaccard_index(
+                    device=self.device, 
+                    num_classes=self.cfg.DATA.N_CLASSES,
+                    ndim=self.dims,
+                    ignore_index=self.cfg.LOSS.IGNORE_INDEX,
+                )
         else:  # synapses
             if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BF":
                 self.train_metric_names = ["IoU (B channel)"]
@@ -324,7 +332,8 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 metric_names=self.train_metric_names,
                 device=self.device,
                 model_source=self.cfg.MODEL.SOURCE,
-                val_to_ignore=None if not self.cfg.LOSS.IGNORE_VALUES else self.cfg.LOSS.VALUE_TO_IGNORE,
+                ignore_index=self.cfg.LOSS.IGNORE_INDEX,
+                ndim=self.dims,
             )
         )
 
@@ -384,7 +393,12 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         if self.multihead:
             self.test_metric_names.append("IoU (classes)")
             # Used to calculate IoU with the classification results
-            self.jaccard_index_matching = jaccard_index(device="cpu", num_classes=self.cfg.DATA.N_CLASSES)
+            self.jaccard_index_matching = jaccard_index(
+                device=self.device, 
+                num_classes=self.cfg.DATA.N_CLASSES,
+                ndim=self.dims,
+                ignore_index=self.cfg.LOSS.IGNORE_INDEX,
+            )
 
         self.test_metrics.append(
             multiple_metrics(
@@ -392,6 +406,8 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 metric_names=self.test_metric_names,
                 device=self.device,
                 model_source=self.cfg.MODEL.SOURCE,
+                ndim=self.dims,
+                ignore_index=self.cfg.LOSS.IGNORE_INDEX,
             )
         )
         
@@ -400,15 +416,24 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             self.test_extra_metrics += ["Precision (post-points)", "Recall (post-points)", "F1 (post-points)", "TP (post-points)", "FP (post-points)", "FN (post-points)"]
             self.test_metric_names += self.test_extra_metrics
 
-        self.loss = instance_segmentation_loss(
+        instance_loss = instance_segmentation_loss(
             self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS,
             self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
             self.cfg.PROBLEM.INSTANCE_SEG.DISTANCE_CHANNEL_MASK,
             self.cfg.DATA.N_CLASSES,
             class_rebalance=self.cfg.LOSS.CLASS_REBALANCE,
             instance_type=self.cfg.PROBLEM.INSTANCE_SEG.TYPE,
-            val_to_ignore = None if not self.cfg.LOSS.IGNORE_VALUES else self.cfg.LOSS.VALUE_TO_IGNORE
+            ignore_index = self.cfg.LOSS.IGNORE_INDEX
         )
+        
+        if self.cfg.LOSS.CONTRAST.ENABLE: 
+            self.loss = ContrastCELoss(
+                main_loss=instance_loss, # type: ignore
+                ndim=self.dims,
+                ignore_index=self.cfg.LOSS.IGNORE_INDEX,
+            )
+        else:
+            self.loss = instance_loss
 
         super().define_metrics()
 
@@ -673,7 +698,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
             # For torchvision models that resize need to rezise the images
             if w_pred.shape != _Y.shape:
-                _Y = resize(_Y, w_pred.shape, order=0)
+                w_pred = resize(w_pred, _Y.shape, order=0)
 
             # Convert instances to integer
             if _Y.dtype == np.float32:

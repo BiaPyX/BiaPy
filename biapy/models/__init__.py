@@ -12,6 +12,7 @@ from typing import Optional, Dict, Tuple, List, Callable
 from packaging.version import Version
 from functools import partial
 from yacs.config import CfgNode as CN
+import numpy as np
 
 from bioimageio.spec.utils import download
 from bioimageio.core.backends.pytorch_backend import load_torch_model
@@ -21,7 +22,7 @@ from bioimageio.spec import InvalidDescr
 from bioimageio.core.digest_spec import get_test_inputs
 
 
-def build_model(cfg: CN, output_channels: int, device: torch.device) -> Tuple[nn.Module, str, Callable, Dict]:
+def build_model(cfg: CN, output_channels: int, device: torch.device) -> Tuple[nn.Module, str, Callable, Dict, Tuple[int, ...]]:
     # model, model_file, model_name, args
     """
     Build selected model
@@ -46,6 +47,8 @@ def build_model(cfg: CN, output_channels: int, device: torch.device) -> Tuple[nn
     # Import the model
     if "efficientnet" in cfg.MODEL.ARCHITECTURE.lower():
         modelname = "efficientnet"
+    elif "hrnet" in cfg.MODEL.ARCHITECTURE.lower():
+        modelname = "hrnet"
     else:
         modelname = str(cfg.MODEL.ARCHITECTURE).lower()
     mdl = importlib.import_module("biapy.models." + modelname)
@@ -54,6 +57,11 @@ def build_model(cfg: CN, output_channels: int, device: torch.device) -> Tuple[nn
     globals().update({k: getattr(mdl, k) for k in names})
 
     ndim = 3 if cfg.PROBLEM.NDIM == "3D" else 2
+    network_stride = None
+
+    # Put again the specific model name
+    if "hrnet" in cfg.MODEL.ARCHITECTURE.lower():
+        modelname = cfg.MODEL.ARCHITECTURE.lower()
 
     # Model building
     if modelname in [
@@ -76,6 +84,8 @@ def build_model(cfg: CN, output_channels: int, device: torch.device) -> Tuple[nn
             upsample_layer=cfg.MODEL.UPSAMPLE_LAYER,
             z_down=cfg.MODEL.Z_DOWN,
             output_channels=output_channels,
+            contrast=cfg.LOSS.CONTRAST.ENABLE, 
+            contrast_proj_dim=cfg.LOSS.CONTRAST.PROJ_DIM, 
         )
         if modelname == "unet":
             callable_model = U_Net  # type: ignore
@@ -126,7 +136,44 @@ def build_model(cfg: CN, output_channels: int, device: torch.device) -> Tuple[nn
         if cfg.PROBLEM.TYPE == "SUPER_RESOLUTION":
             args["upsampling_factor"] = cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING
             args["upsampling_position"] = cfg.MODEL.UNET_SR_UPSAMPLE_POSITION
+
+        network_stride = [ 
+            len(cfg.MODEL.Z_DOWN), 
+            len(cfg.MODEL.Z_DOWN)
+        ]
+        if ndim == 3:
+            network_stride = [np.sum([1 for x in cfg.MODEL.Z_DOWN if x == 2])] + network_stride
         model = callable_model(**args)
+
+    elif "hrnet" in modelname:
+        z_down = any([x for x in cfg.MODEL.Z_DOWN if x == 2])
+        args = dict(
+            image_shape=cfg.DATA.PATCH_SIZE,
+            normalization='sync_bn',
+            output_channels=output_channels,
+            contrast=cfg.LOSS.CONTRAST.ENABLE, 
+            contrast_proj_dim=cfg.LOSS.CONTRAST.PROJ_DIM, 
+            z_down=z_down,
+        )
+        if modelname == "hrnet18":
+            args["cfg"] = cfg.MODEL.HRNET_18
+        elif modelname == 'hrnet32':
+            args["cfg"] = cfg.MODEL.HRNET_32
+        elif modelname == 'hrnet48':
+            args["cfg"] = cfg.MODEL.HRNET_48
+        elif modelname == 'hrnet64':
+            args = dict(
+                cfg.MODEL.HRNET_64,
+                norm='sync_bn',
+                )
+        elif modelname == 'hrnet2x20':
+            args["cfg"] = cfg.MODEL.HRNET2X_20
+        callable_model = HighResolutionNet  # type: ignore
+        model = callable_model(**args)
+
+        network_stride = [4, 4]
+        if ndim == 3:
+            network_stride = [4 if z_down else 1] + network_stride
     else:
         if modelname == "simple_cnn":
             args = dict(
@@ -278,6 +325,21 @@ def build_model(cfg: CN, output_channels: int, device: torch.device) -> Tuple[nn
             cfg.DATA.PATCH_SIZE[1],
             cfg.DATA.PATCH_SIZE[2],
         )
+    # if cfg.PROBLEM.NDIM == "2D":
+    # sample_size = (
+    #     1,
+    #     3,
+    #     512,
+    #     1024,
+    # )
+    # else:
+    #     sample_size = (
+    #         1,
+    #         cfg.DATA.PATCH_SIZE[3],
+    #         cfg.DATA.PATCH_SIZE[0],
+    #         cfg.DATA.PATCH_SIZE[1],
+    #         cfg.DATA.PATCH_SIZE[2],
+    #     )
     summary(
         model,
         input_size=sample_size,
@@ -285,10 +347,11 @@ def build_model(cfg: CN, output_channels: int, device: torch.device) -> Tuple[nn
         depth=10,
         device=device.type,
     )
-
+    # import pdb; pdb.set_trace()
+    # print(sum(p.numel() for p in model.parameters() if p.requires_grad))
     model_file += ":" + str(callable_model.__name__)
     model_name = model_file.rsplit(":", 1)[-1]
-    return model, model_file, model_name, args
+    return model, model_file, model_name, args, network_stride
 
 
 def build_bmz_model(cfg: CN, model: ModelDescr_v0_4 | ModelDescr_v0_5, device: torch.device) -> nn.Module:

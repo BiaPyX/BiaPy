@@ -76,6 +76,7 @@ class Denoising_Workflow(Base_Workflow):
             "type": "image",
             "channels": [self.cfg.DATA.PATCH_SIZE[-1]],
         }
+        self.real_classes = self.model_output_channels["channels"][0]
         self.multihead = False
         self.activations = [{":": "Linear"}]
 

@@ -180,7 +180,7 @@ def watershed_by_channels(
             erode_seed_and_foreground()
 
         semantic = data[..., 0]
-        # semantic = edt.edt(foreground*(1-seed_map), anisotropy=resolution[::-1], black_border=False, order='F')
+        # semantic = edt.edt(foreground*(1-seed_map), anisotropy=resolution, black_border=False, order='F')
         seed_map = label(seed_map, connectivity=1)
     elif channels in ["C"]:
         if ths["TYPE"] == "auto":
@@ -193,7 +193,7 @@ def watershed_by_channels(
         if len(seed_morph_sequence) != 0 or erode_and_dilate_foreground:
             erode_seed_and_foreground()
 
-        # semantic = edt.edt(foreground, anisotropy=resolution[::-1], black_border=False, order='F')
+        # semantic = edt.edt(foreground, anisotropy=resolution, black_border=False, order='F')
         # use contour channel as input to watershed
         semantic = data[..., 0]
         seed_map = label(seed_map, connectivity=1)
@@ -241,8 +241,7 @@ def watershed_by_channels(
         for sd in tqdm(seed_coordinates, total=len(seed_coordinates)):
             z, y, x = sd
             seed_map[z, y, x] = 1
-
-        semantic = -edt.edt(1 - seed_map, anisotropy=resolution[::-1], black_border=False, order="F")
+        semantic = -edt.edt(1 - seed_map, anisotropy=resolution, black_border=False, order="F")
 
         if len(seed_morph_sequence) != 0 or erode_and_dilate_foreground:
             erode_seed_and_foreground()
@@ -262,7 +261,7 @@ def watershed_by_channels(
             erode_seed_and_foreground()
 
         semantic = data[..., 0]
-        # semantic = edt.edt(foreground*(1-seed_map), anisotropy=resolution[::-1], black_border=False, order='F')
+        # semantic = edt.edt(foreground*(1-seed_map), anisotropy=resolution, black_border=False, order='F')
         seed_map = label(seed_map, connectivity=1)
     elif channels in ["BD"]:
         semantic = data[..., 0]
@@ -621,25 +620,11 @@ def ensemble8_2d_predictions(
 
     Returns
     -------
-    out : 3D Numpy array
-        Output image ensembled. E.g. ``(y, x, channels)``.
-
-    Examples
-    --------
-    ::
-
-        # EXAMPLE 1
-        # Apply ensemble to each image of X_test
-        X_test = np.ones((165, 768, 1024, 1))
-        out_X_test = np.zeros(X_test.shape, dtype=(np.float32))
-
-        for i in tqdm(range(X_test.shape[0])):
-            pred_ensembled = ensemble8_2d_predictions(X_test[i],
-                pred_func=(lambda img_batch_subdiv: model(img_batch_subdiv)), n_classes=n_classes)
-            out_X_test[i] = pred_ensembled
+    out : dict
+        Output of the model with the pred key assembled.
     """
     assert mode in ["mean", "min", "max"], "Get unknown ensemble mode {}".format(mode)
-
+    rest_of_outs = {}
     # Prepare all the image transformations per channel
     total_img = []
     for channel in range(o_img.shape[-1]):
@@ -680,12 +665,14 @@ def ensemble8_2d_predictions(
     for i in range(l):
         top = (i + 1) * batch_size_value if (i + 1) * batch_size_value < total_img.shape[0] else total_img.shape[0]
         r_aux = pred_func(total_img[i * batch_size_value : top])
+        
+        # Save the first time the rest of the outputs given by the model
+        if len(rest_of_outs) == 0:
+            for key in [x for x in r_aux.keys() if x != "pred"]:
+                rest_of_outs[key] = r_aux[key]
 
-        # Take just the first output of the network in case it returns more than one output
-        if isinstance(r_aux, list):
-            r_aux = to_numpy_format(r_aux[0], axes_order_back)
-        else:
-            r_aux = to_numpy_format(r_aux, axes_order_back)
+        r_aux = r_aux["pred"]
+        r_aux = to_numpy_format(r_aux, axes_order_back)        
         _decoded_aug_img.append(r_aux)
     _decoded_aug_img = np.concatenate(_decoded_aug_img)
 
@@ -738,8 +725,12 @@ def ensemble8_2d_predictions(
     for i in range(out_img.shape[0]):
         if pad_to_square < 0:
             out[i] = out_img[i, abs(pad_to_square) :, :]
+            if "class" in rest_of_outs:
+                rest_of_outs["class"] = rest_of_outs["class"][i, abs(pad_to_square) :, :]
         else:
             out[i] = out_img[i, :, abs(pad_to_square) :]
+            if "class" in rest_of_outs:
+                rest_of_outs["class"] = rest_of_outs["class"][i, :, abs(pad_to_square) :]
 
     funct = np.mean
     if mode == "min":
@@ -748,7 +739,8 @@ def ensemble8_2d_predictions(
         funct = np.max
     out = np.expand_dims(funct(out, axis=0), 0)
     out = to_pytorch_format(out, axes_order, device)
-    return out
+    rest_of_outs.update({"pred": out})
+    return rest_of_outs
 
 
 def ensemble16_3d_predictions(
@@ -788,25 +780,11 @@ def ensemble16_3d_predictions(
 
     Returns
     -------
-    out : 4D Numpy array
-        Output image ensembled. E.g. ``(z, y, x, channels)``.
-
-    Examples
-    --------
-    ::
-
-        # EXAMPLE 1
-        # Apply ensemble to each image of X_test
-        X_test = np.ones((10, 165, 768, 1024, 1))
-        out_X_test = np.zeros(X_test.shape, dtype=(np.float32))
-
-        for i in tqdm(range(X_test.shape[0])):
-            pred_ensembled = ensemble8_2d_predictions(X_test[i],
-                pred_func=(lambda img_batch_subdiv: model(img_batch_subdiv)))
-            out_X_test[i] = pred_ensembled
+    out : dict
+        Output of the model with the pred key assembled.
     """
     assert mode in ["mean", "min", "max"], "Get unknown ensemble mode {}".format(mode)
-
+    rest_of_outs = {}
     total_vol = []
     for channel in range(vol.shape[-1]):
 
@@ -859,11 +837,12 @@ def ensemble16_3d_predictions(
         top = (i + 1) * batch_size_value if (i + 1) * batch_size_value < total_vol.shape[0] else total_vol.shape[0]
         r_aux = pred_func(total_vol[i * batch_size_value : top])
 
-        # Take just the first output of the network in case it returns more than one output
-        if isinstance(r_aux, list):
-            r_aux = to_numpy_format(r_aux[0], axes_order_back)
-        else:
-            r_aux = to_numpy_format(r_aux, axes_order_back)
+        # Save the first time the rest of the outputs given by the model
+        if len(rest_of_outs) == 0:
+            for key in [x for x in r_aux.keys() if x != "pred"]:
+                rest_of_outs[key] = r_aux[key]
+
+        r_aux = r_aux["pred"]
 
         if r_aux.ndim == 4:
             r_aux = np.expand_dims(r_aux, 0)
@@ -1054,8 +1033,12 @@ def ensemble16_3d_predictions(
     for i in range(out_vols.shape[0]):
         if pad_to_square < 0:
             out[i] = out_vols[i, :, :, abs(pad_to_square) :, :]
+            if "class" in rest_of_outs:
+                rest_of_outs["class"] = rest_of_outs["class"][i, :, :, abs(pad_to_square) :, :]
         else:
             out[i] = out_vols[i, :, abs(pad_to_square) :, :, :]
+            if "class" in rest_of_outs:
+                rest_of_outs["class"] = rest_of_outs["class"][i, :, abs(pad_to_square) :, :, :]
 
     funct = np.mean
     if mode == "min":
@@ -1064,7 +1047,8 @@ def ensemble16_3d_predictions(
         funct = np.max
     out = np.expand_dims(funct(out, axis=0), 0)
     out = to_pytorch_format(out, axes_order, device)
-    return out
+    rest_of_outs.update({"pred": out})
+    return rest_of_outs
 
 
 def create_th_plot(

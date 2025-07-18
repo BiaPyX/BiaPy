@@ -69,6 +69,7 @@ from biapy.data.data_manipulation import (
     load_and_prepare_test_data,
     read_img_as_ndarray,
     save_tif,
+    resize,
 )
 from biapy.data.post_processing.post_processing import (
     ensemble8_2d_predictions,
@@ -80,6 +81,7 @@ from biapy.data.pre_processing import preprocess_data
 from biapy.data.norm import Normalization
 from biapy.data.generators.chunked_test_pair_data_generator import chunked_test_pair_data_generator
 from biapy.data.dataset import PatchCoords
+from biapy.models.memory_bank import MemoryBank
 
 
 class Base_Workflow(metaclass=ABCMeta):
@@ -175,6 +177,7 @@ class Base_Workflow(metaclass=ABCMeta):
         self.test_metric_best = []
         self.test_metric_names = []
         self.loss = None
+        self.memory_bank = None
 
         self.resolution: List[int | float] = list(self.cfg.DATA.TEST.RESOLUTION)
         if self.cfg.PROBLEM.NDIM == "2D":
@@ -623,6 +626,14 @@ class Base_Workflow(metaclass=ABCMeta):
         if self.cfg.MODEL.SOURCE == "biapy":
             assert self.model
             p = self.model(in_img)
+
+            # Recover the original shape of the input, as not all the model return a prediction
+            # of the same size as the input image
+            if p["pred"].shape[2:] != in_img.shape[2:]:
+                p["pred"] = resize(p["pred"], in_img.shape, mode="bilinear")
+                if "class" in p:
+                    p["class"] = resize(p["class"], in_img.shape, mode="nearest")
+
             if apply_act:
                 p = self.apply_model_activations(p, training=is_train)
         elif self.cfg.MODEL.SOURCE == "bmz":
@@ -678,6 +689,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.bmz_config["model_file"],
                 self.bmz_config["model_name"],
                 self.model_build_kwargs,
+                self.network_stride,
             ) = build_model(self.cfg, self.model_output_channels["channels"], self.device)
         elif self.cfg.MODEL.SOURCE == "torchvision":
             self.model, self.torchvision_preprocessing = build_torchvision_model(self.cfg, self.device)
@@ -775,6 +787,23 @@ class Base_Workflow(metaclass=ABCMeta):
             self.cfg, self.model_without_ddp, len(self.train_generator)
         )
 
+        contrast_init_iter = 0
+        if self.cfg.LOSS.CONTRAST.ENABLE:
+            self.memory_bank = MemoryBank(
+                num_classes=self.cfg.DATA.N_CLASSES,
+                memory_size = self.cfg.LOSS.CONTRAST.MEMORY_SIZE,
+                feature_dims = self.cfg.LOSS.CONTRAST.PROJ_DIM,
+                network_stride = self.network_stride,
+                pixel_update_freq=self.cfg.LOSS.CONTRAST.PIXEL_UPD_FREQ,
+                device = self.device,
+                ignore_index = self.cfg.LOSS.IGNORE_INDEX,
+            )
+            self.memory_bank.to(self.device)
+            # When to activate the contrastive loss
+            contrast_init_iter = self.cfg.LOSS.CONTRAST.MEMORY_SIZE
+            if self.cfg.TRAIN.LR_SCHEDULER.NAME == "warmupcosine":
+                contrast_init_iter += self.cfg.TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_EPOCHS
+        
         print("#####################")
         print("#  TRAIN THE MODEL  #")
         print("#####################")
@@ -783,6 +812,7 @@ class Base_Workflow(metaclass=ABCMeta):
         start_time = time.time()
         self.val_best_metric = np.zeros(len(self.train_metric_names), dtype=np.float32)
         self.val_best_loss = np.inf
+        total_iters = 0
         for epoch in range(self.start_epoch, self.cfg.TRAIN.EPOCHS):
             print("~~~ Epoch {}/{} ~~~\n".format(epoch + 1, self.cfg.TRAIN.EPOCHS))
             e_start = time.time()
@@ -793,7 +823,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.log_writer.set_step(epoch * self.num_training_steps_per_epoch)
 
             # Train
-            train_stats = train_one_epoch(
+            train_stats, iterations_done = train_one_epoch(
                 self.cfg,
                 model=self.model,
                 model_call_func=self.model_call_func,
@@ -807,7 +837,11 @@ class Base_Workflow(metaclass=ABCMeta):
                 log_writer=self.log_writer,
                 lr_scheduler=self.lr_scheduler,
                 verbose=self.cfg.TRAIN.VERBOSE,
+                memory_bank=self.memory_bank,
+                total_iters=total_iters,
+                contrast_warmup_iters=contrast_init_iter,
             )
+            total_iters += iterations_done
 
             # Save checkpoint
             if self.cfg.MODEL.SAVE_CKPT_FREQ != -1:
@@ -838,6 +872,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     epoch=epoch,
                     data_loader=self.val_generator,
                     lr_scheduler=self.lr_scheduler,
+                    memory_bank=self.memory_bank,
                 )
 
                 # Save checkpoint is val loss improved
@@ -1067,31 +1102,24 @@ class Base_Workflow(metaclass=ABCMeta):
         if self.cfg.MODEL.SOURCE == "bmz":
             return pred
 
-        if not isinstance(pred, list):
-            multiple_heads = False
-            pred = [pred]  # type: ignore
-        else:
-            multiple_heads = True
-            assert len(pred) == len(
-                self.activations
-            ), "Activations length need to match prediction list length in multiple heads setting"
-
-        for out_heads in range(len(pred)):
-            for key, value in self.activations[out_heads].items():
+        def __apply_acts(prediction, acts):
+            for key, value in acts.items():
                 # Ignore CE_Sigmoid as torch.nn.BCEWithLogitsLoss will apply Sigmoid automatically in a way
                 # that is more stable numerically (ref: https://pytorch.org/docs/stable/generated/torch.nn.BCEWithLogitsLoss.html)
                 if (training and value not in ["Linear", "CE_Sigmoid"]) or (not training and value != "Linear"):
                     value = "Sigmoid" if value == "CE_Sigmoid" else value
                     act = getattr(torch.nn, value)()
                     if key == ":":
-                        pred[out_heads] = act(pred[out_heads])
+                        prediction = act(prediction)
                     else:
-                        pred[out_heads][:, int(key), ...] = act(pred[out_heads][:, int(key), ...])
+                        prediction[:, int(key), ...] = act(prediction[:, int(key), ...])
+            return prediction
 
-        if not multiple_heads:
-            return pred[0]
-        else:
-            return pred
+        pred["pred"] = __apply_acts(pred["pred"], self.activations[0])
+        if "class" in pred:
+            pred["class"] = __apply_acts(pred["class"], self.activations[1])
+
+        return pred
 
     @torch.no_grad()
     def test(self):
@@ -1275,12 +1303,14 @@ class Base_Workflow(metaclass=ABCMeta):
                     )
 
                 # Multi-head concatenation
-                if isinstance(p, list):
-                    p = torch.cat((p[0], torch.argmax(p[1], dim=1).unsqueeze(1)), dim=1)
+                if "class" in p:
+                    p = torch.cat((p["pred"], torch.argmax(p["class"], dim=1).unsqueeze(1)), dim=1)
+                else:
+                    p = p["pred"]
 
                 # Calculate the metrics
-                if y_batch is not None:
-                    metric_values = self.metric_calculation(output=p, targets=y_batch[k], train=False)
+                if y_batch is not None:                        
+                    metric_values = self.metric_calculation(output=p, targets=np.expand_dims(y_batch[k],0), train=False)
                     for metric in metric_values:
                         if str(metric).lower() not in self.stats[stats_name]:
                             self.stats[stats_name][str(metric).lower()] = 0
@@ -1302,11 +1332,10 @@ class Base_Workflow(metaclass=ABCMeta):
                 p = self.model_call_func(x_batch[k * self.cfg.TRAIN.BATCH_SIZE : top])
 
                 # Multi-head concatenation
-                if isinstance(p, list):
-                    p = torch.cat(
-                        (p[0], torch.argmax(p[1], dim=1).unsqueeze(1)),
-                        dim=1,
-                    )
+                if "class" in p:
+                    p = torch.cat((p["pred"], torch.argmax(p["class"], dim=1).unsqueeze(1)), dim=1)
+                else:
+                    p = p["pred"]
 
                 # Calculate the metrics
                 if y_batch is not None:
@@ -1530,6 +1559,8 @@ class Base_Workflow(metaclass=ABCMeta):
         if isinstance(pred, tuple):
             _, pred, mask = pred
             pred = self.apply_model_activations(pred)
+            if isinstance(pred, dict):
+                pred = pred["pred"]
             pred, _, _ = self.model_without_ddp.save_images(
                 torch.from_numpy(self.bmz_config["test_input_norm"]).to(self.device),
                 pred,
@@ -1540,8 +1571,10 @@ class Base_Workflow(metaclass=ABCMeta):
         else:
             pred = self.apply_model_activations(pred)
             # Multi-head concatenation
-            if isinstance(pred, list):
-                pred = torch.cat((pred[0], torch.argmax(pred[1], dim=1).unsqueeze(1)), dim=1)
+            if "class" in pred:
+                pred = torch.cat((pred["pred"], torch.argmax(pred["class"], dim=1).unsqueeze(1)), dim=1)
+            else:
+                pred = pred["pred"]
 
         # Save output
         _prepare_bmz_sample("test_output", pred.clone().cpu().detach().numpy().astype(np.float32), apply_norm=False)
@@ -1818,8 +1851,11 @@ class Base_Workflow(metaclass=ABCMeta):
                     pred = self.model_call_func(self.current_sample["X"])
 
                 # Multi-head concatenation
-                if isinstance(pred, list):
-                    pred = torch.cat((pred[0], torch.argmax(pred[1], dim=1).unsqueeze(1)), dim=1)
+                if "class" in pred:
+                    pred = torch.cat((pred["pred"], torch.argmax(pred["class"], dim=1).unsqueeze(1)), dim=1)
+                else:
+                    pred = pred["pred"]
+
                 pred = to_numpy_format(pred, self.axes_order_back)
                 del self.current_sample["X"]
 

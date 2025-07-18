@@ -283,7 +283,7 @@ class Config:
         # Lower and upper bound for percentile clip. Must be set when DATA.NORMALIZATION.PERC_CLIP.ENABLE = 'True'
         _C.DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC = -1.0
         _C.DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC = -1.0
-        # Lower and upper values to clip. If these are provided the percentiles are not calculated with the variable above, e.g.
+        # Lower and upper values to clip. If these are provided the percentiles are not calculated based on 
         # 'DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC' and 'DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC' 
         _C.DATA.NORMALIZATION.PERC_CLIP.LOWER_VALUE = -1.0
         _C.DATA.NORMALIZATION.PERC_CLIP.UPPER_VALUE = -1.0
@@ -1096,6 +1096,135 @@ class Config:
         # Whether to maintain or not the upscaling layer. 
         _C.MODEL.RCAN_UPSCALING_LAYER = True
 
+        _C.MODEL.HRNET_64 = CN()
+        _C.MODEL.HRNET_64.Z_DOWN = True
+        _C.MODEL.HRNET_64.STAGE2 = CN()
+        _C.MODEL.HRNET_64.STAGE2.NUM_MODULES = 1
+        _C.MODEL.HRNET_64.STAGE2.NUM_BRANCHES = 2
+        _C.MODEL.HRNET_64.STAGE2.NUM_BLOCKS = [4, 4]
+        _C.MODEL.HRNET_64.STAGE2.NUM_CHANNELS = [64, 128]
+        _C.MODEL.HRNET_64.STAGE2.BLOCK = 'BASIC'
+
+        _C.MODEL.HRNET_64.STAGE3 = CN()
+        _C.MODEL.HRNET_64.STAGE3.NUM_MODULES = 4
+        _C.MODEL.HRNET_64.STAGE3.NUM_BRANCHES = 3
+        _C.MODEL.HRNET_64.STAGE3.NUM_BLOCKS = [4, 4, 4]
+        _C.MODEL.HRNET_64.STAGE3.NUM_CHANNELS = [64, 128, 256]
+        _C.MODEL.HRNET_64.STAGE3.BLOCK = 'BASIC'
+
+        _C.MODEL.HRNET_64.STAGE4 = CN()
+        _C.MODEL.HRNET_64.STAGE4.NUM_MODULES = 3
+        _C.MODEL.HRNET_64.STAGE4.NUM_BRANCHES = 4
+        _C.MODEL.HRNET_64.STAGE4.NUM_BLOCKS = [4, 4, 4, 4]
+        _C.MODEL.HRNET_64.STAGE4.NUM_CHANNELS = [64, 128, 256, 512]
+        _C.MODEL.HRNET_64.STAGE4.BLOCK = 'BASIC'
+
+
+        # configs for HRNet48
+        _C.MODEL.HRNET_48 = CN()
+        _C.MODEL.HRNET_48.Z_DOWN = True
+        _C.MODEL.HRNET_48.STAGE2 = CN()
+        _C.MODEL.HRNET_48.STAGE2.NUM_MODULES = 1
+        _C.MODEL.HRNET_48.STAGE2.NUM_BRANCHES = 2
+        _C.MODEL.HRNET_48.STAGE2.NUM_BLOCKS = [4, 4]
+        _C.MODEL.HRNET_48.STAGE2.NUM_CHANNELS = [48, 96]
+        _C.MODEL.HRNET_48.STAGE2.BLOCK = 'BASIC'
+
+        _C.MODEL.HRNET_48.STAGE3 = CN()
+        _C.MODEL.HRNET_48.STAGE3.NUM_MODULES = 4
+        _C.MODEL.HRNET_48.STAGE3.NUM_BRANCHES = 3
+        _C.MODEL.HRNET_48.STAGE3.NUM_BLOCKS = [4, 4, 4]
+        _C.MODEL.HRNET_48.STAGE3.NUM_CHANNELS = [48, 96, 192]
+        _C.MODEL.HRNET_48.STAGE3.BLOCK = 'BASIC'
+
+        _C.MODEL.HRNET_48.STAGE4 = CN()
+        _C.MODEL.HRNET_48.STAGE4.NUM_MODULES = 3
+        _C.MODEL.HRNET_48.STAGE4.NUM_BRANCHES = 4
+        _C.MODEL.HRNET_48.STAGE4.NUM_BLOCKS = [4, 4, 4, 4]
+        _C.MODEL.HRNET_48.STAGE4.NUM_CHANNELS = [48, 96, 192, 384]
+        _C.MODEL.HRNET_48.STAGE4.BLOCK = 'BASIC'
+
+
+        # configs for HRNet32
+        _C.MODEL.HRNET_32 = CN()
+        _C.MODEL.HRNET_32.Z_DOWN = True
+        _C.MODEL.HRNET_32.STAGE2 = CN()
+        _C.MODEL.HRNET_32.STAGE2.NUM_MODULES = 1
+        _C.MODEL.HRNET_32.STAGE2.NUM_BRANCHES = 2
+        _C.MODEL.HRNET_32.STAGE2.NUM_BLOCKS = [4, 4]
+        _C.MODEL.HRNET_32.STAGE2.NUM_CHANNELS = [32, 64]
+        _C.MODEL.HRNET_32.STAGE2.BLOCK = 'BASIC'
+
+        _C.MODEL.HRNET_32.STAGE3 = CN()
+        _C.MODEL.HRNET_32.STAGE3.NUM_MODULES = 4
+        _C.MODEL.HRNET_32.STAGE3.NUM_BRANCHES = 3
+        _C.MODEL.HRNET_32.STAGE3.NUM_BLOCKS = [4, 4, 4]
+        _C.MODEL.HRNET_32.STAGE3.NUM_CHANNELS = [32, 64, 128]
+        _C.MODEL.HRNET_32.STAGE3.BLOCK = 'BASIC'
+
+        _C.MODEL.HRNET_32.STAGE4 = CN()
+        _C.MODEL.HRNET_32.STAGE4.NUM_MODULES = 3
+        _C.MODEL.HRNET_32.STAGE4.NUM_BRANCHES = 4
+        _C.MODEL.HRNET_32.STAGE4.NUM_BLOCKS = [4, 4, 4, 4]
+        _C.MODEL.HRNET_32.STAGE4.NUM_CHANNELS = [32, 64, 128, 256]
+        _C.MODEL.HRNET_32.STAGE4.BLOCK = 'BASIC'
+
+
+        # configs for HRNet18
+        _C.MODEL.HRNET_18 = CN()
+        _C.MODEL.HRNET_18.Z_DOWN = True
+        _C.MODEL.HRNET_18.STAGE2 = CN()
+        _C.MODEL.HRNET_18.STAGE2.NUM_MODULES = 1
+        _C.MODEL.HRNET_18.STAGE2.NUM_BRANCHES = 2
+        _C.MODEL.HRNET_18.STAGE2.NUM_BLOCKS = [4, 4]
+        _C.MODEL.HRNET_18.STAGE2.NUM_CHANNELS = [18, 36]
+        _C.MODEL.HRNET_18.STAGE2.BLOCK = 'BASIC'
+
+        _C.MODEL.HRNET_18.STAGE3 = CN()
+        _C.MODEL.HRNET_18.STAGE3.NUM_MODULES = 4
+        _C.MODEL.HRNET_18.STAGE3.NUM_BRANCHES = 3
+        _C.MODEL.HRNET_18.STAGE3.NUM_BLOCKS = [4, 4, 4]
+        _C.MODEL.HRNET_18.STAGE3.NUM_CHANNELS = [18, 36, 72]
+        _C.MODEL.HRNET_18.STAGE3.BLOCK = 'BASIC'
+
+        _C.MODEL.HRNET_18.STAGE4 = CN()
+        _C.MODEL.HRNET_18.STAGE4.NUM_MODULES = 3
+        _C.MODEL.HRNET_18.STAGE4.NUM_BRANCHES = 4
+        _C.MODEL.HRNET_18.STAGE4.NUM_BLOCKS = [4, 4, 4, 4]
+        _C.MODEL.HRNET_18.STAGE4.NUM_CHANNELS = [18, 36, 72, 144]
+        _C.MODEL.HRNET_18.STAGE4.BLOCK = 'BASIC'
+
+        # configs for HRNet2x20
+        _C.MODEL.HRNET2X_20 = CN()
+        _C.MODEL.HRNET2X_20.Z_DOWN = True
+        _C.MODEL.HRNET2X_20.STAGE1 = CN()
+        _C.MODEL.HRNET2X_20.STAGE1.NUM_MODULES = 1
+        _C.MODEL.HRNET2X_20.STAGE1.NUM_BRANCHES = 2
+        _C.MODEL.HRNET2X_20.STAGE1.NUM_BLOCKS = [4, 4]
+        _C.MODEL.HRNET2X_20.STAGE1.NUM_CHANNELS = [32, 64]
+        _C.MODEL.HRNET2X_20.STAGE1.BLOCK = 'BOTTLENECK'
+
+        _C.MODEL.HRNET2X_20.STAGE2 = CN()
+        _C.MODEL.HRNET2X_20.STAGE2.NUM_MODULES = 1
+        _C.MODEL.HRNET2X_20.STAGE2.NUM_BRANCHES = 3
+        _C.MODEL.HRNET2X_20.STAGE2.NUM_BLOCKS = [4, 4, 4]
+        _C.MODEL.HRNET2X_20.STAGE2.NUM_CHANNELS = [20, 40, 80]
+        _C.MODEL.HRNET2X_20.STAGE2.BLOCK = 'BASIC'
+
+        _C.MODEL.HRNET2X_20.STAGE3 = CN()
+        _C.MODEL.HRNET2X_20.STAGE3.NUM_MODULES = 4
+        _C.MODEL.HRNET2X_20.STAGE3.NUM_BRANCHES = 4
+        _C.MODEL.HRNET2X_20.STAGE3.NUM_BLOCKS = [4, 4, 4, 4]
+        _C.MODEL.HRNET2X_20.STAGE3.NUM_CHANNELS = [20, 40, 80, 160]
+        _C.MODEL.HRNET2X_20.STAGE3.BLOCK = 'BASIC'
+
+        _C.MODEL.HRNET2X_20.STAGE4 = CN()
+        _C.MODEL.HRNET2X_20.STAGE4.NUM_MODULES = 3
+        _C.MODEL.HRNET2X_20.STAGE4.NUM_BRANCHES = 5
+        _C.MODEL.HRNET2X_20.STAGE4.NUM_BLOCKS = [4, 4, 4, 4, 4]
+        _C.MODEL.HRNET2X_20.STAGE4.NUM_CHANNELS = [20, 40, 80, 160, 320]
+        _C.MODEL.HRNET2X_20.STAGE4.BLOCK = 'BASIC'
+
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Loss
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1142,12 +1271,15 @@ class Config:
         # To adjust the loss function based on the imbalance between classes. Used when LOSS.TYPE == "CE" in detection and
         # semantic segmentation and if using B,C,M,P or A channels in instance segmentation workflow.
         _C.LOSS.CLASS_REBALANCE = False
-        # Whether to ignore a value in the loss and metric calculation. This functionality is still experimental as it is only added in instance segmentation workflow and
-        # for a few channel configurations.
-        _C.LOSS.IGNORE_VALUES = False
-        # Value to ignore when 'LOSS.IGNORE_VALUES' is True
-        _C.LOSS.VALUE_TO_IGNORE = -1
-
+        # Whether to ignore a value in the loss and metric calculation. This is only available when LOSS.TYPE == "CE". This value will not only
+        # be ignored in the loss computation but in the metrics, e.g. IoU.
+        _C.LOSS.IGNORE_INDEX = -1
+        _C.LOSS.CONTRAST = CN()
+        _C.LOSS.CONTRAST.ENABLE = False
+        _C.LOSS.CONTRAST.MEMORY_SIZE = 5000
+        _C.LOSS.CONTRAST.PROJ_DIM = 256
+        _C.LOSS.CONTRAST.PIXEL_UPD_FREQ = 10
+        
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Training phase
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

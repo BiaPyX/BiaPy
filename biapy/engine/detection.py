@@ -107,6 +107,7 @@ class Detection_Workflow(Base_Workflow):
             self.activations = [{"0": "CE_Sigmoid"}]
             self.model_output_channels["channels"] = [self.model_output_channels["channels"]]
             self.multihead = False
+        self.real_classes = self.model_output_channels["channels"][0] + 1
 
         super().define_activations_and_channels()
 
@@ -151,6 +152,8 @@ class Detection_Workflow(Base_Workflow):
                 metric_names=self.train_metric_names,
                 device=self.device,
                 model_source=self.cfg.MODEL.SOURCE,
+                ndim=self.dims,
+                ignore_index=self.cfg.LOSS.IGNORE_INDEX,
             )
         )
 
@@ -170,6 +173,8 @@ class Detection_Workflow(Base_Workflow):
                 metric_names=self.test_metric_names,
                 device=self.device,
                 model_source=self.cfg.MODEL.SOURCE,
+                ndim=self.dims,
+                ignore_index=self.cfg.LOSS.IGNORE_INDEX,
             )
         )
 
@@ -183,9 +188,11 @@ class Detection_Workflow(Base_Workflow):
         if self.cfg.LOSS.TYPE == "CE":
             self.loss = CrossEntropyLoss_wrapper(
                 num_classes=self.cfg.DATA.N_CLASSES,
+                ndim=self.dims,
                 multihead=self.multihead,
                 model_source=self.cfg.MODEL.SOURCE,
                 class_rebalance=self.cfg.LOSS.CLASS_REBALANCE,
+                ignore_index = self.cfg.LOSS.IGNORE_INDEX
             )
         elif self.cfg.LOSS.TYPE == "DICE":
             self.loss = DiceLoss()
