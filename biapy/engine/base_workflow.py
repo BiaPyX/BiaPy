@@ -668,12 +668,12 @@ class Base_Workflow(metaclass=ABCMeta):
                 if saved_cfg:
                     # Checks that this config and previous represent same workflow
                     header_message = "There is an inconsistency between the configuration loaded from checkpoint and the actual one. Error:\n"
+                    tmp_cfg = convert_old_model_cfg_to_current_version(saved_cfg.clone())
                     compare_configurations_without_model(
-                        self.cfg, saved_cfg, header_message, old_cfg_version=biapy_ckpt_version
+                        self.cfg, tmp_cfg, header_message, old_cfg_version=biapy_ckpt_version
                     )
 
                     # Override model specs
-                    tmp_cfg = convert_old_model_cfg_to_current_version(saved_cfg.clone())
                     if self.cfg.PROBLEM.PRINT_OLD_KEY_CHANGES:
                         print("The following changes were made in order to adapt the loaded input configuration from checkpoint into the current configuration version:")
                         diff_between_configs(saved_cfg, tmp_cfg)

@@ -1958,7 +1958,7 @@ def compare_configurations_without_model(actual_cfg, old_cfg, header_message="",
         # "DATA.PATCH_SIZE",
         "PROBLEM.INSTANCE_SEG.DATA_CHANNELS",
         "PROBLEM.SUPER_RESOLUTION.UPSCALING",
-        # "DATA.N_CLASSES",
+        "DATA.N_CLASSES",
     ]
 
     def get_attribute_recursive(var, attr):
