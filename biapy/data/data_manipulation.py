@@ -2199,7 +2199,7 @@ def samples_from_class_list(
         if expected_classes:
             if expected_classes != len(list_of_classes):
                 raise ValueError(
-                    "Found {} number of classes (folders: {}) but 'MODEL.N_CLASSES' was set to {}. They must match. Aborting...".format(
+                    "Found {} number of classes (folders: {}) but 'DATA.N_CLASSES' was set to {}. They must match. Aborting...".format(
                         len(list_of_classes), list_of_classes, expected_classes
                     )
                 )
@@ -3374,7 +3374,7 @@ def check_masks(path: str, n_classes: int = 2, is_3d: bool = False):
             values = np.unique(img)
             if len(values) > n_classes:
                 print(
-                    "Error: given mask ({}) has more classes than specified in 'MODEL.N_CLASSES'. "
+                    "Error: given mask ({}) has more classes than specified in 'DATA.N_CLASSES'. "
                     "Values found: {}".format(os.path.join(path, ids[i]), values)
                 )
                 error = True
@@ -3384,15 +3384,15 @@ def check_masks(path: str, n_classes: int = 2, is_3d: bool = False):
 
     if len(classes_found) > n_classes:
         m += (
-            "Number of classes found across images is greater than the value specified in 'MODEL.N_CLASSES'. "
+            "Number of classes found across images is greater than the value specified in 'DATA.N_CLASSES'. "
             f"Classes found: {classes_found}\n"
         )
         error = True
 
     if error:
         m += (
-            "'MODEL.N_CLASSES' variable value must be set taking into account the background class. E.g. if mask has [0,1,2] "
-            "values 'MODEL.N_CLASSES' should be 3.\nCorrect the errors in the masks above to continue"
+            "'DATA.N_CLASSES' variable value must be set taking into account the background class. E.g. if mask has [0,1,2] "
+            "values 'DATA.N_CLASSES' should be 3.\nCorrect the errors in the masks above to continue"
         )
         raise ValueError(m)
 

@@ -240,7 +240,7 @@ def create_train_val_augmentors(
             resolution=cfg.DATA.TRAIN.RESOLUTION,
             random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH,
             prob_map=prob_map,
-            n_classes=cfg.MODEL.N_CLASSES,
+            n_classes=cfg.DATA.N_CLASSES,
             ignore_index=None if not cfg.LOSS.IGNORE_VALUES else cfg.LOSS.VALUE_TO_IGNORE,
             extra_data_factor=cfg.DATA.TRAIN.REPLICATE,
             norm_module=norm_module,
@@ -291,7 +291,7 @@ def create_train_val_augmentors(
             shape=cfg.DATA.PATCH_SIZE,
             random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH,
             val=True,
-            n_classes=cfg.MODEL.N_CLASSES,
+            n_classes=cfg.DATA.N_CLASSES,
             ignore_index=None if not cfg.LOSS.IGNORE_VALUES else cfg.LOSS.VALUE_TO_IGNORE,
             seed=cfg.SYSTEM.SEED,
             norm_module=norm_module,
@@ -472,7 +472,7 @@ def create_test_generator(
         dic["test_by_chunks"] = cfg.TEST.BY_CHUNKS.ENABLE
         dic["instance_problem"] = cfg.PROBLEM.TYPE == "INSTANCE_SEG"
         dic["ignore_index"] = None if not cfg.LOSS.IGNORE_VALUES else cfg.LOSS.VALUE_TO_IGNORE
-        dic["n_classes"] = cfg.MODEL.N_CLASSES
+        dic["n_classes"] = cfg.DATA.N_CLASSES
     
     test_generator = gen_name(**dic)
     data_norm = test_generator.get_data_normalization()
@@ -555,7 +555,7 @@ def create_chunked_test_generator(
         padding=cfg.DATA.TEST.PADDING,
         out_dir=out_dir,
         dtype_str=dtype_str,
-        n_classes=cfg.MODEL.N_CLASSES,
+        n_classes=cfg.DATA.N_CLASSES,
         ignore_index=None if not cfg.LOSS.IGNORE_VALUES else cfg.LOSS.VALUE_TO_IGNORE,
         instance_problem = cfg.PROBLEM.TYPE == "INSTANCE_SEG",
     )

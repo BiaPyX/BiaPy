@@ -39,7 +39,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
         if cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
             channels_provided = len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS.replace("Dv2", "D"))
-            if cfg.MODEL.N_CLASSES > 2:
+            if cfg.DATA.N_CLASSES > 2:
                 channels_provided += 1
         else:  # synapses
             if cfg.PROBLEM.NDIM != "3D":
@@ -234,13 +234,13 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 )
             )
         if cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES != [-1]:
-            if len(cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES) > cfg.MODEL.N_CLASSES:
+            if len(cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES) > cfg.DATA.N_CLASSES:
                 raise ValueError(
-                    "'TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES' length can't be greater than 'MODEL.N_CLASSES'"
+                    "'TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES' length can't be greater than 'DATA.N_CLASSES'"
                 )
-            if np.max(cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES) > cfg.MODEL.N_CLASSES:
+            if np.max(cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES) > cfg.DATA.N_CLASSES:
                 raise ValueError(
-                    "'TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES' can not have a class number greater than 'MODEL.N_CLASSES'"
+                    "'TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES' can not have a class number greater than 'DATA.N_CLASSES'"
                 )
             min_class = np.min(cfg.TEST.POST_PROCESSING.DET_WATERSHED_DONUTS_CLASSES)
             if not all(
@@ -524,8 +524,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             [True if x.lower() in ["accuracy"] else False for x in cfg.TEST.METRICS]
         ), f"'TEST.METRICS' options is 'accuracy' in {cfg.PROBLEM.TYPE} workflow"
 
-        if "top-5-accuracy" in [x.lower() for x in cfg.TRAIN.METRICS] and cfg.MODEL.N_CLASSES < 5:
-            raise ValueError("'top-5-accuracy' can only be used when MODEL.N_CLASSES >= 5")
+        if "top-5-accuracy" in [x.lower() for x in cfg.TRAIN.METRICS] and cfg.DATA.N_CLASSES < 5:
+            raise ValueError("'top-5-accuracy' can only be used when DATA.N_CLASSES >= 5")
 
     loss = ""
     if cfg.PROBLEM.TYPE in [
@@ -539,8 +539,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "W_CE_DICE",
         ], "LOSS.TYPE not in ['CE', 'DICE', 'W_CE_DICE']"
 
-        if cfg.MODEL.N_CLASSES > 2 and loss != "CE":
-            raise ValueError("'MODEL.N_CLASSES' can only be done with 'CE' loss")
+        if cfg.DATA.N_CLASSES > 2 and loss != "CE":
+            raise ValueError("'DATA.N_CLASSES' can only be done with 'CE' loss")
         if loss == "W_CE_DICE":
             assert (
                 len(cfg.LOSS.WEIGHTS) == 2
@@ -606,7 +606,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "does not support float16 data type."
         )
 
-    if cfg.MODEL.N_CLASSES > 2 and cfg.PROBLEM.TYPE not in [
+    if cfg.DATA.N_CLASSES > 2 and cfg.PROBLEM.TYPE not in [
         "SEMANTIC_SEG",
         "INSTANCE_SEG",
         "DETECTION",
@@ -614,7 +614,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         "IMAGE_TO_IMAGE",
     ]:
         raise ValueError(
-            "'MODEL.N_CLASSES' can only be greater than 2 in the following workflows: 'SEMANTIC_SEG', "
+            "'DATA.N_CLASSES' can only be greater than 2 in the following workflows: 'SEMANTIC_SEG', "
             "'INSTANCE_SEG', 'DETECTION', 'CLASSIFICATION' and 'IMAGE_TO_IMAGE'"
         )
 
@@ -623,8 +623,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     #### Semantic segmentation ####
     if cfg.PROBLEM.TYPE == "SEMANTIC_SEG":
         if not model_will_be_read and cfg.MODEL.SOURCE == "biapy":
-            if cfg.MODEL.N_CLASSES < 2:
-                raise ValueError("'MODEL.N_CLASSES' needs to be greater or equal 2 (binary case)")
+            if cfg.DATA.N_CLASSES < 2:
+                raise ValueError("'DATA.N_CLASSES' needs to be greater or equal 2 (binary case)")
         elif cfg.MODEL.SOURCE == "torchvision":
             if cfg.MODEL.TORCHVISION_MODEL_NAME not in [
                 "deeplabv3_mobilenet_v3_large",
@@ -686,7 +686,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "'PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS' needs to be of the same length as the channels selected in 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'. "
                 "E.g. 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'='BC' 'PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS'=[1,0.5]. "
                 "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'='BCD' 'PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS'=[0.5,0.5,1]. "
-                "If 'MODEL.N_CLASSES' > 2 one more weigth need to be provided."
+                "If 'DATA.N_CLASSES' > 2 one more weigth need to be provided."
             )
         if cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK:
             if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS not in [
@@ -757,8 +757,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
     #### Detection ####
     if cfg.PROBLEM.TYPE == "DETECTION":
-        if not model_will_be_read and cfg.MODEL.SOURCE == "biapy" and cfg.MODEL.N_CLASSES < 2:
-            raise ValueError("'MODEL.N_CLASSES' needs to be greater or equal 2 (binary case)")
+        if not model_will_be_read and cfg.MODEL.SOURCE == "biapy" and cfg.DATA.N_CLASSES < 2:
+            raise ValueError("'DATA.N_CLASSES' needs to be greater or equal 2 (binary case)")
 
         cpd = cfg.PROBLEM.DETECTION.CENTRAL_POINT_DILATION
         if len(cpd) == 1:
@@ -1197,7 +1197,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             if cfg.DATA.TEST.LOAD_GT or cfg.DATA.TEST.USE_VAL_AS_TEST:
                 use_gt = True
                 
-            expected_classes = cfg.MODEL.N_CLASSES if use_gt else 1
+            expected_classes = cfg.DATA.N_CLASSES if use_gt else 1
             list_of_classes = sorted(next(os_walk_clean(cfg.DATA.TEST.PATH))[1])
             if len(list_of_classes) < 1:
                 raise ValueError("There is no folder/class for test in {}".format(cfg.DATA.TEST.PATH))
@@ -1206,10 +1206,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 if expected_classes != len(list_of_classes):
                     if use_gt:
                         mess = f"Found {len(list_of_classes)} number of classes for test (folders: {list_of_classes}) "\
-                        + f"but 'MODEL.N_CLASSES' was set to {expected_classes}. They must match. Aborting..."
+                        + f"but 'DATA.N_CLASSES' was set to {expected_classes}. They must match. Aborting..."
                     else:
                         mess = f"Found {len(list_of_classes)} number of classes for test (folders: {list_of_classes}) "\
-                        + f"but 'MODEL.N_CLASSES' was set to 1 because 'DATA.TEST.LOAD_GT' is False, so a unique folder "\
+                        + f"but 'DATA.N_CLASSES' was set to 1 because 'DATA.TEST.LOAD_GT' is False, so a unique folder "\
                         + "containing all the samples is expected. Aborting..."
                     raise ValueError(mess)
                 else:
@@ -1225,8 +1225,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 ], "'TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE' needs to be in ['chunk_by_chunk', 'entire_pred']"
             if len(cfg.DATA.TEST.INPUT_IMG_AXES_ORDER) < 3:
                 raise ValueError("'DATA.TEST.INPUT_IMG_AXES_ORDER' needs to be at least of length 3, e.g., 'ZYX'")
-            if cfg.MODEL.N_CLASSES > 2:
-                raise ValueError("Not implemented pipeline option: 'MODEL.N_CLASSES' > 2 and 'TEST.BY_CHUNKS'")
+            if cfg.DATA.N_CLASSES > 2:
+                raise ValueError("Not implemented pipeline option: 'DATA.N_CLASSES' > 2 and 'TEST.BY_CHUNKS'")
             if cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA:
                 if cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_RAW_PATH == "":
                     raise ValueError(
@@ -1476,7 +1476,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 )
             )
         if (
-            cfg.MODEL.N_CLASSES > 2
+            cfg.DATA.N_CLASSES > 2
             and cfg.PROBLEM.TYPE != "CLASSIFICATION"
             and model_arch
             not in [
@@ -1493,7 +1493,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             ]
         ):
             raise ValueError(
-                "'MODEL.N_CLASSES' > 2 can only be used with 'MODEL.ARCHITECTURE' in ['unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'multiresunet', 'unetr', 'unext_v1', 'unext_v2']"
+                "'DATA.N_CLASSES' > 2 can only be used with 'MODEL.ARCHITECTURE' in ['unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'multiresunet', 'unetr', 'unext_v1', 'unext_v2']"
             )
 
         assert len(cfg.MODEL.FEATURE_MAPS) > 2, "'MODEL.FEATURE_MAPS' needs to have at least 3 values"
@@ -1903,7 +1903,7 @@ def compare_configurations_without_model(actual_cfg, old_cfg, header_message="",
         # "DATA.PATCH_SIZE",
         "PROBLEM.INSTANCE_SEG.DATA_CHANNELS",
         "PROBLEM.SUPER_RESOLUTION.UPSCALING",
-        "MODEL.N_CLASSES",
+        # "DATA.N_CLASSES",
     ]
 
     def get_attribute_recursive(var, attr):
@@ -1927,7 +1927,7 @@ def compare_configurations_without_model(actual_cfg, old_cfg, header_message="",
         old_value = get_attribute_recursive(old_cfg, var_to_compare)
         if current_value != old_value:
             full_message = ""
-            if var_to_compare == "MODEL.N_CLASSES":
+            if var_to_compare == "DATA.N_CLASSES":
                 if not actual_cfg.MODEL.SKIP_UNMATCHED_LAYERS:
                     full_message = header_message \
                         + f"The '{var_to_compare}' value of the compared configurations does not match: " \
@@ -2166,6 +2166,12 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict):
             if old_cfg["MODEL"]["BATCH_NORMALIZATION"]:
                 old_cfg["MODEL"]["NORMALIZATION"] = "bn"
             del old_cfg["MODEL"]["BATCH_NORMALIZATION"]
+
+        if "N_CLASSES" in old_cfg["MODEL"]:
+            if "DATA" not in old_cfg:
+                old_cfg["DATA"] = {}
+            old_cfg["DATA"]["N_CLASSES"] = old_cfg["MODEL"]["N_CLASSES"]
+            del old_cfg["MODEL"]["N_CLASSES"]
 
         if "BMZ" in old_cfg["MODEL"]:
             if "SOURCE_MODEL_DOI" in old_cfg["MODEL"]["BMZ"]:

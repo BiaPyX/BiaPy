@@ -132,12 +132,12 @@ def build_model(cfg: CN, output_channels: int, device: torch.device) -> Tuple[nn
             args = dict(
                 image_shape=cfg.DATA.PATCH_SIZE,
                 activation=cfg.MODEL.ACTIVATION.lower(),
-                n_classes=cfg.MODEL.N_CLASSES,
+                n_classes=cfg.DATA.N_CLASSES,
             )
             model = simple_CNN(**args)  # type: ignore
             callable_model = simple_CNN  # type: ignore
         elif "efficientnet" in modelname:
-            args = dict(efficientnet_name=cfg.MODEL.ARCHITECTURE.lower(), n_classes=cfg.MODEL.N_CLASSES)
+            args = dict(efficientnet_name=cfg.MODEL.ARCHITECTURE.lower(), n_classes=cfg.DATA.N_CLASSES)
             model = efficientnet(**args)  # type: ignore
             callable_model = efficientnet  # type: ignore
         elif modelname == "vit":
@@ -146,7 +146,7 @@ def build_model(cfg: CN, output_channels: int, device: torch.device) -> Tuple[nn
                 patch_size=cfg.MODEL.VIT_TOKEN_SIZE,
                 in_chans=cfg.DATA.PATCH_SIZE[-1],
                 ndim=ndim,
-                num_classes=cfg.MODEL.N_CLASSES,
+                num_classes=cfg.DATA.N_CLASSES,
                 norm_layer=partial(nn.LayerNorm, eps=1e-6),
             )
             if cfg.MODEL.VIT_MODEL == "custom":
@@ -393,7 +393,7 @@ def check_bmz_args(
     workflow_specs = {}
     workflow_specs["workflow_type"] = cfg.PROBLEM.TYPE
     workflow_specs["ndim"] = cfg.PROBLEM.NDIM
-    workflow_specs["nclasses"] = cfg.MODEL.N_CLASSES
+    workflow_specs["nclasses"] = cfg.DATA.N_CLASSES
 
     preproc_info, error, error_message = check_bmz_model_compatibility(model_rdf, workflow_specs=workflow_specs)
 
@@ -483,14 +483,14 @@ def check_bmz_model_compatibility(
 
             if not isinstance(classes, int):
                 reason_message = (
-                    f"[{specific_workflow}] 'MODEL.N_CLASSES' not extracted. Obtained {classes}. Please check it!\n"
+                    f"[{specific_workflow}] 'DATA.N_CLASSES' not extracted. Obtained {classes}. Please check it!\n"
                 )
                 return preproc_info, True, reason_message
 
             if isinstance(classes, int) and classes != -1:
                 if ref_classes != "all":
                     if classes > 2 and ref_classes != classes:
-                        reason_message = f"[{specific_workflow}] 'MODEL.N_CLASSES' does not match network's output classes. Please check it!\n"
+                        reason_message = f"[{specific_workflow}] 'DATA.N_CLASSES' does not match network's output classes. Please check it!\n"
                         return preproc_info, True, reason_message
             else:
                 reason_message = f"[{specific_workflow}] Couldn't find the classes this model is returning so please be aware to match it\n"
@@ -692,7 +692,7 @@ def check_model_restrictions(cfg: CN, bmz_config: Dict, workflow_specs: Dict) ->
         if classes == -1:
             raise ValueError("Classes not found for semantic segmentation dir.")
 
-        opts["MODEL.N_CLASSES"] = max(2, classes)
+        opts["DATA.N_CLASSES"] = max(2, classes)
 
     elif specific_workflow in ["INSTANCE_SEG"]:
         # Assumed it's BC. This needs a more elaborated process. Still deciding this:
@@ -738,7 +738,7 @@ def check_model_restrictions(cfg: CN, bmz_config: Dict, workflow_specs: Dict) ->
             1,
         ] * channels
         if classes != 2:
-            opts["MODEL.N_CLASSES"] = max(2, classes)
+            opts["DATA.N_CLASSES"] = max(2, classes)
         if channel_code == "A":
             opts["LOSS.CLASS_REBALANCE"] = True
 
@@ -839,10 +839,10 @@ def build_torchvision_model(cfg: CN, device: torch.device) -> Tuple[nn.Module, C
 
     # Create new head
     sample_size = None
-    out_classes = cfg.MODEL.N_CLASSES if cfg.MODEL.N_CLASSES > 2 else 1
+    out_classes = cfg.DATA.N_CLASSES if cfg.DATA.N_CLASSES > 2 else 1
     if cfg.PROBLEM.TYPE == "CLASSIFICATION":
         if (
-            cfg.MODEL.N_CLASSES != 1000
+            cfg.DATA.N_CLASSES != 1000
         ):  # 1000 classes are the ones by default in ImageNet, which are the weights loaded by default
             print(
                 f"WARNING: Model's head changed from 1000 to {out_classes} so a finetunning is required to have good results"
@@ -875,7 +875,7 @@ def build_torchvision_model(cfg: CN, device: torch.device) -> Tuple[nn.Module, C
             if cfg.MODEL.TORCHVISION_MODEL_NAME in ["maxvit_t"]:
                 sample_size = (1, 3, 224, 224)
     elif cfg.PROBLEM.TYPE == "SEMANTIC_SEG":
-        if cfg.MODEL.N_CLASSES != 21:
+        if cfg.DATA.N_CLASSES != 21:
             print(
                 f"WARNING: Model's head changed from 21 to {out_classes} so a finetunning is required to have good results"
             )
@@ -892,7 +892,7 @@ def build_torchvision_model(cfg: CN, device: torch.device) -> Tuple[nn.Module, C
 
     elif cfg.PROBLEM.TYPE == "INSTANCE_SEG":
         # MaskRCNN
-        if cfg.MODEL.N_CLASSES != 91:  # 91 classes are the ones by default in MaskRCNN
+        if cfg.DATA.N_CLASSES != 91:  # 91 classes are the ones by default in MaskRCNN
             cls_score = torch.nn.Linear(in_features=1024, out_features=out_classes, bias=True)
             model.roi_heads.box_predictor.cls_score = cls_score
             mask_fcn_logits = torch.nn.Conv2d(

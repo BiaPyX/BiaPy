@@ -70,7 +70,7 @@ class Classification_Workflow(Base_Workflow):
         """
         self.model_output_channels = {
             "type": "mask",
-            "channels": [self.cfg.MODEL.N_CLASSES],
+            "channels": [self.cfg.DATA.N_CLASSES],
         }
         self.multihead = False
         self.activations = [{":": "Linear"}]
@@ -105,13 +105,13 @@ class Classification_Workflow(Base_Workflow):
         for metric in list(set(self.cfg.TRAIN.METRICS)):
             if metric == "accuracy":
                 self.train_metrics.append(
-                    Accuracy(task="multiclass", num_classes=self.cfg.MODEL.N_CLASSES).to(self.device),
+                    Accuracy(task="multiclass", num_classes=self.cfg.DATA.N_CLASSES).to(self.device),
                 )
                 self.train_metric_names.append("Accuracy")
                 self.train_metric_best.append("max")
-            elif metric == "top-5-accuracy" and self.cfg.MODEL.N_CLASSES > 5:
+            elif metric == "top-5-accuracy" and self.cfg.DATA.N_CLASSES > 5:
                 self.train_metrics.append(
-                    Accuracy(task="multiclass", num_classes=self.cfg.MODEL.N_CLASSES, top_k=5).to(self.device),
+                    Accuracy(task="multiclass", num_classes=self.cfg.DATA.N_CLASSES, top_k=5).to(self.device),
                 )
                 self.train_metric_names.append("Top 5 accuracy")
                 self.train_metric_best.append("max")
@@ -210,7 +210,7 @@ class Classification_Workflow(Base_Workflow):
             train_in_memory=self.cfg.DATA.TRAIN.IN_MEMORY,
             val_path=self.cfg.DATA.VAL.PATH,
             val_in_memory=self.cfg.DATA.VAL.IN_MEMORY,
-            expected_classes=self.cfg.MODEL.N_CLASSES,
+            expected_classes=self.cfg.DATA.N_CLASSES,
             cross_val=self.cfg.DATA.VAL.CROSS_VAL,
             cross_val_nsplits=self.cfg.DATA.VAL.CROSS_VAL_NFOLD,
             cross_val_fold=self.cfg.DATA.VAL.CROSS_VAL_FOLD,
@@ -275,7 +275,7 @@ class Classification_Workflow(Base_Workflow):
                 test_path=self.cfg.DATA.TEST.PATH,
                 norm_module=self.norm_module,
                 use_val_as_test=self.cfg.DATA.TEST.USE_VAL_AS_TEST,
-                expected_classes=self.cfg.MODEL.N_CLASSES if self.use_gt else 1,
+                expected_classes=self.cfg.DATA.N_CLASSES if self.use_gt else 1,
                 crop_shape=self.cfg.DATA.PATCH_SIZE,
                 is_3d=(self.cfg.PROBLEM.NDIM == "3D"),
                 reflect_to_complete_shape=self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE,
@@ -382,10 +382,10 @@ class Classification_Workflow(Base_Workflow):
                         if self.class_names:
                             display_labels = [
                                 "Category {} ({})".format(i, self.class_names[i])
-                                for i in range(self.cfg.MODEL.N_CLASSES)
+                                for i in range(self.cfg.DATA.N_CLASSES)
                             ]
                         else:
-                            display_labels = ["Category {}".format(i) for i in range(self.cfg.MODEL.N_CLASSES)]
+                            display_labels = ["Category {}".format(i) for i in range(self.cfg.DATA.N_CLASSES)]
                         print("\n" + classification_report(self.all_gt, self.all_pred, target_names=display_labels))  # type: ignore
                     else:
                         print(

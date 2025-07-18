@@ -1727,8 +1727,8 @@ class Base_Workflow(metaclass=ABCMeta):
                     )
 
                 # Argmax if needed
-                if self.cfg.MODEL.N_CLASSES > 2 and self.cfg.DATA.TEST.ARGMAX_TO_OUTPUT and not self.multihead:
-                    _type = np.uint8 if self.cfg.MODEL.N_CLASSES < 255 else np.uint16
+                if self.cfg.DATA.N_CLASSES > 2 and self.cfg.DATA.TEST.ARGMAX_TO_OUTPUT and not self.multihead:
+                    _type = np.uint8 if self.cfg.DATA.N_CLASSES < 255 else np.uint16
                     pred = np.expand_dims(np.argmax(pred, -1), -1).astype(_type)
 
                 # Calculate the metrics
@@ -1837,8 +1837,8 @@ class Base_Workflow(metaclass=ABCMeta):
                 )
 
                 # Argmax if needed
-                if self.cfg.MODEL.N_CLASSES > 2 and self.cfg.DATA.TEST.ARGMAX_TO_OUTPUT and not self.multihead:
-                    _type = np.uint8 if self.cfg.MODEL.N_CLASSES < 255 else np.uint16
+                if self.cfg.DATA.N_CLASSES > 2 and self.cfg.DATA.TEST.ARGMAX_TO_OUTPUT and not self.multihead:
+                    _type = np.uint8 if self.cfg.DATA.N_CLASSES < 255 else np.uint16
                     pred = np.expand_dims(np.argmax(pred, -1), -1).astype(_type)
 
                 if self.cfg.TEST.POST_PROCESSING.APPLY_MASK:

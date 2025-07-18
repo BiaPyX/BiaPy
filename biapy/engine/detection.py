@@ -99,9 +99,9 @@ class Detection_Workflow(Base_Workflow):
         }
 
         # Multi-head: points + classification
-        if self.cfg.MODEL.N_CLASSES > 2:
+        if self.cfg.DATA.N_CLASSES > 2:
             self.activations = [{"0": "CE_Sigmoid"}, {"0": "Linear"}]
-            self.model_output_channels["channels"] = [self.model_output_channels["channels"], self.cfg.MODEL.N_CLASSES]
+            self.model_output_channels["channels"] = [self.model_output_channels["channels"], self.cfg.DATA.N_CLASSES]
             self.multihead = True
         else:
             self.activations = [{"0": "CE_Sigmoid"}]
@@ -147,7 +147,7 @@ class Detection_Workflow(Base_Workflow):
 
         self.train_metrics.append(
             multiple_metrics(
-                num_classes=self.cfg.MODEL.N_CLASSES,
+                num_classes=self.cfg.DATA.N_CLASSES,
                 metric_names=self.train_metric_names,
                 device=self.device,
                 model_source=self.cfg.MODEL.SOURCE,
@@ -166,7 +166,7 @@ class Detection_Workflow(Base_Workflow):
 
         self.test_metrics.append(
             multiple_metrics(
-                num_classes=self.cfg.MODEL.N_CLASSES,
+                num_classes=self.cfg.DATA.N_CLASSES,
                 metric_names=self.test_metric_names,
                 device=self.device,
                 model_source=self.cfg.MODEL.SOURCE,
@@ -182,7 +182,7 @@ class Detection_Workflow(Base_Workflow):
 
         if self.cfg.LOSS.TYPE == "CE":
             self.loss = CrossEntropyLoss_wrapper(
-                num_classes=self.cfg.MODEL.N_CLASSES,
+                num_classes=self.cfg.DATA.N_CLASSES,
                 multihead=self.multihead,
                 model_source=self.cfg.MODEL.SOURCE,
                 class_rebalance=self.cfg.LOSS.CLASS_REBALANCE,
@@ -621,9 +621,9 @@ class Detection_Workflow(Base_Workflow):
             else:
                 gt_coordinates = [[0, y, x] for y, x in zip(zcoords, ycoords)]
 
-            if self.cfg.MODEL.N_CLASSES > 2:
+            if self.cfg.DATA.N_CLASSES > 2:
                 if "class" not in df_gt:
-                    raise ValueError("MODEL.N_CLASSES > 2 but no class specified in the CSV file")
+                    raise ValueError("DATA.N_CLASSES > 2 but no class specified in the CSV file")
             gt_points_classes = None
             if self.multihead:
                 if "class" not in df_gt:

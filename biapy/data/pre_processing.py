@@ -176,10 +176,10 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
                     img = np.expand_dims(img, 0)
 
                 # Create the instance mask
-                if cfg.MODEL.N_CLASSES > 2:
+                if cfg.DATA.N_CLASSES > 2:
                     if img.shape[-1] != 2:
                         raise ValueError(
-                            "In instance segmentation, when 'MODEL.N_CLASSES' are more than 2 labels need to have two channels, "
+                            "In instance segmentation, when 'DATA.N_CLASSES' are more than 2 labels need to have two channels, "
                             "e.g. (256,256,2), containing the instance segmentation map (first channel) and classification map (second channel)."
                         )
                     else:
@@ -280,10 +280,10 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
                 os.path.join(getattr(cfg.DATA, tag).GT_PATH, Y[i]),
                 is_3d=not cfg.PROBLEM.NDIM == "2D",
             )
-            if cfg.MODEL.N_CLASSES > 2:
+            if cfg.DATA.N_CLASSES > 2:
                 if img.shape[-1] != 2:
                     raise ValueError(
-                        "In instance segmentation, when 'MODEL.N_CLASSES' are more than 2 labels need to have two channels, "
+                        "In instance segmentation, when 'DATA.N_CLASSES' are more than 2 labels need to have two channels, "
                         "e.g. (256,256,2), containing the instance segmentation map (first channel) and classification map "
                         "(second channel)."
                     )
@@ -296,7 +296,7 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
                 fb_mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE,
             )[0]
 
-            if cfg.MODEL.N_CLASSES > 2:
+            if cfg.DATA.N_CLASSES > 2:
                 img = np.concatenate([img, class_channel], axis=-1)
 
             save_tif(
@@ -1182,8 +1182,8 @@ def create_detection_masks(cfg: CN, data_type: str = "train"):
         raise ValueError(f"No data found in folder {img_dir}")
     ids = sorted(next(os_walk_clean(label_dir))[2])
 
-    channels = 2 if cfg.MODEL.N_CLASSES > 2 else 1
-    dtype = np.uint8 if cfg.MODEL.N_CLASSES < 255 else np.uint16
+    channels = 2 if cfg.DATA.N_CLASSES > 2 else 1
+    dtype = np.uint8 if cfg.DATA.N_CLASSES < 255 else np.uint16
     if len(img_ids) != len(ids):
         raise ValueError(
             "Different number of CSV files and images found ({} vs {}). "
@@ -1261,8 +1261,8 @@ def create_detection_masks(cfg: CN, data_type: str = "train"):
                 df["class"] = df["class"].astype("int")
                 class_point = np.array(df["class"])
             else:
-                if cfg.MODEL.N_CLASSES > 2:
-                    raise ValueError("MODEL.N_CLASSES > 2 but no class specified in CSV file")
+                if cfg.DATA.N_CLASSES > 2:
+                    raise ValueError("DATA.N_CLASSES > 2 but no class specified in CSV file")
                 class_point = [1] * len(z_axis_point)
 
             # Create masks
@@ -1280,10 +1280,10 @@ def create_detection_masks(cfg: CN, data_type: str = "train"):
                     a2_coord = x_axis_point[j]
                 c_point = class_point[j]
 
-                if c_point > cfg.MODEL.N_CLASSES:
+                if c_point > cfg.DATA.N_CLASSES:
                     raise ValueError(
-                        "Class {} detected while 'MODEL.N_CLASSES' was set to {}. Please check it!".format(
-                            c_point, cfg.MODEL.N_CLASSES
+                        "Class {} detected while 'DATA.N_CLASSES' was set to {}. Please check it!".format(
+                            c_point, cfg.DATA.N_CLASSES
                         )
                     )
 

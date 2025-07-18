@@ -50,7 +50,7 @@ class Config:
 
         ### SEMANTIC_SEG
         _C.PROBLEM.SEMANTIC_SEG = CN()
-        # Class id to ignore when MODEL.N_CLASSES > 2
+        # Class id to ignore when DATA.N_CLASSES > 2
         _C.PROBLEM.SEMANTIC_SEG.IGNORE_CLASS_ID = 0
 
         ### INSTANCE_SEG
@@ -1009,7 +1009,7 @@ class Config:
         # Activation function to use along the model
         _C.MODEL.ACTIVATION = "ELU"
         # Number of classes including the background class (that should be using 0 label)
-        _C.MODEL.N_CLASSES = 2
+        _C.DATA.N_CLASSES = 2
         # Downsampling to be made in Z. This value will be the third integer of the MaxPooling operation. When facing
         # anysotropic datasets set it to get better performance
         _C.MODEL.Z_DOWN = [0, 0, 0, 0]

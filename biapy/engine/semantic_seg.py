@@ -42,11 +42,11 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         super(Semantic_Segmentation_Workflow, self).__init__(cfg, job_identifier, device, args, **kwargs)
 
         if cfg.TRAIN.ENABLE and cfg.DATA.TRAIN.CHECK_DATA:
-            check_masks(cfg.DATA.TRAIN.GT_PATH, n_classes=cfg.MODEL.N_CLASSES, is_3d=(self.cfg.PROBLEM.NDIM == "3D"))
+            check_masks(cfg.DATA.TRAIN.GT_PATH, n_classes=cfg.DATA.N_CLASSES, is_3d=(self.cfg.PROBLEM.NDIM == "3D"))
             if not cfg.DATA.VAL.FROM_TRAIN:
-                check_masks(cfg.DATA.VAL.GT_PATH, n_classes=cfg.MODEL.N_CLASSES, is_3d=(self.cfg.PROBLEM.NDIM == "3D"))
+                check_masks(cfg.DATA.VAL.GT_PATH, n_classes=cfg.DATA.N_CLASSES, is_3d=(self.cfg.PROBLEM.NDIM == "3D"))
         if cfg.TEST.ENABLE and cfg.DATA.TEST.LOAD_GT and cfg.DATA.TEST.CHECK_DATA:
-            check_masks(cfg.DATA.TEST.GT_PATH, n_classes=cfg.MODEL.N_CLASSES, is_3d=(self.cfg.PROBLEM.NDIM == "3D"))
+            check_masks(cfg.DATA.TEST.GT_PATH, n_classes=cfg.DATA.N_CLASSES, is_3d=(self.cfg.PROBLEM.NDIM == "3D"))
 
         # From now on, no modification of the cfg will be allowed
         self.cfg.freeze()
@@ -76,7 +76,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         """
         self.model_output_channels = {
             "type": "mask",
-            "channels": [1 if self.cfg.MODEL.N_CLASSES <= 2 else self.cfg.MODEL.N_CLASSES],
+            "channels": [1 if self.cfg.DATA.N_CLASSES <= 2 else self.cfg.DATA.N_CLASSES],
         }
         self.multihead = False
         self.activations = [{":": "CE_Sigmoid"}]
@@ -112,7 +112,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
             if metric in ["iou", "jaccard_index"]:
                 self.train_metrics.append(
                     jaccard_index(
-                        num_classes=self.cfg.MODEL.N_CLASSES,
+                        num_classes=self.cfg.DATA.N_CLASSES,
                         device=self.device,
                         model_source=self.cfg.MODEL.SOURCE,
                     )
@@ -126,7 +126,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
             if metric in ["iou", "jaccard_index"]:
                 self.test_metrics.append(
                     jaccard_index(
-                        num_classes=self.cfg.MODEL.N_CLASSES,
+                        num_classes=self.cfg.DATA.N_CLASSES,
                         device=self.device,
                         model_source=self.cfg.MODEL.SOURCE,
                     )
@@ -135,7 +135,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
 
         if self.cfg.LOSS.TYPE == "CE":
             self.loss = CrossEntropyLoss_wrapper(
-                num_classes=self.cfg.MODEL.N_CLASSES,
+                num_classes=self.cfg.DATA.N_CLASSES,
                 model_source=self.cfg.MODEL.SOURCE,
                 class_rebalance=self.cfg.LOSS.CLASS_REBALANCE,
             )
@@ -335,7 +335,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
             Model prediction.
         """
         # Save simple binarization of predictions
-        if self.cfg.MODEL.N_CLASSES <= 2:
+        if self.cfg.DATA.N_CLASSES <= 2:
             pred = (pred > 0.5).astype(np.uint8)
         save_tif(
             pred,

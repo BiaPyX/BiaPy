@@ -206,9 +206,9 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             raise ValueError("Something wrong happen during instance seg. channel configuration. Contact BiaPy team")
 
         # Multi-head: instances + classification
-        if self.cfg.MODEL.N_CLASSES > 2:
+        if self.cfg.DATA.N_CLASSES > 2:
             self.activations = [self.activations, {"0": "Linear"}]
-            self.model_output_channels["channels"] = [self.model_output_channels["channels"], self.cfg.MODEL.N_CLASSES]
+            self.model_output_channels["channels"] = [self.model_output_channels["channels"], self.cfg.DATA.N_CLASSES]
             self.multihead = True
         else:
             self.activations = [self.activations]
@@ -299,7 +299,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 self.train_metric_names.append("IoU (classes)")
                 self.train_metric_best += ["max"]
                 # Used to calculate IoU with the classification results
-                self.jaccard_index_matching = jaccard_index(device=self.device, num_classes=self.cfg.MODEL.N_CLASSES)
+                self.jaccard_index_matching = jaccard_index(device=self.device, num_classes=self.cfg.DATA.N_CLASSES)
         else:  # synapses
             if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BF":
                 self.train_metric_names = ["IoU (B channel)"]
@@ -320,7 +320,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
         self.train_metrics.append(
             multiple_metrics(
-                num_classes=self.cfg.MODEL.N_CLASSES,
+                num_classes=self.cfg.DATA.N_CLASSES,
                 metric_names=self.train_metric_names,
                 device=self.device,
                 model_source=self.cfg.MODEL.SOURCE,
@@ -384,11 +384,11 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         if self.multihead:
             self.test_metric_names.append("IoU (classes)")
             # Used to calculate IoU with the classification results
-            self.jaccard_index_matching = jaccard_index(device="cpu", num_classes=self.cfg.MODEL.N_CLASSES)
+            self.jaccard_index_matching = jaccard_index(device="cpu", num_classes=self.cfg.DATA.N_CLASSES)
 
         self.test_metrics.append(
             multiple_metrics(
-                num_classes=self.cfg.MODEL.N_CLASSES,
+                num_classes=self.cfg.DATA.N_CLASSES,
                 metric_names=self.test_metric_names,
                 device=self.device,
                 model_source=self.cfg.MODEL.SOURCE,
@@ -404,7 +404,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS,
             self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
             self.cfg.PROBLEM.INSTANCE_SEG.DISTANCE_CHANNEL_MASK,
-            self.cfg.MODEL.N_CLASSES,
+            self.cfg.DATA.N_CLASSES,
             class_rebalance=self.cfg.LOSS.CLASS_REBALANCE,
             instance_type=self.cfg.PROBLEM.INSTANCE_SEG.TYPE,
             val_to_ignore = None if not self.cfg.LOSS.IGNORE_VALUES else self.cfg.LOSS.VALUE_TO_IGNORE
@@ -650,7 +650,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     error_shape = (40, 256, 256, 2)
                 if error_shape:
                     raise ValueError(
-                        f"Image {test_file} wrong dimension. In instance segmentation, when 'MODEL.N_CLASSES' are "
+                        f"Image {test_file} wrong dimension. In instance segmentation, when 'DATA.N_CLASSES' are "
                         f"more than 2 labels need to have two channels, e.g. {error_shape}, containing the instance "
                         "segmentation map (first channel) and classification map (second channel)."
                     )
