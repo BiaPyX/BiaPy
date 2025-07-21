@@ -16,14 +16,13 @@ from scipy.ndimage import rotate, grey_dilation, binary_erosion, binary_dilation
 from scipy.signal import savgol_filter
 from skimage import morphology
 from skimage.morphology import disk, ball, remove_small_objects, dilation, erosion
-from skimage.segmentation import watershed, relabel_sequential
+from skimage.segmentation import watershed, relabel_sequential, find_boundaries
 from skimage.filters import rank, threshold_otsu
-from skimage.measure import label, regionprops_table
+from skimage.measure import label, regionprops_table, marching_cubes, mesh_surface_area
 from skimage.exposure import equalize_adapthist
 from skimage.feature import peak_local_max, blob_log
 from scipy.ndimage import binary_dilation as binary_dilation_scipy
 
-import diplib as dip
 from typing import (
     Tuple,
     Optional,
@@ -1876,11 +1875,7 @@ def measure_morphological_props_and_filter(
             Diameter of each instance obtained from the bounding box.
 
         elongations : Array of ints
-            Elongation of each instance. It is the inverse of the circularity. The values of elongation range from
-            ``1`` for round particles and increase for elongated particles. In 2D it is calculated as:
-            ``(perimeter^2)/(4 * PI * area)``. In 3D: ``(sqrt(surface area^3))/ (6 * volume * sqrt(PI))`` where ``sqrt``
-            is the square root. For the 3D `diplib library <https://diplib.org/diplib-docs/features.html#shape_features_P2A>`__
-            is used (corresponds to 'P2A' metric in diplib).
+            Elongation of each instance. It is the inverse of the circularity. Only measurable for 2D images.
 
         perimeter : Array of ints
             In 2D, approximates the contour as a line through the centers of border pixels using a 4-connectivity.
@@ -1920,11 +1915,22 @@ def measure_morphological_props_and_filter(
     centers = np.zeros((total_labels, 3 if image3d else 2), dtype=np.uint16)
     circularities = np.zeros(total_labels, dtype=np.float32)
     perimeters = np.zeros(total_labels, dtype=np.uint32)
-    elongations = np.zeros(total_labels, dtype=np.float32)
+    if image3d:
+        elongations = np.zeros(total_labels, dtype=np.float32)
 
+    def surface_area(binary_image):
+        try:
+            binary_image[find_boundaries(binary_image, mode="outer")] = 0
+            verts, faces, _, _ = marching_cubes(binary_image)
+            # note: you might want to do some mesh smoothing here
+            surface_area = mesh_surface_area(verts, faces)
+        except:
+            surface_area = 0
+        return surface_area
+    import pdb; pdb.set_trace()
     # Area, diameter, center, circularity (if 2D), elongation (if 2D) and perimeter (if 2D) calculation over the whole image
-    lprops = ["label", "bbox", "perimeter"] if not image3d else ["label", "bbox"]
-    props = regionprops_table(img, properties=(lprops))
+    lprops = ["label", "bbox", "perimeter"] if not image3d else ["label", "bbox", "surface_area"]
+    props = regionprops_table(img, properties=(lprops), extra_properties=(surface_area,))
     for k, l in tqdm(enumerate(props["label"]), total=len(props["label"]), leave=False):
         label_index = np.where(label_list == l)[0]
         pixels = npixels[label_index]
@@ -1941,6 +1947,14 @@ def measure_morphological_props_and_filter(
                 props["bbox-1"][k] + ((props["bbox-4"][k] - props["bbox-1"][k]) // 2),
                 props["bbox-2"][k] + ((props["bbox-5"][k] - props["bbox-2"][k]) // 2),
             ]
+            surf_area = props["surface_area"][k]
+            perimeters[label_index] = surf_area
+            sphericity = (
+                (36 * math.pi * pixels * pixels) / (surf_area * surf_area * surf_area)
+                if surf_area > 0
+                else 0
+            )
+            circularities[label_index] = sphericity
         else:
             vol = pixels * (resolution[0] * resolution[1])
             diam = max(
@@ -1961,26 +1975,6 @@ def measure_morphological_props_and_filter(
         areas[label_index] = vol
         diameters[label_index] = diam
         centers[label_index] = center
-
-    if total_labels > 0:
-        img = dip.Image(img.astype(img.dtype.name)) # type: ignore
-
-        features = ["SurfaceArea", "P2A"] if image3d else ["P2A"]
-        measurement = dip.MeasurementTool.Measure(img, features=features) # type: ignore
-
-        for lbl in measurement.Objects():
-            label_index = np.where(label_list == lbl)[0]
-            elongations[label_index] = measurement["P2A"][lbl]
-            if image3d:
-                perimeters[label_index] = measurement["SurfaceArea"][lbl]
-                pixels = npixels[label_index]
-                sphericity = (
-                    (36 * math.pi * pixels**2) / (perimeters[label_index] ** 3) if perimeters[label_index] > 0 else 0
-                )
-                circularities[label_index] = sphericity
-
-        # Convert diplib.PyDIP_bin.Image back into numpy array
-        img = np.array(img)
 
     # Remove those instances that do not satisfy the properties
     conditions = []
@@ -2048,10 +2042,11 @@ def measure_morphological_props_and_filter(
         cir_name: circularities,
         "diameters": diameters,
         "perimeters": perimeters,
-        "elongations": elongations,
         "comment": comment,
         "conditions": conditions,
     }
+    if image3d:
+        d_result["elongations"]= elongations
 
     print(
         "Removed {} instances by properties ({}), {} instances left".format(

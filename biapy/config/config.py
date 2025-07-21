@@ -1506,10 +1506,7 @@ class Config:
         #     (Lehmann et al., 201211 ; https://doi.org/10.1093/bioinformatics/btw413).
         #
         #   * 'elongation' is the inverse of the circularity. The values of elongation range from 1 for round particles and increase for
-        #     elongated particles. Calculated as: 
-        #       - In 2D: (perimeter^2)/(4 * PI * area) 
-        #       - In 3D: (sqrt(surface area^3))/ (6 * volume * sqrt(PI)) where 'sqrt' is the square root. For the 3D diplib library is used
-        #         where it corresponds to 'P2A' metric (more info here: https://diplib.org/diplib-docs/features.html#shape_features_P2A)
+        #     elongated particles. Calculated as: (perimeter^2)/(4 * PI * area) . It is only measurable for 2D images.
         #
         #   * 'npixels' corresponds to the sum of pixels that compose an instance.
         #
