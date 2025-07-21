@@ -1198,6 +1198,8 @@ if all_test_info["Test1"]["enable"]:
 
     biapy_config['MODEL']['ARCHITECTURE'] = 'unet'
 
+    biapy_config['LOSS']['TYPE'] = "W_CE_DICE"
+    
     biapy_config['TEST']['ENABLE'] = True
     biapy_config['TEST']['AUGMENTATION'] = True
     biapy_config['TEST']['FULL_IMG'] = True
