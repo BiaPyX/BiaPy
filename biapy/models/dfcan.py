@@ -108,10 +108,10 @@ class DFCAN(nn.Module):
             nn.Sigmoid(),
         )
 
-    def forward(self, x) -> dict:
+    def forward(self, x) -> torch.Tensor:
         x = self.input(x)
         x = self.RGs(x)
         x = self.conv_gelu(x)
         x = self.pixel_shuffle(x)  # upsampling
         x = self.conv_sigmoid(x)
-        return {"pred": x}
+        return x

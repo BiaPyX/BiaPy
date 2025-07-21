@@ -1,4 +1,6 @@
 import torch.nn as nn
+from typing import Dict
+
 from biapy.models.blocks import get_activation
 
 
@@ -103,8 +105,8 @@ class simple_CNN(nn.Module):
             nn.Softmax(dim=1),
         )
 
-    def forward(self, x) -> dict:
+    def forward(self, x) -> Dict:
         out = self.block1(x)
         out = self.block2(out)
         out = self.last_block(out)
-        return {"pred": out}
+        return out

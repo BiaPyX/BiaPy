@@ -70,10 +70,10 @@ class wdsr(nn.Module):
             shuf.append(nn.PixelShuffle(scale))
         self.shuf = nn.Sequential(*shuf)
 
-    def forward(self, x) -> dict:
+    def forward(self, x) -> torch.Tensor:
         x = self.body(x) + self.skip(x)
         x = self.shuf(x)
-        return {"pred": x}
+        return x
 
 
 class Block(nn.Module):

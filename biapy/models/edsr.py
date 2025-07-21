@@ -100,10 +100,10 @@ class SR_upsampling(nn.Module):
         if factor == 4:
             self.conv2 = conv(num_filters, num_filters * (self.f**2), kernel_size=3, padding="same")
 
-    def forward(self, x) -> dict:
+    def forward(self, x) -> torch.Tensor:
         out = self.conv1(x)
         out = torch.nn.functional.pixel_shuffle(out, upscale_factor=self.f)
         if self.conv2:
             out = self.conv2(out)
             out = torch.nn.functional.pixel_shuffle(out, upscale_factor=self.f)
-        return {"pred": out}
+        return out

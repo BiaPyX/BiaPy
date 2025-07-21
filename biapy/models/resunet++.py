@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from typing import List
+from typing import List, Dict
 
 from biapy.models.blocks import (
     ResConvBlock,
@@ -256,7 +256,7 @@ class ResUNetPlusPlus(nn.Module):
 
         self.apply(self._init_weights)
 
-    def forward(self, x) -> torch.Tensor | List[torch.Tensor]:
+    def forward(self, x) -> Dict | torch.Tensor:
         # Super-resolution
         if self.pre_upsampling:
             x = self.pre_upsampling(x)
@@ -304,7 +304,10 @@ class ResUNetPlusPlus(nn.Module):
         if self.multihead and self.last_class_head:
             out_dict["class"] = self.last_class_head(feats)
 
-        return out_dict
+        if len(out_dict.keys()) == 0:
+            return out_dict["pred"]
+        else:
+            return out_dict
 
     def _init_weights(self, m):
         if isinstance(m, nn.Conv2d) or isinstance(m, nn.Conv3d):

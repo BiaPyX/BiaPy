@@ -1,7 +1,8 @@
+import torch
 import torch.nn as nn
 
 from biapy.models.blocks import DoubleConvBlock, UpBlock, ProjectionHead, get_norm_2d, get_norm_3d
-
+from typing import Dict
 
 class Attention_U_Net(nn.Module):
     """
@@ -213,7 +214,7 @@ class Attention_U_Net(nn.Module):
 
         self.apply(self._init_weights)
 
-    def forward(self, x) -> dict:
+    def forward(self, x) -> Dict | torch.Tensor:
         # Super-resolution
         if self.pre_upsampling:
             x = self.pre_upsampling(x)
@@ -254,7 +255,10 @@ class Attention_U_Net(nn.Module):
         if self.multihead and self.last_class_head:
             out_dict["class"] = self.last_class_head(feats)
 
-        return out_dict
+        if len(out_dict.keys()) == 0:
+            return out_dict["pred"]
+        else:
+            return out_dict
 
     def _init_weights(self, m):
         if isinstance(m, nn.Conv2d) or isinstance(m, nn.Conv3d):

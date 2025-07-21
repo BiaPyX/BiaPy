@@ -2,7 +2,7 @@
 
 import torch
 import torch.nn as nn
-from typing import List
+from typing import Dict
 
 from biapy.models.blocks import get_norm_2d, get_norm_3d, ProjectionHead
 
@@ -432,7 +432,7 @@ class MultiResUnet(torch.nn.Module):
         if self.multihead:
             self.last_class_head = conv(self.in_filters9, output_channels[1], kernel_size=1, padding="same")
 
-    def forward(self, x: torch.Tensor) -> dict:
+    def forward(self, x: torch.Tensor) -> Dict | torch.Tensor:
         # Super-resolution
         if self.pre_upsampling:
             x = self.pre_upsampling(x)
@@ -488,5 +488,8 @@ class MultiResUnet(torch.nn.Module):
         if self.multihead and self.last_class_head:
             out_dict["class"] = self.last_class_head(feats)
 
-        return out_dict
+        if len(out_dict.keys()) == 0:
+            return out_dict["pred"]
+        else:
+            return out_dict
     

@@ -1,5 +1,5 @@
+import torch
 from torch import nn
-
 
 class ChannelAttention(nn.Module):
     def __init__(self, num_features, reduction, ndim=2):
@@ -96,7 +96,7 @@ class rcan(nn.Module):
             )
         self.conv2 = conv(filters, num_channels, kernel_size=3, padding="same")
 
-    def forward(self, x) -> dict:
+    def forward(self, x) -> torch.Tensor:
         x = self.sf(x)
         residual = x
         x = self.rgs(x)
@@ -105,4 +105,4 @@ class rcan(nn.Module):
         if self.upscaling_layer:
             x = self.upscale(x)
         x = self.conv2(x)
-        return {"pred": x}
+        return x

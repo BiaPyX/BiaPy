@@ -2,6 +2,7 @@ import math
 import torch
 import torch.nn as nn
 from timm.models.vision_transformer import Block
+from typing import Dict
 
 from biapy.models.blocks import DoubleConvBlock, ConvBlock, ProjectionHead,  get_norm_2d,  get_norm_3d
 from biapy.models.tr_layers import PatchEmbed
@@ -285,7 +286,7 @@ class UNETR(nn.Module):
         x = x.permute(self.permutation).contiguous()
         return x
 
-    def forward(self, input) -> dict:
+    def forward(self, input) -> Dict | torch.Tensor:
         # Vit part
         B = input.shape[0]
         x = self.patch_embed(input)
@@ -336,7 +337,10 @@ class UNETR(nn.Module):
         if self.multihead and self.last_class_head:
             out_dict["class"] = self.last_class_head(feats)
 
-        return out_dict
+        if len(out_dict.keys()) == 0:
+            return out_dict["pred"]
+        else:
+            return out_dict
 
     def _init_weights(self, m):
         if isinstance(m, nn.Conv2d) or isinstance(m, nn.Conv3d):

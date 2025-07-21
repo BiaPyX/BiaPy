@@ -371,7 +371,7 @@ class HighResolutionNet(nn.Module):
 
         return nn.Sequential(*modules), num_inchannels
 
-    def forward(self, x):
+    def forward(self, x) -> Dict | torch.Tensor:
         x = self.conv1_block(x)
         x = self.conv2_block(x)
 
@@ -429,7 +429,10 @@ class HighResolutionNet(nn.Module):
             class_head_out = self.last_class_head(feats)
             out_dict["class"] = class_head_out
 
-        return out_dict
+        if len(out_dict.keys()) == 0:
+            return out_dict["pred"]
+        else:
+            return out_dict
 
 
 class HighResolutionModule(nn.Module):
