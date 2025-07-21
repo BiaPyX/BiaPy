@@ -1533,39 +1533,39 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
         assert len(cfg.MODEL.FEATURE_MAPS) > 2, "'MODEL.FEATURE_MAPS' needs to have at least 3 values"
 
-        # Adjust dropout to feature maps
-        if model_arch in ["vit", "unetr", "mae"]:
+    # Adjust dropout to feature maps
+    if model_arch in ["vit", "unetr", "mae"]:
+        if all(x == 0 for x in cfg.MODEL.DROPOUT_VALUES):
+            opts.extend(["MODEL.DROPOUT_VALUES", (0.0,)])
+        elif len(cfg.MODEL.DROPOUT_VALUES) != 1:
+            raise ValueError(
+                "'MODEL.DROPOUT_VALUES' must be list of an unique number when 'MODEL.ARCHITECTURE' is one among ['vit', 'mae', 'unetr']"
+            )
+        elif not check_value(cfg.MODEL.DROPOUT_VALUES[0]):
+            raise ValueError("'MODEL.DROPOUT_VALUES' not in [0, 1] range")
+    else:
+        if len(cfg.MODEL.FEATURE_MAPS) != len(cfg.MODEL.DROPOUT_VALUES):
             if all(x == 0 for x in cfg.MODEL.DROPOUT_VALUES):
-                opts.extend(["MODEL.DROPOUT_VALUES", (0.0,)])
-            elif len(cfg.MODEL.DROPOUT_VALUES) != 1:
-                raise ValueError(
-                    "'MODEL.DROPOUT_VALUES' must be list of an unique number when 'MODEL.ARCHITECTURE' is one among ['vit', 'mae', 'unetr']"
-                )
-            elif not check_value(cfg.MODEL.DROPOUT_VALUES[0]):
+                opts.extend(["MODEL.DROPOUT_VALUES", (0.0,) * len(cfg.MODEL.FEATURE_MAPS)])
+            elif any(not check_value(x) for x in cfg.MODEL.DROPOUT_VALUES):
                 raise ValueError("'MODEL.DROPOUT_VALUES' not in [0, 1] range")
-        else:
-            if len(cfg.MODEL.FEATURE_MAPS) != len(cfg.MODEL.DROPOUT_VALUES):
-                if all(x == 0 for x in cfg.MODEL.DROPOUT_VALUES):
-                    opts.extend(["MODEL.DROPOUT_VALUES", (0.0,) * len(cfg.MODEL.FEATURE_MAPS)])
-                elif any(not check_value(x) for x in cfg.MODEL.DROPOUT_VALUES):
-                    raise ValueError("'MODEL.DROPOUT_VALUES' not in [0, 1] range")
-                else:
-                    raise ValueError("'MODEL.FEATURE_MAPS' and 'MODEL.DROPOUT_VALUES' lengths must be equal")
+            else:
+                raise ValueError("'MODEL.FEATURE_MAPS' and 'MODEL.DROPOUT_VALUES' lengths must be equal")
 
-        # Adjust Z_DOWN values to feature maps
-        if all(x == 0 for x in cfg.MODEL.Z_DOWN):
-            opts.extend(["MODEL.Z_DOWN", (2,) * (len(cfg.MODEL.FEATURE_MAPS) - 1)])
-        elif any([False for x in cfg.MODEL.Z_DOWN if x != 1 and x != 2]):
-            raise ValueError("'MODEL.Z_DOWN' needs to be 1 or 2")
-        else:
-            if model_arch == "multiresunet" and len(cfg.MODEL.Z_DOWN) != 4:
-                raise ValueError("'MODEL.Z_DOWN' length must be 4 when using 'multiresunet'")
-            elif len(cfg.MODEL.FEATURE_MAPS) - 1 != len(cfg.MODEL.Z_DOWN):
-                raise ValueError("'MODEL.FEATURE_MAPS' length minus one and 'MODEL.Z_DOWN' length must be equal")
+    # Adjust Z_DOWN values to feature maps
+    if all(x == 0 for x in cfg.MODEL.Z_DOWN):
+        opts.extend(["MODEL.Z_DOWN", (2,) * (len(cfg.MODEL.FEATURE_MAPS) - 1)])
+    elif any([False for x in cfg.MODEL.Z_DOWN if x != 1 and x != 2]):
+        raise ValueError("'MODEL.Z_DOWN' needs to be 1 or 2")
+    else:
+        if model_arch == "multiresunet" and len(cfg.MODEL.Z_DOWN) != 4:
+            raise ValueError("'MODEL.Z_DOWN' length must be 4 when using 'multiresunet'")
+        elif len(cfg.MODEL.FEATURE_MAPS) - 1 != len(cfg.MODEL.Z_DOWN):
+            raise ValueError("'MODEL.FEATURE_MAPS' length minus one and 'MODEL.Z_DOWN' length must be equal")
 
-        # Adjust ISOTROPY values to feature maps
-        if all(x == True for x in cfg.MODEL.ISOTROPY):
-            opts.extend(["MODEL.ISOTROPY", (True,) * (len(cfg.MODEL.FEATURE_MAPS))])
+    # Adjust ISOTROPY values to feature maps
+    if all(x == True for x in cfg.MODEL.ISOTROPY):
+        opts.extend(["MODEL.ISOTROPY", (True,) * (len(cfg.MODEL.FEATURE_MAPS))])
 
     # Correct UPSCALING for other workflows than SR
     if len(cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING) == 0:
@@ -1955,7 +1955,7 @@ def compare_configurations_without_model(actual_cfg, old_cfg, header_message="",
     vars_to_compare = [
         "PROBLEM.TYPE",
         "PROBLEM.NDIM",
-        # "DATA.PATCH_SIZE",
+        "DATA.PATCH_SIZE",
         "PROBLEM.INSTANCE_SEG.DATA_CHANNELS",
         "PROBLEM.SUPER_RESOLUTION.UPSCALING",
         "DATA.N_CLASSES",
@@ -1981,23 +1981,30 @@ def compare_configurations_without_model(actual_cfg, old_cfg, header_message="",
         current_value = get_attribute_recursive(actual_cfg, var_to_compare)
         old_value = get_attribute_recursive(old_cfg, var_to_compare)
         if current_value != old_value:
-            full_message = ""
+            error_message, warning_message = "", ""
             if var_to_compare == "DATA.N_CLASSES":
                 if not actual_cfg.MODEL.SKIP_UNMATCHED_LAYERS:
-                    full_message = header_message \
+                    error_message = header_message \
                         + f"The '{var_to_compare}' value of the compared configurations does not match: " \
                         + f"{current_value} (current configuration) vs {old_value} (from loaded configuration). " \
                         + "If you want to load all weights from the checkpoint that match in shape with your model " \
                         + "(e.g., to fine-tune the head), set 'MODEL.SKIP_UNMATCHED_LAYERS' to True."
             # Allow SSL pretrainings
             elif not (var_to_compare == "PROBLEM.TYPE" and old_value == "SELF_SUPERVISED"):
-                full_message = header_message \
+                error_message = header_message \
                     + f"The '{var_to_compare}' value of the compared configurations does not match: " \
                     + f"{current_value} (current configuration) vs {old_value} (from loaded configuration)"
-
-            if full_message != "":
-                raise ValueError( full_message )
-
+            elif var_to_compare == "DATA.PATCH_SIZE" and any([new for new, old in zip(current_value,old_value) if new < old]):
+                warning_message = \
+                    + f"WARNING: The 'DATA.PATCH_SIZE' value used for training the model that you are trying to load was {old_value}." \
+                    + f"It seems that one of the values in your 'DATA.PATCH_SIZE', which is {current_value}, is smaller so may be causing " \
+                    + "an error during model building process"
+                
+            if error_message != "":
+                raise ValueError( error_message )
+            if warning_message != "":
+                print( warning_message )
+            
     print("Configurations seem to be compatible. Continuing . . .")
 
 

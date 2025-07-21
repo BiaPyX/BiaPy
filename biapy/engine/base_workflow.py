@@ -684,10 +684,9 @@ class Base_Workflow(metaclass=ABCMeta):
                     update_dict_with_existing_keys(self.cfg["MODEL"], tmp_cfg["MODEL"])
 
                     # Check if the merge is coherent
-                    updated_config = self.cfg.clone()
-                    updated_config["MODEL"]["LOAD_MODEL_FROM_CHECKPOINT"] = False
                     self.cfg["MODEL"]["LOAD_CHECKPOINT"] = True
-                    check_configuration(updated_config, self.job_identifier)
+                    self.cfg["MODEL"]["LOAD_MODEL_FROM_CHECKPOINT"] = False
+                    check_configuration(self.cfg, self.job_identifier)
             (
                 self.model,
                 self.bmz_config["model_file"],

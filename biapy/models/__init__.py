@@ -325,21 +325,7 @@ def build_model(cfg: CN, output_channels: int, device: torch.device) -> Tuple[nn
             cfg.DATA.PATCH_SIZE[1],
             cfg.DATA.PATCH_SIZE[2],
         )
-    # if cfg.PROBLEM.NDIM == "2D":
-    # sample_size = (
-    #     1,
-    #     3,
-    #     512,
-    #     1024,
-    # )
-    # else:
-    #     sample_size = (
-    #         1,
-    #         cfg.DATA.PATCH_SIZE[3],
-    #         cfg.DATA.PATCH_SIZE[0],
-    #         cfg.DATA.PATCH_SIZE[1],
-    #         cfg.DATA.PATCH_SIZE[2],
-    #     )
+
     summary(
         model,
         input_size=sample_size,
@@ -347,8 +333,7 @@ def build_model(cfg: CN, output_channels: int, device: torch.device) -> Tuple[nn
         depth=10,
         device=device.type,
     )
-    # import pdb; pdb.set_trace()
-    # print(sum(p.numel() for p in model.parameters() if p.requires_grad))
+
     model_file += ":" + str(callable_model.__name__)
     model_name = model_file.rsplit(":", 1)[-1]
     return model, model_file, model_name, args, network_stride
