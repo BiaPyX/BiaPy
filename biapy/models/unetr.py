@@ -2,9 +2,8 @@ import math
 import torch
 import torch.nn as nn
 from timm.models.vision_transformer import Block
-from typing import List
 
-from biapy.models.blocks import DoubleConvBlock, ConvBlock
+from biapy.models.blocks import DoubleConvBlock, ConvBlock, ProjectionHead,  get_norm_2d,  get_norm_3d
 from biapy.models.tr_layers import PatchEmbed
 
 
@@ -67,6 +66,12 @@ class UNETR(nn.Module):
     k_size : int, optional
         Decoder convolutions' kernel size.
 
+    contrast : bool, optional
+        Whether to add contrastive learning head to the model. Default is ``False``.
+
+    contrast_proj_dim : int, optional
+        Dimension of the projection head for contrastive learning. Default is ``256``.
+
     Returns
     -------
     model : Torch model
@@ -89,6 +94,8 @@ class UNETR(nn.Module):
         normalization="bn",
         dropout=0.0,
         k_size=3,
+        contrast: bool = False,
+        contrast_proj_dim: int = 256,
     ):
         super().__init__()
 
@@ -105,7 +112,7 @@ class UNETR(nn.Module):
         self.output_channels = output_channels
         self.multihead = len(output_channels) == 2
         self.k_size = k_size
-
+        self.contrast = contrast
         if self.ndim == 3:
             conv = nn.Conv3d
             convtranspose = nn.ConvTranspose3d
@@ -116,6 +123,8 @@ class UNETR(nn.Module):
                 self.embed_dim,
             )
             self.permutation = (0, 4, 1, 2, 3)
+            norm_func = get_norm_3d
+            dropout = nn.Dropout3d
         else:
             conv = nn.Conv2d
             convtranspose = nn.ConvTranspose2d
@@ -125,6 +134,8 @@ class UNETR(nn.Module):
                 self.embed_dim,
             )
             self.permutation = (0, 3, 1, 2)
+            norm_func = get_norm_2d
+            dropout = nn.Dropout2d
 
         # ViT part
         self.patch_embed = PatchEmbed(
@@ -247,7 +258,19 @@ class UNETR(nn.Module):
             )
         )
 
-        self.last_block = conv(num_filters, output_channels[0], kernel_size=1, padding="same")
+        if self.contrast:
+            # extra added layers
+            self.last_block = nn.Sequential(
+                conv(num_filters, num_filters, kernel_size=3, stride=1, padding=1),
+                norm_func(normalization, num_filters),
+                dropout(0.10),
+                conv(num_filters, output_channels[0], kernel_size=1, stride=1, padding=0, bias=False),
+            )
+
+            self.proj_head = ProjectionHead(ndim=self.ndim, in_channels=num_filters, proj_dim=contrast_proj_dim)
+        else:
+            self.last_block = conv(num_filters, output_channels[0], kernel_size=1, padding="same")
+
         # Multi-head:
         #   Instance segmentation: instances + classification
         #   Detection: points + classification
@@ -262,7 +285,7 @@ class UNETR(nn.Module):
         x = x.permute(self.permutation).contiguous()
         return x
 
-    def forward(self, input) -> torch.Tensor | List[torch.Tensor]:
+    def forward(self, input) -> dict:
         # Vit part
         B = input.shape[0]
         x = self.patch_embed(input)
@@ -295,15 +318,25 @@ class UNETR(nn.Module):
 
         # UNETR output
         x = self.two_yellow_layers[-1](x)
-        class_head_out = torch.empty(())
-        if self.multihead and self.last_class_head:
-            class_head_out = self.last_class_head(x)
-        x = self.last_block(x)
 
-        if self.multihead:
-            return [x, class_head_out]
-        else:
-            return x
+        feats = x
+        # Regular output
+        out = self.last_block(feats)
+        out_dict = {
+            "pred": out,
+        }
+
+        # Contrastive learning head
+        if self.contrast:
+            out_dict["embed"] = self.proj_head(feats)
+
+        # Multi-head output
+        #   Instance segmentation: instances + classification
+        #   Detection: points + classification
+        if self.multihead and self.last_class_head:
+            out_dict["class"] = self.last_class_head(feats)
+
+        return out_dict
 
     def _init_weights(self, m):
         if isinstance(m, nn.Conv2d) or isinstance(m, nn.Conv3d):

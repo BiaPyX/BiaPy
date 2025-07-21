@@ -4,7 +4,7 @@ from typing import Callable, Optional
 
 class PatchEmbed(nn.Module):
     """
-    2D Image to Patch Embedding
+    Image to Patch Embedding
     """
 
     def __init__(

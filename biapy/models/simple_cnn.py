@@ -29,12 +29,10 @@ class simple_CNN(nn.Module):
 
         if self.ndim == 3:
             conv = nn.Conv3d
-            convtranspose = nn.ConvTranspose3d
             batchnorm_layer = nn.BatchNorm3d
             pool = nn.MaxPool3d
         else:
             conv = nn.Conv2d
-            convtranspose = nn.ConvTranspose2d
             batchnorm_layer = nn.BatchNorm2d
             pool = nn.MaxPool2d
 
@@ -105,8 +103,8 @@ class simple_CNN(nn.Module):
             nn.Softmax(dim=1),
         )
 
-    def forward(self, x):
+    def forward(self, x) -> dict:
         out = self.block1(x)
         out = self.block2(out)
         out = self.last_block(out)
-        return out
+        return {"pred": out}

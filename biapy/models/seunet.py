@@ -1,8 +1,6 @@
-import torch
 import torch.nn as nn
-from typing import List
 
-from biapy.models.blocks import DoubleConvBlock, UpBlock, ConvBlock
+from biapy.models.blocks import DoubleConvBlock, UpBlock, ConvBlock, ProjectionHead, get_norm_2d, get_norm_3d
 
 
 class SE_U_Net(nn.Module):
@@ -56,6 +54,12 @@ class SE_U_Net(nn.Module):
     larger_io : bool, optional
         Whether to use extra and larger kernels in the input and output layers.
 
+    contrast : bool, optional
+        Whether to add contrastive learning head to the model. Default is ``False``.
+
+    contrast_proj_dim : int, optional
+        Dimension of the projection head for contrastive learning. Default is ``256``.
+
     Returns
     -------
     model : Torch model
@@ -85,6 +89,8 @@ class SE_U_Net(nn.Module):
         upsampling_position="pre",
         isotropy=False,
         larger_io=True,
+        contrast: bool = False,
+        contrast_proj_dim: int = 256,
     ):
         super(SE_U_Net, self).__init__()
 
@@ -98,16 +104,21 @@ class SE_U_Net(nn.Module):
         self.z_down = z_down
         self.output_channels = output_channels
         self.multihead = len(output_channels) == 2
+        self.contrast = contrast
         if type(isotropy) == bool:
             isotropy = isotropy * len(feature_maps)
         if self.ndim == 3:
             conv = nn.Conv3d
             convtranspose = nn.ConvTranspose3d
             pooling = nn.MaxPool3d
+            norm_func = get_norm_3d
+            dropout = nn.Dropout3d
         else:
             conv = nn.Conv2d
             convtranspose = nn.ConvTranspose2d
             pooling = nn.MaxPool2d
+            norm_func = get_norm_2d
+            dropout = nn.Dropout2d
 
         # Super-resolution
         self.pre_upsampling = None
@@ -214,6 +225,7 @@ class SE_U_Net(nn.Module):
             )
         else:
             self.conv_out = None
+
         # Super-resolution
         self.post_upsampling = None
         if len(upsampling_factor) > 1 and upsampling_position == "post":
@@ -224,7 +236,19 @@ class SE_U_Net(nn.Module):
                 stride=upsampling_factor,
             )
 
-        self.last_block = conv(feature_maps[0], output_channels[0], kernel_size=1, padding="same")
+        if self.contrast:
+            # extra added layers
+            self.last_block = nn.Sequential(
+                conv(feature_maps[0], feature_maps[0], kernel_size=3, stride=1, padding=1),
+                norm_func(normalization, feature_maps[0]),
+                dropout(0.10),
+                conv(feature_maps[0], output_channels[0], kernel_size=1, stride=1, padding=0, bias=False),
+            )
+
+            self.proj_head = ProjectionHead(ndim=self.ndim, in_channels=feature_maps[0], proj_dim=contrast_proj_dim)
+        else:
+            self.last_block = conv(feature_maps[0], output_channels[0], kernel_size=1, padding="same")
+
         # Multi-head:
         #   Instance segmentation: instances + classification
         #   Detection: points + classification
@@ -234,7 +258,7 @@ class SE_U_Net(nn.Module):
 
         self.apply(self._init_weights)
 
-    def forward(self, x) -> torch.Tensor | List[torch.Tensor]:
+    def forward(self, x) -> dict:
         # Super-resolution
         if self.pre_upsampling:
             x = self.pre_upsampling(x)
@@ -262,20 +286,28 @@ class SE_U_Net(nn.Module):
         if self.conv_out:
             x = self.conv_out(x)
 
+        feats = x
         # Super-resolution
         if self.post_upsampling:
-            x = self.post_upsampling(x)
+            feats = self.post_upsampling(feats)
 
-        class_head_out = torch.empty(())
+        # Regular output
+        out = self.last_block(feats)
+        out_dict = {
+            "pred": out,
+        }
+
+        # Contrastive learning head
+        if self.contrast:
+            out_dict["embed"] = self.proj_head(feats)
+
+        # Multi-head output
+        #   Instance segmentation: instances + classification
+        #   Detection: points + classification
         if self.multihead and self.last_class_head:
-            class_head_out = self.last_class_head(x)
+            out_dict["class"] = self.last_class_head(feats)
 
-        x = self.last_block(x)
-
-        if self.multihead:
-            return [x, class_head_out]
-        else:
-            return x
+        return out_dict
 
     def _init_weights(self, m):
         if isinstance(m, nn.Conv2d) or isinstance(m, nn.Conv3d):

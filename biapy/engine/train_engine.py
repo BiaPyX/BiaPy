@@ -88,9 +88,9 @@ def train_one_epoch(
             memory_bank.dequeue_and_enqueue(
                 outputs['key'], targets.detach(),
             )
-            outputs = outputs["seg"]
         else:
-            loss = loss_function(outputs["pred"], targets)
+            loss = loss_function(outputs, targets)
+        if isinstance(outputs, dict):
             outputs = outputs["pred"]
 
         loss_value = loss.item()
@@ -179,9 +179,9 @@ def evaluate(
             }
 
             loss = loss_function(outputs, targets, with_embed=with_embed)
-            outputs = outputs["seg"]
         else:
             loss = loss_function(outputs, targets)
+        if isinstance(outputs, dict):
             outputs = outputs["pred"]
 
         # Calculate the metrics

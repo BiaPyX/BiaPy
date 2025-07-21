@@ -70,10 +70,10 @@ class wdsr(nn.Module):
             shuf.append(nn.PixelShuffle(scale))
         self.shuf = nn.Sequential(*shuf)
 
-    def forward(self, x):
+    def forward(self, x) -> dict:
         x = self.body(x) + self.skip(x)
         x = self.shuf(x)
-        return x
+        return {"pred": x}
 
 
 class Block(nn.Module):

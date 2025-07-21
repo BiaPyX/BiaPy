@@ -96,7 +96,7 @@ class rcan(nn.Module):
             )
         self.conv2 = conv(filters, num_channels, kernel_size=3, padding="same")
 
-    def forward(self, x):
+    def forward(self, x) -> dict:
         x = self.sf(x)
         residual = x
         x = self.rgs(x)
@@ -105,4 +105,4 @@ class rcan(nn.Module):
         if self.upscaling_layer:
             x = self.upscale(x)
         x = self.conv2(x)
-        return x
+        return {"pred": x}

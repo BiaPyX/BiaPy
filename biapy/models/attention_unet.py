@@ -1,6 +1,4 @@
-import torch
 import torch.nn as nn
-from typing import List
 
 from biapy.models.blocks import DoubleConvBlock, UpBlock, ProjectionHead, get_norm_2d, get_norm_3d
 

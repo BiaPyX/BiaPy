@@ -9,9 +9,8 @@ from torchmetrics.image import PeakSignalNoiseRatio, StructuralSimilarityIndexMe
 from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
 from torchmetrics.image.fid import FrechetInceptionDistance
 from torchmetrics.image.inception import InceptionScore
-from typing import Dict, Optional, Tuple, Any
+from typing import Dict, Optional
 from numpy.typing import NDArray
-from biapy.data.dataset import PatchCoords
 
 
 from biapy.data.data_2D_manipulation import (
@@ -224,9 +223,8 @@ class Self_supervised_Workflow(Base_Workflow):
         """
         Unravel MAE loss.
         """
-        # Targets not used because the loss has been already calculated
-        loss, pred, mask = output
-        return loss
+        # Targets not used because the loss has been already calculated 
+        return output["loss"]
 
     def metric_calculation(
         self,
@@ -258,9 +256,8 @@ class Self_supervised_Workflow(Base_Workflow):
             Value of the metrics for the given prediction.
         """
         if self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK.lower() == "masking":
-            _, _output, _ = output
             assert self.model_without_ddp
-            _output = self.model_without_ddp.unpatchify(_output)
+            _output = self.model_without_ddp.unpatchify(output)
         else:
             _output = output
 
@@ -324,7 +321,7 @@ class Self_supervised_Workflow(Base_Workflow):
         # with the original test image values and the unnormalized prediction
         if train and isinstance(_output, torch.Tensor) and isinstance(_targets, torch.Tensor):
             if self.cfg.DATA.NORMALIZATION.TYPE in ["div", "scale_range"]:
-                _output = torch.clamp(_output, min=0, max=1)
+                output = torch.clamp(output, min=0, max=1)
                 _targets = torch.clamp(_targets, min=0, max=1)
             elif self.cfg.DATA.NORMALIZATION.TYPE == "zero_mean_unit_variance":
                 _output = (_output - torch.min(_output)) / (torch.max(_output) - torch.min(_output) + 1e-8)
@@ -451,6 +448,7 @@ class Self_supervised_Workflow(Base_Workflow):
                         device=self.device,
                         pred_func=self.model_call_func,
                     )
+                p = p["pred"]
                 p = to_numpy_format(p, self.axes_order_back)
                 if "pred" not in locals():
                     pred = np.zeros((self.current_sample["X"].shape[0],) + p.shape[1:], dtype=self.dtype)
@@ -468,8 +466,8 @@ class Self_supervised_Workflow(Base_Workflow):
                     apply_act=False,
                 )
                 if self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
-                    loss, p, mask = p
                     p = self.apply_model_activations(p)
+                    p, mask = p["pred"], p["mask"]
                     p, m, pv = self.model.save_images(
                         to_pytorch_format(
                             self.current_sample["X"][k * self.cfg.TRAIN.BATCH_SIZE : top],
@@ -482,6 +480,7 @@ class Self_supervised_Workflow(Base_Workflow):
                     )
                 else:
                     p = self.apply_model_activations(p)
+                    p = p["pred"]
                     p = to_numpy_format(p, self.axes_order_back)
 
                 if "pred" not in locals():

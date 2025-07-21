@@ -627,12 +627,16 @@ class Base_Workflow(metaclass=ABCMeta):
             assert self.model
             p = self.model(in_img)
 
-            # Recover the original shape of the input, as not all the model return a prediction
-            # of the same size as the input image
-            if p["pred"].shape[2:] != in_img.shape[2:]:
-                p["pred"] = resize(p["pred"], in_img.shape, mode="bilinear")
-                if "class" in p:
-                    p["class"] = resize(p["class"], in_img.shape, mode="nearest")
+            if (
+                not (self.cfg.PROBLEM.TYPE == "SELF_SUPERVISED" and "mask" in p and self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK.lower() == "masking") 
+                and self.cfg.PROBLEM.TYPE != "CLASSIFICATION"
+            ):
+                # Recover the original shape of the input, as not all the model return a prediction
+                # of the same size as the input image
+                if p["pred"].shape[2:] != in_img.shape[2:]:
+                    p["pred"] = resize(p["pred"], in_img.shape, mode="bilinear")
+                    if "class" in p:
+                        p["class"] = resize(p["class"], in_img.shape, mode="nearest")
 
             if apply_act:
                 p = self.apply_model_activations(p, training=is_train)
@@ -1115,10 +1119,12 @@ class Base_Workflow(metaclass=ABCMeta):
                         prediction[:, int(key), ...] = act(prediction[:, int(key), ...])
             return prediction
 
-        pred["pred"] = __apply_acts(pred["pred"], self.activations[0])
-        if "class" in pred:
-            pred["class"] = __apply_acts(pred["class"], self.activations[1])
-
+        if isinstance(pred, dict):
+            pred["pred"] = __apply_acts(pred["pred"], self.activations[0])
+            if "class" in pred:
+                pred["class"] = __apply_acts(pred["class"], self.activations[1])
+        else:
+            pred = __apply_acts(pred, self.activations[0])
         return pred
 
     @torch.no_grad()
@@ -1556,11 +1562,10 @@ class Base_Workflow(metaclass=ABCMeta):
         pred = self.model(torch.from_numpy(self.bmz_config["test_input_norm"]).to(self.device))
 
         # MAE
-        if isinstance(pred, tuple):
-            _, pred, mask = pred
+        if isinstance(pred, dict) and "mask" in pred:
             pred = self.apply_model_activations(pred)
-            if isinstance(pred, dict):
-                pred = pred["pred"]
+            mask = pred["mask"]
+            pred = pred["pred"]
             pred, _, _ = self.model_without_ddp.save_images(
                 torch.from_numpy(self.bmz_config["test_input_norm"]).to(self.device),
                 pred,
@@ -1571,10 +1576,11 @@ class Base_Workflow(metaclass=ABCMeta):
         else:
             pred = self.apply_model_activations(pred)
             # Multi-head concatenation
-            if "class" in pred:
-                pred = torch.cat((pred["pred"], torch.argmax(pred["class"], dim=1).unsqueeze(1)), dim=1)
-            else:
-                pred = pred["pred"]
+            if isinstance(pred, dict):
+                if "class" in pred:
+                    pred = torch.cat((pred["pred"], torch.argmax(pred["class"], dim=1).unsqueeze(1)), dim=1)
+                else:
+                    pred = pred["pred"]
 
         # Save output
         _prepare_bmz_sample("test_output", pred.clone().cpu().detach().numpy().astype(np.float32), apply_norm=False)

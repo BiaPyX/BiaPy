@@ -4,6 +4,8 @@ import torch
 import torch.nn as nn
 from typing import List
 
+from biapy.models.blocks import get_norm_2d, get_norm_3d, ProjectionHead
+
 
 class Conv_batchnorm(torch.nn.Module):
     """
@@ -277,6 +279,12 @@ class MultiResUnet(torch.nn.Module):
     upsampling_position : str, optional
         Whether the upsampling is going to be made previously (``pre`` option) to the model
         or after the model (``post`` option).
+    
+    contrast : bool, optional
+        Whether to add contrastive learning head to the model. Default is ``False``.
+
+    contrast_proj_dim : int, optional
+        Dimension of the projection head for contrastive learning. Default is ``256``.
     """
 
     def __init__(
@@ -288,12 +296,15 @@ class MultiResUnet(torch.nn.Module):
         output_channels=[1],
         upsampling_factor=(),
         upsampling_position="pre",
+        contrast: bool = False,
+        contrast_proj_dim: int = 256,
     ):
         super().__init__()
         self.ndim = ndim
         self.alpha = alpha
         self.output_channels = output_channels
         self.multihead = len(output_channels) == 2
+        self.contrast = contrast
         if len(output_channels) == 0:
             raise ValueError("'output_channels' needs to has at least one value")
         if len(output_channels) != 1 and len(output_channels) != 2:
@@ -304,11 +315,15 @@ class MultiResUnet(torch.nn.Module):
             convtranspose = nn.ConvTranspose3d
             batchnorm_layer = nn.BatchNorm3d
             pooling = nn.MaxPool3d
+            norm_func = get_norm_3d
+            dropout = nn.Dropout3d
         else:
             conv = nn.Conv2d
             convtranspose = nn.ConvTranspose2d
             batchnorm_layer = nn.BatchNorm2d
             pooling = nn.MaxPool2d
+            norm_func = get_norm_2d
+            dropout = nn.Dropout2d
 
         # Super-resolution
         self.pre_upsampling = None
@@ -397,14 +412,18 @@ class MultiResUnet(torch.nn.Module):
                 stride=upsampling_factor,
             )
 
-        self.last_block = Conv_batchnorm(
-            conv,
-            batchnorm_layer,
-            self.in_filters9,
-            output_channels[0],
-            kernel_size=1,
-            activation="None",
-        )
+        if self.contrast:
+            # extra added layers
+            self.last_block = nn.Sequential(
+                conv(self.in_filters9, self.in_filters9, kernel_size=3, stride=1, padding=1),
+                batchnorm_layer,
+                dropout(0.10),
+                conv(self.in_filters9, output_channels[0], kernel_size=1, stride=1, padding=0, bias=False),
+            )
+
+            self.proj_head = ProjectionHead(ndim=self.ndim, in_channels=self.in_filters9, proj_dim=contrast_proj_dim)
+        else:
+            self.last_block = conv(self.in_filters9, output_channels[0], kernel_size=1, padding="same")
 
         # Multi-head:
         #   Instance segmentation: instances + classification
@@ -413,7 +432,7 @@ class MultiResUnet(torch.nn.Module):
         if self.multihead:
             self.last_class_head = conv(self.in_filters9, output_channels[1], kernel_size=1, padding="same")
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor | List[torch.Tensor]:
+    def forward(self, x: torch.Tensor) -> dict:
         # Super-resolution
         if self.pre_upsampling:
             x = self.pre_upsampling(x)
@@ -448,17 +467,26 @@ class MultiResUnet(torch.nn.Module):
         up9 = torch.cat([self.upsample9(x_multires8), x_multires1], dim=1)
         x_multires9 = self.multiresblock9(up9)
 
+        feats = x_multires9
         # Super-resolution
         if self.post_upsampling:
-            x_multires9 = self.post_upsampling(x_multires9)
+            feats = self.post_upsampling(feats)
 
-        class_head_out = torch.empty(())
+        # Regular output
+        out = self.last_block(feats)
+        out_dict = {
+            "pred": out,
+        }
+
+        # Contrastive learning head
+        if self.contrast:
+            out_dict["embed"] = self.proj_head(feats)
+
+        # Multi-head output
+        #   Instance segmentation: instances + classification
+        #   Detection: points + classification
         if self.multihead and self.last_class_head:
-            class_head_out = self.last_class_head(x_multires9)
+            out_dict["class"] = self.last_class_head(feats)
 
-        out = self.last_block(x_multires9)
-
-        if self.multihead:
-            return [out, class_head_out]
-        else:
-            return out
+        return out_dict
+    
