@@ -22,8 +22,7 @@ from biapy.data.data_3D_manipulation import (
 from biapy.data.data_manipulation import save_tif
 from biapy.utils.misc import to_pytorch_format, MetricLogger
 from biapy.engine.base_workflow import Base_Workflow
-from biapy.engine.metrics import SSIM_loss, W_MAE_SSIM_loss, W_MSE_SSIM_loss
-from biapy.data.dataset import PatchCoords
+from biapy.engine.metrics import SSIM_loss, W_MAE_SSIM_loss, W_MSE_SSIM_loss, loss_encapsulation
 
 
 class Super_resolution_Workflow(Base_Workflow):
@@ -172,9 +171,9 @@ class Super_resolution_Workflow(Base_Workflow):
                 self.test_metric_names.append("LPIPS")
 
             if self.cfg.LOSS.TYPE == "MSE":
-                self.loss = torch.nn.MSELoss().to(self.device)
+                self.loss = loss_encapsulation(torch.nn.MSELoss().to(self.device))
             elif self.cfg.LOSS.TYPE == "MAE":
-                self.loss = torch.nn.L1Loss().to(self.device)
+                self.loss = loss_encapsulation(torch.nn.L1Loss().to(self.device))
             elif self.cfg.LOSS.TYPE == "SSIM":
                 self.loss = SSIM_loss(data_range=data_range, device=self.device)
             elif self.cfg.LOSS.TYPE == "W_MAE_SSIM":
@@ -223,6 +222,8 @@ class Super_resolution_Workflow(Base_Workflow):
         out_metrics : dict
             Value of the metrics for the given prediction.
         """
+        if isinstance(output, dict):
+            output = output["pred"]
         if isinstance(output, np.ndarray):
             _output = to_pytorch_format(
                 output.copy(),

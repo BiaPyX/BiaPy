@@ -90,8 +90,6 @@ def train_one_epoch(
             )
         else:
             loss = loss_function(outputs, targets)
-        if isinstance(outputs, dict):
-            outputs = outputs["pred"]
 
         loss_value = loss.item()
         if not math.isfinite(loss_value):
@@ -181,8 +179,6 @@ def evaluate(
             loss = loss_function(outputs, targets, with_embed=with_embed)
         else:
             loss = loss_function(outputs, targets)
-        if isinstance(outputs, dict):
-            outputs = outputs["pred"]
 
         # Calculate the metrics
         metric_function(outputs, targets, metric_logger=metric_logger)

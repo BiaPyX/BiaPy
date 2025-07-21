@@ -18,8 +18,7 @@ from biapy.data.data_3D_manipulation import (
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.data.data_manipulation import save_tif
 from biapy.utils.misc import to_pytorch_format, is_main_process, to_pytorch_format, MetricLogger
-from biapy.engine.metrics import n2v_loss_mse
-from biapy.data.dataset import PatchCoords
+from biapy.engine.metrics import n2v_loss_mse, loss_encapsulation
 
 
 class Denoising_Workflow(Base_Workflow):
@@ -137,7 +136,7 @@ class Denoising_Workflow(Base_Workflow):
 
         # print("Overriding 'LOSS.TYPE' to set it to N2V loss (masked MSE)")
         if self.cfg.LOSS.TYPE == "MSE":
-            self.loss = n2v_loss_mse
+            self.loss = loss_encapsulation(n2v_loss_mse)
 
         super().define_metrics()
 
@@ -170,6 +169,8 @@ class Denoising_Workflow(Base_Workflow):
         out_metrics : dict
             Value of the metrics for the given prediction.
         """
+        if isinstance(output, dict):
+            output = output["pred"]
         if isinstance(output, np.ndarray):
             _output = to_pytorch_format(
                 output.copy(),

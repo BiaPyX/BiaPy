@@ -36,7 +36,7 @@ from biapy.utils.misc import (
 )
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.data.pre_processing import create_ssl_source_data_masks
-from biapy.engine.metrics import SSIM_loss, W_MAE_SSIM_loss, W_MSE_SSIM_loss
+from biapy.engine.metrics import SSIM_loss, W_MAE_SSIM_loss, W_MSE_SSIM_loss, loss_encapsulation
 
 
 class Self_supervised_Workflow(Base_Workflow):
@@ -197,9 +197,9 @@ class Self_supervised_Workflow(Base_Workflow):
             self.loss = self.MaskedAutoencoderViT_loss_wrapper
         else:
             if self.cfg.LOSS.TYPE == "MSE":
-                self.loss = torch.nn.MSELoss().to(self.device)
+                self.loss = loss_encapsulation(torch.nn.MSELoss().to(self.device))
             elif self.cfg.LOSS.TYPE == "MAE":
-                self.loss = torch.nn.L1Loss().to(self.device)
+                self.loss = loss_encapsulation(torch.nn.L1Loss().to(self.device))
             elif self.cfg.LOSS.TYPE == "SSIM":
                 self.loss = SSIM_loss(data_range=data_range, device=self.device)
             elif self.cfg.LOSS.TYPE == "W_MAE_SSIM":
@@ -260,6 +260,9 @@ class Self_supervised_Workflow(Base_Workflow):
             _output = self.model_without_ddp.unpatchify(output)
         else:
             _output = output
+        
+        if isinstance(_output, dict):
+            _output = _output["pred"]
 
         if isinstance(_output, np.ndarray):
             _output = to_pytorch_format(

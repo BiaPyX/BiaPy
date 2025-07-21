@@ -13,7 +13,7 @@ from biapy.engine.base_workflow import Base_Workflow
 from biapy.data.pre_processing import preprocess_data
 from biapy.data.data_manipulation import load_and_prepare_train_data_cls, load_and_prepare_cls_test_data
 from biapy.utils.misc import is_main_process, MetricLogger
-from biapy.data.dataset import PatchCoords
+from biapy.engine.metrics import loss_encapsulation
 
 
 class Classification_Workflow(Base_Workflow):
@@ -130,7 +130,7 @@ class Classification_Workflow(Base_Workflow):
         self.test_metric_names.append("Confusion matrix")
 
         if self.cfg.LOSS.TYPE == "CE":
-            self.loss = torch.nn.CrossEntropyLoss()
+            self.loss = loss_encapsulation(torch.nn.CrossEntropyLoss())
 
         super().define_metrics()
 
@@ -169,6 +169,8 @@ class Classification_Workflow(Base_Workflow):
 
         with torch.no_grad():
             for i, metric in enumerate(list_to_use):
+                if isinstance(output, dict):
+                    output = output["pred"]
                 val = metric(output, targets)
                 if torch.is_tensor(val):
                     val = val.item() if not torch.isnan(val) else 0
@@ -301,7 +303,10 @@ class Classification_Workflow(Base_Workflow):
                 if (k + 1) * self.cfg.TRAIN.BATCH_SIZE < self.current_sample["X"].shape[0]
                 else self.current_sample["X"].shape[0]
             )
-            p = self.model_call_func(self.current_sample["X"][k * self.cfg.TRAIN.BATCH_SIZE : top]).cpu().numpy()
+            p = self.model_call_func(self.current_sample["X"][k * self.cfg.TRAIN.BATCH_SIZE : top])
+            if isinstance(p, dict):
+                p = p["pred"]
+            p = p.cpu().numpy()
             p = np.argmax(p, axis=1)
             self.all_pred.append(p)
 

@@ -180,6 +180,9 @@ class jaccard_index:
         jaccard : torch.Tensor
             Jaccard index value.
         """
+        if isinstance(y_pred, dict):
+            y_pred = y_pred["pred"]
+
         # For those cases that are predicting 2 channels (binary case) we adapt the GT to match.
         # It's supposed to have 0 value as background and 1 as foreground
         if self.model_source == "bmz" and self.num_classes <= 2 and y_pred.shape[1] != y_true.shape[1]:
@@ -271,15 +274,18 @@ class multiple_metrics:
         dict : dict
             Metrics and their values.
         """
-        # Check multi-head
-        if isinstance(y_pred, list):
-            num_channels = y_pred[0].shape[1] + 1
-            _y_pred = y_pred[0]
-            _y_pred_class = torch.argmax(y_pred[1], dim=1)
+        if isinstance(y_pred, dict):
+            _y_pred = y_pred["pred"]
         else:
-            num_channels = y_pred.shape[1]
             _y_pred = y_pred
-            _y_pred_class = y_pred[:, -1]
+        num_channels = _y_pred.shape[1]
+
+        # Check multi-head
+        if "class" in y_pred:
+            num_channels +=  1
+            _y_pred_class = torch.argmax(y_pred["class"], dim=1)
+        else:            
+            _y_pred_class = _y_pred[:, -1]
 
         if _y_pred.shape[-self.ndim :] != y_true.shape[-self.ndim :]:
             y_true = scale_target(y_true, _y_pred.shape[-self.ndim :])
@@ -324,7 +330,19 @@ def scale_target(targets_: torch.Tensor, scaled_size: Tuple[int, ...]) -> torch.
     targets = F.interpolate(targets, size=scaled_size, mode="nearest")
     return targets.long()
 
+class loss_encapsulation(nn.Module):
+    """
+    Just a wrapper to any other common loss deataching the prediction from the dict given by the model.
+    """
+    def __init__(self, loss):
+        super(loss_encapsulation, self).__init__()
+        self.loss = loss 
 
+    def forward(self, inputs, targets):
+        if isinstance(inputs, dict):
+            inputs = inputs["pred"]
+        return self.loss(inputs, targets)
+       
 class CrossEntropyLoss_wrapper:
     def __init__(
         self,
@@ -440,6 +458,7 @@ class DiceLoss(nn.Module):
         super(DiceLoss, self).__init__()
 
     def forward(self, inputs, targets, smooth=1):
+        inputs = inputs["pred"]
         inputs = F.sigmoid(inputs)
 
         # flatten label and prediction tensors
@@ -463,6 +482,7 @@ class DiceBCELoss(nn.Module):
         self.w_bce = w_bce
 
     def forward(self, inputs, targets, smooth=1):
+        inputs = inputs["pred"]
         inputs = F.sigmoid(inputs)
 
         # flatten label and prediction tensors
@@ -963,13 +983,11 @@ class instance_segmentation_loss:
         loss : torch.Tensor
             Loss value.
         """
-        if isinstance(y_pred, list):
-            _y_pred = y_pred[0]
-            _y_pred_class = y_pred[1]
+        _y_pred = y_pred["pred"]
+        extra_channels = 0
+        if "class" in y_pred:
+            _y_pred_class = y_pred["class"]
             extra_channels = 1
-        else:
-            _y_pred = y_pred
-            extra_channels = 0
 
         if self.instance_type == "regular" and "D" in self.out_channels and self.out_channels != "Dv2":
             if self.mask_distance_channel:
@@ -1473,6 +1491,7 @@ class SSIM_loss(torch.nn.Module):
         self.ssim = StructuralSimilarityIndexMeasure(data_range=data_range).to(device, non_blocking=True)
 
     def forward(self, input, target):
+        input = input["pred"]
         return 1 - self.ssim(input, target)
 
 
@@ -1485,6 +1504,7 @@ class W_MAE_SSIM_loss(torch.nn.Module):
         self.ssim = StructuralSimilarityIndexMeasure(data_range=data_range).to(device, non_blocking=True)
 
     def forward(self, input, target):
+        input = input["pred"]
         return (self.mse(input, target) * self.w_mae) + ((1 - self.ssim(input, target)) * self.w_ssim)
 
 
@@ -1497,10 +1517,12 @@ class W_MSE_SSIM_loss(torch.nn.Module):
         self.ssim = StructuralSimilarityIndexMeasure(data_range=data_range).to(device, non_blocking=True)
 
     def forward(self, input, target):
+        input = input["pred"]
         return (self.mse(input, target) * self.w_mse) + ((1 - self.ssim(input, target)) * self.w_ssim)
 
 
 def n2v_loss_mse(y_pred, y_true):
+    y_pred = y_pred["pred"]
     target = y_true[:, 0].squeeze()
     mask = y_true[:, 1].squeeze()
     loss = torch.sum(torch.square(target - y_pred.squeeze() * mask)) / torch.sum(mask)
@@ -1531,4 +1553,5 @@ class SSIM_wrapper:
         loss : torch.Tensor
             Loss value.
         """
+        y_pred = y_pred["pred"]
         return 1 - self.loss(y_pred, y_true)
