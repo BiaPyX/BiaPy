@@ -1510,7 +1510,7 @@ class W_MAE_SSIM_loss(torch.nn.Module):
         self.ssim = StructuralSimilarityIndexMeasure(data_range=data_range).to(device, non_blocking=True)
 
     def forward(self, input, target):
-        if isinstance(inout, dict):
+        if isinstance(input, dict):
             input = input["pred"]
         return (self.mse(input, target) * self.w_mae) + ((1 - self.ssim(input, target)) * self.w_ssim)
 
