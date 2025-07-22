@@ -1,4 +1,4 @@
-# CartoCell training workflow compatible with BiaPy version 3.6.1
+# CartoCell training workflow compatible with BiaPy version 3.6.2
 
 SYSTEM:
     NUM_CPUS: -1
