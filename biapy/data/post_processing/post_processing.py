@@ -1915,7 +1915,7 @@ def measure_morphological_props_and_filter(
     centers = np.zeros((total_labels, 3 if image3d else 2), dtype=np.uint16)
     circularities = np.zeros(total_labels, dtype=np.float32)
     perimeters = np.zeros(total_labels, dtype=np.uint32)
-    if image3d:
+    if not image3d:
         elongations = np.zeros(total_labels, dtype=np.float32)
 
     def surface_area(binary_image):
@@ -1927,7 +1927,7 @@ def measure_morphological_props_and_filter(
         except:
             surface_area = 0
         return surface_area
-    import pdb; pdb.set_trace()
+
     # Area, diameter, center, circularity (if 2D), elongation (if 2D) and perimeter (if 2D) calculation over the whole image
     lprops = ["label", "bbox", "perimeter"] if not image3d else ["label", "bbox", "surface_area"]
     props = regionprops_table(img, properties=(lprops), extra_properties=(surface_area,))
@@ -2045,7 +2045,7 @@ def measure_morphological_props_and_filter(
         "comment": comment,
         "conditions": conditions,
     }
-    if image3d:
+    if not image3d:
         d_result["elongations"]= elongations
 
     print(
