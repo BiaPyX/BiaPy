@@ -1,3 +1,10 @@
+"""Module for 3D data manipulation utilities.
+
+This module provides functions to process and manipulate 3D data volumes, including:
+- Cropping/merging with overlap
+- Padding and resizing
+- Efficient loading of large 3D files
+"""
 import os
 import math
 import h5py
@@ -42,8 +49,7 @@ def load_3D_efficient_files(
         Shape of the train subvolumes to create. E.g. ``(z, y, x, channels)``.
 
     overlap : Tuple of 3 floats, optional
-        Amount of minimum overlap on x, y and z dimensions. The values must be on range ``[0, 1)``, that is, ``0%``
-        or ``99%`` of overlap. E. g. ``(z, y, x)``.
+        Amount of minimum overlap on x, y and z dimensions. The values must be on range ``[0, 1)``, that is, ``0%`` or ``99%`` of overlap. E. g. ``(z, y, x)``.
 
     padding : Tuple of ints, optional
         Size of padding to be added on each axis ``(z, y, x)``. E.g. ``(24, 24, 24)``.
@@ -149,7 +155,7 @@ def load_img_part_from_efficient_file(
     filepath: str, patch_coords: PatchCoords, data_axes_order: str = "ZYXC", data_path: Optional[str] = None
 ):
     """
-    Loads from ``filepath`` the patch determined by ``patch_coords``.
+    Load from ``filepath`` the patch determined by ``patch_coords``.
 
     Parameters
     ----------
@@ -189,7 +195,7 @@ def extract_patch_from_efficient_file(
     data_axes_order: str = "ZYXC",
 ) -> NDArray:
     """
-    Loads from ``filepath`` the patch determined by ``patch_coords``.
+    Load from ``filepath`` the patch determined by ``patch_coords``.
 
     Parameters
     ----------
@@ -250,7 +256,7 @@ def insert_patch_in_efficient_file(
     mode="replace",
 ):
     """
-    Loads from ``filepath`` the patch determined by ``patch_coords``.
+    Load from ``filepath`` the patch determined by ``patch_coords``.
 
     Parameters
     ----------
@@ -404,7 +410,6 @@ def crop_3D_data_with_overlap(
         X_train, Y_train = crop_3D_data_with_overlap(
              X_train, (80, 80, 80, 1), data_mask=Y_train, overlap=(0.5,0.5,0.5), padding=(64,64,64))
     """
-
     if verbose:
         print("### 3D-OV-CROP ###")
         print("Cropping {} images into {} with overlapping . . .".format(data.shape, vol_shape))
