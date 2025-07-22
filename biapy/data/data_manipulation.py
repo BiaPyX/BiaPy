@@ -1,3 +1,44 @@
+"""
+Data Manipulation Module for BiaPy.
+
+This module provides a collection of functions for loading, processing, and manipulating 
+biological image data for deep learning applications. It supports both 2D and 3D data 
+formats, including common file types like TIFF, HDF5, Zarr, and NumPy arrays.
+
+Key Functionalities:
+- Loading training, validation, and test data from various formats
+- Data preprocessing and normalization
+- Image cropping and patching with overlap
+- Data filtering based on various properties
+- Cross-validation and train-test splitting
+- Data augmentation and shape manipulation
+- Format conversion (e.g., to one-hot encoding)
+- Data saving in multiple formats
+
+The module supports:
+- Both 2D and 3D image data
+- Multiple input formats (TIFF, HDF5, Zarr, NumPy arrays)
+- Classification and segmentation workflows
+- Memory-efficient loading of large datasets
+- Parallel processing capabilities
+- Data validation and consistency checks
+
+Main Classes and Functions:
+- load_and_prepare_train_data(): Main function for loading training data
+- load_and_prepare_test_data(): Function for loading test data
+- load_and_prepare_cls_test_data(): For classification test data
+- samples_from_image_list(): Creates dataset from image list
+- samples_from_zarr(): Handles Zarr/HDF5 datasets
+- filter_samples_by_properties(): Filters data based on conditions
+- img_to_onehot_encoding(): Converts masks to one-hot format
+- save_tif(), save_npy_files(): Data saving utilities
+
+Typical Workflow:
+1. Load data using one of the load_and_prepare_* functions
+2. Apply preprocessing/normalization
+3. Filter or augment data as needed
+4. Use in training or save processed data
+"""
 import os
 import h5py
 import torch
@@ -946,7 +987,6 @@ def load_and_prepare_test_data(
     test_filenames : list of str
         List of test filenames.
     """
-
     print("### LOAD ###")
 
     sample_list = []
@@ -1097,7 +1137,6 @@ def load_and_prepare_cls_test_data(
     test_filenames : list of str
         List of test filenames.
     """
-
     print("### LOAD ###")
 
     X_test = []
@@ -2161,6 +2200,7 @@ def samples_from_class_list(
 ) -> BiaPyDataset:
     """
     Create dataset samples from the given path taking into account that each subfolder represents a class.
+
     This function does not load the data.
 
     Parameters
@@ -2306,9 +2346,9 @@ def filter_samples_by_properties(
     save_filtered_images_num: int = 3,
 ):
     """
-    Filter samples from ``x_dataset`` using defined conditions. The filtering will be done using the images each sample is extracted
-    from. However, if ``zarr_data_info`` is provided the function will assume that Zarr/h5 files are provided, so the filtering will be
-    performed sample by sample.
+    Filter samples from ``x_dataset`` using defined conditions.
+    
+    The filtering will be done using the images each sample is extracted from. However, if ``zarr_data_info`` is provided the function will assume that Zarr/h5 files are provided, so the filtering will be performed sample by sample.
 
     Parameters
     ----------
@@ -2825,8 +2865,10 @@ def load_images_to_dataset(
     zarr_data_information: Optional[Dict] = None,
 ):
     """
-    Load images into the ``dataset``: creating ``"img"`` key. The process done faster
-    if the samples extracted from the same image are in continuous positions within the list.
+    Load images into the ``dataset``: creating ``"img"`` key.
+    
+    The process done faster if the samples extracted from the same
+    image are in continuous positions within the list.
 
     Parameters
     ----------
@@ -3103,7 +3145,7 @@ def extract_patch_within_image(img: NDArray, coords: PatchCoords, is_3d=False) -
 
 def img_to_onehot_encoding(img: NDArray, num_classes: int = 2) -> NDArray:
     """
-    Converts image given into one-hot encode format.
+    Convert image given into one-hot encode format.
 
     The opposite function is :func:`~onehot_encoding_to_img`.
 
@@ -3138,7 +3180,7 @@ def img_to_onehot_encoding(img: NDArray, num_classes: int = 2) -> NDArray:
 
 def onehot_encoding_to_img(encoded_image: NDArray) -> NDArray:
     """
-    Converts one-hot encode image into an image with jus tone channel and all the classes represented by an integer.
+    Convert one-hot encode image into an image with jus tone channel and all the classes represented by an integer.
 
     The opposite function is :func:`~img_to_onehot_encoding`.
 
@@ -3251,8 +3293,9 @@ def read_img_as_ndarray(path: str, is_3d: bool = False) -> NDArray:
 
 def imread(path: str) -> NDArray | Tuple[NDArray, Optional[str]]:
     """
-    Read an image from a given path. In the past from ``skimage.io import imread``
-    was used but now it is deprecated.
+    Read an image from a given path.
+
+    In the past from ``skimage.io import imread`` was used but now it is deprecated.
 
     Parameters
     ----------
@@ -3276,8 +3319,9 @@ def imread(path: str) -> NDArray | Tuple[NDArray, Optional[str]]:
 
 def imwrite(path: str, image: NDArray):
     """
-    Writes ``data`` in the given ``path``. In the past from ``skimage.io import imsave``
-    was used but now it is deprecated.
+    Write ``data`` in the given ``path``.
+    
+    In the past from ``skimage.io import imsave`` was used but now it is deprecated.
 
     Parameters
     ----------
@@ -3310,7 +3354,25 @@ def check_value(
     value_range: Tuple[int | float, int | float] = (0, 1),
 ) -> bool:
     """
-    Checks if a value is within a range
+    Check whether a value or a collection of values falls within a specified range.
+
+    This function supports individual values (int, float), lists or tuples of values,
+    and NumPy arrays. If `value` is a list or tuple, all elements must fall within
+    the specified `value_range`. For NumPy arrays, both the minimum and maximum
+    values of the array must be within the range.
+
+    Parameters
+    ----------
+    value : int, float, list, tuple or np.ndarray
+        The value or collection of values to check.
+    value_range : tuple of (int or float), optional
+        A (min, max) tuple specifying the inclusive range of valid values.
+        Default is (0, 1).
+
+    Returns
+    -------
+    bool
+        True if all values are within the specified range; False otherwise.
     """
     if isinstance(value, list) or isinstance(value, tuple):
         for i in range(len(value)):
@@ -3332,6 +3394,33 @@ def check_value(
 
 
 def data_range(x: NDArray) -> str:
+    """
+    Determine the value range of a NumPy array commonly used in image data.
+
+    This function checks whether the input array falls within one of the standard
+    intensity ranges used in image processing: [0, 1], [0, 255], or [0, 65535],
+    corresponding to normalized float, 8-bit, or 16-bit unsigned integer images,
+    respectively.
+
+    Parameters
+    ----------
+    x : np.ndarray
+        The input array whose range is to be determined.
+
+    Returns
+    -------
+    str
+        A string indicating the value range:
+        - "01 range" for values in [0, 1]
+        - "uint8 range" for values in [0, 255]
+        - "uint16 range" for values in [0, 65535]
+        - "none_range" if values fall outside these common ranges
+
+    Raises
+    ------
+    ValueError
+        If the input is not a NumPy array.
+    """
     if not isinstance(x, np.ndarray):
         raise ValueError("Input array of type {} and not numpy array".format(type(x)))
     if check_value(x, (0, 1)):
@@ -3346,8 +3435,9 @@ def data_range(x: NDArray) -> str:
 
 def check_masks(path: str, n_classes: int = 2, is_3d: bool = False):
     """
-    Check whether the data masks have the correct labels inspection a few random images of the given path. If the
-    function gives no error one should assume that the masks are correct.
+    Check whether the data masks have the correct labels inspection a few random images of the given path.
+    
+    If the function gives no error one should assume that the masks are correct.
 
     Parameters
     ----------
@@ -3401,7 +3491,7 @@ def check_masks(path: str, n_classes: int = 2, is_3d: bool = False):
 
 def shape_mismatch_message(X_data: BiaPyDataset, Y_data: BiaPyDataset) -> str:
     """
-    Builds an error message with the shape mismatch between two provided data ``X_data`` and ``Y_data``.
+    Build an error message with the shape mismatch between two provided data ``X_data`` and ``Y_data``.
 
     Parameters
     ----------
@@ -3439,9 +3529,12 @@ def shape_mismatch_message(X_data: BiaPyDataset, Y_data: BiaPyDataset) -> str:
 
 def save_tif(X: NDArray, data_dir: str, filenames: Optional[List[str]] = None, verbose: bool = True):
     """
-    Save images in the given directory. If the input file has a different dtype than np.uint8, np.uint16,
-    np.float32 it is casted into np.float32 automatically. This is done because if not the axes are not
-    correctly set when opening resulting images in Fiji/ImageJ.
+    Save images in the given directory.
+
+    If the input file has a different dtype than np.uint8, np.uint16,
+    np.float32 it is casted into np.float32 automatically. This is done
+    because if not the axes are not correctly set when opening resulting
+    images in Fiji/ImageJ.
 
     Parameters
     ----------
@@ -3458,7 +3551,6 @@ def save_tif(X: NDArray, data_dir: str, filenames: Optional[List[str]] = None, v
     verbose : bool, optional
          To print saving information.
     """
-
     if verbose:
         s = X.shape if not isinstance(X, list) else X[0].shape
         print("Saving {} data as .tif in folder: {}".format(s, data_dir))
@@ -3533,7 +3625,6 @@ def save_tif_pair_discard(
     verbose : bool, optional
          To print saving information.
     """
-
     if verbose:
         s = X.shape if not isinstance(X, list) else X[0].shape
         print("Saving {} data as .tif in folder: {}".format(s, data_dir))
@@ -3587,7 +3678,6 @@ def save_npy_files(X: NDArray, data_dir: str, filenames: Optional[List[str]] = N
     verbose : bool, optional
          To print saving information.
     """
-
     if verbose:
         s = X.shape if not isinstance(X, list) else X[0].shape
         print("Saving {} data as .npy in folder: {}".format(s, data_dir))
@@ -3621,7 +3711,9 @@ def reduce_dtype(
     eps: float = 1e-6,
 ) -> NDArray:
     """
-    Reduce the data type of the given input to the selected range using the formula:
+    Reduce the data type of the given input to the selected range.
+    
+    It uses the following formula:
     ``results = ((x - x_min)/(x_max - x_min)) * (out_max - out_min)``
 
     Parameters
@@ -3681,6 +3773,42 @@ interp_mode_map = {
 }
 
 def resize(input_data, size, mode='bilinear', **kwargs):
+    """
+    Resize a multi-dimensional image tensor or array to a specified size.
+
+    This function resizes 2D or 3D image data in either PyTorch tensor or NumPy array
+    format using appropriate interpolation methods. The input is expected to follow
+    common conventions for image dimensions.
+
+    Supported input formats:
+    - PyTorch tensor of shape (B, C, H, W) for 2D or (B, C, D, H, W) for 3D data
+    - NumPy array of shape (B, H, W, C) for 2D or (B, D, H, W, C) for 3D data
+
+    Parameters
+    ----------
+    input_data : torch.Tensor or np.ndarray
+        The image data to be resized.
+    size : tuple of int
+        Target size for each dimension. Must match the number of dimensions in input_data.
+        Only spatial dimensions are resized (e.g., H, W, D), batch and channel dimensions are preserved.
+    mode : str, optional
+        Interpolation mode to use. Must be one of the keys in `interp_mode_map`. Defaults to 'bilinear'.
+    **kwargs : dict
+        Additional arguments passed to `torch.nn.functional.interpolate` or `skimage.transform.resize`.
+
+    Returns
+    -------
+    torch.Tensor or np.ndarray
+        The resized image data in the same format as the input.
+
+    Raises
+    ------
+    ValueError
+        If the length of `size` does not match the number of dimensions in `input_data`,
+        or if an unsupported interpolation mode is specified.
+    TypeError
+        If `input_data` is neither a PyTorch tensor nor a NumPy array.
+    """
     if len(size) != input_data.ndim:
         raise ValueError("The size provided ({}) needs to be of the same size as the dimensions of the input_data ({})".format(size, input_data.ndim))
     
