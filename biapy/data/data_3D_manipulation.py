@@ -819,70 +819,57 @@ def extract_3D_patch_with_overlap_and_padding_yield(
     verbose: bool = False,
 ):
     """
-    Extract 3D patches into smaller patches with a defined overlap. Is supports multi-GPU inference
-    by setting ``total_ranks`` and ``rank`` variables. Each GPU will process a evenly number of
-    volumes in ``Z`` axis. If the number of volumes in ``Z`` to be yielded are not divisible by the
-    number of GPUs the first GPUs will process one more volume.
+    Extract 3D patches into smaller patches with a defined overlap.
+    
+    Supports multi-GPU inference by setting ``total_ranks`` and ``rank`` variables.
+    Each GPU will process an even number of volumes in the ``Z`` axis. If the number
+    of volumes is not divisible by the number of GPUs, the first GPUs will process
+    one more volume.
 
     Parameters
     ----------
     data : H5 dataset
         Data to extract patches from. E.g. ``(z, y, x, channels)``.
-
     vol_shape : 4D int tuple
         Shape of the patches to create. E.g. ``(z, y, x, channels)``.
-
     axes_order : str
-        Order of axes of ``data``. One between ['TZCYX', 'TZYXC', 'ZCYX', 'ZYXC'].
-
+        Order of axes of ``data``. One of ['TZCYX', 'TZYXC', 'ZCYX', 'ZYXC'].
     overlap : Tuple of 3 floats, optional
-        Amount of minimum overlap on x, y and z dimensions. Should be the same as used in
-        :func:`~crop_3D_data_with_overlap`. The values must be on range ``[0, 1)``, that is, ``0%`` or ``99%`` of
-        overlap. E.g. ``(z, y, x)``.
-
+        Amount of minimum overlap on x, y and z dimensions. Should be the same as used
+        in :func:`~crop_3D_data_with_overlap`. Values must be in range ``[0, 1)``,
+        representing 0% to 99% overlap. E.g. ``(z, y, x)``.
     padding : tuple of ints, optional
         Size of padding to be added on each axis ``(z, y, x)``. E.g. ``(24, 24, 24)``.
-
     total_ranks : int, optional
         Total number of GPUs.
-
     rank : int, optional
         Rank of the current GPU.
-
     return_only_stats : bool, optional
-        To just return the crop statistics without yielding any patch. Useful to precalculate how many patches
-        are going to be created before doing it.
-
+        Whether to just return crop statistics without yielding patches. Useful for
+        precalculating the number of patches.
     load_data: bool, optional
-        Whether to load data from file or not. Useful to speed up the process if only patch coords are needed.
-
+        Whether to load data from file. Speeds up process if only patch coordinates
+        are needed.
     verbose : bool, optional
-        To print useful information for debugging.
+        Whether to print debugging information.
 
     Yields
     ------
     img : 4D Numpy array, optional
-        Extracted patch from ``data``. E.g. ``(z, y, x, channels)``. Returned if ``load_data`` is ``True``.
-
+        Extracted patch from ``data``. E.g. ``(z, y, x, channels)``. Only returned if
+        ``load_data`` is ``True``.
     real_patch_in_data : Tuple of tuples of ints
-        Coordinates of patch of each axis. Needed to reconstruct the entire image.
-        E.g. ``((0, 20), (0, 8), (16, 24))`` means that the yielded patch should be
-        inserted in possition [0:20,0:8,16:24]. This calculate the padding made, so
-        only a portion of the real ``vol_shape`` is used.
-
+        Coordinates where patch should be inserted in original data. E.g.
+        ``((0, 20), (0, 8), (16, 24))`` means the patch belongs at position
+        [0:20,0:8,16:24] in the original data.
     total_vol : int
         Total number of crops to extract.
-
     z_vol_info : dict, optional
-        Information of how the volumes in ``Z`` are inserted into the original data size.
-        E.g. ``{0: [0, 20], 1: [20, 40], 2: [40, 60], 3: [60, 80], 4: [80, 100]}`` means that
-        the first volume will be place in ``[0:20]`` position, the second will be placed in
-        ``[20:40]`` and so on.
-
+        Mapping of volume positions in original data. E.g. ``{0: [0, 20], 1: [20, 40]}``
+        means first volume goes at [0:20], second at [20:40].
     list_of_vols_in_z : list of list of int, optional
-        Volumes in ``Z`` axis that each GPU will process. E.g. ``[[0, 1, 2], [3, 4]]`` means that
-        the first GPU will process volumes ``0``, ``1`` and ``2`` (``3`` in total) whereas the second
-        GPU will process volumes ``3`` and ``4``.
+        Volumes assigned to each GPU. E.g. ``[[0, 1, 2], [3, 4]]`` means GPU 0 processes
+        volumes 0-2, GPU 1 processes volumes 3-4.
     """
     if verbose and rank == 0:
         print("### 3D-OV-CROP ###")
@@ -1129,7 +1116,6 @@ def order_dimensions(
     shape : Tuple
         Reordered data. E.g. ``(t, z, channel, y, x)``.
     """
-
     if input_order == output_order:
         return data
 
@@ -1294,8 +1280,34 @@ def write_chunked_data(
 def read_chunked_nested_data(
     file: str, data_path: str = ""
 ) -> Tuple[Type[zarr.hierarchy.Group], Type[zarr.core.Array]] | Tuple[Type[h5py._hl.files.File], Type[h5py._hl.dataset.Dataset]]:  # type: ignore
-    """
-    Find recursively raw and ground truth data within a H5/Zarr file.
+    """Find recursively raw and ground truth data within a H5/Zarr file.
+
+    This function automatically detects whether the input file is in HDF5 or Zarr format
+    and returns the appropriate file handler and dataset objects.
+
+    Parameters
+    ----------
+    file : str
+        Path to the input file. Supported formats: .h5, .hdf5, .hdf, .n5, .zarr
+    data_path : str, optional
+        Internal path within the file where data is stored. Default: "" (root level)
+
+    Returns
+    -------
+    tuple
+        Returns one of:
+        - (zarr.hierarchy.Group, zarr.core.Array) for Zarr/N5 files
+        - (h5py.File, h5py.Dataset) for HDF5 files
+
+    Raises
+    ------
+    ValueError
+        If the input file format is neither Zarr nor HDF5
+
+    Examples
+    --------
+    >>> file_handler, dataset = read_chunked_nested_data("data.h5")
+    >>> zarr_group, zarr_array = read_chunked_nested_data("data.zarr")
     """
     if any(file.endswith(x) for x in [".h5", ".hdf5", ".hdf"]):
         return read_chunked_nested_h5(file, data_path)
@@ -1308,8 +1320,36 @@ def read_chunked_nested_data(
 def read_chunked_nested_zarr(
     zarrfile: str, data_path: str = ""
 ) -> Tuple[Type[zarr.hierarchy.Group], Type[zarr.core.Array]]:  # type: ignore
-    """
-    Find recursively raw and ground truth data within a Zarr file.
+    """Find recursively raw and ground truth data within a Zarr/N5 file.
+
+    This function searches through a Zarr/N5 file hierarchy to locate array data
+    at the specified path. It supports nested group structures.
+
+    Parameters
+    ----------
+    zarrfile : str
+        Path to the Zarr/N5 file. Must have .zarr or .n5 extension.
+    data_path : str, optional
+        Internal path to the dataset within the Zarr hierarchy, using dot notation
+        for nested groups (e.g., "group1.subgroup.data"). Default: "" (root level).
+
+    Returns
+    -------
+    tuple
+        A tuple containing:
+        - zarr.hierarchy.Group: The root group of the Zarr file
+        - zarr.core.Array: The found array data
+
+    Raises
+    ------
+    ValueError
+        If the file extension is not .zarr or .n5
+        If the specified data_path is not found in the Zarr hierarchy
+
+    Examples
+    --------
+    >>> group, array = read_chunked_nested_zarr("data.zarr")
+    >>> subgroup, dataset = read_chunked_nested_zarr("experiment.n5", "images.channel1")
     """
     if not any(zarrfile.endswith(x) for x in [".n5", ".zarr"]):
         raise ValueError("Not implemented for other filetypes than Zarr")
@@ -1344,8 +1384,36 @@ def read_chunked_nested_zarr(
 def read_chunked_nested_h5(
     h5file: str, data_path: str = ""
 ) -> Tuple[Type[h5py._hl.files.File], Type[h5py._hl.dataset.Dataset]]:  # type: ignore
-    """
-    Find recursively raw and ground truth data within a Zarr file.
+    """Find recursively raw and ground truth data within an HDF5 file.
+
+    This function searches through an HDF5 file hierarchy to locate dataset objects
+    at the specified path. It supports nested group structures.
+
+    Parameters
+    ----------
+    h5file : str
+        Path to the HDF5 file. Must have .h5, .hdf5, or .hdf extension.
+    data_path : str, optional
+        Internal path to the dataset within the HDF5 hierarchy, using dot notation
+        for nested groups (e.g., "group1/subgroup/data"). Default: "" (root level).
+
+    Returns
+    -------
+    tuple
+        A tuple containing:
+        - h5py.File: The opened HDF5 file object
+        - h5py.Dataset: The found dataset object
+
+    Raises
+    ------
+    ValueError
+        If the file extension is not .h5, .hdf5, or .hdf
+        If the specified data_path is not found in the HDF5 hierarchy
+
+    Examples
+    --------
+    >>> file, dataset = read_chunked_nested_h5("data.h5")
+    >>> file, subgroup_data = read_chunked_nested_h5("experiment.hdf5", "images/channel1")
     """
     if not any(h5file.endswith(x) for x in [".h5", ".hdf5", ".hdf"]):
         raise ValueError("Not implemented for other filetypes than H5")
@@ -1379,6 +1447,46 @@ def read_chunked_nested_h5(
 def read_chunked_data(
     filename: str,
 ) -> Tuple[Type[zarr.hierarchy.Group], Type[zarr.core.Array]] | Tuple[Type[h5py._hl.files.File], Type[h5py._hl.dataset.Dataset]]:  # type: ignore
+    """Read and return the first dataset found in an HDF5 or Zarr file.
+
+    This function automatically detects the file format (HDF5 or Zarr) and returns
+    the file handler along with the first available dataset. For Zarr files, it
+    prioritizes groups over arrays when multiple items exist.
+
+    Parameters
+    ----------
+    filename : str
+        Path to the input file. Supported formats:
+        - HDF5: .h5, .hdf5, .hdf
+        - Zarr: .zarr
+
+    Returns
+    -------
+    tuple
+        Returns one of:
+        - (h5py.File, h5py.Dataset) for HDF5 files
+        - (zarr.Group, zarr.Array) for Zarr files
+        The first dataset found in the file will be returned
+
+    Raises
+    ------
+    ValueError
+        If the file doesn't exist
+        If the file extension is not recognized
+        If the input is not a string
+        If no datasets are found in the file
+
+    Examples
+    --------
+    >>> file_handler, dataset = read_chunked_data("data.h5")
+    >>> zarr_group, zarr_array = read_chunked_data("data.zarr")
+
+    Notes
+    -----
+    For Zarr files, the function will:
+    1. First look for groups and return the first group found
+    2. If no groups exist, return the first array found
+    """
     if isinstance(filename, str):
         if not os.path.exists(filename):
             raise ValueError(f"File {filename} does not exist.")
