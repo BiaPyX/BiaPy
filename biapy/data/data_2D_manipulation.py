@@ -1,3 +1,35 @@
+"""2D data manipulation utilities for biomedical image processing.
+
+This module provides functions for processing 2D image data, particularly focused on:
+- Overlapping patch extraction and reconstruction
+- Image cropping and merging with configurable overlap
+- Shape validation and normalization
+- Memory-efficient handling of large 2D datasets
+
+Key Features:
+- :func:`crop_data_with_overlap`: Extract overlapping patches from 2D images
+- :func:`merge_data_with_overlap`: Reconstruct images from overlapping patches
+- :func:`ensure_2d_shape`: Validate and standardize 2D image shapes
+
+The module is optimized for biomedical image analysis workflows and supports:
+- Both HDF5 and numpy array inputs
+- Configurable padding and overlap strategies
+- Multi-image batch processing
+- Mask handling for segmentation tasks
+
+Typical usage involves:
+1. Extracting patches from large images using :func:`crop_data_with_overlap`
+2. Processing patches through a neural network
+3. Reconstructing full images using :func:`merge_data_with_overlap`
+
+Examples:
+    >>> from biapy.data.data_2D_manipulation import crop_data_with_overlap
+    >>> # Crop 512x512 images into 256x256 patches with 25% overlap
+    >>> patches, coords = crop_data_with_overlap(images, (256,256,1), overlap=(0.25,0.25))
+
+Note:
+    All functions expect and return images in (y, x, channels) format by default.
+"""
 import numpy as np
 import os
 import math
@@ -22,7 +54,9 @@ def crop_data_with_overlap(
     load_data: bool = True,
 ) -> Tuple[NDArray, NDArray, List[PatchCoords]] | Tuple[NDArray, List[PatchCoords]] | List[PatchCoords]:
     """
-    Crop data into small square pieces with overlap. The difference with :func:`~crop_data` is that this function
+    Crop data into small square pieces with overlap.
+    
+    The difference with :func:`~crop_data` is that this function
     allows you to create patches with overlap.
 
     The opposite function is :func:`~merge_data_with_overlap`.
@@ -123,7 +157,6 @@ def crop_data_with_overlap(
         #     (6, 4) patches per (x,y) axis
         #     **** New data shape is: (3960, 256, 256, 1)
     """
-
     if data.ndim != 4:
         raise ValueError("data expected to be 4 dimensional, given {}".format(data.shape))
     if data_mask is not None:
@@ -400,7 +433,6 @@ def merge_data_with_overlap(
     |   Example 3 overlapping map                   |   Example 4 overlapping map                   |
     +-----------------------------------------------+-----------------------------------------------+
     """
-
     if data_mask is not None:
         if data.shape[:-1] != data_mask.shape[:-1]:
             raise ValueError(
