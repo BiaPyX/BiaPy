@@ -281,7 +281,7 @@ class multiple_metrics:
         num_channels = _y_pred.shape[1]
 
         # Check multi-head
-        if "class" in y_pred:
+        if isinstance(y_pred, dict) and "class" in y_pred:
             num_channels +=  1
             _y_pred_class = torch.argmax(y_pred["class"], dim=1)
         else:            
@@ -458,7 +458,8 @@ class DiceLoss(nn.Module):
         super(DiceLoss, self).__init__()
 
     def forward(self, inputs, targets, smooth=1):
-        inputs = inputs["pred"]
+        if isinstance(inputs, dict):
+            inputs = inputs["pred"]
         inputs = F.sigmoid(inputs)
 
         # flatten label and prediction tensors
@@ -482,7 +483,8 @@ class DiceBCELoss(nn.Module):
         self.w_bce = w_bce
 
     def forward(self, inputs, targets, smooth=1):
-        inputs = inputs["pred"]
+        if isinstance(inputs, dict):
+            inputs = inputs["pred"]
         inputs = F.sigmoid(inputs)
 
         # flatten label and prediction tensors
@@ -983,9 +985,12 @@ class instance_segmentation_loss:
         loss : torch.Tensor
             Loss value.
         """
-        _y_pred = y_pred["pred"]
+        if isinstance(y_pred, dict):
+            _y_pred = y_pred["pred"]
+        else:
+            _y_pred = y_pred
         extra_channels = 0
-        if "class" in y_pred:
+        if isinstance(y_pred, dict) and "class" in y_pred:
             _y_pred_class = y_pred["class"]
             extra_channels = 1
 
@@ -1491,7 +1496,8 @@ class SSIM_loss(torch.nn.Module):
         self.ssim = StructuralSimilarityIndexMeasure(data_range=data_range).to(device, non_blocking=True)
 
     def forward(self, input, target):
-        input = input["pred"]
+        if isinstance(input, dict):
+            input = input["pred"]
         return 1 - self.ssim(input, target)
 
 
@@ -1504,7 +1510,8 @@ class W_MAE_SSIM_loss(torch.nn.Module):
         self.ssim = StructuralSimilarityIndexMeasure(data_range=data_range).to(device, non_blocking=True)
 
     def forward(self, input, target):
-        input = input["pred"]
+        if isinstance(inout, dict):
+            input = input["pred"]
         return (self.mse(input, target) * self.w_mae) + ((1 - self.ssim(input, target)) * self.w_ssim)
 
 
@@ -1517,12 +1524,14 @@ class W_MSE_SSIM_loss(torch.nn.Module):
         self.ssim = StructuralSimilarityIndexMeasure(data_range=data_range).to(device, non_blocking=True)
 
     def forward(self, input, target):
-        input = input["pred"]
+        if isinstance(input, dict):
+            input = input["pred"]
         return (self.mse(input, target) * self.w_mse) + ((1 - self.ssim(input, target)) * self.w_ssim)
 
 
 def n2v_loss_mse(y_pred, y_true):
-    y_pred = y_pred["pred"]
+    if isinstance(y_pred, dict):
+        y_pred = y_pred["pred"]
     target = y_true[:, 0].squeeze()
     mask = y_true[:, 1].squeeze()
     loss = torch.sum(torch.square(target - y_pred.squeeze() * mask)) / torch.sum(mask)
@@ -1553,5 +1562,6 @@ class SSIM_wrapper:
         loss : torch.Tensor
             Loss value.
         """
-        y_pred = y_pred["pred"]
+        if isinstance(y_pred, dict):
+            y_pred = y_pred["pred"]
         return 1 - self.loss(y_pred, y_true)

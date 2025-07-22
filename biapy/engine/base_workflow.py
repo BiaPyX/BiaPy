@@ -629,15 +629,18 @@ class Base_Workflow(metaclass=ABCMeta):
 
             if (
                 not (self.cfg.PROBLEM.TYPE == "SELF_SUPERVISED" and "mask" in p and self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK.lower() == "masking") 
-                and self.cfg.PROBLEM.TYPE != "CLASSIFICATION"
+                and self.cfg.PROBLEM.TYPE not in ["CLASSIFICATION", "SUPER_RESOLUTION"]
             ):
                 # Recover the original shape of the input, as not all the model return a prediction
                 # of the same size as the input image
-                if p["pred"].shape[2:] != in_img.shape[2:]:
-                    p["pred"] = resize(p["pred"], in_img.shape, mode="bilinear")
-                    if "class" in p:
-                        p["class"] = resize(p["class"], in_img.shape, mode="nearest")
-
+                if isinstance(p, dict):
+                    if p["pred"].shape[2:] != in_img.shape[2:]:
+                        p["pred"] = resize(p["pred"], in_img.shape, mode="bilinear")
+                        if "class" in p:
+                            p["class"] = resize(p["class"], in_img.shape, mode="nearest")
+                else:
+                    if p.shape[2:] != in_img.shape[2:]:
+                        p = resize(p, in_img.shape, mode="bilinear")
             if apply_act:
                 p = self.apply_model_activations(p, training=is_train)
         elif self.cfg.MODEL.SOURCE == "bmz":
@@ -1308,10 +1311,11 @@ class Base_Workflow(metaclass=ABCMeta):
                     )
 
                 # Multi-head concatenation
-                if "class" in p:
-                    p = torch.cat((p["pred"], torch.argmax(p["class"], dim=1).unsqueeze(1)), dim=1)
-                else:
-                    p = p["pred"]
+                if isinstance(p, dict):
+                    if "class" in p:
+                        p = torch.cat((p["pred"], torch.argmax(p["class"], dim=1).unsqueeze(1)), dim=1)
+                    else:
+                        p = p["pred"]
 
                 # Calculate the metrics
                 if y_batch is not None:                        
@@ -1337,10 +1341,11 @@ class Base_Workflow(metaclass=ABCMeta):
                 p = self.model_call_func(x_batch[k * self.cfg.TRAIN.BATCH_SIZE : top])
 
                 # Multi-head concatenation
-                if "class" in p:
-                    p = torch.cat((p["pred"], torch.argmax(p["class"], dim=1).unsqueeze(1)), dim=1)
-                else:
-                    p = p["pred"]
+                if isinstance(p, dict):
+                    if "class" in p:
+                        p = torch.cat((p["pred"], torch.argmax(p["class"], dim=1).unsqueeze(1)), dim=1)
+                    else:
+                        p = p["pred"]
 
                 # Calculate the metrics
                 if y_batch is not None:
@@ -1855,11 +1860,12 @@ class Base_Workflow(metaclass=ABCMeta):
                 else:
                     pred = self.model_call_func(self.current_sample["X"])
 
-                # Multi-head concatenation
-                if "class" in pred:
-                    pred = torch.cat((pred["pred"], torch.argmax(pred["class"], dim=1).unsqueeze(1)), dim=1)
-                else:
-                    pred = pred["pred"]
+                # Multi-head concatenationç
+                if isinstance(pred, dict):
+                    if "class" in pred:
+                        pred = torch.cat((pred["pred"], torch.argmax(pred["class"], dim=1).unsqueeze(1)), dim=1)
+                    else:
+                        pred = pred["pred"]
 
                 pred = to_numpy_format(pred, self.axes_order_back)
                 del self.current_sample["X"]
