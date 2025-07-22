@@ -628,7 +628,7 @@ class Base_Workflow(metaclass=ABCMeta):
             p = self.model(in_img)
 
             if (
-                not (self.cfg.PROBLEM.TYPE == "SELF_SUPERVISED" and "mask" in p and self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK.lower() == "masking") 
+                not (self.cfg.PROBLEM.TYPE == "SELF_SUPERVISED" and self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK.lower() == "masking") 
                 and self.cfg.PROBLEM.TYPE not in ["CLASSIFICATION", "SUPER_RESOLUTION"]
             ):
                 # Recover the original shape of the input, as not all the model return a prediction

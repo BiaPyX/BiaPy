@@ -257,12 +257,12 @@ class Self_supervised_Workflow(Base_Workflow):
         """
         if isinstance(output, dict):
             _output = output["pred"]
+        else:
+            _output = output
 
         if self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK.lower() == "masking":
             assert self.model_without_ddp
             _output = self.model_without_ddp.unpatchify(_output)
-        else:
-            _output = output
 
         if isinstance(_output, np.ndarray):
             _output = to_pytorch_format(
