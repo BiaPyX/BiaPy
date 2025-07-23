@@ -1,3 +1,8 @@
+"""
+Pre-processing utilities for image and mask data in deep learning workflows.
+
+This module provides pre-processing functions for instance segmentation, detection mask creation, self-supervised learning data generation, semantic segmentation probability maps, and general image processing operations such as resizing, blurring, edge detection, histogram matching, and CLAHE. It supports both 2D and 3D data formats and integrates with BiaPy configuration objects for flexible data pipelines.
+"""
 import os
 import scipy
 import h5py
@@ -45,8 +50,7 @@ from biapy.data.data_manipulation import (
 #########################
 def create_instance_channels(cfg: CN, data_type: str = "train"):
     """
-    Create training and validation new data with appropiate channels based on ``PROBLEM.INSTANCE_SEG.DATA_CHANNELS``
-    for instance segmentation.
+    Create training and validation new data with appropiate channels based on ``PROBLEM.INSTANCE_SEG.DATA_CHANNELS`` for instance segmentation.
 
     Parameters
     ----------
@@ -56,7 +60,6 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
     data_type: str, optional
         Wheter to create training or validation instance channels.
     """
-
     assert data_type in ["train", "val", "test"]
     if data_type == "train":
         tag = "TRAIN"
@@ -311,8 +314,7 @@ def labels_into_channels(
     data_mask: NDArray, mode: str = "BC", fb_mode: str = "outer", save_dir: Optional[str] = None
 ) -> NDArray:
     """
-    Converts input semantic or instance segmentation data masks into different binary channels to train an instance segmentation
-    problem.
+    Convert input semantic or instance segmentation data masks into different binary channels to train an instance segmentation problem.
 
     Parameters
     ----------
@@ -343,7 +345,6 @@ def labels_into_channels(
     new_mask : 5D Numpy array
         5D array with 3 channels instead of one. E.g. ``(10, 200, 1000, 1000, 3)``
     """
-
     assert data_mask.ndim in [5, 4]
     assert mode in ["C", "BC", "BCM", "BCD", "BD", "BCDv2", "Dv2", "BDv2", "BP", "BCP", "A"]
 
@@ -517,9 +518,9 @@ def synapse_channel_creation(
     normalize_values: bool = False,
 ):
     """
-    Creates different channels that represent a synapse segmentation problem to train an instance segmentation
-    problem. This function is only prepared to read an H5/Zarr file that follows
-    `CREMI data format <https://cremi.org/data/>`__.
+    Create different channels that represent a synapse segmentation problem to train an instance segmentation problem.
+    
+    This function is only prepared to read an H5/Zarr file that follows `CREMI data format <https://cremi.org/data/>`__.
 
     Parameters
     ----------
@@ -929,8 +930,9 @@ def create_flow_channels(
     data: NDArray, ref_point: str = "center", label_to_pre_site: Optional[Dict] = None, normalize_values: bool = True
 ):
     """
-    Obtain the horizontal and vertical distance maps for each instance. Depth distance is also calculated if
-    the ``data`` provided is 3D.
+    Obtain the horizontal and vertical distance maps for each instance.
+    
+    Depth distance is also calculated if the ``data`` provided is 3D.
 
     Parameters
     ----------
@@ -1158,7 +1160,6 @@ def create_detection_masks(cfg: CN, data_type: str = "train"):
         data_type: str, optional
                 Wheter to create train, validation or test masks.
     """
-
     assert data_type in ["train", "val", "test"]
 
     if data_type == "train":
@@ -1476,7 +1477,6 @@ def create_ssl_source_data_masks(cfg: CN, data_type: str = "train"):
         data_type: str, optional
                 Wheter to create train, validation or test source data.
     """
-
     assert data_type in ["train", "val", "test"]
     tag = data_type.upper()
 
@@ -1510,8 +1510,7 @@ def crappify(
     Down_up: bool = True,
 ):
     """
-    Crappifies input image by adding Gaussian noise and downsampling and upsampling it so the resolution
-    gets worsen.
+    Crappify input image by adding Gaussian noise and downsampling and upsampling it so the resolution gets worsen.
 
     input_img : 4D/5D Numpy array
         Data to be modified. E.g. ``(y, x, channels)`` if working with 2D images or
@@ -1584,7 +1583,7 @@ def crappify(
 
 def add_gaussian_noise(image: NDArray, percentage_of_noise: float) -> NDArray:
     """
-    Adds Gaussian noise to an input image.
+    Add Gaussian noise to an input image.
 
     Parameters
     ----------
@@ -1719,7 +1718,7 @@ def calculate_volume_prob_map(
 
 def resize_images(images: List[NDArray], **kwards) -> List[NDArray]:
     """
-    The function resizes all the images using the specified parameters or default values if not provided.
+    Resize all the images using the specified parameters or default values if not provided.
 
     Parameters
     ----------
@@ -1745,7 +1744,7 @@ def resize_images(images: List[NDArray], **kwards) -> List[NDArray]:
 
 def apply_gaussian_blur(images: List[NDArray], **kwards) -> List[NDArray]:
     """
-    The function applies a Gaussian blur to all images.
+    Apply a Gaussian blur to all images.
 
     Parameters
     ----------
@@ -1760,9 +1759,7 @@ def apply_gaussian_blur(images: List[NDArray], **kwards) -> List[NDArray]:
     -------
     blurred_images: list of Numpy arrays
         A Gaussian blurred images. The returned data will use the same data type as the given `images`.
-
     """
-
     def _process(image, **kwards):
         im = gaussian(image, **kwards)  # returns 0-1 range
         if np.issubdtype(image.dtype, np.integer):
@@ -1776,7 +1773,7 @@ def apply_gaussian_blur(images: List[NDArray], **kwards) -> List[NDArray]:
 
 def apply_median_blur(images: List[NDArray], **kwards) -> List[NDArray]:
     """
-    The function applies a median blur filter to all images.
+    Apply a median blur filter to all images.
 
     Parameters
     ----------
@@ -1799,8 +1796,9 @@ def apply_median_blur(images: List[NDArray], **kwards) -> List[NDArray]:
 
 def detect_edges(images: List[NDArray], **kwards) -> List[NDArray]:
     """
-    The function `detect_edges` takes the 2D images as input, converts it to grayscale if necessary, and
-    applies the Canny edge detection algorithm to detect edges in the image.
+    Detect edges in the given images using the Canny edge detection algorithm.
+    
+    The function `detect_edges` takes the 2D images as input, converts it to grayscale if necessary, and applies the Canny edge detection algorithm to detect edges in the image.
 
     Parameters
     ----------
@@ -1819,7 +1817,6 @@ def detect_edges(images: List[NDArray], **kwards) -> List[NDArray]:
         The returned data will use the same structure as the given `images` (list[Numpy array] or Numpy array).
 
     """
-
     def to_gray(image):
         c = image.shape[-1]
         if c == 3:
@@ -1845,6 +1842,8 @@ def detect_edges(images: List[NDArray], **kwards) -> List[NDArray]:
 
 def _histogram_matching(source_imgs: List[NDArray], target_imgs: List[NDArray]) -> List[NDArray]:
     """
+    Apply histogram matching to a set of source images based on the mean histogram of target images.
+    
     Given a set of target images, it will obtain their mean histogram
     and applies histogram matching to all images from source images.
 
@@ -1861,7 +1860,6 @@ def _histogram_matching(source_imgs: List[NDArray], target_imgs: List[NDArray]) 
     matched_images : list of Numpy arrays
         A set of source images with target's histogram
     """
-
     # Concatenate all target images to compute the reference histogram
     target_concat = np.concatenate([img.ravel() for img in target_imgs])
 
@@ -1895,8 +1893,9 @@ def _histogram_matching(source_imgs: List[NDArray], target_imgs: List[NDArray]) 
 
 def apply_histogram_matching(images: List[NDArray], reference_path: str, is_2d: bool):
     """
-    The function returns the images with their histogram matched to the histogram of the reference images,
-    loaded from the given ``reference_path``.
+    Apply histogram matching to a list of images based on the histogram of reference images.
+
+    The function returns the images with their histogram matched to the histogram of the reference images, loaded from the given ``reference_path``.
 
     Parameters
     ----------
@@ -1926,8 +1925,9 @@ def apply_histogram_matching(images: List[NDArray], reference_path: str, is_2d: 
 
 def apply_clahe(images: List[NDArray], **kwards) -> List[NDArray]:
     """
-    The function applies Contrast Limited Adaptive Histogram Equalization (CLAHE) to an image and
-    returns the result.
+    Apply Contrast Limited Adaptive Histogram Equalization (CLAHE) to a list of images.
+
+    The function applies Contrast Limited Adaptive Histogram Equalization (CLAHE) to an image and returns the result.
 
     Parameters
     ----------
@@ -1961,14 +1961,12 @@ def preprocess_data(
     cfg: CN, x_data: List[NDArray] = [], y_data: List[NDArray] = [], is_2d: bool = True, is_y_mask: bool = False
 ) -> List[NDArray] | Tuple[List[NDArray], List[NDArray]]:
     """
-    The function preprocesses data by applying various image processing techniques.
+    Pre-process data by applying various image processing techniques.
 
     Parameters
     ----------
     cfg: dict
-        The `cfg` parameter is a configuration object that contains various settings for
-        preprocessing the data. It is used to control the behavior of different preprocessing techniques
-        such as image resizing, blurring, histogram matching, etc.
+        The `cfg` parameter is a configuration object that contains various settings for preprocessing the data. It is used to control the behavior of different preprocessing techniques such as image resizing, blurring, histogram matching, etc.
 
     x_data: list of 3D/4D Numpy arrays, optional
         The input data (images) to be preprocessed. The first dimension must be the number of images.
@@ -1999,7 +1997,6 @@ def preprocess_data(
     y_data: list of 3D/4D Numpy arrays, optional
         Preprocessed data. The same structure and dimensionality of the given data will be returned.
     """
-
     if len(y_data) > 0:
         if cfg.RESIZE.ENABLE:
             # if y is a mask, then use nearest
