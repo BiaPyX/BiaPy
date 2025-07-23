@@ -1,3 +1,41 @@
+"""
+biapy.data.dataset
+==================
+
+This module provides the foundational data structures for managing and organizing datasets 
+within BiaPy. It includes representations for both individual data files and data samples, 
+as well as the overall dataset structure used during training and inference.
+
+Classes
+-------
+
+- DatasetFile:
+    Represents metadata and statistics associated with an individual input file.
+    This includes the file path, size, shape, and any derived properties needed 
+    for data handling.
+
+- DataSample:
+    Encapsulates a single sample of the dataset, typically representing one training
+    or inference instance. It stores indexing information (e.g., crop position, file ID)
+    and can also include per-sample weights, masks, or labels.
+
+- BiaPyDataset:
+    Main class that manages a full dataset, composed of a list of `DatasetFile` and 
+    a list of `DataSample`. Provides methods to clean or filter the dataset, and 
+    supports deep copying for safe reuse.
+
+Typical usage
+-------------
+
+```python
+from biapy.data.dataset import DatasetFile, DataSample, BiaPyDataset
+
+# Assume dataset_info and sample_list are preconstructed lists of DatasetFile and DataSample
+dataset = BiaPyDataset(dataset_info=dataset_info, sample_list=sample_list)
+
+# Clean dataset by keeping only a subset of samples or images
+dataset.clean_dataset(samples_to_maintain=[0, 2, 5], clean_by="sample")
+"""
 from __future__ import annotations
 from typing import List, Tuple, Optional
 from numpy.typing import NDArray
