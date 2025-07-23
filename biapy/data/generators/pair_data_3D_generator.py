@@ -1,3 +1,10 @@
+"""
+3D paired image and mask data generator for BiaPy.
+
+This module provides the Pair3DImageDataGenerator class, which generates batches of
+3D images and their corresponding masks with on-the-fly augmentation. It is based on
+imgaug, microDL, and custom augmentors for flexible deep learning workflows.
+"""
 import numpy as np
 import random
 from PIL import Image
@@ -9,9 +16,7 @@ from biapy.data.generators.pair_base_data_generator import PairBaseDataGenerator
 
 
 class Pair3DImageDataGenerator(PairBaseDataGenerator):
-    """Custom 3D data generator based on `imgaug <https://github.com/aleju/imgaug-doc>`_ and our own
-    `augmentors.py <https://github.com/BiaPyX/BiaPy/blob/master/biapy/data/generators/augmentors.py>`_
-    transformations. This generator will yield an image and its corresponding mask.
+    """Custom 3D data generator based on `imgaug <https://github.com/aleju/imgaug-doc>`_ and our own `augmentors.py <https://github.com/BiaPyX/BiaPy/blob/master/biapy/data/generators/augmentors.py>`_ transformations. This generator will yield an image and its corresponding mask.
 
     Based on `microDL <https://github.com/czbiohub/microDL>`_ and
     `Shervine's blog <https://stanford.edu/~shervine/blog/keras-how-to-generate-data-on-the-fly>`_.
@@ -23,6 +28,16 @@ class Pair3DImageDataGenerator(PairBaseDataGenerator):
     """
 
     def __init__(self, zflip: bool = False, **kwars):
+        """
+        Initialize the Pair3DImageDataGenerator.
+
+        Parameters
+        ----------
+        zflip : bool, optional
+            Whether to apply flips in the z dimension.
+        **kwars : dict
+            Keyword arguments passed to the base PairBaseDataGenerator.
+        """
         super().__init__(**kwars)
         sshape = self.X.sample_list[0].get_shape()
         if sshape is None:
@@ -44,8 +59,7 @@ class Pair3DImageDataGenerator(PairBaseDataGenerator):
         e_mask: Optional[NDArray] = None,
     ) -> Tuple[NDArray, NDArray]:
         """
-        Transform the input image and its mask at the same time with one of the selected choices based on a
-        probability.
+        Transform the input image and its mask at the same time with one of the selected choices based on a probability.
 
         Parameters
         ----------
@@ -91,6 +105,26 @@ class Pair3DImageDataGenerator(PairBaseDataGenerator):
         return image.transpose((2, 1, 0, 3)), mask.transpose((2, 1, 0, 3))
 
     def save_aug_samples(self, img, mask, orig_images, i, pos, out_dir, point_dict):
+        """
+        Save augmented and original samples for inspection.
+
+        Parameters
+        ----------
+        img : 4D Numpy array
+            Augmented image sample. E.g. ``(z, y, x, channels)``.
+        mask : 4D Numpy array
+            Augmented mask sample. E.g. ``(z, y, x, channels)``.
+        orig_images : dict
+            Dictionary containing original image and mask under keys "o_x" and "o_y".
+        i : int
+            Index of the augmented sample.
+        pos : int
+            Index of the sample in the dataset.
+        out_dir : str
+            Directory to save the images.
+        point_dict : dict
+            Information about the crop and selected point for visualization.
+        """
         aux = np.expand_dims(orig_images["o_x"], 0).astype(np.float32)
         save_tif(
             aux,
