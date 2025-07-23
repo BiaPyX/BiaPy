@@ -686,8 +686,8 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
                 # Measure class IoU
                 class_iou = self.jaccard_index_matching(
-                    torch.as_tensor(class_channel.squeeze().astype(np.int32)),
-                    torch.as_tensor(_Y_classes.squeeze().astype(np.int32)),
+                    torch.as_tensor(class_channel.squeeze().astype(np.int32)).to(self.device, non_blocking=True),
+                    torch.as_tensor(_Y_classes.squeeze().astype(np.int32)).to(self.device, non_blocking=True),
                 )
                 class_iou = class_iou.item() if not torch.isnan(class_iou) else 0
                 print(f"Class IoU: {class_iou}")

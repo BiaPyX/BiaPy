@@ -125,7 +125,7 @@ class UNETR(nn.Module):
             )
             self.permutation = (0, 4, 1, 2, 3)
             norm_func = get_norm_3d
-            dropout = nn.Dropout3d
+            dropout_layer = nn.Dropout3d
         else:
             conv = nn.Conv2d
             convtranspose = nn.ConvTranspose2d
@@ -136,7 +136,7 @@ class UNETR(nn.Module):
             )
             self.permutation = (0, 3, 1, 2)
             norm_func = get_norm_2d
-            dropout = nn.Dropout2d
+            dropout_layer = nn.Dropout2d
 
         # ViT part
         self.patch_embed = PatchEmbed(
@@ -264,7 +264,7 @@ class UNETR(nn.Module):
             self.last_block = nn.Sequential(
                 conv(num_filters, num_filters, kernel_size=3, stride=1, padding=1),
                 norm_func(normalization, num_filters),
-                dropout(0.10),
+                dropout_layer(0.10),
                 conv(num_filters, output_channels[0], kernel_size=1, stride=1, padding=0, bias=False),
             )
 

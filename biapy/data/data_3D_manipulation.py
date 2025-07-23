@@ -35,42 +35,55 @@ def load_3D_efficient_files(
     data_within_zarr_path: Optional[str] = None,
 ):
     """
-    Load information of all patches that can be extracted from all the Zarr/H5 samples in ``data_path``.
+    Efficiently index 3D patches from Zarr or HDF5 image volumes for training or inference.
+
+    This function computes and returns metadata about all the 3D patches that can be
+    extracted from a list of multidimensional microscopy volumes, typically stored in
+    Zarr or HDF5 formats. Patches are extracted using overlap and padding strategies
+    without loading full image volumes into memory, allowing large datasets to be
+    preprocessed efficiently.
 
     Parameters
     ----------
-    data_path : str
-        Path to the training data.
+    data_path : list of str
+        List of paths to Zarr or HDF5 files containing the raw 3D image volumes.
 
     input_axes : str
-        Order of axes of the data in ``data_path``. One between ['TZCYX', 'TZYXC', 'ZCYX', 'ZYXC'].
+        Axes layout of the image data in the files. Must be one of ['TZCYX', 'TZYXC', 'ZCYX', 'ZYXC'].
 
-    crop_shape : 4D tuple
-        Shape of the train subvolumes to create. E.g. ``(z, y, x, channels)``.
+    crop_shape : tuple of int
+        Shape of the 3D patches to be extracted, in the form (z, y, x, channels).
 
-    overlap : Tuple of 3 floats, optional
-        Amount of minimum overlap on x, y and z dimensions. The values must be on range ``[0, 1)``, that is, ``0%`` or ``99%`` of overlap. E. g. ``(z, y, x)``.
+    overlap : tuple of float
+        Minimum fractional overlap between neighboring patches in the z, y, and x dimensions.
+        Values must be in the range [0.0, 1.0).
 
-    padding : Tuple of ints, optional
-        Size of padding to be added on each axis ``(z, y, x)``. E.g. ``(24, 24, 24)``.
+    padding : tuple of int
+        Number of voxels to pad along each spatial axis (z, y, x) when patching.
 
     check_channel : bool, optional
-        Whether to check if the crop_shape channel matches with the loaded images' one.
+        If True, verify that the channel dimension in the `crop_shape` matches the actual
+        number of channels in the image volume. Default is True.
 
     data_within_zarr_path : str, optional
-        Path to find the data within the Zarr/H5 file. E.g. 'volumes.labels.neuron_ids'.
+        Optional internal path to the dataset inside the Zarr or HDF5 file, e.g.,
+        'volumes/raw' or 'volumes/labels/neuron_ids'. If None, the top-level dataset is used.
 
     Returns
     -------
     data_info : dict
-        All patches that can be extracted from all the Zarr/H5 samples in ``data_path``.
-        Keys created are:
-            * ``"filepath"``: path to the file where the patch was extracted.
-            * ``"full_shape"``: shape of the data within the file where the patch was extracted.
-            * ``"patch_coords"``: coordinates of the data that represents the patch.
+        Dictionary mapping patch index to patch metadata, with the following keys:
+            - "filepath": path to the source file.
+            - "full_shape": shape of the complete data volume.
+            - "patch_coords": coordinates (start and end) of the extracted patch.
 
-    data_info_total_patches : List of ints
-        Amount of patches extracted from each sample in ``data_path``.
+    data_info_total_patches : list of int
+        List with the number of patches extracted from each file in `data_path`.
+
+    Raises
+    ------
+    ValueError
+        If the input crop shape is not 4D or if the channel dimension does not match.
     """
     data_info = {}
     data_total_patches = []
