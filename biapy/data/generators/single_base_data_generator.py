@@ -1,3 +1,11 @@
+"""
+Single image data generator for BiaPy.
+
+This module provides the SingleBaseDataGenerator class, which supports flexible
+data loading, augmentation, and normalization for single image data in deep learning
+workflows. It includes a wide range of augmentation options for both 2D and 3D data,
+and is designed to work with BiaPyDataset objects and normalization modules.
+"""
 from abc import ABCMeta, abstractmethod
 import torch
 from torch.utils.data import Dataset
@@ -21,9 +29,7 @@ from biapy.data.norm import Normalization
 
 class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
     """
-    Custom BaseDataGenerator based on `imgaug <https://github.com/aleju/imgaug-doc>`_
-    and our own `augmentors.py <https://github.com/BiaPyX/BiaPy/blob/master/biapy/data/generators/augmentors.py>`_
-    transformations.
+    Custom BaseDataGenerator based on `imgaug <https://github.com/aleju/imgaug-doc>`_ and our own `augmentors.py <https://github.com/BiaPyX/BiaPy/blob/master/biapy/data/generators/augmentors.py>`_ transformations.
 
     Based on `microDL <https://github.com/czbiohub/microDL>`_ and
     `Shervine's blog <https://stanford.edu/~shervine/blog/keras-how-to-generate-data-on-the-fly>`_.
@@ -191,6 +197,16 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         preprocess_f=None,
         preprocess_cfg=None,
     ):
+        """
+        Initialize the SingleBaseDataGenerator.
+
+        Sets up data sources, normalization, augmentation options, and preprocessing
+        for single image data.
+
+        Parameters
+        ----------
+        See class docstring for full parameter list.
+        """
         if preprocess_f and preprocess_cfg is None:
             raise ValueError("'preprocess_cfg' needs to be provided with 'preprocess_f'")
 
@@ -324,7 +340,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         raise NotImplementedError
 
     def __len__(self):
-        """Defines the number of samples per epoch."""
+        """Define the number of samples per epoch."""
         return self.length
 
     def load_sample(self, idx: int, first_load: bool = False) -> Tuple[NDArray, int]:
@@ -394,7 +410,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
     def getitem(self, index: int) -> Tuple[torch.Tensor, int]:
         """
-        Generation of one pair of data.
+        Generate one sample of data.
 
         Parameters
         ----------
@@ -411,7 +427,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
     def __getitem__(self, index: int) -> Tuple[torch.Tensor, int]:
         """
-        Generation of one sample data.
+        Generate one sample data.
 
         Parameters
         ----------
@@ -617,7 +633,6 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
             Batch of data. E.g. ``(num_examples, y, x, channels)`` in ``2D`` or ``(num_examples, z, y, x, channels)``
             in ``3D``.
         """
-
         if random_images == False and num_examples > self.length:
             num_examples = self.length
             print(
@@ -657,4 +672,12 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         return sample_x
 
     def get_data_normalization(self):
+        """
+        Return the normalization module used by the generator.
+
+        Returns
+        -------
+        Normalization
+            The normalization module.
+        """
         return self.norm_module
