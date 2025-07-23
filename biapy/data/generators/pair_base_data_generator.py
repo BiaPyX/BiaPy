@@ -1,3 +1,11 @@
+"""
+Base data generator for paired image and mask data in BiaPy.
+
+This module provides the PairBaseDataGenerator class, which supports flexible
+data loading, augmentation, and normalization for deep learning workflows.
+It includes a wide range of augmentation options for both 2D and 3D data,
+and is designed to work with BiaPyDataset objects and normalization modules.
+"""
 from typing import (
     Tuple,
     Literal,
@@ -25,9 +33,7 @@ from biapy.data.norm import Normalization
 
 class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
     """
-    Custom BaseDataGenerator based on `imgaug <https://github.com/aleju/imgaug-doc>`_
-    and our own `augmentors.py <https://github.com/BiaPyX/BiaPy/blob/master/biapy/data/generators/augmentors.py>`_
-    transformations.
+    Custom BaseDataGenerator based on `imgaug <https://github.com/aleju/imgaug-doc>`_ and our own `augmentors.py <https://github.com/BiaPyX/BiaPy/blob/master/biapy/data/generators/augmentors.py>`_ transformations.
 
     Based on `microDL <https://github.com/czbiohub/microDL>`_ and
     `Shervine's blog <https://stanford.edu/~shervine/blog/keras-how-to-generate-data-on-the-fly>`_.
@@ -452,6 +458,16 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         preprocess_f=None,
         preprocess_cfg=None,
     ):
+        """
+        Initialize the PairBaseDataGenerator.
+
+        Sets up data sources, normalization, augmentation options, and preprocessing
+        for paired image and mask data.
+
+        Parameters
+        ----------
+        See class docstring for full parameter list.
+        """
         if preprocess_f and preprocess_cfg is None:
             raise ValueError("'preprocess_cfg' needs to be provided with 'preprocess_f'")
 
@@ -792,7 +808,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         raise NotImplementedError
 
     def __len__(self):
-        """Defines the number of samples per epoch."""
+        """Define the number of samples per epoch."""
         return self.length
 
     def load_sample(self, _idx: int, first_load: bool = False) -> Tuple[NDArray, NDArray]:
@@ -947,7 +963,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
     def getitem(self, index: int) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-        Generation of one pair of data.
+        Generate one pair of data.
 
         Parameters
         ----------
@@ -964,7 +980,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
     def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-        Generation of one pair of data.
+        Generate one pair of data.
 
         Parameters
         ----------
@@ -1012,8 +1028,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         e_mask: Optional[NDArray],
     ) -> Tuple[NDArray, NDArray]:
         """
-        Transform the input image and its mask at the same time with one of the selected choices based on a
-        probability.
+        Transform the input image and its mask at the same time with one of the selected choices based on a probability.
 
         Parameters
         ----------
@@ -1541,7 +1556,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
     def prepare_n2v(self, _img: NDArray, _mask: NDArray) -> Tuple[NDArray, NDArray]:
         """
-        Creates Noise2Void mask.
+        Create Noise2Void mask.
 
         Parameters
         ----------
