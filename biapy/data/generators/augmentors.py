@@ -1,3 +1,12 @@
+"""
+Augmentation utilities for image and mask data in deep learning workflows.
+
+This module provides a variety of data augmentation functions for images and masks,
+including cutout, cutblur, cutmix, cutnoise, misalignment, cropping, flipping,
+rotation, zoom, gamma/contrast adjustment, blurring, dropout, elastic deformation,
+shear, shift, and more. These augmentations are designed to improve model robustness
+and generalization for both 2D and 3D data formats.
+"""
 import cv2
 import random
 import math
@@ -26,8 +35,9 @@ def cutout(
     apply_to_mask: bool = False,
 ) -> Tuple[NDArray, NDArray]:
     """
-    Cutout data augmentation presented in `Improved Regularization of Convolutional Neural Networks with Cutout
-    <https://arxiv.org/pdf/1708.04552.pdf>`_.
+    Apply augmentation using Cutout technique.
+
+    Cutout data augmentation presented in `Improved Regularization of Convolutional Neural Networks with Cutout <https://arxiv.org/pdf/1708.04552.pdf>`_.
 
     Parameters
     ----------
@@ -70,7 +80,6 @@ def cutout(
 
     Examples
     --------
-
     Calling this function with ``nb_iterations=(1,3)``, ``size=(0.05,0.3)``,
     ``apply_to_mask=False`` may result in:
 
@@ -90,7 +99,6 @@ def cutout(
 
     The grid is painted for visualization purposes.
     """
-
     it = np.random.randint(nb_iterations[0], nb_iterations[1])
 
     out = img.copy()
@@ -133,9 +141,9 @@ def cutblur(
     only_inside: bool = True,
 ) -> NDArray:
     """
-    CutBlur data augmentation introduced in `Rethinking Data Augmentation for Image Super-resolution: A Comprehensive
-    Analysis and a New Strategy <https://arxiv.org/pdf/2004.00448.pdf>`_ and adapted from
-    https://github.com/clovaai/cutblur .
+    Apply CutBlur data augmentation.
+
+    CutBlur data augmentation introduced in `Rethinking Data Augmentation for Image Super-resolution: A Comprehensive Analysis and a New Strategy <https://arxiv.org/pdf/2004.00448.pdf>`_ and adapted from https://github.com/clovaai/cutblur .
 
 
     Parameters
@@ -161,7 +169,6 @@ def cutblur(
 
     Examples
     --------
-
     Calling this function with ``size=(0.2,0.4)``, ``down_ratio_range=(2,8)``,
     ``only_inside=True`` may result in:
 
@@ -181,7 +188,6 @@ def cutblur(
 
     The grid and the red square are painted for visualization purposes.
     """
-
     _size = random.uniform(size[0], size[1])
 
     y_size = int(img.shape[0] * _size)
@@ -244,10 +250,10 @@ def cutmix(
     size: Tuple[float, float] = (0.2, 0.4),
 ) -> Tuple[NDArray, NDArray]:
     """
-    Cutmix augmentation introduced in `CutMix: Regularization Strategy to Train Strong Classifiers with Localizable
-    Features <https://arxiv.org/abs/1905.04899>`_. With this augmentation a region of the image sample is filled
-    with a given second image. This implementation is used for semantic segmentation so the masks of the images are
-    also needed. It assumes that the images are of the same shape.
+    Apply Cutmix data augmentation.
+
+    Cutmix augmentation introduced in `CutMix: Regularization Strategy to Train Strong Classifiers with Localizable Features <https://arxiv.org/abs/1905.04899>`_. With this augmentation a region of the image sample is filled
+    with a given second image. This implementation is used for semantic segmentation so the masks of the images are also needed. It assumes that the images are of the same shape.
 
     Parameters
     ----------
@@ -276,7 +282,6 @@ def cutmix(
 
     Examples
     --------
-
     Calling this function with ``size=(0.2,0.4)`` may result in:
 
     +----------------------------------------------+----------------------------------------------+
@@ -295,7 +300,6 @@ def cutmix(
 
     The grid is painted for visualization purposes.
     """
-
     _size = random.uniform(size[0], size[1])
 
     y_size = int(im1.shape[0] * _size)
@@ -328,6 +332,8 @@ def cutnoise(
     size: Tuple[float, float] = (0.2, 0.4),
 ) -> NDArray:
     """
+    Apply Cutnoise data augmentation.
+
     Cutnoise data augmentation. Randomly add noise to a cuboid region in the image to force the model to learn
     denoising when making predictions.
 
@@ -352,7 +358,6 @@ def cutnoise(
 
     Examples
     --------
-
     Calling this function with ``scale=(0.1,0.2)``, ``nb_iterations=(1,3)`` and
     ``size=(0.2,0.4)`` may result in:
 
@@ -398,6 +403,8 @@ def misalignment(
     c_relation: str = "1_1",
 ) -> Tuple[NDArray, NDArray]:
     """
+    Apply mis-alignment data augmentation.
+
     Mis-alignment data augmentation of image stacks. This augmentation is applied to both images and masks.
 
     Implementation based on `PyTorch Connectomics' misalign.py
@@ -427,7 +434,6 @@ def misalignment(
 
     Examples
     --------
-
     Calling this function with ``displacement=16`` and ``rotate_ratio=0.5`` may result in:
 
     +---------------------------------------------+---------------------------------------------+
@@ -446,7 +452,6 @@ def misalignment(
 
     The grid is painted for visualization purposes.
     """
-
     out = np.zeros(img.shape, img.dtype)
     m_out = np.zeros(mask.shape, mask.dtype)
 
@@ -630,7 +635,6 @@ def brightness(
 
     Examples
     --------
-
     Calling this function with ``brightness_factor=(0.1,0.3)``, ``mode='mix'``, ``invert=False`` and ``invert_p=0``
     may result in:
 
@@ -650,7 +654,6 @@ def brightness(
 
     The grid is painted for visualization purposes.
     """
-
     if brightness_factor[0] == 0 and brightness_factor[1] == 0:
         return image
 
@@ -691,7 +694,6 @@ def contrast(image: NDArray, contrast_factor: Tuple[float, float] = (0, 0), mode
 
     Examples
     --------
-
     Calling this function with ``contrast_factor=(0.1,0.3)``, ``mode='mix'``, ``invert=False`` and ``invert_p=0``
     may result in:
 
@@ -711,7 +713,6 @@ def contrast(image: NDArray, contrast_factor: Tuple[float, float] = (0, 0), mode
 
     The grid is painted for visualization purposes.
     """
-
     if contrast_factor[0] == 0 and contrast_factor[1] == 0:
         return image
 
@@ -755,7 +756,6 @@ def missing_sections(img: NDArray, iterations: Tuple[int, int] = (30, 40), chann
 
     Examples
     --------
-
     Calling this function with ``iterations=(30,40)`` may result in:
 
     +---------------------------------------------+---------------------------------------------+
@@ -774,7 +774,6 @@ def missing_sections(img: NDArray, iterations: Tuple[int, int] = (30, 40), chann
 
     The grid is painted for visualization purposes.
     """
-
     it = np.random.randint(iterations[0], iterations[1])
 
     num_section = img.shape[-1]
@@ -852,7 +851,6 @@ def shuffle_channels(img: NDArray) -> NDArray:
 
     Examples
     --------
-
     +-----------------------------------------------+-----------------------------------------------+
     | .. figure:: ../../../img/orig_chshuffle.png   | .. figure:: ../../../img/chshuffle.png        |
     |   :width: 80%                                 |   :width: 80%                                 |
@@ -863,7 +861,6 @@ def shuffle_channels(img: NDArray) -> NDArray:
 
     The grid is painted for visualization purposes.
     """
-
     if img.ndim != 3 and img.ndim != 4:
         raise ValueError(
             "Image is supposed to be 3 or 4 dimensions but provided {} image shape instead".format(img.shape)
@@ -889,7 +886,6 @@ def grayscale(img: NDArray) -> NDArray:
 
     Examples
     --------
-
     +-----------------------------------------------+-----------------------------------------------+
     | .. figure:: ../../../img/orig_grayscale.png   | .. figure:: ../../../img/grayscale.png        |
     |   :width: 80%                                 |   :width: 80%                                 |
@@ -900,7 +896,6 @@ def grayscale(img: NDArray) -> NDArray:
 
     The grid is painted for visualization purposes.
     """
-
     if img.shape[-1] != 3:
         raise ValueError(
             "Image is supposed to have 3 channels (RGB). Provided {} image shape instead".format(img.shape)
@@ -919,8 +914,9 @@ def GridMask(
     invert: bool = False,
 ) -> NDArray:
     """
-    GridMask data augmentation presented in `GridMask Data Augmentation <https://arxiv.org/abs/2001.04086v1>`_.
-    Code adapted from `<https://github.com/dvlab-research/GridMask/blob/master/imagenet_grid/utils/grid.py>`_.
+    Apply GridMask data augmentation presented in `GridMask Data Augmentation <https://arxiv.org/abs/2001.04086v1>`_.
+
+    GridMask is a data augmentation technique that randomly masks out grid-like regions in the image, which helps the model to learn more robust features by forcing it to focus on different parts of the image Code adapted from `<https://github.com/dvlab-research/GridMask/blob/master/imagenet_grid/utils/grid.py>`_.
 
     Parameters
     ----------
@@ -953,7 +949,6 @@ def GridMask(
 
     Examples
     --------
-
     Calling this function with the default settings may result in:
 
     +----------------------------------------------+----------------------------------------------+
@@ -966,7 +961,6 @@ def GridMask(
 
     The grid is painted for visualization purposes.
     """
-
     h, w, c = img.shape
 
     # 1.5 * h, 1.5 * w works fine with the squared images
@@ -1028,9 +1022,10 @@ def random_crop_pair(
     Tuple[NDArray, NDArray, int, int, int, int],
 ]:
     """
-    Random crop for an image and its mask. No crop is done in those dimensions that ``random_crop_size`` is greater than
-    the input image shape in those dimensions. For instance, if an input image is ``400x150`` and ``random_crop_size``
-    is ``224x224`` the resulting image will be ``224x150``.
+    Apply random crop for an image and its mask.
+    
+    No crop is done in those dimensions that ``random_crop_size`` is greater than
+    the input image shape in those dimensions. For instance, if an input image is ``400x150`` and ``random_crop_size`` is ``224x224`` the resulting image will be ``224x150``.
 
     Parameters
     ----------
@@ -1079,7 +1074,6 @@ def random_crop_pair(
     y : int, optional
         Y coordinate in the complete image where the crop starts.
     """
-
     if weight_map is not None:
         img, we = image
     else:
@@ -1184,7 +1178,9 @@ def random_3D_crop_pair(
     Tuple[NDArray, NDArray, int, int, int, int, int, int],
 ]:
     """
-    Extracts a random 3D patch from the given image and mask. No crop is done in those dimensions that ``random_crop_size`` is
+    Extract a random 3D patch from the given image and mask.
+    
+    No crop is done in those dimensions that ``random_crop_size`` is
     greater than the input image shape in those dimensions. For instance, if an input image is ``10x400x150`` and ``random_crop_size``
     is ``10x224x224`` the resulting image will be ``10x224x150``.
 
@@ -1244,7 +1240,6 @@ def random_3D_crop_pair(
     x : int, optional
         X coordinate in the complete image where the crop starts.
     """
-
     if weight_map is not None:
         vol, we = image
     else:
@@ -1370,9 +1365,10 @@ def random_crop_single(
     Tuple[NDArray, int, int, int, int],
 ]:
     """
-    Random crop for a single image. No crop is done in those dimensions that ``random_crop_size`` is greater than
-    the input image shape in those dimensions. For instance, if an input image is ``400x150`` and ``random_crop_size``
-    is ``224x224`` the resulting image will be ``224x150``.
+    Random crop for a single image.
+    
+    No crop is done in those dimensions that ``random_crop_size`` is greater than
+    the input image shape in those dimensions. For instance, if an input image is ``400x150`` and ``random_crop_size`` is ``224x224`` the resulting image will be ``224x150``.
 
     Parameters
     ----------
@@ -1412,7 +1408,6 @@ def random_crop_single(
     y : int, optional
         X coordinate in the complete image where the crop starts.
     """
-
     if weight_map is not None:
         img, we = image
     else:
@@ -1451,9 +1446,10 @@ def random_3D_crop_single(
     Tuple[NDArray, int, int, int, int, int, int],
 ]:
     """
-    Random crop for a single image. No crop is done in those dimensions that ``random_crop_size`` is greater than
-    the input image shape in those dimensions. For instance, if an input image is ``50x400x150`` and ``random_crop_size``
-    is ``30x224x224`` the resulting image will be ``30x224x150``.
+    Random crop for a single image.
+    
+    No crop is done in those dimensions that ``random_crop_size`` is greater than
+    the input image shape in those dimensions. For instance, if an input image is ``50x400x150`` and ``random_crop_size`` is ``30x224x224`` the resulting image will be ``30x224x150``.
 
     Parameters
     ----------
@@ -1499,7 +1495,6 @@ def random_3D_crop_single(
     x : int, optional
         X coordinate in the complete image where the crop starts.
     """
-
     if weight_map is not None:
         img, we = image
     else:
@@ -1568,7 +1563,7 @@ def center_crop_single(
 
 def resize_img(img: NDArray, shape: Tuple[int, ...]) -> NDArray:
     """
-    Resizes input image to given shape.
+    Resize input image to given shape.
 
     Parameters
     ----------
@@ -1583,7 +1578,6 @@ def resize_img(img: NDArray, shape: Tuple[int, ...]) -> NDArray:
     img : 3D/4D Numpy array
         Resized image. E.g. ``(y, x, channels)`` for ``2D`` or  ``(z, y, x, channels)`` for ``3D``.
     """
-
     return resize(
         img,
         shape,
@@ -1642,7 +1636,6 @@ def rotation(
         Rotated heatmap. Returned if ``mask`` is provided. E.g. ``(y, x, channels)`` for ``2D`` or
         ``(y, x, z, channels)`` for ``3D``.
     """
-
     if len(angles) == 0:
         angle = np.random.randint(0, 360)
     elif isinstance(angles, tuple):
@@ -2142,7 +2135,6 @@ def gaussian_blur(image: np.ndarray, sigma: float):
     -------
     img : np.ndarray
         Blurred image. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
-    
     """
     # Needed for elastic as integer
     if isinstance(sigma, tuple):
@@ -2169,7 +2161,6 @@ def median_blur(image: np.ndarray, k_range: Optional[tuple] = None):
     -------
     img : np.ndarray
         Blurred image. E.g. ``(y, x, channels)`` for ``2D`` or  ``(y, x, z, channels)`` for ``3D``.
-   
     """
     k = random.randint(k_range[0], k_range[1])
     
@@ -2337,7 +2328,6 @@ def elastic(image: np.ndarray,
 
     heat : 3D/4D Numpy array, optional
         Deformed heatmap. E.g. ``(y, x, channels)`` for ``2D`` or ``(y, x, z, channels)`` for ``3D``.
-
     """
     if random_seed is not None:
         np.random.seed(random_seed)
@@ -2362,6 +2352,28 @@ def elastic(image: np.ndarray,
 
 ## Helpers  
 def build_shear_matrix_skimage(image_shape, shear_x_rad, shear_y_rad, shift_add=(0.5, 0.5)):
+    """
+    Build an affine transformation matrix for shear augmentation using skimage.
+
+    Parameters
+    ----------
+    image_shape : tuple
+        Shape of the image (height, width, ...).
+
+    shear_x_rad : float
+        Shear angle in radians for the x direction.
+
+    shear_y_rad : float
+        Shear angle in radians for the y direction.
+
+    shift_add : tuple, optional
+        Additional shift to apply when centering the transformation.
+
+    Returns
+    -------
+    matrix : AffineTransform
+        Affine transformation matrix for shear.
+    """
     h, w = image_shape[:2]
     if h == 0 or w == 0:
         return AffineTransform()
