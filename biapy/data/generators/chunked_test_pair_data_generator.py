@@ -1,3 +1,10 @@
+"""
+Chunked test pair data generator for BiaPy.
+
+This module provides an IterableDataset for generating test data pairs from chunked
+Zarr/HDF5 files, including patch extraction, normalization, filtering, and saving
+results. It is designed for efficient inference on large volumetric datasets.
+"""
 from __future__ import annotations
 import torch
 from torch.utils.data import IterableDataset, DistributedSampler
@@ -108,6 +115,46 @@ class chunked_test_pair_data_generator(IterableDataset):
         ignore_index: Optional[int] = None,
         instance_problem: bool = False,
     ):
+        """
+        Initialize the chunked_test_pair_data_generator.
+
+        Parameters
+        ----------
+        sample_to_process : dict
+            Dictionary containing sample data and file pointers.
+        norm_module : Normalization
+            Normalization module to apply.
+        input_axes : str
+            Axes order for input data.
+        mask_input_axes : str
+            Axes order for mask data.
+        crop_shape : tuple of int
+            Shape of the patches to extract.
+        padding : tuple of int
+            Padding to apply to patches.
+        out_dir : str
+            Output directory for results.
+        dtype_str : str, optional
+            Data type for output.
+        convert_to_rgb : bool, optional
+            Convert single-channel images to RGB.
+        filter_props : list of list of str, optional
+            Properties for filtering samples.
+        filter_vals : list of list of float or int, optional
+            Values for filtering samples.
+        filter_signs : list of list of str, optional
+            Comparison signs for filtering.
+        preprocess_data : Callable, optional
+            Preprocessing function.
+        preprocess_cfg : dict, optional
+            Preprocessing configuration.
+        n_classes : int, optional
+            Number of classes.
+        ignore_index : int, optional
+            Index to ignore in mask.
+        instance_problem : bool, optional
+            Whether the problem is instance segmentation.
+        """
         super(chunked_test_pair_data_generator).__init__()
         self.sample_to_process = sample_to_process
         self.X_parallel_data = sample_to_process["X"]
@@ -291,7 +338,7 @@ class chunked_test_pair_data_generator(IterableDataset):
 
     def __iter__(self):
         """
-        Function to iterate over the generator.
+        Iterate over the generator.
 
         Returns
         -------
@@ -413,8 +460,9 @@ class chunked_test_pair_data_generator(IterableDataset):
 
     def insert_patch_in_file(self, patch: NDArray, patch_coords: PatchCoords):
         """
-        Insert patch into the output parallel file. It always creates a Zarr dataset using ``self.crop_shape``
-        as chunk size.
+        Insert patch into the output parallel file.
+        
+        It always creates a Zarr dataset using ``self.crop_shape`` as chunk size.
 
         Parameters
         ----------
@@ -473,9 +521,7 @@ class chunked_test_pair_data_generator(IterableDataset):
         )
 
     def merge_zarr_parts_into_one(self):
-        """
-        Merges all parts of the Zarr data, created by each rank, into just one file.
-        """
+        """Merge all parts of the Zarr data, created by each rank, into just one file."""
         # Creates the final Zarr dataset
         data_filename = os.path.join(self.out_dir, os.path.splitext(self.filename)[0] + ".zarr")
         final_data = zarr.open_array(
@@ -523,9 +569,7 @@ class chunked_test_pair_data_generator(IterableDataset):
                             )
 
     def save_parallel_data_as_tif(self):
-        """
-        Saves the final zarr into a tiff file.
-        """
+        """Save the final zarr into a tiff file."""
         final_zarr_file = os.path.join(self.out_dir, os.path.splitext(self.filename)[0] + ".zarr")
         if not os.path.exists(final_zarr_file):
             print(f"Couldn't load Zarr data for saving. File {final_zarr_file} not found!")
@@ -535,9 +579,7 @@ class chunked_test_pair_data_generator(IterableDataset):
             save_tif(np.expand_dims(data, 0), self.out_dir, [os.path.splitext(self.filename)[0] + ".tif"], verbose=True)
 
     def close_open_files(self):
-        """
-        Closes all files that may be open in the generator.
-        """
+        """Close all files that may be open in the generator."""
         # Input data files
         if self.X_parallel_file is not None and isinstance(self.X_parallel_file, h5py.File):
             self.X_parallel_file.close()
@@ -548,4 +590,12 @@ class chunked_test_pair_data_generator(IterableDataset):
             self.out_file.close()
 
     def __len__(self):
+        """
+        Return the number of patches in the dataset.
+
+        Returns
+        -------
+        int
+            Number of patches.
+        """
         return self.len
