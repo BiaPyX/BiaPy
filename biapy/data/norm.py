@@ -1,3 +1,12 @@
+"""
+Normalization utilities for image and mask data in deep learning workflows.
+
+This module provides the Normalization class, which supports various normalization
+strategies for images and masks, including percentile clipping, scaling, and
+zero-mean unit-variance normalization. It is designed to work with both NumPy arrays
+and PyTorch tensors, and integrates with BiaPy's DatasetFile for reproducible
+normalization statistics.
+"""
 import torch
 import copy
 import numpy as np
@@ -29,35 +38,27 @@ from biapy.data.dataset import DatasetFile
 
 class Normalization:
     """
-    Information about the normalization with the following keys are:
-    * ``"type"``, str: normalization type to use. Possible options:
-        - ``"div"`` to divide values from ``0/255`` (or ``0/65535`` if ``uint16``) in ``[0,1]`` range.
-        - ``"scale_range"`` same as ``"div"`` but scaling the range to ``[0-max]`` and then dividing by the maximum
-        value of the data and not by ``255`` or ``65535``.
-        - ``"zero_mean_unit_variance"`` to substract the mean and divide by std. In this option ``mean`` and ``std``
-        can also be provided or they will be calculated from the input.
-    * ``"mask_norm"``, str: how to normalize the mask (Y input data). Possible options:
-        - ``"as_mask"`` to treat the input as a mask. If this option is choosen ``channels_to_analize`` and ``channel_info``
-        keys are expected.
-        - ``"as_image"`` to treat the input as a raw image.
-    * ``"lower_bound"``, float (optional): if this is present mean that a percentile clipping is requested and this variable
-    represents the lower bound.
-    * ``"upper_bound"``, float (optional): upper bound for the percentile clipping.
-    * ``"lower_bound_val"``, float (optional): lower value for clipping. If this is set ``"lower_bound"` will be ignored.
-    * ``"upper_bound_val"``, float (optional): upper value for clipping. If this is set ``"upper_bound"` will be ignored.
-    * ``"scale_range_min_val"``, list of floats (optional): minimum value used for normalize the data per each channel.
-    Used when ``"scale_range"`` normalization type is selected.
-    * ``"scale_range_max_val"``, list of floats (optional): maximum value used for normalize the data per each channel.
-    Used when ``"scale_range"`` normalization type is selected.
-    * ``"mean"``, float (optional): mean to be used with ``"zero_mean_unit_variance"`` normalization.
-    * ``"std"``, float (optional): std to be used with ``"zero_mean_unit_variance"`` normalization.
-    * ``"channels_to_analize"``, int (optional): how many channels to analize during the mask normalization. Used if
-    ``"mask_norm"`` is ``"as_mask"``.
-    * ``"channel_info"``, str (optional): information of each channel. Used if ``"mask_norm"`` is ``"as_mask"``.
-    Expected keys are:
-        - ``type``, str: type of channel. Options: ["classes", "bin", "no_bin"]
-        - ``div``, boolean: whether of the channel needs to be divided or not.
+    Handles normalization of image and mask data for deep learning workflows.
 
+    This class supports several normalization strategies:
+    - "div": Divides values to scale them to [0, 1] range, using 255 or 65535 as divisor.
+    - "scale_range": Scales values to [0, 1] using the min and max of the data.
+    - "zero_mean_unit_variance": Subtracts mean and divides by standard deviation.
+
+    It also manages mask normalization, percentile clipping, and stores normalization statistics
+    for reproducibility.
+
+    Attributes:
+        type (str): Normalization type ("div", "scale_range", "zero_mean_unit_variance").
+        measure_by (str): Whether to measure stats by "image" or "patch".
+        mask_norm (str): Mask normalization mode ("as_mask", "as_image", "none").
+        out_dtype (str): Output data type after normalization.
+        do_percentile_clipping (bool): Whether to apply percentile clipping.
+        channels_to_analize (Optional[int]): Number of mask channels to analyze.
+        channel_info (Optional[Dict]): Info about each mask channel.
+        train_normalization (bool): If True, normalization is applied during training.
+        eps (float): Small value to avoid division by zero.
+        ... (other attributes for normalization statistics)
     """
 
     def __init__(
@@ -78,6 +79,26 @@ class Normalization:
         train_normalization: bool = True,
         eps: float = 1e-6,
     ):
+        """
+        Initialize the Normalization object with the specified configuration.
+
+        Args:
+            type (str): Normalization type.
+            measure_by (str): "image" or "patch".
+            mask_norm (str): Mask normalization mode.
+            out_dtype (str): Output data type.
+            percentile_clip (bool): Enable percentile clipping.
+            per_lower_bound (float): Lower percentile for clipping.
+            per_upper_bound (float): Upper percentile for clipping.
+            lower_bound_val (float): Explicit lower bound value.
+            upper_bound_val (float): Explicit upper bound value.
+            mean (float): Fixed mean for normalization.
+            std (float): Fixed std for normalization.
+            channels_to_analize (Optional[int]): Number of mask channels to analyze.
+            channel_info (Optional[Dict]): Info about each mask channel.
+            train_normalization (bool): Apply normalization during training.
+            eps (float): Epsilon for numerical stability.
+        """
         assert type in ["div", "scale_range", "zero_mean_unit_variance"]
         assert measure_by in ["image", "patch"]
         assert mask_norm in ["as_mask", "as_image", "none"]
@@ -117,7 +138,10 @@ class Normalization:
 
     def set_stats_from_image(self, image: NDArray | torch.Tensor):
         """
-        Set normalization values from the given image.
+        Compute and set normalization statistics from a single image.
+
+        Args:
+            image (NDArray | torch.Tensor): Input image.
         """
         if self.measure_by == "image":
             if self.do_percentile_clipping:
@@ -139,8 +163,16 @@ class Normalization:
 
     def set_stats_from_mask(self, mask: NDArray | torch.Tensor, n_classes: int = 1, ignore_index: Optional[int] = None, instance_problem: bool = False):
         """
-        Set normalization values from the given mask. The mask analysis is done by channel, as some of them may be normalized,
+        Compute and set normalization statistics from a mask.
+        
+        The mask analysis is done by channel, as some of them may be normalized,
         such as distance channels, while others no e.g. foreground binary channel.
+
+        Args:
+            mask (NDArray | torch.Tensor): Input mask.
+            n_classes (int): Number of classes.
+            ignore_index (Optional[int]): Index to ignore.
+            instance_problem (bool): If True, treat as instance segmentation.
         """
         _ignore_index = -1 if ignore_index is None else ignore_index
         if self.mask_norm == "as_mask":
@@ -174,7 +206,10 @@ class Normalization:
 
     def set_stats_from_DatasetFile(self, dataset_file: DatasetFile):
         """
-        Set normalization values from the given dataset_file.
+        Load normalization statistics from a DatasetFile object.
+
+        Args:
+            dataset_file (DatasetFile): DatasetFile containing normalization stats.
         """
         try:
             if self.measure_by == "image":
@@ -193,7 +228,13 @@ class Normalization:
 
     def set_DatasetFile_from_stats(self, dataset_file: DatasetFile) -> DatasetFile:
         """
-        Modify ``dataset_file`` adding normalization stats so they can be reused after.
+        Save current normalization statistics into a DatasetFile object.
+
+        Args:
+            dataset_file (DatasetFile): DatasetFile to update.
+
+        Returns:
+            DatasetFile: Updated DatasetFile with normalization stats.
         """
         if self.measure_by == "image":
             if self.do_percentile_clipping:
@@ -213,20 +254,21 @@ class Normalization:
         img: NDArray | torch.Tensor,
     ) -> Tuple[NDArray | torch.Tensor, Dict]:
         """
-        X data normalization.
+        Apply normalization to an image.
 
         Parameters
         ----------
-        img : 3D/4D Numpy array or torch.Tensor
+        img (NDArray | torch.Tensor): Input image.
             X element, for instance, an image. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
 
         Returns
         -------
-        img : 3D/4D Numpy array or torch.Tensor
-            X element normalized. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
+        Tuple[NDArray | torch.Tensor, Dict]: Normalized image and normalization info.
+            img : 3D/4D Numpy array or torch.Tensor
+                X element normalized. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
 
-        last_X_norm_extra_info : dict
-            Values used to normalize the data.
+            last_X_norm_extra_info : dict
+                Values used to normalize the data.
         """
         self.last_X_norm_extra_info = {}
         # Percentile clipping
@@ -262,21 +304,22 @@ class Normalization:
         mask: NDArray | torch.Tensor,
     ) -> Tuple[NDArray | torch.Tensor, dict]:
         """
-        Y data normalization.
+        Apply normalization to a mask.
 
         Parameters
         ----------
-        mask : 3D/4D Numpy array or torch.Tensor
+        mask (NDArray | torch.Tensor): Input mask.
             Y element, for instance, an image's mask. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in
             ``3D``.
 
         Returns
         -------
-        mask : 3D/4D Numpy array or torch.Tensor
-            Y element normalized. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
+        Tuple[NDArray | torch.Tensor, dict]: Normalized mask and normalization info.
+            mask : 3D/4D Numpy array or torch.Tensor
+                Y element normalized. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
 
-        last_Y_norm_extra_info : dict
-            Values used to normalize the data.
+            last_Y_norm_extra_info : dict
+                Values used to normalize the data.
         """
         self.last_Y_norm_extra_info = {}
         if self.mask_norm == "as_mask":
@@ -294,7 +337,13 @@ class Normalization:
 
     def get_channel_info(self, channel_pos: int) -> Dict:
         """
-        Get information of the channel.
+        Retrieve information about a specific mask channel.
+
+        Args:
+            channel_pos (int): Channel index.
+
+        Returns:
+            Dict: Channel information.
         """
         assert self.channel_info
         return self.channel_info[channel_pos]
@@ -308,13 +357,12 @@ class Normalization:
 
         Parameters
         ----------
-        data : 3D/4D Numpy array or torch.Tensor
+        data (NDArray | torch.Tensor): Input data.
             Data to normalize. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
 
         Returns
         -------
-        data : 3D/4D Numpy array or torch.Tensor
-            Clipped data. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
+        Tuple[NDArray | torch.Tensor, float, float]: Clipped data, lower bound, upper bound E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
         """
         if isinstance(data, torch.Tensor):
             x_lwr = (
@@ -356,7 +404,7 @@ class Normalization:
 
         Parameters
         ----------
-        data : 3D/4D Numpy array or torch.Tensor
+        data (torch.Tensor): Input tensor.
             Data to normalize. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
 
         q : float, optional
@@ -364,8 +412,7 @@ class Normalization:
 
         Returns
         -------
-        data : 3D/4D Numpy array or torch.Tensor
-            Clipped data. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
+        int | float: Percentile value.
         """
         # Note that ``kthvalue()`` works one-based, i.e. the first sorted value
         # indeed corresponds to k=1, not k=0! Use float(q) instead of q directly,
@@ -397,18 +444,19 @@ class Normalization:
 
         Returns
         -------
-        data : 3D/4D Numpy array or torch.Tensor
-            Normalized data. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
+        Tuple[NDArray | torch.Tensor, Dict]: Normalized data and normalization info.
+            data : 3D/4D Numpy array or torch.Tensor
+                Normalized data. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
 
-        norm_steps : dict
-            Contains information about the normalization steps applied. It is a dict containing the following keys:
-            * ``"orig_dtype"``, str: original dtype of the sample.
-            * ``"div_value"``, int/float (optional): number used to divide during normalization. It is created when ``"div"``
-            normalization type is selected.
-            * ``"scale_range_min_val"``, int/float (optional): ``x_min`` in the formula above. It is created when ``"scale_range"``
-            normalization type is selected.
-            * ``"scale_range_max_val"``, int/float (optional): ``x_max`` in the formula above. It is created when ``"scale_range"``
-            normalization type is selected.
+            norm_steps : dict
+                Contains information about the normalization steps applied. It is a dict containing the following keys:
+                * ``"orig_dtype"``, str: original dtype of the sample.
+                * ``"div_value"``, int/float (optional): number used to divide during normalization. It is created when ``"div"``
+                normalization type is selected.
+                * ``"scale_range_min_val"``, int/float (optional): ``x_min`` in the formula above. It is created when ``"scale_range"``
+                normalization type is selected.
+                * ``"scale_range_max_val"``, int/float (optional): ``x_max`` in the formula above. It is created when ``"scale_range"``
+                normalization type is selected.
         """
         norm_steps = {}
         norm_steps["orig_dtype"] = str(data.dtype)
@@ -469,23 +517,24 @@ class Normalization:
         data: NDArray | torch.Tensor,
     ) -> Tuple[NDArray | torch.Tensor, Dict]:
         """
-        Normalize given data by subtracting the mean and diving by standard deviation.
+        Apply zero-mean, unit-variance normalization.
 
         Parameters
         ----------
-        data : 3D/4D Numpy array or torch.Tensor
+        data : (NDArray | torch.Tensor)
             Data to normalize. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
 
         Returns
         -------
-        data : 3D/4D Numpy array or torch.Tensor
-            Normalized data. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
+        Tuple[NDArray | torch.Tensor, Dict]: Normalized data and normalization info.
+            data : 3D/4D Numpy array or torch.Tensor
+                Normalized data. E.g. ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
 
-        norm_steps : dict
-            Contains information about the normalization steps applied. It is a dict containing the following keys:
-                * ``"orig_dtype"``, str: original dtype of the sample.
-                * ``"mean"``, int/float (optional): mean used in the normalization.
-                * ``"std"``, int/float (optional): std used in the normalization.
+            norm_steps : dict
+                Contains information about the normalization steps applied. It is a dict containing the following keys:
+                    * ``"orig_dtype"``, str: original dtype of the sample.
+                    * ``"mean"``, int/float (optional): mean used in the normalization.
+                    * ``"std"``, int/float (optional): std used in the normalization.
         """
         norm_steps = {}
         norm_steps["orig_dtype"] = str(data.dtype)
@@ -607,8 +656,9 @@ class Normalization:
         norm_extra_info: Dict,
     ) -> NDArray | torch.Tensor:
         """
-        Unnormalization of input data by multiplying by the std and adding the mean. Opposite function of
-        ``zero_mean_unit_variance_normalization``.
+        Unnormalization of input data by multiplying by the std and adding the mean.
+        
+        Opposite function of ``zero_mean_unit_variance_normalization``.
 
         Parameters
         ----------
@@ -637,10 +687,18 @@ class Normalization:
         return (data * extra_info["std"]) + extra_info["mean"]
 
     def __str__(self):
+        """Return string representation of the object."""
         return str(self.__dict__)
 
     def __repr__(self):
+        """Return string representation of the object."""
         return str(self.__dict__)
 
     def copy(self):
+        """
+        Return a deep copy of the Normalization object.
+
+        Returns:
+            Normalization: Deep copy of the object.
+        """
         return copy.deepcopy(self)
