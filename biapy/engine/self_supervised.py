@@ -451,7 +451,8 @@ class Self_supervised_Workflow(Base_Workflow):
                         device=self.device,
                         pred_func=self.model_call_func,
                     )
-                p = p["pred"]
+                if isinstance(p, dict):
+                    p = p["pred"]
                 p = to_numpy_format(p, self.axes_order_back)
                 if "pred" not in locals():
                     pred = np.zeros((self.current_sample["X"].shape[0],) + p.shape[1:], dtype=self.dtype)
@@ -483,7 +484,8 @@ class Self_supervised_Workflow(Base_Workflow):
                     )
                 else:
                     p = self.apply_model_activations(p)
-                    p = p["pred"]
+                    if isinstance(p, dict):
+                        p = p["pred"]
                     p = to_numpy_format(p, self.axes_order_back)
 
                 if "pred" not in locals():
