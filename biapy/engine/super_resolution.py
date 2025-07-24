@@ -1,3 +1,13 @@
+"""
+Super-resolution workflow for BiaPy.
+
+This module defines the Super_resolution_Workflow class, which implements the
+training, validation, and inference pipeline for single-image super-resolution
+and image restoration tasks in BiaPy. It supports 2D and 3D data, multiple
+metrics (PSNR, SSIM, FID, IS, LPIPS), and handles data loading, model setup,
+predictions, and result saving for reconstructing high-resolution images from
+low-resolution inputs.
+"""
 import math
 import torch
 import numpy as np
@@ -27,7 +37,8 @@ from biapy.engine.metrics import SSIM_loss, W_MAE_SSIM_loss, W_MSE_SSIM_loss, lo
 
 class Super_resolution_Workflow(Base_Workflow):
     """
-    Semantic segmentation workflow where the goal is to assign a class to each pixel of the input image.
+    Single-image super-resolution workflow where the goal is to reconstruct high-resolution (HR) images from low-resolution (LR) ones. If there is a difference in the size of the LR and HR images, typically determined by a scale factor (x2, x4), this task is known as single-image super-resolution. If the size of the LR and HR images is the same, this task is usually referred to as image restoration.
+
     More details in `our documentation <https://biapy.readthedocs.io/en/latest/workflows/super_resolution.html>`_.
 
     Parameters
@@ -46,6 +57,25 @@ class Super_resolution_Workflow(Base_Workflow):
     """
 
     def __init__(self, cfg, job_identifier, device, args, **kwargs):
+        """
+        Initialize the Super_resolution_Workflow.
+
+        Sets up configuration, device, job identifier, and initializes
+        workflow-specific attributes for super-resolution tasks.
+
+        Parameters
+        ----------
+        cfg : YACS configuration
+            Running configuration.
+        job_identifier : str
+            Complete name of the running job.
+        device : torch.device
+            Device used.
+        args : argparse.Namespace
+            Arguments used in BiaPy's call.
+        **kwargs : dict
+            Additional keyword arguments.
+        """
         super(Super_resolution_Workflow, self).__init__(cfg, job_identifier, device, args, **kwargs)
 
         # From now on, no modification of the cfg will be allowed
@@ -61,6 +91,8 @@ class Super_resolution_Workflow(Base_Workflow):
 
     def define_activations_and_channels(self):
         """
+        Define the activations and output channels of the model.
+
         This function must define the following variables:
 
         self.model_output_channels : List of functions
@@ -87,6 +119,8 @@ class Super_resolution_Workflow(Base_Workflow):
 
     def define_metrics(self):
         """
+        Define the metrics to be used during training and test.
+
         This function must define the following variables:
 
         self.train_metrics : List of functions
@@ -201,7 +235,7 @@ class Super_resolution_Workflow(Base_Workflow):
         metric_logger: Optional[MetricLogger] = None,
     ) -> Dict:
         """
-        Execution of the metrics defined in :func:`~define_metrics` function.
+        Calculate the metrics defined in :func:`~define_metrics` function.
 
         Parameters
         ----------
@@ -337,9 +371,7 @@ class Super_resolution_Workflow(Base_Workflow):
         return out_metrics
 
     def process_test_sample(self):
-        """
-        Function to process a sample in the inference phase.
-        """
+        """Process a sample in the test/inference phase."""
         assert self.model
         # Skip processing image
         if "discard" in self.current_sample["X"] and self.current_sample["X"]["discard"]:
@@ -487,7 +519,7 @@ class Super_resolution_Workflow(Base_Workflow):
 
     def after_merge_patches(self, pred):
         """
-        Steps need to be done after merging all predicted patches into the original image.
+        Execute steps needed after merging all predicted patches into the original image.
 
         Parameters
         ----------
@@ -498,7 +530,7 @@ class Super_resolution_Workflow(Base_Workflow):
 
     def after_full_image(self, pred: NDArray):
         """
-        Steps that must be executed after generating the prediction by supplying the entire image to the model.
+        Execute steps needed after generating the prediction by supplying the entire image to the model.
 
         Parameters
         ----------
@@ -508,9 +540,7 @@ class Super_resolution_Workflow(Base_Workflow):
         pass
 
     def after_all_images(self):
-        """
-        Steps that must be done after predicting all images.
-        """
+        """Execute steps needed after predicting all images."""
         # FID, IS and LPIPS need to be computed for all the images
         for i, metric in enumerate(self.test_metrics):
             m_name = self.test_metric_names[i].lower()
