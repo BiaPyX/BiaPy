@@ -1,3 +1,11 @@
+"""
+Instance segmentation workflow for BiaPy.
+
+This module defines the Instance_Segmentation_Workflow class, which implements the
+training, validation, and inference pipeline for instance segmentation tasks in BiaPy.
+It handles data preparation, model setup, metrics, predictions, post-processing,
+and result saving for assigning unique IDs to each object in 2D and 3D images.
+"""
 import os
 import torch
 import h5py
@@ -50,6 +58,7 @@ from biapy.data.dataset import PatchCoords
 class Instance_Segmentation_Workflow(Base_Workflow):
     """
     Instance segmentation workflow where the goal is to assign an unique id, i.e. integer, to each object of the input image.
+    
     More details in `our documentation <https://biapy.readthedocs.io/en/latest/workflows/instance_segmentation.html>`_.
 
     Parameters
@@ -68,6 +77,25 @@ class Instance_Segmentation_Workflow(Base_Workflow):
     """
 
     def __init__(self, cfg, job_identifier, device, args, **kwargs):
+        """
+        Initialize the Instance_Segmentation_Workflow.
+
+        Sets up configuration, device, job identifier, and initializes
+        workflow-specific attributes for instance segmentation tasks.
+
+        Parameters
+        ----------
+        cfg : YACS configuration
+            Running configuration.
+        job_identifier : str
+            Complete name of the running job.
+        device : torch.device
+            Device used.
+        args : argparse.Namespace
+            Arguments used in BiaPy's call.
+        **kwargs : dict
+            Additional keyword arguments.
+        """
         super(Instance_Segmentation_Workflow, self).__init__(cfg, job_identifier, device, args, **kwargs)
 
         self.original_train_input_mask_axes_order = self.cfg.DATA.TRAIN.INPUT_MASK_AXES_ORDER
@@ -151,6 +179,8 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
     def define_activations_and_channels(self):
         """
+        Define the activations and output channels of the model.
+
         This function must define the following variables:
 
         self.model_output_channels : List of functions
@@ -222,6 +252,8 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
     def define_metrics(self):
         """
+        Define the metrics to be used in the instance segmentation workflow.
+
         This function must define the following variables:
 
         self.train_metrics : List of functions
@@ -445,7 +477,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         metric_logger: Optional[MetricLogger] = None,
     ) -> Dict:
         """
-        Execution of the metrics defined in :func:`~define_metrics` function.
+        Calculate the metrics defined in :func:`~define_metrics` function.
 
         Parameters
         ----------
@@ -466,7 +498,6 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         out_metrics : dict
             Value of the metrics for the given prediction.
         """
-
         if isinstance(output, np.ndarray):
             _output = to_pytorch_format(
                 output.copy(),
@@ -517,7 +548,9 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
     def instance_seg_process(self, pred, filenames, out_dir, out_dir_post_proc, calculate_metrics: bool = True):
         """
-        Instance segmentation workflow engine for test/inference. Process model's prediction to prepare
+        Instance segmentation workflow engine for test/inference.
+        
+        Process model's prediction to prepare
         instance segmentation output and calculate metrics.
 
         Parameters
@@ -1064,7 +1097,9 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         calculate_metrics: bool = False,
     ) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
-        Synapse segmentation workflow engine for test/inference. Process model's prediction to prepare
+        Synapse segmentation workflow engine for test/inference.
+        
+        Process model's prediction to prepare
         synapse segmentation output and calculate metrics.
 
         Parameters
@@ -1432,9 +1467,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         return pre_points_df, post_points_df
 
     def process_test_sample(self):
-        """
-        Function to process a sample in the inference phase.
-        """
+        """Process a sample in the inference phase."""
         if self.cfg.MODEL.SOURCE != "torchvision":
             self.instances_already_created = False
             super().process_test_sample()
@@ -1477,7 +1510,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
     def after_merge_patches(self, pred):
         """
-        Steps need to be done after merging all predicted patches into the original image.
+        Execute steps needed after merging all predicted patches into the original image.
 
         Parameters
         ----------
@@ -1611,9 +1644,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     )
 
     def after_all_patch_prediction_by_chunks(self):
-        """
-        Place any code that needs to be done after predicting all the patches, one by one, in the "by chunks" setting.
-        """
+        """Execute steps needed after merging all predicted patches into the original image in "by chunks" setting."""
         assert isinstance(self.all_pred, list) and isinstance(self.all_gt, list)
         if self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
             if self.cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE == "chunk_by_chunk":
@@ -2289,7 +2320,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
     def after_full_image(self, pred: NDArray):
         """
-        Steps that must be executed after generating the prediction by supplying the entire image to the model.
+        Execute steps needed after generating the prediction by supplying the entire image to the model.
 
         Parameters
         ----------
@@ -2326,9 +2357,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             raise NotImplementedError
 
     def after_all_images(self):
-        """
-        Steps that must be done after predicting all images.
-        """
+        """Execute steps needed after predicting all images."""
         super().after_all_images()
         assert isinstance(self.all_pred, list) and isinstance(self.all_gt, list)
         if self.cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
@@ -2508,7 +2537,8 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
     def prepare_instance_data(self):
         """
-        Creates instance segmentation ground truth images to train the model based on the ground truth instances provided.
+        Create instance segmentation ground truth images to train the model based on the ground truth instances provided.
+
         They will be saved in a separate folder in the root path of the ground truth.
         """
         original_test_path, original_test_mask_path = None, None
