@@ -1,3 +1,12 @@
+"""
+Configuration management for BiaPy.
+
+This module defines the Config class, which encapsulates all configuration options
+for BiaPy workflows using a YACS CfgNode. It provides default values and hierarchical
+organization for system, data, augmentation, model, loss, training, inference,
+post-processing, and logging parameters. Utility functions are included for updating
+dependent configuration variables after merging user-provided configs.
+"""
 import os
 from yacs.config import CfgNode as CN
 import copy
@@ -6,8 +15,31 @@ from typing import (
 )
 
 class Config:
-    def __init__(self, job_dir: str, job_identifier: str):
+    """
+    BiaPy configuration handler.
 
+    This class manages the hierarchical configuration for BiaPy experiments,
+    including system resources, problem specification, data loading, augmentation,
+    model architecture, loss functions, training, inference, post-processing, and
+    logging. It uses YACS CfgNode for flexible and robust configuration management.
+
+    Attributes
+    ----------
+    _C : CN
+        The root YACS configuration node containing all experiment parameters.
+    """
+
+    def __init__(self, job_dir: str, job_identifier: str):
+        """
+        Initialize the Config object with default values.
+
+        Parameters
+        ----------
+        job_dir : str
+            Directory where job outputs (results, checkpoints, logs) will be stored.
+        job_identifier : str
+            Unique identifier for the job (used in output paths).
+        """
         if "/" in job_identifier:
             raise ValueError("Job name can not contain / character. Provided: {}".format(job_identifier))
 
@@ -1668,26 +1700,74 @@ class Config:
         self._C = _C
 
     def get_cfg_defaults(self) -> CN:
-        """Get a yacs CfgNode object with default values for my_project."""
+        """
+        Get a clone of the default configuration.
+
+        Returns
+        -------
+        CN
+            A cloned YACS CfgNode object with default values.
+        """
         # Return a clone so that the defaults will not be altered
         # This is for the "local variable" use pattern
         return self._C.clone()
 
     def to_dict(self):
+        """
+        Convert the configuration to a Python dictionary.
+
+        Returns
+        -------
+        dict
+            Dictionary representation of the configuration.
+        """
         return dict(self._C)
 
     def copy(self):
+        """
+        Create a deep copy of the Config object.
+
+        Returns
+        -------
+        Config
+            A deep copy of the current Config instance.
+        """
         return copy.deepcopy(self)
 
     def __str__(self):
+        """
+        Return a string representation of the Config object.
+
+        Returns
+        -------
+        str
+            String representation of the configuration.
+        """
         return str(self.__dict__)
 
     def __repr__(self):
+        """
+        Return a string representation of the Config object.
+
+        Returns
+        -------
+        str
+            String representation of the configuration.
+        """
         return str(self.__dict__)
 
 def update_dependencies(cfg) -> None:
-    """Update some variables that depend of changes made after merge the .cfg file provide by the user. That is,
-    this function should be called after YACS's merge_from_file().
+    """
+    Update dependent configuration variables after merging user config.
+
+    This function should be called after merging a user-provided .cfg file
+    to ensure that all dependent paths and variables are updated accordingly.
+    That is, this function should be called after YACS's merge_from_file().
+
+    Parameters
+    ----------
+    cfg : Config or CN
+        The configuration object to update.
     """
     call = getattr(cfg, "_C") if bool(getattr(cfg, "_C", False)) else cfg
     # Remove possible / characters at the end of the paths
