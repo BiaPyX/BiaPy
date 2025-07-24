@@ -1,3 +1,10 @@
+"""
+Training and evaluation engine for BiaPy.
+
+This module provides functions to train and evaluate deep learning models for
+one epoch, handling distributed training, logging, learning rate scheduling,
+and memory bank operations for contrastive/self-supervised learning.
+"""
 import torch
 import math
 import sys
@@ -32,13 +39,62 @@ def train_one_epoch(
     total_iters: int=0,
     contrast_warmup_iters: int=0,
 ):
+    """
+    Train the model for one epoch.
 
+    Handles forward and backward passes, loss computation, metric logging,
+    optimizer steps, learning rate scheduling, and optional memory bank updates.
+
+    Parameters
+    ----------
+    cfg : CN
+        BiaPy configuration node.
+    model : nn.Module or nn.parallel.DistributedDataParallel
+        Model to train.
+    model_call_func : Callable
+        Function to call the model (handles multi-heads, etc.).
+    loss_function : Callable
+        Loss function.
+    metric_function : Callable
+        Metric computation function.
+    prepare_targets : Callable
+        Function to prepare targets for loss/metrics.
+    data_loader : DataLoader
+        Training data loader.
+    optimizer : Optimizer
+        Optimizer for model parameters.
+    device : torch.device
+        Device to use.
+    epoch : int
+        Current epoch number.
+    log_writer : TensorboardLogger, optional
+        Logger for TensorBoard.
+    lr_scheduler : Scheduler, optional
+        Learning rate scheduler.
+    verbose : bool, optional
+        Verbosity flag.
+    memory_bank : MemoryBank, optional
+        Memory bank for contrastive/self-supervised learning.
+    total_iters : int, optional
+        Total iterations completed (for contrastive warmup).
+    contrast_warmup_iters : int, optional
+        Number of warmup iterations for contrastive learning.
+
+    Returns
+    -------
+    dict
+        Dictionary of averaged metrics for the epoch.
+    int
+        Number of steps (batches) processed.
+    """
+    # Switch to training mode
     model.train(True)
 
     # Ensure correct order of each epoch info by adding loss first
     metric_logger = MetricLogger(delimiter="  ", verbose=verbose)
     metric_logger.add_meter("loss", SmoothedValue())
 
+    # Set up the header for logging
     header = "Epoch: [{}]".format(epoch + 1)
     print_freq = 10
 
@@ -146,7 +202,40 @@ def evaluate(
     lr_scheduler: Optional[Scheduler] = None,
     memory_bank: Optional[MemoryBank] = None,
 ):
+    """
+    Evaluate the model on the validation set.
 
+    Runs the model in evaluation mode, computes loss and metrics, and updates
+    learning rate scheduler if needed.
+
+    Parameters
+    ----------
+    cfg : CN
+        BiaPy configuration node.
+    model : nn.Module or nn.parallel.DistributedDataParallel
+        Model to evaluate.
+    model_call_func : Callable
+        Function to call the model.
+    loss_function : Callable
+        Loss function.
+    metric_function : Callable
+        Metric computation function.
+    prepare_targets : Callable
+        Function to prepare targets for loss/metrics.
+    epoch : int
+        Current epoch number.
+    data_loader : DataLoader
+        Validation data loader.
+    lr_scheduler : Scheduler, optional
+        Learning rate scheduler.
+    memory_bank : MemoryBank, optional
+        Memory bank for contrastive/self-supervised learning.
+
+    Returns
+    -------
+    dict
+        Dictionary of averaged metrics for the validation set.
+    """
     # Ensure correct order of each epoch info by adding loss first
     metric_logger = MetricLogger(delimiter="  ")
     metric_logger.add_meter("loss", SmoothedValue())
