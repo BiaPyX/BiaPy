@@ -1,3 +1,11 @@
+"""
+Self-supervised workflow for BiaPy.
+
+This module defines the Self_supervised_Workflow class, which implements the
+training, validation, and inference pipeline for self-supervised learning tasks in BiaPy.
+It supports pretext tasks such as masking and crappification, and handles data preparation,
+model setup, metrics, predictions, and result saving for learning representations without labels.
+"""
 import os
 import torch
 import math
@@ -41,10 +49,9 @@ from biapy.engine.metrics import SSIM_loss, W_MAE_SSIM_loss, W_MSE_SSIM_loss, lo
 
 class Self_supervised_Workflow(Base_Workflow):
     """
-    Self supervised workflow where the goal is to pretrain the backbone model by solving a so-called
-    pretext task without labels. This way, the model learns a representation that can be later transferred
-    to solve a downstream task in a labeled (but smaller) dataset. More details in `our documentation
-    <https://biapy.readthedocs.io/en/latest/workflows/self_supervision.html>`_.
+    Self supervised workflow where the goal is to pretrain the backbone model by solving a so-called pretext task without labels. This way, the model learns a representation that can be later transferred to solve a downstream task in a labeled (but smaller) dataset.
+    
+    More details in `our documentation <https://biapy.readthedocs.io/en/latest/workflows/self_supervision.html>`_.
 
     Parameters
     ----------
@@ -62,6 +69,25 @@ class Self_supervised_Workflow(Base_Workflow):
     """
 
     def __init__(self, cfg, job_identifier, device, args, **kwargs):
+        """
+        Initialize the Self_supervised_Workflow.
+
+        Sets up configuration, device, job identifier, and initializes
+        workflow-specific attributes for self-supervised tasks.
+
+        Parameters
+        ----------
+        cfg : YACS configuration
+            Running configuration.
+        job_identifier : str
+            Complete name of the running job.
+        device : torch.device
+            Device used.
+        args : argparse.Namespace
+            Arguments used in BiaPy's call.
+        **kwargs : dict
+            Additional keyword arguments.
+        """
         super(Self_supervised_Workflow, self).__init__(cfg, job_identifier, device, args, **kwargs)
 
         self.prepare_ssl_data()
@@ -83,6 +109,8 @@ class Self_supervised_Workflow(Base_Workflow):
 
     def define_activations_and_channels(self):
         """
+        Define the model output channels and activations to be applied to the model output.
+
         This function must define the following variables:
 
         self.model_output_channels : List of functions
@@ -109,6 +137,8 @@ class Self_supervised_Workflow(Base_Workflow):
 
     def define_metrics(self):
         """
+        Define the metrics to be used in the workflow.
+
         This function must define the following variables:
 
         self.train_metrics : List of functions
@@ -220,9 +250,7 @@ class Self_supervised_Workflow(Base_Workflow):
         super().define_metrics()
 
     def MaskedAutoencoderViT_loss_wrapper(self, output, targets):
-        """
-        Unravel MAE loss.
-        """
+        """Unravel MAE loss."""
         # Targets not used because the loss has been already calculated 
         return output["loss"]
 
@@ -234,7 +262,7 @@ class Self_supervised_Workflow(Base_Workflow):
         metric_logger: Optional[MetricLogger] = None,
     ) -> Dict:
         """
-        Execution of the metrics defined in :func:`~define_metrics` function.
+        Calculate the metrics defined in :func:`~define_metrics` function.
 
         Parameters
         ----------
@@ -378,8 +406,7 @@ class Self_supervised_Workflow(Base_Workflow):
 
     def prepare_targets(self, targets, batch):
         """
-        Location to perform any necessary data transformations to ``targets``
-        before calculating the loss.
+        Perform any necessary data transformations to ``targets`` before calculating the loss.
 
         Parameters
         ----------
@@ -401,9 +428,7 @@ class Self_supervised_Workflow(Base_Workflow):
             return to_pytorch_format(targets, self.axes_order, self.device, dtype=self.loss_dtype)
 
     def process_test_sample(self):
-        """
-        Function to process a sample in the inference phase.
-        """
+        """Process a sample in the test/inference phase."""
         assert self.model and self.model_without_ddp
         # Skip processing image
         if "discard" in self.current_sample["X"] and self.current_sample["X"]["discard"]:
@@ -642,7 +667,7 @@ class Self_supervised_Workflow(Base_Workflow):
 
     def after_merge_patches(self, pred):
         """
-        Steps need to be done after merging all predicted patches into the original image.
+        Execute steps needed after merging all predicted patches into the original image.
 
         Parameters
         ----------
@@ -653,7 +678,7 @@ class Self_supervised_Workflow(Base_Workflow):
 
     def after_full_image(self, pred: NDArray):
         """
-        Steps that must be executed after generating the prediction by supplying the entire image to the model.
+        Execute steps needed after generating the prediction by supplying the entire image to the model.
 
         Parameters
         ----------
@@ -663,9 +688,7 @@ class Self_supervised_Workflow(Base_Workflow):
         pass
 
     def after_all_images(self):
-        """
-        Steps that must be done after predicting all images.
-        """
+        """Execute steps needed after predicting all images."""
         # FID, IS and LPIPS need to be computed for all the images
         if self.current_sample["Y"] is not None:
             for i, metric in enumerate(self.test_metrics):
@@ -682,8 +705,9 @@ class Self_supervised_Workflow(Base_Workflow):
 
     def prepare_ssl_data(self):
         """
-        Creates self supervised "ground truth" images, if ``crappify`` was selected, to train the model based
-        on the input images provided. They will be saved in a separate folder in the root path of the inout images.
+        Create self supervised "ground truth" images, if ``crappify`` was selected, to train the model based on the input images provided.
+        
+        Images will be saved in a separate folder in the root path of the input images.
         """
         if self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
             print("No SSL data needs to be prepared for masking, as it will be generated on the fly")
