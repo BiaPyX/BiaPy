@@ -1,3 +1,11 @@
+"""
+Denoising workflow and utilities for BiaPy.
+
+This module provides the Denoising_Workflow class for training and inference on image denoising tasks,
+as well as utility functions for patch manipulation, stratified coordinate sampling, and structN2V masking.
+It supports both 2D and 3D data, and includes implementations of various pixel manipulation strategies
+used in self-supervised denoising approaches such as Noise2Void (N2V).
+"""
 import math
 import torch
 import numpy as np
@@ -23,25 +31,42 @@ from biapy.engine.metrics import n2v_loss_mse, loss_encapsulation
 
 class Denoising_Workflow(Base_Workflow):
     """
-    Denoising workflow where the goal is to remove noise from an image. More details in
-    `our documentation <https://biapy.readthedocs.io/en/latest/workflows/denoising.html>`_.
+    Denoising workflow where the goal is to remove noise from an image.
+
+    More details in `our documentation <https://biapy.readthedocs.io/en/latest/workflows/denoising.html>`_.
 
     Parameters
     ----------
     cfg : YACS configuration
         Running configuration.
-
-    Job_identifier : str
+    job_identifier : str
         Complete name of the running job.
-
-    device : Torch device
+    device : torch.device
         Device used.
-
-    args : argpase class
+    args : argparse.Namespace
         Arguments used in BiaPy's call.
     """
 
     def __init__(self, cfg, job_identifier, device, args, **kwargs):
+        """
+        Initialize the Denoising_Workflow.
+
+        Sets up configuration, device, job identifier, and initializes
+        workflow-specific attributes for denoising tasks.
+
+        Parameters
+        ----------
+        cfg : YACS configuration
+            Running configuration.
+        job_identifier : str
+            Complete name of the running job.
+        device : torch.device
+            Device used.
+        args : argparse.Namespace
+            Arguments used in BiaPy's call.
+        **kwargs : dict
+            Additional keyword arguments.
+        """
         super(Denoising_Workflow, self).__init__(cfg, job_identifier, device, args, **kwargs)
 
         # From now on, no modification of the cfg will be allowed
@@ -57,6 +82,8 @@ class Denoising_Workflow(Base_Workflow):
 
     def define_activations_and_channels(self):
         """
+        Define the activations and output channels of the model.
+
         This function must define the following variables:
 
         self.model_output_channels : List of functions
@@ -83,6 +110,8 @@ class Denoising_Workflow(Base_Workflow):
 
     def define_metrics(self):
         """
+        Define the metrics to be used during training and test/inference.
+
         This function must define the following variables:
 
         self.train_metrics : List of functions
@@ -148,7 +177,7 @@ class Denoising_Workflow(Base_Workflow):
         metric_logger: Optional[MetricLogger] = None,
     ) -> Dict:
         """
-        Execution of the metrics defined in :func:`~define_metrics` function.
+        Execute the calculation of metrics defined in :func:`~define_metrics` function.
 
         Parameters
         ----------
@@ -212,9 +241,7 @@ class Denoising_Workflow(Base_Workflow):
         return out_metrics
 
     def process_test_sample(self):
-        """
-        Function to process a sample in the inference phase.
-        """
+        """Process a sample in the test/inference phase."""
         assert self.model is not None
         # Skip processing image
         if "discard" in self.current_sample["X"] and self.current_sample["X"]["discard"]:
@@ -322,7 +349,7 @@ class Denoising_Workflow(Base_Workflow):
 
     def after_merge_patches(self, pred: torch.Tensor):
         """
-        Steps need to be done after merging all predicted patches into the original image.
+        Execute steps needed after merging all predicted patches into the original image.
 
         Parameters
         ----------
@@ -333,7 +360,7 @@ class Denoising_Workflow(Base_Workflow):
 
     def after_full_image(self, pred: NDArray):
         """
-        Steps that must be executed after generating the prediction by supplying the entire image to the model.
+        Execute steps needed after generating the prediction by supplying the entire image to the model.
 
         Parameters
         ----------
@@ -343,9 +370,7 @@ class Denoising_Workflow(Base_Workflow):
         pass
 
     def after_all_images(self):
-        """
-        Steps that must be done after predicting all images.
-        """
+        """Excute steps that must be done after predicting all images."""
         super().after_all_images()
 
 
@@ -356,6 +381,29 @@ class Denoising_Workflow(Base_Workflow):
 
 
 def get_subpatch(patch, coord, local_sub_patch_radius, crop_patch=True):
+    """
+    Extract a subpatch centered at a given coordinate, handling border cropping.
+
+    Parameters
+    ----------
+    patch : np.ndarray
+        Input patch.
+    coord : tuple of int
+        Center coordinate for the subpatch.
+    local_sub_patch_radius : int
+        Radius of the subpatch to extract.
+    crop_patch : bool, optional
+        Whether to crop the patch at the borders (default: True).
+
+    Returns
+    -------
+    subpatch : np.ndarray
+        Extracted subpatch.
+    crop_neg : int
+        Negative crop offset.
+    crop_pos : int
+        Positive crop offset.
+    """
     crop_neg, crop_pos = 0, 0
     if crop_patch:
         start = np.array(coord) - local_sub_patch_radius
@@ -385,6 +433,21 @@ def get_subpatch(patch, coord, local_sub_patch_radius, crop_patch=True):
 
 
 def random_neighbor(shape, coord):
+    """
+    Sample a random neighbor coordinate different from the given coordinate.
+
+    Parameters
+    ----------
+    shape : tuple of int
+        Shape of the patch.
+    coord : tuple of int
+        Center coordinate.
+
+    Returns
+    -------
+    rand_coords : list of int
+        Random neighbor coordinate.
+    """
     rand_coords = sample_coords(shape, coord)
     while np.any(rand_coords == coord):
         rand_coords = sample_coords(shape, coord)
@@ -393,14 +456,63 @@ def random_neighbor(shape, coord):
 
 
 def sample_coords(shape, coord, sigma=4):
+    """
+    Sample random coordinates from a normal distribution centered at coord.
+
+    Parameters
+    ----------
+    shape : tuple of int
+        Shape of the patch.
+    coord : tuple of int
+        Center coordinate.
+    sigma : float, optional
+        Standard deviation for the normal distribution (default: 4).
+
+    Returns
+    -------
+    coords : list of int
+        Sampled coordinates.
+    """
     return [normal_int(c, sigma, s) for c, s in zip(coord, shape)]
 
 
 def normal_int(mean, sigma, w):
+    """
+    Sample an integer from a normal distribution and clip to valid range.
+
+    Parameters
+    ----------
+    mean : float
+        Mean of the normal distribution.
+    sigma : float
+        Standard deviation.
+    w : int
+        Maximum allowed value (exclusive).
+
+    Returns
+    -------
+    int
+        Sampled and clipped integer.
+    """
     return int(np.clip(np.round(np.random.normal(mean, sigma)), 0, w - 1))
 
 
 def mask_center(local_sub_patch_radius, ndims=2):
+    """
+    Create a mask with the center pixel set to zero.
+
+    Parameters
+    ----------
+    local_sub_patch_radius : int
+        Radius of the patch.
+    ndims : int, optional
+        Number of dimensions (default: 2).
+
+    Returns
+    -------
+    mask : np.ndarray
+        Boolean mask with center pixel set to zero.
+    """
     size = local_sub_patch_radius * 2 + 1
     patch_wo_center = np.ones((size,) * ndims)
     if ndims == 2:
@@ -413,6 +525,19 @@ def mask_center(local_sub_patch_radius, ndims=2):
 
 
 def pm_normal_withoutCP(local_sub_patch_radius):
+    """
+    Return a function that samples a random neighbor from a normal distribution (without center pixel).
+
+    Parameters
+    ----------
+    local_sub_patch_radius : int
+        Radius of the local subpatch.
+
+    Returns
+    -------
+    Callable
+        Function that takes (patch, coords, dims, structN2Vmask) and returns values from random neighbors.
+    """
     def normal_withoutCP(patch, coords, dims, structN2Vmask=None):
         vals = []
         for coord in zip(*coords):
@@ -424,6 +549,19 @@ def pm_normal_withoutCP(local_sub_patch_radius):
 
 
 def pm_mean(local_sub_patch_radius):
+    """
+    Return a function that computes the mean of the local neighborhood (excluding center pixel).
+
+    Parameters
+    ----------
+    local_sub_patch_radius : int
+        Radius of the local subpatch.
+
+    Returns
+    -------
+    Callable
+        Function that takes (patch, coords, dims, structN2Vmask) and returns mean values.
+    """
     def patch_mean(patch, coords, dims, structN2Vmask=None):
         patch_wo_center = mask_center(local_sub_patch_radius, ndims=dims)
         vals = []
@@ -438,6 +576,19 @@ def pm_mean(local_sub_patch_radius):
 
 
 def pm_median(local_sub_patch_radius):
+    """
+    Return a function that computes the median of the local neighborhood (excluding center pixel).
+
+    Parameters
+    ----------
+    local_sub_patch_radius : int
+        Radius of the local subpatch.
+
+    Returns
+    -------
+    Callable
+        Function that takes (patch, coords, dims, structN2Vmask) and returns median values.
+    """
     def patch_median(patch, coords, dims, structN2Vmask=None):
         patch_wo_center = mask_center(local_sub_patch_radius, ndims=dims)
         vals = []
@@ -452,6 +603,19 @@ def pm_median(local_sub_patch_radius):
 
 
 def pm_uniform_withCP(local_sub_patch_radius):
+    """
+    Return a function that samples a random value from the local neighborhood (including center pixel).
+
+    Parameters
+    ----------
+    local_sub_patch_radius : int
+        Radius of the local subpatch.
+
+    Returns
+    -------
+    Callable
+        Function that takes (patch, coords, dims, structN2Vmask) and returns random values.
+    """
     def random_neighbor_withCP_uniform(patch, coords, dims, structN2Vmask=None):
         vals = []
         for coord in zip(*coords):
@@ -464,6 +628,19 @@ def pm_uniform_withCP(local_sub_patch_radius):
 
 
 def pm_uniform_withoutCP(local_sub_patch_radius):
+    """
+    Return a function that samples a random value from the local neighborhood (excluding center pixel).
+
+    Parameters
+    ----------
+    local_sub_patch_radius : int
+        Radius of the local subpatch.
+
+    Returns
+    -------
+    Callable
+        Function that takes (patch, coords, dims, structN2Vmask) and returns random values.
+    """
     def random_neighbor_withoutCP_uniform(patch, coords, dims, structN2Vmask=None):
         patch_wo_center = mask_center(local_sub_patch_radius, ndims=dims)
         vals = []
@@ -478,6 +655,19 @@ def pm_uniform_withoutCP(local_sub_patch_radius):
 
 
 def pm_normal_additive(pixel_gauss_sigma):
+    """
+    Return a function that adds Gaussian noise to the center pixel.
+
+    Parameters
+    ----------
+    pixel_gauss_sigma : float
+        Standard deviation of the Gaussian noise.
+
+    Returns
+    -------
+    Callable
+        Function that takes (patch, coords, dims, structN2Vmask) and returns noisy values.
+    """
     def pixel_gauss(patch, coords, dims, structN2Vmask=None):
         vals = []
         for coord in zip(*coords):
@@ -488,6 +678,19 @@ def pm_normal_additive(pixel_gauss_sigma):
 
 
 def pm_normal_fitted(local_sub_patch_radius):
+    """
+    Return a function that samples from a Gaussian fitted to the local neighborhood.
+
+    Parameters
+    ----------
+    local_sub_patch_radius : int
+        Radius of the local subpatch.
+
+    Returns
+    -------
+    Callable
+        Function that takes (patch, coords, dims, structN2Vmask) and returns sampled values.
+    """
     def local_gaussian(patch, coords, dims, structN2Vmask=None):
         vals = []
         for coord in zip(*coords):
@@ -500,6 +703,19 @@ def pm_normal_fitted(local_sub_patch_radius):
 
 
 def pm_identity(local_sub_patch_radius):
+    """
+    Return a function that simply returns the center pixel value (identity).
+
+    Parameters
+    ----------
+    local_sub_patch_radius : int
+        Radius of the local subpatch (unused).
+
+    Returns
+    -------
+    Callable
+        Function that takes (patch, coords, dims, structN2Vmask) and returns the center pixel value.
+    """
     def identity(patch, coords, dims, structN2Vmask=None):
         vals = []
         for coord in zip(*coords):
@@ -510,6 +726,21 @@ def pm_identity(local_sub_patch_radius):
 
 
 def get_stratified_coords2D(box_size, shape):
+    """
+    Generate stratified random coordinates for 2D patches.
+
+    Parameters
+    ----------
+    box_size : int
+        Size of the box for stratification.
+    shape : tuple of int
+        Shape of the 2D image.
+
+    Returns
+    -------
+    tuple of lists
+        (y_coords, x_coords) for sampled points.
+    """
     box_count_Y = int(np.ceil(shape[0] / box_size))
     box_count_X = int(np.ceil(shape[1] / box_size))
     x_coords = []
@@ -526,6 +757,21 @@ def get_stratified_coords2D(box_size, shape):
 
 
 def get_stratified_coords3D(box_size, shape):
+    """
+    Generate stratified random coordinates for 3D patches.
+
+    Parameters
+    ----------
+    box_size : int
+        Size of the box for stratification.
+    shape : tuple of int
+        Shape of the 3D image.
+
+    Returns
+    -------
+    tuple of lists
+        (z_coords, y_coords, x_coords) for sampled points.
+    """
     box_count_z = int(np.ceil(shape[0] / box_size))
     box_count_Y = int(np.ceil(shape[1] / box_size))
     box_count_X = int(np.ceil(shape[2] / box_size))
@@ -552,8 +798,19 @@ def get_stratified_coords3D(box_size, shape):
 
 def apply_structN2Vmask(patch, coords, mask):
     """
-    each point in coords corresponds to the center of the mask.
-    then for point in the mask with value=1 we assign a random value
+    Apply a structN2V mask to a 2D patch.
+
+    Each point in coords corresponds to the center of the mask.
+    For each point in the mask with value=1, assign a random value.
+
+    Parameters
+    ----------
+    patch : np.ndarray
+        Input patch to modify.
+    coords : np.ndarray or list
+        Coordinates of mask centers.
+    mask : np.ndarray
+        Binary mask to apply.
     """
     coords = np.array(coords, dtype=int)
     ndim = mask.ndim
@@ -573,8 +830,19 @@ def apply_structN2Vmask(patch, coords, mask):
 
 def apply_structN2Vmask3D(patch, coords, mask):
     """
-    each point in coords corresponds to the center of the mask.
-    then for point in the mask with value=1 we assign a random value
+    Apply a structN2V mask to a 3D patch.
+
+    Each point in coords corresponds to the center of the mask.
+    For each point in the mask with value=1, assign a random value.
+
+    Parameters
+    ----------
+    patch : np.ndarray
+        Input 3D patch to modify.
+    coords : np.ndarray or list
+        Coordinates of mask centers (z, y, x).
+    mask : np.ndarray
+        Binary mask to apply.
     """
     z_coords = coords[0]
     coords = coords[1:]
@@ -602,6 +870,25 @@ def manipulate_val_data(
     shape: Tuple[int, ...] = (64, 64),
     value_manipulation: Callable = pm_uniform_withCP(5),
 ):
+    """
+    Manipulate validation data for self-supervised denoising.
+
+    Applies a value manipulation strategy (e.g., uniform, mean, median) to a percentage of pixels
+    in the validation set, as used in Noise2Void/structN2V validation.
+
+    Parameters
+    ----------
+    X_val : NDArray
+        Validation input data.
+    Y_val : NDArray
+        Validation target data (will be overwritten).
+    perc_pix : float, optional
+        Percentage of pixels to manipulate (default: 0.198).
+    shape : tuple of int, optional
+        Shape of the patch (default: (64, 64)).
+    value_manipulation : Callable, optional
+        Function to manipulate pixel values (default: pm_uniform_withCP(5)).
+    """
     dims = len(shape)
     if dims == 2:
         box_size = np.round(np.sqrt(100 / perc_pix), dtype=int)  # type: ignore
@@ -631,4 +918,19 @@ def manipulate_val_data(
 
 
 def get_value_manipulation(n2v_manipulator, n2v_neighborhood_radius):
+    """
+    Return a value manipulation function for N2V/structN2V based on the given strategy.
+
+    Parameters
+    ----------
+    n2v_manipulator : str
+        Name of the manipulation strategy (e.g., 'uniform_withCP').
+    n2v_neighborhood_radius : int
+        Neighborhood radius for the manipulation.
+
+    Returns
+    -------
+    Callable
+        Value manipulation function.
+    """
     return eval("pm_{0}({1})".format(n2v_manipulator, str(n2v_neighborhood_radius)))
