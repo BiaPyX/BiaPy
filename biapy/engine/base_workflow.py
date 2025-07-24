@@ -1,3 +1,11 @@
+"""
+Base workflow class for BiaPy.
+
+This module defines the Base_Workflow abstract class, which provides the main
+structure and utility methods for building training and inference workflows in BiaPy.
+It handles configuration, model preparation, data loading, training, testing,
+metrics, logging, and post-processing for both 2D and 3D biomedical image analysis.
+"""
 import math
 import os
 import datetime
@@ -110,6 +118,23 @@ class Base_Workflow(metaclass=ABCMeta):
         device: torch.device,
         args: argparse.Namespace,
     ):
+        """
+        Initialize the Base_Workflow object.
+
+        Sets up configuration, device, job identifier, and initializes
+        all workflow attributes and state variables.
+
+        Parameters
+        ----------
+        cfg : CN
+            Running configuration.
+        job_identifier : str
+            Complete name of the running job.
+        device : torch.device
+            Device used.
+        args : argparse.Namespace
+            Arguments used in BiaPy's call.
+        """
         self.cfg = cfg
         self.args = args
         self.job_identifier = job_identifier
@@ -258,6 +283,8 @@ class Base_Workflow(metaclass=ABCMeta):
 
     def define_activations_and_channels(self):
         """
+        Define the activations to be applied to the model output and the channels that the model will output.
+
         This function must define the following variables:
 
         self.model_output_channels : List of functions
@@ -296,6 +323,8 @@ class Base_Workflow(metaclass=ABCMeta):
 
     def define_metrics(self):
         """
+        Define the metrics to be calculated during training and test.
+
         This function must define the following variables:
 
         self.train_metrics : List of functions
@@ -342,7 +371,7 @@ class Base_Workflow(metaclass=ABCMeta):
         metric_logger: Optional[MetricLogger] = None,
     ) -> Dict:
         """
-        Execution of the metrics defined in :func:`~define_metrics` function.
+        Execute the calculation of metrics defined in :func:`~define_metrics` function.
 
         Parameters
         ----------
@@ -367,8 +396,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
     def prepare_targets(self, targets, batch):
         """
-        Location to perform any necessary data transformations to ``targets``
-        before calculating the loss.
+        Location to perform any necessary data transformations to ``targets`` before calculating the loss.
 
         Parameters
         ----------
@@ -387,9 +415,7 @@ class Base_Workflow(metaclass=ABCMeta):
         return to_pytorch_format(targets, self.axes_order, self.device)
 
     def load_train_data(self):
-        """
-        Load training and validation data.
-        """
+        """Load training and validation data."""
         print("##########################")
         print("#   LOAD TRAINING DATA   #")
         print("##########################")
@@ -480,9 +506,7 @@ class Base_Workflow(metaclass=ABCMeta):
             dist.barrier()
 
     def destroy_train_data(self):
-        """
-        Delete training variable to release memory.
-        """
+        """Delete training variables to release memory."""
         print("Releasing memory . . .")
         if "X_train" in locals() or "X_train" in globals():
             del self.X_train
@@ -498,9 +522,7 @@ class Base_Workflow(metaclass=ABCMeta):
             del self.val_generator
 
     def prepare_train_generators(self):
-        """
-        Build train and val generators.
-        """
+        """Build training and validation generators."""
         if self.cfg.TRAIN.ENABLE:
             print("##############################")
             print("#  PREPARE TRAIN GENERATORS  #")
@@ -650,9 +672,7 @@ class Base_Workflow(metaclass=ABCMeta):
         return p
 
     def prepare_model(self):
-        """
-        Build the model.
-        """
+        """Build the model."""
         if self.model_prepared:
             print("Model already prepared!")
             return
@@ -748,9 +768,7 @@ class Base_Workflow(metaclass=ABCMeta):
             self.start_epoch = 0
 
     def prepare_logging_tool(self):
-        """
-        Prepare looging tool.
-        """
+        """Prepare looging tool."""
         print("#######################")
         print("# Prepare logging tool #")
         print("#######################")
@@ -776,9 +794,7 @@ class Base_Workflow(metaclass=ABCMeta):
             self.plot_values["val_" + self.train_metric_names[i]] = []
 
     def train(self):
-        """
-        Training phase.
-        """
+        """Training phase."""
         self.load_train_data()
         if not self.model_prepared:
             self.prepare_model()
@@ -1010,9 +1026,7 @@ class Base_Workflow(metaclass=ABCMeta):
         self.destroy_train_data()
 
     def load_test_data(self):
-        """
-        Load test data.
-        """
+        """Load test data."""
         print("######################")
         print("#   LOAD TEST DATA   #")
         print("######################")
@@ -1053,9 +1067,7 @@ class Base_Workflow(metaclass=ABCMeta):
             )
 
     def destroy_test_data(self):
-        """
-        Delete test variable to release memory.
-        """
+        """Delete test variable to release memory."""
         print("Releasing memory . . .")
         if "X_test" in locals() or "X_test" in globals():
             del self.X_test
@@ -1067,9 +1079,7 @@ class Base_Workflow(metaclass=ABCMeta):
             del self.current_sample
 
     def prepare_test_generators(self):
-        """
-        Prepare test data generator.
-        """
+        """Prepare test data generator."""
         if self.cfg.TEST.ENABLE:
             print("############################")
             print("#  PREPARE TEST GENERATOR  #")
@@ -1086,7 +1096,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
     def apply_model_activations(self, pred: torch.Tensor, training=False) -> torch.Tensor:
         """
-        Function that apply the last activation (if any) to the model's output.
+        Apply the last activation (if any) to the model's output.
 
         Parameters
         ----------
@@ -1131,9 +1141,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
     @torch.no_grad()
     def test(self):
-        """
-        Test/Inference step.
-        """
+        """Test/Inference step."""
         self.load_test_data()
         if not self.model_prepared:
             self.prepare_model()
@@ -1391,7 +1399,9 @@ class Base_Workflow(metaclass=ABCMeta):
 
     def process_test_sample_by_chunks(self):
         """
-        Function to process a sample in the inference phase. A final H5/Zarr file is created in "TZCYX" or "TZYXC" order
+        Process a sample in the inference phase.
+        
+        A final H5/Zarr file is created in "TZCYX" or "TZYXC" order
         depending on ``DATA.TEST.INPUT_IMG_AXES_ORDER`` ('T' is always included).
         """
         if not self.cfg.TEST.REUSE_PREDICTIONS:
@@ -1509,8 +1519,9 @@ class Base_Workflow(metaclass=ABCMeta):
 
         def _prepare_bmz_sample(sample_key, img, apply_norm=True):
             """
-            Prepare a sample from the given ``img`` using the patch size in the configuration. It also saves
-            the sample in ``self.bmz_config`` using the ``sample_key``.
+            Prepare a sample from the given ``img`` using the patch size in the configuration.
+            
+            It also saves the sample in ``self.bmz_config`` using the ``sample_key``.
 
             Parameters
             ----------
@@ -1598,9 +1609,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     self.bmz_config["postprocessing"].append("sigmoid")
 
     def process_test_sample(self):
-        """
-        Function to process a sample in the inference phase.
-        """
+        """Process a sample in the inference phase."""
         # Skip processing image
         if "discard" in self.current_sample["X"] and self.current_sample["X"]["discard"]:
             return True
@@ -2047,6 +2056,7 @@ class Base_Workflow(metaclass=ABCMeta):
     def after_full_image(self, pred: NDArray):
         """
         Place here any code that must be executed after generating the prediction by supplying the entire image to the model.
+        
         To enable this, the model should be convolutional, and the image(s) should be in a 2D format. Using 3D images as
         direct inputs to the model is not feasible due to their large size.
 
@@ -2058,9 +2068,7 @@ class Base_Workflow(metaclass=ABCMeta):
         raise NotImplementedError
 
     def after_all_images(self):
-        """
-        Place here any code that must be done after predicting all images.
-        """
+        """Place here any code that must be done after predicting all images."""
         ############################
         ### POST-PROCESSING (2D) ###
         ############################
@@ -2096,7 +2104,5 @@ class Base_Workflow(metaclass=ABCMeta):
             )
 
     def after_all_patch_prediction_by_chunks(self):
-        """
-        Place any code that needs to be done after predicting all the patches, one by one, in the "by chunks" setting.
-        """
+        """Place any code that needs to be done after predicting all the patches, one by one, in the "by chunks" setting."""
         raise NotImplementedError
