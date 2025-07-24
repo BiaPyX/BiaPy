@@ -1,3 +1,9 @@
+"""
+BiaPy engine package.
+
+This package contains core workflow classes, training and evaluation engines,
+metrics, and learning rate schedulers for deep learning pipelines in BiaPy.
+"""
 import timm.optim
 from torch.optim.optimizer import Optimizer
 from torch.optim.lr_scheduler import ReduceLROnPlateau, OneCycleLR
@@ -17,12 +23,27 @@ def prepare_optimizer(
     steps_per_epoch: int,
 ) -> Tuple[Optimizer, Scheduler | None]:
     """
-    Select the optimizer, loss and metrics for the given model.
+    Create and configure the optimizer and learning rate scheduler for the given model.
+
+    This function selects and initializes the optimizer (e.g., Adam, AdamW) and, if specified,
+    the learning rate scheduler (ReduceLROnPlateau, WarmUpCosineDecayScheduler, or OneCycleLR)
+    based on the configuration.
 
     Parameters
     ----------
     cfg : YACS CN object
-        Configuration.
+        Configuration object with optimizer and scheduler settings.
+    model_without_ddp : nn.Module or nn.parallel.DistributedDataParallel
+        The model to optimize.
+    steps_per_epoch : int
+        Number of steps (batches) per training epoch.
+
+    Returns
+    -------
+    optimizer : Optimizer
+        Configured optimizer for the model.
+    lr_scheduler : Scheduler or None
+        Configured learning rate scheduler, or None if not specified.
     """
     lr = cfg.TRAIN.LR if cfg.TRAIN.LR_SCHEDULER.NAME != "warmupcosine" else cfg.TRAIN.LR_SCHEDULER.MIN_LR
     opt_args = {}
