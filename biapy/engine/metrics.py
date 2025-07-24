@@ -1,3 +1,12 @@
+"""
+Metrics and loss functions for BiaPy.
+
+This module provides a variety of metrics and loss functions for evaluating and training
+deep learning models in BiaPy. It includes implementations for Jaccard index (IoU),
+Dice loss, BCE, Cross-Entropy, contrastive losses, instance segmentation losses,
+detection metrics, and wrappers for SSIM, MSE, and MAE-based losses. Both PyTorch and
+NumPy-based metrics are supported for 2D and 3D biomedical image analysis.
+"""
 import torch
 import numpy as np
 import pandas as pd
@@ -13,7 +22,7 @@ from typing import Optional, List, Tuple
 
 def jaccard_index_numpy(y_true, y_pred):
     """
-    Define Jaccard index.
+    Compute the Jaccard index (Intersection over Union) between ground truth and prediction.
 
     Parameters
     ----------
@@ -30,7 +39,6 @@ def jaccard_index_numpy(y_true, y_pred):
     jac : float
         Jaccard index value.
     """
-
     if y_true.ndim != y_pred.ndim:
         raise ValueError("Dimension mismatch: {} and {} provided".format(y_true.shape, y_pred.shape))
 
@@ -48,7 +56,7 @@ def jaccard_index_numpy(y_true, y_pred):
 
 def jaccard_index_numpy_without_background(y_true, y_pred):
     """
-    Define Jaccard index excluding the background class (first channel).
+    Compute Jaccard index excluding the background class (first channel).
 
     Parameters
     ----------
@@ -65,7 +73,6 @@ def jaccard_index_numpy_without_background(y_true, y_pred):
     jac : float
         Jaccard index value.
     """
-
     if y_true.ndim != y_pred.ndim:
         raise ValueError("Dimension mismatch: {} and {} provided".format(y_true.shape, y_pred.shape))
 
@@ -82,6 +89,19 @@ def jaccard_index_numpy_without_background(y_true, y_pred):
 
 
 def weight_binary_ratio(target):
+    """
+    Compute a weight map to balance foreground and background pixels.
+
+    Parameters
+    ----------
+    target : torch.Tensor
+        Target tensor.
+
+    Returns
+    -------
+    weight : torch.Tensor
+        Weight map.
+    """
     if torch.max(target) == torch.min(target):
         return torch.ones_like(target, dtype=torch.float32)
 
@@ -114,6 +134,12 @@ def weight_binary_ratio(target):
 
 
 class jaccard_index:
+    """
+    Jaccard index (IoU) metric for PyTorch tensors.
+
+    Supports binary and multiclass segmentation, with optional thresholding and ignore index.
+    """
+
     def __init__(
         self,
         num_classes: int,
@@ -201,6 +227,12 @@ class jaccard_index:
 
 
 class multiple_metrics:
+    """
+    Compute multiple metrics for instance segmentation workflows.
+
+    Supports IoU, L1, and other metrics for multi-head or multi-channel outputs.
+    """
+
     def __init__(
         self,
         num_classes: int,
@@ -234,7 +266,6 @@ class multiple_metrics:
         ndim : int, optional
             Number of dimensions of the input data. 2 for 2D images, 3 for 3D volumes.
         """
-
         self.num_classes = num_classes
         self.metric_names = metric_names
         self.device = device
@@ -331,19 +362,47 @@ def scale_target(targets_: torch.Tensor, scaled_size: Tuple[int, ...]) -> torch.
     return targets.long()
 
 class loss_encapsulation(nn.Module):
-    """
-    Just a wrapper to any other common loss deataching the prediction from the dict given by the model.
-    """
+    """Just a wrapper to any other common loss deataching the prediction from the dict given by the model."""
+
     def __init__(self, loss):
+        """
+        Initialize the loss_encapsulation module.
+
+        Parameters
+        ----------
+        loss : nn.Module or callable
+            The loss function to wrap.
+        """
         super(loss_encapsulation, self).__init__()
         self.loss = loss 
 
     def forward(self, inputs, targets):
+        """
+        Forward pass for the encapsulated loss.
+
+        Parameters
+        ----------
+        inputs : torch.Tensor or dict
+            Model predictions. If a dict, expects the prediction under the "pred" key.
+        targets : torch.Tensor
+            Ground truth targets.
+
+        Returns
+        -------
+        loss : torch.Tensor
+            Computed loss value.
+        """
         if isinstance(inputs, dict):
             inputs = inputs["pred"]
         return self.loss(inputs, targets)
        
 class CrossEntropyLoss_wrapper:
+    """
+    Wrapper for PyTorch's CrossEntropyLoss and BCEWithLogitsLoss.
+
+    Supports multi-head, class rebalancing, and ignore index.
+    """
+
     def __init__(
         self,
         num_classes: int,
@@ -354,7 +413,7 @@ class CrossEntropyLoss_wrapper:
         ignore_index: int = -1,
     ):
         """
-        Wrapper to Pytorch's CrossEntropyLoss.
+        Initialize wrapper to Pytorch's CrossEntropyLoss.
 
         Parameters
         ----------
@@ -451,13 +510,33 @@ class CrossEntropyLoss_wrapper:
 
 class DiceLoss(nn.Module):
     """
-    Based on `Kaggle <https://www.kaggle.com/code/bigironsphere/loss-function-library-keras-pytorch>`_.
+    Dice loss for binary segmentation.
+
+    Based on `Kaggle implementation <https://www.kaggle.com/code/bigironsphere/loss-function-library-keras-pytorch>`_.
     """
 
     def __init__(self):
+        """Initialize the DiceLoss module."""
         super(DiceLoss, self).__init__()
 
     def forward(self, inputs, targets, smooth=1):
+        """
+        Compute the Dice loss.
+
+        Parameters
+        ----------
+        inputs : torch.Tensor or dict
+            Predicted logits. If a dict, expects the prediction under the "pred" key.
+        targets : torch.Tensor
+            Ground truth masks.
+        smooth : float, optional
+            Smoothing factor to avoid division by zero (default: 1).
+
+        Returns
+        -------
+        loss : torch.Tensor
+            Dice loss value (1 - Dice coefficient).
+        """
         if isinstance(inputs, dict):
             inputs = inputs["pred"]
         inputs = F.sigmoid(inputs)
@@ -474,15 +553,44 @@ class DiceLoss(nn.Module):
 
 class DiceBCELoss(nn.Module):
     """
-    Based on `Kaggle <https://www.kaggle.com/code/bigironsphere/loss-function-library-keras-pytorch>`_.
+    Combined Dice and BCE loss for binary segmentation.
+     
+    Based on `Kaggle implementation <https://www.kaggle.com/code/bigironsphere/loss-function-library-keras-pytorch>`_ implementation.
     """
 
     def __init__(self, w_dice=0.5, w_bce=0.5):
+        """
+        Initialize the DiceBCELoss module.
+
+        Parameters
+        ----------
+        w_dice : float, optional
+            Weight for the Dice loss component (default: 0.5).
+        w_bce : float, optional
+            Weight for the BCE loss component (default: 0.5).
+        """
         super(DiceBCELoss, self).__init__()
         self.w_dice = w_dice
         self.w_bce = w_bce
 
     def forward(self, inputs, targets, smooth=1):
+        """
+        Compute the weighted sum of Dice loss and BCE loss.
+
+        Parameters
+        ----------
+        inputs : torch.Tensor or dict
+            Predicted logits. If a dict, expects the prediction under the "pred" key.
+        targets : torch.Tensor
+            Ground truth masks.
+        smooth : float, optional
+            Smoothing factor to avoid division by zero (default: 1).
+
+        Returns
+        -------
+        loss : torch.Tensor
+            Weighted sum of Dice loss and BCE loss.
+        """
         if isinstance(inputs, dict):
             inputs = inputs["pred"]
         inputs = F.sigmoid(inputs)
@@ -527,6 +635,20 @@ class ContrastCELoss(nn.Module):
         weight: float = 1.0,
         ignore_index: int = -1,
     ):
+        """
+        Initialize the ContrastCELoss module.
+
+        Parameters
+        ----------
+        main_loss : nn.Module
+            The main loss function to be used for the segmentation task.
+        ndim : int, optional
+            Number of dimensions of the input data. 2 for 2D images, 3 for 3D volumes. Default is 2.
+        weight : float, optional
+            Weight for the contrastive loss. Default is 1.0.
+        ignore_index : int, optional
+            Label to ignore in the loss calculation. Default is -1.
+        """
         super(ContrastCELoss, self).__init__()
         self.ndim = ndim
         self.main_loss = main_loss
@@ -602,6 +724,12 @@ class ContrastCELoss(nn.Module):
 
 
 class PixelContrastLoss(nn.Module):
+    """
+    Pixel Contrastive Loss for semantic segmentation tasks.
+
+    Supports hard anchor sampling and negative sampling for contrastive learning.
+    """
+
     def __init__(
         self,
         temperature: float = 0.07,
@@ -612,7 +740,7 @@ class PixelContrastLoss(nn.Module):
         ndim: int = 2,
     ):
         """
-        Pixel Contrastive Loss for semantic segmentation tasks.
+        Initialize the Pixel Contrastive Loss for semantic segmentation tasks.
 
         Parameters
         ----------
@@ -634,7 +762,6 @@ class PixelContrastLoss(nn.Module):
         ndim : int, optional
             Number of dimensions of the input data. 2 for 2D images, 3 for 3D volumes. Default is 2.
         """
-
         super(PixelContrastLoss, self).__init__()
 
         self.temperature = temperature
@@ -737,6 +864,7 @@ class PixelContrastLoss(nn.Module):
     def _sample_negative(self, Q: torch.Tensor):
         """
         Sample negative examples from the queue.
+
         The queue is expected to be of shape (class_num, cache_size, feat_size), where:
             - class_num is the number of classes,
             - cache_size is the number of samples per class,
@@ -918,6 +1046,38 @@ class PixelContrastLoss(nn.Module):
 
 
 class instance_segmentation_loss:
+    """
+    Custom loss for instance segmentation tasks in BiaPy.
+
+    This loss combines different loss functions (e.g., BCE, L1, CrossEntropy) for multiple output channels,
+    such as binary masks, contours, distances, and class channels. It supports class rebalancing, masking
+    of distance channels, and different instance segmentation output types (e.g., "regular", "synapses").
+    The loss is configurable for various output channel combinations (e.g., "BC", "BCP", "BCD", etc.)
+    and can handle multi-class and multi-head settings.
+
+    Parameters
+    ----------
+    weights : tuple of float, optional
+        Weights to be applied to each output channel loss. E.g. (1, 0.2).
+    out_channels : str, optional
+        String specifying the output channels (e.g., "BC", "BCP", "BCD", etc.).
+    mask_distance_channel : bool, optional
+        Whether to mask the distance channel loss to only calculate it where the binary mask is present.
+    n_classes : int, optional
+        Number of classes for the class channel (default: 2).
+    class_rebalance : bool, optional
+        Whether to reweight classes inside the loss function.
+    instance_type : str, optional
+        Type of instance segmentation ("regular" or "synapses").
+    ignore_index : int, optional
+        Value to ignore in the loss calculation (default: -1).
+
+    Usage
+    -----
+    loss_fn = instance_segmentation_loss(weights=(1, 0.2), out_channels="BC")
+    loss = loss_fn(y_pred, y_true)
+    """
+
     def __init__(
         self,
         weights=(1, 0.2),
@@ -929,7 +1089,7 @@ class instance_segmentation_loss:
         ignore_index: int = -1,
     ):
         """
-        Custom loss that mixed BCE and MSE depending on the ``out_channels`` variable.
+        Initialize the custom loss that mixed BCE and MSE depending on the ``out_channels`` variable.
 
         Parameters
         ----------
@@ -1209,7 +1369,7 @@ def detection_metrics(
     verbose=False,
 ):
     """
-    Calculate detection metrics based on
+    Calculate detection metrics (precision, recall, F1) for point-based object detection.
 
     Parameters
     ----------
@@ -1491,18 +1651,66 @@ def detection_metrics(
 
 
 class SSIM_loss(torch.nn.Module):
+    """SSIM loss using torchmetrics StructuralSimilarityIndexMeasure."""
+
     def __init__(self, data_range, device):
+        """
+        Initialize the SSIM_loss module.
+
+        Parameters
+        ----------
+        data_range : float
+            The value range of the input images (e.g., 1.0 or 255).
+        device : torch.device
+            Device to use for computation.
+        """
         super(SSIM_loss, self).__init__()
         self.ssim = StructuralSimilarityIndexMeasure(data_range=data_range).to(device, non_blocking=True)
 
     def forward(self, input, target):
+        """
+        Compute the SSIM loss.
+
+        Parameters
+        ----------
+        input : torch.Tensor or dict
+            Predicted images. If a dict, expects the prediction under the "pred" key.
+        target : torch.Tensor
+            Ground truth images.
+
+        Returns
+        -------
+        loss : torch.Tensor
+            1 minus the SSIM value (so that lower is better).
+        """
         if isinstance(input, dict):
             input = input["pred"]
         return 1 - self.ssim(input, target)
 
 
 class W_MAE_SSIM_loss(torch.nn.Module):
+    """
+    Weighted combination of MAE and SSIM loss.
+
+    This loss combines Mean Absolute Error (MAE) and Structural Similarity Index Measure (SSIM)
+    for image regression tasks, allowing the user to balance pixel-wise and perceptual similarity.
+    """
+
     def __init__(self, data_range, device, w_mae=0.5, w_ssim=0.5):
+        """
+        Initialize the W_MAE_SSIM_loss module.
+
+        Parameters
+        ----------
+        data_range : float
+            The value range of the input images (e.g., 1.0 or 255).
+        device : torch.device
+            Device to use for computation.
+        w_mae : float, optional
+            Weight for the MAE loss component (default: 0.5).
+        w_ssim : float, optional
+            Weight for the SSIM loss component (default: 0.5).
+        """
         super(W_MAE_SSIM_loss, self).__init__()
         self.w_mae = w_mae
         self.w_ssim = w_ssim
@@ -1510,13 +1718,49 @@ class W_MAE_SSIM_loss(torch.nn.Module):
         self.ssim = StructuralSimilarityIndexMeasure(data_range=data_range).to(device, non_blocking=True)
 
     def forward(self, input, target):
+        """
+        Compute the weighted sum of MAE and SSIM loss.
+
+        Parameters
+        ----------
+        input : torch.Tensor or dict
+            Predicted images. If a dict, expects the prediction under the "pred" key.
+        target : torch.Tensor
+            Ground truth images.
+
+        Returns
+        -------
+        loss : torch.Tensor
+            Weighted sum of MAE and (1 - SSIM) loss.
+        """
         if isinstance(input, dict):
             input = input["pred"]
         return (self.mse(input, target) * self.w_mae) + ((1 - self.ssim(input, target)) * self.w_ssim)
 
 
 class W_MSE_SSIM_loss(torch.nn.Module):
+    """
+    Weighted combination of MSE and SSIM loss.
+
+    This loss combines Mean Squared Error (MSE) and Structural Similarity Index Measure (SSIM)
+    for image regression tasks, allowing the user to balance pixel-wise and perceptual similarity.
+    """
+
     def __init__(self, data_range, device, w_mse=0.5, w_ssim=0.5):
+        """
+        Initialize the W_MSE_SSIM_loss module.
+
+        Parameters
+        ----------
+        data_range : float
+            The value range of the input images (e.g., 1.0 or 255).
+        device : torch.device
+            Device to use for computation.
+        w_mse : float, optional
+            Weight for the MSE loss component (default: 0.5).
+        w_ssim : float, optional
+            Weight for the SSIM loss component (default: 0.5).
+        """
         super(W_MSE_SSIM_loss, self).__init__()
         self.w_mse = w_mse
         self.w_ssim = w_ssim
@@ -1524,12 +1768,42 @@ class W_MSE_SSIM_loss(torch.nn.Module):
         self.ssim = StructuralSimilarityIndexMeasure(data_range=data_range).to(device, non_blocking=True)
 
     def forward(self, input, target):
+        """
+        Compute the weighted sum of MSE and SSIM loss.
+
+        Parameters
+        ----------
+        input : torch.Tensor or dict
+            Predicted images. If a dict, expects the prediction under the "pred" key.
+        target : torch.Tensor
+            Ground truth images.
+
+        Returns
+        -------
+        loss : torch.Tensor
+            Weighted sum of MSE and (1 - SSIM) loss.
+        """
         if isinstance(input, dict):
             input = input["pred"]
         return (self.mse(input, target) * self.w_mse) + ((1 - self.ssim(input, target)) * self.w_ssim)
 
 
 def n2v_loss_mse(y_pred, y_true):
+    """
+    Noise2Void MSE loss for self-supervised denoising.
+
+    Parameters
+    ----------
+    y_pred : torch.Tensor or dict
+        Predicted output.
+    y_true : torch.Tensor
+        Ground truth and mask.
+
+    Returns
+    -------
+    loss : torch.Tensor
+        Loss value.
+    """
     if isinstance(y_pred, dict):
         y_pred = y_pred["pred"]
     target = y_true[:, 0].squeeze()
@@ -1539,10 +1813,10 @@ def n2v_loss_mse(y_pred, y_true):
 
 
 class SSIM_wrapper:
+    """Wrapper for SSIM loss using pytorch_msssim."""
+
     def __init__(self):
-        """
-        Wrapper to SSIM loss function.
-        """
+        """Initiate wrapper to SSIM loss function."""
         self.loss = SSIM(data_range=1, size_average=True, channel=1)
 
     def __call__(self, y_pred, y_true):
