@@ -1,3 +1,11 @@
+"""
+Classification workflow for BiaPy.
+
+This module defines the Classification_Workflow class, which implements the
+training, validation, and inference pipeline for image classification tasks in BiaPy.
+It handles data loading, model setup, metrics, predictions, and result saving for
+single-label classification problems.
+"""
 import os
 import torch
 import math
@@ -19,6 +27,7 @@ from biapy.engine.metrics import loss_encapsulation
 class Classification_Workflow(Base_Workflow):
     """
     Classification workflow where the goal of this workflow is to assing a label to the input image.
+
     More details in `our documentation <https://biapy.readthedocs.io/en/latest/workflows/classification.html>`_.
 
     Parameters
@@ -37,6 +46,25 @@ class Classification_Workflow(Base_Workflow):
     """
 
     def __init__(self, cfg, job_identifier, device, args, **kwargs):
+        """
+        Initialize the Classification_Workflow.
+
+        Sets up configuration, device, job identifier, and initializes
+        workflow-specific attributes for classification tasks.
+
+        Parameters
+        ----------
+        cfg : YACS configuration
+            Running configuration.
+        job_identifier : str
+            Complete name of the running job.
+        device : torch.device
+            Device used.
+        args : argparse.Namespace
+            Arguments used in BiaPy's call.
+        **kwargs : dict
+            Additional keyword arguments.
+        """
         super(Classification_Workflow, self).__init__(cfg, job_identifier, device, args, **kwargs)
         self.all_pred = []
         if self.cfg.DATA.TEST.LOAD_GT:
@@ -54,6 +82,8 @@ class Classification_Workflow(Base_Workflow):
 
     def define_activations_and_channels(self):
         """
+        Define the activations and output channels of the model.
+
         This function must define the following variables:
 
         self.model_output_channels : List of functions
@@ -80,6 +110,8 @@ class Classification_Workflow(Base_Workflow):
 
     def define_metrics(self):
         """
+        Define the metrics to be used during training and test/inference.
+
         This function must define the following variables:
 
         self.train_metrics : List of functions
@@ -142,7 +174,7 @@ class Classification_Workflow(Base_Workflow):
         metric_logger: Optional[MetricLogger] = None,
     ) -> Dict:
         """
-        Execution of the metrics defined in :func:`~define_metrics` function.
+        Execute the calculation of metrics defined in :func:`~define_metrics` function.
 
         Parameters
         ----------
@@ -182,8 +214,7 @@ class Classification_Workflow(Base_Workflow):
 
     def prepare_targets(self, targets, batch):
         """
-        Location to perform any necessary data transformations to ``targets``
-        before calculating the loss.
+        Perform any necessary data transformations to ``targets`` before calculating the loss.
 
         Parameters
         ----------
@@ -201,9 +232,7 @@ class Classification_Workflow(Base_Workflow):
         return targets.to(self.device, non_blocking=True)
 
     def load_train_data(self):
-        """
-        Load training and validation data.
-        """
+        """Load training and validation data."""
         (
             self.X_train,
             self.X_val,
@@ -252,9 +281,7 @@ class Classification_Workflow(Base_Workflow):
         self.Y_train, self.Y_val = None, None
 
     def load_test_data(self):
-        """
-        Load test data.
-        """
+        """Load test data."""
         if self.cfg.TEST.ENABLE:
             print("######################")
             print("#   LOAD TEST DATA   #")
@@ -287,9 +314,7 @@ class Classification_Workflow(Base_Workflow):
             )
 
     def process_test_sample(self):
-        """
-        Function to process a sample in the inference phase.
-        """
+        """Process a sample in the inference phase."""
         assert isinstance(self.all_pred, list) and isinstance(self.all_gt, list)
         # Skip processing image
         if "discard" in self.current_sample["X"] and self.current_sample["X"]["discard"]:
@@ -343,9 +368,7 @@ class Classification_Workflow(Base_Workflow):
         return self.model(in_img)
 
     def after_all_images(self):
-        """
-        Steps that must be done after predicting all images.
-        """
+        """Execute steps that are needed after predicting all images."""
         self.all_pred = np.array(self.all_pred).squeeze()
         if self.cfg.DATA.TEST.LOAD_GT and self.all_gt is not None:
             self.all_gt = np.array(self.all_gt).squeeze()
@@ -403,7 +426,7 @@ class Classification_Workflow(Base_Workflow):
 
     def after_merge_patches(self, pred):
         """
-        Steps need to be done after merging all predicted patches into the original image.
+        Execute steps that are needed after merging all predicted patches into the original image.
 
         Parameters
         ----------
@@ -414,7 +437,7 @@ class Classification_Workflow(Base_Workflow):
 
     def after_full_image(self, pred: NDArray):
         """
-        Steps that must be executed after generating the prediction by supplying the entire image to the model.
+        Execute steps that are needed after generating the prediction by supplying the entire image to the model.
 
         Parameters
         ----------
