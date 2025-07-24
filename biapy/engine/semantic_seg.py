@@ -1,3 +1,11 @@
+"""
+Semantic segmentation workflow for BiaPy.
+
+This module defines the Semantic_Segmentation_Workflow class, which implements the
+training, validation, and inference pipeline for semantic segmentation tasks in BiaPy.
+It handles data preparation, model setup, metrics, predictions, post-processing,
+and result saving for assigning a class to each pixel in 2D and 3D images.
+"""
 import torch
 import numpy as np
 from skimage.transform import resize
@@ -21,6 +29,7 @@ from biapy.engine.metrics import (
 class Semantic_Segmentation_Workflow(Base_Workflow):
     """
     Semantic segmentation workflow where the goal is to assign a class to each pixel of the input image.
+
     More details in `our documentation <https://biapy.readthedocs.io/en/latest/workflows/semantic_segmentation.html>`_.
 
     Parameters
@@ -39,6 +48,25 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
     """
 
     def __init__(self, cfg, job_identifier, device, args, **kwargs):
+        """
+        Initialize the Semantic_Segmentation_Workflow.
+
+        Sets up configuration, device, job identifier, and initializes
+        workflow-specific attributes for semantic segmentation tasks.
+
+        Parameters
+        ----------
+        cfg : YACS configuration
+            Running configuration.
+        job_identifier : str
+            Complete name of the running job.
+        device : torch.device
+            Device used.
+        args : argparse.Namespace
+            Arguments used in BiaPy's call.
+        **kwargs : dict
+            Additional keyword arguments.
+        """
         super(Semantic_Segmentation_Workflow, self).__init__(cfg, job_identifier, device, args, **kwargs)
 
         if cfg.TRAIN.ENABLE and cfg.DATA.TRAIN.CHECK_DATA:
@@ -60,6 +88,8 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
 
     def define_activations_and_channels(self):
         """
+        Define the model output channels and activations to be applied to them.
+
         This function must define the following variables:
 
         self.model_output_channels : List of functions
@@ -86,6 +116,8 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
 
     def define_metrics(self):
         """
+        Define the metrics to be calculated during training and test/inference.
+
         This function must define the following variables:
 
         self.train_metrics : List of functions
@@ -163,9 +195,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         super().define_metrics()
 
     def process_test_sample(self):
-        """
-        Function to process a sample in the inference phase.
-        """
+        """Process a sample in the inference phase."""
         if self.cfg.MODEL.SOURCE != "torchvision":
             super().process_test_sample()
         else:
@@ -260,7 +290,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         metric_logger: Optional[MetricLogger] = None,
     ) -> Dict:
         """
-        Execution of the metrics defined in :func:`~define_metrics` function.
+        Calculate the metrics defined in :func:`~define_metrics` function.
 
         Parameters
         ----------
@@ -323,8 +353,10 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
 
     def prepare_targets(self, targets, batch):
         """
-        Location to perform any necessary data transformations to ``targets``
-        before calculating the loss.
+        Prepare the targets for the loss calculation.
+        
+        This function is used to convert the targets to the correct format
+        and device, ensuring they match the model's expected input format.
 
         Parameters
         ----------
@@ -344,7 +376,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
 
     def after_merge_patches(self, pred):
         """
-        Steps need to be done after merging all predicted patches into the original image.
+        Execute steps needed after merging all predicted patches into the original image.
 
         Parameters
         ----------
@@ -363,7 +395,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
 
     def after_full_image(self, pred: NDArray):
         """
-        Steps that must be executed after generating the prediction by supplying the entire image to the model.
+        Execute steps needed after generating the prediction by supplying the entire image to the model.
 
         Parameters
         ----------
@@ -379,7 +411,5 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         )
 
     def after_all_images(self):
-        """
-        Steps that must be done after predicting all images.
-        """
+        """Execute steps needed after predicting all images."""
         super().after_all_images()
