@@ -1,3 +1,12 @@
+"""
+Post-processing utilities for image and mask data in BiaPy.
+
+This module provides functions for instance segmentation refinement, watershed segmentation,
+morphological filtering, synapse and point detection, ensemble predictions, and other
+post-processing operations for 2D and 3D biomedical images. It supports advanced
+morphological measurements, filtering, and visualization tools to improve segmentation
+results and extract quantitative information from model outputs.
+"""
 import os
 import math
 import time
@@ -55,8 +64,7 @@ def watershed_by_channels(
     save_dir: Optional[str]=None,
 ):
     """
-    Convert binary foreground probability maps and instance contours to instance masks via watershed segmentation
-    algorithm.
+    Convert binary foreground probability maps and instance contours to instance masks via watershed segmentation algorithm.
 
     Implementation based on `PyTorch Connectomics' process.py
     <https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/utils/process.py>`_.
@@ -115,7 +123,6 @@ def watershed_by_channels(
     save_dir :  str, optional
         Directory to save watershed output into.
     """
-
     assert channels in [
         "A",
         "C",
@@ -402,7 +409,7 @@ def create_synapses(
     relative_th_value: bool = False,
 ) -> Tuple[NDArray, Dict]:
     """
-    Creates synapses pre/post points from the given ``data``. 
+    Create synapses pre/post points from the given ``data``.
 
     Find more info regarding ``min_distance``, ``min_sigma`` and ``exclude_border`` arguments in 
     `peak_local_max <https://scikit-image.org/docs/0.25.x/api/skimage.feature.html#skimage.feature.peak_local_max>`__ 
@@ -536,7 +543,7 @@ def apply_median_filtering(
     mf_size: int=5
 ) -> NDArray:
     """
-    Applies a median filtering to the specified axes of the provided data.
+    Apply a median filtering to the specified axes of the provided data.
 
     Parameters
     ----------
@@ -592,7 +599,7 @@ def ensemble8_2d_predictions(
     mode="mean",
 ) -> torch.Tensor:
     """
-    Outputs the mean prediction of a given image generating its 8 possible rotations and flips.
+    Output the mean prediction of a given image generating its 8 possible rotations and flips.
 
     Parameters
     ----------
@@ -752,7 +759,7 @@ def ensemble16_3d_predictions(
     mode: str="mean"
 ) -> torch.Tensor:
     """
-    Outputs the mean prediction of a given image generating its 16 possible rotations and flips.
+    Output the mean prediction of a given image generating its 16 possible rotations and flips.
 
     Parameters
     ----------
@@ -1080,7 +1087,6 @@ def create_th_plot(
     ideal_value : int/float, optional
         Value that should be the ideal optimum. It is going to be marked with a red line in the chart.
     """
-
     assert th_name in [
         "TH_BINARY_MASK",
         "TH_CONTOUR",
@@ -1149,8 +1155,7 @@ def voronoi_on_mask(
     verbose: bool=False
 ) -> NDArray:
     """
-    Apply Voronoi to the voxels not labeled yet marked by the mask. It is done using distances from the un-labeled
-    voxels to the cell perimeters.
+    Apply Voronoi to the voxels not labeled yet marked by the mask. It is done using distances from the un-labeled voxels to the cell perimeters.
 
     Parameters
     ----------
@@ -1176,7 +1181,6 @@ def voronoi_on_mask(
     data : 4D Numpy array
         Image with Voronoi applied. ``(num_of_images, z, y, x)`` e.g. ``(1, 397, 1450, 2000)``
     """
-
     if data.ndim != 2 and data.ndim != 3:
         raise ValueError("Data must be 2/3 dimensional, provided {}".format(data.shape))
     if mask.ndim != 3 and mask.ndim != 4:
@@ -1254,9 +1258,7 @@ def remove_close_points_by_mask(
     return_drops: bool=False,
 ) -> List[List[int | float]] | Tuple[List[List[int | float]], List[int]] | Tuple[List[List[int | float]], List[int], List[bool]]:
     """
-    Remove all points from ``point_list`` that are at a ``radius`` or less distance from each other but conditioned that the must 
-    lay in the same mask label. For that last label creation the given ``raw_predictions`` is used, which is expected to be model's 
-    raw prediction. It is binarized using ``bin_th`` threshold and then the labels are created using connected-components.
+    Remove all points from ``point_list`` that are at a ``radius`` or less distance from each other but conditioned that the must lay in the same mask label. For that last label creation the given ``raw_predictions`` is used, which is expected to be model's raw prediction. It is binarized using ``bin_th`` threshold and then the labels are created using connected-components.
 
     Parameters
     ----------
@@ -1810,13 +1812,17 @@ def measure_morphological_props_and_filter(
     comp_signs=[[]],
 ):
     """
-    Measures the properties of input image's instances. It calculates each instance id, number of pixels, area/volume
-    (2D/3D respec. and taking into account the ``resolution``), diameter, perimeter/surface_area (2D/3D respec.),
-    circularity/sphericity (2D/3D respec.) and elongation properties. All instances that satisfy the conditions composed
-    by ``properties``, ``prop_values`` and ``comp_signs`` variables will be removed from ``img``. Apart from returning
-    all properties this function will return also a list identifying those instances that satisfy and not satify the
-    conditions. Those removed will be marked as 'Removed' whereas the rest are 'Correct'. Some of the properties follow
-    the formulas used in `MorphoLibJ library for Fiji <https://doi.org/10.1093/bioinformatics/btw413>`__.
+    Measure the properties of input image's instances.
+
+    It calculates each instance id, number of pixels, area/volume (2D/3D respec. 
+    and taking into account the ``resolution``), diameter, perimeter/surface_area
+    (2D/3D respec.), circularity/sphericity (2D/3D respec.) and elongation properties.
+    All instances that satisfy the conditions composed by ``properties``, ``prop_values``
+    and ``comp_signs`` variables will be removed from ``img``. Apart from returning all
+    properties this function will return also a list identifying those instances that
+    satisfy and not satify the conditions. Those removed will be marked as 'Removed' 
+    whereas the rest are 'Correct'. Some of the properties follow the formulas used
+    in `MorphoLibJ library for Fiji <https://doi.org/10.1093/bioinformatics/btw413>`__.
 
     Parameters
     ----------
@@ -2081,7 +2087,6 @@ def find_neighbors(
     neighbors  : list of ints
         Neighbors instance ids of the given label.
     """
-
     list_of_neighbors = []
     label_points = np.where((img == label) > 0)
     if img.ndim == 3:
@@ -2225,7 +2230,6 @@ def apply_binary_mask(
     X : 3D/4D Numpy array
         Data with the mask applied. E.g. ``(y, x, channels)`` for 2D or ``(z, y, x, channels)`` for 3D.
     """
-
     if X.ndim != 4 and X.ndim != 3:
         raise ValueError("'X' needs to have 3 or 4 dimensions and not {}".format(X.ndim))
 
