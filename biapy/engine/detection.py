@@ -1,3 +1,11 @@
+"""
+Detection workflow for BiaPy.
+
+This module defines the Detection_Workflow class, which implements the
+training, validation, and inference pipeline for object detection tasks in BiaPy.
+It handles data preparation, model setup, metrics, predictions, post-processing,
+and result saving for localization of objects in 2D and 3D images.
+"""
 import os
 import torch
 import torch.distributed as dist
@@ -38,6 +46,7 @@ from biapy.data.dataset import PatchCoords
 class Detection_Workflow(Base_Workflow):
     """
     Detection workflow where the goal is to localize objects in the input image, not requiring a pixel-level class.
+
     More details in `our documentation <https://biapy.readthedocs.io/en/latest/workflows/detection.html>`_.
 
     Parameters
@@ -56,6 +65,25 @@ class Detection_Workflow(Base_Workflow):
     """
 
     def __init__(self, cfg, job_identifier, device, args, **kwargs):
+        """
+        Initialize the Detection_Workflow.
+
+        Sets up configuration, device, job identifier, and initializes
+        workflow-specific attributes for detection tasks.
+
+        Parameters
+        ----------
+        cfg : YACS configuration
+            Running configuration.
+        job_identifier : str
+            Complete name of the running job.
+        device : torch.device
+            Device used.
+        args : argparse.Namespace
+            Arguments used in BiaPy's call.
+        **kwargs : dict
+            Additional keyword arguments.
+        """
         super(Detection_Workflow, self).__init__(cfg, job_identifier, device, args, **kwargs)
 
         self.original_test_mask_path = self.prepare_detection_data()
@@ -79,6 +107,8 @@ class Detection_Workflow(Base_Workflow):
 
     def define_activations_and_channels(self):
         """
+        Define the activations and output channels of the model.
+
         This function must define the following variables:
 
         self.model_output_channels : List of functions
@@ -113,6 +143,8 @@ class Detection_Workflow(Base_Workflow):
 
     def define_metrics(self):
         """
+        Define the metrics to be calculated during training and test/inference phases.
+
         This function must define the following variables:
 
         self.train_metrics : List of functions
@@ -209,7 +241,7 @@ class Detection_Workflow(Base_Workflow):
         metric_logger: Optional[MetricLogger] = None,
     ) -> Dict:
         """
-        Execution of the metrics defined in :func:`~define_metrics` function.
+        Calculate the metrics defined in :func:`~define_metrics` function.
 
         Parameters
         ----------
@@ -285,8 +317,7 @@ class Detection_Workflow(Base_Workflow):
         patch_pos: Optional[PatchCoords] = None,
     ):
         """
-        Detection workflow engine for test/inference. Process model's prediction to prepare detection output and
-        calculate metrics.
+        Process model's prediction to prepare detection output and calculate metrics (detection workflow engine for test/inference).
 
         Parameters
         ----------
@@ -852,7 +883,7 @@ class Detection_Workflow(Base_Workflow):
 
     def after_merge_patches(self, pred):
         """
-        Steps need to be done after merging all predicted patches into the original image.
+        Excute steps needed after merging all predicted patches into the original image.
 
         Parameters
         ----------
@@ -925,9 +956,7 @@ class Detection_Workflow(Base_Workflow):
             )
 
     def after_all_patch_prediction_by_chunks(self):
-        """
-        Place any code that needs to be done after predicting all the patches, one by one, in the "by chunks" setting.
-        """
+        """Excute stepes needed after predicting all the patches, one by one, in the "by chunks" setting."""
         assert isinstance(self.all_pred, list)
         filename, _ = os.path.splitext(self.current_sample["filename"])
         input_dir = (
@@ -1089,9 +1118,7 @@ class Detection_Workflow(Base_Workflow):
             print("No points created for the given sample")
 
     def process_test_sample(self):
-        """
-        Function to process a sample in the inference phase.
-        """
+        """Process a sample in the test/inference phase."""
         if self.cfg.MODEL.SOURCE != "torchvision":
             super().process_test_sample()
         else:
@@ -1182,7 +1209,7 @@ class Detection_Workflow(Base_Workflow):
 
     def after_full_image(self, pred: NDArray):
         """
-        Steps that must be executed after generating the prediction by supplying the entire image to the model.
+        Excute steps due after generating the prediction by supplying the entire image to the model.
 
         Parameters
         ----------
@@ -1200,14 +1227,13 @@ class Detection_Workflow(Base_Workflow):
             raise NotImplementedError
 
     def after_all_images(self):
-        """
-        Steps that must be done after predicting all images.
-        """
+        """Execute steps that must be done after predicting all images."""
         super().after_all_images()
 
     def prepare_detection_data(self) -> str:
         """
-        Creates detection ground truth images to train the model based on the ground truth coordinates provided.
+        Create detection ground truth images to train the model based on the ground truth coordinates provided.
+        
         They will be saved in a separate folder in the root path of the ground truth.
         """
         original_test_mask_path = self.cfg.DATA.TEST.GT_PATH
