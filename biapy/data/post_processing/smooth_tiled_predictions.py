@@ -6,7 +6,14 @@
 #     https://github.com/Vooban/Smoothly-Blend-Image-Patches/blob/master/LICENSE
 
 
-"""Do smooth predictions on an image from tiled prediction patches."""
+"""
+Smoothly blend tiled prediction patches for large images.
+
+This module provides utilities to perform smooth predictions on large images by
+dividing them into overlapping tiles, applying a prediction function to each tile,
+and blending the results using spline-based windowing. This approach reduces edge
+artifacts and improves prediction quality for models that operate on patches.
+"""
 
 import numpy as np
 import scipy.signal
@@ -24,8 +31,21 @@ else:
 
 def _spline_window(window_size, power=2):
     """
-    Squared spline (power=2) window function:
-    https://www.wolframalpha.com/input/?i=y%3Dx**2,+y%3D-(x-2)**2+%2B2,+y%3D(x-4)**2,+from+y+%3D+0+to+2
+    Generate a squared spline window function for smooth blending.
+
+    Source: https://www.wolframalpha.com/input/?i=y%3Dx**2,+y%3D-(x-2)**2+%2B2,+y%3D(x-4)**2,+from+y+%3D+0+to+2
+
+    Parameters
+    ----------
+    window_size : int
+        Size of the window (patch).
+    power : int, optional
+        Power of the spline (default is 2).
+
+    Returns
+    -------
+    wind : np.ndarray
+        1D window array for blending.
     """
     intersection = int(window_size / 4)
     wind_outer = (abs(2 * (scipy.signal.triang(window_size))) ** power) / 2
@@ -45,9 +65,19 @@ cached_2d_windows = dict()
 
 def _window_2D(window_size, power=2):
     """
-    Make a 1D window function, then infer and return a 2D window function.
-    Done with an augmentation, and self multiplication with its transpose.
-    Could be generalized to more dimensions.
+    Create a 2D window function for smooth blending of overlapping patches.
+
+    Parameters
+    ----------
+    window_size : int
+        Size of the window (patch).
+    power : int, optional
+        Power of the spline (default is 2).
+
+    Returns
+    -------
+    wind : np.ndarray
+        2D window array for blending.
     """
     # Memoization
     global cached_2d_windows
@@ -69,9 +99,21 @@ def _window_2D(window_size, power=2):
 
 def _pad_img(img, window_size, subdivisions):
     """
-    Add borders to img for a "valid" border pattern according to "window_size" and
-    "subdivisions".
-    Image is an np array of shape (y, x, nb_channels).
+    Pad an image with reflected borders for tiled prediction.
+
+    Parameters
+    ----------
+    img : np.ndarray
+        Input image of shape (y, x, nb_channels).
+    window_size : int
+        Size of the window (patch).
+    subdivisions : int
+        Number of subdivisions (overlap factor).
+
+    Returns
+    -------
+    ret : np.ndarray
+        Padded image.
     """
     aug = int(round(window_size * (1 - 1.0 / subdivisions)))
     more_borders = ((aug, aug), (aug, aug), (0, 0))
@@ -90,8 +132,21 @@ def _pad_img(img, window_size, subdivisions):
 
 def _unpad_img(padded_img, window_size, subdivisions):
     """
-    Undo what's done in the `_pad_img` function.
-    Image is an np array of shape (y, x, nb_channels).
+    Remove padding added by `_pad_img`.
+
+    Parameters
+    ----------
+    padded_img : np.ndarray
+        Image with padding.
+    window_size : int
+        Size of the window (patch).
+    subdivisions : int
+        Number of subdivisions (overlap factor).
+
+    Returns
+    -------
+    ret : np.ndarray
+        Unpadded image.
     """
     aug = int(round(window_size * (1 - 1.0 / subdivisions)))
     ret = padded_img[aug:-aug, aug:-aug, :]
@@ -101,12 +156,17 @@ def _unpad_img(padded_img, window_size, subdivisions):
 
 def _rotate_mirror_do(im):
     """
-    Duplicate an np array (image) of shape (y, x, nb_channels) 8 times, in order
-    to have all the possible rotations and mirrors of that image that fits the
-    possible 90 degrees rotations.
+    Generate all 8 dihedral (D4) rotations and mirrors of an image.
 
-    It is the D_4 (D4) Dihedral group:
-    https://en.wikipedia.org/wiki/Dihedral_group
+    Parameters
+    ----------
+    im : np.ndarray
+        Input image of shape (y, x, nb_channels).
+
+    Returns
+    -------
+    mirrs : list of np.ndarray
+        List of 8 rotated and mirrored images.
     """
     mirrs = []
     mirrs.append(np.array(im))
@@ -123,12 +183,17 @@ def _rotate_mirror_do(im):
 
 def _rotate_mirror_undo(im_mirrs):
     """
-    merges a list of 8 np arrays (images) of shape (y, x, nb_channels) generated
-    from the `_rotate_mirror_do` function. Each images might have changed and
-    merging them implies to rotated them back in order and average things out.
+    Merge a list of 8 rotated/mirrored images back to the original orientation.
 
-    It is the D_4 (D4) Dihedral group:
-    https://en.wikipedia.org/wiki/Dihedral_group
+    Parameters
+    ----------
+    im_mirrs : list of np.ndarray
+        List of 8 rotated and mirrored images.
+
+    Returns
+    -------
+    np.ndarray
+        Averaged image in original orientation.
     """
     origs = []
     origs.append(np.array(im_mirrs[0]))
@@ -144,10 +209,25 @@ def _rotate_mirror_undo(im_mirrs):
 
 def _windowed_subdivs(padded_img, window_size, subdivisions, n_classes, pred_func):
     """
-    Create tiled overlapping patches.
+    Create tiled overlapping patches and apply prediction function.
 
-    Returns:
-        5D numpy array of shape = (
+    Parameters
+    ----------
+    padded_img : np.ndarray
+        Padded input image.
+    window_size : int
+        Size of the window (patch).
+    subdivisions : int
+        Number of subdivisions (overlap factor).
+    n_classes : int
+        Number of output channels/classes.
+    pred_func : callable
+        Prediction function to apply to each patch.
+
+    Returns
+    -------
+    subdivs : np.ndarray
+        5D array of predicted patches of shape = (
             nb_patches_along_X,
             nb_patches_along_Y,
             patches_resolution_along_X,
@@ -195,6 +275,23 @@ def _windowed_subdivs(padded_img, window_size, subdivisions, n_classes, pred_fun
 
 
 def create_gen(subdivs, subdivs_m, subdivs_w):
+    """
+    Create a generator that yields ([image, weights], label) tuples from patch arrays.
+
+    Parameters
+    ----------
+    subdivs : np.ndarray
+        Array of image patches.
+    subdivs_m : np.ndarray
+        Array of label patches.
+    subdivs_w : np.ndarray
+        Array of weight patches.
+
+    Yields
+    ------
+    tuple
+        A tuple of ([image_patch, weight_patch], label_patch) for each patch.
+    """
     gen = zip(subdivs, subdivs_m, subdivs_w)
     for img, label, weights in gen:
         yield ([img, weights], label)
@@ -202,7 +299,23 @@ def create_gen(subdivs, subdivs_m, subdivs_w):
 
 def _recreate_from_subdivs(subdivs, window_size, subdivisions, padded_out_shape):
     """
-    Merge tiled overlapping patches smoothly.
+    Merge tiled overlapping patches smoothly into a single image.
+
+    Parameters
+    ----------
+    subdivs : np.ndarray
+        5D array of predicted patches.
+    window_size : int
+        Size of the window (patch).
+    subdivisions : int
+        Number of subdivisions (overlap factor).
+    padded_out_shape : tuple
+        Shape of the output image (with padding).
+
+    Returns
+    -------
+    y : np.ndarray
+        Reconstructed image from patches.
     """
     step = int(window_size / subdivisions)
     padx_len = padded_out_shape[0]
@@ -223,12 +336,34 @@ def _recreate_from_subdivs(subdivs, window_size, subdivisions, padded_out_shape)
 
 def predict_img_with_smooth_windowing(input_img, window_size, subdivisions, n_classes, pred_func):
     """
-    Apply the `pred_func` function to square patches of the image, and overlap
-    the predictions to merge them smoothly.
-    See 6th, 7th and 8th idea here:
+    Predict an image by applying a function to overlapping patches and blending smoothly.
+
+    This function divides the input image into overlapping patches, applies the
+    prediction function to each patch, and blends the results using a spline window.
+    See 6th, 7th and 8th ideas here:
     http://blog.kaggle.com/2017/05/09/dstl-satellite-imagery-competition-3rd-place-winners-interview-vladimir-sergey/
+
+    Parameters
+    ----------
+    input_img : np.ndarray
+        Input image of shape (y, x, nb_channels).
+    window_size : int
+        Size of the window (patch).
+    subdivisions : int
+        Number of subdivisions (overlap factor).
+    n_classes : int
+        Number of output channels/classes.
+    pred_func : callable
+        Prediction function to apply to each patch.
+
+    Returns
+    -------
+    prd : np.ndarray
+        Output image with smoothly blended predictions.
     """
+    # Pad the input image to allow for overlapping patches.
     pad = _pad_img(input_img, window_size, subdivisions)
+    # Generate all 8 dihedral (D4) rotations and mirrors of the padded image.
     pads = _rotate_mirror_do(pad)
 
     # Note that the implementation could be more memory-efficient by merging
@@ -278,8 +413,30 @@ def predict_img_with_smooth_windowing(input_img, window_size, subdivisions, n_cl
 
 
 def predict_img_with_overlap(input_img, window_size, subdivisions, n_classes, pred_func):
-    """Based on predict_img_with_smooth_windowing but works just with the
-    original image instead of creating 8 new ones.
+    """
+    Predict an image by applying a function to overlapping patches (no rotation/mirroring).
+
+    This function divides the input image into overlapping patches, applies the
+    prediction function to each patch, and blends the results using a spline window.
+    Unlike `predict_img_with_smooth_windowing`, it does not use dihedral augmentations.
+
+    Parameters
+    ----------
+    input_img : np.ndarray
+        Input image of shape (y, x, nb_channels).
+    window_size : int
+        Size of the window (patch).
+    subdivisions : int
+        Number of subdivisions (overlap factor).
+    n_classes : int
+        Number of output channels/classes.
+    pred_func : callable
+        Prediction function to apply to each patch.
+
+    Returns
+    -------
+    prd : np.ndarray
+        Output image with smoothly blended predictions.
     """
     pad = _pad_img(input_img, window_size, subdivisions)
 
