@@ -1,3 +1,11 @@
+"""
+Configuration checking utilities for BiaPy.
+
+This module provides functions to validate, compare, and update BiaPy configuration
+objects, ensuring that all required settings are present and consistent for a given
+workflow. It includes compatibility checks for data, model, augmentation, and
+post-processing options.
+"""
 import os
 import numpy as np
 import collections
@@ -10,7 +18,30 @@ from biapy.config import Config
 
 def check_configuration(cfg, jobname, check_data_paths=True):
     """
-    Check if the configuration is good.
+    Validate and update a BiaPy configuration object for workflow consistency.
+
+    This function checks that all required configuration options are present and consistent
+    for the selected workflow, model, and data. It performs compatibility checks for data
+    shapes, augmentation, model architecture, loss, metrics, post-processing, and file paths.
+    It also updates dependent configuration variables if needed.
+
+    Parameters
+    ----------
+    cfg : yacs.config.CfgNode
+        The configuration object to validate and update.
+    jobname : str
+        The job identifier (used for checkpoint path checks).
+    check_data_paths : bool, optional
+        Whether to check that all required data paths exist (default: True).
+
+    Raises
+    ------
+    ValueError
+        If any configuration inconsistency or missing/invalid option is found.
+    FileNotFoundError
+        If a required file or directory does not exist.
+    AssertionError
+        If a configuration assertion fails.
     """
     dim_count = 2 if cfg.PROBLEM.NDIM == "2D" else 3
 
@@ -1947,8 +1978,27 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
 def compare_configurations_without_model(actual_cfg, old_cfg, header_message="", old_cfg_version=None):
     """
-    Compares two configurations and throws an error if they differ in some critical variables that change workflow behaviour. This
-    comparisdon does not take into account model specs.
+    Compare two BiaPy configurations and raise an error if critical workflow variables differ.
+
+    This function checks that key configuration variables (such as problem type, patch size,
+    number of classes, and data channels) match between the current and previous configuration.
+    It ignores model-specific parameters and allows for some backward compatibility.
+
+    Parameters
+    ----------
+    actual_cfg : yacs.config.CfgNode
+        The current configuration object.
+    old_cfg : yacs.config.CfgNode or dict
+        The previous configuration object to compare against.
+    header_message : str, optional
+        Message to prepend to any error or warning (default: "").
+    old_cfg_version : str or None, optional
+        Version string of the old configuration, for backward compatibility (default: None).
+
+    Raises
+    ------
+    ValueError
+        If a critical configuration variable does not match and cannot be ignored.
     """
     print("Comparing configurations . . .")
 
@@ -2010,7 +2060,9 @@ def compare_configurations_without_model(actual_cfg, old_cfg, header_message="",
 
 def convert_old_model_cfg_to_current_version(old_cfg: dict):
     """
-    Backward compatibility until commit 6aa291baa9bc5d7fb410454bfcea3a3da0c23604 (version 3.2.0)
+    Convert old configuration to the current BiaPy version.
+    
+    Backward compatibility until commit 6aa291baa9bc5d7fb410454bfcea3a3da0c23604 (version 3.2.0).
     Commit url: https://github.com/BiaPyX/BiaPy/commit/6aa291baa9bc5d7fb410454bfcea3a3da0c23604
 
     Parameters
@@ -2322,7 +2374,7 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict):
 
 def diff_between_configs(old_dict: Dict | Config, new_dict: Dict | Config, path: str=""):
     """
-    Print differences between tow given configurations. 
+    Print differences between two given configurations.
 
     Paramaters
     ----------
