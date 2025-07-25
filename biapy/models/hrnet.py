@@ -429,7 +429,7 @@ class HighResolutionNet(nn.Module):
             class_head_out = self.last_class_head(feats)
             out_dict["class"] = class_head_out
 
-        if len(out_dict.keys()) == 0:
+        if len(out_dict.keys()) == 1:
             return out_dict["pred"]
         else:
             return out_dict

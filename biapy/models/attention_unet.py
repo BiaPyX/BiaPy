@@ -255,7 +255,7 @@ class Attention_U_Net(nn.Module):
         if self.multihead and self.last_class_head:
             out_dict["class"] = self.last_class_head(feats)
 
-        if len(out_dict.keys()) == 0:
+        if len(out_dict.keys()) == 1:
             return out_dict["pred"]
         else:
             return out_dict
