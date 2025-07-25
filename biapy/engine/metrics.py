@@ -663,7 +663,7 @@ class ContrastCELoss(nn.Module):
         ----------
         preds : dict
             Dictionary containing the predictions from the model. It should contain:
-            - "seg": Segmentation predictions.
+            - "pred": Segmentation predictions.
             - "embed": Embedding predictions.
             - "segment_queue": Segment queues for contrastive learning.
             - "pixel_queue": Pixel queues for contrastive learning.
@@ -674,10 +674,10 @@ class ContrastCELoss(nn.Module):
         with_embed : bool, optional
             Whether to include the embedding in the loss calculation. Default is False.
         """
-        assert "seg" in preds, "Segmentation prediction is missing in the input dictionary."
+        assert "pred" in preds, "Segmentation prediction is missing in the input dictionary."
         assert "embed" in preds, "Embedding prediction is missing in the input dictionary."
 
-        seg = preds["seg"]
+        seg = preds["pred"]
         embedding = preds["embed"]
 
         segment_queue = preds["segment_queue"] if "segment_queue" in preds else None
@@ -1026,7 +1026,6 @@ class PixelContrastLoss(nn.Module):
         )
 
         batch_size = feats.shape[0]
-
         labels = labels.contiguous().view(batch_size, -1)
         predict = predict.contiguous().view(batch_size, -1)
 
@@ -1036,6 +1035,7 @@ class PixelContrastLoss(nn.Module):
             feats = feats.permute(0, 2, 3, 4, 1)
         feats = feats.contiguous().view(feats.shape[0], -1, feats.shape[-1])
 
+        
         feats_, labels_ = self._hard_anchor_sampling(feats, labels, predict)
 
         if feats_ is not None and labels_ is not None:

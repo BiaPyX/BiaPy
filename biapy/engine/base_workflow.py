@@ -649,12 +649,13 @@ class Base_Workflow(metaclass=ABCMeta):
             assert self.model
             p = self.model(in_img)
 
+            # Recover the original shape of the input, as not all the model return a prediction
+            # of the same size as the input image
             if (
-                not (self.cfg.PROBLEM.TYPE == "SELF_SUPERVISED" and self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK.lower() == "masking") 
+                not self.cfg.LOSS.CONTRAST.ENABLE 
+                and not (self.cfg.PROBLEM.TYPE == "SELF_SUPERVISED" and self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK.lower() == "masking") 
                 and self.cfg.PROBLEM.TYPE not in ["CLASSIFICATION", "SUPER_RESOLUTION"]
             ):
-                # Recover the original shape of the input, as not all the model return a prediction
-                # of the same size as the input image
                 if isinstance(p, dict):
                     if p["pred"].shape[2:] != in_img.shape[2:]:
                         p["pred"] = resize(p["pred"], in_img.shape, mode="bilinear")
@@ -712,8 +713,10 @@ class Base_Workflow(metaclass=ABCMeta):
                     check_configuration(self.cfg, self.job_identifier)
             (
                 self.model,
-                self.bmz_config["model_file"],
-                self.bmz_config["model_name"],
+                self.bmz_config["callable_model"],
+                self.bmz_config["collected_sources"],
+                self.bmz_config["all_import_lines"],
+                self.bmz_config["scanned_files"],
                 self.model_build_kwargs,
                 self.network_stride,
             ) = build_model(self.cfg, self.model_output_channels["channels"], self.device)

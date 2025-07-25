@@ -132,7 +132,7 @@ def train_one_epoch(
                 with_embed = False
 
             outputs = {
-                "seg": outputs["pred"],
+                "pred": outputs["pred"],
                 "embed": outputs["embed"],
                 'key': outputs["embed"].detach(),
                 'pixel_queue': memory_bank.pixel_queue,
