@@ -139,12 +139,9 @@ def build_model(cfg: CN, output_channels: int, device: torch.device) -> Tuple[nn
             args["upsampling_factor"] = cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING
             args["upsampling_position"] = cfg.MODEL.UNET_SR_UPSAMPLE_POSITION
 
-        network_stride = [ 
-            len(cfg.MODEL.Z_DOWN), 
-            len(cfg.MODEL.Z_DOWN)
-        ]
+        network_stride = [1,1] 
         if ndim == 3:
-            network_stride = [np.sum([1 for x in cfg.MODEL.Z_DOWN if x == 2])] + network_stride
+            network_stride = [1] + network_stride
         model = callable_model(**args)
 
     elif "hrnet" in modelname:

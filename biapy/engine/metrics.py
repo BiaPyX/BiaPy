@@ -642,10 +642,13 @@ class ContrastCELoss(nn.Module):
         ----------
         main_loss : nn.Module
             The main loss function to be used for the segmentation task.
+
         ndim : int, optional
             Number of dimensions of the input data. 2 for 2D images, 3 for 3D volumes. Default is 2.
+
         weight : float, optional
             Weight for the contrastive loss. Default is 1.0.
+
         ignore_index : int, optional
             Label to ignore in the loss calculation. Default is -1.
         """
@@ -684,7 +687,8 @@ class ContrastCELoss(nn.Module):
         pixel_queue = preds["pixel_queue"] if "pixel_queue" in preds else None
 
         if seg.shape[-self.ndim :] != target.shape[-self.ndim :]:
-            pred = F.interpolate(input=seg, size=target.shape[-self.ndim :], mode="bilinear", align_corners=True)
+            mode = "bilinear" if self.ndim == 2 else "trilinear"
+            pred = F.interpolate(input=seg, size=target.shape[-self.ndim :], mode=mode, align_corners=True)
         else:
             pred = seg
 

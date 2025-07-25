@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from typing import Tuple
 
+
 class MemoryBank(nn.Module):
     """
     Memory Bank for storing pixel and segment features. Used in contrastive learning to maintain a queue of features.
@@ -25,7 +26,7 @@ class MemoryBank(nn.Module):
 
     device : torch.device
         Device on which the memory bank is stored (CPU or GPU).
-    
+
     ignore_index : int, optional
             Value to ignore in the loss calculation. If not provided, no value will be ignored.
     """
@@ -60,11 +61,7 @@ class MemoryBank(nn.Module):
         self.segment_queue = nn.functional.normalize(self.segment_queue, p=2, dim=2)
         self.segment_queue_ptr = torch.zeros(num_classes, dtype=torch.long).to(device)
 
-    def dequeue_and_enqueue(
-        self, 
-        keys: torch.Tensor, 
-        labels: torch.Tensor
-    ):
+    def dequeue_and_enqueue(self, keys: torch.Tensor, labels: torch.Tensor):
         """
         Dequeue and enqueue features into the memory bank.
 
@@ -73,15 +70,15 @@ class MemoryBank(nn.Module):
         keys : torch.Tensor
             Features to be enqueued, shape (batch_size, classes, H, W) or (batch_size, classes, D, H, W).
             E.g. (8, 19, 128, 256) for a batch size of 2, 19 classes, and a spatial size of 128x256.
-            
+
         labels : torch.Tensor
             Ground truth labels, shape (batch_size, 1, H, W) or (batch_size, 1, D, H, W).
             E.g. (8, 1, 128, 256) for a batch size of 2 and a spatial size of 128x256.
-        """        
+        """
         batch_size = keys.shape[0]
         feat_dim = keys.shape[1]
 
-        # When working in instance segmentation the channels are more than 1 so we need to merge then into 
+        # When working in instance segmentation the channels are more than 1 so we need to merge then into
         # just one channel. This trick of multiplying an offset is to take into account the background class too.
         if labels.shape[1] != 1:
             if labels.ndim == 4:
@@ -91,14 +88,15 @@ class MemoryBank(nn.Module):
             labels = labels * offsets
             labels, _ = labels.max(dim=1)
         # In semantic the target is already compressed into one channel
-        else:  
+        else:
             labels = labels.squeeze(1)
         labels = labels.long()
 
+        # Downsample the labels according to the network stride
         if labels.ndim == 3:
-            labels = labels[:, ::self.network_stride[-2], ::self.network_stride[-1]]
+            labels = labels[:, :: self.network_stride[-2], :: self.network_stride[-1]]
         else:
-            labels = labels[:, ::self.network_stride[-3], ::self.network_stride[-2], ::self.network_stride[-1]]
+            labels = labels[:, :: self.network_stride[-3], :: self.network_stride[-2], :: self.network_stride[-1]]
 
         for bs in range(batch_size):
             this_feat = keys[bs].contiguous().view(feat_dim, -1)
@@ -111,7 +109,7 @@ class MemoryBank(nn.Module):
 
                 # segment enqueue and dequeue
                 feat = torch.mean(this_feat[:, idxs], dim=1).squeeze(1)
-                
+
                 ptr = int(self.segment_queue_ptr[lb])
 
                 self.segment_queue[lb, ptr, :] = nn.functional.normalize(feat.view(-1), p=2, dim=0)
@@ -129,5 +127,5 @@ class MemoryBank(nn.Module):
                     self.pixel_queue[lb, -K:, :] = nn.functional.normalize(feat, p=2, dim=1)
                     self.pixel_queue_ptr[lb] = 0
                 else:
-                    self.pixel_queue[lb, ptr:ptr + K, :] = nn.functional.normalize(feat, p=2, dim=1)
+                    self.pixel_queue[lb, ptr : ptr + K, :] = nn.functional.normalize(feat, p=2, dim=1)
                     self.pixel_queue_ptr[lb] = (self.pixel_queue_ptr[lb] + 1) % self.memory_size

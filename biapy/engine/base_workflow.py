@@ -203,6 +203,7 @@ class Base_Workflow(metaclass=ABCMeta):
         self.test_metric_names = []
         self.loss = None
         self.memory_bank = None
+        self.real_classes = -1 
 
         self.resolution: List[int | float] = list(self.cfg.DATA.TEST.RESOLUTION)
         if self.cfg.PROBLEM.NDIM == "2D":
@@ -320,8 +321,12 @@ class Base_Workflow(metaclass=ABCMeta):
             for x in self.activations:
                 if not isinstance(x, dict):
                     raise ValueError("'self.activations' must be a list of dicts")
+        if self.real_classes == -1:
+            raise ValueError(
+                "'real_classes' needs to be defined. Correct define_activations_and_channels() function"
+            )
 
-    def define_metrics(self):
+    def define_metrics(self):   
         """
         Define the metrics to be calculated during training and test.
 
@@ -815,7 +820,7 @@ class Base_Workflow(metaclass=ABCMeta):
         contrast_init_iter = 0
         if self.cfg.LOSS.CONTRAST.ENABLE:
             self.memory_bank = MemoryBank(
-                num_classes=self.cfg.DATA.N_CLASSES,
+                num_classes=self.real_classes,
                 memory_size = self.cfg.LOSS.CONTRAST.MEMORY_SIZE,
                 feature_dims = self.cfg.LOSS.CONTRAST.PROJ_DIM,
                 network_stride = self.network_stride,
