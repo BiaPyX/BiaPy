@@ -7,6 +7,7 @@ workflow. It includes compatibility checks for data, model, augmentation, and
 post-processing options.
 """
 import os
+import re
 import numpy as np
 import collections
 from typing import Dict
@@ -1763,21 +1764,47 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         ]:
             z_size = cfg.DATA.PATCH_SIZE[0]
             sizes = cfg.DATA.PATCH_SIZE[1:-1]
-            for i in range(len(cfg.MODEL.FEATURE_MAPS) - 1):
-                if not all(
-                    [False for x in sizes if x % (np.power(2, (i + 1))) != 0 or z_size % cfg.MODEL.Z_DOWN[i] != 0]
-                ):
-                    m = (
-                        "The 'DATA.PATCH_SIZE' provided is not divisible by 2 in each of the U-Net's levels. You can:\n 1) Reduce the number "
-                        + "of levels (by reducing 'cfg.MODEL.FEATURE_MAPS' array's length)\n 2) Increase 'DATA.PATCH_SIZE'"
-                    )
-                    if cfg.PROBLEM.NDIM == "3D":
-                        m += (
-                            "\n 3) If the Z axis is the problem, as the patch size is normally less than in other axis due to resolution, you "
-                            + "can tune 'MODEL.Z_DOWN' variable to not downsample the image in all U-Net levels"
+
+            if "hrnet" not in model_arch:
+                for i in range(len(cfg.MODEL.FEATURE_MAPS) - 1):
+                    if not all(
+                        [False for x in sizes if x % (np.power(2, (i + 1))) != 0 or z_size % cfg.MODEL.Z_DOWN[i] != 0]
+                    ):
+                        m = (
+                            "The 'DATA.PATCH_SIZE' provided is not divisible by 2 in each of the U-Net's levels. You can:\n 1) Reduce the number "
+                            + "of levels (by reducing 'cfg.MODEL.FEATURE_MAPS' array's length)\n 2) Increase 'DATA.PATCH_SIZE'"
                         )
-                    raise ValueError(m)
-                z_size = z_size // cfg.MODEL.Z_DOWN[i]
+                        if cfg.PROBLEM.NDIM == "3D":
+                            m += (
+                                "\n 3) If the Z axis is the problem, as the patch size is normally less than in other axis due to resolution, you "
+                                + "can tune 'MODEL.Z_DOWN' variable to not downsample the image in all U-Net levels"
+                            )
+                        raise ValueError(m)
+                    z_size = z_size // cfg.MODEL.Z_DOWN[i]
+            else:
+                
+                # Check that the input patch size is divisible in every level of the HRNet's like architectures
+                _mod = model_arch.upper()
+                _mod = re.sub(r'HRNET(\d+)', r'HRNET_\1', _mod)
+                _mod = _mod.replace("X", "_X")
+                hrnet_zdown = getattr(cfg.MODEL, _mod).Z_DOWN
+                hrnet_zdown_div = 2 if hrnet_zdown else 1
+
+                for i in range(4):
+                    if not all(
+                        [False for x in sizes if x % (np.power(2, (i + 1))) != 0 or z_size % hrnet_zdown_div != 0]
+                    ):
+                        m = (
+                            f"The 'DATA.PATCH_SIZE' provided is not divisible by 2 in each of the {_mod}'s levels. You can:\n 1) Reduce the number "
+                            + "of levels (by reducing 'cfg.MODEL.FEATURE_MAPS' array's length)\n 2) Increase 'DATA.PATCH_SIZE'"
+                        )
+                        if cfg.PROBLEM.NDIM == "3D":
+                            m += (
+                                "\n 3) If the Z axis is the problem, as the patch size is normally less than in other axis due to resolution, you "
+                                + f"can tune 'MODEL.{_mod}.Z_DOWN' variable to not downsample the image in all U-Net levels"
+                            )
+                        raise ValueError(m)
+                    z_size = z_size // 2 if hrnet_zdown else z_size
 
     if cfg.MODEL.LOAD_CHECKPOINT and check_data_paths:
         if not os.path.exists(get_checkpoint_path(cfg, jobname)):

@@ -35,9 +35,6 @@ class HighResolutionNet(nn.Module):
     normalization : str, optional
         Normalization layer (one of ``'bn'``, ``'sync_bn'`` ``'in'``, ``'gn'`` or ``'none'``).
 
-    z_down : bool, optional 
-        Whether to downsample the z-axis or not. If ``False`` it will not downsample the z-axis. Default is ``False``.
-        
     output_channels : list of int, optional
         Output channels of the network. It must be a list of lenght ``1`` or ``2``. When two
         numbers are provided two task to be done is expected (multi-head). Possible scenarios are:
@@ -49,6 +46,7 @@ class HighResolutionNet(nn.Module):
 
     contrast_proj_dim : int
         Dimensions of the projection embedding.
+
     Returns
     -------
     model : Torch model
@@ -60,7 +58,6 @@ class HighResolutionNet(nn.Module):
         cfg: Dict,
         image_shape: Tuple[int, ...] = (256, 256, 1),
         normalization: str = "none",
-        z_down: bool = False,
         output_channels: List[int] = [1],
         contrast: bool = False,
         contrast_proj_dim: int = 256,
@@ -75,7 +72,7 @@ class HighResolutionNet(nn.Module):
         self.in_size = 64
         self.ndim = 3 if len(image_shape) == 4 else 2
         self.contrast = contrast
-        self.z_down = z_down
+        self.z_down = cfg["Z_DOWN"]
 
         if self.ndim == 3:
             self.conv_call = nn.Conv3d

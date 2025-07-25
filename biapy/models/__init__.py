@@ -1,6 +1,7 @@
 from importlib import import_module
 from importlib.util import find_spec
 import os
+import re
 import json
 from pathlib import Path
 import pooch
@@ -145,34 +146,26 @@ def build_model(cfg: CN, output_channels: int, device: torch.device) -> Tuple[nn
         model = callable_model(**args)
 
     elif "hrnet" in modelname:
-        z_down = any([x for x in cfg.MODEL.Z_DOWN if x == 2])
         args = dict(
             image_shape=cfg.DATA.PATCH_SIZE,
             normalization='sync_bn',
             output_channels=output_channels,
             contrast=cfg.LOSS.CONTRAST.ENABLE, 
             contrast_proj_dim=cfg.LOSS.CONTRAST.PROJ_DIM, 
-            z_down=z_down,
         )
-        if modelname == "hrnet18":
-            args["cfg"] = cfg.MODEL.HRNET_18
-        elif modelname == 'hrnet32':
-            args["cfg"] = cfg.MODEL.HRNET_32
-        elif modelname == 'hrnet48':
-            args["cfg"] = cfg.MODEL.HRNET_48
-        elif modelname == 'hrnet64':
-            args = dict(
-                cfg.MODEL.HRNET_64,
-                norm='sync_bn',
-                )
-        elif modelname == 'hrnet2x20':
-            args["cfg"] = cfg.MODEL.HRNET2X_20
+
+        # Take the HRNet configuration from the cfg
+        _mod = modelname.upper()
+        _mod = re.sub(r'HRNET(\d+)', r'HRNET_\1', _mod)
+        _mod = _mod.replace("X", "_X")
+        args["cfg"] = getattr(cfg.MODEL, _mod)
+
         callable_model = HighResolutionNet  # type: ignore
         model = callable_model(**args)
 
         network_stride = [4, 4]
         if ndim == 3:
-            network_stride = [4 if z_down else 1] + network_stride
+            network_stride = [4 if args["cfg"].Z_DOWN else 1] + network_stride
     else:
         if modelname == "simple_cnn":
             args = dict(
