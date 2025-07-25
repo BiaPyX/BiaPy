@@ -258,7 +258,7 @@ def evaluate(
             with_embed = False
 
             outputs = {
-                "seg": outputs["pred"],
+                "pred": outputs["pred"],
                 "embed": outputs["embed"],
                 'key': outputs["pred"].detach(),
                 'pixel_queue': memory_bank.pixel_queue,
