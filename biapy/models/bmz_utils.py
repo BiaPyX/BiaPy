@@ -105,21 +105,14 @@ def create_environment_file_for_model(building_dir):
     env_file : str
         Path to the environment.yaml file created.
     """
-    import biapy
-
     env = dict(
         name="biapy",
         dependencies=[
-            "python=3.10",
-            "pytorch=2.4.0",
-            "torchvision=0.19.0",
-            "torchmetrics[image]=1.4",
-            "timm=1.0.14",
+            "python>=3.10",
             "pip",
             {
                 "pip": [
-                    "biapy=={}".format(biapy.__version__),
-                    "pytorch_msssim",
+                    "timm==1.0.14",
                 ]
             },
         ],

@@ -1,4 +1,5 @@
-import importlib
+from importlib import import_module
+from importlib.util import find_spec
 import os
 import json
 from pathlib import Path
@@ -13,16 +14,17 @@ from packaging.version import Version
 from functools import partial
 from yacs.config import CfgNode as CN
 import numpy as np
+import ast
+import inspect
+from collections import deque, defaultdict
 
-from bioimageio.spec.utils import download
 from bioimageio.core.backends.pytorch_backend import load_torch_model
 from bioimageio.spec.model.v0_4 import ModelDescr as ModelDescr_v0_4
 from bioimageio.spec.model.v0_5 import ModelDescr as ModelDescr_v0_5
 from bioimageio.spec import InvalidDescr
 from bioimageio.core.digest_spec import get_test_inputs
 
-
-def build_model(cfg: CN, output_channels: int, device: torch.device) -> Tuple[nn.Module, str, Callable, Dict, Tuple[int, ...]]:
+def build_model(cfg: CN, output_channels: int, device: torch.device) -> Tuple[nn.Module, str, Dict, set, List[str], Dict, Tuple[int, ...]]:
     # model, model_file, model_name, args
     """
     Build selected model
@@ -51,7 +53,7 @@ def build_model(cfg: CN, output_channels: int, device: torch.device) -> Tuple[nn
         modelname = "hrnet"
     else:
         modelname = str(cfg.MODEL.ARCHITECTURE).lower()
-    mdl = importlib.import_module("biapy.models." + modelname)
+    mdl = import_module("biapy.models." + modelname)
     model_file = os.path.abspath(mdl.__file__)  # type: ignore
     names = [x for x in mdl.__dict__ if not x.startswith("_")]
     globals().update({k: getattr(mdl, k) for k in names})
@@ -334,10 +336,181 @@ def build_model(cfg: CN, output_channels: int, device: torch.device) -> Tuple[nn
         device=device.type,
     )
 
-    model_file += ":" + str(callable_model.__name__)
-    model_name = model_file.rsplit(":", 1)[-1]
-    return model, model_file, model_name, args, network_stride
+    # Queue for recursive dependency tracing
+    dependency_queue = deque()
+    dependency_queue.append(callable_model)
 
+    collected_sources, all_import_lines, scanned_files = extract_model(dependency_queue, model_file)
+    all_import_lines = merge_import_lines(all_import_lines)
+
+    return model, str(callable_model.__name__), collected_sources, all_import_lines, scanned_files, args, network_stride # type: ignore
+
+def extract_model(dependency_queue: deque, model_file: str) -> Tuple[Dict[str, str], set, List[str]]:
+    """
+    Extracts the source code of the model and its dependencies.
+
+    Parameters  
+    ----------  
+    dependency_queue : deque
+        Queue of model dependencies to be processed.
+
+    model_file : str    
+        Path to the main model file.
+
+    Returns 
+    -------
+    collected_sources : dict
+        Dictionary containing the source code of the collected model dependencies.
+
+    all_import_lines : set  
+        Set of all import lines found in the model and its dependencies.
+
+    scanned_files : list
+        List of all files that were scanned for dependencies.
+    """
+    visited_files = set()
+    visited_names = set()
+    collected_sources = {}
+    all_import_lines = set()
+    all_biapy_modules = {}
+    scanned_files = []
+    queue = [model_file]
+
+    # === Step 1: Recursively collect all biapy modules and import lines ===
+    while queue:
+        filepath = os.path.abspath(queue.pop())
+        if filepath in visited_files:
+            continue
+        visited_files.add(filepath)
+        scanned_files.append(filepath)
+
+        with open(filepath, "r") as f:
+            tree = ast.parse(f.read(), filename=filepath)
+
+        biapy_module_names = set()
+
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    mod = alias.name
+                    full = f"import {mod}" + (f" as {alias.asname}" if alias.asname else "")
+                    if mod.startswith("biapy"):
+                        biapy_module_names.add(mod)
+                    else:
+                        all_import_lines.add(full)
+            elif isinstance(node, ast.ImportFrom):
+                mod = node.module
+                if not mod:
+                    continue
+                names = ", ".join(
+                    f"{alias.name}" + (f" as {alias.asname}" if alias.asname else "")
+                    for alias in node.names
+                )
+                full = f"from {mod} import {names}"
+                if mod.startswith("biapy"):
+                    biapy_module_names.add(mod)
+                else:
+                    all_import_lines.add(full)
+
+        for name in biapy_module_names:
+            if name in all_biapy_modules:
+                continue
+            try:
+                mod = import_module(name)
+                spec = find_spec(name)
+                if spec and spec.origin and os.path.isfile(spec.origin):
+                    all_biapy_modules[name] = mod
+                    queue.append(spec.origin)
+            except Exception as e:
+                print(f"Warning: Could not import '{name}': {e}")
+
+    # === Step 2: Extract relevant functions and classes ===
+    biapy_modules = list(all_biapy_modules.values())
+
+    while dependency_queue:
+        obj = dependency_queue.popleft()
+        name = obj.__name__
+        if name in visited_names:
+            continue
+        visited_names.add(name)
+
+        try:
+            source = inspect.getsource(obj)
+            collected_sources[name] = source
+        except Exception as e:
+            print(f"Skipping {name}: {e}")
+            continue
+
+        # Find further dependencies
+        class Visitor(ast.NodeVisitor):
+            def __init__(self):
+                self.names = set()
+
+            def visit_Call(self, node):
+                if isinstance(node.func, ast.Name):
+                    self.names.add(node.func.id)
+                elif isinstance(node.func, ast.Attribute):
+                    self.names.add(node.func.attr)
+                self.generic_visit(node)
+
+        called_names = Visitor()
+        called_names.visit(ast.parse(source))
+
+        for cname in called_names.names:
+            if cname in visited_names:
+                continue
+            for mod in biapy_modules:
+                if hasattr(mod, cname):
+                    dep = getattr(mod, cname)
+                    if inspect.isfunction(dep) or inspect.isclass(dep):
+                        dependency_queue.append(dep)
+                        break
+
+    return collected_sources, sorted(all_import_lines), scanned_files
+
+
+def merge_import_lines(import_lines: List[str]) -> List[str]:
+    """
+    Merges import lines by grouping them by module and sorting names within each module.
+
+    Parameters
+    ----------
+    import_lines : list of str
+        List of import lines to be merged.
+
+    Returns
+    -------
+    merged : list of str
+        Merged import lines, sorted and grouped by module.
+    """
+    grouped = defaultdict(set)
+    standalone_imports = set()
+
+    for line in import_lines:
+        line = line.strip()
+        if line.startswith("import "):
+            # Regular import, keep it as-is
+            standalone_imports.add(line)
+        elif line.startswith("from "):
+            try:
+                parts = line.split(" import ")
+                mod = parts[0][5:].strip()  # remove "from "
+                names = parts[1].split(",")
+                for name in names:
+                    grouped[mod].add(name.strip())
+            except Exception as e:
+                print(f"Warning: could not parse import line '{line}': {e}")
+        else:
+            standalone_imports.add(line)
+
+    merged = []
+
+    for mod, names in grouped.items():
+        sorted_names = sorted(names)
+        merged.append(f"from {mod} import {', '.join(sorted_names)}")
+
+    merged.extend(sorted(standalone_imports))
+    return sorted(merged)
 
 def build_bmz_model(cfg: CN, model: ModelDescr_v0_4 | ModelDescr_v0_5, device: torch.device) -> nn.Module:
     """
@@ -852,19 +1025,19 @@ def get_cfg_key_value(obj, attr, *args):
 def build_torchvision_model(cfg: CN, device: torch.device) -> Tuple[nn.Module, Callable]:
     # Find model in TorchVision
     if "quantized_" in cfg.MODEL.TORCHVISION_MODEL_NAME:
-        mdl = importlib.import_module("torchvision.models.quantization", cfg.MODEL.TORCHVISION_MODEL_NAME)
+        mdl = import_module("torchvision.models.quantization", cfg.MODEL.TORCHVISION_MODEL_NAME)
         w_prefix = "_quantizedweights"
         tc_model_name = cfg.MODEL.TORCHVISION_MODEL_NAME.replace("quantized_", "")
-        mdl_weigths = importlib.import_module("torchvision.models", cfg.MODEL.TORCHVISION_MODEL_NAME)
+        mdl_weigths = import_module("torchvision.models", cfg.MODEL.TORCHVISION_MODEL_NAME)
     else:
         w_prefix = "_weights"
         tc_model_name = cfg.MODEL.TORCHVISION_MODEL_NAME
         if cfg.PROBLEM.TYPE == "CLASSIFICATION":
-            mdl = importlib.import_module("torchvision.models", cfg.MODEL.TORCHVISION_MODEL_NAME)
+            mdl = import_module("torchvision.models", cfg.MODEL.TORCHVISION_MODEL_NAME)
         elif cfg.PROBLEM.TYPE == "SEMANTIC_SEG":
-            mdl = importlib.import_module("torchvision.models.segmentation", cfg.MODEL.TORCHVISION_MODEL_NAME)
+            mdl = import_module("torchvision.models.segmentation", cfg.MODEL.TORCHVISION_MODEL_NAME)
         elif cfg.PROBLEM.TYPE in ["INSTANCE_SEG", "DETECTION"]:
-            mdl = importlib.import_module("torchvision.models.detection", cfg.MODEL.TORCHVISION_MODEL_NAME)
+            mdl = import_module("torchvision.models.detection", cfg.MODEL.TORCHVISION_MODEL_NAME)
         mdl_weigths = mdl
 
     # Import model and weights
