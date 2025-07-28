@@ -1,3 +1,13 @@
+"""Residual U-Net model definition for 2D/3D biomedical image taks.
+
+This module provides the ResUNet class, which implements a configurable Residual U-Net architecture
+with support for 2D and 3D data, super-resolution, multi-head outputs, and optional
+contrastive learning head.
+
+Reference:
+    Road Extraction by Deep Residual U-Net
+    https://arxiv.org/pdf/1711.10684.pdf
+"""
 import torch
 import torch.nn as nn
 from typing import Dict 
@@ -6,75 +16,9 @@ from biapy.models.blocks import ResConvBlock, ResUpBlock, ConvBlock, ProjectionH
 
 
 class ResUNet(nn.Module):
-    """
-    Create 2D/3D Residual U-Net.
+    """Configurable 2D/3D Residual U-Net model for image segmentation and super-resolution.
 
-    Reference: `Road Extraction by Deep Residual U-Net <https://arxiv.org/pdf/1711.10684.pdf>`_.
-
-    Parameters
-    ----------
-    image_shape : 3D/4D tuple
-        Dimensions of the input image. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
-
-    activation : str, optional
-        Activation layer.
-
-    feature_maps : array of ints, optional
-        Feature maps to use on each level.
-
-    drop_values : float, optional
-        Dropout value to be fixed.
-
-    normalization : str, optional
-        Normalization layer (one of ``'bn'``, ``'sync_bn'`` ``'in'``, ``'gn'`` or ``'none'``).
-
-    k_size : int, optional
-        Kernel size.
-
-    upsample_layer : str, optional
-        Type of layer to use to make upsampling. Two options: "convtranspose" or "upsampling".
-
-    z_down : List of ints, optional
-        Downsampling used in z dimension. Set it to ``1`` if the dataset is not isotropic.
-
-    output_channels : list of int, optional
-        Output channels of the network. It must be a list of lenght ``1`` or ``2``. When two
-        numbers are provided two task to be done is expected (multi-head). Possible scenarios are:
-            * instances + classification on instance segmentation
-            * points + classification in detection.
-
-    upsampling_factor : tuple of ints, optional
-        Factor of upsampling for super resolution workflow for each dimension.
-
-    upsampling_position : str, optional
-        Whether the upsampling is going to be made previously (``pre`` option) to the model
-        or after the model (``post`` option).
-
-    isotropy : bool or list of bool, optional
-        Whether to use 3d or 2d convolutions at each U-Net level even if input is 3d.
-
-    larger_io : bool, optional
-        Whether to use extra and larger kernels in the input and output layers.
-
-    contrast : bool, optional
-        Whether to add contrastive learning head to the model. Default is ``False``.
-
-    contrast_proj_dim : int, optional
-        Dimension of the projection head for contrastive learning. Default is ``256``.
-
-    Returns
-    -------
-    model : Torch model
-        Residual U-Net model.
-
-
-    Calling this function with its default parameters returns the following network:
-
-    .. image:: ../../img/models/unet.png
-        :width: 100%
-        :align: center
-
-    Image created with `PlotNeuralNet <https://github.com/HarisIqbal88/PlotNeuralNet>`_.
+    Supports multi-head outputs and optional contrastive learning head.
     """
 
     def __init__(
@@ -95,6 +39,76 @@ class ResUNet(nn.Module):
         contrast: bool = False,
         contrast_proj_dim: int = 256,
     ):
+        """
+        Create 2D/3D Residual U-Net.
+
+        Reference: `Road Extraction by Deep Residual U-Net <https://arxiv.org/pdf/1711.10684.pdf>`_.
+
+        Parameters
+        ----------
+        image_shape : 3D/4D tuple
+            Dimensions of the input image. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
+
+        activation : str, optional
+            Activation layer.
+
+        feature_maps : array of ints, optional
+            Feature maps to use on each level.
+
+        drop_values : float, optional
+            Dropout value to be fixed.
+
+        normalization : str, optional
+            Normalization layer (one of ``'bn'``, ``'sync_bn'`` ``'in'``, ``'gn'`` or ``'none'``).
+
+        k_size : int, optional
+            Kernel size.
+
+        upsample_layer : str, optional
+            Type of layer to use to make upsampling. Two options: "convtranspose" or "upsampling".
+
+        z_down : List of ints, optional
+            Downsampling used in z dimension. Set it to ``1`` if the dataset is not isotropic.
+
+        output_channels : list of int, optional
+            Output channels of the network. It must be a list of lenght ``1`` or ``2``. When two
+            numbers are provided two task to be done is expected (multi-head). Possible scenarios are:
+                * instances + classification on instance segmentation
+                * points + classification in detection.
+
+        upsampling_factor : tuple of ints, optional
+            Factor of upsampling for super resolution workflow for each dimension.
+
+        upsampling_position : str, optional
+            Whether the upsampling is going to be made previously (``pre`` option) to the model
+            or after the model (``post`` option).
+
+        isotropy : bool or list of bool, optional
+            Whether to use 3d or 2d convolutions at each U-Net level even if input is 3d.
+
+        larger_io : bool, optional
+            Whether to use extra and larger kernels in the input and output layers.
+
+        contrast : bool, optional
+            Whether to add contrastive learning head to the model. Default is ``False``.
+
+        contrast_proj_dim : int, optional
+            Dimension of the projection head for contrastive learning. Default is ``256``.
+
+        Returns
+        -------
+        model : Torch model
+            Residual U-Net model.
+
+
+        Calling this function with its default parameters returns the following network:
+
+        .. image:: ../../img/models/unet.png
+            :width: 100%
+            :align: center
+
+        Image created with `PlotNeuralNet <https://github.com/HarisIqbal88/PlotNeuralNet>`_.
+        """
         super(ResUNet, self).__init__()
 
         if len(output_channels) == 0:
@@ -262,6 +276,19 @@ class ResUNet(nn.Module):
         self.apply(self._init_weights)
 
     def forward(self, x) -> Dict | torch.Tensor:
+        """Forward pass of the Residual U-Net model.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input tensor of shape (batch, channels, ...).
+
+        Returns
+        -------
+        Dict or torch.Tensor
+            Model output. Returns a dictionary if multi-head or contrastive outputs are enabled,
+            otherwise returns the main prediction tensor.
+        """
         # Super-resolution
         if self.pre_upsampling:
             x = self.pre_upsampling(x)
