@@ -1,3 +1,10 @@
+"""
+This module provides functionality to create and configure EfficientNet models from `torchvision.models`.
+
+It allows users to instantiate various EfficientNet architectures (e.g., b0-b7),
+optionally load pre-trained ImageNet weights, and customize the final
+classification layer for specific tasks.
+"""
 import torchvision.models as models
 from torchvision.models._api import WeightsEnum
 from torch.hub import load_state_dict_from_url
