@@ -269,12 +269,12 @@ def insert_patch_in_efficient_file(
     mode="replace",
 ):
     """
-    Load from ``filepath`` the patch determined by ``patch_coords``.
+    Insert ``patch`` in ``data`` at ``patch_coords``.
 
     Parameters
     ----------
     data : Zarr/H5 data
-        Data to extract the patch from.
+        Data to insert the patch into.
 
     patch : NDArray
         Patch to insert into ``data``.

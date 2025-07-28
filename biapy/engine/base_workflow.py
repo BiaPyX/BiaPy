@@ -652,30 +652,31 @@ class Base_Workflow(metaclass=ABCMeta):
 
         if self.cfg.MODEL.SOURCE == "biapy":
             assert self.model
-            p = self.model(in_img)
+            pred = self.model(in_img)
 
             # Recover the original shape of the input, as not all the model return a prediction
             # of the same size as the input image
             if (
-                not self.cfg.LOSS.CONTRAST.ENABLE 
+                not (self.cfg.LOSS.CONTRAST.ENABLE and is_train)
                 and not (self.cfg.PROBLEM.TYPE == "SELF_SUPERVISED" and self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK.lower() == "masking") 
                 and self.cfg.PROBLEM.TYPE not in ["CLASSIFICATION", "SUPER_RESOLUTION"]
             ):
-                if isinstance(p, dict):
-                    if p["pred"].shape[2:] != in_img.shape[2:]:
-                        p["pred"] = resize(p["pred"], in_img.shape, mode="bilinear")
-                        if "class" in p:
-                            p["class"] = resize(p["class"], in_img.shape, mode="nearest")
+                if isinstance(pred, dict):
+                    if pred["pred"].shape[2:] != in_img.shape[2:]:
+                        mode = "bilinear" if self.cfg.PROBLEM.NDIM == "2D" else "trilinear"
+                        pred["pred"] = resize(pred["pred"], in_img.shape, mode=mode)
+                    if "class" in pred:
+                        pred["class"] = resize(pred["class"], in_img.shape, mode="nearest")
                 else:
-                    if p.shape[2:] != in_img.shape[2:]:
-                        p = resize(p, in_img.shape, mode="bilinear")
+                    if pred.shape[2:] != in_img.shape[2:]:
+                        pred = resize(pred, in_img.shape, mode="bilinear")
             if apply_act:
-                p = self.apply_model_activations(p, training=is_train)
+                pred = self.apply_model_activations(pred, training=is_train)
         elif self.cfg.MODEL.SOURCE == "bmz":
-            p = self.bmz_model_call(in_img, is_train)
+            pred = self.bmz_model_call(in_img, is_train)
         elif self.cfg.MODEL.SOURCE == "torchvision":
-            p = self.torchvision_model_call(in_img, is_train)
-        return p
+            pred = self.torchvision_model_call(in_img, is_train)
+        return pred
 
     def prepare_model(self):
         """Build the model."""
