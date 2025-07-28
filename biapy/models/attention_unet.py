@@ -337,6 +337,27 @@ class Attention_U_Net(nn.Module):
             return out_dict
 
     def _init_weights(self, m):
+        """
+        Initialize model weights using Xavier uniform initialization.
+
+        Applies Xavier uniform initialization to convolutional and linear layers,
+        and sets appropriate initial values for normalization layers.
+
+        Parameters
+        ----------
+        m : nn.Module
+            PyTorch module to initialize.
+
+        Notes
+        -----
+        Initialization strategy:
+        - Conv2d/Conv3d: Xavier uniform for weights, zero for biases
+        - Linear: Xavier uniform for weights, zero for biases  
+        - LayerNorm: Zero for biases, one for weights
+
+        Xavier initialization helps maintain consistent variance of activations
+        and gradients throughout the network depth.
+        """
         if isinstance(m, nn.Conv2d) or isinstance(m, nn.Conv3d):
             nn.init.xavier_uniform_(m.weight)
             if m.bias is not None:
