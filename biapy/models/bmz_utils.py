@@ -1,3 +1,12 @@
+"""
+This module provides utility functions for managing and preparing BioImage Model Zoo (BMZ) models within the BiaPy framework.
+
+It includes functionalities for:
+- Retrieving and parsing BMZ model information (`get_bmz_model_info`).
+- Creating necessary environment files for model deployment (`create_environment_file_for_model`).
+- Generating visual covers for models based on input/output examples (`create_model_cover`).
+- Generating comprehensive documentation files for exported models (`create_model_doc`).
+"""
 import os
 import yaml
 import numpy as np
@@ -42,7 +51,6 @@ def get_bmz_model_info(
     model_instance : Torch model
         Torch model.
     """
-
     assert (
         model.weights.pytorch_state_dict
     ), "Seems that the original BMZ model has no pytorch_state_dict object. Aborting"
@@ -92,8 +100,7 @@ def get_bmz_model_info(
 
 def create_environment_file_for_model(building_dir):
     """
-    Create a conda environment file (environment.yaml) with the necessary dependencies to build a model
-    with BiaPy.
+    Create a conda environment file (environment.yaml) with the necessary dependencies to build a model with BiaPy.
 
     Parameters
     ----------
@@ -258,8 +265,7 @@ def create_model_doc(
     doc_output_path: str,
 ):
     """
-    Create a documentation file with information of the workflow and model used. It will be saved into
-    ``doc_output_path``.
+    Create a documentation file with information of the workflow and model used. It will be saved into ``doc_output_path``.
 
     Parameters
     ----------
