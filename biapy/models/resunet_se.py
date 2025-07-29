@@ -1,3 +1,33 @@
+"""
+This module implements the Residual U-Net with Squeeze-and-Excitation (SE) blocks, referred to as ResUNet_SE.
+
+This architecture is a variant of the U-Net, enhanced with residual connections and channel-wise attention mechanisms to improve feature learning and representation for various image analysis tasks.
+
+The ResUNet_SE is designed for both 2D and 3D image processing, supporting
+different normalization types, kernel sizes, and flexible upsampling strategies.
+It can be configured for multi-task learning with multiple output heads,
+including an optional contrastive learning projection.
+
+Key components and functionalities include:
+
+Classes:
+--------
+- ResUNet_SE: The main Residual U-Net model with Squeeze-and-Excitation blocks.
+
+This module relies on building blocks defined in `biapy.models.blocks`, such as
+`ResConvBlock`, `ResUpBlock`, `ConvBlock`, `ProjectionHead`, and normalization helpers.
+
+Reference:
+----------
+`Squeeze and Excitation Networks <https://arxiv.org/abs/1709.01507>`_.
+
+Image representation:
+---------------------
+.. image:: ../../img/models/unet.png
+    :width: 100%
+    :align: center
+Image created with `PlotNeuralNet <https://github.com/HarisIqbal88/PlotNeuralNet>`_.
+"""
 import torch
 import torch.nn as nn
 from typing import Dict 
@@ -14,68 +44,108 @@ from biapy.models.blocks import (
 
 class ResUNet_SE(nn.Module):
     """
-    Create Residual 2D/3D U-Net with squeeze-excite blocks.
+    Create Residual 2D/3D U-Net with Squeeze-and-Excitation (SE) blocks.
+
+    This model extends the classic U-Net architecture by incorporating
+    residual connections within its convolutional blocks and Squeeze-and-Excitation
+    modules for channel-wise attention. This design aims to improve feature
+    learning and propagation, leading to better performance in dense prediction
+    tasks like image segmentation.
 
     Reference: `Squeeze and Excitation Networks <https://arxiv.org/abs/1709.01507>`_.
 
     Parameters
     ----------
-    image_shape : 3D/4D tuple
-        Dimensions of the input image. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
+    image_shape : Tuple[int, ...]
+        Dimensions of the input image. E.g., `(y, x, channels)` for 2D or
+        `(z, y, x, channels)` for 3D. The last element `image_shape[-1]`
+        should be the number of input channels.
 
     activation : str, optional
-        Activation layer.
+        Activation layer to use throughout the network (e.g., "ELU", "ReLU").
+        Defaults to "ELU".
 
-    feature_maps : array of ints, optional
-        Feature maps to use on each level.
+    feature_maps : List[int], optional
+        A list specifying the number of feature maps (channels) at each level
+        of the U-Net. The length of this list defines the depth of the U-Net.
+        Defaults to `[32, 64, 128, 256]`.
 
-    drop_values : float, optional
-        Dropout value to be fixed.
+    drop_values : List[float], optional
+        A list of dropout probabilities to apply at each level of the U-Net.
+        Its length should match the number of levels (i.e., `len(feature_maps)`).
+        Defaults to `[0.1, 0.1, 0.1, 0.1]`.
 
     normalization : str, optional
-        Normalization layer (one of ``'bn'``, ``'sync_bn'`` ``'in'``, ``'gn'`` or ``'none'``).
+        Type of normalization layer to use throughout the network. Options include
+        `'bn'` (Batch Normalization), `'sync_bn'` (Synchronized Batch Normalization for multi-GPU),
+        `'in'` (Instance Normalization), `'gn'` (Group Normalization), or `'none'`.
+        Defaults to "none".
 
     k_size : int, optional
-        Kernel size.
+        Kernel size for most convolutional layers in the network. Defaults to 3.
 
     upsample_layer : str, optional
-        Type of layer to use to make upsampling. Two options: "convtranspose" or "upsampling".
+        Type of layer to use for upsampling in the decoder path.
+        Two options: "convtranspose" (using `nn.ConvTranspose2d`/`3d`) or
+        "upsampling" (using `nn.Upsample` followed by convolution).
+        Defaults to "convtranspose".
 
-    z_down : List of ints, optional
-        Downsampling used in z dimension. Set it to ``1`` if the dataset is not isotropic.
+    z_down : List[int], optional
+        For 3D data, a list of downsampling factors for the z-dimension at each
+        pooling stage in the encoder. Set elements to `1` if the dataset is not
+        isotropic and z-downsampling is not desired at that stage.
+        Its length should match the number of pooling stages (`len(feature_maps) - 1`).
+        Defaults to `[2, 2, 2, 2]`.
 
-    output_channels : list of int, optional
-        Output channels of the network. It must be a list of lenght ``1`` or ``2``. When two
-        numbers are provided two task to be done is expected (multi-head). Possible scenarios are:
-            * instances + classification on instance segmentation
-            * points + classification in detection.
+    output_channels : List[int], optional
+        Specifies the number of output channels for the final prediction head(s).
+        Must be a list of length 1 for a single output task (e.g., semantic segmentation)
+        or length 2 for multi-head tasks (e.g., instances + classification in instance segmentation,
+        or points + classification in detection). Defaults to `[1]`.
 
-    upsampling_factor : tuple of ints, optional
-        Factor of upsampling for super resolution workflow for each dimension.
+    upsampling_factor : Tuple[int, ...], optional
+        Factor of upsampling for super-resolution workflows. If provided,
+        it dictates the kernel and stride for an initial or final transposed
+        convolution. Defaults to an empty tuple `()`, meaning no super-resolution.
 
     upsampling_position : str, optional
-        Whether the upsampling is going to be made previously (``pre`` option) to the model
-        or after the model (``post`` option).
+        Determines where super-resolution upsampling is applied:
+        - ``"pre"``: Upsampling is performed *before* the main U-Net model.
+        - ``"post"``: Upsampling is performed *after* the main U-Net model.
+        Defaults to "pre".
 
-    isotropy : bool or list of bool, optional
-        Whether to use 3d or 2d convolutions at each U-Net level even if input is 3d.
+    isotropy : bool or List[bool], optional
+        Controls whether to use 3D or 2D convolutions at each U-Net level when
+        the input is 3D.
+        - If `True` (bool), all levels use 3D convolutions.
+        - If `False` (bool), all levels use 2D convolutions (1xKxK kernels for 3D input).
+        - If `List[bool]`, specifies for each level (encoder/decoder pair) whether
+          to use 3D (True) or 2D (False) kernels. Its length should match `len(feature_maps)`.
+        Defaults to False.
 
     larger_io : bool, optional
-        Whether to use extra and larger kernels in the input and output layers.
+        If True, uses extra and larger kernels (k_size+2) in the input and
+        output layers for potentially better initial/final feature extraction.
+        Defaults to True.
 
     extra_conv : bool, optional
-            To add a convolutional layer before the residual blocks (as in Kisuk et al, 2017, https://arxiv.org/pdf/1706.00120)
+        If True, adds an additional convolutional layer before the residual
+        blocks in the encoder and decoder, as seen in some U-Net variants
+        (e.g., Kisuk et al., 2017). Defaults to True.
 
     contrast : bool, optional
-        Whether to add contrastive learning head to the model. Default is ``False``.
+        Whether to add a contrastive learning projection head to the model.
+        If True, an additional output `embed` will be available in the forward pass.
+        Defaults to `False`.
 
     contrast_proj_dim : int, optional
-        Dimension of the projection head for contrastive learning. Default is ``256``.
+        Dimension of the projection head for contrastive learning, if `contrast` is True.
+        Defaults to `256`.
 
     Returns
     -------
-    model : Torch model
-        U-Net model.
+    model : nn.Module
+        The constructed ResUNet_SE model.
 
     Calling this function with its default parameters returns the following network:
 
@@ -105,6 +175,55 @@ class ResUNet_SE(nn.Module):
         contrast: bool = False,
         contrast_proj_dim: int = 256,
     ):
+        """
+        Initialize the ResUNet_SE model.
+
+        Sets up the encoder (downsampling path), decoder (upsampling path),
+        bottleneck, and optional super-resolution and multi-head output layers.
+        It dynamically selects 2D or 3D convolutional, pooling, and normalization
+        layers based on `ndim` and `isotropy` settings.
+
+        Parameters
+        ----------
+        image_shape : Tuple[int, ...], optional
+            Input image dimensions. Defaults to (256, 256, 1).
+        activation : str, optional
+            Activation function name. Defaults to "ELU".
+        feature_maps : List[int], optional
+            Number of feature maps at each U-Net level. Defaults to `[32, 64, 128, 256]`.
+        drop_values : List[float], optional
+            Dropout probabilities for each level. Defaults to `[0.1, 0.1, 0.1, 0.1]`.
+        normalization : str, optional
+            Normalization layer type. Defaults to "none".
+        k_size : int, optional
+            Kernel size for convolutions. Defaults to 3.
+        upsample_layer : str, optional
+            Upsampling method ("convtranspose" or "upsampling"). Defaults to "convtranspose".
+        z_down : List[int], optional
+            Z-dimension downsampling factors for 3D data. Defaults to `[2, 2, 2, 2]`.
+        output_channels : List[int], optional
+            Number of channels for the output head(s). Can be length 1 or 2.
+            Defaults to `[1]`.
+        upsampling_factor : Tuple[int, ...], optional
+            Factor for super-resolution upsampling. Defaults to `()`.
+        upsampling_position : str, optional
+            Position of super-resolution upsampling ("pre" or "post"). Defaults to "pre".
+        isotropy : bool | List[bool], optional
+            Controls 3D vs 2D convolutions for 3D input. Defaults to False.
+        larger_io : bool, optional
+            Whether to use larger kernels in input/output layers. Defaults to True.
+        extra_conv : bool, optional
+            Whether to add an extra conv layer before residual blocks. Defaults to True.
+        contrast : bool, optional
+            Whether to add a contrastive learning projection head. Defaults to `False`.
+        contrast_proj_dim : int, optional
+            Dimension of the contrastive projection head. Defaults to `256`.
+
+        Raises
+        ------
+        ValueError
+            If 'output_channels' is empty or has more than two values.
+        """
         super(ResUNet_SE, self).__init__()
 
         if len(output_channels) == 0:
@@ -278,6 +397,33 @@ class ResUNet_SE(nn.Module):
         self.apply(self._init_weights)
 
     def forward(self, x) -> Dict | torch.Tensor:
+        """
+        Perform the forward pass of the ResUNet_SE model.
+
+        The input `x` first undergoes optional pre-upsampling for super-resolution
+        and an optional larger input convolution. It then passes through the
+        encoder path (downsampling blocks with pooling), followed by a bottleneck.
+        The decoder path upsamples features, concatenates them with corresponding
+        skip connections from the encoder, and processes them through upsampling blocks.
+        Finally, optional post-upsampling and the final prediction head(s) are applied.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            The input image tensor.
+            Expected shape for 2D: `(batch_size, input_channels, height, width)`.
+            Expected shape for 3D: `(batch_size, input_channels, depth, height, width)`.
+
+        Returns
+        -------
+        Dict | torch.Tensor
+            If `contrast` is True or `multihead` is True, returns a dictionary
+            containing different output tensors (e.g., "pred", "embed", "class").
+            Otherwise, returns only the primary prediction tensor.
+            The primary prediction tensor ("pred") will have `output_channels[0]`
+            channels and spatial dimensions corresponding to the original input
+            (or upsampled input if `upsampling_position` is "pre").
+        """
         # Super-resolution
         if self.pre_upsampling:
             x = self.pre_upsampling(x)
