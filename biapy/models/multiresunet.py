@@ -1,5 +1,37 @@
-# Adapted from https://github.com/nibtehaz/MultiResUNet
+"""
+This module implements the MultiResUNet architecture, a U-Net variant designed for multimodal biomedical image segmentation.
 
+MultiResUNet enhances the standard U-Net by incorporating "MultiRes Blocks"
+in the encoder and decoder paths, and "ResPaths" for skip connections.
+These components aim to improve feature representation and information flow
+across different scales.
+
+Key components implemented in this file include:
+
+Classes:
+--------
+- Conv_batchnorm: A basic convolutional block with optional batch normalization and activation.
+- Multiresblock: The MultiRes Block, a core component that processes features
+  through parallel convolutional paths of different kernel sizes (3x3, 5x5, 7x7)
+  and fuses them.
+- Respath: The ResPath module, which acts as an enhanced skip connection,
+  applying residual convolutional blocks to features before they are concatenated
+  in the decoder.
+- MultiResUnet: The main MultiResUNet model, combining the encoder, decoder,
+  and skip connections using the MultiRes Blocks and ResPaths.
+
+The implementation supports both 2D and 3D inputs, various normalization types,
+and optional multi-head outputs, including a contrastive learning projection.
+
+Reference:
+----------
+`MultiResUNet : Rethinking the U-Net Architecture for Multimodal Biomedical Image
+Segmentation <https://arxiv.org/abs/1902.04049>`_
+
+Code Adapted From:
+------------------
+https://github.com/nibtehaz/MultiResUNet
+"""
 import torch
 import torch.nn as nn
 from typing import Dict
@@ -9,30 +41,35 @@ from biapy.models.blocks import get_norm_2d, get_norm_3d, ProjectionHead
 
 class Conv_batchnorm(torch.nn.Module):
     """
-    Convolutional layers.
+    A basic convolutional block with optional batch normalization and activation.
+
+    This module combines a convolutional layer, a batch normalization layer,
+    and an activation function (ReLU by default), providing a standard building
+    block for neural networks.
 
     Parameters
     ----------
     conv : Torch conv layer
-        Convolutional layer to use.
+        Convolutional layer type to use (e.g., `nn.Conv2d`, `nn.Conv3d`).
 
     batchnorm : Torch batch normalization layer
-        Convolutional layer to use.
+        Batch normalization layer type to use (e.g., `nn.BatchNorm2d`, `nn.BatchNorm3d`).
 
     num_in_filters : int
-        Number of input filters.
+        Number of input channels for the convolutional layer.
 
     num_out_filters : int
-        Number of output filters.
+        Number of output channels for the convolutional layer.
 
     kernel_size : Tuple of ints
-        Size of the convolving kernel.
+        Size of the convolving kernel (e.g., 3 for 3x3, (3,3,3) for 3x3x3).
 
     stride : Tuple of ints, optional
-        Stride of the convolution.
+        Stride of the convolution. Defaults to 1.
 
     activation : str, optional
-        Activation function.
+        Activation function to apply after convolution and batch normalization.
+        Currently supports "relu" or "None" (for no activation). Defaults to "relu".
     """
 
     def __init__(
@@ -45,7 +82,33 @@ class Conv_batchnorm(torch.nn.Module):
         stride=1,
         activation="relu",
     ):
+        """
+        Initialize the Conv_batchnorm block.
+
+        Sets up the convolutional layer, batch normalization layer, and
+        stores the chosen activation function type.
+
+        Parameters
+        ----------
+        conv : Type[nn.Conv2d | nn.Conv3d]
+            The convolutional layer type to use (e.g., `nn.Conv2d` for 2D, `nn.Conv3d` for 3D).
+        batchnorm : Type[nn.BatchNorm2d | nn.BatchNorm3d]
+            The batch normalization layer type to use (e.g., `nn.BatchNorm2d`, `nn.BatchNorm3d`).
+        num_in_filters : int
+            The number of input channels for the convolutional layer.
+        num_out_filters : int
+            The number of output channels for the convolutional layer.
+        kernel_size : int | Tuple[int, ...]
+            The size of the convolving kernel. Can be a single integer for square/cubic kernels
+            or a tuple for specific dimensions.
+        stride : int | Tuple[int, ...], optional
+            The stride of the convolution. Can be a single integer or a tuple. Defaults to 1.
+        activation : str, optional
+            The name of the activation function to apply after convolution and batch normalization.
+            Currently supports "relu" or "None" (for no activation). Defaults to "relu".
+        """
         super().__init__()
+        
         self.activation = activation
         self.conv1 = conv(
             in_channels=num_in_filters,
@@ -57,6 +120,22 @@ class Conv_batchnorm(torch.nn.Module):
         self.batchnorm = batchnorm(num_out_filters)
 
     def forward(self, x):
+        """
+        Perform the forward pass of the convolutional block.
+
+        Applies convolution, batch normalization, and then the specified
+        activation function to the input tensor.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            The input tensor to the block.
+
+        Returns
+        -------
+        torch.Tensor
+            The output tensor after convolution, batch normalization, and activation.
+        """
         x = self.conv1(x)
         x = self.batchnorm(x)
 
@@ -68,27 +147,56 @@ class Conv_batchnorm(torch.nn.Module):
 
 class Multiresblock(torch.nn.Module):
     """
-    MultiRes Block.
+    MultiRes Block as described in the MultiResUNet paper.
+
+    This block enhances feature extraction by processing input through parallel
+    convolutional paths with different effective receptive fields (3x3, 5x5, 7x7)
+    and then concatenating their outputs. It also includes a shortcut connection
+    and batch normalization.
 
     Parameters
     ----------
     conv : Torch conv layer
-        Convolutional layer to use.
+        Convolutional layer type to use (e.g., `nn.Conv2d`, `nn.Conv3d`).
 
     batchnorm : Torch batch normalization layer
-        Convolutional layer to use.
+        Batch normalization layer type to use (e.g., `nn.BatchNorm2d`, `nn.BatchNorm3d`).
 
     num_in_channels : int
-        Number of channels coming into multires block
+        Number of input channels coming into the MultiRes Block.
 
     num_filters : int
-        Number of output filters.
+        Base number of filters for calculating the output filter counts for
+        the internal convolutional paths.
 
-    alpha : str, optional
-        Alpha hyperparameter.
+    alpha : float, optional
+        Alpha hyperparameter (default: 1.67). Used to scale the total number
+        of filters, influencing the capacity of the block.
     """
 
     def __init__(self, conv, batchnorm, num_in_channels, num_filters, alpha=1.67):
+        """
+        Initialize the MultiRes Block.
+
+        Calculates the number of filters for each parallel convolutional path
+        (3x3, 5x5, 7x7) based on `num_filters` and `alpha`. It then sets up
+        these parallel paths using `Conv_batchnorm` blocks, along with a
+        shortcut connection and final batch normalization layers.
+
+        Parameters
+        ----------
+        conv : Type[nn.Conv2d | nn.Conv3d]
+            The convolutional layer type to use.
+        batchnorm : Type[nn.BatchNorm2d | nn.BatchNorm3d]
+            The batch normalization layer type to use.
+        num_in_channels : int
+            The number of input channels for the MultiRes Block.
+        num_filters : int
+            The base number of filters used to determine the output channel counts
+            for the internal convolutional paths.
+        alpha : float, optional
+            The scaling factor for the total number of filters (`W`). Defaults to 1.67.
+        """
         super().__init__()
         self.alpha = alpha
         self.W = num_filters * alpha
@@ -138,6 +246,25 @@ class Multiresblock(torch.nn.Module):
         self.batch_norm2 = batchnorm(num_out_filters)
 
     def forward(self, x):
+        """
+        Perform the forward pass of the MultiRes Block.
+
+        The input `x` first goes through a shortcut connection. Simultaneously,
+        it passes through three sequential convolutional paths (3x3, 5x5, 7x7).
+        The outputs of these paths are concatenated, batch normalized, and then
+        added to the shortcut output. A final batch normalization and ReLU
+        activation are applied.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            The input tensor to the MultiRes Block.
+
+        Returns
+        -------
+        torch.Tensor
+            The output tensor of the MultiRes Block.
+        """
         shrtct = self.shortcut(x)
 
         a = self.conv_3x3(x)
@@ -156,27 +283,53 @@ class Multiresblock(torch.nn.Module):
 
 class Respath(torch.nn.Module):
     """
-    ResPath.
+    ResPath module for MultiResUNet.
+
+    ResPath acts as an enhanced skip connection by applying a series of
+    residual convolutional blocks to the features before they are
+    concatenated into the decoder path. This helps to reduce the semantic
+    gap between encoder and decoder features.
 
     Parameters
     ----------
     conv : Torch conv layer
-        Convolutional layer to use.
+        Convolutional layer type to use (e.g., `nn.Conv2d`, `nn.Conv3d`).
 
     batchnorm : Torch batch normalization layer
-        Convolutional layer to use.
+        Batch normalization layer type to use (e.g., `nn.BatchNorm2d`, `nn.BatchNorm3d`).
 
     num_in_filters : int
-        Number of output filters.
+        Number of input channels coming into the ResPath.
 
     num_out_filters : int
-        Number of filters going out the respath.
+        Number of output channels for each convolutional block within the ResPath.
 
-    respath_length : str, optional
-        length of ResPath.
+    respath_length : int
+        The number of residual convolutional blocks to stack in the ResPath.
     """
 
     def __init__(self, conv, batchnorm, num_in_filters, num_out_filters, respath_length):
+        """
+        Initialize the ResPath module.
+
+        Sets up a sequence of `respath_length` residual convolutional blocks.
+        Each block consists of a convolutional layer and a shortcut connection,
+        followed by batch normalization and ReLU. The input and output filter
+        counts are managed across these blocks.
+
+        Parameters
+        ----------
+        conv : Type[nn.Conv2d | nn.Conv3d]
+            The convolutional layer type to use.
+        batchnorm : Type[nn.BatchNorm2d | nn.BatchNorm3d]
+            The batch normalization layer type to use.
+        num_in_filters : int
+            The number of input channels for the first block in the ResPath.
+        num_out_filters : int
+            The number of output channels for each convolutional block within the ResPath.
+        respath_length : int
+            The number of residual convolutional blocks to stack in this ResPath.
+        """
         super().__init__()
 
         self.respath_length = respath_length
@@ -231,6 +384,23 @@ class Respath(torch.nn.Module):
             self.bns.append(batchnorm(num_out_filters))
 
     def forward(self, x):
+        """
+        Perform the forward pass of the ResPath.
+
+        The input `x` passes through a sequence of `respath_length` residual
+        convolutional blocks. Each block involves a convolutional path and
+        a shortcut connection, followed by batch normalization and ReLU activation.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            The input tensor to the ResPath.
+
+        Returns
+        -------
+        torch.Tensor
+            The output tensor after processing through all residual blocks in the ResPath.
+        """
         for short, conv, bn in zip(self.shortcuts, self.convs, self.bns):
 
             shortcut = short(x)
@@ -299,6 +469,42 @@ class MultiResUnet(torch.nn.Module):
         contrast: bool = False,
         contrast_proj_dim: int = 256,
     ):
+        """
+        Initialize the MultiResUNet model.
+
+        Sets up the encoder (downsampling path), decoder (upsampling path),
+        skip connections (ResPaths), and optional super-resolution and multi-head
+        output layers. It dynamically selects 2D or 3D convolutional and
+        normalization layers based on `ndim`.
+
+        Parameters
+        ----------
+        ndim : int
+            Number of dimensions of the input data (2 for 2D, 3 for 3D).
+        input_channels : int
+            Number of channels in the input image.
+        alpha : float, optional
+            Alpha hyperparameter for MultiRes Blocks. Defaults to 1.67.
+        z_down : List[int], optional
+            Downsampling factors for the z-dimension at each pooling stage (for 3D).
+            Defaults to `[2, 2, 2, 2]`.
+        output_channels : List[int], optional
+            Output channels for the network's prediction head(s). Can be length 1 or 2.
+            Defaults to `[1]`.
+        upsampling_factor : Tuple[int, ...], optional
+            Factor for super-resolution upsampling. Defaults to `()`.
+        upsampling_position : str, optional
+            Position of super-resolution upsampling ("pre" or "post"). Defaults to "pre".
+        contrast : bool, optional
+            Whether to add a contrastive learning projection head. Defaults to `False`.
+        contrast_proj_dim : int, optional
+            Dimension of the contrastive projection head. Defaults to `256`.
+
+        Raises
+        ------
+        ValueError
+            If 'output_channels' is empty or has more than two values.
+        """
         super().__init__()
         self.ndim = ndim
         self.alpha = alpha
@@ -433,6 +639,23 @@ class MultiResUnet(torch.nn.Module):
             self.last_class_head = conv(self.in_filters9, output_channels[1], kernel_size=1, padding="same")
 
     def forward(self, x: torch.Tensor) -> Dict | torch.Tensor:
+        """
+        Perform the forward pass of the ResPath.
+
+        The input `x` passes through a sequence of `respath_length` residual
+        convolutional blocks. Each block involves a convolutional path and
+        a shortcut connection, followed by batch normalization and ReLU activation.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            The input tensor to the ResPath.
+
+        Returns
+        -------
+        torch.Tensor
+            The output tensor after processing through all residual blocks in the ResPath.
+        """
         # Super-resolution
         if self.pre_upsampling:
             x = self.pre_upsampling(x)
