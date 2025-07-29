@@ -1,3 +1,30 @@
+"""
+Definition of the High-Resolution Net (HRNet) model and its essential building blocks, designed for dense prediction tasks in 2D and 3D imaging.
+
+The HRNet architecture maintains high-resolution representations throughout the
+network by connecting high-to-low resolution convolution streams in parallel
+and facilitating repeated information exchange across these streams.
+
+Key components implemented in this file include:
+
+Classes:
+--------
+- HighResolutionNet: The main HRNet model, orchestrating the overall architecture.
+- HighResolutionModule: A core HRNet building block that manages parallel
+  resolution branches and cross-resolution information fusion.
+- HRBasicBlock: The basic residual block used within HRNet branches.
+- HRBottleneck: The bottleneck residual block used within HRNet branches.
+
+Reference:
+----------
+`Deep High-Resolution Representation Learning for Visual Recognition
+<https://ieeexplore.ieee.org/abstract/document/9052469>`_
+
+Code Adapted From:
+------------------
+`Exploring Cross-Image Pixel Contrast for Semantic Segmentation
+<https://github.com/tfzhou/ContrastiveSeg/tree/main>`_
+"""
 import os
 import torch
 import torch.nn as nn
@@ -12,7 +39,15 @@ blocks_dict = {"BASIC": HRBasicBlock, "BOTTLENECK": HRBottleneck}
 
 class HighResolutionNet(nn.Module):
     """
-    Create 2D/3D HRNet.
+    Implements a 2D/3D High-Resolution Net (HRNet) model.
+
+    HRNet is a convolutional neural network architecture designed to maintain
+    high-resolution representations throughout the network. It achieves this
+    by employing parallel high-to-low resolution convolution streams and
+    repeatedly exchanging information across these streams. This design
+    is particularly effective for dense prediction tasks like semantic
+    segmentation, instance segmentation, and object detection, where
+    preserving spatial detail is crucial.
 
     Reference: `Deep High-Resolution Representation Learning for Visual Recognition <https://ieeexplore.ieee.org/abstract/document/9052469>`_.
 
@@ -21,36 +56,41 @@ class HighResolutionNet(nn.Module):
     Parameters
     ----------
     cfg : Dict
-        HRNet configuration. Exoected keys are:
-            * ``NUM_MODULES``, int: number of modules to create
-            * ``NUM_BRANCHES``, int: number of modules to create
-            * ``NUM_BLOCKS``, List[int]: Number of blocks per branch
-            * ``NUM_CHANNELS``, List[int]: Number of channels per branch
-            * ``BLOCK``, str: block type. Options: ['BASIC', "BOTTLENECK"]
-            * ``Z_DOWN``, bool: whether to downsample the z-axis or not. If ``False`` it will not downsample the z-axis.
+        HRNet configuration dictionary. Expected keys define the network structure:
+        * ``NUM_MODULES`` (int): Number of modules within each stage.
+        * ``NUM_BRANCHES`` (int): Number of parallel branches (resolution streams) in a stage.
+        * ``NUM_BLOCKS`` (List[int]): List specifying the number of blocks per branch.
+        * ``NUM_CHANNELS`` (List[int]): List specifying the number of channels for each branch.
+        * ``BLOCK`` (str): Type of building block, e.g., 'BASIC' for `HRBasicBlock` or 'BOTTLENECK' for `HRBottleneck`.
+        * ``Z_DOWN`` (bool): For 3D HRNet, whether to downsample the z-axis (True) or keep its original resolution (False).
 
-    image_shape : 3D/4D tuple
-        Dimensions of the input image. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
+    image_shape : Tuple[int, ...]
+        Dimensions of the input image. E.g., `(y, x, channels)` for 2D or `(z, y, x, channels)` for 3D.
+        The last element `image_shape[-1]` should be the number of input channels.
 
     normalization : str, optional
-        Normalization layer (one of ``'bn'``, ``'sync_bn'`` ``'in'``, ``'gn'`` or ``'none'``).
+        Type of normalization layer to use throughout the network. Options include
+        `'bn'` (Batch Normalization), `'sync_bn'` (Synchronized Batch Normalization for multi-GPU),
+        `'in'` (Instance Normalization), `'gn'` (Group Normalization), or `'none'`.
+        Defaults to "none".
 
-    output_channels : list of int, optional
-        Output channels of the network. It must be a list of lenght ``1`` or ``2``. When two
-        numbers are provided two task to be done is expected (multi-head). Possible scenarios are:
-            * instances + classification on instance segmentation
-            * points + classification in detection.
+    output_channels : List[int], optional
+        Specifies the number of output channels for the final prediction head(s).
+        Must be a list of length 1 for a single output task (e.g., semantic segmentation)
+        or length 2 for multi-head tasks (e.g., instances + classification in instance segmentation,
+        or points + classification in detection). Defaults to `[1]`.
 
-    contrast: bool
-        Whether to create a projection embedding for contrastive learning.
+    contrast : bool, optional
+        If True, an additional projection head (`ProjectionHead`) is created to generate
+        an embedding suitable for contrastive learning. Defaults to False.
 
-    contrast_proj_dim : int
-        Dimensions of the projection embedding.
+    contrast_proj_dim : int, optional
+        The output dimension of the projection embedding when `contrast` is True. Defaults to 256.
 
     Returns
     -------
-    model : Torch model
-        HRNet model.
+    model : nn.Module
+        The constructed HRNet model.
     """
 
     def __init__(
@@ -62,6 +102,37 @@ class HighResolutionNet(nn.Module):
         contrast: bool = False,
         contrast_proj_dim: int = 256,
     ):
+        """
+        Initialize the HighResolutionNet model.
+
+        Configures the HRNet architecture based on the provided parameters,
+        setting up convolutional layers, normalization types, and the
+        multi-resolution stages. It also prepares for optional contrastive
+        learning and multi-head outputs.
+
+        Parameters
+        ----------
+        cfg : Dict
+            HRNet configuration dictionary, detailing module, branch, block, and channel counts,
+            block type, and z-axis downsampling for 3D.
+        image_shape : Tuple[int, ...], optional
+            Input image dimensions, used to determine 2D/3D mode and input channels.
+            Defaults to (256, 256, 1).
+        normalization : str, optional
+            Type of normalization layer (e.g., 'bn', 'sync_bn', 'none'). Defaults to "none".
+        output_channels : List[int], optional
+            Number of channels for the output head(s). Supports one or two outputs.
+            Defaults to [1].
+        contrast : bool, optional
+            If True, enables a projection head for contrastive learning. Defaults to False.
+        contrast_proj_dim : int, optional
+            Output dimension for the contrastive projection head. Defaults to 256.
+
+        Raises
+        ------
+        ValueError
+            If 'output_channels' is empty or has more than two values.
+        """
         if len(output_channels) == 0:
             raise ValueError("'output_channels' needs to has at least one value")
         if len(output_channels) != 1 and len(output_channels) != 2:
@@ -177,6 +248,10 @@ class HighResolutionNet(nn.Module):
         """
         Create transition layers between stages of the HRNet.
 
+        These layers handle the transition of feature maps between stages that might
+        have different numbers of branches or different channel configurations.
+        They include convolutional blocks to adjust channels and spatial dimensions.
+
         Parameters
         ----------
         num_channels_pre_layer : List[int]
@@ -196,7 +271,6 @@ class HighResolutionNet(nn.Module):
         transition_layers : nn.ModuleList
             List of transition layers between the previous and current layers.
         """
-
         num_branches_cur = len(num_channels_cur_layer)
         num_branches_pre = len(num_channels_pre_layer)
 
@@ -251,7 +325,11 @@ class HighResolutionNet(nn.Module):
         norm: str = "none",
     ):
         """
-        Make a layer of blocks for the HRNet.
+        Construct a sequential layer consisting of multiple HRNet building blocks.
+
+        This method generates a sequence of `HRBasicBlock` or `HRBottleneck` instances,
+        optionally including a downsampling projection for the first block if input/output
+        dimensions or strides differ.
 
         Parameters
         ----------
@@ -304,7 +382,11 @@ class HighResolutionNet(nn.Module):
         mpool: Tuple[int, ...] = (2, 2),
     ):
         """
-        Create a stage of the HRNet.
+        Construct a full stage of the HRNet, consisting of multiple HighResolutionModule instances.
+
+        Each stage of HRNet typically involves multiple parallel branches at different
+        resolutions, with information exchange between them. This method creates the modules
+        that manage these branches and their interactions.
 
         Parameters
         ----------
@@ -369,6 +451,30 @@ class HighResolutionNet(nn.Module):
         return nn.Sequential(*modules), num_inchannels
 
     def forward(self, x) -> Dict | torch.Tensor:
+        """
+        Perform the forward pass of the HighResolutionNet.
+
+        The input `x` first goes through initial convolutional blocks. Then, it
+        propagates through a series of HRNet stages, where feature maps are
+        processed in parallel across multiple resolutions and information is
+        exchanged. Finally, features from all resolutions are fused, and passed
+        through a final prediction head. Optionally, a contrastive learning
+        projection head and/or a multi-head classification output can be included.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            The input image tensor.
+            Expected shape for 2D: `(batch_size, channels, height, width)`.
+            Expected shape for 3D: `(batch_size, channels, depth, height, width)`.
+
+        Returns
+        -------
+        Dict or torch.Tensor
+            If `contrast` is True or `multihead` is True, returns a dictionary
+            containing output tensors (e.g., 'pred', 'embed', 'class').
+            Otherwise, returns a single prediction tensor.
+        """
         x = self.conv1_block(x)
         x = self.conv2_block(x)
 
@@ -434,7 +540,13 @@ class HighResolutionNet(nn.Module):
 
 class HighResolutionModule(nn.Module):
     """
-    High Resolution Module for HRNet.
+    Implements the High Resolution Module for HRNet.
+
+    This module is a core building block of the HRNet architecture. It consists
+    of multiple parallel convolutional branches at different resolutions, along
+    with fusion layers that enable rich information exchange across these
+    branches. This design helps maintain high-resolution representations
+    throughout the network.
 
     Pararameters
     ------------
@@ -478,6 +590,53 @@ class HighResolutionModule(nn.Module):
         norm: str = "none",
         mpool: Tuple[int, ...] = (2, 2),
     ):
+        """
+        Initialize a High Resolution Module.
+
+        Sets up the parallel branches with their respective convolutional blocks
+        and constructs the information fusion layers that allow features to be
+        exchanged across different resolutions. It also determines the
+        appropriate convolutional and normalization layers based on the
+        dimensionality (`ndim`).
+
+        Parameters
+        ----------
+        ndim : int
+            Number of spatial dimensions of the input (2 for 2D, 3 for 3D).
+        num_branches : int
+            The number of parallel resolution branches within this module.
+        blocks : Type[HRBasicBlock | HRBottleneck]
+            The class of residual block to be used within the branches.
+        num_blocks : List[int]
+            A list where each element specifies the number of `blocks` for the
+            corresponding branch. Its length must match `num_branches`.
+        num_inchannels : List[int]
+            A list where each element specifies the input channel count for the
+            corresponding branch. Its length must match `num_branches`.
+        num_channels : List[int]
+            A list where each element specifies the output channel count for the
+            corresponding branch after processing through its blocks. Its length
+            must match `num_branches`.
+        multi_scale_output : bool, optional
+            If True, the module's forward pass will output features at all scales
+            by fusing and returning all branch outputs. If False, only a single
+            (typically high-resolution) output might be expected, depending on
+            subsequent processing. Defaults to True.
+        norm : str, optional
+            The type of normalization layer to apply within the module's blocks
+            and fusion layers (e.g., 'bn', 'sync_bn', 'in', 'gn', 'none').
+            Defaults to "none".
+        mpool : Tuple[int, ...], optional
+            The downsampling factor for max-pooling operations, primarily used
+            in the fusion layers when features from higher resolution branches
+            are downsampled to match lower resolution ones. Defaults to (2, 2).
+
+        Raises
+        ------
+        ValueError
+            If the lengths of `num_blocks`, `num_inchannels`, or `num_channels`
+            do not match `num_branches`.
+        """
         super(HighResolutionModule, self).__init__()
         self.ndim = ndim
         if self.ndim == 3:
@@ -543,7 +702,6 @@ class HighResolutionModule(nn.Module):
 
         Parameters
         ----------
-
         branch_index : int
             Index of the branch to create.
 
@@ -640,6 +798,29 @@ class HighResolutionModule(nn.Module):
         return nn.ModuleList(branches)
 
     def _make_fuse_layers(self, norm: str, mpool: Tuple[int, ...] = (2, 2)):
+        """
+        Construct the fusion layers for exchanging information between branches.
+
+        These layers enable the High Resolution Module to repeatedly fuse outputs
+        from parallel branches at different resolutions. They consist of
+        convolutional operations and optional upsampling/downsampling to align
+        feature map dimensions for element-wise summation.
+
+        Parameters
+        ----------
+        norm : str
+            Normalization layer type to use within the fusion layers.
+        mpool : Tuple[int, ...], optional
+            Downsampling factor for pooling operations when features are downsampled
+            from a higher resolution branch to a lower resolution one during fusion.
+            Defaults to (2, 2).
+
+        Returns
+        -------
+        fuse_layers : nn.ModuleList or None
+            A list of lists of `nn.Module` (or `None` for identity connections)
+            representing the fusion operations. Returns `None` if `num_branches` is 1.
+        """
         if self.num_branches == 1:
             return None
 
@@ -702,9 +883,49 @@ class HighResolutionModule(nn.Module):
         return nn.ModuleList(fuse_layers)
 
     def get_num_inchannels(self):
+        """
+        Retrieve the current number of input channels for each branch.
+
+        This method provides access to the dynamically updated `num_inchannels`
+        list, which reflects the channel counts of features after they have
+        passed through the respective blocks within this module. This is useful
+        for configuring subsequent stages or modules.
+
+        Returns
+        -------
+        List[int]
+            A list where each element represents the number of channels for
+            the corresponding branch's output.
+        """
         return self.num_inchannels
 
     def forward(self, x):
+        """
+        Perform the forward pass of the High Resolution Module.
+
+        The input is a list of tensors, where each tensor corresponds to a
+        feature map from a parallel resolution branch. Each feature map
+        first passes through its respective branch's convolutional blocks.
+        Then, the outputs from all branches are fused by upsampling or
+        downsampling as necessary, followed by element-wise summation to
+        create new feature maps at each target resolution.
+
+        Parameters
+        ----------
+        x : List[torch.Tensor]
+            A list of input feature tensors, where each tensor corresponds to
+            a different resolution branch. The order typically goes from highest
+            to lowest resolution.
+
+        Returns
+        -------
+        List[torch.Tensor]
+            A list of output feature tensors, representing the fused and
+            processed features at potentially multiple scales. If
+            `multi_scale_output` is True, the list will contain features
+            for all output resolutions; otherwise, it might contain only
+            the highest resolution output.
+        """
         if self.num_branches == 1:
             return [self.branches[0](x[0])]
 
@@ -743,7 +964,7 @@ class HighResolutionModule(nn.Module):
 
 class HighResolutionNext(nn.Module):
     """
-    High Resolution Next model for HRNet.
+    Implements the High Resolution Next model for HRNet.
 
     Parameters
     ----------
@@ -765,6 +986,36 @@ class HighResolutionNext(nn.Module):
     """
 
     def __init__(self, cfg, norm="none", ndim=2, z_down=False):
+        """
+        Initialize the High Resolution Next (HRNet) model.
+
+        Constructs the entire HRNet architecture, including the stem, and
+        sequential stages (Stage 1 to Stage 4), each potentially composed of
+        multiple High Resolution Modules and transition layers. The model
+        dynamically adapts its convolutional and normalization layers based
+        on the input data's dimensionality (`ndim`).
+
+        Parameters
+        ----------
+        cfg : Dict
+            A dictionary containing the full configuration for the HRNet model.
+            It must specify the architecture details for each stage (STAGE1,
+            STAGE2, STAGE3, STAGE4), including the number of modules, branches,
+            blocks, and channels, as well as the block type to use.
+        norm : str, optional
+            The type of normalization layer to use throughout the network.
+            Options include 'bn' (BatchNorm), 'sync_bn' (SyncBatchNorm),
+            'in' (InstanceNorm), 'gn' (GroupNorm), or 'none'. Defaults to "none".
+        ndim : int, optional
+            The number of spatial dimensions of the input data. Use 2 for 2D
+            data (e.g., images) and 3 for 3D data (e.g., volumetric scans).
+            Defaults to 2.
+        z_down : bool, optional
+            Applicable only when `ndim` is 3. If True, the z-axis (depth) will
+            also be downsampled during pooling operations in the stem and
+            transition layers. If False, downsampling will only occur in the
+            x and y dimensions, preserving the z-resolution. Defaults to False.
+        """
         super(HighResolutionNext, self).__init__()
         self.ndim = ndim
         self.z_down = z_down
@@ -886,6 +1137,7 @@ class HighResolutionNext(nn.Module):
     ):
         """
         Create a stage of the HRNet.
+
         Parameters
         ----------
         layer_config : Dict
@@ -948,42 +1200,85 @@ class HighResolutionNext(nn.Module):
         return nn.Sequential(*modules), num_inchannels
 
     def forward(self, x):
+        """
+        Perform the forward pass through the High Resolution Next (HRNet) model.
+
+        The input tensor first passes through the stem network (initial
+        convolution, batch normalization, and ReLU activation). Then, it
+        progresses through multiple stages (Stage 1 to Stage 4). Each stage
+        begins with a transition layer that prepares the feature maps for
+        the multi-resolution High Resolution Modules within that stage.
+        Features are maintained and exchanged across different resolutions
+        throughout these stages, ultimately returning a list of multi-scale
+        feature maps from the final stage.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            The input tensor to the network, typically an image or volumetric data.
+            Expected shape for 2D: (Batch, Channels, Height, Width)
+            Expected shape for 3D: (Batch, Channels, Depth, Height, Width)
+
+        Returns
+        -------
+        List[torch.Tensor]
+            A list of output feature tensors, where each tensor corresponds to
+            a different resolution branch from the final stage (Stage 4).
+            The list is ordered from highest to lowest resolution.
+        """
+        # Stem network
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
 
+        # Stage 1
         x_list = []
         for i in range(self.stage1_cfg["NUM_BRANCHES"]):
+            # Apply transition0 layer if it exists for the current branch, otherwise use x directly
             if self.transition0[i] is not None:
                 x_list.append(self.transition0[i](x))
             else:
                 x_list.append(x)
+        # Pass the list of features through Stage 1 modules
         y_list = self.stage1(x_list)
 
+        # Stage 2
         x_list = []
         for i in range(self.stage2_cfg["NUM_BRANCHES"]):
             if self.transition1[i] is not None:
+                # For the first branch (highest resolution), transition from y_list[0]
+                # For subsequent branches, transition from the last (lowest resolution) feature map of previous stage
                 if i == 0:
                     x_list.append(self.transition1[i](y_list[0]))
                 else:
                     x_list.append(self.transition1[i](y_list[-1]))
             else:
+                # If no transition layer, use the corresponding branch's output from the previous stage
                 x_list.append(y_list[i])
+        # Pass the list of features through Stage 2 modules
         y_list = self.stage2(x_list)
 
+        # Stage 3
         x_list = []
         for i in range(self.stage3_cfg["NUM_BRANCHES"]):
             if self.transition2[i] is not None:
+                # Transition always from the last (lowest resolution) feature map of the previous stage
                 x_list.append(self.transition2[i](y_list[-1]))
             else:
+                # If no transition layer, use the corresponding branch's output from the previous stage
                 x_list.append(y_list[i])
+        # Pass the list of features through Stage 3 modules
         y_list = self.stage3(x_list)
 
+        # Stage 4 (final stage)
         x_list = []
         for i in range(self.stage4_cfg["NUM_BRANCHES"]):
             if self.transition3[i] is not None:
+                # Transition always from the last (lowest resolution) feature map of the previous stage
                 x_list.append(self.transition3[i](y_list[-1]))
             else:
+                # If no transition layer, use the corresponding branch's output from the previous stage
                 x_list.append(y_list[i])
+        # Pass the list of features through Stage 4 modules
         x = self.stage4(x_list)
         return x
