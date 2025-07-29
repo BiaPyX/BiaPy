@@ -478,6 +478,18 @@ class ResUNet_SE(nn.Module):
             return out_dict
 
     def _init_weights(self, m):
+        """
+        Initialize the weights of convolutional, linear, and LayerNorm layers.
+
+        Applies Xavier uniform initialization to convolutional and linear layer weights
+        (with bias set to 0 if present). For LayerNorm, weights are set to 1.0 and
+        biases to 0.
+
+        Parameters
+        ----------
+        m : nn.Module
+            The module whose weights are to be initialized.
+        """
         if isinstance(m, nn.Conv2d) or isinstance(m, nn.Conv3d):
             nn.init.xavier_uniform_(m.weight)
             if m.bias is not None:
