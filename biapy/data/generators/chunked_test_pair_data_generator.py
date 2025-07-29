@@ -233,7 +233,14 @@ class chunked_test_pair_data_generator(IterableDataset):
                     self.crop_shape[2], self.x_dim
                 )
             )
-
+        for i, p in enumerate(self.padding):
+            if p >= self.crop_shape[i] // 2:
+                raise ValueError(
+                    "'Padding' can not be greater than half of 'crop_shape'. Max value for the given input shape {} is {}".format(
+                        self.crop_shape, ((self.crop_shape[0] // 2) - 1, (self.crop_shape[1] // 2) - 1, (self.crop_shape[2] // 2) - 1)
+                    )
+                )
+        
         # Z
         self.step_z = self.crop_shape[0] - (self.padding[0] * 2)
         self.vols_per_z = math.ceil(self.z_dim / self.step_z)

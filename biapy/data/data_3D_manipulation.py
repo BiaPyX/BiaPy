@@ -443,7 +443,7 @@ def crop_3D_data_with_overlap(
     for i, p in enumerate(padding):
         if p >= vol_shape[i] // 2:
             raise ValueError(
-                "'Padding' can not be greater than the half of 'vol_shape'. Max value for this {} input shape is {}".format(
+                "'Padding' can not be greater than half of 'vol_shape'. Max value for the given input shape {} is {}".format(
                     vol_shape, ((vol_shape[0] // 2) - 1, (vol_shape[1] // 2) - 1, (vol_shape[2] // 2) - 1)
                 )
             )
