@@ -1,3 +1,12 @@
+"""
+This module implements a Memory Bank for contrastive learning, designed to store and manage queues of pixel-level and segment-level features.
+
+The `MemoryBank` class facilitates the use of a feature queue, which is a common
+component in self-supervised contrastive learning methods. It allows for the
+dynamic updating of stored features, ensuring that the bank always contains
+a diverse and up-to-date set of representations for each class. This is crucial
+for contrastive losses that rely on a large number of negative samples.
+"""
 import torch
 import torch.nn as nn
 from typing import Tuple
@@ -41,6 +50,44 @@ class MemoryBank(nn.Module):
         device: torch.device = torch.device("cpu" if not torch.cuda.is_available() else "cuda"),
         ignore_index: int = -1,
     ):
+        """
+        Initialize the MemoryBank.
+
+        Sets up two main queues: `pixel_queue` for storing individual pixel features
+        and `segment_queue` for storing aggregated segment-level features. Each queue
+        is initialized with random normalized features and includes a pointer to
+        manage enqueue/dequeue operations.
+
+        Parameters
+        ----------
+        num_classes : int, optional
+            The total number of classes in the dataset. Each class will have its
+            own dedicated queue within the memory bank. Defaults to 2.
+        memory_size : int, optional
+            The maximum number of feature vectors to store for each class in both
+            the pixel and segment queues. Defaults to 5000.
+        feature_dims : int, optional
+            The dimensionality of the feature vectors that will be stored. This
+            should match the output dimension of the feature extractor. Defaults to 256.
+        network_stride : Tuple[int, ...], optional
+            The spatial stride of the network's output features relative to the
+            input image. Used to correctly downsample ground truth labels to match
+            feature map dimensions. For 2D, e.g., (16, 16); for 3D, e.g., (8, 16, 16).
+            Defaults to (16, 16).
+        pixel_update_freq : int, optional
+            The maximum number of pixel features to enqueue into the `pixel_queue`
+            for a given class in a single update step. This helps control the
+            update rate and memory usage. Defaults to 10.
+        device : torch.device, optional
+            The PyTorch device (e.g., `torch.device('cuda')` or `torch.device('cpu')`)
+            on which the memory bank tensors will be allocated and stored.
+            Defaults to CUDA if available, otherwise CPU.
+        ignore_index : int, optional
+            A class label value that should be ignored during feature extraction
+            and enqueueing (e.g., for background or unlabeled regions). Features
+            associated with this label will not be added to the memory bank.
+            Defaults to -1.
+        """
         super(MemoryBank, self).__init__()
 
         # Memory bank
