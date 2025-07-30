@@ -1,3 +1,16 @@
+"""
+This module provides an implementation of an Early Stopping mechanism, a common regularization technique used in machine learning to prevent overfitting during model training.
+
+The `EarlyStopping` class monitors a validation metric (typically validation loss)
+and stops the training process if the metric does not improve for a specified
+number of epochs (patience).
+
+Classes:
+--------
+- EarlyStopping: Implements the early stopping logic.
+
+This implementation is adapted from a widely used PyTorch early stopping script.
+"""
 import numpy as np
 from typing import (
     Callable,
@@ -6,6 +19,12 @@ from typing import (
 class EarlyStopping:
     """
     Early stops the training if validation loss doesn't improve after a given patience.
+
+    This class monitors a specified metric (e.g., validation loss) during training.
+    If the metric does not show improvement (beyond a `delta` threshold) for a
+    number of epochs defined by `patience`, the `early_stop` flag is set to True,
+    signaling that training should be halted.
+
     Copied from: https://github.com/Bjarten/early-stopping-pytorch/blob/master/pytorchtools.py
     """
 
@@ -16,16 +35,25 @@ class EarlyStopping:
         trace_func: Callable=print
     ):
         """
+        Initialize the EarlyStopping instance.
+
+        Sets up the parameters for monitoring validation loss and determining
+        when to stop training.
+
         Parameters
         ----------
         patience : int, optional
-            How long to wait after last time validation loss improved.
-
+            How many epochs to wait for improvement in validation loss after the
+            last observed improvement. If no improvement is seen within this many
+            epochs, training will be stopped. Defaults to 7.
         delta : float, optional
-            Minimum change in the monitored quantity to qualify as an improvement.
-
-        trace_func : function, optional
-            Trace print function.
+            Minimum change in the monitored quantity (validation loss) to qualify
+            as an improvement. Any change smaller than `delta` is considered no
+            improvement. Defaults to 0.
+        trace_func : Callable, optional
+            A function used for printing messages (e.g., `print` or a custom logger).
+            This function will be called to log the early stopping counter.
+            Defaults to `print`.
         """
         self.patience = patience
         self.counter = 0
@@ -36,17 +64,32 @@ class EarlyStopping:
         self.trace_func = trace_func
 
     def __call__(self, val_loss: float):
+        """
+        Update the internal state of the early stopping mechanism based on the current validation loss.
 
-        score = -val_loss
+        This method should be called after each epoch's validation phase. It
+        compares the current `val_loss` with the best score observed so far.
+        If no significant improvement is made, the internal counter is incremented.
+        If the counter exceeds `patience`, the `early_stop` flag is set to True.
+
+        Parameters
+        ----------
+        val_loss : float
+            The current validation loss for the epoch.
+        """
+        score = -val_loss # We want to maximize score, so minimize -val_loss
 
         if self.best_score is None:
+            # First epoch, initialize best_score
             self.best_score = score
         elif score < self.best_score + self.delta:
+            # No significant improvement
             self.counter += 1
             self.trace_func(f"EarlyStopping counter: {self.counter} out of {self.patience}")
             if self.counter >= self.patience:
                 self.early_stop = True
         else:
+            # Improvement detected, reset counter and update best score
             self.best_score = score
             self.val_loss_min = val_loss
             self.counter = 0
