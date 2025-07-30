@@ -627,7 +627,14 @@ class MultiResUnet(torch.nn.Module):
 
             self.proj_head = ProjectionHead(ndim=self.ndim, in_channels=self.in_filters9, proj_dim=contrast_proj_dim)
         else:
-            self.last_block = conv(self.in_filters9, output_channels[0], kernel_size=1, padding="same")
+            self.last_block = Conv_batchnorm(
+                conv,
+                batchnorm_layer,
+                self.in_filters9,
+                output_channels[0],
+                kernel_size=1,
+                activation="None",
+            )
 
         # Multi-head:
         #   Instance segmentation: instances + classification
