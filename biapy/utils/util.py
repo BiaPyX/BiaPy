@@ -1,3 +1,21 @@
+"""
+This module provides a collection of utility functions for image processing,
+data manipulation, and visualization, primarily geared towards bioimage analysis
+workflows.
+
+It includes functionalities for:
+- Generating plots for training loss and metrics.
+- Creating threshold-based metric plots.
+- Generating weight maps for U-Net-like models to handle object boundaries.
+- Organizing images into class-specific folders based on foreground percentage.
+- Visualizing learned filters of convolutional layers.
+- Ensuring image dimensions are divisible by a given factor for downsampling.
+- Converting segmentation masks to affinity graphs (for 3D data).
+- Validating and reshaping image volumes.
+- Implementing `im2col` for patch extraction.
+- Widening segmentation borders.
+- Calculating SHA256 checksums for files.
+"""
 import os
 import math
 import numpy as np
@@ -18,27 +36,32 @@ def create_plots(results, metrics, job_id, chartOutDir):
     """
     Create loss and main metric plots with the given results.
 
+    This function visualizes the training and validation loss, as well as
+    training and validation values for each given metric across epochs.
+    Plots are saved as PNG images in the specified output directory.
+
     Parameters
     ----------
-    results : Keras History object
-        Record of training loss values and metrics values at successive epochs. History object is returned by Keras
-        `fit() <https://keras.io/api/models/model_training_apis/#fit-method>`_ method.
-
-    metrics : List of str
-        Metrics used.
-
+    results : Dict
+        A dictionary containing training history. Expected keys are 'loss',
+        'val_loss' (optional), and entries for each metric (e.g., 'jaccard_index')
+        and its validation counterpart (e.g., 'val_jaccard_index').
+    metrics : List[str]
+        A list of metric names (e.g., ["jaccard_index", "f1_score"]) present in `results`.
     job_id : str
-        Jod identifier.
-
+        A unique identifier for the job, used in plot titles and filenames.
     chartOutDir : str
-        Path where the charts will be stored into.
+        The directory where the generated chart images will be stored.
 
     Examples
     --------
+    >>> # Assuming 'results' is a dictionary like:
+    >>> # {'loss': [...], 'val_loss': [...], 'jaccard_index': [...], 'val_jaccard_index': [...]}
+    >>> # create_plots(results, ['jaccard_index'], 'my_experiment', './charts/')
+
     +-----------------------------------------------+-----------------------------------------------+
     | .. figure:: ../../img/chart_loss.png          | .. figure:: ../../img/chart_jaccard_index.png |
-    |   :width: 80%                                 |   :width: 80%                                 |
-    |   :align: center                              |   :align: center                              |
+    |   :width: 80%                                 |   :align: center                              |
     |                                               |                                               |
     |   Loss values on each epoch                   |   Jaccard index values on each epoch          |
     +-----------------------------------------------+-----------------------------------------------+
@@ -78,44 +101,43 @@ def create_plots(results, metrics, job_id, chartOutDir):
 
 def threshold_plots(preds_test, Y_test, n_dig, job_id, job_file, char_dir, r_val=0.5):
     """
-    Create a plot with the different metric values binarizing the prediction with different thresholds, from ``0.1``
-    to ``0.9``.
+    Generate plots showing metric values (e.g., Jaccard index) across different binarization thresholds applied to predictions.
+
+    The predictions are binarized using thresholds from 0.1 to 0.9 (inclusive, step 0.1).
+    For each threshold, the Jaccard index is calculated against the ground truth.
+    A plot is generated visualizing these metric values.
 
     Parameters
     ----------
-    preds_test : 4D Numpy array
-        Predictions made by the model. E.g. ``(num_of_images, y, x, channels)``.
-
-    Y_test : 4D Numpy array
-        Ground truth of the data. E.g. ``(num_of_images, y, x, channels)``.
-
+    preds_test : NDArray
+        Predictions made by the model, typically a 4D NumPy array
+        of shape `(num_of_images, y, x, channels)` with float values.
+    Y_test : NDArray
+        Ground truth masks, typically a 4D NumPy array
+        of shape `(num_of_images, y, x, channels)` with integer labels.
     n_dig : int
-        The number of digits used for encoding temporal indices (e.g. ``3``). Used by the DET calculation binary.
-
+        The number of digits used for encoding temporal indices (e.g., `3`).
+        This parameter seems to be a remnant from a previous use case (DET calculation binary)
+        and might not be directly used in the current function's logic, but kept for compatibility.
     job_id : str
-        Id of the job.
-
+        Identifier for the job.
     job_file : str
-        Id and run number of the job.
-
+        Combined identifier for the job and run number (e.g., "278_3"), used in filenames.
     char_dir : str
-        Path to store the charts generated.
-
+        Path to the directory where the generated charts will be stored.
     r_val : float, optional
-        Threshold values to return.
+        A specific threshold value (between 0.1 and 0.9) for which the Jaccard index
+        will be returned. Defaults to 0.5.
 
     Returns
     -------
-    t_jac : float
-        Value of the Jaccard index when the threshold is ``r_val``.
+    float
+        The Jaccard index value obtained when binarizing predictions with the `r_val` threshold.
 
     Examples
     --------
-    ::
-
-        jac, voc = threshold_plots(
-            preds_test, Y_test, det_eval_ge_path, det_eval_path, det_bin,
-            n_dig, args.job_id, '278_3', char_dir)
+    >>> # Assuming preds_test and Y_test are loaded NumPy arrays
+    >>> # t_jac_at_0_5 = threshold_plots(preds_test, Y_test, 3, 'my_job', 'my_job_run1', './threshold_charts/', r_val=0.5)
 
     Will generate one chart for the IoU. In the x axis represents the 9 different thresholds applied, that is:
     ``0.1, 0.2, 0.3, ..., 0.9``. The y axis is the value of the metric in each chart. For instance, the Jaccard/IoU
@@ -170,28 +192,44 @@ def threshold_plots(preds_test, Y_test, n_dig, job_id, job_file, char_dir, r_val
 
 def make_weight_map(label, binary=True, w0=10, sigma=5):
     """
-    Generates a weight map in order to make the U-Net learn better the borders of cells and distinguish individual
-    cells that are tightly packed. These weight maps follow the methodology of the original U-Net paper.
+    Generate a weight map for semantic segmentation, particularly useful for separating tightly packed objects, following the methodology of the original U-Net paper.
+
+    The weight map `W(x)` is a sum of two components:
+    1. A class balancing map `W_c(x)`: assigns higher weight to foreground pixels.
+    2. A distance-based map: `w0 * exp(-((d1 + d2)^2) / (2 * sigma^2))`. This component
+       is high near boundaries between touching objects, where `d1` is the distance
+       to the closest object and `d2` is the distance to the second closest object.
 
     Based on `unet/py_files/helpers.py <https://github.com/deepimagej/python4deepimagej/blob/499955a264e1b66c4ed2c014cb139289be0e98a4/unet/py_files/helpers.py>`_.
 
     Parameters
     ----------
-
-    label : 3D numpy array
-       Corresponds to a label image. E.g. ``(y, x, channels)``.
-
+    label : NDArray
+       A 2D or 3D NumPy array representing a label image. If 3D, it's assumed
+       to be `(y, x, channels)` and only the first channel is used.
+       Objects are typically labeled with unique positive integers, background is 0.
     binary : bool, optional
-       Corresponds to whether or not the labels are binary.
-
+       If True, the input `label` is treated as a binary mask (0 for background,
+       >0 for foreground) and then distinct objects are extracted. If False,
+       it's assumed `label` already contains distinct object IDs (or 0/1 for binary).
+       Defaults to True.
     w0 : float, optional
-       Controls for the importance of separating tightly associated entities.
-
+       Weight factor controlling the importance of the distance-based component
+       for separating tightly associated entities. Defaults to 10.
     sigma : int, optional
-       Represents the standard deviation of the Gaussian used for the weight map.
+       Standard deviation of the Gaussian function used in the distance-based
+       component. Controls the spread of the boundary weights. Defaults to 5.
+
+    Returns
+    -------
+    NDArray
+        A 2D NumPy array representing the generated weight map, with the same
+        spatial dimensions as the input `label`.
 
     Examples
     --------
+    >>> # Assuming 'label_image' is a 2D NumPy array with object labels
+    >>> # weight_map = make_weight_map(label_image, binary=True, w0=10, sigma=5)
 
     Notice that weight has been defined where the objects are almost touching
     each other.
@@ -200,7 +238,6 @@ def make_weight_map(label, binary=True, w0=10, sigma=5):
         :width: 650
         :align: center
     """
-
     # Initialization.
     lab = np.array(label)
     lab_multi = lab
@@ -276,30 +313,31 @@ def make_weight_map(label, binary=True, w0=10, sigma=5):
 
 def do_save_wm(labels, path, binary=True, w0=10, sigma=5):
     """
-    Retrieves the label images, applies the weight-map algorithm and save the weight maps in a folder. Uses
-    internally :meth:`util.make_weight_map`.
+    Generate weight maps for a batch of label images and save them as NumPy files.
+
+    This function iterates through a 4D array of label images, applies the
+    `make_weight_map` function to each, and saves the resulting weight maps
+    into a specified directory structure.
 
     Based on `deepimagejunet/py_files/helpers.py <https://github.com/deepimagej/python4deepimagej/blob/499955a264e1b66c4ed2c014cb139289be0e98a4/unet/py_files/helpers.py>`_.
 
     Parameters
     ----------
-    labels : 4D numpy array
-        Corresponds to given label images. E.g. ``(num_of_images, y, x, channels)``.
-
+    labels : NDArray
+        A 4D NumPy array of label images, typically `(num_of_images, y, x, channels)`.
     path : str
-        Refers to the path where the weight maps should be saved.
-
+        The base directory where the weight maps should be saved. A subdirectory
+        named "weight" will be created within this path.
     binary : bool, optional
-        Corresponds to whether or not the labels are binary.
-
+        Corresponds to whether or not the labels are binary, passed to `make_weight_map`.
+        Defaults to True.
     w0 : float, optional
-        Controls for the importance of separating tightly associated entities.
-
+        Controls the importance of separating tightly associated entities, passed to `make_weight_map`.
+        Defaults to 10.
     sigma : int, optional
-        Represents the standard deviation of the Gaussian used for the weight
-        map.
+        Represents the standard deviation of the Gaussian used for the weight map,
+        passed to `make_weight_map`. Defaults to 5.
     """
-
     # Copy labels.
     labels_ = copy.deepcopy(labels)
 
@@ -330,23 +368,22 @@ def do_save_wm(labels, path, binary=True, w0=10, sigma=5):
 
 def foreground_percentage(mask, class_tag):
     """
-    Percentage of pixels that corresponds to the class in the given image.
+    Calculate the percentage of pixels in a given mask that correspond to a specific class.
 
     Parameters
     ----------
-    mask : 2D Numpy array
-        Image mask to analize.
-
+    mask : NDArray
+        A 2D or 3D NumPy array representing an image mask. If 3D, it's assumed
+        to be `(y, x, channels)` and only the first channel is used.
     class_tag : int
-        Class to find in the image.
+        The integer label of the class to count.
 
     Returns
     -------
-    x : float
-        Percentage of pixels that corresponds to the class. Value between ``0``
-        and ``1``.
+    float
+        The percentage of pixels labeled as `class_tag` in the mask,
+        as a value between 0.0 and 1.0.
     """
-
     c = 0
     for i in range(0, mask.shape[0]):
         for j in range(0, mask.shape[1]):
@@ -358,27 +395,32 @@ def foreground_percentage(mask, class_tag):
 
 def divide_images_on_classes(data, data_mask, out_dir, num_classes=2, th=0.8):
     """
-    Create a folder for each class where the images that have more pixels labeled as the class (in percentage) than
-    the given threshold will be stored.
+    Organize images into class-specific folders based on the percentage of
+    foreground pixels belonging to each class in their corresponding masks.
+
+    For each class, a subdirectory is created. An image and its mask are
+    saved into a class's folder if the percentage of pixels labeled as that
+    class in the mask exceeds a given threshold.
 
     Parameters
     ----------
-    data : 4D numpy array
-        Data to save as images. The first dimension must be the number of images. E. g.``(num_of_images, y, x, channels)``.
-
-    data_mask : 4D numpy array
-        Data mask to save as images.  The first dimension must be the number of images. E. g. ``(num_of_images, y, x, channels)``.
-
+    data : NDArray
+        A 4D NumPy array of input images, typically `(num_of_images, y, x, channels)`.
+        Only the first channel `data[:,:,:,0]` is used for saving.
+    data_mask : NDArray
+        A 4D NumPy array of corresponding mask images, typically `(num_of_images, y, x, channels)`.
+        Only the first channel `data_mask[:,:,:,0]` is used for analysis and saving.
     out_dir : str
-        Path to save the images.
-
+        The base path where the class-specific folders ("x/classX" and "y/classX")
+        will be created and images saved.
     num_classes : int, optional
-        Number of classes.
-
+        The total number of classes to consider (from 0 to `num_classes - 1`).
+        Defaults to 2.
     th : float, optional
-        Percentage of the pixels that must be labeled as a class to save it inside that class folder.
+        The minimum percentage (between 0.0 and 1.0) of pixels that must be labeled
+        as a specific class in a mask for its corresponding image and mask to be
+        saved into that class's folder. Defaults to 0.8.
     """
-
     # Create the directories
     for i in range(num_classes):
         os.makedirs(os.path.join(out_dir, "x", "class" + str(i)), exist_ok=True)
@@ -412,35 +454,36 @@ def divide_images_on_classes(data, data_mask, out_dir, num_classes=2, th=0.8):
 
 def save_filters_of_convlayer(model, out_dir, l_num=None, name=None, prefix="", img_per_row=8):
     """
-    Create an image of the filters learned by a convolutional layer. One can identify the layer with ``l_num`` or
-    ``name`` args. If both are passed ``name`` will be prioritized.
+    Create and save an image visualizing the filters learned by a specific convolutional layer within a Keras model.
+
+    The layer can be identified by its numerical index (`l_num`) or its name (`name`).
+    If both are provided, `name` takes precedence. The filters are normalized
+    to 0-1 for visualization and arranged in a grid.
 
     Inspired by https://machinelearningmastery.com/how-to-visualize-filters-and-feature-maps-in-convolutional-neural-networks
 
     Parameters
     ----------
-    model : Keras Model
-        Model where the layers are stored.
-
+    model : Any
+        The Keras Model object containing the layers.
     out_dir : str
-        Path where the image will be stored.
-
-    l_num : int, optional
-        Number of the layer to extract filters from.
-
-    name : str, optional
-        Name of the layer to extract filters from.
-
+        The directory where the output image will be stored.
+    l_num : Optional[int], optional
+        The numerical index of the convolutional layer to extract filters from.
+        Defaults to None.
+    name : Optional[str], optional
+        The name of the convolutional layer to extract filters from.
+        Defaults to None.
     prefix : str, optional
-        Prefix to add to the output image name.
-
+        A string prefix to add to the output image filename. Defaults to "".
     img_per_row : int, optional
-        Filters per row on the image.
+        The number of filters to display per row in the output image grid.
+        Defaults to 8.
 
     Raises
     ------
     ValueError
-        if ``l_num`` and ``name`` not provided.
+        If neither `l_num` nor `name` is provided.
 
     Examples
     --------
@@ -496,25 +539,26 @@ def save_filters_of_convlayer(model, out_dir, l_num=None, name=None, prefix="", 
 
 def check_downsample_division(X, d_levels):
     """
-    Ensures ``X`` shape is divisible by ``2`` times ``d_levels`` adding padding if necessary.
+    Ensure that the spatial dimensions of a 4D NumPy array `X` are divisible by `2` raised to the power of `d_levels`. Padding is applied if necessary.
+
+    This is crucial for U-Net like architectures or other models that perform
+    multiple levels of downsampling (e.g., pooling layers).
 
     Parameters
     ----------
-    X : 4D Numpy array
-        Data to check if its shape.  E.g. ``(10, 1000, 1000, 1)``.
-
+    X : NDArray
+        The input data, a 4D NumPy array with shape `(num_images, height, width, channels)`.
     d_levels : int
-        Levels of downsampling by ``2``.
+        The number of downsampling levels (e.g., if `d_levels=3`, dimensions
+        must be divisible by `2^3 = 8`).
 
     Returns
     -------
-    X : 4D Numpy array
-        Data divisible by 2 ``d_levels`` times.
-
-    o_shape : 4 int tuple
-        Original shape of ``X``. E.g. ``(10, 1000, 1000, 1)``.
+    X_padded : NDArray
+        The padded data, with spatial dimensions divisible by `2^d_levels`.
+    original_shape : Tuple[int, ...]
+        The original shape of the input `X`.
     """
-
     d_val = pow(2, d_levels)
     dy = math.ceil(X.shape[1] / d_val)
     dx = math.ceil(X.shape[2] / d_val)
@@ -535,26 +579,43 @@ def check_downsample_division(X, d_levels):
 
 def seg2aff_pni(img, dz=1, dy=1, dx=1, 
     dtype: DTypeLike = np.float32):
-    # Adapted from PyTorch for Connectomics:
-    # https://github.com/zudi-lin/pytorch_connectomics/commit/6fbd5457463ae178ecd93b2946212871e9c617ee
     """
-    Transform segmentation to 3D affinity graph.
+    Transform a 3D segmentation mask into a 3D affinity graph (4D tensor).
+
+    The affinity graph has 3 channels corresponding to affinities in the z, y, and x directions.
+    An affinity value is 1 if two adjacent voxels (at specified distances `dz`, `dy`, `dx`)
+    belong to the same segment (and are not background, i.e., label > 0), and 0 otherwise.
+
+    Adapted from PyTorch for Connectomics:
+    https://github.com/zudi-lin/pytorch_connectomics/commit/6fbd5457463ae178ecd93b2946212871e9c617ee
 
     Parameters
     ----------
-    img : Numpy array like
-        3D indexed image, with each index corresponding to each segment.
+    img : NDArray
+        A 3D NumPy array representing an indexed image, where each index
+        corresponds to a unique segment. Background is typically 0.
     dz : int, optional
-        Distance in voxels in the z direction to calculate affinity from.
+        Distance in voxels in the z (depth) direction to calculate affinity from.
+        Must be less than `img.shape[-3]`. Defaults to 1.
     dy : int, optional
-        Distance in voxels in the y direction to calculate affinity from.
+        Distance in voxels in the y (height) direction to calculate affinity from.
+        Must be less than `img.shape[-2]`. Defaults to 1.
     dx : int, optional
-        Distance in voxels in the x direction to calculate affinity from.
+        Distance in voxels in the x (width) direction to calculate affinity from.
+        Must be less than `img.shape[-1]`. Defaults to 1.
+    dtype : DTypeLike, optional
+        The desired data type for the output affinity map. Defaults to `np.float32`.
 
     Returns
     -------
-    ret : 4D Numpy array
-        3D affinity graph (4D tensor), 3 channels for z, y, x direction.
+    ret : NDArray
+        A 4D NumPy array representing the 3D affinity graph, with shape
+        `(3, D, H, W)` where the first dimension corresponds to z, y, x affinities.
+
+    Raises
+    ------
+    AssertionError
+        If `dz`, `dy`, or `dx` are zero or exceed the corresponding image dimension.
     """
     img = check_volume(img)
     ret = np.zeros((3,) + img.shape, dtype=dtype)
@@ -587,8 +648,32 @@ def seg2aff_pni(img, dz=1, dy=1, dx=1,
 
 
 def check_volume(data):
-    # Original code: https://github.com/torms3/DataProvider/blob/master/python/utils.py#L11
-    """Ensure that data is numpy 3D array."""
+    """
+    Ensure that the input data is a 3D NumPy array.
+
+    If the input is 2D, it adds a new z-axis. If it's 4D with a batch size of 1,
+    it reshapes it to 3D by removing the batch dimension. Raises an error for
+    other dimensions.
+
+    Original code: https://github.com/torms3/DataProvider/blob/master/python/utils.py#L11
+
+    Parameters
+    ----------
+    data : NDArray
+        The input data array. Can be 2D, 3D, or 4D (with batch size 1).
+
+    Returns
+    -------
+    NDArray
+        A 3D NumPy array.
+
+    Raises
+    ------
+    RuntimeError
+        If `data` is not a NumPy array or has an unsupported number of dimensions.
+    AssertionError
+        If `data` is 4D but its batch dimension is not 1.
+    """
     assert isinstance(data, np.ndarray)
 
     if data.ndim == 2:
@@ -606,6 +691,26 @@ def check_volume(data):
 
 
 def im2col(A, BSZ, stepsize=1):
+    """
+    Implement the `im2col` (image to column) operation, which extracts sliding windows (patches) from an input 2D array and arranges them as columns in a new 2D array.
+
+    This is a common operation in convolutional neural networks for efficient
+    convolution implementation.
+
+    Parameters
+    ----------
+    A : NDArray
+        The input 2D NumPy array (image).
+    BSZ : Tuple[int, int]
+        A tuple `(patch_height, patch_width)` specifying the size of the sliding window.
+    stepsize : int, optional
+        The stride (step size) for sliding the window. Defaults to 1.
+
+    Returns
+    -------
+    NDArray
+        A 2D NumPy array where each row is a flattened patch from the input `A`.
+    """
     # Parameters
     M, N = A.shape
     # Get Starting block indices
@@ -617,10 +722,26 @@ def im2col(A, BSZ, stepsize=1):
 
 
 def seg_widen_border(seg, tsz_h=1):
-    # Kisuk Lee's thesis (A.1.4):
-    # "we preprocessed the ground truth seg such that any voxel centered on a 3 × 3 × 1 window containing
-    # more than one positive segment ID (zero is reserved for background) is marked as background."
-    # seg=0: background
+    """
+    Widen the border of segments in a label image by marking pixels as background if they are at the boundary between two different segments.
+
+    This is based on Kisuk Lee's thesis (A.1.4): "we preprocessed the ground truth seg such that any voxel centered
+    on a 3 x 3 x 1 window containing more than one positive segment ID (zero is reserved for background) is
+    marked as background."
+
+    Parameters
+    ----------
+    seg : NDArray
+        The input label image (2D or 3D NumPy array). Background is 0, segments are positive integers.
+    tsz_h : int, optional
+        Half-size of the square/cube window used to check for multiple segment IDs.
+        A `tsz_h=1` corresponds to a 3x3 (or 3x3x3 for 3D) window. Defaults to 1.
+
+    Returns
+    -------
+    NDArray
+        The label image with widened segment borders (boundary pixels set to 0).
+    """
     tsz = 2 * tsz_h + 1
     sz = seg.shape
     if len(sz) == 3:
@@ -644,6 +765,22 @@ def seg_widen_border(seg, tsz_h=1):
 def create_file_sha256sum(
     filename: str
 ) -> str:
+    """
+    Calculate the SHA256 checksum of a given file.
+
+    This function reads the file in chunks to efficiently compute the hash,
+    even for large files, without loading the entire file into memory.
+
+    Parameters
+    ----------
+    filename : str
+        The path to the file for which to calculate the SHA256 sum.
+
+    Returns
+    -------
+    str
+        The hexadecimal SHA256 checksum of the file.
+    """
     h = sha256()
     b = bytearray(128 * 1024)
     mv = memoryview(b)
