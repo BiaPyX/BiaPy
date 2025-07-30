@@ -1,3 +1,20 @@
+"""
+This package (`biapy.models`) is responsible for building and managing deep learning models within the BiaPy framework.
+
+It provides functionalities to:
+
+1.  **Dynamically build models**: Select and instantiate various neural network architectures
+    (e.g., U-Net, ResUNet, ViT, ConvNeXt variants, etc.) based on configuration settings.
+2.  **Integrate with BioImage Model Zoo (BMZ)**: Facilitate the loading and compatibility
+    checking of pre-trained models from the BioImage Model Zoo, enabling easy reuse
+    of community-contributed models.
+3.  **Extract model source code**: Collect the necessary source code for a given model
+    and its dependencies, which is crucial for reproducibility and export functionalities.
+
+The module handles different problem types (e.g., semantic segmentation, super-resolution,
+classification) and adapts model configurations (e.g., 2D/3D, input/output channels,
+normalization, dropout) accordingly.
+"""
 from importlib import import_module
 from importlib.util import find_spec
 import os
@@ -28,7 +45,7 @@ from bioimageio.core.digest_spec import get_test_inputs
 def build_model(cfg: CN, output_channels: int, device: torch.device) -> Tuple[nn.Module, str, Dict, set, List[str], Dict, Tuple[int, ...]]:
     # model, model_file, model_name, args
     """
-    Build selected model
+    Build selected model.
 
     Parameters
     ----------
@@ -337,7 +354,7 @@ def build_model(cfg: CN, output_channels: int, device: torch.device) -> Tuple[nn
 
 def extract_model(dependency_queue: deque, model_file: str) -> Tuple[Dict[str, str], set, List[str]]:
     """
-    Extracts the source code of the model and its dependencies.
+    Extract the source code of the model and its dependencies.
 
     Parameters  
     ----------  
@@ -461,7 +478,7 @@ def extract_model(dependency_queue: deque, model_file: str) -> Tuple[Dict[str, s
 
 def merge_import_lines(import_lines: List[str]) -> List[str]:
     """
-    Merges import lines by grouping them by module and sorting names within each module.
+    Merge import lines by grouping them by module and sorting names within each module.
 
     Parameters
     ----------
@@ -619,8 +636,7 @@ def check_bmz_model_compatibility(
     workflow_specs: Optional[Dict] = None,
 ) -> Tuple[List, bool, str]:
     """
-    Checks one model compatibility with BiaPy by looking at its RDF file provided by BMZ. This function is the one
-    used in BMZ's continuous integration with BiaPy.
+    Check one model compatibility with BiaPy by looking at its RDF file provided by BMZ. This function is the one used in BMZ's continuous integration with BiaPy.
 
     Parameters
     ----------
@@ -829,7 +845,7 @@ def check_bmz_model_compatibility(
 
 def check_model_restrictions(cfg: CN, bmz_config: Dict, workflow_specs: Dict) -> List[str]:
     """
-    Checks model restrictions to be applied into the current configuration.
+    Check model restrictions to be applied into the current configuration.
 
     Parameters
     ----------
@@ -1006,6 +1022,34 @@ def check_model_restrictions(cfg: CN, bmz_config: Dict, workflow_specs: Dict) ->
 
 
 def get_cfg_key_value(obj, attr, *args):
+    """
+    Recursively retrieve a nested attribute value from an object (e.g., a YACS CfgNode).
+
+    This function allows accessing values from nested configuration objects
+    or any object with attributes, by providing a dot-separated string for the
+    attribute path. It's particularly useful for navigating `CfgNode` objects.
+
+    Parameters
+    ----------
+    obj : object
+        The base object from which to start attribute retrieval.
+    attr : str
+        A dot-separated string representing the path to the desired attribute
+        (e.g., "MODEL.ARCHITECTURE", "DATA.PATCH_SIZE.0").
+    *args
+        Optional arguments to pass to `getattr` for default values if an
+        attribute is not found. If provided, `getattr(obj, name, *args)` is used.
+
+    Returns
+    -------
+    any
+        The value of the nested attribute.
+
+    Raises
+    ------
+    AttributeError
+        If an attribute in the path does not exist and no default value is provided.
+    """
     def _getattr(obj, attr):
         return getattr(obj, attr, *args)
 
@@ -1013,6 +1057,59 @@ def get_cfg_key_value(obj, attr, *args):
 
 
 def build_torchvision_model(cfg: CN, device: torch.device) -> Tuple[nn.Module, Callable]:
+    """
+    Build and adapt a model from the `torchvision.models` library based on the configuration.
+
+    This function dynamically loads a pre-trained model from `torchvision.models`
+    (e.g., ResNet, DeepLabV3, MaskRCNN, etc.) as specified in the configuration.
+    It then adapts the final output layer(s) of the model to match the number of
+    classes or output channels required by the specific problem type (e.g.,
+    classification, semantic segmentation, instance segmentation).
+
+    Parameters
+    ----------
+    cfg : YACS CN object
+        The configuration object. Key parameters used are:
+        - `cfg.MODEL.TORCHVISION_MODEL_NAME`: Name of the torchvision model to load
+          (e.g., "resnet50", "deeplabv3_resnet101", "maskrcnn_resnet50_fpn", "quantized_resnet50").
+        - `cfg.PROBLEM.TYPE`: Type of problem (e.g., "CLASSIFICATION", "SEMANTIC_SEG",
+          "INSTANCE_SEG", "DETECTION") to determine model adaptation logic.
+        - `cfg.DATA.N_CLASSES`: Number of output classes required for the problem.
+        - `cfg.DATA.PATCH_SIZE`: Input patch size, used for generating the model summary.
+        - `cfg.PROBLEM.NDIM`: Number of input dimensions ("2D" or "3D").
+    device : torch.device
+        The PyTorch device (e.g., "cpu", "cuda", "mps") on which the model
+        will be loaded and run.
+
+    Returns
+    -------
+    model : nn.Module
+        The instantiated and adapted PyTorch model from torchvision.
+    transforms : Callable
+        A callable representing the default preprocessing transforms associated
+        with the loaded torchvision model's weights. This should be applied to
+        input images before feeding them to the model.
+
+    Notes
+    -----
+    - Models are loaded with their `DEFAULT` pre-trained weights from torchvision.
+    - The final layer adaptation logic is specific to common torchvision model
+      structures for classification, semantic segmentation, and instance segmentation.
+    - For classification, the final linear layer is replaced. A warning is printed
+      if the number of classes differs from ImageNet's default (1000).
+    - For semantic segmentation, the final convolutional layer(s) of the classifier
+      and auxiliary classifier (if present) are replaced. A warning is printed
+      if the number of classes differs from Pascal VOC's default (21).
+    - For instance segmentation (MaskRCNN), the box predictor's classification
+      score head and the mask predictor's final convolutional layer are replaced.
+      A warning is printed if the number of classes differs from COCO's default (91).
+    - Special handling is included for `squeezenet` and `lraspp_mobilenet_v3_large`
+      due to their unique head structures.
+    - For `maxvit_t` in classification, a fixed sample input size of (1, 3, 224, 224)
+      is used for the model summary.
+    - This function assumes the necessary `torchvision` models and their default
+      weights are installed and accessible.
+    """
     # Find model in TorchVision
     if "quantized_" in cfg.MODEL.TORCHVISION_MODEL_NAME:
         mdl = import_module("torchvision.models.quantization", cfg.MODEL.TORCHVISION_MODEL_NAME)
