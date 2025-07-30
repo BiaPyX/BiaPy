@@ -1,3 +1,34 @@
+"""
+This module implements the U-NeXt (Version 2) architecture, a U-Net based model that incorporates the latest advancements from ConvNeXt V2 blocks.
+
+It aims to combine the strong hierarchical feature learning of U-Nets with the improved
+design principles of ConvNeXt V2, which are co-designed and scaled with Masked
+Autoencoders for enhanced performance.
+
+U-NeXt_V2 is designed for both 2D and 3D image segmentation tasks. It features
+a ConvNeXt V2-style encoder and decoder, with specialized blocks for downsampling,
+upsampling, and the bottleneck. It supports various configurations, including
+optional super-resolution, multi-head outputs, and stochastic depth for regularization.
+
+Classes:
+--------
+- U_NeXt_V2: The main U-NeXt model (Version 2).
+
+This module relies on building blocks defined in `biapy.models.blocks`, such as
+`UpConvNeXtBlock_V2`, `ConvNeXtBlock_V2`, and `ProjectionHead`.
+
+References:
+-----------
+`U-Net: Convolutional Networks for Biomedical Image Segmentation <https://arxiv.org/abs/1505.04597>`_
+`ConvNeXt V2: Co-designing and Scaling ConvNets with Masked Autoencoders <https://arxiv.org/abs/2301.00808>`_.
+
+Image representation:
+---------------------
+.. image:: ../../img/models/unext.png
+    :width: 100%
+    :align: center
+"""
+
 import torch
 import torch.nn as nn
 from typing import Dict
@@ -8,74 +39,98 @@ from torchvision.ops.misc import Permute
 
 class U_NeXt_V2(nn.Module):
     """
-    Create 2D/3D U-NeXt V2 (U-Net based model with ConvNext V2 blocks).
+    Create 2D/3D U-NeXt V2 (U-Net based model with ConvNeXt V2 blocks).
+
+    U-NeXt V2 combines the classic U-Net architecture with modern ConvNeXt V2 blocks,
+    leveraging the co-design and scaling principles from Masked Autoencoders. This
+    model aims to achieve high performance in biomedical image segmentation by
+    integrating strong hierarchical feature learning with efficient and robust
+    convolutional designs.
 
     Reference: `U-Net: Convolutional Networks for Biomedical Image Segmentation <https://arxiv.org/abs/1505.04597>`_,
     `ConvNeXt V2: Co-designing and Scaling ConvNets with Masked Autoencoders <https://arxiv.org/abs/2301.00808>`_.
 
     Parameters
     ----------
-    image_shape : 3D/4D tuple
-        Dimensions of the input image. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
+    image_shape : Tuple[int, ...]
+        Dimensions of the input image. E.g., `(y, x, channels)` for 2D or
+        `(z, y, x, channels)` for 3D. The last element `image_shape[-1]`
+        should be the number of input channels.
 
     activation : str, optional
-        Activation layer.
+        Activation layer. (Note: ConvNeXt V2 blocks typically use GELU, this parameter
+        might be less relevant for internal block activations but could apply to
+        other parts if customized).
 
-    feature_maps : array of ints, optional
-        Feature maps to use on each level.
+    feature_maps : List[int], optional
+        A list specifying the number of feature maps (channels) at each level
+        of the U-NeXt. The length of this list defines the depth of the network.
+        Defaults to `[32, 64, 128, 256]`.
 
     upsample_layer : str, optional
-        Type of layer to use to make upsampling. Two options: "convtranspose" or "upsampling".
+        Type of layer to use for upsampling in the decoder path.
+        Two options: "convtranspose" (using `nn.ConvTranspose2d`/`3d`) or
+        "upsampling" (using `nn.Upsample` followed by convolution).
+        Defaults to "convtranspose".
 
-    z_down : List of ints, optional
-        Downsampling used in z dimension. Set it to ``1`` if the dataset is not isotropic.
+    z_down : List[int], optional
+        For 3D data, a list of downsampling factors for the z-dimension at each
+        pooling stage in the encoder. Set elements to `1` if the dataset is not
+        isotropic and z-downsampling is not desired at that stage.
+        Its length should match the number of pooling stages (`len(feature_maps) - 1`).
+        Defaults to `[2, 2, 2, 2]`.
 
-    output_channels : list of int, optional
-        Output channels of the network. It must be a list of lenght ``1`` or ``2``. When two
-        numbers are provided two task to be done is expected (multi-head). Possible scenarios are:
-            * instances + classification on instance segmentation
-            * points + classification in detection.
+    output_channels : List[int], optional
+        Specifies the number of output channels for the final prediction head(s).
+        Must be a list of length 1 for a single output task (e.g., semantic segmentation)
+        or length 2 for multi-head tasks (e.g., instances + classification in instance segmentation,
+        or points + classification in detection). Defaults to `[1]`.
 
-    upsampling_factor : tuple of ints, optional
-        Factor of upsampling for super resolution workflow for each dimension.
+    upsampling_factor : Tuple[int, ...], optional
+        Factor of upsampling for super-resolution workflows. If provided,
+        it dictates the kernel and stride for an initial or final transposed
+        convolution. Defaults to an empty tuple `()`, meaning no super-resolution.
 
     upsampling_position : str, optional
-        Whether the upsampling is going to be made previously (``pre`` option) to the model
-        or after the model (``post`` option).
+        Determines where super-resolution upsampling is applied:
+        - ``"pre"``: Upsampling is performed *before* the main U-NeXt model.
+        - ``"post"``: Upsampling is performed *after* the main U-NeXt model.
+        Defaults to "pre".
 
-    stochastic_depth_prob: float, optional
-        Maximum stochastic depth probability. This probability will progressively increase with each
-        layer, reaching its maximum value at the bottleneck layer.
+    stochastic_depth_prob : float, optional
+        Maximum stochastic depth probability. This probability will progressively
+        increase with each layer, reaching its maximum value at the bottleneck layer.
+        Defaults to 0.1.
 
-    cn_layers:
-        Number of times each ConvNext block is repeated in each level. This array should be the same length
-        as the 'feature_maps' attribute.
+    cn_layers : List[int]
+        Number of ConvNeXt V2 blocks repeated in each level (stage) of the encoder
+        and bottleneck. This list should have the same length as `feature_maps`.
+        Defaults to `[2, 2, 2, 2]`.
 
-    isotropy : bool or list of bool, optional
-        Whether to use 3d or 2d depthwise convolutions at each U-NeXt level even if input is 3d.
+    isotropy : bool or List[bool], optional
+        Controls whether to use 3D or 2D depthwise convolutions at each U-NeXt
+        level when the input is 3D.
+        - If `True` (bool), all levels use 3D depthwise convolutions.
+        - If `False` (bool), all levels use 2D depthwise convolutions (1xKxK kernels for 3D input).
+        - If `List[bool]`, specifies for each level whether to use 3D (True) or 2D (False) kernels.
+        Defaults to True.
 
     stem_k_size : int, optional
-        Size of the stem kernel (default: 2).
+        Size of the kernel for the initial stem layer's pooling/convolution. Defaults to 2.
 
     contrast : bool, optional
-        Whether to add contrastive learning head to the model. Default is ``False``.
+        Whether to add a contrastive learning projection head to the model.
+        If True, an additional output `embed` will be available in the forward pass.
+        Defaults to `False`.
 
     contrast_proj_dim : int, optional
-        Dimension of the projection head for contrastive learning. Default is ``256``.
+        Dimension of the projection head for contrastive learning, if `contrast` is True.
+        Defaults to `256`.
 
     Returns
     -------
-    model : Torch model
-        U-NeXt model.
-
-
-    Calling this function with its default parameters returns the following network:
-
-    .. image:: ../../img/models/unext.png
-        :width: 100%
-        :align: center
-
-
+    model : nn.Module
+        The constructed U-NeXt V2 model.
     """
 
     def __init__(
@@ -94,6 +149,50 @@ class U_NeXt_V2(nn.Module):
         contrast: bool = False,
         contrast_proj_dim: int = 256,
     ):
+        """
+        Initialize the U-NeXt_V2 model.
+
+        Sets up the ConvNeXt V2-style encoder (downsampling path), decoder (upsampling path),
+        stem, bottleneck, and optional super-resolution and multi-head output layers.
+        It dynamically selects 2D or 3D convolutional and normalization layers based
+        on `ndim` and `isotropy` settings. Stochastic depth probabilities are
+        progressively increased across layers.
+
+        Parameters
+        ----------
+        image_shape : Tuple[int, ...], optional
+            Input image dimensions. Defaults to (256, 256, 1).
+        feature_maps : List[int], optional
+            Number of feature maps at each U-NeXt level. Defaults to `[32, 64, 128, 256]`.
+        upsample_layer : str, optional
+            Upsampling method ("convtranspose" or "upsampling"). Defaults to "convtranspose".
+        z_down : List[int], optional
+            Z-dimension downsampling factors for 3D data. Defaults to `[2, 2, 2, 2]`.
+        output_channels : List[int], optional
+            Number of channels for the output head(s). Can be length 1 or 2.
+            Defaults to `[1]`.
+        upsampling_factor : Tuple[int, ...], optional
+            Factor for super-resolution upsampling. Defaults to `()`.
+        upsampling_position : str, optional
+            Position of super-resolution upsampling ("pre" or "post"). Defaults to "pre".
+        stochastic_depth_prob : float, optional
+            Maximum stochastic depth probability. Defaults to 0.1.
+        cn_layers : List[int], optional
+            Number of ConvNeXt V2 blocks per level. Defaults to `[2, 2, 2, 2]`.
+        isotropy : bool | List[bool], optional
+            Controls 3D vs 2D depthwise convolutions for 3D input. Defaults to True.
+        stem_k_size : int, optional
+            Kernel size for the stem layer. Defaults to 2.
+        contrast : bool, optional
+            Whether to add a contrastive learning projection head. Defaults to `False`.
+        contrast_proj_dim : int, optional
+            Dimension of the contrastive projection head. Defaults to `256`.
+
+        Raises
+        ------
+        ValueError
+            If 'output_channels' is empty or has more than two values.
+        """
         super(U_NeXt_V2, self).__init__()
 
         if len(output_channels) == 0:
@@ -273,6 +372,33 @@ class U_NeXt_V2(nn.Module):
         self.apply(self._init_weights)
 
     def forward(self, x) -> Dict | torch.Tensor:
+        """
+        Perform the forward pass of the U-NeXt_V2 model.
+
+        The input `x` first undergoes optional pre-upsampling for super-resolution.
+        It then passes through the ConvNeXt V2-style encoder path (stem, ConvNeXt V2 blocks,
+        and downsampling layers), followed by a bottleneck. The decoder path upsamples
+        features, concatenates them with corresponding skip connections from the encoder,
+        and processes them through `UpConvNeXtBlock_V2` modules. Finally, optional
+        post-upsampling and the final prediction head(s) are applied.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            The input image tensor.
+            Expected shape for 2D: `(batch_size, input_channels, height, width)`.
+            Expected shape for 3D: `(batch_size, input_channels, depth, height, width)`.
+
+        Returns
+        -------
+        Dict | torch.Tensor
+            If `contrast` is True or `multihead` is True, returns a dictionary
+            containing different output tensors (e.g., "pred", "embed", "class").
+            Otherwise, returns only the primary prediction tensor.
+            The primary prediction tensor ("pred") will have `output_channels[0]`
+            channels and spatial dimensions corresponding to the original input
+            (or upsampled input if `upsampling_position` is "pre").
+        """
         # Super-resolution
         if self.pre_upsampling:
             x = self.pre_upsampling(x)
@@ -322,6 +448,18 @@ class U_NeXt_V2(nn.Module):
             return out_dict
 
     def _init_weights(self, m):
+        """
+        Initialize the weights of convolutional, linear, and LayerNorm layers.
+
+        Applies Xavier uniform initialization to convolutional and linear layer weights
+        (with bias set to 0 if present). For LayerNorm, weights are set to 1.0 and
+        biases to 0. This method is typically called using `model.apply()`.
+
+        Parameters
+        ----------
+        m : nn.Module
+            The module whose weights are to be initialized.
+        """
         if isinstance(m, nn.Conv2d) or isinstance(m, nn.Conv3d):
             nn.init.xavier_uniform_(m.weight)
             if m.bias is not None:
