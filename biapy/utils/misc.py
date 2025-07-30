@@ -1,3 +1,22 @@
+"""
+This module provides a collection of utility functions and classes primarily designed to support distributed training, logging, and model management within a PyTorch deep learning workflow.
+
+It includes functionalities for:
+- Initializing and managing distributed training environments (DDP).
+- Controlling print statements for master processes in distributed setups.
+- Setting random seeds for reproducibility.
+- Gradient norm calculation.
+- Saving and loading model checkpoints.
+- Converting data formats between PyTorch tensors and NumPy arrays.
+- Logging metrics to TensorBoard.
+- Tracking and smoothing metric values during training.
+- Iterating with progress logging.
+- Updating nested dictionaries.
+- Cleaning directory walks by excluding specific files/directories.
+
+The module aims to streamline common deep learning operations, especially
+in distributed and large-scale training scenarios.
+"""
 import os
 import sys
 import builtins
@@ -31,7 +50,17 @@ original_print = builtins.print
 
 def setup_for_distributed(is_master):
     """
-    This function disables printing when not in master process
+    Disable printing for non-master processes in a distributed training setup.
+
+    This function replaces the built-in `print` function with a custom one
+    that only prints output if the current process is the master process (rank 0),
+    or if `force=True` is passed to the print call. This prevents cluttered
+    output when running on multiple GPUs/nodes.
+
+    Parameters
+    ----------
+    is_master : bool
+        True if the current process is the master process (rank 0), False otherwise.
     """
     builtin_print = original_print
 
@@ -47,6 +76,14 @@ def setup_for_distributed(is_master):
 
 
 def is_dist_avail_and_initialized():
+    """
+    Check if PyTorch distributed backend is available and initialized.
+
+    Returns
+    -------
+    bool
+        True if distributed training is available and initialized, False otherwise.
+    """
     if not dist.is_available():
         return False
     if not dist.is_initialized():
@@ -55,22 +92,75 @@ def is_dist_avail_and_initialized():
 
 
 def get_world_size():
+    """
+    Return the total number of participating processes in the distributed group.
+
+    Returns 0 if distributed mode is not initialized.
+
+    Returns
+    -------
+    int
+        The world size.
+    """
     if not is_dist_avail_and_initialized():
         return 1
     return dist.get_world_size()
 
 
 def get_rank():
+    """
+    Return the rank of the current process in the distributed group.
+
+    Returns 0 if distributed mode is not initialized. The master process typically has rank 0.
+
+    Returns
+    -------
+    int
+        The rank of the current process.
+    """
     if not is_dist_avail_and_initialized():
         return 0
     return dist.get_rank()
 
 
 def is_main_process():
+    """
+    Check if the current process is the main (master) process (rank 0).
+
+    Returns
+    -------
+    bool
+        True if the current process is the main process, False otherwise.
+    """
     return get_rank() == 0
 
 
 def init_devices(args, cfg):
+    """
+    Initialize the PyTorch distributed environment and sets up the device for the current process.
+
+    This function handles different distributed setup scenarios (e.g., ITP, environment variables, SLURM).
+    It sets the appropriate GPU device, initializes the process group, and configures
+    the custom print function for distributed logging.
+
+    Parameters
+    ----------
+    args : Any
+        An object containing command-line arguments or configuration,
+        expected to have attributes like `dist_on_itp`, `gpu`, `dist_backend`, `dist_url`.
+    cfg : YACS CN object
+        The configuration object, used to determine the default device if CUDA is not available.
+
+    Returns
+    -------
+    torch.device
+        The PyTorch device assigned to the current process.
+
+    Raises
+    ------
+    AssertionError
+        If distributed training is attempted without GPUs when environment variables are set.
+    """
     if args.dist_on_itp:
         args.rank = int(os.environ["OMPI_COMM_WORLD_RANK"])
         args.world_size = int(os.environ["OMPI_COMM_WORLD_SIZE"])
@@ -155,12 +245,16 @@ def init_devices(args, cfg):
 
 def set_seed(seed=42):
     """
-    Sets the seed on multiple python modules to obtain results as reproducible as possible.
+    Set the random seed for reproducibility across multiple Python modules and PyTorch.
+
+    The seed is adjusted by the distributed rank to ensure different random
+    states for each process in a distributed setup, which can be beneficial
+    for certain operations (e.g., data loading).
 
     Parameters
     ----------
     seed : int, optional
-        Seed value.
+        The base seed value. Defaults to 42.
     """
     seed = seed + get_rank()
     torch.manual_seed(seed)
@@ -169,6 +263,25 @@ def set_seed(seed=42):
 
 
 def get_grad_norm_(parameters, norm_type: float = 2.0) -> torch.Tensor:
+    """
+    Compute the total norm of gradients for a collection of parameters.
+
+    This function is typically used for gradient clipping.
+
+    Parameters
+    ----------
+    parameters : Iterable[torch.Tensor] or torch.Tensor
+        An iterable of model parameters or a single parameter tensor.
+    norm_type : float, optional
+        The type of the norm (e.g., 2.0 for L2 norm, `inf` for max norm).
+        Defaults to 2.0.
+
+    Returns
+    -------
+    torch.Tensor
+        The total norm of the gradients. Returns a tensor with value 0.0 if no
+        parameters have gradients.
+    """
     if isinstance(parameters, torch.Tensor):
         parameters = [parameters]
     parameters = [p for p in parameters if p.grad is not None]
@@ -187,6 +300,36 @@ def get_grad_norm_(parameters, norm_type: float = 2.0) -> torch.Tensor:
 
 
 def save_model(cfg, biapy_version, jobname, epoch, model_without_ddp, optimizer, model_build_kwargs=None):
+    """
+    Save the model checkpoint to the specified path.
+
+    This function saves the model's state dictionary, optimizer state, current epoch,
+    configuration, and BiaPy version. It ensures that saving is performed only by
+    the main process in a distributed setup.
+
+    Parameters
+    ----------
+    cfg : YACS CN object
+        The configuration object.
+    biapy_version : str
+        The current version of BiaPy.
+    jobname : str
+        The name of the current job/experiment.
+    epoch : int
+        The current epoch number.
+    model_without_ddp : nn.Module
+        The model instance, typically the unwrapped model if using DistributedDataParallel.
+    optimizer : torch.optim.Optimizer
+        The optimizer's state.
+    model_build_kwargs : Optional[Dict], optional
+        Keyword arguments used to build the model, useful for re-instantiating
+        the model from the checkpoint. Defaults to None.
+
+    Returns
+    -------
+    Path
+        The path to the saved checkpoint file.
+    """
     output_dir = Path(cfg.PATHS.CHECKPOINT)
     checkpoint_paths = [output_dir / "{}-checkpoint-{}.pth".format(jobname, str(epoch))]
 
@@ -206,11 +349,52 @@ def save_model(cfg, biapy_version, jobname, epoch, model_without_ddp, optimizer,
 
 
 def save_on_master(*args, **kwargs):
+    """
+    Save a PyTorch object only if the current process is the main (master) process.
+
+    This is a wrapper around `torch.save` to ensure that checkpoints are not
+    redundantly saved by all processes in a distributed training setup.
+
+    Parameters
+    ----------
+    *args : Any
+        Positional arguments to pass to `torch.save`.
+    **kwargs : Any
+        Keyword arguments to pass to `torch.save`.
+    """
     if is_main_process():
         torch.save(*args, **kwargs)
 
 
 def get_checkpoint_path(cfg, jobname):
+    """
+    Determine the path to the checkpoint file to load.
+
+    It selects the checkpoint based on `cfg.PATHS.CHECKPOINT_FILE`,
+    `cfg.MODEL.LOAD_CHECKPOINT_EPOCH` ("last_on_train" or "best_on_val"),
+    and the `jobname`.
+
+    Parameters
+    ----------
+    cfg : YACS CN object
+        The configuration object. Key parameters:
+        - `cfg.PATHS.CHECKPOINT`: Base directory for checkpoints.
+        - `cfg.PATHS.CHECKPOINT_FILE`: Explicit path to a checkpoint file (if set).
+        - `cfg.MODEL.LOAD_CHECKPOINT_EPOCH`: Strategy for selecting checkpoint
+          ("last_on_train" or "best_on_val").
+    jobname : str
+        The name of the current job/experiment.
+
+    Returns
+    -------
+    str
+        The absolute path to the checkpoint file.
+
+    Raises
+    ------
+    NotImplementedError
+        If `cfg.MODEL.LOAD_CHECKPOINT_EPOCH` is an unrecognized value.
+    """
     checkpoint_dir = Path(cfg.PATHS.CHECKPOINT)
 
     # Select the checkpoint source file
@@ -235,6 +419,48 @@ def get_checkpoint_path(cfg, jobname):
 
 
 def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=None, just_extract_checkpoint_info=False, skip_unmatched_layers=False):
+    """
+    Load a model checkpoint from disk.
+
+    This function handles loading the model's state dictionary, optimizer state,
+    and epoch number from a checkpoint file. It can also be configured to
+    only extract configuration information or to skip layers with mismatched shapes.
+
+    Parameters
+    ----------
+    cfg : YACS CN object
+        The configuration object. Key parameters:
+        - `cfg.PATHS.CHECKPOINT_FILE`: Explicit path to checkpoint.
+        - `cfg.MODEL.LOAD_CHECKPOINT_EPOCH`: Strategy for checkpoint selection.
+        - `cfg.MODEL.LOAD_CHECKPOINT_ONLY_WEIGHTS`: If True, only model weights are loaded.
+    jobname : str
+        The name of the current job/experiment.
+    model_without_ddp : nn.Module
+        The model instance (unwrapped if DDP is used) to load weights into.
+    device : torch.device
+        The device to map the loaded checkpoint to.
+    optimizer : Optional[torch.optim.Optimizer], optional
+        The optimizer instance to load state into. If None, optimizer state is not loaded.
+        Defaults to None.
+    just_extract_checkpoint_info : bool, optional
+        If True, only the configuration (`cfg`) and BiaPy version from the checkpoint
+        are returned, without loading model or optimizer states. Defaults to False.
+    skip_unmatched_layers : bool, optional
+        If True, layers in the checkpoint that have different shapes than the
+        current model's layers will be skipped during loading. Defaults to False.
+
+    Returns
+    -------
+    Tuple[int | CN | None, str | None]
+        If `just_extract_checkpoint_info` is True: returns `(checkpoint_cfg, biapy_version)`.
+        Otherwise: returns `(start_epoch, resume_path)`.
+        `checkpoint_cfg` and `biapy_version` can be `None` if not found in the checkpoint.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the specified checkpoint file does not exist.
+    """
     start_epoch = 0
 
     resume = get_checkpoint_path(cfg, jobname)
@@ -306,6 +532,21 @@ def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=Non
 
 
 def all_reduce_mean(x):
+    """
+    Perform an all-reduce operation on a scalar or single-element tensor, then computes the mean across all processes in a distributed group.
+
+    If not in a distributed environment, returns the input value directly.
+
+    Parameters
+    ----------
+    x : float or torch.Tensor
+        The scalar value or single-element tensor to be reduced.
+
+    Returns
+    -------
+    float
+        The mean of `x` across all processes.
+    """
     world_size = get_world_size()
     if world_size > 1:
         x_reduce = torch.tensor(x).cuda()
@@ -317,6 +558,26 @@ def all_reduce_mean(x):
 
 
 def to_pytorch_format(x: torch.Tensor | NDArray, axes_order: Tuple, device: torch.device, dtype=torch.float32) -> torch.Tensor:
+    """
+    Convert a NumPy array or PyTorch tensor to PyTorch tensor format with a specified axis order and moves it to the target device.
+
+    Parameters
+    ----------
+    x : torch.Tensor or numpy.ndarray
+        The input data.
+    axes_order : Tuple[int, ...]
+        A tuple specifying the desired permutation of axes.
+        For example, `(0, 3, 1, 2)` for `(N, H, W, C)` to `(N, C, H, W)`.
+    device : torch.device
+        The target PyTorch device (e.g., "cuda", "cpu").
+    dtype : torch.dtype, optional
+        The desired data type for the output tensor. Defaults to `torch.float32`.
+
+    Returns
+    -------
+    torch.Tensor
+        The converted PyTorch tensor.
+    """
     if isinstance(x, torch.Tensor) and torch.is_tensor(x):
         return x.to(dtype).permute(axes_order).to(device, non_blocking=True)
     else:
@@ -324,10 +585,41 @@ def to_pytorch_format(x: torch.Tensor | NDArray, axes_order: Tuple, device: torc
 
 
 def to_numpy_format(x, axes_order_back):
+    """
+    Convert a PyTorch tensor back to a NumPy array with a specified axis order.
+
+    Parameters
+    ----------
+    x : torch.Tensor
+        The input PyTorch tensor.
+    axes_order_back : Tuple[int, ...]
+        A tuple specifying the desired permutation of axes to revert to
+        the original NumPy-like order.
+
+    Returns
+    -------
+    numpy.ndarray
+        The converted NumPy array.
+    """
     return x.permute(axes_order_back).cpu().numpy()
 
 
 def time_text(t):
+    """
+    Format a time duration (in seconds) into a human-readable string.
+
+    Formats as 'Xh', 'Xm', or 'Xs' depending on the duration.
+
+    Parameters
+    ----------
+    t : float
+        Time duration in seconds.
+
+    Returns
+    -------
+    str
+        Formatted time string.
+    """
     if t >= 3600:
         return "{:.1f}h".format(t / 3600)
     elif t >= 60:
@@ -337,17 +629,54 @@ def time_text(t):
 
 
 class TensorboardLogger(object):
+    """A simple wrapper for `tensorboardX.SummaryWriter` to log scalar metrics."""
+
     def __init__(self, log_dir):
+        """
+        Initialize the TensorboardLogger.
+
+        Parameters
+        ----------
+        log_dir : str
+            The directory where TensorBoard log files will be saved.
+        """
         self.writer = SummaryWriter(logdir=log_dir)
         self.step = 0
 
     def set_step(self, step=None):
+        """
+        Set the current global step for logging.
+
+        If `step` is None, increments the internal step counter.
+
+        Parameters
+        ----------
+        step : Optional[int], optional
+            The specific step number to set. If None, increments the current step.
+            Defaults to None.
+        """
         if step is not None:
             self.step = step
         else:
             self.step += 1
 
     def update(self, head="scalar", step=None, **kwargs):
+        """
+        Log scalar values to TensorBoard.
+
+        Parameters
+        ----------
+        head : str, optional
+            The main category for the scalar (e.g., "train_loss", "val_metrics").
+            Defaults to "scalar".
+        step : Optional[int], optional
+            The specific global step to log this update at. If None, uses the
+            internal `self.step`. Defaults to None.
+        **kwargs : float | int | torch.Tensor
+            Keyword arguments where keys are metric names (e.g., "loss", "accuracy")
+            and values are the corresponding scalar values (can be PyTorch tensors
+            or Python floats/ints).
+        """
         for k, v in kwargs.items():
             if v is None:
                 continue
@@ -357,16 +686,27 @@ class TensorboardLogger(object):
             self.writer.add_scalar(head + "/" + k, v, self.step if step is None else step)
 
     def flush(self):
+        """Ensure all pending events have been written to disk."""
         self.writer.flush()
 
 
 class SmoothedValue(object):
-    """
-    Track a series of values and provide access to smoothed values over a
-    window or the global series average.
-    """
+    """Track a series of values and provides access to smoothed values (median, average) over a sliding window or the global series average."""
 
     def __init__(self, window_size=20, fmt=None):
+        """
+        Initialize the SmoothedValue tracker.
+
+        Parameters
+        ----------
+        window_size : int, optional
+            The size of the sliding window for calculating median and average.
+            Defaults to 20.
+        fmt : Optional[str], optional
+            A format string for displaying the value. Placeholders include
+            `{median}`, `{avg}`, `{global_avg}`, `{max}`, `{value}`.
+            Defaults to "{median:.4f} ({global_avg:.4f})".
+        """
         if fmt is None:
             fmt = "{median:.4f} ({global_avg:.4f})"
         self.deque = deque(maxlen=window_size)
@@ -376,13 +716,26 @@ class SmoothedValue(object):
         self.eps = sys.float_info.epsilon
 
     def update(self, value, n=1):
+        """
+        Update the tracker with a new value.
+
+        Parameters
+        ----------
+        value : float
+            The new value to add.
+        n : int, optional
+            The number of samples represented by this value (e.g., batch size).
+            Defaults to 1.
+        """
         self.deque.append(value)
         self.count += n
         self.total += value * n
 
     def synchronize_between_processes(self):
         """
-        Warning: does not synchronize the deque!
+        Synchronize the `count` and `total` attributes across all processes in a distributed environment using `dist.all_reduce`.
+
+        Warning: This method does *not* synchronize the `deque` (sliding window).
         """
         if not is_dist_avail_and_initialized():
             return
@@ -395,27 +748,33 @@ class SmoothedValue(object):
 
     @property
     def median(self):
+        """Return the median of the values in the current sliding window."""
         d = torch.tensor(list(self.deque))
         return d.median().item()
 
     @property
     def avg(self):
+        """Return the average of the values in the current sliding window."""
         d = torch.tensor(list(self.deque), dtype=torch.float32)
         return d.mean().item()
 
     @property
     def global_avg(self) -> float:
+        """Return the global average of all values recorded since initialization."""
         return self.total / (self.count + self.eps)
 
     @property
     def max(self):
+        """Return the maximum value in the current sliding window."""
         return max(self.deque)
 
     @property
     def value(self):
+        """Return the most recently updated value."""
         return self.deque[-1]
 
     def __str__(self):
+        """Return a formatted string representation of the smoothed value."""
         return self.fmt.format(
             median=self.median,
             avg=self.avg,
@@ -426,12 +785,34 @@ class SmoothedValue(object):
 
 
 class MetricLogger(object):
+    """Aggregate and logs various metrics using `SmoothedValue` objects."""
+
     def __init__(self, delimiter="\t", verbose=False):
+        r"""
+        Initialize the MetricLogger.
+
+        Parameters
+        ----------
+        delimiter : str, optional
+            The string used to separate metrics when printing. Defaults to \t".
+        verbose : bool, optional
+            If True, additional information (e.g., max GPU memory) is printed.
+            Defaults to False.
+        """
         self.meters = defaultdict(SmoothedValue)
         self.delimiter = delimiter
         self.verbose = verbose
 
     def update(self, **kwargs):
+        """
+        Update the values of tracked metrics.
+
+        Parameters
+        ----------
+        **kwargs : float | int | torch.Tensor
+            Keyword arguments where keys are metric names and values are their
+            current scalar values.
+        """
         for k, v in kwargs.items():
             if v is None:
                 continue
@@ -441,6 +822,7 @@ class MetricLogger(object):
             self.meters[k].update(v)
 
     def __getattr__(self, attr):
+        """Allow direct access to `SmoothedValue` objects via attribute lookup."""
         if attr in self.meters:
             return self.meters[attr]
         if attr in self.__dict__:
@@ -448,19 +830,48 @@ class MetricLogger(object):
         raise AttributeError("'{}' object has no attribute '{}'".format(type(self).__name__, attr))
 
     def __str__(self):
+        """Return a string representation of all tracked metrics."""
         loss_str = []
         for name, meter in self.meters.items():
             loss_str.append("{}: {}".format(name, str(meter)))
         return self.delimiter.join(loss_str)
 
     def synchronize_between_processes(self):
+        """Synchronize all tracked `SmoothedValue` meters across distributed processes."""
         for meter in self.meters.values():
             meter.synchronize_between_processes()
 
     def add_meter(self, name, meter):
+        """
+        Add a custom `SmoothedValue` meter to the logger.
+
+        Parameters
+        ----------
+        name : str
+            The name of the meter.
+        meter : SmoothedValue
+            The `SmoothedValue` instance to add.
+        """
         self.meters[name] = meter
 
     def log_every(self, iterable, print_freq, header=None):
+        """
+        Log progress for an iterable, printing metrics at a specified frequency.
+
+        Parameters
+        ----------
+        iterable : Iterable[Any]
+            The iterable (e.g., DataLoader) to iterate over.
+        print_freq : int
+            The frequency (in iterations) at which to print log messages.
+        header : Optional[str], optional
+            An optional header string to prepend to log messages. Defaults to None.
+
+        Yields
+        ------
+        Any
+            Items from the input `iterable`.
+        """
         i = 0
         if not header:
             header = ""
@@ -514,6 +925,33 @@ class MetricLogger(object):
 
 
 def update_dict_with_existing_keys(d, u, not_recognized_keys=[], not_recognized_key_vals=[]):
+    """
+    Recursively update a dictionary `d` with values from dictionary `u`, only for keys that already exist in `d`.
+
+    This function is useful for updating configuration dictionaries while
+    ensuring that no new keys are introduced from the update dictionary.
+    It also tracks keys from `u` that were not found in `d`.
+
+    Parameters
+    ----------
+    d : Dict
+        The dictionary to be updated (destination).
+    u : Dict
+        The dictionary containing update values (source).
+    not_recognized_keys : Optional[List], optional
+        A list to append keys from `u` that were not found in `d`.
+        If None, a new list is created. Defaults to None.
+    not_recognized_key_vals : Optional[List], optional
+        A list to append values corresponding to `not_recognized_keys`.
+        If None, a new list is created. Defaults to None.
+
+    Returns
+    -------
+    Tuple[Dict, List, List]
+        - `d`: The updated dictionary.
+        - `not_recognized_keys`: List of keys from `u` not found in `d`.
+        - `not_recognized_key_vals`: List of values from `u` corresponding to `not_recognized_keys`.
+    """
     for k, v in u.items():
         if k in d:
             if isinstance(v, collections.abc.Mapping):
@@ -533,6 +971,29 @@ def update_dict_with_existing_keys(d, u, not_recognized_keys=[], not_recognized_
     return d, not_recognized_keys, not_recognized_key_vals
 
 def os_walk_clean(path, exclude_files=["Thumbs.db", "desktop.ini", ".DS_Store"], exclude_dirs=[".git", "__pycache__"]):
+    """
+    Perform a directory walk similar to `os.walk`, but excludes specified files and directories.
+
+    This function is useful for iterating through file systems while
+    ignoring common system files or version control directories.
+
+    Parameters
+    ----------
+    path : str
+        The root directory from which to start the walk.
+    exclude_files : List[str], optional
+        A list of filenames to exclude from the output. Files starting with '.'
+        are also excluded by default. Defaults to common system files.
+    exclude_dirs : List[str], optional
+        A list of directory names to exclude from the walk. Directories starting with '.'
+        are also excluded by default. Defaults to common version control/cache dirs.
+
+    Yields
+    ------
+    Tuple[str, List[str], List[str]]
+        A tuple `(root, dirs, files)` for each directory in the tree,
+        similar to `os.walk`, but with excluded items removed.
+    """
     for root, dirs, files in os.walk(path):
         files = [f for f in files if f not in exclude_files and not f[0] == '.']
         dirs[:] = [d for d in dirs if d not in exclude_dirs and not d[0] == '.']        
