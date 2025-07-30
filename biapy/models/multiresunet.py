@@ -36,7 +36,7 @@ import torch
 import torch.nn as nn
 from typing import Dict
 
-from biapy.models.blocks import get_norm_2d, get_norm_3d, ProjectionHead
+from biapy.models.blocks import ProjectionHead
 
 
 class Conv_batchnorm(torch.nn.Module):
@@ -521,14 +521,12 @@ class MultiResUnet(torch.nn.Module):
             convtranspose = nn.ConvTranspose3d
             batchnorm_layer = nn.BatchNorm3d
             pooling = nn.MaxPool3d
-            norm_func = get_norm_3d
             dropout = nn.Dropout3d
         else:
             conv = nn.Conv2d
             convtranspose = nn.ConvTranspose2d
             batchnorm_layer = nn.BatchNorm2d
             pooling = nn.MaxPool2d
-            norm_func = get_norm_2d
             dropout = nn.Dropout2d
 
         # Super-resolution
