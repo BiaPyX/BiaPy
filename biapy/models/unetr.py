@@ -1,3 +1,27 @@
+"""
+This module implements the UNETR (U-Net TRansformers) architecture, a hybrid deep learning model that combines the strengths of Vision Transformers (ViT) with the U-Net's skip-connection mechanism.
+
+UNETR replaces the traditional convolutional encoder of a U-Net with a ViT,
+allowing it to capture long-range dependencies effectively. The ViT's latent
+representations are then integrated into a convolutional decoder via skip
+connections, adapting their spatial dimensionality to match the decoder's
+levels. This design is particularly well-suited for 3D medical image
+segmentation.
+
+Classes:
+--------
+- UNETR: The main UNETR model, integrating a ViT encoder with a U-Net-like decoder.
+
+This module leverages components from `biapy.models.blocks` such as `DoubleConvBlock`,
+`ConvBlock`, `ProjectionHead`, and normalization helpers (`get_norm_2d`, `get_norm_3d`),
+as well as `PatchEmbed` from `biapy.models.tr_layers`.
+
+Reference:
+----------
+`UNETR: Transformers for 3D Medical Image Segmentation
+<https://openaccess.thecvf.com/content/WACV2022/html/Hatamizadeh_UNETR_Transformers_for_3D_Medical_Image_Segmentation_WACV_2022_paper.html>`_.
+"""
+
 import math
 import torch
 import torch.nn as nn
@@ -10,73 +34,91 @@ from biapy.models.tr_layers import PatchEmbed
 
 class UNETR(nn.Module):
     """
-    UNETR architecture. It combines a ViT with U-Net, replaces the convolutional encoder
-    with the ViT and adapt each skip connection signal to their layer's spatial dimensionality.
+    UNETR (U-Net TRansformers) architecture.
+
+    This model combines a Vision Transformer (ViT) as an encoder with a
+    U-Net-like convolutional decoder. The ViT processes input images as
+    sequences of patches, capturing global context, while the decoder
+    reconstructs the output by upsampling and integrating skip connections
+    from the ViT's intermediate layers.
 
     Reference: `UNETR: Transformers for 3D Medical Image Segmentation
     <https://openaccess.thecvf.com/content/WACV2022/html/Hatamizadeh_UNETR_Transformers_for_3D_Medical_Image_Segmentation_WACV_2022_paper.html>`_.
 
     Parameters
     ----------
-    input_shape : 3D/4D tuple
-        Dimensions of the input image. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
+    input_shape : Tuple[int, ...]
+        Dimensions of the input image. E.g., `(y, x, channels)` for 2D or
+        `(z, y, x, channels)` for 3D. The last element `input_shape[-1]`
+        should be the number of input channels.
 
     patch_size : int
-        Size of the patches that are extracted from the input image. As an example, to use ``16x16``
-        patches, set ``patch_size = 16``.
+        Size of the square/cubic patches that are extracted from the input image.
+        For example, to use `16x16` patches, set `patch_size = 16`.
 
     embed_dim : int
-        Dimension of the embedding space.
+        Dimension of the embedding space for the Vision Transformer. This is
+        the dimensionality of the patch tokens.
 
     depth : int
-        Number of transformer encoder layers.
+        Number of transformer encoder layers (blocks) in the ViT backbone.
 
     num_heads : int
-        Number of heads in the multi-head attention layer.
+        Number of attention heads in the multi-head attention layer of the ViT.
 
     mlp_ratio : float, optional
-        Ratio to multiply ``embed_dim`` to obtain the dense layers of the final classifier.
+        Ratio to multiply `embed_dim` to obtain the hidden dimension of the
+        MLP block within each Transformer block. Defaults to 4.0.
 
-    num_filters: int, optional
-        Number of filters in the first UNETR's layer of the decoder. In each layer the previous number of filters is
-        doubled.
+    num_filters : int, optional
+        Number of filters in the first layer of the UNETR's convolutional decoder.
+        In subsequent decoder layers, the number of filters is typically doubled
+        or halved depending on the stage. Defaults to 16.
 
-    norm_layer : Torch layer, optional
-        Normalization layer to use in ViT backbone.
+    norm_layer : Callable, optional
+        Normalization layer constructor to use in the ViT backbone (e.g., `nn.LayerNorm`).
+        Defaults to `nn.LayerNorm`.
 
-    output_channels : list of int, optional
-        Output channels of the network. It must be a list of lenght ``1`` or ``2``. When two
-        numbers are provided two task to be done is expected (multi-head). Possible scenarios are:
-            * instances + classification on instance segmentation
-            * points + classification in detection.
+    output_channels : List[int], optional
+        Output channels of the network. It must be a list of length 1 for a single
+        output task (e.g., semantic segmentation) or length 2 for multi-head tasks
+        (e.g., instances + classification in instance segmentation, or points +
+        classification in detection). Defaults to `[1]`.
 
     decoder_activation : str, optional
-        Activation function for the decoder.
+        Activation function for the convolutional decoder blocks (e.g., "relu", "elu").
+        Defaults to "relu".
 
     ViT_hidd_mult : int, optional
-        Multiple of the transformer encoder layers from of which the skip connection signal is going to be extracted.
-        E.g. if we have ``12`` transformer encoder layers, and we set ``ViT_hidd_mult = 3``, we are going to take
-        ``[1*ViT_hidd_mult, 2*ViT_hidd_mult, 3*ViT_hidd_mult]`` -> ``[Z3, Z6, Z9]`` encoder's signals.
+        Multiplier to select which intermediate transformer encoder layers' outputs
+        are used as skip connections for the decoder. For example, if `depth` is 12
+        and `ViT_hidd_mult = 3`, skip connections will be taken from layers 3, 6, and 9.
+        Defaults to 3.
 
     normalization : str, optional
-        Normalization layer (one of ``'bn'``, ``'sync_bn'`` ``'in'``, ``'gn'`` or ``'none'``).
+        Normalization layer type for the convolutional decoder (one of `'bn'`,
+        `'sync_bn'`, `'in'`, `'gn'`, or `'none'`). Defaults to "bn".
 
-    dropout : bool, optional
-        Dropout rate for the decoder (can be a list of dropout rates for each layer).
+    dropout : float or List[float], optional
+        Dropout rate for the decoder. Can be a single float applied uniformly
+        or a list of dropout rates for each decoder layer. Defaults to 0.0.
 
     k_size : int, optional
-        Decoder convolutions' kernel size.
+        Kernel size for the convolutional layers in the decoder. Defaults to 3.
 
     contrast : bool, optional
-        Whether to add contrastive learning head to the model. Default is ``False``.
+        Whether to add a contrastive learning projection head to the model.
+        If True, an additional output `embed` will be available in the forward pass.
+        Defaults to `False`.
 
     contrast_proj_dim : int, optional
-        Dimension of the projection head for contrastive learning. Default is ``256``.
+        Dimension of the projection head for contrastive learning, if `contrast` is True.
+        Defaults to `256`.
 
     Returns
     -------
-    model : Torch model
-        UNETR model.
+    model : nn.Module
+        The constructed UNETR model.
     """
 
     def __init__(
@@ -98,6 +140,59 @@ class UNETR(nn.Module):
         contrast: bool = False,
         contrast_proj_dim: int = 256,
     ):
+        """
+        Initialize the UNETR model.
+
+        Sets up the Vision Transformer (ViT) encoder, including patch embedding,
+        positional embeddings, and transformer blocks. It then constructs the
+        U-Net-like convolutional decoder, which includes a bottleneck layer,
+        upsampling layers, and convolutional blocks that integrate skip
+        connections from the ViT encoder. Optional contrastive learning and
+        multi-head outputs are also configured.
+
+        Parameters
+        ----------
+        input_shape : Tuple[int, ...]
+            Dimensions of the input image. E.g., `(y, x, channels)` for 2D or
+            `(z, y, x, channels)` for 3D. The last element is the number of input channels.
+        patch_size : int
+            Size of the patches.
+        embed_dim : int
+            Dimension of the embedding space for the ViT.
+        depth : int
+            Number of transformer encoder layers.
+        num_heads : int
+            Number of attention heads.
+        mlp_ratio : float, optional
+            Ratio for MLP hidden dimension. Defaults to 4.0.
+        num_filters : int, optional
+            Number of filters in the first decoder layer. Defaults to 16.
+        norm_layer : Callable, optional
+            Normalization layer constructor for ViT. Defaults to `nn.LayerNorm`.
+        output_channels : List[int], optional
+            Output channels for the network's prediction head(s). Can be length 1 or 2.
+            Defaults to `[1]`.
+        decoder_activation : str, optional
+            Activation function for decoder. Defaults to "relu".
+        ViT_hidd_mult : int, optional
+            Multiplier for selecting ViT hidden layer outputs as skip connections.
+            Defaults to 3.
+        normalization : str, optional
+            Normalization layer type for decoder. Defaults to "bn".
+        dropout : float | List[float], optional
+            Dropout rate(s) for the decoder. Defaults to 0.0.
+        k_size : int, optional
+            Kernel size for decoder convolutions. Defaults to 3.
+        contrast : bool, optional
+            Whether to add a contrastive learning head. Defaults to `False`.
+        contrast_proj_dim : int, optional
+            Dimension of the contrastive projection head. Defaults to `256`.
+
+        Raises
+        ------
+        ValueError
+            If 'output_channels' is empty or has more than two values.
+        """
         super().__init__()
 
         if len(output_channels) == 0:
@@ -282,19 +377,63 @@ class UNETR(nn.Module):
         self.apply(self._init_weights)
 
     def proj_feat(self, x):
+        """
+        Reshape and permute the flattened ViT feature tensor back into a spatial feature map format suitable for convolutional layers.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Flattened feature tensor from the ViT encoder, typically
+            ` (batch_size, num_patches, embed_dim)`.
+
+        Returns
+        -------
+        torch.Tensor
+            Reshaped and permuted feature tensor,
+            e.g., `(batch_size, embed_dim, D, H, W)` for 3D or
+            `(batch_size, embed_dim, H, W)` for 2D.
+        """
         x = x.view((x.size(0),) + self.reshape_shape)
         x = x.permute(self.permutation).contiguous()
         return x
 
     def forward(self, input) -> Dict | torch.Tensor:
-        # Vit part
-        B = input.shape[0]
+        """
+        Perform the complete forward pass of the UNETR model.
+
+        The input `input` first goes through the ViT encoder, which produces
+        a latent representation and extracts intermediate features for skip
+        connections. These features are then fed into the convolutional decoder,
+        which upsamples and reconstructs the output, integrating the ViT's
+        hierarchical representations via skip connections. Finally, the
+        output passes through the prediction head(s).
+
+        Parameters
+        ----------
+        input : torch.Tensor
+            The input image tensor.
+            Expected shape for 2D: `(batch_size, input_channels, height, width)`.
+            Expected shape for 3D: `(batch_size, input_channels, depth, height, width)`.
+
+        Returns
+        -------
+        Dict | torch.Tensor
+            If `contrast` is True or `multihead` is True, returns a dictionary
+            containing different output tensors (e.g., "pred", "embed", "class").
+            Otherwise, returns only the primary prediction tensor.
+            The primary prediction tensor ("pred") will have `output_channels[0]`
+            channels and spatial dimensions matching the input `input`.
+        """
+        B = input.shape[0] # batch size
+        # ViT Encoder
         x = self.patch_embed(input)
 
+        # Add class token and positional embeddings
         cls_tokens = self.cls_token.expand(B, -1, -1)
         x = torch.cat((cls_tokens, x), dim=1)
         x = x + self.pos_embed
 
+        # Collect skip connections from ViT blocks
         skip_connection_index = [self.ViT_hidd_mult * layer for layer in range(1, self.total_upscale_factor)]
         skip_connections = []
         for i, blk in enumerate(self.blocks):
@@ -303,31 +442,43 @@ class UNETR(nn.Module):
                 skip_connections.insert(0, x[:, 1:, :])
 
         # CNN Decoder
+        # Bottleneck: Reshape ViT output (excluding class token) and apply transposed conv
         x = self.bottleneck(self.proj_feat(x[:, 1:, :]))
 
+        # Decoder's upsampling path
         for i, layers in enumerate(zip(self.mid_blue_block, self.two_yellow_layers, self.up_green_layers)):
             blue, yellow, green = layers
+
+            # Process ViT skip connection (blue block)
             z = self.proj_feat(skip_connections[i])
             z = blue(z)
+
+            # Concatenate current decoder feature with processed skip connection
             x = torch.cat([x, z], dim=1)
+
+            # Apply DoubleConvBlock (yellow block)
             x = yellow(x)
+
+            # Apply transposed conv for upsampling (green block)
             x = green(x)
 
-        # first skip connection (out of transformer)
+        # First skip connection (from original input image)
+        # This connects the raw input to the first decoder stage
         first_skip = self.two_yellow_layers[-2](input)
         x = torch.cat([first_skip, x], dim=1)
 
-        # UNETR output
+        # Final UNETR output block before prediction heads
         x = self.two_yellow_layers[-1](x)
 
         feats = x
-        # Regular output
+
+        # Primary output (e.g., segmentation mask)
         out = self.last_block(feats)
         out_dict = {
             "pred": out,
         }
 
-        # Contrastive learning head
+        # Optional: Contrastive learning projection head
         if self.contrast:
             out_dict["embed"] = self.proj_head(feats)
 
@@ -337,12 +488,25 @@ class UNETR(nn.Module):
         if self.multihead and self.last_class_head:
             out_dict["class"] = self.last_class_head(feats)
 
+        # Return format based on whether multiple outputs are generated
         if len(out_dict.keys()) == 1:
             return out_dict["pred"]
         else:
             return out_dict
 
     def _init_weights(self, m):
+        """
+        Initialize the weights of convolutional, linear, and LayerNorm layers.
+
+        Applies Xavier uniform initialization to convolutional and linear layer weights
+        (with bias set to 0 if present). For LayerNorm, weights are set to 1.0 and
+        biases to 0. This method is typically called using `model.apply()`.
+
+        Parameters
+        ----------
+        m : nn.Module
+            The module whose weights are to be initialized.
+        """
         if isinstance(m, nn.Conv2d) or isinstance(m, nn.Conv3d):
             nn.init.xavier_uniform_(m.weight)
             if m.bias is not None:
