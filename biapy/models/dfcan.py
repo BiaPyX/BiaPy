@@ -5,6 +5,7 @@ The DFCAN model leverages Fourier domain processing and channel attention
 mechanisms to enhance image details, particularly in microscopy images.
 
 Key components include:
+
 - `fftshift2d` and `fftshift3d`: Functions for shifting the zero-frequency
   component in 2D and 3D Fourier transforms.
 - `RCAB` (Residual Channel Attention Block): A fundamental block incorporating
