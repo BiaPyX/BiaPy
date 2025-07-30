@@ -16,7 +16,6 @@ classification) and adapts model configurations (e.g., 2D/3D, input/output chann
 normalization, dropout) accordingly.
 """
 from importlib import import_module
-from importlib.util import find_spec
 import os
 import re
 import json
@@ -35,6 +34,7 @@ import numpy as np
 import ast
 import inspect
 from collections import deque, defaultdict
+from importlib import import_module, util
 
 from bioimageio.core.backends.pytorch_backend import load_torch_model
 from bioimageio.spec.model.v0_4 import ModelDescr as ModelDescr_v0_4
@@ -379,11 +379,13 @@ def extract_model(dependency_queue: deque, model_file: str) -> Tuple[Dict[str, s
     visited_names = set()
     collected_sources = {}
     all_import_lines = set()
-    all_biapy_modules = {}
     scanned_files = []
     queue = [model_file]
 
-    # === Step 1: Recursively collect all biapy modules and import lines ===
+    # {name: source_code} for all class/function definitions
+    name_to_source: Dict[str, str] = {}
+
+    # === Step 1: Scan all relevant files and build name → source map ===
     while queue:
         filepath = os.path.abspath(queue.pop())
         if filepath in visited_files:
@@ -392,11 +394,14 @@ def extract_model(dependency_queue: deque, model_file: str) -> Tuple[Dict[str, s
         scanned_files.append(filepath)
 
         with open(filepath, "r") as f:
-            tree = ast.parse(f.read(), filename=filepath)
+            source_lines = f.readlines()
+        source_text = "".join(source_lines)
+        tree = ast.parse(source_text, filename=filepath)
 
         biapy_module_names = set()
 
         for node in ast.walk(tree):
+            # Import parsing
             if isinstance(node, ast.Import):
                 for alias in node.names:
                     mod = alias.name
@@ -419,20 +424,46 @@ def extract_model(dependency_queue: deque, model_file: str) -> Tuple[Dict[str, s
                 else:
                     all_import_lines.add(full)
 
+        # Extract all top-level classes and functions and map name → source
+        for node in tree.body:
+            if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
+                name = node.name
+                start_line = node.lineno - 1
+                # Try to find the end of the block
+                end_line = start_line + 1
+                indent = len(source_lines[start_line]) - len(source_lines[start_line].lstrip())
+
+                while end_line < len(source_lines):
+                    line_indent = len(source_lines[end_line]) - len(source_lines[end_line].lstrip())
+                    if source_lines[end_line].strip() and line_indent <= indent:
+                        break
+                    end_line += 1
+
+                name_to_source[name] = "".join(source_lines[start_line:end_line])
+
+        # Follow BiaPy module imports (if file-based)
         for name in biapy_module_names:
-            if name in all_biapy_modules:
-                continue
             try:
-                mod = import_module(name)
+                from importlib.util import find_spec
                 spec = find_spec(name)
                 if spec and spec.origin and os.path.isfile(spec.origin):
-                    all_biapy_modules[name] = mod
                     queue.append(spec.origin)
             except Exception as e:
-                print(f"Warning: Could not import '{name}': {e}")
+                print(f"Warning: Failed to resolve {name}: {e}")
 
-    # === Step 2: Extract relevant functions and classes ===
-    biapy_modules = list(all_biapy_modules.values())
+    # === Step 2: Traverse dependency tree ===
+    class NameVisitor(ast.NodeVisitor):
+        def __init__(self):
+            self.names = set()
+
+        def visit_Name(self, node):
+            self.names.add(node.id)
+            self.generic_visit(node)
+
+        def visit_Attribute(self, node):
+            if isinstance(node.value, ast.Name):
+                self.names.add(node.value.id)
+            self.generic_visit(node)
 
     while dependency_queue:
         obj = dependency_queue.popleft()
@@ -441,40 +472,25 @@ def extract_model(dependency_queue: deque, model_file: str) -> Tuple[Dict[str, s
             continue
         visited_names.add(name)
 
-        try:
-            source = inspect.getsource(obj)
-            collected_sources[name] = source
-        except Exception as e:
-            print(f"Skipping {name}: {e}")
+        source = name_to_source.get(name)
+        if not source:
+            print(f"Warning: Source not found for {name}")
             continue
 
-        # Find further dependencies
-        class Visitor(ast.NodeVisitor):
-            def __init__(self):
-                self.names = set()
+        collected_sources[name] = source
 
-            def visit_Call(self, node):
-                if isinstance(node.func, ast.Name):
-                    self.names.add(node.func.id)
-                elif isinstance(node.func, ast.Attribute):
-                    self.names.add(node.func.attr)
-                self.generic_visit(node)
+        # Find dependencies
+        visitor = NameVisitor()
+        visitor.visit(ast.parse(source))
 
-        called_names = Visitor()
-        called_names.visit(ast.parse(source))
-
-        for cname in called_names.names:
-            if cname in visited_names:
-                continue
-            for mod in biapy_modules:
-                if hasattr(mod, cname):
-                    dep = getattr(mod, cname)
-                    if inspect.isfunction(dep) or inspect.isclass(dep):
-                        dependency_queue.append(dep)
-                        break
+        for dep_name in visitor.names:
+            if dep_name not in visited_names and dep_name in name_to_source:
+                class FakeObject:
+                    def __init__(self, __name__):
+                        self.__name__ = __name__
+                dependency_queue.append(FakeObject(dep_name))
 
     return collected_sources, sorted(all_import_lines), scanned_files
-
 
 def merge_import_lines(import_lines: List[str]) -> List[str]:
     """
