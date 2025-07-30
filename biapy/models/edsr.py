@@ -2,6 +2,7 @@
 This module implements the Enhanced Deep Residual Networks for Single Image Super-Resolution (EDSR) model.
 
 It includes the main EDSR model architecture and its essential building blocks:
+
 - `SR_convblock`: A residual convolutional block used within the EDSR network.
 - `SR_upsampling`: An upsampling block employing sub-pixel convolution (PixelShuffle)
   for efficient image scaling.
