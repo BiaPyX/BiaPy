@@ -259,7 +259,7 @@ class Attention_U_Net(nn.Module):
         self.apply(self._init_weights)
 
     def forward(self, x) -> Dict | torch.Tensor:
-        """
+        r"""
         Forward pass through the Attention U-Net.
 
         Processes input through encoder-decoder architecture with attention gates
@@ -277,7 +277,7 @@ class Attention_U_Net(nn.Module):
         -------
         torch.Tensor or Dict[str, torch.Tensor]
             For single-head without contrastive learning:
-                torch.Tensor of shape (batch_size, output_channels, *spatial_dims)
+                torch.Tensor of shape (batch_size, output_channels, \*spatial_dims)
             
             For multi-head or contrastive learning:
                 Dictionary containing:
