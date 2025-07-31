@@ -28,6 +28,7 @@ Image representation:
 .. image:: ../../img/models/unet.png
     :width: 100%
     :align: center
+
 Image created with `PlotNeuralNet <https://github.com/HarisIqbal88/PlotNeuralNet>`_.
 """
 
