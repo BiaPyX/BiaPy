@@ -19,7 +19,7 @@ Reference:
 
 Adapted from:
 -------------
-`https://github.com/yjn870/WDSR-pytorch/tree/master`_.
+https://github.com/yjn870/WDSR-pytorch/tree/master
 """
 import math
 import torch
