@@ -343,6 +343,7 @@ class MaskedAutoencoderViT(nn.Module):
         ----------
         imgs : Tensor
             Input images.
+
             - For 2D: `(N, C, H, W)`, where `N` is batch size, `C` are channels,
               `H` is height, and `W` is width.
             - For 3D: `(N, C, Z, H, W)`, where `N` is batch size, `C` are channels,
@@ -352,10 +353,12 @@ class MaskedAutoencoderViT(nn.Module):
         -------
         x : Torch tensor
             Flattened image patches.
+
             - For 2D: `(N, L, patch_size**2 * C)`, where `L` is the total number
               of patches (`(H*W)/(p*p)`).
             - For 3D: `(N, L, patch_size**3 * C)`, where `L` is the total number
               of patches (`(Z*H*W)/(p*p*p)`).
+
         """
         p = self.patch_embed.patch_size
 
@@ -384,6 +387,7 @@ class MaskedAutoencoderViT(nn.Module):
         ----------
         x : Tensor
             Input patches.
+
             - For 2D: `(N, L, patch_size**2 * C)`, where `N` is batch size, `L` is
               the number of patches, and `C` are channels.
             - For 3D: `(N, L, patch_size**3 * C)`, where `N` is batch size, `L` is
@@ -393,8 +397,10 @@ class MaskedAutoencoderViT(nn.Module):
         -------
         imgs : Torch tensor
             Reconstructed images.
+
             - For 2D: `(N, C, H, W)`.
             - For 3D: `(N, C, Z, H, W)`.
+
         """
         p = self.patch_embed.patch_size
         if self.ndim == 2:
@@ -499,6 +505,7 @@ class MaskedAutoencoderViT(nn.Module):
         ----------
         x : Tensor
             Input image tensor. Its shape depends on `ndim`:
+            
             - For 2D: `(N, C, H, W)`
             - For 3D: `(N, C, Z, H, W)`
 
