@@ -1088,9 +1088,9 @@ def build_torchvision_model(cfg: CN, device: torch.device) -> Tuple[nn.Module, C
         The configuration object. Key parameters used are:
 
         - `cfg.MODEL.TORCHVISION_MODEL_NAME`: Name of the torchvision model to load
-        (e.g., "resnet50", "deeplabv3_resnet101", "maskrcnn_resnet50_fpn", "quantized_resnet50").
+          (e.g., "resnet50", "deeplabv3_resnet101", "maskrcnn_resnet50_fpn", "quantized_resnet50").
         - `cfg.PROBLEM.TYPE`: Type of problem (e.g., "CLASSIFICATION", "SEMANTIC_SEG",
-        "INSTANCE_SEG", "DETECTION") to determine model adaptation logic.
+          "INSTANCE_SEG", "DETECTION") to determine model adaptation logic.
         - `cfg.DATA.N_CLASSES`: Number of output classes required for the problem.
         - `cfg.DATA.PATCH_SIZE`: Input patch size, used for generating the model summary.
         - `cfg.PROBLEM.NDIM`: Number of input dimensions ("2D" or "3D").
@@ -1112,21 +1112,22 @@ def build_torchvision_model(cfg: CN, device: torch.device) -> Tuple[nn.Module, C
     -----
     - Models are loaded with their `DEFAULT` pre-trained weights from torchvision.
     - The final layer adaptation logic is specific to common torchvision model
-    structures for classification, semantic segmentation, and instance segmentation.
+      structures for classification, semantic segmentation, and instance segmentation.
     - For classification, the final linear layer is replaced. A warning is printed
-    if the number of classes differs from ImageNet's default (1000).
+      if the number of classes differs from ImageNet's default (1000).
     - For semantic segmentation, the final convolutional layer(s) of the classifier
-    and auxiliary classifier (if present) are replaced. A warning is printed
-    if the number of classes differs from Pascal VOC's default (21).
+      and auxiliary classifier (if present) are replaced. A warning is printed
+      if the number of classes differs from Pascal VOC's default (21).
     - For instance segmentation (MaskRCNN), the box predictor's classification
-    score head and the mask predictor's final convolutional layer are replaced.
-    A warning is printed if the number of classes differs from COCO's default (91).
+      score head and the mask predictor's final convolutional layer are replaced.
+      A warning is printed if the number of classes differs from COCO's default (91).
     - Special handling is included for `squeezenet` and `lraspp_mobilenet_v3_large`
-    due to their unique head structures.
+      due to their unique head structures.
     - For `maxvit_t` in classification, a fixed sample input size of (1, 3, 224, 224)
-    is used for the model summary.
+      is used for the model summary.
     - This function assumes the necessary `torchvision` models and their default
-    weights are installed and accessible.
+      weights are installed and accessible.
+      
     """
     # Find model in TorchVision
     if "quantized_" in cfg.MODEL.TORCHVISION_MODEL_NAME:
