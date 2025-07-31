@@ -26,7 +26,7 @@ Reference:
 
 Adapted from:
 -------------
-`https://github.com/yjn870/RCAN-pytorch`_.
+https://github.com/yjn870/RCAN-pytorch
 """
 import torch
 from torch import nn
