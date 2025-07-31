@@ -107,17 +107,21 @@ class SE_U_Net(nn.Module):
 
     upsampling_position : str, optional
         Determines where super-resolution upsampling is applied:
+
         - ``"pre"``: Upsampling is performed *before* the main U-Net model.
         - ``"post"``: Upsampling is performed *after* the main U-Net model.
+        
         Defaults to "pre".
 
     isotropy : bool or List[bool], optional
         Controls whether to use 3D or 2D convolutions at each U-Net level when
         the input is 3D.
+
         - If `True` (bool), all levels use 3D convolutions.
         - If `False` (bool), all levels use 2D convolutions (1xKxK kernels for 3D input).
         - If `List[bool]`, specifies for each level (encoder/decoder pair) whether
           to use 3D (True) or 2D (False) kernels. Its length should match `len(feature_maps)`.
+        
         Defaults to False.
 
     larger_io : bool, optional
