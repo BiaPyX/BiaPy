@@ -378,10 +378,12 @@ def get_checkpoint_path(cfg, jobname):
     ----------
     cfg : YACS CN object
         The configuration object. Key parameters:
+
         - `cfg.PATHS.CHECKPOINT`: Base directory for checkpoints.
         - `cfg.PATHS.CHECKPOINT_FILE`: Explicit path to a checkpoint file (if set).
         - `cfg.MODEL.LOAD_CHECKPOINT_EPOCH`: Strategy for selecting checkpoint
           ("last_on_train" or "best_on_val").
+          
     jobname : str
         The name of the current job/experiment.
 
