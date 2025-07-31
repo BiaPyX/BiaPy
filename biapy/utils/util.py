@@ -195,6 +195,7 @@ def make_weight_map(label, binary=True, w0=10, sigma=5):
     Generate a weight map for semantic segmentation, particularly useful for separating tightly packed objects, following the methodology of the original U-Net paper.
 
     The weight map `W(x)` is a sum of two components:
+
     1. A class balancing map `W_c(x)`: assigns higher weight to foreground pixels.
     2. A distance-based map: `w0 * exp(-((d1 + d2)^2) / (2 * sigma^2))`. This component
        is high near boundaries between touching objects, where `d1` is the distance
@@ -237,6 +238,7 @@ def make_weight_map(label, binary=True, w0=10, sigma=5):
     .. image:: ../../img/weight_map.png
         :width: 650
         :align: center
+        
     """
     # Initialization.
     lab = np.array(label)
