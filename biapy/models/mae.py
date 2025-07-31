@@ -505,7 +505,7 @@ class MaskedAutoencoderViT(nn.Module):
         ----------
         x : Tensor
             Input image tensor. Its shape depends on `ndim`:
-            
+
             - For 2D: `(N, C, H, W)`
             - For 3D: `(N, C, Z, H, W)`
 
@@ -636,6 +636,7 @@ class MaskedAutoencoderViT(nn.Module):
         ----------
         imgs : Tensor
             Input images.
+
             - For 2D: `(N, C, H, W)`.
             - For 3D: `(N, C, Z, H, W)`.
 
@@ -643,10 +644,12 @@ class MaskedAutoencoderViT(nn.Module):
         -------
         dict
             A dictionary containing:
+
             - "loss": The calculated reconstruction loss (Tensor).
             - "pred": The predicted full patch sequence from the decoder (Tensor),
                       shape `(N, L, patch_size**ndim * C)`.
             - "mask": The binary mask used during masking (Tensor), shape `(N, L)`.
+            
         """
         latent, mask, ids_restore = self.forward_encoder(imgs)
         pred = self.forward_decoder(latent, ids_restore)  # [N, L, p*p*3]
