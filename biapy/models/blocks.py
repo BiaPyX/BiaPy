@@ -1299,9 +1299,10 @@ class ResUpBlock(nn.Module):
         Only relevant if `ndim` is 3. Defaults to 2.
     up_mode : str
         The upsampling mode to use.
+
         - 'convtranspose': Uses a transpose convolution (`convtranspose`) for upsampling.
-        - 'upsampling': Uses `nn.Upsample` (bilinear for 2D, trilinear for 3D) followed
-                        by a 1x1 convolution.
+        - 'upsampling': Uses `nn.Upsample` (bilinear for 2D, trilinear for 3D) followed by a 1x1 convolution.
+
     conv : Type[nn.Conv2d | nn.Conv3d]
         The convolutional layer type to use within the internal `ResConvBlock`.
     k_size : int or tuple
@@ -2136,8 +2137,10 @@ class ProjectionHead(nn.Module):
         Defaults to 'convmlp'.
     bn_type : str, optional
         Defines the type of batch normalization to apply within the 'convmlp' projection.
+
         - 'sync_bn': Synchronized Batch Normalization.
         - 'none': No batch normalization is applied.
+        
         Defaults to 'sync_bn'.
     """
 
