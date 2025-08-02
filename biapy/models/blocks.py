@@ -2131,9 +2131,10 @@ class ProjectionHead(nn.Module):
         The desired dimension of the projected output features. Defaults to 256.
     proj : str, optional
         Specifies the type of projection layer to use.
+
         - 'linear': Uses a single 1x1 convolutional layer (equivalent to a linear projection).
-        - 'convmlp': Employs a convolutional MLP structure, consisting of a 1x1 convolution,
-                     batch normalization, ReLU activation, and another 1x1 convolution.
+        - 'convmlp': Employs a convolutional MLP structure, consisting of a 1x1 convolution, batch normalization, ReLU activation, and another 1x1 convolution.
+        
         Defaults to 'convmlp'.
     bn_type : str, optional
         Defines the type of batch normalization to apply within the 'convmlp' projection.
