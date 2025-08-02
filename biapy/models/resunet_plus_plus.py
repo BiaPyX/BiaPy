@@ -6,9 +6,10 @@
 import importlib.util
 import sys
 import os
+from importlib import import_module
 
 # Define the full path to the original file
-mdl = importlib.util.import_module("biapy.models.resunet++")
+mdl = import_module("biapy.models.resunet++")
 model_file = os.path.abspath(mdl.__file__)
 current_dir = os.path.dirname(model_file)
 original_file_path = os.path.join(current_dir, "resunet++.py")
