@@ -8,6 +8,7 @@ patches. It supports both 2D and 3D image inputs.
 Classes:
 --------
 - PatchEmbed: Transforms an input image into a sequence of embedded patches.
+
 """
 import torch.nn as nn
 from typing import Callable, Optional
@@ -111,6 +112,7 @@ class PatchEmbed(nn.Module):
         ----------
         x : torch.Tensor
             The input image tensor.
+
             - For 2D: `(batch_size, channels, height, width)`
             - For 3D: `(batch_size, channels, depth, height, width)`
 
@@ -118,6 +120,7 @@ class PatchEmbed(nn.Module):
         -------
         torch.Tensor
             The embedded patches.
+            
             - If `flatten` is True: `(batch_size, num_patches, embed_dim)`
             - If `flatten` is False: `(batch_size, embed_dim, grid_size_D, grid_size_H, grid_size_W)`
               (spatial dimensions will be `img_size / patch_size`)

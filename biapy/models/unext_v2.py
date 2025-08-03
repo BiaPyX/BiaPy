@@ -27,6 +27,7 @@ Image representation:
 .. image:: ../../img/models/unext.png
     :width: 100%
     :align: center
+
 """
 
 import torch
