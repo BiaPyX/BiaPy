@@ -52,7 +52,7 @@ class wdsr(nn.Module):
         Initialize the WDSR model.
 
         Sets up the main body of the network, including the initial convolution,
-        a sequence of residual blocks (`Block`s), and the final convolutional layer.
+        a sequence of residual blocks (``Block``s), and the final convolutional layer.
         It also defines a skip connection path and a PixelShuffle layer for upsampling.
         Weight normalization is applied to convolutional layers.
 
@@ -61,7 +61,7 @@ class wdsr(nn.Module):
         scale : int | Tuple[int, ...]
             The super-resolution upscaling factor. If a tuple is provided (e.g., for
             multi-dimensional scaling), only the first element is used as the
-            upscaling factor for `nn.PixelShuffle`.
+            upscaling factor for ``nn.PixelShuffle``.
         num_filters : int, optional
             The number of feature maps in the main body of the network. Defaults to 32.
         num_res_blocks : int, optional
