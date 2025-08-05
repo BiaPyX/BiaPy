@@ -53,7 +53,7 @@ class wdsr(nn.Module):
 
         Sets up the main body of the network, including the initial convolution,
         a sequence of residual blocks (``Block``s), and the final convolutional layer.
-        It also defines a skip connection path and a PixelShuffle layer for upsampling.
+        It also defines a skip connection path and a ``PixelShuffle`` layer for upsampling.
         Weight normalization is applied to convolutional layers.
 
         Parameters

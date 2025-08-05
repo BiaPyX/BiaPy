@@ -153,32 +153,33 @@ class DoubleConvBlock(nn.Module):
         """
         Initialize the Double Convolutional Block.
 
-        Sets up two ``ConvBlock`` layers sequentially. The first ``ConvBlock``
-        transforms the input from ``in_size`` channels to ``out_size`` channels,
-        and the second ``ConvBlock`` maintains ``out_size`` channels.
+        Sets up two ConvBlock layers sequentially. The first ConvBlock
+        transforms the input from in_size channels to out_size channels,
+        and the second ConvBlock maintains out_size channels.
 
         Parameters
         ----------
-        conv : Type[nn.Conv2d | nn.Conv3d]
-            The convolutional layer type to use within each ``ConvBlock``.
+        conv : torch.nn.Module
+            The convolutional layer type to use within each ConvBlock.
+            Should be either torch.nn.Conv2d or torch.nn.Conv3d.
         in_size : int
-            Number of input feature channels to the first ``ConvBlock``.
+            Number of input feature channels to the first ConvBlock.
         out_size : int
-            Number of output feature channels for the entire `DoubleConvBlock`.
-            Both internal ``ConvBlock``s will output this number of channels.
+            Number of output feature channels for the entire DoubleConvBlock.
+            Both internal ConvBlocks will output this number of channels.
         k_size : int or tuple
-            Kernel size for the convolutional layers within each ``ConvBlock``.
-        act : Optional[str], optional
-            Activation layer to use within each ``ConvBlock``. Defaults to ``None``.
+            Kernel size for the convolutional layers within each ConvBlock.
+        act : str, optional
+            Activation layer to use within each ConvBlock. Defaults to None.
         norm : str, optional
-            Normalization layer type to use within each ``ConvBlock``.
-            Options include `'bn'`, `'sync_bn'`, `'in'`, `'gn'`, or `'none'`.
+            Normalization layer type to use within each ConvBlock.
+            Options include 'bn', 'sync_bn', 'in', 'gn', or 'none'.
             Defaults to "none".
         dropout : float, optional
-            Dropout value to be fixed within each ``ConvBlock``. Defaults to 0.
+            Dropout value to be fixed within each ConvBlock. Defaults to 0.
         se_block : bool, optional
             Whether to add a Squeeze-and-Excitation (SE) block at the end of
-            each ``ConvBlock``. Defaults to ``False``.
+            each ConvBlock. Defaults to False.
         """
         super(DoubleConvBlock, self).__init__()
         block = []
