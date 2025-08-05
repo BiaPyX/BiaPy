@@ -1126,9 +1126,9 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         if self.ndim == 3:
             image = image.reshape(image.shape[:2] + (image.shape[2] * image.shape[3],))
             mask = mask.reshape(mask.shape[:2] + (mask.shape[2] * mask.shape[3],))
-            if e_im:
+            if e_im is not None:
                 e_im = e_im.reshape(e_im.shape[:2] + (e_im.shape[2] * e_im.shape[3],))
-            if e_mask:
+            if e_mask is not None:
                 e_mask = e_mask.reshape(e_mask.shape[:2] + (e_mask.shape[2] * e_mask.shape[3],))
             # if e_heat: e_heat = e_heat.reshape(e_heat.shape[:2]+(e_heat.shape[2]*e_heat.shape[3],))
         
