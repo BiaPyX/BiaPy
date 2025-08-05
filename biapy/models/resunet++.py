@@ -8,6 +8,7 @@ mechanisms, and atrous spatial pyramid pooling (ASPP), offering enhanced feature
 representation and robustness across 2D and 3D image data.
 
 The implementation is flexible to support tasks like:
+
 - Semantic segmentation
 - Instance segmentation (with multi-head output)
 - Point detection
@@ -155,6 +156,7 @@ class ResUNetPlusPlus(nn.Module):
         output_channels : list of int, optional
             Output channels of the network. It must be a list of lenght ``1`` or ``2``. When two
             numbers are provided two task to be done is expected (multi-head). Possible scenarios are:
+
                 * instances + classification on instance segmentation
                 * points + classification in detection.
 
