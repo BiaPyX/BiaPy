@@ -87,8 +87,10 @@ class U_NeXt_V1(nn.Module):
 
     upsampling_position : str, optional
         Determines where super-resolution upsampling is applied:
+
         - ``"pre"``: Upsampling is performed *before* the main U-NeXt model.
         - ``"post"``: Upsampling is performed *after* the main U-NeXt model.
+        
         Defaults to "pre".
 
     stochastic_depth_prob : float, optional
@@ -108,9 +110,11 @@ class U_NeXt_V1(nn.Module):
     isotropy : bool or List[bool], optional
         Controls whether to use 3D or 2D depthwise convolutions at each U-NeXt
         level when the input is 3D.
+
         - If `True` (bool), all levels use 3D depthwise convolutions.
         - If `False` (bool), all levels use 2D depthwise convolutions (1xKxK kernels for 3D input).
         - If `List[bool]`, specifies for each level whether to use 3D (True) or 2D (False) kernels.
+        
         Defaults to True.
 
     stem_k_size : int, optional

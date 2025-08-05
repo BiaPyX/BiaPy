@@ -100,6 +100,7 @@ class Attention_U_Net(nn.Module):
         output_channels : list of int, optional
             Output channels of the network. It must be a list of lenght ``1`` or ``2``. When two
             numbers are provided two task to be done is expected (multi-head). Possible scenarios are:
+            
                 * instances + classification on instance segmentation
                 * points + classification in detection.
 
@@ -270,6 +271,7 @@ class Attention_U_Net(nn.Module):
         ----------
         x : torch.Tensor
             Input tensor of shape:
+
             - 2D: (batch_size, channels, height, width)
             - 3D: (batch_size, channels, depth, height, width)
 
@@ -281,6 +283,7 @@ class Attention_U_Net(nn.Module):
             
             For multi-head or contrastive learning:
                 Dictionary containing:
+
                 - "pred": Main prediction tensor
                 - "embed": Feature embeddings (if contrast=True)
                 - "class": Classification output (if multihead=True)
