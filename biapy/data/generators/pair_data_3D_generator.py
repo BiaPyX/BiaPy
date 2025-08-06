@@ -88,6 +88,12 @@ class Pair3DImageDataGenerator(PairBaseDataGenerator):
         image = image.transpose((2, 1, 0, 3))
         mask = mask.transpose((2, 1, 0, 3))
 
+        if e_im is not None and e_mask is not None:
+            # Transpose the extra image and mask so we can merge the z and c channels easily.
+            # z, y, x, c --> x, y, z, c
+            e_im = e_im.transpose((2, 1, 0, 3))
+            e_mask = e_mask.transpose((2, 1, 0, 3))
+        
         # Apply flips in z as imgaug can not do it
         if self.zflip and random.uniform(0, 1) < self.da_prob:
             l_image = []
