@@ -499,11 +499,9 @@ def create_synapses(
                 coords = coords[:, :3].astype(int)  # Remove sigma
 
             all_coords.append(coords)
-            if max_value < len(coords):
-                max_value = len(coords)
+            max_value += len(coords)
         
         # Choose appropiate dtype
-        max_value = np.max(data)
         if max_value < 255:
             appropiate_dtype = np.uint8
         elif max_value < 65535:
