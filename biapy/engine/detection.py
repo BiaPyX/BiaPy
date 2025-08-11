@@ -137,7 +137,7 @@ class Detection_Workflow(Base_Workflow):
             self.activations = [{"0": "CE_Sigmoid"}]
             self.model_output_channels["channels"] = [self.model_output_channels["channels"]]
             self.multihead = False
-        self.real_classes = self.model_output_channels["channels"][0] + 1
+        self.real_classes = self.model_output_channels["channels"][0]
 
         super().define_activations_and_channels()
 

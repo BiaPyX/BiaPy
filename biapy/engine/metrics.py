@@ -895,7 +895,7 @@ class PixelContrastLoss(nn.Module):
         y_ = torch.zeros((class_num * cache_size, 1)).float().cuda()
         sample_ptr = 0
         for ii in range(class_num):
-            # if ii == 0: continue
+            if ii == 0: continue
             this_q = Q[ii, :cache_size, :]
 
             X_[sample_ptr : sample_ptr + cache_size, ...] = this_q
@@ -1012,7 +1012,7 @@ class PixelContrastLoss(nn.Module):
         labels = torch.nn.functional.interpolate(labels.float().clone(), feats.shape[-self.ndim :], mode="nearest")
 
         # When working in instance segmentation the channels are more than 1 so we need to merge then into 
-        # just one channel. This trick of multiplying an offset is to take into account the background class too.
+        # just one channel.
         if labels.shape[1] != 1:
             if labels.ndim == 4:
                 offsets = torch.tensor([1, 2], device=labels.device).view(1, 2, 1, 1)

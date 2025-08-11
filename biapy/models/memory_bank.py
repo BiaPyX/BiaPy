@@ -149,7 +149,7 @@ class MemoryBank(nn.Module):
             this_feat = keys[bs].contiguous().view(feat_dim, -1)
             this_label = labels[bs].contiguous().view(-1)
             this_label_ids = torch.unique(this_label)
-            this_label_ids = [x for x in this_label_ids if x != self.ignore_index]
+            this_label_ids = [x for x in this_label_ids if x != self.ignore_index and x != 0]
 
             for lb in this_label_ids:
                 idxs = (this_label == lb).nonzero()
