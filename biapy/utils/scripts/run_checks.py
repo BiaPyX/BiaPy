@@ -3461,7 +3461,7 @@ if all_test_info["Test29"]["enable"]:
 
     biapy_config['MODEL']['SOURCE'] = 'bmz'
     biapy_config['MODEL']['BMZ'] = {}
-    biapy_config['MODEL']['BMZ']['SOURCE_MODEL_ID'] = '10.5281/zenodo.5764892' # affable-shark
+    biapy_config['MODEL']['BMZ']['SOURCE_MODEL_ID'] = 'affable-shark' 
 
     biapy_config['TEST']['ENABLE'] = True
     biapy_config['TEST']['FULL_IMG'] = False
@@ -3626,7 +3626,7 @@ if all_test_info["Test31"]["enable"]:
 
     biapy_config['MODEL']['SOURCE'] = 'bmz'
     biapy_config['MODEL']['BMZ'] = {}
-    biapy_config['MODEL']['BMZ']['SOURCE_MODEL_ID'] = '10.5281/zenodo.5764892' # affable-shark
+    biapy_config['MODEL']['BMZ']['SOURCE_MODEL_ID'] = 'affable-shark' 
 
     biapy_config['TEST']['ENABLE'] = True
     biapy_config['TEST']['FULL_IMG'] = False
