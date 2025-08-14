@@ -14,7 +14,8 @@ env:
 
 jobs:
   bump-feedstock:
-    # Run only if the upstream workflow succeeded and it was triggered by a GitHub Release
+    # Run only if the upstream workflow succeeded.
+    # (Remove the second condition if your PyPI workflow isn't triggered by "release")
     if: >
       ${{
         github.event.workflow_run.conclusion == 'success' &&
@@ -63,28 +64,27 @@ h = hashlib.sha256()
 with open(fn, "rb") as f:
     for chunk in iter(lambda: f.read(1024*1024), b""):
         h.update(chunk)
-# expose as outputs
 with open(os.environ["GITHUB_OUTPUT"], "a") as out:
     out.write(f"sdist_url={url}\n")
     out.write(f"sha256={h.hexdigest()}\n")
 PY
 
-      - name: Set up conda (for optional rerender)
+      - name: Set up conda
         uses: conda-incubator/setup-miniconda@v3
         with:
           miniforge-version: latest
           use-mamba: true
-          activate-environment: cf
-          auto-activate-base: false
+          auto-activate-base: true
           channels: conda-forge
 
-      - name: Create env with conda-smithy
-        run: mamba create -n cf -y python>=3.10 conda-smithy ruamel.yaml
+      - name: Install conda-smithy toolchain
+        run: mamba install -y python>=3.10 conda-smithy ruamel.yaml
 
       - name: Authenticate gh CLI (use your PAT)
         env:
           GH_TOKEN: ${{ secrets.CF_GH_TOKEN }}
-        run: gh auth status || gh auth login --with-token <<<"$GH_TOKEN"
+        run: |
+          gh auth status || echo "$GH_TOKEN" | gh auth login --with-token
 
       - name: Clone your feedstock fork
         env:
@@ -99,8 +99,7 @@ PY
       - name: Copy your meta.yaml into the feedstock
         working-directory: feedstock
         run: |
-          # Copy the project's curated recipe into the feedstock
-          # We're in ./feedstock, repo root is one level up
+          # We're in ./feedstock, project root is one level up
           cp ../biapy/utils/env/conda_forge_meta.yaml recipe/meta.yaml
           git add recipe/meta.yaml
           git commit -m "Import project's conda_forge_meta.yaml as recipe/meta.yaml"
@@ -137,7 +136,7 @@ PY
       - name: (Optional) conda-smithy rerender
         working-directory: feedstock
         run: |
-          conda run -n cf conda-smithy rerender -c auto || true
+          conda-smithy rerender -c auto || true
           if ! git diff --quiet; then
             git add .
             git commit -m "conda-smithy rerender"
