@@ -9,6 +9,8 @@
       <img src="https://img.shields.io/badge/PyTorch-2.4-orange.svg" /></a>
     <a href= "https://pypi.org/project/biapy/">
       <img src="https://img.shields.io/pypi/v/biapy.svg?color=green" /></a>
+    <a href= "https://anaconda.org/conda-forge/biapy/">
+      <img src="https://anaconda.org/conda-forge/biapy/badges/version.svg" /></a>
     <a href= "https://github.com/BiaPyX/BiaPy/blob/master/LICENSE">
       <img src="https://img.shields.io/badge/License-MIT-blue.svg" /></a>
     <a href= "https://biapy.readthedocs.io/en/latest/">
