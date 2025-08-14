@@ -1,0 +1,167 @@
+name: Bump conda-forge feedstock after PyPI
+
+on:
+  workflow_run:
+    workflows: ["Upload BiaPy to PyPI"]  # must match your existing workflow's name
+    types: [completed]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  PACKAGE_NAME: biapy
+
+jobs:
+  bump-feedstock:
+    # Run only if the upstream workflow succeeded and it was triggered by a GitHub Release
+    if: >
+      ${{
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'release'
+      }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out this repo (to read your meta.yaml)
+        uses: actions/checkout@v4
+
+      - name: Determine version from release tag (or fall back to PyPI latest)
+        id: ver
+        run: |
+          RAW_TAG="${{ github.event.workflow_run.head_branch }}"
+          if [ -n "$RAW_TAG" ]; then
+            VERSION="${RAW_TAG#v}"
+          else
+            VERSION="$(python - <<'PY'
+import json, urllib.request
+print(json.load(urllib.request.urlopen("https://pypi.org/pypi/biapy/json"))["info"]["version"])
+PY
+)"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch PyPI sdist URL and SHA256
+        id: sdist
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+          PACKAGE_NAME: ${{ env.PACKAGE_NAME }}
+        run: |
+          python - <<'PY'
+import json, os, urllib.request, hashlib, sys
+pkg = os.environ["PACKAGE_NAME"]
+ver = os.environ["VERSION"]
+with urllib.request.urlopen(f"https://pypi.org/pypi/{pkg}/{ver}/json") as r:
+    data = json.load(r)
+sdists = [u for u in data["urls"] if u.get("packagetype") == "sdist"]
+if not sdists:
+    print(f"No sdist found on PyPI for {pkg} {ver}", file=sys.stderr); sys.exit(1)
+url = sdists[0]["url"]
+fn = "sdist.tar.gz"
+urllib.request.urlretrieve(url, fn)
+h = hashlib.sha256()
+with open(fn, "rb") as f:
+    for chunk in iter(lambda: f.read(1024*1024), b""):
+        h.update(chunk)
+# expose as outputs
+with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+    out.write(f"sdist_url={url}\n")
+    out.write(f"sha256={h.hexdigest()}\n")
+PY
+
+      - name: Set up conda (for optional rerender)
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          miniforge-version: latest
+          use-mamba: true
+          activate-environment: cf
+          auto-activate-base: false
+          channels: conda-forge
+
+      - name: Create env with conda-smithy
+        run: mamba create -n cf -y python>=3.10 conda-smithy ruamel.yaml
+
+      - name: Authenticate gh CLI (use your PAT)
+        env:
+          GH_TOKEN: ${{ secrets.CF_GH_TOKEN }}
+        run: gh auth status || gh auth login --with-token <<<"$GH_TOKEN"
+
+      - name: Clone your feedstock fork
+        env:
+          FEEDSTOCK_FORK: ${{ secrets.CF_FEEDSTOCK_FORK }} # e.g. your-user/biapy-feedstock
+        run: |
+          test -n "$FEEDSTOCK_FORK"
+          gh repo clone "$FEEDSTOCK_FORK" feedstock
+          cd feedstock
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Copy your meta.yaml into the feedstock
+        working-directory: feedstock
+        run: |
+          # Copy the project's curated recipe into the feedstock
+          # We're in ./feedstock, repo root is one level up
+          cp ../biapy/utils/env/conda_forge_meta.yaml recipe/meta.yaml
+          git add recipe/meta.yaml
+          git commit -m "Import project's conda_forge_meta.yaml as recipe/meta.yaml"
+
+      - name: Create bump branch and update version + sha256
+        working-directory: feedstock
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+          SDIST_SHA256: ${{ steps.sdist.outputs.sha256 }}
+        run: |
+          BRANCH="bump-v$VERSION"
+          git switch -c "$BRANCH"
+
+          python - <<'PY'
+import os, re, pathlib
+p = pathlib.Path("recipe") / "meta.yaml"
+s = p.read_text()
+ver = os.environ["VERSION"]
+sha = os.environ["SDIST_SHA256"]
+
+# Update jinja2 version line: {% set version = "X.Y.Z" %}
+s = re.sub(r'{%\s*set\s+version\s*=\s*"[0-9A-Za-z\.\-\+]+"?\s*%}',
+           '{% set version = "' + ver + '" %}', s)
+
+# Update sha256 under source:
+s = re.sub(r'(sha256:\s*)([0-9a-fA-F]+)', r'\1' + sha, s)
+
+p.write_text(s)
+PY
+
+          git add recipe/meta.yaml
+          git commit -m "Bump to v$VERSION (update version and sha256)"
+
+      - name: (Optional) conda-smithy rerender
+        working-directory: feedstock
+        run: |
+          conda run -n cf conda-smithy rerender -c auto || true
+          if ! git diff --quiet; then
+            git add .
+            git commit -m "conda-smithy rerender"
+          fi
+
+      - name: Push branch to your fork
+        working-directory: feedstock
+        env:
+          GH_TOKEN: ${{ secrets.CF_GH_TOKEN }}
+        run: git push --set-upstream origin HEAD
+
+      - name: Open PR to conda-forge feedstock
+        working-directory: feedstock
+        env:
+          GH_TOKEN: ${{ secrets.CF_GH_TOKEN }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          TITLE="biapy v$VERSION"
+          BODY="Automated bump to $VERSION after successful PyPI upload.\n\n- Recipe copied from project: \`biapy/utils/env/conda_forge_meta.yaml\`\n- Version and sha256 updated from PyPI sdist."
+          OWNER="$(git remote get-url origin | sed -E 's#.*/([^/]+)/biapy-feedstock.*#\1#')"
+          HEAD_REF="${OWNER}:$(git rev-parse --abbrev-ref HEAD)"
+          gh pr create \
+            --repo conda-forge/biapy-feedstock \
+            --title "$TITLE" \
+            --body "$BODY" \
+            --head "$HEAD_REF" \
+            --base "main"
