@@ -1,4 +1,4 @@
-name: Bump conda-forge feedstock after PyPI
+name: Bump conda-forge feedstock
 
 on:
   workflow_run:
