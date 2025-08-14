@@ -15,6 +15,7 @@ The module handles different problem types (e.g., semantic segmentation, super-r
 classification) and adapts model configurations (e.g., 2D/3D, input/output channels,
 normalization, dropout) accordingly.
 """
+
 from importlib import import_module
 import os
 import re
@@ -30,11 +31,10 @@ from typing import Optional, Dict, Tuple, List, Callable
 from packaging.version import Version
 from functools import partial
 from yacs.config import CfgNode as CN
-import numpy as np
 import ast
-import inspect
 from collections import deque, defaultdict
-from importlib import import_module, util
+from importlib import import_module,
+import requests
 
 from bioimageio.core.backends.pytorch_backend import load_torch_model
 from bioimageio.spec.model.v0_4 import ModelDescr as ModelDescr_v0_4
@@ -42,7 +42,10 @@ from bioimageio.spec.model.v0_5 import ModelDescr as ModelDescr_v0_5
 from bioimageio.spec import InvalidDescr
 from bioimageio.core.digest_spec import get_test_inputs
 
-def build_model(cfg: CN, output_channels: int, device: torch.device) -> Tuple[nn.Module, str, Dict, set, List[str], Dict, Tuple[int, ...]]:
+
+def build_model(
+    cfg: CN, output_channels: int, device: torch.device
+) -> Tuple[nn.Module, str, Dict, set, List[str], Dict, Tuple[int, ...]]:
     # model, model_file, model_name, args
     """
     Build selected model.
@@ -104,8 +107,8 @@ def build_model(cfg: CN, output_channels: int, device: torch.device) -> Tuple[nn
             upsample_layer=cfg.MODEL.UPSAMPLE_LAYER,
             z_down=cfg.MODEL.Z_DOWN,
             output_channels=output_channels,
-            contrast=cfg.LOSS.CONTRAST.ENABLE, 
-            contrast_proj_dim=cfg.LOSS.CONTRAST.PROJ_DIM, 
+            contrast=cfg.LOSS.CONTRAST.ENABLE,
+            contrast_proj_dim=cfg.LOSS.CONTRAST.PROJ_DIM,
         )
         if modelname == "unet":
             callable_model = U_Net  # type: ignore
@@ -157,7 +160,7 @@ def build_model(cfg: CN, output_channels: int, device: torch.device) -> Tuple[nn
             args["upsampling_factor"] = cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING
             args["upsampling_position"] = cfg.MODEL.UNET_SR_UPSAMPLE_POSITION
 
-        network_stride = [1,1] 
+        network_stride = [1, 1]
         if ndim == 3:
             network_stride = [1] + network_stride
         model = callable_model(**args)
@@ -165,15 +168,15 @@ def build_model(cfg: CN, output_channels: int, device: torch.device) -> Tuple[nn
     elif "hrnet" in modelname:
         args = dict(
             image_shape=cfg.DATA.PATCH_SIZE,
-            normalization='sync_bn',
+            normalization="sync_bn",
             output_channels=output_channels,
-            contrast=cfg.LOSS.CONTRAST.ENABLE, 
-            contrast_proj_dim=cfg.LOSS.CONTRAST.PROJ_DIM, 
+            contrast=cfg.LOSS.CONTRAST.ENABLE,
+            contrast_proj_dim=cfg.LOSS.CONTRAST.PROJ_DIM,
         )
 
         # Take the HRNet configuration from the cfg
         _mod = modelname.upper()
-        _mod = re.sub(r'HRNET(\d+)', r'HRNET_\1', _mod)
+        _mod = re.sub(r"HRNET(\d+)", r"HRNET_\1", _mod)
         _mod = _mod.replace("X", "_X")
         args["cfg"] = getattr(cfg.MODEL, _mod)
 
@@ -350,26 +353,27 @@ def build_model(cfg: CN, output_channels: int, device: torch.device) -> Tuple[nn
     collected_sources, all_import_lines, scanned_files = extract_model(dependency_queue, model_file)
     all_import_lines = merge_import_lines(all_import_lines)
 
-    return model, str(callable_model.__name__), collected_sources, all_import_lines, scanned_files, args, network_stride # type: ignore
+    return model, str(callable_model.__name__), collected_sources, all_import_lines, scanned_files, args, network_stride  # type: ignore
+
 
 def extract_model(dependency_queue: deque, model_file: str) -> Tuple[Dict[str, str], set, List[str]]:
     """
     Extract the source code of the model and its dependencies.
 
-    Parameters  
-    ----------  
+    Parameters
+    ----------
     dependency_queue : deque
         Queue of model dependencies to be processed.
 
-    model_file : str    
+    model_file : str
         Path to the main model file.
 
-    Returns 
+    Returns
     -------
     collected_sources : dict
         Dictionary containing the source code of the collected model dependencies.
 
-    all_import_lines : set  
+    all_import_lines : set
         Set of all import lines found in the model and its dependencies.
 
     scanned_files : list
@@ -415,8 +419,7 @@ def extract_model(dependency_queue: deque, model_file: str) -> Tuple[Dict[str, s
                 if not mod:
                     continue
                 names = ", ".join(
-                    f"{alias.name}" + (f" as {alias.asname}" if alias.asname else "")
-                    for alias in node.names
+                    f"{alias.name}" + (f" as {alias.asname}" if alias.asname else "") for alias in node.names
                 )
                 full = f"from {mod} import {names}"
                 if mod.startswith("biapy"):
@@ -445,6 +448,7 @@ def extract_model(dependency_queue: deque, model_file: str) -> Tuple[Dict[str, s
         for name in biapy_module_names:
             try:
                 from importlib.util import find_spec
+
                 spec = find_spec(name)
                 if spec and spec.origin and os.path.isfile(spec.origin):
                     queue.append(spec.origin)
@@ -485,12 +489,15 @@ def extract_model(dependency_queue: deque, model_file: str) -> Tuple[Dict[str, s
 
         for dep_name in visitor.names:
             if dep_name not in visited_names and dep_name in name_to_source:
+
                 class FakeObject:
                     def __init__(self, __name__):
                         self.__name__ = __name__
+
                 dependency_queue.append(FakeObject(dep_name))
 
     return collected_sources, sorted(all_import_lines), scanned_files
+
 
 def merge_import_lines(import_lines: List[str]) -> List[str]:
     """
@@ -534,6 +541,7 @@ def merge_import_lines(import_lines: List[str]) -> List[str]:
 
     merged.extend(sorted(standalone_imports))
     return sorted(merged)
+
 
 def build_bmz_model(cfg: CN, model: ModelDescr_v0_4 | ModelDescr_v0_5, device: torch.device) -> nn.Module:
     """
@@ -585,6 +593,88 @@ def build_bmz_model(cfg: CN, model: ModelDescr_v0_4 | ModelDescr_v0_5, device: t
     return model_instance
 
 
+def find_bmz_models(
+    model_ID: str,
+    url: str = "https://hypha.aicell.io/bioimage-io/artifacts/bioimage.io/children?limit=1000000",
+    timeout: int = 30,
+):
+    """
+    Query the BioImage.IO Hypha API for *models* and return those whose
+    nickname/id/rdf_source contains `model_ID` (case-insensitive).
+
+    Returns list of dicts with: id, alias, nickname, rdf_source, version,
+    format_version, artifact_path (id used as path), and a few handy urls.
+
+    Parameters
+    ----------
+    model_ID : str
+        Model identifier. It can be either its ``DOI`` or ``nickname``.
+
+    url : str
+        URL to the BioImage.IO Hypha API endpoint to query for models.
+
+    timeout : int
+        Timeout for the HTTP request in seconds.
+
+    Returns
+    -------
+    out : list of dict
+        List of dictionaries containing model information. Each dictionary has the following
+        keys: `id`, `alias`, `nickname`, `rdf_source`, `version`, `format_version`,
+        `artifact_path`, `urls` (which contains `covers` and `documentation` URLs), and `raw`
+        (the original item from the API response).
+    """
+    q = str(model_ID).lower()
+
+    r = requests.get(url, timeout=timeout)
+    r.raise_for_status()
+    items = r.json()
+
+    if isinstance(items, dict) and "children" in items:
+        items = items["children"]
+
+    out = []
+    for it in items or []:
+        if (it or {}).get("type") != "model":
+            continue
+
+        # Pull common fields defensively from the manifest config
+        cfg = ((it.get("manifest") or {}).get("config")) or {}
+        b = cfg.get("bioimageio") or {}
+        nickname = b.get("nickname") or it.get("alias")
+        rdf_source = b.get("rdf_source") or b.get("source")  # some deployments use 'source'
+        version = b.get("version") or cfg.get("version") or it.get("version")
+        format_version = b.get("format_version") or cfg.get("format_version")
+
+        # Build haystack for matching (old behavior)
+        hay = [
+            nickname or "",
+            it.get("id") or "",
+            rdf_source or "",
+        ]
+        if not any(q in h.lower() for h in hay):
+            continue
+
+        out.append(
+            {
+                "artifact_path": it.get("id"),  # usable as path for other calls
+                "id": it.get("id"),
+                "alias": it.get("alias"),
+                "nickname": nickname,
+                "rdf_source": rdf_source,
+                "version": version,
+                "format_version": format_version,
+                "urls": {
+                    "covers": (b.get("thumbnails") or {}),
+                    "documentation": b.get("documentation"),
+                },
+                "raw": it,  # keep the original item in case you need more fields
+            }
+        )
+
+    return out
+
+
 def check_bmz_args(
     model_ID: str,
     cfg: CN,
@@ -606,40 +696,20 @@ def check_bmz_args(
         Preprocessing names that the model is using.
     """
     # Checking BMZ model compatibility using the available model list provided by BMZ
-    COLLECTION_URL = "https://uk1s3.embassy.ebi.ac.uk/public-datasets/bioimage.io/collection.json"
-    # COLLECTION_URL = "https://raw.githubusercontent.com/bioimage-io/collection-bioimage-io/gh-pages/collection.json"
-    collection_path = Path(pooch.retrieve(COLLECTION_URL, known_hash=None))
-    with collection_path.open() as f:
-        collection = json.load(f)
+    matches = find_bmz_models(model_ID)
 
-    # Find the model among all
-    model_urls = [
-        entry
-        for entry in collection["collection"]
-        if entry["type"] == "model"
-        and (
-            ("nickname" in entry and model_ID in entry["nickname"])
-            or ("id" in entry and model_ID in entry["id"])
-            or ("rdf_source" in entry and model_ID in entry["rdf_source"])
-        )
-    ]
-
-    if len(model_urls) == 0:
+    if len(matches) == 0:
         raise ValueError(f"No model found with the provided DOI/name: {model_ID}")
-    if len(model_urls) > 1:
+    if len(matches) > 1:
         raise ValueError(f"More than one model found with the provided DOI/name ({model_ID}). Contact BiaPy team.")
-    with open(Path(pooch.retrieve(model_urls[0]["rdf_source"], known_hash=None))) as stream:
-        try:
-            model_rdf = yaml.safe_load(stream)
-        except yaml.YAMLError as exc:
-            print(exc)
+    model_dict = matches[0]
 
     workflow_specs = {}
     workflow_specs["workflow_type"] = cfg.PROBLEM.TYPE
     workflow_specs["ndim"] = cfg.PROBLEM.NDIM
     workflow_specs["nclasses"] = cfg.DATA.N_CLASSES
 
-    preproc_info, error, error_message = check_bmz_model_compatibility(model_rdf, workflow_specs=workflow_specs)
+    preproc_info, error, error_message = check_bmz_model_compatibility(model_dict, workflow_specs=workflow_specs)
 
     if error:
         raise ValueError(f"Model {model_ID} can not be used in BiaPy. Message:\n{error_message}\n")
@@ -673,189 +743,214 @@ def check_bmz_model_compatibility(
     reason_message: str
         Reason why the model can not be consumed if there is any.
     """
+
+    # --------- helpers ---------
+    def g(d, *ks, default=None):
+        cur = d
+        for k in ks:
+            if isinstance(cur, dict) and k in cur:
+                cur = cur[k]
+            else:
+                return default
+        return cur
+
+    m = g(model_rdf, "raw", "manifest", default={}) or {}
+
     specific_workflow = "all" if workflow_specs is None else workflow_specs["workflow_type"]
     specific_dims = "all" if workflow_specs is None else workflow_specs["ndim"]
     ref_classes = "all" if workflow_specs is None else workflow_specs["nclasses"]
 
-    preproc_info = []
+    preproc_info: List = []
 
-    # Accepting models that are exported in pytorch_state_dict and with just one input
-    if (
-        "pytorch_state_dict" in model_rdf["weights"]
-        and model_rdf["weights"]["pytorch_state_dict"] is not None
-        and len(model_rdf["inputs"]) == 1
-    ):
-
-        # TODO: control model.weights.pytorch_state_dict.dependencies conda env to check if all
-        # dependencies are installed
-        # https://github.com/bioimage-io/collection-bioimage-io/issues/609
-
-        model_version = Version("0.5")
-        if "format_version" in model_rdf:
-            model_version = Version(model_rdf["format_version"])
-
-        # Capture model kwargs
-        model_kwargs = None
-        if "kwargs" in model_rdf["weights"]["pytorch_state_dict"]:
-            model_kwargs = model_rdf["weights"]["pytorch_state_dict"]["kwargs"]
-        elif (
-            "architecture" in model_rdf["weights"]["pytorch_state_dict"]
-            and "kwargs" in model_rdf["weights"]["pytorch_state_dict"]["architecture"]
-        ):
-            model_kwargs = model_rdf["weights"]["pytorch_state_dict"]["architecture"]["kwargs"]
-        else:
-            return preproc_info, True, f"[{specific_workflow}] Couldn't extract kwargs from model description.\n"
-
-        # Check problem type
-        if (specific_workflow in ["all", "SEMANTIC_SEG"]) and (
-            "semantic-segmentation" in model_rdf["tags"]
-            or ("segmentation" in model_rdf["tags"] and "instance-segmentation" not in model_rdf["tags"])
-        ):
-            # Check number of classes
-            classes = -1
-            if "n_classes" in model_kwargs:  # BiaPy
-                classes = model_kwargs["n_classes"]
-            elif "out_channels" in model_kwargs:
-                classes = model_kwargs["out_channels"]
-            elif "output_channels" in model_kwargs:
-                classes = model_kwargs["output_channels"]
-            elif "classes" in model_kwargs:
-                classes = model_kwargs["classes"]
-            if isinstance(classes, list):
-                classes = classes[-1]
-
-            if not isinstance(classes, int):
-                reason_message = (
-                    f"[{specific_workflow}] 'DATA.N_CLASSES' not extracted. Obtained {classes}. Please check it!\n"
-                )
-                return preproc_info, True, reason_message
-
-            if isinstance(classes, int) and classes != -1:
-                if ref_classes != "all":
-                    if classes > 2 and ref_classes != classes:
-                        reason_message = f"[{specific_workflow}] 'DATA.N_CLASSES' does not match network's output classes. Please check it!\n"
-                        return preproc_info, True, reason_message
-            else:
-                reason_message = f"[{specific_workflow}] Couldn't find the classes this model is returning so please be aware to match it\n"
-                return preproc_info, True, reason_message
-
-        elif specific_workflow in ["all", "INSTANCE_SEG"] and "instance-segmentation" in model_rdf["tags"]:
-            # TODO: add cellpose tag and create flow post-processing to create images
-            pass
-        elif specific_workflow in ["all", "DETECTION"] and "detection" in model_rdf["tags"]:
-            pass
-        elif specific_workflow in ["all", "DENOISING"] and "denoising" in model_rdf["tags"]:
-            pass
-        elif specific_workflow in ["all", "SUPER_RESOLUTION"] and (
-            "super-resolution" in model_rdf["tags"]
-            or "superresolution" in model_rdf["tags"]
-        ):
-            pass
-        elif specific_workflow in ["all", "SELF_SUPERVISED"] and "self-supervision" in model_rdf["tags"]:
-            pass
-        elif specific_workflow in ["all", "CLASSIFICATION"] and "classification" in model_rdf["tags"]:
-            pass
-        elif specific_workflow in ["all", "IMAGE_TO_IMAGE"] and (
-            "pix2pix" in model_rdf["tags"]
-            or "image-reconstruction" in model_rdf["tags"]
-            or "image-to-image" in model_rdf["tags"]
-            or "image-restoration" in model_rdf["tags"]
-        ):
-            pass
-        else:
-            reason_message = "[{}] no workflow tag recognized in {}.\n".format(specific_workflow, model_rdf["tags"])
-            return preproc_info, True, reason_message
-
-        # Check axes
-        axes_order = model_rdf["inputs"][0]["axes"]
-        if isinstance(axes_order, list):
-            _axes_order = ""
-            for axis in axes_order:
-                if "type" in axis:
-                    if axis["type"] == "batch":
-                        _axes_order += "b"
-                    elif axis["type"] == "channel":
-                        _axes_order += "c"
-                    elif "id" in axis:
-                        _axes_order += axis["id"]
-                elif "id" in axis:
-                    if axis["id"] == "channel":
-                        _axes_order += "c"
-                    else:
-                        _axes_order += axis["id"]
-            axes_order = _axes_order
-
-        if specific_dims == "2D":
-            if axes_order != "bcyx":
-                reason_message = (
-                    f"[{specific_workflow}] In a 2D problem the axes need to be 'bcyx', found {axes_order}\n"
-                )
-                return preproc_info, True, reason_message
-            elif "2d" not in model_rdf["tags"] and "3d" in model_rdf["tags"]:
-                reason_message = f"[{specific_workflow}] Selected model seems to not be 2D\n"
-                return preproc_info, True, reason_message
-        elif specific_dims == "3D":
-            if axes_order != "bczyx":
-                reason_message = (
-                    f"[{specific_workflow}] In a 3D problem the axes need to be 'bczyx', found {axes_order}\n"
-                )
-                return preproc_info, True, reason_message
-            elif "3d" not in model_rdf["tags"] and "2d" in model_rdf["tags"]:
-                reason_message = f"[{specific_workflow}] Selected model seems to not be 3D\n"
-                return preproc_info, True, reason_message
-        else:  # All
-            if axes_order not in ["bcyx", "bczyx"]:
-                reason_message = f"[{specific_workflow}] Accepting models only with ['bcyx', 'bczyx'] axis order, found {axes_order}\n"
-                return preproc_info, True, reason_message
-
-        # Check preprocessing
-        if "preprocessing" in model_rdf["inputs"][0]:
-            preproc_info = model_rdf["inputs"][0]["preprocessing"]
-            key_to_find = "id" if model_version > Version("0.5.0") else "name"
-            if isinstance(preproc_info, list):
-                # Remove "ensure_dtype" preprocessing when casting to float, as BiaPy will always do it like that
-                new_preproc_info = []
-                for preproc in preproc_info:
-                    if key_to_find in preproc and not (
-                        preproc[key_to_find] == "ensure_dtype"
-                        and "kwargs" in preproc
-                        and "dtype" in preproc["kwargs"]
-                        and "float" in preproc["kwargs"]["dtype"]
-                    ):
-                        new_preproc_info.append(preproc)
-                preproc_info = new_preproc_info.copy()
-
-                # Then if there is still more than one preprocessing not continue as it is not implemented yet
-                if len(preproc_info) > 1:
-                    reason_message = (
-                        f"[{specific_workflow}] More than one preprocessing from BMZ not implemented yet {axes_order}\n"
-                    )
-                    return preproc_info, True, reason_message
-                elif len(preproc_info) == 1:
-                    preproc_info = preproc_info[0]
-                    if key_to_find in preproc_info:
-                        if preproc_info[key_to_find] not in [
-                            "zero_mean_unit_variance",
-                            "fixed_zero_mean_unit_variance",
-                            "scale_range",
-                            "scale_linear",
-                        ]:
-                            reason_message = f"[{specific_workflow}] Not recognized preprocessing found: {preproc_info[key_to_find]}\n"
-                            return preproc_info, True, reason_message
-                    else:
-                        reason_message = (
-                            f"[{specific_workflow}] Not recognized preprocessing structure found: {preproc_info}\n"
-                        )
-                        return preproc_info, True, reason_message
-
-        # Check post-processing
-        if model_kwargs is not None and "postprocessing" in model_kwargs and model_kwargs["postprocessing"] is not None:
-            reason_message = f"[{specific_workflow}] Currently no postprocessing is supported. Found: {model_kwargs['postprocessing']}\n"
-            return preproc_info, True, reason_message
-    else:
-        reason_message = f"[{specific_workflow}] pytorch_state_dict not found in model RDF\n"
+    # --------- Accept only PyTorch state dict models with a single input ---------
+    weights = g(m, "weights", "pytorch_state_dict")
+    inputs = g(m, "inputs") or []
+    if not (isinstance(weights, dict) and weights and isinstance(inputs, list) and len(inputs) == 1):
+        reason_message = f"[{specific_workflow}] pytorch_state_dict not found in model RDF or inputs != 1\n"
         return preproc_info, True, reason_message
 
+    # Model format version (defaults to 0.5 for your legacy logic)
+    model_version = Version("0.5")
+    fmt = g(m, "format_version")
+    if isinstance(fmt, str):
+        try:
+            model_version = Version(fmt)
+        except Exception:
+            pass
+
+    # --------- Extract model kwargs ---------
+    model_kwargs = None
+    if "kwargs" in weights:
+        model_kwargs = weights["kwargs"]
+    elif "architecture" in weights and isinstance(weights["architecture"], dict):
+        model_kwargs = weights["architecture"].get("kwargs", None)
+    if model_kwargs is None:
+        return preproc_info, True, f"[{specific_workflow}] Couldn't extract kwargs from model description.\n"
+
+    # --------- Problem type via tags ---------
+    tags = g(m, "tags", default=[]) or []
+    
+    if (specific_workflow in ["all", "SEMANTIC_SEG"]) and (
+        "semantic-segmentation" in tags or ("segmentation" in tags and "instance-segmentation" not in tags)
+    ):
+        # classes
+        classes = -1
+        for k in ("n_classes", "out_channels", "output_channels", "classes"):
+            if k in model_kwargs:
+                classes = model_kwargs[k]
+                break
+        if isinstance(classes, list):
+            classes = classes[-1]
+
+        if not isinstance(classes, int):
+            reason_message = (
+                f"[{specific_workflow}] 'DATA.N_CLASSES' not extracted. Obtained {classes}. Please check it!\n"
+            )
+            return preproc_info, True, reason_message
+        
+        if (
+            classes == -1
+            and "architecture" in weights
+            and isinstance(weights["architecture"], dict)
+            and ("callable" in weights["architecture"] or "source" in weights["architecture"])
+        ):
+            # Check if the model is one of the known architectures and assume it returns 1 class (as is the default in BiaPy)
+            for arch in [weights["architecture"].get("callable", None), weights["architecture"].get("source", None)]:
+                if arch is not None:
+                    arch = str(arch).lower().replace(".py", "")
+                    if arch in [
+                        "unet",
+                        "resunet",
+                        "resunet++",
+                        "seunet",
+                        "attention_unet",
+                        "resunet_se",
+                        "unetr",
+                        "multiresunet",
+                        "unext_v1",
+                        "unext_v2",
+                        "hrnet",
+                    ]:
+                        classes = 1
+                if classes != -1:
+                    print(f"[BMZ] Detected BiaPy model ({arch}) so assuming 1 as the class output, which is the default in BiaPy")
+                    break 
+
+        if isinstance(classes, int) and classes != -1:
+            if ref_classes != "all":
+                if classes > 2 and ref_classes != classes:
+                    reason_message = f"[{specific_workflow}] 'DATA.N_CLASSES' does not match network's output classes. Please check it!\n"
+                    return preproc_info, True, reason_message
+        else:
+            reason_message = f"[{specific_workflow}] Couldn't find the classes this model is returning so please be aware to match it\n"
+            return preproc_info, True, reason_message
+
+    elif specific_workflow in ["all", "INSTANCE_SEG"] and "instance-segmentation" in tags:
+        pass
+    elif specific_workflow in ["all", "DETECTION"] and "detection" in tags:
+        pass
+    elif specific_workflow in ["all", "DENOISING"] and "denoising" in tags:
+        pass
+    elif specific_workflow in ["all", "SUPER_RESOLUTION"] and ("super-resolution" in tags or "superresolution" in tags):
+        pass
+    elif specific_workflow in ["all", "SELF_SUPERVISED"] and "self-supervision" in tags:
+        pass
+    elif specific_workflow in ["all", "CLASSIFICATION"] and "classification" in tags:
+        pass
+    elif specific_workflow in ["all", "IMAGE_TO_IMAGE"] and any(
+        t in tags for t in ("pix2pix", "image-reconstruction", "image-to-image", "image-restoration")
+    ):
+        pass
+    else:
+        reason_message = f"[{specific_workflow}] no workflow tag recognized in {tags}.\n"
+        return preproc_info, True, reason_message
+
+    # --------- Axes checks ---------
+    axes_order = g(inputs[0], "axes")
+    if isinstance(axes_order, list):
+        _axes_order = ""
+        for axis in axes_order:
+            if "type" in axis:
+                if axis["type"] == "batch":
+                    _axes_order += "b"
+                elif axis["type"] == "channel":
+                    _axes_order += "c"
+                elif "id" in axis:
+                    _axes_order += axis["id"]
+            elif "id" in axis:
+                _axes_order += "c" if axis["id"] == "channel" else axis["id"]
+        axes_order = _axes_order
+
+    if specific_dims == "2D":
+        if axes_order != "bcyx":
+            reason_message = f"[{specific_workflow}] In a 2D problem the axes need to be 'bcyx', found {axes_order}\n"
+            return preproc_info, True, reason_message
+        elif "2d" not in tags and "3d" in tags:
+            reason_message = f"[{specific_workflow}] Selected model seems to not be 2D\n"
+            return preproc_info, True, reason_message
+    elif specific_dims == "3D":
+        if axes_order != "bczyx":
+            reason_message = f"[{specific_workflow}] In a 3D problem the axes need to be 'bczyx', found {axes_order}\n"
+            return preproc_info, True, reason_message
+        elif "3d" not in tags and "2d" in tags:
+            reason_message = f"[{specific_workflow}] Selected model seems to not be 3D\n"
+            return preproc_info, True, reason_message
+    else:  # "all"
+        if axes_order not in ["bcyx", "bczyx"]:
+            reason_message = (
+                f"[{specific_workflow}] Accepting models only with ['bcyx', 'bczyx'] axis order, found {axes_order}\n"
+            )
+            return preproc_info, True, reason_message
+
+    # --------- Preprocessing ---------
+    if "preprocessing" in (inputs[0] or {}):
+        preproc_info = inputs[0]["preprocessing"]
+        key_to_find = "id" if model_version > Version("0.5.0") else "name"
+        if isinstance(preproc_info, list):
+            # remove ensure_dtype->float casts (BiaPy does it anyway)
+            new_preproc_info = []
+            for preproc in preproc_info:
+                if key_to_find in preproc and not (
+                    preproc[key_to_find] == "ensure_dtype"
+                    and "kwargs" in preproc
+                    and "dtype" in preproc["kwargs"]
+                    and "float" in str(preproc["kwargs"]["dtype"])
+                ):
+                    new_preproc_info.append(preproc)
+            preproc_info = new_preproc_info.copy()
+
+            if len(preproc_info) > 1:
+                reason_message = (
+                    f"[{specific_workflow}] More than one preprocessing from BMZ not implemented yet {axes_order}\n"
+                )
+                return preproc_info, True, reason_message
+            elif len(preproc_info) == 1:
+                preproc_info = preproc_info[0]
+                if key_to_find in preproc_info:
+                    if preproc_info[key_to_find] not in [
+                        "zero_mean_unit_variance",
+                        "fixed_zero_mean_unit_variance",
+                        "scale_range",
+                        "scale_linear",
+                    ]:
+                        reason_message = (
+                            f"[{specific_workflow}] Not recognized preprocessing found: {preproc_info[key_to_find]}\n"
+                        )
+                        return preproc_info, True, reason_message
+                else:
+                    reason_message = (
+                        f"[{specific_workflow}] Not recognized preprocessing structure found: {preproc_info}\n"
+                    )
+                    return preproc_info, True, reason_message
+
+    # --------- Post-processing in kwargs (unsupported) ---------
+    if "postprocessing" in model_kwargs and model_kwargs["postprocessing"] is not None:
+        reason_message = (
+            f"[{specific_workflow}] Currently no postprocessing is supported. Found: {model_kwargs['postprocessing']}\n"
+        )
+        return preproc_info, True, reason_message
+
+    # All checks passed
     return preproc_info, False, ""
 
 
@@ -929,6 +1024,32 @@ def check_model_restrictions(cfg: CN, bmz_config: Dict, workflow_specs: Dict) ->
             classes = model_kwargs["classes"]
         if isinstance(classes, list):
             classes = classes[-1]
+
+        try:
+            if classes == -1:
+                # Check if the model is one of the known architectures and assume it returns 1 class (as is the default in BiaPy)
+                for arch in [str(bmz_config["original_bmz_config"].weights.pytorch_state_dict.architecture.source), bmz_config["original_bmz_config"].weights.pytorch_state_dict.architecture.callable]:
+                    if arch is not None:
+                        arch = str(arch).lower().replace(".py", "")
+                        if arch in [
+                            "unet",
+                            "resunet",
+                            "resunet++",
+                            "seunet",
+                            "attention_unet",
+                            "resunet_se",
+                            "unetr",
+                            "multiresunet",
+                            "unext_v1",
+                            "unext_v2",
+                            "hrnet",
+                        ]:
+                            classes = 1
+                    if classes != -1:
+                        print(f"[BMZ] Detected BiaPy model ({arch}) so assuming 1 as the class output, which is the default in BiaPy")
+                        break 
+        except:
+            pass
 
         if not isinstance(classes, int):
             raise ValueError(f"Classes not extracted correctly. Obtained {classes}")
@@ -1066,6 +1187,7 @@ def get_cfg_key_value(obj, attr, *args):
     AttributeError
         If an attribute in the path does not exist and no default value is provided.
     """
+
     def _getattr(obj, attr):
         return getattr(obj, attr, *args)
 
@@ -1127,7 +1249,7 @@ def build_torchvision_model(cfg: CN, device: torch.device) -> Tuple[nn.Module, C
       is used for the model summary.
     - This function assumes the necessary `torchvision` models and their default
       weights are installed and accessible.
-      
+
     """
     # Find model in TorchVision
     if "quantized_" in cfg.MODEL.TORCHVISION_MODEL_NAME:
