@@ -595,7 +595,7 @@ def ensemble8_2d_predictions(
     device: torch.device,
     batch_size_value: int=1,
     mode="mean",
-) -> torch.Tensor:
+) -> torch.Tensor | Dict:
     """
     Output the mean prediction of a given image generating its 8 possible rotations and flips.
 
@@ -671,11 +671,11 @@ def ensemble8_2d_predictions(
         r_aux = pred_func(total_img[i * batch_size_value : top])
         
         # Save the first time the rest of the outputs given by the model
-        if len(rest_of_outs) == 0:
+        if len(rest_of_outs) == 0 and isinstance(r_aux, dict):
             for key in [x for x in r_aux.keys() if x != "pred"]:
                 rest_of_outs[key] = r_aux[key]
+            r_aux = r_aux["pred"]
 
-        r_aux = r_aux["pred"]
         r_aux = to_numpy_format(r_aux, axes_order_back)        
         _decoded_aug_img.append(r_aux)
     _decoded_aug_img = np.concatenate(_decoded_aug_img)
@@ -743,8 +743,11 @@ def ensemble8_2d_predictions(
         funct = np.max
     out = np.expand_dims(funct(out, axis=0), 0)
     out = to_pytorch_format(out, axes_order, device)
-    rest_of_outs.update({"pred": out})
-    return rest_of_outs
+    if len(rest_of_outs) == 0:
+        return out
+    else:
+        rest_of_outs.update({"pred": out})
+        return rest_of_outs
 
 
 def ensemble16_3d_predictions(
@@ -755,7 +758,7 @@ def ensemble16_3d_predictions(
     device: torch.device,
     batch_size_value: int=1, 
     mode: str="mean"
-) -> torch.Tensor:
+) -> torch.Tensor | Dict:
     """
     Output the mean prediction of a given image generating its 16 possible rotations and flips.
 
@@ -842,11 +845,10 @@ def ensemble16_3d_predictions(
         r_aux = pred_func(total_vol[i * batch_size_value : top])
 
         # Save the first time the rest of the outputs given by the model
-        if len(rest_of_outs) == 0:
+        if len(rest_of_outs) == 0 and isinstance(r_aux, dict):
             for key in [x for x in r_aux.keys() if x != "pred"]:
                 rest_of_outs[key] = r_aux[key]
-
-        r_aux = r_aux["pred"]
+            r_aux = r_aux["pred"]
 
         if r_aux.ndim == 4:
             r_aux = np.expand_dims(r_aux, 0)
@@ -1051,8 +1053,12 @@ def ensemble16_3d_predictions(
         funct = np.max
     out = np.expand_dims(funct(out, axis=0), 0)
     out = to_pytorch_format(out, axes_order, device)
-    rest_of_outs.update({"pred": out})
-    return rest_of_outs
+
+    if len(rest_of_outs) == 0:
+        return out
+    else:
+        rest_of_outs.update({"pred": out})
+        return rest_of_outs
 
 
 def create_th_plot(
