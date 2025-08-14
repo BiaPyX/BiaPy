@@ -383,15 +383,17 @@ class BiaPy:
         
         if not reuse_original_bmz_config:
             error = False
-            if "collected_sources" not in self.workflow.bmz_config:
-                raise ValueError(
-                    "You need first to call prepare_model(), train(), test() or run_job() functions so the model can be built"
-                )
+            # If the model was loaded from BMZ we will still use the file that describes the model
+            if "original_bmz_config" not in self.workflow.bmz_config:
+                if "collected_sources" not in self.workflow.bmz_config:
+                    raise ValueError(
+                        "You need first to call prepare_model(), train(), test() or run_job() functions so the model can be built"
+                    )
 
-            if self.workflow.checkpoint_path is None:
-                raise ValueError(
-                    "Seems that you have forgoten to activate 'MODEL.LOAD_CHECKPOINT' to True"
-                )
+                if self.workflow.checkpoint_path is None:
+                    raise ValueError(
+                        "Seems that you have forgoten to activate 'MODEL.LOAD_CHECKPOINT' to True"
+                    )
                 
             if self.workflow.bmz_config["test_input"] is None:
                 if "test_input" not in bmz_cfg:
@@ -976,6 +978,7 @@ class BiaPy:
 
         # Weights + architecture
         # If it's a BiaPy model
+        env_descriptor = None
         if not reuse_original_bmz_config and "collected_sources" in self.workflow.bmz_config:
             arch_file_path = os.path.join(building_dir, "model.py")
             with open(arch_file_path, "w") as f:
@@ -1009,19 +1012,19 @@ class BiaPy:
                 state_dict_source = os.path.join(building_dir, "checkpoint.pth")
                 os.makedirs(building_dir, exist_ok=True)
                 torch.save(checkpoint["model"], state_dict_source)
+
+            # Only if timm is required we create the env file
+            if any([x for x in self.workflow.bmz_config["all_import_lines"] if "timm" in x]):
+                env_file_path = create_environment_file_for_model(building_dir)
+                env_descriptor = EnvironmentFileDescr(
+                    source=Path(env_file_path), sha256=Sha256(create_file_sha256sum(env_file_path))
+                )
         else:
             state_dict_source, state_dict_sha256, pytorch_architecture = get_bmz_model_info(
                 self.workflow.bmz_config["original_bmz_config"],
                 original_model_version,
             )
-        # Only if timm is required we create the env file
-        if any([x for x in self.workflow.bmz_config["all_import_lines"] if "timm" in x]):
-            env_file_path = create_environment_file_for_model(building_dir)
-            env_descriptor = EnvironmentFileDescr(
-                source=Path(env_file_path), sha256=Sha256(create_file_sha256sum(env_file_path))
-            )
-        else:
-            env_descriptor = None
+
         # Only exporting in pytorch_state_dict
         pytorch_state_dict = PytorchStateDictWeightsDescr(
             source=state_dict_source,  # type: ignore

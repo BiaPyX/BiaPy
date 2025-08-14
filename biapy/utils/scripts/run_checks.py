@@ -3541,7 +3541,7 @@ if all_test_info["Test30"]["enable"]:
 
     biapy_config['MODEL']['SOURCE'] = 'bmz'
     biapy_config['MODEL']['BMZ'] = {}
-    biapy_config['MODEL']['BMZ']['SOURCE_MODEL_ID'] = '10.5281/zenodo.6406756' # hiding-blowfish
+    biapy_config['MODEL']['BMZ']['SOURCE_MODEL_ID'] = 'hiding-blowfish'
 
     biapy_config['TEST']['ENABLE'] = True
     biapy_config['TEST']['FULL_IMG'] = False
