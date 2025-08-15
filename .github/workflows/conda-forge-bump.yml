@@ -138,7 +138,7 @@ jobs:
       - name: Validate recipe YAML has sha256 under source
         working-directory: feedstock
         run: |
-          python - <<'PY'
+          conda run -n cf python - <<'PY'
           import sys
           from ruamel.yaml import YAML
           from pathlib import Path
