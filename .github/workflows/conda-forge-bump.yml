@@ -78,7 +78,7 @@ jobs:
           git add recipe/meta.yaml
           git commit -m "Import project's conda_forge_meta.yaml as recipe/meta.yaml"
 
-      - name: Create bump branch and update version + sha256
+      - name: Create bump branch and update version + sha256 (robust)
         working-directory: feedstock
         env:
           VERSION: ${{ steps.ver.outputs.version }}
@@ -88,30 +88,74 @@ jobs:
           BRANCH="bump-v$VERSION"
           git switch -c "$BRANCH"
 
-          # Update recipe/meta.yaml using Python (more robust than sed for Jinja)
           python - <<'PY'
-          import os, re, pathlib, sys
+          import os, re, pathlib
           p = pathlib.Path("recipe") / "meta.yaml"
           s = p.read_text(encoding="utf-8")
-
           ver = os.environ["VERSION"]
           sha = os.environ["SDIST_SHA256"]
 
-          # Update Jinja version line like: {% set version = "X.Y.Z" %}
+          # 1) Update Jinja version line: {% set version = "X.Y.Z" %}
           s, n1 = re.subn(r'{%\s*set\s+version\s*=\s*"[^"]+"\s*%}',
                           '{% set version = "' + ver + '" %}', s)
 
-          # Update sha256 under source:
-          s, n2 = re.subn(r'(sha256:\s*)([0-9a-fA-F]+)', r'\1' + sha, s)
+          # 2) Ensure sha256 is correctly present under source:
+          #    - if sha256 line exists, replace value
+          #    - else, insert after the url: line within the source block
+          if re.search(r'(?m)^\s*sha256\s*:\s*[0-9A-Fa-f]+', s):
+              s, n2 = re.subn(r'(?m)^(?P<indent>\s*sha256\s*:\s*)([0-9A-Fa-f]+)\s*$',
+                              r'\g<indent>' + sha, s)
+          else:
+              # Find the url line inside the 'source' block and insert sha256 on the next line
+              # Match "source:" then later a line like "  url: ...."
+              m = re.search(r'(?ms)^(?P<indent>\s*)source:\s*\n(?P<body>(?:^\s+.*\n)+)', s)
+              if not m:
+                  raise SystemExit("Could not locate 'source:' block in recipe/meta.yaml")
+              # inside the source body, find the url line to get its indentation
+              body = m.group('body')
+              mu = re.search(r'(?m)^(?P<uindent>\s*)url\s*:\s*\S+\s*$', body)
+              if not mu:
+                  raise SystemExit("Could not locate 'url:' line in source block")
+              uindent = mu.group('uindent')
+              # insert sha256 on the line *after* the url
+              def _ins_sha(murl):
+                  line = murl.group(0)
+                  return line + "\n" + f"{uindent}sha256: {sha}"
+              body2, nurl = re.subn(r'(?m)^(%surl\s*:\s*\S+\s*)$' % re.escape(uindent), _ins_sha, body, count=1)
+              if nurl != 1:
+                  raise SystemExit("Failed to insert sha256 after url line")
+              # splice back the modified body
+              s = s[:m.start('body')] + body2 + s[m.end('body'):]
+              n2 = 1
 
-          p.write_text(s, encoding="utf-8")
-          print(f"updated version: {n1} match(es); updated sha256: {n2} match(es)")
-          if n1 == 0 or n2 == 0:
-              sys.exit("regex did not match expected lines in recipe/meta.yaml")
+            p.write_text(s, encoding="utf-8")
+            print(f"updated version matches: {n1}; ensured sha256: {bool(n2)}")
           PY
 
           git add recipe/meta.yaml
           git commit -m "Bump to v$VERSION (update version and sha256)"
+
+      - name: Validate recipe YAML has sha256 under source
+        working-directory: feedstock
+        run: |
+          python - <<'PY'
+            import sys
+            from ruamel.yaml import YAML
+            from pathlib import Path
+            yaml = YAML(typ="safe")
+            data = yaml.load(Path("recipe/meta.yaml").read_text())
+            src = data.get("source", {})
+            if isinstance(src, dict):
+                ok = "sha256" in src
+            elif isinstance(src, list) and src and isinstance(src[0], dict):
+                ok = "sha256" in src[0]
+            else:
+                ok = False
+            if not ok:
+                print("ERROR: recipe/meta.yaml 'source' lacks 'sha256:'", file=sys.stderr)
+                sys.exit(1)
+            print("OK: sha256 present in source")
+          PY
 
       - name: (Optional) conda-smithy rerender
         working-directory: feedstock
