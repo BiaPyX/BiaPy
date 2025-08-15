@@ -85,8 +85,8 @@ jobs:
           SDIST_SHA256: ${{ steps.sdist.outputs.sha256 }}
         shell: bash
         run: |
-          BRANCH="bump-v$VERSION"
-          git switch -c "$BRANCH"
+          BRANCH="bump-v$VERSION-${GITHUB_RUN_ID}"
+          git checkout -B "$BRANCH"
 
           python - <<'PY'
           import os, re, pathlib
@@ -176,7 +176,7 @@ jobs:
 
       - name: Push branch to your fork
         working-directory: feedstock
-        run: git push --set-upstream origin HEAD
+        run: git push --set-upstream origin "$BRANCH"
 
       - name: Open PR to conda-forge feedstock
         working-directory: feedstock
