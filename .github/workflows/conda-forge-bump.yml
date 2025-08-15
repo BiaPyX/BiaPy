@@ -88,11 +88,27 @@ jobs:
           BRANCH="bump-v$VERSION"
           git switch -c "$BRANCH"
 
-          # Update Jinja version line
-          sed -E -i 's/{%[[:space:]]*set[[:space:]]+version[[:space:]]*=[[:space:]]*"[^"]+"[[:space:]]*%}/{% set version = "'"$VERSION"'" %}/' recipe/meta.yaml
+          # Update recipe/meta.yaml using Python (more robust than sed for Jinja)
+          python - <<'PY'
+          import os, re, pathlib, sys
+          p = pathlib.Path("recipe") / "meta.yaml"
+          s = p.read_text(encoding="utf-8")
 
-          # Update sha256 under source
-          sed -E -i 's/(sha256:[[:space:]]*)([0-9a-fA-F]+)/\1'"$SDIST_SHA256"'/' recipe/meta.yaml
+          ver = os.environ["VERSION"]
+          sha = os.environ["SDIST_SHA256"]
+
+          # Update Jinja version line like: {% set version = "X.Y.Z" %}
+          s, n1 = re.subn(r'{%\s*set\s+version\s*=\s*"[^"]+"\s*%}',
+                          '{% set version = "' + ver + '" %}', s)
+
+          # Update sha256 under source:
+          s, n2 = re.subn(r'(sha256:\s*)([0-9a-fA-F]+)', r'\1' + sha, s)
+
+          p.write_text(s, encoding="utf-8")
+          print(f"updated version: {n1} match(es); updated sha256: {n2} match(es)")
+          if n1 == 0 or n2 == 0:
+              sys.exit("regex did not match expected lines in recipe/meta.yaml")
+          PY
 
           git add recipe/meta.yaml
           git commit -m "Bump to v$VERSION (update version and sha256)"
