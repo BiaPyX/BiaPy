@@ -24,6 +24,7 @@
 [![Code consistency](https://github.com/BiaPyX/BiaPy/actions/workflows/check_code_consistency.yml/badge.svg)](https://github.com/BiaPyX/BiaPy/actions/workflows/check_code_consistency.yml)
 [![Upload BiaPy to PyPI](https://github.com/BiaPyX/BiaPy/actions/workflows/upload_biapy_to_pypi.yml/badge.svg)](https://github.com/BiaPyX/BiaPy/actions/workflows/upload_biapy_to_pypi.yml)
 [![Publish Docker image](https://github.com/BiaPyX/BiaPy/actions/workflows/create_release_container.yml/badge.svg)](https://github.com/BiaPyX/BiaPy/actions/workflows/create_release_container.yml)
+[![Bump conda-forge feedstock](https://github.com/BiaPyX/BiaPy/actions/workflows/conda-forge-bump.yml/badge.svg)](https://github.com/BiaPyX/BiaPy/actions/workflows/conda-forge-bump.yml)
 
 🔥**NEWS**🔥: BiaPy's paper is finally out in **Nature Methods**! Check it out at: [https://www.nature.com/articles/s41592-025-02699-y](https://www.nature.com/articles/s41592-025-02699-y)
 
