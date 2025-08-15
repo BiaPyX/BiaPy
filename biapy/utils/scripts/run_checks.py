@@ -369,7 +369,7 @@ all_test_info["Test31"] = {
     "yaml": "test_31.yaml",
     "internal_checks": [
         {"type": "regular", "pattern": "Test IoU (B channel) (merge patches):", "gt": True, "value": 0.7},
-        {"type": "BMZ", "pattern": "Package path:", "bmz_package_name": "NucleiSegmentationBoundaryModel.zip"},
+        {"type": "BMZ", "pattern": "Package path:", "bmz_package_name": "Nuclei Segmentation Boundary Model.zip"},
         {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 1, "metric": "f1",
             "gt": True, "value": 0.85},
     ]
@@ -1134,7 +1134,7 @@ def runjob(test_info, results_folder, yaml_file, biapy_folder, multigpu=False, b
                "--jobname", test_info["jobname"],
                "--config", yaml_file, 
                "--result_dir", results_folder, 
-               "--model_name", bmz_package.split(".")[:-1][0],
+               "--model_name", str(bmz_package.split(".")[:-1][0]),
                "--doc_file", doc_file,
                "--bmz_folder", bmz_folder,
                "--gpu", gpu]
