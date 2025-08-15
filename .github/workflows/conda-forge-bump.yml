@@ -2,8 +2,8 @@ name: Bump conda-forge feedstock
 
 on:
   workflow_run:
-    workflows: ["Upload BiaPy to PyPI"]
-    types: [completed]
+    # workflows: ["Upload BiaPy to PyPI"]
+    # types: [completed]
   workflow_dispatch: {}  # manual test runs
 
 permissions:
