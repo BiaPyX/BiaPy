@@ -128,8 +128,8 @@ jobs:
               s = s[:m.start('body')] + body2 + s[m.end('body'):]
               n2 = 1
 
-            p.write_text(s, encoding="utf-8")
-            print(f"updated version matches: {n1}; ensured sha256: {bool(n2)}")
+          p.write_text(s, encoding="utf-8")
+          print(f"updated version matches: {n1}; ensured sha256: {bool(n2)}")
           PY
 
           git add recipe/meta.yaml
