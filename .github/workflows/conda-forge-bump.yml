@@ -176,17 +176,22 @@ jobs:
 
       - name: Push branch to your fork
         working-directory: feedstock
-        run: git push --set-upstream origin "$BRANCH"
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          BRANCH="bump-v$VERSION"
+          git push --set-upstream origin "$BRANCH"
 
       - name: Open PR to conda-forge feedstock
         working-directory: feedstock
         env:
           VERSION: ${{ steps.ver.outputs.version }}
+          FORK: ${{ env.FEEDSTOCK_FORK }}
         run: |
-          TITLE="biapy v$VERSION"
-          BODY="Automated bump to $VERSION after GitHub Release.\n\n- Recipe copied from project: \`biapy/utils/env/conda_forge_meta.yaml\`\n- Version and sha256 updated from PyPI sdist."
-          OWNER="${FEEDSTOCK_FORK%%/*}"
           BRANCH="bump-v$VERSION"
+          TITLE="biapy v$VERSION"
+          BODY="Automated bump to $VERSION after GitHub Release. Recipe copied from project: \`biapy/utils/env/conda_forge_meta.yaml\` . Version and sha256 updated from PyPI sdist."
+          OWNER="${FORK%%/*}"
           gh pr create \
             --repo conda-forge/biapy-feedstock \
             --title "$TITLE" \
