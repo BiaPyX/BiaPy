@@ -113,7 +113,7 @@ jobs:
           git add recipe/meta.yaml
           git commit -m "Bump to v$VERSION (update version and sha256)"
 
-      - name: name: (Optional) conda-smithy rerender
+      - name: (Optional) conda-smithy rerender
         working-directory: feedstock
         run: |
           conda run -n cf conda-smithy rerender -c auto || true
