@@ -139,22 +139,22 @@ jobs:
         working-directory: feedstock
         run: |
           python - <<'PY'
-            import sys
-            from ruamel.yaml import YAML
-            from pathlib import Path
-            yaml = YAML(typ="safe")
-            data = yaml.load(Path("recipe/meta.yaml").read_text())
-            src = data.get("source", {})
-            if isinstance(src, dict):
-                ok = "sha256" in src
-            elif isinstance(src, list) and src and isinstance(src[0], dict):
-                ok = "sha256" in src[0]
-            else:
-                ok = False
-            if not ok:
-                print("ERROR: recipe/meta.yaml 'source' lacks 'sha256:'", file=sys.stderr)
-                sys.exit(1)
-            print("OK: sha256 present in source")
+          import sys
+          from ruamel.yaml import YAML
+          from pathlib import Path
+          yaml = YAML(typ="safe")
+          data = yaml.load(Path("recipe/meta.yaml").read_text())
+          src = data.get("source", {})
+          if isinstance(src, dict):
+              ok = "sha256" in src
+          elif isinstance(src, list) and src and isinstance(src[0], dict):
+              ok = "sha256" in src[0]
+          else:
+              ok = False
+          if not ok:
+              print("ERROR: recipe/meta.yaml 'source' lacks 'sha256:'", file=sys.stderr)
+              sys.exit(1)
+          print("OK: sha256 present in source")
           PY
 
       - name: (Optional) conda-smithy rerender
