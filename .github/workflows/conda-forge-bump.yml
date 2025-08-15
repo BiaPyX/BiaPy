@@ -179,7 +179,7 @@ jobs:
         env:
           VERSION: ${{ steps.ver.outputs.version }}
         run: |
-          BRANCH="bump-v$VERSION"
+          BRANCH="bump-v$VERSION-${GITHUB_RUN_ID}"
           git push --set-upstream origin "$BRANCH"
 
       - name: Open PR to conda-forge feedstock
@@ -188,7 +188,7 @@ jobs:
           VERSION: ${{ steps.ver.outputs.version }}
           FORK: ${{ env.FEEDSTOCK_FORK }}
         run: |
-          BRANCH="bump-v$VERSION"
+          BRANCH="bump-v$VERSION-${GITHUB_RUN_ID}"
           TITLE="biapy v$VERSION"
           BODY="Automated bump to $VERSION after GitHub Release. Recipe copied from project: \`biapy/utils/env/conda_forge_meta.yaml\` . Version and sha256 updated from PyPI sdist."
           OWNER="${FORK%%/*}"
