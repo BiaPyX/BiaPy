@@ -1,6 +1,8 @@
 name: Bump conda-forge feedstock
 
 on:
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
