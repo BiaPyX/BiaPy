@@ -57,8 +57,8 @@ jobs:
           auto-activate-base: true
           channels: conda-forge
 
-      - name: Install conda-smithy toolchain
-        run: mamba install -y python>=3.10 conda-smithy ruamel.yaml
+      - name: Create env for conda-smithy
+        run: mamba create -n cf -y conda-smithy ruamel.yaml
 
       - name: Authenticate gh CLI
         run: gh auth status
@@ -113,14 +113,22 @@ jobs:
           git add recipe/meta.yaml
           git commit -m "Bump to v$VERSION (update version and sha256)"
 
-      - name: (Optional) conda-smithy rerender
+      - name: name: (Optional) conda-smithy rerender
         working-directory: feedstock
         run: |
-          conda-smithy rerender -c auto || true
+          conda run -n cf conda-smithy rerender -c auto || true
           if ! git diff --quiet; then
             git add .
             git commit -m "conda-smithy rerender"
           fi
+
+      - name: Configure git auth for push
+        working-directory: feedstock
+        run: |
+          # Configure git to use gh's credential helper (respects GH_TOKEN)
+          gh auth setup-git
+          # Make sure "origin" uses a tokenized HTTPS URL
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${FEEDSTOCK_FORK}.git"
 
       - name: Push branch to your fork
         working-directory: feedstock
