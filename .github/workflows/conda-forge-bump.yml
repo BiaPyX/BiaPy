@@ -3,6 +3,7 @@ name: Bump conda-forge feedstock
 on:
   release:
     types: [published]
+  workflow_dispatch: {}
 
 permissions:
   contents: read
@@ -10,38 +11,34 @@ permissions:
 
 env:
   PACKAGE_NAME: biapy
-  GH_TOKEN: ${{ secrets.CF_GH_TOKEN }}
+  GH_TOKEN: ${{ secrets.CF_GH_TOKEN }}             
   FEEDSTOCK_FORK: ${{ secrets.CF_FEEDSTOCK_FORK }}
 
 jobs:
   bump-feedstock:
-    # Only run after the PyPI workflow succeeded for a release,
-    # or when manually triggered via workflow_dispatch.
-    if: ${{ github.event_name == 'release' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check out this repo (to read your meta.yaml)
+      - name: Check out this repo
         uses: actions/checkout@v4
 
-      - name: Determine version from release tag (or fall back to PyPI latest)
+      - name: Determine version from release tag (fallback to PyPI latest on manual run)
         id: ver
         shell: bash
         run: |
-          RAW_TAG="${{ github.event.release.tag_name }}"
-          if [ -n "$RAW_TAG" ]; then
+          if [ "${{ github.event_name }}" = "release" ]; then
+            RAW_TAG="${{ github.event.release.tag_name }}"
             VERSION="${RAW_TAG#v}"
           else
-            VERSION="$(python -c "import json,urllib.request;print(json.load(urllib.request.urlopen('https://pypi.org/pypi/biapy/json'))['info']['version'])")"
+            VERSION="$(python -c "import json,urllib.request;print(json.load(urllib.request.urlopen('https://pypi.org/pypi/${{ env.PACKAGE_NAME }}/json'))['info']['version'])")"
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Fetch PyPI sdist URL and SHA256
+      - name: Fetch PyPI sdist URL and SHA256 (with short retry to avoid race)
         id: sdist
         shell: bash
         env:
           VERSION: ${{ steps.ver.outputs.version }}
-          PACKAGE_NAME: ${{ env.PACKAGE_NAME }}
         run: |
           PYPI_JSON="https://pypi.org/pypi/${PACKAGE_NAME}/${VERSION}/json"
           OUT=$(python -c "import json,urllib.request,hashlib,os; d=json.load(urllib.request.urlopen('${PYPI_JSON}')); sd=[u for u in d['urls'] if u.get('packagetype')=='sdist']; u=sd[0]['url'] if sd else (_ for _ in ()).throw(SystemExit(1)); h=hashlib.sha256(urllib.request.urlopen(u).read()).hexdigest(); print(u); print(h)")
@@ -52,7 +49,7 @@ jobs:
             echo "sha256=$SDIST_SHA256"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Set up conda
+      - name: Set up conda (Miniforge)
         uses: conda-incubator/setup-miniconda@v3
         with:
           miniforge-version: latest
@@ -63,7 +60,7 @@ jobs:
       - name: Install conda-smithy toolchain
         run: mamba install -y python>=3.10 conda-smithy ruamel.yaml
 
-      - name: Authenticate gh CLI (use your PAT)
+      - name: Authenticate gh CLI
         run: gh auth status
 
       - name: Clone your feedstock fork
@@ -91,7 +88,7 @@ jobs:
           BRANCH="bump-v$VERSION"
           git switch -c "$BRANCH"
 
-          # Update version Jinja line
+          # Update Jinja version line
           sed -E -i 's/{%[[:space:]]*set[[:space:]]+version[[:space:]]*=[[:space:]]*"[^"]+"[[:space:]]*%}/{% set version = "'"$VERSION"'" %}/' recipe/meta.yaml
 
           # Update sha256 under source
@@ -119,7 +116,7 @@ jobs:
           VERSION: ${{ steps.ver.outputs.version }}
         run: |
           TITLE="biapy v$VERSION"
-          BODY="Automated bump to $VERSION after successful PyPI upload.\n\n- Recipe copied from project: \`biapy/utils/env/conda_forge_meta.yaml\`\n- Version and sha256 updated from PyPI sdist."
+          BODY="Automated bump to $VERSION after GitHub Release.\n\n- Recipe copied from project: \`biapy/utils/env/conda_forge_meta.yaml\`\n- Version and sha256 updated from PyPI sdist."
           OWNER="${FEEDSTOCK_FORK%%/*}"
           BRANCH="bump-v$VERSION"
           gh pr create \
