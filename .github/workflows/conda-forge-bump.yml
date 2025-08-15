@@ -12,6 +12,8 @@ permissions:
 
 env:
   PACKAGE_NAME: biapy
+  GH_TOKEN: ${{ secrets.CF_GH_TOKEN }}
+  FEEDSTOCK_FORK: ${{ secrets.CF_FEEDSTOCK_FORK }}
 
 jobs:
   bump-feedstock:
@@ -64,14 +66,9 @@ jobs:
         run: mamba install -y python>=3.10 conda-smithy ruamel.yaml
 
       - name: Authenticate gh CLI (use your PAT)
-        env:
-          GH_TOKEN: ${{ secrets.CF_GH_TOKEN }}
-        run: |
-          gh auth status || echo "$GH_TOKEN" | gh auth login --with-token
+        run: gh auth status
 
       - name: Clone your feedstock fork
-        env:
-          FEEDSTOCK_FORK: ${{ secrets.CF_FEEDSTOCK_FORK }}
         run: |
           test -n "$FEEDSTOCK_FORK"
           gh repo clone "$FEEDSTOCK_FORK" feedstock
@@ -116,23 +113,20 @@ jobs:
 
       - name: Push branch to your fork
         working-directory: feedstock
-        env:
-          GH_TOKEN: ${{ secrets.CF_GH_TOKEN }}
         run: git push --set-upstream origin HEAD
 
       - name: Open PR to conda-forge feedstock
         working-directory: feedstock
         env:
-          GH_TOKEN: ${{ secrets.CF_GH_TOKEN }}
           VERSION: ${{ steps.ver.outputs.version }}
         run: |
           TITLE="biapy v$VERSION"
           BODY="Automated bump to $VERSION after successful PyPI upload.\n\n- Recipe copied from project: \`biapy/utils/env/conda_forge_meta.yaml\`\n- Version and sha256 updated from PyPI sdist."
-          OWNER="$(git remote get-url origin | sed -E 's#.*/([^/]+)/biapy-feedstock.*#\1#')"
-          HEAD_REF="${OWNER}:$(git rev-parse --abbrev-ref HEAD)"
+          OWNER="${FEEDSTOCK_FORK%%/*}"
+          BRANCH="bump-v$VERSION"
           gh pr create \
             --repo conda-forge/biapy-feedstock \
             --title "$TITLE" \
             --body "$BODY" \
-            --head "$HEAD_REF" \
+            --head "${OWNER}:${BRANCH}" \
             --base "main"
