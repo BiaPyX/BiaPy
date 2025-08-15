@@ -17,7 +17,7 @@ jobs:
   bump-feedstock:
     # Only run after the PyPI workflow succeeded for a release,
     # or when manually triggered via workflow_dispatch.
-    if: ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'release') || github.event_name == 'workflow_dispatch' }}
+    if: ${{ github.event_name == 'release' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -28,7 +28,7 @@ jobs:
         id: ver
         shell: bash
         run: |
-          RAW_TAG="${{ github.event.workflow_run.head_branch }}"
+          RAW_TAG="${{ github.event.release.tag_name }}"
           if [ -n "$RAW_TAG" ]; then
             VERSION="${RAW_TAG#v}"
           else
