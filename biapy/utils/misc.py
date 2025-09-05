@@ -427,13 +427,6 @@ def get_checkpoint_path(cfg, jobname):
 
     return resume
 
-
-def save_state_dict_safetensors(model: torch.nn.Module, path: str, metadata: Dict[str, str] = None):
-    from safetensors.torch import save_file
-    state = model.state_dict()
-    # state must be a dict[str, Tensor]
-    save_file(state, path, metadata=metadata or {})
-
 def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=None, just_extract_checkpoint_info=False, skip_unmatched_layers=False):
     """
     Load a model checkpoint from disk.
