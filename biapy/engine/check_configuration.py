@@ -1807,8 +1807,15 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     z_size = z_size // 2 if hrnet_zdown else z_size
 
     if cfg.MODEL.LOAD_CHECKPOINT and check_data_paths:
-        if not os.path.exists(get_checkpoint_path(cfg, jobname)):
+        file = get_checkpoint_path(cfg, jobname)
+        if not any([file + ext for ext in ['.pth', '.safetensors'] if os.path.exists(file + ext)]):
             raise FileNotFoundError(f"Model checkpoint not found at {get_checkpoint_path(cfg, jobname)}")
+
+        if os.path.exists(file + ".safetensors"):
+            try:
+                from safetensors.torch import load_file
+            except ImportError:
+                raise ImportError("Please install safetensors package to be able to load .safetensors checkpoints")
 
     ### Train ###
     assert cfg.TRAIN.OPTIMIZER in [

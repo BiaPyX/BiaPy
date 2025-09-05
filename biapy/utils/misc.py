@@ -299,7 +299,7 @@ def get_grad_norm_(parameters, norm_type: float = 2.0) -> torch.Tensor:
     return total_norm
 
 
-def save_model(cfg, biapy_version, jobname, epoch, model_without_ddp, optimizer, model_build_kwargs=None):
+def save_model(cfg, biapy_version, jobname, epoch, model_without_ddp, optimizer, model_build_kwargs=None, extension="pth"):
     """
     Save the model checkpoint to the specified path.
 
@@ -324,6 +324,9 @@ def save_model(cfg, biapy_version, jobname, epoch, model_without_ddp, optimizer,
     model_build_kwargs : Optional[Dict], optional
         Keyword arguments used to build the model, useful for re-instantiating
         the model from the checkpoint. Defaults to None.
+    extension : str, optional
+        The file extension for the checkpoint file. Options are 'pth' (native PyTorch format)
+        or 'safetensors' (https://github.com/huggingface/safetensors). Defaults to "pth".
 
     Returns
     -------
@@ -331,7 +334,7 @@ def save_model(cfg, biapy_version, jobname, epoch, model_without_ddp, optimizer,
         The path to the saved checkpoint file.
     """
     output_dir = Path(cfg.PATHS.CHECKPOINT)
-    checkpoint_paths = [output_dir / "{}-checkpoint-{}.pth".format(jobname, str(epoch))]
+    checkpoint_paths = [output_dir / "{}-checkpoint-{}.{}".format(jobname, str(epoch), extension)]
 
     for checkpoint_path in checkpoint_paths:
         to_save = {
@@ -348,7 +351,7 @@ def save_model(cfg, biapy_version, jobname, epoch, model_without_ddp, optimizer,
         return checkpoint_paths[0]
 
 
-def save_on_master(*args, **kwargs):
+def save_on_master(model_dict, checkpoint_path):
     """
     Save a PyTorch object only if the current process is the main (master) process.
 
@@ -363,8 +366,13 @@ def save_on_master(*args, **kwargs):
         Keyword arguments to pass to `torch.save`.
     """
     if is_main_process():
-        torch.save(*args, **kwargs)
-
+        if str(checkpoint_path).endswith(".pth"):
+            torch.save(model_dict, checkpoint_path)
+        elif str(checkpoint_path).endswith(".safetensors"):
+            from safetensors.torch import save_file
+            save_file(model_dict["model"], checkpoint_path)
+        else:
+            raise ValueError("Unsupported checkpoint extension: {}".format(checkpoint_path))
 
 def get_checkpoint_path(cfg, jobname):
     """
@@ -390,7 +398,7 @@ def get_checkpoint_path(cfg, jobname):
     Returns
     -------
     str
-        The absolute path to the checkpoint file.
+        The absolute path to the checkpoint file without the extension (without the .pth or .safetensors).
 
     Raises
     ------
@@ -404,21 +412,27 @@ def get_checkpoint_path(cfg, jobname):
         resume = cfg.PATHS.CHECKPOINT_FILE
     else:
         if cfg.MODEL.LOAD_CHECKPOINT_EPOCH == "last_on_train":
-            all_checkpoints = glob.glob(os.path.join(checkpoint_dir, "{}-checkpoint-*.pth".format(jobname)))
+            all_checkpoints = glob.glob(os.path.join(checkpoint_dir, "{}-checkpoint-*".format(jobname)))
             latest_ckpt = -1
             for ckpt in all_checkpoints:
                 t = ckpt.split("-")[-1].split(".")[0]
                 if t.isdigit():
                     latest_ckpt = max(int(t), latest_ckpt)
             if latest_ckpt >= 0:
-                resume = os.path.join(checkpoint_dir, "{}-checkpoint-{}.pth".format(jobname, latest_ckpt))
+                resume = os.path.join(checkpoint_dir, "{}-checkpoint-{}".format(jobname, latest_ckpt))
         elif cfg.MODEL.LOAD_CHECKPOINT_EPOCH == "best_on_val":
-            resume = os.path.join(checkpoint_dir, "{}-checkpoint-best.pth".format(jobname))
+            resume = os.path.join(checkpoint_dir, "{}-checkpoint-best".format(jobname))
         else:
             raise NotImplementedError
 
     return resume
 
+
+def save_state_dict_safetensors(model: torch.nn.Module, path: str, metadata: Dict[str, str] = None):
+    from safetensors.torch import save_file
+    state = model.state_dict()
+    # state must be a dict[str, Tensor]
+    save_file(state, path, metadata=metadata or {})
 
 def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=None, just_extract_checkpoint_info=False, skip_unmatched_layers=False):
     """
@@ -467,8 +481,14 @@ def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=Non
 
     resume = get_checkpoint_path(cfg, jobname)
 
+    # Take the first existing file with supported extension
+    for ext in ['.pth', '.safetensors']:
+        if os.path.exists(resume + ext):
+            resume += ext
+            break
+
     if not os.path.exists(resume):
-        raise FileNotFoundError(f"Checkpoint file {resume} not found")
+        raise FileNotFoundError(f"Checkpoint file {resume} not found (considering .pth and .safetensors extensions)")
     else:
         if just_extract_checkpoint_info:
             print("Extracting model from checkpoint file {}".format(resume))
@@ -482,11 +502,16 @@ def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=Non
     torch.serialization.add_safe_globals([torch.nn.modules.normalization.LayerNorm])
     if resume.startswith("https"):
         checkpoint = torch.hub.load_state_dict_from_url(resume, map_location=device, check_hash=True)
-    else:
+    elif resume.endswith(".safetensors"):
+        from safetensors.torch import load_file
+        checkpoint = {
+            "model": load_file(resume, device="cpu")
+        }
+    else: # ends with .pth
         checkpoint = torch.load(resume, map_location=device, weights_only=True)
 
     if just_extract_checkpoint_info:
-        if "cfg" not in checkpoint:
+        if "cfg" not in checkpoint and not resume.endswith(".safetensors"):
             print(
                 "Checkpoint seems to not be from BiaPy (v3.5.1 or later) as model building args couldn't be extracted. Thus, "
                 "the model will be built based on the current configuration"

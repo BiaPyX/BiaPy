@@ -889,6 +889,7 @@ class Base_Workflow(metaclass=ABCMeta):
                         optimizer=self.optimizer,
                         epoch=epoch + 1,
                         model_build_kwargs=self.model_build_kwargs,
+                        extension=self.cfg.MODEL.OUT_CHECKPOINT_FORMAT,
                     )
 
             # Validation
@@ -932,6 +933,7 @@ class Base_Workflow(metaclass=ABCMeta):
                             optimizer=self.optimizer,
                             epoch="best",
                             model_build_kwargs=self.model_build_kwargs,
+                            extension=self.cfg.MODEL.OUT_CHECKPOINT_FORMAT,
                         )
                 print(f"[Val] best loss: {self.val_best_loss:.4f} best " + m)
 
