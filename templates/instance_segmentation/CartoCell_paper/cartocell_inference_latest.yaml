@@ -1,4 +1,4 @@
-# CartoCell inference workflow compatible with BiaPy version 3.6.4
+# CartoCell inference workflow compatible with BiaPy version 3.6.5
 
 SYSTEM:
     NUM_CPUS: -1
@@ -10,7 +10,6 @@ PROBLEM:
     NDIM: 3D                    # images are 3D
     INSTANCE_SEG:
         DATA_CHANNELS: BCM              # problem representation: binary masks + contours + foreground mask
-        DATA_MW_TH_TYPE: "auto"         # automatic calculation of threshold per each channel
         DATA_REMOVE_BEFORE_MW: True     # remove objects before watershed
         DATA_REMOVE_SMALL_OBJ_BEFORE: 5 # size of small objects to be removed before watershed
 

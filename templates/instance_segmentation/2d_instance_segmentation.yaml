@@ -1,4 +1,4 @@
-# BiaPy version: 3.6.4
+# BiaPy version: 3.6.5
 
 SYSTEM:
     NUM_CPUS: -1
@@ -8,7 +8,6 @@ PROBLEM:
     NDIM: 2D
     INSTANCE_SEG:
         DATA_CHANNELS: BC
-        DATA_MW_TH_TYPE: "auto"
   
 DATA: 
     PATCH_SIZE: (256, 256, 1)  
