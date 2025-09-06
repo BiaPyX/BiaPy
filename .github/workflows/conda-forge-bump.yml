@@ -4,7 +4,7 @@ on:
   workflow_dispatch: {}
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
 
 env:
@@ -61,13 +61,17 @@ jobs:
       - name: Authenticate gh CLI
         run: gh auth status
 
-      - name: Clone your feedstock fork
+      - name: Clone your feedstock fork (track upstream/main)
         run: |
           test -n "$FEEDSTOCK_FORK"
           gh repo clone "$FEEDSTOCK_FORK" feedstock
           cd feedstock
           git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream https://github.com/conda-forge/${{ env.PACKAGE_NAME }}-feedstock.git
+          git fetch upstream main
+          git checkout main
+          git reset --hard upstream/main 
 
       - name: Copy your meta.yaml into the feedstock
         working-directory: feedstock
@@ -93,41 +97,27 @@ jobs:
           ver = os.environ["VERSION"]
           sha = os.environ["SDIST_SHA256"]
 
-          # 1) Update Jinja version line: {% set version = "X.Y.Z" %}
           s, n1 = re.subn(r'{%\s*set\s+version\s*=\s*"[^"]+"\s*%}',
                           '{% set version = "' + ver + '" %}', s)
 
-          # 2) Ensure sha256 is correctly present under source:
-          #    - if sha256 line exists, replace value
-          #    - else, insert after the url: line within the source block
           if re.search(r'(?m)^\s*sha256\s*:\s*[0-9A-Fa-f]+', s):
               s, n2 = re.subn(r'(?m)^(?P<indent>\s*sha256\s*:\s*)([0-9A-Fa-f]+)\s*$',
                               r'\g<indent>' + sha, s)
           else:
-              # Find the url line inside the 'source' block and insert sha256 on the next line
-              # Match "source:" then later a line like "  url: ...."
               m = re.search(r'(?ms)^(?P<indent>\s*)source:\s*\n(?P<body>(?:^\s+.*\n)+)', s)
               if not m:
                   raise SystemExit("Could not locate 'source:' block in recipe/meta.yaml")
-              # inside the source body, find the url line to get its indentation
               body = m.group('body')
               mu = re.search(r'(?m)^(?P<uindent>\s*)url\s*:\s*\S+\s*$', body)
               if not mu:
                   raise SystemExit("Could not locate 'url:' line in source block")
               uindent = mu.group('uindent')
-              # insert sha256 on the line *after* the url
               def _ins_sha(murl):
                   line = murl.group(0)
                   return line + "\n" + f"{uindent}sha256: {sha}"
               body2, nurl = re.subn(r'(?m)^(%surl\s*:\s*\S+\s*)$' % re.escape(uindent), _ins_sha, body, count=1)
-              if nurl != 1:
-                  raise SystemExit("Failed to insert sha256 after url line")
-              # splice back the modified body
               s = s[:m.start('body')] + body2 + s[m.end('body'):]
-              n2 = 1
-
           p.write_text(s, encoding="utf-8")
-          print(f"updated version matches: {n1}; ensured sha256: {bool(n2)}")
           PY
 
           git add recipe/meta.yaml
@@ -167,9 +157,7 @@ jobs:
       - name: Configure git auth for push
         working-directory: feedstock
         run: |
-          # Configure git to use gh's credential helper (respects GH_TOKEN)
           gh auth setup-git
-          # Make sure "origin" uses a tokenized HTTPS URL
           git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${FEEDSTOCK_FORK}.git"
 
       - name: Push branch to your fork
@@ -178,7 +166,7 @@ jobs:
           VERSION: ${{ steps.ver.outputs.version }}
         run: |
           BRANCH="bump-v$VERSION-${GITHUB_RUN_ID}"
-          git push --set-upstream origin "$BRANCH"
+          git push --force --set-upstream origin "$BRANCH"
 
       - name: Open PR to conda-forge feedstock
         working-directory: feedstock
@@ -188,7 +176,7 @@ jobs:
         run: |
           BRANCH="bump-v$VERSION-${GITHUB_RUN_ID}"
           TITLE="biapy v$VERSION"
-          BODY="Automated bump to $VERSION after GitHub Release. Recipe copied from project: \`biapy/utils/env/conda_forge_meta.yaml\` . Version and sha256 updated from PyPI sdist."
+          BODY="Automated bump to $VERSION after GitHub Release. Recipe copied from project: \`biapy/utils/env/conda_forge_meta.yaml\`. Version and sha256 updated from PyPI sdist."
           OWNER="${FORK%%/*}"
           gh pr create \
             --repo conda-forge/biapy-feedstock \
@@ -196,3 +184,18 @@ jobs:
             --body "$BODY" \
             --head "${OWNER}:${BRANCH}" \
             --base "main"
+      - name: Enable auto-merge on PR
+        working-directory: feedstock
+        env:
+          GH_TOKEN: ${{ secrets.CF_GH_TOKEN }}
+        run: |
+          # Get the last PR number created by this workflow run
+          PR_NUMBER=$(gh pr list \
+            --repo conda-forge/${PACKAGE_NAME}-feedstock \
+            --head "$(echo $FEEDSTOCK_FORK | cut -d/ -f1):bump-v${{ steps.ver.outputs.version }}-${GITHUB_RUN_ID}" \
+            --json number --jq '.[0].number')
+
+          echo "Enabling auto-merge for PR #$PR_NUMBER"
+          gh pr merge "$PR_NUMBER" \
+            --repo conda-forge/${PACKAGE_NAME}-feedstock \
+            --auto --merge
