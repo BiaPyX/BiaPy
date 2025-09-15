@@ -11,19 +11,19 @@ upsampling, and the bottleneck. It supports various configurations, including
 optional super-resolution, multi-head outputs, and stochastic depth for regularization.
 
 Classes:
---------
-- U_NeXt_V2: The main U-NeXt model (Version 2).
+
+- ``U_NeXt_V2``: The main U-NeXt model (Version 2).
 
 This module relies on building blocks defined in `biapy.models.blocks`, such as
 `UpConvNeXtBlock_V2`, `ConvNeXtBlock_V2`, and `ProjectionHead`.
 
 References:
------------
-`U-Net: Convolutional Networks for Biomedical Image Segmentation <https://arxiv.org/abs/1505.04597>`_
-`ConvNeXt V2: Co-designing and Scaling ConvNets with Masked Autoencoders <https://arxiv.org/abs/2301.00808>`_.
+
+- `U-Net: Convolutional Networks for Biomedical Image Segmentation <https://arxiv.org/abs/1505.04597>`_
+- `ConvNeXt V2: Co-designing and Scaling ConvNets with Masked Autoencoders <https://arxiv.org/abs/2301.00808>`_.
 
 Image representation:
----------------------
+
 .. image:: ../../img/models/unext.png
     :width: 100%
     :align: center

@@ -9,8 +9,8 @@ The architecture is flexible, automatically adapting to 2D or 3D input based
 on the provided `image_shape`.
 
 Classes:
---------
-- simple_CNN: The main class for creating the simple CNN model.
+
+- ``simple_CNN``: The main class for creating the simple CNN model.
 
 This module uses a helper function `get_activation` from `biapy.models.blocks`
 to dynamically select the activation function.

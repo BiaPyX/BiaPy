@@ -9,27 +9,25 @@ across different scales.
 Key components implemented in this file include:
 
 Classes:
---------
-- Conv_batchnorm: A basic convolutional block with optional batch normalization and activation.
-- Multiresblock: The MultiRes Block, a core component that processes features
+
+- ``Conv_batchnorm``: A basic convolutional block with optional batch normalization and activation.
+- ``Multiresblock``: The MultiRes Block, a core component that processes features
   through parallel convolutional paths of different kernel sizes (3x3, 5x5, 7x7)
   and fuses them.
-- Respath: The ResPath module, which acts as an enhanced skip connection,
+- ``Respath``: The ResPath module, which acts as an enhanced skip connection,
   applying residual convolutional blocks to features before they are concatenated
   in the decoder.
-- MultiResUnet: The main MultiResUNet model, combining the encoder, decoder,
+- ``MultiResUnet``: The main MultiResUNet model, combining the encoder, decoder,
   and skip connections using the MultiRes Blocks and ResPaths.
 
 The implementation supports both 2D and 3D inputs, various normalization types,
 and optional multi-head outputs, including a contrastive learning projection.
 
 Reference:
-----------
 `MultiResUNet : Rethinking the U-Net Architecture for Multimodal Biomedical Image
 Segmentation <https://arxiv.org/abs/1902.04049>`_
 
 Code Adapted From:
-------------------
 https://github.com/nibtehaz/MultiResUNet
 """
 import torch

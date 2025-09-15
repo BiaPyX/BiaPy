@@ -10,8 +10,8 @@ of learned representations.
 Key components and functionalities include:
 
 Classes:
---------
-- SE_U_Net: The main Squeeze-and-Excitation U-Net model, comprising an
+
+- ``SE_U_Net``: The main Squeeze-and-Excitation U-Net model, comprising an
   encoder (downsampling path), a decoder (upsampling path), and skip connections,
   all enhanced with SE blocks.
 
@@ -20,11 +20,10 @@ such as `DoubleConvBlock`, `UpBlock`, `ConvBlock`, `ProjectionHead`, and
 utility functions for normalization (`get_norm_2d`, `get_norm_3d`).
 
 Reference:
-----------
 `Squeeze and Excitation Networks <https://arxiv.org/abs/1709.01507>`_.
 
 Image representation:
----------------------
+
 .. image:: ../../img/models/unet.png
     :width: 100%
     :align: center

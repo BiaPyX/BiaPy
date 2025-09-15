@@ -9,21 +9,21 @@ image from the encoder's latent representation and mask tokens.
 Key components and functionalities include:
 
 Classes:
---------
-- MaskedAutoencoderViT: The main MAE model, encompassing the encoder and decoder.
+
+- ``MaskedAutoencoderViT``: The main MAE model, encompassing the encoder and decoder.
 
 Functions:
-----------
-- mae_vit_base_patch16_dec512d8b: Factory function for a base MAE-ViT model.
-- mae_vit_large_patch16_dec512d8b: Factory function for a large MAE-ViT model.
-- mae_vit_huge_patch14_dec512d8b: Factory function for a huge MAE-ViT model.
+
+- ``mae_vit_base_patch16_dec512d8b``: Factory function for a base MAE-ViT model.
+- ``mae_vit_large_patch16_dec512d8b``: Factory function for a large MAE-ViT model.
+- ``mae_vit_huge_patch14_dec512d8b``: Factory function for a huge MAE-ViT model.
 
 The implementation supports both 2D and 3D image inputs, different masking strategies
 (random and grid), and provides methods for patching/unpatching images,
 forward passes through encoder/decoder, and loss calculation.
 
 References:
------------
+
 - Masked Autoencoders Are Scalable Vision Learners: https://arxiv.org/abs/2111.06377
 - timm: https://github.com/rwightman/pytorch-image-models/tree/master/timm
 - DeiT: https://github.com/facebookresearch/deit

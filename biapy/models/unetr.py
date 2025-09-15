@@ -9,15 +9,14 @@ levels. This design is particularly well-suited for 3D medical image
 segmentation.
 
 Classes:
---------
-- UNETR: The main UNETR model, integrating a ViT encoder with a U-Net-like decoder.
+
+- ``UNETR``: The main UNETR model, integrating a ViT encoder with a U-Net-like decoder.
 
 This module leverages components from `biapy.models.blocks` such as `DoubleConvBlock`,
 `ConvBlock`, `ProjectionHead`, and normalization helpers (`get_norm_2d`, `get_norm_3d`),
 as well as `PatchEmbed` from `biapy.models.tr_layers`.
 
 Reference:
-----------
 `UNETR: Transformers for 3D Medical Image Segmentation
 <https://openaccess.thecvf.com/content/WACV2022/html/Hatamizadeh_UNETR_Transformers_for_3D_Medical_Image_Segmentation_WACV_2022_paper.html>`_.
 """

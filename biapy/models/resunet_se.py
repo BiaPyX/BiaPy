@@ -11,18 +11,17 @@ including an optional contrastive learning projection.
 Key components and functionalities include:
 
 Classes:
---------
-- ResUNet_SE: The main Residual U-Net model with Squeeze-and-Excitation blocks.
+
+- ``ResUNet_SE``: The main Residual U-Net model with Squeeze-and-Excitation blocks.
 
 This module relies on building blocks defined in `biapy.models.blocks`, such as
 `ResConvBlock`, `ResUpBlock`, `ConvBlock`, `ProjectionHead`, and normalization helpers.
 
 Reference:
-----------
 `Squeeze and Excitation Networks <https://arxiv.org/abs/1709.01507>`_.
 
 Image representation:
----------------------
+
 .. image:: ../../img/models/unet.png
     :width: 100%
     :align: center

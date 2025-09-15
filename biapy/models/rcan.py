@@ -6,26 +6,24 @@ mechanisms to achieve high-quality image reconstruction. The model is built
 upon several key components:
 
 Classes:
---------
-- ChannelAttention: Implements a channel attention mechanism that recalibrates
+
+- ``ChannelAttention``: Implements a channel attention mechanism that recalibrates
   channel-wise feature responses by modeling interdependencies between channels.
-- RCAB (Residual Channel Attention Block): A fundamental building block that
+- ``RCAB`` (Residual Channel Attention Block): A fundamental building block that
   combines residual learning with the ChannelAttention mechanism.
-- RG (Residual Group): A collection of multiple RCABs, followed by a
+- ``RG`` (Residual Group): A collection of multiple RCABs, followed by a
   convolutional layer, with a global residual connection.
-- rcan: The main RCAN model, integrating the initial feature extraction,
+- ``rcan``: The main RCAN model, integrating the initial feature extraction,
   multiple Residual Groups, and an optional upscaling module for super-resolution.
 
 The implementation supports both 2D and 3D image inputs and is adapted from
 the official RCAN-pytorch repository.
 
 Reference:
-----------
 `Image Super-Resolution Using Very Deep Residual Channel Attention Networks
 <https://openaccess.thecvf.com/content_ECCV_2018/html/Yulun_Zhang_Image_Super-Resolution_Using_ECCV_2018_paper.html>`_.
 
 Adapted from:
--------------
 https://github.com/yjn870/RCAN-pytorch
 """
 import torch
