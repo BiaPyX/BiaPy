@@ -1,29 +1,23 @@
 """
-Definition of the High-Resolution Net (HRNet) model and its essential building blocks, designed for dense prediction tasks in 2D and 3D imaging.
+This file implements the High-Resolution Net (HRNet) model and its core building blocks,
+designed for dense prediction tasks in 2D and 3D imaging.
 
 The HRNet architecture maintains high-resolution representations throughout the
 network by connecting high-to-low resolution convolution streams in parallel
 and facilitating repeated information exchange across these streams.
 
-Key components implemented in this file include:
+Key components:
 
-Classes:
---------
-- HighResolutionNet: The main HRNet model, orchestrating the overall architecture.
-- HighResolutionModule: A core HRNet building block that manages parallel
-  resolution branches and cross-resolution information fusion.
-- HRBasicBlock: The basic residual block used within HRNet branches.
-- HRBottleneck: The bottleneck residual block used within HRNet branches.
+- ``HighResolutionNet``: The main HRNet model.
+- ``HighResolutionModule``: Core HRNet building block that manages multi-resolution fusion.
+- ``HRBasicBlock``: Basic residual block for HRNet.
+- ``HRBottleneck``: Bottleneck residual block for HRNet.
 
-Reference:
-----------
-`Deep High-Resolution Representation Learning for Visual Recognition
-<https://ieeexplore.ieee.org/abstract/document/9052469>`_
+Reference:  
+`Deep High-Resolution Representation Learning for Visual Recognition <https://ieeexplore.ieee.org/abstract/document/9052469>`_
 
-Code Adapted From:
-------------------
-`Exploring Cross-Image Pixel Contrast for Semantic Segmentation
-<https://github.com/tfzhou/ContrastiveSeg/tree/main>`_
+Code adapted from:  
+`Exploring Cross-Image Pixel Contrast for Semantic Segmentation <https://github.com/tfzhou/ContrastiveSeg/tree/main>`_
 """
 import os
 import torch
