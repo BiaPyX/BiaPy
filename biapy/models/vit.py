@@ -8,17 +8,17 @@ a backbone for various computer vision tasks, including classification and
 self-supervised learning (e.g., Masked Autoencoders).
 
 Classes:
---------
-- VisionTransformer: An extended ViT model with support for 2D/3D inputs and global pooling.
+
+- ``VisionTransformer``: An extended ViT model with support for 2D/3D inputs and global pooling.
 
 Functions:
-----------
-- vit_base_patch16: Factory function for a base-sized ViT model with 16x16 patches.
-- vit_large_patch16: Factory function for a large-sized ViT model with 16x16 patches.
-- vit_huge_patch14: Factory function for a huge-sized ViT model with 14x14 patches.
+
+- ``vit_base_patch16``: Factory function for a base-sized ViT model with 16x16 patches.
+- ``vit_large_patch16``: Factory function for a large-sized ViT model with 16x16 patches.
+- ``vit_huge_patch14``: Factory function for a huge-sized ViT model with 14x14 patches.
 
 References:
------------
+
 - timm: https://github.com/rwightman/pytorch-image-models/tree/master/timm
 - DeiT: https://github.com/facebookresearch/deit
 - Masked Autoencoders Are Scalable Vision Learners: https://arxiv.org/abs/2111.06377

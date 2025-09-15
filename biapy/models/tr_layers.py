@@ -6,8 +6,8 @@ embedding space and the subsequent flattening and optional normalization of thes
 patches. It supports both 2D and 3D image inputs.
 
 Classes:
---------
-- PatchEmbed: Transforms an input image into a sequence of embedded patches.
+
+- ``PatchEmbed``: Transforms an input image into a sequence of embedded patches.
 
 """
 import torch.nn as nn

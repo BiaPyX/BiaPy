@@ -9,16 +9,14 @@ a series of residual blocks, a final reconstruction layer, and a skip connection
 with a PixelShuffle layer for upsampling.
 
 Classes:
---------
-- wdsr: The main WDSR model.
-- Block: The residual block used within the WDSR architecture.
+
+- ``wdsr``: The main WDSR model.
+- ``Block``: The residual block used within the WDSR architecture.
 
 Reference:
-----------
 `Wide Activation for Efficient and Accurate Image Super-Resolution <https://arxiv.org/abs/1808.08718>`_.
 
 Adapted from:
--------------
 https://github.com/yjn870/WDSR-pytorch/tree/master
 """
 import math
