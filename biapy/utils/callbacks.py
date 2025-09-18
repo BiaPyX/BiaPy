@@ -6,7 +6,7 @@ and stops the training process if the metric does not improve for a specified
 number of epochs (patience).
 
 Classes:
---------
+
 - EarlyStopping: Implements the early stopping logic.
 
 This implementation is adapted from a widely used PyTorch early stopping script.
