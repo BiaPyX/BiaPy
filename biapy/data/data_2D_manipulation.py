@@ -2,23 +2,27 @@
 2D data manipulation utilities for biomedical image processing.
 
 This module provides functions for processing 2D image data, particularly focused on:
+
 - Overlapping patch extraction and reconstruction
 - Image cropping and merging with configurable overlap
 - Shape validation and normalization
 - Memory-efficient handling of large 2D datasets
 
 Key Features:
+
 - :func:`crop_data_with_overlap`: Extract overlapping patches from 2D images
 - :func:`merge_data_with_overlap`: Reconstruct images from overlapping patches
 - :func:`ensure_2d_shape`: Validate and standardize 2D image shapes
 
 The module is optimized for biomedical image analysis workflows and supports:
+
 - Both HDF5 and numpy array inputs
 - Configurable padding and overlap strategies
 - Multi-image batch processing
 - Mask handling for segmentation tasks
 
 Typical usage involves:
+
 1. Extracting patches from large images using :func:`crop_data_with_overlap`
 2. Processing patches through a neural network
 3. Reconstructing full images using :func:`merge_data_with_overlap`
