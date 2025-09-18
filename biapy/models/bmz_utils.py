@@ -2,6 +2,7 @@
 This module provides utility functions for managing and preparing BioImage Model Zoo (BMZ) models within the BiaPy framework.
 
 It includes functionalities for:
+
 - Retrieving and parsing BMZ model information (`get_bmz_model_info`).
 - Creating necessary environment files for model deployment (`create_environment_file_for_model`).
 - Generating visual covers for models based on input/output examples (`create_model_cover`).

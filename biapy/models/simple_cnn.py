@@ -34,8 +34,10 @@ class simple_CNN(nn.Module):
     ----------
     image_shape : Tuple[int, ...]
         Dimensions of the input image.
+
         - For 2D: `(height, width, channels)`
         - For 3D: `(depth, height, width, channels)`
+        
         The last element `image_shape[-1]` should be the number of input channels.
 
     activation : str, optional
@@ -63,8 +65,10 @@ class simple_CNN(nn.Module):
         ----------
         image_shape : Tuple[int, ...]
             Dimensions of the input image.
+
             - For 2D: `(height, width, channels)`
             - For 3D: `(depth, height, width, channels)`
+            
             The last element is the number of input channels.
         activation : str, optional
             Name of the activation layer to use (e.g., "ReLU", "ELU", "SiLU").
