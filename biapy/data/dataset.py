@@ -29,14 +29,15 @@ Classes
 Typical usage
 -------------
 
-```python
-from biapy.data.dataset import DatasetFile, DataSample, BiaPyDataset
+.. code-block:: python
 
-# Assume dataset_info and sample_list are preconstructed lists of DatasetFile and DataSample
-dataset = BiaPyDataset(dataset_info=dataset_info, sample_list=sample_list)
+    from biapy.data.dataset import DatasetFile, DataSample, BiaPyDataset
 
-# Clean dataset by keeping only a subset of samples or images
-dataset.clean_dataset(samples_to_maintain=[0, 2, 5], clean_by="sample")
+    # Assume dataset_info and sample_list are preconstructed lists of DatasetFile and DataSample
+    dataset = BiaPyDataset(dataset_info=dataset_info, sample_list=sample_list)
+
+    # Clean dataset by keeping only a subset of samples or images
+    dataset.clean_dataset(samples_to_maintain=[0, 2, 5], clean_by="sample")
 """
 from __future__ import annotations
 from typing import List, Tuple, Optional
