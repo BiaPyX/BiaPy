@@ -1,4 +1,5 @@
-"""Module for 3D data manipulation utilities.
+"""
+Module for 3D data manipulation utilities.
 
 This module provides functions to process and manipulate 3D data volumes, including:
 - Cropping/merging with overlap

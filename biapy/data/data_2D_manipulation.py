@@ -1,4 +1,5 @@
-"""2D data manipulation utilities for biomedical image processing.
+"""
+2D data manipulation utilities for biomedical image processing.
 
 This module provides functions for processing 2D image data, particularly focused on:
 - Overlapping patch extraction and reconstruction
