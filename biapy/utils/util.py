@@ -4,6 +4,7 @@ data manipulation, and visualization, primarily geared towards bioimage analysis
 workflows.
 
 It includes functionalities for:
+
 - Generating plots for training loss and metrics.
 - Creating threshold-based metric plots.
 - Generating weight maps for U-Net-like models to handle object boundaries.
