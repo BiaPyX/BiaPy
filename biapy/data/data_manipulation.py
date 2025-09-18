@@ -6,6 +6,7 @@ biological image data for deep learning applications. It supports both 2D and 3D
 formats, including common file types like TIFF, HDF5, Zarr, and NumPy arrays.
 
 Key Functionalities:
+
 - Loading training, validation, and test data from various formats
 - Data preprocessing and normalization
 - Image cropping and patching with overlap
@@ -16,6 +17,7 @@ Key Functionalities:
 - Data saving in multiple formats
 
 The module supports:
+
 - Both 2D and 3D image data
 - Multiple input formats (TIFF, HDF5, Zarr, NumPy arrays)
 - Classification and segmentation workflows
@@ -24,6 +26,7 @@ The module supports:
 - Data validation and consistency checks
 
 Main Classes and Functions:
+
 - load_and_prepare_train_data(): Main function for loading training data
 - load_and_prepare_test_data(): Function for loading test data
 - load_and_prepare_cls_test_data(): For classification test data
@@ -34,6 +37,7 @@ Main Classes and Functions:
 - save_tif(), save_npy_files(): Data saving utilities
 
 Typical Workflow:
+
 1. Load data using one of the load_and_prepare_* functions
 2. Apply preprocessing/normalization
 3. Filter or augment data as needed
