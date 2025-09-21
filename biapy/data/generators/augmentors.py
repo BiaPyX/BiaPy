@@ -1880,7 +1880,7 @@ def zoom(
             if mask is not None:
                 mask = np.pad(mask, mask_pad_tup, mode)  # type: ignore
             if heat is not None:
-                heat = np.pad(heat, img_pad_tup[:-1], mode)  # type: ignore
+                heat = np.pad(heat, img_pad_tup, mode)  # type: ignore
 
     if mask is None:
         return img
