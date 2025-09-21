@@ -1132,10 +1132,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 e_mask = e_mask.reshape(e_mask.shape[:2] + (e_mask.shape[2] * e_mask.shape[3],))
             # if e_heat: e_heat = e_heat.reshape(e_heat.shape[:2]+(e_heat.shape[2]*e_heat.shape[3],))
         
-        # normalize heat
-        if heat is not None:
-            heat = (heat - heat.min()) / (heat.max() + sys.float_info.epsilon - heat.min())
-
         # Apply cblur
         if self.cutblur and random.uniform(0, 1) < self.da_prob:
             image = cutblur(image, self.cblur_size, self.cblur_down_range, self.cblur_inside)
@@ -1288,9 +1284,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         # Merge heatmaps and masks again
         if self.no_bin_channel_found:
-            # unnormalize heat
-            heat = heat * (heat.max() + sys.float_info.epsilon - heat.min()) + heat.min()
-            
             if self.ndim == 3:
                 heat = heat.reshape(o_heat_shape)
 
