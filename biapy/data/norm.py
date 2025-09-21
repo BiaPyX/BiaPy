@@ -196,8 +196,7 @@ class Normalization:
                     if len(np.unique(mask[..., j])) > 2:
                         self.channel_info[j]["type"] = "no_bin"
                         self.no_bin_channel_found = True
-                    if np.max(mask[..., j]) > 30:
-                        self.channel_info[j]["div"] = True
+                        self.channel_info[j]["div"] = False
                 else:  # In semantic seg, maybe the mask are in 255
                     if np.max(mask[..., j]) > max(n_classes,_ignore_index):
                         self.channel_info[j]["div"] = True
