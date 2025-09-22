@@ -259,7 +259,6 @@ class UNETR(nn.Module):
                 for i in range(depth)
             ]
         )
-        self.norm = norm_layer(embed_dim)
 
         # UNETR Part (bottom_up, from the bottle-neck, to the output)
         self.total_upscale_factor = int(math.log2(patch_size))
