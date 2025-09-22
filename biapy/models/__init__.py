@@ -242,7 +242,7 @@ def build_model(
                 mlp_ratio=cfg.MODEL.VIT_MLP_RATIO,
                 num_filters=cfg.MODEL.UNETR_VIT_NUM_FILTERS,
                 output_channels=output_channels,
-                decoder_activation=cfg.MODEL.UNETR_DEC_ACTIVATION,
+                decoder_activation=cfg.MODEL.UNETR_DEC_ACTIVATION.lower(),
                 ViT_hidd_mult=cfg.MODEL.UNETR_VIT_HIDD_MULT,
                 normalization=cfg.MODEL.NORMALIZATION,
                 dropout=cfg.MODEL.DROPOUT_VALUES[0],
@@ -607,9 +607,8 @@ def build_bmz_model(cfg: CN, model: ModelDescr_v0_4 | ModelDescr_v0_5, device: t
 
     return model_instance
 
-
 def find_bmz_models(
-    model_ID: str,
+    model_ID: Optional[str] = None,
     url: str = "https://hypha.aicell.io/bioimage-io/artifacts/bioimage.io/children?limit=1000000",
     timeout: int = 30,
 ):
@@ -623,7 +622,8 @@ def find_bmz_models(
     Parameters
     ----------
     model_ID : str
-        Model identifier. It can be either its ``DOI`` or ``nickname``.
+        Model identifier. It can be either its ``DOI`` or ``nickname``. Leave it as None
+        to get all available models.
 
     url : str
         URL to the BioImage.IO Hypha API endpoint to query for models.
@@ -639,7 +639,7 @@ def find_bmz_models(
         `artifact_path`, `urls` (which contains `covers` and `documentation` URLs), and `raw`
         (the original item from the API response).
     """
-    q = str(model_ID).lower()
+    q = str(model_ID).lower() if model_ID else None
 
     r = requests.get(url, timeout=timeout)
     r.raise_for_status()
@@ -667,7 +667,7 @@ def find_bmz_models(
             it.get("id") or "",
             rdf_source or "",
         ]
-        if not any(q in h.lower() for h in hay):
+        if q and not any(q in h.lower() for h in hay):
             continue
 
         out.append(
@@ -969,7 +969,7 @@ def check_bmz_model_compatibility(
     return preproc_info, False, ""
 
 
-def check_model_restrictions(cfg: CN, bmz_config: Dict, workflow_specs: Dict) -> List[str]:
+def check_model_restrictions(cfg: CN, bmz_config: Dict, workflow_specs: Dict, verbose: bool=True) -> List[str]:
     """
     Check model restrictions to be applied into the current configuration.
 
@@ -984,6 +984,9 @@ def check_model_restrictions(cfg: CN, bmz_config: Dict, workflow_specs: Dict) ->
     workflow_specs : dict
         Specifications of the workflow. Only expected "workflow_type" key.
 
+    verbose : bool
+        Whether to print the changes imposed by the model or not.
+
     Returns
     -------
     option_list: list of str
@@ -992,42 +995,96 @@ def check_model_restrictions(cfg: CN, bmz_config: Dict, workflow_specs: Dict) ->
     """
     specific_workflow = workflow_specs["workflow_type"]
 
-    # First let's make sure we have a valid model
-    if isinstance(bmz_config["original_bmz_config"], InvalidDescr):
-        raise ValueError(f"Failed to load '{cfg.MODEL.BMZ.SOURCE_MODEL_ID}' model")
+    # First let's make sure we have a valid model, if it is a dict then it will be the RDF
+    if not isinstance(bmz_config["original_bmz_config"], dict):
+        if isinstance(bmz_config["original_bmz_config"], InvalidDescr):
+            raise ValueError(f"Failed to load '{cfg.MODEL.BMZ.SOURCE_MODEL_ID}' model")
+    else:
+        rdf = bmz_config["original_bmz_config"].get("raw") or bmz_config["original_bmz_config"]
+        core = rdf.get("manifest", rdf)  # <- NEW: inputs/weights/etc. are usually here now
 
     # Version of the model
-    model_version = Version(bmz_config["original_bmz_config"].format_version)
+    if isinstance(bmz_config["original_bmz_config"], dict):
+        fmt = (core.get("format_version")
+            or rdf.get("format_version")
+            or bmz_config["original_bmz_config"].get("format_version"))
+        model_version = Version(str(fmt)) if fmt else Version("0.5.2")
+    else:
+        try:
+            model_version = Version(bmz_config["original_bmz_config"].format_version)
+        except:
+            model_version = Version("0.5.2")
+
     opts = {}
 
-    # 1) Change PATCH_SIZE with the one stored in the RDF
-    inputs = get_test_inputs(bmz_config["original_bmz_config"])
-    input_image_shape = None
-    if "input0" in inputs.members:
-        input_image_shape = inputs.members["input0"]._data.shape  # type: ignore
-    elif "raw" in inputs.members:
-        input_image_shape = inputs.members["raw"]._data.shape  # type: ignore
-    else:  # ambitious-sloth case
-        input_image_shape = inputs.members[list(inputs.members.keys())[0]]._data.shape
-    if input_image_shape is None:
-        raise ValueError(f"Couldn't load input info from BMZ model's RDF: {inputs}")
-    if cfg.DATA.PATCH_SIZE != input_image_shape[2:] + (input_image_shape[1],):
-        opts["DATA.PATCH_SIZE"] = input_image_shape[2:] + (input_image_shape[1],)
+    # ---- 1) DATA.PATCH_SIZE from input tensor shape/axes ----
+    if isinstance(bmz_config["original_bmz_config"], dict):
+        if "inputs" not in core or not core["inputs"]:
+            raise KeyError("Couldn't find 'inputs' in the model RDF (expected under raw.manifest.inputs).")
 
-    # Capture model kwargs
-    if hasattr(bmz_config["original_bmz_config"].weights.pytorch_state_dict, "kwargs"):
-        model_kwargs = bmz_config["original_bmz_config"].weights.pytorch_state_dict.kwargs
-    elif hasattr(bmz_config["original_bmz_config"].weights.pytorch_state_dict, "architecture") and hasattr(
-        bmz_config["original_bmz_config"].weights.pytorch_state_dict.architecture, "kwargs"
-    ):
-        model_kwargs = bmz_config["original_bmz_config"].weights.pytorch_state_dict.architecture.kwargs
+        input0 = core["inputs"][0]
+        input_image_shape = []
+        if "shape" in input0:
+            input_image_shape = input0["shape"]
+            # e.g. {'min': [...], 'step': [...]} -> take 'min'
+            if isinstance(input_image_shape, dict) and "min" in input_image_shape:
+                input_image_shape = input_image_shape["min"]
+        else:
+            # Derive from axes (supports 'type'=='batch'/'channel' and sized spatial axes)
+            for axis in input0.get("axes", []):
+                if "type" in axis:
+                    if axis["type"] == "batch":
+                        input_image_shape += [1]
+                    elif axis["type"] == "channel":
+                        input_image_shape += [1]
+                    elif ("id" in axis) and ("size" in axis):
+                        if isinstance(axis["size"], int):
+                            input_image_shape += [axis["size"]]
+                        elif isinstance(axis["size"], dict) and "min" in axis["size"]:
+                            input_image_shape += [axis["size"]["min"]]
+                elif "id" in axis:
+                    if axis["id"] == "channel":
+                        input_image_shape += [1]
+                    else:
+                        if isinstance(axis.get("size"), int):
+                            input_image_shape += [axis["size"]]
+                        elif isinstance(axis.get("size"), dict) and "min" in axis["size"]:
+                            input_image_shape += [axis["size"]["min"]]
     else:
-        raise ValueError(f"Couldn't extract kwargs from model description.")
-
-    # 2) Workflow specific restrictions
-    # Classes in semantic segmentation
+        inputs = get_test_inputs(bmz_config["original_bmz_config"])
+        input_image_shape = None
+        if "input0" in inputs.members:
+            input_image_shape = inputs.members["input0"]._data.shape  # type: ignore
+        elif "raw" in inputs.members:
+            input_image_shape = inputs.members["raw"]._data.shape  # type: ignore
+        else:  # ambitious-sloth case
+            input_image_shape = inputs.members[list(inputs.members.keys())[0]]._data.shape
+        if input_image_shape is None:
+            raise ValueError(f"Couldn't load input info from BMZ model's RDF: {inputs}")
+        if cfg.DATA.PATCH_SIZE != input_image_shape[2:] + (input_image_shape[1],):
+            opts["DATA.PATCH_SIZE"] = input_image_shape[2:] + (input_image_shape[1],)
+            
+    # ---- Capture model kwargs from weights ----
+    if isinstance(bmz_config["original_bmz_config"], dict):
+        weights = core.get("weights", {}).get("pytorch_state_dict", {})
+        if "kwargs" in weights:
+            model_kwargs = weights["kwargs"]
+        elif "architecture" in weights and "kwargs" in weights["architecture"]:
+            model_kwargs = weights["architecture"]["kwargs"]
+        else:
+            raise ValueError("Couldn't extract kwargs from model description (looked under manifest.weights.pytorch_state_dict).")
+    else:
+        weights = bmz_config["original_bmz_config"].weights.pytorch_state_dict
+        if hasattr(weights, "kwargs"):
+            model_kwargs = weights.kwargs
+        elif hasattr(weights, "architecture") and hasattr(weights.architecture, "kwargs"):
+            model_kwargs = weights.architecture.kwargs
+        else:
+            raise ValueError(f"Couldn't extract kwargs from model description.")    
+    
+    # ---- 2) Workflow-specific restrictions ----
     if specific_workflow in ["SEMANTIC_SEG"]:
-        # Check number of classes
+        # Number of classes
         classes = -1
         if "n_classes" in model_kwargs:  # BiaPy
             classes = model_kwargs["n_classes"]
@@ -1037,13 +1094,21 @@ def check_model_restrictions(cfg: CN, bmz_config: Dict, workflow_specs: Dict) ->
             classes = model_kwargs["output_channels"]
         elif "classes" in model_kwargs:
             classes = model_kwargs["classes"]
+
         if isinstance(classes, list):
             classes = classes[-1]
 
         try:
             if classes == -1:
                 # Check if the model is one of the known architectures and assume it returns 1 class (as is the default in BiaPy)
-                for arch in [str(bmz_config["original_bmz_config"].weights.pytorch_state_dict.architecture.source), bmz_config["original_bmz_config"].weights.pytorch_state_dict.architecture.callable]:
+                try:
+                    names = [str(weights["architecture"]["source"]), weights["architecture"]["callable"]]
+                except:
+                    names = [
+                        str(weights.architecture.source), 
+                        weights.architecture.callable
+                    ]
+                for arch in names:
                     if arch is not None:
                         arch = str(arch).lower().replace(".py", "")
                         if arch in [
@@ -1061,11 +1126,12 @@ def check_model_restrictions(cfg: CN, bmz_config: Dict, workflow_specs: Dict) ->
                         ]:
                             classes = 1
                     if classes != -1:
-                        print(f"[BMZ] Detected BiaPy model ({arch}) so assuming 1 as the class output, which is the default in BiaPy")
+                        if verbose:
+                            print(f"[BMZ] Detected BiaPy model ({arch}) so assuming 1 as the class output, which is the default in BiaPy")
                         break 
         except:
             pass
-
+        
         if not isinstance(classes, int):
             raise ValueError(f"Classes not extracted correctly. Obtained {classes}")
         if classes == -1:
@@ -1079,7 +1145,7 @@ def check_model_restrictions(cfg: CN, bmz_config: Dict, workflow_specs: Dict) ->
 
         # Defaults
         channels = 2
-        channel_code = "BC"
+        channel_code = ["B", "C"]
         classes = 2
 
         if "out_channels" in model_kwargs:
@@ -1087,14 +1153,19 @@ def check_model_restrictions(cfg: CN, bmz_config: Dict, workflow_specs: Dict) ->
         elif "output_channels" in model_kwargs:
             channels = model_kwargs["output_channels"]
 
-        if "biapy" in bmz_config["original_bmz_config"].tags:
+        if isinstance(bmz_config["original_bmz_config"], dict):
+            tags = core["tags"]
+        else:
+            tags = bmz_config["original_bmz_config"].tags
+
+        if "biapy" in tags:
             # CartoCell models
             if (
-                "cyst" in bmz_config["original_bmz_config"].tags
-                and "3d" in bmz_config["original_bmz_config"].tags
-                and "fluorescence" in bmz_config["original_bmz_config"].tags
+                "cyst" in tags
+                and "3d" in tags
+                and "fluorescence" in tags
             ):
-                channel_code = "BCM"
+                channel_code = ["B", "C", "M"]
 
             # Handle multihead
             assert isinstance(channels, list)
@@ -1106,11 +1177,11 @@ def check_model_restrictions(cfg: CN, bmz_config: Dict, workflow_specs: Dict) ->
             if isinstance(channels, list):
                 channels = channels[-1]
             if channels == 1:
-                channel_code = "C"
+                channel_code = ["C"]
             elif channels == 2:
-                channel_code = "BC"
+                channel_code = ["B", "C"]
             elif channels == 8:
-                channel_code = "A"
+                channel_code = ["A"] # wild-whale
 
         opts["PROBLEM.INSTANCE_SEG.DATA_CHANNELS"] = channel_code
         opts["PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS"] = [
@@ -1121,19 +1192,31 @@ def check_model_restrictions(cfg: CN, bmz_config: Dict, workflow_specs: Dict) ->
         if channel_code == "A":
             opts["LOSS.CLASS_REBALANCE"] = True
 
-    # 3) Change preprocessing to the one stablished by BMZ by translate BMZ keywords into BiaPy's
-    # 'zero_mean_unit_variance' and 'fixed_zero_mean_unit_variance' norms of BMZ can be translated to our 'custom' norm
-    # providing mean and std
-    print(f"[BMZ] Overriding preprocessing steps to the ones fixed in BMZ model: {bmz_config['preprocessing']}")
+    # ---- 3) Preprocessing mapping (BMZ -> BiaPy) ----
     key_to_find = "id" if model_version > Version("0.5.0") else "name"
-    if key_to_find in bmz_config["preprocessing"]:
-        if bmz_config["preprocessing"][key_to_find] in ["fixed_zero_mean_unit_variance", "zero_mean_unit_variance"]:
-            if "kwargs" in bmz_config["preprocessing"] and "mean" in bmz_config["preprocessing"]["kwargs"]:
-                mean = bmz_config["preprocessing"]["kwargs"]["mean"]
-                std = bmz_config["preprocessing"]["kwargs"]["std"]
-            elif "mean" in bmz_config["preprocessing"]:
-                mean = bmz_config["preprocessing"]["mean"]
-                std = bmz_config["preprocessing"]["std"]
+    if isinstance(bmz_config["original_bmz_config"], dict):
+        preproc_info = input0.get("preprocessing", [])
+        if len(preproc_info) > 0:
+            preproc_info = preproc_info[0]
+    else:
+        preproc_info = bmz_config["preprocessing"]
+
+    if not preproc_info:
+        return opts
+    
+    if verbose:
+        print(f"[BMZ] Overriding preprocessing steps to the ones fixed in BMZ model: {preproc_info}")
+    
+    if key_to_find in preproc_info:
+        proc_id = preproc_info[key_to_find]
+        # zero_mean_unit_variance / fixed_zero_mean_unit_variance -> zero_mean_unit_variance(mean,std)
+        if proc_id in ["fixed_zero_mean_unit_variance", "zero_mean_unit_variance"]:
+            if "kwargs" in preproc_info and "mean" in preproc_info["kwargs"]:
+                mean = preproc_info["kwargs"]["mean"]
+                std = preproc_info["kwargs"]["std"]
+            elif "mean" in preproc_info:
+                mean = preproc_info["mean"]
+                std = preproc_info["std"]
             else:
                 mean, std = -1.0, -1.0
 
@@ -1141,31 +1224,34 @@ def check_model_restrictions(cfg: CN, bmz_config: Dict, workflow_specs: Dict) ->
             opts["DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.MEAN_VAL"] = mean
             opts["DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.STD_VAL"] = std
 
-        # 'scale_linear' norm of BMZ is close to our 'div' norm (TODO: we need to control the "gain" arg)
-        elif bmz_config["preprocessing"][key_to_find] == "scale_linear":
+        # scale_linear ~ div (gain not handled, same as original)
+        elif preproc_info[key_to_find] == "scale_linear":
             opts["DATA.NORMALIZATION.TYPE"] = "div"
 
-        # 'scale_range' norm of BMZ is as our 'scale_range' norm too
-        elif bmz_config["preprocessing"][key_to_find] == "scale_range":
+        # scale_range -> scale_range (+ optional PERC_CLIP)
+        elif preproc_info[key_to_find] == "scale_range":
             opts["DATA.NORMALIZATION.TYPE"] = "scale_range"
 
             # Check if there is percentile clippign
             if (
-                float(bmz_config["preprocessing"]["kwargs"]["min_percentile"]) != 0
-                or float(bmz_config["preprocessing"]["kwargs"]["max_percentile"]) != 100
+                float(preproc_info["kwargs"]["min_percentile"]) != 0
+                or float(preproc_info["kwargs"]["max_percentile"]) != 100
             ):
                 opts["DATA.NORMALIZATION.PERC_CLIP.ENABLE"] = True
                 opts["DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC"] = float(
-                    bmz_config["preprocessing"]["kwargs"]["min_percentile"]
+                    preproc_info["kwargs"]["min_percentile"]
                 )
                 opts["DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC"] = float(
-                    bmz_config["preprocessing"]["kwargs"]["max_percentile"]
+                    preproc_info["kwargs"]["max_percentile"]
                 )
+
+    if not cfg:
+        return opts
 
     option_list = []
     for key, val in opts.items():
         old_val = get_cfg_key_value(cfg, key)
-        if old_val != val:
+        if old_val != val and verbose:
             print(f"[BMZ] Changed '{key}' from {old_val} to {val} as defined in the RDF")
         option_list.append(key)
         option_list.append(val)
