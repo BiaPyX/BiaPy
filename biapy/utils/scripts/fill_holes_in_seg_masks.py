@@ -34,7 +34,7 @@ for n, id_ in tqdm(enumerate(ids), total=len(ids)):
     new_img = np.zeros(img.shape, dtype=img.dtype)
     if args['is_3d']:
         for c in range(img.shape[-1]):
-            for z in range(len(img)):
+            for z in tqdm(range(len(img))):
                 instances_in_slice = np.unique(img[z,...,c])[1:]
                 for l in instances_in_slice:
                     new_img[z,...,c] += (fill_voids.fill(img[z,...,c]==l)*l).astype(img.dtype)
