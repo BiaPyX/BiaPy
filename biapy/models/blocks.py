@@ -1274,7 +1274,7 @@ class ResConvBlock(nn.Module):
         if self.pre_conv is not None:
             x = self.pre_conv(x)
         out = self.block(x) + self.shortcut(x)
-        return out
+        return self.se_block(out)
 
 
 class ResUpBlock(nn.Module):
