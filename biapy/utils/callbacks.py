@@ -15,6 +15,7 @@ import numpy as np
 from typing import (
     Callable,
 )
+from biapy.utils.misc import is_main_process
 
 class EarlyStopping:
     """
@@ -85,7 +86,8 @@ class EarlyStopping:
         elif score < self.best_score + self.delta:
             # No significant improvement
             self.counter += 1
-            self.trace_func(f"EarlyStopping counter: {self.counter} out of {self.patience}")
+            if is_main_process():
+                self.trace_func(f"EarlyStopping counter: {self.counter} out of {self.patience}")
             if self.counter >= self.patience:
                 self.early_stop = True
         else:
