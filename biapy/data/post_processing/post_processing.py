@@ -8,6 +8,7 @@ morphological measurements, filtering, and visualization tools to improve segmen
 results and extract quantitative information from model outputs.
 """
 import os
+import cv2
 import math
 import time
 import torch
@@ -25,7 +26,7 @@ from scipy.signal import savgol_filter
 from skimage import morphology
 from skimage.morphology import disk, ball, remove_small_objects, dilation, erosion
 from skimage.segmentation import watershed, relabel_sequential, find_boundaries
-from skimage.filters import rank, threshold_otsu
+from skimage.filters import rank, threshold_otsu, gaussian
 from skimage.measure import label, regionprops_table, marching_cubes, mesh_surface_area
 from skimage.exposure import equalize_adapthist
 from skimage.feature import peak_local_max, blob_log
@@ -145,6 +146,7 @@ def watershed_by_channels(
     custom_sort_key = get_sort_key(CUSTOM_ORDER)
 
     # Sort the lists to have the ones that can define a good starting points for the seeds first
+    channels = sorted(channels, key=custom_sort_key)
     seed_channels = sorted(seed_channels, key=custom_sort_key)
     seed_channel_ths = sorted(seed_channel_ths, key=custom_sort_key)
     growth_mask_channels = sorted(growth_mask_channels, key=custom_sort_key)
@@ -206,11 +208,12 @@ def watershed_by_channels(
         topografic_surface = - (1 - foreground_probs)
     else:
         # Seed creation process
+        hvz_channels_processed = False
         for i, ch in enumerate(seed_channels):
             if "seed_map" not in locals():            
-                if ch in ["C", "B", "T", "Dn"]:
+                if ch in ["C", "B", "T", "Dn", "Dc"]:
                     seed_map = 1 - data[..., i]
-                else: # F, P
+                else: # F, P, Db, D
                     seed_map = data[..., i]
                 
                 th = float(seed_channel_ths[i]) if seed_channel_ths[i] != "auto" else threshold_otsu(seed_map)
@@ -218,22 +221,67 @@ def watershed_by_channels(
 
                 seed_map = seed_map > th
             else:
-                th = float(seed_channel_ths[i]) if seed_channel_ths[i] != "auto" else threshold_otsu(data[..., i])
-                seed_ths_used.append(th)
+                if ch in ['F', 'B', 'P', 'C', 'Db', 'Dc', 'Dn', 'D', 'T']:
+                    th = float(seed_channel_ths[i]) if seed_channel_ths[i] != "auto" else threshold_otsu(data[..., i])
+                    seed_ths_used.append(th)
 
-                if ch in ["F", "P"]:
-                    seed_map *= data[..., i] > th
-                elif ch in ["C", "B", "T", "Dn"]:
-                    seed_map *= data[..., i] < th
-            
-        seed_map = label(seed_map, connectivity=1)
+                    if ch in ["F", "P", "Db", "D"]:
+                        seed_map *= data[..., i] > th
+                    elif ch in ["C", "B", "T", "Dn", "Dc"]:
+                        seed_map *= data[..., i] < th
+                elif not hvz_channels_processed and ch in ['H', 'V', 'Z']:
+                    h_dir = cv2.normalize(
+                        data[..., channels.index("H")], None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F
+                    ) # type: ignore
+                    sobelh = cv2.Sobel(h_dir, cv2.CV_64F, 1, 0, ksize=21)
+                    v_dir = cv2.normalize(
+                        data[..., channels.index("V")], None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F
+                    ) # type: ignore
+                    sobelv = cv2.Sobel(v_dir, cv2.CV_64F, 0, 1, ksize=21)
+                    if "Z" in channels:
+                        z_dir = cv2.normalize(
+                            data[..., channels.index("Z")], None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F
+                        ) # type: ignore
+                        sobelz = cv2.Sobel(z_dir, cv2.CV_64F, 0, 1, ksize=21)
+
+                    sobelh = 1 - (
+                        cv2.normalize(
+                            sobelh, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F
+                        )
+                    ) # type: ignore
+                    sobelv = 1 - (
+                        cv2.normalize(
+                            sobelv, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F
+                        )
+                    ) # type: ignore
+                    overall = np.maximum(sobelh, sobelv)
+                    if "Z" in channels:
+                        sobelz = 1 - (
+                            cv2.normalize(
+                                sobelz, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F
+                            )
+                        ) # type: ignore
+                        overall = np.maximum(overall, sobelz)
+
+                    hvz_ths = [seed_channel_ths[i] for i, x in enumerate(seed_channels) if x in ['H', 'V', 'Z']]
+                    if any([x for x in hvz_ths if x != "auto"]):
+                        th = float(np.min([x for x in hvz_ths if x != "auto"])) # Take the most restrictive
+                    else:
+                        th = threshold_otsu(overall)
+                    for x in hvz_ths:
+                        seed_ths_used.append(th)
+
+                    seed_map *= overall < th
+                    hvz_channels_processed = True # To avoid processing them again
+                elif ch == 'E':
+                    raise NotImplementedError("Embeddings not implemented yet")
 
         # Growth mask creation process
         for i, ch in enumerate(growth_mask_channels):
             if "growth_mask" not in locals():
-                if ch in ["C", "B", "T", "Dn"]:
+                if ch in ["C", "B", "Dn", "Dc"]:
                     growth_mask = 1 - data[..., i]
-                else: # F, P
+                else: # F, Db, D
                     growth_mask = data[..., i]
 
                 th = float(growth_mask_channel_ths[i]) if growth_mask_channel_ths[i] != "auto" else threshold_otsu(growth_mask) / 2
@@ -244,19 +292,27 @@ def watershed_by_channels(
                 th = float(growth_mask_channel_ths[i]) if growth_mask_channel_ths[i] != "auto" else threshold_otsu(data[..., i]) / 2
                 growth_mask_ths_used.append(th)
 
-                if ch in ["F", "P"]:
+                if ch in ["F", "Db", "D"]:
                     growth_mask *= data[..., i] > th
-                elif ch in ["C", "B", "T", "Dn"]:
+                elif ch in ["C", "B", "Dn", "Dc"]:
                     growth_mask *= data[..., i] < th
 
         # Define the topographic surface to grow the seeds
-        ch_pos = channels.index(topo_surface_channel)
-        topografic_surface = - data[..., ch_pos]
-        # topografic_surface = edt.edt(growth_mask, anisotropy=resolution, black_border=False, order='F')   
+        if "overall" in locals():
+            topografic_surface = -(1.0 - overall) 
+        else:
+            ch_pos = channels.index(topo_surface_channel)
+            topografic_surface = - data[..., ch_pos]
+            # topografic_surface = edt.edt(growth_mask, anisotropy=resolution, black_border=False, order='F')   
 
     # Morphological operation to the growth mask
     if len(seed_morph_sequence) != 0 or erode_and_dilate_growth_mask:
         erode_seed_and_growth_mask()
+
+    # Enhance watershed inputs
+    seed_map = binary_fill_holes(seed_map)
+    seed_map = label(seed_map, connectivity=1)
+    topografic_surface = gaussian(topografic_surface, sigma=1.0, truncate=1)
 
     # Print the thresholds used
     print("Thresholds used: {}".format({"seed": seed_ths_used, "growth_mask": growth_mask_ths_used}))

@@ -476,8 +476,8 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             if "R" in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
                 print("Creating instances with Stardist procedure . . .")
                 pred_labels, _ = stardist_instances_from_prediction(
-                    prob, 
-                    dist, 
+                    pred[..., :self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS.index("R")].squeeze(), 
+                    pred[..., self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS.index("R"):].squeeze(), 
                     prob_thresh=self.cfg.PROBLEM.INSTANCE_SEG.STARDIST.PROB_THRESH, 
                     nms_iou_thresh=self.cfg.PROBLEM.INSTANCE_SEG.STARDIST.NMS_IOU_THRESH, 
                     anisotropy=self.resolution[:self.dims],
