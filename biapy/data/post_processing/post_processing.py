@@ -15,13 +15,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.transforms as transforms
 import fill_voids
-import edt
 import zarr
 from tqdm import tqdm
 from scipy.signal import find_peaks
 from scipy.spatial import cKDTree # type: ignore
 from scipy.spatial.distance import cdist
-from scipy.ndimage import rotate, grey_dilation, binary_erosion, binary_dilation, median_filter, center_of_mass
+from scipy.ndimage import rotate, grey_dilation, binary_erosion, binary_dilation, median_filter, binary_fill_holes, find_objects
 from scipy.signal import savgol_filter
 from skimage import morphology
 from skimage.morphology import disk, ball, remove_small_objects, dilation, erosion
@@ -48,17 +47,19 @@ from biapy.data.pre_processing import generate_ellipse_footprint
 
 def watershed_by_channels(
     data: NDArray,
-    channels: str,
-    ths: Dict={},
+    channels: List[str],
+    seed_channels: List[str],
+    seed_channel_ths: List[float|int],
+    topo_surface_channel: str,
+    growth_mask_channels: List[str],
+    growth_mask_channel_ths: List[float|int],
     remove_before: bool=False,
     thres_small_before: int=10,
     seed_morph_sequence: List[str]=[],
     seed_morph_radius: List[int]=[],
-    erode_and_dilate_foreground: bool=False,
+    erode_and_dilate_growth_mask: bool=False,
     fore_erosion_radius: int=5,
     fore_dilation_radius: int=5,
-    rmv_close_points: bool=False,
-    remove_close_points_radius: int=-1,
     resolution: List[float|int]=[1., 1., 1.],
     watershed_by_2d_slices: bool=False,
     save_dir: Optional[str]=None,
@@ -96,22 +97,15 @@ def watershed_by_channels(
     seed_morph_radius: List of ints, optional
         List of ints to determine the radius of the erosion or dilation for instance seeds.
 
-    erode_and_dilate_foreground : bool, optional
-        To erode and dilate the foreground mask before using marker controlled watershed. The idea is to
+    erode_and_dilate_growth_mask : bool, optional
+        To erode and dilate the growth mask before using marker controlled watershed. The idea is to
         remove the small holes that may be produced so the instances grow without them.
 
     fore_erosion_radius: int, optional
-        Radius to erode the foreground mask.
+        Radius to erode the growth mask.
 
     fore_dilation_radius: int, optional
-        Radius to dilate the foreground mask.
-
-    rmv_close_points : bool, optional
-        To remove close points to each other. Used in 'BP' channel configuration.
-
-    remove_close_points_radius : float, optional
-        Radius from each point to decide what points to keep. Used in 'BP' channel configuration.
-        E.g. ``10.0``.
+        Radius to dilate the growth mask.
 
     resolution : tuple of int/float
         Resolution of the data in ``(z,y,x)`` to calibrate coordinates. E.g. ``[30,8,8]``.
@@ -123,30 +117,48 @@ def watershed_by_channels(
     save_dir :  str, optional
         Directory to save watershed output into.
     """
-    assert channels in [
-        "A",
-        "C",
-        "BC",
-        "BCM",
-        "BCD",
-        "BCDv2",
-        "Dv2",
-        "BDv2",
-        "BP",
-        "BD",
-        "BCP",
-    ]
     assert len(resolution) == 3, "'resolution' must be a list of 3 int/float"
 
-    def erode_seed_and_foreground():
+    # Define the custom order once
+    CUSTOM_ORDER = {
+        "F": 0, # Foreground
+        "B": 1, # Background
+        "C": 3, # contours
+        "H": 4, # Horizontal distance
+        "V": 5, # Vertical distance
+        "Z": 6, # Z distance
+        "Db": 7, # Distance (boundary)
+        "Dc": 8, # Distance (center/skeleton)
+        "Dn": 9, # Distance (neighbor)
+        "D": 10, # Distance (signed)
+        "T": 11, # Touching area
+        "A": 12,  # Affinities
+        "E": 13,  # Embeddings
+        "R": 999,  # Radial distances
+    }
+
+    def get_sort_key(weights):
+        """Return a sort function based on given weights dict"""
+        def sort_key(item):
+            return (weights.get(item, 999), item)  # alphabetically for "rest"
+        return sort_key
+    custom_sort_key = get_sort_key(CUSTOM_ORDER)
+
+    # Sort the lists to have the ones that can define a good starting points for the seeds first
+    seed_channels = sorted(seed_channels, key=custom_sort_key)
+    seed_channel_ths = sorted(seed_channel_ths, key=custom_sort_key)
+    growth_mask_channels = sorted(growth_mask_channels, key=custom_sort_key)
+    growth_mask_channel_ths = sorted(growth_mask_channel_ths, key=custom_sort_key)
+
+    def erode_seed_and_growth_mask():
         nonlocal seed_map
-        nonlocal foreground
-        assert isinstance(seed_map, np.ndarray) and isinstance(foreground, np.ndarray) 
+        nonlocal growth_mask
+        assert isinstance(seed_map, np.ndarray) and isinstance(growth_mask, np.ndarray)
 
         if len(seed_morph_sequence) != 0:
             print("Applying {} to seeds . . .".format(seed_morph_sequence))
-        if erode_and_dilate_foreground:
-            print("Foreground erosion . . .")
+        if erode_and_dilate_growth_mask:
+            print("Growth mask erosion . . .")
 
         if len(seed_morph_sequence) != 0:
             morph_funcs = []
@@ -159,202 +171,101 @@ def watershed_by_channels(
         image3d = True if seed_map.ndim == 3 else False
         if not image3d:
             seed_map = np.expand_dims(seed_map, 0)
-            foreground = np.expand_dims(foreground, 0)
+            growth_mask = np.expand_dims(growth_mask, 0)
 
         for i in tqdm(range(seed_map.shape[0])):
             if len(seed_morph_sequence) != 0:
                 for k, morph_function in enumerate(morph_funcs):
                     seed_map[i] = morph_function(seed_map[i], disk(radius=seed_morph_radius[k]))
 
-            if erode_and_dilate_foreground:
-                foreground[i] = binary_dilation(foreground[i], disk(radius=fore_erosion_radius))
-                foreground[i] = binary_erosion(foreground[i], disk(radius=fore_dilation_radius))
+            if erode_and_dilate_growth_mask:
+                growth_mask[i] = binary_dilation(growth_mask[i], disk(radius=fore_erosion_radius))
+                growth_mask[i] = binary_erosion(growth_mask[i], disk(radius=fore_dilation_radius))
 
         if not image3d:
             seed_map = seed_map.squeeze()
-            foreground = foreground.squeeze()
+            growth_mask = growth_mask.squeeze()
 
-    if channels in ["BC", "BCM"]:
-        if ths["TYPE"] == "auto":
-            ths["TH_BINARY_MASK"] = threshold_otsu(data[..., 0])
-            ths["TH_CONTOUR"] = threshold_otsu(data[..., 1])
-            ths["TH_FOREGROUND"] = ths["TH_BINARY_MASK"] / 2
-        seed_map = (data[..., 0] > ths["TH_BINARY_MASK"]) * (data[..., 1] < ths["TH_CONTOUR"])
-        foreground = data[..., 0] > ths["TH_FOREGROUND"]
-
-        if len(seed_morph_sequence) != 0 or erode_and_dilate_foreground:
-            erode_seed_and_foreground()
-
-        semantic = data[..., 0]
-        # semantic = edt.edt(foreground*(1-seed_map), anisotropy=resolution, black_border=False, order='F')
-        seed_map = label(seed_map, connectivity=1)
-    elif channels in ["C"]:
-        if ths["TYPE"] == "auto":
-            ths["TH_BINARY_MASK"] = threshold_otsu(1 - data[..., 0])
-            ths["TH_CONTOUR"] = threshold_otsu(data[..., 0])
-            ths["TH_FOREGROUND"] = ths["TH_BINARY_MASK"] / 2
-        seed_map = (1 - data[..., 0] > ths["TH_BINARY_MASK"]) * (data[..., 0] < ths["TH_CONTOUR"])
-        foreground = 1 - data[..., 0] > ths["TH_FOREGROUND"]
-
-        if len(seed_morph_sequence) != 0 or erode_and_dilate_foreground:
-            erode_seed_and_foreground()
-
-        # semantic = edt.edt(foreground, anisotropy=resolution, black_border=False, order='F')
-        # use contour channel as input to watershed
-        semantic = data[..., 0]
-        seed_map = label(seed_map, connectivity=1)
-    elif channels in ["A"]:
+    seed_ths_used, growth_mask_ths_used = [], []
+    # Affinities are expected to be alone so we can use them directly
+    if "A" in seed_channels and len(seed_channels) == 1:
         # For now use the minimum values between all affinities (to enhance borders)
         foreground_probs = np.min(data, axis=-1)
 
-        if ths["TYPE"] == "auto":
-            ths["TH_BINARY_MASK"] = threshold_otsu(foreground_probs)
-            ths["TH_CONTOUR"] = threshold_otsu(1 - foreground_probs)
-            ths["TH_FOREGROUND"] = ths["TH_BINARY_MASK"] / 2
-        seed_map = (foreground_probs > ths["TH_BINARY_MASK"]) * (1 - foreground_probs < ths["TH_CONTOUR"])
-        foreground = foreground_probs > ths["TH_FOREGROUND"]
+        # Seed creation process
+        th = float(seed_channel_ths[0]) if seed_channel_ths[0] != "auto" else threshold_otsu(data) 
+        seed_map = foreground_probs > th
+        seed_ths_used.append(th)
 
-        if len(seed_morph_sequence) != 0 or erode_and_dilate_foreground:
-            erode_seed_and_foreground()
+        # Growth mask creation process
+        th = growth_mask_channel_ths[0] if growth_mask_channel_ths[0] != "auto" else (th/2)
+        growth_mask = foreground_probs > th 
+        growth_mask_ths_used.append(th)
 
-        # use contour channel as input to watershed
-        semantic = 1 - foreground_probs
+        # Define the topographic surface to grow the seeds
+        topografic_surface = - (1 - foreground_probs)
+    else:
+        # Seed creation process
+        for i, ch in enumerate(seed_channels):
+            if "seed_map" not in locals():            
+                if ch in ["C", "B", "T", "Dn"]:
+                    seed_map = 1 - data[..., i]
+                else: # F, P
+                    seed_map = data[..., i]
+                
+                th = float(seed_channel_ths[i]) if seed_channel_ths[i] != "auto" else threshold_otsu(seed_map)
+                seed_ths_used.append(th)
+
+                seed_map = seed_map > th
+            else:
+                th = float(seed_channel_ths[i]) if seed_channel_ths[i] != "auto" else threshold_otsu(data[..., i])
+                seed_ths_used.append(th)
+
+                if ch in ["F", "P"]:
+                    seed_map *= data[..., i] > th
+                elif ch in ["C", "B", "T", "Dn"]:
+                    seed_map *= data[..., i] < th
+            
         seed_map = label(seed_map, connectivity=1)
-    elif channels in ["BP"]:
-        if ths["TYPE"] == "auto":
-            ths["TH_POINTS"] = threshold_otsu(data[..., 1])
-            ths["TH_FOREGROUND"] = threshold_otsu(data[..., 0])
 
-        seed_map = data[..., 1] > ths["TH_POINTS"]
-        foreground = data[..., 0] > ths["TH_FOREGROUND"]
+        # Growth mask creation process
+        for i, ch in enumerate(growth_mask_channels):
+            if "growth_mask" not in locals():
+                if ch in ["C", "B", "T", "Dn"]:
+                    growth_mask = 1 - data[..., i]
+                else: # F, P
+                    growth_mask = data[..., i]
 
-        print("Creating the central points . . .")
-        seed_map = label(seed_map, connectivity=1)
-        assert isinstance(seed_map, np.ndarray)
-        instances = np.unique(seed_map)[1:]
-        seed_coordinates = center_of_mass(seed_map, label(seed_map), instances)
-        seed_coordinates = np.round(seed_coordinates).astype(int)
+                th = float(growth_mask_channel_ths[i]) if growth_mask_channel_ths[i] != "auto" else threshold_otsu(growth_mask) / 2
+                growth_mask_ths_used.append(th)
 
-        if rmv_close_points:
-            seed_coordinates = remove_close_points(
-                seed_coordinates,
-                remove_close_points_radius,
-                resolution,
-                ndim=seed_map.ndim,
-            )
+                growth_mask = growth_mask > th
+            else:
+                th = float(growth_mask_channel_ths[i]) if growth_mask_channel_ths[i] != "auto" else threshold_otsu(data[..., i]) / 2
+                growth_mask_ths_used.append(th)
 
-        seed_map = np.zeros(data.shape[:-1], dtype=np.uint8)
-        for sd in tqdm(seed_coordinates, total=len(seed_coordinates)):
-            z, y, x = sd
-            seed_map[z, y, x] = 1
-        semantic = -edt.edt(1 - seed_map, anisotropy=resolution, black_border=False, order="F")
+                if ch in ["F", "P"]:
+                    growth_mask *= data[..., i] > th
+                elif ch in ["C", "B", "T", "Dn"]:
+                    growth_mask *= data[..., i] < th
 
-        if len(seed_morph_sequence) != 0 or erode_and_dilate_foreground:
-            erode_seed_and_foreground()
+        # Define the topographic surface to grow the seeds
+        ch_pos = channels.index(topo_surface_channel)
+        topografic_surface = - data[..., ch_pos]
+        # topografic_surface = edt.edt(growth_mask, anisotropy=resolution, black_border=False, order='F')   
 
-        seed_map = label(seed_map, connectivity=1)
-    elif channels in ["BCP"]:
-        if ths["TYPE"] == "auto":
-            ths["TH_BINARY_MASK"] = threshold_otsu(data[..., 0])
-            ths["TH_CONTOUR"] = threshold_otsu(data[..., 1])
-            ths["TH_POINTS"] = threshold_otsu(data[..., 2])
-            ths["TH_FOREGROUND"] = ths["TH_BINARY_MASK"] / 2
+    # Morphological operation to the growth mask
+    if len(seed_morph_sequence) != 0 or erode_and_dilate_growth_mask:
+        erode_seed_and_growth_mask()
 
-        seed_map = (data[..., 0] > ths["TH_BINARY_MASK"]) * (data[..., 1] < ths["TH_CONTOUR"]) * (data[..., 2] > ths["TH_POINTS"])
-        foreground = data[..., 0] > ths["TH_FOREGROUND"]
-
-        if len(seed_morph_sequence) != 0 or erode_and_dilate_foreground:
-            erode_seed_and_foreground()
-
-        semantic = data[..., 0]
-        # semantic = edt.edt(foreground*(1-seed_map), anisotropy=resolution, black_border=False, order='F')
-        seed_map = label(seed_map, connectivity=1)
-    elif channels in ["BD"]:
-        semantic = data[..., 0]
-        if ths["TYPE"] == "auto":
-            ths["TH_BINARY_MASK"] = threshold_otsu(data[..., 0])
-            ths["TH_FOREGROUND"] = ths["TH_BINARY_MASK"] / 2
-        seed_map = (data[..., 0] > ths["TH_BINARY_MASK"]) * (data[..., 1] < ths["TH_DISTANCE"])
-        foreground = semantic > ths["TH_FOREGROUND"]
-        seed_map = label(seed_map, connectivity=1)
-    elif channels in ["BCD"]:
-        semantic = data[..., 0]
-        if ths["TYPE"] == "auto":
-            ths["TH_BINARY_MASK"] = threshold_otsu(data[..., 0])
-            ths["TH_CONTOUR"] = threshold_otsu(data[..., 1])
-            ths["TH_FOREGROUND"] = ths["TH_BINARY_MASK"] / 2
-
-        seed_map = (
-            (data[..., 0] > ths["TH_BINARY_MASK"])
-            * (data[..., 1] < ths["TH_CONTOUR"])
-            * (data[..., 2] < ths["TH_DISTANCE"])
-        )
-        foreground = semantic > ths["TH_FOREGROUND"]
-
-        if len(seed_morph_sequence) != 0 or erode_and_dilate_foreground:
-            erode_seed_and_foreground()
-        seed_map = label(seed_map, connectivity=1)
-    else:  # 'BCDv2', 'Dv2', 'BDv2'
-        semantic = data[..., -1]
-        foreground = None
-        if channels == "BCDv2":  # 'BCDv2'
-            if ths["TYPE"] == "auto":
-                ths["TH_BINARY_MASK"] = threshold_otsu(data[..., 0])
-                ths["TH_CONTOUR"] = threshold_otsu(data[..., 1])
-            seed_map = (
-                (data[..., 0] > ths["TH_BINARY_MASK"])
-                * (data[..., 1] < ths["TH_CONTOUR"])
-                * (data[..., 1] < ths["TH_DISTANCE"])
-            )
-            background_seed = binary_dilation(
-                ((data[..., 0] > ths["TH_BINARY_MASK"]) + (data[..., 1] > ths["TH_CONTOUR"])).astype(np.uint8),
-                iterations=2,
-            )
-            assert isinstance(seed_map, np.ndarray)
-            seed_map, num = label(seed_map, connectivity=1, return_num=True) # type: ignore
-
-            # Create background seed and label correctly
-            background_seed = 1 - background_seed
-            background_seed[background_seed == 1] = num + 1
-            seed_map = seed_map + background_seed
-            del background_seed
-        elif channels == "BDv2":  # 'BDv2'
-            if ths["TYPE"] == "auto":
-                ths["TH_BINARY_MASK"] = threshold_otsu(data[..., 0])
-            seed_map = (data[..., 0] > ths["TH_BINARY_MASK"]) * (data[..., 1] < ths["TH_DISTANCE"])
-            background_seed = binary_dilation((data[..., 1] < ths["TH_DISTANCE"]).astype(np.uint8), iterations=2)
-            seed_map = label(seed_map, connectivity=1)
-            background_seed = label(background_seed, connectivity=1)
-            assert isinstance(background_seed, np.ndarray) and isinstance(seed_map, np.ndarray)
-
-            props = regionprops_table(seed_map, properties=("area", "centroid"))
-            for n in range(len(props["centroid-0"])):
-                label_center = [
-                    props["centroid-0"][n],
-                    props["centroid-1"][n],
-                    props["centroid-2"][n],
-                ]
-                instance_to_remove = background_seed[label_center]
-                background_seed[background_seed == instance_to_remove] = 0
-            seed_map = seed_map + background_seed
-            del background_seed
-            seed_map = label(seed_map, connectivity=1)  # re-label again
-        elif channels == "Dv2":  # 'Dv2'
-            seed_map = data[..., 0] < ths["TH_DISTANCE"]
-            seed_map = label(seed_map, connectivity=1)
-
-        if len(seed_morph_sequence) != 0:
-            erode_seed_and_foreground()
-
-    # Print the thresholds used in automatic case
-    if ths["TYPE"] == "auto":
-        print("Thresholds used: {}".format(ths))
+    # Print the thresholds used
+    print("Thresholds used: {}".format({"seed": seed_ths_used, "growth_mask": growth_mask_ths_used}))
 
     if remove_before:
         seed_map = remove_small_objects(seed_map, thres_small_before)
         seed_map, _, _ = relabel_sequential(seed_map)
 
-    assert isinstance(seed_map, np.ndarray) and foreground is not None
+    assert isinstance(seed_map, np.ndarray) and growth_mask is not None, "Seed map and growth mask must be numpy arrays"
 
     # Choose appropiate dtype
     max_value = np.max(seed_map)
@@ -365,13 +276,14 @@ def watershed_by_channels(
     else:
         appropiate_dtype = np.uint32
 
+    # Apply marker controlled watershed
     if watershed_by_2d_slices:
         print("Doing watershed by 2D slices")
         segm = np.zeros(seed_map.shape, dtype=appropiate_dtype)
         for z in tqdm(range(len(segm))):
-            segm[z] = watershed(-semantic[z], seed_map[z], mask=foreground[z])
+            segm[z] = watershed(topografic_surface[z], seed_map[z], mask=growth_mask[z])
     else:
-        segm = watershed(-semantic, seed_map, mask=foreground)
+        segm = watershed(topografic_surface, seed_map, mask=growth_mask)
         segm = segm.astype(appropiate_dtype)
 
     if save_dir:
@@ -382,23 +294,22 @@ def watershed_by_channels(
             verbose=False,
         )
         save_tif(
-            np.expand_dims(np.expand_dims(semantic, -1), 0).astype(np.float32),
+            np.expand_dims(np.expand_dims(topografic_surface, -1), 0).astype(np.float32),
             save_dir,
             ["semantic.tif"],
             verbose=False,
         )
-        if channels in ["A", "C", "BC", "BCM", "BCD", "BP"]:
-            save_tif(
-                np.expand_dims(np.expand_dims(foreground, -1), 0).astype(np.uint8),
-                save_dir,
-                ["foreground.tif"],
-                verbose=False,
-            )
+        save_tif(
+            np.expand_dims(np.expand_dims(growth_mask, -1), 0).astype(np.uint8),
+            save_dir,
+            ["foreground.tif"],
+            verbose=False,
+        )
     return segm
 
 def create_synapses(
     data: NDArray,
-    channels: str,
+    channels: List[str],
     point_creation_func: str = "peak_local_max",
     min_th_to_be_peak: List[float] = [0.2],
     min_distance: int=1,
@@ -421,8 +332,8 @@ def create_synapses(
     data : 4D Numpy array
         Binary foreground labels and contours data to apply watershed into. E.g. ``(397, 1450, 2000, 2)``.
 
-    channels : str
-        Channel type used. Possible options: ``A``, ``C``, ``BC``, ``BCM``, ``BCD``, ``BCDv2``, ``Dv2`` and ``BDv2``.
+    channels : List of str
+        Channel type used.
 
     point_creation_func : str, optional
         Function to be used in the pre/post point creation. Options: ["peak_local_max", "blob_log"]
@@ -453,87 +364,85 @@ def create_synapses(
         To use ``min_th_to_be_peak`` as a relative threshold to the maximum value, i.e. ``threshold_rel`` is set instead of 
         ``threshold_abs`` in the ``peak_local_max`` or ``blob_log`` call. 
     """
-    assert channels in [
-        "B",
-        "BF",
-    ]
     assert point_creation_func in ["peak_local_max", "blob_log"]
 
     d_result = {}
     ids, probs = [], []
-    if channels == "BF":
-        print("TODO")
-        import pdb; pdb.set_trace()
-    elif channels == "B":
-        # Take the coords of the predicted points
-        all_coords = []
-        max_value = 0
-        data = data.astype(np.float32)
-        for c in range(data.shape[-1]):
-            if relative_th_value:
-                threshold_abs = None
-                threshold_rel = min_th_to_be_peak[c]
-            else:
-                threshold_abs = min_th_to_be_peak[c]
-                threshold_rel = None
+    if set(channels) == {"F_pre","F"}:
+        raise ValueError("Not implemented")
+    
+    # Assuming {"F_pre", "F_post"} channels from now on
 
-            if point_creation_func == "peak_local_max":
-                coords = peak_local_max(
-                    data[..., c],
-                    min_distance=min_distance,
-                    threshold_abs=threshold_abs,
-                    threshold_rel=threshold_rel,
-                    exclude_border=exclude_border,
-                )
-                coords = coords.astype(int)
-            else:
-                coords = blob_log(
-                    data[..., c] * 255,
-                    min_sigma=min_sigma,
-                    max_sigma=max_sigma,
-                    num_sigma=num_sigma,
-                    threshold=threshold_abs, # type: ignore
-                    threshold_rel=threshold_rel,
-                    exclude_border=exclude_border,
-                )
-                coords = coords[:, :3].astype(int)  # Remove sigma
-
-            all_coords.append(coords)
-            max_value += len(coords)
-        
-        # Choose appropiate dtype
-        if max_value < 255:
-            appropiate_dtype = np.uint8
-        elif max_value < 65535:
-            appropiate_dtype = np.uint16
+    # Take the coords of the predicted points
+    all_coords = []
+    max_value = 0
+    data = data.astype(np.float32)
+    for c in range(data.shape[-1]):
+        if relative_th_value:
+            threshold_abs = None
+            threshold_rel = min_th_to_be_peak[c]
         else:
-            appropiate_dtype = np.uint32
-        new_data = np.zeros(data.shape, dtype=appropiate_dtype)
+            threshold_abs = min_th_to_be_peak[c]
+            threshold_rel = None
 
-        lbl_cont = 1
-        ellipse_footprint_cpd = generate_ellipse_footprint([2,4,4])
-        for c, coords in enumerate(all_coords):
-            for coord in coords:
-                z,y,x = coord
-                new_data[int(z), int(y), int(x), c] = lbl_cont
-                probs.append(float(data[z,y,x,c]))
-                ids.append(lbl_cont)
-                lbl_cont += 1
-
-            # Dilate the labels
-            new_data[...,c] = binary_dilation_scipy(
-                new_data[...,c],
-                iterations=1,
-                structure=ellipse_footprint_cpd,
+        if point_creation_func == "peak_local_max":
+            coords = peak_local_max(
+                data[..., c],
+                min_distance=min_distance,
+                threshold_abs=threshold_abs,
+                threshold_rel=threshold_rel,
+                exclude_border=exclude_border,
             )
+            coords = coords.astype(int)
+        else:
+            coords = blob_log(
+                data[..., c] * 255,
+                min_sigma=min_sigma,
+                max_sigma=max_sigma,
+                num_sigma=num_sigma,
+                threshold=threshold_abs, # type: ignore
+                threshold_rel=threshold_rel,
+                exclude_border=exclude_border,
+            )
+            coords = coords[:, :3].astype(int)  # Remove sigma
 
-        d_result["ids"] = ids
-        d_result["tag"] = (["pre",]*len(all_coords[0])) + (["post",]*len(all_coords[1]))
-        d_result["probabilities"] = probs
-        d_result["points"] = np.concatenate(all_coords, axis=0)
+        all_coords.append(coords)
+        max_value += len(coords)
+    
+    # Choose appropiate dtype
+    if max_value < 255:
+        appropiate_dtype = np.uint8
+    elif max_value < 65535:
+        appropiate_dtype = np.uint16
+    else:
+        appropiate_dtype = np.uint32
+    new_data = np.zeros(data.shape, dtype=appropiate_dtype)
 
-        return new_data, d_result
-    return np.zeros((10,10)), {"da":"da"} 
+    lbl_cont = 1
+    ellipse_footprint_cpd = generate_ellipse_footprint([2,4,4])
+    for c, coords in enumerate(all_coords):
+        for coord in coords:
+            z,y,x = coord
+            new_data[int(z), int(y), int(x), c] = lbl_cont
+            probs.append(float(data[z,y,x,c]))
+            ids.append(lbl_cont)
+            lbl_cont += 1
+
+        # Dilate the labels
+        new_data[...,c] = binary_dilation_scipy(
+            new_data[...,c],
+            iterations=1,
+            structure=ellipse_footprint_cpd,
+        )
+
+    d_result["ids"] = ids
+    first_tag = "pre" if channels.index("F_pre") == 0 else "post"
+    second_tag = 'post' if first_tag == 'pre' else 'pre'
+    d_result["tag"] = ([first_tag,]*len(all_coords[0])) + ([second_tag,]*len(all_coords[1]))
+    d_result["probabilities"] = probs
+    d_result["points"] = np.concatenate(all_coords, axis=0)
+
+    return new_data, d_result
 
 def apply_median_filtering(
     data: NDArray, 
@@ -2287,3 +2196,33 @@ def apply_binary_mask(
                     for c in range(X.shape[-1]):
                         X[k, ..., c] = X[k, ..., c] * (mask > 0)
     return X
+
+def fill_label_holes(lbl_img: NDArray) -> NDArray:
+    """
+    Fill small holes in label image.
+    
+    Parameters
+    ----------
+    lbl_img : 2D/3D Numpy array
+        Label image with instances. E.g. ``(1450, 2000)`` for 2D and ``(397, 1450, 2000)`` for 3D.
+
+    Returns
+    -------
+    lbl_img_filled : 2D/3D Numpy array
+        Label image with instances with holes filled. E.g. ``(1450, 2000)`` for 2D and ``(397, 1450, 2000)`` for 3D.
+    """
+    print("Filling holes in label image . . .")
+    def grow(sl,interior):
+        return tuple(slice(s.start-int(w[0]),s.stop+int(w[1])) for s,w in zip(sl,interior))
+    def shrink(interior):
+        return tuple(slice(int(w[0]),(-1 if w[1] else None)) for w in interior)
+    objects = find_objects(lbl_img)
+    lbl_img_filled = np.zeros_like(lbl_img)
+    for i,sl in enumerate(objects,1):
+        if sl is None: continue
+        interior = [(s.start>0,s.stop<sz) for s,sz in zip(sl,lbl_img.shape)]
+        shrink_slice = shrink(interior)
+        grown_mask = lbl_img[grow(sl,interior)]==i
+        mask_filled = binary_fill_holes(grown_mask)[shrink_slice]
+        lbl_img_filled[sl][mask_filled] = i
+    return lbl_img_filled

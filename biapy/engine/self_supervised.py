@@ -122,8 +122,8 @@ class Self_supervised_Workflow(Base_Workflow):
         self.activations : List of dicts
             Activations to be applied to the model output. Each dict will
             match an output channel of the model. If ':' is used the activation
-            will be applied to all channels at once. "Linear" and "CE_Sigmoid"
-            will not be applied. E.g. [{":": "Linear"}].
+            will be applied to all channels at once. "linear" and "ce_sigmoid"
+            will not be applied. E.g. [{":": "linear"}].
         """
         self.model_output_channels = {
             "type": "image",
@@ -131,7 +131,7 @@ class Self_supervised_Workflow(Base_Workflow):
         }
         self.real_classes = self.model_output_channels["channels"][0]
         self.multihead = False
-        self.activations = [{":": "Linear"}]
+        self.activations = [{":": "linear"}]
 
         super().define_activations_and_channels()
 

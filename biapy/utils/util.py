@@ -580,8 +580,7 @@ def check_downsample_division(X, d_levels):
     return X, o_shape
 
 
-def seg2aff_pni(img, dz=1, dy=1, dx=1, 
-    dtype: DTypeLike = np.float32):
+def seg2aff_pni(img, dz=1, dy=1, dx=1, dtype: DTypeLike = np.float32):
     """
     Transform a 3D segmentation mask into a 3D affinity graph (4D tensor).
 
@@ -620,11 +619,10 @@ def seg2aff_pni(img, dz=1, dy=1, dx=1,
     AssertionError
         If `dz`, `dy`, or `dx` are zero or exceed the corresponding image dimension.
     """
-    img = check_volume(img)
     ret = np.zeros((3,) + img.shape, dtype=dtype)
 
     # z-affinity.
-    assert dz and abs(dz) < img.shape[-3]
+    assert dz and abs(dz) < img.shape[0]
     if dz > 0:
         ret[0, dz:, :, :] = (img[dz:, :, :] == img[:-dz, :, :]) & (img[dz:, :, :] > 0)
     else:
@@ -632,7 +630,7 @@ def seg2aff_pni(img, dz=1, dy=1, dx=1,
         ret[0, :-dz, :, :] = (img[dz:, :, :] == img[:-dz, :, :]) & (img[dz:, :, :] > 0)
 
     # y-affinity.
-    assert dy and abs(dy) < img.shape[-2]
+    assert dy and abs(dy) < img.shape[1]
     if dy > 0:
         ret[1, :, dy:, :] = (img[:, dy:, :] == img[:, :-dy, :]) & (img[:, dy:, :] > 0)
     else:
@@ -640,7 +638,7 @@ def seg2aff_pni(img, dz=1, dy=1, dx=1,
         ret[1, :, :-dy, :] = (img[:, dy:, :] == img[:, :-dy, :]) & (img[:, dy:, :] > 0)
 
     # x-affinity.
-    assert dx and abs(dx) < img.shape[-1]
+    assert dx and abs(dx) < img.shape[2]
     if dx > 0:
         ret[2, :, :, dx:] = (img[:, :, dx:] == img[:, :, :-dx]) & (img[:, :, dx:] > 0)
     else:
@@ -649,48 +647,6 @@ def seg2aff_pni(img, dz=1, dy=1, dx=1,
 
     return ret
 
-
-def check_volume(data):
-    """
-    Ensure that the input data is a 3D NumPy array.
-
-    If the input is 2D, it adds a new z-axis. If it's 4D with a batch size of 1,
-    it reshapes it to 3D by removing the batch dimension. Raises an error for
-    other dimensions.
-
-    Original code: https://github.com/torms3/DataProvider/blob/master/python/utils.py#L11
-
-    Parameters
-    ----------
-    data : NDArray
-        The input data array. Can be 2D, 3D, or 4D (with batch size 1).
-
-    Returns
-    -------
-    NDArray
-        A 3D NumPy array.
-
-    Raises
-    ------
-    RuntimeError
-        If `data` is not a NumPy array or has an unsupported number of dimensions.
-    AssertionError
-        If `data` is 4D but its batch dimension is not 1.
-    """
-    assert isinstance(data, np.ndarray)
-
-    if data.ndim == 2:
-        data = data[np.newaxis, ...]
-    elif data.ndim == 3:
-        pass
-    elif data.ndim == 4:
-        assert data.shape[0] == 1
-        data = np.reshape(data, data.shape[-3:])
-    else:
-        raise RuntimeError("data must be a numpy 3D array")
-
-    assert data.ndim == 3
-    return data
 
 
 def im2col(A, BSZ, stepsize=1):

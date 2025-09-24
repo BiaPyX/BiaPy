@@ -17,7 +17,7 @@ from torchmetrics.image import StructuralSimilarityIndexMeasure
 from pytorch_msssim import SSIM
 import torch.nn.functional as F
 import torch.nn as nn
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Dict
 
 
 def jaccard_index_numpy(y_true, y_pred):
@@ -238,6 +238,8 @@ class multiple_metrics:
         num_classes: int,
         metric_names: List[str],
         device: torch.device,
+        out_channels: Optional[List[str]]=["F", "C"],
+        channel_extra_opts: Optional[Dict]={},
         ignore_index: int = -1,
         model_source: str = "biapy",
         ndim: int = 2,
@@ -257,6 +259,12 @@ class multiple_metrics:
             Using device. Most commonly "cpu" or "cuda" for GPU, but also potentially "mps",
             "xpu", "xla" or "meta".
 
+        out_channels : list of str, optional
+            Output channels to be predicted. E.g. ["F", "C"] for foreground and class channels.
+
+        channel_extra_opts : dict, optional
+            Additional options for each output channel (e.g., {"B": {"mask_values": True}}).
+
         ignore_index : int, optional
             Value to ignore in the loss calculation. If not provided, no value will be ignored.
 
@@ -269,6 +277,8 @@ class multiple_metrics:
         self.num_classes = num_classes
         self.metric_names = metric_names
         self.device = device
+        self.out_channels = out_channels if out_channels is not None else [".",]*len(metric_names)
+        self.channel_extra_opts = channel_extra_opts
         self.model_source = model_source
         self.ignore_index = ignore_index if ignore_index != -1 else None
         self.ndim = ndim
@@ -283,7 +293,7 @@ class multiple_metrics:
                 loss_func = JaccardIndex(
                     task="binary", threshold=0.5, num_classes=2, ignore_index=self.ignore_index
                 ).to(self.device, non_blocking=True)
-            elif metric_names[i] == "L1 (distance channel)":
+            elif "L1" in metric_names[i]:
                 loss_func = torch.nn.L1Loss()
 
             self.metric_func.append(loss_func)
@@ -322,14 +332,24 @@ class multiple_metrics:
             y_true = scale_target(y_true, _y_pred.shape[-self.ndim :])
 
         res_metrics = {}
-        for i in range(num_channels):
+        for i, channel in enumerate(self.out_channels):
+            ch_pos = self.out_channels.index(channel)         
+            if channel == "A":
+                assert self.channel_extra_opts is not None and "A" in self.channel_extra_opts, "Affinity channel options must be provided."
+                ch_pos_end = len(self.channel_extra_opts["A"].get("y_affinities", [1])) + ch_pos
+            elif channel == "R":
+                assert self.channel_extra_opts is not None and "R" in self.channel_extra_opts, "Rays channel options must be provided."
+                ch_pos_end = self.channel_extra_opts["R"].get("nrays", 32) + ch_pos
+            else:
+                ch_pos_end = ch_pos + 1
+
             if self.metric_names[i] not in res_metrics:
                 res_metrics[self.metric_names[i]] = []
             # Measure metric
             if self.metric_names[i] == "IoU (classes)":
                 res_metrics[self.metric_names[i]].append(self.metric_func[i](_y_pred_class, y_true[:, 1]))
             else:
-                res_metrics[self.metric_names[i]].append(self.metric_func[i](_y_pred[:, i], y_true[:, 0]))
+                res_metrics[self.metric_names[i]].append(self.metric_func[i](_y_pred[:, ch_pos:ch_pos_end], y_true[:, ch_pos:ch_pos_end]))
 
         # Mean of same metric values
         for key, value in res_metrics.items():
@@ -1056,40 +1076,39 @@ class instance_segmentation_loss:
     This loss combines different loss functions (e.g., BCE, L1, CrossEntropy) for multiple output channels,
     such as binary masks, contours, distances, and class channels. It supports class rebalancing, masking
     of distance channels, and different instance segmentation output types (e.g., "regular", "synapses").
-    The loss is configurable for various output channel combinations (e.g., "BC", "BCP", "BCD", etc.)
-    and can handle multi-class and multi-head settings.
+    The loss is configurable for various output channel combinations and can handle multi-class and 
+    multi-head settings.
 
     Parameters
     ----------
     weights : tuple of float, optional
         Weights to be applied to each output channel loss. E.g. (1, 0.2).
-    out_channels : str, optional
-        String specifying the output channels (e.g., "BC", "BCP", "BCD", etc.).
-    mask_distance_channel : bool, optional
-        Whether to mask the distance channel loss to only calculate it where the binary mask is present.
+    out_channels : List of str, optional
+        String specifying the output channels (e.g., ["F", "C"], ["B", "C", "P"], ["B","C","D"], etc.).
+    channel_extra_opts : dict, optional
+        Additional options for each output channel (e.g., {"D": {"mask_values": True}}).
     n_classes : int, optional
         Number of classes for the class channel (default: 2).
     class_rebalance : bool, optional
         Whether to reweight classes inside the loss function.
-    instance_type : str, optional
-        Type of instance segmentation ("regular" or "synapses").
     ignore_index : int, optional
         Value to ignore in the loss calculation (default: -1).
 
     Usage
     -----
-    loss_fn = instance_segmentation_loss(weights=(1, 0.2), out_channels="BC")
+    loss_fn = instance_segmentation_loss(weights=(1, 0.2), out_channels=["F", "C"])
     loss = loss_fn(y_pred, y_true)
     """
 
     def __init__(
         self,
         weights=(1, 0.2),
-        out_channels="BC",
-        mask_distance_channel=True,
+        out_channels=["F", "C"],
+        losses_to_use=[],
+        channel_extra_opts={},
+        channel_num: int = 1,
         n_classes=2,
         class_rebalance=False,
-        instance_type="regular",
         ignore_index: int = -1,
     ):
         """
@@ -1101,35 +1120,45 @@ class instance_segmentation_loss:
             Weights to be applied to segmentation (binary and contours) and to distances respectively. E.g. ``(1, 0.2)``,
             ``1`` should be multipled by ``BCE`` for the first two channels and ``0.2`` to ``MSE`` for the last channel.
 
-        out_channels : str, optional
+        out_channels : List of str, optional
             Channels to operate with.
 
-        mask_distance_channel : bool, optional
-            Whether to mask the distance channel to only calculate the loss in those regions where the binary mask
-            defined by B channel is present.
+        channel_extra_opts : dict, optional
+            Additional options for each output channel (e.g., {"B": {"mask_values": True}}).
 
         class_rebalance: bool, optional
             Whether to reweight classes (inside loss function) or not.
 
-        instance_type : str, optional
-            Type of instances expected. Options are: ["regular", "synapses"]
-
         ignore_index : int, optional
             Value to ignore in the loss calculation.
         """
-        assert instance_type in ["regular", "synapses"]
-
         self.weights = weights
         self.out_channels = out_channels
-        self.mask_distance_channel = mask_distance_channel
+        self.channel_num = channel_num
+        self.channel_extra_opts = channel_extra_opts
         self.n_classes = n_classes
-        self.d_channel = -2 if n_classes > 2 else -1
         self.class_rebalance = class_rebalance
-        self.instance_type = instance_type
         self.ignore_index = ignore_index
         self.ignore_values = True if ignore_index != -1 else False
-        self.binary_channels_loss = torch.nn.BCEWithLogitsLoss()
-        self.distance_channels_loss = torch.nn.L1Loss()
+        self.losses_to_use = []
+        self.loss_names = losses_to_use
+        for loss in losses_to_use:
+            loss = loss.lower()
+            assert loss in ["bce", "ce", "l1", "mae", "mse", "triplet"], (
+                "Loss {} not recognized. Available options are: 'bce', 'ce', 'l1', 'mae', 'mse' and 'triplet'".format(loss)
+            )
+            if loss == "ce" or loss == "bce":
+                self.losses_to_use.append(torch.nn.BCEWithLogitsLoss)
+            elif loss == "l1" or loss == "mae":
+                self.losses_to_use.append(torch.nn.L1Loss())
+            elif loss == "mse":
+                self.losses_to_use.append(torch.nn.MSELoss())
+            elif loss == "triplet":
+                self.losses_to_use.append(torch.nn.TripletMarginLoss(margin=1.0, p=2))
+        
+        assert len(self.losses_to_use) == len(self.out_channels), (
+            "Number of losses ({}) and number of output channels ({}) do not match.".format(len(self.losses_to_use), len(self.out_channels))
+        )
         self.class_channel_loss = torch.nn.CrossEntropyLoss()
 
     def __call__(self, y_pred, y_true):
@@ -1153,212 +1182,70 @@ class instance_segmentation_loss:
             _y_pred = y_pred["pred"]
         else:
             _y_pred = y_pred
-        extra_channels = 0
-        if isinstance(y_pred, dict) and "class" in y_pred:
+    
+        if self.n_classes > 2 and isinstance(y_pred, dict) and "class" in y_pred:
             _y_pred_class = y_pred["class"]
-            extra_channels = 1
 
-        if self.instance_type == "regular" and "D" in self.out_channels and self.out_channels != "Dv2":
-            if self.mask_distance_channel:
-                D = _y_pred[:, self.d_channel] * y_true[:, 0]
-            else:
-                D = _y_pred[:, self.d_channel]
+        assert (y_true.shape[1] == self.channel_num), (
+            "Seems that the GT loaded doesn't have {} channels as expected in {}. GT shape: {}".format(
+                self.channel_num, self.out_channels, y_true.shape
+            )
+        )
 
         loss = 0
-        if self.instance_type == "regular":
-            if self.out_channels == "BC":
-                assert (
-                    y_true.shape[1] == 2 + extra_channels
-                ), f"Seems that the GT loaded doesn't have 2 channels as expected in BC. GT shape: {y_true.shape}"
-                if self.class_rebalance:
-                    B_weight_mask = weight_binary_ratio(y_true[:, 0])
-                    if self.ignore_values:
-                        B_weight_mask = B_weight_mask * (y_true[:, 0] != self.ignore_index)
-                    B_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=B_weight_mask)
-                    C_weight_mask = weight_binary_ratio(y_true[:, 1])
-                    if self.ignore_values:
-                        C_weight_mask = C_weight_mask * (y_true[:, 1] != self.ignore_index)
-                    C_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=C_weight_mask)
-                else:
-                    if self.ignore_values:
-                        B_weight_mask = torch.ones((y_true[:, 0].shape)) * (y_true[:, 0] != self.ignore_index)
-                        B_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=B_weight_mask)
-                        C_weight_mask = torch.ones((y_true[:, 1].shape)) * (y_true[:, 1] != self.ignore_index)
-                        C_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=C_weight_mask)
-                    else:
-                        B_binary_channels_loss = self.binary_channels_loss
-                        C_binary_channels_loss = self.binary_channels_loss
-
-                loss = self.weights[0] * B_binary_channels_loss(_y_pred[:, 0], y_true[:, 0]) + self.weights[
-                    1
-                ] * C_binary_channels_loss(_y_pred[:, 1], y_true[:, 1])
-
-            elif self.out_channels == "BCP":
-                assert (
-                    y_true.shape[1] == 3 + extra_channels
-                ), f"Seems that the GT loaded doesn't have 3 channels as expected in BCP. GT shape: {y_true.shape}"
-                if self.class_rebalance:
-                    B_weight_mask = weight_binary_ratio(y_true[:, 0])
-                    if self.ignore_values:
-                        B_weight_mask = B_weight_mask * (y_true[:, 0] != self.ignore_index)
-                    B_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=B_weight_mask)
-
-                    C_weight_mask = weight_binary_ratio(y_true[:, 1])
-                    if self.ignore_values:
-                        C_weight_mask = C_weight_mask * (y_true[:, 1] != self.ignore_index)
-                    C_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=C_weight_mask)
-
-                    P_weight_mask = weight_binary_ratio(y_true[:, 2])
-                    if self.ignore_values:
-                        P_weight_mask = P_weight_mask * (y_true[:, 2] != self.ignore_index)
-                    P_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=P_weight_mask)
-                else:
-                    if self.ignore_values:
-                        B_weight_mask = torch.ones((y_true[:, 0].shape)) * (y_true[:, 0] != self.ignore_index)
-                        B_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=B_weight_mask)
-                        C_weight_mask = torch.ones((y_true[:, 1].shape)) * (y_true[:, 1] != self.ignore_index)
-                        C_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=C_weight_mask)
-                        P_weight_mask = torch.ones((y_true[:, 2].shape)) * (y_true[:, 2] != self.ignore_index)
-                        P_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=P_weight_mask)
-                    else:
-                        B_binary_channels_loss = self.binary_channels_loss
-                        C_binary_channels_loss = self.binary_channels_loss
-                        P_binary_channels_loss = self.binary_channels_loss
-
-                loss = (
-                    self.weights[0] * B_binary_channels_loss(_y_pred[:, 0], y_true[:, 0])
-                    + self.weights[1] * C_binary_channels_loss(_y_pred[:, 1], y_true[:, 1])
-                    + self.weights[2] * P_binary_channels_loss(_y_pred[:, 2], y_true[:, 2])
-                )
-            elif self.out_channels == "BCM":
-                assert (
-                    y_true.shape[1] == 3 + extra_channels
-                ), f"Seems that the GT loaded doesn't have 3 channels as expected in BCM. GT shape: {y_true.shape}"
-                if self.class_rebalance:
-                    B_weight_mask = weight_binary_ratio(y_true[:, 0])
-                    B_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=B_weight_mask)
-                    C_weight_mask = weight_binary_ratio(y_true[:, 1])
-                    C_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=C_weight_mask)
-                    M_weight_mask = weight_binary_ratio(y_true[:, 2])
-                    M_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=M_weight_mask)
-                else:
-                    B_binary_channels_loss = self.binary_channels_loss
-                    C_binary_channels_loss = self.binary_channels_loss
-                    M_binary_channels_loss = self.binary_channels_loss
-                loss = (
-                    self.weights[0] * B_binary_channels_loss(_y_pred[:, 0], y_true[:, 0])
-                    + self.weights[1] * C_binary_channels_loss(_y_pred[:, 1], y_true[:, 1])
-                    + self.weights[2] * M_binary_channels_loss(_y_pred[:, 2], y_true[:, 2])
-                )
-            elif self.out_channels == "BCD":
-                assert (
-                    y_true.shape[1] == 3 + extra_channels
-                ), f"Seems that the GT loaded doesn't have 3 channels as expected in BCD. GT shape: {y_true.shape}"
-                if self.class_rebalance:
-                    B_weight_mask = weight_binary_ratio(y_true[:, 0])
-                    B_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=B_weight_mask)
-                    C_weight_mask = weight_binary_ratio(y_true[:, 1])
-                    C_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=C_weight_mask)
-                else:
-                    B_binary_channels_loss = self.binary_channels_loss
-                    C_binary_channels_loss = self.binary_channels_loss
-                loss = (
-                    self.weights[0] * B_binary_channels_loss(_y_pred[:, 0], y_true[:, 0])
-                    + self.weights[1] * C_binary_channels_loss(_y_pred[:, 1], y_true[:, 1])
-                    + self.weights[2] * self.distance_channels_loss(D, y_true[:, 2])
-                )
-            elif self.out_channels == "BCDv2":
-                assert (
-                    y_true.shape[1] == 3 + extra_channels
-                ), f"Seems that the GT loaded doesn't have 3 channels as expected in BCDv2. GT shape: {y_true.shape}"
-                if self.class_rebalance:
-                    B_weight_mask = weight_binary_ratio(y_true[:, 0])
-                    B_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=B_weight_mask)
-                    C_weight_mask = weight_binary_ratio(y_true[:, 1])
-                    C_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=C_weight_mask)
-                else:
-                    B_binary_channels_loss = self.binary_channels_loss
-                    C_binary_channels_loss = self.binary_channels_loss
-                loss = (
-                    self.weights[0] * B_binary_channels_loss(_y_pred[:, 0], y_true[:, 0])
-                    + self.weights[1] * C_binary_channels_loss(_y_pred[:, 1], y_true[:, 1])
-                    + self.weights[2] * self.distance_channels_loss(D, y_true[:, 2])
-                )
-            elif self.out_channels in ["BDv2", "BD"]:
-                assert (
-                    y_true.shape[1] == 2 + extra_channels
-                ), f"Seems that the GT loaded doesn't have 2 channels as expected in BD/BDv2. GT shape: {y_true.shape}"
-                if self.class_rebalance:
-                    B_weight_mask = weight_binary_ratio(y_true[:, 0])
-                    B_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=B_weight_mask)
-                else:
-                    B_binary_channels_loss = self.binary_channels_loss
-                loss = self.weights[0] * B_binary_channels_loss(_y_pred[:, 0], y_true[:, 0]) + self.weights[
-                    1
-                ] * self.distance_channels_loss(D, y_true[:, 1])
-            elif self.out_channels == "BP":
-                assert (
-                    y_true.shape[1] == 2 + extra_channels
-                ), f"Seems that the GT loaded doesn't have 2 channels as expected in BP. GT shape: {y_true.shape}"
-                if self.class_rebalance:
-                    B_weight_mask = weight_binary_ratio(y_true[:, 0])
-                    B_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=B_weight_mask)
-                    P_weight_mask = weight_binary_ratio(y_true[:, 1])
-                    P_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=P_weight_mask)
-                else:
-                    B_binary_channels_loss = self.binary_channels_loss
-                    P_binary_channels_loss = self.binary_channels_loss
-                loss = self.weights[0] * B_binary_channels_loss(_y_pred[:, 0], y_true[:, 0]) + self.weights[
-                    1
-                ] * P_binary_channels_loss(_y_pred[:, 1], y_true[:, 1])
-            elif self.out_channels == "C":
-                if self.class_rebalance:
-                    C_weight_mask = weight_binary_ratio(y_true)
-                    C_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=C_weight_mask)
-                else:
-                    C_binary_channels_loss = self.binary_channels_loss
-                loss = C_binary_channels_loss(_y_pred, y_true)
-            elif self.out_channels in ["A"]:
-                if self.class_rebalance:
-                    A_weight_mask = weight_binary_ratio(y_true)
-                    A_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=A_weight_mask)
-                else:
-                    A_binary_channels_loss = self.binary_channels_loss
-                loss = A_binary_channels_loss(_y_pred, y_true)
-            # Dv2
+        for i, channel in enumerate(self.out_channels):
+            ch_pos = self.out_channels.index(channel)
+            if channel == "A":
+                ch_pos_end = len(self.channel_extra_opts["A"].get("y_affinities", [1])) + ch_pos
+            elif channel == "R":
+                ch_pos_end = self.channel_extra_opts["R"].get("nrays", 32) + ch_pos
             else:
-                loss = self.weights[0] * self.distance_channels_loss(_y_pred, y_true)
+                ch_pos_end = ch_pos + 1
 
-            if self.n_classes > 2:
-                loss += self.weights[-1] * self.class_channel_loss(_y_pred_class, y_true[:, -1].type(torch.long))
-        else:
-            if self.out_channels == "BF":
+            y_pred_slice = _y_pred[:, ch_pos:ch_pos_end]
+            y_true_slice = y_true[:, ch_pos:ch_pos_end]
+
+            # element-wise mask you wanted to use (float on same device)
+            mask_vals = self.channel_extra_opts.get(channel, {}).get("mask_values", False)
+            mask = None
+            if mask_vals:
+                mask = (y_true_slice != 0).float()
+
+            # class-rebalance / ignore_index weights for BCE
+            weight = None
+            if self.loss_names[i] in ["bce", "ce"] and channel in ["B","F","P","C","T","A","F_pre","F_post"]:
                 if self.class_rebalance:
-                    B_weight_mask = weight_binary_ratio(y_true[:, 0])
-                    B_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=B_weight_mask)
-                else:
-                    B_binary_channels_loss = self.binary_channels_loss
-                loss = self.weights[0] * B_binary_channels_loss(_y_pred[:, 0], y_true[:, 0])
-                # Depending the dimensions more or less channels are present (2 for 2D and 3 for 3D)
-                for c in range(1, y_true.shape[1]):
-                    if self.mask_distance_channel:
-                        loss += self.weights[c] * self.distance_channels_loss(
-                            _y_pred[:, c] * (y_true[:, c] != 0), y_true[:, c]
-                        )
-                    else:
-                        loss += self.weights[c] * self.distance_channels_loss(_y_pred[:, c], y_true[:, c])
-            elif self.out_channels == "B":
-                if self.class_rebalance:
-                    B_weight_mask = weight_binary_ratio(y_true[:, 0])
-                    B_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=B_weight_mask)
-                    BB_weight_mask = weight_binary_ratio(y_true[:, 1])
-                    BB_binary_channels_loss = torch.nn.BCEWithLogitsLoss(weight=BB_weight_mask)
-                else:
-                    B_binary_channels_loss = self.binary_channels_loss
-                    BB_binary_channels_loss = self.binary_channels_loss
-                loss = self.weights[0] * B_binary_channels_loss(_y_pred[:, 0], y_true[:, 0]) + self.weights[
-                    1
-                ] * BB_binary_channels_loss(_y_pred[:, 1], y_true[:, 1])
+                    weight = weight_binary_ratio(y_true_slice).float()
+                if self.ignore_values:
+                    ignore_mask = (y_true_slice != self.ignore_index).float()
+                    weight = ignore_mask if weight is None else weight * ignore_mask
+
+            # instantiate criterion with no reduction so we can mask safely
+            name = self.loss_names[i]
+            if name in ["bce", "ce"]:
+                crit = torch.nn.BCEWithLogitsLoss(weight=weight, reduction="none")
+            elif name in ["l1", "mae"]:
+                crit = torch.nn.L1Loss(reduction="none")
+            elif name == "mse":
+                crit = torch.nn.MSELoss(reduction="none")
+            else:
+                crit = self.losses_to_use[i]   # e.g. Triplet already reduced
+
+            loss_tensor = crit(y_pred_slice, y_true_slice)  # same shape as slice
+
+            # apply optional element mask AFTER computing the per-element loss
+            if mask is not None:
+                loss_tensor = loss_tensor * mask
+                denom = mask.sum().clamp_min(1.0)
+            else:
+                denom = torch.tensor(loss_tensor.numel(), device=loss_tensor.device, dtype=loss_tensor.dtype)
+
+            channel_loss_val = loss_tensor.sum() / denom
+            loss += self.weights[i] * channel_loss_val
+
+        if self.n_classes > 2 and isinstance(y_pred, dict) and "class" in y_pred: 
+            loss += self.weights[-1] * self.class_channel_loss(_y_pred_class, y_true[:, -1].type(torch.long))
+
         return loss
 
 
@@ -1843,3 +1730,228 @@ class SSIM_wrapper:
         if isinstance(y_pred, dict):
             y_pred = y_pred["pred"]
         return 1 - self.loss(y_pred, y_true)
+
+# ---------------------------
+# Lovasz-hinge (binary) utils
+# ---------------------------
+
+def _lovasz_grad(gt_sorted: torch.Tensor) -> torch.Tensor:
+    p = gt_sorted.numel()
+    gts = gt_sorted.sum()
+    intersection = gts - gt_sorted.cumsum(0)
+    union = gts + (1 - gt_sorted).cumsum(0)
+    jaccard = 1.0 - intersection / union.clamp_min(1e-8)
+    if p > 1:
+        jaccard[1:p] = jaccard[1:p] - jaccard[0:-1]
+    return jaccard
+
+def lovasz_hinge_flat(logits: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
+    """
+    Binary Lovasz hinge loss (logits vs. {0,1} labels), per-instance.
+    """
+    if logits.numel() == 0:
+        return logits * 0.0
+    labelsf = labels.float()
+    signs = 2.0 * labelsf - 1.0
+    errors = 1.0 - logits * signs  # hinge errors
+    errors_sorted, perm = torch.sort(errors, descending=True)
+    gt_sorted = labelsf[perm]
+    grad = _lovasz_grad(gt_sorted)
+    return torch.dot(F.relu(errors_sorted), grad)
+
+def prob_to_logit_clamped(p: torch.Tensor, eps: float = 1e-6) -> torch.Tensor:
+    p = p.clamp(eps, 1 - eps)
+    return torch.log(p) - torch.log1p(-p)
+
+# ---------------------------
+# Geometry helpers (2D / 3D)
+# ---------------------------
+
+def instance_centroid(coords: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    """
+    coords: (H,W,D) or (Z,Y,X,D), mask: (H,W) or (Z,Y,X) bool
+    returns: (D,)
+    """
+    idx = mask.nonzero(as_tuple=False)
+    if idx.numel() == 0:
+        return coords.new_full((coords.shape[-1],), float("nan"))
+    pts = coords[mask]  # (N,D)
+    return pts.mean(dim=0)
+
+def instance_medoid(coords: torch.Tensor, mask: torch.Tensor, subsample: Optional[int] = 2048) -> torch.Tensor:
+    """
+    Medoid inside the instance: the pixel/voxel whose avg distance to all others is minimal.
+    coords: (...,D), mask: (...) bool, returns (D,)
+    To keep it fast, we subsample if the instance is very large.
+    """
+    pts = coords[mask]  # (N,D)
+    n = pts.shape[0]
+    if n == 0:
+        return coords.new_full((coords.shape[-1],), float("nan"))
+    if subsample is not None and n > subsample:
+        idx = torch.randperm(n, device=pts.device)[:subsample]
+        pts = pts[idx]
+        n = pts.shape[0]
+    # pairwise distances (N,N) -> O(n^2); OK with subsampling
+    # d(i) = mean_j ||pts[i]-pts[j]||
+    d2 = torch.cdist(pts, pts, p=2)  # (N,N)
+    mean_d = d2.mean(dim=1)          # (N,)
+    i_star = torch.argmin(mean_d)
+    return pts[i_star]
+
+# ---------------------------
+# Gaussian φ(e; C, σ) in D dims
+# ---------------------------
+
+def gaussian_phi(e_minus_c: torch.Tensor, sigma: torch.Tensor, elliptical: bool) -> torch.Tensor:
+    """
+    e_minus_c: (..., D)
+    sigma: (..., 1) if isotropic; (..., D) if elliptical
+    returns: (..., 1) probability
+    """
+    if elliptical:
+        # diagonal covariance: sum_d ( (e_d)^2 / (2 σ_d^2) )
+        sig2 = (sigma ** 2).clamp_min(1e-8)
+        num = (e_minus_c ** 2 / (2.0 * sig2)).sum(dim=-1)
+    else:
+        # isotropic: ||e||^2 / (2 σ^2)
+        sig2 = (sigma[..., 0] ** 2).clamp_min(1e-8)
+        num = (e_minus_c ** 2).sum(dim=-1) / (2.0 * sig2)
+    return torch.exp(-num).unsqueeze(-1)
+
+# ---------------------------
+# Main loss
+# ---------------------------
+
+def embedseg_losses(
+    pred_offsets: torch.Tensor,      # (B, D, *spatial)   D=2 or 3; offsets o(x) in pixels/voxels
+    pred_sigma: torch.Tensor,        # (B, S, *spatial)   S=1 (isotropic) or S=D (elliptical)
+    pred_seediness: torch.Tensor,    # (B, 1, *spatial)   (single class typical for microscopy)
+    gt_instance_ids: torch.Tensor,   # (B, 1, *spatial)   int IDs, 0 = background
+    *,
+    use_elliptical: bool = True,           # True -> S=D; False -> S=1
+    center_mode: str = "medoid",           # {"medoid","centroid","mean_embedding"}; EmbedSeg uses "medoid"
+    lambda_main: float = 1.0,
+    lambda_seed: float = 1.0,
+    lambda_sigma_smooth: float = 0.01,
+    medoid_subsample: Optional[int] = 2048,  # speed for large instances
+) -> Dict[str, torch.Tensor]:
+    """
+    Implements:
+      - Main IoU surrogate: Lovasz-hinge on φ(e; Ck, σk) vs. GT instance mask (per instance)  [Neven Eq. (5) + Lovasz]
+      - Seediness regression: FG -> φ, BG -> 0                                             [Neven Eq. (10)]
+      - Sigma smoothness within instance: ||σ_i - mean(σ)||^2                               [Neven Eq. (12)]
+    Differences adopted from EmbedSeg:
+      - Instance center during training: **medoid** (default) rather than centroid/mean-embedding.
+      - Supports 2D and 3D with axis-aligned ellipses/ellipsoids.
+
+    Returns dict with total loss and components.
+    """
+    B = pred_offsets.shape[0]
+    spatial_shape = pred_offsets.shape[2:]
+    D = pred_offsets.shape[1]
+    assert D in (2, 3), f"Offsets must have 2 or 3 channels, got {D}"
+    S_expected = D if use_elliptical else 1
+    assert pred_sigma.shape[1] == S_expected, f"pred_sigma channels ({pred_sigma.shape[1]}) must be {S_expected}"
+
+    device = pred_offsets.device
+
+    # Build absolute coordinate grid in pixels/voxels with shape (*spatial, D)
+    grids = []
+    for dim, size in enumerate(spatial_shape):
+        rng = torch.arange(size, device=device)
+        # torch.meshgrid with indexing='ij'
+        grids.append(rng)
+    mesh = torch.meshgrid(*grids, indexing="ij")  # tuple length = len(spatial_shape)
+    # Order coords as (X,Y) for 2D or (X,Y,Z)? We'll keep natural ijk order and treat consistently.
+    # Compose (..., D)
+    if D == 2:
+        # spatial is (H,W) -> coords (H,W,2) = (y,x) order
+        coords = torch.stack([mesh[-1], mesh[-2]], dim=-1).float() if len(spatial_shape) == 2 else None
+        # But if D==2 and spatial has 2 dims, we prefer (y,x). Keep consistent with offsets being (dy,dx).
+        # To avoid confusion, we simply stack in the same order as spatial dims:
+        coords = torch.stack([m for m in mesh], dim=-1).float()  # (...,2)
+    else:
+        coords = torch.stack([m for m in mesh], dim=-1).float()  # (...,3)
+
+    total_main = pred_offsets.new_tensor(0.0)
+    total_seed = pred_offsets.new_tensor(0.0)
+    total_sigma_smooth = pred_offsets.new_tensor(0.0)
+    total_instances = 0
+
+    for b in range(B):
+        # Reformat predictions to (...,C) layout for easy masking
+        offs = pred_offsets[b].permute(*range(1, 1 + len(spatial_shape)), 0)   # (*spatial, D)
+        emb = coords + offs                                                    # e(x) = x + o(x)
+        sig = pred_sigma[b].permute(*range(1, 1 + len(spatial_shape)), 0)      # (*spatial, S)
+        seed_map = pred_seediness[b, 0]                                        # (*spatial)
+        inst = gt_instance_ids[b, 0]                                           # (*spatial)
+
+        # find all instance labels > 0
+        labels = torch.unique(inst)
+        labels = labels[labels > 0]
+
+        for k in labels.tolist():
+            mask = (inst == k)
+            n_k = int(mask.sum().item())
+            if n_k == 0:
+                continue
+
+            # ----- choose instance center Ck
+            if center_mode == "medoid":
+                Ck = instance_medoid(coords, mask, subsample=medoid_subsample)  # EmbedSeg default
+            elif center_mode == "centroid":
+                Ck = instance_centroid(coords, mask)
+            elif center_mode == "mean_embedding":
+                pts = emb[mask]
+                Ck = pts.mean(dim=0) if pts.numel() > 0 else coords.new_full((D,), float("nan"))
+            else:
+                raise ValueError(f"Unknown center_mode: {center_mode}")
+            if torch.isnan(Ck).any():
+                continue
+
+            # ----- instance σk = mean σ over the instance (per channel)
+            if use_elliptical:
+                sig_k = sig[mask].mean(dim=0, keepdim=False)  # (D,)
+                sig_b = sig.new_empty((*spatial_shape, D)).copy_(sig_k)  # broadcast
+            else:
+                sig_k = sig[mask].mean(dim=0, keepdim=False)  # (1,)
+                sig_b = sig.new_empty((*spatial_shape, 1)).copy_(sig_k)
+
+            # ----- φ_k(e) everywhere
+            e_minus_c = emb - Ck.view(*(1,) * len(spatial_shape), D)
+            phi = gaussian_phi(e_minus_c, sig_b, elliptical=use_elliptical).squeeze(-1)  # (*spatial), in (0,1]
+
+            # ===== (1) Main per-instance Lovasz-hinge on φ vs. GT mask =====
+            y = mask.float().view(-1)                              # (P,)
+            logits = prob_to_logit_clamped(phi.view(-1))           # convert prob->logit for hinge
+            total_main = total_main + lovasz_hinge_flat(logits, y)
+
+            # ===== (2) Seediness regression (Eq. 10) =====
+            # FG pixels -> φ; BG -> 0
+            target_seed = torch.zeros_like(seed_map)
+            target_seed[mask] = phi[mask]
+            seed_loss = F.mse_loss(seed_map, target_seed)
+            total_seed = total_seed + seed_loss
+
+            # ===== (3) Sigma smoothness within instance (Eq. 12) =====
+            sig_pix = sig[mask]                      # (Nk,S)
+            sig_mean = sig_pix.mean(dim=0, keepdim=True)
+            sigma_smooth = F.mse_loss(sig_pix, sig_mean.expand_as(sig_pix))
+            total_sigma_smooth = total_sigma_smooth + sigma_smooth
+
+            total_instances += 1
+
+    total_instances = max(total_instances, 1)
+    loss_main = total_main / total_instances
+    loss_seed = total_seed / total_instances
+    loss_sigma_smooth = total_sigma_smooth / total_instances
+
+    loss = lambda_main * loss_main + lambda_seed * loss_seed + lambda_sigma_smooth * loss_sigma_smooth
+    return {
+        "loss": loss,
+        "loss_main": loss_main.detach(),
+        "loss_seed": loss_seed.detach(),
+        "loss_sigma_smooth": loss_sigma_smooth.detach(),
+        "num_instances": torch.tensor(total_instances, device=device),
+    }

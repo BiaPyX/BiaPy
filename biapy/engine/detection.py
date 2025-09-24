@@ -120,8 +120,8 @@ class Detection_Workflow(Base_Workflow):
         self.activations : List of dicts
             Activations to be applied to the model output. Each dict will
             match an output channel of the model. If ':' is used the activation
-            will be applied to all channels at once. "Linear" and "CE_Sigmoid"
-            will not be applied. E.g. [{":": "Linear"}].
+            will be applied to all channels at once. "linear" and "ce_sigmoid"
+            will not be applied. E.g. [{":": "linear"}].
         """
         self.model_output_channels = {
             "type": "mask",
@@ -130,11 +130,11 @@ class Detection_Workflow(Base_Workflow):
 
         # Multi-head: points + classification
         if self.cfg.DATA.N_CLASSES > 2:
-            self.activations = [{"0": "CE_Sigmoid"}, {"0": "Linear"}]
+            self.activations = [{"0": "ce_sigmoid"}, {"0": "linear"}]
             self.model_output_channels["channels"] = [self.model_output_channels["channels"], self.cfg.DATA.N_CLASSES]
             self.multihead = True
         else:
-            self.activations = [{"0": "CE_Sigmoid"}]
+            self.activations = [{"0": "ce_sigmoid"}]
             self.model_output_channels["channels"] = [self.model_output_channels["channels"]]
             self.multihead = False
         self.real_classes = self.model_output_channels["channels"][0]

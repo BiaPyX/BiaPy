@@ -34,6 +34,7 @@ from biapy.models import (
     check_bmz_args,
     check_model_restrictions,
 )
+from biapy.models.blocks import get_activation
 from biapy.engine import prepare_optimizer, build_callbacks
 from biapy.data.generators import (
     create_train_val_augmentors,
@@ -297,8 +298,8 @@ class Base_Workflow(metaclass=ABCMeta):
         self.activations : List of dicts
             Activations to be applied to the model output. Each dict will
             match an output channel of the model. If ':' is used the activation
-            will be applied to all channels at once. "Linear" and "CE_Sigmoid"
-            will not be applied. E.g. [{":": "Linear"}].
+            will be applied to all channels at once. "linear" and "ce_sigmoid"
+            will not be applied. E.g. [{":": "linear"}].
         """
         if not self.model_output_channels:
             raise ValueError(
@@ -751,14 +752,10 @@ class Base_Workflow(metaclass=ABCMeta):
 
         self.model_without_ddp = self.model
         if self.args.distributed:
-            if self.cfg.MODEL.ARCHITECTURE.lower() in ["unetr", "resunet_se"]:
-                find_unused_parameters = True
-            else:
-                find_unused_parameters = False
             self.model = torch.nn.parallel.DistributedDataParallel(
                 self.model,
                 device_ids=[self.args.gpu],
-                find_unused_parameters=find_unused_parameters,
+                find_unused_parameters=False,
             )
             self.model_without_ddp = self.model.module
         self.model_prepared = True
@@ -1116,7 +1113,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
         training : bool, optional
             To advice the function if this is being applied during training of inference. During training,
-            ``CE_Sigmoid`` activations will NOT be applied, as ``torch.nn.BCEWithLogitsLoss`` will apply
+            ``ce_sigmoid`` activations will NOT be applied, as ``torch.nn.BCEWithLogitsLoss`` will apply
             ``Sigmoid`` automatically in a way that is more stable numerically
             (`ref <https://pytorch.org/docs/stable/generated/torch.nn.BCEWithLogitsLoss.html>`_).
 
@@ -1131,11 +1128,11 @@ class Base_Workflow(metaclass=ABCMeta):
 
         def __apply_acts(prediction, acts):
             for key, value in acts.items():
-                # Ignore CE_Sigmoid as torch.nn.BCEWithLogitsLoss will apply Sigmoid automatically in a way
+                # Ignore ce_sigmoid as torch.nn.BCEWithLogitsLoss will apply Sigmoid automatically in a way
                 # that is more stable numerically (ref: https://pytorch.org/docs/stable/generated/torch.nn.BCEWithLogitsLoss.html)
-                if (training and value not in ["Linear", "CE_Sigmoid"]) or (not training and value != "Linear"):
-                    value = "Sigmoid" if value == "CE_Sigmoid" else value
-                    act = getattr(torch.nn, value)()
+                if (training and value not in ["linear", "ce_sigmoid"]) or (not training and value != "linear"):
+                    value = "sigmoid" if value == "ce_sigmoid" else value
+                    act = get_activation(value.lower())
                     if key == ":":
                         prediction = act(prediction)
                     else:
@@ -1616,7 +1613,7 @@ class Base_Workflow(metaclass=ABCMeta):
             # Check activations to be inserted as postprocessing in BMZ
             act = list(self.activations[0].values())
             for ac in act:
-                if ac in ["CE_Sigmoid", "Sigmoid"]:
+                if ac in ["ce_sigmoid", "Sigmoid"]:
                     self.bmz_config["postprocessing"].append("sigmoid")
 
     def process_test_sample(self):

@@ -91,17 +91,39 @@ class Config:
         _C.PROBLEM.INSTANCE_SEG.TYPE = "regular" 
 
         #### For "regular" type of instances ####
-        # Possible options: 'C', 'BC', 'BP', 'BD', 'BCM', 'BCD', 'BCDv2', 'Dv2', 'BDv2' and 'A'. This variable defines the channels
-        # to be used to represent instances based on the input instance masks. The meaning of each letter is a follows:
-        #   - 'B' stands for 'Binary mask', it is a binary representation of each instance region without its contour.
+        # This variable defines the channels to be used to represent the instances. The approach follows a bottom-up setting,
+        # where the intermediate representations of the instances are learned by the model and then fused to create the final
+        # instances. The variable needs to be a list with the representations to be extracted from the instances. 
+        # These are the options available:
+        #   - 'F' stands for 'Foreground', it is a binary representation of each instance
+        #   - 'B' stands for 'Background', it is a binary representation of the background, i.e. everything that is not an instance.
+        #   - 'P' stands for 'Central part', the extreme case of the F channel, where only the center of mass, or the skeleton is 
+        #     represented. It may also be expressed as a heatmap.
         #   - 'C' stands for 'Contour', it is a binary representation of the countours of each instance.
-        #   - 'D' stands for 'Distance', where, for each instance, the pixel/voxel value is the distance to its contour.
-        #   - 'M' stands for 'Mask', contains the B and the C channels, i.e. the foreground mask. It is simply calculated by 
-        #     binarizing the input instance masks.
-        #   - 'Dv2' stands for 'Distance V2', which is a version of the 'D' channel calculating background distance as well.
-        #   - 'P' stands for 'Points' and contains a binary representation of the central points of each instance.
-        #   - 'A' stands for 'Affinities" and contains the affinity values for each dimension.
-        #   - 'F' stands for 'Flow' where, for each instance, contains the distance values to its center of mass for each dimension.
+        #   - 'H' stands for 'Horizontal distance', where, for each instance, the pixel/voxel value is the distance to its contour/skeleton 
+        #     in the horizontal axis.
+        #   - 'V' stands for 'Vertical distance', where, for each instance, the pixel/voxel value is the distance to its contour/skeleton 
+        #     in the vertical axis.
+        #   - 'Z' stands for 'Depth distance', where, for each instance, the pixel/voxel value is the distance to its contour/skeleton 
+        #     in the depth axis.
+        #   - 'Db' stands for 'Distance to the boundary', where, for each instance, the pixel/voxel value is the distance to its contour.
+        #   - 'Dc' stands for 'Distance to the center', where, for each instance, the pixel/voxel value is the distance to its 
+        #     center/skeleton.
+        #   - 'Dn' stands for 'Distance to the closest neighbor', where, for each instance, the pixel/voxel value is the distance to its 
+        #     closest neighbor instance.
+        #   - 'D' stands for 'Db for F and B channels' distance map'. In some cases, background pixel distances are negated and combined 
+        #     with a Tanh activation, 
+        #     while in others they are not
+        #   - 'R' stands for 'Radial distance', distances to boundaries measure how far each pixel is from its object’s edge along fixed 
+        #     radial directions, with StarDist being the most prominent approach.
+        #   - 'T' stands for 'Touching area', where touching regions between instances are highlighted.
+        #   - 'A' stands for 'Affinities' and contains the affinity values for each dimension. Affinities represent images as graphs for 
+        #     segmentation, where each voxel is a node connected to neighbors by edges indicating shared object membership. In 3D, nodes 
+        #     link along x-, y-, and z-axes, yielding multiple affinity channels, commonly used in connectomics.
+        #   - 'E' stands for 'Embeddings' and contains the embedding vectors for each pixel/voxel. Embedding-based approaches map each 
+        #     pixel in an input image to a point in an n-dimensional feature space (typically n=24), referred to as the pixel embedding. 
+        #     The goal is to ensure that embeddings from the same instance are close together, while embeddings from different instances
+        #     are well separated. We grouped here all the channels involved in this process
         #
         #### For "synapse" type of instances ####
         # Possible options: 'B' and 'BF' (still experimental). This variable defines the channels to be used to represent synapse instances based on the input 
@@ -111,38 +133,105 @@ class Config:
         #   * In 'BF':
         #       - 'B' stands for 'Binary mask', it is a binary representation of each postsynaptic site
         #       - 'F' stands for 'Flow' and contains the distance values to the corresponding presynaptic site (of each postsynaptic 
-        #         site) for each dimension.¡
-        _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS = "BC"
-        # Whether to mask the distance channel to only calculate the loss in those regions where the binary mask
-        # defined by B channel is present
-        _C.PROBLEM.INSTANCE_SEG.DISTANCE_CHANNEL_MASK = True
+        #         site) for each dimension.
+        _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS = ["B", "C"]
+        # Details for each channel. It must be a list with a unique element: a dict of dicts. The details can be only set for the following channels:
+        #   - 'F' channel. Possible options:
+        #       - 'erosion': int, the erosion size to be applied to the channel. Default: 0
+        #       - 'dilation': int, the dilation size to be applied to the channel. Default: 0
+        #   - 'B' channel. Possible options:
+        #       - 'erosion': int, the erosion size to be applied to the channel. Default: 0
+        #       - 'dilation': int, the dilation size to be applied to the channel. Default: 0
+        #   - 'P' channel. Possible options:
+        #       - 'type': str, the type of the channel. Options are: 'centroid', 'skeleton'. Default: 'centroid'
+        #       - 'dilation': int, the dilation size to be applied to the channel. Default: 0
+        #   - 'C' channel. Possible options:
+        #       - 'mode': str, how to create the contours. Corresponds to 'mode' arg of find_boundaries function from scikit-image. 
+        #          More info in: https://scikit-image.org/docs/stable/api/skimage.segmentation.html#skimage.segmentation.find_boundaries.
+        #          Options are: 'thick', 'inner', 'outer', 'subpixel' and 'dense'. The last one is used to label as contour every pixel
+        #          that is not in the foreground. Default: 'thick'.
+        #   - 'H', 'V', 'Z' and 'Db' channels. Possible options:
+        #       - 'norm': bool, whether to normalize the distances between 0 and 1. Default: False
+        #       - 'mask_values': bool, whether to mask the distance channel to only calculate the loss in non-zero values. Default: True
+        #   - 'Dc' channel. Possible options:
+        #       - 'type': str, the type of the channel. Options are: 'center', 'skeleton'. Default: 'center'
+        #       - 'norm': bool, whether to normalize the distances between 0 and 1. Default: False
+        #       - 'mask_values': bool, whether to mask the distance channel to only calculate the loss in non-zero values. Default: True
+        #   - 'Dn' channel. Possible options:
+        #       - 'closing_size': int, the size of the closing to be applied to the combined distance map. Default: 0
+        #       - 'norm': bool, whether to normalize the distances between 0 and 1. Default: False
+        #       - 'mask_values': bool, whether to mask the distance channel to only calculate the loss in non-zero values. Default: True
+        #       - 'decline_power': int, the power to which the distances are raised to control the decline rate. Default: 3
+        #   - 'D' channel. Possible options:
+        #       - 'act': str, activation function to be used in the last layer of the model when this channel is selected. Options are: 
+        #         'tanh' and 'linear'. Default: 'tanh'
+        #       - 'alpha': int, value to scale the distances of the background when 'act' is 'tanh'. Default: 1
+        #       - 'beta': int, value to scale the distances of the foreground when 'act' is 'tanh'. Default: 1
+        #       - 'norm': bool, whether to normalize the distances between -1 and 1. Default: False
+        #   - 'R' channel. Possible options:
+        #       - 'nrays': int, the number of rays to be used to represent the radial distances. Default: 32 (in 2D) and 96 (in 3D)
+        #       - 'norm': bool, whether to normalize the distances between 0 and 1. Default: False
+        #       - 'mask_values': bool, whether to mask the distance channel to only calculate the loss in non-zero values. Default: True
+        #   - 'T' channel. Possible options:
+        #       - 'thickness': int, the thickness in pixels of the touching area. Default: 2
+        #   - 'A' channel. Possible options:
+        #       - 'z_affinities': list of int, the offsets in x axis to be calculated. Default: [1]
+        #       - 'y_affinities': list of int, the offsets in y axis to be calculated. Default: [1]
+        #       - 'x_affinities': list of int, the offsets in z axis to be calculated. Default: [1]
+        #       - 'widen_borders': int, the size in pixels to widen the borders of the affinities. Default: 1
+        #       Notice that 'z_affinities', 'y_affinities' and 'x_affinities'  need to be lists of the same length. To reproduce the paper
+        #       "Superhuman Accuracy on the SNEMI3D Connectomics Challenge" the values are: 
+        #       'z_affinities': [1,2,3,4], 'y_affinities': [1,3,9,27] and 'x_affinities': [1,3,9,27]
+        #   - 'E' channel. Possible options:
+        #       - 'features': int, the number of features to be learned per pixel/voxel. Default: 24
+        _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS = [{}]
+        # Losses to be applied to each channel. If not provided, the losses will be set automatically depending on the channel.
+        # The options are:
+        #  - "bce"/"ce": binary cross entropy. Ref: https://pytorch.org/docs/stable/generated/torch.nn.BCEWithLogitsLoss.html
+        #  - "l1"/"mae": mean absolute error. Ref: https://pytorch.org/docs/stable/generated/torch.nn.L1Loss.html
+        #  - "mse": mean squared error. Ref: https://pytorch.org/docs/stable/generated/torch.nn.MSELoss.html
+        #  - "triplet": triplet loss. Ref: https://pytorch.org/docs/stable/generated/torch.nn.TripletMarginLoss.html
+        _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES = []
 
         # Weights to be applied to the channels.
         _C.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS = (1, 1)
-        # Contour creation mode. Corresponds to 'mode' arg of find_boundaries function from scikit-image. More
-        # info in: https://scikit-image.org/docs/stable/api/skimage.segmentation.html#skimage.segmentation.find_boundaries.
-        # It can be also set as "dense", to label as contour every pixel that is not in B channel.
-        _C.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE = "thick"
-        # Whether the threshold are going to be set as automaticaly (with Otsu thresholding) or manually.
-        # Options available: 'auto' or 'manual'. If this last is used PROBLEM.INSTANCE_SEG.DATA_MW_TH_* need to be set.
-        _C.PROBLEM.INSTANCE_SEG.DATA_MW_TH_TYPE = "auto"
+        # Defines how the instances are created. Options:
+        #   - "watershed" to use watershed algorithm
+        #   - "agglomeration" to use agglomeration algorithm
+        #   - "stardist" to use agglomeration algorithm
+        _C.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS = ""
 
-        # To convert the model predictions, which are between 0 and 1 range, into instances with marked controlled
-        # watershed (MW) a few thresholds need to be set. There can be up to three channels, as explained above and
-        # based on 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS' value. Each threshold is related to one of these channels. See the details in
-        # https://biapy.readthedocs.io/en/latest/workflows/instance_segmentation.html#problem-resolution
-        #
-        # This variables are only used when _C.PROBLEM.TYPE = 'INSTANCE_SEG
-        # TH_BINARY_MASK controls channel 'B' in the creation of the MW seeds
-        _C.PROBLEM.INSTANCE_SEG.DATA_MW_TH_BINARY_MASK = 0.5
-        # TH_CONTOUR controls channel 'C' in the creation of the MW seeds
-        _C.PROBLEM.INSTANCE_SEG.DATA_MW_TH_CONTOUR = 0.1
-        # TH_FOREGROUND acts over the channel 'B' and is used to limit how much the seeds can be grow
-        _C.PROBLEM.INSTANCE_SEG.DATA_MW_TH_FOREGROUND = 0.3
-        # TH_DISTANCE controls channel 'D' in the creation of the MW seeds
-        _C.PROBLEM.INSTANCE_SEG.DATA_MW_TH_DISTANCE = 1.0
-        # TH_POINTS controls channel 'P' in the creation of the MW seeds
-        _C.PROBLEM.INSTANCE_SEG.DATA_MW_TH_POINTS = 0.5
+        # Options for marker-controlled watershed
+        _C.PROBLEM.INSTANCE_SEG.WATERSHED = CN()
+        # List of the channels to be used for seed creation. If not provided will be automatically set based on
+        # 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'.
+        _C.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS = []
+        # Thresholds for the seed channels. If not provided will be automatically set with "auto" for each channel.
+        # If set it must have same length than 'PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS'. Options:
+        #   - A float between 0 and 1 to threshold each channel
+        #   - "auto" to automatically define a value by applying an Otsu thresholding
+        _C.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS_THRESH = []
+        # Defines the topographic surface to grow the seeds. If not provided will be automatically set based on
+        # 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'. If defined it must be a channel name, e.g. "B" or "C". 
+        _C.PROBLEM.INSTANCE_SEG.WATERSHED.TOPOGRAPHIC_SURFACE_CHANNEL = ""
+        # Channel to be used for growth mask creation. If not provided will be automatically set based on
+        # 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'. Options:
+        #   - A list of channel names, e.g. ["B"], ["C"] or ["B", "C"]. The channels must be in 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'
+        #   - "auto" to automatically create it based on the selected channels ('PROBLEM.INSTANCE_SEG.DATA_CHANNELS') 
+        _C.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS = []
+        # Thresholds for the growth mask channels. If not provided will be automatically set with "auto" for each channel.
+        # If set it must have same length than 'PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS'. Options:
+        #   - A float between 0 and 1 to threshold each channel
+        #   - "auto" to automatically define a value depending on the channels provided
+        _C.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS_THRESH  = []
+
+        # Options for stardist-kind instance creation
+        _C.PROBLEM.INSTANCE_SEG.STARDIST = CN()
+        # Probability threshold to consider a pixel/voxel as a potential instance center
+        _C.PROBLEM.INSTANCE_SEG.STARDIST.PROB_THRESH = 0.4
+        # Non-maximum suppression IoU threshold to filter overlapping instance candidates
+        _C.PROBLEM.INSTANCE_SEG.STARDIST.NMS_IOU_THRESH = 0.3
+
         # Size of small objects to be removed after doing watershed
         _C.PROBLEM.INSTANCE_SEG.DATA_REMOVE_SMALL_OBJ_BEFORE = 10
         # Whether to remove objects before watershed
@@ -154,7 +243,7 @@ class Config:
         _C.PROBLEM.INSTANCE_SEG.SEED_MORPH_RADIUS = []
         # To erode and dilate the foreground mask before using marker controlled watershed. The idea is to remove the small holes
         # that may be produced so the instances grow without them
-        _C.PROBLEM.INSTANCE_SEG.ERODE_AND_DILATE_FOREGROUND = False
+        _C.PROBLEM.INSTANCE_SEG.ERODE_AND_DILATE_GROWTH_MASK = False
         # Radius to erode the foreground mask
         _C.PROBLEM.INSTANCE_SEG.FORE_EROSION_RADIUS = 5
         # Radius to dilate the foreground mask
@@ -362,7 +451,7 @@ class Config:
         # File to load/save data prepared with the appropiate channels in a instance segmentation problem.
         # E.g. _C.PROBLEM.TYPE ='INSTANCE_SEG' and _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS != 'B'
         _C.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR = os.path.join(
-            "user_data", "train", "y_" + _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
+            "user_data", "train", "y_" + "".join(_C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
         )
         # Path to load/save detection masks prepared.
         _C.DATA.TRAIN.DETECTION_MASK_DIR = os.path.join("user_data", "train", "y_detection_masks")
@@ -532,7 +621,7 @@ class Config:
         # File to load/save data prepared with the appropiate channels in a instance segmentation problem.
         # E.g. _C.PROBLEM.TYPE ='INSTANCE_SEG' and _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS != 'B'
         _C.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR = os.path.join(
-            "user_data", "test", "y_" + _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
+            "user_data", "test", "y_" + "".join(_C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
         )
         # Path to load/save detection masks prepared.
         _C.DATA.TEST.DETECTION_MASK_DIR = os.path.join("user_data", "test", "y_detection_masks")
@@ -667,7 +756,7 @@ class Config:
         # File to load/save data prepared with the appropiate channels in a instance segmentation problem.
         # E.g. _C.PROBLEM.TYPE ='INSTANCE_SEG' and _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS != 'B'
         _C.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR = os.path.join(
-            "user_data", "val", "y_" + _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
+            "user_data", "val", "y_" + "".join(_C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
         )
         # Path to load/save detection masks prepared.
         _C.DATA.VAL.DETECTION_MASK_DIR = os.path.join("user_data", "val", "y_detection_masks")
@@ -1268,8 +1357,8 @@ class Config:
         #       * "CE" (default): cross entropy. Ref: https://pytorch.org/docs/stable/generated/torch.nn.CrossEntropyLoss.html
         #       * "DICE": Dice loss. Ref: https://www.kaggle.com/code/bigironsphere/loss-function-library-keras-pytorch
         #       * "W_CE_DICE": CE and Dice (with a weight term on each one that must sum 1). Ref: https://www.kaggle.com/code/bigironsphere/loss-function-library-keras-pytorch
-        #   * Instance segmentation: automatically set depending on the channels selected (PROBLEM.INSTANCE_SEG.DATA_CHANNELS). There is no need
-        #                            to set it.
+        #   * Instance segmentation: automatically set depending on the channels selected (PROBLEM.INSTANCE_SEG.DATA_CHANNELS). 
+        #     It can be also set manually with PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES. 
         #   * Detection:
         #       * "CE" (default): cross entropy. Ref: https://pytorch.org/docs/stable/generated/torch.nn.CrossEntropyLoss.html
         #       * "DICE": Dice loss. Ref: https://www.kaggle.com/code/bigironsphere/loss-function-library-keras-pytorch
@@ -1300,10 +1389,14 @@ class Config:
         #       * "W_MAE_SSIM": MAE and SSIM (with a weight term on each one that must sum 1).
         #       * "W_MSE_SSIM": MSE and SSIM (with a weight term on each one that must sum 1).
         _C.LOSS.TYPE = ""
-        # Weights to be applied in multiple loss combination cases. They must sum 1. E.g. [0.3, 0.7].
+        # Weights to be applied in multiple loss combination cases, by multiplying the corresponding weight to each loss.
+        # It works for all the workflows but the instance segmentation one, as in that case the weights must be set
+        # in PROBLEM.INSTANCE_SEG.DATA_CHANNEL_LOSSES. The weights must sum 1. E.g. [0.3, 0.7].
         _C.LOSS.WEIGHTS = [0.66, 0.34]
-        # To adjust the loss function based on the imbalance between classes. Used when LOSS.TYPE == "CE" in detection and
-        # semantic segmentation and if using B,C,M,P or A channels in instance segmentation workflow.
+        # To adjust the loss function based on the imbalance between classes. This measures how many pixels represent each class and assigns 
+        # a weight map to the predictions based on that. It can be used along with LOSS.WEIGHTS. It is used when loss is LOSS.TYPE == "CE" 
+        # in detection and semantic segmentation. In instance segmentation if "bce"/"ce" loss is set in 
+        # PROBLEM.INSTANCE_SEG.DATA_CHANNEL_LOSSES this will also be applied.
         _C.LOSS.CLASS_REBALANCE = False
         # Whether to ignore a value in the loss and metric calculation. This is only available when LOSS.TYPE == "CE". This value will not only
         # be ignored in the loss computation but in the metrics, e.g. IoU.
@@ -1596,6 +1689,8 @@ class Config:
         _C.TEST.POST_PROCESSING.REPARE_LARGE_BLOBS_SIZE = -1
         # Clear objects connected to the label image border
         _C.TEST.POST_PROCESSING.CLEAR_BORDER = False
+        # Fill holes in instances
+        _C.TEST.POST_PROCESSING.FILL_HOLES = False
 
         ### Detection
         # To remove close points to each other. This can also be set when using 'BP' channels for instance segmentation.
@@ -1666,15 +1761,15 @@ class Config:
         # Paths where a few samples of instance channels created will be stored just to check id there is any problem
         _C.PATHS.TRAIN_INSTANCE_CHANNELS_CHECK = os.path.join(
             _C.PATHS.RESULT_DIR.PATH,
-            "train_" + _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS + "_instance_channels",
+            "train_" + "".join(_C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) + "_instance_channels",
         )
         _C.PATHS.VAL_INSTANCE_CHANNELS_CHECK = os.path.join(
             _C.PATHS.RESULT_DIR.PATH,
-            "val_" + _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS + "_instance_channels",
+            "val_" + "".join(_C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) + "_instance_channels",
         )
         _C.PATHS.TEST_INSTANCE_CHANNELS_CHECK = os.path.join(
             _C.PATHS.RESULT_DIR.PATH,
-            "test_" + _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS + "_instance_channels",
+            "test_" + "".join(_C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) + "_instance_channels",
         )
         # Name of the folder where weights files will be stored/loaded from.
         _C.PATHS.CHECKPOINT = os.path.join(job_dir, "checkpoints")
@@ -1795,18 +1890,23 @@ def update_dependencies(cfg) -> None:
     post_d_dil = "".join(str(call.PROBLEM.INSTANCE_SEG.SYNAPSES.POSTSITE_DILATION_DISTANCE_CHANNELS)[1:-1].replace(",","")).replace(" ","_")
     tdata = call.DATA.TRAIN.GT_PATH if not call.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA else call.DATA.TRAIN.PATH
     if call.PROBLEM.INSTANCE_SEG.TYPE == "regular":
+        suffix = ""
+        for key, val in call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0].items():
+            suffix += f"_{key}"
+            if key in call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
+                for kdetail, vdetail in val.items():
+                    suffix += f"-{kdetail}-{vdetail}"
         call.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR = (
             tdata
             + "_"
-            + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
+            + "".join(call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) 
+            + suffix
         )
-        if "C" in call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
-            call.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR += "_" + call.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
     else: 
         call.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR = (
             tdata
             + "_"
-            + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
+            + "".join(call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
             + "_"
             + post_dil
             + "_" 
@@ -1820,15 +1920,14 @@ def update_dependencies(cfg) -> None:
         call.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR = (
             vdata
             + "_"
-            + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
+            + "".join(call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) 
+            + suffix
         )
-        if "C" in call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
-            call.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR += "_" + call.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
     else: 
         call.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR = (
             vdata
             + "_"
-            + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
+            + "".join(call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
             + "_"
             + post_dil 
             + "_" 
@@ -1843,15 +1942,14 @@ def update_dependencies(cfg) -> None:
         call.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR = (
             tdata
             + "_"
-            + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
+            + "".join(call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
+            + suffix
         )
-        if "C" in call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
-            call.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR += "_" + call.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
     else: 
         call.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR = (
             tdata
             + "_"
-            + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
+            + "".join(call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
             + "_"
             + post_dil
             + "_" 
@@ -1867,13 +1965,13 @@ def update_dependencies(cfg) -> None:
 
     call.PATHS.TRAIN_INSTANCE_CHANNELS_CHECK = os.path.join(
         call.PATHS.RESULT_DIR.PATH,
-        "train_" + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS + "_instance_channels",
+        "train_" + "".join(call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) + "_instance_channels",
     )
     call.PATHS.VAL_INSTANCE_CHANNELS_CHECK = os.path.join(
         call.PATHS.RESULT_DIR.PATH,
-        "val_" + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS + "_instance_channels",
+        "val_" + "".join(call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) + "_instance_channels",
     )
     call.PATHS.TEST_INSTANCE_CHANNELS_CHECK = os.path.join(
         call.PATHS.RESULT_DIR.PATH,
-        "test_" + call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS + "_instance_channels",
+        "test_" + "".join(call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) + "_instance_channels",
     )

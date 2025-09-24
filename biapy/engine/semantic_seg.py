@@ -101,8 +101,8 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         self.activations : List of dicts
             Activations to be applied to the model output. Each dict will
             match an output channel of the model. If ':' is used the activation
-            will be applied to all channels at once. "Linear" and "CE_Sigmoid"
-            will not be applied. E.g. [{":": "Linear"}].
+            will be applied to all channels at once. "linear" and "ce_sigmoid"
+            will not be applied. E.g. [{":": "linear"}].
         """
         self.model_output_channels = {
             "type": "mask",
@@ -110,7 +110,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         }
         self.real_classes = self.cfg.DATA.N_CLASSES
         self.multihead = False
-        self.activations = [{":": "CE_Sigmoid"}]
+        self.activations = [{":": "ce_sigmoid"}]
 
         super().define_activations_and_channels()
 

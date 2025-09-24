@@ -4,17 +4,16 @@ Pre-processing utilities for image and mask data in deep learning workflows.
 This module provides pre-processing functions for instance segmentation, detection mask creation, self-supervised learning data generation, semantic segmentation probability maps, and general image processing operations such as resizing, blurring, edge detection, histogram matching, and CLAHE. It supports both 2D and 3D data formats and integrates with BiaPy configuration objects for flexible data pipelines.
 """
 import os
-import scipy
+import edt
 import h5py
 import zarr
 import numpy as np
 from tqdm import tqdm
 import pandas as pd
 from skimage.segmentation import clear_border, find_boundaries, watershed
-from scipy.ndimage import distance_transform_edt, center_of_mass
-from scipy.ndimage import binary_dilation as binary_dilation_scipy
-from skimage.morphology import disk, dilation, binary_dilation
-from skimage.measure import label, regionprops, regionprops_table
+from scipy.ndimage import generic_filter, generate_binary_structure, grey_closing, center_of_mass, map_coordinates, binary_dilation as binary_dilation_scipy
+from skimage.morphology import disk, binary_dilation, binary_erosion, skeletonize
+from skimage.measure import label, regionprops_table
 from skimage.transform import resize
 from skimage.feature import canny
 from skimage.exposure import equalize_adapthist
@@ -22,7 +21,7 @@ from skimage.color import rgb2gray
 from skimage.filters import gaussian, median
 from yacs.config import CfgNode as CN
 from numpy.typing import NDArray
-from typing import List, Optional, Dict, Tuple
+from typing import List, Optional, Dict, Tuple, Sequence
 
 from biapy.data.dataset import BiaPyDataset
 from biapy.utils.util import (
@@ -43,7 +42,6 @@ from biapy.data.data_manipulation import (
     load_data_from_dir,
     save_tif,
 )
-
 
 #########################
 # INSTANCE SEGMENTATION #
@@ -129,10 +127,15 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
     print("Creating Y_{} channels . . .".format(data_type))
     # Create the mask patch by patch (Zarr/H5)
     if working_with_zarr_h5_files and isinstance(Y, dict):
-        savepath = str(data_path) + "_" + cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
+        savepath = str(data_path) + "_" + "".join(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) 
         if cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
-            if "C" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
-                savepath += "_" + cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE
+            suffix = ""
+            for key, val in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0].items():
+                suffix += f"_{key}"
+                if key in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
+                    for kdetail, vdetail in val.items():
+                        suffix += f"-{kdetail}-{vdetail}"
+            savepath += suffix
         else:
             post_dil = "".join(str(cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.POSTSITE_DILATION)[1:-1].replace(",", "")).replace(
                 " ", "_"
@@ -142,7 +145,7 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
             ).replace(" ", "_")
             savepath += "_" + post_dil + "_" + post_d_dil
 
-        if "D" in cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE:
+        if "D" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
             dtype_str = "float32"
             raise ValueError("Currently distance creation using Zarr by chunks is not implemented.")
         else:
@@ -175,8 +178,6 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
                 )
                 if img.ndim == 3:
                     img = np.expand_dims(img, -1)
-                if img.ndim == 4:
-                    img = np.expand_dims(img, 0)
 
                 # Create the instance mask
                 if cfg.DATA.N_CLASSES > 2:
@@ -190,18 +191,20 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
                         img = labels_into_channels(
                             img,
                             mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
+                            channel_extra_opts=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0],
                             save_dir=getattr(cfg.PATHS, tag + "_INSTANCE_CHANNELS_CHECK"),
-                            fb_mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE,
                         )
-                        img = np.concatenate([img, class_channel], axis=-1)
+                        img = np.concatenate([
+                            np.expand_dims(img,0), 
+                            np.expand_dims(class_channel,0)
+                        ], axis=-1)
                 else:
                     img = labels_into_channels(
                         img,
                         mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
+                        channel_extra_opts=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0],
                         save_dir=getattr(cfg.PATHS, tag + "_INSTANCE_CHANNELS_CHECK"),
-                        fb_mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE,
                     )
-                img = img[0]
 
                 # Create the Zarr file where the mask will be placed
                 if mask is None or os.path.basename(Y[i]["filepath"]) != last_parallel_file:
@@ -293,11 +296,11 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
                 class_channel = np.expand_dims(img[..., 1].copy(), -1)
 
             img = labels_into_channels(
-                np.expand_dims(img, 0),
+                img,
                 mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
+                channel_extra_opts=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0],
                 save_dir=getattr(cfg.PATHS, tag + "_INSTANCE_CHANNELS_CHECK"),
-                fb_mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE,
-            )[0]
+            )
 
             if cfg.DATA.N_CLASSES > 2:
                 img = np.concatenate([img, class_channel], axis=-1)
@@ -311,17 +314,21 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
 
 
 def labels_into_channels(
-    data_mask: NDArray, mode: str = "BC", fb_mode: str = "outer", save_dir: Optional[str] = None
+    instance_labels: NDArray, 
+    mode: List[str] = ["I", "C"], 
+    channel_extra_opts: Dict = {},
+    resolution: List[int|float] = [1,1,1], 
+    save_dir: Optional[str] = None,
 ) -> NDArray:
     """
     Convert input semantic or instance segmentation data masks into different binary channels to train an instance segmentation problem.
 
     Parameters
     ----------
-    data_mask : 4D/5D Numpy array
-        Data mask to create the new array from. It is expected to have just one channel. E.g. ``(10, 200, 1000, 1000, 1)``
+    instance_labels : 3D/4D Numpy array
+        Instance labels to be used to extract the channels from. E.g. ``(200, 1000, 1000, 1)``
 
-    mode : str, optional
+    mode : List, optional
         Operation mode. Possible values: ``C``, ``BC``, ``BCM``, ``BCD``, ``BD``, ``BCDv2``, ``Dv2``, ``BDv2`` and ``BP``.
          - 'B' stands for 'Binary segmentation', containing each instance region without the contour.
          - 'C' stands for 'Contour', containing each instance contour.
@@ -332,187 +339,692 @@ def labels_into_channels(
          - 'P' stands for 'Points' and contains the central points of an instance (as in Detection workflow)
          - 'A' stands for 'Affinities" and contains the affinity values for each dimension
 
-    fb_mode : str, optional
-       Mode of the find_boundaries function from ``scikit-image`` or "dense". More info in:
-       `find_boundaries() <https://scikit-image.org/docs/stable/api/skimage.segmentation.html#skimage.segmentation.find_boundaries>`_.
-       Choose "dense" to label as contour every pixel that is not in ``B`` channel.
+    channel_extra_opts : dict, optional
+        Additional options for each output channel (e.g., {"I": {"erosion": 1}}).
+
+    resolution : Tuple of int/float
+        Resolution of the data, in ``(z,y,x)`` to calibrate coordinates. E.g. ``[30,8,8]``.
 
     save_dir : str, optional
         Path to store samples of the created array just to debug it is correct.
 
     Returns
     -------
-    new_mask : 5D Numpy array
-        5D array with 3 channels instead of one. E.g. ``(10, 200, 1000, 1000, 3)``
+    new_mask : 3D/4D Numpy array
+        Instance representations. The shape will be as the input ``instance_labels`` but with the amount of channels
+        requested. E.g. ``(200, 1000, 1000, 3)``
     """
-    assert data_mask.ndim in [5, 4]
-    assert mode in ["C", "BC", "BCM", "BCD", "BD", "BCDv2", "Dv2", "BDv2", "BP", "BCP", "A"]
+    assert len(resolution) == 3, "'resolution' must be a list of 3 int/float"
+    assert instance_labels.ndim in [3, 4]
+    c_number = 0
+    for ch in mode:
+        if ch == "R":
+            nrays = channel_extra_opts["R"]["nrays"]
+            c_number += nrays
+        elif ch == "A":
+            affs = (
+                len(channel_extra_opts["A"]["z_affinities"])
+                +len(channel_extra_opts["A"]["y_affinities"])
+                +len(channel_extra_opts["A"]["x_affinities"])
+            )
+            c_number += affs
+        else:
+            c_number += 1
 
-    d_shape = 4 if data_mask.ndim == 5 else 3
-    if mode in ["BCDv2", "Dv2", "BDv2"]:
-        c_number = 4
-    elif mode in ["BCD", "BCM", "BCP"]:
-        c_number = 3
-    elif mode in ["BC", "BP", "BD"]:
-        c_number = 2
-    elif mode in ["C"]:
-        c_number = 1
-    elif mode in ["A"]:
-        # the number of affinity channels depends on the dimensions of the input image
-        c_number = 3 if data_mask.ndim == 5 else 2
-
-    if "D" in mode:
+    if any(x for x in ["Db", "Dc", "Dn", "D", "H", "V", "Z", "R", "E"] if x in mode):
         dtype = np.float32
     else:
         dtype = np.uint8
+        
+    new_mask = np.zeros(instance_labels.shape[:-1] + (c_number,), dtype=dtype)
+    vol = instance_labels[..., 0]
 
-    new_mask = np.zeros(data_mask.shape[:d_shape] + (c_number,), dtype=dtype)
-    for img in tqdm(range(data_mask.shape[0]), disable=not is_main_process()):
-        vol = data_mask[img, ..., 0].astype(np.int64)
-        instances = np.unique(vol)
+    # Precompute regionprops only when needed
+    needs_props = any(x in mode for x in ("H", "V", "Z"))
+    if needs_props:
+        # label, bbox, centroid (you didn't have intensity stats here)
+        props_tbl = regionprops_table(vol, properties=("label", "bbox", "centroid"))
+        # Convenience view as list of labels
+        instances = [0] + list(props_tbl["label"])
         instance_count = len(instances)
+    else:
+        instances = list(np.unique(vol))
+        instance_count = len(instances)
+    instances = [inst for inst in instances if inst != 0] # remove background
 
-        # Background distance
-        if "Dv2" in mode:
-            # Background distance
-            vol_b_dist = np.invert(vol > 0)
-            vol_b_dist = scipy.ndimage.distance_transform_edt(vol_b_dist)
-            vol_b_dist = np.max(vol_b_dist) - vol_b_dist
-            new_mask[img, ..., 3] = vol_b_dist.copy()
-        # Affinities
-        if "A" in mode:
-            ins_vol = np.copy(vol)
-            if fb_mode == "dense":
-                ins_vol = seg_widen_border(vol)
-                # if ins_vol.ndim == 3:
-                #    for i in range(ins_vol.shape[0]):
-                #        ins_vol[i,...] = erosion(vol[i,...], disk(1))
-                # else:
-                #    ins_vol = erosion(vol, disk(1))
-            affs = seg2aff_pni(ins_vol, dtype=dtype)
-            affs = np.transpose(affs, (1, 2, 3, 0))
-            if c_number == 2:
-                affs = np.squeeze(affs, 0)
-            new_mask[img] = affs
-        # Semantic mask
-        if "B" in mode and instance_count != 1:
-            new_mask[img, ..., 0] = (vol > 0).copy().astype(np.uint8)
+    if instance_count <= 1:
+        return new_mask  # only background
+    
+    fg_mask = (vol > 0).astype(np.uint8)
+    bg_mask = (vol == 0).astype(np.uint8)
 
-        # Central points
-        if "P" in mode and instance_count != 1:
-            if mode == "BP":
-                c_channel = 1
-            elif mode == "BCP":
-                c_channel = 2
-            coords = center_of_mass(vol > 0, vol, instances[1:])
-            coords = np.round(coords).astype(int)
-            for coord in coords:
-                if data_mask.ndim == 5:
-                    z, y, x = coord
-                    new_mask[img, z, y, x, c_channel] = 1
+    # Precompute flow channels if any of H/V/Z is requested
+    if any(ch in mode for ch in ("H", "V", "Z")):
+        norm_flag = True
+        for ch in ("H", "V", "Z"): 
+            if ch in channel_extra_opts and "norm" in channel_extra_opts[ch]:
+                norm_flag = bool(channel_extra_opts[ch]["norm"])
+                break
+        hv_channels = create_flow_channels(
+            vol,
+            ref_point="center",
+            normalize_values=norm_flag,
+            calc_props=props_tbl,
+        )
+
+    # ---------- Foreground (F) / Background (B) ----------
+    for ch, mask_expr in (("F", fg_mask), ("B", bg_mask)):
+        if ch in mode:
+            mask = mask_expr.astype(np.uint8)
+
+            # erosion radius (default 0 = no erosion)
+            er_k = int(channel_extra_opts.get(ch, {}).get("erosion", 0))
+            if er_k > 0:
+                selem = disk(er_k)
+                if mask.ndim == 2:
+                    mask = binary_erosion(mask, footprint=selem).astype(np.uint8)
+                elif mask.ndim == 3:
+                    # apply 2D erosion slice-by-slice
+                    out = np.zeros_like(mask, dtype=np.uint8)
+                    for z in range(mask.shape[0]):
+                        out[z] = binary_erosion(mask[z], footprint=selem).astype(np.uint8)
+                    mask = out
                 else:
-                    y, x = coord
-                    new_mask[img, y, x, c_channel] = 1
+                    raise ValueError(f"Unsupported mask ndim {mask.ndim} for channel {ch}")
 
-            if data_mask.ndim == 5:
-                for i in range(new_mask.shape[1]):
-                    new_mask[img, i, ..., c_channel] = dilation(new_mask[img, i, ..., c_channel], disk(3))
+            # dilation radius (default 0 = no dilation)
+            dil_k = int(channel_extra_opts.get(ch, {}).get("dilation", 0))
+            if dil_k > 0:
+                selem = disk(dil_k)
+                if mask.ndim == 2:
+                    mask = binary_dilation(mask, footprint=selem).astype(np.uint8)
+                elif mask.ndim == 3:
+                    # apply 2D dilation slice-by-slice
+                    out = np.zeros_like(mask, dtype=np.uint8)
+                    for z in range(mask.shape[0]):
+                        out[z] = binary_dilation(mask[z], footprint=selem).astype(np.uint8)
+                    mask = out
+                else:
+                    raise ValueError(f"Unsupported mask ndim {mask.ndim} for channel {ch}")
+                
+            new_mask[..., mode.index(ch)] = mask
+
+    # ---------- P (central part) ----------
+    if "P" in mode:
+        p_opts = channel_extra_opts.get("P", {})
+        p_type = p_opts.get("type", "centroid")
+        p_dil  = int(p_opts.get("dilation", 0))
+
+        p_out = np.zeros_like(fg_mask, dtype=np.uint8)
+        if p_type == "skeleton":
+            p_out = skeletonize(fg_mask).astype(np.uint8)
+        else:
+            com_list = center_of_mass(fg_mask, labels=vol, index=instances)
+            # Mark each centroid (guard against rounding outside bounds)
+            if p_out.ndim == 2:
+                H, W = p_out.shape
+                for cy, cx in com_list:
+                    y = int(round(cy)); x = int(round(cx))
+                    if 0 <= y < H and 0 <= x < W:
+                        p_out[y, x] = 1
+            elif p_out.ndim == 3:
+                Z, Y, X = p_out.shape
+                for cz, cy, cx in com_list:
+                    z = int(round(cz)); y = int(round(cy)); x = int(round(cx))
+                    if 0 <= z < Z and 0 <= y < Y and 0 <= x < X:
+                        p_out[z, y, x] = 1
             else:
-                new_mask[img, ..., c_channel] = dilation(new_mask[img, ..., c_channel], disk(3))
+                raise ValueError(f"Unsupported ndim {p_out.ndim} for P[type='centroid']")
 
-        # Contour
-        if ("C" in mode or "Dv2" in mode) and instance_count != 1:
-            c_channel = 0 if mode == "C" else 1
-            f = "thick" if fb_mode == "dense" else fb_mode
-            new_mask[img, ..., c_channel] = find_boundaries(vol, mode=f).astype(np.uint8)
-            if fb_mode == "dense" and mode != "BCM":
-                if new_mask[img, ..., c_channel].ndim == 2:
-                    new_mask[img, ..., c_channel] = 1 - binary_dilation(new_mask[img, ..., c_channel], disk(1))
+        # Optional dilation (in pixels / voxels)
+        if p_dil > 0:
+            selem = disk(p_dil)
+            if p_out.ndim == 2:    
+                p_out = binary_dilation(p_out, footprint=selem).astype(np.uint8)
+            elif p_out.ndim == 3:
+                for j in range(p_out.shape[0]):
+                    p_out[j] = binary_dilation(p_out[j], footprint=selem).astype(np.uint8)
+
+        # Write the channel
+        new_mask[..., mode.index("P")] = p_out
+
+    # ---------- C (contours) ----------
+    if "C" in mode:
+        c_mode = channel_extra_opts.get("C", {}).get("mode", "thick")
+        if c_mode == "dense":
+            # synthetic "dense" edges: dilate FG and XOR with FG to thicken borders on both sides
+            fg = fg_mask
+            if fg.ndim == 2:
+                rim = binary_dilation(fg, disk(1)).astype(np.uint8) ^ fg
+                new_mask[..., mode.index("C")] = rim
+            else:
+                out = np.zeros_like(fg)
+                for j in range(fg.shape[0]):
+                    out[j] = (binary_dilation(fg[j], disk(1)).astype(np.uint8) ^ fg[j])
+                new_mask[..., mode.index("C")] = out
+        else:
+            # valid skimage modes: inner|outer|thick|subpixel
+            new_mask[..., mode.index("C")] = find_boundaries(vol, mode=c_mode).astype(np.uint8)
+
+    # ---------- Dc (distance to center/skeleton) ----------
+    if "Dc" in mode:
+        dc_type = channel_extra_opts.get("Dc", {}).get("type", "center")
+        dc_channel = np.zeros_like(vol, dtype=np.float32)
+        
+        for lab in instances:  # skip background
+            m = (vol == lab)
+            if not np.any(m):
+                continue
+
+            # tight bbox to speed up ops
+            idxs = np.where(m)
+            if vol.ndim == 2:
+                y0, y1 = idxs[0].min(), idxs[0].max() + 1
+                x0, x1 = idxs[1].min(), idxs[1].max() + 1
+                sub = m[y0:y1, x0:x1]
+
+                if dc_type == "skeleton":
+                    sk = skeletonize(sub.astype(np.uint8)).astype(bool)
+                    dist_to_sk = edt.edt(~sk, anisotropy=resolution, parallel=-1)
+                    dc_channel[y0:y1, x0:x1][sub] = dist_to_sk[sub]
                 else:
-                    for j in range(new_mask[img, ..., c_channel].shape[0]):
-                        new_mask[img, j, ..., c_channel] = 1 - binary_dilation(
-                            new_mask[img, j, ..., c_channel], disk(1)
-                        )
-                new_mask[img, ..., c_channel] = 1 - ((vol > 0) * new_mask[img, ..., c_channel])
-            if "B" in mode:
-                # Remove contours from segmentation maps
-                new_mask[img, ..., 0][np.where(new_mask[img, ..., 1] == 1)] = 0
-            if mode == "BCM":
-                new_mask[img, ..., 2] = (vol > 0).astype(np.uint8)
+                    # centroid in GLOBAL coords
+                    ys, xs = np.where(sub)
+                    cy = y0 + ys.mean()
+                    cx = x0 + xs.mean()
+                    # compute distances on bbox grid, then fill only inside the instance
+                    yy, xx = np.ogrid[y0:y1, x0:x1]
+                    dist = np.sqrt((yy - cy)**2 + (xx - cx)**2)
+                    dc_channel[y0:y1, x0:x1][sub] = dist[sub]
 
-        if ("D" in mode or "Dv2" in mode) and instance_count != 1:
-            # Foreground distance
-            new_mask[img, ..., -1] = scipy.ndimage.distance_transform_edt(new_mask[img, ..., 0])
-            props = regionprops(vol, new_mask[img, ..., -1])
-            max_values = np.zeros(vol.shape)
-            for i in range(len(props)):
-                max_values = np.where(vol == props[i].label, props[i].intensity_max, max_values)
-            new_mask[img, ..., -1] = max_values - new_mask[img, ..., -1]
+            else:  # vol.ndim == 3
+                z0, z1 = idxs[0].min(), idxs[0].max() + 1
+                y0, y1 = idxs[1].min(), idxs[1].max() + 1
+                x0, x1 = idxs[2].min(), idxs[2].max() + 1
+                sub = m[z0:z1, y0:y1, x0:x1]
 
-    # Normalize and merge distance channels
-    if "Dv2" in mode:
-        # Normalize background
-        b_min = np.min(new_mask[..., 3])
-        b_max = np.max(new_mask[..., 3])
-        new_mask[..., 3] = (new_mask[..., 3] - b_min) / (b_max - b_min)
+                if dc_type == "skeleton":
+                    sk = skeletonize(sub.astype(np.uint8)).astype(bool)
+                    dist_to_sk = edt.edt(~sk, anisotropy=resolution, parallel=-1)
+                    dc_channel[z0:z1, y0:y1, x0:x1][sub] = dist_to_sk[sub]
+                else:
+                    # centroid in GLOBAL coords
+                    zs, ys, xs = np.where(sub)
+                    cz = z0 + zs.mean()
+                    cy = y0 + ys.mean()
+                    cx = x0 + xs.mean()
+                    zz, yy, xx = np.ogrid[z0:z1, y0:y1, x0:x1]
+                    dist = np.sqrt((zz - cz)**2 + (yy - cy)**2 + (xx - cx)**2)
+                    dc_channel[z0:z1, y0:y1, x0:x1][sub] = dist[sub]
+        
+        assert isinstance(dc_channel, np.ndarray), "Expected dc_channel to be a numpy array"
+        # Normalization
+        if channel_extra_opts.get("Dc", {}).get("norm", False):
+            dc_channel = norm_channel(
+                dc_channel, 
+                vol, 
+                instances,
+            )
+        new_mask[..., mode.index("Dc")] = dc_channel 
 
-        if instance_count != 1:
-            # Normalize foreground
-            f_min = np.min(new_mask[..., 2])
-            f_max = np.max(new_mask[..., 2])
-            new_mask[..., 2] = (new_mask[..., 2] - f_min) / (f_max - f_min)
+    # ---------- Db (distance to boundary) ----------
+    if "Db" in mode:
+        db_channel = edt.edt(vol, anisotropy=resolution, parallel=-1)
+        assert isinstance(db_channel, np.ndarray), "Expected db to be a numpy array"
 
-            new_mask[..., 2] = new_mask[..., 3] - new_mask[..., 2]
+        # Normalization
+        if channel_extra_opts.get("Db", {}).get("norm", False):
+            db_channel = norm_channel(
+                db_channel, 
+                vol, 
+                instances,
+            )
+        new_mask[..., mode.index("Db")] = db_channel
 
-            # The intersection of the channels is the contour channel, so set it to the maximum value 1
-            new_mask[..., 2][new_mask[..., 1] > 0] = 1
+    # ---------- Dn (distance to neighbor) ----------
+    if "Dn" in mode:
+        dn_opts = channel_extra_opts.get("Dn", {})
+        dn_norm = bool(dn_opts.get("norm", False))
+        power = float(dn_opts.get("decline_power", 3.0)) 
+        closing_size  = int(dn_opts.get("closing_size", 3))  # neighborhood size for grey closing
 
-        if mode == "BCDv2":
-            new_mask = new_mask[..., :3]
-        elif mode == "BDv2":
-            new_mask = new_mask[..., [0, -1]]
-        elif mode == "Dv2":
-            new_mask = np.expand_dims(new_mask[..., 2], -1)
+        dn_channel = np.zeros_like(vol, dtype=np.float32)
+        
+        # Mask to remember which cell pixels belong to cells that have at least one OTHER instance
+        has_neighbor_px = np.zeros_like(vol, dtype=bool)
 
+        for lab in instances: 
+            cur = (vol == lab)
+            if not np.any(cur):
+                continue
+
+            other_instances = fg_mask & (~cur)
+            if not np.any(other_instances):
+                # No other labeled object anywhere -> keep this cell at 0 (suppressed)
+                continue
+
+            has_neighbor_px[cur] = True
+
+            # Per paper: (selected cell ∪ background) = 1; "other cells" = 0  (distance to other cells)
+            fg = (bg_mask | cur)
+            d = edt.edt(fg, anisotropy=resolution, parallel=-1).astype(np.float32)
+
+            if dn_norm:
+                # Paper path: cut->normalize [0,1]->invert (1 - ..)
+                d_cell = d[cur].copy()
+                m = d_cell.max()
+                if m > 0:
+                    d_cell /= m
+                else:
+                    d_cell.fill(0.0)
+                dn_channel[cur] = 1.0 - d_cell
+            else:
+                # Store raw distances for now (we'll handle per-image norm or unnormalized inversion later)
+                dn_channel[cur] = d[cur]
+
+        invert_mask = has_neighbor_px  # operate only on cells that actually have neighbors
+
+        # --- Unnormalized but still inverted ---
+        if not dn_norm:
+            if np.any(invert_mask):
+                M = float(dn_channel[invert_mask].max())
+                if M > 0:
+                    dn_channel[invert_mask] = M - dn_channel[invert_mask]
+            # background & isolated cells remain 0
+
+        # Grayscale closing after merging & inversion
+        if closing_size > 0:
+            size = (closing_size,) * dn_channel.ndim
+            dn_channel = grey_closing(dn_channel, size=size)
+
+        if power is not None and power != 1.0:
+            if dn_norm :
+                # values in [0,1] already → direct power
+                dn_channel = np.power(dn_channel, power, dtype=np.float32)
+            else:
+                # unnormalized: temporarily normalize on the meaningful support, power, then unnormalize
+                if np.any(invert_mask):
+                    M2 = float(dn_channel[invert_mask].max())
+                    if M2 > 0:
+                        tmp = dn_channel[invert_mask] / M2
+                        tmp = np.power(tmp, power, dtype=np.float32)
+                        dn_channel[invert_mask] = tmp * M2
+
+        new_mask[..., mode.index("Dn")] = dn_channel.astype(np.float32)
+        
+    # ---------- D (signed distance, global) ----------
+    if "D" in mode:
+        alpha = channel_extra_opts.get("D", {}).get("alpha", 1.0)
+        beta = channel_extra_opts.get("D", {}).get("beta", 1.0)
+
+        # 1) Signed distance
+        sdist = edt.edt(fg_mask, anisotropy=resolution, parallel=-1)/alpha - edt.edt(bg_mask, anisotropy=resolution, parallel=-1)/beta
+        assert isinstance(sdist, np.ndarray), "Expected sdist to be a numpy array"
+
+        # 2) Map GT to [-1, 1] with tanh (COSEM-style: "Whole-cell organelle segmentation in volume electron microscopy")
+        tanh_on = channel_extra_opts.get("D", {}).get("norm", True)
+        if tanh_on:
+            sdist = np.tanh(sdist)
+            
+        new_mask[..., mode.index("D")] = sdist
+        
+    # ---------- H / V / Z (flow-like channels) ----------
+    if "Z" in mode:
+        new_mask[..., mode.index("Z")] = hv_channels[...,0]
+    if "V" in mode:
+        ch_pos = 0 if new_mask[..., mode.index("V")].ndim == 2 else 1
+        new_mask[..., mode.index("V")] = hv_channels[...,ch_pos]
+    if "H" in mode:
+        ch_pos = 1 if new_mask[..., mode.index("H")].ndim == 2 else 2
+        new_mask[..., mode.index("H")] = hv_channels[...,ch_pos]
+
+    # ---------- T (touching area) ----------
+    if "T" in mode:
+        new_mask[..., mode.index("T")] = touching_mask_nd(
+            vol,
+            connectivity=new_mask[..., mode.index("T")].ndim
+        )
+
+    # ---------- A (affinities) ----------
+    if "A" in mode:
+        ins_vol = vol
+        wb = int(channel_extra_opts["A"].get("widen_borders", 1))
+        if wb:
+            ins_vol = seg_widen_border(vol, tsz_h=wb)
+            
+        k = 0
+        for zaff, yaff, xaff in zip(
+            channel_extra_opts["A"].get("z_affinities", []),
+            channel_extra_opts["A"].get("y_affinities", []),
+            channel_extra_opts["A"].get("x_affinities", []),
+        ):
+            affs = seg2aff_pni(ins_vol, dz=zaff, dy=yaff, dx=xaff, dtype=dtype)  # shape: (n_affs, Z, Y, X)
+            affs = np.transpose(affs, (1, 2, 3, 0))  # shape: (Z, Y, X, n_affs)
+            new_mask[..., k*3:(k+1)*3] = affs
+            k += 1
+
+    # ---------- R (radial distances) ----------
+    if "R" in mode:
+        r_opts = channel_extra_opts.get("R", {})
+        ndim = 2 if new_mask[..., mode.index("R")].ndim == 2 else 3
+        nrays = int(r_opts.get("nrays", 32 if ndim == 2 else 96))
+
+        rays = generate_rays(n_rays=nrays, ndim=ndim).astype(np.float32)
+        spacing = None if new_mask[..., mode.index("R")].ndim == 2 else resolution
+
+        new_mask[..., mode.index("R"):] = radial_distances(vol, rays, spacing=spacing)
+
+    # ---------- E (Embeddings) ----------
+    if "E" in mode:
+        raise NotImplementedError
+
+    # Save examples of each channel
     if save_dir:
         os.makedirs(save_dir, exist_ok=True)
-        suffix = []
-        if mode == "Dv2":
-            suffix.append("_distance.tif")
-        elif mode != "C":
-            suffix.append("_semantic.tif")
-        if mode in ["C", "BC", "BCM", "BCD", "BCDv2"]:
-            suffix.append("_contour.tif")
-            if mode in ["BCD", "BCDv2"]:
-                suffix.append("_distance.tif")
-            elif mode == "BCM":
-                suffix.append("_binary_mask.tif")
-        elif mode == "BP":
-            suffix.append("_points.tif")
-        elif mode in ["BDv2", "BD"]:
-            suffix.append("_distance.tif")
-        elif mode == "A":
-            suffix.append("_affinity.tif")
+        for j, mod in enumerate(mode):
+            if mod == "B":
+                suffix = "_background.tif"
+            elif mod == "F":
+                suffix = "_foreground.tif"
+            elif mod == "P":
+                suffix = "_central_part.tif"
+            elif mod == "C":
+                suffix = "_contour.tif"
+            elif mod == "H":
+                suffix = "_horizontal_distance.tif"
+            elif mod == "V":
+                suffix = "_vertical_distance.tif"
+            elif mod == "Z":
+                suffix = "_z_distance.tif"
+            elif mod == "Db":
+                suffix = "_distance_to_border.tif"
+            elif mod == "Dc":
+                suffix = "_distance_to_center.tif"
+            elif mod == "Dn":
+                suffix = "_distance_to_neighbor.tif"
+            elif mod == "D":
+                suffix = "_distance.tif"
+            elif mod == "R":
+                suffix = "_radial_distances.tif"
+            elif mod == "T":
+                suffix = "_touching.tif"
+            elif mod == "A":
+                suffix = "_affinity.tif"
+            elif mod == "E":
+                suffix = "_embeddings.tif"
+            else:
+                raise ValueError("Unknown channel type: {}".format(mod))
 
-        for i in range(min(3, len(new_mask))):
-            for j in range(len(suffix)):
-                aux = new_mask[i, ..., j]
-                aux = np.expand_dims(np.expand_dims(aux, -1), 0)
-                save_tif(aux, save_dir, filenames=["vol" + str(i) + suffix[j]], verbose=False)
-                save_tif(
-                    np.expand_dims(data_mask[i], 0),
-                    save_dir,
-                    filenames=["vol" + str(i) + "_y.tif"],
-                    verbose=False,
-                )
+            aux = new_mask[..., j]
+            aux = np.expand_dims(np.expand_dims(aux, -1), 0)
+            save_tif(aux, save_dir, filenames=["vol" + suffix[j]], verbose=False)
+            save_tif(
+                np.expand_dims(instance_labels, 0),
+                save_dir,
+                filenames=["vol" + "_y.tif"],
+                verbose=False,
+            )
     return new_mask
+
+
+def norm_channel(channel: NDArray, vol: NDArray, instances: list[int]) -> NDArray:
+    """
+    Normalize a channel based on instance masks.
+
+    Parameters
+    ----------
+    channel : NDArray
+        The channel to normalize (e.g. db_channel).
+    vol : NDArray
+        Instance mask volume, same shape as channel.
+    instances : list[int]
+        List of instance IDs in `vol`. Background (0) will be ignored.
+
+    Returns
+    -------
+    NDArray
+        Normalized channel, same shape as input.
+    """
+    instances = [inst for inst in instances if inst != 0]  # drop background
+    normed = np.zeros_like(channel, dtype=np.float32)
+
+    for inst in instances:
+        mask = (vol == inst)
+        if not np.any(mask):
+            continue
+
+        values = channel[mask]
+        mi, ma = values.min(), values.max()
+
+        # Avoid division by zero
+        if ma == mi:
+            normed[mask] = 0
+        else:
+            normed[mask] = (values - mi) / (ma - mi)
+
+    return normed
+
+def touching_mask_nd(labels: NDArray, connectivity: int = 1) -> NDArray:
+    """
+    Create a binary mask of touching pixels/voxels for an N-D labeled instance mask.
+
+    Parameters
+    ----------
+    labels : NDArray
+        N-D array of instance labels (0 = background, 1..N = instances).
+
+    connectivity : int, optional
+        Neighborhood connectivity passed to `generate_binary_structure`.
+        1 = 6-neigh for 3D / 4-neigh for 2D, 
+        2 = 18-neigh for 3D / 8-neigh for 2D,
+        3 = 26-neigh for 3D (if ndim==3).
+
+    Returns
+    -------
+    touch : NDArray
+        Binary mask with 1 where a voxel touches at least one *different* instance.
+    """
+    # Neighborhood footprint including the center
+    footprint = generate_binary_structure(labels.ndim, connectivity)
+
+    def is_touching(window):
+        center = window[len(window)//2]
+        if center == 0:  # background is never touching
+            return 0
+        # unique neighbor labels (including center); drop 0 and center label
+        uniq = np.unique(window)
+        return 1 if np.any((uniq != 0) & (uniq != center)) else 0
+
+    touch = generic_filter(
+        labels,
+        is_touching,
+        footprint=footprint,
+        mode='constant',
+        cval=0
+    )
+    return touch.astype(np.uint8)
+
+def generate_rays(n_rays: int, ndim: int, jitter: bool=False, seed: int=0):
+    """
+    Unit directions in R^ndim.
+    - 2D: uniform angles on circle -> (R,2) [dx,dy]
+    - 3D: Fibonacci sphere -> (R,3) [dx,dy,dz]
+
+    Parameters
+    ----------
+    n_rays : int
+        Number of rays to generate.
+    ndim : int
+        Dimensionality (2 or 3).
+    jitter : bool, optional
+        Whether to add jitter to 3D rays (default: False).
+    seed : int, optional
+        Random seed for jitter (default: 0).    
+
+    Returns
+    -------
+    rays : (n_rays, 2) or (n_rays, 3) Numpy array
+        Unit vectors along which to compute distances.
+    """
+    if ndim == 2:
+        a = np.linspace(0, 2*np.pi, n_rays, endpoint=False, dtype=np.float32)
+        return np.stack([np.cos(a), np.sin(a)], axis=1).astype(np.float32)
+    elif ndim == 3:
+        rng = np.random.default_rng(seed) if jitter else None
+        i = np.arange(n_rays, dtype=np.float32)
+        phi = (1 + np.sqrt(5.0)) / 2.0
+        z = 1 - 2*(i + 0.5) / n_rays
+        r = np.sqrt(np.maximum(0.0, 1 - z*z))
+        theta = 2*np.pi*i/phi
+        if jitter:
+            theta += rng.uniform(-np.pi/n_rays, np.pi/n_rays, size=n_rays)
+            z += rng.uniform(-1/n_rays, 1/n_rays, size=n_rays)
+            z = np.clip(z, -1.0, 1.0); r = np.sqrt(np.maximum(0.0, 1 - z*z))
+        x = r * np.cos(theta); y = r * np.sin(theta)
+        dirs = np.stack([x, y, z], axis=1).astype(np.float32)
+        dirs /= (np.linalg.norm(dirs, axis=1, keepdims=True) + 1e-12)
+        return dirs
+    else:
+        raise ValueError("Only 2D and 3D are supported.")
+
+
+def radial_distances(
+    labels: NDArray,
+    rays: NDArray,
+    max_dist: Optional[float] = None,
+    spacing: Optional[Sequence[float]] = None,
+    max_iters: int = 50,
+) -> NDArray:
+    """
+    Compute radial distances from each foreground pixel to the instance boundary along specified rays.
+
+    Parameters
+    ----------
+    labels : NDArray
+        2D or 3D array of instance labels (0 = background, 1..N = instances).
+    rays : (n_rays, 2) or (n_rays, 3) Numpy array
+        Unit vectors along which to compute distances.
+    max_dist : float, optional
+        Maximum distance to cap at. If None, no capping is done.
+    spacing : sequence of float, optional
+        Physical spacing of the data in each dimension. If None, assumes isotropic spacing of 1.0.
+    max_iters : int
+        Maximum number of steps to march along each ray.
+
+    Returns
+    -------
+    D : NDArray
+        Array of shape (H, W, n_rays) or (D, H, W, n_rays) with distances in physical units.
+        Background pixels have distance 0 in all rays.
+    """
+    labels = np.asarray(labels)
+    ndim = labels.ndim
+    assert rays.ndim == 2 and rays.shape[1] == ndim
+    spacing = np.ones(ndim, np.float32) if spacing is None else np.asarray(spacing, np.float32)
+    shape = labels.shape
+    n_rays = rays.shape[0]
+
+    # normalize rays in index space (row/col[/z] units)
+    rays_idx = rays.astype(np.float32)
+    norms = np.linalg.norm(rays_idx, axis=1, keepdims=True) + 1e-12
+    rays_idx /= norms
+
+    # per-ray physical step length for one unit in index space
+    ray_step_phys = np.linalg.norm(rays_idx * spacing, axis=1)  # shape (n_rays,)
+
+    D = np.zeros(shape + (n_rays,), np.float32)
+
+    fg = np.argwhere(labels > 0)
+    H, W = shape[0], shape[1] if ndim == 2 else (shape[0], shape[1])  # for bounds
+    for (i, j, *rest) in fg:
+        inst_id = int(labels[i, j]) if ndim == 2 else int(labels[i, j, rest[0]])
+        p0 = np.array([i, j] if ndim == 2 else [i, j, rest[0]], np.float32)  # pixel center reference
+
+        for k in range(n_rays):
+            u = rays_idx[k]  # unit in index space
+            x = np.zeros(ndim, np.float32)  # accumulated offset in index space
+
+            # march in unit steps like the ref (||u||=1)
+            for _ in range(max_iters * (max(shape) + 2)):  # safe cap
+                x += u
+                p_samp = p0 + x
+                # rounded sampling
+                if ndim == 2:
+                    ii = int(np.rint(p_samp[0])); jj = int(np.rint(p_samp[1]))
+                    out = (ii < 0 or ii >= shape[0] or jj < 0 or jj >= shape[1])
+                    changed = (not out) and (labels[ii, jj] != inst_id)
+                else:
+                    ii = int(np.rint(p_samp[0])); jj = int(np.rint(p_samp[1])); kk = int(np.rint(p_samp[2]))
+                    out = (ii < 0 or ii >= shape[0] or jj < 0 or jj >= shape[1] or kk < 0 or kk >= shape[2])
+                    changed = (not out) and (labels[ii, jj, kk] != inst_id)
+
+                if out or changed:
+                    max_comp = np.max(np.abs(u)) + 1e-12
+                    t_corr = 1.0 - 0.5 / max_comp
+                    x = x - t_corr * u   # pull back along dominant axis
+                    # distance in pixels
+                    dist_idx = float(np.linalg.norm(x))
+                    # convert to physical units if requested
+                    dist = dist_idx * float(ray_step_phys[k])
+                    if max_dist is not None and dist > max_dist:
+                        dist = max_dist
+                    if ndim == 2:
+                        D[i, j, k] = dist
+                    else:
+                        D[i, j, rest[0], k] = dist
+                    break
+
+    return D
+
+
+def euler_integration(flow: NDArray, coords: NDArray, n_steps: int = 200, dt: float = 1.0, suppressed: bool = True):
+    """
+    Euler integration of flow field starting at coords.
+    
+    Parameters
+    ----------
+    flow : (2, H, W) or (3, D, H, W) Numpy array
+        Flow field (y,x) or (z,y,x).
+    coords : (N, 2) or (N, 3) Numpy array
+        Starting coordinates (y,x) or (z,y,x) in index space.
+    n_steps : int
+        Number of integration steps.
+    dt : float
+        Integration step size.
+    suppressed : bool
+        Whether to use time-suppressed integration (dt/(t+1)) or not (constant dt). 
+
+    Returns
+    -------
+    pos : (N, 2) or (N, 3) Numpy array
+        Final positions after integration.
+    """
+    pos = coords.astype(float).copy()
+    H, W = flow.shape[1:]
+
+    for t in range(n_steps):
+        # Interpolate flow at current positions
+        fy = map_coordinates(flow[0], [pos[:,0], pos[:,1]], order=1, mode='nearest')
+        fx = map_coordinates(flow[1], [pos[:,0], pos[:,1]], order=1, mode='nearest')
+        step = np.stack([fy, fx], axis=1)
+
+        # suppression factor
+        factor = dt / (t+1) if suppressed else dt
+
+        pos += factor * step
+
+        # keep inside bounds
+        pos[:,0] = np.clip(pos[:,0], 0, H-1)
+        pos[:,1] = np.clip(pos[:,1], 0, W-1)
+
+    return pos  # final positions for clustering
 
 
 def synapse_channel_creation(
     data_info: Dict,
     zarr_data_information: Dict,
     savepath: str,
-    mode: str = "BF",
+    mode: List[str] = ["F_pre", "F"],
     postsite_dilation: List[int] = [2, 4, 4],
     postsite_distance_channel_dilation: List[int] = [3, 10, 10],
     normalize_values: bool = False,
@@ -549,10 +1061,8 @@ def synapse_channel_creation(
     savepath : str
         Path to save the data created.
 
-    mode : str, optional
-        Operation mode. Possible values: ``BF``.
-         - 'B' stands for 'Binary segmentation'
-         - 'F' stands for 'Flows'
+    mode : List, optional
+        Operation mode. 
 
     postsite_dilation : tuple of ints, optional
         Dilation to be used in the postsynapse sites ('B' channel).
@@ -571,11 +1081,9 @@ def synapse_channel_creation(
     patch_offset : list of list
         Pixels used on each axis to pad the patch in order to not cut some of the values in the edges.
     """
-    assert mode in ["B", "BF"]
-    if mode == "BF":
-        channels = 4
-    elif mode == "B":
-        channels = 2
+    channels = len(mode)
+    F_pre_pos = mode.index("F_pre")
+    F_post_pos = 1 if F_pre_pos == 0 else 1 
 
     dtype_str = "float32"
     unique_files = []
@@ -713,8 +1221,9 @@ def synapse_channel_creation(
                     max(0, ref_point[2] - width_reference[2]),
                     min(out_data_shape[zarr_data_information["x_axe_pos"]], ref_point[2] + width_reference[2]),
                 ]
+
                 # Take into account the pre point too
-                if mode == "B":
+                if set(mode) == {"F_pre", "F_post"}:
                     ref_point = pre_point_global
                     patch_coords = [
                         min(max(0, ref_point[0] - width_reference[0]), patch_coords[0]),
@@ -803,7 +1312,7 @@ def synapse_channel_creation(
                 ]
 
                 # Paiting each post-synaptic site
-                if mode == "BF":
+                if set(mode) == {"F_pre", "F"}:
                     seeds = np.zeros(patch_shape, dtype=np.uint64)
                     mask_to_grow = np.zeros(patch_shape, dtype=np.uint8)
                     label_to_pre_site = {}
@@ -850,7 +1359,7 @@ def synapse_channel_creation(
                         structure=ellipse_footprint_cpd2,
                     )
                     for z in range(len(seeds)):
-                        semantic = distance_transform_edt(mask_to_grow[z])
+                        semantic = edt.edt(mask_to_grow[z], anisotropy=resolution, parallel=-1)
                         assert isinstance(semantic, np.ndarray)
                         seeds[z] = watershed(-semantic, seeds[z], mask=mask_to_grow[z])
 
@@ -862,7 +1371,10 @@ def synapse_channel_creation(
                         normalize_values=normalize_values,
                     )
 
-                    out_map = np.concatenate([np.expand_dims(channel_0, -1), out_map], axis=-1)
+                    if F_pre_pos == 0:
+                        out_map = np.concatenate([np.expand_dims(channel_0, -1), out_map], axis=-1)
+                    else:
+                        out_map = np.concatenate([out_map, np.expand_dims(channel_0, -1)], axis=-1)
                     del channel_0
                 else:
                     out_map = np.zeros(patch_shape + (channels,), dtype=np.uint8)
@@ -872,7 +1384,7 @@ def synapse_channel_creation(
                         max(0, pre_point[0] - 1) : min(pre_point[0] + 1, out_map.shape[0]),
                         pre_point[1],
                         pre_point[2],
-                        0,
+                        F_pre_pos,
                     ] = 1
 
                     # Paint the pre sites in channel 0 and post sites in channel 1
@@ -893,7 +1405,7 @@ def synapse_channel_creation(
                                 max(0, post_point[0] - 1) : min(post_point[0] + 1, out_map.shape[0]),
                                 post_point[1],
                                 post_point[2],
-                                1,
+                                F_post_pos,
                             ] = 1
                         else:
                             raise ValueError(
@@ -927,7 +1439,11 @@ def synapse_channel_creation(
 
 
 def create_flow_channels(
-    data: NDArray, ref_point: str = "center", label_to_pre_site: Optional[Dict] = None, normalize_values: bool = True
+    data: NDArray, 
+    ref_point: str = "center", 
+    label_to_pre_site: Optional[Dict] = None, 
+    normalize_values: bool = True,
+    calc_props: Optional[Dict] = None,
 ):
     """
     Obtain the horizontal and vertical distance maps for each instance.
@@ -950,6 +1466,9 @@ def create_flow_channels(
     normalize_values : bool, optional
         Whether to normalize the values or not.
 
+    calc_props : dict, optional
+        If region properties have already been calculated, they can be provided here to avoid recalculation.
+
     Returns
     -------
     new_mask : 3D/4D Numpy array
@@ -966,7 +1485,11 @@ def create_flow_channels(
     if dim == 3:
         z_map = np.zeros(orig_data.shape, dtype=np.float32)
 
-    props = regionprops_table(orig_data, properties=("label", "bbox", "centroid"))
+    if calc_props is None:
+        props = regionprops_table(orig_data, properties=("label", "bbox", "centroid"))
+    else:
+        props = calc_props
+
     for k, inst_id in tqdm(enumerate(props["label"]), total=len(props["label"]), leave=False):
         inst_map = np.array(orig_data == inst_id, np.uint8)
         if dim == 2:
@@ -1128,7 +1651,7 @@ def generate_ellipse_footprint(
 
     Returns
     -------
-    distances : np.ndarray
+    distances : NDArray
         Ellipse footprint.
     """
     center = (np.array(shape) / 2).astype(int)

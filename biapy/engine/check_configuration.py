@@ -44,6 +44,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     AssertionError
         If a configuration assertion fails.
     """
+    assert cfg.PROBLEM.NDIM in ["2D", "3D"], "'PROBLEM.NDIM' must be either '2D' or '3D'"
     dim_count = 2 if cfg.PROBLEM.NDIM == "2D" else 3
 
     # Adjust overlap and padding in the default setting if it was not set
@@ -69,15 +70,42 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "synapses",
         ], "'PROBLEM.INSTANCE_SEG.TYPE' needs to be in ['regular', 'synapses']"
 
-        if cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
-            channels_provided = len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS.replace("Dv2", "D"))
-            if cfg.DATA.N_CLASSES > 2:
-                channels_provided += 1
-        else:  # synapses
-            if cfg.PROBLEM.NDIM != "3D":
-                raise ValueError("'PROBLEM.INSTANCE_SEG.TYPE' == 'synapse' can only be used for 3D data")
+        assert len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) > 0, "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS' must be defined"
 
-            channels_provided = 1 + dim_count  # BF
+        # Define the custom order once
+        CUSTOM_ORDER = {
+            "F": 0, # Foreground
+            "B": 1, # Background
+            "C": 3, # contours
+            "H": 4, # Horizontal distance
+            "V": 5, # Vertical distance
+            "Z": 6, # Z distance
+            "Db": 7, # Distance (boundary)
+            "Dc": 8, # Distance (center/skeleton)
+            "Dn": 9, # Distance (neighbor)
+            "D": 10, # Distance (signed)
+            "T": 11, # Touching area
+            "A": 12,  # Affinities
+            "E": 13,  # Embeddings
+            "R": 999,  # Radial distances
+        }
+
+        def get_sort_key(weights):
+            """Return a sort function based on given weights dict"""
+            def sort_key(item):
+                return (weights.get(item, 99), item)  # alphabetically for "rest"
+            return sort_key
+        custom_sort_key = get_sort_key(CUSTOM_ORDER)
+
+        original_instance_channels = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS.copy()
+        sorted_original_instance_channels = sorted(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, key=custom_sort_key)
+        if sorted_original_instance_channels != original_instance_channels:
+            print("Reordered instance segmentation data channels. Before: ", original_instance_channels, " . After: ", sorted_original_instance_channels)
+            opts.extend([ "PROBLEM.INSTANCE_SEG.DATA_CHANNELS", sorted_original_instance_channels])
+
+        channels_provided = len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
+        if cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular" and cfg.DATA.N_CLASSES > 2:
+            channels_provided += 1
 
         if len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS) != channels_provided:
             if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS == (1, 1):
@@ -87,6 +115,258 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                         (1,) * channels_provided,
                     ]
                 )
+
+        if cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
+            channel_loss_set = False
+            # Set default values for some configurations that are more common, such as 'C', 'BC', 'BP', 'BD', 
+            # 'BCM', 'BCD' and 'A'.
+            seed_channels, seed_channels_thresh, growth_mask_channels, growth_mask_channel_ths = [], [], [], []
+            topo_surface_ch = ""
+            if set(sorted_original_instance_channels) == {"C"}:
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
+                    seed_channels = ["C"]
+                    seed_channels_thresh = ["auto"]
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.TOPOGRAPHIC_SURFACE_CHANNEL == "":
+                    topo_surface_ch = "C"
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
+                    growth_mask_channels = ["C"]
+                    growth_mask_channel_ths = ["auto"]
+            elif set(sorted_original_instance_channels) == {"F", "C"}:
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
+                    seed_channels = ["F", "C"]
+                    seed_channels_thresh = ["auto", "auto"]
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.TOPOGRAPHIC_SURFACE_CHANNEL == "":
+                    topo_surface_ch = "F"
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
+                    growth_mask_channels = ["F"]
+                    growth_mask_channel_ths = ["auto"]
+            elif set(sorted_original_instance_channels) == {"F", "P"}:
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
+                    seed_channels = ["P"]
+                    seed_channels_thresh = ["auto"]
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.TOPOGRAPHIC_SURFACE_CHANNEL == "":
+                    topo_surface_ch = "F"
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
+                    growth_mask_channels = ["F"]
+                    growth_mask_channel_ths = ["auto"]
+            elif set(sorted_original_instance_channels) == {"F", "D"}:
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
+                    seed_channels = ["F", "D"]
+                    seed_channels_thresh = ["auto", "auto"]
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.TOPOGRAPHIC_SURFACE_CHANNEL == "":
+                    topo_surface_ch = "F"
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
+                    growth_mask_channels = ["F"]
+                    growth_mask_channel_ths = ["auto"]
+            elif set(sorted_original_instance_channels) == {"F", "C", "Dc"}:
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
+                    seed_channels = ["F", "C", "Dc"]
+                    seed_channels_thresh = ["auto", "auto", "auto"]
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.TOPOGRAPHIC_SURFACE_CHANNEL == "":
+                    topo_surface_ch = "F"
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
+                    growth_mask_channels = ["F"]
+                    growth_mask_channel_ths = ["auto"]
+            elif set(sorted_original_instance_channels) == {"A"}:
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
+                    seed_channels = ["A"]
+                    seed_channels_thresh = ["auto"]
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.TOPOGRAPHIC_SURFACE_CHANNEL == "":
+                    topo_surface_ch = "A"
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
+                    growth_mask_channels = ["A"]
+                    growth_mask_channel_ths = ["auto"]
+            elif set(sorted_original_instance_channels) == {"Dc"}:
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
+                    seed_channels = ["Dc"]
+                    seed_channels_thresh = ["auto"]
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.TOPOGRAPHIC_SURFACE_CHANNEL == "":
+                    topo_surface_ch = "Dc"
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
+                    growth_mask_channels = ["Dc"]
+                    growth_mask_channel_ths = ["auto"]
+            elif set(sorted_original_instance_channels) == {"Db", "R"}:
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
+                    seed_channels = ["A"]
+                    seed_channels_thresh = ["auto"]
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.TOPOGRAPHIC_SURFACE_CHANNEL == "":
+                    topo_surface_ch = "A"
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
+                    growth_mask_channels = ["A"]
+                    growth_mask_channel_ths = ["auto"]
+                if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES == []:
+                    opts.extend(["PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES", ['bce', 'l1']])
+                    channel_loss_set = True
+
+            if seed_channels == [] or seed_channels_thresh == [] or topo_surface_ch == "" or growth_mask_channels == [] or growth_mask_channel_ths == []:
+                print("WARNING: seems that the channels requested are custom so BiaPy did not fill some varibles by default.\n"
+                    "You will need to fill the following variables:\n"
+                    "    - PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS\n"
+                    "    - PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS_THRESH\n"
+                    "    - PROBLEM.INSTANCE_SEG.WATERSHED.TOPOGRAPHIC_SURFACE_CHANNEL\n"
+                    "    - PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS\n"
+                    "    - PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS_THRESH\n"
+                )
+            if seed_channels != []:
+                opts.extend(
+                    [
+                        "PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS",
+                        seed_channels
+                    ]
+                )
+            if seed_channels_thresh != []:
+                opts.extend(
+                    [
+                        "PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS_THRESH",
+                        seed_channels_thresh
+                    ]
+                )
+            if topo_surface_ch != "":
+                opts.extend(
+                    [
+                        "PROBLEM.INSTANCE_SEG.WATERSHED.TOPOGRAPHIC_SURFACE_CHANNEL",
+                        topo_surface_ch
+                    ]
+                )
+            if growth_mask_channels != []:
+                opts.extend(
+                    [
+                        "PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS",
+                        growth_mask_channels
+                    ]
+                )
+            if growth_mask_channel_ths != []:
+                opts.extend(
+                    [
+                        "PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS_THRESH",
+                        growth_mask_channel_ths
+                    ]
+                )
+
+            # Pre-fill per-channel extra options only if the first details dict is empty
+            if len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0]) == 0:
+                chs = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
+                dst = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0]
+
+                # F and B — foreground and background
+                for ch in ("F", "B"):
+                    if ch in chs:
+                        dst[ch] = {
+                            "erosion": 0,
+                            "dilation": 0,
+                        }
+
+                # P — point-like channel
+                if "P" in chs:
+                    dst["P"] = {
+                        "type": "centroid",  # default
+                        "dilation": 1, 
+                    }
+
+                # C — contours
+                if "C" in chs:
+                    dst["C"] = {
+                        "mode": "thick",     # default; valid options: thick|inner|outer|subpixel|dense
+                    }
+
+                # H / V / Z / Db — distance channels group
+                for ch in ("H", "V", "Z", "Db"):
+                    if ch in chs:
+                        dst[ch] = {
+                            "norm": True,                # default
+                            "mask_values": True,          # default
+                        }
+
+                # Dc — center/skeleton distance-to-center
+                if "Dc" in chs:
+                    dst["Dc"] = {
+                        "type": "center",             # default: center|skeleton
+                        "norm": True,                # default
+                        "mask_values": True,          # default
+                    }
+
+                # Dn — normal / inverted distances
+                if "Dn" in chs:
+                    dst["Dn"] = {
+                        "closing_size": 3,            # default
+                        "norm": True,                 # default
+                        "mask_values": True,          # default
+                        "decline_power": 3,           # default
+                    }
+
+                # D — signed distance (global)
+                if "D" in chs:
+                    dst["D"] = {
+                        "alpha": 8,                     # default
+                        "beta": 50,                     # default
+                        "act": "tanh",                  # default: tanh|linear
+                        "norm": True,                   # default
+                    }
+
+                # R — star-convex/radial distances
+                if "R" in chs:
+                    dst["R"] = {
+                        "nrays": 32 if cfg.PROBLEM.NDIM == "2D" else 96,  # matches documented defaults
+                        "norm": True,                 # default
+                        "mask_values": True,          # default
+                    }
+
+                # T — touching thickness
+                if "T" in chs:
+                    dst["T"] = {
+                        "thickness": 2,  # default
+                    }
+
+                # A — pixel/voxel affinities (fixed: removed invalid 'mode')
+                if "A" in chs:
+                    dst["A"] = {
+                        "z_affinities": [1],  # defaults; ensure all three lists have same length
+                        "y_affinities": [1],
+                        "x_affinities": [1],
+                        "widen_borders": 1,   # default
+                    }
+                    # # If you want the SNEMI3D setup, uncomment:
+                    # dst["A"] = {
+                    #     "z_affinities": [1, 2, 3, 4],
+                    #     "y_affinities": [1, 3, 9, 27],
+                    #     "x_affinities": [1, 3, 9, 27],
+                    #     "widen_borders": 1,
+                    # }
+
+                # E — learned per-pixel features
+                if "E" in chs:
+                    dst["E"] = {
+                        "features": 24,  # default
+                    }
+
+            if cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS == "":
+                if "R" in sorted_original_instance_channels:
+                    opts.extend(["PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS", "stardist"])
+                else:
+                    opts.extend(["PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS", "watershed"])
+            assert cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS not in ["agglomeration"], "'agglomeration' not supported yet"
+
+            if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES == []:
+                if not channel_loss_set:
+                    losses = []
+                    for ch in sorted_original_instance_channels:
+                        if ch in ["F", "B", "C", "P", "T"]:
+                            losses.append("bce")
+                        elif ch in ["H", "V", "Z", "Db", "Dc", "Dn", "D", "R"]:
+                            losses.append("l1")
+                        elif ch in ["A"]:
+                            losses.append("bce")
+                        elif ch in ["E"]:
+                            losses.append("triplet")
+                        else:
+                            raise ValueError(f"Unknown instance segmentation data channel '{ch}'")
+
+                    if len(losses) > 0:
+                        opts.extend(["PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES", losses])
+            else:
+                assert len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES) == len(sorted_original_instance_channels), "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES' must have the same length as 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'"
+                for loss in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES:
+                    assert loss in ["bce", "ce", "mse", "l1", "mae", "triplet"], "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES' can only have values in ['bce', 'mse', 'l1', 'ce', 'triplet']"
 
     for phase in ["TRAIN", "VAL", "TEST"]:
         if getattr(cfg.DATA, phase).FILTER_SAMPLES.ENABLE:
@@ -246,9 +526,9 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             raise ValueError(
                 "'TEST.POST_PROCESSING.REPARE_LARGE_BLOBS_SIZE' can only be set when 'PROBLEM.TYPE' is 'INSTANCE_SEG'"
             )
-        if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS != "BP":
+        if set(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) != {"F","P"}:
             raise ValueError(
-                "'TEST.POST_PROCESSING.REPARE_LARGE_BLOBS_SIZE' only makes sense when 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS == 'BP'"
+                "'TEST.POST_PROCESSING.REPARE_LARGE_BLOBS_SIZE' only makes sense when 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS' is ['F','P']"
             )
     if cfg.TEST.POST_PROCESSING.DET_WATERSHED and cfg.PROBLEM.TYPE != "DETECTION":
         raise ValueError("'TEST.POST_PROCESSING.DET_WATERSHED' can only be set when 'PROBLEM.TYPE' is 'DETECTION'")
@@ -603,9 +883,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         loss = "CE" if cfg.LOSS.TYPE == "" else cfg.LOSS.TYPE
         assert loss == "CE", "LOSS.TYPE must be 'CE'"
     opts.extend(["LOSS.TYPE", loss])
+
     if cfg.LOSS.IGNORE_INDEX != -1 and not check_value(cfg.LOSS.IGNORE_INDEX, (0, 255)):
         raise ValueError("If 'LOSS.IGNORE_INDEX' is set it needs to be a value in [0,255] range")
-    if cfg.LOSS.TYPE != "CE":
+    if cfg.LOSS.TYPE != "CE" and cfg.PROBLEM.TYPE != "INSTANCE_SEG":
         print("WARNING: 'LOSS.IGNORE_INDEX' will not have effect, as it is only working when LOSS.TYPE is 'CE'")
 
     if cfg.LOSS.CONTRAST.ENABLE:
@@ -704,25 +985,165 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     #### Instance segmentation ####
     if cfg.PROBLEM.TYPE == "INSTANCE_SEG":
         if cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
-            assert cfg.PROBLEM.INSTANCE_SEG.DATA_MW_TH_TYPE in ["manual", "auto"], "'PROBLEM.INSTANCE_SEG.DATA_MW_TH_TYPE' must be one of ['manual', 'auto']"
-            assert cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in [
-                "A",
-                "C",
-                "BC",
-                "BCM",
-                "BCD",
-                "BCDv2",
-                "BCP",
-                "Dv2",
-                "BDv2",
-                "BP",
-                "BD",
-            ], "PROBLEM.INSTANCE_SEG.DATA_CHANNELS not in ['A','C', 'BC', 'BCM', 'BCD', 'BCDv2', 'Dv2', 'BDv2', 'BP', 'BD', 'BCP']"
+            assert cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS in ["watershed", "agglomeration", "stardist"], "'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' not in ['watershed', 'agglomeration', 'stardist']"
+            for x in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
+                assert x in [
+                    "F",
+                    "B",
+                    "P",
+                    "C",
+                    "H",
+                    "V",
+                    "Z",
+                    "Db",
+                    "Dc",
+                    "Dn",
+                    "D",
+                    "R",
+                    "T",
+                    "A",
+                    "E",
+                ], "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS' not in ['F', 'B', 'P', 'C', 'H', 'V', 'Z', 'Db', 'Dc', 'Dn', 'D', 'R', 'T', 'A', 'E']"
+
+            if "A" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
+                if len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) != 1:
+                    raise ValueError("'A' channel can only be used as the sole instance channel")
+                if cfg.PROBLEM.NDIM != "3D":
+                    raise ValueError("'A' channel can only be used in 3D segmentation")
+            if "Z" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS and cfg.PROBLEM.NDIM == "2D":
+                raise ValueError("'Z' channel can only be used in 3D segmentation")
+            if "R" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
+                assert set(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) == {"Db", "R"}, "'R' channel can only be used together with 'Db' channel"
+            if cfg.PROBLEM.NDIM == "2D":
+                if "H" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS and "V" not in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
+                    raise ValueError("'H' channel can only be used together with 'V' channel")
+                if "V" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS and "H" not in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
+                    raise ValueError("'V' channel can only be used together with 'H' channel")
+            else:
+                if "Z" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS and ("H" not in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS or "V" not in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS):
+                    raise ValueError("'Z' channel can only be used together with 'H' and 'V' channels")
+
+            if cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS == "watershed":
+                assert len(cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS) != 0, "'PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS' must not be empty"
+                assert len(cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS_THRESH) != 0, "'PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS_THRESH' must not be empty"
+                assert len(cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS_THRESH) != 0, "'PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS_THRESH' must not be empty"
+                assert len(cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS) != 0, "'PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS' must not be empty"
+                assert cfg.PROBLEM.INSTANCE_SEG.WATERSHED.TOPOGRAPHIC_SURFACE_CHANNEL != "", "'PROBLEM.INSTANCE_SEG.WATERSHED.TOPOGRAPHIC_SURFACE_CHANNEL' can not be empty"
+
+                assert len(cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS) == len(cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS_THRESH), "'PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS' must have the same length as 'PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS_THRESH'"
+                assert len(cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS) == len(cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS_THRESH), "'PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS' must have the same length as 'PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS_THRESH'"
+
+                for i, x in enumerate(cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS_THRESH):
+                    if x != "auto":
+                        try:
+                            val = float(x)
+                        except:
+                            raise ValueError("'PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS_THRESH' values can only be 'auto' or a float")
+
+                for i, x in enumerate(cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS_THRESH):
+                    if x != "auto":
+                        try:
+                            val = float(x)
+                        except:
+                            raise ValueError("'PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS_THRESH' values can only be 'auto' or a float")
+                
+            chs = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
+            extra_opts_list = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS
+
+            assert len(extra_opts_list) == 1, (
+                "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS' must have exactly one entry: a dict of dicts"
+            )
+            extra_opts = extra_opts_list[0]
+            assert isinstance(extra_opts, dict), "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0]' must be a dict"
+            assert len(extra_opts) == len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS), "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS' must have the same keys as the channels selected in 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'"
+
+            # Every provided key must be supported and (if relevant) present in DATA_CHANNELS
+            for key, val in extra_opts.items():
+                assert isinstance(val, dict), f"'DATA_CHANNELS_EXTRA_OPTS' for '{key}' must be a dict"
+                # Allow providing extra opts only for channels that are in DATA_CHANNELS
+                assert key in chs, f"'DATA_CHANNELS_EXTRA_OPTS' has '{key}' but it's not in DATA_CHANNELS"
+
+                ctx = f"PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS['{key}']"
+
+                if key in ["F", "B"]:  # F and B
+                    _assert_int(val, "erosion", ctx, min_val=0)
+                    _assert_int(val, "dilation", ctx, min_val=0)
+
+                elif key == "P":  # central part
+                    _assert_int(val, "dilation", ctx, min_val=0)
+                    _assert_optional_str_in(val, "type", {"centroid", "skeleton"}, ctx)
+
+                elif key == "C":  # contours
+                    _assert_str_in(val, "mode", {"thick", "inner", "outer", "subpixel", "dense"}, ctx)
+
+                elif key in ("H", "V", "Z", "Db"):  # distance channels group
+                    _assert_optional_bool(val, "norm", ctx)
+                    if "norm" in val:
+                        assert isinstance(val["norm"], bool)
+                    _assert_bool(val, "mask_values", ctx)
+
+                elif key == "Dc":  # distance-to-center
+                    _assert_str_in(val, "type", {"center", "skeleton"}, ctx)
+                    _assert_optional_bool(val, "norm", ctx)
+                    _assert_bool(val, "mask_values", ctx)
+
+                elif key == "Dn":  # distances to closest neighbor
+                    _assert_int(val, "closing_size", ctx, min_val=0)
+                    _assert_optional_bool(val, "norm", ctx)
+                    _assert_bool(val, "mask_values", ctx)
+                    _assert_int(val, "decline_power", ctx, min_val=0)
+
+                elif key == "D":  # signed distance (global)
+                    _assert_str_in(val, "act", {"tanh", "linear"}, ctx)
+                    _assert_int(val, "alpha", ctx, min_val=0)
+                    _assert_int(val, "beta", ctx, min_val=0)
+                    _assert_optional_bool(val, "norm", ctx)
+
+                elif key == "R":  # star-convex/radial
+                    _assert_int(val, "nrays", ctx, min_val=1)
+                    _assert_optional_bool(val, "norm", ctx)
+                    _assert_bool(val, "mask_values", ctx)
+
+                elif key == "T":  # touching thickness
+                    _assert_int(val, "thickness", ctx, min_val=1)
+
+                elif key == "A":  # affinities
+                    # Expect three same-length lists of positive ints + widen_borders (int >= 0)
+                    affs = ("z_affinities", "y_affinities", "x_affinities") if cfg.PROBLEM.NDIM == "3D" else ("y_affinities", "x_affinities")
+                    for ax in affs:
+                        assert ax in val, f"'{ctx}' must have '{ax}'"
+                        _assert_list_of_pos_ints(val[ax], f"{ctx}['{ax}']")
+                    if cfg.PROBLEM.NDIM == "3D":
+                        Lz, Ly, Lx = len(val["z_affinities"]), len(val["y_affinities"]), len(val["x_affinities"])
+                        assert Lz == Ly == Lx, f"'{ctx}' affinity lists must have the same length (got {Lz}, {Ly}, {Lx})"
+                    else:
+                        Ly, Lx = len(val["y_affinities"]), len(val["x_affinities"])
+                        assert Ly == Lx, f"'{ctx}' affinity lists must have the same length (got {Ly}, {Lx})"
+                    _assert_int(val, "widen_borders", ctx, min_val=0)
+
+                elif key == "E":  # learned features
+                    _assert_int(val, "features", ctx, min_val=1)
+                else:
+                    raise ValueError(f"'PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS' for '{key}' channel is not supported")
+
+            # Optionally: enforce that every channel that typically needs opts has an entry.
+            # (This is optional because you pre-fill when empty; still helpful when users pass their own.)
+            must_have_if_present = {"F", "B", "P", "C", "H", "V", "Z", "Db", "Dc", "Dn", "D", "R", "T", "A", "E"}
+            missing = sorted(k for k in chs if k in must_have_if_present and k not in extra_opts)
+            assert not missing, (
+                "Missing extra options for channels: {}. "
+                "Either add them to DATA_CHANNELS_EXTRA_OPTS[0] or remove the channels from DATA_CHANNELS."
+                .format(sorted(missing))
+            )
+
         else:  # synapses
             assert cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE in ["manual", "auto", "relative_by_patch", "relative"], "'PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE' must be one of ['manual', 'auto']"
-            assert cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS in [
-                "B", "BF",
-            ], "PROBLEM.INSTANCE_SEG.DATA_CHANNELS not in ['B', 'BF']"
+            for x in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
+                assert x in ["F_pre", "F_post", "H", "V", "Z"], "PROBLEM.INSTANCE_SEG.DATA_CHANNELS not in ['F_pre', 'F_post', 'H', 'V', 'Z']"
+
+            if set(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) not in [{"F_pre", "F_post"}, {"F_pre", "H", "V", "Z"}]:
+                raise ValueError("PROBLEM.INSTANCE_SEG.DATA_CHANNELS not 'F_pre' + 'F_post' or 'F_pre' + 'H' + 'V' + 'Z', which are the unique configurations supported for synapse detection")
+
             if not cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA or cfg.PROBLEM.NDIM != "3D":
                 raise ValueError(
                     "Synapse detection is only available for 3D Zarr/H5 data. Please set 'DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA' "
@@ -731,30 +1152,23 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         if len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS) != channels_provided:
             raise ValueError(
                 "'PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS' needs to be of the same length as the channels selected in 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'. "
-                "E.g. 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'='BC' 'PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS'=[1,0.5]. "
-                "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'='BCD' 'PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS'=[0.5,0.5,1]. "
+                "E.g. 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'=['F','C'] 'PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS'=[1,0.5]. "
+                "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'=['F','C','D'] 'PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS'=[0.5,0.5,1]. "
                 "If 'DATA.N_CLASSES' > 2 one more weigth need to be provided."
             )
         if cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK:
-            if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS not in [
-                "C",
-                "BC",
-                "BCM",
-                "BCD",
-                "BCDv2",
-            ]:
+            if "F" not in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
                 raise ValueError(
-                    "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS' needs to be in ['C', 'BC', 'BCM', 'BCD', 'BCDv2'] "
-                    "when 'TEST.POST_PROCESSING.VORONOI_ON_MASK' is enabled"
+                    "'F' needs to be in 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS' when 'TEST.POST_PROCESSING.VORONOI_ON_MASK' is enabled"
                 )
             if not check_value(cfg.TEST.POST_PROCESSING.VORONOI_TH):
                 raise ValueError("'TEST.POST_PROCESSING.VORONOI_TH' not in [0, 1] range")
         if (
-            cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS not in ["C", "BC", "BCM", "BCD", "BP"]
-            and cfg.PROBLEM.INSTANCE_SEG.ERODE_AND_DILATE_FOREGROUND
+            not any([x for x in ["F", "B", "C", "D"] if x in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS])
+            and cfg.PROBLEM.INSTANCE_SEG.ERODE_AND_DILATE_GROWTH_MASK
         ):
             raise ValueError(
-                "'PROBLEM.INSTANCE_SEG.ERODE_AND_DILATE_FOREGROUND' can only be used with 'C', 'BC', 'BCM', 'BP' or 'BCD' channels"
+                "'PROBLEM.INSTANCE_SEG.ERODE_AND_DILATE_GROWTH_MASK' can only be used if any of the following channels was selected: 'F', 'B', 'C', or 'D'."
             )
         for morph_operation in cfg.PROBLEM.INSTANCE_SEG.SEED_MORPH_SEQUENCE:
             if morph_operation != "dilate" and morph_operation != "erode":
@@ -766,25 +1180,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             raise ValueError(
                 "'PROBLEM.INSTANCE_SEG.SEED_MORPH_SEQUENCE' length and 'PROBLEM.INSTANCE_SEG.SEED_MORPH_RADIUS' length needs to be the same"
             )
-        if cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE not in [
-            "thick",
-            "inner",
-            "outer",
-            "subpixel",
-            "dense",
-        ]:
-            raise ValueError(
-                "'PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE' must be in ['thick', 'inner', 'outer', 'subpixel', 'dense']"
-            )
-        if cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
-            if (
-                cfg.PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE == "dense"
-                and cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS == "BCM"
-            ):
-                raise ValueError(
-                    "'PROBLEM.INSTANCE_SEG.DATA_CONTOUR_MODE' can not be 'dense' when 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS' is 'BCM'"
-                    " as it does not have sense"
-                )
+
         if cfg.PROBLEM.INSTANCE_SEG.WATERSHED_BY_2D_SLICES:
             if cfg.PROBLEM.NDIM == "2D" and not cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
                 raise ValueError(
@@ -1816,6 +2212,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 from safetensors.torch import load_file
             except ImportError:
                 raise ImportError("Please install safetensors package to be able to load .safetensors checkpoints")
+    
+    assert cfg.MODEL.OUT_CHECKPOINT_FORMAT in ["pth", "safetensors"], "MODEL.OUT_CHECKPOINT_FORMAT not in ['pth', 'safetensors']"
 
     ### Train ###
     assert cfg.TRAIN.OPTIMIZER in [
@@ -2008,6 +2406,36 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             raise ValueError(
                 "'TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS_RADIUS' needs to be set when 'TEST.POST_PROCESSING.REMOVE_CLOSE_POINTS' is True"
             )
+
+# Helper for common check
+def _assert_bool(d, k, ctx):
+    assert k in d, f"'{ctx}' must have '{k}' key"
+    assert isinstance(d[k], bool), f"'{ctx}' '{k}' must be a boolean"
+
+def _assert_int(d, k, ctx, *, min_val=None):
+    assert k in d, f"'{ctx}' must have '{k}' key"
+    assert isinstance(d[k], int), f"'{ctx}' '{k}' must be an integer"
+    if min_val is not None:
+        assert d[k] >= min_val, f"'{ctx}' '{k}' must be >= {min_val}"
+
+def _assert_str_in(d, k, allowed, ctx):
+    assert k in d, f"'{ctx}' must have '{k}' key"
+    assert isinstance(d[k], str), f"'{ctx}' '{k}' must be a string"
+    assert d[k] in allowed, f"'{ctx}' '{k}' must be one of {sorted(allowed)}"
+
+def _assert_optional_str_in(d, k, allowed, ctx):
+    if k in d:
+        assert isinstance(d[k], str), f"'{ctx}' '{k}' must be a string"
+        assert d[k] in allowed, f"'{ctx}' '{k}' must be one of {sorted(allowed)}"
+
+def _assert_optional_bool(d, k, ctx):
+    if k in d:
+        assert isinstance(d[k], bool), f"'{ctx}' '{k}' must be a boolean"
+
+def _assert_list_of_pos_ints(x, ctx):
+    assert isinstance(x, list) and len(x) > 0, f"'{ctx}' must be a non-empty list"
+    for i, v in enumerate(x):
+        assert isinstance(v, int) and v > 0, f"'{ctx}[{i}]' must be a positive integer"
 
 
 def compare_configurations_without_model(actual_cfg, old_cfg, header_message="", old_cfg_version=None):
@@ -2239,6 +2667,68 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict):
                     old_cfg["PROBLEM"]["SUPER_RESOLUTION"]["UPSCALING"] = (
                         old_cfg["PROBLEM"]["SUPER_RESOLUTION"]["UPSCALING"],
                     ) * ndim
+
+        if "INSTANCE_SEG" in old_cfg["PROBLEM"]:
+            if "DATA_CHANNELS" in old_cfg["PROBLEM"]["INSTANCE_SEG"] and isinstance(old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_CHANNELS"], str):
+                if "WATERSHED" not in old_cfg["PROBLEM"]["INSTANCE_SEG"]:
+                    old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"] = {}
+
+                if "M" in old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_CHANNELS"]:
+                    old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_CHANNELS"].remove("M")
+
+                new_old_channel_map = {
+                    "B": "F",
+                    "Dv2": "D",
+                    "F": "HVZ",
+                }
+                old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_CHANNELS"] = [x if x not in new_old_channel_map.keys() else new_old_channel_map[x] for x in old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_CHANNELS"]]
+
+                if "HVZ" in old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_CHANNELS"]:
+                    old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_CHANNELS"].remove("HVZ")
+                    if ndim == 2:
+                        old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_CHANNELS"].extend(["H", "V"])
+                    else:
+                        old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_CHANNELS"].extend(["H", "V", "Z"])
+
+            if "DISTANCE_CHANNEL_MASK" in old_cfg["PROBLEM"]["INSTANCE_SEG"]:
+                if not old_cfg["PROBLEM"]["INSTANCE_SEG"]["DISTANCE_CHANNEL_MASK"]:
+                    if "D" in old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_CHANNELS"]:
+                        old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_CHANNELS_EXTRA_OPTS"] = [{"D": {"mask_values": False}}]
+                del old_cfg["PROBLEM"]["INSTANCE_SEG"]["DISTANCE_CHANNEL_MASK"]
+
+            # Reset values and fill with the thresholds set by the user
+            manual_ths = False
+            if "DATA_MW_TH_TYPE" in old_cfg["PROBLEM"]["INSTANCE_SEG"]:
+                manual_ths = True if old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_MW_TH_TYPE"] == "auto" else False
+                del old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_MW_TH_TYPE"]
+                if manual_ths:
+                    old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]["SEED_CHANNELS_THRESH"] = []
+                    old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]["GROWTH_MASK_CHANNELS_THRESH"] = []
+
+            if "DATA_MW_TH_BINARY_MASK" in old_cfg["PROBLEM"]["INSTANCE_SEG"]:
+                if manual_ths:
+                    old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]["SEED_CHANNELS_THRESH"].append(old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_MW_TH_BINARY_MASK"])
+                del old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_MW_TH_BINARY_MASK"]
+
+            if "DATA_MW_TH_CONTOUR" in old_cfg["PROBLEM"]["INSTANCE_SEG"]:
+                if manual_ths and len(old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]["SEED_CHANNELS"]) > 1:
+                    old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]["SEED_CHANNELS_THRESH"].append(old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_MW_TH_CONTOUR"])
+                del old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_MW_TH_CONTOUR"]
+
+            if "DATA_MW_TH_DISTANCE" in old_cfg["PROBLEM"]["INSTANCE_SEG"]:
+                if manual_ths and len(old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]["SEED_CHANNELS"]) > 1:
+                    old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]["SEED_CHANNELS_THRESH"].append(old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_MW_TH_DISTANCE"])
+                del old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_MW_TH_DISTANCE"]
+
+            if "DATA_MW_TH_POINTS" in old_cfg["PROBLEM"]["INSTANCE_SEG"]:
+                if manual_ths and len(old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]["SEED_CHANNELS"]) > 1:
+                    old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]["SEED_CHANNELS_THRESH"].append(old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_MW_TH_POINTS"])
+                del old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_MW_TH_POINTS"]
+
+            if "DATA_MW_TH_FOREGROUND" in old_cfg["PROBLEM"]["INSTANCE_SEG"]:
+                if manual_ths:
+                    old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]["GROWTH_MASK_CHANNELS_THRESH"].append(old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_MW_TH_FOREGROUND"])
+                del old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_MW_TH_FOREGROUND"]
 
     if "DATA" in old_cfg:
         if "TRAIN" in old_cfg["DATA"]:
