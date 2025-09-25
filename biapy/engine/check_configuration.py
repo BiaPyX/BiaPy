@@ -87,7 +87,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "T": 11, # Touching area
             "A": 12,  # Affinities
             "E": 13,  # Embeddings
-            "R": 999,  # Radial distances
+            "R": 14,  # Radial distances,
         }
 
         def get_sort_key(weights):
@@ -99,9 +99,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
         original_instance_channels = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS.copy()
         sorted_original_instance_channels = sorted(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, key=custom_sort_key)
-        if sorted_original_instance_channels != original_instance_channels:
-            print("Reordered instance segmentation data channels. Before: ", original_instance_channels, " . After: ", sorted_original_instance_channels)
-            opts.extend([ "PROBLEM.INSTANCE_SEG.DATA_CHANNELS", sorted_original_instance_channels])
 
         channels_provided = len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
         if cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular" and cfg.DATA.N_CLASSES > 2:
@@ -130,6 +127,15 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     topo_surface_ch = "C"
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
                     growth_mask_channels = ["C"]
+                    growth_mask_channel_ths = ["auto"]
+            elif set(sorted_original_instance_channels) == {"F"}:
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
+                    seed_channels = ["F"]
+                    seed_channels_thresh = ["auto"]
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.TOPOGRAPHIC_SURFACE_CHANNEL == "":
+                    topo_surface_ch = "F"
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
+                    growth_mask_channels = ["F"]
                     growth_mask_channel_ths = ["auto"]
             elif set(sorted_original_instance_channels) == {"F", "C"}:
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
@@ -411,6 +417,16 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                         "features": 24,  # default
                     }
 
+                    
+            # Add extra weight map channel if requested
+            assert cfg.PROBLEM.INSTANCE_SEG.BORDER_EXTRA_WEIGHTS in ["unet-like", ""], "'PROBLEM.INSTANCE_SEG.BORDER_EXTRA_WEIGHTS' not in ['unet-like', '']"
+            if cfg.PROBLEM.INSTANCE_SEG.BORDER_EXTRA_WEIGHTS == "unet-like" and "We" not in sorted_original_instance_channels:
+                sorted_original_instance_channels.append("We")
+
+            if sorted_original_instance_channels != original_instance_channels:
+                print("Reordered instance segmentation data channels. Before: ", original_instance_channels, " . After: ", sorted_original_instance_channels)
+                opts.extend([ "PROBLEM.INSTANCE_SEG.DATA_CHANNELS", sorted_original_instance_channels])
+                
             if cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS == "":
                 if "R" in sorted_original_instance_channels:
                     opts.extend(["PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS", "stardist"])
@@ -429,13 +445,15 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                             losses.append("bce")
                         elif ch in ["E"]:
                             losses.append("triplet")
+                        elif ch in ["We"]:
+                            continue  # no loss for extra weight map
                         else:
                             raise ValueError(f"Unknown instance segmentation data channel '{ch}'")
 
                     if len(losses) > 0:
                         opts.extend(["PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES", losses])
             else:
-                assert len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES) == len(sorted_original_instance_channels), "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES' must have the same length as 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'"
+                assert len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES) == len([x for x in sorted_original_instance_channels if x != "We"]), "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES' must have the same length as 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'"
                 for loss in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES:
                     assert loss in ["bce", "ce", "mse", "l1", "mae", "triplet"], "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES' can only have values in ['bce', 'mse', 'l1', 'ce', 'triplet']"
 
@@ -1074,6 +1092,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     "T",
                     "A",
                     "E",
+                    "We",
                 ], "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS' not in ['F', 'B', 'P', 'C', 'H', 'V', 'Z', 'Db', 'Dc', 'Dn', 'D', 'R', 'T', 'A', 'E']"
 
             if cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS == "stardist":
@@ -1129,7 +1148,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             else: # agglomeration
                 raise NotImplementedError("'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' == 'agglomeration' is not implemented yet")
               
-            chs = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
+            chs = [x for x in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS if x != "We"]
             extra_opts_list = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS
 
             assert len(extra_opts_list) == 1, (
@@ -1137,7 +1156,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             )
             extra_opts = extra_opts_list[0]
             assert isinstance(extra_opts, dict), "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0]' must be a dict"
-            assert len(extra_opts) == len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS), "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS' must have the same keys as the channels selected in 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'"
+            assert len(extra_opts) == len(chs), "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS' must have the same keys as the channels selected in 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'"
 
             # Every provided key must be supported and (if relevant) present in DATA_CHANNELS
             for key, val in extra_opts.items():
@@ -2590,7 +2609,7 @@ def compare_configurations_without_model(actual_cfg, old_cfg, header_message="",
                     + f"{current_value} (current configuration) vs {old_value} (from loaded configuration)"
             elif var_to_compare == "DATA.PATCH_SIZE" and any([new for new, old in zip(current_value,old_value) if new < old]):
                 warning_message = \
-                    + f"WARNING: The 'DATA.PATCH_SIZE' value used for training the model that you are trying to load was {old_value}." \
+                    f"WARNING: The 'DATA.PATCH_SIZE' value used for training the model that you are trying to load was {old_value}." \
                     + f"It seems that one of the values in your 'DATA.PATCH_SIZE', which is {current_value}, is smaller so may be causing " \
                     + "an error during model building process"
                 

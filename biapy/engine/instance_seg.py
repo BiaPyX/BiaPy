@@ -209,6 +209,8 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 elif channel == "R":
                     self.activations[str(i)] = "linear"
                     self.model_output_channels["channels"] += dst.get("R", {}).get("nrays", 32 if self.dims == 2 else 96)
+                elif channel == "We":
+                    continue
                 else:
                     raise ValueError("Unknown channel: {}".format(channel))
                 
@@ -268,6 +270,8 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 m = "L1 ({} channel)".format(channel) if channel != "R" else "L1 ({} channels)".format(channel)
                 self.train_metric_names += ["L1 ({} channel)".format(channel)]
                 self.train_metric_best += ["min"]
+            elif channel == "We":
+                continue
 
             # Extra channels for the synapse detection branch
             elif channel == "F_pre":
@@ -341,7 +345,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             out_channels = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
             losses_to_use = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES,
             channel_extra_opts = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0],
-            channel_num = self.real_classes,
+            channels_expected = self.real_classes,
             n_classes = self.cfg.DATA.N_CLASSES,
             class_rebalance=self.cfg.LOSS.CLASS_REBALANCE,
             ignore_index = self.cfg.LOSS.IGNORE_INDEX

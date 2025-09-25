@@ -195,6 +195,9 @@ class Config:
 
         # Weights to be applied to the channels.
         _C.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS = (1, 1)
+        # Whether to add an extra weight map to the loss calculation to focus on the borders between instances. Different weighting maps 
+        # can be defined. Options: ["unet-like"]
+        _C.PROBLEM.INSTANCE_SEG.BORDER_EXTRA_WEIGHTS = ""
         # Defines how the instances are created. Options:
         #   - "watershed" to use watershed algorithm
         #   - "agglomeration" to use agglomeration algorithm
@@ -1685,11 +1688,11 @@ class Config:
         # Set it to try to repare large instances by merging their neighbors with them and removing possible central holes.
         # Its value determines which instances are going to be repared by size (number of pixels that compose the instance)
         # This option is useful when PROBLEM.INSTANCE_SEG.DATA_CHANNELS is 'BP', as multiple central seeds may appear in big
-        # instances.
+        # instances. Only works in Instance segmentation workflow.
         _C.TEST.POST_PROCESSING.REPARE_LARGE_BLOBS_SIZE = -1
-        # Clear objects connected to the label image border
+        # Clear objects connected to the label image border. Only works in Instance segmentation workflow.
         _C.TEST.POST_PROCESSING.CLEAR_BORDER = False
-        # Fill holes in instances
+        # Fill holes in instances. Only works in Instance segmentation workflow.
         _C.TEST.POST_PROCESSING.FILL_HOLES = False
 
         ### Detection
@@ -1889,6 +1892,9 @@ def update_dependencies(cfg) -> None:
     post_dil = "".join(str(call.PROBLEM.INSTANCE_SEG.SYNAPSES.POSTSITE_DILATION)[1:-1].replace(",","")).replace(" ","_")
     post_d_dil = "".join(str(call.PROBLEM.INSTANCE_SEG.SYNAPSES.POSTSITE_DILATION_DISTANCE_CHANNELS)[1:-1].replace(",","")).replace(" ","_")
     tdata = call.DATA.TRAIN.GT_PATH if not call.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA else call.DATA.TRAIN.PATH
+    channel_suffix = "".join(call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) 
+    if call.PROBLEM.INSTANCE_SEG.BORDER_EXTRA_WEIGHTS != "":
+        channel_suffix += "We"
     if call.PROBLEM.INSTANCE_SEG.TYPE == "regular":
         suffix = ""
         for key, val in call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0].items():
@@ -1899,14 +1905,14 @@ def update_dependencies(cfg) -> None:
         call.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR = (
             tdata
             + "_"
-            + "".join(call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) 
+            + channel_suffix
             + suffix
         )
     else: 
         call.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR = (
             tdata
             + "_"
-            + "".join(call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
+            + channel_suffix
             + "_"
             + post_dil
             + "_" 
@@ -1920,14 +1926,14 @@ def update_dependencies(cfg) -> None:
         call.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR = (
             vdata
             + "_"
-            + "".join(call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) 
+            + channel_suffix
             + suffix
         )
     else: 
         call.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR = (
             vdata
             + "_"
-            + "".join(call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
+            + channel_suffix
             + "_"
             + post_dil 
             + "_" 
@@ -1942,14 +1948,14 @@ def update_dependencies(cfg) -> None:
         call.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR = (
             tdata
             + "_"
-            + "".join(call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
+            + channel_suffix
             + suffix
         )
     else: 
         call.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR = (
             tdata
             + "_"
-            + "".join(call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
+            + channel_suffix
             + "_"
             + post_dil
             + "_" 
@@ -1965,13 +1971,13 @@ def update_dependencies(cfg) -> None:
 
     call.PATHS.TRAIN_INSTANCE_CHANNELS_CHECK = os.path.join(
         call.PATHS.RESULT_DIR.PATH,
-        "train_" + "".join(call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) + "_instance_channels",
+        "train_" + channel_suffix + "_instance_channels",
     )
     call.PATHS.VAL_INSTANCE_CHANNELS_CHECK = os.path.join(
         call.PATHS.RESULT_DIR.PATH,
-        "val_" + "".join(call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) + "_instance_channels",
+        "val_" + channel_suffix + "_instance_channels",
     )
     call.PATHS.TEST_INSTANCE_CHANNELS_CHECK = os.path.join(
         call.PATHS.RESULT_DIR.PATH,
-        "test_" + "".join(call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) + "_instance_channels",
+        "test_" + channel_suffix + "_instance_channels",
     )

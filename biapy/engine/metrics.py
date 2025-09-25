@@ -278,6 +278,7 @@ class multiple_metrics:
         self.metric_names = metric_names
         self.device = device
         self.out_channels = out_channels if out_channels is not None else [".",]*len(metric_names)
+        self.out_channels = [x for x in self.out_channels if x != "We"]  # Ignore weight extra channel
         self.channel_extra_opts = channel_extra_opts
         self.model_source = model_source
         self.ignore_index = ignore_index if ignore_index != -1 else None
@@ -1083,14 +1084,25 @@ class instance_segmentation_loss:
     ----------
     weights : tuple of float, optional
         Weights to be applied to each output channel loss. E.g. (1, 0.2).
+
     out_channels : List of str, optional
         String specifying the output channels (e.g., ["F", "C"], ["B", "C", "P"], ["B","C","D"], etc.).
+
+    losses_to_use : list of str, optional
+        List of loss functions to use for each output channel (e.g., ["BCE", "MSE"]).
+
     channel_extra_opts : dict, optional
         Additional options for each output channel (e.g., {"D": {"mask_values": True}}).
+    
+    channels_expected : int, optional
+        Number of channels expected in the ground truth (default: 1).   
+
     n_classes : int, optional
         Number of classes for the class channel (default: 2).
+
     class_rebalance : bool, optional
         Whether to reweight classes inside the loss function.
+
     ignore_index : int, optional
         Value to ignore in the loss calculation (default: -1).
 
@@ -1106,7 +1118,7 @@ class instance_segmentation_loss:
         out_channels=["F", "C"],
         losses_to_use=[],
         channel_extra_opts={},
-        channel_num: int = 1,
+        channels_expected: int = 1,
         n_classes=2,
         class_rebalance=False,
         ignore_index: int = -1,
@@ -1133,8 +1145,9 @@ class instance_segmentation_loss:
             Value to ignore in the loss calculation.
         """
         self.weights = weights
-        self.out_channels = out_channels
-        self.channel_num = channel_num
+        self.out_channels = [x for x in out_channels if x != "We"]
+        self.extra_weight_in_borders = out_channels.count("We") > 0
+        self.channels_expected = channels_expected if not self.extra_weight_in_borders else channels_expected + 1
         self.channel_extra_opts = channel_extra_opts
         self.n_classes = n_classes
         self.class_rebalance = class_rebalance
@@ -1155,7 +1168,7 @@ class instance_segmentation_loss:
                 self.losses_to_use.append(torch.nn.MSELoss())
             elif loss == "triplet":
                 self.losses_to_use.append(torch.nn.TripletMarginLoss(margin=1.0, p=2))
-        
+
         assert len(self.losses_to_use) == len(self.out_channels), (
             "Number of losses ({}) and number of output channels ({}) do not match.".format(len(self.losses_to_use), len(self.out_channels))
         )
@@ -1186,11 +1199,15 @@ class instance_segmentation_loss:
         if self.n_classes > 2 and isinstance(y_pred, dict) and "class" in y_pred:
             _y_pred_class = y_pred["class"]
 
-        assert (y_true.shape[1] == self.channel_num), (
+        assert (y_true.shape[1] == self.channels_expected), (
             "Seems that the GT loaded doesn't have {} channels as expected in {}. GT shape: {}".format(
-                self.channel_num, self.out_channels, y_true.shape
+                self.channels_expected, self.out_channels, y_true.shape
             )
         )
+
+        w_borders = None
+        if self.extra_weight_in_borders:
+            w_borders = y_true[:, -1]
 
         loss = 0
         for i, channel in enumerate(self.out_channels):
@@ -1232,6 +1249,10 @@ class instance_segmentation_loss:
                 crit = self.losses_to_use[i]   # e.g. Triplet already reduced
 
             loss_tensor = crit(y_pred_slice, y_true_slice)  # same shape as slice
+
+            # multiply by spatial border weights after crit
+            if w_borders is not None:
+                loss_tensor = loss_tensor * w_borders
 
             # apply optional element mask AFTER computing the per-element loss
             if mask is not None:

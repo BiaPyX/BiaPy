@@ -127,16 +127,11 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
     print("Creating Y_{} channels . . .".format(data_type))
     # Create the mask patch by patch (Zarr/H5)
     if working_with_zarr_h5_files and isinstance(Y, dict):
-        savepath = str(data_path) + "_" + "".join(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) 
-        if cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
-            suffix = ""
-            for key, val in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0].items():
-                suffix += f"_{key}"
-                if key in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
-                    for kdetail, vdetail in val.items():
-                        suffix += f"-{kdetail}-{vdetail}"
-            savepath += suffix
-        else:
+        channel_suffix = "".join(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) 
+        if cfg.PROBLEM.INSTANCE_SEG.BORDER_EXTRA_WEIGHTS != "":
+            channel_suffix += "We"
+        savepath = str(data_path) + "_" + channel_suffix  
+        if cfg.PROBLEM.INSTANCE_SEG.TYPE == "synapses":
             post_dil = "".join(str(cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.POSTSITE_DILATION)[1:-1].replace(",", "")).replace(
                 " ", "_"
             )
@@ -371,7 +366,7 @@ def labels_into_channels(
         else:
             c_number += 1
 
-    if any(x for x in ["Db", "Dc", "Dn", "D", "H", "V", "Z", "R", "E"] if x in mode):
+    if any(x for x in ["Db", "Dc", "Dn", "D", "H", "V", "Z", "R", "E", "We"] if x in mode):
         dtype = np.float32
     else:
         dtype = np.uint8
@@ -712,12 +707,15 @@ def labels_into_channels(
         rays = generate_rays(n_rays=nrays, ndim=ndim).astype(np.float32)
         spacing = None if new_mask[..., mode.index("R")].ndim == 2 else resolution
 
-        new_mask[..., mode.index("R"):] = radial_distances(vol, rays, spacing=spacing)
+        new_mask[..., mode.index("R"):mode.index("R")+nrays] = radial_distances(vol, rays, spacing=spacing)
 
     # ---------- E (Embeddings) ----------
     if "E" in mode:
         raise NotImplementedError
 
+    if "We" in mode:
+        new_mask[..., mode.index("We")] =  unet_border_weight_map(vol, w0=10.0, sigma=5.0, resolution=resolution)
+    
     # Save examples of each channel
     if save_dir:
         os.makedirs(save_dir, exist_ok=True)
@@ -752,6 +750,8 @@ def labels_into_channels(
                 suffix = "_affinity.tif"
             elif mod == "E":
                 suffix = "_embeddings.tif"
+            elif mod == "We":
+                suffix = "_border_weights.tif"
             else:
                 raise ValueError("Unknown channel type: {}".format(mod))
 
@@ -803,6 +803,75 @@ def norm_channel(channel: NDArray, vol: NDArray, instances: list[int]) -> NDArra
             normed[mask] = (values - mi) / (ma - mi)
 
     return normed
+
+def unet_border_weight_map(
+    instances: np.ndarray,
+    w0: float = 10.0,
+    sigma: float = 5.0,
+    apply_only_background: bool = True,
+    resolution: List[int|float] | None = None,
+) -> np.ndarray:
+    """
+    U-Net border-aware weight map (Ronneberger et al. 2015) for 2D or 3D labels.
+
+    Parameters
+    ----------
+    instances : np.ndarray, shape (H, W) or (D, H, W), dtype int
+        0/`background` for background, 1..N (or any ints != background) are instance ids.
+    
+    w0 : float
+        Border weight magnitude.
+    
+    sigma : float
+        Spatial decay (in same units as resolution).
+
+    apply_only_background : bool
+        If True, apply the exponential term only on background (as in the paper).
+
+    resolution : List[int|float] | None
+        Voxel spacing along each axis (z,y,x) or (y,x). If None, isotropic spacing of 1 is assumed.
+
+    Returns
+    -------
+    w : np.ndarray, same shape as `instances`, dtype float32
+        Border weight map.
+    """
+    if instances.ndim not in (2, 3):
+        raise ValueError(f"`instances` must be 2D or 3D, got shape {instances.shape}")
+
+    inst = instances.astype(np.int32, copy=False)
+    shp = inst.shape
+
+    # collect unique instance ids excluding background
+    ids = np.unique(inst)
+    ids = ids[ids != 0]
+
+    # Need at least two distinct instances for the (d1 + d2) term to be meaningful
+    if ids.size < 2:
+        return np.zeros(shp, dtype=np.float32)
+
+    # Compute distance-to-each-instance via EDT on the complement of that instance
+    # distances[k, ...] = distance to instance ids[k]
+    distances = np.empty((ids.size, *shp), dtype=np.float32)
+    for k, lab in enumerate(ids):
+        # edt computes distance to zeros -> pass mask that's zero *inside* the object
+        # equivalently: distance to the boundary of object `lab`
+        distances[k] = edt.edt(inst != lab, anisotropy=resolution, parallel=-1)
+
+    # nearest and second-nearest distances at each voxel/pixel
+    d1 = distances.min(axis=0)
+    d2 = np.partition(distances, 1, axis=0)[1]
+
+    # Border emphasis term
+    denom = 2.0 * (sigma ** 2)
+    w_border = w0 * np.exp(-((d1 + d2) ** 2) / denom, dtype=np.float64)
+    w_border = w_border.astype(np.float32, copy=False)
+
+    if apply_only_background:
+        w_border *= (inst == 0)
+
+    return w_border
+
 
 def touching_mask_nd(labels: NDArray, connectivity: int = 1) -> NDArray:
     """
