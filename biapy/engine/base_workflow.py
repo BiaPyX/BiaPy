@@ -712,7 +712,11 @@ class Base_Workflow(metaclass=ABCMeta):
                     if self.cfg.PROBLEM.PRINT_OLD_KEY_CHANGES:
                         print("The following changes were made in order to adapt the loaded input configuration from checkpoint into the current configuration version:")
                         diff_between_configs(saved_cfg, tmp_cfg)
+                    # Save current BMZ config
+                    tmp_BMZ_config = self.cfg.MODEL.BMZ.clone()
                     update_dict_with_existing_keys(self.cfg["MODEL"], tmp_cfg["MODEL"])
+                    # Restore BMZ config
+                    self.cfg["MODEL"]["BMZ"] = tmp_BMZ_config
 
                     # Check if the merge is coherent
                     self.cfg["MODEL"]["LOAD_CHECKPOINT"] = True
