@@ -915,7 +915,7 @@ class BiaPy:
                 print("Autogenerating documentation . . .")
                 doc = os.path.join(building_dir, "documentation.md")
                 create_model_doc(
-                    biapy_cfg=self.cfg,
+                    biapy_obj=self,
                     bmz_cfg=bmz_cfg,
                     cfg_file=self.cfg_file,
                     task_description=description,

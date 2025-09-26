@@ -205,7 +205,9 @@ class Base_Workflow(metaclass=ABCMeta):
         self.loss = None
         self.memory_bank = None
         self.real_classes = -1 
-
+        self.train_metrics_message = ""
+        self.test_metrics_message = ""
+        
         self.resolution: List[int | float] = list(self.cfg.DATA.TEST.RESOLUTION)
         if self.cfg.PROBLEM.NDIM == "2D":
             self.resolution = [
@@ -1005,14 +1007,17 @@ class Base_Workflow(metaclass=ABCMeta):
         self.total_training_time_str = str(datetime.timedelta(seconds=int(total_time)))
         print("Training time: {}".format(self.total_training_time_str))
 
-        print("Train loss: {}".format(train_stats["loss"]))
+        self.train_metrics_message += ("Train loss: {}\n".format(train_stats["loss"]))
         for i in range(len(self.train_metric_names)):
-            print("Train {}: {}".format(self.train_metric_names[i], train_stats[self.train_metric_names[i]]))
+            self.train_metrics_message += ("Train {}: {}\n".format(self.train_metric_names[i], train_stats[self.train_metric_names[i]]))
         if self.val_generator:
-            print("Validation loss: {}".format(self.val_best_loss))
+            self.train_metrics_message += ("Validation loss: {}\n".format(self.val_best_loss))
             for i in range(len(self.train_metric_names)):
-                print("Validation {}: {}".format(self.train_metric_names[i], self.val_best_metric[i]))
+                self.train_metrics_message += ("Validation {}: {}\n".format(self.train_metric_names[i], self.val_best_metric[i]))
 
+        if self.train_metrics_message != "":
+            for line in self.train_metrics_message.split("\n"):
+                print(line)
         print("Finished Training")
 
         if is_dist_avail_and_initialized():
@@ -1987,8 +1992,8 @@ class Base_Workflow(metaclass=ABCMeta):
                     for metric in self.test_metric_names:
                         if metric.lower() in self.stats["per_crop"]:
                             metric_name = "Foreground IoU" if metric == "IoU" else metric
-                            print(
-                                "Test {} (per patch): {}".format(
+                            self.test_metrics_message += (
+                                "Test {} (per patch): {}\n".format(
                                     metric_name,
                                     self.stats["per_crop"][metric.lower()],
                                 )
@@ -1998,8 +2003,8 @@ class Base_Workflow(metaclass=ABCMeta):
                     for metric in self.test_metric_names:
                         if metric.lower() in self.stats["merge_patches"]:
                             metric_name = "Foreground IoU" if metric == "IoU" else metric
-                            print(
-                                "Test {} (merge patches): {}".format(
+                            self.test_metrics_message += (
+                                "Test {} (merge patches): {}\n".format(
                                     metric_name,
                                     self.stats["merge_patches"][metric.lower()],
                                 )
@@ -2009,39 +2014,38 @@ class Base_Workflow(metaclass=ABCMeta):
                     for metric in self.test_metric_names:
                         if metric.lower() in self.stats["full_image"]:
                             metric_name = "Foreground IoU" if metric == "IoU" else metric
-                            print(
-                                "Test {} (per image): {}".format(
+                            self.test_metrics_message += (
+                                "Test {} (per image): {}\n".format(
                                     metric_name,
                                     self.stats["full_image"][metric.lower()],
                                 )
                             )
 
-            print(" ")
-
             if self.post_processing["per_image"] and len(self.stats["merge_patches_post"]) > 0:
                 for metric in self.test_metric_names:
                     if metric.lower() in self.stats["merge_patches_post"]:
                         metric_name = "Foreground IoU" if metric == "IoU" else metric
-                        print(
-                            "Test {} (merge patches - post-processing): {}".format(
+                        self.test_metrics_message += (
+                            "Test {} (merge patches - post-processing): {}\n".format(
                                 metric_name,
                                 self.stats["merge_patches_post"][metric.lower()],
                             )
                         )
-                print(" ")
 
             if self.post_processing["as_3D_stack"] and len(self.stats["as_3D_stack_post"]) > 0:
                 for metric in self.test_metric_names:
                     if metric.lower() in self.stats["as_3D_stack_post"]:
                         metric_name = "Foreground IoU" if metric == "IoU" else metric
-                        print(
-                            "Test {} (as 3D stack - post-processing): {}".format(
+                        self.test_metrics_message += (
+                            "Test {} (as 3D stack - post-processing): {}\n".format(
                                 metric_name,
                                 self.stats["as_3D_stack_post"][metric.lower()],
                             )
                         )
-                print(" ")
 
+            if self.test_metrics_message != "":
+                for line in self.test_metrics_message.split("\n"):
+                    print(line)
             df_metrics = pd.DataFrame(self.metrics_per_test_file) 
             os.makedirs(self.cfg.PATHS.RESULT_DIR.PATH, exist_ok=True)
             df_metrics.to_csv(

@@ -9,6 +9,8 @@ It includes functionalities for:
 - Generating comprehensive documentation files for exported models (`create_model_doc`).
 """
 import os
+import re
+import biapy
 import yaml
 import numpy as np
 from typing import Tuple
@@ -259,7 +261,7 @@ def create_model_cover(file_paths, out_path, patch_size=256, is_3d=False, workfl
 
 
 def create_model_doc(
-    biapy_cfg: CN | CfgNode,
+    biapy_obj: biapy,
     bmz_cfg: dict,
     cfg_file: str,
     task_description: str,
@@ -270,8 +272,8 @@ def create_model_doc(
 
     Parameters
     ----------
-    biapy_cfg : CfgNode
-        BiaPy configuration.
+    biapy_obj : biapy
+        BiaPy class instance.
 
     bmz_cfg : dict
         BMZ configuration to export the model. Expected keys are:
@@ -360,6 +362,9 @@ def create_model_doc(
                             f"'github_user', 'orcid']. Provided {k}"
                         )
 
+    biapy_cfg = biapy_obj.cfg # type: ignore
+    workflow = biapy_obj.workflow # type: ignore
+
     # Workflow name
     if biapy_cfg.PROBLEM.TYPE == "SEMANTIC_SEG":
         workflow_name = "Semantic segmentation"
@@ -369,7 +374,7 @@ def create_model_doc(
         workflow_name = "Instance segmentation"
         workflow_tag = "instance_segmentation"
         metrics_used = "- Intersection over Union (IoU), also referred as the [Jaccard index](https://en.wikipedia.org/wiki/Jaccard_index), is essentially a method to quantify the percent of overlap between the target mask and the prediction output. In this workflow, as in BiaPy a botton-down approach is used to generate the final instances, IoU is used to measure the model output with the mask created out of the instances."
-        metrics_used += "\n- Matching metrics, which focus on quantifying correctly predicted instances, transforming instance segmentation results into an object detection framework. In this paradigm, the emphasis shifts from uniquely labeled instances to detecting the presence or absence of instances. This transformation is achieved by establishing a criterion for instance overlap, commonly measured through IoU. Unlike traditional segmentation evaluations that rely on nuanced pixel-level overlaps, this approach simplifies assessment by classifying instances as successful true positives (TP) based on a predefined IoU threshold. In BiaPy, the following metrics are implemented: false positives (FP), true positives (TP), false negatives (FN), [precision](https://en.wikipedia.org/wiki/Precision_and_recall), [recall](https://en.wikipedia.org/wiki/Precision_and_recall), [accuracy](https://en.wikipedia.org/wiki/Accuracy_and_precision#In_binary_classification), [F1-score](https://en.wikipedia.org/wiki/Precision_and_recall#F-measure), mean_true_score (mean IoUs of matched true positives but normalized by the total number of GT objects) and panoptic_quality (defined as in Eq. 1 of (Kirillov et al. 'Panoptic Segmentation', CVPR 2019)[https://openaccess.thecvf.com/content_CVPR_2019/papers/Kirillov_Panoptic_Segmentation_CVPR_2019_paper.pdf])."
+        metrics_used += "\n- Matching metrics, which focus on quantifying correctly predicted instances, transforming instance segmentation results into an object detection framework. In this paradigm, the emphasis shifts from uniquely labeled instances to detecting the presence or absence of instances. This transformation is achieved by establishing a criterion for instance overlap, commonly measured through IoU. Unlike traditional segmentation evaluations that rely on nuanced pixel-level overlaps, this approach simplifies assessment by classifying instances as successful true positives (TP) based on a predefined IoU threshold. In BiaPy, the following metrics are implemented: false positives (FP), true positives (TP), false negatives (FN), [precision](https://en.wikipedia.org/wiki/Precision_and_recall), [recall](https://en.wikipedia.org/wiki/Precision_and_recall), [accuracy](https://en.wikipedia.org/wiki/Accuracy_and_precision#In_binary_classification), [F1-score](https://en.wikipedia.org/wiki/Precision_and_recall#F-measure), mean_true_score (mean IoUs of matched true positives but normalized by the total number of GT objects) and panoptic_quality, which is defined as in Eq. 1 of [Kirillov et al. 'Panoptic Segmentation', CVPR 2019](https://openaccess.thecvf.com/content_CVPR_2019/papers/Kirillov_Panoptic_Segmentation_CVPR_2019_paper.pdf). You can find more information of these matching metrics in [3]."
     elif biapy_cfg.PROBLEM.TYPE == "DETECTION":
         workflow_name = "Object detection"
         workflow_tag = "detection"
@@ -387,7 +392,7 @@ def create_model_doc(
     elif biapy_cfg.PROBLEM.TYPE == "CLASSIFICATION":
         workflow_name = "Image classification"
         workflow_tag = "classification"
-        metrics_used = "- Classification metrics, used to evaluate the predicted classes against the ground truth. In BiaPy, true positives (TP), false negatives (FN), and false positives (FP) are computed and subsequently used to calculate the (confusion matrix)[https://en.wikipedia.org/wiki/Confusion_matrix] and the (accuracy)[https://en.wikipedia.org/wiki/Accuracy_and_precision#In_binary_classification]."
+        metrics_used = "- Classification metrics, used to evaluate the predicted classes against the ground truth. In BiaPy, true positives (TP), false negatives (FN), and false positives (FP) are computed and subsequently used to calculate the [confusion matrix](https://en.wikipedia.org/wiki/Confusion_matrix) and the [accuracy](https://en.wikipedia.org/wiki/Accuracy_and_precision#In_binary_classification)."
     elif biapy_cfg.PROBLEM.TYPE == "IMAGE_TO_IMAGE":
         workflow_name = "Image to image"
         workflow_tag = "image_to_image"
@@ -396,17 +401,39 @@ def create_model_doc(
         metrics_used = (
             "Metrics to measure the similarity between the prediction and the ground truth in different ways:"
         )
-        metrics_used += "\n- Mean Squared Error (MSE): [https://lightning.ai/docs/torchmetrics/stable/regression/mean_squared_error.html](https://lightning.ai/docs/torchmetrics/stable/regression/mean_squared_error.html)"
-        metrics_used += "\n- Mean Absolute Error (MAE): [https://lightning.ai/docs/torchmetrics/stable/regression/mean_absolute_error.html](https://lightning.ai/docs/torchmetrics/stable/regression/mean_absolute_error.html)"
+        metrics_used += "\n- [Mean Squared Error (MSE)](https://lightning.ai/docs/torchmetrics/stable/regression/mean_squared_error.html)"
+        metrics_used += "\n- [Mean Absolute Error (MAE)](https://lightning.ai/docs/torchmetrics/stable/regression/mean_absolute_error.html)"
         if biapy_cfg.PROBLEM.TYPE in ["SUPER_RESOLUTION", "IMAGE_TO_IMAGE"]:
-            metrics_used += "\n- Structural Similarity Index Measure (SSIM): [https://lightning.ai/docs/torchmetrics/stable/image/structural_similarity.html](https://lightning.ai/docs/torchmetrics/stable/image/structural_similarity.html)"
-            metrics_used += "\n- Frechet Inception Distance (FID): [https://lightning.ai/docs/torchmetrics/stable/image/frechet_inception_distance.html](https://lightning.ai/docs/torchmetrics/stable/image/frechet_inception_distance.html)"
-            metrics_used += "\n- Inception Score (IS): [https://lightning.ai/docs/torchmetrics/stable/image/inception_score.html](https://lightning.ai/docs/torchmetrics/stable/image/inception_score.html)"
-            metrics_used += "\n- Learned Perceptual Image Patch Similarity (LPIPS): [https://lightning.ai/docs/torchmetrics/stable/image/learned_perceptual_image_patch_similarity.html](https://lightning.ai/docs/torchmetrics/stable/image/learned_perceptual_image_patch_similarity.html)"
+            metrics_used += "\n- [Structural Similarity Index Measure (SSIM)](https://lightning.ai/docs/torchmetrics/stable/image/structural_similarity.html)"
+            metrics_used += "\n- [Frechet Inception Distance (FID)](https://lightning.ai/docs/torchmetrics/stable/image/frechet_inception_distance.html)"
+            metrics_used += "\n- [Inception Score (IS)](https://lightning.ai/docs/torchmetrics/stable/image/inception_score.html)"
+            metrics_used += "\n- [Learned Perceptual Image Patch Similarity (LPIPS)](https://lightning.ai/docs/torchmetrics/stable/image/learned_perceptual_image_patch_similarity.html)"
 
     author_mes = ""
     for aut in bmz_cfg["authors"]:
-        author_mes += f"- {aut['name']} (github: {aut['github_user']})"
+        auth = aut["name"]
+        if "Daniel Franco-Barranco" in auth:
+            auth = re.sub(
+                r"daniel franco-barranco", 
+                r"[Daniel Franco-Barranco](https://orcid.org/0000-0002-1109-110X)", 
+                auth, 
+                flags=re.IGNORECASE
+            )
+        if "Ignacio Arganda-Carreras" in auth:
+            auth = re.sub(
+                r"ignacio arganda-carreras",
+                r"[Ignacio Arganda-Carreras](https://orcid.org/0000-0003-0229-5722)",
+                auth,
+                flags=re.IGNORECASE
+            )
+        if "Arrate Muñoz-Barrutia" in auth:
+            auth = re.sub(
+                r"arrate muñoz-barrutia",
+                r"[Arrate Muñoz-Barrutia](https://orcid.org/0000-0002-1573-1661)",
+                auth,
+                flags=re.IGNORECASE
+            )
+        author_mes += f"- {auth} (github: {aut['github_user']})"
         if "email" in aut:
             author_mes += f" , {aut['email']}"
         if "affiliation" in aut:
@@ -415,58 +442,117 @@ def create_model_doc(
             author_mes += f" - ORCID: {aut['orcid']}"
         author_mes += "\n"
 
+    # preprocessing info
+    if biapy_cfg.DATA.NORMALIZATION.TYPE == "div":
+        preproc_info = "- Division to 255 (or 65535 if uint16) to scale the data to [0,1] range.\n"
+    elif biapy_cfg.DATA.NORMALIZATION.TYPE == "scale_range":
+        preproc_info = "- Scaling the range to [0-max] and then dividing by the maximum value of the data.\n"
+    elif biapy_cfg.DATA.NORMALIZATION.TYPE == "zero_mean_unit_variance":    
+        preproc_info = "- Zero mean and unit variance normalization. "
+        if biapy_cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.MEAN_VAL > 0:
+            preproc_info += f"Using provided mean value of {biapy_cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.MEAN_VAL}. "
+        else:
+            preproc_info += "Mean value calculated from the training data. "
+        if biapy_cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.STD_VAL > 0:
+            preproc_info += f"Using provided std value of {biapy_cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.STD_VAL}.\n"
+        else:
+            preproc_info += "Std value calculated from the training data.\n"
+
+    if biapy_cfg.DATA.NORMALIZATION.PERC_CLIP.ENABLE:
+        preproc_info += "- Percentile clipping. "
+        if biapy_cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_VALUE >= 0 and biapy_cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_VALUE >= 0:
+            preproc_info += f"Using provided lower and upper values of {biapy_cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_VALUE} and {biapy_cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_VALUE}, respectively, to clip the data before normalization.\n"
+        else:
+            preproc_info += f"Using provided lower and upper percentiles of {biapy_cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC} and {biapy_cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC}, respectively, to calculate the values to clip the data before normalization.\n"
+
+    if biapy_cfg.DATA.NORMALIZATION.MEASURE_BY == "image":
+        preproc_info += "- Normalization and percentile clipping values calculated from the complete image.\n"
+    else:
+        preproc_info += "- Normalization and percentile clipping values calculated from each patch.\n"
+ 
     try:
         with open(cfg_file, "r") as file:
             cfg_data = yaml.safe_load(file)
-        train_info = cfg_data["TRAIN"]
-        aug_info = cfg_data["AUGMENTOR"]
     except:
-        train_info = dict(biapy_cfg.TRAIN)
-        aug_info = dict(biapy_cfg.AUGMENTOR)
+        cfg_data = {}
 
-    def dict_to_str(cfg, message, spaces="  "):
-        for tparam, val in cfg.items():
-            if isinstance(val, CfgNode):
-                message += f"{spaces}{tparam}:\n"
-                message += dict_to_str(val, message, spaces + "  ")
-            else:
-                message += f"{spaces}{tparam}: {val}\n"
-        return message
-
-    train_params = dict_to_str(train_info, "")
-    aug_params = dict_to_str(aug_info, "")
+    cfg_data_mes = ""
+    if cfg_data != {}:
+        cfg_data_mes = yaml.safe_dump(
+            cfg_data,
+            sort_keys=False,           # keep insertion order
+            default_flow_style=False,  # block style (multi-line)
+            width=1000                 # avoid line wrapping
+        )
 
     message = ""
     message += f'# {bmz_cfg["model_name"]}\n'
     message += "\n"
     message += f"{task_description}.\n"
     message += "\n"
-    message += "## Training\n"
+    message += "## Training details\n"
     message += "\n"
-    message += f"Complete information on how to train this model can be found in BiaPy documentation, specifically under [{workflow_name.lower()} workflow](https://biapy.readthedocs.io/en/latest/workflows/{workflow_tag}.html) description.\n"
+    message += f"This model was trained using [BiaPy](https://biapyx.github.io/) [1]. Complete information on how to train this model can be found in BiaPy's documentation, specifically under [{workflow_name.lower()} workflow](https://biapy.readthedocs.io/en/latest/workflows/{workflow_tag}.html) description. If you want to reproduce this model training please use the configuration described below (Technical specification section).\n"
     message += "\n"
     message += "### Training Data\n"
     message += "\n"
     message += "- Imaging modality: {}\n".format(bmz_cfg["data"]["image_modality"])
     message += f"- Dimensionality: {biapy_cfg.PROBLEM.NDIM}\n"
-    message += "- Source: {} ; DOI:{}\n".format(bmz_cfg["data"]["name"], bmz_cfg["data"]["doi"])
+    message += "- Source: {} ; DOI: {}\n".format(bmz_cfg["data"]["name"], bmz_cfg["data"]["doi"])
     message += "\n"
-    message += "### Validation\n"
+    message += "### Training procedure\n"
+    message += "#### Preprocessing\n"
+    message += f"{preproc_info}"
+    message += "\n"
+    message += "## Evaluation\n"
+    message += "\n"
+    message += "### Metrics\n"
     message += "\n"
     message += f"In the case of {workflow_name.lower()} the following metrics are calculated:\n"
     message += f"{metrics_used}\n"
-    message += f"\nMore info in [BiaPy documentation](https://biapy.readthedocs.io/en/latest/workflows/{workflow_tag}.html#metrics).\n"
+    message += f"\nMore info in [BiaPy documentation](https://biapy.readthedocs.io/en/latest/workflows/{workflow_tag}.html#metrics)."
     message += "\n"
-    message += "### Training Schedule (BiaPy variables)\n"
-    message += "\n"
-    message += "#### Training setup\n"
-    message += "\n"
-    message += "TRAIN:\n"
-    message += f"{train_params}\n"
-    message += "#### Data augmentation\n"
-    message += "\n"
-    message += "AUGMENTOR:\n"
-    message += f"{aug_params}\n"
+    if workflow.test_metrics_message != "" or workflow.train_metrics_message != "":
+        message += "### Results\n"
+        if workflow.train_metrics_message != "":
+            message += "#### Training results\n"
+            if biapy_cfg.DATA.VAL.FROM_TRAIN:
+                if not biapy_cfg.DATA.VAL.CROSS_VAL:
+                    message += "The validation data was extracted from the training data using a split of {}%.\n".format(float(biapy_cfg.DATA.VAL.SPLIT_TRAIN*100))
+                else:
+                    message += "The validation data was extracted from the training data using cross-validation with {} folds. The fold chosen for this validation is {}.\n".format(int(biapy_cfg.DATA.VAL.CROSS_VAL_NFOLD), int(biapy_cfg.DATA.VAL.CROSS_VAL_FOLD))
+            else:
+                message += "The validation data was independent from the training data. Please take a look to the validation data path's in the configuration file used to train the model. Specifically to 'DATA.VAL.PATH' and 'DATA.VAL.GT_PATH' variables.\n"
+            message += "The final metrics obtained from the training phase are:\n"
+            for line in workflow.train_metrics_message.split("\n"):
+                if line.strip() != "":
+                    message += f"- {line}\n"
+        if workflow.test_metrics_message != "":
+            message += "#### Test results\n"
+            for line in workflow.test_metrics_message.split("\n"):
+                if line.strip() != "":
+                    message += f"- {line}\n"
+        message += "\n**Clarifications on the terminology:**\n"
+        if "merge patches" in workflow.test_metrics_message:
+            message += "As discussed in [2], it is common to divide the images into smaller patches for processing (and even more when working with 3D images). This approach can lead to discrepancies in metric calculations depending on whether they are computed on individual patches or on the reconstructed full images. To address this, we provide metrics calculated in different manners. Normally the metrics reported are 'merge patches'. Below are explanations for the terms used:\n"
+            message += "- Metrics labeled as 'per patch' are calculated on the patches extracted from the images\n"
+            message += "- Metrics labeled as 'merge patches' are calculated on the complete images after reconstructing them from the patches\n"
+        else: # full image case
+            message += "We provide metrics calculated in different manners. Below are explanations for the terms used:\n"
+            message += "- Metrics labeled as 'per image' are computed by feeding the complete images into the model and evaluating the predictions on the whole image\n"
+        if "as 3D stack" in workflow.test_metrics_message:
+            message += "- Metrics labeled as 'as 3D stack' are calculated on the complete 3D images reconstructed from 2D images\n"
+        if "post-processing" in workflow.test_metrics_message:
+            message += "- Metrics labeled as 'post-processing' are calculated after applying all the post-processings selected\n"
+        message += "\n"
+    if cfg_data_mes != "":
+        message += "## Technical specifications\n"
+        message += "This model was trained using BiaPy (v{}). To reproduce the results, make sure to install the same BiaPy version and run it ".format(biapy.__version__)
+        message += "with the configuration provided below. You will need to change the paths to the data accordingly.\n"
+        message += "```yaml\n"
+        message += "{}\n".format(cfg_data_mes)
+        message += "```\n"
+        message += "\n"
     message += "## Contact\n"
     message += "For problems with BiaPy library itself checkout our [FAQ & Troubleshooting section](https://biapy.readthedocs.io/en/latest/get_started/faq.html).\n"
     message += "\n"
@@ -476,7 +562,13 @@ def create_model_doc(
     message += "\n"
     message += "Model created by:\n"
     message += f"{author_mes}\n"
-
+    message += "\n"
+    message += "## References\n"
+    message += "> [1] Franco-Barranco, Daniel, et al. \"BiaPy: Accessible deep learning on bioimages.\" Nature Methods (2025): 1-3.\n"
+    message += "> \n"
+    message += "> [2] Franco-Barranco, Daniel, Arrate Muñoz-Barrutia, and Ignacio Arganda-Carreras. \"Stable deep neural network architectures for mitochondria segmentation on electron microscopy volumes.\" Neuroinformatics 20.2 (2022): 437-450.\n"
+    if biapy_cfg.PROBLEM.TYPE == "INSTANCE_SEG":
+        message += "> [3] Franco-Barranco, Daniel, et al. \"Current progress and challenges in large-scale 3d mitochondria instance segmentation.\" IEEE transactions on medical imaging 42.12 (2023): 3956-3971.\n"
     f = open(doc_output_path, "w")
     f.write(message)
     f.close()
