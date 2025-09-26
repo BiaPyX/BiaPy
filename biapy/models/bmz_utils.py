@@ -12,6 +12,7 @@ import os
 import re
 import biapy
 import yaml
+import time
 import numpy as np
 from typing import Tuple
 from packaging.version import Version
@@ -189,6 +190,9 @@ def create_model_cover(file_paths, out_path, patch_size=256, is_3d=False, workfl
             sample_list=[DataSample(fid=0, coords=None, img=np.expand_dims(mask[..., 0], -1) > 0.5)],
         )
         prob_map = calculate_volume_prob_map(quick_dataset, is_3d, 1, 0)[0]
+
+    # Randomize the seed to avoid always taking the same patch
+    np.random.seed(int(time.time_ns() % (2**32 - 1)))
     img, mask = random_crop_pair(img, mask, (patch_size, patch_size), img_prob=prob_map)  # type: ignore
 
     # If 3D just take middle slice.
