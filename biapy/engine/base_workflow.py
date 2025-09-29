@@ -541,6 +541,8 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.data_norm,
                 self.num_training_steps_per_epoch,
                 self.bmz_config["test_input"],
+                self.bmz_config["cover_raw"],
+                self.bmz_config["cover_gt"],
             ) = create_train_val_augmentors(
                 self.cfg,
                 X_train=self.X_train,
@@ -1101,7 +1103,7 @@ class Base_Workflow(metaclass=ABCMeta):
             print("############################")
             print("#  PREPARE TEST GENERATOR  #")
             print("############################")
-            (self.test_generator, self.data_norm, test_input) = create_test_generator(
+            (self.test_generator, self.data_norm, test_input, cover_raw, cover_gt) = create_test_generator(
                 self.cfg,
                 self.X_test,
                 self.Y_test,
@@ -1110,6 +1112,12 @@ class Base_Workflow(metaclass=ABCMeta):
             # Only save it if it was not done before
             if "test_input" not in self.bmz_config:
                 self.bmz_config["test_input"] = test_input
+
+            # Save the images prepared for the BMZ model cover
+            if "cover_raw" not in self.bmz_config:
+                self.bmz_config["cover_raw"] = cover_raw
+            if "cover_gt" not in self.bmz_config:
+                self.bmz_config["cover_gt"] = cover_gt
 
     def apply_model_activations(self, pred: torch.Tensor, training=False) -> torch.Tensor:
         """

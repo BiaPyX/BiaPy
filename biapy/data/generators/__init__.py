@@ -27,12 +27,11 @@ from biapy.data.generators.test_pair_data_generators import test_pair_data_gener
 from biapy.data.generators.test_single_data_generator import test_single_data_generator
 from biapy.data.generators.chunked_test_pair_data_generator import chunked_test_pair_data_generator
 from biapy.data.pre_processing import preprocess_data
-from biapy.data.data_manipulation import save_tif, extract_patch_within_image
-from biapy.data.dataset import BiaPyDataset, PatchCoords
+from biapy.data.data_manipulation import save_tif
+from biapy.data.dataset import BiaPyDataset
 from biapy.data.norm import Normalization
-from biapy.data.data_3D_manipulation import extract_patch_from_efficient_file
 from biapy.utils.misc import get_rank, get_world_size, is_dist_avail_and_initialized, os_walk_clean
-
+from biapy.models.bmz_utils import extract_BMZ_sample_and_cover
 
 def create_train_val_augmentors(
     cfg: CN,
@@ -366,19 +365,14 @@ def create_train_val_augmentors(
 
     # Save a sample to export the model to BMZ
     bmz_input_sample = None
-    if cfg.PROBLEM.TYPE in ["SEMANTIC_SEG", "INSTANCE_SEG", "DETECTION"]:
-        mask_in_image = []
-        for i in range(len(train_generator)):
-            bmz_input_sample, mask = train_generator.load_sample(i, first_load=True)
-            if len(mask_in_image) <= 100:
-               mask_in_image.append(np.count_nonzero(mask))
-            else:
-                break
-        max_index = int(np.argmax(np.array(mask_in_image)))
-        del mask
-        bmz_input_sample, _ = train_generator.load_sample(max_index, first_load=True)
-    else:
-        bmz_input_sample, _ = train_generator.load_sample(0, first_load=True)
+    bmz_input_sample, mask_sample = train_generator.load_sample(0, first_load=True)
+    bmz_input_sample, cover_raw, cover_gt = extract_BMZ_sample_and_cover(
+        img=bmz_input_sample,
+        img_gt=mask_sample,
+        patch_size=cfg.DATA.PATCH_SIZE,
+        is_3d=cfg.PROBLEM.NDIM == "3D",
+        input_axis_order=cfg.DATA.TRAIN.INPUT_IMG_AXES_ORDER,
+    ) 
     bmz_input_sample = bmz_input_sample.astype(np.float32)
 
     # Ensure dimensions
@@ -414,7 +408,7 @@ def create_train_val_augmentors(
         shuffle=False,
     )
 
-    return train_dataset, val_dataset, data_norm, num_training_steps_per_epoch, bmz_input_sample
+    return train_dataset, val_dataset, data_norm, num_training_steps_per_epoch, bmz_input_sample, cover_raw, cover_gt
 
 
 def create_test_generator(
@@ -496,84 +490,16 @@ def create_test_generator(
     test_generator = gen_name(**dic)
     data_norm = test_generator.get_data_normalization()
 
-    def _prep_test_sample(mask: Any) -> NDArray:
-        if isinstance(mask, np.ndarray):
-            mask = mask.squeeze()
-            dims = 2 if cfg.PROBLEM.NDIM == "2D" else 3
-            if dims == 2:
-                H, W = mask.shape
-                ph, pw = cfg.DATA.PATCH_SIZE[-3], cfg.DATA.PATCH_SIZE[-2]
-
-                coords = np.argwhere(mask > 0)
-                if coords.size == 0:
-                    raise ValueError("Mask is empty!")
-
-                ymin, xmin = coords.min(axis=0)
-                ymax, xmax = coords.max(axis=0)
-
-                y_center = (ymin + ymax) // 2
-                x_center = (xmin + xmax) // 2
-
-                y_start = max(0, min(H - ph, y_center - ph // 2))
-                x_start = max(0, min(W - pw, x_center - pw // 2))
-            elif dims == 3:
-                D, H, W = mask.shape
-                pd, ph, pw = cfg.DATA.PATCH_SIZE[0], cfg.DATA.PATCH_SIZE[-3], cfg.DATA.PATCH_SIZE[-2]
-
-                coords = np.argwhere(mask > 0)
-                if coords.size == 0:
-                    raise ValueError("Mask is empty!")
-
-                zmin, ymin, xmin = coords.min(axis=0)
-                zmax, ymax, xmax = coords.max(axis=0)
-
-                z_center = (zmin + zmax) // 2
-                y_center = (ymin + ymax) // 2
-                x_center = (xmin + xmax) // 2
-                center_slice = cfg.DATA.PATCH_SIZE[0] // 2 if cfg.DATA.PATCH_SIZE[0] % 2 == 0 else None
-                # Handle depth placement
-                if center_slice is None:
-                    z_start = z_center - pd // 2
-                else:
-                    z_start = z_center - center_slice
-                z_start = max(0, min(D - pd, z_start))
-                y_start = max(0, min(H - ph, y_center - ph // 2))
-                x_start = max(0, min(W - pw, x_center - pw // 2))
-
-            # Ensure a patch size
-            patch = PatchCoords(
-                z_start=z_start if cfg.PROBLEM.NDIM == "3D" else None,
-                z_end=z_start+cfg.DATA.PATCH_SIZE[0] if cfg.PROBLEM.NDIM == "3D" else None,
-                y_start=y_start,
-                y_end=y_start+cfg.DATA.PATCH_SIZE[-3],
-                x_start=x_start,
-                x_end=x_start+cfg.DATA.PATCH_SIZE[-2],
-            )
-            mask = extract_patch_within_image(
-                mask, patch, is_3d=True if cfg.PROBLEM.NDIM == "3D" else False
-            )
-        else:
-            # TODO: take a patch ensuring that it contains mask
-            patch = PatchCoords(
-                z_start=0 if cfg.PROBLEM.NDIM == "3D" else None,
-                z_end=0+cfg.DATA.PATCH_SIZE[0] if cfg.PROBLEM.NDIM == "3D" else None,
-                y_start=0,
-                y_end=0+cfg.DATA.PATCH_SIZE[-3],
-                x_start=0,
-                x_end=0+cfg.DATA.PATCH_SIZE[-2],
-            )
-            mask = extract_patch_from_efficient_file(
-                mask, patch, data_axes_order=cfg.DATA.TEST.INPUT_IMG_AXES_ORDER,
-            )
-        mask = mask.astype(np.float32)
-        if (dims == 2 and mask.ndim == 2) or (dims == 3 and mask.ndim == 3):
-            mask = np.expand_dims(mask, -1)
-        return mask
-
     # Save a sample to export the model to BMZ
     bmz_input_sample = None
-    bmz_input_sample, _, _, _, _ = test_generator.load_sample(0, first_load=True)
-    bmz_input_sample = _prep_test_sample(bmz_input_sample)
+    bmz_input_sample, mask_sample, _, _, _ = test_generator.load_sample(0, first_load=True)
+    bmz_input_sample, cover_raw, cover_gt = extract_BMZ_sample_and_cover(
+        img=bmz_input_sample,
+        img_gt=mask_sample,
+        patch_size=cfg.DATA.PATCH_SIZE,
+        is_3d=cfg.PROBLEM.NDIM == "3D",
+        input_axis_order=cfg.DATA.TEST.INPUT_IMG_AXES_ORDER,
+    ) 
 
     # Ensure dimensions
     if cfg.PROBLEM.NDIM == "2D":
@@ -585,7 +511,7 @@ def create_test_generator(
             bmz_input_sample = np.expand_dims(bmz_input_sample, 0)
         bmz_input_sample = bmz_input_sample.transpose(0, 4, 1, 2, 3)  # Numpy -> Torch
 
-    return test_generator, data_norm, bmz_input_sample
+    return test_generator, data_norm, bmz_input_sample, cover_raw, cover_gt
 
 def by_chunks_collate_fn(data):
     """

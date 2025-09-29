@@ -12,13 +12,11 @@ import os
 import re
 import biapy
 import yaml
-import time
 import numpy as np
-from typing import Tuple
+from typing import Any, Tuple
 from packaging.version import Version
-from yacs.config import CfgNode
 from skimage.transform import resize
-from yacs.config import CfgNode as CN
+from numpy.typing import NDArray
 
 from bioimageio.spec.model.v0_4 import ModelDescr as ModelDescr_v0_4
 from bioimageio.spec.model.v0_5 import ModelDescr as ModelDescr_v0_5
@@ -30,11 +28,9 @@ from bioimageio.spec.model.v0_5 import (
 )
 from bioimageio.spec.utils import download
 
-from biapy.data.pre_processing import calculate_volume_prob_map
-from biapy.data.data_manipulation import read_img_as_ndarray, imwrite, reduce_dtype
-from biapy.data.generators.augmentors import random_crop_pair
-from biapy.data.dataset import BiaPyDataset, DataSample, DatasetFile
-
+from biapy.data.data_manipulation import imwrite, reduce_dtype, extract_patch_within_image
+from biapy.data.dataset import PatchCoords
+from biapy.data.data_3D_manipulation import extract_patch_from_efficient_file
 
 def get_bmz_model_info(
     model: ModelDescr_v0_4 | ModelDescr_v0_5, spec_version: Version = Version("0.4.0")
@@ -136,17 +132,160 @@ def create_environment_file_for_model(building_dir):
 
     return env_file
 
-
-def create_model_cover(file_paths, out_path, patch_size=256, is_3d=False, workflow="semantic-segmentation"):
+def extract_BMZ_sample_and_cover(
+    img: Any, 
+    img_gt: Any, 
+    patch_size=[256,256,1], 
+    is_3d=False, 
+    input_axis_order: str = "ZYXC"
+) -> NDArray:
     """
-    Create a cover based on the files that will be read from ``file_paths``.
+    Extract a sample patch from the input image and its corresponding img_gt.
 
     Parameters
     ----------
-    file_paths : dict
-        Contains information about the input/output images to read. It must have the following keys:
-            * ``"input"`` (str): path to the input image to be loaded
-            * ``"output"`` (str): path to the output image to be loaded
+    img : Any
+        The input image from which to extract the patch.
+
+    img_gt : Any
+        The img_gt corresponding to the input image.
+
+    patch_size : list, optional
+        The size of the patch to extract (default is [256,256,1]).
+
+    is_3d : bool, optional
+        Whether the input is 3D (default is False).
+
+    input_axis_order : str, optional
+        The axis order for the input data (default is "ZYXC").
+
+    Returns
+    -------
+    rimg : NDArray
+        The extracted image patch. Shape will be (H, W, C) for 2D or (D, H, W, C) for 3D.
+
+    cover_raw : NDArray
+        The raw image cover (2D slice). Shape will be (H, W, C).
+
+    cover_gt : NDArray
+        The ground truth img_gt cover (2D slice). Shape will be (H, W, C).
+    """
+    if isinstance(img_gt, np.ndarray):
+        dims = 2 if not is_3d else 3
+        if dims == 2:
+            H, W, C = img_gt.shape
+            ph, pw = patch_size[0], patch_size[1]
+            coords = np.argwhere(img_gt)
+            ymin, xmin = coords.min(axis=0)
+            ymax, xmax = coords.max(axis=0)
+            y_center = (ymin + ymax) // 2
+            x_center = (xmin + xmax) // 2
+
+            y_start = max(0, min(H - ph, y_center - ph // 2))
+            x_start = max(0, min(W - pw, x_center - pw // 2))
+        elif dims == 3:
+            D, H, W, C = img_gt.shape
+            pd, ph, pw = patch_size[0], patch_size[1], patch_size[2]
+
+            img_gt2d_per_slice = [img_gt[z].any(axis=-1) for z in range(D)]
+            slice_counts = [np.count_nonzero(m) for m in img_gt2d_per_slice]
+
+            best_slice = np.argmax(slice_counts)
+            m2d = img_gt2d_per_slice[best_slice]
+            if slice_counts[best_slice] == 0:
+                # Entire img_gt empty -> fall back to volume center
+                y_center, x_center = H // 2, W // 2
+            else:
+                coords = np.argwhere(m2d)
+                ymin, xmin = coords.min(axis=0)
+                ymax, xmax = coords.max(axis=0)
+                y_center = (ymin + ymax) // 2
+                x_center = (xmin + xmax) // 2
+                
+            # Depth placement centered around best_slice, bounded
+            half_pd = pd // 2
+            z_end = min(D, best_slice + half_pd)
+            z_center = z_end - half_pd
+            z_start = z_center - half_pd  # works for even/odd since half_pd is floor
+            z_start = max(0, min(D - pd, z_start))
+
+            # In-plane placement, bounded
+            y_start = max(0, min(H - ph, y_center - ph // 2))
+            x_start = max(0, min(W - pw, x_center - pw // 2))
+
+            # If you need a guaranteed fixed-size patch, add optional padding:
+            need_pad_z = max(0, (z_start + pd) - D)
+            need_pad_y = max(0, (y_start + ph) - H)
+            need_pad_x = max(0, (x_start + pw) - W)
+
+            if any((need_pad_z, need_pad_y, need_pad_x)):
+                # pad at the end so slicing yields exact size
+                pad_width = (
+                    (0, need_pad_z),
+                    (0, need_pad_y),
+                    (0, need_pad_x),
+                    (0, 0),
+                )
+                img_gt = np.pad(img_gt, pad_width, mode="constant", constant_values=0)
+            else:
+                img_gt = img_gt
+
+        # Ensure a patch size
+        patch = PatchCoords(
+            z_start=z_start if is_3d else None,
+            z_end=z_start+patch_size[0] if is_3d else None,
+            y_start=y_start,
+            y_end=y_start+patch_size[-3],
+            x_start=x_start,
+            x_end=x_start+patch_size[-2],
+        )
+        rimg = extract_patch_within_image(
+            img, patch, is_3d=True if is_3d else False
+        )
+        rimg_gt = extract_patch_within_image(
+            img_gt, patch, is_3d=True if is_3d else False
+        )
+        if is_3d:
+            cover_raw = rimg[best_slice-z_start].copy()
+            cover_gt = rimg_gt[best_slice-z_start].copy()
+        else:
+            cover_raw = rimg.copy()
+            cover_gt = rimg_gt.copy()
+    else:
+        # TODO: take a patch ensuring that it contains img_gt
+        patch = PatchCoords(
+            z_start=0 if is_3d else None,
+            z_end=0+patch_size[0] if is_3d else None,
+            y_start=0,
+            y_end=0+patch_size[-3],
+            x_start=0,
+            x_end=0+patch_size[-2],
+        )
+        rimg = extract_patch_from_efficient_file(
+            img, patch, data_axes_order=input_axis_order,
+        )
+        rimg_gt = extract_patch_from_efficient_file(
+            img_gt, patch, data_axes_order=input_axis_order,
+        )
+        if is_3d:
+            cover_raw = rimg[rimg.shape[0] // 2].copy()
+            cover_gt = rimg_gt[rimg_gt.shape[0] // 2].copy()
+        else:
+            cover_raw = rimg.copy()
+            cover_gt = rimg_gt.copy()
+
+    rimg = rimg.astype(np.float32)
+    if (dims == 2 and rimg.ndim == 2) or (dims == 3 and rimg.ndim == 3):
+        rimg = np.expand_dims(rimg, -1)
+
+    return rimg, cover_raw, cover_gt
+
+def create_model_cover(img, img_gt, out_path, patch_size=256, is_3d=False, workflow="semantic-segmentation"):
+    """
+    Create a cover based on the files that will be read from ``file_pointers``.
+
+    Parameters
+    ----------
 
     out_path : str
         Directory to save the cover.
@@ -177,29 +316,11 @@ def create_model_cover(file_paths, out_path, patch_size=256, is_3d=False, workfl
         "classification",
         "image-to-image",
     ]
-    assert "input" in file_paths
-    assert "output" in file_paths
-    img = read_img_as_ndarray(str(file_paths["input"]), is_3d=is_3d)
-    mask = read_img_as_ndarray(str(file_paths["output"]), is_3d=is_3d)
-
-    # Take a random patch from the image
-    prob_map = None
-    if workflow in ["semantic-segmentation", "instance-segmentation", "detection"]:
-        quick_dataset = BiaPyDataset(
-            dataset_info=[DatasetFile(str(file_paths["output"]))],
-            sample_list=[DataSample(fid=0, coords=None, img=np.expand_dims(mask[..., 0], -1) > 0.5)],
-        )
-        prob_map = calculate_volume_prob_map(quick_dataset, is_3d, 1, 0)[0]
-
-    # Randomize the seed to avoid always taking the same patch
-    np.random.seed(int(time.time_ns() % (2**32 - 1)))
-    img, mask = random_crop_pair(img, mask, (patch_size, patch_size), img_prob=prob_map)  # type: ignore
-
     # If 3D just take middle slice.
     if is_3d and img.ndim == 4:
         img = img[img.shape[0] // 2]
-    if is_3d and mask.ndim == 4:
-        mask = mask[mask.shape[0] // 2]
+    if is_3d and img_gt.ndim == 4:
+        img_gt = img_gt[img_gt.shape[0] // 2]
 
     # Convert to RGB
     if img.shape[-1] == 1:
@@ -212,48 +333,48 @@ def create_model_cover(file_paths, out_path, patch_size=256, is_3d=False, workfl
     # Resize the images if neccesary
     if img.shape[:-1] != (patch_size, patch_size):
         img = resize(img, (patch_size, patch_size), order=1, clip=True, preserve_range=True, anti_aliasing=True)
-    if mask.shape[:-1] != (patch_size, patch_size):
+    if img_gt.shape[:-1] != (patch_size, patch_size):
         order = 1 if workflow in ["super-resolution", "image-to-image", "denoising", "self-supervised"] else 0
-        mask = resize(mask, (patch_size, patch_size), order=order, clip=True, preserve_range=True, anti_aliasing=True)
+        img_gt = resize(img_gt, (patch_size, patch_size), order=order, clip=True, preserve_range=True, anti_aliasing=True)
 
     # Normalization
     img = reduce_dtype(img, img.min(), img.max(), out_min=0, out_max=255, out_type="uint8")
     if workflow in ["super-resolution", "image-to-image", "denoising", "self-supervised"]:
-        # Normalize mask, as in this workflow case it is also a raw image
-        mask = reduce_dtype(mask, mask.min(), mask.max(), out_min=0, out_max=255, out_type="uint8")
+        # Normalize img_gt, as in this workflow case it is also a raw image
+        img_gt = reduce_dtype(img_gt, img_gt.min(), img_gt.max(), out_min=0, out_max=255, out_type="uint8")
 
-    # Same procedure with the mask in those workflows where the target is also an image
+    # Same procedure with the img_gt in those workflows where the target is also an image
     if workflow in ["super-resolution", "image-to-image", "denoising", "self-supervised"]:
         # Convert to RGB
-        if mask.shape[-1] == 1:
-            mask = np.stack((mask[..., 0],) * 3, axis=-1)
-        elif mask.shape[-1] == 2:
-            mask = np.stack((np.zeros(mask.shape, dtype=mask.dtype), mask), axis=-1)
-        elif mask.shape[-1] > 3:
-            mask = mask[..., :3]
+        if img_gt.shape[-1] == 1:
+            img_gt = np.stack((img_gt[..., 0],) * 3, axis=-1)
+        elif img_gt.shape[-1] == 2:
+            img_gt = np.stack((np.zeros(img_gt.shape, dtype=img_gt.dtype), img_gt), axis=-1)
+        elif img_gt.shape[-1] > 3:
+            img_gt = img_gt[..., :3]
 
-        # Create cover with image and mask side-by-side
+        # Create cover with image and img_gt side-by-side
         out = np.ones((patch_size, patch_size * 2, 3), dtype=img.dtype)
         out[:, :patch_size] = img.copy()
-        out[:, patch_size:] = mask.copy()
+        out[:, patch_size:] = img_gt.copy()
     else:
-        if mask.max() <= 1:
-            mask = (mask * 255).astype(np.uint8)
+        if img_gt.max() <= 1:
+            img_gt = (img_gt * 255).astype(np.uint8)
 
-        # Create cover with image and mask split by the diagonal
-        if mask.shape[-1] == 1:
+        # Create cover with image and img_gt split by the diagonal
+        if img_gt.shape[-1] == 1:
             out = np.ones(img.shape, dtype="uint8")
             for c in range(img.shape[-1]):
                 outc = np.tril(img[..., c])
-                mask_tril = outc == 0
-                outc[mask_tril] = np.triu(mask[..., 0])[mask_tril]
+                img_gt_tril = outc == 0
+                outc[img_gt_tril] = np.triu(img_gt[..., 0])[img_gt_tril]
                 out[..., c] = outc
         else:
-            # Create cover with image and mask side-by-side considering all channels of the mask
-            out = np.ones((patch_size, patch_size * (mask.shape[-1] + 1), 3), dtype=img.dtype)
+            # Create cover with image and img_gt side-by-side considering all channels of the img_gt
+            out = np.ones((patch_size, patch_size * (img_gt.shape[-1] + 1), 3), dtype=img.dtype)
             out[:, :patch_size] = img.copy()
-            for c in range(mask.shape[-1]):
-                out[:, patch_size * (c + 1) : patch_size * (c + 2)] = np.stack((mask[..., c],) * 3, axis=-1)
+            for c in range(img_gt.shape[-1]):
+                out[:, patch_size * (c + 1) : patch_size * (c + 2)] = np.stack((img_gt[..., c],) * 3, axis=-1)
 
     # Save the cover
     os.makedirs(out_path, exist_ok=True)

@@ -554,6 +554,16 @@ class BiaPy:
             if "covers" in bmz_cfg:
                 if not isinstance(bmz_cfg["covers"], list):
                     raise ValueError("'bmz_cfg['covers']' needs to be a list containing strings.")
+            else:
+                if (
+                    "cover_raw" not in self.workflow.bmz_config 
+                    or self.workflow.bmz_config["cover_raw"] is None 
+                    or "cover_gt" not in self.workflow.bmz_config 
+                    or self.workflow.bmz_config["cover_gt"] is None
+                ):
+                    raise ValueError(
+                        "There is no information about covers. You can: 1) provide it using bmz_config['covers'] or run the training phase, by calling train() or run_job() functions, so a cover can be generated."
+                    )
 
         # Preprocessing
         # Actually Torchvision has its own preprocessing but it can not be adapted to BMZ easily, so for now
@@ -652,7 +662,6 @@ class BiaPy:
         os.makedirs(building_dir, exist_ok=True)
         test_input_path = os.path.join(building_dir, "test-input.npy")
         test_output_path = os.path.join(building_dir, "test-output.npy")
-        file_paths = {}
         if not reuse_original_bmz_config:
             test_input = (
                 self.workflow.bmz_config["test_input"] if "test_input" not in bmz_cfg else bmz_cfg["test_input"]
@@ -682,7 +691,6 @@ class BiaPy:
                 preprocessing=preprocessing,  # type: ignore
             )
             inputs = [input_descr]
-            file_paths["input"] = Path(test_input_path)
 
             test_output = (
                 self.workflow.bmz_config["test_output"] if "test_output" not in bmz_cfg else bmz_cfg["test_output"]
@@ -712,7 +720,6 @@ class BiaPy:
                 postprocessing=postprocessing,
             )
             outputs = [output_descr]
-            file_paths["output"] = Path(test_output_path)
         else:
             inputs = []
             for i, input in enumerate(self.workflow.bmz_config["original_bmz_config"].inputs):
@@ -759,18 +766,8 @@ class BiaPy:
                         preprocessing=preprocessing,  # type: ignore
                     )
                     inputs.append(input_descr)
-                    if i == 0:
-                        file_paths["input"] = Path(test_tensor_local_path)
                 else:
                     inputs.append(input)
-                    if i == 0:
-                        try:
-                            file_paths["input"] = input.sample_tensor.download().path  # type: ignore
-                        except:
-                            try:
-                                file_paths["input"] = input.test_tensor.download().path
-                            except:
-                                pass
 
             outputs = []
             for i, output in enumerate(self.workflow.bmz_config["original_bmz_config"].outputs):
@@ -817,18 +814,8 @@ class BiaPy:
                         postprocessing=postprocessing,
                     )
                     outputs.append(output_descr)
-                    if i == 0:
-                        file_paths["output"] = Path(test_tensor_local_path)
                 else:
                     outputs.append(output)
-                    if i == 0:
-                        try:
-                            file_paths["output"] = output.sample_tensor.download().path  # type: ignore
-                        except:
-                            try:
-                                file_paths["output"] = output.test_tensor.download().path
-                            except:
-                                pass
 
         # Name of the model
         if not reuse_original_bmz_config:
@@ -968,7 +955,11 @@ class BiaPy:
             covers = self.workflow.bmz_config["original_bmz_config"].covers
         else:  # create_model_cover
             cover_path = create_model_cover(
-                file_paths, building_dir, is_3d=self.cfg.PROBLEM.NDIM == "3D", workflow=workflow
+                self.workflow.bmz_config["cover_raw"], 
+                self.workflow.bmz_config["cover_gt"], 
+                building_dir, 
+                is_3d=self.cfg.PROBLEM.NDIM == "3D", 
+                workflow=workflow,
             )
             covers.append(Path(cover_path))
 
