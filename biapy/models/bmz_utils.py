@@ -176,8 +176,8 @@ def extract_BMZ_sample_and_cover(
             H, W, C = img_gt.shape
             ph, pw = patch_size[0], patch_size[1]
             coords = np.argwhere(img_gt)
-            ymin, xmin = coords.min(axis=0)
-            ymax, xmax = coords.max(axis=0)
+            ymin, xmin, _ = coords.min(axis=0)
+            ymax, xmax, _ = coords.max(axis=0)
             y_center = (ymin + ymax) // 2
             x_center = (xmin + xmax) // 2
 
@@ -187,18 +187,16 @@ def extract_BMZ_sample_and_cover(
             D, H, W, C = img_gt.shape
             pd, ph, pw = patch_size[0], patch_size[1], patch_size[2]
 
-            img_gt2d_per_slice = [img_gt[z].any(axis=-1) for z in range(D)]
-            slice_counts = [np.count_nonzero(m) for m in img_gt2d_per_slice]
-
+            slice_counts = [np.count_nonzero(img_gt[z]) for z in range(D)]
             best_slice = np.argmax(slice_counts)
-            m2d = img_gt2d_per_slice[best_slice]
+            m2d = img_gt[best_slice]
             if slice_counts[best_slice] == 0:
                 # Entire img_gt empty -> fall back to volume center
                 y_center, x_center = H // 2, W // 2
             else:
                 coords = np.argwhere(m2d)
-                ymin, xmin = coords.min(axis=0)
-                ymax, xmax = coords.max(axis=0)
+                ymin, xmin, _ = coords.min(axis=0)
+                ymax, xmax, _ = coords.max(axis=0)
                 y_center = (ymin + ymax) // 2
                 x_center = (xmin + xmax) // 2
                 
@@ -212,23 +210,6 @@ def extract_BMZ_sample_and_cover(
             # In-plane placement, bounded
             y_start = max(0, min(H - ph, y_center - ph // 2))
             x_start = max(0, min(W - pw, x_center - pw // 2))
-
-            # If you need a guaranteed fixed-size patch, add optional padding:
-            need_pad_z = max(0, (z_start + pd) - D)
-            need_pad_y = max(0, (y_start + ph) - H)
-            need_pad_x = max(0, (x_start + pw) - W)
-
-            if any((need_pad_z, need_pad_y, need_pad_x)):
-                # pad at the end so slicing yields exact size
-                pad_width = (
-                    (0, need_pad_z),
-                    (0, need_pad_y),
-                    (0, need_pad_x),
-                    (0, 0),
-                )
-                img_gt = np.pad(img_gt, pad_width, mode="constant", constant_values=0)
-            else:
-                img_gt = img_gt
 
         # Ensure a patch size
         patch = PatchCoords(
