@@ -1072,10 +1072,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 mask = np.concatenate(new_mask, axis=-1)
             del new_mask
 
-            o_heat_shape = heat.shape
-            if self.ndim == 3:
-                heat = heat.reshape(heat.shape[: (self.ndim - 1)] + (heat.shape[2] * heat.shape[3],))
-
         # Save shape
         o_img_shape = image.shape
         o_mask_shape = mask.shape
@@ -1131,7 +1127,12 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             if e_mask is not None:
                 e_mask = e_mask.reshape(e_mask.shape[:2] + (e_mask.shape[2] * e_mask.shape[3],))
             # if e_heat: e_heat = e_heat.reshape(e_heat.shape[:2]+(e_heat.shape[2]*e_heat.shape[3],))
-        
+
+            if heat is not None:
+                o_heat_shape = heat.shape
+                heat = heat.reshape(heat.shape[: (self.ndim - 1)] + (heat.shape[2] * heat.shape[3],))
+                assert heat.ndim == 3, f"Heat must be 3D, got {heat.ndim}D"
+
         # Apply cblur
         if self.cutblur and random.uniform(0, 1) < self.da_prob:
             image = cutblur(image, self.cblur_size, self.cblur_down_range, self.cblur_inside)
