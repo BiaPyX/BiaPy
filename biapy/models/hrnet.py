@@ -211,7 +211,7 @@ class HighResolutionNet(nn.Module):
             self.stage4_cfg, num_channels, multi_scale_output=True, norm=normalization, mpool=mpool
         )
 
-        in_channels = 720  # 48 + 96 + 192 + 384
+        in_channels = sum(self.stage4_cfg["NUM_CHANNELS"])
         if self.contrast:
             # extra added layers    
             self.last_block = nn.Sequential(
