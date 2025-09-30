@@ -1103,7 +1103,13 @@ class Base_Workflow(metaclass=ABCMeta):
             print("############################")
             print("#  PREPARE TEST GENERATOR  #")
             print("############################")
-            (self.test_generator, self.data_norm, test_input, cover_raw, cover_gt) = create_test_generator(
+            (
+                self.test_generator, 
+                self.data_norm, 
+                test_input, 
+                self.bmz_config["cover_raw"], 
+                self.bmz_config["cover_gt"]
+            ) = create_test_generator(
                 self.cfg,
                 self.X_test,
                 self.Y_test,
@@ -1112,12 +1118,6 @@ class Base_Workflow(metaclass=ABCMeta):
             # Only save it if it was not done before
             if "test_input" not in self.bmz_config:
                 self.bmz_config["test_input"] = test_input
-
-            # Save the images prepared for the BMZ model cover
-            if "cover_raw" not in self.bmz_config:
-                self.bmz_config["cover_raw"] = cover_raw
-            if "cover_gt" not in self.bmz_config:
-                self.bmz_config["cover_gt"] = cover_gt
 
     def apply_model_activations(self, pred: torch.Tensor, training=False) -> torch.Tensor:
         """
@@ -1624,7 +1624,11 @@ class Base_Workflow(metaclass=ABCMeta):
 
         # Save output
         _prepare_bmz_sample("test_output", pred.clone().cpu().detach().numpy().astype(np.float32), apply_norm=False)
-
+        if "cover_gt" not in self.bmz_config or ("cover_gt" in self.bmz_config and self.bmz_config["cover_gt"] is None):
+            self.bmz_config["cover_gt"] = self.bmz_config["test_output"].copy().transpose(0, *range(2, self.bmz_config["test_output"].ndim), 1)
+            if self.cfg.DATA.N_CLASSES > 2 and self.cfg.PROBLEM.TYPE == "SEMANTIC_SEG":
+                self.bmz_config["cover_gt"] = np.expand_dims(np.argmax(self.bmz_config["cover_gt"], -1), -1)
+            
         self.bmz_config["postprocessing"] = []
         if self.cfg.MODEL.SOURCE == "biapy":
             # Check activations to be inserted as postprocessing in BMZ

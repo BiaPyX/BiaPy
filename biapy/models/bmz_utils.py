@@ -170,12 +170,15 @@ def extract_BMZ_sample_and_cover(
     cover_gt : NDArray
         The ground truth img_gt cover (2D slice). Shape will be (H, W, C).
     """
-    if isinstance(img_gt, np.ndarray):
+    cover_raw, cover_gt = None, None
+    ref_img = img_gt if img_gt is not None else img
+
+    if isinstance(ref_img, np.ndarray):
         dims = 2 if not is_3d else 3
         if dims == 2:
-            H, W, C = img_gt.shape
+            H, W, C = ref_img.shape
             ph, pw = patch_size[0], patch_size[1]
-            coords = np.argwhere(img_gt)
+            coords = np.argwhere(ref_img)
             ymin, xmin, _ = coords.min(axis=0)
             ymax, xmax, _ = coords.max(axis=0)
             y_center = (ymin + ymax) // 2
@@ -184,14 +187,14 @@ def extract_BMZ_sample_and_cover(
             y_start = max(0, min(H - ph, y_center - ph // 2))
             x_start = max(0, min(W - pw, x_center - pw // 2))
         elif dims == 3:
-            D, H, W, C = img_gt.shape
+            D, H, W, C = ref_img.shape
             pd, ph, pw = patch_size[0], patch_size[1], patch_size[2]
 
-            slice_counts = [np.count_nonzero(img_gt[z]) for z in range(D)]
+            slice_counts = [np.count_nonzero(ref_img[z]) for z in range(D)]
             best_slice = np.argmax(slice_counts)
-            m2d = img_gt[best_slice]
+            m2d = ref_img[best_slice]
             if slice_counts[best_slice] == 0:
-                # Entire img_gt empty -> fall back to volume center
+                # Entire ref_img empty -> fall back to volume center
                 y_center, x_center = H // 2, W // 2
             else:
                 coords = np.argwhere(m2d)
@@ -223,15 +226,18 @@ def extract_BMZ_sample_and_cover(
         rimg = extract_patch_within_image(
             img, patch, is_3d=True if is_3d else False
         )
-        rimg_gt = extract_patch_within_image(
-            img_gt, patch, is_3d=True if is_3d else False
-        )
+        if img_gt is not None:
+            rimg_gt = extract_patch_within_image(
+                img_gt, patch, is_3d=True if is_3d else False
+            )
         if is_3d:
             cover_raw = rimg[best_slice-z_start].copy()
-            cover_gt = rimg_gt[best_slice-z_start].copy()
+            if img_gt is not None:
+                cover_gt = rimg_gt[best_slice-z_start].copy()
         else:
             cover_raw = rimg.copy()
-            cover_gt = rimg_gt.copy()
+            if img_gt is not None:
+                cover_gt = rimg_gt.copy()
     else:
         # TODO: take a patch ensuring that it contains img_gt
         patch = PatchCoords(
@@ -245,15 +251,18 @@ def extract_BMZ_sample_and_cover(
         rimg = extract_patch_from_efficient_file(
             img, patch, data_axes_order=input_axis_order,
         )
-        rimg_gt = extract_patch_from_efficient_file(
-            img_gt, patch, data_axes_order=input_axis_order,
-        )
+        if img_gt is not None:
+            rimg_gt = extract_patch_from_efficient_file(
+                img_gt, patch, data_axes_order=input_axis_order,
+            )   
         if is_3d:
             cover_raw = rimg[rimg.shape[0] // 2].copy()
-            cover_gt = rimg_gt[rimg_gt.shape[0] // 2].copy()
+            if img_gt is not None:
+                cover_gt = rimg_gt[rimg_gt.shape[0] // 2].copy()
         else:
             cover_raw = rimg.copy()
-            cover_gt = rimg_gt.copy()
+            if img_gt is not None:
+                cover_gt = rimg_gt.copy()
 
     rimg = rimg.astype(np.float32)
     if (dims == 2 and rimg.ndim == 2) or (dims == 3 and rimg.ndim == 3):
