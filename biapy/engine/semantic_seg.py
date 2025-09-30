@@ -11,7 +11,7 @@ import numpy as np
 from skimage.transform import resize
 from typing import Dict, Optional
 from numpy.typing import NDArray
-
+from skimage.filters import threshold_otsu
 
 from biapy.data.post_processing.post_processing import apply_binary_mask
 from biapy.engine.base_workflow import Base_Workflow
@@ -385,7 +385,8 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         """
         # Save simple binarization of predictions
         if self.cfg.DATA.N_CLASSES <= 2:
-            pred = (pred > 0.5).astype(np.uint8)
+            th = threshold_otsu(pred)
+            pred = (pred > th).astype(np.uint8)
         save_tif(
             pred,
             self.cfg.PATHS.RESULT_DIR.PER_IMAGE_BIN,
