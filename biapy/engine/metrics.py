@@ -296,6 +296,8 @@ class multiple_metrics:
                 ).to(self.device, non_blocking=True)
             elif "L1" in metric_names[i]:
                 loss_func = torch.nn.L1Loss()
+            else:
+                raise ValueError(f"Metric {metric_names[i]} not recognized.")
 
             self.metric_func.append(loss_func)
 
@@ -430,8 +432,10 @@ class CrossEntropyLoss_wrapper:
         ndim: int = 2,
         multihead: bool = False,
         model_source: str = "biapy",
-        class_rebalance: bool = False,
+        class_rebalance: str = "none",
+        class_weights: List[float] = [],
         ignore_index: int = -1,
+        device=None,
     ):
         """
         Initialize wrapper to Pytorch's CrossEntropyLoss.
@@ -450,24 +454,33 @@ class CrossEntropyLoss_wrapper:
         model_source : str, optional
             Source of the model. It can be "biapy", "bmz" or "torchvision".
 
-        class_rebalance: bool, optional
-            Whether to reweight classes (inside loss function) or not.
+        class_rebalance: str, optional
+            Whether to reweight classes (inside loss function) or not. Options are: "none", "auto" and "manual".
 
         ignore_index : int, optional
             Value to ignore in the loss calculation. If not provided, no value will be ignored.
+        
+        device : Torch device, optional
+            Using device. Most commonly "cpu" or "cuda" for GPU, but also potentially "mps".
         """
         self.ndim = ndim
         self.model_source = model_source
         self.multihead = multihead
         self.num_classes = num_classes
         self.class_rebalance = class_rebalance
+        self.class_weights = None
         self.ignore_index = ignore_index if ignore_index != -1 else -100  # Default ignore index for CrossEntropyLoss
+        self.device = device if device is not None else torch.device("cpu")
+
+        if self.class_rebalance == "manual":
+            self.class_weights = torch.tensor(class_weights, device=device)
 
         if num_classes <= 2:
             self.loss = torch.nn.BCEWithLogitsLoss()
         else:
-            self.loss = torch.nn.CrossEntropyLoss(ignore_index=self.ignore_index)
-        self.class_channel_loss = torch.nn.CrossEntropyLoss(ignore_index=self.ignore_index)
+            self.loss = torch.nn.CrossEntropyLoss(ignore_index=self.ignore_index, weight=self.class_weights)
+        if self.multihead:
+            self.class_channel_loss = torch.nn.CrossEntropyLoss(ignore_index=self.ignore_index)
 
     def __call__(self, y_pred, y_true):
         """
@@ -503,7 +516,7 @@ class CrossEntropyLoss_wrapper:
             if _y_pred.shape[-self.ndim :] != y_true.shape[-self.ndim :]:
                 y_true = scale_target(y_true, _y_pred.shape[-self.ndim :])
 
-        if self.class_rebalance:
+        if self.class_rebalance == "auto":
             if self.multihead:
                 weight_mask = weight_binary_ratio(y_true[:, 0])
                 loss_fn = torch.nn.BCEWithLogitsLoss(weight=weight_mask)
@@ -1100,8 +1113,11 @@ class instance_segmentation_loss:
     n_classes : int, optional
         Number of classes for the class channel (default: 2).
 
-    class_rebalance : bool, optional
-        Whether to reweight classes inside the loss function.
+    class_rebalance : str, optional
+        Whether to reweight classes (inside loss function) or not. Options are: "none" and "auto".
+
+    class_weights : List[float], optional
+        Weights for each class to be used in the loss calculation (default: None).
 
     ignore_index : int, optional
         Value to ignore in the loss calculation (default: -1).
@@ -1120,7 +1136,8 @@ class instance_segmentation_loss:
         channel_extra_opts={},
         channels_expected: int = 1,
         n_classes=2,
-        class_rebalance=False,
+        class_rebalance: str = "none",
+        class_weights: List[float] = [],
         ignore_index: int = -1,
     ):
         """
@@ -1138,8 +1155,11 @@ class instance_segmentation_loss:
         channel_extra_opts : dict, optional
             Additional options for each output channel (e.g., {"B": {"mask_values": True}}).
 
-        class_rebalance: bool, optional
-            Whether to reweight classes (inside loss function) or not.
+        class_rebalance: str, optional
+            Whether to reweight classes (inside loss function) or not. Options are: "none", "auto" and "manual".
+
+        class_weights : List of float, optional
+            Weights for each class to be used in the loss calculation.
 
         ignore_index : int, optional
             Value to ignore in the loss calculation.
@@ -1151,6 +1171,7 @@ class instance_segmentation_loss:
         self.channel_extra_opts = channel_extra_opts
         self.n_classes = n_classes
         self.class_rebalance = class_rebalance
+        self.class_weights = class_weights if class_rebalance == "manual" else None
         self.ignore_index = ignore_index
         self.ignore_values = True if ignore_index != -1 else False
         self.losses_to_use = []
@@ -1161,7 +1182,11 @@ class instance_segmentation_loss:
                 "Loss {} not recognized. Available options are: 'bce', 'ce', 'l1', 'mae', 'mse' and 'triplet'".format(loss)
             )
             if loss == "ce" or loss == "bce":
-                self.losses_to_use.append(torch.nn.BCEWithLogitsLoss)
+                if self.class_rebalance == "manual" and self.class_weights is not None:
+                    weight = torch.tensor(self.class_weights)
+                else:
+                    weight = None
+                self.losses_to_use.append(torch.nn.BCEWithLogitsLoss(weight=weight))
             elif loss == "l1" or loss == "mae":
                 self.losses_to_use.append(torch.nn.L1Loss())
             elif loss == "mse":
@@ -1231,8 +1256,10 @@ class instance_segmentation_loss:
             # class-rebalance / ignore_index weights for BCE
             weight = None
             if self.loss_names[i] in ["bce", "ce"] and channel in ["B","F","P","C","T","A","F_pre","F_post"]:
-                if self.class_rebalance:
+                if self.class_rebalance == "auto":
                     weight = weight_binary_ratio(y_true_slice).float()
+                elif self.class_rebalance == "manual" and self.class_weights is not None:
+                    weight = torch.tensor(self.class_weights, device=y_true.device).float()
                 if self.ignore_values:
                     ignore_mask = (y_true_slice != self.ignore_index).float()
                     weight = ignore_mask if weight is None else weight * ignore_mask
@@ -1264,10 +1291,316 @@ class instance_segmentation_loss:
             channel_loss_val = loss_tensor.sum() / denom
             loss += self.weights[i] * channel_loss_val
 
-        if self.n_classes > 2 and isinstance(y_pred, dict) and "class" in y_pred: 
+        if self.n_classes > 2 and isinstance(y_pred, dict) and "class" in y_pred:
             loss += self.weights[-1] * self.class_channel_loss(_y_pred_class, y_true[:, -1].type(torch.long))
 
         return loss
+
+class EmbedSegMetrics:
+    """
+    Fast per-iteration metrics for EmbedSeg (no clustering).
+
+    Expects ACTIVATED heads packed in one tensor:
+      y_pred: (B, C, *spatial), where C = D + 2  (D = len(spatial); 2D->4, 3D->5)
+              channels layout: [offset(D), sigma(1), seed(1)]
+      y_true: instance map (B, 1, *spatial) or (B, *spatial), ints, 0 = background
+
+    Returns dict of scalars:
+      - seed_mse     : MSE(seed, φ on FG; 0 on BG)
+      - sigma_var    : mean_k |σ - mean_k(σ)|
+      - intra_disp   : mean ||e(x) - C_k|| over instances
+      - soft_iou_phi : IoU proxy by thresholding max-φ vs FG mask
+    """
+
+    def __init__(self, eps: float = 1e-6, phi_thresh: float = 0.5):
+        self.eps = float(eps)
+        self.phi_thresh = float(phi_thresh)
+        self._grid_cache = {}  # (device, dtype, spatial_tuple) -> grid
+
+    def _coord_grid(self, spatial, device, dtype):
+        key = (device, dtype, tuple(spatial))
+        g = self._grid_cache.get(key)
+        if g is not None and g.shape[2:] == tuple(spatial):
+            return g
+        axes = [torch.arange(n, device=device, dtype=dtype) for n in spatial]
+        try:
+            mesh = torch.meshgrid(*axes, indexing='ij')
+        except TypeError:
+            mesh = torch.meshgrid(*axes)
+        g = torch.stack(mesh, dim=0).unsqueeze(0)  # (1, D, *spatial)
+        self._grid_cache[key] = g
+        return g
+
+    @torch.no_grad()
+    def __call__(self, y_pred: torch.Tensor, y_true: torch.Tensor | dict) -> dict:
+        # y_pred: (B, C, *spatial) with channels [offset(D), sigma, seed]
+        assert y_pred.dim() in (4, 5), f"Expected 4D/5D, got {tuple(y_pred.shape)}"
+        B, C = y_pred.shape[:2]
+        D = y_pred.dim() - 2
+        assert C == D + 2, f"Expected C=D+2. Got C={C}, D={D}"
+
+        off  = y_pred[:, :D, ...]                 # (B,D,*)
+        sig  = y_pred[:, D:D+1, ...].clamp_min(self.eps)  # (B,1,*)
+        seed = y_pred[:, D+1:D+2, ...]            # (B,1,*)
+
+        inst = y_true['instance'] if isinstance(y_true, dict) else y_true
+        if inst.dim() == y_pred.dim() - 1:
+            inst = inst.unsqueeze(1)              # (B,1,*)
+        assert inst.shape[0] == B and inst.shape[2:] == y_pred.shape[2:], \
+            f"inst shape mismatch. Got {tuple(inst.shape)}, expected (B,1,{','.join(map(str, y_pred.shape[2:]))})"
+
+        spatial = y_pred.shape[2:]
+        device, dtype = y_pred.device, y_pred.dtype
+
+        # embeddings e(x) = x + o(x)
+        grid = self._coord_grid(spatial, device, dtype).repeat(B, 1, *([1]*len(spatial)))  # (B,D,*)
+        emb  = grid + off
+
+        seed_mse_vals, sigma_var_vals, intra_disp_vals, soft_iou_vals = [], [], [], []
+
+        for b in range(B):
+            imap = inst[b, 0].long()        # (*)
+            ids = torch.unique(imap); ids = ids[ids > 0]
+
+            eb = emb[b]                     # (D,*)
+            sb = sig[b, 0]                  # (*)
+            sedb = seed[b, 0]               # (*)
+
+            if ids.numel() == 0:
+                # background-only patch
+                seed_mse_vals.append((sedb ** 2).mean().item())
+                sigma_var_vals.append(0.0)
+                intra_disp_vals.append(0.0)
+                soft_iou_vals.append(0.0)
+                continue
+
+            fg_mask = (imap > 0)
+            alpha = 1.0 / (2.0 * (sb ** 2))  # (*)
+
+            seed_target_b = torch.zeros_like(sedb)  # BG target = 0
+            best_phi = torch.zeros_like(sb)
+            intra_disp_k, sigma_var_k = [], []
+
+            for k in ids.tolist():
+                m = (imap == k)             # (*)
+                if not m.any():
+                    continue
+
+                # center Ck: (D,) -> (D,1,1[,1]) for broadcasting
+                Ck = eb[:, m].mean(dim=1)                         # (D,)
+                Ck = Ck.view(D, *([1] * len(spatial)))            # (D,1,1[,1])
+
+                diff  = eb - Ck                                   # (D,*)
+                dist2 = (diff * diff).sum(dim=0)                  # (*)
+                phi   = torch.exp(-alpha * dist2).clamp_min(self.eps)
+
+                seed_target_b[m] = phi[m]
+                best_phi = torch.maximum(best_phi, phi)
+                intra_disp_k.append(torch.sqrt(dist2[m] + self.eps).mean())
+                sigma_var_k.append((sb[m] - sb[m].mean()).abs().mean())
+
+            seed_mse_vals.append(F.mse_loss(sedb, seed_target_b, reduction='mean').item())
+            sigma_var_vals.append(torch.stack(sigma_var_k).mean().item() if sigma_var_k else 0.0)
+            intra_disp_vals.append(torch.stack(intra_disp_k).mean().item() if intra_disp_k else 0.0)
+
+            pred_fg = (best_phi >= self.phi_thresh)
+            inter = (pred_fg & fg_mask).sum().item()
+            union = (pred_fg | fg_mask).sum().item()
+            soft_iou_vals.append((inter / union) if union > 0 else 0.0)
+
+        mean_or_zero = lambda xs: float(torch.tensor(xs, device=device).mean().item()) if xs else 0.0
+        return {
+            'seed_mse':     mean_or_zero(seed_mse_vals),
+            'sigma_var':    mean_or_zero(sigma_var_vals),
+            'intra_disp':   mean_or_zero(intra_disp_vals),
+            'soft_iou_phi': mean_or_zero(soft_iou_vals),
+        }
+
+
+# ---------------- Lovasz-hinge (binary) helpers ----------------
+
+def _flatten_binary_scores(scores, labels):
+    return scores.reshape(-1), labels.reshape(-1)
+
+def _lovasz_grad(gt_sorted):
+    """
+    Computes gradient of the Lovasz extension w.r.t sorted errors.
+    gt_sorted: ground truth labels sorted by prediction errors (1 for positives, 0 for negatives)
+    """
+    p = gt_sorted.sum()
+    n = gt_sorted.numel() - p
+    if p == 0 or n == 0:
+        # undefined but harmless; will be multiplied by 0 error anyway
+        return gt_sorted.new_zeros(gt_sorted.numel())
+
+    gts = gt_sorted.float()
+    intersection = (gts).cumsum(0)
+    union = p + (1 - gts).cumsum(0)
+    jaccard = 1.0 - intersection / union
+    if jaccard.numel() > 1:
+        jaccard[1:] = jaccard[1:] - jaccard[:-1]
+    return jaccard
+
+def lovasz_hinge_flat(logits, labels):
+    """
+    Binary Lovasz-hinge loss (flat).
+    logits: float tensor, arbitrary real values (we pass logit(phi))
+    labels: {0,1} tensor
+    """
+    if logits.numel() == 0:
+        return logits.new_tensor(0.)
+    # hinge errors: margins with y in {-1, +1}
+    signs = 2.0 * labels.float() - 1.0
+    errors = 1.0 - logits * signs
+    # sort errors descending
+    errors_sorted, perm = torch.sort(errors, descending=True)
+    gt_sorted = labels[perm]
+    grad = _lovasz_grad(gt_sorted)
+    loss = torch.dot(torch.relu(errors_sorted), grad)
+    return loss
+
+# ---------------- Strict EmbedSeg loss ----------------
+
+class EmbedSegLossStrict(nn.Module):
+    """
+    Strict EmbedSeg loss (expects predictions as one tensor):
+
+      y_pred: (B, C, *spatial)
+              C = D + 2  where D = len(spatial)  (2D->4, 3D->5)
+              channels layout: [offset(D), sigma(1), seed(1)]
+              heads must be *activated* upstream (tanh offsets, softplus/exp sigma, sigmoid seed)
+
+      y_true: instance map, shape (B, 1, *spatial) or (B, *spatial), ints (0 = background)
+
+    Loss:
+      L = w_iou * LovaszHinge( logit(φ_k) vs mask_k )
+        + w_seed * MSE( seed, φ on FG; 0 on BG )
+        + w_var * mean_k |σ - mean_k(σ)|
+    """
+    
+    def __init__(self, weights: dict | None = None, eps: float = 1e-6):
+        super().__init__()
+        self.eps = float(eps)
+        self.w = {'iou': 1.0, 'var': 10.0, 'seed': 1.0}
+        if weights is not None:
+            self.w.update(weights)
+        self._mse = nn.MSELoss(reduction='mean')
+        self._grid_cache = {}  # (device, dtype, spatial_tuple) -> grid tensor
+
+    def _coord_grid(self, spatial, device, dtype):
+        key = (device, dtype, tuple(spatial))
+        g = self._grid_cache.get(key)
+        if g is not None and g.shape[2:] == tuple(spatial):
+            return g
+        axes = [torch.arange(n, device=device, dtype=dtype) for n in spatial]
+        try:
+            mesh = torch.meshgrid(*axes, indexing='ij')  # torch>=1.10
+        except TypeError:
+            mesh = torch.meshgrid(*axes)                 # fallback
+        g = torch.stack(mesh, dim=0).unsqueeze(0)        # (1, D, ...)
+        self._grid_cache[key] = g
+        return g
+
+    def _sigma_instance_smooth(self, sigma_pred, inst_map):
+        # |σ - mean_k(σ)| averaged over instances in each batch item, then averaged over batch
+        B = sigma_pred.shape[0]
+        acc, cnt = sigma_pred.new_tensor(0.0), 0
+        for b in range(B):
+            imap = inst_map[b, 0].long()
+            ids = torch.unique(imap); ids = ids[ids > 0]
+            if ids.numel() == 0: continue
+            sb = sigma_pred[b, 0]
+            for k in ids.tolist():
+                m = (imap == k)
+                if m.any():
+                    acc = acc + (sb[m] - sb[m].mean()).abs().mean()
+                    cnt += 1
+        return acc / max(cnt, 1)
+
+    def forward(self, y_pred: torch.Tensor, y_true: torch.Tensor | dict):
+        assert y_pred.dim() in (4, 5), f"Expected 4D/5D, got {tuple(y_pred.shape)}"
+        B, C = y_pred.shape[:2]
+        D = y_pred.dim() - 2
+        assert C == D + 2, f"Expected C=D+2. Got C={C}, D={D}"
+
+        # Split heads as fresh tensors (no views)
+        off  = y_pred[:, :D, ...].clone()        # (B,D,*)
+        sig  = y_pred[:, D:D+1, ...].clone()     # (B,1,*)
+        seed = y_pred[:, D+1:D+2, ...].clone()   # (B,1,*)
+
+        # Instance GT -> (B,1,*) contiguous
+        inst = y_true['instance'] if isinstance(y_true, dict) else y_true
+        if inst.dim() == y_pred.dim() - 1:
+            inst = inst.unsqueeze(1)
+        inst = inst.contiguous()
+
+        spatial = y_pred.shape[2:]
+        device, dtype = y_pred.device, y_pred.dtype
+
+        # e(x) = x + o(x). Make emb a fresh tensor too.
+        grid = self._coord_grid(spatial, device, dtype).repeat(B, 1, *([1]*len(spatial)))
+        emb  = (grid + off).clone()  # (B,D,*)
+
+        lovasz_losses = []
+        seed_targets_b = []  # collect per-batch seed targets and stack later
+
+        for b in range(B):
+            imap = inst[b, 0].long()
+            ids = torch.unique(imap); ids = ids[ids > 0]
+
+            eb = emb[b]                          # (D,*)
+            sb = sig[b, 0].clamp_min(self.eps)   # (*)
+            alpha = 1.0 / (2.0 * (sb ** 2))      # (*)
+
+            # start with BG=0 target, then fill FG via where
+            seed_target_b = torch.zeros_like(sb)  # (*)
+
+            if ids.numel() == 0:
+                seed_targets_b.append(seed_target_b)
+                continue
+
+            # to build soft φ per-instance and union them, keep max over instances
+            # (we only need φ on FG for seed target; max works since FG masks disjoint)
+            best_phi = torch.zeros_like(sb)
+
+            for k in ids.tolist():
+                m = (imap == k)                  # (*)
+                if not m.any():
+                    continue
+
+                # center Ck: (D,) -> (D,1,1[,1])
+                Ck = eb[:, m].mean(dim=1).view(D, *([1] * len(spatial)))
+
+                diff  = eb - Ck
+                dist2 = (diff * diff).sum(dim=0)         # (*)
+                phi   = torch.exp(-alpha * dist2).clamp(min=self.eps, max=1 - self.eps)
+
+                # Lovasz on logit(phi) vs mask_k
+                logits = torch.log(phi) - torch.log1p(-phi)
+                l_flat, y_flat = _flatten_binary_scores(logits, m.float())
+                lovasz_losses.append(lovasz_hinge_flat(l_flat, y_flat))
+
+                # seed target: φ on FG of this instance; BG stays 0
+                # avoid masked in-place by using where
+                # (phi doesn't need to be detached here since we only write into a fresh tensor)
+                seed_target_b = torch.where(m, phi, seed_target_b)
+                best_phi = torch.maximum(best_phi, phi)
+
+            seed_targets_b.append(seed_target_b)
+
+        L_iou = torch.stack(lovasz_losses).mean() if lovasz_losses else off.new_tensor(0.0)
+        L_var = self._sigma_instance_smooth(sig, inst)
+
+        # stack seed targets to (B,1,*) without masked writes
+        if len(seed_targets_b) < B:
+            # pad missing items (background-only) with zeros
+            for _ in range(B - len(seed_targets_b)):
+                seed_targets_b.append(torch.zeros_like(sig[0,0]))
+        seed_target = torch.stack(seed_targets_b, dim=0).unsqueeze(1)  # (B,1,*)
+        L_seed = self._mse(seed, seed_target)
+
+        return self.w['iou'] * L_iou + self.w['var'] * L_var + self.w['seed'] * L_seed
+
 
 
 def detection_metrics(

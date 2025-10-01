@@ -1772,7 +1772,7 @@ def get_activation(activation: str = "relu") -> nn.Module:
     activation : str, optional
         One of ``'relu'``, ``'tanh'``, ``'leaky_relu'``, ``'elu'``, ``'gelu'``,
         ``'silu'``, ``'sigmoid'``, ``'softmax'``,``'swish'``, 'efficient_swish'``,
-        ``'linear'`` and ``'none'``.
+        ``'linear'``, ``'softplus'`` and ``'none'``.
     """
     assert activation in [
         "relu",
@@ -1784,6 +1784,7 @@ def get_activation(activation: str = "relu") -> nn.Module:
         "sigmoid",
         "softmax",
         "linear",
+        "softplus",
         "none",
     ], "Get unknown activation key {}".format(activation)
     activation_dict = {
@@ -1796,6 +1797,7 @@ def get_activation(activation: str = "relu") -> nn.Module:
         "sigmoid": nn.Sigmoid(),
         "softmax": nn.Softmax(dim=1),
         "linear": nn.Identity(),
+        "softplus": nn.Softplus(),
         "none": nn.Identity(),
     }
     return activation_dict[activation]

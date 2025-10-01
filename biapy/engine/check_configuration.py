@@ -103,15 +103,19 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         channels_provided = len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
         if cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular" and cfg.DATA.N_CLASSES > 2:
             channels_provided += 1
+        
+        if "E" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
+            assert set(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) == {"E"}, "'E' representation can only be used alone"
+        if "A" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
+            assert set(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) == {"A"}, "'A' representation can only be used alone"
 
-        if len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS) != channels_provided:
-            if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS == (1, 1):
-                opts.extend(
-                    [
-                        "PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS",
-                        (1,) * channels_provided,
-                    ]
-                )
+        if len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS) != channels_provided and cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS == (1, 1):
+            opts.extend(
+                [
+                    "PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS",
+                    (1,) * channels_provided,
+                ]
+            )
 
         if cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
             channel_loss_set = False
@@ -413,23 +417,50 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
                 # E — learned per-pixel features
                 if "E" in chs:
-                    dst["E"] = {
-                        "features": 24,  # default
+                    dst["E_offset"] = {
+                        "sigma": 6.0,    # default
                     }
+                    dst["E_sigma"] = {}
+                    dst["E_seediness"] = {}
+                
+                opts.extend(["PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS", [dst]])
+            else:
+                dst = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0]
+                # Expand E into E_offset, E_sigma and E_seediness if needed
+                if "E" in dst:
+                    dst["E_offset"] = {
+                        "sigma": 6.0,    # default
+                    }
+                    dst["E_sigma"] = {}
+                    dst["E_seediness"] = {}
+                    del dst["E"]
+                    opts.extend(["PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS", [dst]])
 
-                    
             # Add extra weight map channel if requested
             assert cfg.PROBLEM.INSTANCE_SEG.BORDER_EXTRA_WEIGHTS in ["unet-like", ""], "'PROBLEM.INSTANCE_SEG.BORDER_EXTRA_WEIGHTS' not in ['unet-like', '']"
             if cfg.PROBLEM.INSTANCE_SEG.BORDER_EXTRA_WEIGHTS == "unet-like" and "We" not in sorted_original_instance_channels:
                 sorted_original_instance_channels.append("We")
 
+            replace_channels = False
             if sorted_original_instance_channels != original_instance_channels:
+                replace_channels = True
                 print("Reordered instance segmentation data channels. Before: ", original_instance_channels, " . After: ", sorted_original_instance_channels)
+            
+            if "E" in sorted_original_instance_channels and cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
+                replace_channels = True
+                idx = sorted_original_instance_channels.index("E")
+                sorted_original_instance_channels[idx+1:idx+1] = ["E_offset", "E_sigma", "E_seediness"] 
+                sorted_original_instance_channels.remove("E")
+                print("Expanded 'E' channel into 'E_offset', 'E_sigma' and 'E_seediness' channels.")
+
+            if replace_channels:
                 opts.extend([ "PROBLEM.INSTANCE_SEG.DATA_CHANNELS", sorted_original_instance_channels])
-                
+            
             if cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS == "":
                 if "R" in sorted_original_instance_channels:
                     opts.extend(["PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS", "stardist"])
+                elif "E_offset" in sorted_original_instance_channels:
+                    opts.extend(["PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS", "embeddings"])
                 else:
                     opts.extend(["PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS", "watershed"])
 
@@ -443,8 +474,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                             losses.append("l1")
                         elif ch in ["A"]:
                             losses.append("bce")
-                        elif ch in ["E"]:
-                            losses.append("triplet")
+                        elif ch in ["E_offset", "E_sigma", "E_seediness"]:
+                            losses.append("embedseg")
                         elif ch in ["We"]:
                             continue  # no loss for extra weight map
                         else:
@@ -455,7 +486,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             else:
                 assert len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES) == len([x for x in sorted_original_instance_channels if x != "We"]), "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES' must have the same length as 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'"
                 for loss in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES:
-                    assert loss in ["bce", "ce", "mse", "l1", "mae", "triplet"], "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES' can only have values in ['bce', 'mse', 'l1', 'ce', 'triplet']"
+                    assert loss in ["bce", "ce", "mse", "l1", "mae", "embedseg"], "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES' can only have values in ['bce', 'mse', 'l1', 'ce', 'embedseg']"
 
     for phase in ["TRAIN", "VAL", "TEST"]:
         if getattr(cfg.DATA, phase).FILTER_SAMPLES.ENABLE:
@@ -965,6 +996,11 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 len(cfg.LOSS.WEIGHTS) == 2
             ), "'LOSS.WEIGHTS' needs to be a list of two floats when using LOSS.TYPE is in ['W_MAE_SSIM', 'W_MSE_SSIM']"
             assert sum(cfg.LOSS.WEIGHTS) == 1, "'LOSS.WEIGHTS' values need to sum 1"
+    elif cfg.PROBLEM.TYPE == "INSTANCE_SEG":
+        assert cfg.LOSS.CLASS_REBALANCE in [
+        "none",
+        "auto",
+    ], "LOSS.CLASS_REBALANCE not in ['none', 'auto'] for INSTANCE_SEG workflow"
     elif cfg.PROBLEM.TYPE == "DENOISING":
         loss = "MSE" if cfg.LOSS.TYPE == "" else cfg.LOSS.TYPE
         assert loss == "MSE", "LOSS.TYPE must be 'MSE'"
@@ -975,6 +1011,16 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
     if cfg.LOSS.IGNORE_INDEX != -1 and not check_value(cfg.LOSS.IGNORE_INDEX, (0, 255)):
         raise ValueError("If 'LOSS.IGNORE_INDEX' is set it needs to be a value in [0,255] range")
+    assert cfg.LOSS.CLASS_REBALANCE in [
+        "none",
+        "manual",
+        "auto",
+    ], "LOSS.CLASS_REBALANCE not in ['none', 'manual', 'auto']"
+    if cfg.LOSS.CLASS_REBALANCE == "manual":
+        if cfg.LOSS.CLASS_WEIGHTS == []:
+            raise ValueError("'LOSS.CLASS_WEIGHTS' needs to be configured when 'LOSS.CLASS_REBALANCE' is 'manual'")
+        if len(cfg.LOSS.CLASS_WEIGHTS) != cfg.DATA.N_CLASSES:
+            raise ValueError("'LOSS.CLASS_WEIGHTS' must be a list of length equal to the number of classes")
     if cfg.LOSS.TYPE != "CE" and cfg.PROBLEM.TYPE != "INSTANCE_SEG":
         print("WARNING: 'LOSS.IGNORE_INDEX' will not have effect, as it is only working when LOSS.TYPE is 'CE'")
 
@@ -1074,7 +1120,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     #### Instance segmentation ####
     if cfg.PROBLEM.TYPE == "INSTANCE_SEG":
         if cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
-            assert cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS in ["watershed", "agglomeration", "stardist"], "'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' not in ['watershed', 'agglomeration', 'stardist']"
+            assert cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS in ["watershed", "agglomeration", "stardist", "embeddings"], "'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' not in ['watershed', 'agglomeration', 'stardist', 'embeddings']"
             for x in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
                 assert x in [
                     "F",
@@ -1091,25 +1137,28 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     "R",
                     "T",
                     "A",
-                    "E",
+                    "E_offset",
+                    "E_sigma",
+                    "E_seediness",
                     "We",
-                ], "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS' not in ['F', 'B', 'P', 'C', 'H', 'V', 'Z', 'Db', 'Dc', 'Dn', 'D', 'R', 'T', 'A', 'E']"
+                ], "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS' not in ['F', 'B', 'P', 'C', 'H', 'V', 'Z', 'Db', 'Dc', 'Dn', 'D', 'R', 'T', 'A', 'E_offset', 'E_sigma', 'E_seediness', 'We']"
 
             if cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS == "stardist":
                 assert "R" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, "'R' channel must be used when 'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' is 'stardist'"
                 # For now onlyb allow Db and R channels
                 assert set(sorted_original_instance_channels) == {"Db", "R"}, "'Db' and 'R' channels must be used when 'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' is 'stardist'"
+            elif cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS == "embeddings":
+                assert "E_offset" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS and "E_sigma" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS and "E_seediness" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, "'E_offset', 'E_sigma' and 'E_seediness' channels must be used when 'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' is 'embeddings'"
+                assert len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) == 3, "'E_offset', 'E_sigma' and 'E_seediness' channels must be the only ones used when 'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' is 'embeddings'"
             elif cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS == "watershed":  
                 if "A" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
-                    if len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) != 1:
-                        raise ValueError("'A' channel can only be used as the sole instance channel")
                     if cfg.PROBLEM.NDIM != "3D":
                         raise ValueError("'A' channel can only be used in 3D segmentation")
                 if "Z" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS and cfg.PROBLEM.NDIM == "2D":
                     raise ValueError("'Z' channel can only be used in 3D segmentation")
                 if "R" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
                     assert set(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) == {"Db", "R"}, "'R' channel can only be used together with 'Db' channel"
-                
+
                 if any([x for x in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS if x in ["H", "V", "Z"]]):
                     if "H" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS and "V" not in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
                         raise ValueError("'H' channel can only be used together with 'V' channel")
@@ -1222,8 +1271,12 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                         assert Ly == Lx, f"'{ctx}' affinity lists must have the same length (got {Ly}, {Lx})"
                     _assert_int(val, "widen_borders", ctx, min_val=0)
 
-                elif key == "E":  # learned features
-                    _assert_int(val, "features", ctx, min_val=1)
+                elif key == "E_offset":
+                    _assert_float(val, "sigma", ctx, min_val=1)
+                elif key == "E_sigma":
+                    continue  # no extra opts for E_sigma
+                elif key == "E_seediness":
+                    continue  # no extra opts for E_seediness
                 else:
                     raise ValueError(f"'PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS' for '{key}' channel is not supported")
 
@@ -2102,6 +2155,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
     if len(opts) > 0:
         cfg.merge_from_list(opts)
+        opts = []
 
     if not model_will_be_read and cfg.MODEL.SOURCE == "biapy":
         if cfg.MODEL.UPSAMPLE_LAYER.lower() not in ["upsampling", "convtranspose"]:
@@ -2519,6 +2573,12 @@ def _assert_int(d, k, ctx, *, min_val=None):
     if min_val is not None:
         assert d[k] >= min_val, f"'{ctx}' '{k}' must be >= {min_val}"
 
+def _assert_float(d, k, ctx, *, min_val=None):  
+    assert k in d, f"'{ctx}' must have '{k}' key"
+    assert isinstance(d[k], float), f"'{ctx}' '{k}' must be a float"
+    if min_val is not None:
+        assert d[k] >= min_val, f"'{ctx}' '{k}' must be >= {min_val}"
+
 def _assert_str_in(d, k, allowed, ctx):
     assert k in d, f"'{ctx}' must have '{k}' key"
     assert isinstance(d[k], str), f"'{ctx}' '{k}' must be a string"
@@ -2896,6 +2956,10 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict):
             del old_cfg["AUGMENTOR"]["CONTRAST_EM_MODE"]
         if "AFFINE_MODE" in old_cfg["AUGMENTOR"] and old_cfg["AUGMENTOR"]["AFFINE_MODE"] not in ['constant', 'reflect', 'wrap', 'symmetric']:
             del old_cfg["AUGMENTOR"]["AFFINE_MODE"]
+
+    if "LOSS" in old_cfg and "CLASS_REBALANCE" in old_cfg["LOSS"]:
+        if isinstance(old_cfg["LOSS"]["CLASS_REBALANCE"], bool):
+            old_cfg["LOSS"]["CLASS_REBALANCE"] = "auto" if old_cfg["LOSS"]["CLASS_REBALANCE"] else "none"
 
     if "TEST" in old_cfg and "BY_CHUNKS" in old_cfg["TEST"] and "FORMAT" in old_cfg["TEST"]["BY_CHUNKS"]:
         del old_cfg["TEST"]["BY_CHUNKS"]["FORMAT"]

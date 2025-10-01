@@ -363,6 +363,8 @@ def labels_into_channels(
                 +len(channel_extra_opts["A"]["x_affinities"])
             )
             c_number += affs
+        elif ch in ["E_sigma", "E_seediness"]:
+            continue  # not special channels, just extra targets for embeddings
         else:
             c_number += 1
 
@@ -710,8 +712,9 @@ def labels_into_channels(
         new_mask[..., mode.index("R"):mode.index("R")+nrays] = radial_distances(vol, rays, spacing=spacing)
 
     # ---------- E (Embeddings) ----------
-    if "E" in mode:
-        raise NotImplementedError
+    # Here we only use E_offset as extra target for the embeddings branch
+    if "E_offset" in mode: 
+        new_mask[..., mode.index("E_offset")] = vol.copy()
 
     if "We" in mode:
         new_mask[..., mode.index("We")] =  unet_border_weight_map(vol, w0=10.0, sigma=5.0, resolution=resolution)
@@ -748,8 +751,10 @@ def labels_into_channels(
                 suffix = "_touching.tif"
             elif mod == "A":
                 suffix = "_affinity.tif"
-            elif mod == "E":
-                suffix = "_embeddings.tif"
+            elif mod == "E_offset":
+                suffix = "_embedding_instances.tif"
+            elif mod in ["E_sigma", "E_seediness"]:
+                continue  
             elif mod == "We":
                 suffix = "_border_weights.tif"
             else:

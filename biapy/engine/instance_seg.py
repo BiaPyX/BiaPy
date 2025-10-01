@@ -42,6 +42,8 @@ from biapy.engine.metrics import (
     multiple_metrics,
     detection_metrics,
     ContrastCELoss,
+    EmbedSegLossStrict,
+    EmbedSegMetrics,
 )
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.utils.misc import (
@@ -184,42 +186,50 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         self.multihead : bool
             Whether if the output of the model has more than one head.
 
-        self.activations : List of dicts
+        self.activations : List of lists of str
             Activations to be applied to the model output. Each dict will
-            match an output channel of the model. If ':' is used the activation
-            will be applied to all channels at once. "linear" and "ce_sigmoid"
-            will not be applied. E.g. [{":": "linear"}].
+            match an output channel of the model. "linear" and "ce_sigmoid"
+            will not be applied. E.g. ["linear"].
         """
-        self.activations = {}
+        self.activations = []
         self.model_output_channels = {"type": "mask", "channels": 0}
         dst = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0]
-        for i, channel in enumerate(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS):
+        for channel in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
                 if channel in ["B", "F", "P", "C", "T", "F_pre", "F_post"]:
-                    self.activations[str(i)] = "ce_sigmoid"
+                    self.activations.append("ce_sigmoid")
                     self.model_output_channels["channels"] += 1
-                elif channel in ["Db", "Dc", "Dn", "D", "H", "V", "Z", "E"]:
-                    self.activations[str(i)] = "linear"
+                elif channel in ["Db", "Dc", "Dn", "D", "H", "V", "Z"]:
+                    self.activations.append("linear")
                     self.model_output_channels["channels"] += 1
                 elif channel == "D":
-                    self.activations[str(i)] = dst.get("D", {}).get("act", "linear")
+                    self.activations.append(dst.get("D", {}).get("act", "linear"))
                     self.model_output_channels["channels"] += 1
                 elif channel == "A":
-                    self.activations[str(i)] = "ce_sigmoid"
-                    self.model_output_channels["channels"] += len(dst.get("A", {}).get("y_affinities", [1]))
+                    for _ in len(dst.get("A", {}).get("y_affinities", [1])):
+                        self.model_output_channels["channels"] += 1
+                        self.activations.append("ce_sigmoid")
                 elif channel == "R":
-                    self.activations[str(i)] = "linear"
-                    self.model_output_channels["channels"] += dst.get("R", {}).get("nrays", 32 if self.dims == 2 else 96)
+                    for _ in range(dst.get("R", {}).get("nrays", 32 if self.dims == 2 else 96)):
+                        self.activations.append("linear")
+                        self.model_output_channels["channels"] += 1
+                elif channel == "E_offset":
+                    for _ in range(self.dims):
+                        self.activations.append("ce_sigmoid")
+                        self.model_output_channels["channels"] += 1
+                elif channel == "E_sigma":
+                    self.activations.append("ce_sigmoid")
+                    self.model_output_channels["channels"] += 1
+                elif channel == "E_seediness":
+                    self.activations.append("ce_sigmoid")
+                    self.model_output_channels["channels"] += 1
                 elif channel == "We":
                     continue
                 else:
                     raise ValueError("Unknown channel: {}".format(channel))
-                
-        if len(self.activations) == 0:
-            raise ValueError("Something wrong happen during instance seg. channel configuration. Contact BiaPy team")
 
         # Multi-head: instances + classification
         if self.cfg.DATA.N_CLASSES > 2:
-            self.activations = [self.activations, {"0": "linear"}]
+            self.activations = [self.activations, ["linear"]]
             self.model_output_channels["channels"] = [self.model_output_channels["channels"], self.cfg.DATA.N_CLASSES]
             self.multihead = True
         else:
@@ -266,10 +276,21 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 m = "IoU ({} channel)".format(channel) if channel != "A" else "IoU ({} channels)".format(channel)
                 self.train_metric_names += [m]
                 self.train_metric_best += ["max"]
-            elif channel in ["Db", "Dc", "Dn", "D", "H", "V", "Z", "R", "E"]:
+            elif channel in ["Db", "Dc", "Dn", "D", "H", "V", "Z", "R"]:
                 m = "L1 ({} channel)".format(channel) if channel != "R" else "L1 ({} channels)".format(channel)
                 self.train_metric_names += ["L1 ({} channel)".format(channel)]
                 self.train_metric_best += ["min"]
+            elif channel == "E_offset":
+                self.train_metric_names += ["MSE (seed)"]
+                self.train_metric_best += ["min"]
+                self.train_metric_names += ["Sigma variance"]
+                self.train_metric_best += ["min"]
+                self.train_metric_names += ["Intra-cluster dispersion"]
+                self.train_metric_best += ["min"]
+                self.train_metric_names += ["Soft-IoU (phi)"]
+                self.train_metric_best += ["max"]
+            elif channel in ["E_sigma", "E_seediness"]:
+               continue  # No metrics for these channels
             elif channel == "We":
                 continue
 
@@ -294,20 +315,23 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 ndim=self.dims,
                 ignore_index=self.cfg.LOSS.IGNORE_INDEX,
             )
-            
-        self.train_metrics.append(
-            multiple_metrics(
-                num_classes=self.cfg.DATA.N_CLASSES,
-                metric_names=self.train_metric_names,
-                device=self.device,
-                out_channels=self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
-                channel_extra_opts = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0],
-                model_source=self.cfg.MODEL.SOURCE,
-                ignore_index=self.cfg.LOSS.IGNORE_INDEX,
-                ndim=self.dims,
+        
+        if "E_offset" in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
+            self.train_metrics.append(EmbedSegMetrics())
+        else:
+            self.train_metrics.append(
+                multiple_metrics(
+                    num_classes=self.cfg.DATA.N_CLASSES,
+                    metric_names=self.train_metric_names,
+                    device=self.device,
+                    out_channels=self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
+                    channel_extra_opts = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0],
+                    model_source=self.cfg.MODEL.SOURCE,
+                    ignore_index=self.cfg.LOSS.IGNORE_INDEX,
+                    ndim=self.dims,
+                )
             )
-        )
- 
+    
         self.test_metrics = []
         self.test_metric_names = self.train_metric_names.copy()
 
@@ -322,34 +346,43 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 ignore_index=self.cfg.LOSS.IGNORE_INDEX,
             )
 
-        self.test_metrics.append(
-            multiple_metrics(
-                num_classes=self.cfg.DATA.N_CLASSES,
-                metric_names=self.test_metric_names,
-                device=self.device,
-                out_channels=self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
-                channel_extra_opts = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0],
-                model_source=self.cfg.MODEL.SOURCE,
-                ndim=self.dims,
-                ignore_index=self.cfg.LOSS.IGNORE_INDEX,
+        if "E_offset" in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
+            self.test_metrics.append(EmbedSegMetrics())
+        else:
+            self.test_metrics.append(
+                multiple_metrics(
+                    num_classes=self.cfg.DATA.N_CLASSES,
+                    metric_names=self.test_metric_names,
+                    device=self.device,
+                    out_channels=self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
+                    channel_extra_opts = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0],
+                    model_source=self.cfg.MODEL.SOURCE,
+                    ndim=self.dims,
+                    ignore_index=self.cfg.LOSS.IGNORE_INDEX,
+                )
             )
-        )
         
         if self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "synapses":
             self.test_extra_metrics = ["Precision (pre-points)", "Recall (pre-points)", "F1 (pre-points)", "TP (pre-points)", "FP (pre-points)", "FN (pre-points)"]
             self.test_extra_metrics += ["Precision (post-points)", "Recall (post-points)", "F1 (post-points)", "TP (post-points)", "FP (post-points)", "FN (post-points)"]
             self.test_metric_names += self.test_extra_metrics
 
-        instance_loss = instance_segmentation_loss(
-            weights = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS,
-            out_channels = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
-            losses_to_use = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES,
-            channel_extra_opts = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0],
-            channels_expected = self.real_classes,
-            n_classes = self.cfg.DATA.N_CLASSES,
-            class_rebalance=self.cfg.LOSS.CLASS_REBALANCE,
-            ignore_index = self.cfg.LOSS.IGNORE_INDEX
-        )
+        if "E_offset" in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
+            instance_loss = EmbedSegLossStrict(
+                # weights={'offset':1.0, 'sigma':0.1, 'seed':1.0},
+            )
+        else:
+            instance_loss = instance_segmentation_loss(
+                weights = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS,
+                out_channels = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
+                losses_to_use = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES,
+                channel_extra_opts = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0],
+                channels_expected = self.real_classes,
+                n_classes=self.cfg.DATA.N_CLASSES,
+                class_rebalance=self.cfg.LOSS.CLASS_REBALANCE,
+                class_weights=self.cfg.LOSS.CLASS_WEIGHTS,
+                ignore_index=self.cfg.LOSS.IGNORE_INDEX
+            )
         
         if self.cfg.LOSS.CONTRAST.ENABLE: 
             self.loss = ContrastCELoss(
@@ -427,13 +460,19 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 val = metric(_output, _targets)
                 if isinstance(val, dict):
                     for m in val:
-                        v = val[m].item() if not torch.isnan(val[m]) else 0
+                        if isinstance(val[m], torch.Tensor):
+                            v = val[m].item() if not torch.isnan(val[m]) else 0
+                        else:
+                            v = val[m]
                         out_metrics[list_names_to_use[k]] = v
                         if metric_logger:
                             metric_logger.meters[list_names_to_use[k]].update(v)
                         k += 1
                 else:
-                    val = val.item() if not torch.isnan(val) else 0
+                    if isinstance(val[m], torch.Tensor):
+                        val = val.item() if not torch.isnan(val) else 0
+                    else:
+                        v = val[m]
                     out_metrics[list_names_to_use[i]] = val
                     if metric_logger:
                         metric_logger.meters[list_names_to_use[i]].update(val)

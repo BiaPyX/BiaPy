@@ -183,7 +183,7 @@ class Config:
         #       "Superhuman Accuracy on the SNEMI3D Connectomics Challenge" the values are: 
         #       'z_affinities': [1,2,3,4], 'y_affinities': [1,3,9,27] and 'x_affinities': [1,3,9,27]
         #   - 'E' channel. Possible options:
-        #       - 'features': int, the number of features to be learned per pixel/voxel. Default: 24
+        #       - 'sigma': float, the sigma value to create the gaussian seeds. Default: 6.0
         _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS = [{}]
         # Losses to be applied to each channel. If not provided, the losses will be set automatically depending on the channel.
         # The options are:
@@ -202,6 +202,7 @@ class Config:
         #   - "watershed" to use watershed algorithm
         #   - "agglomeration" to use agglomeration algorithm
         #   - "stardist" to use agglomeration algorithm
+        #   - "embeddings" to use embedding-based clustering algorithms
         _C.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS = ""
 
         # Options for marker-controlled watershed
@@ -1027,8 +1028,9 @@ class Config:
         _C.MODEL.BMZ.EXPORT.AUTHORS = []
         # License of the model.
         _C.MODEL.BMZ.EXPORT.LICENSE = "CC-BY-4.0"
-        # Path to a .md extension file with the documentation of the model. If it is not set so the model documentation will point to 
-        # BiaPy doc: https://github.com/BiaPyX/BiaPy/blob/master/README.md". Take other models in https://bioimage.io/#/ as reference.
+        # Path to a .md extension file with the documentation of the model. If it is not set so the model documentation will be 
+        # automatically generated with the information provided. If you want to add more information you can use this option.
+        # E.g. to provide more details of the training procedure, data, etc.
         _C.MODEL.BMZ.EXPORT.DOCUMENTATION = ""
         # List of tags. Here the type of dataset and the target object should be provided. BiaPy automatically sets the following tags: 
         #   * "biapy": to represent that the model was created with BiaPy.
@@ -1396,11 +1398,15 @@ class Config:
         # It works for all the workflows but the instance segmentation one, as in that case the weights must be set
         # in PROBLEM.INSTANCE_SEG.DATA_CHANNEL_LOSSES. The weights must sum 1. E.g. [0.3, 0.7].
         _C.LOSS.WEIGHTS = [0.66, 0.34]
-        # To adjust the loss function based on the imbalance between classes. This measures how many pixels represent each class and assigns 
-        # a weight map to the predictions based on that. It can be used along with LOSS.WEIGHTS. It is used when loss is LOSS.TYPE == "CE" 
-        # in detection and semantic segmentation. In instance segmentation if "bce"/"ce" loss is set in 
-        # PROBLEM.INSTANCE_SEG.DATA_CHANNEL_LOSSES this will also be applied.
-        _C.LOSS.CLASS_REBALANCE = False
+        # To weight classes in an imbalanced dataset. It can be 'none', 'manual' or 'auto'.
+        # Options:
+        #   * 'none': no class rebalancing is applied
+        #   * 'manual': the weights provided in LOSS.CLASS_WEIGHTS are used to weight each class
+        #   * 'auto': the weights are calculated automatically based on the number of pixels of each class per batch and directly in the loss computation.
+        _C.LOSS.CLASS_REBALANCE = "none"  # Options are 'none', 'manual' or 'auto'
+        # If LOSS.CLASS_REBALANCE is set to 'manual', this list of weights will be used to weight each class in the loss calculation.
+        # The length of the list must be equal to the number of classes.
+        _C.LOSS.CLASS_WEIGHTS = []
         # Whether to ignore a value in the loss and metric calculation. This is only available when LOSS.TYPE == "CE". This value will not only
         # be ignored in the loss computation but in the metrics, e.g. IoU.
         _C.LOSS.IGNORE_INDEX = -1

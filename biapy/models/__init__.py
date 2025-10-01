@@ -1190,7 +1190,7 @@ def check_model_restrictions(cfg: CN, bmz_config: Dict, workflow_specs: Dict, ve
         if classes != 2:
             opts["DATA.N_CLASSES"] = max(2, classes)
         if channel_code == "A":
-            opts["LOSS.CLASS_REBALANCE"] = True
+            opts["LOSS.CLASS_REBALANCE"] = "auto"
 
     # ---- 3) Preprocessing mapping (BMZ -> BiaPy) ----
     key_to_find = "id" if model_version > Version("0.5.0") else "name"
