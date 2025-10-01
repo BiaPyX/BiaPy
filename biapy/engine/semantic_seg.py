@@ -98,11 +98,10 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         self.multihead : bool
             Whether if the output of the model has more than one head.
 
-        self.activations : List of dicts
+        self.activations : List of lists of str
             Activations to be applied to the model output. Each dict will
-            match an output channel of the model. If ':' is used the activation
-            will be applied to all channels at once. "linear" and "ce_sigmoid"
-            will not be applied. E.g. [{":": "linear"}].
+            match an output channel of the model. "linear" and "ce_sigmoid"
+            will not be applied. E.g. ["linear"].
         """
         self.model_output_channels = {
             "type": "mask",
@@ -110,7 +109,9 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         }
         self.real_classes = self.cfg.DATA.N_CLASSES
         self.multihead = False
-        self.activations = [{":": "ce_sigmoid"}]
+        for _ in range(self.model_output_channels["channels"][0]):
+            self.activations.append("ce_sigmoid")
+        self.activations = [self.activations]
 
         super().define_activations_and_channels()
 
@@ -176,7 +177,9 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
                 ndim=self.dims,
                 model_source=self.cfg.MODEL.SOURCE,
                 class_rebalance=self.cfg.LOSS.CLASS_REBALANCE,
-                ignore_index = self.cfg.LOSS.IGNORE_INDEX
+                class_weights=self.cfg.LOSS.CLASS_WEIGHTS,
+                ignore_index=self.cfg.LOSS.IGNORE_INDEX,
+                device=self.device,
             )
         elif self.cfg.LOSS.TYPE == "DICE":
             semantic_loss = DiceLoss()

@@ -117,11 +117,10 @@ class Detection_Workflow(Base_Workflow):
         self.multihead : bool
             Whether if the output of the model has more than one head.
 
-        self.activations : List of dicts
+        self.activations : List of lists of str
             Activations to be applied to the model output. Each dict will
-            match an output channel of the model. If ':' is used the activation
-            will be applied to all channels at once. "linear" and "ce_sigmoid"
-            will not be applied. E.g. [{":": "linear"}].
+            match an output channel of the model. "linear" and "ce_sigmoid"
+            will not be applied. E.g. ["linear"].
         """
         self.model_output_channels = {
             "type": "mask",
@@ -130,11 +129,11 @@ class Detection_Workflow(Base_Workflow):
 
         # Multi-head: points + classification
         if self.cfg.DATA.N_CLASSES > 2:
-            self.activations = [{"0": "ce_sigmoid"}, {"0": "linear"}]
+            self.activations = [["ce_sigmoid"], ["linear"]]
             self.model_output_channels["channels"] = [self.model_output_channels["channels"], self.cfg.DATA.N_CLASSES]
             self.multihead = True
         else:
-            self.activations = [{"0": "ce_sigmoid"}]
+            self.activations = [["ce_sigmoid"]]
             self.model_output_channels["channels"] = [self.model_output_channels["channels"]]
             self.multihead = False
         self.real_classes = self.model_output_channels["channels"][0]
@@ -224,7 +223,9 @@ class Detection_Workflow(Base_Workflow):
                 multihead=self.multihead,
                 model_source=self.cfg.MODEL.SOURCE,
                 class_rebalance=self.cfg.LOSS.CLASS_REBALANCE,
-                ignore_index = self.cfg.LOSS.IGNORE_INDEX
+                class_weights=self.cfg.LOSS.CLASS_WEIGHTS,
+                ignore_index=self.cfg.LOSS.IGNORE_INDEX,
+                device=self.device,
             )
         elif self.cfg.LOSS.TYPE == "DICE":
             self.loss = DiceLoss()

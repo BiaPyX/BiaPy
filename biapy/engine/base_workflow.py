@@ -320,10 +320,18 @@ class Base_Workflow(metaclass=ABCMeta):
             raise ValueError("'activations' needs to be defined. Correct define_activations_and_channels() function")
         else:
             if not isinstance(self.activations, list):
-                raise ValueError("'self.activations' must be a list of dicts")
+                raise ValueError("'self.activations' must be a list of lists")
             for x in self.activations:
-                if not isinstance(x, dict):
-                    raise ValueError("'self.activations' must be a list of dicts")
+                if not isinstance(x, list):
+                    raise ValueError("'self.activations' must be a list of lists")
+                for y in x:
+                    if not isinstance(y, str):
+                        raise ValueError("'self.activations' must be a list of str")
+
+            assert len(self.activations) == len(self.model_output_channels["channels"]), "Activations and output channels do not match"
+            for k in range(len(self.activations)):
+                assert len(self.activations[k]) == self.model_output_channels["channels"][k], "Activations and output channels do not match per head"
+
         if self.real_classes == -1:
             raise ValueError(
                 "'real_classes' needs to be defined. Correct define_activations_and_channels() function"
@@ -1144,17 +1152,18 @@ class Base_Workflow(metaclass=ABCMeta):
             return pred
 
         def __apply_acts(prediction, acts):
-            for key, value in acts.items():
+            out_slices = []
+            for i, activation in enumerate(acts):
                 # Ignore ce_sigmoid as torch.nn.BCEWithLogitsLoss will apply Sigmoid automatically in a way
                 # that is more stable numerically (ref: https://pytorch.org/docs/stable/generated/torch.nn.BCEWithLogitsLoss.html)
-                if (training and value not in ["linear", "ce_sigmoid"]) or (not training and value != "linear"):
-                    value = "sigmoid" if value == "ce_sigmoid" else value
-                    act = get_activation(value.lower())
-                    if key == ":":
-                        prediction = act(prediction)
-                    else:
-                        prediction[:, int(key), ...] = act(prediction[:, int(key), ...])
-            return prediction
+                if (training and activation not in ["linear", "ce_sigmoid"]) or (not training and activation != "linear"):
+                    activation = "sigmoid" if activation == "ce_sigmoid" else activation
+                    act = get_activation(activation.lower())
+                    out_slices.append(act(prediction[:, i, ...]).unsqueeze(1))
+                else:
+                    out_slices.append(prediction[:, i, ...].unsqueeze(1))
+
+            return torch.cat(out_slices, dim=1)
 
         if isinstance(pred, dict):
             pred["pred"] = __apply_acts(pred["pred"], self.activations[0])

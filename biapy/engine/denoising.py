@@ -92,11 +92,10 @@ class Denoising_Workflow(Base_Workflow):
         self.multihead : bool
             Whether if the output of the model has more than one head.
 
-        self.activations : List of dicts
+        self.activations : List of lists of str
             Activations to be applied to the model output. Each dict will
-            match an output channel of the model. If ':' is used the activation
-            will be applied to all channels at once. "linear" and "ce_sigmoid"
-            will not be applied. E.g. [{":": "linear"}].
+            match an output channel of the model. "linear" and "ce_sigmoid"
+            will not be applied. E.g. ["linear"].
         """
         self.model_output_channels = {
             "type": "image",
@@ -104,7 +103,9 @@ class Denoising_Workflow(Base_Workflow):
         }
         self.real_classes = self.model_output_channels["channels"][0]
         self.multihead = False
-        self.activations = [{":": "linear"}]
+        for _ in range(self.model_output_channels["channels"][0]):
+            self.activations.append("linear")
+        self.activations = [self.activations]
 
         super().define_activations_and_channels()
 
