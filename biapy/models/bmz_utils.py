@@ -172,17 +172,20 @@ def extract_BMZ_sample_and_cover(
     """
     cover_raw, cover_gt = None, None
     ref_img = img_gt if img_gt is not None else img
-
     if isinstance(ref_img, np.ndarray):
         dims = 2 if not is_3d else 3
         if dims == 2:
             H, W, C = ref_img.shape
             ph, pw = patch_size[0], patch_size[1]
-            coords = np.argwhere(ref_img)
-            ymin, xmin, _ = coords.min(axis=0)
-            ymax, xmax, _ = coords.max(axis=0)
-            y_center = (ymin + ymax) // 2
-            x_center = (xmin + xmax) // 2
+            coords = np.argwhere(ref_img > 0)
+            if len(coords) == 0:
+                # Entire ref_img empty -> fall back to image center
+                y_center, x_center = H // 2, W // 2
+            else:
+                ymin, xmin, _ = coords.min(axis=0)
+                ymax, xmax, _ = coords.max(axis=0)
+                y_center = (ymin + ymax) // 2
+                x_center = (xmin + xmax) // 2
 
             y_start = max(0, min(H - ph, y_center - ph // 2))
             x_start = max(0, min(W - pw, x_center - pw // 2))
@@ -197,7 +200,7 @@ def extract_BMZ_sample_and_cover(
                 # Entire ref_img empty -> fall back to volume center
                 y_center, x_center = H // 2, W // 2
             else:
-                coords = np.argwhere(m2d)
+                coords = np.argwhere(m2d > 0)
                 ymin, xmin, _ = coords.min(axis=0)
                 ymax, xmax, _ = coords.max(axis=0)
                 y_center = (ymin + ymax) // 2
