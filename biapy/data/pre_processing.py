@@ -68,11 +68,20 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
 
     # Checking if the user inputted Zarr/H5 files
     if getattr(cfg.DATA, tag).INPUT_ZARR_MULTIPLE_DATA:
-        zarr_files = sorted(next(os_walk_clean(getattr(cfg.DATA, tag).PATH))[1])
-        h5_files = sorted(next(os_walk_clean(getattr(cfg.DATA, tag).PATH))[2])
+        try:
+            zarr_files = sorted(next(os_walk_clean(getattr(cfg.DATA, tag).PATH))[1])
+        except StopIteration:
+            raise ValueError("No Zarr/N5 files found in the input path: {}".format(getattr(cfg.DATA, tag).PATH))
+        try:
+            h5_files = sorted(next(os_walk_clean(getattr(cfg.DATA, tag).PATH))[2])
+        except StopIteration:
+            raise ValueError("No H5 files found in the input path: {}".format(getattr(cfg.DATA, tag).PATH))
     else:
-        zarr_files = sorted(next(os_walk_clean(getattr(cfg.DATA, tag).GT_PATH))[1])
-        h5_files = sorted(next(os_walk_clean(getattr(cfg.DATA, tag).GT_PATH))[2])
+        try:
+            zarr_files = sorted(next(os_walk_clean(getattr(cfg.DATA, tag).GT_PATH))[1])
+            h5_files = sorted(next(os_walk_clean(getattr(cfg.DATA, tag).GT_PATH))[2])
+        except StopIteration:
+            raise ValueError("No Zarr/N5 or H5 files found in the GT path: {}".format(getattr(cfg.DATA, tag).GT_PATH))
 
     # Find patches info so we can iterate over them to create the instance mask
     working_with_zarr_h5_files = False
