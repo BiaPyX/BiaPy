@@ -193,9 +193,8 @@ class Normalization:
                     self.channel_info[j]["div"] = False
 
                 if instance_problem:
-                    if len(np.unique(mask[..., j])) > 2 and not mask.dtype == np.uint8:
+                    if len(np.unique(mask[..., j])) > 2 and np.issubdtype(mask.dtype, np.floating):
                         self.channel_info[j]["type"] = "no_bin"
-                        self.channel_info[j]["div"] = False
                 else:  # In semantic seg, maybe the mask are in 255
                     if np.max(mask[..., j]) > max(n_classes,_ignore_index):
                         self.channel_info[j]["div"] = True
