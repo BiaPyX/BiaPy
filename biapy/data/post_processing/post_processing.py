@@ -210,11 +210,12 @@ def watershed_by_channels(
         # Seed creation process
         hvz_channels_processed = False
         for i, ch in enumerate(seed_channels):
+            ch_pos = channels.index(ch)
             if "seed_map" not in locals():            
                 if ch in ["C", "B", "T", "Dn", "Dc"]:
-                    seed_map = 1 - data[..., i]
+                    seed_map = 1 - data[..., ch_pos]
                 else: # F, P, Db, D
-                    seed_map = data[..., i]
+                    seed_map = data[..., ch_pos]
                 
                 th = float(seed_channel_ths[i]) if seed_channel_ths[i] != "auto" else threshold_otsu(seed_map)
                 seed_ths_used.append(th)
@@ -222,13 +223,13 @@ def watershed_by_channels(
                 seed_map = seed_map > th
             else:
                 if ch in ['F', 'B', 'P', 'C', 'Db', 'Dc', 'Dn', 'D', 'T']:
-                    th = float(seed_channel_ths[i]) if seed_channel_ths[i] != "auto" else threshold_otsu(data[..., i])
+                    th = float(seed_channel_ths[i]) if seed_channel_ths[i] != "auto" else threshold_otsu(data[..., ch_pos])
                     seed_ths_used.append(th)
 
                     if ch in ["F", "P", "Db", "D"]:
-                        seed_map *= data[..., i] > th
+                        seed_map *= data[..., ch_pos] > th
                     elif ch in ["C", "B", "T", "Dn", "Dc"]:
-                        seed_map *= data[..., i] < th
+                        seed_map *= data[..., ch_pos] < th
                 elif not hvz_channels_processed and ch in ['H', 'V', 'Z']:
                     h_dir = cv2.normalize(
                         data[..., channels.index("H")], None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F
@@ -278,24 +279,25 @@ def watershed_by_channels(
 
         # Growth mask creation process
         for i, ch in enumerate(growth_mask_channels):
+            ch_pos = channels.index(ch)
             if "growth_mask" not in locals():
                 if ch in ["C", "B", "Dn", "Dc"]:
-                    growth_mask = 1 - data[..., i]
+                    growth_mask = 1 - data[..., ch_pos]
                 else: # F, Db, D
-                    growth_mask = data[..., i]
+                    growth_mask = data[..., ch_pos]
 
                 th = float(growth_mask_channel_ths[i]) if growth_mask_channel_ths[i] != "auto" else threshold_otsu(growth_mask) / 2
                 growth_mask_ths_used.append(th)
 
                 growth_mask = growth_mask > th
             else:
-                th = float(growth_mask_channel_ths[i]) if growth_mask_channel_ths[i] != "auto" else threshold_otsu(data[..., i]) / 2
+                th = float(growth_mask_channel_ths[i]) if growth_mask_channel_ths[i] != "auto" else threshold_otsu(data[..., ch_pos]) / 2
                 growth_mask_ths_used.append(th)
 
                 if ch in ["F", "Db", "D"]:
-                    growth_mask *= data[..., i] > th
+                    growth_mask *= data[..., ch_pos] > th
                 elif ch in ["C", "B", "Dn", "Dc"]:
-                    growth_mask *= data[..., i] < th
+                    growth_mask *= data[..., ch_pos] < th
 
         # Define the topographic surface to grow the seeds
         if "overall" in locals():

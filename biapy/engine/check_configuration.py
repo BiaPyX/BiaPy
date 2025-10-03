@@ -168,6 +168,15 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
                     growth_mask_channels = ["F"]
                     growth_mask_channel_ths = ["auto"]
+            elif set(sorted_original_instance_channels) == {"F", "P"}:
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
+                    seed_channels = ["F", "P"]
+                    seed_channels_thresh = ["auto", "auto"]
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.TOPOGRAPHIC_SURFACE_CHANNEL == "":
+                    topo_surface_ch = "F"
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
+                    growth_mask_channels = ["F"]
+                    growth_mask_channel_ths = ["auto"]
             elif set(sorted_original_instance_channels) == {"F", "H", "V"}:
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
                     seed_channels = ["F", "H", "V"]
@@ -2877,7 +2886,7 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict):
             # Reset values and fill with the thresholds set by the user
             manual_ths = False
             if "DATA_MW_TH_TYPE" in old_cfg["PROBLEM"]["INSTANCE_SEG"]:
-                manual_ths = True if old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_MW_TH_TYPE"] == "auto" else False
+                manual_ths = True if old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_MW_TH_TYPE"] == "manual" else False
                 del old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_MW_TH_TYPE"]
                 if manual_ths:
                     old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]["SEED_CHANNELS_THRESH"] = []
@@ -2885,26 +2894,48 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict):
 
             if "DATA_MW_TH_BINARY_MASK" in old_cfg["PROBLEM"]["INSTANCE_SEG"]:
                 if manual_ths:
-                    old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]["SEED_CHANNELS_THRESH"].append(old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_MW_TH_BINARY_MASK"])
+                    if "SEED_CHANNELS" not in old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]:
+                        old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]["SEED_CHANNELS"] = []
+                    if "F" in old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_CHANNELS"]:
+                        old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]["SEED_CHANNELS"].append("F")
+                        old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]["SEED_CHANNELS_THRESH"].append(old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_MW_TH_BINARY_MASK"])
                 del old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_MW_TH_BINARY_MASK"]
 
             if "DATA_MW_TH_CONTOUR" in old_cfg["PROBLEM"]["INSTANCE_SEG"]:
-                if manual_ths and len(old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]["SEED_CHANNELS"]) > 1:
+                if manual_ths and "C" in old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_CHANNELS"]:
+                    old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]["SEED_CHANNELS"].append("C")
                     old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]["SEED_CHANNELS_THRESH"].append(old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_MW_TH_CONTOUR"])
                 del old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_MW_TH_CONTOUR"]
 
             if "DATA_MW_TH_DISTANCE" in old_cfg["PROBLEM"]["INSTANCE_SEG"]:
-                if manual_ths and len(old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]["SEED_CHANNELS"]) > 1:
-                    old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]["SEED_CHANNELS_THRESH"].append(old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_MW_TH_DISTANCE"])
+                if manual_ths:
+                    add_distance = False
+                    if "Dc" in old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_CHANNELS"]:
+                        old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]["SEED_CHANNELS"].append("Dc")
+                        add_distance = True
+                    elif "D" in old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_CHANNELS"]:
+                        old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]["SEED_CHANNELS"].append("D")
+                        add_distance = True
+                    elif "Db" in old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_CHANNELS"]:
+                        old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]["SEED_CHANNELS"].append("Db")
+                        add_distance = True
+
+                    if add_distance:
+                        old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]["SEED_CHANNELS_THRESH"].append(old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_MW_TH_DISTANCE"])
                 del old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_MW_TH_DISTANCE"]
 
             if "DATA_MW_TH_POINTS" in old_cfg["PROBLEM"]["INSTANCE_SEG"]:
-                if manual_ths and len(old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]["SEED_CHANNELS"]) > 1:
+                if manual_ths and "P" in old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_CHANNELS"]:
+                    old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]["SEED_CHANNELS"].append("P")
                     old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]["SEED_CHANNELS_THRESH"].append(old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_MW_TH_POINTS"])
                 del old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_MW_TH_POINTS"]
 
             if "DATA_MW_TH_FOREGROUND" in old_cfg["PROBLEM"]["INSTANCE_SEG"]:
-                if manual_ths:
+                if manual_ths and "F" in old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_CHANNELS"]:
+                    if "GROWTH_MASK_CHANNELS" not in old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]:
+                        old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]["GROWTH_MASK_CHANNELS"] = []
+                        old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]["GROWTH_MASK_CHANNELS_THRESH"] = []
+                    old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]["GROWTH_MASK_CHANNELS"].append("F")
                     old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]["GROWTH_MASK_CHANNELS_THRESH"].append(old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_MW_TH_FOREGROUND"])
                 del old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_MW_TH_FOREGROUND"]
 
