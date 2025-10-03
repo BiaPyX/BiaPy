@@ -377,8 +377,19 @@ def labels_into_channels(
         else:
             c_number += 1
 
-    if any(x for x in ["Db", "Dc", "Dn", "D", "H", "V", "Z", "R", "E", "We"] if x in mode):
+    if any(x for x in ["Db", "Dc", "Dn", "D", "H", "V", "Z", "R", "We"] if x in mode):
         dtype = np.float32
+    elif "E_offset" in mode:
+        dtype = instance_labels.dtype
+        # Ensure that no floating-point dtype is used for the embeddings. 
+        # This allows the normalization module to correctly recognize them 
+        # as integer or binary channels, ensuring that the subsequent 
+        # data augmentation processes the samples as intended.
+        if np.issubdtype(dtype, np.floating):
+            if instance_labels.max() > 255:
+                dtype = np.uint16
+            else:
+                dtype = np.uint8
     else:
         dtype = np.uint8
         
