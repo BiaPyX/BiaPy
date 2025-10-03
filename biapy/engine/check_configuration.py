@@ -249,6 +249,24 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
                     growth_mask_channels = ["F"]
                     growth_mask_channel_ths = ["auto"]
+            elif set(sorted_original_instance_channels) == {"F", "C", "Db"}:
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
+                    seed_channels = ["F", "C", "Db"]
+                    seed_channels_thresh = ["auto", "auto", "auto"]
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.TOPOGRAPHIC_SURFACE_CHANNEL == "":
+                    topo_surface_ch = "F"
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
+                    growth_mask_channels = ["F"]
+                    growth_mask_channel_ths = ["auto"]
+            elif set(sorted_original_instance_channels) == {"F", "C", "D"}:
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
+                    seed_channels = ["F", "C", "D"]
+                    seed_channels_thresh = ["auto", "auto", "auto"]
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.TOPOGRAPHIC_SURFACE_CHANNEL == "":
+                    topo_surface_ch = "F"
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
+                    growth_mask_channels = ["F"]
+                    growth_mask_channel_ths = ["auto"]
             elif set(sorted_original_instance_channels) == {"A"}:
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
                     seed_channels = ["A"]
@@ -2420,12 +2438,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         if cfg.AUGMENTOR.ELASTIC:
             if cfg.AUGMENTOR.E_MODE not in ["constant", "nearest", "reflect", "wrap"]:
                 raise ValueError("AUGMENTOR.E_MODE not in ['constant', 'nearest', 'reflect', 'wrap']")
-        if cfg.AUGMENTOR.BRIGHTNESS:
-            if cfg.AUGMENTOR.BRIGHTNESS_MODE not in ["2D", "3D"] and cfg.PROBLEM.NDIM == "3D":
-                raise ValueError("AUGMENTOR.BRIGHTNESS_MODE not in ['2D', '3D']")
-        if cfg.AUGMENTOR.CONTRAST:
-            if cfg.AUGMENTOR.CONTRAST_MODE not in ["2D", "3D"] and cfg.PROBLEM.NDIM == "3D":
-                raise ValueError("AUGMENTOR.CONTRAST_MODE not in ['2D', '3D']")
         if cfg.AUGMENTOR.DROPOUT:
             if not check_value(cfg.AUGMENTOR.DROP_RANGE):
                 raise ValueError("AUGMENTOR.DROP_RANGE values not in [0, 1] range")
@@ -2468,12 +2480,17 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "wrap",
             "symmetric",
         ], "'AUGMENTOR.AFFINE_MODE' needs to be in ['constant', 'reflect', 'wrap', 'symmetric']"
-        if cfg.AUGMENTOR.GAMMA_CONTRAST and cfg.DATA.NORMALIZATION.TYPE == "zero_mean_unit_variance":
-            raise ValueError(
-                "'AUGMENTOR.GAMMA_CONTRAST' doesn't work correctly on images with negative values, which 'zero_mean_unit_variance' "
-                "normalization will lead to"
-            )
-
+        if cfg.DATA.NORMALIZATION.TYPE == "zero_mean_unit_variance":
+            if cfg.AUGMENTOR.GAMMA_CONTRAST:
+                raise ValueError(
+                    "'AUGMENTOR.GAMMA_CONTRAST' doesn't work correctly on images with negative values, which 'zero_mean_unit_variance' "
+                    "normalization will lead to"
+                )
+            if cfg.AUGMENTOR.POISSON_NOISE:
+                raise ValueError(
+                    "'AUGMENTOR.POISSON_NOISE' doesn't work correctly on images with negative values, which 'zero_mean_unit_variance' "
+                    "normalization will lead to"
+                )
     # BioImage Model Zoo exportation process
     if cfg.MODEL.BMZ.EXPORT.ENABLE:
         if not cfg.MODEL.BMZ.EXPORT.REUSE_BMZ_CONFIG:
@@ -2956,6 +2973,10 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict):
             del old_cfg["AUGMENTOR"]["CONTRAST_EM_MODE"]
         if "AFFINE_MODE" in old_cfg["AUGMENTOR"] and old_cfg["AUGMENTOR"]["AFFINE_MODE"] not in ['constant', 'reflect', 'wrap', 'symmetric']:
             del old_cfg["AUGMENTOR"]["AFFINE_MODE"]
+        if "BRIGHTNESS_MODE" in old_cfg["AUGMENTOR"]:
+            del old_cfg["AUGMENTOR"]["BRIGHTNESS_MODE"]
+        if "CONTRAST_MODE" in old_cfg["AUGMENTOR"]:
+            del old_cfg["AUGMENTOR"]["CONTRAST_MODE"]
 
     if "LOSS" in old_cfg and "CLASS_REBALANCE" in old_cfg["LOSS"]:
         if isinstance(old_cfg["LOSS"]["CLASS_REBALANCE"], bool):
