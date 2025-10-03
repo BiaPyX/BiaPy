@@ -2,8 +2,7 @@
 3D paired image and mask data generator for BiaPy.
 
 This module provides the Pair3DImageDataGenerator class, which generates batches of
-3D images and their corresponding masks with on-the-fly augmentation. It is based on
-imgaug, microDL, and custom augmentors for flexible deep learning workflows.
+3D images and their corresponding masks with on-the-fly augmentation.
 """
 import numpy as np
 import random
@@ -16,10 +15,8 @@ from biapy.data.generators.pair_base_data_generator import PairBaseDataGenerator
 
 
 class Pair3DImageDataGenerator(PairBaseDataGenerator):
-    """Custom 3D data generator based on `imgaug <https://github.com/aleju/imgaug-doc>`_ and our own `augmentors.py <https://github.com/BiaPyX/BiaPy/blob/master/biapy/data/generators/augmentors.py>`_ transformations. This generator will yield an image and its corresponding mask.
-
-    Based on `microDL <https://github.com/czbiohub/microDL>`_ and
-    `Shervine's blog <https://stanford.edu/~shervine/blog/keras-how-to-generate-data-on-the-fly>`_.
+    """
+    Custom 3D data generator. This generator will yield an image and its corresponding mask.
 
     Parameters
     ----------
@@ -64,51 +61,35 @@ class Pair3DImageDataGenerator(PairBaseDataGenerator):
         Parameters
         ----------
         image : 4D Numpy array
-            Image to transform. E.g. ``(y, x, z, channels)``.
+            Image to transform. E.g. ``(z, y, x, channels)``.
 
         mask : 4D Numpy array
-            Mask to transform. E.g.  ``(y, x, z, channels)``.
+            Mask to transform. E.g.  ``(z, y, x, channels)``.
 
         e_im : 4D Numpy array
-            Extra image to help transforming ``image``. E.g. ``(y, x, z, channels)``.
+            Extra image to help transforming ``image``. E.g. ``(z, y, x, channels)``.
 
         e_mask : 4D Numpy array
-            Extra mask to help transforming ``mask``. E.g. ``(y, x, z, channels)``.
+            Extra mask to help transforming ``mask``. E.g. ``(z, y, x, channels)``.
 
         Returns
         -------
         image : 4D Numpy array
-            Transformed image. E.g. ``(y, x, z, channels)```.
+            Transformed image. E.g. ``(z, y, x, channels)```.
 
         mask : 4D Numpy array
-            Transformed image mask. E.g.``(y, x, z, channels)``.
+            Transformed image mask. E.g.``(z, y, x, channels)``.
         """
-        # Transpose them so we can merge the z and c channels easily.
-        # z, y, x, c --> x, y, z, c
-        image = image.transpose((2, 1, 0, 3))
-        mask = mask.transpose((2, 1, 0, 3))
-
-        if e_im is not None and e_mask is not None:
-            # Transpose the extra image and mask so we can merge the z and c channels easily.
-            # z, y, x, c --> x, y, z, c
-            e_im = e_im.transpose((2, 1, 0, 3))
-            e_mask = e_mask.transpose((2, 1, 0, 3))
-        
-        # Apply flips in z as imgaug can not do it
+        # Apply flips in z
         if self.zflip and random.uniform(0, 1) < self.da_prob:
-            l_image = []
-            l_mask = []
-            for i in range(image.shape[-1]):
-                l_image.append(np.expand_dims(np.flip(image[..., i], 2), -1))
-            for i in range(mask.shape[-1]):
-                l_mask.append(np.expand_dims(np.flip(mask[..., i], 2), -1))
-            image = np.concatenate(l_image, axis=-1)
-            mask = np.concatenate(l_mask, axis=-1)
+            image = image[::-1, ...]
+            mask  = mask[::-1, ...]
+            if e_im is not None:
+                e_im  = e_im[::-1, ...]
+            if e_mask is not None:
+                e_mask = e_mask[::-1, ...]
 
-        image, mask = super().apply_transform(image, mask, e_im, e_mask)
-
-        # x, y, z, c --> z, y, x, c
-        return image.transpose((2, 1, 0, 3)), mask.transpose((2, 1, 0, 3))
+        return super().apply_transform(image, mask, e_im, e_mask)
 
     def save_aug_samples(self, img, mask, orig_images, i, pos, out_dir, point_dict):
         """

@@ -29,10 +29,7 @@ from biapy.data.norm import Normalization
 
 class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
     """
-    Custom BaseDataGenerator based on `imgaug <https://github.com/aleju/imgaug-doc>`_ and our own `augmentors.py <https://github.com/BiaPyX/BiaPy/blob/master/biapy/data/generators/augmentors.py>`_ transformations.
-
-    Based on `microDL <https://github.com/czbiohub/microDL>`_ and
-    `Shervine's blog <https://stanford.edu/~shervine/blog/keras-how-to-generate-data-on-the-fly>`_.
+    Custom BaseDataGenerator to transform single image data.
 
     Parameters
     ----------
@@ -469,9 +466,6 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         image : 3D/4D Numpy array
             Transformed image. E.g. ``(y, x, channels)`` in ``2D`` or ``(z, y, x, channels)`` in ``3D``.
         """
-        # Save shape
-        o_img_shape = image.shape
-
         # Apply zoom
         if self.zoom and random.uniform(0, 1) < self.da_prob:
             image = zoom(
@@ -479,9 +473,8 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 zoom_range=self.zoom_range,
                 zoom_in_z=self.zoom_in_z,
                 mode=self.affine_mode,
-                mask_type=self.norm_module.mask_norm,
             )  # type: ignore
-
+    
         # Apply random rotations
         if self.rand_rot and random.uniform(0, 1) < self.da_prob:
             image = rotation(image, angles=self.rnd_rot_range, mode=self.affine_mode)  # type: ignore
@@ -489,10 +482,6 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         # Apply square rotations
         if self.rotation90 and random.uniform(0, 1) < self.da_prob:
             image = rotation(image, angles=[90, 180, 270], mode=self.affine_mode)  # type: ignore
-
-        # Reshape 3D volumes to 2D image type with multiple channels to pass through imgaug lib
-        if self.ndim == 3:
-            image = image.reshape(image.shape[:2] + (image.shape[2] * image.shape[3],))
 
         # Apply gamma contrast
         if self.gamma_contrast and random.uniform(0, 1) < self.da_prob:
@@ -553,9 +542,6 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 image,
                 drop_range=self.drop_range
             )
-
-        # Recover the original shape
-        image = image.reshape(o_img_shape)
 
         return image
 

@@ -2,8 +2,7 @@
 2D single image data generator for BiaPy.
 
 This module provides the Single2DImageDataGenerator class, which generates batches of
-2D images with on-the-fly augmentation for deep learning workflows. It is based on
-imgaug, microDL, and custom augmentors for flexible data pipelines.
+2D images with on-the-fly augmentation for deep learning workflows.
 """
 import numpy as np
 
@@ -13,10 +12,7 @@ from biapy.data.generators.single_base_data_generator import SingleBaseDataGener
 
 class Single2DImageDataGenerator(SingleBaseDataGenerator):
     """
-    Custom 2D data generator based on `imgaug <https://github.com/aleju/imgaug-doc>`_ and our own `augmentors.py <https://github.com/BiaPyX/BiaPy/blob/master/biapy/data/generators/augmentors.py>`_ transformations. This generator will yield an image and its corresponding class.
-
-    Based on `microDL <https://github.com/czbiohub/microDL>`_ and
-    `Shervine's blog <https://stanford.edu/~shervine/blog/keras-how-to-generate-data-on-the-fly>`_.
+    Custom 2D data generator to transform single image data.
     """
 
     def __init__(self, **kwars):

@@ -2,8 +2,7 @@
 2D paired image and mask data generator for BiaPy.
 
 This module provides the Pair2DImageDataGenerator class, which generates batches of
-2D images and their corresponding masks with on-the-fly augmentation. It is based on
-imgaug, microDL, and custom augmentors for flexible deep learning workflows.
+2D images and their corresponding masks with on-the-fly augmentation.
 """
 import numpy as np
 import os
@@ -17,10 +16,7 @@ from biapy.data.generators.pair_base_data_generator import PairBaseDataGenerator
 
 class Pair2DImageDataGenerator(PairBaseDataGenerator):
     """
-    Custom 2D data generator based on `imgaug <https://github.com/aleju/imgaug-doc>`_ and our own `augmentors.py <https://github.com/BiaPyX/BiaPy/blob/master/biapy/data/generators/augmentors.py>`_ transformations. This generator will yield an image and its corresponding mask.
-
-    Based on `microDL <https://github.com/czbiohub/microDL>`_ and
-    `Shervine's blog <https://stanford.edu/~shervine/blog/keras-how-to-generate-data-on-the-fly>`_.
+    Custom 2D data generator to transform paired image and mask data.
     """
 
     def __init__(self, **kwars):

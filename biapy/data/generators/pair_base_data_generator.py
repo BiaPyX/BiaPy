@@ -15,7 +15,6 @@ import numpy as np
 import random
 import torch
 import os
-import sys
 import h5py
 from tqdm import tqdm
 from skimage.util import random_noise
@@ -33,10 +32,7 @@ from biapy.data.norm import Normalization
 
 class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
     """
-    Custom BaseDataGenerator based on `imgaug <https://github.com/aleju/imgaug-doc>`_ and our own `augmentors.py <https://github.com/BiaPyX/BiaPy/blob/master/biapy/data/generators/augmentors.py>`_ transformations.
-
-    Based on `microDL <https://github.com/czbiohub/microDL>`_ and
-    `Shervine's blog <https://stanford.edu/~shervine/blog/keras-how-to-generate-data-on-the-fly>`_.
+    Custom BaseDataGenerator to transform paired image and mask data.
 
     Parameters
     ----------
@@ -144,9 +140,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
     brightness_factor : tuple of 2 floats, optional
         Strength of the brightness range, with valid values being ``0 <= brightness_factor <= 1``. E.g. ``(0.1, 0.3)``.
 
-    brightness_mode : str, optional
-        Apply same brightness change to the whole image or diffent to slice by slice.
-
     contrast : boolen, optional
         To apply contrast changes to the images as `PyTorch Connectomics
         <https://github.com/zudi-lin/pytorch_connectomics/blob/master/connectomics/data/augmentation/grayscale.py>`_.
@@ -154,9 +147,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
     contrast_factor : tuple of 2 floats, optional
         Strength of the contrast change range, with valid values being ``0 <= contrast_factor <= 1``.
         E.g. ``(0.1, 0.3)``.
-
-    contrast_mode : str, optional
-        Apply same contrast change to the whole image or diffent to slice by slice.
 
     dropout : bool, optional
         To set a certain fraction of pixels in images to zero.
@@ -525,7 +515,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                     "Channel of the patch size given {} does not correspond with the loaded image {}. "
                     "Please, check the channels of the images!".format(shape[-1], img.shape[-1])
                 )
-        self.X_channels = img.shape[-1]
         self.Y_channels = img.shape[-1]
         del img
 
@@ -645,6 +634,8 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.g_sigma = g_sigma
         self.mb_kernel = mb_kernel
         self.motb_k_range = motb_k_range 
+        self.brightness_factor = brightness_factor
+        self.contrast_factor = contrast_factor
 
         # Instance segmentation options
         self.instance_problem = instance_problem
@@ -702,12 +693,8 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         if gamma_contrast:
             self.trans_made += "_gcontrast" + str(gc_gamma)
         if brightness:
-            self.brightness_factor = brightness_factor
-            self.brightness_mode = brightness_mode  # Not used
             self.trans_made += "_brightness" + str(brightness_factor)
         if contrast:
-            self.contrast_factor = contrast_factor
-            self.contrast_mode = contrast_mode  # Not used
             self.trans_made += "_contrast" + str(contrast_factor)
         if dropout:
             self.trans_made += "_drop" + str(drop_range)
@@ -1059,23 +1046,34 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         if self.no_bin_channel_found:
             heat = []
             new_mask = []
+            if self.cutmix:
+                e_new_mask = []
+                e_heat = []
             for j in range(mask.shape[-1]):
                 if self.norm_module.get_channel_info(j)["type"] == "no_bin":
                     heat.append(np.expand_dims(mask[..., j], -1))
+                    if self.cutmix:
+                        e_heat.append(np.expand_dims(e_mask[..., j], -1)) # type: ignore
                 else:
                     new_mask.append(np.expand_dims(mask[..., j], -1))
+                    if self.cutmix:
+                        e_new_mask.append(np.expand_dims(e_mask[..., j], -1)) # type: ignore
 
             heat = np.concatenate(heat, axis=-1)
+            if self.cutmix:
+                e_heat = np.concatenate(e_heat, axis=-1)
             if len(new_mask) == 0:
                 mask = np.zeros(mask.shape)  # Fake mask
+                if self.cutmix:
+                    e_mask = np.zeros(e_mask.shape) # type: ignore
             else:
                 mask = np.concatenate(new_mask, axis=-1)
+                if self.cutmix:
+                    e_mask = np.concatenate(e_new_mask, axis=-1)  # type: ignore
             del new_mask
+            if self.cutmix:
+                del e_new_mask
 
-        # Save shape
-        o_img_shape = image.shape
-        o_mask_shape = mask.shape
-        
         # Convert to grayscale
         if self.grayscale and random.uniform(0, 1) < self.da_prob:
             image = grayscale(image)
@@ -1118,29 +1116,13 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 mask_type=self.norm_module.mask_norm,
             )  # type: ignore
 
-        # Reshape 3D volumes to 2D image type with multiple channels to pass through imgaug lib
-        if self.ndim == 3:
-            image = image.reshape(image.shape[:2] + (image.shape[2] * image.shape[3],))
-            mask = mask.reshape(mask.shape[:2] + (mask.shape[2] * mask.shape[3],))
-            if e_im is not None:
-                e_im = e_im.reshape(e_im.shape[:2] + (e_im.shape[2] * e_im.shape[3],))
-            if e_mask is not None:
-                e_mask = e_mask.reshape(e_mask.shape[:2] + (e_mask.shape[2] * e_mask.shape[3],))
-            # if e_heat: e_heat = e_heat.reshape(e_heat.shape[:2]+(e_heat.shape[2]*e_heat.shape[3],))
-
-            if heat is not None:
-                o_heat_shape = heat.shape
-                heat = heat.reshape(heat.shape[: (self.ndim - 1)] + (heat.shape[2] * heat.shape[3],))
-                assert heat.ndim == 3, f"Heat must be 3D, got {heat.ndim}D"
-
         # Apply cblur
         if self.cutblur and random.uniform(0, 1) < self.da_prob:
             image = cutblur(image, self.cblur_size, self.cblur_down_range, self.cblur_inside)
 
         # Apply cutmix
         if self.cutmix and random.uniform(0, 1) < self.da_prob:
-            assert e_im is not None and e_mask is not None
-            image, mask = cutmix(image, e_im, mask, e_mask, self.cmix_size)
+            image, mask, heat = cutmix(image, e_im, mask, e_mask, heat, e_heat, self.cmix_size) # type: ignore
 
         # Apply cutnoise
         if self.cutnoise and random.uniform(0, 1) < self.da_prob:
@@ -1148,25 +1130,24 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         # Apply misalignment
         if self.misalignment and random.uniform(0, 1) < self.da_prob:
-            rel = str(o_img_shape[-1]) + "_" + str(o_mask_shape[-1])
-            image, mask = misalignment(image, mask, self.ms_displacement, self.ms_rotate_ratio, c_relation=rel)
+            image, mask = misalignment(image, mask, self.ms_displacement, self.ms_rotate_ratio)
 
         # Apply brightness
         if self.brightness and random.uniform(0, 1) < self.da_prob:
             image = brightness(
                 image,
                 brightness_factor=self.brightness_factor,
-                mode=self.brightness_mode,
             )
 
         # Apply contrast
         if self.contrast and random.uniform(0, 1) < self.da_prob:
-            image = contrast(image, contrast_factor=self.contrast_factor, mode=self.contrast_mode)
+            image = contrast(image, contrast_factor=self.contrast_factor)
 
         # Apply gamma contrast
         if self.gamma_contrast and random.uniform(0, 1) < self.da_prob:
             image = gamma_contrast(image, gamma=self.gc_gamma)
 
+        # Apply gaussian noise
         if self.gaussian_noise and random.uniform(0, 1) < self.da_prob:
             mean = np.mean(image) if self.gaussian_noise_use_input_img_mean_and_var else self.gaussian_noise_mean
             var = (
@@ -1176,15 +1157,19 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             )
             image = random_noise(image, mode="gaussian", mean=mean, var=var)
 
+        # Apply poisson noise
         if self.poisson_noise and random.uniform(0, 1) < self.da_prob:
             image = random_noise(image, mode="poisson")
 
+        # Apply salt noise
         if self.salt and random.uniform(0, 1) < self.da_prob:
             image = random_noise(image, mode="salt", amount=self.salt_amount)
 
+        # Apply pepper noise
         if self.pepper and random.uniform(0, 1) < self.da_prob:
             image = random_noise(image, mode="pepper", amount=self.pepper_amount)
 
+        # Apply salt & pepper noise
         if self.salt_and_pepper and random.uniform(0, 1) < self.da_prob:
             image = random_noise(
                 image,
@@ -1201,7 +1186,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         if self.gridmask and random.uniform(0, 1) < self.da_prob:
             image = GridMask(
                 image,
-                self.X_channels,
                 self.z_size,
                 self.grid_ratio,
                 self.grid_d_size,
@@ -1214,7 +1198,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             image, mask = cutout(
                 image,
                 mask,
-                self.X_channels,
                 self.z_size,
                 self.cout_nb_iterations,
                 self.cout_size,
@@ -1222,39 +1205,45 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 self.res_relation,
                 self.cout_apply_to_mask,
             )
-   
+
+        # Apply elastic deformation
         if self.elastic and random.uniform(0, 1) < self.da_prob:
             image, mask, heat = elastic(
-                image, mask=mask, heat=heat,
-                alpha=self.e_alpha,  # or pick a value from the tuple, e.g., random.randint(*self.e_alpha)
+                image, 
+                mask=mask, 
+                heat=heat,
+                alpha=self.e_alpha,
                 sigma=self.e_sigma,
+                mask_type=self.norm_module.mask_norm,
                 mode=self.e_mode
-            )
+            ) # type: ignore
 
         if self.shear and random.uniform(0, 1) < self.da_prob:
             image, mask, heat = shear(
                 image, mask=mask, heat=heat,
                 shear=self.shear_range,
-                mode=self.affine_mode
-            )
+                mode=self.affine_mode,
+                mask_type=self.norm_module.mask_norm,
+            ) # type: ignore
         
         if self.shift and random.uniform(0, 1) < self.da_prob:
             image, mask, heat = shift(
                 image, mask=mask, heat=heat,
                 shift_range=self.shift_range,
-                mode=self.affine_mode
-            )
+                mode=self.affine_mode,
+                mask_type=self.norm_module.mask_norm,
+            ) # type: ignore
 
         if self.vflip and random.uniform(0, 1) < self.da_prob:
             image, mask, heat = flip_vertical(
                 image, mask=mask, heat=heat
-            )
-        
+            ) # type: ignore
+
         if self.hflip and random.uniform(0, 1) < self.da_prob:
             image, mask, heat = flip_horizontal(
                 image, mask=mask, heat=heat
-            )
-        
+            ) # type: ignore
+            
         if self.g_blur and random.uniform(0, 1) < self.da_prob:
             image = gaussian_blur(
                 image,
@@ -1279,20 +1268,13 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 drop_range=self.drop_range
             )
 
-        # Recover the original shape
-        image = image.reshape(o_img_shape)
-        mask = mask.reshape(o_mask_shape)
-
         # Merge heatmaps and masks again
         if self.no_bin_channel_found:
-            if self.ndim == 3:
-                heat = heat.reshape(o_heat_shape)
-
             new_mask = []
             hi, mi = 0, 0
             for j in range(len(self.norm_module.channel_info)):  # type: ignore
                 if self.norm_module.get_channel_info(j)["type"] == "no_bin":
-                    new_mask.append(np.expand_dims(heat[..., hi], -1))
+                    new_mask.append(np.expand_dims(heat[..., hi], -1)) # type: ignore
                     hi += 1
                 else:
                     new_mask.append(np.expand_dims(mask[..., mi], -1))

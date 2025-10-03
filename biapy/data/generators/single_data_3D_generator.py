@@ -2,8 +2,7 @@
 3D single image data generator for BiaPy.
 
 This module provides the Single3DImageDataGenerator class, which generates batches of
-3D images with on-the-fly augmentation for deep learning workflows. It is based on
-imgaug, microDL, and custom augmentors for flexible data pipelines.
+3D images with on-the-fly augmentation for deep learning workflows.
 """
 import numpy as np
 import random
@@ -14,10 +13,7 @@ from biapy.data.generators.single_base_data_generator import SingleBaseDataGener
 
 class Single3DImageDataGenerator(SingleBaseDataGenerator):
     """
-    Custom 3D data generator based on `imgaug <https://github.com/aleju/imgaug-doc>`_ and our own `augmentors.py <https://github.com/BiaPyX/BiaPy/blob/master/biapy/data/generators/augmentors.py>`_ transformations. This generator will yield an image and its corresponding mask.
-
-    Based on `microDL <https://github.com/czbiohub/microDL>`_ and
-    `Shervine's blog <https://stanford.edu/~shervine/blog/keras-how-to-generate-data-on-the-fly>`_.
+    Custom 3D data generator to transform single image data.
 
     Parameters
     ----------
@@ -53,21 +49,10 @@ class Single3DImageDataGenerator(SingleBaseDataGenerator):
         image : 4D Numpy array
             Transformed image. E.g. ``(z, y, x, channels)``.
         """
-        # Transpose them so we can merge the z and c channels easily.
-        # z, y, x, c --> x, y, z, c
-        image = image.transpose((2, 1, 0, 3))
-
-        # Apply flips in z as imgaug can not do it
         if self.zflip and random.uniform(0, 1) < self.da_prob:
-            l_image = []
-            for i in range(image.shape[-1]):
-                l_image.append(np.expand_dims(np.flip(image[..., i], 2), -1))
-            image = np.concatenate(l_image, axis=-1)
+            image = image[::-1, ...]
 
-        image = super().apply_transform(image)
-
-        # x, y, z, c --> z, y, x, c
-        return image.transpose((2, 1, 0, 3))
+        return super().apply_transform(image)
 
     def save_aug_samples(self, img, orig_images, i, pos, out_dir, draw_grid):
         """
