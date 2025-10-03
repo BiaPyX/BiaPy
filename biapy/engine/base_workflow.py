@@ -1641,7 +1641,7 @@ class Base_Workflow(metaclass=ABCMeta):
         self.bmz_config["postprocessing"] = []
         if self.cfg.MODEL.SOURCE == "biapy":
             # Check activations to be inserted as postprocessing in BMZ
-            act = list(self.activations[0].values())
+            act = list(self.activations[0])
             for ac in act:
                 if ac in ["ce_sigmoid", "Sigmoid"]:
                     self.bmz_config["postprocessing"].append("sigmoid")
