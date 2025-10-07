@@ -1390,7 +1390,7 @@ class Config:
         _C.LOSS.TYPE = ""
         # Weights to be applied in multiple loss combination cases, by multiplying the corresponding weight to each loss.
         # It works for all the workflows but the instance segmentation one, as in that case the weights must be set
-        # in PROBLEM.INSTANCE_SEG.DATA_CHANNEL_LOSSES. The weights must sum 1. E.g. [0.3, 0.7].
+        # in PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS. The weights must sum 1. E.g. [0.3, 0.7].
         _C.LOSS.WEIGHTS = [0.66, 0.34]
         # To weight classes in an imbalanced dataset. It can be 'none', 'manual' or 'auto'.
         # Options:
