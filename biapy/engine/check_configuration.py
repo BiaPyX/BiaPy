@@ -466,7 +466,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             for ch in sorted_original_instance_channels:
                 suffix += f"_{ch}"
                 for entry in dst.get(ch, {}):
-                    suffix += f".{entry}-{dst[ch][entry]}"
+                    eval = str(dst[ch][entry]).replace(" ", "").replace("[", "").replace("]", "").replace("(", "").replace(")", "").replace(",", "-")
+                    suffix += f".{entry}-{eval}"
             train_channel_mask_dir = cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR + suffix
             opts.extend(["DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR", train_channel_mask_dir])
             val_channel_mask_dir = cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR + suffix
