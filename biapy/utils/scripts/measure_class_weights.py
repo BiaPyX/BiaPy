@@ -52,6 +52,8 @@ def accumulate_counts(
     total_pixels = 0
     for p in tqdm(files):
         mask = read_img_as_ndarray(str(p.resolve()), is_3d=False).squeeze()
+        mask[...,1] *= 2
+        mask = np.max(mask, axis=-1)
         if mask.ndim != 2:
             raise ValueError(f"Mask {p} is not 2D; got shape={mask.shape}")
         mask = mask.astype(np.int64, copy=False)
