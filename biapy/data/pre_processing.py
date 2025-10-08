@@ -28,7 +28,7 @@ from biapy.utils.util import (
     seg2aff_pni,
     seg_widen_border,
 )
-from biapy.utils.misc import is_main_process, os_walk_clean
+from biapy.utils.misc import is_main_process, get_rank, get_world_size, os_walk_clean
 from biapy.data.data_3D_manipulation import (
     load_3D_efficient_files,
     load_img_part_from_efficient_file,
@@ -285,7 +285,11 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
             if mask and isinstance(imgfile, h5py.File):
                 imgfile.close()
     else:
-        for i in tqdm(range(len(Y)), disable=not is_main_process()):
+        rank = get_rank()
+        world_size = get_world_size()
+        N = len(Y)
+        it = range(rank, N, world_size)
+        for i in tqdm(it, disable=not is_main_process()):
             img = read_img_as_ndarray(
                 os.path.join(getattr(cfg.DATA, tag).GT_PATH, Y[i]),
                 is_3d=not cfg.PROBLEM.NDIM == "2D",
