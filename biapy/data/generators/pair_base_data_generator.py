@@ -522,7 +522,9 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         # Loop over a few masks to ensure foreground class is present to decide normalization
         if self.norm_module.mask_norm == "as_mask":
             print("Checking which channel of the mask needs normalization . . .")
-            n_samples = min(500, len(self.X.sample_list))
+            n_samples = min(50, len(self.X.sample_list))
+            if instance_problem:
+                n_samples = 1
             for i in tqdm(range(n_samples), total=n_samples):
                 _, mask = self.load_sample(i, first_load=True)
                 # Store which channels are binary or not (e.g. distance transform channel is not binary)
@@ -1063,9 +1065,9 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             if self.cutmix:
                 e_heat = np.concatenate(e_heat, axis=-1)
             if len(new_mask) == 0:
-                mask = np.zeros(mask.shape)  # Fake mask
+                mask = np.zeros(mask.shape[:-1] + (1,))  # Fake mask
                 if self.cutmix:
-                    e_mask = np.zeros(e_mask.shape) # type: ignore
+                    e_mask = np.zeros(e_mask.shape[:-1] + (1,))  # type: ignore
             else:
                 mask = np.concatenate(new_mask, axis=-1)
                 if self.cutmix:
@@ -1509,7 +1511,10 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         grid_width : int, optional
             Grid's width.
         """
-        v = np.max(im)
+        vmax = []
+        for c in range(im.shape[-1]):
+            vmax.append(np.max(im[...,c]))
+
         if grid_width is not None and grid_width > 0:
             grid_y = grid_width
             grid_x = grid_width
@@ -1519,15 +1524,15 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         if self.ndim == 2:
             for i in range(0, im.shape[0], grid_y):
-                im[i] = [v] * im.shape[-1]
+                im[i] = vmax
             for j in range(0, im.shape[1], grid_x):
-                im[:, j] = [v] * im.shape[-1]
+                im[:, j] = vmax
         else:
             for k in range(0, im.shape[0]):
                 for i in range(0, im.shape[2], grid_x):
-                    im[k, :, i] = [v] * im.shape[-1]
+                    im[k, :, i] = vmax
                 for j in range(0, im.shape[1], grid_y):
-                    im[k, j] = [v] * im.shape[-1]
+                    im[k, j] = vmax
         return im
 
     def prepare_n2v(self, _img: NDArray, _mask: NDArray) -> Tuple[NDArray, NDArray]:

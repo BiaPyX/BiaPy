@@ -557,8 +557,11 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         grid_width : int, optional
             Grid's width.
         """
-        v = np.max(im)
-        if grid_width:
+        vmax = []
+        for c in range(im.shape[-1]):
+            vmax.append(np.max(im[...,c]))
+
+        if grid_width is not None and grid_width > 0:
             grid_y = grid_width
             grid_x = grid_width
         else:
@@ -567,15 +570,15 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         if self.ndim == 2:
             for i in range(0, im.shape[0], grid_y):
-                im[i] = [v] * im.shape[-1]
+                im[i] = vmax
             for j in range(0, im.shape[1], grid_x):
-                im[:, j] = [v] * im.shape[-1]
+                im[:, j] = vmax
         else:
             for k in range(0, im.shape[0]):
                 for i in range(0, im.shape[2], grid_x):
-                    im[k, :, i] = [v] * im.shape[-1]
+                    im[k, :, i] = vmax
                 for j in range(0, im.shape[1], grid_y):
-                    im[k, j] = [v] * im.shape[-1]
+                    im[k, j] = vmax
         return im
 
     def get_transformed_samples(
