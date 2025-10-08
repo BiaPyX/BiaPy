@@ -353,120 +353,126 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 )
 
             # Pre-fill per-channel extra options only if the first details dict is empty
-            if len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0]) == 0:
-                chs = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
-                dst = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0]
+            chs = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
+            dst = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0]
 
-                # F and B — foreground and background
-                for ch in ("F", "B"):
-                    if ch in chs:
-                        dst[ch] = {
-                            "erosion": 0,
-                            "dilation": 0,
-                        }
-
-                # P — point-like channel
-                if "P" in chs:
-                    dst["P"] = {
-                        "type": "centroid",  # default
-                        "dilation": 1, 
+            # F and B — foreground and background
+            for ch in ("F", "B"):
+                if ch in chs:
+                    dst[ch] = {
+                        "erosion": dst.get(ch, {}).get("erosion", 0),
+                        "dilation": dst.get(ch, {}).get("dilation", 0),
                     }
 
-                # C — contours
-                if "C" in chs:
-                    dst["C"] = {
-                        "mode": "thick",     # default; valid options: thick|inner|outer|subpixel|dense
+            # P — point-like channel
+            if "P" in chs:
+                dst["P"] = {
+                    "type": dst.get("P", {}).get("type", "centroid"),
+                    "dilation": dst.get("P", {}).get("dilation", 1),
+                }
+
+            # C — contours
+            if "C" in chs:
+                dst["C"] = {
+                    "mode": dst.get("C", {}).get("mode", "thick"),
+                }
+
+            # H / V / Z / Db — distance channels group
+            for ch in ("H", "V", "Z", "Db"):
+                if ch in chs:
+                    dst[ch] = {
+                        "norm": dst.get(ch, {}).get("norm", True),
+                        "mask_values": dst.get(ch, {}).get("mask_values", True),
                     }
 
-                # H / V / Z / Db — distance channels group
-                for ch in ("H", "V", "Z", "Db"):
-                    if ch in chs:
-                        dst[ch] = {
-                            "norm": True,                # default
-                            "mask_values": True,          # default
-                        }
+            # Dc — center/skeleton distance-to-center
+            if "Dc" in chs:
+                dst["Dc"] = {
+                    "type": dst.get("Dc", {}).get("mode", "thick"),
+                    "norm": dst.get("Dc", {}).get("norm", True),
+                    "mask_values": dst.get("Dc", {}).get("mask_values", True),
+                }
 
-                # Dc — center/skeleton distance-to-center
-                if "Dc" in chs:
-                    dst["Dc"] = {
-                        "type": "center",             # default: center|skeleton
-                        "norm": True,                # default
-                        "mask_values": True,          # default
-                    }
+            # Dn — normal / inverted distances
+            if "Dn" in chs:
+                dst["Dn"] = {
+                    "closing_size": dst.get("Dn", {}).get("closing_size", 3),
+                    "norm": dst.get("Dn", {}).get("norm", True),
+                    "mask_values": dst.get("Dn", {}).get("mask_values", True),
+                    "decline_power": dst.get("Dn", {}).get("decline_power", 3),
+                }
 
-                # Dn — normal / inverted distances
-                if "Dn" in chs:
-                    dst["Dn"] = {
-                        "closing_size": 3,            # default
-                        "norm": True,                 # default
-                        "mask_values": True,          # default
-                        "decline_power": 3,           # default
-                    }
+            # D — signed distance (global)
+            if "D" in chs:
+                dst["D"] = {
+                    "alpha": dst.get("D", {}).get("alpha", 8),
+                    "beta": dst.get("D", {}).get("beta", 50),
+                    "act": dst.get("D", {}).get("act", "tanh"),
+                    "norm": dst.get("D", {}).get("norm", True),
+                }
 
-                # D — signed distance (global)
-                if "D" in chs:
-                    dst["D"] = {
-                        "alpha": 8,                     # default
-                        "beta": 50,                     # default
-                        "act": "tanh",                  # default: tanh|linear
-                        "norm": True,                   # default
-                    }
+            # R — star-convex/radial distances
+            if "R" in chs:
+                nrays = dst.get("R", {}).get("nrays", "")
+                if nrays == "":
+                    nrays = 32 if cfg.PROBLEM.NDIM == "2D" else 96
+                dst["R"] = {
+                    "nrays": nrays,
+                    "norm": dst.get("R", {}).get("norm", True),
+                    "mask_values": dst.get("R", {}).get("mask_values", True),
+                }
 
-                # R — star-convex/radial distances
-                if "R" in chs:
-                    dst["R"] = {
-                        "nrays": 32 if cfg.PROBLEM.NDIM == "2D" else 96,  # matches documented defaults
-                        "norm": True,                 # default
-                        "mask_values": True,          # default
-                    }
+            # T — touching thickness
+            if "T" in chs:
+                dst["T"] = {
+                    "thickness": dst.get("T", {}).get("thickness", 2),
+                }
 
-                # T — touching thickness
-                if "T" in chs:
-                    dst["T"] = {
-                        "thickness": 2,  # default
-                    }
+            # A — pixel/voxel affinities (fixed: removed invalid 'mode')
+            if "A" in chs:
+                dst["A"] = {
+                    "z_affinities": dst.get("A", {}).get("z_affinities", [1]),
+                    "y_affinities": dst.get("A", {}).get("y_affinities", [1]),
+                    "x_affinities": dst.get("A", {}).get("x_affinities", [1]),
+                    "widen_borders": dst.get("A", {}).get("widen_borders", 1),
+                }
+                # # If you want the SNEMI3D setup, uncomment:
+                # dst["A"] = {
+                #     "z_affinities": dst.get("A", {}).get("z_affinities", [1, 2, 3, 4]),
+                #     "y_affinities": dst.get("A", {}).get("y_affinities", [1, 3, 9, 27]),
+                #     "x_affinities": dst.get("A", {}).get("x_affinities", [1, 3, 9, 27]),
+                #     "widen_borders": dst.get("A", {}).get("widen_borders", 1),
+                # }
 
-                # A — pixel/voxel affinities (fixed: removed invalid 'mode')
-                if "A" in chs:
-                    dst["A"] = {
-                        "z_affinities": [1],  # defaults; ensure all three lists have same length
-                        "y_affinities": [1],
-                        "x_affinities": [1],
-                        "widen_borders": 1,   # default
-                    }
-                    # # If you want the SNEMI3D setup, uncomment:
-                    # dst["A"] = {
-                    #     "z_affinities": [1, 2, 3, 4],
-                    #     "y_affinities": [1, 3, 9, 27],
-                    #     "x_affinities": [1, 3, 9, 27],
-                    #     "widen_borders": 1,
-                    # }
-
-                # E — learned per-pixel features
-                if "E" in chs:
-                    dst["E_offset"] = {
-                        "sigma": 6.0,    # default
-                    }
-                    dst["E_sigma"] = {}
-                    dst["E_seediness"] = {}
-                
-                opts.extend(["PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS", [dst]])
-            else:
-                dst = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0]
-                # Expand E into E_offset, E_sigma and E_seediness if needed
-                if "E" in dst:
-                    dst["E_offset"] = {
-                        "sigma": 6.0,    # default
-                    }
-                    dst["E_sigma"] = {}
-                    dst["E_seediness"] = {}
-                    del dst["E"]
-                    opts.extend(["PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS", [dst]])
+            # E — learned per-pixel features
+            if "E" in chs:
+                dst["E_offset"] = {
+                    "sigma": dst.get("E_offset", {}).get("sigma", 6.0),
+                }
+                dst["E_sigma"] = {}
+                dst["E_seediness"] = {}
+            
+            opts.extend(["PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS", [dst]])
 
             # Add extra weight map channel if requested
             assert cfg.PROBLEM.INSTANCE_SEG.BORDER_EXTRA_WEIGHTS in ["unet-like", ""], "'PROBLEM.INSTANCE_SEG.BORDER_EXTRA_WEIGHTS' not in ['unet-like', '']"
             if cfg.PROBLEM.INSTANCE_SEG.BORDER_EXTRA_WEIGHTS == "unet-like" and "We" not in sorted_original_instance_channels:
                 sorted_original_instance_channels.append("We")
+
+            # Create unique folder names for instance segmentation channel masks
+            # depending on the channels and their options
+            suffix = ""
+            dst = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0]
+            for ch in sorted_original_instance_channels:
+                suffix += f"_{ch}"
+                for entry in dst.get(ch, {}):
+                    suffix += f".{entry}-{dst[ch][entry]}"
+            train_channel_mask_dir = cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR + suffix
+            opts.extend(["DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR", train_channel_mask_dir])
+            val_channel_mask_dir = cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR + suffix
+            opts.extend(["DATA.VAL.INSTANCE_CHANNELS_MASK_DIR", val_channel_mask_dir])
+            test_channel_mask_dir = cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR + suffix
+            opts.extend(["DATA.TEST.INSTANCE_CHANNELS_MASK_DIR", test_channel_mask_dir])
 
             replace_channels = False
             if sorted_original_instance_channels != original_instance_channels:
@@ -495,12 +501,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 if not channel_loss_set:
                     losses = []
                     for ch in sorted_original_instance_channels:
-                        if ch in ["F", "B", "C", "P", "T"]:
+                        if ch in ["F", "B", "C", "P", "T", "A"]:
                             losses.append("bce")
                         elif ch in ["H", "V", "Z", "Db", "Dc", "Dn", "D", "R"]:
                             losses.append("l1")
-                        elif ch in ["A"]:
-                            losses.append("bce")
                         elif ch in ["E_offset", "E_sigma", "E_seediness"]:
                             losses.append("embedseg")
                         elif ch in ["We"]:

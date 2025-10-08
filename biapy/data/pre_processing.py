@@ -738,7 +738,7 @@ def labels_into_channels(
 
     if "We" in mode:
         new_mask[..., mode.index("We")] =  unet_border_weight_map(vol, w0=10.0, sigma=5.0, resolution=resolution)
-    
+
     # Save examples of each channel
     if save_dir:
         os.makedirs(save_dir, exist_ok=True)

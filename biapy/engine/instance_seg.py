@@ -194,12 +194,15 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         self.activations = []
         self.model_output_channels = {"type": "mask", "channels": 0}
         dst = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0]
-        for channel in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
+        for i, channel in enumerate(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS):
                 if channel in ["B", "F", "P", "C", "T", "F_pre", "F_post"]:
                     self.activations.append("ce_sigmoid")
                     self.model_output_channels["channels"] += 1
                 elif channel in ["Db", "Dc", "Dn", "D", "H", "V", "Z"]:
-                    self.activations.append("linear")
+                    if dst.get(channel, {}).get("norm", True) and self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES[i] not in ["mse", "l1", "mae"]:
+                        self.activations.append("ce_sigmoid")
+                    else:
+                        self.activations.append("linear")
                     self.model_output_channels["channels"] += 1
                 elif channel == "D":
                     self.activations.append(dst.get("D", {}).get("act", "linear"))
@@ -2492,13 +2495,12 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         original_test_path, original_test_mask_path = None, None
         train_channel_mask_dir = self.cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR
         val_channel_mask_dir = self.cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR
+        test_channel_mask_dir = self.cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR
 
         if not self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA:
             test_instance_mask_dir = self.cfg.DATA.TEST.GT_PATH
-            test_channel_mask_dir = self.cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR
         else:
-            test_instance_mask_dir = self.cfg.DATA.TEST.PATH
-            test_channel_mask_dir = self.cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR
+            test_instance_mask_dir = self.cfg.DATA.TEST.PATH            
 
         opts = []
         print("###########################")

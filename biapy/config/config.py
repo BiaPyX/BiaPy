@@ -1889,79 +1889,19 @@ def update_dependencies(cfg) -> None:
     call.DATA.TEST.GT_PATH = (
         call.DATA.TEST.GT_PATH if call.DATA.TEST.GT_PATH[-1] != "/" else call.DATA.TEST.GT_PATH[:-1]
     )
-    post_dil = "".join(str(call.PROBLEM.INSTANCE_SEG.SYNAPSES.POSTSITE_DILATION)[1:-1].replace(",","")).replace(" ","_")
-    post_d_dil = "".join(str(call.PROBLEM.INSTANCE_SEG.SYNAPSES.POSTSITE_DILATION_DISTANCE_CHANNELS)[1:-1].replace(",","")).replace(" ","_")
     tdata = call.DATA.TRAIN.GT_PATH if not call.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA else call.DATA.TRAIN.PATH
-    channel_suffix = "".join(call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) 
-    if call.PROBLEM.INSTANCE_SEG.BORDER_EXTRA_WEIGHTS != "":
-        channel_suffix += "We"
-    if call.PROBLEM.INSTANCE_SEG.TYPE == "regular":
-        suffix = ""
-        for key, val in call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0].items():
-            suffix += f"_{key}"
-            if key in call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
-                for kdetail, vdetail in val.items():
-                    suffix += f"-{kdetail}-{vdetail}"
-        call.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR = (
-            tdata
-            + "_"
-            + channel_suffix
-            + suffix
-        )
-    else: 
-        call.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR = (
-            tdata
-            + "_"
-            + channel_suffix
-            + "_"
-            + post_dil
-            + "_" 
-            + post_d_dil
-        )
+    call.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR = tdata
     cpd = '_'.join([str(x) for x in call.PROBLEM.DETECTION.CENTRAL_POINT_DILATION])
     call.DATA.TRAIN.DETECTION_MASK_DIR = call.DATA.TRAIN.GT_PATH + "_detection_masks_" + str(cpd)
     call.DATA.TRAIN.SSL_SOURCE_DIR = call.DATA.TRAIN.PATH + "_ssl_source"
     vdata = call.DATA.VAL.GT_PATH if not call.DATA.VAL.INPUT_ZARR_MULTIPLE_DATA else call.DATA.VAL.PATH
-    if call.PROBLEM.INSTANCE_SEG.TYPE == "regular":
-        call.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR = (
-            vdata
-            + "_"
-            + channel_suffix
-            + suffix
-        )
-    else: 
-        call.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR = (
-            vdata
-            + "_"
-            + channel_suffix
-            + "_"
-            + post_dil 
-            + "_" 
-            + post_d_dil
-        )
-    
+    call.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR = vdata
     # If value is not the default
     call.DATA.VAL.DETECTION_MASK_DIR = call.DATA.VAL.GT_PATH + "_detection_masks_" + str(cpd)
     call.DATA.VAL.SSL_SOURCE_DIR = call.DATA.VAL.PATH + "_ssl_source"
     tdata = call.DATA.TEST.GT_PATH if not call.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA else call.DATA.TEST.PATH
-    if call.PROBLEM.INSTANCE_SEG.TYPE == "regular":
-        call.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR = (
-            tdata
-            + "_"
-            + channel_suffix
-            + suffix
-        )
-    else: 
-        call.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR = (
-            tdata
-            + "_"
-            + channel_suffix
-            + "_"
-            + post_dil
-            + "_" 
-            + post_d_dil
-        )
-    
+    call.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR = tdata
+
     # If value is not the default
     if call.DATA.TEST.BINARY_MASKS == os.path.join("user_data", "test", "bin_mask"):
         call.DATA.TEST.BINARY_MASKS = os.path.join(call.DATA.TEST.PATH, "..", "bin_mask")
@@ -1971,13 +1911,13 @@ def update_dependencies(cfg) -> None:
 
     call.PATHS.TRAIN_INSTANCE_CHANNELS_CHECK = os.path.join(
         call.PATHS.RESULT_DIR.PATH,
-        "train_" + channel_suffix + "_instance_channels",
+        "train_" + "".join(call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) + "_instance_channels",
     )
     call.PATHS.VAL_INSTANCE_CHANNELS_CHECK = os.path.join(
         call.PATHS.RESULT_DIR.PATH,
-        "val_" + channel_suffix + "_instance_channels",
+        "val_" + "".join(call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) + "_instance_channels",
     )
     call.PATHS.TEST_INSTANCE_CHANNELS_CHECK = os.path.join(
         call.PATHS.RESULT_DIR.PATH,
-        "test_" + channel_suffix + "_instance_channels",
+        "test_" + "".join(call.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) + "_instance_channels",
     )
