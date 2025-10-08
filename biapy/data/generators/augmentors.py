@@ -1894,6 +1894,7 @@ def rotation(
     axes_img = (1, 0) if img.ndim == 3 else (2, 1)
 
     def _rotate(arr: NDArray, axes: Tuple[int, int], order: int) -> NDArray:
+        arr_mins, arr_maxes = np.min(arr, axis=tuple(range(arr.ndim - 1))), np.max(arr, axis=tuple(range(arr.ndim - 1)))
         orig_dtype = arr.dtype
         out = rotate(
             arr,
@@ -1906,8 +1907,7 @@ def rotation(
         # Cast back to original dtype
         if np.issubdtype(orig_dtype, np.floating):
             return out.astype(orig_dtype, copy=False)
-        info = np.iinfo(orig_dtype)
-        out = np.clip(out, info.min, info.max)
+        np.clip(out, arr_mins, arr_maxes, out=out)
         return out.astype(orig_dtype, copy=False)
 
     # Image (bilinear)
@@ -2244,9 +2244,10 @@ def shear(
         h = None
         if heat is not None:
             H_heat, W_heat = heat.shape[:2]
+            heat_mins, heat_maxes = np.min(heat, axis=tuple(range(heat.ndim - 1))), np.max(heat, axis=tuple(range(heat.ndim - 1)))
             tform_h = _build_shear_matrix_skimage((H_heat, W_heat), np.deg2rad(shear_x), np.deg2rad(shear_y))
             h = _warp_hwc(heat, tform_h, order=3, cval=cval, mode=mode)
-
+            np.clip(h, heat_mins, heat_maxes, out=h)
         return img, m, h
 
     elif image.ndim == 4:       # (z, y, x, c)
@@ -2371,8 +2372,10 @@ def shift(
 
     # Shift heatmap
     if heat is not None:
+        heat_mins, heat_maxes = np.min(heat, axis=tuple(range(heat.ndim - 1))), np.max(heat, axis=tuple(range(heat.ndim - 1)))
         heat = shift_nd(heat, get_shift_tuple(heat, x_pix, y_pix),
                         order=3, mode=mode, cval=cval)
+        np.clip(heat, heat_mins, heat_maxes, out=heat)
 
     return img, mask, heat
 
@@ -2408,9 +2411,15 @@ def flip_horizontal(image: NDArray, mask: Optional[NDArray] = None, heat: Option
         assert mask.ndim in (3, 4), f"Mask must be 3D or 4D, got {mask.shape}"
     if heat is not None:
         assert heat.ndim in (3, 4), f"Heatmap must be 3D or 4D, got {heat.shape}"
-    img = image[:, ::-1]
-    mask = mask[:, ::-1] if mask is not None else None
-    heat = heat[:, ::-1] if heat is not None else None
+    
+    if image.ndim == 3:
+        img = image[::-1]
+        mask = mask[::-1] if mask is not None else None
+        heat = heat[::-1] if heat is not None else None
+    else:
+        img = image[:, ::-1]
+        mask = mask[:, ::-1] if mask is not None else None
+        heat = heat[:, ::-1] if heat is not None else None
     return img, mask, heat
 
 
@@ -2445,9 +2454,15 @@ def flip_vertical(image: NDArray, mask: Optional[NDArray] = None, heat: Optional
         assert mask.ndim in (3, 4), f"Mask must be 3D or 4D, got {mask.shape}"
     if heat is not None:
         assert heat.ndim in (3, 4), f"Heatmap must be 3D or 4D, got {heat.shape}"
-    img = image[:, :, ::-1]
-    mask = mask[:, :, ::-1] if mask is not None else None
-    heat = heat[:, :, ::-1] if heat is not None else None
+    
+    if image.ndim == 3:
+        img = image[:, ::-1]
+        mask = mask[:, ::-1] if mask is not None else None
+        heat = heat[:, ::-1] if heat is not None else None
+    else:
+        img = image[:, :, ::-1]
+        mask = mask[:, :, ::-1] if mask is not None else None
+        heat = heat[:, :, ::-1] if heat is not None else None
     return img, mask, heat
 
 
@@ -2738,7 +2753,10 @@ def elastic(
     if mask is not None:
         mask_order = 0 if mask_type == "as_mask" else 1
         mask = warp_with_new_displacement(mask, alpha_val, sigma_val, mask_order, cval, mode)
-    heat = warp_with_new_displacement(heat, alpha_val, sigma_val, 3, cval, mode) if heat is not None else heat
+    if heat is not None:
+        heat_mins, heat_maxes = np.min(heat, axis=tuple(range(heat.ndim - 1))), np.max(heat, axis=tuple(range(heat.ndim - 1)))
+        heat = warp_with_new_displacement(heat, alpha_val, sigma_val, 3, cval, mode)
+        np.clip(heat, heat_mins, heat_maxes, out=heat)
 
     return img, mask, heat
 
