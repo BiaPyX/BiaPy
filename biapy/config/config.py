@@ -144,7 +144,7 @@ class Config:
         #       - 'dilation': int, the dilation size to be applied to the channel. Default: 0
         #   - 'P' channel. Possible options:
         #       - 'type': str, the type of the channel. Options are: 'centroid', 'skeleton'. Default: 'centroid'
-        #       - 'dilation': int, the dilation size to be applied to the channel. Default: 0
+        #       - 'dilation': int, the dilation size to be applied to the channel. Default: 1
         #   - 'C' channel. Possible options:
         #       - 'mode': str, how to create the contours. Corresponds to 'mode' arg of find_boundaries function from scikit-image. 
         #          More info in: https://scikit-image.org/docs/stable/api/skimage.segmentation.html#skimage.segmentation.find_boundaries.

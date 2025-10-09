@@ -1,8 +1,8 @@
 """
 Data Manipulation Module for BiaPy.
 
-This module provides a collection of functions for loading, processing, and manipulating 
-biological image data for deep learning applications. It supports both 2D and 3D data 
+This module provides a collection of functions for loading, processing, and manipulating
+biological image data for deep learning applications. It supports both 2D and 3D data
 formats, including common file types like TIFF, HDF5, Zarr, and NumPy arrays.
 
 Key Functionalities:
@@ -43,6 +43,7 @@ Typical Workflow:
 3. Filter or augment data as needed
 4. Use in training or save processed data
 """
+
 import os
 import h5py
 import torch
@@ -685,10 +686,10 @@ def load_and_prepare_train_data(
             # Extract a list of all validation gt images
             if val_mask_path:
                 print("Gathering labels for validation data . . .")
-                val_ids = sorted(next(os_walk_clean(val_mask_path))[2])
-                val_fids = sorted(next(os_walk_clean(val_mask_path))[1])
-                if len(val_ids) == 0:
-                    if len(val_fids) == 0:  # Trying Zarr
+                val_gt_ids = sorted(next(os_walk_clean(val_mask_path))[2])
+                val_gt_fids = sorted(next(os_walk_clean(val_mask_path))[1])
+                if len(val_gt_ids) == 0:
+                    if len(val_gt_fids) == 0:  # Trying Zarr
                         raise ValueError("No images found in dir {}".format(val_mask_path))
 
                     # Working with Zarr
@@ -708,6 +709,12 @@ def load_and_prepare_train_data(
                     )
                     norm_module.measure_by = "patch"
                 else:
+                    assert len(val_gt_ids) == len(val_ids), (
+                        "Number of validation raw images ({}) and validation labels ({}) must be the same. "
+                        "Please, check your data. Raw directory: {} . Label directory: {}.".format(
+                            len(val_ids), len(val_gt_ids), val_path, val_mask_path
+                        )
+                    )
                     # Calculate shape with upsampling
                     if is_3d:
                         assert len(y_upscaling) == 3 and len(crop_shape) == 4
@@ -725,7 +732,7 @@ def load_and_prepare_train_data(
                             crop_shape[2],
                         )
                     Y_val = samples_from_image_list(
-                        list_of_data=val_ids,
+                        list_of_data=val_gt_ids,
                         data_path=val_mask_path,
                         crop=crop,
                         crop_shape=real_shape,
@@ -1201,9 +1208,7 @@ def load_and_prepare_cls_test_data(
     return X_test, test_filenames
 
 
-def load_data_from_dir(
-    data_path: str, is_3d: bool = False
-) -> List[NDArray]:
+def load_data_from_dir(data_path: str, is_3d: bool = False) -> List[NDArray]:
     """
     Create dataset samples from the given list.
 
@@ -1234,7 +1239,7 @@ def load_data_from_dir(
         img_path = os.path.join(data_path, id_)
         img = read_img_as_ndarray(img_path, is_3d=is_3d)
         all_images.append(img)
-    
+
     return all_images
 
 
@@ -2309,12 +2314,12 @@ def samples_from_class_list(
                     f"of {data_range_expected}) in the folder. Current image: {img_path}"
                 )
 
-            dataset_file =DatasetFile(
-                    path=img_path,
-                    shape=img.shape,
-                    class_name=class_name,
-                    class_num=c_num if gt_loaded else -1,
-                )
+            dataset_file = DatasetFile(
+                path=img_path,
+                shape=img.shape,
+                class_name=class_name,
+                class_num=c_num if gt_loaded else -1,
+            )
 
             # Depending on the normalization choosen we need to set the stats into the DatasetFile
             norm_module.set_stats_from_image(img)
@@ -2351,8 +2356,9 @@ def filter_samples_by_properties(
 ):
     """
     Filter samples from ``x_dataset`` using defined conditions.
-    
-    The filtering will be done using the images each sample is extracted from. However, if ``zarr_data_info`` is provided the function will assume that Zarr/h5 files are provided, so the filtering will be performed sample by sample.
+
+    The filtering will be done using the images each sample is extracted from. However, if ``zarr_data_info`` is provided the function will 
+    assume that Zarr/h5 files are provided, so the filtering will be performed sample by sample.
 
     Parameters
     ----------
@@ -2870,7 +2876,7 @@ def load_images_to_dataset(
 ):
     """
     Load images into the ``dataset``: creating ``"img"`` key.
-    
+
     The process done faster if the samples extracted from the same
     image are in continuous positions within the list.
 
@@ -3324,7 +3330,7 @@ def imread(path: str) -> NDArray | Tuple[NDArray, Optional[str]]:
 def imwrite(path: str, image: NDArray):
     """
     Write ``data`` in the given ``path``.
-    
+
     In the past from ``skimage.io import imsave`` was used but now it is deprecated.
 
     Parameters
@@ -3440,7 +3446,7 @@ def data_range(x: NDArray) -> str:
 def check_masks(path: str, n_classes: int = 2, is_3d: bool = False):
     """
     Check whether the data masks have the correct labels inspection a few random images of the given path.
-    
+
     If the function gives no error one should assume that the masks are correct.
 
     Parameters
@@ -3716,7 +3722,7 @@ def reduce_dtype(
 ) -> NDArray:
     """
     Reduce the data type of the given input to the selected range.
-    
+
     It uses the following formula:
     ``results = ((x - x_min)/(x_max - x_min)) * (out_max - out_min)``
 
@@ -3763,20 +3769,22 @@ def reduce_dtype(
             torch_numpy_dtype_dict[out_type][0]
         )
 
+
 # Map common interpolation modes to:
 #   - PyTorch 'mode' string
 #   - scikit-image 'order' int
 interp_mode_map = {
-    'nearest':     {'torch': 'nearest',      'skimage': 0},
-    'linear':      {'torch': 'linear',       'skimage': 1},  # 3D only in PyTorch
-    'bilinear':    {'torch': 'bilinear',     'skimage': 1},
-    'bicubic':     {'torch': 'bicubic',      'skimage': 3},
-    'trilinear':   {'torch': 'trilinear',    'skimage': 1},  # fallback for 3D
-    'area':        {'torch': 'area',         'skimage': 1},  # approximate
-    'nearest-exact': {'torch': 'nearest-exact', 'skimage': 0}
+    "nearest": {"torch": "nearest", "skimage": 0},
+    "linear": {"torch": "linear", "skimage": 1},  # 3D only in PyTorch
+    "bilinear": {"torch": "bilinear", "skimage": 1},
+    "bicubic": {"torch": "bicubic", "skimage": 3},
+    "trilinear": {"torch": "trilinear", "skimage": 1},  # fallback for 3D
+    "area": {"torch": "area", "skimage": 1},  # approximate
+    "nearest-exact": {"torch": "nearest-exact", "skimage": 0},
 }
 
-def resize(input_data, size, mode='bilinear', **kwargs):
+
+def resize(input_data, size, mode="bilinear", **kwargs):
     """
     Resize a multi-dimensional image tensor or array to a specified size.
 
@@ -3814,19 +3822,23 @@ def resize(input_data, size, mode='bilinear', **kwargs):
         If `input_data` is neither a PyTorch tensor nor a NumPy array.
     """
     if len(size) != input_data.ndim:
-        raise ValueError("The size provided ({}) needs to be of the same size as the dimensions of the input_data ({})".format(size, input_data.ndim))
-    
+        raise ValueError(
+            "The size provided ({}) needs to be of the same size as the dimensions of the input_data ({})".format(
+                size, input_data.ndim
+            )
+        )
+
     if mode not in interp_mode_map:
         raise ValueError(f"Unsupported interpolation mode: {mode}")
 
     # Assumed B,C,H,W (2D) or B,C,D,H,W (3D)
     if isinstance(input_data, torch.Tensor):
-        interp_mode = interp_mode_map[mode]['torch']
+        interp_mode = interp_mode_map[mode]["torch"]
         resized = F.interpolate(input_data, size=size[2:], mode=interp_mode, **kwargs)
         return resized
     # Assumed B,H,W,C (2D) or B,D,H,W,C (3D)
     elif isinstance(input_data, np.ndarray):
-        order = interp_mode_map[mode]['skimage']
+        order = interp_mode_map[mode]["skimage"]
         return sk_resize(input_data, size, order=order, **kwargs)
     else:
         raise TypeError("Input must be a torch.Tensor or a numpy.ndarray")
