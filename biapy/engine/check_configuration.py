@@ -109,14 +109,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         if "A" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
             assert set(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) == {"A"}, "'A' representation can only be used alone"
 
-        if len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS) != channels_provided and cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS == (1, 1):
-            opts.extend(
-                [
-                    "PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS",
-                    (1,) * channels_provided,
-                ]
-            )
-
         if cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
             channel_loss_set = False
             # Set default values for some configurations that are more common, such as 'C', 'BC', 'BP', 'BD', 
@@ -519,6 +511,17 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 assert len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES) == len([x for x in sorted_original_instance_channels if x != "We"]), "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES' must have the same length as 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'"
                 for loss in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES:
                     assert loss in ["bce", "ce", "mse", "l1", "mae", "embedseg"], "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES' can only have values in ['bce', 'mse', 'l1', 'ce', 'embedseg']"
+
+        if (
+            len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS) != channels_provided 
+            and (cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS == (1, 1) or cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS == (1,))
+        ):
+            opts.extend(
+                [
+                    "PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS",
+                    (1,) * channels_provided,
+                ]
+            )
 
     for phase in ["TRAIN", "VAL", "TEST"]:
         if getattr(cfg.DATA, phase).FILTER_SAMPLES.ENABLE:
