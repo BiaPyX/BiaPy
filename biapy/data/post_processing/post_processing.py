@@ -365,6 +365,138 @@ def watershed_by_channels(
         )
     return segm
 
+
+def embedseg_instances(
+    y_pred: NDArray,
+    s_fg: float = 0.5,
+    s_min: float = 0.9,
+    assign_thresh: float = 0.5,
+    eps: float = 1e-6,
+) -> NDArray:
+    """
+    Create instances from predicted offsets, per-axis sigmas, and seediness using the
+    EmbedSeg method (channel-last, unbatched).
+
+    Algorithm
+    ---------
+    1) Foreground pool = { pixels with seed >= s_fg }.
+    2) Smooth seed with a small Gaussian and find local maxima (peak_local_max) >= s_min.
+    3) Iterate peaks from highest seed to lowest:
+         - Let C = embedding of the peak pixel; σ_seed = per-axis sigma at that pixel.
+         - For all remaining pool pixels i, compute:
+               phi_i = exp( - sum_a (e_i[a] - C[a])^2 / (2 * sigma_seed[a]^2) )
+         - Assign all pixels with phi_i >= assign_thresh to the instance and remove them from pool.
+    4) Return integer labels (0 = background).
+
+    Parameters
+    ----------
+    y_pred : np.ndarray
+        Model predictions with shape:
+          - 2D: (Y, X, C=5)  with channels [off_y, off_x, sig_y, sig_x, seed]
+          - 3D: (Z, Y, X, C=7) with channels [off_z, off_y, off_x, sig_z, sig_y, sig_x, seed]
+        Heads must be ACTIVATEd already: offsets=tanh, sigmas>0, seed=sigmoid.
+
+    s_fg : float, optional
+        Foreground seed threshold to form the candidate pool.
+
+    s_min : float, optional
+        Minimum (smoothed) seed at a local maximum to start an instance.
+
+    assign_thresh : float, optional
+        φ threshold to assign a pixel/voxel to an instance.
+
+    eps : float, optional
+        Small value to avoid division by zero.
+
+    Returns
+    -------
+    np.ndarray
+        Instance labels with shape (*spatial,), dtype uint8 if max(label) ≤ 255 else uint16.
+    """
+    assert y_pred.ndim in (3, 4), f"Expected (Y,X,C) or (Z,Y,X,C); got {y_pred.shape}"
+    spatial = y_pred.shape[:-1]
+    D = len(spatial)
+    C = y_pred.shape[-1]
+    expected_C = 2 * D + 1
+    assert C == expected_C, f"Expected {expected_C} channels (offset(D)+sigma(D)+seed); got {C}"
+
+    # unpack heads (channel-last)
+    off  = np.moveaxis(y_pred[..., :D], -1, 0)        # (D, *spatial)
+    sig  = np.moveaxis(y_pred[..., D:2*D], -1, 0)     # (D, *spatial)  per-axis σ
+    seed = y_pred[..., 2*D]                           # (*spatial)
+
+    # embeddings e(x) = x + o(x)
+    axes = [np.arange(n, dtype=y_pred.dtype) for n in spatial]
+    grid = np.stack(np.meshgrid(*axes, indexing='ij'), axis=0)   # (D, *spatial)
+    emb  = grid + off                                            # (D, *spatial)
+
+    labels = np.zeros(spatial, dtype=np.int64)
+    N = int(np.prod(spatial))
+
+    # flatten for vectorized math
+    Eb = emb.reshape(D, N)                 # (D, N)
+    Sb = sig.reshape(D, N)                 # (D, N)  (not used in φ; we use seed σ vector)
+    seed_flat = seed.reshape(N)            # (N,)
+
+    # 1) Foreground pool
+    pool = (seed_flat >= s_fg)
+    if not pool.any():
+        return labels.astype(np.uint8, copy=False)
+
+    # 2) Seed smoothing + local maxima
+    seed_smooth = gaussian_filter(seed, sigma=1.0, mode='nearest')
+    footprint = np.ones((3,) * D, dtype=bool)
+    peak_coords = peak_local_max(
+        seed_smooth,
+        threshold_abs=s_min,
+        footprint=footprint,
+        exclude_border=False,
+    )
+    if peak_coords.size == 0:
+        return labels.astype(np.uint8, copy=False)
+
+    # sort peaks by ORIGINAL seed value, descending
+    peak_scores = seed[tuple(peak_coords.T)]
+    peak_coords = peak_coords[np.argsort(peak_scores)[::-1]]
+
+    # helper to flatten coordinates
+    def _ravel(coord):
+        return np.ravel_multi_index(tuple(coord), spatial)
+
+    lbl = 0
+    for coord in peak_coords:
+        if not pool.any():
+            break
+
+        flat_idx = _ravel(coord)
+        if not pool[flat_idx]:
+            continue  # already consumed
+
+        # Center and per-axis σ from the peak (vector sigma)
+        Cc = Eb[:, flat_idx]                    # (D,)
+        sigma_c = np.maximum(sig[(slice(None),) + tuple(coord)], eps)  # (D,)
+        denom = 2.0 * (sigma_c ** 2) + eps      # (D,)
+
+        # φ for remaining pool pixels: sum_a ( (e_a - C_a)^2 / (2*sigma_c[a]^2) )
+        diff = Eb - Cc[:, None]                 # (D, N)
+        quad = (diff * diff) / denom[:, None]   # (D, N)
+        phi  = np.exp(-quad.sum(axis=0))        # (N,)
+
+        take = (phi >= assign_thresh) & pool
+        if not np.any(take):
+            # nothing joins → remove this peak to avoid stalling
+            pool[flat_idx] = False
+            continue
+
+        lbl += 1
+        labels.reshape(-1)[take] = lbl
+        pool[take] = False
+
+    # compact dtype
+    max_lbl = int(labels.max())
+    return labels.astype(np.uint8 if max_lbl <= 255 else np.uint16, copy=False)
+
+
 def create_synapses(
     data: NDArray,
     channels: List[str],

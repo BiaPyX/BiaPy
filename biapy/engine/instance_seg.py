@@ -32,6 +32,7 @@ from biapy.data.post_processing.post_processing import (
     remove_close_points,
     remove_close_points_by_mask,
     fill_label_holes,
+    embedseg_instances,
 )
 from biapy.data.post_processing.polygon_nms_postprocessing import stardist_instances_from_prediction
 from biapy.data.pre_processing import create_instance_channels
@@ -208,7 +209,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     self.activations.append(dst.get("D", {}).get("act", "linear"))
                     self.model_output_channels["channels"] += 1
                 elif channel == "A":
-                    for _ in len(dst.get("A", {}).get("y_affinities", [1])):
+                    for _ in range(len(dst.get("A", {}).get("y_affinities", [1]))):
                         self.model_output_channels["channels"] += 1
                         self.activations.append("ce_sigmoid")
                 elif channel == "R":
@@ -220,8 +221,9 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         self.activations.append("ce_sigmoid")
                         self.model_output_channels["channels"] += 1
                 elif channel == "E_sigma":
-                    self.activations.append("ce_sigmoid")
-                    self.model_output_channels["channels"] += 1
+                    for _ in range(self.dims):
+                        self.activations.append("ce_sigmoid")
+                        self.model_output_channels["channels"] += 1
                 elif channel == "E_seediness":
                     self.activations.append("ce_sigmoid")
                     self.model_output_channels["channels"] += 1
@@ -371,9 +373,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             self.test_metric_names += self.test_extra_metrics
 
         if "E_offset" in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
-            instance_loss = EmbedSegLossStrict(
-                # weights={'offset':1.0, 'sigma':0.1, 'seed':1.0},
-            )
+            instance_loss = EmbedSegLossStrict()
         else:
             instance_loss = instance_segmentation_loss(
                 weights = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS,
@@ -528,6 +528,13 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     nms_iou_thresh=self.cfg.PROBLEM.INSTANCE_SEG.STARDIST.NMS_IOU_THRESH, 
                     anisotropy=self.resolution[:self.dims],
                     grid=self.stardist_grid, 
+                )
+            elif "E_offset" in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
+                pred_labels = embedseg_instances(
+                    y_pred=pred,
+                    s_fg=self.cfg.PROBLEM.INSTANCE_SEG.EMBEDSEG.SEED_THRESH,  
+                    s_min=self.cfg.PROBLEM.INSTANCE_SEG.EMBEDSEG.MIN_SIZE,
+                    assign_thresh=self.cfg.PROBLEM.INSTANCE_SEG.EMBEDSEG.ASSIGN_THRESH,
                 )
             else:
                 print("Creating instances with watershed . . .")

@@ -235,6 +235,18 @@ class Config:
         _C.PROBLEM.INSTANCE_SEG.STARDIST.PROB_THRESH = 0.4
         # Non-maximum suppression IoU threshold to filter overlapping instance candidates
         _C.PROBLEM.INSTANCE_SEG.STARDIST.NMS_IOU_THRESH = 0.3
+        
+        # Options for embedding-based clustering instance creation
+        _C.PROBLEM.INSTANCE_SEG.EMBEDSEG = CN()
+        # Foreground seed threshold to consider a pixel/voxel as a potential seed.
+        _C.PROBLEM.INSTANCE_SEG.EMBEDSEG.SEED_THRESH = 0.5
+        # Minimum seediness threshold to start a new instance (default: 0.9). Only pixels with seed >= s_min are 
+        # considered as valid seeds. This controls how confident a pixel must be to initiate a new instance, preventing 
+        # weak or noisy seeds from forming spurious objects.
+        _C.PROBLEM.INSTANCE_SEG.EMBEDSEG.MIN_SIZE = 0.9
+        # Threshold in [0,1] to accept an assignment of a pixel/voxels to an instance based on the seed score. 
+        # Corresponds directly to φ (phi) thresholding in the EmbedSeg algorithm
+        _C.PROBLEM.INSTANCE_SEG.EMBEDSEG.ASSIGN_THRESH = 0.5
 
         # Size of small objects to be removed after doing watershed
         _C.PROBLEM.INSTANCE_SEG.DATA_REMOVE_SMALL_OBJ_BEFORE = 10

@@ -1301,13 +1301,13 @@ class EmbedSegMetrics:
     Fast per-iteration metrics for EmbedSeg (no clustering).
 
     Expects ACTIVATED heads packed in one tensor:
-      y_pred: (B, C, *spatial), where C = D + 2  (D = len(spatial); 2D->4, 3D->5)
-              channels layout: [offset(D), sigma(1), seed(1)]
+      y_pred: (B, C, *spatial), where C = 2*D + 1  (D = len(spatial); 2D->5, 3D->7)
+              channels layout: [offset(D), sigma(D), seed(1)]
       y_true: instance map (B, 1, *spatial) or (B, *spatial), ints, 0 = background
 
     Returns dict of scalars:
       - seed_mse     : MSE(seed, φ on FG; 0 on BG)
-      - sigma_var    : mean_k |σ - mean_k(σ)|
+      - sigma_var    : mean_k |σ - mean_k(σ)|  (avg over axes & pixels within each instance)
       - intra_disp   : mean ||e(x) - C_k|| over instances
       - soft_iou_phi : IoU proxy by thresholding max-φ vs FG mask
     """
@@ -1333,19 +1333,20 @@ class EmbedSegMetrics:
 
     @torch.no_grad()
     def __call__(self, y_pred: torch.Tensor, y_true: torch.Tensor | dict) -> dict:
-        # y_pred: (B, C, *spatial) with channels [offset(D), sigma, seed]
+        # y_pred: (B, C, *spatial) with channels [offset(D), sigma(D), seed]
         assert y_pred.dim() in (4, 5), f"Expected 4D/5D, got {tuple(y_pred.shape)}"
         B, C = y_pred.shape[:2]
         D = y_pred.dim() - 2
-        assert C == D + 2, f"Expected C=D+2. Got C={C}, D={D}"
+        expected_C = 2 * D + 1
+        assert C == expected_C, f"Expected C=2*D+1. Got C={C}, D={D}"
 
-        off  = y_pred[:, :D, ...]                 # (B,D,*)
-        sig  = y_pred[:, D:D+1, ...].clamp_min(self.eps)  # (B,1,*)
-        seed = y_pred[:, D+1:D+2, ...]            # (B,1,*)
+        off  = y_pred[:, :D,       ...]                      # (B, D, *)
+        sig  = y_pred[:, D:2*D,    ...].clamp_min(self.eps)  # (B, D, *)
+        seed = y_pred[:, 2*D:2*D+1, ...]                     # (B, 1, *)
 
         inst = y_true['instance'] if isinstance(y_true, dict) else y_true
         if inst.dim() == y_pred.dim() - 1:
-            inst = inst.unsqueeze(1)              # (B,1,*)
+            inst = inst.unsqueeze(1)  # (B,1,*)
         assert inst.shape[0] == B and inst.shape[2:] == y_pred.shape[2:], \
             f"inst shape mismatch. Got {tuple(inst.shape)}, expected (B,1,{','.join(map(str, y_pred.shape[2:]))})"
 
@@ -1354,17 +1355,17 @@ class EmbedSegMetrics:
 
         # embeddings e(x) = x + o(x)
         grid = self._coord_grid(spatial, device, dtype).repeat(B, 1, *([1]*len(spatial)))  # (B,D,*)
-        emb  = grid + off
+        emb  = grid + off  # (B,D,*)
 
         seed_mse_vals, sigma_var_vals, intra_disp_vals, soft_iou_vals = [], [], [], []
 
         for b in range(B):
-            imap = inst[b, 0].long()        # (*)
+            imap = inst[b, 0].long()   # (*)
             ids = torch.unique(imap); ids = ids[ids > 0]
 
-            eb = emb[b]                     # (D,*)
-            sb = sig[b, 0]                  # (*)
-            sedb = seed[b, 0]               # (*)
+            eb   = emb[b]              # (D,*)
+            sb   = sig[b]              # (D,*)  per-axis sigma
+            sedb = seed[b, 0]          # (*)
 
             if ids.numel() == 0:
                 # background-only patch
@@ -1375,47 +1376,59 @@ class EmbedSegMetrics:
                 continue
 
             fg_mask = (imap > 0)
-            alpha = 1.0 / (2.0 * (sb ** 2))  # (*)
 
-            seed_target_b = torch.zeros_like(sedb)  # BG target = 0
-            best_phi = torch.zeros_like(sb)
+            seed_target_b = torch.zeros_like(sedb)   # BG target = 0
+            best_phi      = torch.zeros_like(sedb)
             intra_disp_k, sigma_var_k = [], []
 
             for k in ids.tolist():
-                m = (imap == k)             # (*)
+                m = (imap == k)                     # (*)
                 if not m.any():
                     continue
 
-                # center Ck: (D,) -> (D,1,1[,1]) for broadcasting
-                Ck = eb[:, m].mean(dim=1)                         # (D,)
-                Ck = Ck.view(D, *([1] * len(spatial)))            # (D,1,1[,1])
+                # center Ck (in embedding space), broadcastable to (D,*)
+                Ck = eb[:, m].mean(dim=1).view(D, *([1] * len(spatial)))  # (D,1,1[,1])
 
-                diff  = eb - Ck                                   # (D,*)
-                dist2 = (diff * diff).sum(dim=0)                  # (*)
-                phi   = torch.exp(-alpha * dist2).clamp_min(self.eps)
+                # φ with vector σ: sum_a ( (e_a - C_a)^2 / (2 σ_a^2) )
+                diff = eb - Ck                                 # (D,*)
+                quad = (diff * diff) / (2.0 * (sb * sb))       # (D,*)
+                phi  = torch.exp(-quad.sum(dim=0)).clamp_min(self.eps)  # (*)
 
+                # seed target on FG of instance k
                 seed_target_b[m] = phi[m]
-                best_phi = torch.maximum(best_phi, phi)
-                intra_disp_k.append(torch.sqrt(dist2[m] + self.eps).mean())
-                sigma_var_k.append((sb[m] - sb[m].mean()).abs().mean())
 
+                # keep per-pixel max φ across instances (for IoU proxy)
+                best_phi = torch.maximum(best_phi, phi)
+
+                # intra-instance dispersion ||e - Ck||
+                dist2 = (diff * diff).sum(dim=0)               # (*)
+                intra_disp_k.append(torch.sqrt(dist2[m] + self.eps).mean())
+
+                # sigma variability within instance (avg over axes & pixels)
+                sb_m = sb[:, m]                                # (D, #pix_k)
+                mean_axis = sb_m.mean(dim=1, keepdim=True)     # (D,1)
+                sigma_var_k.append((sb_m - mean_axis).abs().mean())
+
+            # aggregate per-batch-item
             seed_mse_vals.append(F.mse_loss(sedb, seed_target_b, reduction='mean').item())
             sigma_var_vals.append(torch.stack(sigma_var_k).mean().item() if sigma_var_k else 0.0)
             intra_disp_vals.append(torch.stack(intra_disp_k).mean().item() if intra_disp_k else 0.0)
 
+            # IoU proxy from best-φ threshold
             pred_fg = (best_phi >= self.phi_thresh)
             inter = (pred_fg & fg_mask).sum().item()
             union = (pred_fg | fg_mask).sum().item()
             soft_iou_vals.append((inter / union) if union > 0 else 0.0)
 
-        mean_or_zero = lambda xs: float(torch.tensor(xs, device=device).mean().item()) if xs else 0.0
+        def mean_or_zero(xs):
+            return float(torch.tensor(xs, device=device).mean().item()) if xs else 0.0
+
         return {
             'seed_mse':     mean_or_zero(seed_mse_vals),
             'sigma_var':    mean_or_zero(sigma_var_vals),
             'intra_disp':   mean_or_zero(intra_disp_vals),
             'soft_iou_phi': mean_or_zero(soft_iou_vals),
         }
-
 
 # ---------------- Lovasz-hinge (binary) helpers ----------------
 
@@ -1466,9 +1479,9 @@ class EmbedSegLossStrict(nn.Module):
     Strict EmbedSeg loss (expects predictions as one tensor):
 
       y_pred: (B, C, *spatial)
-              C = D + 2  where D = len(spatial)  (2D->4, 3D->5)
-              channels layout: [offset(D), sigma(1), seed(1)]
-              heads must be *activated* upstream (tanh offsets, softplus/exp sigma, sigmoid seed)
+        C = D + 2  where D = len(spatial)  (2D->4, 3D->5)
+        channels layout: [offset(D), sigma(D), seed(1)]
+        heads must be *activated* upstream (tanh offsets, softplus/exp sigma, sigmoid seed)
 
       y_true: instance map, shape (B, 1, *spatial) or (B, *spatial), ints (0 = background)
 
@@ -1502,31 +1515,42 @@ class EmbedSegLossStrict(nn.Module):
         return g
 
     def _sigma_instance_smooth(self, sigma_pred, inst_map):
-        # |σ - mean_k(σ)| averaged over instances in each batch item, then averaged over batch
-        B = sigma_pred.shape[0]
-        acc, cnt = sigma_pred.new_tensor(0.0), 0
+        """
+        sigma_pred: (B, D, *), inst_map: (B,1,*)
+        Returns mean over instances of |σ_a - mean_k(σ_a)| averaged over axes and pixels.
+        """
+        B, D = sigma_pred.shape[:2]
+        total = sigma_pred.new_tensor(0.0)
+        count = 0
         for b in range(B):
             imap = inst_map[b, 0].long()
             ids = torch.unique(imap); ids = ids[ids > 0]
-            if ids.numel() == 0: continue
-            sb = sigma_pred[b, 0]
+            if ids.numel() == 0:
+                continue
+            sb = sigma_pred[b]  # (D, *)
             for k in ids.tolist():
-                m = (imap == k)
-                if m.any():
-                    acc = acc + (sb[m] - sb[m].mean()).abs().mean()
-                    cnt += 1
-        return acc / max(cnt, 1)
+                m = (imap == k)  # (*)
+                if not m.any():
+                    continue
+                # per-axis mean within the instance
+                mean_k = sb[:, m].mean(dim=1, keepdim=True)  # (D,1)
+                # average absolute deviation over pixels and axes
+                dev = (sb[:, m] - mean_k).abs().mean()       # scalar
+                total = total + dev
+                count += 1
+        return total / max(count, 1)
 
     def forward(self, y_pred: torch.Tensor, y_true: torch.Tensor | dict):
         assert y_pred.dim() in (4, 5), f"Expected 4D/5D, got {tuple(y_pred.shape)}"
         B, C = y_pred.shape[:2]
         D = y_pred.dim() - 2
-        assert C == D + 2, f"Expected C=D+2. Got C={C}, D={D}"
+        expected_C = 2 * D + 1
+        assert C == expected_C, f"Expected C=2*D+1 (offset(D)+sigma(D)+seed). Got C={C}, D={D}"
 
         # Split heads as fresh tensors (no views)
-        off  = y_pred[:, :D, ...].clone()        # (B,D,*)
-        sig  = y_pred[:, D:D+1, ...].clone()     # (B,1,*)
-        seed = y_pred[:, D+1:D+2, ...].clone()   # (B,1,*)
+        off  = y_pred[:, :D,       ...].clone()   # (B, D, *)
+        sig  = y_pred[:, D:2*D,    ...].clone()   # (B, D, *)
+        seed = y_pred[:, 2*D:2*D+1, ...].clone()  # (B, 1, *)
 
         # Instance GT -> (B,1,*) contiguous
         inst = y_true['instance'] if isinstance(y_true, dict) else y_true
@@ -1537,54 +1561,46 @@ class EmbedSegLossStrict(nn.Module):
         spatial = y_pred.shape[2:]
         device, dtype = y_pred.device, y_pred.dtype
 
-        # e(x) = x + o(x). Make emb a fresh tensor too.
+        # e(x) = x + o(x)
         grid = self._coord_grid(spatial, device, dtype).repeat(B, 1, *([1]*len(spatial)))
-        emb  = (grid + off).clone()  # (B,D,*)
+        emb  = (grid + off).clone()  # (B, D, *)
 
         lovasz_losses = []
-        seed_targets_b = []  # collect per-batch seed targets and stack later
+        seed_targets_b = []  # collect per-batch seed targets (B items)
 
         for b in range(B):
             imap = inst[b, 0].long()
             ids = torch.unique(imap); ids = ids[ids > 0]
 
-            eb = emb[b]                          # (D,*)
-            sb = sig[b, 0].clamp_min(self.eps)   # (*)
-            alpha = 1.0 / (2.0 * (sb ** 2))      # (*)
-
-            # start with BG=0 target, then fill FG via where
-            seed_target_b = torch.zeros_like(sb)  # (*)
+            eb = emb[b]                           # (D, *)
+            sb = sig[b].clamp_min(self.eps)       # (D, *)
+            # seed target buffer (BG=0)
+            seed_target_b = torch.zeros_like(imap, dtype=eb.dtype)  # (*)
 
             if ids.numel() == 0:
                 seed_targets_b.append(seed_target_b)
                 continue
 
-            # to build soft φ per-instance and union them, keep max over instances
-            # (we only need φ on FG for seed target; max works since FG masks disjoint)
-            best_phi = torch.zeros_like(sb)
-
             for k in ids.tolist():
-                m = (imap == k)                  # (*)
+                m = (imap == k)                   # (*)
                 if not m.any():
                     continue
 
-                # center Ck: (D,) -> (D,1,1[,1])
-                Ck = eb[:, m].mean(dim=1).view(D, *([1] * len(spatial)))
+                # center Ck: (D,) -> (D,1,1[,1]) for broadcasting
+                Ck = eb[:, m].mean(dim=1).view(D, *([1] * len(spatial)))  # (D, 1, 1[,1])
 
-                diff  = eb - Ck
-                dist2 = (diff * diff).sum(dim=0)         # (*)
-                phi   = torch.exp(-alpha * dist2).clamp(min=self.eps, max=1 - self.eps)
+                # axis-wise quadratic form: sum_a (diff_a^2 / (2 * sigma_a^2))
+                diff = eb - Ck                                   # (D, *)
+                quad = (diff * diff) / (2.0 * (sb ** 2))         # (D, *)
+                phi  = torch.exp(-quad.sum(dim=0)).clamp(min=self.eps, max=1 - self.eps)  # (*)
 
                 # Lovasz on logit(phi) vs mask_k
                 logits = torch.log(phi) - torch.log1p(-phi)
                 l_flat, y_flat = _flatten_binary_scores(logits, m.float())
                 lovasz_losses.append(lovasz_hinge_flat(l_flat, y_flat))
 
-                # seed target: φ on FG of this instance; BG stays 0
-                # avoid masked in-place by using where
-                # (phi doesn't need to be detached here since we only write into a fresh tensor)
+                # Seed target: φ on FG of this instance; BG stays 0 (no in-place into graph vars)
                 seed_target_b = torch.where(m, phi, seed_target_b)
-                best_phi = torch.maximum(best_phi, phi)
 
             seed_targets_b.append(seed_target_b)
 
@@ -1593,9 +1609,8 @@ class EmbedSegLossStrict(nn.Module):
 
         # stack seed targets to (B,1,*) without masked writes
         if len(seed_targets_b) < B:
-            # pad missing items (background-only) with zeros
             for _ in range(B - len(seed_targets_b)):
-                seed_targets_b.append(torch.zeros_like(sig[0,0]))
+                seed_targets_b.append(torch.zeros_like(inst[0, 0], dtype=off.dtype))
         seed_target = torch.stack(seed_targets_b, dim=0).unsqueeze(1)  # (B,1,*)
         L_seed = self._mse(seed, seed_target)
 

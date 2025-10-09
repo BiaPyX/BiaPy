@@ -87,7 +87,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "T": 11, # Touching area
             "A": 12,  # Affinities
             "E": 13,  # Embeddings
-            "R": 14,  # Radial distances,
+            "E_offset": 14,  # Embeddings (offsets)
+            "E_sigma": 15,  # Embeddings (sigma)
+            "E_seediness": 16,  # Embeddings (seediness)
+            "R": 17,  # Radial distances
         }
 
         def get_sort_key(weights):
