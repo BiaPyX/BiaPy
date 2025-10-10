@@ -201,12 +201,13 @@ class test_single_data_generator(Dataset):
             if not discard:
                 # Preprocess test data
                 if self.preprocess_data:
+                    sample_extra_info["rescaled_shape"] = img.shape
                     img = self.preprocess_data(
                         self.preprocess_cfg,
                         x_data=[img],
                         is_2d=(self.ndim == 2),
                     )[0]
-
+                    
                 # Reflect data to complete the needed shape
                 if not self.crop_center and self.reflect_to_complete_shape:
                     reflected_orig_shape = img.shape
@@ -280,12 +281,9 @@ class test_single_data_generator(Dataset):
             "filename": os.path.basename(path),
             "dir": os.path.dirname(path),
         }
+        test_sample.update(sample_extra_info)
         if self.provide_Y:
             test_sample["Y"] = img_class
-        if "discard" in sample_extra_info:
-            test_sample["discard"] = sample_extra_info["discard"]
-        if "reflected_orig_shape" in sample_extra_info:
-            test_sample["reflected_orig_shape"] = sample_extra_info["reflected_orig_shape"]
 
         return test_sample
 

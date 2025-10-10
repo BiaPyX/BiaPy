@@ -80,6 +80,7 @@ from biapy.data.data_manipulation import (
     save_tif,
     resize,
 )
+from biapy.data.pre_processing import resize_images
 from biapy.data.post_processing.post_processing import (
     ensemble8_2d_predictions,
     ensemble16_3d_predictions,
@@ -1777,8 +1778,46 @@ class Base_Workflow(metaclass=ABCMeta):
                         if self.current_sample["Y"] is not None:
                             self.current_sample["Y"] = np.expand_dims(self.current_sample["Y"], 0)
 
+                # Resize to original shape     
+                if self.cfg.DATA.PREPROCESS.TEST and "rescaled_shape" in self.current_sample:
+                    rescaled_shape = (1,) + self.current_sample["rescaled_shape"][:-1]+(pred.shape[-1],)
+                    if self.cfg.TEST.VERBOSE:
+                        print(
+                            "Resizing prediction from {} to {}".format(
+                                pred.shape, rescaled_shape
+                            )
+                        )
+                    pred = resize_images(
+                        [pred],
+                        output_shape=rescaled_shape,
+                        order=self.cfg.DATA.PREPROCESS.RESIZE.ORDER,
+                        mode=self.cfg.DATA.PREPROCESS.RESIZE.MODE,
+                        cval=self.cfg.DATA.PREPROCESS.RESIZE.CVAL,
+                        clip=self.cfg.DATA.PREPROCESS.RESIZE.CLIP,
+                        preserve_range=self.cfg.DATA.PREPROCESS.RESIZE.PRESERVE_RANGE,
+                        anti_aliasing=self.cfg.DATA.PREPROCESS.RESIZE.ANTI_ALIASING,
+                    )[0]
+
+                    if self.current_sample["Y"] is not None:
+                        self.current_sample["Y"] = resize_images(
+                            [self.current_sample["Y"]],
+                            output_shape=self.current_sample["rescaled_shape"][:-1]+(self.current_sample["Y"].shape[-1],),
+                            order=0,
+                            mode=self.cfg.DATA.PREPROCESS.RESIZE.MODE,
+                            cval=self.cfg.DATA.PREPROCESS.RESIZE.CVAL,
+                            clip=self.cfg.DATA.PREPROCESS.RESIZE.CLIP,
+                            preserve_range=self.cfg.DATA.PREPROCESS.RESIZE.PRESERVE_RANGE,
+                            anti_aliasing=self.cfg.DATA.PREPROCESS.RESIZE.ANTI_ALIASING,
+                        )[0]
+                    
                 if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE:
                     reflected_orig_shape = (1,) + self.current_sample["reflected_orig_shape"]
+                    if self.cfg.TEST.VERBOSE:
+                        print(
+                            "Cropping prediction to original shape {}".format(
+                                self.current_sample["reflected_orig_shape"]
+                            )
+                        )
                     if reflected_orig_shape != pred.shape:
                         if self.cfg.PROBLEM.NDIM == "2D":
                             pred = pred[:, -reflected_orig_shape[1] :, -reflected_orig_shape[2] :]

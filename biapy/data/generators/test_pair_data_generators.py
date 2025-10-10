@@ -246,6 +246,7 @@ class test_pair_data_generator(Dataset):
             if not discard:
                 # Preprocess test data
                 if self.preprocess_data:
+                    sample_extra_info["rescaled_shape"] = img.shape
                     img = self.preprocess_data(
                         self.preprocess_cfg,
                         x_data=[img],
@@ -358,16 +359,7 @@ class test_pair_data_generator(Dataset):
         path = self.X.dataset_info[sample.fid].path
         test_sample["filename"] = os.path.basename(path)
         test_sample["dir"] = os.path.dirname(path)
-        if "gt_associated_id" in sample_extra_info:
-            test_sample["gt_associated_id"] = sample_extra_info["gt_associated_id"]
-        if "img_file_to_close" in sample_extra_info:
-            test_sample["img_file_to_close"] = sample_extra_info["img_file_to_close"]
-        if "mask_file_to_close" in sample_extra_info:
-            test_sample["mask_file_to_close"] = sample_extra_info["mask_file_to_close"]
-        if "discard" in sample_extra_info:
-            test_sample["discard"] = sample_extra_info["discard"]
-        if "reflected_orig_shape" in sample_extra_info:
-            test_sample["reflected_orig_shape"] = sample_extra_info["reflected_orig_shape"]
+        test_sample.update(sample_extra_info)
 
         return test_sample
 

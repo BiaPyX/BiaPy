@@ -2587,7 +2587,9 @@ def preprocess_data(
     Parameters
     ----------
     cfg: dict
-        The `cfg` parameter is a configuration object that contains various settings for preprocessing the data. It is used to control the behavior of different preprocessing techniques such as image resizing, blurring, histogram matching, etc.
+        The `cfg` parameter is a configuration object that contains various settings for preprocessing the data. 
+        It is used to control the behavior of different preprocessing techniques such as image resizing, blurring, 
+        histogram matching, etc.
 
     x_data: list of 3D/4D Numpy arrays, optional
         The input data (images) to be preprocessed. The first dimension must be the number of images.
