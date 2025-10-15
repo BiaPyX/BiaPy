@@ -2876,6 +2876,7 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict):
 
                 new_old_channel_map = {
                     "B": "F",
+                    "D": "Db",
                     "Dv2": "D",
                     "F": "HVZ",
                 }
