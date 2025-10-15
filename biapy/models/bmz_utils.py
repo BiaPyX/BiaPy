@@ -138,7 +138,7 @@ def extract_BMZ_sample_and_cover(
     patch_size=[256,256,1], 
     is_3d=False, 
     input_axis_order: str = "ZYXC"
-) -> NDArray:
+) -> Tuple[NDArray, NDArray, NDArray]:
     """
     Extract a sample patch from the input image and its corresponding img_gt.
 
@@ -171,9 +171,10 @@ def extract_BMZ_sample_and_cover(
         The ground truth img_gt cover (2D slice). Shape will be (H, W, C).
     """
     cover_raw, cover_gt = None, None
-    ref_img = img_gt if img_gt is not None else img
-    if isinstance(ref_img, np.ndarray):
-        dims = 2 if not is_3d else 3
+    mask_available = img_gt is not None and isinstance(img_gt, np.ndarray)
+    dims = 2 if not is_3d else 3
+    ref_img = img_gt if mask_available else img
+    if isinstance(ref_img, np.ndarray):    
         if dims == 2:
             H, W, C = ref_img.shape
             ph, pw = patch_size[0], patch_size[1]
@@ -229,17 +230,17 @@ def extract_BMZ_sample_and_cover(
         rimg = extract_patch_within_image(
             img, patch, is_3d=True if is_3d else False
         )
-        if img_gt is not None:
+        if mask_available:
             rimg_gt = extract_patch_within_image(
                 img_gt, patch, is_3d=True if is_3d else False
             )
         if is_3d:
             cover_raw = rimg[best_slice-z_start].copy()
-            if img_gt is not None:
+            if mask_available:
                 cover_gt = rimg_gt[best_slice-z_start].copy()
         else:
             cover_raw = rimg.copy()
-            if img_gt is not None:
+            if mask_available:
                 cover_gt = rimg_gt.copy()
     else:
         # TODO: take a patch ensuring that it contains img_gt
@@ -254,17 +255,17 @@ def extract_BMZ_sample_and_cover(
         rimg = extract_patch_from_efficient_file(
             img, patch, data_axes_order=input_axis_order,
         )
-        if img_gt is not None:
+        if mask_available:
             rimg_gt = extract_patch_from_efficient_file(
                 img_gt, patch, data_axes_order=input_axis_order,
             )   
         if is_3d:
             cover_raw = rimg[rimg.shape[0] // 2].copy()
-            if img_gt is not None:
+            if mask_available:
                 cover_gt = rimg_gt[rimg_gt.shape[0] // 2].copy()
         else:
             cover_raw = rimg.copy()
-            if img_gt is not None:
+            if mask_available:
                 cover_gt = rimg_gt.copy()
 
     rimg = rimg.astype(np.float32)
