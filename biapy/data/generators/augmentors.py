@@ -1897,7 +1897,7 @@ def rotation(
         arr_mins, arr_maxes = np.min(arr, axis=tuple(range(arr.ndim - 1))), np.max(arr, axis=tuple(range(arr.ndim - 1)))
         orig_dtype = arr.dtype
         out = rotate(
-            arr,
+            arr.astype(np.float32, copy=False),
             angle=angle,
             axes=axes,
             reshape=False,
