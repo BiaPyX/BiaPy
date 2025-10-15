@@ -111,8 +111,8 @@ all_test_info["Test7"] = {
         "multiresunet. Post-proc: remove close points + det weatershed",
     "yaml": "test_7.yaml",
     "internal_checks": [
-        {"type": "regular", "pattern": "Test Foreground IoU (merge patches):", "gt": True, "value": 0.2},
-        {"type": "regular", "pattern": "Test F1 (merge patches)", "gt": True, "value": 0.4},
+        {"type": "regular", "pattern": "Test Foreground IoU (merge patches):", "gt": True, "value": 0.3},
+        {"type": "regular", "pattern": "Test F1 (merge patches)", "gt": True, "value": 0.7},
     ]
 }
 
@@ -1583,7 +1583,7 @@ if all_test_info["Test6"]["enable"]:
     biapy_config['DATA']['TEST']['LOAD_GT'] = True
 
     biapy_config['TRAIN']['ENABLE'] = True
-    biapy_config['TRAIN']['EPOCHS'] = 5
+    biapy_config['TRAIN']['EPOCHS'] = 3
     biapy_config['TRAIN']['PATIENCE'] = -1
 
     biapy_config['MODEL']['ARCHITECTURE'] = 'resunet'

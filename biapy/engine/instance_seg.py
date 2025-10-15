@@ -196,7 +196,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         self.model_output_channels = {"type": "mask", "channels": 0}
         dst = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0]
         for i, channel in enumerate(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS):
-                if channel in ["B", "F", "P", "C", "T", "F_pre", "F_post"]:
+                if channel in ["B", "F", "P", "C", "T", "M", "F_pre", "F_post"]:
                     self.activations.append("ce_sigmoid")
                     self.model_output_channels["channels"] += 1
                 elif channel in ["Db", "Dc", "Dn", "D", "H", "V", "Z"]:
@@ -277,7 +277,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         self.train_metric_best = []
         
         for channel in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
-            if channel in ["B", "F", "P", "C", "T", "A"]:
+            if channel in ["B", "F", "P", "C", "T", "A", "M"]:
                 m = "IoU ({} channel)".format(channel) if channel != "A" else "IoU ({} channels)".format(channel)
                 self.train_metric_names += [m]
                 self.train_metric_best += ["max"]
@@ -794,6 +794,18 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 pred_labels = np.expand_dims(pred_labels, 0)
 
         if self.cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK:
+            if "M" in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
+                ch_pos = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS.index("M")
+                pred = pred[...,ch_pos]
+            else: # F or F+C
+                if "C" in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
+                    pred = (
+                        pred[...,self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS.index("F")] 
+                        + pred[...,self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS.index("C")]
+                    )
+                else:
+                    pred = pred[...,self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS.index("F")]
+                
             pred_labels = voronoi_on_mask(
                 pred_labels,
                 pred,

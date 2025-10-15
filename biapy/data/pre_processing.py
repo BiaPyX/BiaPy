@@ -743,6 +743,13 @@ def labels_into_channels(
     if "We" in mode:
         new_mask[..., mode.index("We")] =  unet_border_weight_map(vol, w0=10.0, sigma=5.0, resolution=resolution)
 
+    # ---------- M (Legacy mask used in CartoCell) ----------
+    if "M" in mode: 
+        # Binary mask = F + C
+        f_ch = new_mask[..., mode.index("F")]
+        c_ch = new_mask[..., mode.index("C")]
+        new_mask[..., mode.index("M")] = np.clip(f_ch + c_ch, 0, 1).astype(np.uint8)
+
     # Save examples of each channel
     if save_dir:
         os.makedirs(save_dir, exist_ok=True)
@@ -781,6 +788,8 @@ def labels_into_channels(
                 continue  
             elif mod == "We":
                 suffix = "_border_weights.tif"
+            elif mod == "M":
+                suffix = "_CartoCell_M_channel.tif"
             else:
                 raise ValueError("Unknown channel type: {}".format(mod))
 

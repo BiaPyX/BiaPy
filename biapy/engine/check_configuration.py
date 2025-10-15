@@ -91,6 +91,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "E_sigma": 15,  # Embeddings (sigma)
             "E_seediness": 16,  # Embeddings (seediness)
             "R": 17,  # Radial distances
+            "M": 18,  # Legacy mask (B + C)
         }
 
         def get_sort_key(weights):
@@ -208,6 +209,15 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
                     growth_mask_channels = ["D"]
                     growth_mask_channel_ths = ["auto"]
+            elif set(sorted_original_instance_channels) == {"F", "C", "M"}:
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
+                    seed_channels = ["F", "C"]
+                    seed_channels_thresh = ["auto", "auto"]
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.TOPOGRAPHIC_SURFACE_CHANNEL == "":
+                    topo_surface_ch = "F"
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
+                    growth_mask_channels = ["F"]
+                    growth_mask_channel_ths = ["auto"]    
             elif set(sorted_original_instance_channels) == {"F", "H", "V", "Z"}:
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
                     seed_channels = ["F", "H", "V", "Z"]
@@ -447,6 +457,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 dst["E_sigma"] = {}
                 dst["E_seediness"] = {}
             
+            # M — legacy mask (foreground + contours)
+            if "M" in chs:
+                dst["M"] = {}
+
             opts.extend(["PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS", [dst]])
 
             # Add extra weight map channel if requested
@@ -497,7 +511,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 if not channel_loss_set:
                     losses = []
                     for ch in sorted_original_instance_channels:
-                        if ch in ["F", "B", "C", "P", "T", "A"]:
+                        if ch in ["F", "B", "C", "P", "T", "A", "M"]:
                             losses.append("bce")
                         elif ch in ["H", "V", "Z", "Db", "Dc", "Dn", "D", "R"]:
                             losses.append("l1")
@@ -1179,7 +1193,16 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     "E_sigma",
                     "E_seediness",
                     "We",
-                ], "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS' not in ['F', 'B', 'P', 'C', 'H', 'V', 'Z', 'Db', 'Dc', 'Dn', 'D', 'R', 'T', 'A', 'E_offset', 'E_sigma', 'E_seediness', 'We']"
+                    "M"
+                ], "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS' not in ['F', 'B', 'P', 'C', 'H', 'V', 'Z', 'Db', 'Dc', 'Dn', 'D', 'R', 'T', 'A', 'M', 'E_offset', 'E_sigma', 'E_seediness', 'We']"
+            
+            # Legacy mask used in CartoCell
+            if "M" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
+                print("WARNING: 'M' channel is a legacy mask channel used in CartoCell so the name is kept but the functionality is limited")
+                if cfg.PROBLEM.NDIM != "3D":
+                    raise ValueError("'M' channel can only be used in 3D segmentation (CartoCell legacy approach)")
+                elif set(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) != {"F", "C", "M"}:
+                    raise ValueError("'M' channel can only be used together with 'F' and 'C' channels (CartoCell legacy approach)")
 
             if cfg.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS == "stardist":
                 assert "R" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, "'R' channel must be used when 'PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS' is 'stardist'"
@@ -1315,6 +1338,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     continue  # no extra opts for E_sigma
                 elif key == "E_seediness":
                     continue  # no extra opts for E_seediness
+                elif key == "M":
+                    continue  # no extra opts for M
                 else:
                     raise ValueError(f"'PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS' for '{key}' channel is not supported")
 
@@ -1349,18 +1374,18 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "If 'DATA.N_CLASSES' > 2 one more weigth need to be provided."
             )
         if cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK:
-            if "F" not in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
+            if not any([x for x in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS if x in ["F", "M"]]):
                 raise ValueError(
-                    "'F' needs to be in 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS' when 'TEST.POST_PROCESSING.VORONOI_ON_MASK' is enabled"
+                    "'TEST.POST_PROCESSING.VORONOI_ON_MASK' can only be activated if any of the following channels was selected: 'F' or 'M'."
                 )
             if not check_value(cfg.TEST.POST_PROCESSING.VORONOI_TH):
                 raise ValueError("'TEST.POST_PROCESSING.VORONOI_TH' not in [0, 1] range")
         if (
-            not any([x for x in ["F", "B", "C", "D"] if x in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS])
+            not any([x for x in ["F", "B", "C", "D", "M"] if x in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS])
             and cfg.PROBLEM.INSTANCE_SEG.ERODE_AND_DILATE_GROWTH_MASK
         ):
             raise ValueError(
-                "'PROBLEM.INSTANCE_SEG.ERODE_AND_DILATE_GROWTH_MASK' can only be used if any of the following channels was selected: 'F', 'B', 'C', or 'D'."
+                "'PROBLEM.INSTANCE_SEG.ERODE_AND_DILATE_GROWTH_MASK' can only be used if any of the following channels was selected: 'F', 'B', 'C', 'M', or 'D'."
             )
         for morph_operation in cfg.PROBLEM.INSTANCE_SEG.SEED_MORPH_SEQUENCE:
             if morph_operation != "dilate" and morph_operation != "erode":
@@ -2870,9 +2895,6 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict):
             if "DATA_CHANNELS" in old_cfg["PROBLEM"]["INSTANCE_SEG"] and isinstance(old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_CHANNELS"], str):
                 if "WATERSHED" not in old_cfg["PROBLEM"]["INSTANCE_SEG"]:
                     old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"] = {}
-
-                if "M" in old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_CHANNELS"]:
-                    old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_CHANNELS"].remove("M")
 
                 new_old_channel_map = {
                     "B": "F",

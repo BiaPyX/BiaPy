@@ -21,7 +21,7 @@ from tqdm import tqdm
 from scipy.signal import find_peaks
 from scipy.spatial import cKDTree # type: ignore
 from scipy.spatial.distance import cdist
-from scipy.ndimage import rotate, grey_dilation, binary_erosion, binary_dilation, median_filter, binary_fill_holes, find_objects
+from scipy.ndimage import rotate, grey_dilation, binary_erosion, binary_dilation, median_filter, binary_fill_holes, find_objects, gaussian_filter
 from scipy.signal import savgol_filter
 from skimage import morphology
 from skimage.morphology import disk, ball, remove_small_objects, dilation, erosion
@@ -1258,7 +1258,7 @@ def create_th_plot(
 
 
 def voronoi_on_mask(
-    data:NDArray, 
+    data: NDArray, 
     mask: NDArray, 
     th: float=0, 
     verbose: bool=False
@@ -1272,9 +1272,9 @@ def voronoi_on_mask(
         Data to apply Voronoi. ``(y, x)`` for 2D or ``(z, y, x)`` for 3D.
         E.g. ``(397, 1450, 2000)`` for 3D.
 
-    mask : 3D/4D Numpy array
-        Data mask to determine which points need to be proccessed. ``(z, y, x, channels)`` e.g.
-        ``(397, 1450, 2000, 3)``.
+    mask : 2D/3D Numpy array
+        Data mask to determine which points need to be proccessed. ``(y, x)`` 
+        for 2D or ``(z, y, x)`` for 3D.``(z, y, x)`` e.g. ``(397, 1450, 2000)``.
 
     th : float, optional
         Threshold used to binarize the input. If th=0, otsu threshold is used.
@@ -1305,14 +1305,6 @@ def voronoi_on_mask(
     if image3d:
         data = np.expand_dims(data, 0)
         mask = np.expand_dims(mask, 0)
-
-    # Extract mask from prediction
-    if mask.shape[-1] == 3:
-        mask = mask[..., 2]
-    else:
-        mask = mask[..., 0] + mask[..., 1]
-
-    mask_shape = np.shape(mask)
 
     # Binarize
     if th == 0:
