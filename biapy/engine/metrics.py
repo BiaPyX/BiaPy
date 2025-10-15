@@ -238,7 +238,7 @@ class multiple_metrics:
         num_classes: int,
         metric_names: List[str],
         device: torch.device,
-        out_channels: Optional[List[str]]=["F", "C"],
+        out_channels: Optional[List[str]]=["F"],
         channel_extra_opts: Optional[Dict]={},
         ignore_index: int = -1,
         model_source: str = "biapy",
@@ -1255,7 +1255,7 @@ class instance_segmentation_loss:
 
             # class-rebalance / ignore_index weights for BCE
             weight = None
-            if self.loss_names[i] in ["bce", "ce"] and channel in ["B","F","P","C","T","A","F_pre","F_post"]:
+            if self.loss_names[i] in ["bce", "ce"] and channel in ["B","F","P","C","T","A","M","F_pre","F_post"]:
                 if self.class_rebalance == "auto":
                     weight = weight_binary_ratio(y_true_slice).float()
                 elif self.class_rebalance == "manual" and self.class_weights is not None:
