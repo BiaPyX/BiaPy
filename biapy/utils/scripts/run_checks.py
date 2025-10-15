@@ -70,7 +70,7 @@ all_test_info["Test4"] = {
         "Post-proc: Clear border + remove instances by properties",
     "yaml": "test_4.yaml",
     "internal_checks": [
-        {"type": "regular", "pattern": "Test IoU (B channel) (merge patches):", "gt": True, "value": 0.4},
+        {"type": "regular", "pattern": "Test IoU (F channel) (merge patches):", "gt": True, "value": 0.4},
         {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 1, "metric": "f1",
             "gt": True, "value": 0.50},
         {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 2, "metric": "f1",
@@ -343,7 +343,7 @@ all_test_info["Test29"] = {
         "zero_mean_unit_variance + format_version: 0.5.3 ",
     "yaml": "test_29.yaml",
     "internal_checks": [
-        {"type": "regular", "pattern": "Test IoU (B channel) (merge patches):", "gt": True, "value": 0.6},
+        {"type": "regular", "pattern": "Test IoU (F channel) (merge patches):", "gt": True, "value": 0.6},
         {"type": "BMZ", "pattern": "Package path:", "bmz_package_name": "test_model_affable-shark.zip"},
         {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 1, "metric": "f1",
             "gt": True, "value": 0.9},
@@ -368,7 +368,7 @@ all_test_info["Test31"] = {
         "zero_mean_unit_variance + format_version: 0.5.3 ",
     "yaml": "test_31.yaml",
     "internal_checks": [
-        {"type": "regular", "pattern": "Test IoU (B channel) (merge patches):", "gt": True, "value": 0.7},
+        {"type": "regular", "pattern": "Test IoU (F channel) (merge patches):", "gt": True, "value": 0.7},
         {"type": "BMZ", "pattern": "Package path:", "bmz_package_name": "Nuclei Segmentation Boundary Model.zip"},
         {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 1, "metric": "f1",
             "gt": True, "value": 0.85},
@@ -381,7 +381,7 @@ all_test_info["Test32"] = {
     "description": "2D instance segmentation. Export BiaPy model to BMZ format",
     "yaml": "test_32.yaml",
     "internal_checks": [
-        {"type": "regular", "pattern": "Test IoU (B channel) (merge patches):", "gt": True, "value": 0.35},
+        {"type": "regular", "pattern": "Test IoU (F channel) (merge patches):", "gt": True, "value": 0.35},
         {"type": "BMZ", "pattern": "Package path:", "bmz_package_name":  "biapy_model.zip"},
     ]
 }
@@ -403,7 +403,7 @@ all_test_info["Test34"] = {
     "description": "2D Instance seg. Conic 2D data (multihead). Basic DA. BC (auto). resunet++. ",
     "yaml": "test_34.yaml",
     "internal_checks": [
-        {"type": "regular", "pattern": "Test IoU (B channel) (merge patches):", "gt": True, "value": 0.35},
+        {"type": "regular", "pattern": "Test IoU (F channel) (merge patches):", "gt": True, "value": 0.35},
         {"type": "regular", "pattern": "Merge patches classification IoU:", "gt": True, "value": 0.1},
         {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 1, "metric": "f1",
             "gt": True, "value": 0.45},
