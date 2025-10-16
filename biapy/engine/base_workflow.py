@@ -247,7 +247,6 @@ class Base_Workflow(metaclass=ABCMeta):
             opts = check_model_restrictions(self.cfg, self.bmz_config, {"workflow_type": cfg.PROBLEM.TYPE})
 
             self.cfg.merge_from_list(opts)
-            update_dependencies(self.cfg)
 
         # Save number of channels to be created by the model
         self.define_activations_and_channels()
