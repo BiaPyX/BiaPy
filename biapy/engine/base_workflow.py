@@ -1152,6 +1152,10 @@ class Base_Workflow(metaclass=ABCMeta):
         if self.cfg.MODEL.SOURCE == "bmz":
             return pred
 
+        # Do not apply any activation when using masking as pretext task
+        if self.cfg.PROBLEM.TYPE == "SELF_SUPERVISED" and self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK.lower() == "masking":
+            return pred
+
         def __apply_acts(prediction, acts):
             out_slices = []
             for i, activation in enumerate(acts):
