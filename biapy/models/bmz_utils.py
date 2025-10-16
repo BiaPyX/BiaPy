@@ -170,7 +170,7 @@ def extract_BMZ_sample_and_cover(
     cover_gt : NDArray
         The ground truth img_gt cover (2D slice). Shape will be (H, W, C).
     """
-    cover_raw, cover_gt = None, None
+    cover_raw, cover_gt = None, img_gt
     mask_available = img_gt is not None and isinstance(img_gt, np.ndarray)
     dims = 2 if not is_3d else 3
     ref_img = img_gt if mask_available else img
@@ -313,7 +313,7 @@ def create_model_cover(img, img_gt, out_path, patch_size=256, is_3d=False, workf
     # If 3D just take middle slice.
     if is_3d and img.ndim == 4:
         img = img[img.shape[0] // 2]
-    if is_3d and img_gt.ndim == 4:
+    if is_3d and isinstance(img_gt, np.ndarray) and img_gt.ndim == 4:
         img_gt = img_gt[img_gt.shape[0] // 2]
 
     # Convert to RGB
@@ -327,7 +327,7 @@ def create_model_cover(img, img_gt, out_path, patch_size=256, is_3d=False, workf
     # Resize the images if neccesary
     if img.shape[:-1] != (patch_size, patch_size):
         img = resize(img, (patch_size, patch_size), order=1, clip=True, preserve_range=True, anti_aliasing=True)
-    if img_gt.shape[:-1] != (patch_size, patch_size):
+    if isinstance(img_gt, np.ndarray) and img_gt.shape[:-1] != (patch_size, patch_size):
         order = 1 if workflow in ["super-resolution", "image-to-image", "denoising", "self-supervised"] else 0
         img_gt = resize(img_gt, (patch_size, patch_size), order=order, clip=True, preserve_range=True, anti_aliasing=True)
 
@@ -351,6 +351,9 @@ def create_model_cover(img, img_gt, out_path, patch_size=256, is_3d=False, workf
         out = np.ones((patch_size, patch_size * 2, 3), dtype=img.dtype)
         out[:, :patch_size] = img.copy()
         out[:, patch_size:] = img_gt.copy()
+    elif workflow in ["classification"]:
+        # In classification the img_gt is a class index, so just create a cover with the image
+        out = img.copy()
     else:
         if img_gt.max() <= 1:
             img_gt = (img_gt * 255).astype(np.uint8)
