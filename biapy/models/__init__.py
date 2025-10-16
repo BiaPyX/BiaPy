@@ -1140,12 +1140,12 @@ def check_model_restrictions(cfg: CN, bmz_config: Dict, workflow_specs: Dict, ve
         opts["DATA.N_CLASSES"] = max(2, classes)
 
     elif specific_workflow in ["INSTANCE_SEG"]:
-        # Assumed it's BC. This needs a more elaborated process. Still deciding this:
+        # Assumed it's F + C. This needs a more elaborated process. Still deciding this:
         # https://github.com/bioimage-io/spec-bioimage-io/issues/621
 
         # Defaults
         channels = 2
-        channel_code = ["B", "C"]
+        channel_code = ["F", "C"]
         classes = 2
 
         if "out_channels" in model_kwargs:
@@ -1165,7 +1165,7 @@ def check_model_restrictions(cfg: CN, bmz_config: Dict, workflow_specs: Dict, ve
                 and "3d" in tags
                 and "fluorescence" in tags
             ):
-                channel_code = ["B", "C", "M"]
+                channel_code = ["F", "C", "M"]
 
             # Handle multihead
             assert isinstance(channels, list)
@@ -1179,7 +1179,7 @@ def check_model_restrictions(cfg: CN, bmz_config: Dict, workflow_specs: Dict, ve
             if channels == 1:
                 channel_code = ["C"]
             elif channels == 2:
-                channel_code = ["B", "C"]
+                channel_code = ["F", "C"]
             elif channels == 8:
                 channel_code = ["A"] # wild-whale
 
