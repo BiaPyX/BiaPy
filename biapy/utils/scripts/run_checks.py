@@ -3185,16 +3185,17 @@ if all_test_info["Test26"]["enable"]:
     biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(detection_3d_brainglobe_data_outpath, "data", "y")
     biapy_config['DATA']['TEST']['IN_MEMORY'] = False
     biapy_config['DATA']['TEST']['LOAD_GT'] = True
-    biapy_config['DATA']['TEST']['PADDING'] = "(0,18,18)"
+    biapy_config['DATA']['TEST']['PADDING'] = "(4,18,18)"
 
     biapy_config['TRAIN']['ENABLE'] = True
     biapy_config['TRAIN']['EPOCHS'] = 100
     biapy_config['TRAIN']['BATCH_SIZE'] = 1
     biapy_config['TRAIN']['PATIENCE'] = 20
+    biapy_config['TRAIN']['LR'] = 0.0001
     biapy_config['TRAIN']['LR_SCHEDULER'] = {}
     biapy_config['TRAIN']['LR_SCHEDULER']['NAME'] = 'warmupcosine'
     biapy_config['TRAIN']['LR_SCHEDULER']['MIN_LR'] = 5.E-6
-    biapy_config['TRAIN']['LR_SCHEDULER']['WARMUP_COSINE_DECAY_EPOCHS'] = 15
+    biapy_config['TRAIN']['LR_SCHEDULER']['WARMUP_COSINE_DECAY_EPOCHS'] = 5
 
     biapy_config['MODEL']['ARCHITECTURE'] = 'resunet'
     biapy_config['MODEL']['Z_DOWN'] = [1,1,1,1]
