@@ -492,8 +492,8 @@ def create_test_generator(
     bmz_input_sample = None
     bmz_input_sample, mask_sample, _, _, _ = test_generator.load_sample(0, first_load=True)
     bmz_input_sample, cover_raw, cover_gt = extract_BMZ_sample_and_cover(
-        img=bmz_input_sample,
-        img_gt=mask_sample,
+        img=bmz_input_sample[0] if isinstance(mask_sample, np.ndarray) else bmz_input_sample,
+        img_gt=mask_sample[0] if isinstance(mask_sample, np.ndarray) else mask_sample,
         patch_size=cfg.DATA.PATCH_SIZE,
         is_3d=cfg.PROBLEM.NDIM == "3D",
         input_axis_order=cfg.DATA.TEST.INPUT_IMG_AXES_ORDER,

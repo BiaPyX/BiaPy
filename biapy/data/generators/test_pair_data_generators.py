@@ -166,11 +166,13 @@ class test_pair_data_generator(Dataset):
 
         Returns
         -------
-        img : 3D/4D ndarray array
-            Image read. E.g. ``(z, y, x, channels)`` for 3D or ``(y, x, channels)`` for 2D.
+        img : 4D/5D ndarray array
+            Image read. E.g. ``(1, z, y, x, channels)`` for 3D or ``(1, y, x, channels)`` for 2D. 
+            If by chunks is being used, the shape will be the loaded data as it is.
 
-        mask 3D/4D ndarray array
-            Mask read. E.g. ``(z, y, x, channels)`` for 3D or ``(y, x, channels)`` for 2D.
+        mask 4D/5D ndarray array
+            Mask read. E.g. ``(1, z, y, x, channels)`` for 3D or ``(1, y, x, channels)`` for 2D.
+            If by chunks is being used, the shape will be the loaded data as it is.
 
         sample : DataSample
             Loaded sample.
