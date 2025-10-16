@@ -277,7 +277,9 @@ class multiple_metrics:
         self.num_classes = num_classes
         self.metric_names = metric_names
         self.device = device
-        self.out_channels = out_channels if out_channels is not None else [".",]*len(metric_names)
+        self.out_channels = out_channels.copy() if out_channels is not None else [".",]*len(metric_names)
+        if self.num_classes > 2:
+            self.out_channels += ["class"]
         self.out_channels = [x for x in self.out_channels if x != "We"]  # Ignore weight extra channel
         self.channel_extra_opts = channel_extra_opts
         self.model_source = model_source
@@ -335,8 +337,7 @@ class multiple_metrics:
             y_true = scale_target(y_true, _y_pred.shape[-self.ndim :])
 
         res_metrics = {}
-        for i, channel in enumerate(self.out_channels):
-            ch_pos = self.out_channels.index(channel)         
+        for ch_pos, channel in enumerate(self.out_channels):
             if channel == "A":
                 assert self.channel_extra_opts is not None and "A" in self.channel_extra_opts, "Affinity channel options must be provided."
                 ch_pos_end = len(self.channel_extra_opts["A"].get("y_affinities", [1])) + ch_pos
@@ -346,13 +347,14 @@ class multiple_metrics:
             else:
                 ch_pos_end = ch_pos + 1
 
-            if self.metric_names[i] not in res_metrics:
-                res_metrics[self.metric_names[i]] = []
+            if self.metric_names[ch_pos] not in res_metrics:
+                res_metrics[self.metric_names[ch_pos]] = []
+
             # Measure metric
-            if self.metric_names[i] == "IoU (classes)":
-                res_metrics[self.metric_names[i]].append(self.metric_func[i](_y_pred_class, y_true[:, 1]))
+            if self.metric_names[ch_pos] == "IoU (classes)":
+                res_metrics[self.metric_names[ch_pos]].append(self.metric_func[ch_pos](_y_pred_class, y_true[:, 1]))
             else:
-                res_metrics[self.metric_names[i]].append(self.metric_func[i](_y_pred[:, ch_pos:ch_pos_end], y_true[:, ch_pos:ch_pos_end]))
+                res_metrics[self.metric_names[ch_pos]].append(self.metric_func[ch_pos](_y_pred[:, ch_pos:ch_pos_end], y_true[:, ch_pos:ch_pos_end]))
 
         # Mean of same metric values
         for key, value in res_metrics.items():
@@ -1170,6 +1172,8 @@ class instance_segmentation_loss:
         self.channels_expected = channels_expected if not self.extra_weight_in_borders else channels_expected + 1
         self.channel_extra_opts = channel_extra_opts
         self.n_classes = n_classes
+        if self.n_classes > 2:
+           self.channels_expected += 1  # for the class channel
         self.class_rebalance = class_rebalance
         self.class_weights = class_weights if class_rebalance == "manual" else None
         self.ignore_index = ignore_index

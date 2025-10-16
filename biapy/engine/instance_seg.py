@@ -234,7 +234,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
         # Multi-head: instances + classification
         if self.cfg.DATA.N_CLASSES > 2:
-            self.activations = [self.activations, ["linear"]]
+            self.activations = [self.activations, ["linear",]*self.cfg.DATA.N_CLASSES]
             self.model_output_channels["channels"] = [self.model_output_channels["channels"], self.cfg.DATA.N_CLASSES]
             self.multihead = True
         else:
