@@ -292,11 +292,11 @@ class test_pair_data_generator(Dataset):
                     mask, _ = self.norm_module.apply_mask_norm(mask)
                     assert isinstance(mask, np.ndarray)
 
-                img = np.expand_dims(img, 0)
-                if self.provide_Y:
-                    mask = np.expand_dims(np.array(mask), 0)
-                    if self.norm_module.mask_norm == "as_mask":
-                        mask = mask.astype(np.uint8)
+            img = np.expand_dims(img, 0)
+            if self.provide_Y:
+                mask = np.expand_dims(np.array(mask), 0)
+                if self.norm_module.mask_norm == "as_mask":
+                    mask = mask.astype(np.uint8)
 
             if self.convert_to_rgb:
                 if img.shape[-1] == 1:
