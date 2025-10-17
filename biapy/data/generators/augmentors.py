@@ -664,10 +664,8 @@ def misalignment(
         out_w = W - displacement
 
         mode = "slip" if random.uniform(0, 1) < 0.5 else "translation"
-        print("MODEEE: {}".format(mode))
         # pick a z-plane (used as the “affected slice” for slip, or split point for translation)
         z_idx = np.random.randint(1, Z - 1) if Z >= 3 else 0
-        print("z_idx: {}".format(z_idx))
         if random.uniform(0, 1) < rotate_ratio:
             # start from a copy; we’ll overwrite affected slices
             out = img.copy()
