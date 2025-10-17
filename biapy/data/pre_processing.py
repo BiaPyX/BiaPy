@@ -136,19 +136,6 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
     print("Creating Y_{} channels . . .".format(data_type))
     # Create the mask patch by patch (Zarr/H5)
     if working_with_zarr_h5_files and isinstance(Y, dict):
-        channel_suffix = "".join(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) 
-        if cfg.PROBLEM.INSTANCE_SEG.BORDER_EXTRA_WEIGHTS != "":
-            channel_suffix += "We"
-        savepath = str(data_path) + "_" + channel_suffix  
-        if cfg.PROBLEM.INSTANCE_SEG.TYPE == "synapses":
-            post_dil = "".join(str(cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.POSTSITE_DILATION)[1:-1].replace(",", "")).replace(
-                " ", "_"
-            )
-            post_d_dil = "".join(
-                str(cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.POSTSITE_DILATION_DISTANCE_CHANNELS)[1:-1].replace(",", "")
-            ).replace(" ", "_")
-            savepath += "_" + post_dil + "_" + post_d_dil
-
         if "D" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
             dtype_str = "float32"
             raise ValueError("Currently distance creation using Zarr by chunks is not implemented.")
@@ -161,7 +148,7 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
             synapse_channel_creation(
                 data_info=Y,
                 zarr_data_information=zarr_data_information,
-                savepath=savepath,
+                savepath=getattr(cfg.DATA, tag).INSTANCE_CHANNELS_MASK_DIR,
                 mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
                 postsite_dilation=cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.POSTSITE_DILATION,
                 postsite_distance_channel_dilation=cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.POSTSITE_DILATION_DISTANCE_CHANNELS,
@@ -222,8 +209,8 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
                         imgfile, data = read_chunked_nested_data(Y[i]["filepath"], path_to_gt_data)
                     else:
                         imgfile, data = read_chunked_data(Y[i]["filepath"])
-                    fname = os.path.join(savepath, os.path.basename(Y[i]["filepath"]))
-                    os.makedirs(savepath, exist_ok=True)
+                    fname = os.path.join(getattr(cfg.DATA, tag).INSTANCE_CHANNELS_MASK_DIR, os.path.basename(Y[i]["filepath"]))
+                    os.makedirs(getattr(cfg.DATA, tag).INSTANCE_CHANNELS_MASK_DIR, exist_ok=True)
                     if any(fname.endswith(x) for x in [".h5", ".hdf5", ".hdf"]):
                         fid_mask = h5py.File(fname, "w")
                     else:  # Zarr file
