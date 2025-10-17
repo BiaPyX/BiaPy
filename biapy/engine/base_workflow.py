@@ -1115,15 +1115,18 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.test_generator, 
                 self.data_norm, 
                 test_input, 
-                self.bmz_config["cover_raw"], 
-                self.bmz_config["cover_gt"]
+                cover_raw, 
+                cover_gt,
             ) = create_test_generator(
                 self.cfg,
                 self.X_test,
                 self.Y_test,
                 norm_module=self.test_norm_module,
             )
-            # Only save it if it was not done before
+            # Save BMZ data if not available
+            if "cover_raw" not in self.bmz_config or "cover_gt" not in self.bmz_config:
+                self.bmz_config["cover_raw"] = cover_raw
+                self.bmz_config["cover_gt"] = cover_gt
             if "test_input" not in self.bmz_config:
                 self.bmz_config["test_input"] = test_input
 
