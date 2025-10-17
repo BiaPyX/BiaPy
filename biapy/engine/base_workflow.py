@@ -1656,7 +1656,7 @@ class Base_Workflow(metaclass=ABCMeta):
     def process_test_sample(self):
         """Process a sample in the inference phase."""
         # Skip processing image
-        if "discard" in self.current_sample["X"] and self.current_sample["X"]["discard"]:
+        if "discard" in self.current_sample and self.current_sample["discard"]:
             return True
 
         #################

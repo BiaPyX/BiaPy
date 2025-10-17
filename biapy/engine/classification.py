@@ -318,7 +318,7 @@ class Classification_Workflow(Base_Workflow):
         """Process a sample in the inference phase."""
         assert isinstance(self.all_pred, list) and isinstance(self.all_gt, list)
         # Skip processing image
-        if "discard" in self.current_sample["X"] and self.current_sample["X"]["discard"]:
+        if "discard" in self.current_sample and self.current_sample["discard"]:
             return True
 
         # Predict each patch

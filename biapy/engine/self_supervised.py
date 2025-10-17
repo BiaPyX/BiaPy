@@ -432,7 +432,7 @@ class Self_supervised_Workflow(Base_Workflow):
         """Process a sample in the test/inference phase."""
         assert self.model and self.model_without_ddp
         # Skip processing image
-        if "discard" in self.current_sample["X"] and self.current_sample["X"]["discard"]:
+        if "discard" in self.current_sample and self.current_sample["discard"]:
             return True
 
         original_data_shape = self.current_sample["X"].shape

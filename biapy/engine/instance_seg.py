@@ -1443,7 +1443,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             super().process_test_sample()
         else:
             # Skip processing image
-            if "discard" in self.current_sample["X"] and self.current_sample["X"]["discard"]:
+            if "discard" in self.current_sample and self.current_sample["discard"]:
                 return True
 
             self.instances_already_created = True

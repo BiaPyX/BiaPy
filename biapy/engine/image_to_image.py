@@ -366,7 +366,7 @@ class Image_to_Image_Workflow(Base_Workflow):
         """Process a sample in the inference phase."""
         assert self.model
         # Skip processing image
-        if "discard" in self.current_sample["X"] and self.current_sample["X"]["discard"]:
+        if "discard" in self.current_sample and self.current_sample["discard"]:
             return True
 
         original_data_shape = self.current_sample["X"].shape

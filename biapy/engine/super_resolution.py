@@ -375,7 +375,7 @@ class Super_resolution_Workflow(Base_Workflow):
         """Process a sample in the test/inference phase."""
         assert self.model
         # Skip processing image
-        if "discard" in self.current_sample["X"] and self.current_sample["X"]["discard"]:
+        if "discard" in self.current_sample and self.current_sample["discard"]:
             return True
 
         if self.cfg.PROBLEM.NDIM == "2D":
