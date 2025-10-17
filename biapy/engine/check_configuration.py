@@ -72,48 +72,48 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
         assert len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) > 0, "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS' must be defined"
 
-        # Define the custom order once
-        CUSTOM_ORDER = {
-            "F": 0, # Foreground
-            "B": 1, # Background
-            "C": 3, # contours
-            "H": 4, # Horizontal distance
-            "V": 5, # Vertical distance
-            "Z": 6, # Z distance
-            "Db": 7, # Distance (boundary)
-            "Dc": 8, # Distance (center/skeleton)
-            "Dn": 9, # Distance (neighbor)
-            "D": 10, # Distance (signed)
-            "T": 11, # Touching area
-            "A": 12,  # Affinities
-            "E": 13,  # Embeddings
-            "E_offset": 14,  # Embeddings (offsets)
-            "E_sigma": 15,  # Embeddings (sigma)
-            "E_seediness": 16,  # Embeddings (seediness)
-            "R": 17,  # Radial distances
-            "M": 18,  # Legacy mask (B + C)
-        }
-
-        def get_sort_key(weights):
-            """Return a sort function based on given weights dict"""
-            def sort_key(item):
-                return (weights.get(item, 99), item)  # alphabetically for "rest"
-            return sort_key
-        custom_sort_key = get_sort_key(CUSTOM_ORDER)
-
-        original_instance_channels = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS.copy()
-        sorted_original_instance_channels = sorted(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, key=custom_sort_key)
-
-        channels_provided = len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
-        if cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular" and cfg.DATA.N_CLASSES > 2:
-            channels_provided += 1
-        
-        if "E" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
-            assert set(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) == {"E"}, "'E' representation can only be used alone"
-        if "A" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
-            assert set(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) == {"A"}, "'A' representation can only be used alone"
-
         if cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
+            # Define the custom order once
+            CUSTOM_ORDER = {
+                "F": 0, # Foreground
+                "B": 1, # Background
+                "C": 3, # contours
+                "H": 4, # Horizontal distance
+                "V": 5, # Vertical distance
+                "Z": 6, # Z distance
+                "Db": 7, # Distance (boundary)
+                "Dc": 8, # Distance (center/skeleton)
+                "Dn": 9, # Distance (neighbor)
+                "D": 10, # Distance (signed)
+                "T": 11, # Touching area
+                "A": 12,  # Affinities
+                "E": 13,  # Embeddings
+                "E_offset": 14,  # Embeddings (offsets)
+                "E_sigma": 15,  # Embeddings (sigma)
+                "E_seediness": 16,  # Embeddings (seediness)
+                "R": 17,  # Radial distances
+                "M": 18,  # Legacy mask (B + C)
+            }
+
+            def get_sort_key(weights):
+                """Return a sort function based on given weights dict"""
+                def sort_key(item):
+                    return (weights.get(item, 99), item)  # alphabetically for "rest"
+                return sort_key
+            custom_sort_key = get_sort_key(CUSTOM_ORDER)
+
+            original_instance_channels = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS.copy()
+            sorted_original_instance_channels = sorted(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS, key=custom_sort_key)
+
+            channels_provided = len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS)
+            if cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular" and cfg.DATA.N_CLASSES > 2:
+                channels_provided += 1
+            
+            if "E" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
+                assert set(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) == {"E"}, "'E' representation can only be used alone"
+            if "A" in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
+                assert set(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) == {"A"}, "'A' representation can only be used alone"
+
             channel_loss_set = False
             # Set default values for some configurations that are more common, such as 'C', 'BC', 'BP', 'BD', 
             # 'BCM', 'BCD' and 'A'.
@@ -507,27 +507,44 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 else:
                     opts.extend(["PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS", "watershed"])
 
-            if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES == []:
-                if not channel_loss_set:
-                    losses = []
-                    for ch in sorted_original_instance_channels:
-                        if ch in ["F", "B", "C", "P", "T", "A", "M"]:
-                            losses.append("bce")
-                        elif ch in ["H", "V", "Z", "Db", "Dc", "Dn", "D", "R"]:
-                            losses.append("l1")
-                        elif ch in ["E_offset", "E_sigma", "E_seediness"]:
-                            losses.append("embedseg")
-                        elif ch in ["We"]:
-                            continue  # no loss for extra weight map
-                        else:
-                            raise ValueError(f"Unknown instance segmentation data channel '{ch}'")
+        else: # synapses
+            # Create unique folder names for instance segmentation channel masks
+            # depending on the channels and their options
+            suffix = "postDilation-"
+            suffix += "".join(str(cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.POSTSITE_DILATION)[1:-1].replace(",","")).replace(" ","_")
+            suffix += "_postDilationDistance-"
+            suffix += "".join(str(cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.POSTSITE_DILATION_DISTANCE_CHANNELS)[1:-1].replace(",","")).replace(" ","_")
+            suffix += "_norm-"
+            suffix += str(cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.NORMALIZE_DISTANCES)
 
-                    if len(losses) > 0:
-                        opts.extend(["PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES", losses])
-            else:
-                assert len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES) == len([x for x in sorted_original_instance_channels if x != "We"]), "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES' must have the same length as 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'"
-                for loss in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES:
-                    assert loss in ["bce", "ce", "mse", "l1", "mae", "embedseg"], "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES' can only have values in ['bce', 'mse', 'l1', 'ce', 'embedseg']"
+            train_channel_mask_dir = cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR + suffix
+            opts.extend(["DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR", train_channel_mask_dir])
+            val_channel_mask_dir = cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR + suffix
+            opts.extend(["DATA.VAL.INSTANCE_CHANNELS_MASK_DIR", val_channel_mask_dir])
+            test_channel_mask_dir = cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR + suffix
+            opts.extend(["DATA.TEST.INSTANCE_CHANNELS_MASK_DIR", test_channel_mask_dir])
+
+        if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES == []:
+            if not channel_loss_set:
+                losses = []
+                for ch in sorted_original_instance_channels:
+                    if ch in ["F", "B", "C", "P", "T", "A", "M", "F_pre", "F_post"]:
+                        losses.append("bce")
+                    elif ch in ["H", "V", "Z", "Db", "Dc", "Dn", "D", "R"]:
+                        losses.append("l1")
+                    elif ch in ["E_offset", "E_sigma", "E_seediness"]:
+                        losses.append("embedseg")
+                    elif ch in ["We"]:
+                        continue  # no loss for extra weight map
+                    else:
+                        raise ValueError(f"Unknown instance segmentation data channel '{ch}'")
+
+                if len(losses) > 0:
+                    opts.extend(["PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES", losses])
+        else:
+            assert len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES) == len([x for x in sorted_original_instance_channels if x != "We"]), "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES' must have the same length as 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'"
+            for loss in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES:
+                assert loss in ["bce", "ce", "mse", "l1", "mae", "embedseg"], "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES' can only have values in ['bce', 'mse', 'l1', 'ce', 'embedseg']"
 
         if (
             len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS) != channels_provided 
