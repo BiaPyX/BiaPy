@@ -963,10 +963,6 @@ class BiaPy:
             )
             covers.append(Path(cover_path))
 
-        # Change dir as the building process copies to the current directory the files used to create the BMZ model
-        cwd = os.getcwd()
-        os.chdir(building_dir)
-
         # Weights + architecture
         # If it's a BiaPy model
         env_descriptor = None
@@ -1077,9 +1073,6 @@ class BiaPy:
             "Package path:",
             save_bioimageio_package(model_descr, output_path=Path(model_path)),
         )
-
-        # Recover the original working path
-        os.chdir(cwd)
 
         print("FINISHED JOB {} !!".format(self.job_identifier))
 
