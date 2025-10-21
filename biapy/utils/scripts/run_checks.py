@@ -1121,21 +1121,13 @@ def runjob(test_info, results_folder, yaml_file, biapy_folder, multigpu=False, b
     os.chdir(biapy_folder)
     print(f"Log: {jobout_file}")
     if bmz:
-        # Create fake doc.md file
-        letters = np.array(list(chr(ord('a') + i) for i in range(26)))
-        text = np.random.choice(letters, 10)
-        doc_file = os.path.join(bmz_folder, 'doc.md')
         os.makedirs(bmz_folder, exist_ok=True)
-        with open(doc_file, 'w+') as f:
-            f.write(str(text))
-
         cmd = ["python", "-u", bmz_script, 
                "--code_dir", biapy_folder,
                "--jobname", test_info["jobname"],
                "--config", yaml_file, 
                "--result_dir", results_folder, 
                "--model_name", str(bmz_package.split(".")[:-1][0]),
-               "--doc_file", doc_file,
                "--bmz_folder", bmz_folder,
                "--gpu", gpu]
         if reuse_original_bmz_config:

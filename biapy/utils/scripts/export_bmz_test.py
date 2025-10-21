@@ -15,7 +15,6 @@ parser.add_argument(
     help="Path to where the resulting output of the job will be stored",
 )
 parser.add_argument("--model_name", required=True, help="Name of the model")
-parser.add_argument("--doc_file", required=True, help="Documentation file")
 parser.add_argument("--bmz_folder", required=True, help="BMZ model out folder")
 parser.add_argument("--gpu", required=True, help="GPU to use")
 parser.add_argument(
@@ -46,7 +45,6 @@ else:
         {"text": "architecture", "doi": "10.1109/LGRS.2018.2802944"},
         {"text": "data", "doi": "10.48550/arXiv.1812.06024"},
         ]
-    bmz_cfg["doc"] = args["doc_file"]
     bmz_cfg["model_name"] = args["model_name"]
     bmz_cfg["data"] = {
         "name": "blablabla",
