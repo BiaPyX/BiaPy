@@ -147,10 +147,15 @@ def watershed_by_channels(
 
     # Sort the lists to have the ones that can define a good starting points for the seeds first
     channels = sorted(channels, key=custom_sort_key)
+    orig_order = seed_channels.copy()
     seed_channels = sorted(seed_channels, key=custom_sort_key)
-    seed_channel_ths = sorted(seed_channel_ths, key=custom_sort_key)
+    positions = [orig_order.index(item) for item in seed_channels]
+    seed_channel_ths = [seed_channel_ths[i] for i in positions]
+    orig_order = growth_mask_channels.copy()
     growth_mask_channels = sorted(growth_mask_channels, key=custom_sort_key)
-    growth_mask_channel_ths = sorted(growth_mask_channel_ths, key=custom_sort_key)
+    positions = [orig_order.index(item) for item in growth_mask_channels]
+    growth_mask_channel_ths = [growth_mask_channel_ths[i] for i in positions]
+    del orig_order
 
     def erode_seed_and_growth_mask():
         nonlocal seed_map
@@ -195,7 +200,7 @@ def watershed_by_channels(
         foreground_probs = np.min(data, axis=-1)
 
         # Seed creation process
-        th = float(seed_channel_ths[0]) if seed_channel_ths[0] != "auto" else threshold_otsu(data) 
+        th = float(seed_channel_ths[0]) if seed_channel_ths[0] != "auto" else float(threshold_otsu(data)) 
         seed_map = foreground_probs > th
         seed_ths_used.append(th)
 
@@ -217,13 +222,13 @@ def watershed_by_channels(
                 else: # F, P, Db, D
                     seed_map = data[..., ch_pos]
                 
-                th = float(seed_channel_ths[i]) if seed_channel_ths[i] != "auto" else threshold_otsu(seed_map)
+                th = float(seed_channel_ths[i]) if seed_channel_ths[i] != "auto" else float(threshold_otsu(seed_map))
                 seed_ths_used.append(th)
 
                 seed_map = seed_map > th
             else:
                 if ch in ['F', 'B', 'P', 'C', 'Db', 'Dc', 'Dn', 'D', 'T']:
-                    th = float(seed_channel_ths[i]) if seed_channel_ths[i] != "auto" else threshold_otsu(data[..., ch_pos])
+                    th = float(seed_channel_ths[i]) if seed_channel_ths[i] != "auto" else float(threshold_otsu(data[..., ch_pos]))
                     seed_ths_used.append(th)
 
                     if ch in ["F", "P", "Db", "D"]:
@@ -268,7 +273,7 @@ def watershed_by_channels(
                     if any([x for x in hvz_ths if x != "auto"]):
                         th = float(np.min([x for x in hvz_ths if x != "auto"])) # Take the most restrictive
                     else:
-                        th = threshold_otsu(overall)
+                        th = float(threshold_otsu(overall))
                     for x in hvz_ths:
                         seed_ths_used.append(th)
 
@@ -286,12 +291,12 @@ def watershed_by_channels(
                 else: # F, Db, D
                     growth_mask = data[..., ch_pos]
 
-                th = float(growth_mask_channel_ths[i]) if growth_mask_channel_ths[i] != "auto" else threshold_otsu(growth_mask) / 2
+                th = float(growth_mask_channel_ths[i]) if growth_mask_channel_ths[i] != "auto" else float(threshold_otsu(growth_mask) / 2)
                 growth_mask_ths_used.append(th)
 
                 growth_mask = growth_mask > th
             else:
-                th = float(growth_mask_channel_ths[i]) if growth_mask_channel_ths[i] != "auto" else threshold_otsu(data[..., ch_pos]) / 2
+                th = float(growth_mask_channel_ths[i]) if growth_mask_channel_ths[i] != "auto" else float(threshold_otsu(data[..., ch_pos]) / 2)
                 growth_mask_ths_used.append(th)
 
                 if ch in ["F", "Db", "D"]:
