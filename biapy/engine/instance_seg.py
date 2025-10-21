@@ -2529,6 +2529,9 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         # Create selected channels for train data
         if self.cfg.TRAIN.ENABLE or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
             if not os.path.isdir(train_channel_mask_dir):
+                # Barrier need as some of the threads may check the existence of the folder after it is created
+                if is_dist_avail_and_initialized():
+                    dist.barrier()
                 print(
                     "You select to create {} channels from given instance labels and no file is detected in {} . "
                     "So let's prepare the data. This process will be done just once!".format(
@@ -2553,6 +2556,9 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         # Create selected channels for val data
         if self.cfg.TRAIN.ENABLE and not self.cfg.DATA.VAL.FROM_TRAIN:
             if not os.path.isdir(val_channel_mask_dir):
+                # Barrier need as some of the threads may check the existence of the folder after it is created
+                if is_dist_avail_and_initialized():
+                    dist.barrier()
                 print(
                     "You select to create {} channels from given instance labels and no file is detected in {} . "
                     "So let's prepare the data. This process will be done just once!".format(
@@ -2577,6 +2583,9 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         # Create selected channels for test data once
         if self.cfg.TEST.ENABLE and not self.cfg.DATA.TEST.USE_VAL_AS_TEST and self.cfg.DATA.TEST.LOAD_GT:
             if not os.path.isdir(test_channel_mask_dir):
+                # Barrier need as some of the threads may check the existence of the folder after it is created
+                if is_dist_avail_and_initialized():
+                    dist.barrier()
                 print(
                     "You select to create {} channels from given instance labels and no file is detected in {} . "
                     "So let's prepare the data. This process will be done just once!".format(
