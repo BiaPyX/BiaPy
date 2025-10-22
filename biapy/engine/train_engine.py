@@ -147,6 +147,7 @@ def train_one_epoch(
         else:
             loss = loss_function(outputs, targets)
 
+        # Separate metric if precalculated inside the loss (e.g. Embedding loss)
         precalculated_metric, precalculated_metric_name = None, None
         if isinstance(loss, tuple):
             precalculated_metric = loss[1]
@@ -278,17 +279,26 @@ def evaluate(
         else:
             loss = loss_function(outputs, targets)
 
+        # Separate metric if precalculated inside the loss (e.g. Embedding loss)
         precalculated_metric, precalculated_metric_name = None, None
         if isinstance(loss, tuple):
             precalculated_metric = loss[1]
             precalculated_metric_name = loss[2]
             loss = loss[0]
+        
+        loss_value = loss.item()
+        if not math.isfinite(loss_value):
+            print("Loss is {}, stopping training".format(loss_value))
+            sys.exit(1)
 
         # Calculate the metrics
-        if precalculated_metric is None:
-            metric_function(outputs, targets, metric_logger=metric_logger)
-        else:
+        if precalculated_metric is not None:
             metric_logger.meters[precalculated_metric_name].update(precalculated_metric)
+        else:
+            metric_function(outputs, targets, metric_logger=metric_logger)
+
+        # Update loss in loggers
+        metric_logger.update(loss=loss)
 
     # Gather the stats from all processes
     metric_logger.synchronize_between_processes()
