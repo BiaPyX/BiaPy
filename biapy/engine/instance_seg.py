@@ -14,9 +14,9 @@ import pandas as pd
 from tqdm import tqdm
 from skimage.segmentation import clear_border
 from skimage.transform import resize
-from skimage.morphology import disk, ball, dilation
+from skimage.morphology import ball, dilation
 import torch.distributed as dist
-from typing import Dict, Optional, List, Tuple, Any
+from typing import Dict, Optional, List, Tuple
 from numpy.typing import NDArray
 from scipy.spatial import distance_matrix
 from skimage.filters import threshold_otsu
@@ -43,8 +43,7 @@ from biapy.engine.metrics import (
     multiple_metrics,
     detection_metrics,
     ContrastCELoss,
-    EmbedSegLossStrict,
-    EmbedSegMetrics,
+    SpatialEmbLoss,
 )
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.utils.misc import (
@@ -322,7 +321,8 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             )
         
         if "E_offset" in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
-            self.train_metrics.append(EmbedSegMetrics())
+            # No metric for the embedding representation during training as the IoU is calculated together with the loss
+            self.train_metrics.append("none") 
         else:
             self.train_metrics.append(
                 multiple_metrics(
@@ -352,7 +352,8 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             )
 
         if "E_offset" in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
-            self.test_metrics.append(EmbedSegMetrics())
+            # No metric for the embedding representation during training as the IoU is calculated together with the loss
+            self.test_metrics.append("none")
         else:
             self.test_metrics.append(
                 multiple_metrics(
@@ -373,7 +374,14 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             self.test_metric_names += self.test_extra_metrics
 
         if "E_offset" in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
-            instance_loss = EmbedSegLossStrict()
+            instance_loss = SpatialEmbLoss(
+                patch_size=self.cfg.DATA.PATCH_SIZE,
+                ndims=self.dims,
+                anisotropy=self.resolution,
+                weights=self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS,
+                center_mode=self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0].get("E_offset", {}).get("center_mode", "centroid"),
+                medoid_max_points=self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0].get("E_offset", {}).get("medoid_max_points", 10000),
+            ).to(self.device, non_blocking=True)
         else:
             instance_loss = instance_segmentation_loss(
                 weights = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS,
@@ -526,7 +534,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     pred[..., self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS.index("R"):].squeeze(), 
                     prob_thresh=self.cfg.PROBLEM.INSTANCE_SEG.STARDIST.PROB_THRESH, 
                     nms_iou_thresh=self.cfg.PROBLEM.INSTANCE_SEG.STARDIST.NMS_IOU_THRESH, 
-                    anisotropy=self.resolution[:self.dims],
+                    anisotropy=self.resolution[-self.dims:], # as a 1 is added at the beginning for 2D
                     grid=self.stardist_grid, 
                 )
             elif "E_offset" in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:

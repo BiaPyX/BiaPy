@@ -452,7 +452,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             # E — learned per-pixel features
             if "E" in chs:
                 dst["E_offset"] = {
-                    "sigma": dst.get("E_offset", {}).get("sigma", 6.0),
+                    "center_mode": dst.get("E", {}).get("center_mode", "medoid"),
+                    "medoid_max_points": dst.get("E", {}).get("medoid_max_points", 10000),
                 }
                 dst["E_sigma"] = {}
                 dst["E_seediness"] = {}
@@ -549,6 +550,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         if (
             len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS) != channels_provided 
             and (cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS == (1, 1) or cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS == (1,))
+            and "E" not in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
         ):
             opts.extend(
                 [
@@ -1350,7 +1352,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     _assert_int(val, "widen_borders", ctx, min_val=0)
 
                 elif key == "E_offset":
-                    _assert_float(val, "sigma", ctx, min_val=1)
+                    _assert_str_in(val, "center_mode", {"medoid", "centroid"}, ctx)
+                    _assert_int(val, "medoid_max_points", ctx, min_val=10000)
                 elif key == "E_sigma":
                     continue  # no extra opts for E_sigma
                 elif key == "E_seediness":
@@ -1383,13 +1386,21 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     "Synapse detection is only available for 3D Zarr/H5 data. Please set 'DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA' "
                     "and PROBLEM.NDIM == '3D'"
                 )
-        if len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS) != channels_provided:
-            raise ValueError(
-                "'PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS' needs to be of the same length as the channels selected in 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'. "
-                "E.g. 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'=['F','C'] 'PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS'=[1,0.5]. "
-                "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'=['F','C','D'] 'PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS'=[0.5,0.5,1]. "
-                "If 'DATA.N_CLASSES' > 2 one more weigth need to be provided."
-            )
+
+        if "E_offset" not in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
+            if len(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS) != channels_provided:
+                raise ValueError(
+                    "'PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS' needs to be of the same length as the channels selected in 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'. "
+                    "E.g. 'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'=['F','C'] 'PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS'=[1,0.5]. "
+                    "'PROBLEM.INSTANCE_SEG.DATA_CHANNELS'=['F','C','D'] 'PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS'=[0.5,0.5,1]. "
+                    "If 'DATA.N_CLASSES' > 2 one more weigth need to be provided."
+                )
+        else:
+            # Set loss weights for the embedding representation
+            if (cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS == (1, 1) or cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS == (1,)):
+                # Corresponds to foreground weight, instance center offset, variance and seediness
+                opts.extend(["PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS", [10,1,10,1]]) # Embedseg default weights
+
         if cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK:
             if not any([x for x in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS if x in ["F", "M"]]):
                 raise ValueError(

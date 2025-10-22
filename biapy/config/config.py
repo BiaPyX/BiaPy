@@ -183,7 +183,8 @@ class Config:
         #       "Superhuman Accuracy on the SNEMI3D Connectomics Challenge" the values are: 
         #       'z_affinities': [1,2,3,4], 'y_affinities': [1,3,9,27] and 'x_affinities': [1,3,9,27]
         #   - 'E' channel. Possible options:
-        #       - 'sigma': float, the sigma value to create the gaussian seeds. Default: 6.0
+        #       - 'center_mode': str, the center mode to use for the gaussian seeds. Default: "centroid". Options: "centroid" and "medoid"
+        #       - 'medoid_max_points': int, the maximum number of points to use when calculating the medoid. Default: 10000
         _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS = [{}]
         # Losses to be applied to each channel. If not provided, the losses will be set automatically depending on the channel.
         # The options are:

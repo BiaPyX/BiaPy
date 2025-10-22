@@ -1300,328 +1300,6 @@ class instance_segmentation_loss:
 
         return loss
 
-class EmbedSegMetrics:
-    """
-    Fast per-iteration metrics for EmbedSeg (no clustering).
-
-    Expects ACTIVATED heads packed in one tensor:
-      y_pred: (B, C, *spatial), where C = 2*D + 1  (D = len(spatial); 2D->5, 3D->7)
-              channels layout: [offset(D), sigma(D), seed(1)]
-      y_true: instance map (B, 1, *spatial) or (B, *spatial), ints, 0 = background
-
-    Returns dict of scalars:
-      - seed_mse     : MSE(seed, φ on FG; 0 on BG)
-      - sigma_var    : mean_k |σ - mean_k(σ)|  (avg over axes & pixels within each instance)
-      - intra_disp   : mean ||e(x) - C_k|| over instances
-      - soft_iou_phi : IoU proxy by thresholding max-φ vs FG mask
-    """
-
-    def __init__(self, eps: float = 1e-6, phi_thresh: float = 0.5):
-        self.eps = float(eps)
-        self.phi_thresh = float(phi_thresh)
-        self._grid_cache = {}  # (device, dtype, spatial_tuple) -> grid
-
-    def _coord_grid(self, spatial, device, dtype):
-        key = (device, dtype, tuple(spatial))
-        g = self._grid_cache.get(key)
-        if g is not None and g.shape[2:] == tuple(spatial):
-            return g
-        axes = [torch.arange(n, device=device, dtype=dtype) for n in spatial]
-        try:
-            mesh = torch.meshgrid(*axes, indexing='ij')
-        except TypeError:
-            mesh = torch.meshgrid(*axes)
-        g = torch.stack(mesh, dim=0).unsqueeze(0)  # (1, D, *spatial)
-        self._grid_cache[key] = g
-        return g
-
-    @torch.no_grad()
-    def __call__(self, y_pred: torch.Tensor, y_true: torch.Tensor | dict) -> dict:
-        # y_pred: (B, C, *spatial) with channels [offset(D), sigma(D), seed]
-        assert y_pred.dim() in (4, 5), f"Expected 4D/5D, got {tuple(y_pred.shape)}"
-        B, C = y_pred.shape[:2]
-        D = y_pred.dim() - 2
-        expected_C = 2 * D + 1
-        assert C == expected_C, f"Expected C=2*D+1. Got C={C}, D={D}"
-
-        off  = y_pred[:, :D,       ...]                      # (B, D, *)
-        sig  = y_pred[:, D:2*D,    ...].clamp_min(self.eps)  # (B, D, *)
-        seed = y_pred[:, 2*D:2*D+1, ...]                     # (B, 1, *)
-
-        inst = y_true['instance'] if isinstance(y_true, dict) else y_true
-        if inst.dim() == y_pred.dim() - 1:
-            inst = inst.unsqueeze(1)  # (B,1,*)
-        assert inst.shape[0] == B and inst.shape[2:] == y_pred.shape[2:], \
-            f"inst shape mismatch. Got {tuple(inst.shape)}, expected (B,1,{','.join(map(str, y_pred.shape[2:]))})"
-
-        spatial = y_pred.shape[2:]
-        device, dtype = y_pred.device, y_pred.dtype
-
-        # embeddings e(x) = x + o(x)
-        grid = self._coord_grid(spatial, device, dtype).repeat(B, 1, *([1]*len(spatial)))  # (B,D,*)
-        emb  = grid + off  # (B,D,*)
-
-        seed_mse_vals, sigma_var_vals, intra_disp_vals, soft_iou_vals = [], [], [], []
-
-        for b in range(B):
-            imap = inst[b, 0].long()   # (*)
-            ids = torch.unique(imap); ids = ids[ids > 0]
-
-            eb   = emb[b]              # (D,*)
-            sb   = sig[b]              # (D,*)  per-axis sigma
-            sedb = seed[b, 0]          # (*)
-
-            if ids.numel() == 0:
-                # background-only patch
-                seed_mse_vals.append((sedb ** 2).mean().item())
-                sigma_var_vals.append(0.0)
-                intra_disp_vals.append(0.0)
-                soft_iou_vals.append(0.0)
-                continue
-
-            fg_mask = (imap > 0)
-
-            seed_target_b = torch.zeros_like(sedb)   # BG target = 0
-            best_phi      = torch.zeros_like(sedb)
-            intra_disp_k, sigma_var_k = [], []
-
-            for k in ids.tolist():
-                m = (imap == k)                     # (*)
-                if not m.any():
-                    continue
-
-                # center Ck (in embedding space), broadcastable to (D,*)
-                Ck = eb[:, m].mean(dim=1).view(D, *([1] * len(spatial)))  # (D,1,1[,1])
-
-                # φ with vector σ: sum_a ( (e_a - C_a)^2 / (2 σ_a^2) )
-                diff = eb - Ck                                 # (D,*)
-                quad = (diff * diff) / (2.0 * (sb * sb))       # (D,*)
-                phi  = torch.exp(-quad.sum(dim=0)).clamp_min(self.eps)  # (*)
-
-                # seed target on FG of instance k
-                seed_target_b[m] = phi[m]
-
-                # keep per-pixel max φ across instances (for IoU proxy)
-                best_phi = torch.maximum(best_phi, phi)
-
-                # intra-instance dispersion ||e - Ck||
-                dist2 = (diff * diff).sum(dim=0)               # (*)
-                intra_disp_k.append(torch.sqrt(dist2[m] + self.eps).mean())
-
-                # sigma variability within instance (avg over axes & pixels)
-                sb_m = sb[:, m]                                # (D, #pix_k)
-                mean_axis = sb_m.mean(dim=1, keepdim=True)     # (D,1)
-                sigma_var_k.append((sb_m - mean_axis).abs().mean())
-
-            # aggregate per-batch-item
-            seed_mse_vals.append(F.mse_loss(sedb, seed_target_b, reduction='mean').item())
-            sigma_var_vals.append(torch.stack(sigma_var_k).mean().item() if sigma_var_k else 0.0)
-            intra_disp_vals.append(torch.stack(intra_disp_k).mean().item() if intra_disp_k else 0.0)
-
-            # IoU proxy from best-φ threshold
-            pred_fg = (best_phi >= self.phi_thresh)
-            inter = (pred_fg & fg_mask).sum().item()
-            union = (pred_fg | fg_mask).sum().item()
-            soft_iou_vals.append((inter / union) if union > 0 else 0.0)
-
-        def mean_or_zero(xs):
-            return float(torch.tensor(xs, device=device).mean().item()) if xs else 0.0
-
-        return {
-            'seed_mse':     mean_or_zero(seed_mse_vals),
-            'sigma_var':    mean_or_zero(sigma_var_vals),
-            'intra_disp':   mean_or_zero(intra_disp_vals),
-            'soft_iou_phi': mean_or_zero(soft_iou_vals),
-        }
-
-# ---------------- Lovasz-hinge (binary) helpers ----------------
-
-def _flatten_binary_scores(scores, labels):
-    return scores.reshape(-1), labels.reshape(-1)
-
-def _lovasz_grad(gt_sorted):
-    """
-    Computes gradient of the Lovasz extension w.r.t sorted errors.
-    gt_sorted: ground truth labels sorted by prediction errors (1 for positives, 0 for negatives)
-    """
-    p = gt_sorted.sum()
-    n = gt_sorted.numel() - p
-    if p == 0 or n == 0:
-        # undefined but harmless; will be multiplied by 0 error anyway
-        return gt_sorted.new_zeros(gt_sorted.numel())
-
-    gts = gt_sorted.float()
-    intersection = (gts).cumsum(0)
-    union = p + (1 - gts).cumsum(0)
-    jaccard = 1.0 - intersection / union
-    if jaccard.numel() > 1:
-        jaccard[1:] = jaccard[1:] - jaccard[:-1]
-    return jaccard
-
-def lovasz_hinge_flat(logits, labels):
-    """
-    Binary Lovasz-hinge loss (flat).
-    logits: float tensor, arbitrary real values (we pass logit(phi))
-    labels: {0,1} tensor
-    """
-    if logits.numel() == 0:
-        return logits.new_tensor(0.)
-    # hinge errors: margins with y in {-1, +1}
-    signs = 2.0 * labels.float() - 1.0
-    errors = 1.0 - logits * signs
-    # sort errors descending
-    errors_sorted, perm = torch.sort(errors, descending=True)
-    gt_sorted = labels[perm]
-    grad = _lovasz_grad(gt_sorted)
-    loss = torch.dot(torch.relu(errors_sorted), grad)
-    return loss
-
-# ---------------- Strict EmbedSeg loss ----------------
-
-class EmbedSegLossStrict(nn.Module):
-    """
-    Strict EmbedSeg loss (expects predictions as one tensor):
-
-      y_pred: (B, C, *spatial)
-        C = D + 2  where D = len(spatial)  (2D->4, 3D->5)
-        channels layout: [offset(D), sigma(D), seed(1)]
-        heads must be *activated* upstream (tanh offsets, softplus/exp sigma, sigmoid seed)
-
-      y_true: instance map, shape (B, 1, *spatial) or (B, *spatial), ints (0 = background)
-
-    Loss:
-      L = w_iou * LovaszHinge( logit(φ_k) vs mask_k )
-        + w_seed * MSE( seed, φ on FG; 0 on BG )
-        + w_var * mean_k |σ - mean_k(σ)|
-    """
-    
-    def __init__(self, weights: dict | None = None, eps: float = 1e-6):
-        super().__init__()
-        self.eps = float(eps)
-        self.w = {'iou': 1.0, 'var': 10.0, 'seed': 1.0}
-        if weights is not None:
-            self.w.update(weights)
-        self._mse = nn.MSELoss(reduction='mean')
-        self._grid_cache = {}  # (device, dtype, spatial_tuple) -> grid tensor
-
-    def _coord_grid(self, spatial, device, dtype):
-        key = (device, dtype, tuple(spatial))
-        g = self._grid_cache.get(key)
-        if g is not None and g.shape[2:] == tuple(spatial):
-            return g
-        axes = [torch.arange(n, device=device, dtype=dtype) for n in spatial]
-        try:
-            mesh = torch.meshgrid(*axes, indexing='ij')  # torch>=1.10
-        except TypeError:
-            mesh = torch.meshgrid(*axes)                 # fallback
-        g = torch.stack(mesh, dim=0).unsqueeze(0)        # (1, D, ...)
-        self._grid_cache[key] = g
-        return g
-
-    def _sigma_instance_smooth(self, sigma_pred, inst_map):
-        """
-        sigma_pred: (B, D, *), inst_map: (B,1,*)
-        Returns mean over instances of |σ_a - mean_k(σ_a)| averaged over axes and pixels.
-        """
-        B, D = sigma_pred.shape[:2]
-        total = sigma_pred.new_tensor(0.0)
-        count = 0
-        for b in range(B):
-            imap = inst_map[b, 0].long()
-            ids = torch.unique(imap); ids = ids[ids > 0]
-            if ids.numel() == 0:
-                continue
-            sb = sigma_pred[b]  # (D, *)
-            for k in ids.tolist():
-                m = (imap == k)  # (*)
-                if not m.any():
-                    continue
-                # per-axis mean within the instance
-                mean_k = sb[:, m].mean(dim=1, keepdim=True)  # (D,1)
-                # average absolute deviation over pixels and axes
-                dev = (sb[:, m] - mean_k).abs().mean()       # scalar
-                total = total + dev
-                count += 1
-        return total / max(count, 1)
-
-    def forward(self, y_pred: torch.Tensor, y_true: torch.Tensor | dict):
-        assert y_pred.dim() in (4, 5), f"Expected 4D/5D, got {tuple(y_pred.shape)}"
-        B, C = y_pred.shape[:2]
-        D = y_pred.dim() - 2
-        expected_C = 2 * D + 1
-        assert C == expected_C, f"Expected C=2*D+1 (offset(D)+sigma(D)+seed). Got C={C}, D={D}"
-
-        # Split heads as fresh tensors (no views)
-        off  = y_pred[:, :D,       ...].clone()   # (B, D, *)
-        sig  = y_pred[:, D:2*D,    ...].clone()   # (B, D, *)
-        seed = y_pred[:, 2*D:2*D+1, ...].clone()  # (B, 1, *)
-
-        # Instance GT -> (B,1,*) contiguous
-        inst = y_true['instance'] if isinstance(y_true, dict) else y_true
-        if inst.dim() == y_pred.dim() - 1:
-            inst = inst.unsqueeze(1)
-        inst = inst.contiguous()
-
-        spatial = y_pred.shape[2:]
-        device, dtype = y_pred.device, y_pred.dtype
-
-        # e(x) = x + o(x)
-        grid = self._coord_grid(spatial, device, dtype).repeat(B, 1, *([1]*len(spatial)))
-        emb  = (grid + off).clone()  # (B, D, *)
-
-        lovasz_losses = []
-        seed_targets_b = []  # collect per-batch seed targets (B items)
-
-        for b in range(B):
-            imap = inst[b, 0].long()
-            ids = torch.unique(imap); ids = ids[ids > 0]
-
-            eb = emb[b]                           # (D, *)
-            sb = sig[b].clamp_min(self.eps)       # (D, *)
-            # seed target buffer (BG=0)
-            seed_target_b = torch.zeros_like(imap, dtype=eb.dtype)  # (*)
-
-            if ids.numel() == 0:
-                seed_targets_b.append(seed_target_b)
-                continue
-
-            for k in ids.tolist():
-                m = (imap == k)                   # (*)
-                if not m.any():
-                    continue
-
-                # center Ck: (D,) -> (D,1,1[,1]) for broadcasting
-                Ck = eb[:, m].mean(dim=1).view(D, *([1] * len(spatial)))  # (D, 1, 1[,1])
-
-                # axis-wise quadratic form: sum_a (diff_a^2 / (2 * sigma_a^2))
-                diff = eb - Ck                                   # (D, *)
-                quad = (diff * diff) / (2.0 * (sb ** 2))         # (D, *)
-                phi  = torch.exp(-quad.sum(dim=0)).clamp(min=self.eps, max=1 - self.eps)  # (*)
-
-                # Lovasz on logit(phi) vs mask_k
-                logits = torch.log(phi) - torch.log1p(-phi)
-                l_flat, y_flat = _flatten_binary_scores(logits, m.float())
-                lovasz_losses.append(lovasz_hinge_flat(l_flat, y_flat))
-
-                # Seed target: φ on FG of this instance; BG stays 0 (no in-place into graph vars)
-                seed_target_b = torch.where(m, phi, seed_target_b)
-
-            seed_targets_b.append(seed_target_b)
-
-        L_iou = torch.stack(lovasz_losses).mean() if lovasz_losses else off.new_tensor(0.0)
-        L_var = self._sigma_instance_smooth(sig, inst)
-
-        # stack seed targets to (B,1,*) without masked writes
-        if len(seed_targets_b) < B:
-            for _ in range(B - len(seed_targets_b)):
-                seed_targets_b.append(torch.zeros_like(inst[0, 0], dtype=off.dtype))
-        seed_target = torch.stack(seed_targets_b, dim=0).unsqueeze(1)  # (B,1,*)
-        L_seed = self._mse(seed, seed_target)
-
-        return self.w['iou'] * L_iou + self.w['var'] * L_var + self.w['seed'] * L_seed
-
-
-
 def detection_metrics(
     true,
     pred,
@@ -2104,227 +1782,310 @@ class SSIM_wrapper:
             y_pred = y_pred["pred"]
         return 1 - self.loss(y_pred, y_true)
 
-# ---------------------------
-# Lovasz-hinge (binary) utils
-# ---------------------------
 
-def _lovasz_grad(gt_sorted: torch.Tensor) -> torch.Tensor:
-    p = gt_sorted.numel()
-    gts = gt_sorted.sum()
-    intersection = gts - gt_sorted.cumsum(0)
-    union = gts + (1 - gt_sorted).cumsum(0)
-    jaccard = 1.0 - intersection / union.clamp_min(1e-8)
+def lovasz_hinge(logits: torch.Tensor,
+                 labels: torch.Tensor,
+                 per_image: bool = True,
+                 ignore_index: int | None = None) -> torch.Tensor:
+    """
+    Single-function binary Lovász hinge loss.
+    - logits: unnormalized scores, same shape as labels (e.g. (1,H,W) or (1,D,H,W))
+    - labels: {0,1} or bool tensor, same shape as logits
+    - per_image: average loss per-item if a batch dim exists
+    - ignore_index: label value to ignore (optional)
+    """
+    if logits.shape != labels.shape:
+        raise ValueError(f"Shape mismatch: logits {logits.shape} vs labels {labels.shape}")
+
+    # Handle per-image averaging if a batch dim is present
+    if per_image and logits.dim() >= 2 and logits.size(0) > 1:
+        losses = []
+        for li, yi in zip(logits, labels):
+            # Flatten and optionally filter ignore_index
+            l_flat = li.reshape(-1)
+            y_flat = yi.to(dtype=torch.long, device=li.device).reshape(-1)
+            if ignore_index is not None:
+                valid = (y_flat != ignore_index)
+                l_flat = l_flat[valid]
+                y_flat = y_flat[valid]
+            if l_flat.numel() == 0:
+                continue
+
+            # Signs in {-1,+1}, hinge errors, sort desc
+            signs = y_flat.float() * 2 - 1
+            errors = 1 - l_flat * signs
+            errs_sorted, perm = torch.sort(errors, descending=True)
+            y_sorted = y_flat[perm].float()
+
+            # Lovász gradient (Jaccard) in-place, no helpers
+            p = y_sorted.numel()
+            if p == 0:
+                continue
+            gts = y_sorted.sum()
+            inter = gts - y_sorted.cumsum(0)
+            union = gts + (1 - y_sorted).cumsum(0)
+            jacc = 1.0 - inter / torch.clamp_min(union, 1.0)
+            if p > 1:
+                jacc[1:p] = jacc[1:p] - jacc[0:p-1]
+
+            losses.append(F.relu(errs_sorted) @ jacc)
+
+        return (torch.stack(losses).mean() if len(losses) else logits.new_tensor(0.0))
+
+    # Single item (or per_image=False): same steps without the loop
+    l_flat = logits.reshape(-1)
+    y_flat = labels.to(dtype=torch.long, device=logits.device).reshape(-1)
+    if ignore_index is not None:
+        valid = (y_flat != ignore_index)
+        l_flat = l_flat[valid]
+        y_flat = y_flat[valid]
+    if l_flat.numel() == 0:
+        return logits.new_tensor(0.0)
+
+    signs = y_flat.float() * 2 - 1
+    errors = 1 - l_flat * signs
+    errs_sorted, perm = torch.sort(errors, descending=True)
+    y_sorted = y_flat[perm].float()
+
+    p = y_sorted.numel()
+    gts = y_sorted.sum()
+    inter = gts - y_sorted.cumsum(0)
+    union = gts + (1 - y_sorted).cumsum(0)
+    jacc = 1.0 - inter / torch.clamp_min(union, 1.0)
     if p > 1:
-        jaccard[1:p] = jaccard[1:p] - jaccard[0:-1]
-    return jaccard
+        jacc[1:p] = jacc[1:p] - jacc[0:p-1]
 
-def lovasz_hinge_flat(logits: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
+    return F.relu(errs_sorted) @ jacc
+
+
+class SpatialEmbLoss(nn.Module):
     """
-    Binary Lovasz hinge loss (logits vs. {0,1} labels), per-instance.
+    Spatial Embedding Loss for 2D and 3D inspired by `EmbedSeg <https://github.com/juglab/EmbedSeg/tree/main>`__.
+
+    Parameters
+    ----------
+    patch_size : List of int, optional
+        Patch size used during training (used to build coordinate map buffer).  
+    anisotropy : List of float or int, optional
+        Anisotropy factors for each axis (z,y,x).
+    ndims : int, optional
+        Number of spatial dimensions (2 or 3).
+    center_mode : str, optional
+        Method to compute object center: "centroid" or "medoid".
+    medoid_max_points : int, optional
+        Maximum number of points to use when computing medoid (to avoid O(N^2) complexity).
+    weights : List of float, optional
+        Weights for the different loss components: [foreground, instance, variance, seed].
     """
-    if logits.numel() == 0:
-        return logits * 0.0
-    labelsf = labels.float()
-    signs = 2.0 * labelsf - 1.0
-    errors = 1.0 - logits * signs  # hinge errors
-    errors_sorted, perm = torch.sort(errors, descending=True)
-    gt_sorted = labelsf[perm]
-    grad = _lovasz_grad(gt_sorted)
-    return torch.dot(F.relu(errors_sorted), grad)
 
-def prob_to_logit_clamped(p: torch.Tensor, eps: float = 1e-6) -> torch.Tensor:
-    p = p.clamp(eps, 1 - eps)
-    return torch.log(p) - torch.log1p(-p)
+    def __init__(
+        self,
+        patch_size: List[int] = [32, 1024, 1024], 
+        anisotropy: List[float | int] = [1,1,1],
+        ndims: int = 2, 
+        center_mode: str = "centroid",      # "centroid" or "medoid"
+        medoid_max_points: Optional[int] = 10000,  # cap to avoid O(N^2) on huge objects
+        weights: List[float] = [1.0, 1.0, 1.0],
+    ):
+        super().__init__()
 
-# ---------------------------
-# Geometry helpers (2D / 3D)
-# ---------------------------
+        self.ndims = ndims
+        self.center_mode = center_mode
+        self.medoid_max_points = medoid_max_points
+        
+        # Grid sizes (used to build the coordinate map buffer; sliced to input size on forward)
+        grid_z = patch_size[0] if ndims == 3 else 1
+        grid_y = patch_size[-3]
+        grid_x = patch_size[-2]
+        # Pixel sizes (coordinate extents)
+        pixel_z = anisotropy[0] if ndims == 3 else 1
+        pixel_y = anisotropy[1]
+        pixel_x = anisotropy[2]
 
-def instance_centroid(coords: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
-    """
-    coords: (H,W,D) or (Z,Y,X,D), mask: (H,W) or (Z,Y,X) bool
-    returns: (D,)
-    """
-    idx = mask.nonzero(as_tuple=False)
-    if idx.numel() == 0:
-        return coords.new_full((coords.shape[-1],), float("nan"))
-    pts = coords[mask]  # (N,D)
-    return pts.mean(dim=0)
+        self.weights = weights
+        self.foreground_weight = self.weights[0]
+        self.w_inst = self.weights[1]
+        self.w_var = self.weights[2]
+        self.w_seed = self.weights[3]
 
-def instance_medoid(coords: torch.Tensor, mask: torch.Tensor, subsample: Optional[int] = 2048) -> torch.Tensor:
-    """
-    Medoid inside the instance: the pixel/voxel whose avg distance to all others is minimal.
-    coords: (...,D), mask: (...) bool, returns (D,)
-    To keep it fast, we subsample if the instance is very large.
-    """
-    pts = coords[mask]  # (N,D)
-    n = pts.shape[0]
-    if n == 0:
-        return coords.new_full((coords.shape[-1],), float("nan"))
-    if subsample is not None and n > subsample:
-        idx = torch.randperm(n, device=pts.device)[:subsample]
-        pts = pts[idx]
-        n = pts.shape[0]
-    # pairwise distances (N,N) -> O(n^2); OK with subsampling
-    # d(i) = mean_j ||pts[i]-pts[j]||
-    d2 = torch.cdist(pts, pts, p=2)  # (N,N)
-    mean_d = d2.mean(dim=1)          # (N,)
-    i_star = torch.argmin(mean_d)
-    return pts[i_star]
+        # Build max-size 3D coordinate grid buffer; for 2D we will slice z=1.
+        # This lets one class handle both 2D (uses x,y) and 3D (uses x,y,z).
+        xm = (
+            torch.linspace(0, pixel_x, grid_x)
+            .view(1, 1, 1, -1)
+            .expand(1, grid_z, grid_y, grid_x)
+        )
+        ym = (
+            torch.linspace(0, pixel_y, grid_y)
+            .view(1, 1, -1, 1)
+            .expand(1, grid_z, grid_y, grid_x)
+        )
+        zm = (
+            torch.linspace(0, pixel_z, grid_z)
+            .view(1, -1, 1, 1)
+            .expand(1, grid_z, grid_y, grid_x)
+        )
+        # Stack as (3, Z, Y, X); for 2D we’ll slice to (2, Y, X) at forward time.
+        xyzm = torch.cat((xm, ym, zm), 0)  # (3, Z, Y, X)
+        self.register_buffer("xyzm", xyzm)
 
-# ---------------------------
-# Gaussian φ(e; C, σ) in D dims
-# ---------------------------
+    def _calculate_binary_iou(self, pred, label):
+        intersection = ((label == 1) & (pred == 1)).sum()
+        union = ((label == 1) | (pred == 1)).sum()
+        if not union:
+            return 0
+        else:
+            iou = intersection.item() / union.item()
+            return iou
+    
+    @torch.no_grad()
+    def _center_from_mask(
+        self,
+        coords: torch.Tensor,   # (D, ...)
+        in_mask: torch.Tensor,  # (1, ...)
+    ) -> torch.Tensor:
+        """
+        Compute object center from binary mask using centroid or medoid.
 
-def gaussian_phi(e_minus_c: torch.Tensor, sigma: torch.Tensor, elliptical: bool) -> torch.Tensor:
-    """
-    e_minus_c: (..., D)
-    sigma: (..., 1) if isotropic; (..., D) if elliptical
-    returns: (..., 1) probability
-    """
-    if elliptical:
-        # diagonal covariance: sum_d ( (e_d)^2 / (2 σ_d^2) )
-        sig2 = (sigma ** 2).clamp_min(1e-8)
-        num = (e_minus_c ** 2 / (2.0 * sig2)).sum(dim=-1)
-    else:
-        # isotropic: ||e||^2 / (2 σ^2)
-        sig2 = (sigma[..., 0] ** 2).clamp_min(1e-8)
-        num = (e_minus_c ** 2).sum(dim=-1) / (2.0 * sig2)
-    return torch.exp(-num).unsqueeze(-1)
+        Parameters
+        ----------
+        coords : torch.Tensor
+            Coordinate grid tensor of shape (D, ...), where D is the number of spatial dimensions
+        in_mask : torch.Tensor
+            Binary mask tensor of shape (1, ...), indicating the object pixels/voxels.  
 
-# ---------------------------
-# Main loss
-# ---------------------------
+        Returns
+        -------
+        center : torch.Tensor
+            Computed center coordinates of shape (D, 1, ..., 1).
+        """
+        D = coords.size(0)
+        # Extract coordinates of all pixels/voxels in the instance: (N, D)
+        pts = coords[in_mask.expand_as(coords)].view(D, -1).t().contiguous()  # (N, D)
+        if pts.numel() == 0:
+            # No pixels: fall back to zeros
+            return torch.zeros(D, *([1] * (coords.dim() - 1)), device=coords.device, dtype=coords.dtype)
 
-def embedseg_losses(
-    pred_offsets: torch.Tensor,      # (B, D, *spatial)   D=2 or 3; offsets o(x) in pixels/voxels
-    pred_sigma: torch.Tensor,        # (B, S, *spatial)   S=1 (isotropic) or S=D (elliptical)
-    pred_seediness: torch.Tensor,    # (B, 1, *spatial)   (single class typical for microscopy)
-    gt_instance_ids: torch.Tensor,   # (B, 1, *spatial)   int IDs, 0 = background
-    *,
-    use_elliptical: bool = True,           # True -> S=D; False -> S=1
-    center_mode: str = "medoid",           # {"medoid","centroid","mean_embedding"}; EmbedSeg uses "medoid"
-    lambda_main: float = 1.0,
-    lambda_seed: float = 1.0,
-    lambda_sigma_smooth: float = 0.01,
-    medoid_subsample: Optional[int] = 2048,  # speed for large instances
-) -> Dict[str, torch.Tensor]:
-    """
-    Implements:
-      - Main IoU surrogate: Lovasz-hinge on φ(e; Ck, σk) vs. GT instance mask (per instance)  [Neven Eq. (5) + Lovasz]
-      - Seediness regression: FG -> φ, BG -> 0                                             [Neven Eq. (10)]
-      - Sigma smoothness within instance: ||σ_i - mean(σ)||^2                               [Neven Eq. (12)]
-    Differences adopted from EmbedSeg:
-      - Instance center during training: **medoid** (default) rather than centroid/mean-embedding.
-      - Supports 2D and 3D with axis-aligned ellipses/ellipsoids.
-
-    Returns dict with total loss and components.
-    """
-    B = pred_offsets.shape[0]
-    spatial_shape = pred_offsets.shape[2:]
-    D = pred_offsets.shape[1]
-    assert D in (2, 3), f"Offsets must have 2 or 3 channels, got {D}"
-    S_expected = D if use_elliptical else 1
-    assert pred_sigma.shape[1] == S_expected, f"pred_sigma channels ({pred_sigma.shape[1]}) must be {S_expected}"
-
-    device = pred_offsets.device
-
-    # Build absolute coordinate grid in pixels/voxels with shape (*spatial, D)
-    grids = []
-    for dim, size in enumerate(spatial_shape):
-        rng = torch.arange(size, device=device)
-        # torch.meshgrid with indexing='ij'
-        grids.append(rng)
-    mesh = torch.meshgrid(*grids, indexing="ij")  # tuple length = len(spatial_shape)
-    # Order coords as (X,Y) for 2D or (X,Y,Z)? We'll keep natural ijk order and treat consistently.
-    # Compose (..., D)
-    if D == 2:
-        # spatial is (H,W) -> coords (H,W,2) = (y,x) order
-        coords = torch.stack([mesh[-1], mesh[-2]], dim=-1).float() if len(spatial_shape) == 2 else None
-        # But if D==2 and spatial has 2 dims, we prefer (y,x). Keep consistent with offsets being (dy,dx).
-        # To avoid confusion, we simply stack in the same order as spatial dims:
-        coords = torch.stack([m for m in mesh], dim=-1).float()  # (...,2)
-    else:
-        coords = torch.stack([m for m in mesh], dim=-1).float()  # (...,3)
-
-    total_main = pred_offsets.new_tensor(0.0)
-    total_seed = pred_offsets.new_tensor(0.0)
-    total_sigma_smooth = pred_offsets.new_tensor(0.0)
-    total_instances = 0
-
-    for b in range(B):
-        # Reformat predictions to (...,C) layout for easy masking
-        offs = pred_offsets[b].permute(*range(1, 1 + len(spatial_shape)), 0)   # (*spatial, D)
-        emb = coords + offs                                                    # e(x) = x + o(x)
-        sig = pred_sigma[b].permute(*range(1, 1 + len(spatial_shape)), 0)      # (*spatial, S)
-        seed_map = pred_seediness[b, 0]                                        # (*spatial)
-        inst = gt_instance_ids[b, 0]                                           # (*spatial)
-
-        # find all instance labels > 0
-        labels = torch.unique(inst)
-        labels = labels[labels > 0]
-
-        for k in labels.tolist():
-            mask = (inst == k)
-            n_k = int(mask.sum().item())
-            if n_k == 0:
-                continue
-
-            # ----- choose instance center Ck
-            if center_mode == "medoid":
-                Ck = instance_medoid(coords, mask, subsample=medoid_subsample)  # EmbedSeg default
-            elif center_mode == "centroid":
-                Ck = instance_centroid(coords, mask)
-            elif center_mode == "mean_embedding":
-                pts = emb[mask]
-                Ck = pts.mean(dim=0) if pts.numel() > 0 else coords.new_full((D,), float("nan"))
+        if self.center_mode == "centroid" or pts.shape[0] == 1:
+            c = pts.mean(0)  # (D,)
+        else:
+            # MEDOID: minimize sum of Euclidean distances to all other points
+            # Optionally sub-sample to keep cdist tractable
+            if self.medoid_max_points is not None and pts.shape[0] > self.medoid_max_points:
+                idx = torch.randperm(pts.shape[0], device=pts.device)[: self.medoid_max_points]
+                pts_sub = pts[idx]
+                dist = torch.cdist(pts_sub, pts_sub, p=2)  # (M, M)
+                sums = dist.sum(dim=1)
+                best = torch.argmin(sums)
+                c = pts_sub[best]  # approximate medoid
             else:
-                raise ValueError(f"Unknown center_mode: {center_mode}")
-            if torch.isnan(Ck).any():
-                continue
+                dist = torch.cdist(pts, pts, p=2)  # (N, N)
+                sums = dist.sum(dim=1)
+                best = torch.argmin(sums)
+                c = pts[best]  # exact medoid
+        return c.view(D, *([1] * (coords.dim() - 1)))  # (D, 1, ..., 1)
 
-            # ----- instance σk = mean σ over the instance (per channel)
-            if use_elliptical:
-                sig_k = sig[mask].mean(dim=0, keepdim=False)  # (D,)
-                sig_b = sig.new_empty((*spatial_shape, D)).copy_(sig_k)  # broadcast
-            else:
-                sig_k = sig[mask].mean(dim=0, keepdim=False)  # (1,)
-                sig_b = sig.new_empty((*spatial_shape, 1)).copy_(sig_k)
+    def forward(
+        self,
+        prediction: torch.Tensor,   # (B, C, H, W) or (B, C, D, H, W)
+        instances: torch.Tensor,    # (B, H, W) or (B, D, H, W)
+    ) -> Tuple[torch.Tensor, float, str]:
+        if prediction.dim() not in (4, 5):
+            raise ValueError(
+                f"Unsupported prediction tensor dimensionality {prediction.dim()}. "
+                "Expected 4D (B,C,H,W) or 5D (B,C,D,H,W)."
+            )
 
-            # ----- φ_k(e) everywhere
-            e_minus_c = emb - Ck.view(*(1,) * len(spatial_shape), D)
-            phi = gaussian_phi(e_minus_c, sig_b, elliptical=use_elliptical).squeeze(-1)  # (*spatial), in (0,1]
+        B = prediction.size(0)
+        D = prediction.dim() - 2  # number of spatial dims (2 or 3)
+        assert D in (2, 3), "Only 2D or 3D supported"
+        assert D == self.ndims, f"Model ndims={D} does not match loss ndims={self.ndims}"
 
-            # ===== (1) Main per-instance Lovasz-hinge on φ vs. GT mask =====
-            y = mask.float().view(-1)                              # (P,)
-            logits = prob_to_logit_clamped(phi.view(-1))           # convert prob->logit for hinge
-            total_main = total_main + lovasz_hinge_flat(logits, y)
+        # Spatial sizes
+        if D == 2:
+            H, W = prediction.size(2), prediction.size(3)
+            # coords: (2, H, W) from self.xyzm (3, Z, Y, X)
+            coords = self.xyzm[:2, 0, :H, :W].contiguous()
+            total_voxels = H * W
+        else:
+            Z, H, W = prediction.size(2), prediction.size(3), prediction.size(4)
+            # coords: (3, Z, H, W)
+            coords = self.xyzm[:3, :Z, :H, :W].contiguous()
+            total_voxels = Z * H * W
 
-            # ===== (2) Seediness regression (Eq. 10) =====
-            # FG pixels -> φ; BG -> 0
-            target_seed = torch.zeros_like(seed_map)
-            target_seed[mask] = phi[mask]
-            seed_loss = F.mse_loss(seed_map, target_seed)
-            total_seed = total_seed + seed_loss
+        # Remove the extra channel dimension in instances
+        instances = instances[:, 0]
 
-            # ===== (3) Sigma smoothness within instance (Eq. 12) =====
-            sig_pix = sig[mask]                      # (Nk,S)
-            sig_mean = sig_pix.mean(dim=0, keepdim=True)
-            sigma_smooth = F.mse_loss(sig_pix, sig_mean.expand_as(sig_pix))
-            total_sigma_smooth = total_sigma_smooth + sigma_smooth
+        # Channel partition
+        emb_ch = D                   # 2 for 2D, 3 for 3D
+        sig_ch = self.ndims          # equal to D
+        seed_ch = 1
 
-            total_instances += 1
+        loss = prediction.new_tensor(0.0)
 
-    total_instances = max(total_instances, 1)
-    loss_main = total_main / total_instances
-    loss_seed = total_seed / total_instances
-    loss_sigma_smooth = total_sigma_smooth / total_instances
+        for b in range(B):
+            # Spatial embedding (tanh) + coordinate grid
+            spatial_emb = torch.tanh(prediction[b, :emb_ch]) + coords  # (D, ...)
+            sigma = prediction[b, emb_ch:emb_ch + sig_ch]              # (D, ...)
+            seed_map = torch.sigmoid(
+                prediction[b, emb_ch + sig_ch: emb_ch + sig_ch + seed_ch]
+            )  # (1, ...)
 
-    loss = lambda_main * loss_main + lambda_seed * loss_seed + lambda_sigma_smooth * loss_sigma_smooth
-    return {
-        "loss": loss,
-        "loss_main": loss_main.detach(),
-        "loss_seed": loss_seed.detach(),
-        "loss_sigma_smooth": loss_sigma_smooth.detach(),
-        "num_instances": torch.tensor(total_instances, device=device),
-    }
+            var_loss = prediction.new_tensor(0.0)
+            instance_loss = prediction.new_tensor(0.0)
+            seed_loss = prediction.new_tensor(0.0)
+            iou = prediction.new_tensor(0.0)
+            obj_count = 0
+
+            instance = instances[b].unsqueeze(0)       # (1, ...)
+            instance_ids = instance.unique()
+            instance_ids = instance_ids[instance_ids != 0]
+
+            # Regress background seeds to zero
+            bg_mask = (instances[b] == 0).unsqueeze(0)  # (1, ...)
+            if bg_mask.sum() > 0:
+                seed_loss = seed_loss + torch.sum(torch.pow(seed_map[bg_mask] - 0, 2))
+
+            for idv in instance_ids:
+                in_mask = instance.eq(idv)  # (1, ...)
+
+                center = self._center_from_mask(coords, in_mask)
+
+                # Sigma stats on object pixels/voxels
+                sigma_in = sigma[in_mask.expand_as(sigma)].view(sig_ch, -1)  # (D, N)
+                s_mean = sigma_in.mean(1).view(sig_ch, 1)                    # (D, 1)
+
+                # Variance loss (before exp), detaching mean to match originals
+                var_loss = var_loss + torch.mean(torch.pow(sigma_in - s_mean.detach(), 2))
+
+                # Distance field
+                s = torch.exp(s_mean.view(sig_ch, *([1] * D)) * 10)          # (D, 1...1)
+                dist = torch.exp(
+                    -1 * torch.sum(torch.pow(spatial_emb - center, 2) * s, dim=0, keepdim=True)
+                )  # (1, ...)
+
+                # Instance (Lovász hinge) loss on the soft mask
+                instance_loss = instance_loss + lovasz_hinge(dist * 2 - 1, in_mask)
+
+                # Seed regression loss towards distance field (fg only)
+                seed_loss = seed_loss + self.foreground_weight * torch.sum(
+                    torch.pow(seed_map[in_mask] - dist[in_mask].detach(), 2)
+                )
+
+                # Measure IoU at 0.5 threshold
+                iou += self._calculate_binary_iou(dist > 0.5, in_mask)
+
+                obj_count += 1
+
+            if obj_count > 0:
+                instance_loss = instance_loss / obj_count
+                var_loss = var_loss / obj_count
+                iou = iou / obj_count
+
+            seed_loss = seed_loss / total_voxels
+
+            loss = loss + (self.w_inst * instance_loss + self.w_var * var_loss + self.w_seed * seed_loss)
+
+        loss = loss / B
+        iou = iou / B
+        return loss + prediction.sum() * 0, float(iou), "IoU" # keep graph identical to originals
