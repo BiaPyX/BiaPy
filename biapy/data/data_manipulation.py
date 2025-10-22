@@ -194,7 +194,9 @@ def load_and_prepare_train_data(
         conditions can be like this: ``[['A'], ['B','C']]``. Then, if the sample satisfies the first list of conditions, only 'A'
         in this first case (from ['A'] list), or satisfy 'B' and 'C' (from ['B','C'] list) it will be removed. In each sublist all the
         conditions must be satisfied. Available properties are: [``'foreground'``, ``'mean'``, ``'min'``, ``'max'``].
+        
         Each property descrition:
+
         * ``'foreground'`` is defined as the mask foreground percentage.
         * ``'mean'`` is defined as the mean value.
         * ``'min'`` is defined as the min value.
@@ -227,7 +229,9 @@ def load_and_prepare_train_data(
         conditions can be like this: ``[['A'], ['B','C']]``. Then, if the sample satisfies the first list of conditions, only 'A'
         in this first case (from ['A'] list), or satisfy 'B' and 'C' (from ['B','C'] list) it will be removed. In each sublist all
         the conditions must be satisfied. Available properties are: [``'foreground'``, ``'mean'``, ``'min'``, ``'max'``].
+        
         Each property descrition:
+        
         * ``'foreground'`` is defined as the mask foreground percentage.
         * ``'mean'`` is defined as the mean value.
         * ``'min'`` is defined as the min value.
@@ -250,6 +254,7 @@ def load_and_prepare_train_data(
 
     filter_by_entire_image : bool, optional
         If filtering is done this will decide how the filtering will be done:
+
             * ``True``: apply filter image by image.
             * ``False``: apply filtering sample by sample. Each sample represents a patch within an image.
 
@@ -279,6 +284,7 @@ def load_and_prepare_train_data(
 
     train_zarr_data_information : dict, optional
         Additional information when using Zarr/H5 files for training. The following keys are expected:
+
         * ``"raw_path"``, str: path where the raw images reside within the zarr (used when ``multiple_data_within_zarr`` is ``True``).
         * ``"gt_path"``, str: path where the mask images reside within the zarr (used when ``multiple_data_within_zarr`` is ``True``).
         * ``"use_gt_path"``, bool: whether the GT that should be used or not.
@@ -1129,6 +1135,7 @@ def load_and_prepare_cls_test_data(
     use_val_as_test_info : dict, optional
         Additional information to create the test set based on the validation. Used when ``use_val_as_test`` is ``True``.
         The expected keys of the dictionary are as follows:
+
             * ``"cross_val_samples_ids"``, list of int: ids of the validation samples (out of the cross validation).
             * ``"train_path"``, str: training path, as the data must be extracted from there.
             * ``"selected_fold``", int: fold selected in cross validation.
@@ -1140,6 +1147,7 @@ def load_and_prepare_cls_test_data(
     -------
     X_test : list of dict
         Loaded test data. Each item in the list represents a sample of the dataset. Each sample is represented as follows:
+
             * ``"filename"``, str: name of the image to extract the data sample from.
             * ``"dir"``, str: directory where the image resides.
             * ``"class_name"``, str: name of the class.
@@ -1399,7 +1407,9 @@ def load_and_prepare_train_data_cls(
         conditions can be like this: ``[['A'], ['B','C']]``. Then, if the sample satisfies the first list of conditions, only 'A'
         in this first case (from ['A'] list), or satisfy 'B' and 'C' (from ['B','C'] list) it will be removed. In each sublist all the
         conditions must be satisfied. Available properties are: [``'foreground'``, ``'mean'``, ``'min'``, ``'max'``].
+        
         Each property descrition:
+
         * ``'foreground'`` is defined as the mask foreground percentage.
         * ``'mean'`` is defined as the mean value.
         * ``'min'`` is defined as the min value.
@@ -1432,7 +1442,9 @@ def load_and_prepare_train_data_cls(
         conditions can be like this: ``[['A'], ['B','C']]``. Then, if the sample satisfies the first list of conditions, only 'A'
         in this first case (from ['A'] list), or satisfy 'B' and 'C' (from ['B','C'] list) it will be removed. In each sublist all
         the conditions must be satisfied. Available properties are: [``'foreground'``, ``'mean'``, ``'min'``, ``'max'``].
+        
         Each property descrition:
+
         * ``'foreground'`` is defined as the mask foreground percentage.
         * ``'mean'`` is defined as the mean value.
         * ``'min'`` is defined as the min value.
@@ -1468,6 +1480,7 @@ def load_and_prepare_train_data_cls(
     -------
     X_train : list of dict
         Loaded train data. Each item in the list represents a sample of the dataset. Each sample is represented as follows:
+
             * ``"filename"``, str: name of the image to extract the data sample from.
             * ``"dir"``, str: directory where the image resides.
             * ``"class_name"``, str: name of the class.
@@ -1477,6 +1490,7 @@ def load_and_prepare_train_data_cls(
 
     X_val : list of dict
         Loaded validation data. Each item in the list represents a sample of the dataset. Each sample is represented as follows:
+        
             * ``"filename"``, str: name of the image to extract the data sample from.
             * ``"dir"``, str: directory where the image resides.
             * ``"class_name"``, str: name of the class.
@@ -2375,6 +2389,7 @@ def filter_samples_by_properties(
         (from ['A'] list), or satisfy 'B' and 'C' (from ['B','C'] list) it will be removed. In each sublist all the conditions must be
         satisfied. Available properties are: [``'foreground'``, ``'mean'``, ``'min'``, ``'max'``, ``diff``, ``target_mean``,
         ``target_min``, ``target_max``]. Each property descrition:
+
         * ``'foreground'`` is defined as the mask foreground percentage.
         * ``'mean'`` is defined as the mean value.
         * ``'min'`` is defined as the min value.
@@ -2404,6 +2419,7 @@ def filter_samples_by_properties(
 
     filter_by_entire_image : bool, optional
         This decides how the filtering is done:
+
             * ``True``: apply filter image by image.
             * ``False``: apply filtering sample by sample. Each sample represents a patch within an image.
 
@@ -2418,6 +2434,7 @@ def filter_samples_by_properties(
 
     zarr_data_info : dict, optional
         Additional information when using Zarr/H5 files for training. The following keys are expected:
+
             * ``"raw_path"``: path where the raw images reside within the zarr (used when ``multiple_data_within_zarr`` is ``True``).
             * ``"gt_path"``: path where the mask images reside within the zarr (used when ``multiple_data_within_zarr`` is ``True``).
             * ``"multiple_data_within_zarr"``: Whether if your input Zarr contains the raw images and labels together or not.
@@ -2757,6 +2774,7 @@ def sample_satisfy_conds(
         be like this: ``[['A'], ['B','C']]``. Then, if the sample satisfies the first list of conditions, only 'A' in this first case
         (from ['A'] list), or satisfy 'B' and 'C' (from ['B','C'] list) it will be removed. In each sublist all the conditions must
         be satisfied. Available properties are: [``'foreground'``, ``'mean'``, ``'min'``, ``'max'``]. Each property descrition:
+
         * ``'foreground'`` is defined as the mask foreground percentage.
         * ``'mean'`` is defined as the mean value of the input.
         * ``'min'`` is defined as the min value of the input.

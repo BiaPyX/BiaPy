@@ -1133,6 +1133,7 @@ def synapse_channel_creation(
     data_info : dict
         All patches that can be extracted from all the Zarr/H5 samples in ``data_path``.
         Keys created are:
+
             * ``"filepath"``: path to the file where the patch was extracted.
             * ``"full_shape"``: shape of the data within the file where the patch was extracted.
             * ``"patch_coords"``: coordinates of the data that represents the patch.
@@ -1140,6 +1141,7 @@ def synapse_channel_creation(
     zarr_data_information : dict
         Information when using Zarr/H5 files. Assumes that the H5/Zarr files contain the information according
         `CREMI data format <https://cremi.org/data/>`__. The following keys are expected:
+
             * ``"z_axe_pos"``: position of z axis of the data within the file.
             * ``"y_axe_pos"``: position of y axis of the data within the file.
             * ``"x_axe_pos"``: position of x axis of the data within the file.
@@ -2237,10 +2239,12 @@ def calculate_volume_prob_map(
     Y : list of dict
         Data to calculate the probability map from. Each item in the list represents a sample of the dataset.
         Expected keys:
+
             * ``"filename"``: name of the image to extract the data sample from.
             * ``"dir"``: directory where the image resides.
             * ``"img"``: image sample itself. It is a ndarrray of  ``(y, x, channels)`` in ``2D`` and
               ``(z, y, x, channels)``in ``3D``. Provided if the user selected to load data into memory.
+
         If ``"img"`` is provided ``"filename"`` and ``"filename"`` are not necessary, and vice versa.
 
     w_foreground : float, optional
