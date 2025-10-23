@@ -3153,6 +3153,9 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict):
                 for key in ["name", "doi", "image_modality", "dataset_id"]:
                     if key not in dataset_info_keys:
                         old_cfg["MODEL"]["BMZ"]["EXPORT"]["DATASET_INFO"][0][key] = f'{key}_not_specified'   
+        
+        if "LAST_ACTIVATION" in old_cfg["MODEL"]:
+            del old_cfg["MODEL"]["LAST_ACTIVATION"]
 
     try:
         del old_cfg["PATHS"]["RESULT_DIR"]["BMZ_BUILD"]
