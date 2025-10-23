@@ -233,7 +233,7 @@ class Denoising_Workflow(Base_Workflow):
 
         with torch.no_grad():
             for i, metric in enumerate(list_to_use):
-                val = metric(_output.squeeze(), _targets[:, 0].squeeze())
+                val = metric(_output, _targets[:, _output.shape[1]:].contiguous())
                 val = val.item() if not torch.isnan(val) else 0
                 out_metrics[list_names_to_use[i]] = val
 

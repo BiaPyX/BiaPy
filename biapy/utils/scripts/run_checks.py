@@ -505,9 +505,9 @@ denoising_folder = os.path.join(data_folder, "denoising")
 # 2D
 denoising_2d_template = "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/denoising/2d_denoising.yaml"
 denoising_2d_template_local = os.path.join(denoising_folder, "2d_denoising.yaml")
-denoising_2d_data_drive_link = "https://drive.google.com/uc?id=1TFvOySOiIgVIv9p4pbHdEbai-d2YGDvV"
-denoising_2d_data_filename = "convallaria2D.zip"
-denoising_2d_data_outpath = os.path.join(denoising_folder, "convallaria2D")
+denoising_2d_data_drive_link = "https://drive.google.com/uc?id=1ZCNBWkOJc4XOtfKHP7M0g1yIVzqtwS76"
+denoising_2d_data_filename = "Noise2Void_RGB.zip"
+denoising_2d_data_outpath = os.path.join(denoising_folder, "Noise2Void_RGB")
 # 3D
 denoising_3d_template = "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/denoising/3d_denoising.yaml"
 denoising_3d_template_local = os.path.join(denoising_folder, "3d_denoising.yaml")
@@ -1957,19 +1957,20 @@ if all_test_info["Test9"]["enable"]:
 
     biapy_config['PROBLEM']['DENOISING']['N2V_STRUCTMASK'] = True
 
+    biapy_config['DATA']['PATCH_SIZE'] = "(64, 64, 3)"
     biapy_config['DATA']['NORMALIZATION'] = {}
     biapy_config['DATA']['NORMALIZATION']['TYPE'] = 'zero_mean_unit_variance'
 
-    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(denoising_2d_data_outpath, "data", "train")
+    biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(denoising_2d_data_outpath, "Noise2Void_RGB")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = False
-    biapy_config['DATA']['TEST']['PATH'] = os.path.join(denoising_2d_data_outpath, "data", "test")
+    biapy_config['DATA']['TEST']['PATH'] = os.path.join(denoising_2d_data_outpath, "Noise2Void_RGB")
     biapy_config['DATA']['TEST']['IN_MEMORY'] = False
 
     biapy_config['TRAIN']['ENABLE'] = True
-    biapy_config['TRAIN']['EPOCHS'] = 20
+    biapy_config['TRAIN']['EPOCHS'] = 10
     biapy_config['TRAIN']['PATIENCE'] = -1
 
-    biapy_config['MODEL']['ARCHITECTURE'] = 'unetr'
+    biapy_config['MODEL']['ARCHITECTURE'] = 'unet'
     biapy_config['MODEL']['LOAD_CHECKPOINT'] = False
 
     biapy_config['TEST']['ENABLE'] = True

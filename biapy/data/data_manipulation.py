@@ -363,7 +363,8 @@ def load_and_prepare_train_data(
 
             # Working with Zarr
             if not is_3d:
-                raise ValueError("Zarr image handle is only available for 3D problems")
+                raise ValueError("Please check you data as only folders where found. In this case BiaPy expects Zarr "
+                                 "format images, but using these is only available for 3D problems")
             train_using_zarr = True
 
             if norm_module.measure_by == "image":

@@ -1748,9 +1748,9 @@ def n2v_loss_mse(y_pred, y_true):
     """
     if isinstance(y_pred, dict):
         y_pred = y_pred["pred"]
-    target = y_true[:, 0].squeeze()
-    mask = y_true[:, 1].squeeze()
-    loss = torch.sum(torch.square(target - y_pred.squeeze() * mask)) / torch.sum(mask)
+    target = y_true[:, :y_pred.shape[1]]
+    mask = y_true[:, y_pred.shape[1]:]
+    loss = torch.sum(torch.square(target - y_pred * mask)) / torch.sum(mask)
     return loss
 
 
