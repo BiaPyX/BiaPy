@@ -285,13 +285,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 self.train_metric_names += ["L1 ({} channel)".format(channel)]
                 self.train_metric_best += ["min"]
             elif channel == "E_offset":
-                self.train_metric_names += ["MSE (seed)"]
-                self.train_metric_best += ["min"]
-                self.train_metric_names += ["Sigma variance"]
-                self.train_metric_best += ["min"]
-                self.train_metric_names += ["Intra-cluster dispersion"]
-                self.train_metric_best += ["min"]
-                self.train_metric_names += ["Soft-IoU (phi)"]
+                self.train_metric_names += ["IoU"]
                 self.train_metric_best += ["max"]
             elif channel in ["E_sigma", "E_seediness"]:
                continue  # No metrics for these channels
