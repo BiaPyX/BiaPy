@@ -461,6 +461,8 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         with torch.no_grad():
             k = 0
             for i, metric in enumerate(list_to_use):
+                if metric == "none":
+                    continue
                 val = metric(_output, _targets)
                 if isinstance(val, dict):
                     for m in val:
