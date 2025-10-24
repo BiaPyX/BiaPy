@@ -21,7 +21,7 @@ from tqdm import tqdm
 from scipy.signal import find_peaks
 from scipy.spatial import cKDTree # type: ignore
 from scipy.spatial.distance import cdist
-from scipy.ndimage import rotate, grey_dilation, binary_erosion, binary_dilation, median_filter, binary_fill_holes, find_objects, gaussian_filter
+from scipy.ndimage import rotate, grey_dilation, binary_erosion, binary_dilation, median_filter, binary_fill_holes, find_objects, gaussian_filter, distance_transform_edt
 from scipy.signal import savgol_filter
 from skimage import morphology
 from skimage.morphology import disk, ball, remove_small_objects, dilation, erosion
@@ -309,7 +309,10 @@ def watershed_by_channels(
             topografic_surface = -(1.0 - overall) 
         else:
             ch_pos = channels.index(topo_surface_channel)
-            topografic_surface = - data[..., ch_pos]
+            if ch in ["C", "B", "Dn", "Dc"]:
+                topografic_surface = data[..., ch_pos]
+            else:
+                topografic_surface = - data[..., ch_pos]
             # topografic_surface = edt.edt(growth_mask, anisotropy=resolution, black_border=False, order='F')   
 
     # Morphological operation to the growth mask
@@ -317,7 +320,6 @@ def watershed_by_channels(
         erode_seed_and_growth_mask()
 
     # Enhance watershed inputs
-    seed_map = binary_fill_holes(seed_map)
     seed_map = label(seed_map, connectivity=1)
     topografic_surface = gaussian(topografic_surface, sigma=1.0, truncate=1)
 
@@ -359,13 +361,13 @@ def watershed_by_channels(
         save_tif(
             np.expand_dims(np.expand_dims(topografic_surface, -1), 0).astype(np.float32),
             save_dir,
-            ["semantic.tif"],
+            ["topografic_surface.tif"],
             verbose=False,
         )
         save_tif(
             np.expand_dims(np.expand_dims(growth_mask, -1), 0).astype(np.uint8),
             save_dir,
-            ["foreground.tif"],
+            ["growth_mask.tif"],
             verbose=False,
         )
     return segm
@@ -1266,6 +1268,7 @@ def voronoi_on_mask(
     data: NDArray, 
     mask: NDArray, 
     th: float=0, 
+    erode_size: int=2,
     verbose: bool=False
 ) -> NDArray:
     """
@@ -1284,8 +1287,8 @@ def voronoi_on_mask(
     th : float, optional
         Threshold used to binarize the input. If th=0, otsu threshold is used.
 
-    thres_small : int, optional
-        Theshold to remove small objects created by the watershed.
+    erode_size : int, optional
+        Size of the erosion to apply to the binary mask before Voronoi.
 
     verbose : bool, optional
          To print saving information.
@@ -1305,52 +1308,58 @@ def voronoi_on_mask(
     if verbose:
         print("Applying Voronoi {}D . . .".format(data.ndim))
 
-    image3d = False if data.ndim != 2 else True
+    image3d = (data.ndim == 3)
 
-    if image3d:
+    if not image3d:
         data = np.expand_dims(data, 0)
         mask = np.expand_dims(mask, 0)
 
-    # Binarize
-    if th == 0:
-        thresh = threshold_otsu(mask)
-    else:
-        thresh = th
-    binaryMask = mask > thresh
+    # 1) Prepare the binary mask (threshold + fill holes + optional erode)
+    thresh = threshold_otsu(mask) if th == 0 else th
+    binaryMask = (mask > thresh).astype(np.uint8)
+    binaryMask = binary_fill_holes(binaryMask)
+    if erode_size > 0:
+        # use a 3D ball; works fine with a single-slice Z as well
+        struct_elem = morphology.ball(radius=erode_size) if image3d else morphology.disk(radius=erode_size)
+        binaryMask = morphology.binary_erosion(binaryMask, struct_elem)
 
-    # Close to fill holes
-    closedBinaryMask = morphology.closing(binaryMask, morphology.ball(radius=5)).astype(np.uint8)
+    # 2) Keep only labels inside the mask
+    voronoiCyst = data * binaryMask
 
-    voronoiCyst = data * closedBinaryMask
-    binaryVoronoiCyst = (voronoiCyst > 0) * 1
-    binaryVoronoiCyst = binaryVoronoiCyst.astype("uint8")
+    # 3) Perimeter = label border within the mask
+    binaryVoronoiCyst = (voronoiCyst > 0).astype(np.uint8)
+    struct_elem = morphology.ball(radius=2) if image3d else morphology.disk(radius=2)
+    eroded = morphology.binary_erosion(binaryVoronoiCyst, struct_elem)
+    perim = (binaryVoronoiCyst - eroded).astype(bool)  # True at perimeter
 
-    # Cell Perimeter
-    erodedVoronoiCyst = morphology.binary_erosion(binaryVoronoiCyst, morphology.ball(radius=2))
-    cellPerimeter = binaryVoronoiCyst - erodedVoronoiCyst
+    # 4) Unknown targets to fill = inside mask but unlabeled
+    unknown = (binaryMask == 1) & (data == 0)
 
-    # Define ids to fill where there is mask but no labels
-    idsToFill = np.argwhere((closedBinaryMask == 1) & (data == 0))
-    labelPerId = np.zeros(np.size(idsToFill))
+    if np.any(unknown) and np.any(perim):
+        # 5) Distance transform to nearest *perimeter* voxel
+        # distance_transform_edt returns nearest *zero* position.
+        # So build an array that is zero at perimeter and one elsewhere.
+        not_perim = np.ones_like(perim, dtype=bool)
+        not_perim[perim] = False
 
-    idsPerim = np.argwhere(cellPerimeter == 1)
-    labelsPerimIds = voronoiCyst[cellPerimeter == 1]
+        # Get indices of nearest perimeter voxel for every location
+        # Avoid computing distances for speed.
+        nearest_z, nearest_y, nearest_x = distance_transform_edt(
+            not_perim, return_indices=True, return_distances=False
+        )
 
-    # Generating voronoi
-    for nId in tqdm(range(1, len(idsToFill))):
-        distCoord = cdist([idsToFill[nId]], idsPerim)
-        idSeedMin = np.argwhere(distCoord == np.min(distCoord))
-        idSeedMin = idSeedMin[0][1]
-        labelPerId[nId] = labelsPerimIds[idSeedMin]
-        voronoiCyst[idsToFill[nId][0], idsToFill[nId][1], idsToFill[nId][2]] = labelsPerimIds[idSeedMin]
+        # 6) Gather labels at the nearest perimeter coordinates
+        perim_labels = np.where(perim, voronoiCyst, 0)
+        nearest_labels = perim_labels[nearest_z, nearest_y, nearest_x]
 
-    if image3d:
-        data = data[0]
-        mask = mask[0]
+        # 7) Assign only where unknown
+        voronoiCyst[unknown] = nearest_labels[unknown]
+
+    # 8) Restore original dimensionality
+    if not image3d:
         voronoiCyst = voronoiCyst[0]
 
     return voronoiCyst
-
 
 def remove_close_points_by_mask(
     points: NDArray | List[List[int | float]], 

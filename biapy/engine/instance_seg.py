@@ -796,23 +796,26 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 pred_labels = np.expand_dims(pred_labels, 0)
 
         if self.cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK:
+            erode_size = 0
             if "M" in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
                 ch_pos = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS.index("M")
                 pred = pred[...,ch_pos]
-            else: # F or F+C
+            elif "F" in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
+                pred = pred[...,self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS.index("F")]
                 if "C" in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
-                    pred = (
-                        pred[...,self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS.index("F")] 
-                        + pred[...,self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS.index("C")]
-                    )
-                else:
-                    pred = pred[...,self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS.index("F")]
-                
+                    pred += pred[...,self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS.index("C")]
+            elif "B" in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
+                pred = 1 - pred[...,self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS.index("B")]    
+            elif "C" in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
+                pred = pred[...,self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS.index("C")] > self.cfg.TEST.POST_PROCESSING.VORONOI_TH
+                erode_size = 2 # As the contours are thicker we erode a little bit
+
             pred_labels = voronoi_on_mask(
                 pred_labels,
                 pred,
                 th=self.cfg.TEST.POST_PROCESSING.VORONOI_TH,
                 verbose=self.cfg.TEST.VERBOSE,
+                erode_size=erode_size,
             )
         del pred
 

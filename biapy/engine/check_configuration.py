@@ -1402,9 +1402,9 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 opts.extend(["PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS", [10,1,10,1]]) # Embedseg default weights
 
         if cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK:
-            if not any([x for x in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS if x in ["F", "M"]]):
+            if not any([x for x in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS if x in ["F", "B", "C", "M"]]):
                 raise ValueError(
-                    "'TEST.POST_PROCESSING.VORONOI_ON_MASK' can only be activated if any of the following channels was selected: 'F' or 'M'."
+                    "'TEST.POST_PROCESSING.VORONOI_ON_MASK' can only be activated if any of the following channels was selected: 'F', 'B', 'C' or 'M'."
                 )
             if not check_value(cfg.TEST.POST_PROCESSING.VORONOI_TH):
                 raise ValueError("'TEST.POST_PROCESSING.VORONOI_TH' not in [0, 1] range")
