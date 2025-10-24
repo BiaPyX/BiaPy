@@ -229,6 +229,27 @@ class Config:
         #   - A float between 0 and 1 to threshold each channel
         #   - "auto" to automatically define a value depending on the channels provided
         _C.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS_THRESH  = []
+        # Sequence of string to determine the morphological filters to apply to instance seeds. They will be done in that order.
+        # Possible options 'dilate' and 'erode'. E.g. ['erode','dilate'] to erode first and dilate later.
+        _C.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_MORPH_SEQUENCE = []
+        # Sequence of ints to determine the radius of the erosion or dilation for instance seeds
+        _C.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_MORPH_RADIUS = []
+        # To erode and dilate the foreground mask before using marker controlled watershed. The idea is to remove the small holes
+        # that may be produced so the instances grow without them
+        _C.PROBLEM.INSTANCE_SEG.WATERSHED.ERODE_AND_DILATE_GROWTH_MASK = False
+        # Radius to erode the foreground mask
+        _C.PROBLEM.INSTANCE_SEG.WATERSHED.FORE_EROSION_RADIUS = 5
+        # Radius to dilate the foreground mask
+        _C.PROBLEM.INSTANCE_SEG.WATERSHED.FORE_DILATION_RADIUS = 5
+        # Whether to save watershed check files
+        _C.PROBLEM.INSTANCE_SEG.WATERSHED.DATA_CHECK_MW = False
+        # Size of small objects to be removed before doing watershed
+        _C.PROBLEM.INSTANCE_SEG.WATERSHED.DATA_REMOVE_SMALL_OBJ_BEFORE = 10
+        # Whether to remove objects before watershed
+        _C.PROBLEM.INSTANCE_SEG.WATERSHED.DATA_REMOVE_BEFORE_MW = False
+        # Whether to apply or not the watershed to create instances slice by slice in a 3D problem. This can solve instances invading
+        # others if the objects in Z axis overlap too much.
+        _C.PROBLEM.INSTANCE_SEG.WATERSHED.BY_2D_SLICES = False
 
         # Options for stardist-kind instance creation
         _C.PROBLEM.INSTANCE_SEG.STARDIST = CN()
@@ -248,28 +269,6 @@ class Config:
         # Threshold in [0,1] to accept an assignment of a pixel/voxels to an instance based on the seed score. 
         # Corresponds directly to φ (phi) thresholding in the EmbedSeg algorithm
         _C.PROBLEM.INSTANCE_SEG.EMBEDSEG.ASSIGN_THRESH = 0.5
-
-        # Size of small objects to be removed after doing watershed
-        _C.PROBLEM.INSTANCE_SEG.DATA_REMOVE_SMALL_OBJ_BEFORE = 10
-        # Whether to remove objects before watershed
-        _C.PROBLEM.INSTANCE_SEG.DATA_REMOVE_BEFORE_MW = False
-        # Sequence of string to determine the morphological filters to apply to instance seeds. They will be done in that order.
-        # Possible options 'dilate' and 'erode'. E.g. ['erode','dilate'] to erode first and dilate later.
-        _C.PROBLEM.INSTANCE_SEG.SEED_MORPH_SEQUENCE = []
-        # Sequence of ints to determine the radius of the erosion or dilation for instance seeds
-        _C.PROBLEM.INSTANCE_SEG.SEED_MORPH_RADIUS = []
-        # To erode and dilate the foreground mask before using marker controlled watershed. The idea is to remove the small holes
-        # that may be produced so the instances grow without them
-        _C.PROBLEM.INSTANCE_SEG.ERODE_AND_DILATE_GROWTH_MASK = False
-        # Radius to erode the foreground mask
-        _C.PROBLEM.INSTANCE_SEG.FORE_EROSION_RADIUS = 5
-        # Radius to dilate the foreground mask
-        _C.PROBLEM.INSTANCE_SEG.FORE_DILATION_RADIUS = 5
-        # Whether to save watershed check files
-        _C.PROBLEM.INSTANCE_SEG.DATA_CHECK_MW = False
-        # Whether to apply or not the watershed to create instances slice by slice in a 3D problem. This can solve instances invading
-        # others if the objects in Z axis overlap too much.
-        _C.PROBLEM.INSTANCE_SEG.WATERSHED_BY_2D_SLICES = False
 
         #### For "synapses" type of instances (only available for 3D H5/Zarr data) ####
         _C.PROBLEM.INSTANCE_SEG.SYNAPSES = CN()

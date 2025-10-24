@@ -1410,23 +1410,23 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 raise ValueError("'TEST.POST_PROCESSING.VORONOI_TH' not in [0, 1] range")
         if (
             not any([x for x in ["F", "B", "C", "D", "M"] if x in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS])
-            and cfg.PROBLEM.INSTANCE_SEG.ERODE_AND_DILATE_GROWTH_MASK
+            and cfg.PROBLEM.INSTANCE_SEG.WATERSHED.ERODE_AND_DILATE_GROWTH_MASK
         ):
             raise ValueError(
-                "'PROBLEM.INSTANCE_SEG.ERODE_AND_DILATE_GROWTH_MASK' can only be used if any of the following channels was selected: 'F', 'B', 'C', 'M', or 'D'."
+                "'PROBLEM.INSTANCE_SEG.WATERSHED.ERODE_AND_DILATE_GROWTH_MASK' can only be used if any of the following channels was selected: 'F', 'B', 'C', 'M', or 'D'."
             )
-        for morph_operation in cfg.PROBLEM.INSTANCE_SEG.SEED_MORPH_SEQUENCE:
+        for morph_operation in cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_MORPH_SEQUENCE:
             if morph_operation != "dilate" and morph_operation != "erode":
                 raise ValueError(
-                    "'PROBLEM.INSTANCE_SEG.SEED_MORPH_SEQUENCE' can only be a sequence with 'dilate' or 'erode' operations. "
-                    "{} given".format(cfg.PROBLEM.INSTANCE_SEG.SEED_MORPH_SEQUENCE)
+                    "'PROBLEM.INSTANCE_SEG.WATERSHED.SEED_MORPH_SEQUENCE' can only be a sequence with 'dilate' or 'erode' operations. "
+                    "{} given".format(cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_MORPH_SEQUENCE)
                 )
-        if len(cfg.PROBLEM.INSTANCE_SEG.SEED_MORPH_SEQUENCE) != len(cfg.PROBLEM.INSTANCE_SEG.SEED_MORPH_RADIUS):
+        if len(cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_MORPH_SEQUENCE) != len(cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_MORPH_RADIUS):
             raise ValueError(
-                "'PROBLEM.INSTANCE_SEG.SEED_MORPH_SEQUENCE' length and 'PROBLEM.INSTANCE_SEG.SEED_MORPH_RADIUS' length needs to be the same"
+                "'PROBLEM.INSTANCE_SEG.WATERSHED.SEED_MORPH_SEQUENCE' length and 'PROBLEM.INSTANCE_SEG.WATERSHED.SEED_MORPH_RADIUS' length needs to be the same"
             )
 
-        if cfg.PROBLEM.INSTANCE_SEG.WATERSHED_BY_2D_SLICES:
+        if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.BY_2D_SLICES:
             if cfg.PROBLEM.NDIM == "2D" and not cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK:
                 raise ValueError(
                     "'PROBLEM.INSTANCE_SEG.WATERSHED_BY_2D_SLICE' can only be activated when 'PROBLEM.NDIM' == 3D or "
@@ -3000,6 +3000,36 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict):
                     old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]["GROWTH_MASK_CHANNELS"].append("F")
                     old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]["GROWTH_MASK_CHANNELS_THRESH"].append(old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_MW_TH_FOREGROUND"])
                 del old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_MW_TH_FOREGROUND"]
+
+            if "WATERSHED" not in old_cfg["PROBLEM"]["INSTANCE_SEG"]:
+                old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"] = {}
+            if "SEED_MORPH_SEQUENCE" in old_cfg["PROBLEM"]["INSTANCE_SEG"]:
+                old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]["SEED_MORPH_SEQUENCE"] = old_cfg["PROBLEM"]["INSTANCE_SEG"]["SEED_MORPH_SEQUENCE"]
+                del old_cfg["PROBLEM"]["INSTANCE_SEG"]["SEED_MORPH_SEQUENCE"]
+            if "SEED_MORPH_RADIUS" in old_cfg["PROBLEM"]["INSTANCE_SEG"]:
+                old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]["SEED_MORPH_RADIUS"] = old_cfg["PROBLEM"]["INSTANCE_SEG"]["SEED_MORPH_RADIUS"]
+                del old_cfg["PROBLEM"]["INSTANCE_SEG"]["SEED_MORPH_RADIUS"]
+            if "ERODE_AND_DILATE_GROWTH_MASK" in old_cfg["PROBLEM"]["INSTANCE_SEG"]:
+                old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]["ERODE_AND_DILATE_GROWTH_MASK"] = old_cfg["PROBLEM"]["INSTANCE_SEG"]["ERODE_AND_DILATE_GROWTH_MASK"]
+                del old_cfg["PROBLEM"]["INSTANCE_SEG"]["ERODE_AND_DILATE_GROWTH_MASK"]
+            if "FORE_EROSION_RADIUS" in old_cfg["PROBLEM"]["INSTANCE_SEG"]:
+                old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]["FORE_EROSION_RADIUS"] = old_cfg["PROBLEM"]["INSTANCE_SEG"]["FORE_EROSION_RADIUS"]
+                del old_cfg["PROBLEM"]["INSTANCE_SEG"]["FORE_EROSION_RADIUS"]
+            if "FORE_DILATION_RADIUS" in old_cfg["PROBLEM"]["INSTANCE_SEG"]:
+                old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]["FORE_DILATION_RADIUS"] = old_cfg["PROBLEM"]["INSTANCE_SEG"]["FORE_DILATION_RADIUS"]
+                del old_cfg["PROBLEM"]["INSTANCE_SEG"]["FORE_DILATION_RADIUS"]
+            if "DATA_CHECK_MW" in old_cfg["PROBLEM"]["INSTANCE_SEG"]:
+                old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]["DATA_CHECK_MW"] = old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_CHECK_MW"]
+                del old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_CHECK_MW"]
+            if "DATA_REMOVE_BEFORE_MW" in old_cfg["PROBLEM"]["INSTANCE_SEG"]:
+                old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]["DATA_REMOVE_BEFORE_MW"] = old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_REMOVE_BEFORE_MW"]
+                del old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_REMOVE_BEFORE_MW"]
+            if "DATA_REMOVE_SMALL_OBJ_BEFORE" in old_cfg["PROBLEM"]["INSTANCE_SEG"]:
+                old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]["DATA_REMOVE_SMALL_OBJ_BEFORE"] = old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_REMOVE_SMALL_OBJ_BEFORE"]
+                del old_cfg["PROBLEM"]["INSTANCE_SEG"]["DATA_REMOVE_SMALL_OBJ_BEFORE"]
+            if "WATERSHED_BY_2D_SLICES" in old_cfg["PROBLEM"]["INSTANCE_SEG"]:
+                old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]["BY_2D_SLICES"] = old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED_BY_2D_SLICES"]
+                del old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED_BY_2D_SLICES"]
 
     if "DATA" in old_cfg:
         if "TRAIN" in old_cfg["DATA"]:
