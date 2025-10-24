@@ -21,11 +21,11 @@ from tqdm import tqdm
 from scipy.signal import find_peaks
 from scipy.spatial import cKDTree # type: ignore
 from scipy.spatial.distance import cdist
-from scipy.ndimage import rotate, grey_dilation, binary_erosion, binary_dilation, median_filter, binary_fill_holes, find_objects, gaussian_filter, distance_transform_edt
+from scipy.ndimage import rotate, grey_dilation, grey_erosion, binary_erosion, binary_dilation, median_filter, binary_fill_holes, find_objects, gaussian_filter, distance_transform_edt
 from scipy.signal import savgol_filter
 from skimage import morphology
 from skimage.morphology import disk, ball, remove_small_objects, dilation, erosion
-from skimage.segmentation import watershed, relabel_sequential, find_boundaries
+from skimage.segmentation import watershed, relabel_sequential, find_boundaries, clear_border
 from skimage.filters import rank, threshold_otsu, gaussian
 from skimage.measure import label, regionprops_table, marching_cubes, mesh_surface_area
 from skimage.exposure import equalize_adapthist
@@ -2399,6 +2399,68 @@ def apply_binary_mask(
                         X[k, ..., c] = X[k, ..., c] * (mask > 0)
     return X
 
+def apply_label_refinement(
+    lbl_img: NDArray, 
+    is_3d: bool, 
+    operations: List[str], 
+    values: List[float]
+) -> NDArray:
+    """
+    Apply label refinement techniques to improve the quality of the label image.
+
+    Parameters
+    ----------
+    lbl_img : NDArray
+        Input label image with instances.
+
+    is_3d : bool
+        Whether the label image is 3D or not.
+
+    operations : List of str
+        List of operations to apply. Options available: ``['fill_holes', 'clear_border', 'erosion', 'dilation',
+        'remove_small_objects', 'remove_big_objects']``.
+    
+    values : List of float
+        List of values associated to each operation. For operations that do not require a value, put any value in that
+        position. 
+
+    Returns
+    -------
+    NDArray
+        Refined label image.
+    """
+    for opt in operations:
+        if opt == "fill_holes":
+            print("Filling holes . . .")
+            lbl_img = fill_label_holes(lbl_img)
+        elif opt == "clear_border":
+            print("Clearing borders . . .")
+            if not is_3d:
+                lbl_img = lbl_img[0]
+            lbl_img = clear_border(lbl_img)
+            if not is_3d:
+                lbl_img = np.expand_dims(lbl_img, 0)
+        elif opt == "erosion":
+            print("Applying erosion . . .")
+            selem_size = values[operations.index(opt)]
+            lbl_img = grey_erosion(lbl_img, selem_size)
+        elif opt == "dilation":
+            print("Applying dilation . . .")
+            selem_size = values[operations.index(opt)]
+            lbl_img = grey_dilation(lbl_img, selem_size)
+        elif opt == "remove_small_objects":
+            print("Removing small objects . . .")
+            min_size = int(values[operations.index(opt)])
+            lbl_img = remove_small_objects(lbl_img, min_size=min_size)
+        elif opt == "remove_big_objects":
+            print("Removing big objects . . .")
+            min_size = int(values[operations.index(opt)])
+            lbl_img = lbl_img * (remove_small_objects(lbl_img, min_size=min_size) == 0)
+        else:
+            raise ValueError("Label refinement operation '{}' not recognized".format(opt))
+    return lbl_img
+
+
 def fill_label_holes(lbl_img: NDArray) -> NDArray:
     """
     Fill small holes in label image.
@@ -2413,7 +2475,6 @@ def fill_label_holes(lbl_img: NDArray) -> NDArray:
     lbl_img_filled : 2D/3D Numpy array
         Label image with instances with holes filled. E.g. ``(1450, 2000)`` for 2D and ``(397, 1450, 2000)`` for 3D.
     """
-    print("Filling holes in label image . . .")
     def grow(sl,interior):
         return tuple(slice(s.start-int(w[0]),s.stop+int(w[1])) for s,w in zip(sl,interior))
     def shrink(interior):

@@ -1624,6 +1624,32 @@ class Config:
         _C.TEST.POST_PROCESSING.APPLY_MASK = False
 
         ### Instance segmentation
+        #
+        #
+        # Instance refinement:
+        # Whether to refine the instances with morphological and filtering operations after being created and before any other post-processing
+        # such as Voronoi. This instance refinement is applied on each instance individually and sequentially. The two variables,
+        # TEST.POST_PROCESSING.INSTANCE_REFINEMENT.PROPS and TEST.POST_PROCESSING.INSTANCE_REFINEMENT.VALUES of refinements to be applied.
+        # For instance, the conditions can be like this: ['A', 'B', 'C'] and they will be applied sequentially.
+        # A full example of this refinement:
+        #   _C.DATA.VAL.FILTER_SAMPLES.PROPS = ['fill_holes', 'remove_small_objects', 'remove_large_objects', 'clear_border']
+        #   _C.DATA.VAL.FILTER_SAMPLES.VALUES = ['none', 10, 2000, 'none']
+        _C.TEST.POST_PROCESSING.INSTANCE_REFINEMENT = CN()
+        # Enable/disable instance refinement
+        _C.TEST.POST_PROCESSING.INSTANCE_REFINEMENT.ENABLE = False
+        # List of morphological operations to apply. They are going to be applied in the list order. Available operations are:
+        #   * 'dilation': to dilate instances
+        #   * 'erosion': to erode instances
+        #   * 'fill_holes': to fill holes inside instances
+        #   * 'clear_border': to remove instances touching the image border
+        #   * 'remove_small_objects': to remove small objects
+        #   * 'remove_large_objects': to remove large objects
+        _C.TEST.POST_PROCESSING.INSTANCE_REFINEMENT.OPERATIONS = []
+        # Values associated to each operation. For 'dilation' and 'erosion' it corresponds to the size of the structuring element (it can also be a list).
+        # For 'remove_small_objects' and 'remove_large_objects' it corresponds to the size threshold in pixels.
+        # For 'fill_holes' and 'clear_border' no value is needed so put None in those cases.
+        _C.TEST.POST_PROCESSING.INSTANCE_REFINEMENT.VALUES = []
+
         # Whether to measure morphological features on each instances, i.e. 'circularity' (2D), 'elongation' (2D), 'npixels', 'area', 'diameter',
         # 'perimeter', 'sphericity' (3D)
         _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES = CN()
@@ -1702,10 +1728,6 @@ class Config:
         # This option is useful when PROBLEM.INSTANCE_SEG.DATA_CHANNELS is 'BP', as multiple central seeds may appear in big
         # instances. Only works in Instance segmentation workflow.
         _C.TEST.POST_PROCESSING.REPARE_LARGE_BLOBS_SIZE = -1
-        # Clear objects connected to the label image border. Only works in Instance segmentation workflow.
-        _C.TEST.POST_PROCESSING.CLEAR_BORDER = False
-        # Fill holes in instances. Only works in Instance segmentation workflow.
-        _C.TEST.POST_PROCESSING.FILL_HOLES = False
 
         ### Detection
         # To remove close points to each other. This can also be set when using 'BP' channels for instance segmentation.

@@ -12,7 +12,6 @@ import h5py
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-from skimage.segmentation import clear_border
 from skimage.transform import resize
 from skimage.morphology import ball, dilation
 import torch.distributed as dist
@@ -33,6 +32,7 @@ from biapy.data.post_processing.post_processing import (
     remove_close_points_by_mask,
     fill_label_holes,
     embedseg_instances,
+    apply_label_refinement,
 )
 from biapy.data.post_processing.polygon_nms_postprocessing import stardist_instances_from_prediction
 from biapy.data.pre_processing import create_instance_channels
@@ -156,7 +156,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         # Specific instance segmentation post-processing
         if (
             self.cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK
-            or self.cfg.TEST.POST_PROCESSING.CLEAR_BORDER
+            or self.cfg.TEST.POST_PROCESSING.INSTANCE_REFINEMENT.ENABLE
             or self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.ENABLE
             or self.cfg.TEST.POST_PROCESSING.REPARE_LARGE_BLOBS_SIZE != -1
             or self.cfg.TEST.POST_PROCESSING.FILL_HOLES
@@ -785,9 +785,14 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         ###################
         # Post-processing #
         ###################
-        if self.cfg.TEST.POST_PROCESSING.FILL_HOLES:
-            pred_labels = fill_label_holes(pred_labels)
-            
+        if self.cfg.TEST.POST_PROCESSING.INSTANCE_REFINEMENT.ENABLE:
+            pred_labels = apply_label_refinement(
+                pred_labels, 
+                is_3d=self.cfg.PROBLEM.NDIM=="3D",
+                operations=self.cfg.TEST.POST_PROCESSING.INSTANCE_REFINEMENT.OPERATIONS, 
+                values=self.cfg.TEST.POST_PROCESSING.INSTANCE_REFINEMENT.VALUES, 
+            )
+
         if self.cfg.TEST.POST_PROCESSING.REPARE_LARGE_BLOBS_SIZE != -1:
             if self.cfg.PROBLEM.NDIM == "2D":
                 pred_labels = pred_labels[0]
@@ -801,13 +806,14 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 ch_pos = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS.index("M")
                 pred = pred[...,ch_pos]
             elif "F" in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
-                pred = pred[...,self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS.index("F")]
                 if "C" in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
-                    pred += pred[...,self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS.index("C")]
+                    pred = pred[...,self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS.index("F")] + pred[...,self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS.index("C")]
+                else:
+                    pred = pred[...,self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS.index("F")]
             elif "B" in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
                 pred = 1 - pred[...,self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS.index("B")]    
             elif "C" in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
-                pred = pred[...,self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS.index("C")] > self.cfg.TEST.POST_PROCESSING.VORONOI_TH
+                pred = pred[...,self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS.index("C")]
                 erode_size = 2 # As the contours are thicker we erode a little bit
 
             pred_labels = voronoi_on_mask(
@@ -818,14 +824,6 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 erode_size=erode_size,
             )
         del pred
-
-        if self.cfg.TEST.POST_PROCESSING.CLEAR_BORDER:
-            print("Clearing borders . . .")
-            if self.cfg.PROBLEM.NDIM == "2D":
-                pred_labels = pred_labels[0]
-            pred_labels = clear_border(pred_labels)
-            if self.cfg.PROBLEM.NDIM == "2D":
-                pred_labels = np.expand_dims(pred_labels, 0)
 
         if (
             self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.ENABLE

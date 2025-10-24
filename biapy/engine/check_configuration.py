@@ -1401,6 +1401,41 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 # Corresponds to foreground weight, instance center offset, variance and seediness
                 opts.extend(["PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS", [10,1,10,1]]) # Embedseg default weights
 
+        if cfg.TEST.POST_PROCESSING.INSTANCE_REFINEMENT.ENABLE:
+            if len(cfg.TEST.POST_PROCESSING.INSTANCE_REFINEMENT.OPERATIONS) != len(
+                cfg.TEST.POST_PROCESSING.INSTANCE_REFINEMENT.VALUES
+            ):
+                raise ValueError(
+                    "'TEST.POST_PROCESSING.INSTANCE_REFINEMENT.OPERATIONS' and 'TEST.POST_PROCESSING.INSTANCE_REFINEMENT.VALUES' need to be of the same length. "
+                    "For those operations that do not require a value, please set 'none' for them (e.g. 'remove_small_objects')."
+                )
+            for opt, value in zip(cfg.TEST.POST_PROCESSING.INSTANCE_REFINEMENT.OPERATIONS, cfg.TEST.POST_PROCESSING.INSTANCE_REFINEMENT.VALUES):
+                if opt not in ["dilation", "erosion", "fill_holes", "clear_border", "remove_small_objects", "remove_big_objects"]:
+                    raise ValueError(
+                        "'TEST.POST_PROCESSING.INSTANCE_REFINEMENT.OPERATIONS' can only contain the following operations: 'dilation', "
+                        "'erosion', 'fill_holes', 'clear_border', 'remove_small_objects', 'remove_big_objects'"
+                    )
+                if (
+                    opt in ["dilation", "erosion"] 
+                    and (
+                        (not isinstance(value, int) and not isinstance(value, list)) 
+                        or (isinstance(value, int) and value < 1)
+                        or (isinstance(value, list) and len(value) != dim_count)
+                        )
+                ):
+                    raise ValueError(
+                        "'TEST.POST_PROCESSING.INSTANCE_REFINEMENT.VALUES' for 'dilation' and 'erosion' operations need to be an integer greater than 0 or a list of {} integers greater than 0".format(dim_count)
+                    )
+                if opt in ["remove_small_objects", "remove_big_objects"] and (not isinstance(value, int) or value < 1):
+                    raise ValueError(
+                        "'TEST.POST_PROCESSING.INSTANCE_REFINEMENT.VALUES' for 'remove_small_objects' and 'remove_big_objects' operations need to be an integer greater than 0"
+                    )
+                if opt in ["fill_holes", "clear_border"] and value != "none":
+                    raise ValueError(
+                        "'TEST.POST_PROCESSING.INSTANCE_REFINEMENT.VALUES' for 'fill_holes' and 'clear_border' operations need to be set to 'none'"
+                    )
+
+
         if cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK:
             if not any([x for x in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS if x in ["F", "B", "C", "M"]]):
                 raise ValueError(
@@ -2865,6 +2900,23 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict):
                     old_cfg["TEST"]["POST_PROCESSING"]["DET_WATERSHED_FIRST_DILATION"] = old_cfg["TEST"][
                         "POST_PROCESSING"
                     ]["DET_WATERSHED_FIRST_DILATION"][0]
+
+            if "INSTANCE_REFINEMENT" not in old_cfg["TEST"]["POST_PROCESSING"]:
+                old_cfg["TEST"]["POST_PROCESSING"]["INSTANCE_REFINEMENT"] = {}
+                old_cfg["TEST"]["POST_PROCESSING"]["INSTANCE_REFINEMENT"]["ENABLE"] = False
+                old_cfg["TEST"]["POST_PROCESSING"]["INSTANCE_REFINEMENT"]["OPERATIONS"] = []
+                old_cfg["TEST"]["POST_PROCESSING"]["INSTANCE_REFINEMENT"]["VALUES"] = []
+                
+            if "CLEAR_BORDER" in old_cfg["TEST"]["POST_PROCESSING"]:
+                old_cfg["TEST"]["POST_PROCESSING"]["INSTANCE_REFINEMENT"]["ENABLE"] = True
+                old_cfg["TEST"]["POST_PROCESSING"]["INSTANCE_REFINEMENT"]["OPERATIONS"].append("clear_border")
+                old_cfg["TEST"]["POST_PROCESSING"]["INSTANCE_REFINEMENT"]["VALUES"].append('none')
+                del old_cfg["TEST"]["POST_PROCESSING"]["CLEAR_BORDER"]
+            if "FILL_HOLES" in old_cfg["TEST"]["POST_PROCESSING"]:
+                old_cfg["TEST"]["POST_PROCESSING"]["INSTANCE_REFINEMENT"]["ENABLE"] = True
+                old_cfg["TEST"]["POST_PROCESSING"]["INSTANCE_REFINEMENT"]["OPERATIONS"].append("fill_holes")
+                old_cfg["TEST"]["POST_PROCESSING"]["INSTANCE_REFINEMENT"]["VALUES"].append('none')
+                del old_cfg["TEST"]["POST_PROCESSING"]["FILL_HOLES"]
 
         if "BY_CHUNKS" in old_cfg["TEST"]:
             for i, x in enumerate(old_cfg["TEST"]["BY_CHUNKS"].copy()):
