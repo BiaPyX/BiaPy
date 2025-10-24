@@ -159,7 +159,6 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             or self.cfg.TEST.POST_PROCESSING.INSTANCE_REFINEMENT.ENABLE
             or self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.ENABLE
             or self.cfg.TEST.POST_PROCESSING.REPARE_LARGE_BLOBS_SIZE != -1
-            or self.cfg.TEST.POST_PROCESSING.FILL_HOLES
         ):
             self.post_processing["instance_post"] = True
         else:
