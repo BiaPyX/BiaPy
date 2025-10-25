@@ -1300,7 +1300,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     _assert_int(val, "dilation", ctx, min_val=0)
 
                 elif key == "P":  # central part
-                    _assert_int(val, "dilation", ctx, min_val=0)
+                    if isinstance(val["dilation"], list):
+                        _assert_list(val, "dilation", ctx, length=dim_count)
+                    else:
+                        _assert_int(val, "dilation", ctx, min_val=0)
                     _assert_optional_str_in(val, "type", {"centroid", "skeleton"}, ctx)
 
                 elif key == "C":  # contours
@@ -2693,11 +2696,10 @@ def _assert_int(d, k, ctx, *, min_val=None):
     if min_val is not None:
         assert d[k] >= min_val, f"'{ctx}' '{k}' must be >= {min_val}"
 
-def _assert_float(d, k, ctx, *, min_val=None):  
+def _assert_list(d, k, ctx, length=2):
     assert k in d, f"'{ctx}' must have '{k}' key"
-    assert isinstance(d[k], float), f"'{ctx}' '{k}' must be a float"
-    if min_val is not None:
-        assert d[k] >= min_val, f"'{ctx}' '{k}' must be >= {min_val}"
+    assert isinstance(d[k], list), f"'{ctx}' '{k}' must be a list"
+    assert len(d[k]) == length, f"'{ctx}' '{k}' must have length {length}"
 
 def _assert_str_in(d, k, allowed, ctx):
     assert k in d, f"'{ctx}' must have '{k}' key"

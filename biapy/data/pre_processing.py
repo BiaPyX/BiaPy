@@ -12,7 +12,7 @@ from tqdm import tqdm
 import pandas as pd
 from skimage.segmentation import clear_border, find_boundaries, watershed
 from scipy.ndimage import generic_filter, generate_binary_structure, grey_closing, center_of_mass, map_coordinates, binary_dilation as binary_dilation_scipy
-from skimage.morphology import disk, binary_dilation, binary_erosion, skeletonize
+from skimage.morphology import disk, ball, binary_dilation, binary_erosion, skeletonize
 from skimage.measure import label, regionprops_table
 from skimage.transform import resize
 from skimage.feature import canny
@@ -461,7 +461,7 @@ def labels_into_channels(
     if "P" in mode:
         p_opts = channel_extra_opts.get("P", {})
         p_type = p_opts.get("type", "centroid")
-        p_dil  = int(p_opts.get("dilation", 0))
+        p_dil  = p_opts.get("dilation", 1)
 
         p_out = np.zeros_like(fg_mask, dtype=np.uint8)
         if p_type == "skeleton":
@@ -486,12 +486,8 @@ def labels_into_channels(
 
         # Optional dilation (in pixels / voxels)
         if p_dil > 0:
-            selem = disk(p_dil)
-            if p_out.ndim == 2:    
-                p_out = binary_dilation(p_out, footprint=selem).astype(np.uint8)
-            elif p_out.ndim == 3:
-                for j in range(p_out.shape[0]):
-                    p_out[j] = binary_dilation(p_out[j], footprint=selem).astype(np.uint8)
+            selem = disk(p_dil) if p_out.ndim == 2 else ball(p_dil)
+            p_out = binary_dilation(p_out, footprint=selem).astype(np.uint8)
 
         # Write the channel
         new_mask[..., mode.index("P")] = p_out
