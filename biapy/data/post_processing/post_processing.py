@@ -2429,17 +2429,15 @@ def apply_label_refinement(
     NDArray
         Refined label image.
     """
+    if not is_3d:
+        lbl_img = lbl_img[0]
     for opt in operations:
         if opt == "fill_holes":
             print("Filling holes . . .")
             lbl_img = fill_label_holes(lbl_img)
         elif opt == "clear_border":
             print("Clearing borders . . .")
-            if not is_3d:
-                lbl_img = lbl_img[0]
             lbl_img = clear_border(lbl_img)
-            if not is_3d:
-                lbl_img = np.expand_dims(lbl_img, 0)
         elif opt == "erosion":
             print("Applying erosion . . .")
             selem_size = values[operations.index(opt)]
@@ -2458,6 +2456,8 @@ def apply_label_refinement(
             lbl_img = lbl_img * (remove_small_objects(lbl_img, min_size=min_size) == 0)
         else:
             raise ValueError("Label refinement operation '{}' not recognized".format(opt))
+    if not is_3d:
+        lbl_img = np.expand_dims(lbl_img, 0)
     return lbl_img
 
 
