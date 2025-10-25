@@ -501,7 +501,7 @@ class Image_to_Image_Workflow(Base_Workflow):
             save_tif(
                 pred,
                 self.cfg.PATHS.RESULT_DIR.PER_IMAGE,
-                [self.current_sample["filename"]],
+                [self.current_sample["X_filename"]],
                 verbose=self.cfg.TEST.VERBOSE,
             )
 

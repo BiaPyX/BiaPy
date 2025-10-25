@@ -279,7 +279,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
             save_tif(
                 masks,
                 self.cfg.PATHS.RESULT_DIR.FULL_IMAGE,
-                [self.current_sample["filename"]],
+                [self.current_sample["X_filename"]],
                 verbose=self.cfg.TEST.VERBOSE,
             )
 
@@ -393,7 +393,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         save_tif(
             pred,
             self.cfg.PATHS.RESULT_DIR.PER_IMAGE_BIN,
-            [self.current_sample["filename"]],
+            [self.current_sample["X_filename"]],
             verbose=self.cfg.TEST.VERBOSE,
         )
 
@@ -410,7 +410,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         save_tif(
             (pred > 0.5).astype(np.uint8),
             self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_BIN,
-            [self.current_sample["filename"]],
+            [self.current_sample["X_filename"]],
             verbose=self.cfg.TEST.VERBOSE,
         )
 

@@ -137,7 +137,7 @@ class test_pair_data_generator(Dataset):
                 Y.sample_list = new_sample_list.copy()
         self.len = len(X.sample_list)
 
-        img, mask, _, sample_extra_info, _ = self.load_sample(0, first_load=True)
+        img, mask, _, _, sample_extra_info, _ = self.load_sample(0, first_load=True)
         if "img_file_to_close" in sample_extra_info and isinstance(sample_extra_info["img_file_to_close"], h5py.File):
             sample_extra_info["img_file_to_close"].close()
         if "mask_file_to_close" in sample_extra_info and isinstance(sample_extra_info["mask_file_to_close"], h5py.File):
@@ -152,7 +152,7 @@ class test_pair_data_generator(Dataset):
         self,
         idx: int,
         first_load: bool = False,
-    ) -> Tuple[NDArray, NDArray | None, DataSample, Dict, Dict | None]:
+    ) -> Tuple[NDArray, Optional[NDArray], DataSample, Optional[DataSample], Dict[str, Any], Optional[Dict[str, Any]]]:
         """
         Load one data sample given its corresponding index.
 
@@ -192,6 +192,7 @@ class test_pair_data_generator(Dataset):
             Normalization extra information useful to undo the normalization after.
         """
         mask = None
+        msample = None
         norm_extra_info = None
         sample = self.X.sample_list[idx]
         sample_extra_info = {}
@@ -311,7 +312,7 @@ class test_pair_data_generator(Dataset):
                     "Please, check the channels of the images!".format(self.data_shape[-1], img.shape[-1])
                 )
                 
-        return img, mask, sample, sample_extra_info, norm_extra_info
+        return img, mask, sample, msample, sample_extra_info, norm_extra_info
 
     def __len__(self) -> int:
         """Defines the length of the generator"""
@@ -333,8 +334,10 @@ class test_pair_data_generator(Dataset):
             * ``"X"``, ndarray: X data. It is a ndarrray of  ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
             * ``"X_norm"``, dict: X element normalization steps.
             * ``"Y"``, ndarray: Y data. It is a ndarrray of  ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
-            * ``"filename"``, str: name of the image to extract the data sample from.
-            * ``"dir"``, str: directory where the image resides.
+            * ``"X_filename"``, str: name of the image to extract the data sample from.
+            * ``"X_dir"``, str: directory where the image resides.
+            * ``"Y_filename"``, str: name of the mask to extract the data sample from.
+            * ``"Y_dir"``, str: directory where the mask resides.
             * ``"gt_associated_id"``, int (optional): position of associated ground truth of the sample within its list. Present if the
               user selected ``PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER`` to be ``True``.
             * ``"discard"``, bool (optional): whether the sample should be discarded or not. Present if ``filter_props``,``filter_vals`` and
@@ -344,7 +347,7 @@ class test_pair_data_generator(Dataset):
             * ``"img_file_to_close"``, h5py.File (optional): file of the image to close. Present if the loaded file is H5.
             * ``"mask_file_to_close"``, h5py.File (optional): file of the image to close. Present if the loaded file is H5.
         """
-        img, mask, sample, sample_extra_info, norm_extra_info = self.load_sample(index)
+        img, mask, sample, msample, sample_extra_info, norm_extra_info = self.load_sample(index)
 
         if isinstance(img, np.ndarray):
             img.flags.writeable = False
@@ -353,14 +356,17 @@ class test_pair_data_generator(Dataset):
             "X": img,
             "X_norm": norm_extra_info,
         }
-        if self.provide_Y and mask is not None:
+        if self.provide_Y and mask is not None and msample is not None:
             if isinstance(mask, np.ndarray):
                 mask.flags.writeable = False
             test_sample["Y"] = mask
+            path = self.Y.dataset_info[msample.fid].path
+            test_sample["Y_filename"] = os.path.basename(path)
+            test_sample["Y_dir"] = os.path.dirname(path)
 
         path = self.X.dataset_info[sample.fid].path
-        test_sample["filename"] = os.path.basename(path)
-        test_sample["dir"] = os.path.dirname(path)
+        test_sample["X_filename"] = os.path.basename(path)
+        test_sample["X_dir"] = os.path.dirname(path)
         test_sample.update(sample_extra_info)
 
         return test_sample

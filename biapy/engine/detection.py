@@ -411,7 +411,7 @@ class Detection_Workflow(Base_Workflow):
 
         # Create a file with detected point and other image with predictions ids (if GT given)
         if not self.cfg.TEST.BY_CHUNKS.ENABLE:
-            file_ext = os.path.splitext(self.current_sample["filename"])[1]
+            file_ext = os.path.splitext(self.current_sample["X_filename"])[1]
             if self.cfg.TEST.VERBOSE:
                 print("Creating the images with detected points . . .")
             points_pred_mask = np.zeros(pred.shape[:-1], dtype=np.uint8)
@@ -445,7 +445,7 @@ class Detection_Workflow(Base_Workflow):
                     write_chunked_data(
                         np.expand_dims(points_pred_mask, 0),
                         out_dir,
-                        self.current_sample["filename"],
+                        self.current_sample["X_filename"],
                         dtype_str="uint8",
                         verbose=self.cfg.TEST.VERBOSE,
                     )
@@ -453,7 +453,7 @@ class Detection_Workflow(Base_Workflow):
                     save_tif(
                         np.expand_dims(points_pred_mask, 0),
                         out_dir,
-                        [self.current_sample["filename"]],
+                        [self.current_sample["X_filename"]],
                         verbose=self.cfg.TEST.VERBOSE,
                     )
 
@@ -464,8 +464,8 @@ class Detection_Workflow(Base_Workflow):
 
             # Detection watershed
             if self.cfg.TEST.POST_PROCESSING.DET_WATERSHED:
-                data_filename = os.path.join(self.cfg.DATA.TEST.PATH, self.current_sample["filename"])
-                w_dir = os.path.join(self.cfg.PATHS.WATERSHED_DIR, self.current_sample["filename"])
+                data_filename = os.path.join(self.cfg.DATA.TEST.PATH, self.current_sample["X_filename"])
+                w_dir = os.path.join(self.cfg.PATHS.WATERSHED_DIR, self.current_sample["X_filename"])
                 check_wa = w_dir if self.cfg.PROBLEM.DETECTION.DATA_CHECK_MW else None
                 assert isinstance(pred_points, list)
                 points_pred_mask = detection_watershed(
@@ -493,7 +493,7 @@ class Detection_Workflow(Base_Workflow):
                     write_chunked_data(
                         np.expand_dims(np.expand_dims(points_pred_mask, -1), 0),
                         self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
-                        self.current_sample["filename"],
+                        self.current_sample["X_filename"],
                         dtype_str="uint8",
                         verbose=self.cfg.TEST.VERBOSE,
                     )
@@ -501,7 +501,7 @@ class Detection_Workflow(Base_Workflow):
                     save_tif(
                         np.expand_dims(np.expand_dims(points_pred_mask, 0), -1),
                         self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,
-                        [self.current_sample["filename"]],
+                        [self.current_sample["X_filename"]],
                         verbose=self.cfg.TEST.VERBOSE,
                     )
             del points_pred_mask
@@ -624,7 +624,7 @@ class Detection_Workflow(Base_Workflow):
                 df.to_csv(
                     os.path.join(
                         out_dir,
-                        os.path.splitext(self.current_sample["filename"])[0] + "_points.csv",
+                        os.path.splitext(self.current_sample["X_filename"])[0] + "_points.csv",
                     ),
                     index=False,
                 )
@@ -637,7 +637,7 @@ class Detection_Workflow(Base_Workflow):
 
             # Read the GT coordinates from the CSV file
             csv_filename = os.path.join(
-                self.original_test_mask_path, os.path.splitext(self.current_sample["filename"])[0] + ".csv"
+                self.original_test_mask_path, os.path.splitext(self.current_sample["X_filename"])[0] + ".csv"
             )
             if not os.path.exists(csv_filename):
                 if self.cfg.TEST.VERBOSE:
@@ -778,7 +778,7 @@ class Detection_Workflow(Base_Workflow):
                     gt_assoc.to_csv(
                         os.path.join(
                             self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
-                            os.path.splitext(self.current_sample["filename"])[0] + "_gt_assoc.csv",
+                            os.path.splitext(self.current_sample["X_filename"])[0] + "_gt_assoc.csv",
                         ),
                         index=False,
                     )
@@ -787,7 +787,7 @@ class Detection_Workflow(Base_Workflow):
                     fp.to_csv(
                         os.path.join(
                             self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
-                            os.path.splitext(self.current_sample["filename"])[0] + "_fp.csv",
+                            os.path.splitext(self.current_sample["X_filename"])[0] + "_fp.csv",
                         ),
                         index=False,
                     )
@@ -837,7 +837,7 @@ class Detection_Workflow(Base_Workflow):
                     write_chunked_data(
                         np.expand_dims(np.expand_dims(gt_id_img, -1), 0),
                         self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
-                        os.path.splitext(self.current_sample["filename"])[0] + "_gt_ids" + file_ext,
+                        os.path.splitext(self.current_sample["X_filename"])[0] + "_gt_ids" + file_ext,
                         dtype_str="uint32",
                         verbose=self.cfg.TEST.VERBOSE,
                     )
@@ -845,7 +845,7 @@ class Detection_Workflow(Base_Workflow):
                     save_tif(
                         np.expand_dims(np.expand_dims(gt_id_img, 0), -1),
                         self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
-                        [os.path.splitext(self.current_sample["filename"])[0] + "_gt_ids" + file_ext],
+                        [os.path.splitext(self.current_sample["X_filename"])[0] + "_gt_ids" + file_ext],
                         verbose=self.cfg.TEST.VERBOSE,
                     )
 
@@ -868,7 +868,7 @@ class Detection_Workflow(Base_Workflow):
                     write_chunked_data(
                         np.expand_dims(points_pred_mask_color, 0),
                         self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
-                        self.current_sample["filename"],
+                        self.current_sample["X_filename"],
                         dtype_str="uint8",
                         verbose=self.cfg.TEST.VERBOSE,
                     )
@@ -876,7 +876,7 @@ class Detection_Workflow(Base_Workflow):
                     save_tif(
                         np.expand_dims(points_pred_mask_color, 0),
                         self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
-                        [self.current_sample["filename"]],
+                        [self.current_sample["X_filename"]],
                         verbose=self.cfg.TEST.VERBOSE,
                     )
 
@@ -947,7 +947,7 @@ class Detection_Workflow(Base_Workflow):
                 else self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK
             )
             os.makedirs(output_dir, exist_ok=True)
-            _filename, _ = os.path.splitext(os.path.basename(self.current_sample["filename"]))
+            _filename, _ = os.path.splitext(os.path.basename(self.current_sample["X_filename"]))
             df_patch.to_csv(
                 os.path.join(
                     output_dir,
@@ -959,7 +959,7 @@ class Detection_Workflow(Base_Workflow):
     def after_all_patch_prediction_by_chunks(self):
         """Excute stepes needed after predicting all the patches, one by one, in the "by chunks" setting."""
         assert isinstance(self.all_pred, list)
-        filename, _ = os.path.splitext(self.current_sample["filename"])
+        filename, _ = os.path.splitext(self.current_sample["X_filename"])
         input_dir = (
             self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING
             if self.post_processing["detection_post"]
@@ -1169,7 +1169,7 @@ class Detection_Workflow(Base_Workflow):
             Image prediction.
         """
         assert self.model and self.torchvision_preprocessing
-        filename, file_extension = os.path.splitext(self.current_sample["filename"])
+        filename, file_extension = os.path.splitext(self.current_sample["X_filename"])
 
         # Convert first to 0-255 range if uint16
         if in_img.dtype == torch.float32:

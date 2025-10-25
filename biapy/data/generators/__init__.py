@@ -490,7 +490,11 @@ def create_test_generator(
 
     # Save a sample to export the model to BMZ
     bmz_input_sample = None
-    bmz_input_sample, mask_sample, _, _, _ = test_generator.load_sample(0, first_load=True)
+    if gen_name == test_single_data_generator:
+        bmz_input_sample, _ , _, _, _ = test_generator.load_sample(0, first_load=True) # type: ignore
+        mask_sample = None
+    else:
+        bmz_input_sample, mask_sample, _, _, _, _ = test_generator.load_sample(0, first_load=True) # type: ignore
     bmz_input_sample, cover_raw, cover_gt = extract_BMZ_sample_and_cover(
         img=bmz_input_sample[0] if isinstance(bmz_input_sample, np.ndarray) else bmz_input_sample,
         img_gt=mask_sample[0] if isinstance(mask_sample, np.ndarray) else mask_sample,

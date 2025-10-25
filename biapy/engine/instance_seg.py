@@ -1249,7 +1249,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             resolution_path = self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_RESOLUTION_PATH
             partners_path = self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_PARTNERS_PATH
             id_path = self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_ID_PATH
-            filename = os.path.join(self.current_sample["dir"], self.current_sample["filename"])
+            filename = os.path.join(self.current_sample["dir"], self.current_sample["X_filename"])
             file, ids = read_chunked_nested_data(filename, id_path)
             ids = list(np.array(ids))
             _, partners = read_chunked_nested_data(filename, partners_path)
@@ -1498,7 +1498,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 if self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
                     r, r_post, rcls, rcls_post = self.instance_seg_process(
                         pred,
-                        [self.current_sample["filename"]],
+                        [self.current_sample["X_filename"]],
                         self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
                         self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,
                     )
@@ -1525,7 +1525,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 else:  # synapses
                     self.synapse_seg_process(
                         pred,
-                        [self.current_sample["filename"]],
+                        [self.current_sample["X_filename"]],
                         self.cfg.PATHS.RESULT_DIR.PER_IMAGE_INSTANCES,
                         self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,
                     )
@@ -1560,7 +1560,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         else:  # synapses
             pre_points_df, post_points_df = self.synapse_seg_process(patch, calculate_metrics=False)
 
-            _filename, _ = os.path.splitext(os.path.basename(self.current_sample["filename"]))
+            _filename, _ = os.path.splitext(os.path.basename(self.current_sample["X_filename"]))
             if pre_points_df is not None and len(pre_points_df) > 0:
                 # Remove possible points in the padded area
                 pre_points_df = pre_points_df[pre_points_df["axis-0"] < patch.shape[0] - added_pad[0][1]]
@@ -1626,7 +1626,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             else:
                 # Load H5/Zarr and convert it into numpy array
                 fpath = os.path.join(
-                    self.cfg.PATHS.RESULT_DIR.PER_IMAGE, os.path.splitext(self.current_sample["filename"])[0] + ".zarr"
+                    self.cfg.PATHS.RESULT_DIR.PER_IMAGE, os.path.splitext(self.current_sample["X_filename"])[0] + ".zarr"
                 )
                 pred_file, pred = read_chunked_data(fpath)
                 pred = np.squeeze(np.array(pred, dtype=self.dtype))
@@ -1638,7 +1638,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 self.after_merge_patches(np.expand_dims(pred, 0))
         else:
             # In this case we need only to merge all local points so it will be done by the main thread. The rest will wait
-            filename = os.path.splitext(self.current_sample["filename"])[0]
+            filename = os.path.splitext(self.current_sample["X_filename"])[0]
             pre_points_df, post_points_df, pre_post_map_df = None, None, None
             if not self.cfg.TEST.REUSE_PREDICTIONS:
                 # For synapses we need to map the pre to the post points. It needs to be done here and not patch by patch as
@@ -1827,7 +1827,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 resolution_path = self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_RESOLUTION_PATH
                 partners_path = self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_PARTNERS_PATH
                 id_path = self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_ID_PATH
-                data_filename = os.path.join(self.current_sample["dir"], self.current_sample["filename"])
+                data_filename = os.path.join(self.current_sample["dir"], self.current_sample["X_filename"])
                 file, ids = read_chunked_nested_data(data_filename, id_path)
                 ids = list(np.array(ids))
                 _, partners = read_chunked_nested_data(data_filename, partners_path)
@@ -1942,7 +1942,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     if self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_POINTS_RADIUS_BY_MASK:    
                         # Load H5/Zarr and convert it into numpy array
                         fpath = os.path.join(
-                            self.cfg.PATHS.RESULT_DIR.PER_IMAGE, os.path.splitext(self.current_sample["filename"])[0] + ".zarr"
+                            self.cfg.PATHS.RESULT_DIR.PER_IMAGE, os.path.splitext(self.current_sample["X_filename"])[0] + ".zarr"
                         )
                         pred_file, pred = read_chunked_data(fpath) 
                         
@@ -1985,7 +1985,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     if self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_POINTS_RADIUS_BY_MASK:    
                         # Load H5/Zarr and convert it into numpy array
                         fpath = os.path.join(
-                            self.cfg.PATHS.RESULT_DIR.PER_IMAGE, os.path.splitext(self.current_sample["filename"])[0] + ".zarr"
+                            self.cfg.PATHS.RESULT_DIR.PER_IMAGE, os.path.splitext(self.current_sample["X_filename"])[0] + ".zarr"
                         )
                         pred_file, pred = read_chunked_data(fpath) 
                         
@@ -2308,7 +2308,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 if self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
                     r, r_post, rcls, rcls_post = self.instance_seg_process(
                         pred,
-                        [self.current_sample["filename"]],
+                        [self.current_sample["X_filename"]],
                         self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_INSTANCES,
                         self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_POST_PROCESSING,
                     )
@@ -2323,7 +2323,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 else:  # synapses
                     self.synapse_seg_process(
                         pred,
-                        [self.current_sample["filename"]],
+                        [self.current_sample["X_filename"]],
                         self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_INSTANCES,
                         self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_POST_PROCESSING,
                     )
@@ -2670,7 +2670,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             Image prediction.
         """
         assert self.torchvision_preprocessing and self.model
-        filename, file_extension = os.path.splitext(self.current_sample["filename"])
+        filename, file_extension = os.path.splitext(self.current_sample["X_filename"])
 
         # Convert first to 0-255 range if uint16
         if in_img.dtype == torch.float32:
@@ -2718,7 +2718,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             save_tif(
                 np.expand_dims(masks, 0),
                 self.cfg.PATHS.RESULT_DIR.FULL_IMAGE,
-                [self.current_sample["filename"]],
+                [self.current_sample["X_filename"]],
                 verbose=self.cfg.TEST.VERBOSE,
             )
 

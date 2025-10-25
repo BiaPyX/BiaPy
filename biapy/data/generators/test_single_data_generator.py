@@ -261,8 +261,8 @@ class test_single_data_generator(Dataset):
             * ``"X"``, ndarray: X data. It is a ndarray of  ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
             * ``"X_norm"``, dict: X element normalization steps.
             * ``"Y"``, ndarray: Y data. It is a ndarray of  ``(y, x, channels)`` in ``2D`` and ``(z, y, x, channels)`` in ``3D``.
-            * ``"filename"``: name of the image to extract the data sample from.
-            * ``"dir"``, str: directory where the image resides.
+            * ``"X_filename"``: name of the image to extract the data sample from.
+            * ``"X_dir"``, str: directory where the image resides.
             * ``"discard"``, bool (optional): whether the sample should be discarded or not. Present if ``filter_props``,``filter_vals``
               and ``filter_signs`` were provided.
             * ``"reflected_orig_shape"``, tuple of int (optional): original shape of the image before reflecting. Present if ``reflect_to_complete_shape``
@@ -279,8 +279,8 @@ class test_single_data_generator(Dataset):
         test_sample = {
             "X": img,
             "X_norm": norm_extra_info,
-            "filename": os.path.basename(path),
-            "dir": os.path.dirname(path),
+            "X_filename": os.path.basename(path),
+            "X_dir": os.path.dirname(path),
         }
         test_sample.update(sample_extra_info)
         if self.provide_Y:

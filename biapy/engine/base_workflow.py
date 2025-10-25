@@ -1225,14 +1225,14 @@ class Base_Workflow(metaclass=ABCMeta):
 
         # Process all the images
         for i, self.current_sample in enumerate(self.test_generator):  # type: ignore
-            self.current_sample_metrics = {"file": self.current_sample["filename"]}
+            self.current_sample_metrics = {"file": self.current_sample["X_filename"]}
             self.f_numbers = [i]
             if "Y" not in self.current_sample:
                 self.current_sample["Y"] = None
 
             # Decide whether to infer by chunks or not
             discarded = False
-            _, file_extension = os.path.splitext(self.current_sample["filename"])
+            _, file_extension = os.path.splitext(self.current_sample["X_filename"])
             if self.cfg.TEST.BY_CHUNKS.ENABLE and self.cfg.PROBLEM.NDIM == "3D":
                 by_chunks = True
                 if file_extension not in [".hdf5", ".hdf", ".h5", ".zarr", ".n5"]:
@@ -1246,20 +1246,20 @@ class Base_Workflow(metaclass=ABCMeta):
             if by_chunks:
                 print(
                     "[Rank {} ({})] Processing image (by chunks): {}".format(
-                        get_rank(), os.getpid(), self.current_sample["filename"]
+                        get_rank(), os.getpid(), self.current_sample["X_filename"]
                     )
                 )
                 self.process_test_sample_by_chunks()
             else:
                 if is_main_process():
                     if self.cfg.PROBLEM.TYPE != "CLASSIFICATION":
-                        print("Processing image: {}".format(self.current_sample["filename"]))
+                        print("Processing image: {}".format(self.current_sample["X_filename"]))
                     discarded = self.process_test_sample()
 
             # If process_test_sample() returns True means that the sample was skipped due to filter set
             # up with: DATA.TEST.FILTER_SAMPLES
             if discarded:
-                print(" Skipping image: {}".format(self.current_sample["filename"]))
+                print(" Skipping image: {}".format(self.current_sample["X_filename"]))
             else:
                 image_counter += 1
 
@@ -1677,8 +1677,10 @@ class Base_Workflow(metaclass=ABCMeta):
                         and self.current_sample["X"].shape[:-1] != self.current_sample["Y"].shape[:-1]
                     ):
                         raise ValueError(
-                            "Image {} and mask {} differ in shape (without considering the channels, i.e. last dimension)".format(
-                                self.current_sample["X"].shape, self.current_sample["Y"].shape
+                                "Image {} ({}) and mask {} ({}) differ in shape (without considering the channels, i.e. last dimension). "
+                                "Please check the images.".format(
+                                    self.current_sample["X"].shape, self.current_sample['X_filename'], 
+                                    self.current_sample["Y"].shape, self.current_sample['Y_filename']
                             )
                         )
 
@@ -1857,7 +1859,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     save_tif(
                         pred,
                         self.cfg.PATHS.RESULT_DIR.PER_IMAGE,
-                        [self.current_sample["filename"]],
+                        [self.current_sample["X_filename"]],
                         verbose=self.cfg.TEST.VERBOSE,
                     )
 
@@ -1894,7 +1896,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     save_tif(
                         pred,
                         self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,
-                        [self.current_sample["filename"]],
+                        [self.current_sample["X_filename"]],
                         verbose=self.cfg.TEST.VERBOSE,
                     )
             else:
@@ -1905,7 +1907,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     else self.cfg.PATHS.RESULT_DIR.PER_IMAGE
                 )
                 # read file created by 'save_tif' (it always has .tif extension)
-                test_file = os.path.join(folder, os.path.splitext(self.current_sample["filename"])[0]+'.tif')
+                test_file = os.path.join(folder, os.path.splitext(self.current_sample["X_filename"])[0]+'.tif')
                 pred = read_img_as_ndarray(test_file, is_3d=self.cfg.PROBLEM.NDIM == "3D")
                 pred = np.expand_dims(pred, 0)  # expand dimensions to include "batch"
 
@@ -1971,7 +1973,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 save_tif(
                     pred,
                     self.cfg.PATHS.RESULT_DIR.FULL_IMAGE,
-                    [self.current_sample["filename"]],
+                    [self.current_sample["X_filename"]],
                     verbose=self.cfg.TEST.VERBOSE,
                 )
 
@@ -1986,7 +1988,7 @@ class Base_Workflow(metaclass=ABCMeta):
             else:
                 # load prediction from file
                 # read file created by 'save_tif' (it always has .tif extension)
-                test_file = os.path.join(self.cfg.PATHS.RESULT_DIR.FULL_IMAGE, os.path.splitext(self.current_sample["filename"])[0]+'.tif')
+                test_file = os.path.join(self.cfg.PATHS.RESULT_DIR.FULL_IMAGE, os.path.splitext(self.current_sample["X_filename"])[0]+'.tif')
                 pred = read_img_as_ndarray(test_file, is_3d=self.cfg.PROBLEM.NDIM == "3D")
                 pred = np.expand_dims(pred, 0)  # expand dimensions to include "batch"
 

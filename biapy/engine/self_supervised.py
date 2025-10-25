@@ -610,11 +610,11 @@ class Self_supervised_Workflow(Base_Workflow):
 
         # Save image
         if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
-            fname, fext = os.path.splitext(self.current_sample["filename"])
+            fname, fext = os.path.splitext(self.current_sample["X_filename"])
             save_tif(
                 pred,
                 self.cfg.PATHS.RESULT_DIR.PER_IMAGE,
-                [self.current_sample["filename"]],
+                [self.current_sample["X_filename"]],
                 verbose=self.cfg.TEST.VERBOSE,
             )
             if self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
