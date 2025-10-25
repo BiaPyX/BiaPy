@@ -89,7 +89,7 @@ class Detection_Workflow(Base_Workflow):
         self.original_test_mask_path = self.prepare_detection_data()
 
         if self.use_gt:
-            self.csv_files = sorted(next(os_walk_clean(self.original_test_mask_path))[2])
+            self.csv_files = next(os_walk_clean(self.original_test_mask_path))[2]
 
         # From now on, no modification of the cfg will be allowed
         self.cfg.freeze()
@@ -966,7 +966,7 @@ class Detection_Workflow(Base_Workflow):
             else self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK
         )
         try:
-            all_pred_files = sorted(next(os_walk_clean(input_dir))[2])
+            all_pred_files = next(os_walk_clean(input_dir))[2]
         except:
             all_pred_files = []
         all_pred_files = [x for x in all_pred_files if filename + "_patch" in x]

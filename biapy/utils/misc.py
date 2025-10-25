@@ -18,6 +18,7 @@ The module aims to streamline common deep learning operations, especially
 in distributed and large-scale training scenarios.
 """
 import os
+import re
 import sys
 import builtins
 import time
@@ -36,12 +37,11 @@ import collections.abc
 import gc
 from typing import (
     Tuple,
-    Literal,
-    Dict,
+    List,
+    Iterator,
 )
 from numpy.typing import NDArray
 
-# from torch._six import inf
 from torch import inf
 from datetime import timedelta
 
@@ -990,31 +990,41 @@ def update_dict_with_existing_keys(d, u, not_recognized_keys=[], not_recognized_
 
     return d, not_recognized_keys, not_recognized_key_vals
 
-def os_walk_clean(path, exclude_files=["Thumbs.db", "desktop.ini", ".DS_Store"], exclude_dirs=[".git", "__pycache__"]):
+def os_walk_clean(
+    path: str,
+    exclude_files: Tuple = ("Thumbs.db", "desktop.ini", ".DS_Store"),
+    exclude_dirs: Tuple = (".git", "__pycache__")
+) -> Iterator[Tuple[str, List[str], List[str]]]:
     """
-    Perform a directory walk similar to `os.walk`, but excludes specified files and directories.
-
-    This function is useful for iterating through file systems while
-    ignoring common system files or version control directories.
-
+    Clean os.walk + robust natural sorting (numeric-aware).
+    
     Parameters
     ----------
     path : str
-        The root directory from which to start the walk.
-    exclude_files : List[str], optional
-        A list of filenames to exclude from the output. Files starting with '.'
-        are also excluded by default. Defaults to common system files.
-    exclude_dirs : List[str], optional
-        A list of directory names to exclude from the walk. Directories starting with '.'
-        are also excluded by default. Defaults to common version control/cache dirs.
-
+        The root directory to walk.
+    exclude_files : tuple, optional
+        Filenames to exclude from the results. Defaults to common system files.
+    exclude_dirs : tuple, optional
+        Directory names to exclude from the results. Defaults to common system directories.
     Yields
     ------
-    Tuple[str, List[str], List[str]]
-        A tuple `(root, dirs, files)` for each directory in the tree,
-        similar to `os.walk`, but with excluded items removed.
+    Iterator[Tuple[str, List[str], List[str]]]
+        Yields tuples of (root, dirs, files) with excluded items removed and
+        directories/files sorted in natural order.
     """
+
+    def natural_key(s):
+        # Split filename into chunks of digits and non-digits,
+        # keeping all chunks as strings but zero-pad digits for proper order.
+        parts = re.findall(r'\d+|\D+', s)
+        # Pad numeric chunks so '2' < '10' < '100'
+        return [p.zfill(10) if p.isdigit() else p.lower() for p in parts]
+
     for root, dirs, files in os.walk(path):
-        files = [f for f in files if f not in exclude_files and not f[0] == '.']
-        dirs[:] = [d for d in dirs if d not in exclude_dirs and not d[0] == '.']        
+        dirs[:]  = [d for d in dirs  if d not in exclude_dirs and not d.startswith('.')]
+        files    = [f for f in files if f not in exclude_files and not f.startswith('.')]
+
+        # Safe natural sort
+        dirs.sort(key=natural_key)
+        files.sort(key=natural_key)
         yield root, dirs, files

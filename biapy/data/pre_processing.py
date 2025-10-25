@@ -69,17 +69,17 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
     # Checking if the user inputted Zarr/H5 files
     if getattr(cfg.DATA, tag).INPUT_ZARR_MULTIPLE_DATA:
         try:
-            zarr_files = sorted(next(os_walk_clean(getattr(cfg.DATA, tag).PATH))[1])
+            zarr_files = next(os_walk_clean(getattr(cfg.DATA, tag).PATH))[1]
         except StopIteration:
             raise ValueError("No Zarr/N5 files found in the input path: {}".format(getattr(cfg.DATA, tag).PATH))
         try:
-            h5_files = sorted(next(os_walk_clean(getattr(cfg.DATA, tag).PATH))[2])
+            h5_files = next(os_walk_clean(getattr(cfg.DATA, tag).PATH))[2]
         except StopIteration:
             raise ValueError("No H5 files found in the input path: {}".format(getattr(cfg.DATA, tag).PATH))
     else:
         try:
-            zarr_files = sorted(next(os_walk_clean(getattr(cfg.DATA, tag).GT_PATH))[1])
-            h5_files = sorted(next(os_walk_clean(getattr(cfg.DATA, tag).GT_PATH))[2])
+            zarr_files = next(os_walk_clean(getattr(cfg.DATA, tag).GT_PATH))[1]
+            h5_files = next(os_walk_clean(getattr(cfg.DATA, tag).GT_PATH))[2]
         except StopIteration:
             raise ValueError("No Zarr/N5 or H5 files found in the GT path: {}".format(getattr(cfg.DATA, tag).GT_PATH))
 
@@ -130,7 +130,7 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
     else:
         if cfg.PROBLEM.INSTANCE_SEG.TYPE == "synapses":
             raise ValueError("Synapse detection is only available for 3D Zarr/H5 data")
-        Y = sorted(next(os_walk_clean(getattr(cfg.DATA, tag).GT_PATH))[2])
+        Y = next(os_walk_clean(getattr(cfg.DATA, tag).GT_PATH))[2]
     del zarr_files, h5_files
 
     print("Creating Y_{} channels . . .".format(data_type))
@@ -1790,17 +1790,17 @@ def create_detection_masks(cfg: CN, data_type: str = "train"):
     img_dir = getattr(cfg.DATA, tag).PATH
     label_dir = getattr(cfg.DATA, tag).GT_PATH
     out_dir = getattr(cfg.DATA, tag).DETECTION_MASK_DIR
-    img_ids = sorted(next(os_walk_clean(img_dir))[2])
+    img_ids = next(os_walk_clean(img_dir))[2]
     working_with_chunked_data = False
     if len(img_ids) == 0:
-        img_ids = sorted(next(os_walk_clean(img_dir))[1])
+        img_ids = next(os_walk_clean(img_dir))[1]
         working_with_chunked_data = True
     if len(img_ids) == 0:
         raise ValueError(f"No data found in folder {img_dir}")
     img_ext = "." + img_ids[0].split(".")[-1]
     if working_with_chunked_data and img_ext not in [".n5", ".zarr"]:
         raise ValueError(f"No data found in folder {img_dir}")
-    ids = sorted(next(os_walk_clean(label_dir))[2])
+    ids = next(os_walk_clean(label_dir))[2]
 
     channels = 2 if cfg.DATA.N_CLASSES > 2 else 1
     dtype = np.uint8 if cfg.DATA.N_CLASSES < 255 else np.uint16
@@ -2101,7 +2101,7 @@ def create_ssl_source_data_masks(cfg: CN, data_type: str = "train"):
 
     img_dir = getattr(cfg.DATA, tag).PATH
     out_dir = getattr(cfg.DATA, tag).SSL_SOURCE_DIR
-    ids = sorted(next(os_walk_clean(img_dir))[2])
+    ids = next(os_walk_clean(img_dir))[2]
     add_noise = True if cfg.PROBLEM.SELF_SUPERVISED.NOISE > 0 else False
 
     print("Creating {} SSL source. . .".format(data_type))

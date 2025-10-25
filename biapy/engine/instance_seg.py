@@ -149,9 +149,9 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         self.is_y_mask = True
         self.load_Y_val = True
         if self.cfg.TEST.ENABLE and self.cfg.DATA.TEST.LOAD_GT:
-            self.test_gt_filenames = sorted(next(os_walk_clean(self.original_test_mask_path))[2])
+            self.test_gt_filenames = next(os_walk_clean(self.original_test_mask_path))[2]
             if len(self.test_gt_filenames) == 0:
-                self.test_gt_filenames = sorted(next(os_walk_clean(self.original_test_mask_path))[1])
+                self.test_gt_filenames = next(os_walk_clean(self.original_test_mask_path))[1]
 
         # Specific instance segmentation post-processing
         if (
@@ -1644,7 +1644,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 # For synapses we need to map the pre to the post points. It needs to be done here and not patch by patch as
                 # some pre points may lay in other chunks of the data.
                 input_dir = self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK
-                all_pred_files = sorted(next(os_walk_clean(input_dir))[2])
+                all_pred_files = next(os_walk_clean(input_dir))[2]
                 all_pred_files = [x for x in all_pred_files if filename + "_patch" in x]
                 all_pre_point_files = [x for x in all_pred_files if "_pre_points.csv" in x and "all_points.csv" not in x]
                 all_post_point_files = [x for x in all_pred_files if "_post_points.csv" in x and "all_points.csv" not in x]

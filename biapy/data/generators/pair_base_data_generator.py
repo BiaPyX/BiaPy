@@ -474,7 +474,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.random_crop_func = random_3D_crop_pair if ndim == 3 else random_crop_pair
         if random_crops_in_DA and prob_map is not None:
             if isinstance(prob_map, str):
-                f = sorted(next(os_walk_clean(prob_map))[2])
+                f = next(os_walk_clean(prob_map))[2]
                 self.prob_map = []
                 for i in range(len(f)):
                     self.prob_map.append(os.path.join(prob_map, f[i]))

@@ -1921,7 +1921,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 use_gt = True
                 
             expected_classes = cfg.DATA.N_CLASSES if use_gt else 1
-            list_of_classes = sorted(next(os_walk_clean(cfg.DATA.TEST.PATH))[1])
+            list_of_classes = next(os_walk_clean(cfg.DATA.TEST.PATH))[1]
             if len(list_of_classes) < 1:
                 raise ValueError("There is no folder/class for test in {}".format(cfg.DATA.TEST.PATH))
 

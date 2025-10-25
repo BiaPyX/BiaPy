@@ -2350,7 +2350,7 @@ def apply_binary_mask(
 
     print("Applying binary mask(s) from {}".format(bin_mask_dir))
 
-    ids = sorted(next(os_walk_clean(bin_mask_dir))[2])
+    ids = next(os_walk_clean(bin_mask_dir))[2]
 
     if len(ids) == 1:
         one_file = True
