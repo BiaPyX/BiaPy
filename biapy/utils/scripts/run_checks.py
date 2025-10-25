@@ -66,7 +66,7 @@ all_test_info["Test3"] = {
 all_test_info["Test4"] = {
     "enable": True,
     "jobname": "test4",
-    "description": "2D Instance seg. Stardist 2D data. Basic DA. BC (auto). Replicate 2. resunet++. "
+    "description": "2D Instance seg. Stardist 2D data. Basic DA. BC (auto). resunet++. "
         "Post-proc: Clear border + remove instances by properties",
     "yaml": "test_4.yaml",
     "internal_checks": [
@@ -1390,7 +1390,6 @@ if all_test_info["Test4"]["enable"]:
     biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(instance_seg_2d_data_outpath, "data", "train", "raw")
     biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(instance_seg_2d_data_outpath, "data", "train", "label")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
-    biapy_config['DATA']['TRAIN']['REPLICATE'] = 2
     biapy_config['DATA']['TEST']['PATH'] = os.path.join(instance_seg_2d_data_outpath, "data", "test", "raw")
     biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(instance_seg_2d_data_outpath, "data", "test", "label")
     biapy_config['DATA']['TEST']['IN_MEMORY'] = False
