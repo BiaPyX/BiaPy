@@ -1244,16 +1244,20 @@ class Base_Workflow(metaclass=ABCMeta):
                 by_chunks = False
 
             if by_chunks:
-                print(
-                    "[Rank {} ({})] Processing image (by chunks): {}".format(
-                        get_rank(), os.getpid(), self.current_sample["X_filename"]
-                    )
+                me = "[Rank {} ({})] Processing image (by chunks): {}".format(
+                    get_rank(), os.getpid(), self.current_sample["X_filename"]
                 )
+                if "Y_filename" in self.current_sample:
+                    me += " (GT: {})".format(self.current_sample["Y_filename"])
+                print(me)
                 self.process_test_sample_by_chunks()
             else:
                 if is_main_process():
                     if self.cfg.PROBLEM.TYPE != "CLASSIFICATION":
-                        print("Processing image: {}".format(self.current_sample["X_filename"]))
+                        me = "Processing image: {}".format(self.current_sample["X_filename"])
+                        if "Y_filename" in self.current_sample:
+                            me += " (GT: {})".format(self.current_sample["Y_filename"])
+                        print(me)
                     discarded = self.process_test_sample()
 
             # If process_test_sample() returns True means that the sample was skipped due to filter set
