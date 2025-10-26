@@ -137,14 +137,16 @@ class Config:
         _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS = ["B", "C"]
         # Details for each channel. It must be a list with a unique element: a dict of dicts. The details can be only set for the following channels:
         #   - 'F' channel. Possible options:
-        #       - 'erosion': int, the erosion size to be applied to the channel. Default: 0
-        #       - 'dilation': int, the dilation size to be applied to the channel. Default: 0
+        #       - 'erosion': int or list of ints, the erosion size to be applied to the channel. Default: 0
+        #       - 'dilation': int or list of ints, the dilation size to be applied to the channel. Default: 0
         #   - 'B' channel. Possible options:
-        #       - 'erosion': int, the erosion size to be applied to the channel. Default: 0
-        #       - 'dilation': int, the dilation size to be applied to the channel. Default: 0
+        #       - 'erosion': int or list of ints, the erosion size to be applied to the channel. Default: 0
+        #       - 'dilation': int or list of ints, the dilation size to be applied to the channel. Default: 0
         #   - 'P' channel. Possible options:
         #       - 'type': str, the type of the channel. Options are: 'centroid', 'skeleton'. Default: 'centroid'
-        #       - 'dilation': int, the dilation size to be applied to the channel. Default: 1
+        #       - 'dilation': int or list of ints, the dilation size to be applied to the channel. Default: 1
+        #       - 'erosion': int or list of ints, the erosion size to be applied to the channel. Useful when you want thinner skeletons
+        #          as they are 2-pixel thick. Default: 0
         #   - 'C' channel. Possible options:
         #       - 'mode': str, how to create the contours. Corresponds to 'mode' arg of find_boundaries function from scikit-image. 
         #          More info in: https://scikit-image.org/docs/stable/api/skimage.segmentation.html#skimage.segmentation.find_boundaries.

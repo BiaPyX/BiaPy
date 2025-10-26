@@ -423,38 +423,33 @@ def labels_into_channels(
     # ---------- Foreground (F) / Background (B) ----------
     for ch, mask_expr in (("F", fg_mask), ("B", bg_mask)):
         if ch in mode:
-            mask = mask_expr.astype(np.uint8)
+            # Check if erosion/dilation is requested as the process needs the original volume
+            # to make it per-instance
+            er_k = channel_extra_opts.get(ch, {}).get("erosion", 0)
+            dil_k = channel_extra_opts.get(ch, {}).get("dilation", 0)            
+            erode, dilate = False, False
+            if (isinstance(er_k, int) and er_k > 0) or (isinstance(er_k, list) and any([x for x in er_k if x > 0])):
+                erode = True
+            if (isinstance(dil_k, int) and dil_k > 0) or (isinstance(dil_k, list) and any([x for x in dil_k if x > 0])):
+                dilate = True
+            if erode or dilate:
+                mask = np.zeros_like(fg_mask, dtype=np.uint8)
+                dil_k = [dil_k,]*mask.ndim if isinstance(dil_k, int) else dil_k
+                dil_k = generate_ellipse_footprint(dil_k)
+                er_k = [er_k,]*mask.ndim if isinstance(er_k, int) else er_k
+                er_k = generate_ellipse_footprint(er_k)
+                for lb in instances:
+                    m = (vol == lb)
+                    if not np.any(m):
+                        continue
+                    if dilate:
+                        m = binary_dilation(m.astype(np.uint8), footprint=dil_k).astype(np.uint8)
+                    if erode:
+                        m = binary_erosion(m.astype(np.uint8), footprint=er_k).astype(np.uint8)
+                    mask[m > 0] = lb
+            else:
+                mask = mask_expr.astype(np.uint8)
 
-            # erosion radius (default 0 = no erosion)
-            er_k = int(channel_extra_opts.get(ch, {}).get("erosion", 0))
-            if er_k > 0:
-                selem = disk(er_k)
-                if mask.ndim == 2:
-                    mask = binary_erosion(mask, footprint=selem).astype(np.uint8)
-                elif mask.ndim == 3:
-                    # apply 2D erosion slice-by-slice
-                    out = np.zeros_like(mask, dtype=np.uint8)
-                    for z in range(mask.shape[0]):
-                        out[z] = binary_erosion(mask[z], footprint=selem).astype(np.uint8)
-                    mask = out
-                else:
-                    raise ValueError(f"Unsupported mask ndim {mask.ndim} for channel {ch}")
-
-            # dilation radius (default 0 = no dilation)
-            dil_k = int(channel_extra_opts.get(ch, {}).get("dilation", 0))
-            if dil_k > 0:
-                selem = disk(dil_k)
-                if mask.ndim == 2:
-                    mask = binary_dilation(mask, footprint=selem).astype(np.uint8)
-                elif mask.ndim == 3:
-                    # apply 2D dilation slice-by-slice
-                    out = np.zeros_like(mask, dtype=np.uint8)
-                    for z in range(mask.shape[0]):
-                        out[z] = binary_dilation(mask[z], footprint=selem).astype(np.uint8)
-                    mask = out
-                else:
-                    raise ValueError(f"Unsupported mask ndim {mask.ndim} for channel {ch}")
-                
             new_mask[..., mode.index(ch)] = mask
 
     # ---------- P (central part) ----------
@@ -462,10 +457,16 @@ def labels_into_channels(
         p_opts = channel_extra_opts.get("P", {})
         p_type = p_opts.get("type", "centroid")
         p_dil  = p_opts.get("dilation", 1)
+        p_ero  = p_opts.get("erosion", 1)
 
         p_out = np.zeros_like(fg_mask, dtype=np.uint8)
         if p_type == "skeleton":
-            p_out = skeletonize(fg_mask).astype(np.uint8)
+            for lb in instances:
+                m = (vol == lb)
+                if not np.any(m):
+                    continue
+                sk = skeletonize(m.astype(np.uint8)).astype(np.uint8)
+                p_out += sk
         else:
             com_list = center_of_mass(fg_mask, labels=vol, index=instances)
             # Mark each centroid (guard against rounding outside bounds)
@@ -485,9 +486,13 @@ def labels_into_channels(
                 raise ValueError(f"Unsupported ndim {p_out.ndim} for P[type='centroid']")
 
         # Optional dilation (in pixels / voxels)
-        if p_dil > 0:
-            selem = disk(p_dil) if p_out.ndim == 2 else ball(p_dil)
-            p_out = binary_dilation(p_out, footprint=selem).astype(np.uint8)
+        if (isinstance(p_dil, int) and p_dil > 0) or (isinstance(p_dil, list) and any([x for x in p_dil if x > 0])):
+            p_dil = [p_dil,]*p_out.ndim if isinstance(p_dil, int) else p_dil
+            p_out = binary_dilation(p_out, footprint=generate_ellipse_footprint(p_dil)).astype(np.uint8)
+        # Optional erosion (in pixels / voxels)
+        if (isinstance(p_ero, int) and p_ero > 0) or (isinstance(p_ero, list) and any([x for x in p_ero if x > 0])):
+            p_ero = [p_ero,]*p_out.ndim if isinstance(p_ero, int) else p_ero
+            p_out = binary_erosion(p_out, footprint=generate_ellipse_footprint(p_ero)).astype(np.uint8)
 
         # Write the channel
         new_mask[..., mode.index("P")] = p_out

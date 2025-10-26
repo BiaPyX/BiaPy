@@ -374,6 +374,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 dst["P"] = {
                     "type": dst.get("P", {}).get("type", "centroid"),
                     "dilation": dst.get("P", {}).get("dilation", 1),
+                    "erosion": dst.get("P", {}).get("erosion", 0),
                 }
 
             # C — contours
@@ -1296,10 +1297,20 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 ctx = f"PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS['{key}']"
 
                 if key in ["F", "B"]:  # F and B
-                    _assert_int(val, "erosion", ctx, min_val=0)
-                    _assert_int(val, "dilation", ctx, min_val=0)
+                    if isinstance(val["erosion"], list):
+                        _assert_list(val, "erosion", ctx, length=dim_count)
+                    else:
+                        _assert_int(val, "erosion", ctx, min_val=0)
+                    if isinstance(val["dilation"], list):
+                        _assert_list(val, "dilation", ctx, length=dim_count)
+                    else:
+                        _assert_int(val, "dilation", ctx, min_val=0)
 
                 elif key == "P":  # central part
+                    if isinstance(val["erosion"], list):
+                        _assert_list(val, "erosion", ctx, length=dim_count)
+                    else:
+                        _assert_int(val, "erosion", ctx, min_val=0)
                     if isinstance(val["dilation"], list):
                         _assert_list(val, "dilation", ctx, length=dim_count)
                     else:
