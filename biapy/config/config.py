@@ -282,8 +282,6 @@ class Config:
         _C.PROBLEM.INSTANCE_SEG.SYNAPSES.POSTSITE_DILATION = [2,4,4]
         # Dilation in (z,y,x) to be made to construct the 'F' channel
         _C.PROBLEM.INSTANCE_SEG.SYNAPSES.POSTSITE_DILATION_DISTANCE_CHANNELS = [3,10,10] 
-        # Whether to normalize or not the distances of channel 'F'
-        _C.PROBLEM.INSTANCE_SEG.SYNAPSES.NORMALIZE_DISTANCES = False
         _C.PROBLEM.INSTANCE_SEG.SYNAPSES.POINT_CREATION_FUNCTION = "peak_local_max"
         # The minimal allowed distance separating peaks. To find the maximum number of peaks, use min_distance=1.
         _C.PROBLEM.INSTANCE_SEG.SYNAPSES.PEAK_LOCAL_MAX_MIN_DISTANCE = 1

@@ -516,8 +516,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             suffix += "".join(str(cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.POSTSITE_DILATION)[1:-1].replace(",","")).replace(" ","_")
             suffix += "_postDilationDistance-"
             suffix += "".join(str(cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.POSTSITE_DILATION_DISTANCE_CHANNELS)[1:-1].replace(",","")).replace(" ","_")
-            suffix += "_norm-"
-            suffix += str(cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.NORMALIZE_DISTANCES)
 
             train_channel_mask_dir = cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR + suffix
             opts.extend(["DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR", train_channel_mask_dir])
@@ -3088,6 +3086,10 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict):
             if "WATERSHED_BY_2D_SLICES" in old_cfg["PROBLEM"]["INSTANCE_SEG"]:
                 old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED"]["BY_2D_SLICES"] = old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED_BY_2D_SLICES"]
                 del old_cfg["PROBLEM"]["INSTANCE_SEG"]["WATERSHED_BY_2D_SLICES"]
+
+            if "SYNAPSES" in old_cfg["PROBLEM"]["INSTANCE_SEG"]:
+                if "NORMALIZE_DISTANCES" in old_cfg["PROBLEM"]["INSTANCE_SEG"]["SYNAPSES"]:
+                    del old_cfg["PROBLEM"]["INSTANCE_SEG"]["SYNAPSES"]["NORMALIZE_DISTANCES"]
 
     if "DATA" in old_cfg:
         if "TRAIN" in old_cfg["DATA"]:

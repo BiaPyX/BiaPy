@@ -154,7 +154,6 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
                 mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
                 postsite_dilation=cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.POSTSITE_DILATION,
                 postsite_distance_channel_dilation=cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.POSTSITE_DILATION_DISTANCE_CHANNELS,
-                normalize_values=cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.NORMALIZE_DISTANCES,
             )
         else:  # regular instances, not synapses
             mask = None
@@ -1124,7 +1123,6 @@ def synapse_channel_creation(
     mode: List[str] = ["F_pre", "F"],
     postsite_dilation: List[int] = [2, 4, 4],
     postsite_distance_channel_dilation: List[int] = [3, 10, 10],
-    normalize_values: bool = False,
 ):
     """
     Create different channels that represent a synapse segmentation problem to train an instance segmentation problem.
@@ -1168,9 +1166,6 @@ def synapse_channel_creation(
 
     postsite_distance_channel_dilation : tuple of ints, optional
         Dilation to be used in the postsynapse sites when creating the distance channels ('F' channels).
-
-    normalize_values : bool, optional
-        Whether to normalize distance values or not.
 
     Returns
     -------
@@ -1467,7 +1462,7 @@ def synapse_channel_creation(
                         seeds,
                         ref_point="presynaptic",
                         label_to_pre_site=label_to_pre_site,
-                        normalize_values=normalize_values,
+                        normalize_values=True,
                     )
 
                     if F_pre_pos == 0:
