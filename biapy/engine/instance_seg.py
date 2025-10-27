@@ -30,8 +30,7 @@ from biapy.data.post_processing.post_processing import (
     create_synapses,
     remove_close_points,
     remove_close_points_by_mask,
-    fill_label_holes,
-    embedseg_instances,
+    Embedding_cluster,
     apply_label_refinement,
 )
 from biapy.data.post_processing.polygon_nms_postprocessing import stardist_instances_from_prediction
@@ -375,6 +374,12 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 center_mode=self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0].get("E_offset", {}).get("center_mode", "centroid"),
                 medoid_max_points=self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0].get("E_offset", {}).get("medoid_max_points", 10000),
             ).to(self.device, non_blocking=True)
+            self.embedding_cluster = Embedding_cluster(
+                device=self.device,
+                patch_size=self.cfg.DATA.PATCH_SIZE,
+                ndims=self.dims,
+                anisotropy=self.resolution,
+            )
         else:
             instance_loss = instance_segmentation_loss(
                 weights = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS,
@@ -533,12 +538,15 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     grid=self.stardist_grid, 
                 )
             elif "E_offset" in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
-                pred_labels = embedseg_instances(
-                    y_pred=pred,
-                    s_fg=self.cfg.PROBLEM.INSTANCE_SEG.EMBEDSEG.SEED_THRESH,  
-                    s_min=self.cfg.PROBLEM.INSTANCE_SEG.EMBEDSEG.MIN_SIZE,
-                    assign_thresh=self.cfg.PROBLEM.INSTANCE_SEG.EMBEDSEG.ASSIGN_THRESH,
+                pred_labels = self.embedding_cluster.create_instances(
+                    pred=pred if self.dims == 3 else pred[0],
+                    fg_thresh=self.cfg.PROBLEM.INSTANCE_SEG.EMBEDSEG.SEED_THRESH,
+                    min_mask_sum=self.cfg.PROBLEM.INSTANCE_SEG.EMBEDSEG.MIN_MASK_SUM,
+                    min_unclustered_sum=self.cfg.PROBLEM.INSTANCE_SEG.EMBEDSEG.MIN_UNCLUSTERED_SUM,
+                    min_object_size=self.cfg.PROBLEM.INSTANCE_SEG.EMBEDSEG.MIN_OBJECT_SIZE
                 )
+                if self.dims == 2:
+                    pred_labels = np.expand_dims(pred_labels, 0)
             else:
                 print("Creating instances with watershed . . .")
                 pred_labels = watershed_by_channels(

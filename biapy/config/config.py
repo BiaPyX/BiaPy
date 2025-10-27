@@ -259,18 +259,22 @@ class Config:
         _C.PROBLEM.INSTANCE_SEG.STARDIST.PROB_THRESH = 0.4
         # Non-maximum suppression IoU threshold to filter overlapping instance candidates
         _C.PROBLEM.INSTANCE_SEG.STARDIST.NMS_IOU_THRESH = 0.3
-        
-        # Options for embedding-based clustering instance creation
+
+        # Options for embedding-based clustering instance creation. They are inspired by the work:
+        # Reference: 
+        #   "EmbedSeg: Embedding-based Instance Segmentation for Biomedical Microscopy Data"
+        #    [link]: https://www.sciencedirect.com/science/article/pii/S1361841522001700
+        # Code adapted from: 
+        #    Embedseg: https://github.com/juglab/EmbedSeg
         _C.PROBLEM.INSTANCE_SEG.EMBEDSEG = CN()
-        # Foreground seed threshold to consider a pixel/voxel as a potential seed.
+        # Foreground threshold for seediness map to consider pixels for clustering.
         _C.PROBLEM.INSTANCE_SEG.EMBEDSEG.SEED_THRESH = 0.5
-        # Minimum seediness threshold to start a new instance (default: 0.9). Only pixels with seed >= s_min are 
-        # considered as valid seeds. This controls how confident a pixel must be to initiate a new instance, preventing 
-        # weak or noisy seeds from forming spurious objects.
-        _C.PROBLEM.INSTANCE_SEG.EMBEDSEG.MIN_SIZE = 0.9
-        # Threshold in [0,1] to accept an assignment of a pixel/voxels to an instance based on the seed score. 
-        # Corresponds directly to φ (phi) thresholding in the EmbedSeg algorithm
-        _C.PROBLEM.INSTANCE_SEG.EMBEDSEG.ASSIGN_THRESH = 0.5
+        # Minimum number of foreground pixels required to perform clustering.
+        _C.PROBLEM.INSTANCE_SEG.EMBEDSEG.MIN_MASK_SUM = 0
+        # Minimum number of unclustered foreground pixels to continue clustering.
+        _C.PROBLEM.INSTANCE_SEG.EMBEDSEG.MIN_UNCLUSTERED_SUM = 0
+        # Minimum size of objects to be considered valid. Objects smaller than this will be ignored.
+        _C.PROBLEM.INSTANCE_SEG.EMBEDSEG.MIN_OBJECT_SIZE = 100
 
         #### For "synapses" type of instances (only available for 3D H5/Zarr data) ####
         _C.PROBLEM.INSTANCE_SEG.SYNAPSES = CN()

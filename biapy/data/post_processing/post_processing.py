@@ -373,135 +373,161 @@ def watershed_by_channels(
     return segm
 
 
-def embedseg_instances(
-    y_pred: NDArray,
-    s_fg: float = 0.5,
-    s_min: float = 0.9,
-    assign_thresh: float = 0.5,
-    eps: float = 1e-6,
-) -> NDArray:
-    """
-    Create instances from predicted offsets, per-axis sigmas, and seediness using the
-    EmbedSeg method (channel-last, unbatched).
+class Embedding_cluster:
+    def __init__(
+        self,
+        device: torch.device, 
+        patch_size: List[int] = [32, 1024, 1024], 
+        anisotropy: List[float | int] = [1,1,1],
+        ndims: int = 2, 
+    ):
+        """
+        Embedding-based clustering for instance segmentation inspired by the EmbedSeg method.
 
-    Algorithm
-    ---------
-    1) Foreground pool = { pixels with seed >= s_fg }.
-    2) Smooth seed with a small Gaussian and find local maxima (peak_local_max) >= s_min.
-    3) Iterate peaks from highest seed to lowest:
-         - Let C = embedding of the peak pixel; σ_seed = per-axis sigma at that pixel.
-         - For all remaining pool pixels i, compute:
-               phi_i = exp( - sum_a (e_i[a] - C[a])^2 / (2 * sigma_seed[a]^2) )
-         - Assign all pixels with phi_i >= assign_thresh to the instance and remove them from pool.
-    4) Return integer labels (0 = background).
+        Reference: `EmbedSeg: Embedding-based Instance Segmentation for Biomedical Microscopy Data <https://www.sciencedirect.com/science/article/pii/S1361841522001700>`_.
 
-    Parameters
-    ----------
-    y_pred : np.ndarray
-        Model predictions with shape:
-          - 2D: (Y, X, C=5)  with channels [off_y, off_x, sig_y, sig_x, seed]
-          - 3D: (Z, Y, X, C=7) with channels [off_z, off_y, off_x, sig_z, sig_y, sig_x, seed]
-        Heads must be ACTIVATEd already: offsets=tanh, sigmas>0, seed=sigmoid.
+        Code adapted from: `Embedseg <https://github.com/juglab/EmbedSeg>`_.
 
-    s_fg : float, optional
-        Foreground seed threshold to form the candidate pool.
+        Parameters
+        ----------
+        device : torch.device
+            Device to run the computations on.
 
-    s_min : float, optional
-        Minimum (smoothed) seed at a local maximum to start an instance.
+        patch_size : List of int, optional
+            Patch size used during training (used to build the coordinate map buffer).
+            E.g. ``[32, 1024, 1024]`` for 3D and ``[1, 1024, 1024]`` for 2D.
 
-    assign_thresh : float, optional
-        φ threshold to assign a pixel/voxel to an instance.
+        anisotropy : List of float/int, optional
+            Anisotropy used during training (used to build the coordinate map buffer).
+            E.g. ``[1, 8, 8]`` for 3D and ``[1, 1, 1]`` for 2D.
 
-    eps : float, optional
-        Small value to avoid division by zero.
+        ndims : int, optional
+            Number of dimensions of the input data. 2 for 2D images, 3 for 3D volumes.
+        """
+        # Grid sizes (used to build the coordinate map buffer; sliced to input size on forward)
+        grid_z = patch_size[0] if ndims == 3 else 1
+        grid_y = patch_size[-3]
+        grid_x = patch_size[-2]
+        # Pixel sizes (coordinate extents)
+        pixel_z = anisotropy[0] if ndims == 3 else 1
+        pixel_y = anisotropy[1]
+        pixel_x = anisotropy[2]
+        self.device = device
 
-    Returns
-    -------
-    np.ndarray
-        Instance labels with shape (*spatial,), dtype uint8 if max(label) ≤ 255 else uint16.
-    """
-    assert y_pred.ndim in (3, 4), f"Expected (Y,X,C) or (Z,Y,X,C); got {y_pred.shape}"
-    spatial = y_pred.shape[:-1]
-    D = len(spatial)
-    C = y_pred.shape[-1]
-    expected_C = 2 * D + 1
-    assert C == expected_C, f"Expected {expected_C} channels (offset(D)+sigma(D)+seed); got {C}"
+        # Build max-size 3D coordinate grid buffer; for 2D we will slice z=1.
+        # This lets one class handle both 2D (uses x,y) and 3D (uses x,y,z).
+        xm = ( torch.linspace(0, pixel_x, grid_x).view(1, 1, 1, -1).expand(1, grid_z, grid_y, grid_x))
+        ym = (torch.linspace(0, pixel_y, grid_y).view(1, 1, -1, 1).expand(1, grid_z, grid_y, grid_x))
+        zm = (torch.linspace(0, pixel_z, grid_z).view(1, -1, 1, 1).expand(1, grid_z, grid_y, grid_x))
 
-    # unpack heads (channel-last)
-    off  = np.moveaxis(y_pred[..., :D], -1, 0)        # (D, *spatial)
-    sig  = np.moveaxis(y_pred[..., D:2*D], -1, 0)     # (D, *spatial)  per-axis σ
-    seed = y_pred[..., 2*D]                           # (*spatial)
+        # Stack as (3, Z, Y, X); for 2D we’ll slice to (2, Y, X) at forward time.
+        self.xyzm = torch.cat((xm, ym, zm), 0).to(self.device)  # (3, Z, Y, X)
+        
+    def create_instances(
+        self,
+        pred: NDArray,
+        fg_thresh: float = 0.7,
+        min_mask_sum: int = 0,
+        min_unclustered_sum: int = 0,
+        min_object_size: int = 0,
+    ) -> NDArray:
+        """
+        Create instances from predicted offsets, per-axis sigmas, and seediness using the
+        EmbedSeg method.
 
-    # embeddings e(x) = x + o(x)
-    axes = [np.arange(n, dtype=y_pred.dtype) for n in spatial]
-    grid = np.stack(np.meshgrid(*axes, indexing='ij'), axis=0)   # (D, *spatial)
-    emb  = grid + off                                            # (D, *spatial)
+        Parameters
+        ----------
+        pred : np.ndarray
+            Model predictions with shape:
+            - 2D: (Y, X, C=5)  with channels [off_y, off_x, sig_y, sig_x, seed]
+            - 3D: (Z, Y, X, C=7) with channels [off_z, off_y, off_x, sig_z, sig_y, sig_x, seed]
 
-    labels = np.zeros(spatial, dtype=np.int64)
-    N = int(np.prod(spatial))
+        fg_thresh : float, optional
+            Foreground threshold for seediness map to consider pixels for clustering.
 
-    # flatten for vectorized math
-    Eb = emb.reshape(D, N)                 # (D, N)
-    Sb = sig.reshape(D, N)                 # (D, N)  (not used in φ; we use seed σ vector)
-    seed_flat = seed.reshape(N)            # (N,)
+        min_mask_sum : int, optional
+            Minimum number of foreground pixels required to perform clustering.
 
-    # 1) Foreground pool
-    pool = (seed_flat >= s_fg)
-    if not pool.any():
-        return labels.astype(np.uint8, copy=False)
+        min_unclustered_sum : int, optional
+            Minimum number of unclustered foreground pixels to continue clustering.
 
-    # 2) Seed smoothing + local maxima
-    seed_smooth = gaussian_filter(seed, sigma=1.0, mode='nearest')
-    footprint = np.ones((3,) * D, dtype=bool)
-    peak_coords = peak_local_max(
-        seed_smooth,
-        threshold_abs=s_min,
-        footprint=footprint,
-        exclude_border=False,
-    )
-    if peak_coords.size == 0:
-        return labels.astype(np.uint8, copy=False)
+        min_object_size : int, optional
+            Minimum size of objects to be considered valid. Objects smaller than this will be ignored.
 
-    # sort peaks by ORIGINAL seed value, descending
-    peak_scores = seed[tuple(peak_coords.T)]
-    peak_coords = peak_coords[np.argsort(peak_scores)[::-1]]
+        Returns
+        -------
+        np.ndarray
+            Instance labels with shape (*spatial,), dtype uint8 if max(label) ≤ 255 else uint16.
+        """
+        assert pred.ndim in (3, 4), f"Expected (Y,X,C) or (Z,Y,X,C); got {pred.shape}"
+        spatial = pred.shape[:-1]
+        D = len(spatial)
+        C = pred.shape[-1]
+        expected_C = 2 * D + 1
+        assert C == expected_C, f"Expected {expected_C} channels (offset(D)+sigma(D)+seed); got {C}"
 
-    # helper to flatten coordinates
-    def _ravel(coord):
-        return np.ravel_multi_index(tuple(coord), spatial)
+        pred = torch.from_numpy(np.moveaxis(pred, -1, 0)).to(self.device)  # (C, *spatial)
 
-    lbl = 0
-    for coord in peak_coords:
-        if not pool.any():
-            break
+        # Spatial sizes
+        if D == 2:
+            H, W = pred.shape[1], pred.shape[2]
+            # coords: (2, H, W) from self.xyzm (3, Z, Y, X)
+            coords = self.xyzm[:2, 0, :H, :W].contiguous()
+        else:
+            Z, H, W = pred.shape[1], pred.shape[2], pred.shape[3]
+            # coords: (3, Z, H, W)
+            coords = self.xyzm[:3, :Z, :H, :W].contiguous()
 
-        flat_idx = _ravel(coord)
-        if not pool[flat_idx]:
-            continue  # already consumed
+        # unpack heads
+        offsets  = torch.tanh(pred[:D]) # (D, *spatial)
+        sigma  = pred[D:2*D] # (D, *spatial)  per-axis σ
+        seed_map = torch.sigmoid(pred[2*D]) # (*spatial)
+        
+        # embeddings e(x) = x + o(x)
+        spatial_emb = offsets + coords  # (D, *spatial)
 
-        # Center and per-axis σ from the peak (vector sigma)
-        Cc = Eb[:, flat_idx]                    # (D,)
-        sigma_c = np.maximum(sig[(slice(None),) + tuple(coord)], eps)  # (D,)
-        denom = 2.0 * (sigma_c ** 2) + eps      # (D,)
+        count = 1
+        mask_fg = seed_map > fg_thresh
+        if mask_fg.sum() > min_mask_sum:
+            labels = np.zeros(spatial, dtype=np.int64)
+            seed_map_cpu = seed_map.cpu().detach().numpy()
+            seed_map_cpu_smooth = gaussian_filter(seed_map_cpu, sigma=1)
+            coords = peak_local_max(seed_map_cpu_smooth)
+            zeros = np.zeros((coords.shape[0], 1), dtype=np.uint8)
+            coords = np.hstack((zeros, coords))
 
-        # φ for remaining pool pixels: sum_a ( (e_a - C_a)^2 / (2*sigma_c[a]^2) )
-        diff = Eb - Cc[:, None]                 # (D, N)
-        quad = (diff * diff) / denom[:, None]   # (D, N)
-        phi  = np.exp(-quad.sum(axis=0))        # (N,)
+            mask_local_max_cpu = np.zeros(seed_map_cpu.shape, dtype=np.bool)
+            mask_local_max_cpu[tuple(coords[:,-D:].T)] = True
+            mask_local_max = torch.from_numpy(mask_local_max_cpu).bool().to(self.device)
+            mask_seed = mask_fg * mask_local_max
 
-        take = (phi >= assign_thresh) & pool
-        if not np.any(take):
-            # nothing joins → remove this peak to avoid stalling
-            pool[flat_idx] = False
-            continue
+            spatial_emb_fg_masked = spatial_emb[mask_fg.expand_as(spatial_emb)].view(D, -1)  # fg candidate pixels
+            spatial_emb_seed_masked = spatial_emb[mask_seed.expand_as(spatial_emb)].view(D, -1)  # seed candidate pixels
+            sigma_seed_masked = sigma[mask_seed.expand_as(sigma)].view(D, -1)  # sigma for seed candidate pixels
+            seed_map_seed_masked = seed_map[mask_seed].view(1, -1)  # seediness for seed candidate pixels
 
-        lbl += 1
-        labels.reshape(-1)[take] = lbl
-        pool[take] = False
-
-    # compact dtype
-    max_lbl = int(labels.max())
-    return labels.astype(np.uint8 if max_lbl <= 255 else np.uint16, copy=False)
+            unprocessed = torch.ones(mask_seed.sum()).short().to(self.device) # unclustered seed candidate pixels
+            unclustered = torch.ones(mask_fg.sum()).short().to(self.device) # unclustered fg candidate pixels
+            labels_masked = torch.zeros(mask_fg.sum()).short().to(self.device)
+            while unprocessed.sum() > min_unclustered_sum:
+                seed = (seed_map_seed_masked * unprocessed.float()).argmax().item()
+                center = spatial_emb_seed_masked[:, seed : seed + 1]
+                unprocessed[seed] = 0
+                s = torch.exp(sigma_seed_masked[:, seed : seed + 1] * 10)
+                dist = torch.exp(
+                    -1 * torch.sum(torch.pow(spatial_emb_fg_masked - center, 2) * s, 0)
+                )
+                proposal = (dist > 0.5).squeeze()
+                if proposal.sum() > min_object_size:
+                    if (
+                        unclustered[proposal].sum().float() / proposal.sum().float()
+                        > 0.5
+                    ):
+                        labels_masked[proposal.squeeze()] = count
+                        count += 1
+                        unclustered[proposal] = 0
+            labels[mask_fg.squeeze().cpu()] = labels_masked.cpu()
+        return labels
 
 
 def create_synapses(

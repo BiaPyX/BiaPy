@@ -19,7 +19,6 @@ import torch.nn.functional as F
 import torch.nn as nn
 from typing import Optional, List, Tuple, Dict
 
-
 def jaccard_index_numpy(y_true, y_pred):
     """
     Compute the Jaccard index (Intersection over Union) between ground truth and prediction.

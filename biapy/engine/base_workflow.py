@@ -1824,13 +1824,13 @@ class Base_Workflow(metaclass=ABCMeta):
                     
                 if self.cfg.DATA.REFLECT_TO_COMPLETE_SHAPE:
                     reflected_orig_shape = (1,) + self.current_sample["reflected_orig_shape"]
-                    if self.cfg.TEST.VERBOSE:
-                        print(
-                            "Cropping prediction to original shape {}".format(
-                                self.current_sample["reflected_orig_shape"]
-                            )
-                        )
                     if reflected_orig_shape != pred.shape:
+                        if self.cfg.TEST.VERBOSE:
+                            print(
+                                "Cropping prediction to original shape {}".format(
+                                    self.current_sample["reflected_orig_shape"]
+                                )
+                            )
                         if self.cfg.PROBLEM.NDIM == "2D":
                             pred = pred[:, -reflected_orig_shape[1] :, -reflected_orig_shape[2] :]
                             if self.current_sample["Y"] is not None:
