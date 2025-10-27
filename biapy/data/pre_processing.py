@@ -68,20 +68,22 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
 
     # Checking if the user inputted Zarr/H5 files
     if getattr(cfg.DATA, tag).INPUT_ZARR_MULTIPLE_DATA:
+        data_path = getattr(cfg.DATA, tag).PATH
         try:
-            zarr_files = next(os_walk_clean(getattr(cfg.DATA, tag).PATH))[1]
+            zarr_files = next(os_walk_clean(data_path))[1]
         except StopIteration:
-            raise ValueError("No Zarr/N5 files found in the input path: {}".format(getattr(cfg.DATA, tag).PATH))
+            raise ValueError("No Zarr/N5 files found in the input path: {}".format(data_path))
         try:
-            h5_files = next(os_walk_clean(getattr(cfg.DATA, tag).PATH))[2]
+            h5_files = next(os_walk_clean(data_path))[2]
         except StopIteration:
-            raise ValueError("No H5 files found in the input path: {}".format(getattr(cfg.DATA, tag).PATH))
+            raise ValueError("No H5 files found in the input path: {}".format(data_path))
     else:
+        data_path = getattr(cfg.DATA, tag).GT_PATH
         try:
-            zarr_files = next(os_walk_clean(getattr(cfg.DATA, tag).GT_PATH))[1]
-            h5_files = next(os_walk_clean(getattr(cfg.DATA, tag).GT_PATH))[2]
+            zarr_files = next(os_walk_clean(data_path))[1]
+            h5_files = next(os_walk_clean(data_path))[2]
         except StopIteration:
-            raise ValueError("No Zarr/N5 or H5 files found in the GT path: {}".format(getattr(cfg.DATA, tag).GT_PATH))
+            raise ValueError("No Zarr/N5 or H5 files found in the GT path: {}".format(data_path))
 
     # Find patches info so we can iterate over them to create the instance mask
     working_with_zarr_h5_files = False
@@ -129,7 +131,7 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
 
     else:
         if cfg.PROBLEM.INSTANCE_SEG.TYPE == "synapses":
-            raise ValueError("Synapse detection is only available for 3D Zarr/H5 data")
+            raise ValueError("Synapse detection is only available for 3D Zarr/H5 data so please check your data in {}".format(data_path))
         Y = next(os_walk_clean(getattr(cfg.DATA, tag).GT_PATH))[2]
     del zarr_files, h5_files
 
