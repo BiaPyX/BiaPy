@@ -159,7 +159,11 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
             mask = None
             imgfile = None
             last_parallel_file = None
-            for i in tqdm(range(len(Y.keys())), disable=not is_main_process()):
+            rank = get_rank()
+            world_size = get_world_size()
+            N = len(Y)
+            it = range(rank, N, world_size)
+            for i in tqdm(it, disable=not is_main_process()):
                 # Extract the patch to process
                 patch_coords = Y[i]["patch_coords"]
                 img = load_img_part_from_efficient_file(
@@ -1195,8 +1199,14 @@ def synapse_channel_creation(
     ellipse_footprint_cpd = generate_ellipse_footprint(postsite_dilation)
     ellipse_footprint_cpd2 = generate_ellipse_footprint(postsite_distance_channel_dilation)
 
+    rank = get_rank()
+    world_size = get_world_size()
+    N = len(unique_files)
+    it = range(rank, N, world_size)
+
     print("Collecting all pre/post-synaptic points")
-    for filename, data_shape in tqdm(zip(unique_files, unique_shapes), disable=not is_main_process()):
+    for i in tqdm(it, disable=not is_main_process()):
+        filename, data_shape = unique_files[i], unique_shapes[i]
         # Take all the information within the dataset
         files = []
         file, ids = read_chunked_nested_data(filename, zarr_data_information["id_path"])
