@@ -1257,7 +1257,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             resolution_path = self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_RESOLUTION_PATH
             partners_path = self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_PARTNERS_PATH
             id_path = self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_ID_PATH
-            filename = os.path.join(self.current_sample["dir"], self.current_sample["X_filename"])
+            filename = os.path.join(self.current_sample["X_dir"], self.current_sample["X_filename"])
             file, ids = read_chunked_nested_data(filename, id_path)
             ids = list(np.array(ids))
             _, partners = read_chunked_nested_data(filename, partners_path)
@@ -1835,7 +1835,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 resolution_path = self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_RESOLUTION_PATH
                 partners_path = self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_PARTNERS_PATH
                 id_path = self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_ID_PATH
-                data_filename = os.path.join(self.current_sample["dir"], self.current_sample["X_filename"])
+                data_filename = os.path.join(self.current_sample["X_dir"], self.current_sample["X_filename"])
                 file, ids = read_chunked_nested_data(data_filename, id_path)
                 ids = list(np.array(ids))
                 _, partners = read_chunked_nested_data(data_filename, partners_path)
