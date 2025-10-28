@@ -169,9 +169,9 @@ class chunked_test_pair_data_generator(IterableDataset):
         else:
             self.Y_parallel_data = None
             self.Y_parallel_file = None
-        self.filename = self.sample_to_process["filename"]
+        self.filename = self.sample_to_process["X_filename"]
         self.file_type = "h5" if any(self.filename.endswith(x) for x in [".h5", ".hdf5", ".hdf"]) else "zarr"
-        self.dir = self.sample_to_process["dir"]
+        self.dir = self.sample_to_process["X_dir"]
         self.norm_module = norm_module
         self.input_axes = input_axes
         self.mask_input_axes = mask_input_axes
