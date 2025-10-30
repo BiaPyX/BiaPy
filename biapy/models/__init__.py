@@ -777,7 +777,7 @@ def check_bmz_model_compatibility(
                 return default
         return cur
 
-    m = g(model_rdf, "raw", "manifest", default={}) or {}
+    m = g(model_rdf, "raw", "manifest", default=model_rdf) or model_rdf
 
     specific_workflow = "all" if workflow_specs is None else workflow_specs["workflow_type"]
     specific_dims = "all" if workflow_specs is None else workflow_specs["ndim"]
@@ -788,8 +788,12 @@ def check_bmz_model_compatibility(
     # --------- Accept only PyTorch state dict models with a single input ---------
     weights = g(m, "weights", "pytorch_state_dict")
     inputs = g(m, "inputs") or []
-    if not (isinstance(weights, dict) and weights and isinstance(inputs, list) and len(inputs) == 1):
-        reason_message = f"[{specific_workflow}] pytorch_state_dict not found in model RDF or inputs != 1\n"
+
+    if not (isinstance(weights, dict) and weights):
+        reason_message = f"[{specific_workflow}] pytorch_state_dict not found in model RDF\n"
+        return preproc_info, True, reason_message
+    if not (isinstance(inputs, list) and len(inputs) == 1):
+        reason_message = f"[{specific_workflow}] Model needs to have a single input.\n"
         return preproc_info, True, reason_message
 
     # Model format version (defaults to 0.5 for your legacy logic)
