@@ -1386,6 +1386,7 @@ if all_test_info["Test4"]["enable"]:
     biapy_config['PROBLEM']['INSTANCE_SEG']['DATA_CHANNELS'] = 'BC'
     biapy_config['PROBLEM']['INSTANCE_SEG']['DATA_MW_TH_TYPE'] = "auto"
     biapy_config['PROBLEM']['INSTANCE_SEG']['DATA_CHANNEL_WEIGHTS'] = "(0.5, 1)"
+    biapy_config['PROBLEM']['INSTANCE_SEG']["WATERSHED"] = {}
     biapy_config['PROBLEM']['INSTANCE_SEG']["WATERSHED"]["DATA_REMOVE_BEFORE_MW"] = True
     biapy_config['PROBLEM']['INSTANCE_SEG']["WATERSHED"]["DATA_REMOVE_SMALL_OBJ_BEFORE"] = 10
     biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(instance_seg_2d_data_outpath, "data", "train", "raw")
