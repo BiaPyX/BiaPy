@@ -24,10 +24,8 @@ print("Processing {} folder . . .".format(files))
 
 # Read images
 for n, id_ in tqdm(enumerate(files), total=len(files)):
-    print("Processing notebook: {}".format(id_))
-    notebook_file = os.path.join(args['input_notebook_dir'], id_)
-    
-    with open(notebook_file, 'r') as f:
+    print("Processing notebook: {}".format(id_))    
+    with open(id_, 'r') as f:
         notebook = json.load(f)
 
     if 'widgets' in notebook.get('metadata', {}):
@@ -37,7 +35,7 @@ for n, id_ in tqdm(enumerate(files), total=len(files)):
         if 'widgets' in cell.get('metadata', {}):
             del cell['metadata']['widgets']
 
-    with open(os.path.join(args['input_notebook_dir'], id_), 'w') as f:
+    with open(id_, 'w') as f:
         json.dump(notebook, f, indent=2)
 
 print("Done!")
