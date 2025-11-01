@@ -26,7 +26,6 @@ import biapy
 from bioimageio.core import create_prediction_pipeline
 from bioimageio.spec import load_description
 
-from biapy.config.config import update_dependencies
 from biapy.models import (
     build_model,
     build_torchvision_model,
