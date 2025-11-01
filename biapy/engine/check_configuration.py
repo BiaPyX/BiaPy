@@ -2491,7 +2491,17 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     if cfg.MODEL.LOAD_CHECKPOINT and check_data_paths:
         file = get_checkpoint_path(cfg, jobname)
         if not any([file + ext for ext in ['.pth', '.safetensors'] if os.path.exists(file + ext)]):
-            raise FileNotFoundError(f"Model checkpoint not found at {get_checkpoint_path(cfg, jobname)}")
+            if cfg.PATHS.CHECKPOINT_FILE == "":
+                raise FileNotFoundError(
+                    f"'MODEL.LOAD_CHECKPOINT' is enabled, but no explicit checkpoint file was provided "
+                    f"('PATHS.CHECKPOINT_FILE': '{cfg.PATHS.CHECKPOINT_FILE}'). "
+                    f"Given the specified job name ('{jobname}'), a checkpoint is expected to exist at:\n"
+                    f"  → {get_checkpoint_path(cfg, jobname)} \n"
+                    f"However, no file was found at that location. Please ensure the checkpoint exists, "
+                    f"or disable 'MODEL.LOAD_CHECKPOINT' if you do not intend to resume training."
+                )
+            else:
+                raise FileNotFoundError(f"Model checkpoint not found at {get_checkpoint_path(cfg, jobname)}")
 
         if os.path.exists(file + ".safetensors"):
             try:
