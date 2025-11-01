@@ -74,7 +74,7 @@ all_test_info["Test4"] = {
         {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 1, "metric": "f1",
             "gt": True, "value": 0.50},
         {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 2, "metric": "f1",
-            "lt": False, "value": 0.3}, # Post-processing (leave bad instances only)
+            "gt": False, "value": 0.3}, # Post-processing (leave bad instances only)
     ]
 }
 
