@@ -27,7 +27,8 @@ from PIL import Image
 from tqdm import tqdm
 from skimage import measure
 from hashlib import sha256
-from numpy.typing import NDArray, DTypeLike
+from numpy.typing import DTypeLike
+import functools
 
 from biapy.engine.metrics import jaccard_index_numpy
 from biapy.utils.misc import is_main_process
@@ -747,3 +748,38 @@ def create_file_sha256sum(
         while n := f.readinto(mv):
             h.update(mv[:n])
     return h.hexdigest()
+
+def get_cfg_key_value(obj, attr, *args):
+    """
+    Recursively retrieve a nested attribute value from an object (e.g., a YACS CfgNode).
+
+    This function allows accessing values from nested configuration objects
+    or any object with attributes, by providing a dot-separated string for the
+    attribute path. It's particularly useful for navigating `CfgNode` objects.
+
+    Parameters
+    ----------
+    obj : object
+        The base object from which to start attribute retrieval.
+    attr : str
+        A dot-separated string representing the path to the desired attribute
+        (e.g., "MODEL.ARCHITECTURE", "DATA.PATCH_SIZE.0").
+    *args
+        Optional arguments to pass to `getattr` for default values if an
+        attribute is not found. If provided, `getattr(obj, name, *args)` is used.
+
+    Returns
+    -------
+    any
+        The value of the nested attribute.
+
+    Raises
+    ------
+    AttributeError
+        If an attribute in the path does not exist and no default value is provided.
+    """
+
+    def _getattr(obj, attr):
+        return getattr(obj, attr, *args)
+
+    return functools.reduce(_getattr, [obj] + attr.split("."))

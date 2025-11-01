@@ -20,7 +20,6 @@ from importlib import import_module
 import os
 import re
 import torch
-import functools
 import torch.nn as nn
 from torchinfo import summary
 from typing import Optional, Dict, Tuple, List, Callable
@@ -35,8 +34,6 @@ import requests
 from bioimageio.core.backends.pytorch_backend import load_torch_model
 from bioimageio.spec.model.v0_4 import ModelDescr as ModelDescr_v0_4
 from bioimageio.spec.model.v0_5 import ModelDescr as ModelDescr_v0_5
-from bioimageio.spec import InvalidDescr
-from bioimageio.core.digest_spec import get_test_inputs
 
 
 def build_model(
@@ -701,7 +698,7 @@ def find_bmz_models(
 def check_bmz_args(
     model_ID: str,
     cfg: CN,
-) -> List:
+) -> Tuple[List, Dict]:
     """
     Check user's provided BMZ arguments.
 
@@ -732,18 +729,18 @@ def check_bmz_args(
     workflow_specs["ndim"] = cfg.PROBLEM.NDIM
     workflow_specs["nclasses"] = cfg.DATA.N_CLASSES
 
-    preproc_info, error, error_message = check_bmz_model_compatibility(model_dict, workflow_specs=workflow_specs)
+    preproc_info, error, error_message, opts = check_bmz_model_compatibility(model_dict, workflow_specs=workflow_specs)
 
     if error:
         raise ValueError(f"Model {model_ID} can not be used in BiaPy. Message:\n{error_message}\n")
 
-    return preproc_info
+    return preproc_info, opts
 
 
 def check_bmz_model_compatibility(
     model_rdf: Dict,
     workflow_specs: Optional[Dict] = None,
-) -> Tuple[List, bool, str]:
+) -> Tuple[List, bool, str, Dict]:
     """
     Check one model compatibility with BiaPy by looking at its RDF file provided by BMZ. This function is the one used in BMZ's continuous integration with BiaPy.
 
@@ -784,6 +781,7 @@ def check_bmz_model_compatibility(
     ref_classes = "all" if workflow_specs is None else workflow_specs["nclasses"]
 
     preproc_info: List = []
+    opts = {}
 
     # --------- Accept only PyTorch state dict models with a single input ---------
     weights = g(m, "weights", "pytorch_state_dict")
@@ -791,10 +789,10 @@ def check_bmz_model_compatibility(
 
     if not (isinstance(weights, dict) and weights):
         reason_message = f"[{specific_workflow}] pytorch_state_dict not found in model RDF\n"
-        return preproc_info, True, reason_message
+        return preproc_info, True, reason_message, opts
     if not (isinstance(inputs, list) and len(inputs) == 1):
         reason_message = f"[{specific_workflow}] Model needs to have a single input.\n"
-        return preproc_info, True, reason_message
+        return preproc_info, True, reason_message, opts
 
     # Model format version (defaults to 0.5 for your legacy logic)
     model_version = Version("0.5")
@@ -812,7 +810,7 @@ def check_bmz_model_compatibility(
     elif "architecture" in weights and isinstance(weights["architecture"], dict):
         model_kwargs = weights["architecture"].get("kwargs", None)
     if model_kwargs is None:
-        return preproc_info, True, f"[{specific_workflow}] Couldn't extract kwargs from model description.\n"
+        return preproc_info, True, f"[{specific_workflow}] Couldn't extract kwargs from model description.\n", opts
 
     # --------- Problem type via tags ---------
     tags = g(m, "tags", default=[]) or []
@@ -833,7 +831,7 @@ def check_bmz_model_compatibility(
             reason_message = (
                 f"[{specific_workflow}] 'DATA.N_CLASSES' not extracted. Obtained {classes}. Please check it!\n"
             )
-            return preproc_info, True, reason_message
+            return preproc_info, True, reason_message, opts
         
         if (
             classes == -1
@@ -867,291 +865,14 @@ def check_bmz_model_compatibility(
             if ref_classes != "all":
                 if classes > 2 and ref_classes != classes:
                     reason_message = f"[{specific_workflow}] 'DATA.N_CLASSES' does not match network's output classes. Please check it!\n"
-                    return preproc_info, True, reason_message
+                    return preproc_info, True, reason_message, opts
         else:
             reason_message = f"[{specific_workflow}] Couldn't find the classes this model is returning so please be aware to match it\n"
-            return preproc_info, True, reason_message
-
-    elif specific_workflow in ["all", "INSTANCE_SEG"] and "instance-segmentation" in tags:
-        pass
-    elif specific_workflow in ["all", "DETECTION"] and "detection" in tags:
-        pass
-    elif specific_workflow in ["all", "DENOISING"] and "denoising" in tags:
-        pass
-    elif specific_workflow in ["all", "SUPER_RESOLUTION"] and ("super-resolution" in tags or "superresolution" in tags):
-        pass
-    elif specific_workflow in ["all", "SELF_SUPERVISED"] and "self-supervision" in tags:
-        pass
-    elif specific_workflow in ["all", "CLASSIFICATION"] and "classification" in tags:
-        pass
-    elif specific_workflow in ["all", "IMAGE_TO_IMAGE"] and any(
-        t in tags for t in ("pix2pix", "image-reconstruction", "image-to-image", "image-restoration")
-    ):
-        pass
-    else:
-        reason_message = f"[{specific_workflow}] no workflow tag recognized in {tags}.\n"
-        return preproc_info, True, reason_message
-
-    # --------- Axes checks ---------
-    axes_order = g(inputs[0], "axes")
-    if isinstance(axes_order, list):
-        _axes_order = ""
-        for axis in axes_order:
-            if "type" in axis:
-                if axis["type"] == "batch":
-                    _axes_order += "b"
-                elif axis["type"] == "channel":
-                    _axes_order += "c"
-                elif "id" in axis:
-                    _axes_order += axis["id"]
-            elif "id" in axis:
-                _axes_order += "c" if axis["id"] == "channel" else axis["id"]
-        axes_order = _axes_order
-
-    if specific_dims == "2D":
-        if axes_order != "bcyx":
-            reason_message = f"[{specific_workflow}] In a 2D problem the axes need to be 'bcyx', found {axes_order}\n"
-            return preproc_info, True, reason_message
-        elif "2d" not in tags and "3d" in tags:
-            reason_message = f"[{specific_workflow}] Selected model seems to not be 2D\n"
-            return preproc_info, True, reason_message
-    elif specific_dims == "3D":
-        if axes_order != "bczyx":
-            reason_message = f"[{specific_workflow}] In a 3D problem the axes need to be 'bczyx', found {axes_order}\n"
-            return preproc_info, True, reason_message
-        elif "3d" not in tags and "2d" in tags:
-            reason_message = f"[{specific_workflow}] Selected model seems to not be 3D\n"
-            return preproc_info, True, reason_message
-    else:  # "all"
-        if axes_order not in ["bcyx", "bczyx"]:
-            reason_message = (
-                f"[{specific_workflow}] Accepting models only with ['bcyx', 'bczyx'] axis order, found {axes_order}\n"
-            )
-            return preproc_info, True, reason_message
-
-    # --------- Preprocessing ---------
-    if "preprocessing" in (inputs[0] or {}):
-        preproc_info = inputs[0]["preprocessing"]
-        key_to_find = "id" if model_version > Version("0.5.0") else "name"
-        if isinstance(preproc_info, list):
-            # remove ensure_dtype->float casts (BiaPy does it anyway)
-            new_preproc_info = []
-            for preproc in preproc_info:
-                if key_to_find in preproc and not (
-                    preproc[key_to_find] == "ensure_dtype"
-                    and "kwargs" in preproc
-                    and "dtype" in preproc["kwargs"]
-                    and "float" in str(preproc["kwargs"]["dtype"])
-                ):
-                    new_preproc_info.append(preproc)
-            preproc_info = new_preproc_info.copy()
-
-            if len(preproc_info) > 1:
-                reason_message = (
-                    f"[{specific_workflow}] More than one preprocessing from BMZ not implemented yet {axes_order}\n"
-                )
-                return preproc_info, True, reason_message
-            elif len(preproc_info) == 1:
-                preproc_info = preproc_info[0]
-                if key_to_find in preproc_info:
-                    if preproc_info[key_to_find] not in [
-                        "zero_mean_unit_variance",
-                        "fixed_zero_mean_unit_variance",
-                        "scale_range",
-                        "scale_linear",
-                    ]:
-                        reason_message = (
-                            f"[{specific_workflow}] Not recognized preprocessing found: {preproc_info[key_to_find]}\n"
-                        )
-                        return preproc_info, True, reason_message
-                else:
-                    reason_message = (
-                        f"[{specific_workflow}] Not recognized preprocessing structure found: {preproc_info}\n"
-                    )
-                    return preproc_info, True, reason_message
-
-    # --------- Post-processing in kwargs (unsupported) ---------
-    if "postprocessing" in model_kwargs and model_kwargs["postprocessing"] is not None:
-        reason_message = (
-            f"[{specific_workflow}] Currently no postprocessing is supported. Found: {model_kwargs['postprocessing']}\n"
-        )
-        return preproc_info, True, reason_message
-
-    # All checks passed
-    return preproc_info, False, ""
-
-
-def check_model_restrictions(cfg: CN, bmz_config: Dict, workflow_specs: Dict, verbose: bool=True) -> List[str]:
-    """
-    Check model restrictions to be applied into the current configuration.
-
-    Parameters
-    ----------
-    cfg : YACS configuration
-        Running configuration.
-
-    bmz_config : dict
-        BMZ configuration where among other thins the RDF of the model is stored.
-
-    workflow_specs : dict
-        Specifications of the workflow. Only expected "workflow_type" key.
-
-    verbose : bool
-        Whether to print the changes imposed by the model or not.
-
-    Returns
-    -------
-    option_list: list of str
-        List of variables and values to change in current configuration. These changes
-        are imposed by the selected model.
-    """
-    specific_workflow = workflow_specs["workflow_type"]
-
-    # First let's make sure we have a valid model, if it is a dict then it will be the RDF
-    if not isinstance(bmz_config["original_bmz_config"], dict):
-        if isinstance(bmz_config["original_bmz_config"], InvalidDescr):
-            raise ValueError(f"Failed to load '{cfg.MODEL.BMZ.SOURCE_MODEL_ID}' model")
-    else:
-        rdf = bmz_config["original_bmz_config"].get("raw") or bmz_config["original_bmz_config"]
-        core = rdf.get("manifest", rdf)  # <- NEW: inputs/weights/etc. are usually here now
-
-    # Version of the model
-    if isinstance(bmz_config["original_bmz_config"], dict):
-        fmt = (core.get("format_version")
-            or rdf.get("format_version")
-            or bmz_config["original_bmz_config"].get("format_version"))
-        model_version = Version(str(fmt)) if fmt else Version("0.5.2")
-    else:
-        try:
-            model_version = Version(bmz_config["original_bmz_config"].format_version)
-        except:
-            model_version = Version("0.5.2")
-
-    opts = {}
-
-    # ---- 1) DATA.PATCH_SIZE from input tensor shape/axes ----
-    if isinstance(bmz_config["original_bmz_config"], dict):
-        if "inputs" not in core or not core["inputs"]:
-            raise KeyError("Couldn't find 'inputs' in the model RDF (expected under raw.manifest.inputs).")
-
-        input0 = core["inputs"][0]
-        input_image_shape = []
-        if "shape" in input0:
-            input_image_shape = input0["shape"]
-            # e.g. {'min': [...], 'step': [...]} -> take 'min'
-            if isinstance(input_image_shape, dict) and "min" in input_image_shape:
-                input_image_shape = input_image_shape["min"]
-        else:
-            # Derive from axes (supports 'type'=='batch'/'channel' and sized spatial axes)
-            for axis in input0.get("axes", []):
-                if "type" in axis:
-                    if axis["type"] == "batch":
-                        input_image_shape += [1]
-                    elif axis["type"] == "channel":
-                        input_image_shape += [1]
-                    elif ("id" in axis) and ("size" in axis):
-                        if isinstance(axis["size"], int):
-                            input_image_shape += [axis["size"]]
-                        elif isinstance(axis["size"], dict) and "min" in axis["size"]:
-                            input_image_shape += [axis["size"]["min"]]
-                elif "id" in axis:
-                    if axis["id"] == "channel":
-                        input_image_shape += [1]
-                    else:
-                        if isinstance(axis.get("size"), int):
-                            input_image_shape += [axis["size"]]
-                        elif isinstance(axis.get("size"), dict) and "min" in axis["size"]:
-                            input_image_shape += [axis["size"]["min"]]
-    else:
-        inputs = get_test_inputs(bmz_config["original_bmz_config"])
-        input_image_shape = None
-        if "input0" in inputs.members:
-            input_image_shape = inputs.members["input0"]._data.shape  # type: ignore
-        elif "raw" in inputs.members:
-            input_image_shape = inputs.members["raw"]._data.shape  # type: ignore
-        else:  # ambitious-sloth case
-            input_image_shape = inputs.members[list(inputs.members.keys())[0]]._data.shape
-        if input_image_shape is None:
-            raise ValueError(f"Couldn't load input info from BMZ model's RDF: {inputs}")
-        if cfg.DATA.PATCH_SIZE != input_image_shape[2:] + (input_image_shape[1],):
-            opts["DATA.PATCH_SIZE"] = input_image_shape[2:] + (input_image_shape[1],)
-            
-    # ---- Capture model kwargs from weights ----
-    if isinstance(bmz_config["original_bmz_config"], dict):
-        weights = core.get("weights", {}).get("pytorch_state_dict", {})
-        if "kwargs" in weights:
-            model_kwargs = weights["kwargs"]
-        elif "architecture" in weights and "kwargs" in weights["architecture"]:
-            model_kwargs = weights["architecture"]["kwargs"]
-        else:
-            raise ValueError("Couldn't extract kwargs from model description (looked under manifest.weights.pytorch_state_dict).")
-    else:
-        weights = bmz_config["original_bmz_config"].weights.pytorch_state_dict
-        if hasattr(weights, "kwargs"):
-            model_kwargs = weights.kwargs
-        elif hasattr(weights, "architecture") and hasattr(weights.architecture, "kwargs"):
-            model_kwargs = weights.architecture.kwargs
-        else:
-            raise ValueError(f"Couldn't extract kwargs from model description.")    
-    
-    # ---- 2) Workflow-specific restrictions ----
-    if specific_workflow in ["SEMANTIC_SEG"]:
-        # Number of classes
-        classes = -1
-        if "n_classes" in model_kwargs:  # BiaPy
-            classes = model_kwargs["n_classes"]
-        elif "out_channels" in model_kwargs:
-            classes = model_kwargs["out_channels"]
-        elif "output_channels" in model_kwargs:
-            classes = model_kwargs["output_channels"]
-        elif "classes" in model_kwargs:
-            classes = model_kwargs["classes"]
-
-        if isinstance(classes, list):
-            classes = classes[-1]
-
-        try:
-            if classes == -1:
-                # Check if the model is one of the known architectures and assume it returns 1 class (as is the default in BiaPy)
-                try:
-                    names = [str(weights["architecture"]["source"]), weights["architecture"]["callable"]]
-                except:
-                    names = [
-                        str(weights.architecture.source), 
-                        weights.architecture.callable
-                    ]
-                for arch in names:
-                    if arch is not None:
-                        arch = str(arch).lower().replace(".py", "")
-                        if arch in [
-                            "unet",
-                            "resunet",
-                            "resunet++",
-                            "seunet",
-                            "attention_unet",
-                            "resunet_se",
-                            "unetr",
-                            "multiresunet",
-                            "unext_v1",
-                            "unext_v2",
-                            "hrnet",
-                        ]:
-                            classes = 1
-                    if classes != -1:
-                        if verbose:
-                            print(f"[BMZ] Detected BiaPy model ({arch}) so assuming 1 as the class output, which is the default in BiaPy")
-                        break 
-        except:
-            pass
-        
-        if not isinstance(classes, int):
-            raise ValueError(f"Classes not extracted correctly. Obtained {classes}")
-        if classes == -1:
-            raise ValueError("Classes not found for semantic segmentation dir.")
+            return preproc_info, True, reason_message, opts
 
         opts["DATA.N_CLASSES"] = max(2, classes)
 
-    elif specific_workflow in ["INSTANCE_SEG"]:
+    elif specific_workflow in ["all", "INSTANCE_SEG"] and "instance-segmentation" in tags:
         # Assumed it's F + C. This needs a more elaborated process. Still deciding this:
         # https://github.com/bioimage-io/spec-bioimage-io/issues/621
 
@@ -1164,11 +885,6 @@ def check_model_restrictions(cfg: CN, bmz_config: Dict, workflow_specs: Dict, ve
             channels = model_kwargs["out_channels"]
         elif "output_channels" in model_kwargs:
             channels = model_kwargs["output_channels"]
-
-        if isinstance(bmz_config["original_bmz_config"], dict):
-            tags = core["tags"]
-        else:
-            tags = bmz_config["original_bmz_config"].tags
 
         if "biapy" in tags:
             # CartoCell models
@@ -1204,107 +920,163 @@ def check_model_restrictions(cfg: CN, bmz_config: Dict, workflow_specs: Dict, ve
         if channel_code == "A":
             opts["LOSS.CLASS_REBALANCE"] = "auto"
 
-    # ---- 3) Preprocessing mapping (BMZ -> BiaPy) ----
-    key_to_find = "id" if model_version > Version("0.5.0") else "name"
-    if isinstance(bmz_config["original_bmz_config"], dict):
-        preproc_info = input0.get("preprocessing", [])
-        if len(preproc_info) > 0:
-            preproc_info = preproc_info[0]
+    elif specific_workflow in ["all", "DETECTION"] and "detection" in tags:
+        pass
+    elif specific_workflow in ["all", "DENOISING"] and "denoising" in tags:
+        pass
+    elif specific_workflow in ["all", "SUPER_RESOLUTION"] and ("super-resolution" in tags or "superresolution" in tags):
+        pass
+    elif specific_workflow in ["all", "SELF_SUPERVISED"] and "self-supervision" in tags:
+        pass
+    elif specific_workflow in ["all", "CLASSIFICATION"] and "classification" in tags:
+        pass
+    elif specific_workflow in ["all", "IMAGE_TO_IMAGE"] and any(
+        t in tags for t in ("pix2pix", "image-reconstruction", "image-to-image", "image-restoration")
+    ):
+        pass
     else:
-        preproc_info = bmz_config["preprocessing"]
+        reason_message = f"[{specific_workflow}] no workflow tag recognized in {tags}.\n"
+        return preproc_info, True, reason_message, opts
 
-    if not preproc_info:
-        return opts
+    # --------- Axes checks ---------
+    axes_order = g(inputs[0], "axes")
+    input_image_shape = []
     
-    if verbose:
-        print(f"[BMZ] Overriding preprocessing steps to the ones fixed in BMZ model: {preproc_info}")
+    if isinstance(axes_order, list):
+        _axes_order = ""
+        for axis in axes_order:
+            if "type" in axis:
+                if axis["type"] == "batch":
+                    _axes_order += "b"
+                    input_image_shape += [1]
+                elif axis["type"] == "channel":
+                    _axes_order += "c"
+                    input_image_shape += [1]
+                elif "id" in axis:
+                    _axes_order += axis["id"]
+                    input_image_shape += [axis["size"]]
+            elif "id" in axis:
+                if axis["id"] == "channel":
+                    _axes_order += "c" 
+                    input_image_shape += [1]
+                else:
+                    if isinstance(axis.get("size"), int):
+                        input_image_shape += [axis["size"]]
+                    elif isinstance(axis.get("size"), dict) and "min" in axis["size"]:
+                        input_image_shape += [axis["size"]["min"]]
+                    _axes_order += axis["id"]
+        axes_order = _axes_order
     
-    if key_to_find in preproc_info:
-        proc_id = preproc_info[key_to_find]
-        # zero_mean_unit_variance / fixed_zero_mean_unit_variance -> zero_mean_unit_variance(mean,std)
-        if proc_id in ["fixed_zero_mean_unit_variance", "zero_mean_unit_variance"]:
-            if "kwargs" in preproc_info and "mean" in preproc_info["kwargs"]:
-                mean = preproc_info["kwargs"]["mean"]
-                std = preproc_info["kwargs"]["std"]
-            elif "mean" in preproc_info:
-                mean = preproc_info["mean"]
-                std = preproc_info["std"]
-            else:
-                mean, std = -1.0, -1.0
+    opts["DATA.PATCH_SIZE"] = tuple(input_image_shape[2:] + [input_image_shape[1]]) # (z) y x c
 
-            opts["DATA.NORMALIZATION.TYPE"] = "zero_mean_unit_variance"
-            opts["DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.MEAN_VAL"] = mean
-            opts["DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.STD_VAL"] = std
+    if specific_dims == "2D":
+        if axes_order != "bcyx":
+            reason_message = f"[{specific_workflow}] In a 2D problem the axes need to be 'bcyx', found {axes_order}\n"
+            return preproc_info, True, reason_message, opts
+        elif "2d" not in tags and "3d" in tags:
+            reason_message = f"[{specific_workflow}] Selected model seems to not be 2D\n"
+            return preproc_info, True, reason_message, opts
+    elif specific_dims == "3D":
+        if axes_order != "bczyx":
+            reason_message = f"[{specific_workflow}] In a 3D problem the axes need to be 'bczyx', found {axes_order}\n"
+            return preproc_info, True, reason_message, opts
+        elif "3d" not in tags and "2d" in tags:
+            reason_message = f"[{specific_workflow}] Selected model seems to not be 3D\n"
+            return preproc_info, True, reason_message, opts
+    else:  # "all"
+        if axes_order not in ["bcyx", "bczyx"]:
+            reason_message = (
+                f"[{specific_workflow}] Accepting models only with ['bcyx', 'bczyx'] axis order, found {axes_order}\n"
+            )
+            return preproc_info, True, reason_message, opts
 
-        # scale_linear ~ div (gain not handled, same as original)
-        elif preproc_info[key_to_find] == "scale_linear":
-            opts["DATA.NORMALIZATION.TYPE"] = "div"
+    # --------- Preprocessing ---------
+    if "preprocessing" in (inputs[0] or {}):
+        preproc_info = inputs[0]["preprocessing"]
+        key_to_find = "id" if model_version > Version("0.5.0") else "name"
+        if isinstance(preproc_info, list):
+            # remove ensure_dtype->float casts (BiaPy does it anyway)
+            new_preproc_info = []
+            for preproc in preproc_info:
+                if key_to_find in preproc and not (
+                    preproc[key_to_find] == "ensure_dtype"
+                    and "kwargs" in preproc
+                    and "dtype" in preproc["kwargs"]
+                    and "float" in str(preproc["kwargs"]["dtype"])
+                ):
+                    new_preproc_info.append(preproc)
+            preproc_info = new_preproc_info.copy()
 
-        # scale_range -> scale_range (+ optional PERC_CLIP)
-        elif preproc_info[key_to_find] == "scale_range":
-            opts["DATA.NORMALIZATION.TYPE"] = "scale_range"
-
-            # Check if there is percentile clippign
-            if (
-                float(preproc_info["kwargs"]["min_percentile"]) != 0
-                or float(preproc_info["kwargs"]["max_percentile"]) != 100
-            ):
-                opts["DATA.NORMALIZATION.PERC_CLIP.ENABLE"] = True
-                opts["DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC"] = float(
-                    preproc_info["kwargs"]["min_percentile"]
+            if len(preproc_info) > 1:
+                reason_message = (
+                    f"[{specific_workflow}] More than one preprocessing from BMZ not implemented yet {axes_order}\n"
                 )
-                opts["DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC"] = float(
-                    preproc_info["kwargs"]["max_percentile"]
-                )
+                return preproc_info, True, reason_message, opts
+            elif len(preproc_info) == 1:
+                preproc_info = preproc_info[0]
+                if key_to_find in preproc_info:
+                    proc_id = preproc_info[key_to_find]
+                    if proc_id not in [
+                        "zero_mean_unit_variance",
+                        "fixed_zero_mean_unit_variance",
+                        "scale_range",
+                        "scale_linear",
+                    ]:
+                        reason_message = (
+                            f"[{specific_workflow}] Not recognized preprocessing found: {proc_id}\n"
+                        )
+                        return preproc_info, True, reason_message, opts
+                    else:
+                        # zero_mean_unit_variance / fixed_zero_mean_unit_variance -> zero_mean_unit_variance(mean,std)
+                        if proc_id in ["fixed_zero_mean_unit_variance", "zero_mean_unit_variance"]:
+                            if "kwargs" in preproc_info and "mean" in preproc_info["kwargs"]:
+                                mean = preproc_info["kwargs"]["mean"]
+                                std = preproc_info["kwargs"]["std"]
+                            elif "mean" in preproc_info:
+                                mean = preproc_info["mean"]
+                                std = preproc_info["std"]
+                            else:
+                                mean, std = -1.0, -1.0
 
-    if not cfg:
-        return opts
+                            opts["DATA.NORMALIZATION.TYPE"] = "zero_mean_unit_variance"
+                            opts["DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.MEAN_VAL"] = mean
+                            opts["DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.STD_VAL"] = std
 
-    option_list = []
-    for key, val in opts.items():
-        old_val = get_cfg_key_value(cfg, key)
-        if old_val != val and verbose:
-            print(f"[BMZ] Changed '{key}' from {old_val} to {val} as defined in the RDF")
-        option_list.append(key)
-        option_list.append(val)
+                        # scale_linear ~ div (gain not handled, same as original)
+                        elif proc_id == "scale_linear":
+                            opts["DATA.NORMALIZATION.TYPE"] = "div"
 
-    return option_list
+                        # scale_range -> scale_range (+ optional PERC_CLIP)
+                        elif proc_id == "scale_range":
+                            opts["DATA.NORMALIZATION.TYPE"] = "scale_range"
 
+                            # Check if there is percentile clippign
+                            if (
+                                float(preproc_info["kwargs"]["min_percentile"]) != 0
+                                or float(preproc_info["kwargs"]["max_percentile"]) != 100
+                            ):
+                                opts["DATA.NORMALIZATION.PERC_CLIP.ENABLE"] = True
+                                opts["DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC"] = float(
+                                    preproc_info["kwargs"]["min_percentile"]
+                                )
+                                opts["DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC"] = float(
+                                    preproc_info["kwargs"]["max_percentile"]
+                                )
+                else:
+                    reason_message = (
+                        f"[{specific_workflow}] Not recognized preprocessing structure found: {preproc_info}\n"
+                    )
+                    return preproc_info, True, reason_message, opts
 
-def get_cfg_key_value(obj, attr, *args):
-    """
-    Recursively retrieve a nested attribute value from an object (e.g., a YACS CfgNode).
+    # --------- Post-processing in kwargs (unsupported) ---------
+    if "postprocessing" in model_kwargs and model_kwargs["postprocessing"] is not None:
+        reason_message = (
+            f"[{specific_workflow}] Currently no postprocessing is supported. Found: {model_kwargs['postprocessing']}\n"
+        )
+        return preproc_info, True, reason_message, opts
 
-    This function allows accessing values from nested configuration objects
-    or any object with attributes, by providing a dot-separated string for the
-    attribute path. It's particularly useful for navigating `CfgNode` objects.
-
-    Parameters
-    ----------
-    obj : object
-        The base object from which to start attribute retrieval.
-    attr : str
-        A dot-separated string representing the path to the desired attribute
-        (e.g., "MODEL.ARCHITECTURE", "DATA.PATCH_SIZE.0").
-    *args
-        Optional arguments to pass to `getattr` for default values if an
-        attribute is not found. If provided, `getattr(obj, name, *args)` is used.
-
-    Returns
-    -------
-    any
-        The value of the nested attribute.
-
-    Raises
-    ------
-    AttributeError
-        If an attribute in the path does not exist and no default value is provided.
-    """
-
-    def _getattr(obj, attr):
-        return getattr(obj, attr, *args)
-
-    return functools.reduce(_getattr, [obj] + attr.split("."))
+    # All checks passed
+    return preproc_info, False, "", opts
 
 
 def build_torchvision_model(cfg: CN, device: torch.device) -> Tuple[nn.Module, Callable]:

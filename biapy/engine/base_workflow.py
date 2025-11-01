@@ -32,7 +32,6 @@ from biapy.models import (
     build_torchvision_model,
     build_bmz_model,
     check_bmz_args,
-    check_model_restrictions,
 )
 from biapy.models.blocks import get_activation
 from biapy.engine import prepare_optimizer, build_callbacks
@@ -66,6 +65,7 @@ from biapy.engine.check_configuration import (
 from biapy.utils.util import (
     create_plots,
     check_downsample_division,
+    get_cfg_key_value,
 )
 from biapy.engine.train_engine import train_one_epoch, evaluate
 from biapy.data.data_2D_manipulation import (
@@ -239,14 +239,21 @@ class Base_Workflow(metaclass=ABCMeta):
         self.bmz_config = {}
         self.bmz_pipeline = None
         if self.cfg.MODEL.SOURCE == "bmz":
-            self.bmz_config["preprocessing"] = check_bmz_args(self.cfg.MODEL.BMZ.SOURCE_MODEL_ID, self.cfg)
+            self.bmz_config["preprocessing"], opts = check_bmz_args(self.cfg.MODEL.BMZ.SOURCE_MODEL_ID, self.cfg)
+            print("[BMZ] Overriding preprocessing steps to the ones fixed in BMZ model: {}".format(self.bmz_config["preprocessing"]))
 
+            option_list = []
+            for key, val in opts.items():
+                old_val = get_cfg_key_value(cfg, key)
+                if old_val != val:
+                    print(f"[BMZ] Changed '{key}' from {old_val} to {val} as defined in the RDF")
+                option_list.append(key)
+                option_list.append(val)
+                
             print("Loading BioImage Model Zoo pretrained model . . .")
             self.bmz_config["original_bmz_config"] = load_description(self.cfg.MODEL.BMZ.SOURCE_MODEL_ID)
 
-            opts = check_model_restrictions(self.cfg, self.bmz_config, {"workflow_type": cfg.PROBLEM.TYPE})
-
-            self.cfg.merge_from_list(opts)
+            self.cfg.merge_from_list(option_list)
 
         # Save number of channels to be created by the model
         self.define_activations_and_channels()
