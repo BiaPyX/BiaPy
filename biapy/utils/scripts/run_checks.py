@@ -67,14 +67,14 @@ all_test_info["Test4"] = {
     "enable": True,
     "jobname": "test4",
     "description": "2D Instance seg. Stardist 2D data. Basic DA. BC (auto). resunet++. "
-        "Post-proc: Clear border + remove instances by properties",
+        "Post-proc: Clear border + remove instances by properties (leave only the bad ones).",
     "yaml": "test_4.yaml",
     "internal_checks": [
         {"type": "regular", "pattern": "Test IoU (F channel) (merge patches):", "gt": True, "value": 0.4},
         {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 1, "metric": "f1",
             "gt": True, "value": 0.50},
         {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 2, "metric": "f1",
-            "gt": False, "value": 0.3}, # Post-processing
+            "lt": False, "value": 0.3}, # Post-processing (leave bad instances only)
     ]
 }
 
@@ -1386,7 +1386,8 @@ if all_test_info["Test4"]["enable"]:
     biapy_config['PROBLEM']['INSTANCE_SEG']['DATA_CHANNELS'] = 'BC'
     biapy_config['PROBLEM']['INSTANCE_SEG']['DATA_MW_TH_TYPE'] = "auto"
     biapy_config['PROBLEM']['INSTANCE_SEG']['DATA_CHANNEL_WEIGHTS'] = "(0.5, 1)"
-
+    biapy_config['PROBLEM']['INSTANCE_SEG']["WATERSHED"]["DATA_REMOVE_BEFORE_MW"] = True
+    biapy_config['PROBLEM']['INSTANCE_SEG']["WATERSHED"]["DATA_REMOVE_SMALL_OBJ_BEFORE"] = 10
     biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(instance_seg_2d_data_outpath, "data", "train", "raw")
     biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(instance_seg_2d_data_outpath, "data", "train", "label")
     biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
