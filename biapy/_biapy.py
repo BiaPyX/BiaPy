@@ -704,7 +704,7 @@ class BiaPy:
             if test_output.ndim == 4:
                 output_axes += [
                     SpaceOutputAxisWithHalo(
-                        halo=self.cfg.DATA.PATCH_SIZE[0]//8, 
+                        halo=self.cfg.DATA.PATCH_SIZE[0]//16, 
                         id=AxisId("y"), 
                         size=SizeReference(
                             tensor_id='input0',
@@ -831,7 +831,7 @@ class BiaPy:
                         elif letter == "z":
                             output_axes.append(
                                 SpaceOutputAxisWithHalo(
-                                    halo=test_tensor.shape[0]//8, id=AxisId(str(letter)), size=SizeReference(
+                                    halo=test_tensor.shape[0]//16, id=AxisId(str(letter)), size=SizeReference(
                                         tensor_id='input0',
                                         axis_id='z',
                                         offset=0,
