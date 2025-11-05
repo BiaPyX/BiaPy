@@ -12,7 +12,7 @@ from tqdm import tqdm
 import pandas as pd
 from skimage.segmentation import clear_border, find_boundaries, watershed
 from scipy.ndimage import generic_filter, generate_binary_structure, grey_closing, center_of_mass, map_coordinates, binary_dilation as binary_dilation_scipy
-from skimage.morphology import disk, ball, binary_dilation, binary_erosion, skeletonize
+from skimage.morphology import disk, binary_dilation, binary_erosion, skeletonize
 from skimage.measure import label, regionprops_table
 from skimage.transform import resize
 from skimage.feature import canny
@@ -312,6 +312,27 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
                 verbose=False,
             )
 
+def unique_labels_fast(a: np.ndarray):
+    """
+    Find the unique labels in an integer array a in [0, K] in O(n) time and O(K) space.
+
+    Parameters
+    ----------
+    a : ndarray
+        Input array of integers.
+
+    Returns
+    -------
+    ndarray
+        Array of unique labels.
+    """
+    # a: any shape, integer dtype, all values in [0, K]
+    a = np.asarray(a)
+    K = int(a.max())
+    present = np.zeros(K + 1, dtype=bool)
+    present[a.ravel()] = True        # O(n) and very cache-friendly
+    return np.flatnonzero(present)    # sorted because we scan 0..K
+
 
 def labels_into_channels(
     instance_labels: NDArray, 
@@ -393,21 +414,28 @@ def labels_into_channels(
     vol = instance_labels[..., 0]
 
     # Precompute regionprops only when needed
-    needs_props = any(x in mode for x in ("H", "V", "Z"))
+    needs_props = False
+    if (
+        any(x in mode for x in ("H", "V", "Z"))
+        or ("P" in mode and channel_extra_opts.get("P", {}).get("type", "") == "skeleton")
+        or ("Dc" in mode)
+    ):
+        needs_props = True
     if needs_props:
         # label, bbox, centroid (you didn't have intensity stats here)
         props_tbl = regionprops_table(vol, properties=("label", "bbox", "centroid"))
         # Convenience view as list of labels
-        instances = [0] + list(props_tbl["label"])
+        instances = list(props_tbl["label"])
         instance_count = len(instances)
     else:
-        instances = list(np.unique(vol))
+        instances = sorted(list(unique_labels_fast(vol)))
         instance_count = len(instances)
-    instances = [inst for inst in instances if inst != 0] # remove background
+        instances = [inst for inst in instances if inst != 0] # remove background
 
     if instance_count <= 1:
         return new_mask  # only background
-    
+    disable_tqdm = False if instance_count >= 2000 else True
+
     fg_mask = (vol > 0).astype(np.uint8)
     bg_mask = (vol == 0).astype(np.uint8)
 
@@ -430,7 +458,9 @@ def labels_into_channels(
         # Check if erosion/dilation is requested as the process needs the original volume
         # to make it per-instance
         er_k = channel_extra_opts.get("F", {}).get("erosion", 0)
-        dil_k = channel_extra_opts.get("F", {}).get("dilation", 0)            
+        dil_k = channel_extra_opts.get("F", {}).get("dilation", 0)  
+        mask = fg_mask.astype(np.uint8)
+   
         erode, dilate = False, False
         if (isinstance(er_k, int) and er_k > 0) or (isinstance(er_k, list) and any([x for x in er_k if x > 0])):
             erode = True
@@ -442,7 +472,7 @@ def labels_into_channels(
             dil_k = generate_ellipse_footprint(dil_k)
             er_k = [er_k,]*mask.ndim if isinstance(er_k, int) else er_k
             er_k = generate_ellipse_footprint(er_k)
-            for lb in instances:
+            for lb in tqdm(instances, disable=disable_tqdm):
                 m = (vol == lb)
                 if not np.any(m):
                     continue
@@ -451,9 +481,7 @@ def labels_into_channels(
                 if erode:
                     m = binary_erosion(m.astype(np.uint8), footprint=er_k).astype(np.uint8)
                 mask[m > 0] = lb
-            else:
-                mask = fg_mask.astype(np.uint8)
-            new_mask[..., mode.index("F")] = mask
+        new_mask[..., mode.index("F")] = mask
 
     # ---------- Background (B) ----------
     if "B" in mode:
@@ -462,6 +490,8 @@ def labels_into_channels(
         er_k = channel_extra_opts.get("B", {}).get("erosion", 0)
         dil_k = channel_extra_opts.get("B", {}).get("dilation", 0)            
         erode, dilate = False, False
+        mask = bg_mask.astype(np.uint8)
+
         if (isinstance(er_k, int) and er_k > 0) or (isinstance(er_k, list) and any([x for x in er_k if x > 0])):
             erode = True
         if (isinstance(dil_k, int) and dil_k > 0) or (isinstance(dil_k, list) and any([x for x in dil_k if x > 0])):
@@ -472,7 +502,7 @@ def labels_into_channels(
             dil_k = generate_ellipse_footprint(dil_k)
             er_k = [er_k,]*mask.ndim if isinstance(er_k, int) else er_k
             er_k = generate_ellipse_footprint(er_k)
-            for lb in instances:
+            for lb in tqdm(instances, disable=disable_tqdm):
                 m = (vol == lb)
                 if not np.any(m):
                     continue
@@ -483,8 +513,6 @@ def labels_into_channels(
                 if erode:
                     m = binary_dilation(m.astype(np.uint8), footprint=er_k).astype(np.uint8)
                 mask[m > 0] = 1
-        else:
-            mask = bg_mask.astype(np.uint8)
         new_mask[..., mode.index("B")] = mask
 
     # ---------- P (central part) ----------
@@ -496,12 +524,11 @@ def labels_into_channels(
 
         p_out = np.zeros_like(fg_mask, dtype=np.uint8)
         if p_type == "skeleton":
-            for lb in instances:
-                m = (vol == lb)
-                if not np.any(m):
-                    continue
-                sk = skeletonize(m.astype(np.uint8)).astype(np.uint8)
-                p_out += sk
+            for i, lb in tqdm(enumerate(instances), disable=disable_tqdm):
+                slc = slice_from_props(props_tbl, i, vol.ndim)
+                sub = (vol[slc] == lb)
+                sk = skeletonize(sub)      
+                p_out[slc] += sk
         else:
             com_list = center_of_mass(fg_mask, labels=vol, index=instances)
             # Mark each centroid (guard against rounding outside bounds)
@@ -552,55 +579,39 @@ def labels_into_channels(
 
     # ---------- Dc (distance to center/skeleton) ----------
     if "Dc" in mode:
-        dc_type = channel_extra_opts.get("Dc", {}).get("type", "center")
+        dc_type = channel_extra_opts.get("Dc", {}).get("type", "centroid")
         dc_channel = np.zeros_like(vol, dtype=np.float32)
         
-        for lab in instances:  # skip background
-            m = (vol == lab)
-            if not np.any(m):
+        if vol.ndim == 3:        
+            cz_tab = props_tbl['centroid-0']
+            cy_tab = props_tbl['centroid-1']
+            cx_tab = props_tbl['centroid-2']
+        else:
+            cy_tab = props_tbl['centroid-0']
+            cx_tab = props_tbl['centroid-1']
+
+        for i, lb in tqdm(enumerate(instances), disable=disable_tqdm):
+            slc = slice_from_props(props_tbl, i, vol.ndim)
+            sub = (vol[slc] == lb)
+            if not sub.any():
                 continue
 
-            # tight bbox to speed up ops
-            idxs = np.where(m)
-            if vol.ndim == 2:
-                y0, y1 = idxs[0].min(), idxs[0].max() + 1
-                x0, x1 = idxs[1].min(), idxs[1].max() + 1
-                sub = m[y0:y1, x0:x1]
-
-                if dc_type == "skeleton":
-                    sk = skeletonize(sub.astype(np.uint8)).astype(bool)
-                    dist_to_sk = edt.edt(~sk, anisotropy=resolution, parallel=-1)
-                    dc_channel[y0:y1, x0:x1][sub] = dist_to_sk[sub]
-                else:
-                    # centroid in GLOBAL coords
-                    ys, xs = np.where(sub)
-                    cy = y0 + ys.mean()
-                    cx = x0 + xs.mean()
-                    # compute distances on bbox grid, then fill only inside the instance
-                    yy, xx = np.ogrid[y0:y1, x0:x1]
-                    dist = np.sqrt((yy - cy)**2 + (xx - cx)**2)
-                    dc_channel[y0:y1, x0:x1][sub] = dist[sub]
-
-            else:  # vol.ndim == 3
-                z0, z1 = idxs[0].min(), idxs[0].max() + 1
-                y0, y1 = idxs[1].min(), idxs[1].max() + 1
-                x0, x1 = idxs[2].min(), idxs[2].max() + 1
-                sub = m[z0:z1, y0:y1, x0:x1]
-
-                if dc_type == "skeleton":
-                    sk = skeletonize(sub.astype(np.uint8)).astype(bool)
-                    dist_to_sk = edt.edt(~sk, anisotropy=resolution, parallel=-1)
-                    dc_channel[z0:z1, y0:y1, x0:x1][sub] = dist_to_sk[sub]
-                else:
-                    # centroid in GLOBAL coords
-                    zs, ys, xs = np.where(sub)
-                    cz = z0 + zs.mean()
-                    cy = y0 + ys.mean()
-                    cx = x0 + xs.mean()
-                    zz, yy, xx = np.ogrid[z0:z1, y0:y1, x0:x1]
+            if dc_type == "skeleton":
+                sk = skeletonize(sub)              
+                dist_to_sk = edt.edt(~sk, anisotropy=resolution, parallel=-1)
+                dc_channel[slc][sub] = dist_to_sk[sub]
+            else: 
+                if vol.ndim == 3:
+                    cz = float(cz_tab[i]); cy = float(cy_tab[i]); cx = float(cx_tab[i])
+                    zz, yy, xx = np.ogrid[slc[0], slc[1], slc[2]]  # grids in global coords
                     dist = np.sqrt((zz - cz)**2 + (yy - cy)**2 + (xx - cx)**2)
-                    dc_channel[z0:z1, y0:y1, x0:x1][sub] = dist[sub]
-        
+                    dc_channel[slc][sub] = dist[sub]
+                else:
+                    cy = float(cy_tab[i]); cx = float(cx_tab[i])
+                    yy, xx = np.ogrid[slc[0], slc[1]]
+                    dist = np.sqrt((yy - cy)**2 + (xx - cx)**2)
+                    dc_channel[slc][sub] = dist[sub]
+
         assert isinstance(dc_channel, np.ndarray), "Expected dc_channel to be a numpy array"
         # Normalization
         if channel_extra_opts.get("Dc", {}).get("norm", False):
@@ -637,7 +648,7 @@ def labels_into_channels(
         # Mask to remember which cell pixels belong to cells that have at least one OTHER instance
         has_neighbor_px = np.zeros_like(vol, dtype=bool)
 
-        for lab in instances: 
+        for lab in tqdm(instances, disable=disable_tqdm): 
             cur = (vol == lab)
             if not np.any(cur):
                 continue
@@ -874,6 +885,41 @@ def norm_channel(channel: NDArray, vol: NDArray, instances: list[int]) -> NDArra
             normed[mask] = (values - mi) / (ma - mi)
 
     return normed
+
+def slice_from_props(props_tbl: pd.DataFrame | dict, i: int, ndim: int) -> tuple[slice, ...]:
+    """
+    Get a slice representation from the properties table for a specific instance.
+
+    Parameters
+    ----------
+    props_tbl : pd.DataFrame | dict
+        The properties table containing region properties.
+    i : int
+        The index of the instance in the properties table.
+    ndim : int
+        The number of dimensions (2 or 3).
+
+    Returns
+    -------
+    tuple[slice, ...]
+        A tuple of slice objects representing the bounding box of the instance.
+    """
+    if ndim == 2:
+        y0 = int(props_tbl['bbox-0'][i])
+        x0 = int(props_tbl['bbox-1'][i])
+        y1 = int(props_tbl['bbox-2'][i])
+        x1 = int(props_tbl['bbox-3'][i])
+        return (slice(y0, y1), slice(x0, x1))
+    elif ndim == 3:
+        z0 = int(props_tbl['bbox-0'][i])
+        y0 = int(props_tbl['bbox-1'][i])
+        x0 = int(props_tbl['bbox-2'][i])
+        z1 = int(props_tbl['bbox-3'][i])
+        y1 = int(props_tbl['bbox-4'][i])
+        x1 = int(props_tbl['bbox-5'][i])
+        return (slice(z0, z1), slice(y0, y1), slice(x0, x1))
+    else:
+        raise ValueError("Only 2D or 3D volumes are supported.")
 
 def unet_border_weight_map(
     instances: np.ndarray,
