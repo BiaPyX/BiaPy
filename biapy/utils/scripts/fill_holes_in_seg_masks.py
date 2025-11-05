@@ -1,9 +1,9 @@
 import argparse
 import os
-import sys
 import numpy as np
 from tqdm import tqdm
 import fill_voids
+from biapy.data.data_manipulation import save_tif, read_img_as_ndarray
 
 parser = argparse.ArgumentParser(description="Fill tiny holes in semantic/instance masks",
                                  formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -11,13 +11,9 @@ parser = argparse.ArgumentParser(description="Fill tiny holes in semantic/instan
 parser.add_argument("-input_label_dir", "--input_label_dir", required=True, help="Directory to the folder where the labels to fbe fixed reside")
 parser.add_argument("-output_label_dir", "--output_label_dir", required=True, help="output folder to store the fixed labels")
 parser.add_argument("-is_3d", "--is_3d", action='store_true', help="Flag to indicate if the input is 3D")
-parser.add_argument("-BiaPy_dir", "--BiaPy_dir", required=True, help="BiaPy directory")
 args = vars(parser.parse_args())
 
-# python fill_holes_in_seg_masks.py --input_label_dir /data/dfranco/thesis/data2/dfranco/datasets/oocyte/arturo_instances/v2/y --output_label_dir /scratch/dfranco/thesis/data2/dfranco/datasets/oocyte/arturo_instances/v3/y --BiaPy_dir ../../ --is_3d
-
-sys.path.insert(0, args['BiaPy_dir'])
-from biapy.data.data_manipulation import save_tif, read_img_as_ndarray
+# python fill_holes_in_seg_masks.py --input_label_dir /data/dfranco/thesis/data2/dfranco/datasets/oocyte/arturo_instances/v2/y --output_label_dir /scratch/dfranco/thesis/data2/dfranco/datasets/oocyte/arturo_instances/v3/y ../../ --is_3d
 
 data_dir = args['input_label_dir']
 out_dir = args['output_label_dir']
