@@ -156,7 +156,7 @@ class Config:
         #       - 'norm': bool, whether to normalize the distances between 0 and 1. Default: False
         #       - 'mask_values': bool, whether to mask the distance channel to only calculate the loss in non-zero values. Default: True
         #   - 'Dc' channel. Possible options:
-        #       - 'type': str, the type of the channel. Options are: 'center', 'skeleton'. Default: 'center'
+        #       - 'type': str, the type of the channel. Options are: 'centroid', 'skeleton'. Default: 'centroid'
         #       - 'norm': bool, whether to normalize the distances between 0 and 1. Default: False
         #       - 'mask_values': bool, whether to mask the distance channel to only calculate the loss in non-zero values. Default: True
         #   - 'Dn' channel. Possible options:

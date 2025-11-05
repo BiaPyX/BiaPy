@@ -167,6 +167,24 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
                     growth_mask_channels = ["F"]
                     growth_mask_channel_ths = ["auto"]
+            elif set(sorted_original_instance_channels) == {"F", "Dc"}:
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
+                    seed_channels = ["F", "Dc"]
+                    seed_channels_thresh = ["auto", "auto"]
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.TOPOGRAPHIC_SURFACE_CHANNEL == "":
+                    topo_surface_ch = "F"
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
+                    growth_mask_channels = ["F"]
+                    growth_mask_channel_ths = ["auto"]
+            elif set(sorted_original_instance_channels) == {"F", "Dn"}:
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
+                    seed_channels = ["F", "Dn"]
+                    seed_channels_thresh = ["auto", "auto"]
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.TOPOGRAPHIC_SURFACE_CHANNEL == "":
+                    topo_surface_ch = "F"
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
+                    growth_mask_channels = ["F"]
+                    growth_mask_channel_ths = ["auto"]
             elif set(sorted_original_instance_channels) == {"F", "P"}:
                 if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
                     seed_channels = ["F", "P"]
@@ -397,7 +415,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             # Dc — center/skeleton distance-to-center
             if "Dc" in chs:
                 dst["Dc"] = {
-                    "type": dst.get("Dc", {}).get("mode", "thick"),
+                    "type": dst.get("Dc", {}).get("mode", "centroid"),
                     "norm": dst.get("Dc", {}).get("norm", True),
                     "mask_values": dst.get("Dc", {}).get("mask_values", True),
                 }
@@ -1325,8 +1343,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                         assert isinstance(val["norm"], bool)
                     _assert_bool(val, "mask_values", ctx)
 
-                elif key == "Dc":  # distance-to-center
-                    _assert_str_in(val, "type", {"center", "skeleton"}, ctx)
+                elif key == "Dc":  # distance-to-centroid
+                    _assert_str_in(val, "type", {"centroid", "skeleton"}, ctx)
                     _assert_optional_bool(val, "norm", ctx)
                     _assert_bool(val, "mask_values", ctx)
 
