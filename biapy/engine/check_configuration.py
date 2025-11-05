@@ -2530,7 +2530,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             except ImportError:
                 raise ImportError("Please install safetensors package to be able to load .safetensors checkpoints")
 
-    if not cfg.MODEL.LOAD_CHECKPOINT and not cfg.TRAIN.ENABLE and cfg.TEST.ENABLE:
+    if cfg.MODEL.SOURCE == "biapy" and not cfg.MODEL.LOAD_CHECKPOINT and not cfg.TRAIN.ENABLE and cfg.TEST.ENABLE:
         raise ValueError("Seems that you want to test a model without training first. In this case, 'MODEL.LOAD_CHECKPOINT' needs to be set to True to load a pre-trained model.")
 
     assert cfg.MODEL.OUT_CHECKPOINT_FORMAT in ["pth", "safetensors"], "MODEL.OUT_CHECKPOINT_FORMAT not in ['pth', 'safetensors']"
