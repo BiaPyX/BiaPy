@@ -425,37 +425,67 @@ def labels_into_channels(
             calc_props=props_tbl,
         )
 
-    # ---------- Foreground (F) / Background (B) ----------
-    for ch, mask_expr in (("F", fg_mask), ("B", bg_mask)):
-        if ch in mode:
-            # Check if erosion/dilation is requested as the process needs the original volume
-            # to make it per-instance
-            er_k = channel_extra_opts.get(ch, {}).get("erosion", 0)
-            dil_k = channel_extra_opts.get(ch, {}).get("dilation", 0)            
-            erode, dilate = False, False
-            if (isinstance(er_k, int) and er_k > 0) or (isinstance(er_k, list) and any([x for x in er_k if x > 0])):
-                erode = True
-            if (isinstance(dil_k, int) and dil_k > 0) or (isinstance(dil_k, list) and any([x for x in dil_k if x > 0])):
-                dilate = True
-            if erode or dilate:
-                mask = np.zeros_like(fg_mask, dtype=np.uint8)
-                dil_k = [dil_k,]*mask.ndim if isinstance(dil_k, int) else dil_k
-                dil_k = generate_ellipse_footprint(dil_k)
-                er_k = [er_k,]*mask.ndim if isinstance(er_k, int) else er_k
-                er_k = generate_ellipse_footprint(er_k)
-                for lb in instances:
-                    m = (vol == lb)
-                    if not np.any(m):
-                        continue
-                    if dilate:
-                        m = binary_dilation(m.astype(np.uint8), footprint=dil_k).astype(np.uint8)
-                    if erode:
-                        m = binary_erosion(m.astype(np.uint8), footprint=er_k).astype(np.uint8)
-                    mask[m > 0] = lb
+    # ---------- Foreground (F) ----------
+    if "F" in mode:
+        # Check if erosion/dilation is requested as the process needs the original volume
+        # to make it per-instance
+        er_k = channel_extra_opts.get("F", {}).get("erosion", 0)
+        dil_k = channel_extra_opts.get("F", {}).get("dilation", 0)            
+        erode, dilate = False, False
+        if (isinstance(er_k, int) and er_k > 0) or (isinstance(er_k, list) and any([x for x in er_k if x > 0])):
+            erode = True
+        if (isinstance(dil_k, int) and dil_k > 0) or (isinstance(dil_k, list) and any([x for x in dil_k if x > 0])):
+            dilate = True
+        if erode or dilate:
+            mask = np.zeros_like(fg_mask, dtype=vol.dtype)
+            dil_k = [dil_k,]*mask.ndim if isinstance(dil_k, int) else dil_k
+            dil_k = generate_ellipse_footprint(dil_k)
+            er_k = [er_k,]*mask.ndim if isinstance(er_k, int) else er_k
+            er_k = generate_ellipse_footprint(er_k)
+            for lb in instances:
+                m = (vol == lb)
+                if not np.any(m):
+                    continue
+                if dilate:
+                    m = binary_dilation(m.astype(np.uint8), footprint=dil_k).astype(np.uint8)
+                if erode:
+                    m = binary_erosion(m.astype(np.uint8), footprint=er_k).astype(np.uint8)
+                mask[m > 0] = lb
             else:
-                mask = mask_expr.astype(np.uint8)
+                mask = fg_mask.astype(np.uint8)
+            new_mask[..., mode.index("F")] = mask
 
-            new_mask[..., mode.index(ch)] = mask
+    # ---------- Background (B) ----------
+    if "B" in mode:
+        # Check if erosion/dilation is requested as the process needs the original volume
+        # to make it per-instance
+        er_k = channel_extra_opts.get("B", {}).get("erosion", 0)
+        dil_k = channel_extra_opts.get("B", {}).get("dilation", 0)            
+        erode, dilate = False, False
+        if (isinstance(er_k, int) and er_k > 0) or (isinstance(er_k, list) and any([x for x in er_k if x > 0])):
+            erode = True
+        if (isinstance(dil_k, int) and dil_k > 0) or (isinstance(dil_k, list) and any([x for x in dil_k if x > 0])):
+            dilate = True
+        if erode or dilate:
+            mask = np.zeros_like(fg_mask, dtype=np.uint8)
+            dil_k = [dil_k,]*mask.ndim if isinstance(dil_k, int) else dil_k
+            dil_k = generate_ellipse_footprint(dil_k)
+            er_k = [er_k,]*mask.ndim if isinstance(er_k, int) else er_k
+            er_k = generate_ellipse_footprint(er_k)
+            for lb in instances:
+                m = (vol == lb)
+                if not np.any(m):
+                    continue
+                # As the background mask is going to be created using the instances,
+                # we need to invert the operations
+                if dilate:
+                    m = binary_erosion(m.astype(np.uint8), footprint=dil_k).astype(np.uint8)
+                if erode:
+                    m = binary_dilation(m.astype(np.uint8), footprint=er_k).astype(np.uint8)
+                mask[m > 0] = 1
+        else:
+            mask = bg_mask.astype(np.uint8)
+        new_mask[..., mode.index("B")] = mask
 
     # ---------- P (central part) ----------
     if "P" in mode:
@@ -734,7 +764,17 @@ def labels_into_channels(
         new_mask[..., mode.index("E_offset")] = vol.copy()
 
     if "We" in mode:
-        new_mask[..., mode.index("We")] =  unet_border_weight_map(vol, w0=10.0, sigma=5.0, resolution=resolution)
+        mask_to_use = vol
+        if "F" in mode:
+            mask_to_use = new_mask[..., mode.index("F")]
+        elif "B" in mode:
+            mask_to_use = new_mask[..., mode.index("B")]
+        new_mask[..., mode.index("We")] =  unet_border_weight_map(mask_to_use, w0=10.0, sigma=5.0, resolution=resolution)
+
+    # Binarize foreground channel at this point and not before because
+    # they need to be used in We channel creation
+    if "F" in mode:
+        new_mask[..., mode.index("F")] = new_mask[..., mode.index("F")] > 0
 
     # ---------- M (Legacy mask used in CartoCell) ----------
     if "M" in mode: 
@@ -877,6 +917,26 @@ def unet_border_weight_map(
     ids = np.unique(inst)
     ids = ids[ids != 0]
 
+    # Special handling when exactly one instance is present:
+    # treat background as a pseudo-second instance so we still emphasize the object boundary.
+    if ids.size == 1:
+        lab = ids[0]
+
+        # Distance to the (only) instance: zeros inside the instance
+        d_obj = edt.edt(inst != lab, anisotropy=resolution, parallel=-1).astype(np.float32, copy=False)
+
+        # Distance to background: zeros in background
+        d_bg = edt.edt(inst != 0, anisotropy=resolution, parallel=-1).astype(np.float32, copy=False)
+
+        denom = 2.0 * (sigma ** 2)
+        w_border = w0 * np.exp(-((d_obj + d_bg) ** 2) / denom, dtype=np.float64)
+        w_border = w_border.astype(np.float32, copy=False)
+
+        if apply_only_background:
+            w_border *= (inst == 0)
+
+        return w_border
+
     # Need at least two distinct instances for the (d1 + d2) term to be meaningful
     if ids.size < 2:
         return np.zeros(shp, dtype=np.float32)
@@ -884,7 +944,7 @@ def unet_border_weight_map(
     # Compute distance-to-each-instance via EDT on the complement of that instance
     # distances[k, ...] = distance to instance ids[k]
     distances = np.empty((ids.size, *shp), dtype=np.float32)
-    for k, lab in enumerate(ids):
+    for k, lab in tqdm(enumerate(ids), total=len(ids)):
         # edt computes distance to zeros -> pass mask that's zero *inside* the object
         # equivalently: distance to the boundary of object `lab`
         distances[k] = edt.edt(inst != lab, anisotropy=resolution, parallel=-1)
