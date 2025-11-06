@@ -3505,9 +3505,10 @@ def check_masks(path: str, n_classes: int = 2, is_3d: bool = False):
             classes_found = list(set(classes_found))
 
     if len(classes_found) > n_classes:
+        formated_classes = [int(c) for c in classes_found]
         m += (
             "Number of classes found across images is greater than the value specified in 'DATA.N_CLASSES'. "
-            f"Classes found: {classes_found}\n"
+            f"Classes found: {formated_classes}\n"
         )
         error = True
 
