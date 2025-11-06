@@ -1405,11 +1405,14 @@ class Config:
         # It works for all the workflows but the instance segmentation one, as in that case the weights must be set
         # in PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS. The weights must sum 1. E.g. [0.3, 0.7].
         _C.LOSS.WEIGHTS = [0.66, 0.34]
-        # To weight classes in an imbalanced dataset. It can be 'none', 'manual' or 'auto'.
-        # Options:
+        # To weight classes in an imbalanced dataset. Options available are:
         #   * 'none': no class rebalancing is applied
         #   * 'manual': the weights provided in LOSS.CLASS_WEIGHTS are used to weight each class
-        #   * 'auto': the weights are calculated automatically based on the number of pixels of each class per batch and directly in the loss computation.
+        #   * 'auto': the weights are calculated automatically based on the number of pixels of each class per batch and directly in the loss computation. 
+        #     This option is only applied for binary clases. That is to say:
+        #       * When LOSS.TYPE == "CE" in semantic segmentation and detection workflows and MODEL.N_CLASSES == 2.
+        #       * In instance segmentation when PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES contains "CE". This is automatically set
+        #         when using binary channels, such as "B","F","P","C","T","A","M","F_pre","F_post".  
         _C.LOSS.CLASS_REBALANCE = "none"  # Options are 'none', 'manual' or 'auto'
         # If LOSS.CLASS_REBALANCE is set to 'manual', this list of weights will be used to weight each class in the loss calculation.
         # The length of the list must be equal to the number of classes.

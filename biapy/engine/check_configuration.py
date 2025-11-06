@@ -1060,8 +1060,14 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "W_CE_DICE",
         ], "LOSS.TYPE not in ['CE', 'DICE', 'W_CE_DICE']"
 
-        if cfg.DATA.N_CLASSES > 2 and loss != "CE":
-            raise ValueError("'DATA.N_CLASSES' can only be done with 'CE' loss")
+        if cfg.DATA.N_CLASSES > 2:
+            if loss != "CE":
+                raise ValueError("'DATA.N_CLASSES' are only used with 'CE' loss and not with {}".format(loss))
+            if cfg.LOSS.CLASS_REBALANCE == "auto":
+                raise ValueError(
+                    "'LOSS.CLASS_REBALANCE' can not be set to 'auto' when 'DATA.N_CLASSES' > 2 as it is only valid for binary problems. " \
+                    "Use 'manual' and 'LOSS.CLASS_WEIGHTS' if you really want to rebalance classes. If not, set 'LOSS.CLASS_REBALANCE' to 'none'."
+                )
         if loss == "W_CE_DICE":
             assert (
                 len(cfg.LOSS.WEIGHTS) == 2
