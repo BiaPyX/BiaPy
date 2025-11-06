@@ -174,7 +174,13 @@ class BiaPy:
 
         # Translates the input config it to current version
         with open(self.args.config, "r", encoding="utf8") as stream:
-            original_cfg = yaml.safe_load(stream)
+            try:
+                cfg_content = stream.read()
+                if "\t" in cfg_content:
+                    cfg_content = cfg_content.replace("\t", "  ")
+                original_cfg = yaml.safe_load(cfg_content)
+            except yaml.YAMLError as exc:
+                raise ValueError("Error reading the configuration file. Please check the file format: {}".format(exc))
         temp_cfg = CN(convert_old_model_cfg_to_current_version(original_cfg))
         if self.cfg._C.PROBLEM.PRINT_OLD_KEY_CHANGES:
             print("The following changes were made in order to adapt the input configuration:")
