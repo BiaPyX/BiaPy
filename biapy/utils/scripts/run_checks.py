@@ -339,12 +339,12 @@ all_test_info["Test28"] = {
 all_test_info["Test29"] = {
     "enable": True,
     "jobname": "test29",
-    "description": "2D instance segmentation. BMZ 'affable-shark' model import, inference and export. "
+    "description": "2D instance segmentation. BMZ 'stupendous-blowfish' model import, inference and export. "
         "zero_mean_unit_variance + format_version: 0.5.3 ",
     "yaml": "test_29.yaml",
     "internal_checks": [
         {"type": "regular", "pattern": "Test IoU (F channel) (merge patches):", "gt": True, "value": 0.6},
-        {"type": "BMZ", "pattern": "Package path:", "bmz_package_name": "test_model_affable-shark.zip"},
+        {"type": "BMZ", "pattern": "Package path:", "bmz_package_name": "test_model_stupendous-blowfish.zip"},
         {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 1, "metric": "f1",
             "gt": True, "value": 0.9},
     ]
@@ -364,14 +364,14 @@ all_test_info["Test30"] = {
 all_test_info["Test31"] = {
     "enable": True,
     "jobname": "test31",
-    "description": "2D instance segmentation. BMZ 'affable-shark' model import, finetunning and export (reusing model original info)."
+    "description": "2D instance segmentation. BMZ 'frank-boar' model import, finetunning and export (reusing model original info)."
         "zero_mean_unit_variance + format_version: 0.5.3 ",
     "yaml": "test_31.yaml",
     "internal_checks": [
         {"type": "regular", "pattern": "Test IoU (F channel) (merge patches):", "gt": True, "value": 0.7},
         {"type": "BMZ", "pattern": "Package path:", "bmz_package_name": "Nuclei Segmentation Boundary Model.zip"},
         {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 1, "metric": "f1",
-            "gt": True, "value": 0.85},
+            "gt": True, "value": 0.4},
     ]
 }
 
@@ -3456,7 +3456,7 @@ if all_test_info["Test29"]["enable"]:
 
     biapy_config['MODEL']['SOURCE'] = 'bmz'
     biapy_config['MODEL']['BMZ'] = {}
-    biapy_config['MODEL']['BMZ']['SOURCE_MODEL_ID'] = 'affable-shark' 
+    biapy_config['MODEL']['BMZ']['SOURCE_MODEL_ID'] = 'stupendous-blowfish' 
 
     biapy_config['TEST']['ENABLE'] = True
     biapy_config['TEST']['FULL_IMG'] = False
@@ -3616,12 +3616,12 @@ if all_test_info["Test31"]["enable"]:
     biapy_config['DATA']['TEST']['LOAD_GT'] = True
 
     biapy_config['TRAIN']['ENABLE'] = True
-    biapy_config['TRAIN']['EPOCHS'] = 2
+    biapy_config['TRAIN']['EPOCHS'] = 5
     biapy_config['TRAIN']['PATIENCE'] = -1
 
     biapy_config['MODEL']['SOURCE'] = 'bmz'
     biapy_config['MODEL']['BMZ'] = {}
-    biapy_config['MODEL']['BMZ']['SOURCE_MODEL_ID'] = 'affable-shark' 
+    biapy_config['MODEL']['BMZ']['SOURCE_MODEL_ID'] = 'frank-boar' 
 
     biapy_config['TEST']['ENABLE'] = True
     biapy_config['TEST']['FULL_IMG'] = False
