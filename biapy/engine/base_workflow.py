@@ -693,7 +693,7 @@ class Base_Workflow(metaclass=ABCMeta):
             if apply_act:
                 pred = self.apply_model_activations(pred, training=is_train)
         elif self.cfg.MODEL.SOURCE == "bmz":
-            pred = self.bmz_model_call(in_img, is_train)
+            pred = self.apply_model_activations(self.bmz_model_call(in_img, is_train))
         elif self.cfg.MODEL.SOURCE == "torchvision":
             pred = self.torchvision_model_call(in_img, is_train)
         return pred
@@ -1157,10 +1157,6 @@ class Base_Workflow(metaclass=ABCMeta):
         pred : Torch tensor
             Resulting predictions after applying last activation(s).
         """
-        # Not apply the activation, as it will be done in the BMZ model
-        if self.cfg.MODEL.SOURCE == "bmz":
-            return pred
-
         # Do not apply any activation when using masking as pretext task
         if self.cfg.PROBLEM.TYPE == "SELF_SUPERVISED" and self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK.lower() == "masking":
             return pred
