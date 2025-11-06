@@ -941,8 +941,11 @@ def check_bmz_model_compatibility(
     # --------- Axes checks ---------
     axes_order = g(inputs[0], "axes")
     input_image_shape = []
-    
-    if isinstance(axes_order, list):
+
+    # Model version > 5   
+    if isinstance(axes_order, str):
+        input_image_shape = inputs[0].get("shape", {}).get("min", [])
+    elif isinstance(axes_order, list):
         _axes_order = ""
         for axis in axes_order:
             if "type" in axis:
