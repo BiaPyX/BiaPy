@@ -1879,7 +1879,7 @@ if all_test_info["Test11"]["enable"]:
     biapy_config['TRAIN']['LR_SCHEDULER']['WARMUP_COSINE_DECAY_EPOCHS'] = 15
 
     biapy_config['MODEL']['ARCHITECTURE'] = 'hrnet48'
-    biapy_config['MODEL']['HRNET48']['Z_DOWN'] = False
+    biapy_config['MODEL']['HRNET_48']['Z_DOWN'] = False
     del biapy_config['MODEL']['FEATURE_MAPS']
     biapy_config['MODEL']['LOAD_CHECKPOINT'] = False
 
