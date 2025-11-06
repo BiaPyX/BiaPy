@@ -474,7 +474,7 @@ class CrossEntropyLoss_wrapper:
         self.device = device if device is not None else torch.device("cpu")
 
         if self.class_rebalance == "manual":
-            self.class_weights = torch.tensor(class_weights, device=device)
+            self.class_weights = torch.tensor(class_weights, device=device, dtype=torch.float32)
 
         if num_classes <= 2:
             self.loss = torch.nn.BCEWithLogitsLoss()
