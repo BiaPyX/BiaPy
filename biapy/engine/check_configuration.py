@@ -2294,14 +2294,27 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
     # Adjust Z_DOWN values to feature maps
     if all(x == 0 for x in cfg.MODEL.Z_DOWN):
-        opts.extend(["MODEL.Z_DOWN", (2,) * (len(cfg.MODEL.FEATURE_MAPS) - 1)])
+        if model_arch == "multiresunet":
+            opts.extend(["MODEL.Z_DOWN", (2, 2, 2, 2)])
+        else:
+            opts.extend(["MODEL.Z_DOWN", (2,) * (len(cfg.MODEL.FEATURE_MAPS) - 1)])
     elif any([False for x in cfg.MODEL.Z_DOWN if x != 1 and x != 2]):
         raise ValueError("'MODEL.Z_DOWN' needs to be 1 or 2")
     else:
         if model_arch == "multiresunet" and len(cfg.MODEL.Z_DOWN) != 4:
             raise ValueError("'MODEL.Z_DOWN' length must be 4 when using 'multiresunet'")
-        elif len(cfg.MODEL.FEATURE_MAPS) - 1 != len(cfg.MODEL.Z_DOWN):
-            raise ValueError("'MODEL.FEATURE_MAPS' length minus one and 'MODEL.Z_DOWN' length must be equal")
+        elif model_arch in [
+            "unet",
+            "resunet",
+            "resunet++",
+            "seunet",
+            "resunet_se",
+            "attention_unet",
+            "unext_v1",
+            "unext_v2",
+        ]:
+            if len(cfg.MODEL.FEATURE_MAPS) - 1 != len(cfg.MODEL.Z_DOWN):
+                raise ValueError("'MODEL.FEATURE_MAPS' length minus one and 'MODEL.Z_DOWN' length must be equal")
 
     # Adjust ISOTROPY values to feature maps
     if all(x == True for x in cfg.MODEL.ISOTROPY):
