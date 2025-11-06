@@ -967,7 +967,11 @@ def check_bmz_model_compatibility(
                     _axes_order += axis["id"]
         axes_order = _axes_order
     
-    opts["DATA.PATCH_SIZE"] = tuple(input_image_shape[2:] + [input_image_shape[1]]) # (z) y x c
+    try:
+        opts["DATA.PATCH_SIZE"] = tuple(input_image_shape[2:] + [input_image_shape[1]]) # (z) y x c
+    except Exception:
+        reason_message = f"[{specific_workflow}] couldn't extract input image shape from model RDF: {input_image_shape}\n"
+        return preproc_info, True, reason_message, opts
 
     if specific_dims == "2D":
         if axes_order != "bcyx":
