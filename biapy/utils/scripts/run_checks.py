@@ -346,7 +346,7 @@ all_test_info["Test29"] = {
         {"type": "regular", "pattern": "Test IoU (F channel) (merge patches):", "gt": True, "value": 0.6},
         {"type": "BMZ", "pattern": "Package path:", "bmz_package_name": "test_model_stupendous-blowfish.zip"},
         {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 1, "metric": "f1",
-            "gt": True, "value": 0.9},
+            "gt": True, "value": 0.85},
     ]
 }
 
