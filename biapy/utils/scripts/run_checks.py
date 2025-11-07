@@ -1189,7 +1189,7 @@ try:
         biapy_config['TRAIN']['EPOCHS'] = 50
         biapy_config['TRAIN']['PATIENCE'] = -1
 
-        biapy_config['MODEL']['ARCHITECTURE'] = 'hrnet'
+        biapy_config['MODEL']['ARCHITECTURE'] = 'hrnet48'
 
         biapy_config['LOSS'] = {}
         biapy_config['LOSS']['TYPE'] = "W_CE_DICE"
