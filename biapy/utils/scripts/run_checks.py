@@ -369,7 +369,7 @@ all_test_info["Test31"] = {
     "yaml": "test_31.yaml",
     "internal_checks": [
         {"type": "regular", "pattern": "Test IoU (F channel) (merge patches):", "gt": True, "value": 0.7},
-        {"type": "BMZ", "pattern": "Package path:", "bmz_package_name": "Nuclei Segmentation Boundary Model.zip"},
+        {"type": "BMZ", "pattern": "Package path:", "bmz_package_name": "2D U-NeXt V1 for nucleus segmentation.zip"},
         {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 1, "metric": "f1",
             "gt": True, "value": 0.9},
     ]
