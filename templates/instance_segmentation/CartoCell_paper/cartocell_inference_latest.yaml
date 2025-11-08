@@ -1,4 +1,4 @@
-# CartoCell inference workflow compatible with BiaPy version 3.6.6
+# CartoCell inference workflow compatible with BiaPy version 3.6.7
 
 SYSTEM:
     NUM_CPUS: -1
