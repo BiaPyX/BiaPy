@@ -31,7 +31,7 @@ RUN conda init bash && \
 SHELL ["conda", "run", "-n", "BiaPy_env", "/bin/bash", "-c"]
 
 # Install Pytorch 2.2.0 + CUDA 11.8
-RUN pip install torch==2.4.0 torchvision==0.19.0 --index-url https://download.pytorch.org/whl/cu118 
+RUN pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
 
 # Install BiaPy
 RUN pip install biapy
