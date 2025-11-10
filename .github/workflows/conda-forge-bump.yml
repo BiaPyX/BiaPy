@@ -3,18 +3,28 @@ name: Bump conda-forge feedstock
 on:
   workflow_dispatch: {}
 
+  # auto-run when the PyPI publish workflow completes
+  workflow_run:
+    workflows: ["Upload BiaPy to PyPI"]   # must match the other workflow's name
+    types: [completed]
+
 permissions:
   contents: write
   pull-requests: write
-  actions: write
 
 env:
   PACKAGE_NAME: biapy
-  GH_TOKEN: ${{ secrets.CF_GH_TOKEN }}             
+  GH_TOKEN: ${{ secrets.CF_GH_TOKEN }}
   FEEDSTOCK_FORK: ${{ secrets.CF_FEEDSTOCK_FORK }}
+
+# avoid overlapping bumps for the same workflow run
+concurrency:
+  group: cf-bump-${{ github.workflow }}-${{ github.run_id }}
+  cancel-in-progress: false
 
 jobs:
   bump-feedstock:
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
 
     steps:

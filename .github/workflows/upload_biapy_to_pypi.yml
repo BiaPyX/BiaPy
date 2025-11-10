@@ -29,12 +29,3 @@ jobs:
           python -m build 
       - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
-      - name: Trigger bump workflow and wait
-        uses: convictional/trigger-workflow-and-wait@v1.6.5
-        with:
-          owner: BiaPyX
-          repo: BiaPy
-          github_token: ${{ secrets.GITHUB_TOKEN }}   # or a PAT if cross-repo
-          workflow_file_name: conda-forge-bump.yml
-          ref: master
-          wait_interval: 60
