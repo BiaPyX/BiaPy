@@ -1,35 +1,59 @@
 import argparse
 import os
-import sys
 import xml.etree.ElementTree as ET
 
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from skimage.measure import label as sklabel
-from skimage.morphology import binary_dilation, disk
 import plotly.graph_objects as go
 from sklearn.cluster import DBSCAN
+import edt
 
-# python agreement_manual_vs_dnn.py --input_file_dir /path/to/gt --input_instance_dir /path/to/preds_root
+# python -u /data/dfranco/BiaPy/biapy/utils/scripts/agreement_manual_points_vs_dnn_instances.py  --input_file_dir /data/dfranco/datasets/lesion_medular/neuron_seg/neuron_final_test --input_instance_dir /data/dfranco/exp_results/lesion_medular_neuron22/test_v4/results/lesion_medular_neuron22_1/per_image_instances
 
 # -----------------------------
 # Arguments
 # -----------------------------
 parser = argparse.ArgumentParser(
-    description="Single Plotly figure (SVG): Manual vs DNN agreement across classes 0–5 with tolerance-dilated matching.",
-    formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    description=(
+        "Single Plotly figure (SVG): Manual vs two DNN predictions agreement across classes 0–5 "
+        "with tolerance-dilated matching."
+    ),
+    formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
-parser.add_argument("--input_file_dir", "-input_file_dir", required=True,
-                    help="Directory containing the Experto*/ XML folders")
-parser.add_argument("--input_instance_dir", "-input_instance_dir", required=True,
-                    help="Directory containing per-image instance masks (DNN output)")
-parser.add_argument("--tolerance_px", type=int, default=8,
-                    help="Pixel tolerance for BOTH click clustering and DNN-vs-GT matching (via dilation)")
-parser.add_argument("--output_svg", default="agreement_manual_vs_dnn.svg",
-                    help="Path/name for the SVG plot output")
-parser.add_argument("--also_html", action="store_true",
-                    help="Additionally save an interactive HTML")
+parser.add_argument(
+    "--input_file_dir",
+    "-input_file_dir",
+    required=True,
+    help="Directory containing the Experto*/ XML folders",
+)
+parser.add_argument(
+    "--input_instance_dir",
+    "-input_instance_dir",
+    required=True,
+    help="Directory containing per-image instance masks (SpineDL-Neuron output)",
+)
+parser.add_argument(
+    "--tolerance_px",
+    type=int,
+    default=8,
+    help="Pixel tolerance for BOTH click clustering and DNN-vs-GT matching (via dilation)",
+)
+parser.add_argument(
+    "--output_svg",
+    default="agreement_manual_vs_SpineDL.svg",
+    help="Path/name for the SVG plot output",
+)
+# NEW: optional auxiliary folder for intermediates
+parser.add_argument(
+    "--aux_dir",
+    default=None,
+    help=(
+        "Directory to store intermediate calculations (CSV cache of manual clusters). "
+        "If not given, a folder named '_aux_cache' is created inside --input_file_dir."
+    ),
+)
 
 args = vars(parser.parse_args())
 
@@ -38,6 +62,7 @@ from biapy.data.data_manipulation import read_img_as_ndarray
 # -----------------------------
 # Utilities
 # -----------------------------
+
 def read_expert_points_from_xml(root_dir: str) -> pd.DataFrame:
     """Read all expert XML files under 'Experto*' folders and return (folder, file, x, y)."""
     fids = sorted(next(os.walk(root_dir))[1])
@@ -94,52 +119,175 @@ def cluster_manual_points(df_file: pd.DataFrame, eps: int = 8) -> pd.DataFrame:
     dfc = df_file.copy()
     dfc["cluster_id"] = labels
     n_by_cluster = (
-        dfc.groupby("cluster_id")["folder"]
-        .nunique()
-        .reset_index(name="n_experts")
+        dfc.groupby("cluster_id")["folder"].nunique().reset_index(name="n_experts")
     )
-    pts_by_cluster = dfc.groupby("cluster_id")[["x", "y"]].apply(lambda g: g.to_numpy())
+    pts_by_cluster = dfc.groupby("cluster_id")[
+        ["x", "y"]
+    ].apply(lambda g: g.to_numpy())
     n_by_cluster["points"] = n_by_cluster["cluster_id"].map(pts_by_cluster)
     return n_by_cluster
 
 
-def make_single_figure(experts_df: pd.DataFrame,
-                       nn_imgs: dict[str, np.ndarray],
-                       out_dir: str,
-                       tol_px: int,
-                       out_svg_path: str,
-                       also_html: bool):
+# -----------------------------
+# CSV cache helpers for clusters
+# -----------------------------
+
+def save_clusters_csv(cluster_df: pd.DataFrame, csv_path: str) -> None:
+    """Save clusters as long-form CSV: one row per point with cluster_id, n_experts, x, y."""
+    rows = []
+    for _, row in cluster_df.iterrows():
+        pts = row["points"]
+        cid = int(row["cluster_id"])
+        n_exp = int(row["n_experts"])
+        if pts is None or len(pts) == 0:
+            rows.append({"cluster_id": cid, "n_experts": n_exp, "x": np.nan, "y": np.nan})
+        else:
+            for (x, y) in pts:
+                rows.append({"cluster_id": cid, "n_experts": n_exp, "x": int(x), "y": int(y)})
+    pd.DataFrame(rows).to_csv(csv_path, index=False)
+
+
+def load_clusters_csv(csv_path: str) -> pd.DataFrame:
+    """Load long-form CSV and reconstruct the compact cluster DataFrame with a 'points' ndarray."""
+    df = pd.read_csv(csv_path)
+    groups = []
+    for cid, g in df.groupby("cluster_id"):
+        # Drop NaNs safely
+        gxy = g.dropna(subset=["x", "y"])
+        pts = gxy[["x", "y"]].to_numpy(dtype=int)
+        n_exp = int(g["n_experts"].iloc[0]) if len(g) else 0
+        groups.append({"cluster_id": int(cid), "n_experts": n_exp, "points": pts})
+    if not groups:
+        return pd.DataFrame(columns=["cluster_id", "n_experts", "points"])
+    return pd.DataFrame(groups)
+
+def get_dist_to_clicks(df_file: pd.DataFrame, H: int, W: int) -> np.ndarray:
     """
-    Compute class distributions for Manual and DNN:
+    Distance (per pixel) to the nearest manual click (all experts merged).
+    This is the same for dnn1 and dnn2 for a given image.
+    """
+    click_img = np.zeros((H, W), dtype=np.uint8)
+    if len(df_file) > 0:
+        xs = np.rint(df_file["x"].to_numpy()).astype(int)
+        ys = np.rint(df_file["y"].to_numpy()).astype(int)
+        xs = np.clip(xs, 0, W - 1)
+        ys = np.clip(ys, 0, H - 1)
+        click_img[ys, xs] = 1
+
+    # Distance to nearest click: edt expects True=background, so pass ~clicks
+    dist = edt.edt((click_img == 0).astype(np.uint8))
+    return dist
+
+
+# -----------------------------
+# Core computation
+# -----------------------------
+
+def compute_dnn_freqs_for_file(
+    df_file: pd.DataFrame,
+    nn_mask: np.ndarray,
+    tol_px: int,
+    man_clusters: pd.DataFrame | None = None,
+    dist_to_instances: np.ndarray | None = None,
+    dist_to_clicks: np.ndarray | None = None,
+):
+    """Return per-class counts (0..5) for one DNN mask against manual clusters in df_file.
+
+    If `man_clusters` is provided, it is used directly (and may come from CSV cache); otherwise
+    clusters are computed on the fly.
+    """
+    H, W = nn_mask.shape
+    nn_ids = [i for i in np.unique(nn_mask) if i != 0]
+    assert dist_to_instances is not None, "dist_to_instances must be provided"
+    assert dist_to_clicks is not None, "dist_to_clicks must be provided"
+
+    # All manual clicks in this image (for class-0 check)
+    xs_all = np.rint(df_file["x"].to_numpy()).astype(int)
+    ys_all = np.rint(df_file["y"].to_numpy()).astype(int)
+    xs_all = np.clip(xs_all, 0, W - 1) if xs_all.size else xs_all
+    ys_all = np.clip(ys_all, 0, H - 1) if ys_all.size else ys_all
+
+    # Manual clusters (cached or given)
+    if man_clusters is None:
+        man_clusters = cluster_manual_points(df_file, eps=tol_px)
+
+    # Manual counts per class (for normalization/denominator)
+    manual_counts = {k: 0 for k in range(6)}
+    for _, row in man_clusters.iterrows():
+        k = int(row["n_experts"])
+        k = max(1, min(5, k))
+        manual_counts[k] += 1
+    denom_manual = sum(manual_counts[k] for k in range(1, 6))
+
+    dnn_counts = {k: 0 for k in range(6)}
+
+    # Class 0 (DNN-only): for each instance, check if ANY pixel of that instance
+    # is within tol of a click. If not, it's DNN-only.
+    for obj_id in nn_ids:
+        mask_i = (nn_mask == obj_id)
+        if mask_i.any():
+            min_d = float(np.min(dist_to_clicks[mask_i]))
+        else:
+            min_d = np.inf
+        if not np.isfinite(min_d) or min_d > tol_px:
+            dnn_counts[0] += 1
+
+    # Classes 1..5: a manual cluster is a "hit" if ANY of its points lies within tol
+    # of ANY instance (using dist_to_instances at those point coordinates).
+    for _, row in man_clusters.iterrows():
+        pts = row["points"]
+        k = int(row["n_experts"])
+        k = max(1, min(5, k))
+        hit = False
+        if pts is not None and len(pts):
+            xs = np.clip(pts[:, 0].astype(int), 0, W - 1)
+            ys = np.clip(pts[:, 1].astype(int), 0, H - 1)
+            if np.any(dist_to_instances[ys, xs] <= tol_px):
+                hit = True
+        if hit:
+            dnn_counts[k] += 1
+
+    return dnn_counts, denom_manual
+
+
+def make_single_figure(
+    experts_df: pd.DataFrame,
+    nn_imgs_1: dict[str, np.ndarray],
+    out_dir: str,
+    tol_px: int,
+    out_svg_path: str,
+):
+    """
+    Compute class distributions for Manual, SpineDL-Neuron:
       - Manual: distribution by #experts (1..5). Class 0 = 0.
-      - DNN:    hits per manual class (1..5) + class 0 = DNN-only objects.
+      - DNN#1/2: hits per manual class (1..5) + class 0 = DNN-only objects.
     Matching uses tolerance by dilating each DNN instance with a 'disk(tol_px)' before point-in-mask tests.
-    Only process images whose basenames appear in BOTH GT (XMLs) and predictions.
+    Only process images whose basenames appear in GT (XMLs) and in BOTH DNN prediction directories.
     Normalize per image to 100 manual neurons, then average across images.
+    Uses CSV cache in `aux_dir` to avoid recomputing manual clustering.
     """
-    # --- basenames present in DNN folder ---
-    nn_base_to_file = {os.path.splitext(fname)[0]: fname for fname in nn_imgs.keys()}
-    nn_basenames = set(nn_base_to_file.keys())
+    # --- basenames present in DNN folders ---
+    nn1_base_to_file = {os.path.splitext(fname)[0]: fname for fname in nn_imgs_1.keys()}
+    nn1_basenames = set(nn1_base_to_file.keys())
 
     # --- basenames present in GT (from expert XMLs) ---
     gt_basenames = set(experts_df["file"].unique())
 
-    # --- intersection only ---
-    common = sorted(nn_basenames.intersection(gt_basenames))
+    # --- intersection only (GT ∩ DNN1) ---
+    common = sorted(gt_basenames.intersection(nn1_basenames))
     if not common:
-        raise RuntimeError("No overlapping images between GT (XMLs) and DNN predictions.")
+        raise RuntimeError("No overlapping images between GT (XMLs) and both DNN prediction folders.")
 
     per_file_manual = []
-    per_file_dnn = []
-
-    # Structuring element for dilation (tolerance)
-    selem = disk(max(1, int(tol_px))) if tol_px > 0 else None
+    per_file_dnn1 = []
 
     for base in tqdm(common, desc="Processing overlapping sections"):
         df_file = experts_df[experts_df["file"] == base]
 
-        # ----- Manual clusters -----
+        # ----- Manual clusters (with CSV cache) -----
         man_clusters = cluster_manual_points(df_file, eps=tol_px)
+
+        # Manual counts (1..5) for normalization
         manual_counts = {k: 0 for k in range(6)}
         for _, row in man_clusters.iterrows():
             k = int(row["n_experts"])
@@ -149,125 +297,107 @@ def make_single_figure(experts_df: pd.DataFrame,
         if denom_manual == 0:
             continue  # nothing manual to normalize to
 
-        # ----- DNN vs Manual mapping with dilation tolerance -----
-        nn_mask = nn_imgs[nn_base_to_file[base]]
-        H, W = nn_mask.shape
-        nn_ids = [i for i in np.unique(nn_mask) if i != 0]
-
-        # Precompute dilated masks for each DNN instance
-        dilated_masks = {}
-        for obj_id in nn_ids:
-            m = (nn_mask == obj_id)
-            mdil = binary_dilation(m, selem) if selem is not None else m
-            dilated_masks[obj_id] = mdil
-
-        # All manual clicks in this image (for class-0 check)
-        xs_all = np.rint(df_file["x"].to_numpy()).astype(int)
-        ys_all = np.rint(df_file["y"].to_numpy()).astype(int)
-        xs_all = np.clip(xs_all, 0, W - 1) if xs_all.size else xs_all
-        ys_all = np.clip(ys_all, 0, H - 1) if ys_all.size else ys_all
-
-        dnn_counts = {k: 0 for k in range(6)}
-
-        # Class 0 (DNN-only): DNN instances with no manual click within tol (i.e., inside dilated mask)
-        dnn_only = 0
-        for obj_id in nn_ids:
-            mdil = dilated_masks[obj_id]
-            if xs_all.size == 0 or not mdil[ys_all, xs_all].any():
-                dnn_only += 1
-        dnn_counts[0] = dnn_only
-
-        # For classes 1..5: a manual cluster is "hit" if any of its points falls in any dilated DNN mask
-        for _, row in man_clusters.iterrows():
-            pts = row["points"]  # Nx2
-            k = int(row["n_experts"])
-            k = max(1, min(5, k))
-            hit = False
-            if pts.size and len(nn_ids) > 0:
-                xs = np.clip(pts[:, 0].astype(int), 0, W - 1)
-                ys = np.clip(pts[:, 1].astype(int), 0, H - 1)
-                for obj_id in nn_ids:
-                    if dilated_masks[obj_id][ys, xs].any():
-                        hit = True
-                        break
-            if hit:
-                dnn_counts[k] += 1
-
-        # Normalize to 100 manual neurons (per image)
-        manual_freqs = np.array([manual_counts[i] for i in range(6)], dtype=float) * (100.0 / denom_manual)
+        # ❌ Remove normalization to 100 neurons per image
+        manual_freqs = np.array([manual_counts[i] for i in range(6)], dtype=float)
         manual_freqs[0] = 0.0  # no manual class 0
-        dnn_freqs = np.array([dnn_counts[i] for i in range(6)], dtype=float) * (100.0 / denom_manual)
-
         per_file_manual.append(manual_freqs)
-        per_file_dnn.append(dnn_freqs)
+
+        # # Normalize manual to 100 neurons per image
+        # manual_freqs = np.array([manual_counts[i] for i in range(6)], dtype=float) * (
+        #     100.0 / denom_manual
+        # )
+        # manual_freqs[0] = 0.0  # no manual class 0
+        # per_file_manual.append(manual_freqs)
+
+        H, W = nn_imgs_1[nn1_base_to_file[base]].shape
+
+        # Distance to clicks (same for both models for this image)
+        dist2clicks = get_dist_to_clicks(df_file, H, W)
+
+        # ----- SpineDL-Neuron #1 vs Manual -----
+        nn_mask_1 = nn_imgs_1[nn1_base_to_file[base]]
+        dist2inst_1 = edt.edt((nn_mask_1 == 0).astype(np.uint8))
+        dnn1_counts, _ = compute_dnn_freqs_for_file(
+            df_file, nn_mask_1, tol_px,
+            man_clusters=man_clusters,
+            dist_to_instances=dist2inst_1,
+            dist_to_clicks=dist2clicks,
+        )
+        dnn1_freqs = np.array([dnn1_counts[i] for i in range(6)], dtype=float)
+        # dnn1_freqs = np.array([dnn1_counts[i] for i in range(6)], dtype=float) * (
+        #     100.0 / denom_manual
+        # )
+        per_file_dnn1.append(dnn1_freqs)
 
     if not per_file_manual:
         raise RuntimeError("No valid overlapping sections with manual objects found.")
 
     manual_mean = np.mean(np.stack(per_file_manual, axis=0), axis=0)
-    dnn_mean = np.mean(np.stack(per_file_dnn, axis=0), axis=0)
+    dnn1_mean = np.mean(np.stack(per_file_dnn1, axis=0), axis=0)
 
     # -----------------------------
     # Plotly grouped bar chart
     # -----------------------------
     x = list(range(6))
     fig = go.Figure()
-    fig.add_bar(name="Manual", x=x, y=manual_mean.tolist(),
-                hovertemplate="Class %{x}<br>Manual: %{y:.2f}<extra></extra>")
-    fig.add_bar(name="DNN", x=x, y=dnn_mean.tolist(),
-                hovertemplate="Class %{x}<br>DNN: %{y:.2f}<extra></extra>")
+    fig.add_bar(
+        name="Manual",
+        x=x,
+        y=manual_mean.tolist(),
+        text=[f"{v:.1f}" for v in manual_mean], 
+        textfont=dict(size=10),
+        textposition="outside",
+        hovertemplate="Class %{x}<br>Manual: %{y:.2f}<extra></extra>",
+    )
+    fig.add_bar(
+        name="SpineDL-Neuron",
+        x=x,
+        y=dnn1_mean.tolist(),
+        text=[f"{v:.1f}" for v in dnn1_mean], 
+        textfont=dict(size=10),
+        textposition="outside",
+        hovertemplate="Class %{x}<br>SpineDL-Neuron: %{y:.2f}<extra></extra>",
+    )
     fig.update_layout(
         barmode="group",
-        title=("Agreement among identification methods (Manual vs DNN)<br>"
-               f"<sup>Matching uses dilation tolerance of {tol_px}px. "
-               "Classes 0–5 = times identified in manual analyses (0 = DNN-only). "
-               "Bars are mean frequency per 100 manual neurons.</sup>"),
-        xaxis_title="Times identified as neurons in manual analyses (Class)",
-        yaxis_title="Frequency (normalized)",
-        bargap=0.2
+        title=(
+            "Agreement among identification methods (Manual vs SpineDL-Neuron)<br>"
+            f"<sup>Matching uses dilation tolerance of {tol_px}px. "
+            "Classes 0–5 = times identified in manual analyses (0 = DNN-only).</sup>"
+        ),
+        xaxis_title="Times identified as neurons in manual analyses",
+        yaxis_title="Frequency",
+        bargap=0.2,
     )
 
     # Ensure output directory exists
     os.makedirs(out_dir, exist_ok=True)
     svg_path = os.path.join(out_dir, out_svg_path)
-    try:
-        fig.write_image(svg_path)  # requires kaleido
-        print(f"✅ Saved SVG to: {svg_path}")
-    except Exception as e:
-        print("⚠️ Could not write SVG (is 'kaleido' installed?). Error:", repr(e))
-        # Always save an HTML fallback
-        html_path = os.path.splitext(svg_path)[0] + ".html"
-        fig.write_html(html_path, include_plotlyjs="cdn", full_html=True)
-        print(f"💾 Saved HTML fallback to: {html_path}")
-
-    if also_html:
-        html_path = os.path.splitext(svg_path)[0] + ".html"
-        fig.write_html(html_path, include_plotlyjs="cdn", full_html=True)
-        print(f"💾 Also saved HTML to: {html_path}")
-
+    fig.write_image(svg_path)  # requires kaleido
+    print(f"✅ Saved SVG to: {svg_path}")
 
 # -----------------------------
 # Main
 # -----------------------------
+
 def main():
-    tol = int(args["tolerance_px"])
+    tol = int(args["tolerance_px"]) 
     file_dir = args["input_file_dir"]
-    nn_dir = args["input_instance_dir"]
+    nn_dir_1 = args["input_instance_dir"]
     out_svg_path = args["output_svg"]
 
     print("Reading expert XMLs …")
     experts_df = read_expert_points_from_xml(file_dir)
 
-    print("Loading DNN instances …")
-    nn_imgs = load_instance_masks(nn_dir)
+    print("Loading SpineDL-Neuron #1 instances …")
+    nn_imgs_1 = load_instance_masks(nn_dir_1)
 
     make_single_figure(
         experts_df=experts_df,
-        nn_imgs=nn_imgs,
+        nn_imgs_1=nn_imgs_1,
         out_dir=file_dir,
         tol_px=tol,
         out_svg_path=out_svg_path,
-        also_html=bool(args["also_html"]),
     )
 
 

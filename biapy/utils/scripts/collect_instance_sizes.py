@@ -97,48 +97,54 @@ def main():
     df.to_csv(csv_path, index=False)
     print(f"✅ Wrote {len(df)} rows to {csv_path}")
 
-# import pandas as pd
+    ######################
 
-# # Path to your output CSV
-# csv_path = "instance_sizes.csv"
+    # Read the CSV
+    df = pd.read_csv(csv_path)
 
-# # Read the CSV
-# df = pd.read_csv(csv_path)
+    # Extract dataset and split from the path
+    df['dataset'] = df['image_path'].str.extract(r'instance_seg_paper/([^/]+)/')[0]
+    df['split'] = df['image_path'].str.extract(r'instance_seg_paper/[^/]+/([^/]+)/')[0]
 
-# # Extract dataset and split from the path
-# df['dataset'] = df['image_path'].str.extract(r'instance_seg_paper/([^/]+)/')[0]
-# df['split'] = df['image_path'].str.extract(r'instance_seg_paper/[^/]+/([^/]+)/')[0]
+    # Filter only train split
+    df_train = df[df['split'].str.contains('train', case=False, na=False)]
 
-# # Filter only test split
-# df_test = df[df['split'].str.contains('test', case=False, na=False)]
+    # Compute per-dataset percentile thresholds
+    filtered_rows = []
+    for dataset, subset in df_train.groupby('dataset'):
+        low = subset['size'].quantile(0.005)   # 0.5 percentile
+        high = subset['size'].quantile(0.998)  # 99.8 percentile
+        filtered = subset[(subset['size'] >= low) & (subset['size'] <= high)]
+        filtered_rows.append(filtered)
 
-# # Compute per-dataset percentile thresholds
-# filtered_rows = []
-# for dataset, subset in df_test.groupby('dataset'):
-#     low = subset['size'].quantile(0.005)   # 0.5 percentile
-#     high = subset['size'].quantile(0.998)  # 99.8 percentile
-#     filtered = subset[(subset['size'] >= low) & (subset['size'] <= high)]
-#     filtered_rows.append(filtered)
+    # Concatenate filtered subsets
+    df_filtered = pd.concat(filtered_rows, ignore_index=True)
 
-# # Concatenate filtered subsets
-# df_filtered = pd.concat(filtered_rows, ignore_index=True)
+    # Compute min and max per dataset after filtering
+    stats = (
+        df_filtered.groupby('dataset')['size']
+        .agg(['min', 'max'])
+        .reset_index()
+        .sort_values('dataset')
+    )
+    print(stats)
+    # TRAIN:
+    # dataset   min      max
+    # 0  CartoCell   849     4508 -> +20% = 5400
+    # 1   LIVECell    21     4295 -> +20% = 5200
+    # 2     Lizard     3      435 -> +20% = 550
+    # 3     MitoEM  1638   551926 -> not filter max
+    # 4   Omnipose    27     6118 -> +20% = 7400
+    # 5    SNEMI3D    24  2657691 -> not filter max
 
-# # Compute min and max per dataset after filtering
-# stats = (
-#     df_filtered.groupby('dataset')['size']
-#     .agg(['min', 'max'])
-#     .reset_index()
-#     .sort_values('dataset')
-# )
-# print(stats)
-# >>> print(stats)
-#      dataset  min      max
-# 0  CartoCell  841     5157
-# 1   LIVECell   11     5207
-# 2     Lizard   11    21862
-# 3     MitoEM  220   408336
-# 4   Omnipose   32     8837
-# 5    SNEMI3D   27  1461877
+    # TEST:
+    #      dataset  min      max
+    # 0  CartoCell  841     5157
+    # 1   LIVECell   11     5207
+    # 2     Lizard   3      442
+    # 3     MitoEM  220   408336
+    # 4   Omnipose   32     8837
+    # 5    SNEMI3D   27  1461877
 
 if __name__ == "__main__":
     main()
