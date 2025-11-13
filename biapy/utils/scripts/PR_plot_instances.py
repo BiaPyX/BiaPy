@@ -297,10 +297,16 @@ def main():
         showlegend=False,
     ))
     fig.update_layout(
-        title=f"Precision–Recall Curve (IoU ≥ {args.iou_thresh:.2f}) — AP≈{ap:.4f}",
+        title=dict(
+            text=f"Precision–Recall Curve (IoU ≥ {args.iou_thresh:.2f}) — AP≈{ap:.4f}",
+            font=dict(size=24)
+        ),
         xaxis_title="Recall", yaxis_title="Precision",
-        xaxis=dict(range=[0, 1]), yaxis=dict(range=[0, 1]),
+        xaxis=dict(range=[0, 1], title_font=dict(size=20), tickfont=dict(size=18)), yaxis=dict(range=[0, 1], title_font=dict(size=20), tickfont=dict(size=18)),
         width=900, height=600, template="plotly_white",
+        legend=dict(
+            font=dict(size=18)
+        )
     )
 
     # Save SVG (requires kaleido)
