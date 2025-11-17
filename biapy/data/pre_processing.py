@@ -330,7 +330,7 @@ def unique_labels_fast(a: np.ndarray):
     a = np.asarray(a)
     K = int(a.max())
     present = np.zeros(K + 1, dtype=bool)
-    present[a.ravel()] = True        # O(n) and very cache-friendly
+    present[a.ravel().astype(int)] = True        # O(n) and very cache-friendly
     return np.flatnonzero(present)    # sorted because we scan 0..K
 
 
