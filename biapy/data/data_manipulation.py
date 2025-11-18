@@ -3295,29 +3295,31 @@ def read_img_as_ndarray(path: str, is_3d: bool = False) -> NDArray:
     img : Numpy 3D/4D array
         Image read. E.g. ``(z, y, x, channels)`` for 3D or ``(y, x, channels)`` for 2D.
     """
-    # Read image
-    axes_position = None
-    if path.endswith(".npy"):
-        img = np.load(path)
-    elif path.endswith(".pt"):
-        img = torch.load(path, weights_only=True, map_location="cpu").numpy()
-    elif any(path.endswith(x) for x in [".h5", ".hdf5", ".hdf"]):
-        img = h5py.File(path, "r")
-        img = np.array(img[list(img)[0]])
-    elif path.endswith(".zarr") or path.endswith(".n5"):
-        from biapy.data.data_3D_manipulation import read_chunked_data
+    try:
+        # Read image
+        axes_position = None
+        if path.endswith(".npy"):
+            img = np.load(path)
+        elif path.endswith(".pt"):
+            img = torch.load(path, weights_only=True, map_location="cpu").numpy()
+        elif any(path.endswith(x) for x in [".h5", ".hdf5", ".hdf"]):
+            img = h5py.File(path, "r")
+            img = np.array(img[list(img)[0]])
+        elif path.endswith(".zarr") or path.endswith(".n5"):
+            from biapy.data.data_3D_manipulation import read_chunked_data
 
-        _, img = read_chunked_data(path)
-        img = np.array(img)
-    else:
-        img, axes_position = imread(path)
-    img = np.squeeze(img)
+            _, img = read_chunked_data(path)
+            img = np.array(img)
+        else:
+            img, axes_position = imread(path)
+        img = np.squeeze(img)
 
-    if not is_3d:
-        img = ensure_2d_shape(img, path)
-    else:
-        img = ensure_3d_shape(img, path, data_axes_order=axes_position)
-
+        if not is_3d:
+            img = ensure_2d_shape(img, path)
+        else:
+            img = ensure_3d_shape(img, path, data_axes_order=axes_position)
+    except Exception as e:
+        raise ValueError(f"Error reading image from path {path}. Error message: {e}")
     return img
 
 
