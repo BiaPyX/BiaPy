@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 import matplotlib.transforms as transforms
 import fill_voids
 import zarr
+import difflib
 from tqdm import tqdm
 from scipy.signal import find_peaks
 from scipy.spatial import cKDTree # type: ignore
@@ -1946,7 +1947,9 @@ def detection_watershed(
 
 def measure_morphological_props_and_filter(
     img: NDArray,
+    intensity_image: NDArray,
     resolution: List[float|int],
+    extra_props: List[str] = ["label", "bbox", "perimeter"],
     filter_instances: bool=False,
     properties: List[List[str]]=[[]],
     prop_values=[[]],
@@ -1970,8 +1973,16 @@ def measure_morphological_props_and_filter(
     img : 2D/3D Numpy array
         Image with instances. E.g. ``(1450, 2000)`` for 2D and ``(397, 1450, 2000)`` for 3D.
 
+    intensity_image : 2D/3D Numpy array
+        Intensity image to measure intensity-based properties. E.g. ``(1450, 2000)`` for 2D 
+        and ``(397, 1450, 2000)`` for 3D.
+
     resolution : tuple of int/float
         Resolution of the data.
+
+    extra_props : List of str, optional
+        List of extra properties to measure. For a more detailed list of the available properties please refer to
+        `skimage.measure.regionprops <https://scikit-image.org/docs/stable/api/skimage.measure.html#skimage.measure.regionprops>`__.
 
     filter_instances : bool, optional
         Whether to do instance filtering or not.
@@ -2038,6 +2049,27 @@ def measure_morphological_props_and_filter(
     """
     print("Checking the properties of instances . . .")
     
+    # Allowed regionprops attributes (from skimage.measure.regionprops)
+    VALID_REGIONPROPS = {
+        "area", "area_bbox", "area_convex", "area_filled",
+        "axis_major_length", "axis_minor_length", "bbox", "centroid",
+        "centroid_local", "centroid_weighted", "centroid_weighted_local",
+        "coords_scaled", "coords", "eccentricity", "equivalent_diameter_area",
+        "euler_number", "extent", "feret_diameter_max", "image",
+        "image_convex", "image_filled", "image_intensity", "inertia_tensor",
+        "inertia_tensor_eigvals", "intensity_max", "intensity_mean",
+        "intensity_min", "intensity_std", "label", "moments",
+        "moments_central", "moments_hu", "moments_normalized",
+        "moments_weighted", "moments_weighted_central", "moments_weighted_hu",
+        "moments_weighted_normalized", "num_pixels", "orientation",
+        "perimeter", "perimeter_crofton", "slice", "solidity",
+    }
+
+    assert set(extra_props).issubset(VALID_REGIONPROPS), f"Invalid properties found: {set(extra_props) - VALID_REGIONPROPS}"
+    extra_props = list(set(extra_props))
+    if "area" in extra_props:
+        extra_props.remove("area")
+
     assert len(resolution) == 3, "'resolution' must be a list of 3 int/float" 
 
     image3d = True if img.ndim == 3 else False
@@ -2076,10 +2108,23 @@ def measure_morphological_props_and_filter(
         return surface_area
 
     # Area, diameter, center, circularity (if 2D), elongation (if 2D) and perimeter (if 2D) calculation over the whole image
-    lprops = ["label", "bbox", "perimeter"] if not image3d else ["label", "bbox", "surface_area"]
-    props = regionprops_table(img, properties=(lprops), extra_properties=(surface_area,))
+    base_props = ["label", "bbox", "perimeter"] if not image3d else ["label", "bbox", "surface_area"]
+    fprops = list(set(base_props + extra_props))
+    
+    # Create a dictionary to hold extra properties with default values
+    extra_prop_list = [x for x in extra_props if x not in base_props]
+    extra_props = {}
+    for eprop in extra_prop_list:
+        extra_props[eprop] = [0,]*total_labels
+
+    props = regionprops_table(
+        img, 
+        intensity_image=intensity_image,
+        properties=(fprops), 
+        extra_properties=(surface_area,)
+    )
     for k, l in tqdm(enumerate(props["label"]), total=len(props["label"]), leave=False):
-        label_index = np.where(label_list == l)[0]
+        label_index = int(np.where(label_list == l)[0])
         pixels = npixels[label_index]
 
         if image3d:
@@ -2122,6 +2167,16 @@ def measure_morphological_props_and_filter(
         areas[label_index] = vol
         diameters[label_index] = diam
         centers[label_index] = center
+
+        for eprop in extra_prop_list:
+            if eprop in props:
+                extra_props[eprop][label_index] = props[eprop][k]
+            else:
+                closest_key = find_closest_key(eprop, props.keys())
+                if closest_key not in props:
+                    raise ValueError(f"Property '{eprop}' not in regionprops. Closest match was {closest_key}. "
+                                     f"Properties calculated: {list(props.keys())}. Contact BiaPy developers for adding it.")
+                extra_props[eprop][label_index] = props[closest_key][k]
 
     # Remove those instances that do not satisfy the properties
     conditions = []
@@ -2192,6 +2247,9 @@ def measure_morphological_props_and_filter(
         "comment": comment,
         "conditions": conditions,
     }
+    for eprop in extra_prop_list:
+        if eprop not in d_result:
+            d_result[eprop] = np.array(extra_props[eprop])
     if not image3d:
         d_result["elongations"]= elongations
 
@@ -2203,6 +2261,24 @@ def measure_morphological_props_and_filter(
 
     return img, d_result
 
+def find_closest_key(requested: str, available_keys):
+    """
+    Find the closest existing key for a canonical regionprops property name.
+    Example: "intensity_std" -> "intensity_std-0"
+    """
+    # 1) Prefixed keys are the most common pattern ("prop", "prop-0", "prop_0")
+    prefix_matches = [k for k in available_keys if k.startswith(requested)]
+    if prefix_matches:
+        return prefix_matches[0]   # usually "-0"
+
+    # 2) Underscore variant (skimage sometimes uses '_' instead of '-')
+    prefix_matches = [k for k in available_keys if k.startswith(requested + "_")]
+    if prefix_matches:
+        return prefix_matches[0]
+
+    # 3) Fallback: fuzzy match
+    closest = difflib.get_close_matches(requested, available_keys, n=1, cutoff=0.4)
+    return closest[0] if closest else None
 
 def find_neighbors(
     img: NDArray, 

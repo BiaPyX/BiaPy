@@ -842,74 +842,85 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 pred_labels = pred_labels[0]
             pred_labels, d_result = measure_morphological_props_and_filter(
                 pred_labels,
-                self.resolution,
+                intensity_image=self.current_sample["X"][0],
+                resolution=self.resolution,
+                extra_props=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.EXTRA_PROPS,
                 filter_instances=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.ENABLE,
                 properties=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS,
                 prop_values=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.VALUES,
                 comp_signs=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGNS,
             )
+            extra_properties_keys = self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.EXTRA_PROPS
             if self.cfg.PROBLEM.NDIM == "2D":
                 pred_labels = np.expand_dims(pred_labels, 0)
 
             # Save all instance stats
             if self.cfg.PROBLEM.NDIM == "2D":
-                df = pd.DataFrame(
-                    zip(
-                        np.array(d_result["labels"], dtype=np.uint64),
-                        list(d_result["centers"][:, 0]),
-                        list(d_result["centers"][:, 1]),
-                        d_result["npixels"],
-                        d_result["areas"],
-                        d_result["circularities"],
-                        d_result["diameters"],
-                        d_result["perimeters"],
-                        d_result["elongations"],
-                        d_result["comment"],
-                        d_result["conditions"],
-                    ),
-                    columns=[
-                        "label",
-                        "axis-0",
-                        "axis-1",
-                        "npixels",
-                        "area",
-                        "circularity",
-                        "diameter",
-                        "perimeter",
-                        "elongation",
-                        "comment",
-                        "conditions",
-                    ],
-                )
+                # Base properties that are always included
+                base_data_series = [
+                    np.array(d_result["labels"], dtype=np.uint64),
+                    list(d_result["centers"][:, 0]),
+                    list(d_result["centers"][:, 1]),
+                    d_result["npixels"],
+                    d_result["areas"],
+                    d_result["circularities"],
+                    d_result["diameters"],
+                    d_result["perimeters"],
+                    d_result["elongations"],
+                    d_result["comment"],
+                    d_result["conditions"],
+                ]
+
+                # Base column names
+                base_columns = [
+                    "label",
+                    "axis-0",
+                    "axis-1",
+                    "npixels",
+                    "area",
+                    "circularity",
+                    "diameter",
+                    "perimeter",
+                    "elongation",
+                    "comment",
+                    "conditions",
+                ]
             else:
-                df = pd.DataFrame(
-                    zip(
-                        np.array(d_result["labels"], dtype=np.uint64),
-                        list(d_result["centers"][:, 0]),
-                        list(d_result["centers"][:, 1]),
-                        list(d_result["centers"][:, 2]),
-                        d_result["npixels"],
-                        d_result["areas"],
-                        d_result["sphericities"],
-                        d_result["diameters"],
-                        d_result["perimeters"],
-                        d_result["comment"],
-                        d_result["conditions"],
-                    ),
-                    columns=[
-                        "label",
-                        "axis-0",
-                        "axis-1",
-                        "axis-2",
-                        "npixels",
-                        "volume",
-                        "sphericity",
-                        "diameter",
-                        "perimeter (surface area)",
-                        "comment",
-                        "conditions",
-                    ],
-                )
+                base_data_series = [
+                    np.array(d_result["labels"], dtype=np.uint64),
+                    list(d_result["centers"][:, 0]),
+                    list(d_result["centers"][:, 1]),
+                    list(d_result["centers"][:, 2]),
+                    d_result["npixels"],
+                    d_result["areas"],
+                    d_result["sphericities"],
+                    d_result["diameters"],
+                    d_result["perimeters"],
+                    d_result["comment"],
+                    d_result["conditions"],
+                ]
+                base_columns =[
+                    "label",
+                    "axis-0",
+                    "axis-1",
+                    "axis-2",
+                    "npixels",
+                    "volume",
+                    "sphericity",
+                    "diameter",
+                    "perimeter (surface area)",
+                    "comment",
+                    "conditions",
+                ]
+            extra_properties_keys = [key for key in extra_properties_keys if key not in base_columns and key in d_result]
+            extra_data_series = [d_result[key] for key in extra_properties_keys if key in d_result]
+            all_data_series = base_data_series + extra_data_series
+            all_columns = base_columns + extra_properties_keys
+
+            df = pd.DataFrame(
+                zip(*all_data_series),
+                columns=all_columns,
+            )
             df = df.sort_values(by=["label"])
             df.to_csv(
                 os.path.join(out_dir, os.path.splitext(filenames[0])[0] + "_full_stats.csv"),

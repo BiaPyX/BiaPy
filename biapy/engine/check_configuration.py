@@ -795,117 +795,135 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGNS' need to have same length"
         )
 
-    if (
-        cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.ENABLE
-        and cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.ENABLE
-    ):
-        if cfg.PROBLEM.TYPE not in ["INSTANCE_SEG", "DETECTION"]:
-            raise ValueError(
-                "'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS' can only be used in INSTANCE_SEG and DETECTION workflows"
-            )
+    if cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.ENABLE:
+        properties = cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.EXTRA_PROPS
+        if properties != []:
+            # Allowed regionprops attributes (from skimage.measure.regionprops)
+            VALID_REGIONPROPS = {
+                "area", "area_bbox", "area_convex", "area_filled",
+                "axis_major_length", "axis_minor_length", "bbox", "centroid",
+                "centroid_local", "centroid_weighted", "centroid_weighted_local",
+                "coords_scaled", "coords", "eccentricity", "equivalent_diameter_area",
+                "euler_number", "extent", "feret_diameter_max", "image",
+                "image_convex", "image_filled", "image_intensity", "inertia_tensor",
+                "inertia_tensor_eigvals", "intensity_max", "intensity_mean",
+                "intensity_min", "intensity_std", "label", "moments",
+                "moments_central", "moments_hu", "moments_normalized",
+                "moments_weighted", "moments_weighted_central", "moments_weighted_hu",
+                "moments_weighted_normalized", "num_pixels", "orientation",
+                "perimeter", "perimeter_crofton", "slice", "solidity",
+            }
+            assert set(properties).issubset(VALID_REGIONPROPS), f"Invalid properties found: {set(properties) - VALID_REGIONPROPS}"
+            opts.extend(["TEST.POST_PROCESSING.MEASURE_PROPERTIES.EXTRA_PROPS", list(set(cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.EXTRA_PROPS))])
 
-        if len(cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS) == 0:
-            raise ValueError(
-                "'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS' can not be an empty list when "
-                "'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.ENABLE' is enabled"
-            )
-
-        for i in range(len(cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS)):
-            if not isinstance(
-                cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS[i],
-                list,
-            ):
+        if cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.ENABLE:
+            if cfg.PROBLEM.TYPE not in ["INSTANCE_SEG", "DETECTION"]:
                 raise ValueError(
-                    "'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS' need to be a list of list. E.g. [ ['circularity'], ['area', 'diameter'] ]"
-                )
-            if not isinstance(
-                cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.VALUES[i],
-                list,
-            ):
-                raise ValueError(
-                    "'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.VALUES' need to be a list of list. E.g. [ [10], [15, 3] ]"
-                )
-            if not isinstance(
-                cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGNS[i],
-                list,
-            ):
-                raise ValueError(
-                    "'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGNS' need to be a list of list. E.g. [ ['gt'], ['le', 'gt'] ]"
+                    "'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS' can only be used in INSTANCE_SEG and DETECTION workflows"
                 )
 
-            if not (
-                len(cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS[i])
-                == len(cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.VALUES[i])
-                == len(cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGNS[i])
-            ):
+            if len(cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS) == 0:
                 raise ValueError(
-                    "'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS', 'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.VALUES' and "
-                    "'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGNS' need to have same length"
+                    "'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS' can not be an empty list when "
+                    "'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.ENABLE' is enabled"
                 )
 
-            # Check for unique values
-            if (
-                len(
-                    [
-                        item
-                        for item, count in collections.Counter(
-                            cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS[i]
-                        ).items()
-                        if count > 1
-                    ]
-                )
-                > 0
-            ):
-                raise ValueError(
-                    "Non repeated values are allowed in 'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES'"
-                )
-            for j in range(len(cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS[i])):
-                if cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS[i][j] not in [
-                    "circularity",
-                    "npixels",
-                    "area",
-                    "diameter",
-                    "elongation",
-                    "sphericity",
-                    "perimeter",
-                ]:
+            for i in range(len(cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS)):
+                if not isinstance(
+                    cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS[i],
+                    list,
+                ):
                     raise ValueError(
-                        "'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS' can only be one among these: ['circularity', 'npixels', 'area', 'diameter', 'elongation', 'sphericity', 'perimeter']"
+                        "'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS' need to be a list of list. E.g. [ ['circularity'], ['area', 'diameter'] ]"
                     )
+                if not isinstance(
+                    cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.VALUES[i],
+                    list,
+                ):
+                    raise ValueError(
+                        "'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.VALUES' need to be a list of list. E.g. [ [10], [15, 3] ]"
+                    )
+                if not isinstance(
+                    cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGNS[i],
+                    list,
+                ):
+                    raise ValueError(
+                        "'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGNS' need to be a list of list. E.g. [ ['gt'], ['le', 'gt'] ]"
+                    )
+
+                if not (
+                    len(cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS[i])
+                    == len(cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.VALUES[i])
+                    == len(cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGNS[i])
+                ):
+                    raise ValueError(
+                        "'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS', 'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.VALUES' and "
+                        "'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGNS' need to have same length"
+                    )
+
+                # Check for unique values
                 if (
-                    cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS[i][j]
-                    in ["circularity", "elongation"]
-                    and cfg.PROBLEM.NDIM != "2D"
+                    len(
+                        [
+                            item
+                            for item, count in collections.Counter(
+                                cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS[i]
+                            ).items()
+                            if count > 1
+                        ]
+                    )
+                    > 0
                 ):
                     raise ValueError(
-                        "'circularity' or 'elongation' properties can only be measured in 2D images. Delete them from 'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS'. "
-                        "'circularity'-kind property in 3D is 'sphericity'"
+                        "Non repeated values are allowed in 'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES'"
                     )
-                if (
-                    cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS[i][j] == "sphericity"
-                    and cfg.PROBLEM.NDIM != "3D"
-                ):
-                    raise ValueError(
-                        "'sphericity' property can only be measured in 3D images. Delete it from 'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS'. "
-                        "'sphericity'-kind property in 2D is 'circularity'"
-                    )
-                if cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGNS[i][j] not in [
-                    "gt",
-                    "ge",
-                    "lt",
-                    "le",
-                ]:
-                    raise ValueError(
-                        "'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGNS' can only be one among these: ['gt', 'ge', 'lt', 'le']"
-                    )
-                if cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS[i][
-                    j
-                ] == "circularity" and not check_value(
-                    cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.VALUES[i][j]
-                ):
-                    raise ValueError(
-                        "Circularity can only have values in [0, 1] range (check  'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.VALUES' values)"
-                    )
+                for j in range(len(cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS[i])):
+                    if cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS[i][j] not in [
+                        "circularity",
+                        "npixels",
+                        "area",
+                        "diameter",
+                        "elongation",
+                        "sphericity",
+                        "perimeter",
+                    ]:
+                        raise ValueError(
+                            "'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS' can only be one among these: ['circularity', 'npixels', 'area', 'diameter', 'elongation', 'sphericity', 'perimeter']"
+                        )
+                    if (
+                        cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS[i][j]
+                        in ["circularity", "elongation"]
+                        and cfg.PROBLEM.NDIM != "2D"
+                    ):
+                        raise ValueError(
+                            "'circularity' or 'elongation' properties can only be measured in 2D images. Delete them from 'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS'. "
+                            "'circularity'-kind property in 3D is 'sphericity'"
+                        )
+                    if (
+                        cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS[i][j] == "sphericity"
+                        and cfg.PROBLEM.NDIM != "3D"
+                    ):
+                        raise ValueError(
+                            "'sphericity' property can only be measured in 3D images. Delete it from 'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS'. "
+                            "'sphericity'-kind property in 2D is 'circularity'"
+                        )
+                    if cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGNS[i][j] not in [
+                        "gt",
+                        "ge",
+                        "lt",
+                        "le",
+                    ]:
+                        raise ValueError(
+                            "'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGNS' can only be one among these: ['gt', 'ge', 'lt', 'le']"
+                        )
+                    if cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS[i][
+                        j
+                    ] == "circularity" and not check_value(
+                        cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.VALUES[i][j]
+                    ):
+                        raise ValueError(
+                            "Circularity can only have values in [0, 1] range (check  'TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.VALUES' values)"
+                        )
 
     if cfg.PROBLEM.TYPE != "INSTANCE_SEG":
         if cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK:

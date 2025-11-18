@@ -1663,20 +1663,11 @@ class Config:
         # 'perimeter', 'sphericity' (3D)
         _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES = CN()
         _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.ENABLE = False
-        # Remove instances by the conditions based in each instance properties. The three variables, TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS,
-        # TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.VALUES and TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGNS will compose a list
-        # of conditions to remove the instances. They are list of list of conditions. For instance, the conditions can be like this: [['A'], ['B','C']]. Then, if the instance satisfies
-        # the first list of conditions, only 'A' in this first case (from ['A'] list), or satisfy 'B' and 'C' (from ['B','C'] list) it will be
-        # removed from the image. In each sublist all the conditions must be satisfied. Available properties are: ['circularity', 'elongation',
-        # 'npixels', 'area', 'diameter', 'perimeter', 'sphericity']. When this post-processing step is selected two .csv files
-        # will be created, one with the properties of each instance from the original image (will be placed in PATHS.RESULT_DIR.PER_IMAGE_INSTANCES
-        # path), and another with only instances that remain once this post-processing has been applied (will be placed in
-        # PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING path). In those csv files two more information columns will appear: a list of conditions
-        # that each instance has satisfy or not ('Satisfied', 'No satisfied' respectively), and a comment with two possible values, 'Removed'
-        # and 'Correct', telling you if the instance has been removed or not, respectively. Some of the properties follow the formulas used in
-        # MorphoLibJ library for Fiji https://doi.org/10.1093/bioinformatics/btw413
-        #
-        # Each property descrition:
+        # List of properties to measure on each instance. The following properties will be always calculated: label, npixels, areas, centers, elongation (2D), 
+        # sphericities (2D)/circularities (3D), diameters, perimeter (2D)/surface_area (3D). Apart from them, you can select more properties to be calculated
+        # based on scikit-image regionprops function. Check the following link for a detailed list of the extra available properties you can request:
+        # https://scikit-image.org/docs/stable/api/skimage.measure.html#skimage.measure.regionprops
+        # Default property description is as follows:
         #   * 'circularity' is defined as the ratio of area over the square of the perimeter, normalized such that the value for a disk equals
         #     one: (4 * PI * area) / (perimeter^2). Only measurable for 2D images (use sphericity for 3D images). While values of circularity
         #     range theoretically within the interval [0;1], the measurements errors of the perimeter may produce circularity values above 1
@@ -1700,6 +1691,20 @@ class Config:
         #
         #   * 'sphericity', in 3D, it is the ratio of the squared volume over the cube of the surface area, normalized such that the value
         #     for a ball equals one: (36 * PI)*((volume^2)/(perimeter^3)). Only measurable for 3D images (use circularity for 2D images).
+        #
+        _C.TEST.POST_PROCESSING.MEASURE_PROPERTIES.EXTRA_PROPS = []
+        # Remove instances by the conditions based in each instance properties. The three variables, TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS,
+        # TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.VALUES and TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGNS will compose a list
+        # of conditions to remove the instances. They are list of list of conditions. For instance, the conditions can be like this: [['A'], ['B','C']]. Then, if the instance satisfies
+        # the first list of conditions, only 'A' in this first case (from ['A'] list), or satisfy 'B' and 'C' (from ['B','C'] list) it will be
+        # removed from the image. In each sublist all the conditions must be satisfied. Available properties are: ['circularity', 'elongation',
+        # 'npixels', 'area', 'diameter', 'perimeter', 'sphericity']. When this post-processing step is selected two .csv files
+        # will be created, one with the properties of each instance from the original image (will be placed in PATHS.RESULT_DIR.PER_IMAGE_INSTANCES
+        # path), and another with only instances that remain once this post-processing has been applied (will be placed in
+        # PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING path). In those csv files two more information columns will appear: a list of conditions
+        # that each instance has satisfy or not ('Satisfied', 'No satisfied' respectively), and a comment with two possible values, 'Removed'
+        # and 'Correct', telling you if the instance has been removed or not, respectively. Some of the properties follow the formulas used in
+        # MorphoLibJ library for Fiji https://doi.org/10.1093/bioinformatics/btw413
         #
         # A full example of this post-processing:
         # If you want to remove those instances that have less than 100 pixels and circularity less equal to 0.7 you should
