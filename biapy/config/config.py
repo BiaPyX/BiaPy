@@ -1500,6 +1500,8 @@ class Config:
         # It is slower and not as precise as the "normal" inference process but saves memory. In 'TEST.BY_CHUNKS' it will
         # only save memory with the datatype change.
         _C.TEST.REDUCE_MEMORY = False
+        # Whether to compute the metrics in CPU instead of GPU to reduce GPU memory consumption.
+        _C.TEST.METRICS_IN_CPU = True
         # In the processing of 3D images, the primary image is segmented into smaller patches. These patches are subsequently
         # passed through a computational network. The outcome is a new image, typically saved as a TIF file, that retains the
         # dimensions of the original input. Notably, if the input image is sizable, this process can be memory-intensive. This

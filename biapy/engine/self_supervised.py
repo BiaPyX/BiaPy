@@ -200,26 +200,26 @@ class Self_supervised_Workflow(Base_Workflow):
         self.test_metric_names = []
         for metric in list(set(self.cfg.TEST.METRICS)):
             if metric == "psnr":
-                self.test_metrics.append(PeakSignalNoiseRatio().to(self.device))
+                self.test_metrics.append(PeakSignalNoiseRatio().to(self.test_device))
                 self.test_metric_names.append("PSNR")
             elif metric == "mse":
-                self.test_metrics.append(MeanSquaredError().to(self.device))
+                self.test_metrics.append(MeanSquaredError().to(self.test_device))
                 self.test_metric_names.append("MSE")
             elif metric == "mae":
-                self.test_metrics.append(MeanAbsoluteError().to(self.device))
+                self.test_metrics.append(MeanAbsoluteError().to(self.test_device))
                 self.test_metric_names.append("MAE")
             elif metric == "ssim":
-                self.test_metrics.append(StructuralSimilarityIndexMeasure().to(self.device))
+                self.test_metrics.append(StructuralSimilarityIndexMeasure().to(self.test_device))
                 self.test_metric_names.append("SSIM")
             elif metric == "fid":
-                self.test_metrics.append(FrechetInceptionDistance(normalize=True).to(self.device))
+                self.test_metrics.append(FrechetInceptionDistance(normalize=True).to(self.test_device))
                 self.test_metric_names.append("FID")
             elif metric == "is":
-                self.test_metrics.append(InceptionScore(normalize=True).to(self.device))
+                self.test_metrics.append(InceptionScore(normalize=True).to(self.test_device))
                 self.test_metric_names.append("IS")
             elif metric == "lpips":
                 self.test_metrics.append(
-                    LearnedPerceptualImagePatchSimilarity(net_type="squeeze", normalize=True).to(self.device)
+                    LearnedPerceptualImagePatchSimilarity(net_type="squeeze", normalize=True).to(self.test_device)
                 )
                 self.test_metric_names.append("LPIPS")
 
@@ -297,7 +297,7 @@ class Self_supervised_Workflow(Base_Workflow):
             _output = to_pytorch_format(
                 _output.copy(),
                 self.axes_order,
-                self.device,
+                self.device if train else self.test_device,
                 dtype=self.loss_dtype,
             )
         else:  # torch.Tensor
@@ -310,7 +310,7 @@ class Self_supervised_Workflow(Base_Workflow):
             _targets = to_pytorch_format(
                 targets.copy(),
                 self.axes_order,
-                self.device,
+                self.device if train else self.test_device,
                 dtype=self.loss_dtype,
             )
         else:  # torch.Tensor
@@ -465,7 +465,7 @@ class Self_supervised_Workflow(Base_Workflow):
                         self.current_sample["X"][k],
                         axes_order_back=self.axes_order_back,
                         axes_order=self.axes_order,
-                        device=self.device,
+                        device=self.test_device,
                         pred_func=self.model_call_func,
                     )
                 else:
@@ -474,7 +474,7 @@ class Self_supervised_Workflow(Base_Workflow):
                         batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
                         axes_order_back=self.axes_order_back,
                         axes_order=self.axes_order,
-                        device=self.device,
+                        device=self.test_device,
                         pred_func=self.model_call_func,
                     )
                 if isinstance(p, dict):
@@ -502,7 +502,7 @@ class Self_supervised_Workflow(Base_Workflow):
                         to_pytorch_format(
                             self.current_sample["X"][k * self.cfg.TRAIN.BATCH_SIZE : top],
                             self.axes_order,
-                            self.device,
+                            self.test_device,
                         ),
                         p,
                         mask,

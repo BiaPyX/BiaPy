@@ -267,7 +267,7 @@ class Detection_Workflow(Base_Workflow):
             _output = to_pytorch_format(
                 output.copy(),
                 self.axes_order,
-                self.device,
+                self.device if train else self.test_device,
                 dtype=self.loss_dtype,
             )
         else:  # torch.Tensor
@@ -280,7 +280,7 @@ class Detection_Workflow(Base_Workflow):
             _targets = to_pytorch_format(
                 targets.copy(),
                 self.axes_order,
-                self.device,
+                self.device if train else self.test_device,
                 dtype=self.loss_dtype,
             )
         else:  # torch.Tensor

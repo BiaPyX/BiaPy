@@ -140,6 +140,10 @@ class Base_Workflow(metaclass=ABCMeta):
         self.args = args
         self.job_identifier = job_identifier
         self.device = device
+        if self.cfg.TEST.METRICS_IN_CPU:
+            self.test_device = torch.device("cpu")
+        else:
+            self.test_device = device
         self.original_test_mask_path = None
         self.test_mask_filenames = None
         self.cross_val_samples_ids = None
@@ -696,6 +700,14 @@ class Base_Workflow(metaclass=ABCMeta):
             pred = self.apply_model_activations(self.bmz_model_call(in_img, is_train))
         elif self.cfg.MODEL.SOURCE == "torchvision":
             pred = self.torchvision_model_call(in_img, is_train)
+        
+        if not is_train:
+            if isinstance(pred, dict):
+                for key in pred:
+                    if torch.is_tensor(pred[key]):
+                        pred[key] = pred[key].to(self.test_device)
+            elif torch.is_tensor(pred):
+                pred = pred.to(self.test_device)
         return pred
 
     def prepare_model(self):
@@ -1351,7 +1363,7 @@ class Base_Workflow(metaclass=ABCMeta):
                         x_batch[k],
                         axes_order_back=self.axes_order_back,
                         axes_order=self.axes_order,
-                        device=self.device,
+                        device=self.test_device,
                         pred_func=self.model_call_func,
                         mode=self.cfg.TEST.AUGMENTATION_MODE,
                     )
@@ -1361,7 +1373,7 @@ class Base_Workflow(metaclass=ABCMeta):
                         batch_size_value=self.cfg.TRAIN.BATCH_SIZE,
                         axes_order_back=self.axes_order_back,
                         axes_order=self.axes_order,
-                        device=self.device,
+                        device=self.test_device,
                         pred_func=self.model_call_func,
                         mode=self.cfg.TEST.AUGMENTATION_MODE,
                     )
@@ -1955,7 +1967,7 @@ class Base_Workflow(metaclass=ABCMeta):
                         axes_order_back=self.axes_order_back,
                         pred_func=self.model_call_func,
                         axes_order=self.axes_order,
-                        device=self.device,
+                        device=self.test_device,
                         mode=self.cfg.TEST.AUGMENTATION_MODE,
                     )
                 else:

@@ -145,7 +145,7 @@ class Classification_Workflow(Base_Workflow):
                 self.train_metric_best.append("max")
             elif metric == "top-5-accuracy" and self.cfg.DATA.N_CLASSES > 5:
                 self.train_metrics.append(
-                    Accuracy(task="multiclass", num_classes=self.cfg.DATA.N_CLASSES, top_k=5).to(self.device),
+                    Accuracy(task="multiclass", num_classes=self.cfg.DATA.N_CLASSES, top_k=5).to(self.test_device),
                 )
                 self.train_metric_names.append("Top 5 accuracy")
                 self.train_metric_best.append("max")

@@ -16,7 +16,7 @@ from skimage.filters import threshold_otsu
 from biapy.data.post_processing.post_processing import apply_binary_mask
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.data.data_manipulation import check_masks, save_tif
-from biapy.utils.misc import to_pytorch_format, to_numpy_format, to_pytorch_format, MetricLogger
+from biapy.utils.misc import to_pytorch_format, to_numpy_format, MetricLogger
 from biapy.engine.metrics import (
     jaccard_index,
     CrossEntropyLoss_wrapper,
@@ -163,7 +163,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
                 self.test_metrics.append(
                     jaccard_index(
                         num_classes=self.cfg.DATA.N_CLASSES,
-                        device=self.device,
+                        device=self.test_device,
                         model_source=self.cfg.MODEL.SOURCE,
                         ndim=self.dims,
                         ignore_index=self.cfg.LOSS.IGNORE_INDEX,
@@ -318,7 +318,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
             _output = to_pytorch_format(
                 output.copy(),
                 self.axes_order,
-                self.device,
+                self.device if train else self.test_device,
                 dtype=self.loss_dtype,
             )
         else:  # torch.Tensor
@@ -331,7 +331,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
             _targets = to_pytorch_format(
                 targets.copy(),
                 self.axes_order,
-                self.device,
+                self.device if train else self.test_device,
                 dtype=self.loss_dtype,
             )
         else:  # torch.Tensor

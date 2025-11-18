@@ -25,7 +25,7 @@ from biapy.data.data_3D_manipulation import (
 )
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.data.data_manipulation import save_tif
-from biapy.utils.misc import to_pytorch_format, is_main_process, to_pytorch_format, MetricLogger
+from biapy.utils.misc import to_pytorch_format, is_main_process, MetricLogger
 from biapy.engine.metrics import n2v_loss_mse, loss_encapsulation
 
 
@@ -155,12 +155,12 @@ class Denoising_Workflow(Base_Workflow):
         for metric in list(set(self.cfg.TEST.METRICS)):
             if metric in ["mse"]:
                 self.test_metrics.append(
-                    MeanSquaredError().to(self.device),
+                    MeanSquaredError().to(self.test_device),
                 )
                 self.test_metric_names.append("MSE")
             elif metric == "mae":
                 self.test_metrics.append(
-                    MeanAbsoluteError().to(self.device),
+                    MeanAbsoluteError().to(self.test_device),
                 )
                 self.test_metric_names.append("MAE")
 
@@ -205,7 +205,7 @@ class Denoising_Workflow(Base_Workflow):
             _output = to_pytorch_format(
                 output.copy(),
                 self.axes_order,
-                self.device,
+                self.device if train else self.test_device,
                 dtype=self.loss_dtype,
             )
         else:  # torch.Tensor
@@ -218,7 +218,7 @@ class Denoising_Workflow(Base_Workflow):
             _targets = to_pytorch_format(
                 targets.copy(),
                 self.axes_order,
-                self.device,
+                self.device if train else self.test_device,
                 dtype=self.loss_dtype,
             )
         else:  # torch.Tensor

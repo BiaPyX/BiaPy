@@ -337,7 +337,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             self.test_metric_names.append("IoU (classes)")
             # Used to calculate IoU with the classification results
             self.jaccard_index_matching = jaccard_index(
-                device=self.device, 
+                device=self.test_device, 
                 num_classes=self.cfg.DATA.N_CLASSES,
                 ndim=self.dims,
                 ignore_index=self.cfg.LOSS.IGNORE_INDEX,
@@ -351,7 +351,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 multiple_metrics(
                     num_classes=self.cfg.DATA.N_CLASSES,
                     metric_names=self.test_metric_names,
-                    device=self.device,
+                    device=self.test_device,
                     out_channels=self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
                     channel_extra_opts = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0],
                     model_source=self.cfg.MODEL.SOURCE,
@@ -375,7 +375,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 medoid_max_points=self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0].get("E_offset", {}).get("medoid_max_points", 10000),
             ).to(self.device, non_blocking=True)
             self.embedding_cluster = Embedding_cluster(
-                device=self.device,
+                device=self.test_device,
                 patch_size=self.cfg.DATA.PATCH_SIZE,
                 ndims=self.dims,
                 anisotropy=self.resolution,
@@ -437,7 +437,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             _output = to_pytorch_format(
                 output.copy(),
                 self.axes_order,
-                self.device,
+                self.device if train else self.test_device,
                 dtype=self.loss_dtype,
             )
         else:  # torch.Tensor
@@ -450,7 +450,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             _targets = to_pytorch_format(
                 targets.copy(),
                 self.axes_order,
-                self.device,
+                self.device if train else self.test_device,
                 dtype=self.loss_dtype,
             )
         else:  # torch.Tensor
@@ -685,8 +685,8 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
                 # Measure class IoU
                 class_iou = self.jaccard_index_matching(
-                    torch.as_tensor(class_channel.squeeze().astype(np.int32)).to(self.device, non_blocking=True),
-                    torch.as_tensor(_Y_classes.squeeze().astype(np.int32)).to(self.device, non_blocking=True),
+                    torch.as_tensor(class_channel.squeeze().astype(np.uint16)).to(self.test_device, non_blocking=True),
+                    torch.as_tensor(_Y_classes.squeeze().astype(np.uint16)).to(self.test_device, non_blocking=True),
                 )
                 class_iou = class_iou.item() if not torch.isnan(class_iou) else 0
                 print(f"Class IoU: {class_iou}")
