@@ -1874,7 +1874,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     pred = np.expand_dims(apply_binary_mask(pred[0], self.cfg.DATA.TEST.BINARY_MASKS), 0)
 
                 # Save image
-                if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
+                if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "" and self.cfg.TEST.SAVE_MODEL_RAW_OUTPUT:
                     save_tif(
                         pred,
                         self.cfg.PATHS.RESULT_DIR.PER_IMAGE,

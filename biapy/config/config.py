@@ -1162,7 +1162,7 @@ class Config:
         # Format of the output checkpoint. Options are 'pth' (native PyTorch format) or 'safetensors' (https://github.com/huggingface/safetensors)
         _C.MODEL.OUT_CHECKPOINT_FORMAT = "pth"
         # To skip loading those layers that do not match in shape with the given checkpoint. If this is set to False a regular load function will be 
-        # done, which will fail if a layer mismatch is found. Only workes when 'MODEL.LOAD_MODEL_FROM_CHECKPOINT' is True
+        # done, which will fail if a layer mismatch is found. Only works when 'MODEL.LOAD_MODEL_FROM_CHECKPOINT' is True
         _C.MODEL.SKIP_UNMATCHED_LAYERS = False
         # Epochs to save a checkpoint of the model apart from the ones saved with LOAD_CHECKPOINT_ONLY_WEIGHTS. Set it to -1 to
         # not do it.
@@ -1502,6 +1502,9 @@ class Config:
         _C.TEST.REDUCE_MEMORY = False
         # Whether to compute the metrics in CPU instead of GPU to reduce GPU memory consumption.
         _C.TEST.METRICS_IN_CPU = True
+        # Whether to save the raw output of the model (before any post-processing) alongside the final prediction. It is placed normally
+        # in a folder called 'per_image'
+        _C.TEST.SAVE_MODEL_RAW_OUTPUT = True
         # In the processing of 3D images, the primary image is segmented into smaller patches. These patches are subsequently
         # passed through a computational network. The outcome is a new image, typically saved as a TIF file, that retains the
         # dimensions of the original input. Notably, if the input image is sizable, this process can be memory-intensive. This

@@ -320,7 +320,7 @@ class Denoising_Workflow(Base_Workflow):
         pred = self.norm_module.undo_image_norm(pred, self.current_sample["X_norm"])
 
         # Save image
-        if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
+        if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "" and self.cfg.TEST.SAVE_MODEL_RAW_OUTPUT:
             assert isinstance(pred, np.ndarray)
             save_tif(
                 pred,

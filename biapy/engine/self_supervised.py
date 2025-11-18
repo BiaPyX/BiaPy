@@ -609,7 +609,7 @@ class Self_supervised_Workflow(Base_Workflow):
         assert isinstance(pred, np.ndarray)
 
         # Save image
-        if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "":
+        if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "" and self.cfg.TEST.SAVE_MODEL_RAW_OUTPUT:
             fname, fext = os.path.splitext(self.current_sample["X_filename"])
             save_tif(
                 pred,
