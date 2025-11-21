@@ -280,6 +280,11 @@ def create_model_cover(img, img_gt, out_path, patch_size=256, is_3d=False, workf
 
     Parameters
     ----------
+    img : NDArray
+        Input image. E.g. ``(z, y, x, channels)`` for 3D or ``(y, x, channels)`` for 2D.
+
+    img_gt : NDArray
+        Ground truth image. E.g. ``(z, y, x, channels)`` for 3D or ``(y, x, channels)`` for 2D.
 
     out_path : str
         Directory to save the cover.
@@ -320,7 +325,7 @@ def create_model_cover(img, img_gt, out_path, patch_size=256, is_3d=False, workf
     if img.shape[-1] == 1:
         img = np.stack((img[..., 0],) * 3, axis=-1)
     elif img.shape[-1] == 2:
-        img = np.stack((np.zeros(img.shape, dtype=img.dtype), img), axis=-1)
+        img = np.concatenate((img, np.zeros(img.shape[:-1] + (1,), dtype=img.dtype)), axis=-1)
     elif img.shape[-1] > 3:
         img = img[..., :3]
 
