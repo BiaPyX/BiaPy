@@ -1,0 +1,98 @@
+SYSTEM:
+    NUM_CPUS: -1
+    NUM_WORKERS: 2
+
+PROBLEM:
+    TYPE: INSTANCE_SEG
+    NDIM: 2D
+    INSTANCE_SEG:
+        DATA_CHANNELS: ["F", "P"]
+        DATA_CHANNEL_WEIGHTS : [1, 2]
+        WATERSHED:
+          SEED_CHANNELS: ["P"]
+          SEED_CHANNELS_THRESH: [0.3]
+          TOPOGRAPHIC_SURFACE_CHANNEL: "F"
+          GROWTH_MASK_CHANNELS: ["F"]
+          GROWTH_MASK_CHANNELS_THRESH: [0.5]
+        DATA_CHECK_MW: false
+  
+DATA: 
+    PATCH_SIZE: (512, 512, 2)
+    REFLECT_TO_COMPLETE_SHAPE: True
+    NORMALIZATION:
+        TYPE: 'div'
+        PERC_CLIP:
+          ENABLE: True
+          LOWER_PERC: 0.1
+          UPPER_PERC: 99.8
+    TRAIN:                                                                                                              
+        PATH: /path/to/spinedl_neuron_data/train/raw
+        GT_PATH: /path/to/spinedl_neuron_data/train/label
+        IN_MEMORY: True
+        FILTER_SAMPLES:
+          ENABLE: True
+          PROPS: [['mean']]
+          VALUES: [[0.05]]
+          SIGNS: [["lt"]]
+          NORM_BEFORE: True
+    VAL:
+        FROM_TRAIN: False
+        PATH: /path/to/spinedl_neuron_data/validation/raw                           
+        GT_PATH: /path/to/spinedl_neuron_data/validation/label
+        IN_MEMORY: True
+    TEST:                                                                                                               
+        PATH: /path/to/spinedl_neuron_data/validation/raw                      
+        GT_PATH: /path/to/spinedl_neuron_data/validation/label
+        IN_MEMORY: False
+        LOAD_GT: False
+        PADDING: (100,100)
+
+AUGMENTOR:
+    ENABLE: True
+    RANDOM_ROT: True
+    VFLIP: True
+    HFLIP: True
+    BRIGHTNESS: True
+    BRIGHTNESS_FACTOR: (-0.2, 0.2)
+    CONTRAST: True
+    CONTRAST_FACTOR: (-0.2, 0.2)
+    ELASTIC: True
+    ZOOM: True
+    ZOOM_RANGE: (0.8, 1.2)
+    AFFINE_MODE: 'reflect'
+
+MODEL:
+    ARCHITECTURE: hrnet48
+    LOAD_CHECKPOINT: True
+    
+TRAIN:
+    ENABLE: False
+    OPTIMIZER: ADAMW
+    LR: 1.E-4
+    BATCH_SIZE: 6
+    EPOCHS: 800
+    PATIENCE: 100
+    LR_SCHEDULER:
+        NAME: 'warmupcosine'
+        MIN_LR: 1.E-5
+        WARMUP_COSINE_DECAY_EPOCHS: 5
+
+LOSS:
+  CLASS_REBALANCE: True
+  
+TEST:
+    ENABLE: True
+    AUGMENTATION: False
+    FULL_IMG: False
+    POST_PROCESSING:
+      MEASURE_PROPERTIES: 
+        ENABLE: False
+        REMOVE_BY_PROPERTIES:
+          ENABLE: False
+          PROPS: [['npixels']]
+          VALUES: [[100]]
+          SIGNS: [["lt"]]
+      INSTANCE_REFINEMENT:
+        ENABLE: True
+        OPERATIONS: ["remove_small_objects", "fill_holes"]
+        VALUES: [10, 'none']
