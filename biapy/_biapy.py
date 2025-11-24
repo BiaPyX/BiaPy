@@ -710,37 +710,38 @@ class BiaPy:
             if self.cfg.PROBLEM.NDIM == "3D":
                 output_axes += [
                     SpaceOutputAxisWithHalo(
-                        halo=(self.cfg.DATA.PATCH_SIZE[0]//8) & ~1, 
+                        halo=(test_output.shape[2]//8) & ~1, 
                             id=AxisId("z"), 
                             size=SizeReference(
-                                tensor_id='input0',
-                                axis_id='z',
+                                tensor_id='input0', # type: ignore
+                                axis_id='z', # type: ignore
                                 offset=0,
                             ),
+                        scale=float(test_input.shape[2]//test_output.shape[2]),
                     )
                 ]
-            sshape = self.cfg.DATA.PATCH_SIZE[0] if self.cfg.PROBLEM.NDIM == "2D" else self.cfg.DATA.PATCH_SIZE[1]
             output_axes += [
                 SpaceOutputAxisWithHalo(
-                    halo=(sshape//8) & ~1, 
+                    halo=(test_output.shape[test_output.ndim-2]//8) & ~1, 
                     id=AxisId("y"), 
                     size=SizeReference(
-                        tensor_id='input0',
-                        axis_id='y',
+                        tensor_id='input0', # type: ignore
+                        axis_id='y', # type: ignore
                         offset=0,
                     ),
+                    scale=float(test_input.shape[test_input.ndim-2]//test_output.shape[test_output.ndim-2]),
                 )
             ]
-            sshape = self.cfg.DATA.PATCH_SIZE[1] if self.cfg.PROBLEM.NDIM == "2D" else self.cfg.DATA.PATCH_SIZE[2]
             output_axes += [
                 SpaceOutputAxisWithHalo(
-                    halo=(sshape//8) & ~1,  
+                    halo=(test_output.shape[test_output.ndim-1]//8) & ~1,  
                     id=AxisId("x"),
                     size=SizeReference(
-                        tensor_id='input0',
-                        axis_id='x',
+                        tensor_id='input0', # type: ignore
+                        axis_id='x', # type: ignore
                         offset=0,
                     ),
+                    scale=float(test_input.shape[test_input.ndim-1]//test_output.shape[test_output.ndim-1]),
                 ),
             ]
             data_descr = IntervalOrRatioDataDescr(type="float32")
@@ -831,34 +832,32 @@ class BiaPy:
                                     halo=(test_tensor.shape[0]//8) & ~1, 
                                         id=AxisId(str(letter)), 
                                         size=SizeReference(
-                                            tensor_id='input0',
-                                            axis_id='z',
+                                            tensor_id='input0', # type: ignore
+                                            axis_id='z', # type: ignore
                                             offset=0,
                                         )
                                 )
                             )
                         elif letter == "y":
-                            sshape = test_tensor.shape[0] if self.cfg.PROBLEM.NDIM == "2D" else test_tensor.shape[1]
                             output_axes.append(
                                 SpaceOutputAxisWithHalo(
-                                    halo=(sshape//8) & ~1, 
+                                    halo=(test_tensor.shape[test_tensor.ndim-2]//8) & ~1, 
                                     id=AxisId(str(letter)), 
                                     size=SizeReference(
-                                        tensor_id='input0',
-                                        axis_id='y',
+                                        tensor_id='input0', # type: ignore
+                                        axis_id='y', # type: ignore
                                         offset=0,
                                     )
                                 )
                             )
                         elif letter == "x":
-                            sshape = test_tensor.shape[1] if self.cfg.PROBLEM.NDIM == "2D" else test_tensor.shape[2]
                             output_axes.append(
                                 SpaceOutputAxisWithHalo(
-                                halo=(sshape//8) & ~1, 
+                                halo=(test_tensor.shape[test_tensor.ndim-1]//8) & ~1, 
                                 id=AxisId(str(letter)), 
                                 size=SizeReference(
-                                        tensor_id='input0',
-                                        axis_id='x',
+                                        tensor_id='input0', # type: ignore
+                                        axis_id='x', # type: ignore
                                         offset=0,
                                     )
                                 )

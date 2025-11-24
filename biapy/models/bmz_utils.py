@@ -388,7 +388,7 @@ def create_model_cover(img, img_gt, out_path, patch_size=256, is_3d=False, workf
 
 
 def create_model_doc(
-    biapy_obj: biapy,
+    biapy_obj: Any,
     bmz_cfg: dict,
     cfg_file: str,
     task_description: str,
