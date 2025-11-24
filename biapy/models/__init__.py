@@ -378,7 +378,8 @@ def init_embedding_output(model: nn.Module, n_sigma: int = 2):
 
 def extract_model(dependency_queue: deque, model_file: str) -> Tuple[Dict[str, str], set, List[str]]:
     """
-    Extract the source code of the model and its dependencies.
+    Extract the source code of the model and its dependencies, ensuring
+    dependencies are ordered before the definition that uses them.
 
     Parameters
     ----------
@@ -391,17 +392,18 @@ def extract_model(dependency_queue: deque, model_file: str) -> Tuple[Dict[str, s
     Returns
     -------
     collected_sources : dict
-        Dictionary containing the source code of the collected model dependencies.
+        Dictionary containing the source code of the collected model dependencies,
+        ordered so that dependencies appear before the main model.
 
     all_import_lines : set
-        Set of all import lines found in the model and its dependencies.
+        Set of all external import lines found in the model and its dependencies.
 
     scanned_files : list
         List of all files that were scanned for dependencies.
     """
     visited_files = set()
     visited_names = set()
-    collected_sources = {}
+    collected_sources: Dict[str, str] = {}
     all_import_lines = set()
     scanned_files = []
     queue = [model_file]
@@ -447,22 +449,22 @@ def extract_model(dependency_queue: deque, model_file: str) -> Tuple[Dict[str, s
                 else:
                     all_import_lines.add(full)
 
-        # Extract all top-level classes and functions and map name → source
-        for node in tree.body:
-            if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
-                name = node.name
-                start_line = node.lineno - 1
-                # Try to find the end of the block
-                end_line = start_line + 1
-                indent = len(source_lines[start_line]) - len(source_lines[start_line].lstrip())
+            # Extract all top-level classes and functions and map name → source
+            for node in tree.body:
+                if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
+                    name = node.name
+                    start_line = node.lineno - 1
+                    # Try to find the end of the block
+                    end_line = start_line + 1
+                    indent = len(source_lines[start_line]) - len(source_lines[start_line].lstrip())
 
-                while end_line < len(source_lines):
-                    line_indent = len(source_lines[end_line]) - len(source_lines[end_line].lstrip())
-                    if source_lines[end_line].strip() and line_indent <= indent:
-                        break
-                    end_line += 1
+                    while end_line < len(source_lines):
+                        line_indent = len(source_lines[end_line]) - len(source_lines[end_line].lstrip())
+                        if source_lines[end_line].strip() and line_indent <= indent:
+                            break
+                        end_line += 1
 
-                name_to_source[name] = "".join(source_lines[start_line:end_line])
+                    name_to_source[name] = "".join(source_lines[start_line:end_line])
 
         # Follow BiaPy module imports (if file-based)
         for name in biapy_module_names:
@@ -475,7 +477,11 @@ def extract_model(dependency_queue: deque, model_file: str) -> Tuple[Dict[str, s
             except Exception as e:
                 print(f"Warning: Failed to resolve {name}: {e}")
 
-    # === Step 2: Traverse dependency tree ===
+    # === Step 2: Traverse dependency tree and store definitions in discovery order ===
+    # We use a list to store the (name, source) tuples in the order they are found (BFS).
+    # This order is: [Dependent_A, Dependency_B, Dependency_C, ...]
+    definition_list: List[Tuple[str, str]] = []
+
     class NameVisitor(ast.NodeVisitor):
         def __init__(self):
             self.names = set()
@@ -501,7 +507,8 @@ def extract_model(dependency_queue: deque, model_file: str) -> Tuple[Dict[str, s
             print(f"Warning: Source not found for {name}")
             continue
 
-        collected_sources[name] = source
+        # Add the definition to the temporary list
+        definition_list.append((name, source))
 
         # Find dependencies
         visitor = NameVisitor()
@@ -515,6 +522,12 @@ def extract_model(dependency_queue: deque, model_file: str) -> Tuple[Dict[str, s
                         self.__name__ = __name__
 
                 dependency_queue.append(FakeObject(dep_name))
+
+    # === Step 3: Populate collected_sources in reverse order (Dependencies First) ===
+    # By reversing the list, the deepest dependencies (discovered last) are placed 
+    # at the start of the dictionary, ensuring they are defined before being used.
+    for name, source in reversed(definition_list):
+        collected_sources[name] = source
 
     return collected_sources, sorted(all_import_lines), scanned_files
 
