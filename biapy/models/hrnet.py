@@ -27,10 +27,6 @@ from typing import Dict, List, Tuple, Type
 
 from biapy.models.blocks import HRBasicBlock, HRBottleneck, ConvBlock, get_norm_3d, get_norm_2d, ProjectionHead
 
-
-blocks_dict = {"BASIC": HRBasicBlock, "BOTTLENECK": HRBottleneck}
-
-
 class HighResolutionNet(nn.Module):
     """
     Implements a 2D/3D High-Resolution Net (HRNet) model.
@@ -132,6 +128,7 @@ class HighResolutionNet(nn.Module):
         if len(output_channels) != 1 and len(output_channels) != 2:
             raise ValueError(f"'output_channels' must be a list of one or two values at max, not {output_channels}")
 
+        self.blocks_dict = {"BASIC": HRBasicBlock, "BOTTLENECK": HRBottleneck}
         self.output_channels = output_channels
         self.multihead = len(output_channels) == 2
         self.in_size = 64
@@ -179,7 +176,7 @@ class HighResolutionNet(nn.Module):
 
         self.stage2_cfg = cfg["STAGE2"]
         num_channels = self.stage2_cfg["NUM_CHANNELS"]
-        block = blocks_dict[self.stage2_cfg["BLOCK"]]
+        block = self.blocks_dict[self.stage2_cfg["BLOCK"]]
         num_channels = [num_channels[i] * block.expansion for i in range(len(num_channels))]
 
         self.transition1 = self._make_transition_layer([256], num_channels, norm=normalization, mpool=mpool)
@@ -190,7 +187,7 @@ class HighResolutionNet(nn.Module):
 
         self.stage3_cfg = cfg["STAGE3"]
         num_channels = self.stage3_cfg["NUM_CHANNELS"]
-        block = blocks_dict[self.stage3_cfg["BLOCK"]]
+        block = self.blocks_dict[self.stage3_cfg["BLOCK"]]
         num_channels = [num_channels[i] * block.expansion for i in range(len(num_channels))]
         self.transition2 = self._make_transition_layer(
             pre_stage_channels, num_channels, norm=normalization, mpool=mpool
@@ -201,7 +198,7 @@ class HighResolutionNet(nn.Module):
 
         self.stage4_cfg = cfg["STAGE4"]
         num_channels = self.stage4_cfg["NUM_CHANNELS"]
-        block = blocks_dict[self.stage4_cfg["BLOCK"]]
+        block = self.blocks_dict[self.stage4_cfg["BLOCK"]]
         num_channels = [num_channels[i] * block.expansion for i in range(len(num_channels))]
         self.transition3 = self._make_transition_layer(
             pre_stage_channels, num_channels, norm=normalization, mpool=mpool
@@ -417,7 +414,7 @@ class HighResolutionNet(nn.Module):
         num_branches = layer_config["NUM_BRANCHES"]
         num_blocks = layer_config["NUM_BLOCKS"]
         num_channels = layer_config["NUM_CHANNELS"]
-        block = blocks_dict[layer_config["BLOCK"]]
+        block = self.blocks_dict[layer_config["BLOCK"]]
 
         modules = []
         for i in range(num_modules):
@@ -1031,28 +1028,28 @@ class HighResolutionNext(nn.Module):
 
         self.stage1_cfg = cfg["STAGE1"]
         num_channels = self.stage1_cfg["NUM_CHANNELS"]
-        block = blocks_dict[self.stage1_cfg["BLOCK"]]
+        block = self.blocks_dict[self.stage1_cfg["BLOCK"]]
         num_channels = [num_channels[i] * block.expansion for i in range(len(num_channels))]
         self.transition0 = self._make_transition_layer([64], num_channels, norm=norm, mpool=mpool)
         self.stage1, pre_stage_channels = self._make_stage(self.stage1_cfg, num_channels, norm=norm, mpool=mpool)
 
         self.stage2_cfg = cfg["STAGE2"]
         num_channels = self.stage2_cfg["NUM_CHANNELS"]
-        block = blocks_dict[self.stage2_cfg["BLOCK"]]
+        block = self.blocks_dict[self.stage2_cfg["BLOCK"]]
         num_channels = [num_channels[i] * block.expansion for i in range(len(num_channels))]
         self.transition1 = self._make_transition_layer(pre_stage_channels, num_channels, norm=norm, mpool=mpool)
         self.stage2, pre_stage_channels = self._make_stage(self.stage2_cfg, num_channels, norm=norm, mpool=mpool)
 
         self.stage3_cfg = cfg["STAGE3"]
         num_channels = self.stage3_cfg["NUM_CHANNELS"]
-        block = blocks_dict[self.stage3_cfg["BLOCK"]]
+        block = self.blocks_dict[self.stage3_cfg["BLOCK"]]
         num_channels = [num_channels[i] * block.expansion for i in range(len(num_channels))]
         self.transition2 = self._make_transition_layer(pre_stage_channels, num_channels, norm=norm, mpool=mpool)
         self.stage3, pre_stage_channels = self._make_stage(self.stage3_cfg, num_channels, norm=norm, mpool=mpool)
 
         self.stage4_cfg = cfg["STAGE4"]
         num_channels = self.stage4_cfg["NUM_CHANNELS"]
-        block = blocks_dict[self.stage4_cfg["BLOCK"]]
+        block = self.blocks_dict[self.stage4_cfg["BLOCK"]]
         num_channels = [num_channels[i] * block.expansion for i in range(len(num_channels))]
         self.transition3 = self._make_transition_layer(pre_stage_channels, num_channels, norm=norm, mpool=mpool)
         self.stage4, pre_stage_channels = self._make_stage(
@@ -1166,7 +1163,8 @@ class HighResolutionNext(nn.Module):
         num_branches = layer_config["NUM_BRANCHES"]
         num_blocks = layer_config["NUM_BLOCKS"]
         num_channels = layer_config["NUM_CHANNELS"]
-        block = blocks_dict[layer_config["BLOCK"]]
+        self.blocks_dict = {"BASIC": HRBasicBlock, "BOTTLENECK": HRBottleneck}
+        block = self.blocks_dict[layer_config["BLOCK"]]
 
         modules = []
         for i in range(num_modules):
