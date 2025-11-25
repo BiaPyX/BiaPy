@@ -153,15 +153,15 @@ class Config:
         #          Options are: 'thick', 'inner', 'outer', 'subpixel' and 'dense'. The last one is used to label as contour every pixel
         #          that is not in the foreground. Default: 'thick'.
         #   - 'H', 'V', 'Z' and 'Db' channels. Possible options:
-        #       - 'norm': bool, whether to normalize the distances between 0 and 1. Default: False
+        #       - 'norm': bool, whether to normalize the distances between 0 and 1. Default: True
         #       - 'mask_values': bool, whether to mask the distance channel to only calculate the loss in non-zero values. Default: True
         #   - 'Dc' channel. Possible options:
         #       - 'type': str, the type of the channel. Options are: 'centroid', 'skeleton'. Default: 'centroid'
-        #       - 'norm': bool, whether to normalize the distances between 0 and 1. Default: False
+        #       - 'norm': bool, whether to normalize the distances between 0 and 1. Default: True
         #       - 'mask_values': bool, whether to mask the distance channel to only calculate the loss in non-zero values. Default: True
         #   - 'Dn' channel. Possible options:
         #       - 'closing_size': int, the size of the closing to be applied to the combined distance map. Default: 0
-        #       - 'norm': bool, whether to normalize the distances between 0 and 1. Default: False
+        #       - 'norm': bool, whether to normalize the distances between 0 and 1. Default: True
         #       - 'mask_values': bool, whether to mask the distance channel to only calculate the loss in non-zero values. Default: True
         #       - 'decline_power': int, the power to which the distances are raised to control the decline rate. Default: 3
         #   - 'D' channel. Possible options:
@@ -169,10 +169,10 @@ class Config:
         #         'tanh' and 'linear'. Default: 'tanh'
         #       - 'alpha': int, value to scale the distances of the background when 'act' is 'tanh'. Default: 1
         #       - 'beta': int, value to scale the distances of the foreground when 'act' is 'tanh'. Default: 1
-        #       - 'norm': bool, whether to normalize the distances between -1 and 1. Default: False
+        #       - 'norm': bool, whether to normalize the distances between -1 and 1. Default: True
         #   - 'R' channel. Possible options:
         #       - 'nrays': int, the number of rays to be used to represent the radial distances. Default: 32 (in 2D) and 96 (in 3D)
-        #       - 'norm': bool, whether to normalize the distances between 0 and 1. Default: False
+        #       - 'norm': bool, whether to normalize the distances between 0 and 1. Default: True
         #       - 'mask_values': bool, whether to mask the distance channel to only calculate the loss in non-zero values. Default: True
         #   - 'T' channel. Possible options:
         #       - 'thickness': int, the thickness in pixels of the touching area. Default: 2
