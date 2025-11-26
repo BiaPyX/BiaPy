@@ -1686,8 +1686,7 @@ class Config:
         #     is also taken into account. Does not take into account the image resolution.
         #
         #   * 'perimeter', in 2D, approximates the contour as a line through the centers of border pixels using a 4-connectivity. In 3D,
-        #     it corresponds to the surface area calculated with diplib library 
-        #     (more info here https://diplib.org/diplib-docs/features.html#shape_features_P2A).
+        #     it corresponds to the surface area.
         #
         #   * 'sphericity', in 3D, it is the ratio of the squared volume over the cube of the surface area, normalized such that the value
         #     for a ball equals one: (36 * PI)*((volume^2)/(perimeter^3)). Only measurable for 3D images (use circularity for 2D images).

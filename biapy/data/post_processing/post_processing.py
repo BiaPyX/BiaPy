@@ -2037,8 +2037,7 @@ def measure_morphological_props_and_filter(
 
         perimeter : Array of ints
             In 2D, approximates the contour as a line through the centers of border pixels using a 4-connectivity.
-            In 3D, it is the surface area computed using
-            `the diplib library <https://diplib.org/diplib-docs/features.html#shape_features_P2A>`__.
+            In 3D, it is the surface area.
 
         comment : List of str
             List containing 'Correct' string when the instance surpass the circularity threshold and 'Removed'
