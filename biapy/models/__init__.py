@@ -424,7 +424,7 @@ def extract_model(dependency_queue: deque, model_file: str) -> Tuple[Dict[str, s
         source_text = "".join(source_lines)
         tree = ast.parse(source_text, filename=filepath)
 
-        biapy_module_names = set()
+        biapy_module_names = []
 
         for node in ast.walk(tree):
             # Import parsing
@@ -433,7 +433,7 @@ def extract_model(dependency_queue: deque, model_file: str) -> Tuple[Dict[str, s
                     mod = alias.name
                     full = f"import {mod}" + (f" as {alias.asname}" if alias.asname else "")
                     if mod.startswith("biapy"):
-                        biapy_module_names.add(mod)
+                        biapy_module_names.append(mod)
                     else:
                         all_import_lines.add(full)
             elif isinstance(node, ast.ImportFrom):
@@ -445,29 +445,33 @@ def extract_model(dependency_queue: deque, model_file: str) -> Tuple[Dict[str, s
                 )
                 full = f"from {mod} import {names}"
                 if mod.startswith("biapy"):
-                    biapy_module_names.add(mod)
+                    biapy_module_names.append(mod)
                 else:
                     all_import_lines.add(full)
 
-            # Extract all top-level classes and functions and map name → source
-            for node in tree.body:
-                if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
-                    name = node.name
-                    start_line = node.lineno - 1
-                    # Try to find the end of the block
-                    end_line = start_line + 1
-                    indent = len(source_lines[start_line]) - len(source_lines[start_line].lstrip())
+        # Extract all top-level classes and functions and map name → source
+        for _node in tree.body:
+            if isinstance(_node, (ast.FunctionDef, ast.ClassDef)):
+                name = _node.name
+                start_line = _node.lineno - 1
+                # Try to find the end of the block
+                end_line = start_line + 1
+                indent = len(source_lines[start_line]) - len(source_lines[start_line].lstrip())
 
-                    while end_line < len(source_lines):
-                        line_indent = len(source_lines[end_line]) - len(source_lines[end_line].lstrip())
-                        if source_lines[end_line].strip() and line_indent <= indent:
-                            break
-                        end_line += 1
+                while end_line < len(source_lines):
+                    line_indent = len(source_lines[end_line]) - len(source_lines[end_line].lstrip())
+                    if source_lines[end_line].strip() and line_indent <= indent:
+                        break
+                    end_line += 1
 
-                    name_to_source[name] = "".join(source_lines[start_line:end_line])
+                name_to_source[name] = "".join(source_lines[start_line:end_line])
 
         # Follow BiaPy module imports (if file-based)
+        visited = set()
         for name in biapy_module_names:
+            if name in visited:
+                continue
+            visited.add(name)
             try:
                 from importlib.util import find_spec
 
@@ -484,19 +488,19 @@ def extract_model(dependency_queue: deque, model_file: str) -> Tuple[Dict[str, s
 
     class NameVisitor(ast.NodeVisitor):
         def __init__(self):
-            self.names = set()
+            self.names = []
 
         def visit_Name(self, node):
-            self.names.add(node.id)
+            self.names.append(node.id)
             self.generic_visit(node)
 
         def visit_Attribute(self, node):
             if isinstance(node.value, ast.Name):
-                self.names.add(node.value.id)
+                self.names.append(node.value.id)
             self.generic_visit(node)
 
     while dependency_queue:
-        obj = dependency_queue.popleft()
+        obj = dependency_queue.pop()
         name = obj.__name__
         if name in visited_names:
             continue
