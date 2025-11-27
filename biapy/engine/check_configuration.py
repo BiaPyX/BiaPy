@@ -2210,8 +2210,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "hrnet32",
             "hrnet48",
             "hrnet64",
-            "hrnet2x20",
-        ], "MODEL.ARCHITECTURE not in ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'simple_cnn', 'efficientnet_b[0-7]', 'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae', 'unext_v1', 'unext_v2', 'hrnet18', 'hrnet32', 'hrnet48', 'hrnet64', 'hrnet2x20']"
+        ], "MODEL.ARCHITECTURE not in ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'simple_cnn', 'efficientnet_b[0-7]', 'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae', 'unext_v1', 'unext_v2', 'hrnet18', 'hrnet32', 'hrnet48', 'hrnet64']"
         if (
             model_arch
             not in [
@@ -2233,7 +2232,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "hrnet32",
                 "hrnet48",
                 "hrnet64",
-                "hrnet2x20",
             ]
             and cfg.PROBLEM.NDIM == "3D"
             and cfg.PROBLEM.TYPE != "CLASSIFICATION"
@@ -2259,7 +2257,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                         "hrnet32",
                         "hrnet48",
                         "hrnet64",
-                        "hrnet2x20",
                     ]
                 )
             )
@@ -2282,11 +2279,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "hrnet32",
                 "hrnet48",
                 "hrnet64",
-                "hrnet2x20",
             ]
         ):
             raise ValueError(
-                "'DATA.N_CLASSES' > 2 can only be used with 'MODEL.ARCHITECTURE' in ['unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'multiresunet', 'unetr', 'unext_v1', 'unext_v2', 'hrnet18', 'hrnet32', 'hrnet48', 'hrnet64', 'hrnet2x20']"
+                "'DATA.N_CLASSES' > 2 can only be used with 'MODEL.ARCHITECTURE' in ['unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'multiresunet', 'unetr', 'unext_v1', 'unext_v2', 'hrnet18', 'hrnet32', 'hrnet48', 'hrnet64']"
             )
 
         assert len(cfg.MODEL.FEATURE_MAPS) > 2, "'MODEL.FEATURE_MAPS' needs to have at least 3 values"
@@ -2374,10 +2370,9 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "hrnet32",
                 "hrnet48",
                 "hrnet64",
-                "hrnet2x20",
             ]:
                 raise ValueError(
-                    "Architectures available for {} are: ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'resunet_se', 'unetr', 'multiresunet', 'unext_v1', 'unext_v2', 'hrnet18', 'hrnet32', 'hrnet48', 'hrnet64', 'hrnet2x20']".format(
+                    "Architectures available for {} are: ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'resunet_se', 'unetr', 'multiresunet', 'unext_v1', 'unext_v2', 'hrnet18', 'hrnet32', 'hrnet48', 'hrnet64']".format(
                         cfg.PROBLEM.TYPE
                     )
                 )
@@ -2428,10 +2423,9 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "hrnet32",
                 "hrnet48",
                 "hrnet64",
-                "hrnet2x20",
             ]:
                 raise ValueError(
-                    "Architectures available for 'IMAGE_TO_IMAGE' are: ['edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'resunet_se', 'seunet', 'attention_unet', 'unetr', 'multiresunet', 'unext_v1', 'unext_v2', 'hrnet18', 'hrnet32', 'hrnet48', 'hrnet64', 'hrnet2x20']"
+                    "Architectures available for 'IMAGE_TO_IMAGE' are: ['edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'resunet_se', 'seunet', 'attention_unet', 'unetr', 'multiresunet', 'unext_v1', 'unext_v2', 'hrnet18', 'hrnet32', 'hrnet48', 'hrnet64']"
                 )
             # Not allowed archs
             if cfg.PROBLEM.NDIM == "3D" and model_arch == "wdsr":
@@ -2458,11 +2452,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "hrnet32",
                 "hrnet48",
                 "hrnet64",
-                "hrnet2x20",
             ]:
                 raise ValueError(
                     "'SELF_SUPERVISED' models available are these: ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'resunet_se', "
-                    "'unetr', 'unext_v1', 'unext_v2', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae', 'hrnet18', 'hrnet32', 'hrnet48', 'hrnet64', 'hrnet2x20']"
+                    "'unetr', 'unext_v1', 'unext_v2', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae', 'hrnet18', 'hrnet32', 'hrnet48', 'hrnet64']"
                 )
 
             # Not allowed archs
@@ -2500,7 +2493,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "hrnet32",
             "hrnet48",
             "hrnet64",
-            "hrnet2x20",
         ]:
             z_size = cfg.DATA.PATCH_SIZE[0]
             sizes = cfg.DATA.PATCH_SIZE[1:-1]
@@ -2523,12 +2515,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     z_size = z_size // cfg.MODEL.Z_DOWN[i]
             else:
                 
-                # Check that the input patch size is divisible in every level of the HRNet's like architectures
-                _mod = model_arch.upper()
-                _mod = re.sub(r'HRNET(\d+)', r'HRNET_\1', _mod)
-                _mod = _mod.replace("X", "_X")
-                hrnet_zdown = getattr(cfg.MODEL, _mod).Z_DOWN
-                hrnet_zdown_div = 2 if hrnet_zdown else 1
+                # Check that the input patch size is divisible in every level of the HRNet selected
+                hrnet_zdown_div = 2 if cfg.MODEL.HRNET.Z_DOWN else 1
 
                 for i in range(4):
                     if not all(
@@ -2544,7 +2532,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                                 + f"can tune 'MODEL.{_mod}.Z_DOWN' variable to not downsample the image in all U-Net levels"
                             )
                         raise ValueError(m)
-                    z_size = z_size // 2 if hrnet_zdown else z_size
+                    z_size = z_size // 2 if cfg.MODEL.HRNET.Z_DOWN else z_size
 
     if cfg.MODEL.LOAD_CHECKPOINT and check_data_paths:
         file = get_checkpoint_path(cfg, jobname)

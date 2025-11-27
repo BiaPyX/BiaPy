@@ -14,7 +14,7 @@ Key components:
 - ``HRBottleneck``: Bottleneck residual block for HRNet.
 
 Reference:  
-`Deep High-Resolution Representation Learning for Visual Recognition <https://ieeexplore.ieee.org/abstract/document/9052469>`_
+`High-Resolution Representations for Labeling Pixels and Regions <https://arxiv.org/pdf/1904.04514>`_
 
 Code adapted from:  
 `Exploring Cross-Image Pixel Contrast for Semantic Segmentation <https://github.com/tfzhou/ContrastiveSeg/tree/main>`_
@@ -25,7 +25,14 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import Dict, List, Tuple, Type
 
-from biapy.models.blocks import HRBasicBlock, HRBottleneck, ConvBlock, get_norm_3d, get_norm_2d, ProjectionHead
+from biapy.models.blocks import (
+    HRBasicBlock, 
+    HRBottleneck, 
+    ConvBlock, 
+    get_norm_3d, 
+    get_norm_2d, 
+    ProjectionHead, 
+)
 
 class HighResolutionModule(nn.Module):
     """
@@ -451,329 +458,6 @@ class HighResolutionModule(nn.Module):
 
         return x_fuse
 
-class HighResolutionNext(nn.Module):
-    """
-    Implements the High Resolution Next model for HRNet.
-
-    Parameters
-    ----------
-    cfg : Dict
-        HRNet configuration. Expected keys are:
-            * ``STAGE1``, Dict: configuration for stage 1
-            * ``STAGE2``, Dict: configuration for stage 2
-            * ``STAGE3``, Dict: configuration for stage 3
-            * ``STAGE4``, Dict: configuration for stage 4
-
-    norm : str, optional
-        Normalization layer to use (one of 'bn', 'sync_bn', 'in', 'gn', or 'none'). Default is 'none'.
-
-    ndim : int, optional
-        Number of dimensions of the input data (2 for 2D, 3 for 3D). Default is 2.
-    
-    z_down : bool, optional
-        Whether to downsample the z-axis or not. If ``False`` it will not downsample the z-axis. Default is ``False``.
-    """
-
-    def __init__(self, cfg, norm="none", ndim=2, z_down=False):
-        """
-        Initialize the High Resolution Next (HRNet) model.
-
-        Constructs the entire HRNet architecture, including the stem, and
-        sequential stages (Stage 1 to Stage 4), each potentially composed of
-        multiple High Resolution Modules and transition layers. The model
-        dynamically adapts its convolutional and normalization layers based
-        on the input data's dimensionality (`ndim`).
-
-        Parameters
-        ----------
-        cfg : Dict
-            A dictionary containing the full configuration for the HRNet model.
-            It must specify the architecture details for each stage (STAGE1,
-            STAGE2, STAGE3, STAGE4), including the number of modules, branches,
-            blocks, and channels, as well as the block type to use.
-        norm : str, optional
-            The type of normalization layer to use throughout the network.
-            Options include 'bn' (BatchNorm), 'sync_bn' (SyncBatchNorm),
-            'in' (InstanceNorm), 'gn' (GroupNorm), or 'none'. Defaults to "none".
-        ndim : int, optional
-            The number of spatial dimensions of the input data. Use 2 for 2D
-            data (e.g., images) and 3 for 3D data (e.g., volumetric scans).
-            Defaults to 2.
-        z_down : bool, optional
-            Applicable only when `ndim` is 3. If True, the z-axis (depth) will
-            also be downsampled during pooling operations in the stem and
-            transition layers. If False, downsampling will only occur in the
-            x and y dimensions, preserving the z-resolution. Defaults to False.
-        """
-        super(HighResolutionNext, self).__init__()
-        self.ndim = ndim
-        self.z_down = z_down
-        if self.ndim == 3:
-            self.conv_call = nn.Conv3d
-            self.norm_func = get_norm_3d
-            self.dropout = nn.Dropout3d
-            mpool = (2, 2, 2) if self.z_down else (1, 2, 2)
-        else:
-            self.conv_call = nn.Conv2d
-            self.norm_func = get_norm_2d
-            self.dropout = nn.Dropout2d
-            mpool = (2, 2)
-
-        # stem net
-        self.conv1 = self.conv_call(3, 64, kernel_size=3, stride=mpool, padding=1, bias=False)
-        self.bn1 = self.norm_func(norm, 64)
-        self.relu = nn.ReLU()
-
-        self.stage1_cfg = cfg["STAGE1"]
-        num_channels = self.stage1_cfg["NUM_CHANNELS"]
-        block = self.blocks_dict[self.stage1_cfg["BLOCK"]]
-        num_channels = [num_channels[i] * block.expansion for i in range(len(num_channels))]
-        self.transition0 = self._make_transition_layer([64], num_channels, norm=norm, mpool=mpool)
-        self.stage1, pre_stage_channels = self._make_stage(self.stage1_cfg, num_channels, norm=norm, mpool=mpool)
-
-        self.stage2_cfg = cfg["STAGE2"]
-        num_channels = self.stage2_cfg["NUM_CHANNELS"]
-        block = self.blocks_dict[self.stage2_cfg["BLOCK"]]
-        num_channels = [num_channels[i] * block.expansion for i in range(len(num_channels))]
-        self.transition1 = self._make_transition_layer(pre_stage_channels, num_channels, norm=norm, mpool=mpool)
-        self.stage2, pre_stage_channels = self._make_stage(self.stage2_cfg, num_channels, norm=norm, mpool=mpool)
-
-        self.stage3_cfg = cfg["STAGE3"]
-        num_channels = self.stage3_cfg["NUM_CHANNELS"]
-        block = self.blocks_dict[self.stage3_cfg["BLOCK"]]
-        num_channels = [num_channels[i] * block.expansion for i in range(len(num_channels))]
-        self.transition2 = self._make_transition_layer(pre_stage_channels, num_channels, norm=norm, mpool=mpool)
-        self.stage3, pre_stage_channels = self._make_stage(self.stage3_cfg, num_channels, norm=norm, mpool=mpool)
-
-        self.stage4_cfg = cfg["STAGE4"]
-        num_channels = self.stage4_cfg["NUM_CHANNELS"]
-        block = self.blocks_dict[self.stage4_cfg["BLOCK"]]
-        num_channels = [num_channels[i] * block.expansion for i in range(len(num_channels))]
-        self.transition3 = self._make_transition_layer(pre_stage_channels, num_channels, norm=norm, mpool=mpool)
-        self.stage4, pre_stage_channels = self._make_stage(
-            self.stage4_cfg, num_channels, multi_scale_output=True, norm=norm, mpool=mpool
-        )
-
-    def _make_transition_layer(
-        self,
-        num_channels_pre_layer: List[int],
-        num_channels_cur_layer: List[int],
-        norm: str,
-        mpool: Tuple[int, ...] = (2, 2),
-    ):
-        """
-        Create transition layers between stages of the HRNet.
-
-        Parameters
-        ----------
-        num_channels_pre_layer : List[int]
-            Number of channels in the previous layer.
-
-        num_channels_cur_layer : List[int]
-            Number of channels in the current layer.
-
-        norm : str
-            Normalization layer to use (one of 'bn', 'sync_bn', 'in', 'gn', or 'none').
-
-        mpool : Tuple[int, ...], optional
-            Downsampling factor for the pooling operation. Used to downsample the features. Default is (2, 2).
-
-        Returns
-        -------
-        transition_layers : nn.ModuleList
-            List of transition layers between the previous and current layers.
-
-        """
-        num_branches_cur = len(num_channels_cur_layer)
-        num_branches_pre = len(num_channels_pre_layer)
-
-        transition_layers = []
-        for i in range(num_branches_cur):
-            if i < num_branches_pre:
-                if num_channels_cur_layer[i] != num_channels_pre_layer[i]:
-                    transition_layers.append(
-                        nn.Sequential(
-                            self.conv_call(num_channels_pre_layer[i], num_channels_cur_layer[i], 3, 1, 1, bias=False),
-                            self.norm_func(norm, num_channels_cur_layer[i]),
-                            nn.ReLU(),
-                        )
-                    )
-                else:
-                    transition_layers.append(None)
-            else:
-                conv3x3s = []
-                for j in range(i + 1 - num_branches_pre):
-                    inchannels = num_channels_pre_layer[-1]
-                    outchannels = num_channels_cur_layer[i] if j == i - num_branches_pre else inchannels
-                    conv3x3s.append(
-                        nn.Sequential(
-                            self.conv_call(inchannels, outchannels, 3, mpool, 1, bias=False),
-                            self.norm_func(norm, outchannels),
-                            nn.ReLU(),
-                        )
-                    )
-                transition_layers.append(nn.Sequential(*conv3x3s))
-
-        return nn.ModuleList(transition_layers)
-
-    def _make_stage(
-        self,
-        layer_config: Dict,
-        num_inchannels: List[int],
-        multi_scale_output: bool = True,
-        norm: str = "none",
-        mpool: Tuple[int, ...] = (2, 2),
-    ):
-        """
-        Create a stage of the HRNet.
-
-        Parameters
-        ----------
-        layer_config : Dict
-            Configuration dictionary for the stage. Expected keys are:
-                * ``NUM_MODULES``, int: number of modules to create
-                * ``NUM_BRANCHES``, int: number of branches in the stage
-                * ``NUM_BLOCKS``, List[int]: Number of blocks per branch
-                * ``NUM_CHANNELS``, List[int]: Number of channels per branch
-                * ``BLOCK``, str: block type. Options: ['BASIC', "BOTTLENECK"]
-
-        num_inchannels : List[int]
-            Number of input channels for each branch in the stage.
-
-        multi_scale_output : bool, optional
-            Whether to output features at multiple scales or not. Default is True.
-
-        norm : str, optional
-            Normalization layer to use (one of 'bn', 'sync_bn', 'in', 'gn', or 'none'). Default is 'none'.
-
-        mpool : Tuple[int, ...], optional
-            Downsampling factor for the pooling operation. Used to downsample the features. Default is (2, 2).
-
-        Returns
-        -------
-        modules : nn.Sequential
-            Sequential container with the modules of the stage.
-
-        num_inchannels : List[int]
-            Number of input channels for the next stage.
-        """
-        num_modules = layer_config["NUM_MODULES"]
-        num_branches = layer_config["NUM_BRANCHES"]
-        num_blocks = layer_config["NUM_BLOCKS"]
-        num_channels = layer_config["NUM_CHANNELS"]
-        self.blocks_dict = {"BASIC": HRBasicBlock, "BOTTLENECK": HRBottleneck}
-        block = self.blocks_dict[layer_config["BLOCK"]]
-
-        modules = []
-        for i in range(num_modules):
-            # multi_scale_output is only used last module
-            if not multi_scale_output and i == num_modules - 1:
-                reset_multi_scale_output = False
-            else:
-                reset_multi_scale_output = True
-
-            modules.append(
-                HighResolutionModule(
-                    self.ndim,
-                    num_branches,
-                    block,
-                    num_blocks,
-                    num_inchannels,
-                    num_channels,
-                    reset_multi_scale_output,
-                    norm,
-                    mpool,
-                )
-            )
-            num_inchannels = modules[-1].get_num_inchannels()
-
-        return nn.Sequential(*modules), num_inchannels
-
-    def forward(self, x):
-        """
-        Perform the forward pass through the High Resolution Next (HRNet) model.
-
-        The input tensor first passes through the stem network (initial
-        convolution, batch normalization, and ReLU activation). Then, it
-        progresses through multiple stages (Stage 1 to Stage 4). Each stage
-        begins with a transition layer that prepares the feature maps for
-        the multi-resolution High Resolution Modules within that stage.
-        Features are maintained and exchanged across different resolutions
-        throughout these stages, ultimately returning a list of multi-scale
-        feature maps from the final stage.
-
-        Parameters
-        ----------
-        x : torch.Tensor
-            The input tensor to the network, typically an image or volumetric data.
-            Expected shape for 2D: (Batch, Channels, Height, Width)
-            Expected shape for 3D: (Batch, Channels, Depth, Height, Width)
-
-        Returns
-        -------
-        List[torch.Tensor]
-            A list of output feature tensors, where each tensor corresponds to
-            a different resolution branch from the final stage (Stage 4).
-            The list is ordered from highest to lowest resolution.
-        """
-        # Stem network
-        x = self.conv1(x)
-        x = self.bn1(x)
-        x = self.relu(x)
-
-        # Stage 1
-        x_list = []
-        for i in range(self.stage1_cfg["NUM_BRANCHES"]):
-            # Apply transition0 layer if it exists for the current branch, otherwise use x directly
-            if self.transition0[i] is not None:
-                x_list.append(self.transition0[i](x))
-            else:
-                x_list.append(x)
-        # Pass the list of features through Stage 1 modules
-        y_list = self.stage1(x_list)
-
-        # Stage 2
-        x_list = []
-        for i in range(self.stage2_cfg["NUM_BRANCHES"]):
-            if self.transition1[i] is not None:
-                # For the first branch (highest resolution), transition from y_list[0]
-                # For subsequent branches, transition from the last (lowest resolution) feature map of previous stage
-                if i == 0:
-                    x_list.append(self.transition1[i](y_list[0]))
-                else:
-                    x_list.append(self.transition1[i](y_list[-1]))
-            else:
-                # If no transition layer, use the corresponding branch's output from the previous stage
-                x_list.append(y_list[i])
-        # Pass the list of features through Stage 2 modules
-        y_list = self.stage2(x_list)
-
-        # Stage 3
-        x_list = []
-        for i in range(self.stage3_cfg["NUM_BRANCHES"]):
-            if self.transition2[i] is not None:
-                # Transition always from the last (lowest resolution) feature map of the previous stage
-                x_list.append(self.transition2[i](y_list[-1]))
-            else:
-                # If no transition layer, use the corresponding branch's output from the previous stage
-                x_list.append(y_list[i])
-        # Pass the list of features through Stage 3 modules
-        y_list = self.stage3(x_list)
-
-        # Stage 4 (final stage)
-        x_list = []
-        for i in range(self.stage4_cfg["NUM_BRANCHES"]):
-            if self.transition3[i] is not None:
-                # Transition always from the last (lowest resolution) feature map of the previous stage
-                x_list.append(self.transition3[i](y_list[-1]))
-            else:
-                # If no transition layer, use the corresponding branch's output from the previous stage
-                x_list.append(y_list[i])
-        # Pass the list of features through Stage 4 modules
-        x = self.stage4(x_list)
-        return x
-
-
 class HighResolutionNet(nn.Module):
     """
     Implements a 2D/3D High-Resolution Net (HRNet) model.
@@ -786,7 +470,7 @@ class HighResolutionNet(nn.Module):
     segmentation, instance segmentation, and object detection, where
     preserving spatial detail is crucial.
 
-    Reference: `Deep High-Resolution Representation Learning for Visual Recognition <https://ieeexplore.ieee.org/abstract/document/9052469>`_.
+    Reference: `High-Resolution Representations for Labeling Pixels and Regions <https://arxiv.org/pdf/1904.04514>`_.
 
     Code adapted from: `Exploring Cross-Image Pixel Contrast for Semantic Segmentation <https://github.com/tfzhou/ContrastiveSeg/tree/main>`_.
 

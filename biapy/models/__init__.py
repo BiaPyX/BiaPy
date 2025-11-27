@@ -167,11 +167,41 @@ def build_model(
             contrast_proj_dim=cfg.LOSS.CONTRAST.PROJ_DIM,
         )
 
-        # Take the HRNet configuration from the cfg
-        _mod = modelname.upper()
-        _mod = re.sub(r"HRNET(\d+)", r"HRNET_\1", _mod)
-        _mod = _mod.replace("X", "_X")
-        args["cfg"] = getattr(cfg.MODEL, _mod)
+        if cfg.MODEL.HRNET.CUSTOM:
+            args["cfg"] = cfg.MODEL.HRNET
+        else:
+            if modelname == "hrnet64":
+                num_channels = 64
+            elif modelname == "hrnet48":
+                num_channels = 48
+            elif modelname == "hrnet32":
+                num_channels = 32
+            elif modelname == "hrnet18":
+                num_channels = 32
+            args["cfg"] = {
+                'Z_DOWN': cfg.MODEL.HRNET.Z_DOWN, 
+                'STAGE2': {
+                    'NUM_MODULES': 1, 
+                    'NUM_BRANCHES': 2, 
+                    'NUM_BLOCKS': [4, 4], 
+                    'NUM_CHANNELS': [num_channels, num_channels*2], 
+                    'BLOCK': 'BASIC'
+                },
+                'STAGE3': {
+                    'NUM_MODULES': 4, 
+                    'NUM_BRANCHES': 3, 
+                    'NUM_BLOCKS': [4, 4, 4], 
+                    'NUM_CHANNELS': [num_channels, num_channels*2, num_channels*3], 
+                    'BLOCK': 'BASIC',
+                },
+                'STAGE4': {
+                    'NUM_MODULES': 3, 
+                    'NUM_BRANCHES': 4, 
+                    'NUM_BLOCKS': [4, 4, 4, 4], 
+                    'NUM_CHANNELS': [num_channels, num_channels*2, num_channels*3, num_channels*4], 
+                    'BLOCK': 'BASIC'
+                }
+            } 
 
         callable_model = HighResolutionNet  # type: ignore
         model = callable_model(**args)
