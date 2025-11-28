@@ -2523,16 +2523,19 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                         [False for x in sizes if x % (np.power(2, (i + 1))) != 0 or z_size % hrnet_zdown_div != 0]
                     ):
                         m = (
-                            f"The 'DATA.PATCH_SIZE' provided is not divisible by 2 in each of the {_mod}'s levels. You can:\n 1) Reduce the number "
+                            f"The 'DATA.PATCH_SIZE' provided is not divisible by 2 in each of the HRNET's levels. You can:\n 1) Reduce the number "
                             + "of levels (by reducing 'cfg.MODEL.FEATURE_MAPS' array's length)\n 2) Increase 'DATA.PATCH_SIZE'"
                         )
                         if cfg.PROBLEM.NDIM == "3D":
                             m += (
                                 "\n 3) If the Z axis is the problem, as the patch size is normally less than in other axis due to resolution, you "
-                                + f"can tune 'MODEL.{_mod}.Z_DOWN' variable to not downsample the image in all U-Net levels"
+                                + f"can tune 'MODEL.HRNET.Z_DOWN' variable to not downsample the image in all U-Net levels"
                             )
                         raise ValueError(m)
                     z_size = z_size // 2 if cfg.MODEL.HRNET.Z_DOWN else z_size
+
+        if "hrnet" in model_arch:
+            assert cfg.MODEL.HRNET.BLOCK_TYPE in ['BASIC', 'BOTTLENECK', 'CONVNEXT_V1', 'CONVNEXT_V2'], "'MODEL.HRNET.BLOCK_TYPE' not in ['BASIC', 'BOTTLENECK', 'CONVNEXT_V1', 'CONVNEXT_V2']"
 
     if cfg.MODEL.LOAD_CHECKPOINT and check_data_paths:
         file = get_checkpoint_path(cfg, jobname)

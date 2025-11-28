@@ -32,6 +32,8 @@ from biapy.models.blocks import (
     get_norm_3d, 
     get_norm_2d, 
     ProjectionHead, 
+    ConvNeXtBlock_V2,
+    ConvNeXtBlock_V1,
 )
 
 class HighResolutionModule(nn.Module):
@@ -559,7 +561,12 @@ class HighResolutionNet(nn.Module):
         if len(output_channels) != 1 and len(output_channels) != 2:
             raise ValueError(f"'output_channels' must be a list of one or two values at max, not {output_channels}")
 
-        self.blocks_dict = {"BASIC": HRBasicBlock, "BOTTLENECK": HRBottleneck}
+        self.blocks_dict = {
+            "BASIC": HRBasicBlock, 
+            "BOTTLENECK": HRBottleneck,     
+            "CONVNEXT_V1": ConvNeXtBlock_V1, 
+            "CONVNEXT_V2": ConvNeXtBlock_V2,
+        }
         self.output_channels = output_channels
         self.multihead = len(output_channels) == 2
         self.in_size = 64

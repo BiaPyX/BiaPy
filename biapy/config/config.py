@@ -1235,8 +1235,11 @@ class Config:
         _C.MODEL.HRNET = CN()
         # Whether to downsample the input in Z or not
         _C.MODEL.HRNET.Z_DOWN = True
-        # Indicate whether to use a custom configuration for HRNet or use a predefined one. If set to False the rest of
-        # parameters will be ignored (Z_DOWN will be used though).
+        # Type of block to use in HRNet. Options: 'BASIC', 'BOTTLENECK', 'CONVNEXT_V1' and 'CONVNEXT_V2'
+        _C.MODEL.HRNET.BLOCK_TYPE = 'BASIC'
+        # Indicate whether to use a custom configuration for HRNet or use a predefined one. If set to True 
+        # MODEL.HRNET.STAGE2, MODEL.HRNET.STAGE3 and MODEL.HRNET.STAGE4 will be used. If False, the configuration
+        # will be set depending on the selected architecture (see PROBLEM.MODEL_ARCHITECTURE)
         _C.MODEL.HRNET.CUSTOM = False
 
         # These stages are used for HRNet18, HRNet32, HRNet48 and HRNet64
@@ -1245,19 +1248,16 @@ class Config:
         _C.MODEL.HRNET.STAGE2.NUM_BRANCHES = 2
         _C.MODEL.HRNET.STAGE2.NUM_BLOCKS = [4, 4]
         _C.MODEL.HRNET.STAGE2.NUM_CHANNELS = [18, 36]
-        _C.MODEL.HRNET.STAGE2.BLOCK = 'BASIC'
         _C.MODEL.HRNET.STAGE3 = CN()
         _C.MODEL.HRNET.STAGE3.NUM_MODULES = 4
         _C.MODEL.HRNET.STAGE3.NUM_BRANCHES = 3
         _C.MODEL.HRNET.STAGE3.NUM_BLOCKS = [4, 4, 4]
         _C.MODEL.HRNET.STAGE3.NUM_CHANNELS = [18, 36, 72]
-        _C.MODEL.HRNET.STAGE3.BLOCK = 'BASIC'
         _C.MODEL.HRNET.STAGE4 = CN()
         _C.MODEL.HRNET.STAGE4.NUM_MODULES = 3
         _C.MODEL.HRNET.STAGE4.NUM_BRANCHES = 4
         _C.MODEL.HRNET.STAGE4.NUM_BLOCKS = [4, 4, 4, 4]
         _C.MODEL.HRNET.STAGE4.NUM_CHANNELS = [18, 36, 72, 144]
-        _C.MODEL.HRNET.STAGE4.BLOCK = 'BASIC'
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Loss
