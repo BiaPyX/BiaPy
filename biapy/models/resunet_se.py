@@ -36,10 +36,10 @@ from biapy.models.blocks import (
     ResConvBlock,
     ResUpBlock,
     ConvBlock,
-    ProjectionHead, 
     get_norm_2d, 
     get_norm_3d
 )
+from biapy.models.heads import ProjectionHead
 
 
 class ResUNet_SE(nn.Module):

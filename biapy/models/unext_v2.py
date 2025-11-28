@@ -34,8 +34,9 @@ import torch
 import torch.nn as nn
 from typing import Dict
 
-from biapy.models.blocks import UpConvNeXtBlock_V2, ConvNeXtBlock_V2, ProjectionHead
+from biapy.models.blocks import UpConvNeXtBlock_V2, ConvNeXtBlock_V2
 from torchvision.ops.misc import Permute
+from biapy.models.heads import ProjectionHead
 
 
 class U_NeXt_V2(nn.Module):

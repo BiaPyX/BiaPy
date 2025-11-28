@@ -27,8 +27,9 @@ import torch.nn as nn
 from timm.models.vision_transformer import Block
 from typing import Dict
 
-from biapy.models.blocks import DoubleConvBlock, ConvBlock, ProjectionHead,  get_norm_2d,  get_norm_3d
+from biapy.models.blocks import DoubleConvBlock, ConvBlock,  get_norm_2d,  get_norm_3d
 from biapy.models.tr_layers import PatchEmbed
+from biapy.models.heads import ProjectionHead
 
 
 class UNETR(nn.Module):

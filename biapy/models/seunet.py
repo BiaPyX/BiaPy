@@ -35,7 +35,8 @@ import torch
 import torch.nn as nn
 from typing import Dict
 
-from biapy.models.blocks import DoubleConvBlock, UpBlock, ConvBlock, ProjectionHead, get_norm_2d, get_norm_3d
+from biapy.models.blocks import DoubleConvBlock, UpBlock, ConvBlock, get_norm_2d, get_norm_3d
+from biapy.models.heads import ProjectionHead
 
 
 class SE_U_Net(nn.Module):

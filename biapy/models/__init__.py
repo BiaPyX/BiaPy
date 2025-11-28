@@ -165,6 +165,7 @@ def build_model(
             output_channels=output_channels,
             contrast=cfg.LOSS.CONTRAST.ENABLE,
             contrast_proj_dim=cfg.LOSS.CONTRAST.PROJ_DIM,
+            head_type=cfg.MODEL.HRNET.HEAD_TYPE,
         )
 
         if cfg.MODEL.HRNET.CUSTOM:

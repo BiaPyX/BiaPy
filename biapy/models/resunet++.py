@@ -21,19 +21,17 @@ Reference:
 """
 import torch
 import torch.nn as nn
-from typing import List, Dict
+from typing import Dict
 
 from biapy.models.blocks import (
     ResConvBlock,
     ResUpBlock,
     SqExBlock,
-    ASPP,
     ResUNetPlusPlus_AttentionBlock,
-    ProjectionHead, 
     get_norm_2d, 
     get_norm_3d
 )
-
+from biapy.models.heads import ASPP, ProjectionHead
 
 class ResUNetPlusPlus(nn.Module):
     """

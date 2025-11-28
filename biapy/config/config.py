@@ -1240,6 +1240,7 @@ class Config:
         # Indicate whether to use a custom configuration for HRNet or use a predefined one. If set to True 
         # MODEL.HRNET.STAGE2, MODEL.HRNET.STAGE3 and MODEL.HRNET.STAGE4 will be used. If False, the configuration
         # will be set depending on the selected architecture (see PROBLEM.MODEL_ARCHITECTURE)
+        _C.MODEL.HRNET.HEAD_TYPE = "OCR" # Options: "OCR", "ASPP", "PSP", "FCN"
         _C.MODEL.HRNET.CUSTOM = False
 
         # These stages are used for HRNet18, HRNet32, HRNet48 and HRNet64

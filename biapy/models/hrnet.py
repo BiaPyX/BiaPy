@@ -31,10 +31,10 @@ from biapy.models.blocks import (
     ConvBlock, 
     get_norm_3d, 
     get_norm_2d, 
-    ProjectionHead, 
     ConvNeXtBlock_V2,
     ConvNeXtBlock_V1,
 )
+from biapy.models.heads import ASPP, ProjectionHead, PSP, OCRHead
 
 class HighResolutionModule(nn.Module):
     """
@@ -524,6 +524,7 @@ class HighResolutionNet(nn.Module):
         output_channels: List[int] = [1],
         contrast: bool = False,
         contrast_proj_dim: int = 256,
+        head_type: str = "FCN",
     ):
         """
         Initialize the HighResolutionNet model.
@@ -550,6 +551,8 @@ class HighResolutionNet(nn.Module):
             If True, enables a projection head for contrastive learning. Defaults to False.
         contrast_proj_dim : int, optional
             Output dimension for the contrastive projection head. Defaults to 256.
+        head_type : str, optional
+            Type of head to use in the module. Options: "FCN", "ASPP" and "PSP". Defaults to "FCN".
 
         Raises
         ------
@@ -573,6 +576,7 @@ class HighResolutionNet(nn.Module):
         self.ndim = 3 if len(image_shape) == 4 else 2
         self.contrast = contrast
         self.z_down = cfg["Z_DOWN"]
+        self.head_type = head_type
 
         if self.ndim == 3:
             self.conv_call = nn.Conv3d
@@ -647,19 +651,69 @@ class HighResolutionNet(nn.Module):
         )
 
         in_channels = sum(self.stage4_cfg["NUM_CHANNELS"])
-        if self.contrast:
-            # extra added layers    
+
+        if head_type == "ASPP":
             self.last_block = nn.Sequential(
-                self.conv_call(in_channels, in_channels, kernel_size=3, stride=1, padding=1),
-                self.norm_func(normalization, in_channels),
-                self.dropout(0.10),
-                self.conv_call(in_channels, self.output_channels[0], kernel_size=1, stride=1, padding=0, bias=False),
-            )
-
-            self.proj_head = ProjectionHead(ndim=self.ndim, in_channels=in_channels, proj_dim=contrast_proj_dim)
+                ASPP(
+                    conv=self.conv_call,
+                    in_dims=in_channels,
+                    out_dims=256,
+                    norm=normalization,
+                    rate=[6, 12, 18],
+                ),
+                self.conv_call(256, self.output_channels[0], kernel_size=1, padding=0, bias=True),
+            )  
+        elif head_type == "PSP":
+            self.last_block = nn.Sequential(
+                PSP(
+                    conv=self.conv_call,         
+                    in_dims=in_channels,
+                    out_dims=256,
+                    norm=normalization,         
+                    pool_sizes=[1, 2, 3, 6],      
+                ),
+                self.conv_call(256, self.output_channels[0], kernel_size=1, padding=0, bias=True),
+            )  
+        elif head_type == "OCR":
+            self.last_block = nn.Sequential(
+                OCRHead(
+                    conv=self.conv_call,         
+                    in_dims=in_channels,
+                    out_dims=256,
+                    num_classes=self.output_channels[0],
+                    norm=normalization,         
+                    key_dims=256,
+                    scale=1.0,  
+                ),
+                self.conv_call(256, self.output_channels[0], kernel_size=1, padding=0, bias=True),
+            )  
+        elif head_type == "FCN":
+            if self.contrast:
+                self.last_block = nn.Sequential(
+                    self.conv_call(in_channels, in_channels, kernel_size=3, stride=1, padding=1),
+                    self.norm_func(normalization, in_channels),
+                    self.dropout(0.10),
+                    self.conv_call(in_channels, self.output_channels[0], kernel_size=1, stride=1, padding=0, bias=False),
+                )
+            else:
+                self.last_block = self.conv_call(in_channels, self.output_channels[0], kernel_size=1, padding="same")
         else:
-            self.last_block = self.conv_call(in_channels, self.output_channels[0], kernel_size=1, padding="same")
+            raise ValueError(f"head_type '{head_type}' is not supported. Choose from: 'ASPP', 'PSP', 'FCN'.")
 
+        if self.contrast:
+            self.proj_head = ProjectionHead(ndim=self.ndim, in_channels=in_channels, proj_dim=contrast_proj_dim)
+        
+        if self.ndim == 2:
+            scale_factor = 4
+            mode = "bilinear"
+        else:
+            scale_factor = (1, 4, 4) if not self.z_down else (4, 4, 4)
+            mode = "trilinear"
+        self.upsample_logits = nn.Upsample(
+            scale_factor=scale_factor,      
+            mode=mode,       
+            align_corners=False,
+        )
         # Multi-head:
         #   Instance segmentation: instances + classification
         #   Detection: points + classification
@@ -879,7 +933,7 @@ class HighResolutionNet(nn.Module):
 
         return nn.Sequential(*modules), num_inchannels
 
-    def forward(self, x) -> Dict | torch.Tensor:
+    def forward(self, input) -> Dict | torch.Tensor:
         """
         Perform the forward pass of the HighResolutionNet.
 
@@ -904,7 +958,7 @@ class HighResolutionNet(nn.Module):
             containing output tensors (e.g., 'pred', 'embed', 'class').
             Otherwise, returns a single prediction tensor.
         """
-        x = self.conv1_block(x)
+        x = self.conv1_block(input)
         x = self.conv2_block(x)
 
         x = self.layer1(x)
@@ -950,6 +1004,7 @@ class HighResolutionNet(nn.Module):
 
         feats = torch.cat([feat1, feat2, feat3, feat4], 1)
         out = self.last_block(feats)
+        out = self.upsample_logits(out)
         out_dict = {
             "pred": out,
         }

@@ -12,8 +12,8 @@ import torch
 import torch.nn as nn
 from typing import Dict 
 
-from biapy.models.blocks import ResConvBlock, ResUpBlock, ConvBlock, ProjectionHead, get_norm_2d, get_norm_3d
-
+from biapy.models.blocks import ResConvBlock, ResUpBlock, ConvBlock, get_norm_2d, get_norm_3d
+from biapy.models.heads import ProjectionHead
 
 class ResUNet(nn.Module):
     """Configurable 2D/3D Residual U-Net model for image segmentation and super-resolution.

@@ -34,7 +34,7 @@ import torch
 import torch.nn as nn
 from typing import Dict
 
-from biapy.models.blocks import ProjectionHead
+from biapy.models.heads import ProjectionHead
 
 
 class Conv_batchnorm(torch.nn.Module):
