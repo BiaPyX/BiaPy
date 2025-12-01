@@ -28,7 +28,7 @@ from plotly.subplots import make_subplots
 from biapy.data.data_manipulation import read_img_as_ndarray, save_tif
 
 # ---------------------- USER CONFIG ----------------------
-PRED_FOLDER   = "/data/dfranco/exp_results/lesion_medular37/per_image_binarized/"
+PRED_FOLDER   = "/data/dfranco/exp_results/lesion_medular38/results/lesion_medular38_1/per_image_binarized"
 EXPERTS_ROOT  = "/data/dfranco/datasets/lesion_medular/semantic_seg/V11/test/label"  # folder containing N subfolders, one per expert
 
 OUTPUT_BARS_SVG      = "agreement_bars.svg"
