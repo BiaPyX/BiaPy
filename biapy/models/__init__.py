@@ -192,14 +192,14 @@ def build_model(
                     'NUM_MODULES': 4, 
                     'NUM_BRANCHES': 3, 
                     'NUM_BLOCKS': [4, 4, 4], 
-                    'NUM_CHANNELS': [num_channels, num_channels*2, num_channels*3], 
+                    'NUM_CHANNELS': [num_channels, num_channels*2, num_channels*4], 
                     'BLOCK': 'BASIC',
                 },
                 'STAGE4': {
                     'NUM_MODULES': 3, 
                     'NUM_BRANCHES': 4, 
                     'NUM_BLOCKS': [4, 4, 4, 4], 
-                    'NUM_CHANNELS': [num_channels, num_channels*2, num_channels*3, num_channels*4], 
+                    'NUM_CHANNELS': [num_channels, num_channels*2, num_channels*4, num_channels*8], 
                     'BLOCK': 'BASIC'
                 }
             } 
