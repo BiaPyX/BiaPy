@@ -691,11 +691,12 @@ def create_model_doc(
     message += f"{author_mes}\n"
     message += "\n"
     message += "## References\n"
-    message += "> [1] Franco-Barranco, Daniel, et al. \"BiaPy: Accessible deep learning on bioimages.\" Nature Methods (2025): 1-3.\n"
-    message += "> \n"
-    message += "> [2] Franco-Barranco, Daniel, Arrate Muñoz-Barrutia, and Ignacio Arganda-Carreras. \"Stable deep neural network architectures for mitochondria segmentation on electron microscopy volumes.\" Neuroinformatics 20.2 (2022): 437-450.\n"
+    message += "[1] Franco-Barranco, Daniel, et al. \"BiaPy: Accessible deep learning on bioimages.\" Nature Methods (2025): 1-3.\n"
+    model_arch = biapy_cfg.MODEL.ARCHITECTURE.lower()
+    if model_arch in ["unet", "resunet", "seunet", "resunet_se", "attention_unet"]:
+        message += "[2] Franco-Barranco, Daniel, Arrate Muñoz-Barrutia, and Ignacio Arganda-Carreras. \"Stable deep neural network architectures for mitochondria segmentation on electron microscopy volumes.\" Neuroinformatics 20.2 (2022): 437-450.\n"
     if biapy_cfg.PROBLEM.TYPE == "INSTANCE_SEG":
-        message += "> [3] Franco-Barranco, Daniel, et al. \"Current progress and challenges in large-scale 3d mitochondria instance segmentation.\" IEEE transactions on medical imaging 42.12 (2023): 3956-3971.\n"
+        message += "[3] Franco-Barranco, Daniel, et al. \"Current progress and challenges in large-scale 3d mitochondria instance segmentation.\" IEEE transactions on medical imaging 42.12 (2023): 3956-3971.\n"
     f = open(doc_output_path, "w")
     f.write(message)
     f.close()
