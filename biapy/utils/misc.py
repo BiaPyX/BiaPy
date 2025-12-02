@@ -425,7 +425,8 @@ def get_checkpoint_path(cfg, jobname):
         else:
             raise NotImplementedError
 
-    return resume
+    root, extension = os.path.splitext(resume)
+    return root
 
 def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=None, just_extract_checkpoint_info=False, skip_unmatched_layers=False):
     """
