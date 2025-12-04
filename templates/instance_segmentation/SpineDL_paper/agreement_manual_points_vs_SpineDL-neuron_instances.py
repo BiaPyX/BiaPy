@@ -10,7 +10,7 @@ import plotly.graph_objects as go
 from sklearn.cluster import DBSCAN
 import edt
 
-# python -u /data/dfranco/BiaPy/biapy/utils/scripts/agreement_manual_points_vs_dnn_instances.py  --input_file_dir /data/dfranco/datasets/lesion_medular/neuron_seg/neuron_final_test --input_instance_dir /data/dfranco/exp_results/lesion_medular_neuron22/test_v4/results/lesion_medular_neuron22_1/per_image_instances
+# python -u agreement_manual_points_vs_SpineDL-neuron_instances.py --input_file_dir /home/user/datasets/neuron_test --input_instance_dir /home/user/medular_lesion/results/medular_lesion_1/per_image_instances
 
 # -----------------------------
 # Arguments
@@ -26,7 +26,7 @@ parser.add_argument(
     "--input_file_dir",
     "-input_file_dir",
     required=True,
-    help="Directory containing the Experto*/ XML folders",
+    help="Directory containing the Manual_annotation*/ XML folders",
 )
 parser.add_argument(
     "--input_instance_dir",
@@ -64,9 +64,9 @@ from biapy.data.data_manipulation import read_img_as_ndarray
 # -----------------------------
 
 def read_expert_points_from_xml(root_dir: str) -> pd.DataFrame:
-    """Read all expert XML files under 'Experto*' folders and return (folder, file, x, y)."""
+    """Read all expert XML files under 'Manual_annotation*' folders and return (folder, file, x, y)."""
     fids = sorted(next(os.walk(root_dir))[1])
-    fids = [x for x in fids if "Experto" in x]
+    fids = [x for x in fids if "Manual_annotation" in x]
 
     points, files, folders = [], [], []
     for id_ in tqdm(fids, desc="Scanning expert folders"):
@@ -85,7 +85,7 @@ def read_expert_points_from_xml(root_dir: str) -> pd.DataFrame:
                 folders.append(os.path.basename(folder_path))
 
     if len(points) == 0:
-        raise RuntimeError("No XML markers found under Experto* folders.")
+        raise RuntimeError("No XML markers found under Manual_annotation* folders.")
 
     pts = np.array(points, dtype=int)
     return pd.DataFrame({"folder": folders, "file": files, "x": pts[:, 0], "y": pts[:, 1]})
