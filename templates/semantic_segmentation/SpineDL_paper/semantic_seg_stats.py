@@ -1,45 +1,11 @@
-"""
-Agreement analysis for semantic segmentation (Plotly version with heatmaps)
-**Dataset-level IoU version**
-
-- Loads model predictions and expert annotations.
-- Computes IoU (per class and mean IoU) by aggregating intersections/unions
-  across the entire dataset (NOT per-image averaging).
-- Plots:
-  (1) Bar: Model vs each expert (overall mIoU across images, dataset-level)
-  (2) Bar: Model vs experts (per-class mIoU across images, dataset-level)
-  (3) Heatmap matrix: Agreement (mIoU) among Model + Experts (overall, dataset-level)
-  (4-8) Heatmap matrices per class: Agreement among Model + Experts (class IoU, dataset-level)
-
-Requirements:
-    pip install plotly kaleido pillow numpy scikit-image
-
-Assumptions:
-- Masks are indexed images (pixel values are class IDs).
-- File names match across model and expert folders.
-- All images for the same case have identical spatial size.
-"""
 import os
+import argparse
 from glob import glob
 import numpy as np
 from PIL import Image
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from biapy.data.data_manipulation import read_img_as_ndarray, save_tif
-
-# ---------------------- USER CONFIG ----------------------
-PRED_FOLDER   = "/data/dfranco/exp_results/lesion_medular38/results/lesion_medular38_1/per_image_binarized"
-EXPERTS_ROOT  = "/data/dfranco/datasets/lesion_medular/semantic_seg/V11/test/label"  # folder containing N subfolders, one per expert
-
-OUTPUT_BARS_SVG      = "agreement_bars.svg"
-OUTPUT_OVERALL_SVG   = "agreement_overall_matrix.svg"
-OUTPUT_CLASSES_SVG   = "agreement_class_matrices.svg"
-
-CLASS_NAMES   = ["background", "gray matter", "white matter", "ependyma", "damaged region"]
-NUM_CLASSES   = len(CLASS_NAMES)
-
-OUTPUT_SVG    = "agreement_plotly.svg"
-VOID_LABEL    = None  # set to e.g. 255 if you have a void/ignore label
 
 # ---------------------- IO HELPERS -----------------------
 def load_masks(folder):
@@ -180,15 +146,102 @@ def save_consensus_gt(consensus_dict, out_dir, color_map=None):
     os.makedirs(out_dir, exist_ok=True)
 
     for name, mask in consensus_dict.items():
+        # save_tif expects 5D data (1, D, H, W, 1) or 4D (1, H, W, 1)
         save_tif(np.expand_dims(np.expand_dims(mask, 0), -1), out_dir, [name], verbose=True)
+
+
+# ---------------------- ARGPARSE CONFIG -----------------------------
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Agreement analysis for semantic segmentation using dataset-level IoU.",
+        formatter_class=argparse.RawTextHelpFormatter
+    )
+
+    # --- INPUT/OUTPUT Paths ---
+    parser.add_argument(
+        "--pred_folder", type=str, required=True,
+        help="Path to the folder containing model predictions (segmentation masks).",
+        default="/data/dfranco/exp_results/lesion_medular37/per_image_binarized",
+        metavar="PRED_FOLDER"
+    )
+    parser.add_argument(
+        "--experts_root", type=str, required=True,
+        help="Root folder containing N subfolders, one per expert's annotations.",
+        default="/data/dfranco/datasets/lesion_medular/semantic_seg/V11/test/label",
+        metavar="EXPERTS_ROOT"
+    )
+
+    # --- Output Filenames (SVGs) ---
+    parser.add_argument(
+        "--output_bars_svg", type=str, default="agreement_bars.svg",
+        help="Output filename for the Model vs Experts bar plot (SVG).",
+        metavar="FILE"
+    )
+    parser.add_argument(
+        "--output_overall_svg", type=str, default="agreement_overall_matrix.svg",
+        help="Output filename for the overall agreement heatmap matrix (SVG).",
+        metavar="FILE"
+    )
+    parser.add_argument(
+        "--output_classes_svg", type=str, default="agreement_class_matrices.svg",
+        help="Output filename for the per-class agreement heatmap matrices (SVG).",
+        metavar="FILE"
+    )
+    parser.add_argument(
+        "--output_consensus_svg", type=str, default="agreement_consensus_unanimous_perclass.svg",
+        help="Output filename for the Model vs Unanimous-Consensus bar plot (SVG).",
+        metavar="FILE"
+    )
+    parser.add_argument(
+        "--output_consensus_dir", type=str, default="consensus_unanimous_gt",
+        help="Output directory for saving unanimous-consensus GT masks.",
+        metavar="DIR"
+    )
+    parser.add_argument(
+        "--output_iou_agreement_dir", type=str, default="consensus_unanimous_iou_maps",
+        help="Output directory for saving IoU agreement maps (TP/Errors in RGB).",
+        metavar="DIR"
+    )
+
+    # --- Class Configuration ---
+    parser.add_argument(
+        "--class_names", nargs='+', required=True,
+        default=["background", "gray matter", "white matter", "ependyma", "damaged region"],
+        help="List of class names, in order of their class IDs (e.g., [ID 0, ID 1, ...]).",
+        metavar="NAME"
+    )
+    parser.add_argument(
+        "--void_label", type=int, default=None,
+        help="Optional: Pixel value used for void/ignore label in masks (e.g., 255). Default is None.",
+        metavar="ID"
+    )
+    parser.add_argument(
+        "--background_idx", type=int, default=0,
+        help="Index of the background class in CLASS_NAMES, used for excluding it from some plots (e.g., 0).",
+        metavar="ID"
+    )
+    parser.add_argument(
+        "--consensus_void_label", type=int, default=0,
+        help="Pixel value to use for void when building the unanimous consensus GT mask.",
+        metavar="ID"
+    )
+
+    args = parser.parse_args()
+
+    # Derived variable
+    args.num_classes = len(args.class_names)
+
+    return args
 
 # ---------------------- MAIN -----------------------------
 def main():
+    args = parse_args()
+
     # Load predictions & experts
-    preds = load_masks(PRED_FOLDER)
-    expert_dirs = sorted([p for p in glob(os.path.join(EXPERTS_ROOT, "*")) if os.path.isdir(p)])
+    preds = load_masks(args.pred_folder)
+    expert_dirs = sorted([p for p in glob(os.path.join(args.experts_root, "*")) if os.path.isdir(p)])
     if len(expert_dirs) < 2:
-        raise RuntimeError(f"Expected >=2 expert subfolders in '{EXPERTS_ROOT}', found {len(expert_dirs)}.")
+        raise RuntimeError(f"Expected >=2 expert subfolders in '{args.experts_root}', found {len(expert_dirs)}.")
     experts = [load_masks(d) for d in expert_dirs]
 
     # Harmonize filenames
@@ -206,7 +259,7 @@ def main():
     model_vs_expert_overall = []
     model_vs_expert_perclass = []
     for E in experts:
-        per_c, overall = dataset_level_iou(preds, E, keys, NUM_CLASSES, void_label=VOID_LABEL)
+        per_c, overall = dataset_level_iou(preds, E, keys, args.num_classes, void_label=args.void_label)
         model_vs_expert_overall.append(overall)
         model_vs_expert_perclass.append(per_c)
     model_vs_expert_perclass = np.vstack(model_vs_expert_perclass)  # (E, C)
@@ -215,36 +268,36 @@ def main():
     # (3) Agreement matrices among all annotators (Model + Experts) — DATASET-LEVEL
     annotators = [preds] + experts
     overall_mat = np.full((N, N), np.nan)
-    perclass_mats = [np.full((N, N), np.nan) for _ in range(NUM_CLASSES)]
+    perclass_mats = [np.full((N, N), np.nan) for _ in range(args.num_classes)]
     for i in range(N):
         for j in range(N):
             if i == j:
                 overall_mat[i, j] = 1.0
-                for c in range(NUM_CLASSES):
+                for c in range(args.num_classes):
                     perclass_mats[c][i, j] = 1.0
             elif j > i:
-                per_c, overall = dataset_level_iou(annotators[i], annotators[j], keys, NUM_CLASSES, void_label=VOID_LABEL)
+                per_c, overall = dataset_level_iou(annotators[i], annotators[j], keys, args.num_classes, void_label=args.void_label)
                 overall_mat[i, j] = overall
                 overall_mat[j, i] = overall
-                for c in range(NUM_CLASSES):
+                for c in range(args.num_classes):
                     perclass_mats[c][i, j] = per_c[c]
                     perclass_mats[c][j, i] = per_c[c]
 
     overall_Z, overall_text = lower_triangular_matrix(overall_mat)
-    class_Z_text = [lower_triangular_matrix(pm) for pm in perclass_mats]
-    
-     # ---------------------- CONSENSUS (UNANIMOUS) EVALUATION ----------------------
+    perclass_Z_text = [lower_triangular_matrix(pm) for pm in perclass_mats]
+
+    # ---------------------- CONSENSUS (UNANIMOUS) EVALUATION ----------------------
     # Build new GT by keeping only pixels where all experts agree, void elsewhere
-    CONS_VOID = 0
-    consensus_gt = build_unanimous_consensus(experts, keys, void_value=CONS_VOID)
+    consensus_gt = build_unanimous_consensus(experts, keys, void_value=args.consensus_void_label)
 
     # Compute dataset-level IoU (per class and overall) between Model and consensus GT
-    cons_per_class, cons_overall = dataset_level_iou(preds, consensus_gt, keys, NUM_CLASSES, void_label=CONS_VOID)
-    
+    cons_per_class, cons_overall = dataset_level_iou(
+        preds, consensus_gt, keys, args.num_classes, void_label=args.consensus_void_label
+    )
+
     # Save the consensus GT masks to disk
-    OUTPUT_CONSENSUS_DIR = "consensus_unanimous_gt"
-    save_consensus_gt(consensus_gt, OUTPUT_CONSENSUS_DIR)
-    print(f"Saved unanimous-consensus GT masks to: {OUTPUT_CONSENSUS_DIR}")
+    save_consensus_gt(consensus_gt, args.output_consensus_dir)
+    print(f"Saved unanimous-consensus GT masks to: {args.output_consensus_dir}")
 
     # ---------------------- FIGURE 1: BARS ----------------------
     fig1 = make_subplots(
@@ -272,7 +325,7 @@ def main():
     # Per-class bar
     fig1.add_trace(
         go.Bar(
-            x=CLASS_NAMES,
+            x=args.class_names,
             y=mean_perclass_model,
             text=[f"{v:.2f}" if np.isfinite(v) else "NA" for v in mean_perclass_model],
             textposition="outside",
@@ -296,8 +349,8 @@ def main():
         a.yshift = 12
         a.align = "center"
 
-    fig1.write_image(OUTPUT_BARS_SVG, format="svg")
-    print(f"Saved: {OUTPUT_BARS_SVG}")
+    fig1.write_image(args.output_bars_svg, format="svg")
+    print(f"Saved: {args.output_bars_svg}")
 
     # ---------------------- FIGURE 2: OVERALL MATRIX ----------------------
     fig2 = go.Figure()
@@ -327,20 +380,30 @@ def main():
         template="plotly_white",
         showlegend=False
     )
-    fig2.write_image(OUTPUT_OVERALL_SVG, format="svg")
-    print(f"Saved: {OUTPUT_OVERALL_SVG}")
+    fig2.write_image(args.output_overall_svg, format="svg")
+    print(f"Saved: {args.output_overall_svg}")
 
-    # ---------------------- FIGURE 3: PER-CLASS MATRICES (2 rows: 3 + 2) -------------------
-    CLASS_TITLES = ["Background", "Gray matter", "White matter", "Ependyma", "Damaged region"]
+    # ---------------------- FIGURE 3: PER-CLASS MATRICES -------------------
+    # Use the first 5 class names for subplot titles
+    CLASS_TITLES = [name.replace('<br>', ' ') for name in args.class_names]
+    # Adjust specs based on the number of classes (up to 6 classes, 2 rows, 3 cols)
+    n_plots = args.num_classes
+    n_rows = (n_plots + 2) // 3
+    specs = [[{"type": "heatmap"}] * 3 for _ in range(n_rows)]
+    while len(specs[0]) > 3: # Should not happen based on n_plots, but defensive programming
+        specs[0].pop()
 
-    specs = [
-        [{"type": "heatmap"}, {"type": "heatmap"}, {"type": "heatmap"}],
-        [{"type": "heatmap"}, {"type": "heatmap"}, {"type": "domain"}],  # last slot empty
-    ]
-    subplot_titles = CLASS_TITLES + [""]  # 6 slots total; blank for the empty one
+    # If the last row is partial, fill with "domain" (empty plot) slots
+    last_row_len = n_plots % 3
+    if last_row_len == 1:
+        specs[-1].extend([{"type": "domain"}, {"type": "domain"}])
+    elif last_row_len == 2:
+        specs[-1].extend([{"type": "domain"}])
+
+    subplot_titles = CLASS_TITLES[:n_plots] + [""] * (n_rows * 3 - n_plots)
 
     fig3 = make_subplots(
-        rows=2, cols=3,
+        rows=n_rows, cols=3,
         specs=specs,
         subplot_titles=subplot_titles,
         shared_yaxes=True,
@@ -350,8 +413,9 @@ def main():
     )
 
     # Prepare data for class heatmaps
-    positions = [(1,1), (1,2), (1,3), (2,1), (2,2)]
-    for idx, (Z, T) in enumerate([lower_triangular_matrix(pm) for pm in perclass_mats]):
+    positions = [(r+1, c+1) for r in range(n_rows) for c in range(3)]
+    for idx, (Z, T) in enumerate(perclass_Z_text):
+        if idx >= n_plots: break # should not happen if perclass_Z_text is correct length
         r, c = positions[idx]
         fig3.add_trace(
             go.Heatmap(
@@ -368,9 +432,10 @@ def main():
         fig3.update_xaxes(tickangle=35, tickfont_size=13, automargin=True, row=r, col=c)
         fig3.update_yaxes(showticklabels=(c == 1), tickfont_size=13, automargin=True, row=r, col=c)
 
-    for r in (1, 2):
-        for c in (1, 2, 3):
-            if r == 2 and c == 3:
+    for r in range(1, n_rows + 1):
+        for c in range(1, 4):
+            # Update shared y-axes, skip empty domain plots
+            if r == n_rows and c > last_row_len and last_row_len != 0:
                 continue
             if not (r == 1 and c == 1):
                 fig3.update_yaxes(matches="y", row=r, col=c)
@@ -380,7 +445,7 @@ def main():
         coloraxis=dict(
             colorscale="Viridis",
             cmin=0, cmax=1,
-            colorbar=dict(title="mIoU", thickness=18, len=0.86, x=1.02, y=0.5, yanchor="middle")
+            colorbar=dict(title="IoU", thickness=18, len=0.86, x=1.02, y=0.5, yanchor="middle")
         ),
         width=2200,
         height=1400,
@@ -394,50 +459,78 @@ def main():
         a.yshift = 10
         a.align = "center"
 
-    fig3.write_image(OUTPUT_CLASSES_SVG, format="svg")
-    print(f"Saved: {OUTPUT_CLASSES_SVG}")
+    fig3.write_image(args.output_classes_svg, format="svg")
+    print(f"Saved: {args.output_classes_svg}")
 
     # ---------------------- FIGURE 4: MODEL vs CONSENSUS (UNANIMOUS) PER-CLASS ----------------------
-    OUTPUT_CONSENSUS_SVG = "agreement_consensus_unanimous_perclass.svg"
 
-    # Remove background class (e.g., index 0)
-    BACKGROUND_IDX = 0  # change if your background class has another index
+    # Filter out the background class
+    class_names_no_bg = [c for i, c in enumerate(args.class_names) if i != args.background_idx]
+    ious_no_bg = [v for i, v in enumerate(cons_per_class) if i != args.background_idx]
 
-    class_names_no_bg = [c for i, c in enumerate(CLASS_NAMES) if i != BACKGROUND_IDX]
-    ious_no_bg = [v for i, v in enumerate(cons_per_class) if i != BACKGROUND_IDX]
+    # Hardcoded colors (can be moved to args or an external config if needed)
+    color_map = {
+        "background": "#000000",
+        "gray matter": "#009898",
+        "white matter": "#f2e800",
+        "ependyma": "#cb579a",
+        "damaged region": "#b74c34",
+    }
+    default_color = "#7f7f7f"
 
     fig4 = go.Figure()
-    fig4.add_trace(
-        go.Bar(
-            x=class_names_no_bg,
-            y=ious_no_bg,
-            text=[f"{v:.2f}" if np.isfinite(v) else "NA" for v in ious_no_bg],
-            textposition="outside",
-            cliponaxis=False,
-            hovertemplate="IoU: %{y:.3f}<extra>%{x}</extra>",
+    for cls, iou in zip(class_names_no_bg, ious_no_bg):
+        text_val = f"{iou:.2f}" if np.isfinite(iou) else "NA"
+        color = color_map.get(cls, default_color)
+
+        fig4.add_trace(
+            go.Bar(
+                x=[cls],
+                y=[iou],
+                name=cls,
+                marker=dict(color=color),
+                width=0.2,
+                text=[text_val],
+                textposition="outside",
+                cliponaxis=False,
+                hovertemplate="IoU: %{y:.3f}<extra>%{x}</extra>",
+            )
         )
-    )
+
     fig4.update_xaxes(title_text="", tickangle=45, automargin=True)
-    fig4.update_yaxes(title_text="IoU (dataset-level, consensus GT)", range=[0, 1], automargin=True)
+    fig4.update_yaxes(
+        title_text="IoU (dataset-level, consensus GT)",
+        range=[0, 1],
+        automargin=True
+    )
 
     fig4.update_layout(
         title={
-            "text": f"Model vs Unanimous-Consensus GT — Per-Class IoU (overall mIoU = {cons_overall:.3f})",
-            "x": 0.5, "y": 0.95, "xanchor": "center"
+            "text": "Model vs Unanimous-Consensus GT — Per-Class IoU",
+            "x": 0.5, "y": 0.95, "xanchor": "center",
         },
-        width=1200, height=600,
+        width=1200,
+        height=600,
         margin=dict(l=70, r=60, t=110, b=90),
         template="plotly_white",
-        showlegend=False,
-        bargap=0.25,
+        showlegend=True,
+        legend=dict(
+            orientation="v",
+            x=1.02,
+            xanchor="left",
+            y=1,
+            yanchor="top",
+        ),
     )
 
-    fig4.write_image(OUTPUT_CONSENSUS_SVG, format="svg")
-    print(f"Saved: {OUTPUT_CONSENSUS_SVG}")
+    fig4.write_image(args.output_consensus_svg, format="svg")
+    print(f"Saved: {args.output_consensus_svg}")
 
-    OUTPUT_IoU_AGREEMENT_DIR = "consensus_unanimous_iou_maps"
-    save_iou_agreement_maps(preds, consensus_gt, keys, OUTPUT_IoU_AGREEMENT_DIR, void_value=CONS_VOID)
-    print(f"Saved IoU agreement maps to: {OUTPUT_IoU_AGREEMENT_DIR}")
+    save_iou_agreement_maps(
+        preds, consensus_gt, keys, args.output_iou_agreement_dir, void_value=args.consensus_void_label
+    )
+    print(f"Saved IoU agreement maps to: {args.output_iou_agreement_dir}")
+
 
 if __name__ == "__main__":
     main()
