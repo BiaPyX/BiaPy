@@ -10,7 +10,7 @@ import plotly.graph_objects as go
 from sklearn.cluster import DBSCAN
 import edt
 
-# python -u agreement_manual_points_vs_SpineDL-neuron_instances.py --input_file_dir /home/user/datasets/neuron_test --input_instance_dir /home/user/medular_lesion/results/medular_lesion_1/per_image_instances
+# python -u agreement_manual_points_vs_SpineDL-neuron_instances.py --manual_annotation_dir /home/user/datasets/neuron_test --pred_folder /home/user/medular_lesion/results/medular_lesion_1/per_image_instances
 
 # -----------------------------
 # Arguments
@@ -23,16 +23,16 @@ parser = argparse.ArgumentParser(
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 parser.add_argument(
-    "--input_file_dir",
-    "-input_file_dir",
+    "--manual_annotation_dir",
+    "-manual_annotation_dir",
     required=True,
     help="Directory containing the Manual_annotation*/ XML folders",
 )
 parser.add_argument(
-    "--input_instance_dir",
-    "-input_instance_dir",
+    "--pred_folder",
+    "-pred_folder",
     required=True,
-    help="Directory containing per-image instance masks (SpineDL-Neuron output)",
+    help="Directory containing predicted instance masks (SpineDL-Neuron output)",
 )
 parser.add_argument(
     "--tolerance_px",
@@ -51,7 +51,7 @@ parser.add_argument(
     default=None,
     help=(
         "Directory to store intermediate calculations (CSV cache of manual clusters). "
-        "If not given, a folder named '_aux_cache' is created inside --input_file_dir."
+        "If not given, a folder named '_aux_cache' is created inside --manual_annotation_dir."
     ),
 )
 
@@ -253,7 +253,6 @@ def compute_dnn_freqs_for_file(
 def make_single_figure(
     experts_df: pd.DataFrame,
     nn_imgs_1: dict[str, np.ndarray],
-    out_dir: str,
     tol_px: int,
     out_svg_path: str,
 ):
@@ -297,17 +296,9 @@ def make_single_figure(
         if denom_manual == 0:
             continue  # nothing manual to normalize to
 
-        # ❌ Remove normalization to 100 neurons per image
         manual_freqs = np.array([manual_counts[i] for i in range(6)], dtype=float)
         manual_freqs[0] = 0.0  # no manual class 0
         per_file_manual.append(manual_freqs)
-
-        # # Normalize manual to 100 neurons per image
-        # manual_freqs = np.array([manual_counts[i] for i in range(6)], dtype=float) * (
-        #     100.0 / denom_manual
-        # )
-        # manual_freqs[0] = 0.0  # no manual class 0
-        # per_file_manual.append(manual_freqs)
 
         H, W = nn_imgs_1[nn1_base_to_file[base]].shape
 
@@ -324,9 +315,6 @@ def make_single_figure(
             dist_to_clicks=dist2clicks,
         )
         dnn1_freqs = np.array([dnn1_counts[i] for i in range(6)], dtype=float)
-        # dnn1_freqs = np.array([dnn1_counts[i] for i in range(6)], dtype=float) * (
-        #     100.0 / denom_manual
-        # )
         per_file_dnn1.append(dnn1_freqs)
 
     if not per_file_manual:
@@ -361,9 +349,7 @@ def make_single_figure(
     fig.update_layout(
         barmode="group",
         title=(
-            "Agreement among identification methods (Manual vs SpineDL-Neuron)<br>"
-            f"<sup>Matching uses dilation tolerance of {tol_px}px. "
-            "Classes 0–5 = times identified in manual analyses (0 = DNN-only).</sup>"
+            "Agreement among identification methods<br>(Manual vs SpineDL-Neuron)"
         ),
         xaxis_title="Times identified as neurons in manual analyses",
         yaxis_title="Frequency",
@@ -371,10 +357,8 @@ def make_single_figure(
     )
 
     # Ensure output directory exists
-    os.makedirs(out_dir, exist_ok=True)
-    svg_path = os.path.join(out_dir, out_svg_path)
-    fig.write_image(svg_path)  # requires kaleido
-    print(f"✅ Saved SVG to: {svg_path}")
+    fig.write_image(out_svg_path)  # requires kaleido
+    print(f"✅ Saved SVG to: {out_svg_path}")
 
 # -----------------------------
 # Main
@@ -382,8 +366,8 @@ def make_single_figure(
 
 def main():
     tol = int(args["tolerance_px"]) 
-    file_dir = args["input_file_dir"]
-    nn_dir_1 = args["input_instance_dir"]
+    file_dir = args["manual_annotation_dir"]
+    nn_dir_1 = args["pred_folder"]
     out_svg_path = args["output_svg"]
 
     print("Reading expert XMLs …")
@@ -395,7 +379,6 @@ def main():
     make_single_figure(
         experts_df=experts_df,
         nn_imgs_1=nn_imgs_1,
-        out_dir=file_dir,
         tol_px=tol,
         out_svg_path=out_svg_path,
     )

@@ -205,7 +205,7 @@ def parse_args():
 
     # --- Class Configuration ---
     parser.add_argument(
-        "--class_names", nargs='+', required=True,
+        "--class_names", nargs='+', required=False,
         default=["background", "gray matter", "white matter", "ependyma", "damaged region"],
         help="List of class names, in order of their class IDs (e.g., [ID 0, ID 1, ...]).",
         metavar="NAME"
@@ -396,8 +396,11 @@ def main():
     # If the last row is partial, fill with "domain" (empty plot) slots
     last_row_len = n_plots % 3
     if last_row_len == 1:
+        specs[-1].pop()
+        specs[-1].pop()
         specs[-1].extend([{"type": "domain"}, {"type": "domain"}])
     elif last_row_len == 2:
+        specs[-1].pop()
         specs[-1].extend([{"type": "domain"}])
 
     subplot_titles = CLASS_TITLES[:n_plots] + [""] * (n_rows * 3 - n_plots)

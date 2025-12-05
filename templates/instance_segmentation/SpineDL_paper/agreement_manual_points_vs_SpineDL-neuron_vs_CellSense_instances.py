@@ -10,7 +10,7 @@ import plotly.graph_objects as go
 from sklearn.cluster import DBSCAN
 import edt
 
-# python -u agreement_manual_points_vs_SpineDL-neuron_vs_CellSense_instances.py --input_file_dir /home/user/datasets/neuron_test --input_instance_dir /home/user/medular_lesion/results/medular_lesion_1/per_image_instances --input_instance_dir2 /home/user/cellSense_predictions
+# python -u agreement_manual_points_vs_SpineDL-neuron_vs_CellSense_instances.py --manual_annotation_dir /home/user/datasets/neuron_test --spinedl_pred_folder /home/user/medular_lesion/results/medular_lesion_1/per_image_instances --cellsense_pred_folder /home/user/cellSense_predictions
 
 # -----------------------------
 # Arguments
@@ -23,20 +23,20 @@ parser = argparse.ArgumentParser(
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
 )
 parser.add_argument(
-    "--input_file_dir",
-    "-input_file_dir",
+    "--manual_annotation_dir",
+    "-manual_annotation_dir",
     required=True,
     help="Directory containing the Manual_annotation*/ XML folders",
 )
 parser.add_argument(
-    "--input_instance_dir",
-    "-input_instance_dir",
+    "--spinedl_pred_folder",
+    "-spinedl_pred_folder",
     required=True,
     help="Directory containing per-image instance masks (SpineDL-Neuron output)",
 )
 parser.add_argument(
-    "--input_instance_dir2",
-    "-input_instance_dir2",
+    "--cellsense_pred_folder",
+    "-cellsense_pred_folder",
     required=True,
     help="Directory containing per-image instance masks (CellSense output)",
 )
@@ -48,7 +48,7 @@ parser.add_argument(
 )
 parser.add_argument(
     "--output_svg",
-    default="agreement_manual_vs_dnn.svg",
+    default="agreement_manual_vs_SpineDL_vs_CellSense.svg",
     help="Path/name for the SVG plot output",
 )
 parser.add_argument(
@@ -62,7 +62,7 @@ parser.add_argument(
     default=None,
     help=(
         "Directory to store intermediate calculations (CSV cache of manual clusters). "
-        "If not given, a folder named '_aux_cache' is created inside --input_file_dir."
+        "If not given, a folder named '_aux_cache' is created inside --manual_annotation_dir."
     ),
 )
 
@@ -265,7 +265,6 @@ def make_single_figure(
     experts_df: pd.DataFrame,
     nn_imgs_1: dict[str, np.ndarray],
     nn_imgs_2: dict[str, np.ndarray],
-    out_dir: str,
     tol_px: int,
     out_svg_path: str,
     also_html: bool,
@@ -313,17 +312,9 @@ def make_single_figure(
         if denom_manual == 0:
             continue  # nothing manual to normalize to
 
-        # ❌ Remove normalization to 100 neurons per image
         manual_freqs = np.array([manual_counts[i] for i in range(6)], dtype=float)
         manual_freqs[0] = 0.0  # no manual class 0
         per_file_manual.append(manual_freqs)
-
-        # # Normalize manual to 100 neurons per image
-        # manual_freqs = np.array([manual_counts[i] for i in range(6)], dtype=float) * (
-        #     100.0 / denom_manual
-        # )
-        # manual_freqs[0] = 0.0  # no manual class 0
-        # per_file_manual.append(manual_freqs)
 
         H, W = nn_imgs_1[nn1_base_to_file[base]].shape
 
@@ -340,9 +331,6 @@ def make_single_figure(
             dist_to_clicks=dist2clicks,
         )
         dnn1_freqs = np.array([dnn1_counts[i] for i in range(6)], dtype=float)
-        # dnn1_freqs = np.array([dnn1_counts[i] for i in range(6)], dtype=float) * (
-        #     100.0 / denom_manual
-        # )
         per_file_dnn1.append(dnn1_freqs)
 
         # ----- CellSense vs Manual -----
@@ -355,9 +343,6 @@ def make_single_figure(
             dist_to_clicks=dist2clicks,
         )
         dnn2_freqs = np.array([dnn2_counts[i] for i in range(6)], dtype=float)
-        # dnn2_freqs = np.array([dnn2_counts[i] for i in range(6)], dtype=float) * (
-        #     100.0 / denom_manual
-        # )
         per_file_dnn2.append(dnn2_freqs)
 
     if not per_file_manual:
@@ -403,9 +388,7 @@ def make_single_figure(
     fig.update_layout(
         barmode="group",
         title=(
-            "Agreement among identification methods (Manual vs SpineDL-Neuron vs CellSense)<br>"
-            f"<sup>Matching uses dilation tolerance of {tol_px}px. "
-            "Classes 0–5 = times identified in manual analyses (0 = DNN-only).</sup>"
+            "Agreement among identification methods<br>(Manual vs SpineDL-Neuron vs CellSense)"
         ),
         xaxis_title="Times identified as neurons in manual analyses",
         yaxis_title="Frequency",
@@ -415,20 +398,18 @@ def make_single_figure(
     )
 
     # Ensure output directory exists
-    os.makedirs(out_dir, exist_ok=True)
-    svg_path = os.path.join(out_dir, out_svg_path)
     try:
-        fig.write_image(svg_path)  # requires kaleido
-        print(f"✅ Saved SVG to: {svg_path}")
+        fig.write_image(out_svg_path)  # requires kaleido
+        print(f"✅ Saved SVG to: {out_svg_path}")
     except Exception as e:
         print("⚠️ Could not write SVG (is 'kaleido' installed?). Error:", repr(e))
         # Always save an HTML fallback
-        html_path = os.path.splitext(svg_path)[0] + ".html"
+        html_path = os.path.splitext(out_svg_path)[0] + ".html"
         fig.write_html(html_path, include_plotlyjs="cdn", full_html=True)
         print(f"💾 Saved HTML fallback to: {html_path}")
 
     if also_html:
-        html_path = os.path.splitext(svg_path)[0] + ".html"
+        html_path = os.path.splitext(out_svg_path)[0] + ".html"
         fig.write_html(html_path, include_plotlyjs="cdn", full_html=True)
         print(f"💾 Also saved HTML to: {html_path}")
 
@@ -439,9 +420,9 @@ def make_single_figure(
 
 def main():
     tol = int(args["tolerance_px"]) 
-    file_dir = args["input_file_dir"]
-    nn_dir_1 = args["input_instance_dir"]
-    nn_dir_2 = args["input_instance_dir2"]
+    file_dir = args["manual_annotation_dir"]
+    nn_dir_1 = args["spinedl_pred_folder"]
+    nn_dir_2 = args["cellsense_pred_folder"]
     out_svg_path = args["output_svg"]
 
     print("Reading expert XMLs …")
@@ -457,7 +438,6 @@ def main():
         experts_df=experts_df,
         nn_imgs_1=nn_imgs_1,
         nn_imgs_2=nn_imgs_2,
-        out_dir=file_dir,
         tol_px=tol,
         out_svg_path=out_svg_path,
         also_html=bool(args["also_html"]),
