@@ -202,7 +202,7 @@ class Detection_Workflow(Base_Workflow):
             multiple_metrics(
                 num_classes=self.cfg.DATA.N_CLASSES,
                 metric_names=self.test_metric_names,
-                device=self.device,
+                device=self.test_device,
                 model_source=self.cfg.MODEL.SOURCE,
                 ndim=self.dims,
                 ignore_index=self.cfg.LOSS.IGNORE_INDEX,
@@ -483,7 +483,10 @@ class Detection_Workflow(Base_Workflow):
                 # Instance filtering by properties
                 points_pred_mask, d_result = measure_morphological_props_and_filter(
                     points_pred_mask,
-                    self.resolution,
+                    intensity_image=self.current_sample["X"][0],
+                    resolution=self.resolution,
+                    extra_props=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.EXTRA_PROPS,
+                    filter_instances=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.ENABLE,
                     properties=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.PROPS,
                     prop_values=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.VALUES,
                     comp_signs=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGNS,
