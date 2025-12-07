@@ -18,8 +18,9 @@ Classes:
 import torch
 import torch.nn as nn
 
-from biapy.models.blocks import DoubleConvBlock, UpBlock, ProjectionHead, get_norm_2d, get_norm_3d
+from biapy.models.blocks import DoubleConvBlock, UpBlock, get_norm_2d, get_norm_3d
 from typing import Dict
+from biapy.models.heads import ProjectionHead
 
 class Attention_U_Net(nn.Module):
     """
