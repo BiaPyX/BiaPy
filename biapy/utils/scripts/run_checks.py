@@ -544,6 +544,8 @@ self_supervision_2d_template_local = os.path.join(self_supervision_folder, "2d_s
 self_supervision_2d_data_drive_link = semantic_2d_data_drive_link
 self_supervision_2d_data_filename = "fibsem_epfl_2D.zip"
 self_supervision_2d_data_outpath = os.path.join(self_supervision_folder, "fibsem_epfl_2D")
+self_supervision_2d_checkpoint_link = "https://drive.google.com/uc?id=1bLB-oYx0JFAvSGv1Fa0F-vK26U_HlPtQ"
+self_supervision_2d_checkpoint_test14 = os.path.join(self_supervision_folder, "test14_checkpoint.pth")
 # 3D
 self_supervision_3d_template = "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/self-supervised/3d_self-supervised.yaml"
 self_supervision_3d_template_local = os.path.join(self_supervision_folder, "3d_self_supervision.yaml")
@@ -916,6 +918,10 @@ if not os.path.exists(self_supervision_2d_data_outpath) and (all_test_info["Test
     if not os.path.exists(self_supervision_2d_template_local):
         print("Downloading self_supervision YAML . . .")
         _, _ = urllib.request.urlretrieve(self_supervision_2d_template, filename=self_supervision_2d_template_local)
+    
+    if not os.path.exists(self_supervision_2d_checkpoint_test14):
+        print("Downloading test14 checkpoint . . .")
+        download_drive_file(self_supervision_2d_checkpoint_link, self_supervision_2d_checkpoint_test14)
 
 # General things: 3D Data + YAML donwload
 if not os.path.exists(self_supervision_3d_data_outpath) and (all_test_info["Test17"]["enable"] \
@@ -2333,15 +2339,18 @@ try:
         biapy_config['DATA']['TEST']['LOAD_GT'] = True
 
         biapy_config['TRAIN']['ENABLE'] = True
-        biapy_config['TRAIN']['EPOCHS'] = 20
-        biapy_config['TRAIN']['PATIENCE'] = -1
+        biapy_config['TRAIN']['EPOCHS'] = 1
+        biapy_config['TRAIN']['PATIENCE'] = 1
         biapy_config['TRAIN']['BATCH_SIZE'] = 6
 
         biapy_config['MODEL']['ARCHITECTURE'] = 'rcan'
-        biapy_config['MODEL']['LOAD_CHECKPOINT'] = False
+        biapy_config['MODEL']['LOAD_CHECKPOINT'] = True
 
         biapy_config['TEST']['ENABLE'] = True
 
+        biapy_config['PATHS'] = {}
+        biapy_config['PATHS']['CHECKPOINT_FILE'] = self_supervision_2d_checkpoint_test14
+         
         # Save file
         test_file = os.path.join(self_supervision_folder, all_test_info["Test14"]["yaml"])
         with open(test_file, 'w') as outfile:
