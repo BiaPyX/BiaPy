@@ -1756,10 +1756,6 @@ class Base_Workflow(metaclass=ABCMeta):
 
                 pred = self.predict_batches_in_test(self.current_sample["X"], self.current_sample["Y"])
 
-                # Delete self.current_sample["X"] as in 3D there is no full image
-                if self.cfg.PROBLEM.NDIM == "3D":
-                    del self.current_sample["X"]
-
                 # Reconstruct the predictions
                 if original_data_shape[1:-1] != self.cfg.DATA.PATCH_SIZE[:-1]:
                     if self.cfg.PROBLEM.NDIM == "3D":
