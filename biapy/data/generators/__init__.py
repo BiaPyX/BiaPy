@@ -246,6 +246,7 @@ def create_train_val_augmentors(
             prob_map=prob_map,
             n_classes=cfg.DATA.N_CLASSES,
             ignore_index=cfg.LOSS.IGNORE_INDEX,
+            extra_data_factor=cfg.DATA.TRAIN.REPLICATE,
             norm_module=norm_module,
             random_crop_scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
             convert_to_rgb=cfg.DATA.FORCE_RGB,

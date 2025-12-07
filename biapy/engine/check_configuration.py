@@ -2177,6 +2177,12 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             raise ValueError("'DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC' not in [0, 100] range")
         if not check_value(cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC, value_range=(0, 100)):
             raise ValueError("'DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC' not in [0, 100] range")
+        
+    if cfg.DATA.TRAIN.REPLICATE:
+        if cfg.PROBLEM.TYPE == "CLASSIFICATION" or (
+            cfg.PROBLEM.TYPE == "SELF_SUPERVISED" and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"
+        ):
+            print("WARNING: 'DATA.TRAIN.REPLICATE' has no effect in the selected workflow")
 
     ### Model ###
     if not model_will_be_read and cfg.MODEL.SOURCE == "biapy":
@@ -3164,8 +3170,6 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict):
                     old_cfg["DATA"]["TRAIN"]["FILTER_SAMPLES"]["PROPS"] = [["foreground"]]
                     old_cfg["DATA"]["TRAIN"]["FILTER_SAMPLES"]["VALUES"] = [[min_fore]]
                     old_cfg["DATA"]["TRAIN"]["FILTER_SAMPLES"]["SIGNS"] = [["lt"]]
-            if "REPLICATE" in old_cfg["DATA"]["TRAIN"]:
-                del old_cfg["DATA"]["TRAIN"]["REPLICATE"]
         if "VAL" in old_cfg["DATA"]:
             if "BINARY_MASKS" in old_cfg["DATA"]["VAL"]:
                 del old_cfg["DATA"]["VAL"]["BINARY_MASKS"]

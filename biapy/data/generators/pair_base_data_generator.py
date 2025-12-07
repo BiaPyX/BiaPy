@@ -301,6 +301,10 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
     ignore_index : int, optional
         Value to ignore in the loss/metrics. 
 
+    extra_data_factor : int, optional
+        Factor to multiply the batches yielded in a epoch. It acts as if ``X`` and ``Y``` where concatenated
+        ``extra_data_factor`` times.
+
     n2v : bool, optional
         Whether to create `Noise2Void <https://openaccess.thecvf.com/content_CVPR_2019/papers/Krull_Noise2Void_-_Learning_Denoising_From_Single_Noisy_Images_CVPR_2019_paper.pdf>`__
         mask. Used in DENOISING problem type.
@@ -431,6 +435,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         val: bool = False,
         n_classes: int = 1,
         ignore_index: Optional[int] = None,
+        extra_data_factor: int = 1,
         n2v: bool = False,
         n2v_perc_pix: float = 0.198,
         n2v_manipulator="uniform_withCP",
@@ -655,6 +660,13 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             self.n2v_structMask = n2v_structMask
             self.n2v_load_gt = n2v_load_gt
             self.apply_structN2Vmask_func = apply_structN2Vmask if self.ndim == 2 else apply_structN2Vmask3D
+
+        if extra_data_factor > 1:
+            self.extra_data_factor = extra_data_factor
+            self.o_indexes = np.concatenate([self.o_indexes] * extra_data_factor)
+            self.length = self.length * extra_data_factor
+        else:
+            self.extra_data_factor = 1
 
         self.da_options = []
         self.trans_made = ""
@@ -1409,6 +1421,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         for i in tqdm(range(num_examples), disable=not is_main_process()):
             if random_images:
                 pos = random.randint(0, self.length - 1) if self.length > 2 else 0
+                pos = pos % self.real_length
             else:
                 pos = i
 
