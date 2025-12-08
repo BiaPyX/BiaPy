@@ -14,7 +14,7 @@ Key components:
 - ``HRBottleneck``: Bottleneck residual block for HRNet.
 
 Reference:  
-`High-Resolution Representations for Labeling Pixels and Regions <https://arxiv.org/pdf/1904.04514>`_
+`Deep high-resolution representation learning for visual recognition <https://ieeexplore.ieee.org/abstract/document/9052469/>`_
 
 Code adapted from:  
 `Exploring Cross-Image Pixel Contrast for Semantic Segmentation <https://github.com/tfzhou/ContrastiveSeg/tree/main>`_
@@ -472,7 +472,7 @@ class HighResolutionNet(nn.Module):
     segmentation, instance segmentation, and object detection, where
     preserving spatial detail is crucial.
 
-    Reference: `High-Resolution Representations for Labeling Pixels and Regions <https://arxiv.org/pdf/1904.04514>`_.
+    Reference: `Deep high-resolution representation learning for visual recognition <https://ieeexplore.ieee.org/abstract/document/9052469/>`_.
 
     Code adapted from: `Exploring Cross-Image Pixel Contrast for Semantic Segmentation <https://github.com/tfzhou/ContrastiveSeg/tree/main>`_.
 
