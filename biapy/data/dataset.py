@@ -252,6 +252,7 @@ class DatasetFile:
         self.scale_range_max_val = scale_range_max_val
         self.mean = mean
         self.std = std
+        self.orig_dtype = ""
         if input_axes is not None:
             self.input_axes = input_axes
         if parallel_data is not None:
@@ -302,6 +303,14 @@ class DatasetFile:
             return self.class_num
         else:
             return -1
+
+    def __iter__(self):
+        """
+        Make the class iterable by yielding key-value pairs of instance variables.
+        """
+        # Iterate over the instance's dictionary of attributes
+        for attr_name, attr_value in self.__dict__.items():
+            yield attr_name, attr_value
 
     def __str__(self):
         """

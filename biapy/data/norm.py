@@ -98,6 +98,7 @@ class Normalization:
             channel_info (Optional[Dict]): Info about each mask channel.
             train_normalization (bool): Apply normalization during training.
             eps (float): Epsilon for numerical stability.
+            orig_dtype: Original data type of the input before normalization.
         """
         assert type in ["div", "scale_range", "zero_mean_unit_variance"]
         assert measure_by in ["image", "patch"]
@@ -113,6 +114,7 @@ class Normalization:
         self.channel_info = channel_info
         self.train_normalization = train_normalization
         self.eps = eps
+        self.orig_dtype = ""
 
         if percentile_clip:
             self.per_lower_bound = per_lower_bound
@@ -144,6 +146,7 @@ class Normalization:
             image (NDArray | torch.Tensor): Input image.
         """
         if self.measure_by == "image":
+            self.orig_dtype = str(image.dtype)
             if self.do_percentile_clipping:
                 if isinstance(image, np.ndarray):
                     self.lower_bound_val = float(np.percentile(image, self.per_lower_bound))
@@ -234,6 +237,7 @@ class Normalization:
             DatasetFile: Updated DatasetFile with normalization stats.
         """
         if self.measure_by == "image":
+            dataset_file.orig_dtype = self.orig_dtype
             if self.do_percentile_clipping:
                 dataset_file.lower_bound_val = self.lower_bound_val
                 dataset_file.upper_bound_val = self.upper_bound_val

@@ -105,8 +105,7 @@ class Pair2DImageDataGenerator(PairBaseDataGenerator):
         # the crop
         if self.random_crops_in_DA and self.prob_map is not None:
             img, mask = self.load_sample(pos)
-            if img.max() < 1:
-                img *= 255
+            img = self.norm_module.undo_image_norm(img, dict(self.X.dataset_info[self.X.sample_list[pos].fid]))
             if mask.max() == 1:
                 mask *= 255
             img, mask = (img).astype(np.uint8), mask.astype(np.uint8)

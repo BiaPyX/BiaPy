@@ -142,7 +142,6 @@ class test_pair_data_generator(Dataset):
             sample_extra_info["img_file_to_close"].close()
         if "mask_file_to_close" in sample_extra_info and isinstance(sample_extra_info["mask_file_to_close"], h5py.File):
             sample_extra_info["mask_file_to_close"].close()
-        self.norm_module.orig_dtype = img.dtype if isinstance(img, np.ndarray) else "Zarr"  # type: ignore
 
         if mask is not None and not test_by_chunks:
             # Store which channels are binary or not (e.g. distance transform channel is not binary)
