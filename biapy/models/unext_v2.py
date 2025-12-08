@@ -34,7 +34,7 @@ import torch
 import torch.nn as nn
 from typing import Dict
 
-from biapy.models.blocks import UpConvNeXtBlock_V2, ConvNeXtBlock_V2
+from biapy.models.blocks import UpConvNeXtBlock_V2, ConvNeXtBlock_V2, prepare_activation_layers
 from torchvision.ops.misc import Permute
 from biapy.models.heads import ProjectionHead
 
@@ -150,14 +150,14 @@ class U_NeXt_V2(nn.Module):
         stem_k_size=2,
         contrast: bool = False,
         contrast_proj_dim: int = 256,
+        explicit_activations: bool = False,
+        activations: list = None,
     ):
         """
         Initialize the U-NeXt_V2 model.
 
-        Sets up the ConvNeXt V2-style encoder (downsampling path), decoder (upsampling path),
-        stem, bottleneck, and optional super-resolution and multi-head output layers.
-        It dynamically selects 2D or 3D convolutional and normalization layers based
-        on `ndim` and `isotropy` settings. Stochastic depth probabilities are
+        Sets up the ConvNeXt V2-style encoder (downsampling path), decoder (upsampling path), stem, bottleneck, and optional super-resolution and multi-head output layers.
+        It dynamically selects 2D or 3D convolutional and normalization layers based on `ndim` and `isotropy` settings. Stochastic depth probabilities are
         progressively increased across layers.
 
         Parameters
@@ -189,7 +189,10 @@ class U_NeXt_V2(nn.Module):
             Whether to add a contrastive learning projection head. Defaults to `False`.
         contrast_proj_dim : int, optional
             Dimension of the contrastive projection head. Defaults to `256`.
-
+        explicit_activations : bool, optional
+            If True, uses explicit activation functions in the last layers.
+        activations : List[List[str]], optional
+            Activation functions to apply to the outputs if `explicit_activations` is True.
         Raises
         ------
         ValueError
@@ -209,6 +212,9 @@ class U_NeXt_V2(nn.Module):
         self.multihead = len(output_channels) == 2
         layer_norm = nn.LayerNorm
         self.contrast = contrast
+        self.explicit_activations = explicit_activations
+        if self.explicit_activations:
+            self.out_activations, self.class_activation = prepare_activation_layers(activations)
 
         # convert isotropy to list if it is a single bool
         if type(isotropy) == bool:
@@ -430,6 +436,15 @@ class U_NeXt_V2(nn.Module):
 
         # Regular output
         out = self.last_block(feats)
+
+        if self.explicit_activations:
+            # If there is only one activation, apply it to the whole tensor
+            if len(self.out_activations) == 1:
+                out = self.out_activations[0](out)
+            else:
+                for i, act in enumerate(self.out_activations):
+                    out[:, i:i+1] = act(out[:, i:i+1])
+
         out_dict = {
             "pred": out,
         }
@@ -442,7 +457,11 @@ class U_NeXt_V2(nn.Module):
         #   Instance segmentation: instances + classification
         #   Detection: points + classification
         if self.multihead and self.last_class_head:
-            out_dict["class"] = self.last_class_head(feats)
+            class_head_out = self.last_class_head(feats)
+            if self.explicit_activations:
+                for i, act in enumerate(self.class_activation):
+                    class_head_out[:, i:i+1] = act(class_head_out[:, i:i+1])
+            out_dict["class"] = class_head_out
 
         if len(out_dict.keys()) == 1:
             return out_dict["pred"]

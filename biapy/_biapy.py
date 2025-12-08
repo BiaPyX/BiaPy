@@ -647,25 +647,10 @@ class BiaPy:
 
         print("Pre-processing: {}".format(preprocessing))
 
-        # Post-processing
-        # if self.cfg.PROBLEM.TYPE in ['SEMANTIC_SEG', 'DETECTION', "SUPER_RESOLUTION", "SELF_SUPERVISED"]:
-        #     postprocessing = [{"name": "binarize", "kwargs": {"threshold": 0.5}}]
+        # Post-processing deactivated as the models now are built with activations when they are exported
+        # so no post-processing is needed
         postprocessing = []
-        if len(self.workflow.bmz_config["postprocessing"]) > 0:
-            postprocessing = []
-            for post in self.workflow.bmz_config["postprocessing"]:
-                if post == "sigmoid":
-                    postprocessing.append(
-                        {
-                            "id": "sigmoid",
-                        }
-                    )
-                    break
-                # TODO: there are no other activation functions implemented in BMZ yet
-        if len(postprocessing) > 0:
-            print("Post-processing: {}".format(postprocessing))
-        else:
-            print("Post-processing: any")
+        print("Post-processing: any")
 
         # Save input/output samples
         os.makedirs(building_dir, exist_ok=True)
@@ -1043,11 +1028,14 @@ class BiaPy:
             print("✅ model.py created with {} components.".format(len(self.workflow.bmz_config["collected_sources"])))
 
             arch_file_sha256 = create_file_sha256sum(arch_file_path)
+            model_kwargs = self.workflow.model_build_kwargs.copy()
+            if "explicit_activations" in model_kwargs:
+                model_kwargs["explicit_activations"] = True
             pytorch_architecture = ArchitectureFromFileDescr(
                 source=Path(arch_file_path),
                 sha256=Sha256(arch_file_sha256),
                 callable=self.workflow.bmz_config["callable_model"],
-                kwargs=self.workflow.model_build_kwargs,
+                kwargs=model_kwargs,
             )
             state_dict_source = Path(self.workflow.checkpoint_path)
             state_dict_sha256 = None

@@ -34,7 +34,7 @@ import torch.nn as nn
 from torchvision.ops.misc import Permute
 from typing import Dict
 
-from biapy.models.blocks import UpConvNeXtBlock_V1, ConvNeXtBlock_V1
+from biapy.models.blocks import UpConvNeXtBlock_V1, ConvNeXtBlock_V1, prepare_activation_layers
 from biapy.models.heads import ProjectionHead
 
 
@@ -130,6 +130,12 @@ class U_NeXt_V1(nn.Module):
         Dimension of the projection head for contrastive learning, if `contrast` is True.
         Defaults to `256`.
 
+    explicit_activations : bool, optional
+        If True, uses explicit activation functions in the last layers.
+    
+    activations : List[List[str]], optional
+        Activation functions to apply to the outputs if `explicit_activations` is True.
+
     Returns
     -------
     model : nn.Module
@@ -152,6 +158,8 @@ class U_NeXt_V1(nn.Module):
         stem_k_size=2,
         contrast: bool = False,
         contrast_proj_dim: int = 256,
+        explicit_activations: bool = False,
+        activations: list = None,
     ):
         """
         Initialize the U-NeXt_V1 model.
@@ -193,6 +201,10 @@ class U_NeXt_V1(nn.Module):
             Whether to add a contrastive learning projection head. Defaults to `False`.
         contrast_proj_dim : int, optional
             Dimension of the contrastive projection head. Defaults to `256`.
+        explicit_activations : bool, optional
+            If True, uses explicit activation functions in the last layers.
+        activations : List[List[str]], optional
+            Activation functions to apply to the outputs if `explicit_activations` is True.
 
         Raises
         ------
@@ -211,6 +223,9 @@ class U_NeXt_V1(nn.Module):
         self.z_down = z_down
         self.output_channels = output_channels
         self.multihead = len(output_channels) == 2
+        self.explicit_activations = explicit_activations
+        if self.explicit_activations:
+            self.out_activations, self.class_activation = prepare_activation_layers(activations)
         layer_norm = nn.LayerNorm
         self.contrast = contrast
         # convert isotropy to list if it is a single bool
@@ -440,6 +455,15 @@ class U_NeXt_V1(nn.Module):
 
         # Regular output
         out = self.last_block(feats)
+
+        if self.explicit_activations:
+            # If there is only one activation, apply it to the whole tensor
+            if len(self.out_activations) == 1:
+                out = self.out_activations[0](out)
+            else:
+                for i, act in enumerate(self.out_activations):
+                    out[:, i:i+1] = act(out[:, i:i+1])
+
         out_dict = {
             "pred": out,
         }
@@ -452,7 +476,11 @@ class U_NeXt_V1(nn.Module):
         #   Instance segmentation: instances + classification
         #   Detection: points + classification
         if self.multihead and self.last_class_head:
-            out_dict["class"] = self.last_class_head(feats)
+            class_head_out = self.last_class_head(feats)
+            if self.explicit_activations:
+                for i, act in enumerate(self.class_activation):
+                    class_head_out[:, i:i+1] = act(class_head_out[:, i:i+1])
+            out_dict["class"] = class_head_out
 
         if len(out_dict.keys()) == 1:
             return out_dict["pred"]

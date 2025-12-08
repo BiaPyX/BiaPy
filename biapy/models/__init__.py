@@ -37,7 +37,7 @@ from bioimageio.spec.model.v0_5 import ModelDescr as ModelDescr_v0_5
 
 
 def build_model(
-    cfg: CN, output_channels: int, device: torch.device
+    cfg: CN, output_channels: int, activations: List[str], device: torch.device
 ) -> Tuple[nn.Module, str, Dict, set, List[str], Dict, Tuple[int, ...]]:
     # model, model_file, model_name, args
     """
@@ -102,6 +102,8 @@ def build_model(
             output_channels=output_channels,
             contrast=cfg.LOSS.CONTRAST.ENABLE,
             contrast_proj_dim=cfg.LOSS.CONTRAST.PROJ_DIM,
+            activations=activations,
+            explicit_activations=False,
         )
         if modelname == "unet":
             callable_model = U_Net  # type: ignore
@@ -121,7 +123,7 @@ def build_model(
             callable_model = ResUNet_SE  # type: ignore
             args["isotropy"] = cfg.MODEL.ISOTROPY
             args["larger_io"] = cfg.MODEL.LARGER_IO
-        elif modelname == "unext_v1":
+        elif modelname in ["unext_v1", "unext_v2"]:
             args = dict(
                 image_shape=cfg.DATA.PATCH_SIZE,
                 feature_maps=cfg.MODEL.FEATURE_MAPS,
@@ -133,21 +135,16 @@ def build_model(
                 isotropy=cfg.MODEL.ISOTROPY,
                 stem_k_size=cfg.MODEL.CONVNEXT_STEM_K_SIZE,
                 output_channels=output_channels,
+                contrast=cfg.LOSS.CONTRAST.ENABLE,
+                contrast_proj_dim=cfg.LOSS.CONTRAST.PROJ_DIM,
+                activations=activations,
+                explicit_activations=False,
             )
-            callable_model = U_NeXt_V1  # type: ignore
-        elif modelname == "unext_v2":
-            args = dict(
-                image_shape=cfg.DATA.PATCH_SIZE,
-                feature_maps=cfg.MODEL.FEATURE_MAPS,
-                upsample_layer=cfg.MODEL.UPSAMPLE_LAYER,
-                z_down=cfg.MODEL.Z_DOWN,
-                cn_layers=cfg.MODEL.CONVNEXT_LAYERS,
-                stochastic_depth_prob=cfg.MODEL.CONVNEXT_SD_PROB,
-                isotropy=cfg.MODEL.ISOTROPY,
-                stem_k_size=cfg.MODEL.CONVNEXT_STEM_K_SIZE,
-                output_channels=output_channels,
-            )
-            callable_model = U_NeXt_V2  # type: ignore
+            if modelname == "unext_v1":
+                callable_model = U_NeXt_V1  # type: ignore
+            else:
+                callable_model = U_NeXt_V2  # type: ignore
+                del args["layer_scale"]
 
         if cfg.PROBLEM.TYPE == "SUPER_RESOLUTION":
             args["upsampling_factor"] = cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING
@@ -166,6 +163,8 @@ def build_model(
             contrast=cfg.LOSS.CONTRAST.ENABLE,
             contrast_proj_dim=cfg.LOSS.CONTRAST.PROJ_DIM,
             head_type=cfg.MODEL.HRNET.HEAD_TYPE,
+            activations=activations,
+            explicit_activations=False,
         )
 
         if cfg.MODEL.HRNET.CUSTOM:
@@ -275,6 +274,10 @@ def build_model(
                 normalization=cfg.MODEL.NORMALIZATION,
                 dropout=cfg.MODEL.DROPOUT_VALUES[0],
                 k_size=cfg.MODEL.UNETR_DEC_KERNEL_SIZE,
+                contrast=cfg.LOSS.CONTRAST.ENABLE,
+                contrast_proj_dim=cfg.LOSS.CONTRAST.PROJ_DIM,
+                activations=activations,
+                explicit_activations=False,
             )
             model = UNETR(**args)  # type: ignore
             callable_model = UNETR  # type: ignore

@@ -29,7 +29,8 @@ from biapy.models.blocks import (
     SqExBlock,
     ResUNetPlusPlus_AttentionBlock,
     get_norm_2d, 
-    get_norm_3d
+    get_norm_3d,
+    prepare_activation_layers
 )
 from biapy.models.heads import ASPP, ProjectionHead
 
@@ -81,27 +82,11 @@ class ResUNetPlusPlus(nn.Module):
     contrast_proj_dim : int
         Dimensionality of the projection head for contrastive learning.
 
-    Attributes
-    ----------
-    encoder : nn.ModuleList
-        Encoder layers with residual connections and SE blocks.
-
-    decoder : nn.ModuleList
-        Decoder layers with residual upsampling.
-
-    aspp : ASPP
-        Atrous Spatial Pyramid Pooling module used at bottleneck.
-
-    final_conv : nn.Module
-        Final convolution layers for segmentation and optional classification output.
-
-    contrast_head : nn.Module, optional
-        Optional projection head for contrastive learning.
-
-    Example
-    -------
-    >>> model = ResUNetPlusPlus(image_shape=(128, 128, 1))
-    >>> output = model(torch.rand(1, 1, 128, 128))
+    explicit_activations : bool, optional
+        If True, uses explicit activation functions in the last layers. 
+    
+    activations : List[List[str]], optional
+        Activation functions to apply to the outputs if `explicit_activations` is True.
     """
 
     def __init__(
@@ -119,6 +104,8 @@ class ResUNetPlusPlus(nn.Module):
         upsampling_position="pre",
         contrast: bool = False,
         contrast_proj_dim: int = 256,
+        explicit_activations: bool = False,
+        activations: List[List[str]] = [],
     ):
         """
         Create 2D/3D ResUNet++.
@@ -171,6 +158,12 @@ class ResUNetPlusPlus(nn.Module):
         contrast_proj_dim : int, optional
             Dimension of the projection head for contrastive learning. Default is ``256``.
 
+        explicit_activations : bool, optional
+            If True, uses explicit activation functions in the last layers. Default is ``False``.
+
+        activations : List[List[str]], optional
+            Activation functions to apply to the outputs if `explicit_activations` is True.
+
         Returns
         -------
         model : Torch model
@@ -198,6 +191,9 @@ class ResUNetPlusPlus(nn.Module):
         self.output_channels = output_channels
         self.multihead = len(output_channels) == 2
         self.contrast = contrast
+        self.explicit_activations = explicit_activations
+        if self.explicit_activations:
+            self.out_activations, self.class_activation = prepare_activation_layers(activations)
         if self.ndim == 3:
             conv = nn.Conv3d
             convtranspose = nn.ConvTranspose3d
@@ -392,6 +388,15 @@ class ResUNetPlusPlus(nn.Module):
 
         # Regular output
         out = self.last_block(feats)
+
+        if self.explicit_activations:
+            # If there is only one activation, apply it to the whole tensor
+            if len(self.out_activations) == 1:
+                out = self.out_activations[0](out)
+            else:
+                for i, act in enumerate(self.out_activations):
+                    out[:, i:i+1] = act(out[:, i:i+1])
+
         out_dict = {
             "pred": out,
         }
@@ -404,7 +409,11 @@ class ResUNetPlusPlus(nn.Module):
         #   Instance segmentation: instances + classification
         #   Detection: points + classification
         if self.multihead and self.last_class_head:
-            out_dict["class"] = self.last_class_head(feats)
+            class_head_out = self.last_class_head(feats)
+            if self.explicit_activations:
+                for i, act in enumerate(self.class_activation):
+                    class_head_out[:, i:i+1] = act(class_head_out[:, i:i+1])
+            out_dict["class"] = class_head_out
 
         if len(out_dict.keys()) == 1:
             return out_dict["pred"]

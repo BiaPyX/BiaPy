@@ -19,7 +19,7 @@ import torch
 import torch.nn as nn
 from torchvision.ops.stochastic_depth import StochasticDepth
 from torchvision.ops.misc import Permute
-from typing import Optional, Type
+from typing import Optional, Type, List, Tuple
 
 
 class ConvBlock(nn.Module):
@@ -1801,6 +1801,40 @@ def get_activation(activation: str = "relu") -> nn.Module:
     }
     return activation_dict[activation]
 
+def prepare_activation_layers(activations: List[List[str]]) -> Tuple[nn.ModuleList, Optional[nn.ModuleList]]:
+    """ 
+    Prepare activation layers for the output and classification heads.
+    
+    Parameters
+    ----------
+    activations : List[List[str]]
+        A list containing two lists of activation function names. The first list corresponds to the output head,
+        and the second list corresponds to the classification head.
+
+    Returns
+    -------
+    out_activations : nn.ModuleList
+        A ModuleList containing the activation layers for the output head.
+    class_activation : nn.ModuleList or None
+        A ModuleList containing the activation layers for the classification head, or None if not provided.
+    """
+    activation_list = []
+    for out_list in activations:
+        activation_list.append([])
+        for activation in out_list:
+            if activation == "ce_softmax":
+                activation = "softmax"
+                act = get_activation(activation.lower())
+                activation_list[-1].append(act)
+                break
+            else:
+                activation = "sigmoid" if activation == "ce_sigmoid" else activation
+                act = get_activation(activation.lower())
+                activation_list[-1].append(act)
+            
+    out_activations = nn.ModuleList(activation_list[0])
+    class_activation = nn.ModuleList(activation_list[1]) if len(activation_list) > 1 else None
+    return out_activations, class_activation   
 
 def get_norm_3d(norm: str, out_channels: int, bn_momentum: float = 0.1) -> nn.Module:
     """

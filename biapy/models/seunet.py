@@ -35,7 +35,7 @@ import torch
 import torch.nn as nn
 from typing import Dict
 
-from biapy.models.blocks import DoubleConvBlock, UpBlock, ConvBlock, get_norm_2d, get_norm_3d
+from biapy.models.blocks import DoubleConvBlock, UpBlock, ConvBlock, get_norm_2d, get_norm_3d, prepare_activation_layers
 from biapy.models.heads import ProjectionHead
 
 
@@ -43,10 +43,8 @@ class SE_U_Net(nn.Module):
     """
     Create 2D/3D U-Net with Squeeze-and-Excitation (SE) blocks.
 
-    This model extends the classic U-Net architecture by incorporating
-    Squeeze-and-Excitation (SE) modules within its convolutional blocks.
-    This design aims to improve feature learning and propagation by allowing
-    the network to perform dynamic channel-wise feature recalibration,
+    This model extends the classic U-Net architecture by incorporating Squeeze-and-Excitation (SE) modules within its convolutional blocks.
+    This design aims to improve feature learning and propagation by allowing the network to perform dynamic channel-wise feature recalibration,
     leading to better performance in dense prediction tasks like image segmentation.
 
     Reference: `Squeeze and Excitation Networks <https://openaccess.thecvf.com/content_cvpr_2018/html/Hu_Squeeze-and-Excitation_Networks_CVPR_2018_paper.html>`_.
@@ -138,6 +136,12 @@ class SE_U_Net(nn.Module):
         Dimension of the projection head for contrastive learning, if `contrast` is True.
         Defaults to `256`.
 
+    explicit_activations : bool, optional
+        If True, uses explicit activation functions in the last layers.
+    
+    activations : List[List[str]], optional
+        Activation functions to apply to the outputs if `explicit_activations` is True.
+
     Returns
     -------
     model : nn.Module
@@ -169,6 +173,8 @@ class SE_U_Net(nn.Module):
         larger_io=True,
         contrast: bool = False,
         contrast_proj_dim: int = 256,
+        explicit_activations: bool = False,
+        activations: List[List[str]] = [],
     ):
         """
         Initialize the SE_U_Net model.
@@ -228,6 +234,10 @@ class SE_U_Net(nn.Module):
         contrast_proj_dim : int, optional
             Output dimension of the contrastive projection head, if `contrast` is True.
             Defaults to `256`.
+        explicit_activations : bool, optional
+            If True, uses explicit activation functions in the last layers.
+        activations : List[List[str]], optional
+            Activation functions to apply to the outputs if `explicit_activations` is True.
 
         Raises
         ------
@@ -247,6 +257,9 @@ class SE_U_Net(nn.Module):
         self.output_channels = output_channels
         self.multihead = len(output_channels) == 2
         self.contrast = contrast
+        self.explicit_activations = explicit_activations
+        if self.explicit_activations:
+            self.out_activations, self.class_activation = prepare_activation_layers(activations)
         if type(isotropy) == bool:
             isotropy = isotropy * len(feature_maps)
         if self.ndim == 3:
@@ -462,6 +475,15 @@ class SE_U_Net(nn.Module):
 
         # Regular output
         out = self.last_block(feats)
+
+        if self.explicit_activations:
+            # If there is only one activation, apply it to the whole tensor
+            if len(self.out_activations) == 1:
+                out = self.out_activations[0](out)
+            else:
+                for i, act in enumerate(self.out_activations):
+                    out[:, i:i+1] = act(out[:, i:i+1])
+
         out_dict = {
             "pred": out,
         }
@@ -474,7 +496,12 @@ class SE_U_Net(nn.Module):
         #   Instance segmentation: instances + classification
         #   Detection: points + classification
         if self.multihead and self.last_class_head:
-            out_dict["class"] = self.last_class_head(feats)
+            class_head_out = self.last_class_head(feats)
+            if self.explicit_activations:
+                for i, act in enumerate(self.class_activation):
+                    class_head_out[:, i:i+1] = act(class_head_out[:, i:i+1])
+            out_dict["class"] = class_head_out
+
 
         if len(out_dict.keys()) == 1:
             return out_dict["pred"]

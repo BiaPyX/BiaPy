@@ -27,7 +27,7 @@ import torch.nn as nn
 from timm.models.vision_transformer import Block
 from typing import Dict
 
-from biapy.models.blocks import DoubleConvBlock, ConvBlock,  get_norm_2d,  get_norm_3d
+from biapy.models.blocks import DoubleConvBlock, ConvBlock,  get_norm_2d,  get_norm_3d, prepare_activation_layers
 from biapy.models.tr_layers import PatchEmbed
 from biapy.models.heads import ProjectionHead
 
@@ -115,6 +115,12 @@ class UNETR(nn.Module):
         Dimension of the projection head for contrastive learning, if `contrast` is True.
         Defaults to `256`.
 
+    explicit_activations : bool, optional
+        If True, uses explicit activation functions in the last layers.
+    
+    activations : List[List[str]], optional
+        Activation functions to apply to the outputs if `explicit_activations` is True.
+
     Returns
     -------
     model : nn.Module
@@ -139,6 +145,8 @@ class UNETR(nn.Module):
         k_size=3,
         contrast: bool = False,
         contrast_proj_dim: int = 256,
+        explicit_activations: bool = False,
+        activations: list = None,
     ):
         """
         Initialize the UNETR model.
@@ -209,6 +217,9 @@ class UNETR(nn.Module):
         self.multihead = len(output_channels) == 2
         self.k_size = k_size
         self.contrast = contrast
+        self.explicit_activations = explicit_activations
+        if self.explicit_activations:
+            self.out_activations, self.class_activation = prepare_activation_layers(activations)
         if self.ndim == 3:
             conv = nn.Conv3d
             convtranspose = nn.ConvTranspose3d
@@ -473,6 +484,15 @@ class UNETR(nn.Module):
 
         # Primary output (e.g., segmentation mask)
         out = self.last_block(feats)
+
+        if self.explicit_activations:
+            # If there is only one activation, apply it to the whole tensor
+            if len(self.out_activations) == 1:
+                out = self.out_activations[0](out)
+            else:
+                for i, act in enumerate(self.out_activations):
+                    out[:, i:i+1] = act(out[:, i:i+1])
+
         out_dict = {
             "pred": out,
         }
@@ -485,7 +505,11 @@ class UNETR(nn.Module):
         #   Instance segmentation: instances + classification
         #   Detection: points + classification
         if self.multihead and self.last_class_head:
-            out_dict["class"] = self.last_class_head(feats)
+            class_head_out = self.last_class_head(feats)
+            if self.explicit_activations:
+                for i, act in enumerate(self.class_activation):
+                    class_head_out[:, i:i+1] = act(class_head_out[:, i:i+1])
+            out_dict["class"] = class_head_out
 
         # Return format based on whether multiple outputs are generated
         if len(out_dict.keys()) == 1:

@@ -33,49 +33,11 @@ from biapy.models.blocks import (
     get_norm_2d, 
     ConvNeXtBlock_V2,
     ConvNeXtBlock_V1,
+    prepare_activation_layers
 )
 from biapy.models.heads import ASPP, ProjectionHead, PSP, OCRHead
 
 class HighResolutionModule(nn.Module):
-    """
-    Implements the High Resolution Module for HRNet.
-
-    This module is a core building block of the HRNet architecture. It consists
-    of multiple parallel convolutional branches at different resolutions, along
-    with fusion layers that enable rich information exchange across these
-    branches. This design helps maintain high-resolution representations
-    throughout the network.
-
-    Pararameters
-    ------------
-    ndim : int
-        Number of dimensions of the input data (2 for 2D, 3 for 3D).
-
-    num_branches : int
-        Number of branches in the module.
-
-    blocks : Type[HRBasicBlock | HRBottleneck]
-        Type of block to use in the module (either HRBasicBlock or HRBottleneck).
-
-    num_blocks : List[int]
-        Number of blocks in each branch.
-
-    num_inchannels : List[int]
-        Number of input channels for each branch.
-
-    num_channels : List[int]
-        Number of output channels for each branch.
-
-    multi_scale_output : bool
-        Whether to output features at multiple scales or not.
-
-    norm : str
-        Normalization layer to use (one of 'bn', 'sync_bn', 'in', 'gn', or 'none').
-
-    mpool : Tuple[int, ...]
-        Downsampling factor for the pooling operation. Used to downsample the features.
-    """
-
     def __init__(
         self,
         ndim: int,
@@ -461,61 +423,6 @@ class HighResolutionModule(nn.Module):
         return x_fuse
 
 class HighResolutionNet(nn.Module):
-    """
-    Implements a 2D/3D High-Resolution Net (HRNet) model.
-
-    HRNet is a convolutional neural network architecture designed to maintain
-    high-resolution representations throughout the network. It achieves this
-    by employing parallel high-to-low resolution convolution streams and
-    repeatedly exchanging information across these streams. This design
-    is particularly effective for dense prediction tasks like semantic
-    segmentation, instance segmentation, and object detection, where
-    preserving spatial detail is crucial.
-
-    Reference: `Deep high-resolution representation learning for visual recognition <https://ieeexplore.ieee.org/abstract/document/9052469/>`_.
-
-    Code adapted from: `Exploring Cross-Image Pixel Contrast for Semantic Segmentation <https://github.com/tfzhou/ContrastiveSeg/tree/main>`_.
-
-    Parameters
-    ----------
-    cfg : Dict
-        HRNet configuration dictionary. Expected keys define the network structure:
-        * ``NUM_MODULES`` (int): Number of modules within each stage.
-        * ``NUM_BRANCHES`` (int): Number of parallel branches (resolution streams) in a stage.
-        * ``NUM_BLOCKS`` (List[int]): List specifying the number of blocks per branch.
-        * ``NUM_CHANNELS`` (List[int]): List specifying the number of channels for each branch.
-        * ``BLOCK`` (str): Type of building block, e.g., 'BASIC' for `HRBasicBlock` or 'BOTTLENECK' for `HRBottleneck`.
-        * ``Z_DOWN`` (bool): For 3D HRNet, whether to downsample the z-axis (True) or keep its original resolution (False).
-
-    image_shape : Tuple[int, ...]
-        Dimensions of the input image. E.g., `(y, x, channels)` for 2D or `(z, y, x, channels)` for 3D.
-        The last element `image_shape[-1]` should be the number of input channels.
-
-    normalization : str, optional
-        Type of normalization layer to use throughout the network. Options include
-        `'bn'` (Batch Normalization), `'sync_bn'` (Synchronized Batch Normalization for multi-GPU),
-        `'in'` (Instance Normalization), `'gn'` (Group Normalization), or `'none'`.
-        Defaults to "none".
-
-    output_channels : List[int], optional
-        Specifies the number of output channels for the final prediction head(s).
-        Must be a list of length 1 for a single output task (e.g., semantic segmentation)
-        or length 2 for multi-head tasks (e.g., instances + classification in instance segmentation,
-        or points + classification in detection). Defaults to `[1]`.
-
-    contrast : bool, optional
-        If True, an additional projection head (`ProjectionHead`) is created to generate
-        an embedding suitable for contrastive learning. Defaults to False.
-
-    contrast_proj_dim : int, optional
-        The output dimension of the projection embedding when `contrast` is True. Defaults to 256.
-
-    Returns
-    -------
-    model : nn.Module
-        The constructed HRNet model.
-    """
-
     def __init__(
         self,
         cfg: Dict,
@@ -525,40 +432,71 @@ class HighResolutionNet(nn.Module):
         contrast: bool = False,
         contrast_proj_dim: int = 256,
         head_type: str = "FCN",
+        explicit_activations: bool = False,
+        activations: List[List[str]] = [],
     ):
         """
-        Initialize the HighResolutionNet model.
+        Implements a 2D/3D High-Resolution Net (HRNet) model.
 
-        Configures the HRNet architecture based on the provided parameters,
-        setting up convolutional layers, normalization types, and the
-        multi-resolution stages. It also prepares for optional contrastive
-        learning and multi-head outputs.
+        HRNet is a convolutional neural network architecture designed to maintain high-resolution representations throughout the network. It achieves this
+        by employing parallel high-to-low resolution convolution streams and repeatedly exchanging information across these streams. This design
+        is particularly effective for dense prediction tasks like semantic segmentation, instance segmentation, and object detection, where
+        preserving spatial detail is crucial.
+
+        Reference: `Deep high-resolution representation learning for visual recognition <https://ieeexplore.ieee.org/abstract/document/9052469/>`_.
+
+        Code adapted from: `Exploring Cross-Image Pixel Contrast for Semantic Segmentation <https://github.com/tfzhou/ContrastiveSeg/tree/main>`_. 
 
         Parameters
         ----------
         cfg : Dict
-            HRNet configuration dictionary, detailing module, branch, block, and channel counts,
-            block type, and z-axis downsampling for 3D.
-        image_shape : Tuple[int, ...], optional
-            Input image dimensions, used to determine 2D/3D mode and input channels.
-            Defaults to (256, 256, 1).
-        normalization : str, optional
-            Type of normalization layer (e.g., 'bn', 'sync_bn', 'none'). Defaults to "none".
-        output_channels : List[int], optional
-            Number of channels for the output head(s). Supports one or two outputs.
-            Defaults to [1].
-        contrast : bool, optional
-            If True, enables a projection head for contrastive learning. Defaults to False.
-        contrast_proj_dim : int, optional
-            Output dimension for the contrastive projection head. Defaults to 256.
-        head_type : str, optional
-            Type of head to use in the module. Options: "FCN", "ASPP" and "PSP". Defaults to "FCN".
+            HRNet configuration dictionary. Expected keys define the network structure:
+            * ``NUM_MODULES`` (int): Number of modules within each stage.
+            * ``NUM_BRANCHES`` (int): Number of parallel branches (resolution streams) in a stage.
+            * ``NUM_BLOCKS`` (List[int]): List specifying the number of blocks per branch.
+            * ``NUM_CHANNELS`` (List[int]): List specifying the number of channels for each branch.
+            * ``BLOCK`` (str): Type of building block, e.g., 'BASIC' for `HRBasicBlock` or 'BOTTLENECK' for `HRBottleneck`.
+            * ``Z_DOWN`` (bool): For 3D HRNet, whether to downsample the z-axis (True) or keep its original resolution (False).
 
-        Raises
-        ------
-        ValueError
-            If 'output_channels' is empty or has more than two values.
+        image_shape : Tuple[int, ...]
+            Dimensions of the input image. E.g., `(y, x, channels)` for 2D or `(z, y, x, channels)` for 3D.
+            The last element `image_shape[-1]` should be the number of input channels.
+
+        normalization : str, optional
+            Type of normalization layer to use throughout the network. Options include
+            `'bn'` (Batch Normalization), `'sync_bn'` (Synchronized Batch Normalization for multi-GPU),
+            `'in'` (Instance Normalization), `'gn'` (Group Normalization), or `'none'`.
+            Defaults to "none".
+
+        output_channels : List[int], optional
+            Specifies the number of output channels for the final prediction head(s).
+            Must be a list of length 1 for a single output task (e.g., semantic segmentation)
+            or length 2 for multi-head tasks (e.g., instances + classification in instance segmentation,
+            or points + classification in detection). Defaults to `[1]`.
+
+        contrast : bool, optional
+            If True, an additional projection head (`ProjectionHead`) is created to generate
+            an embedding suitable for contrastive learning. Defaults to False.
+
+        contrast_proj_dim : int, optional
+            The output dimension of the projection embedding when `contrast` is True. Defaults to 256.
+
+        head_type : str, optional
+            Type of head to use in the module. Options are: "OCR", "FCN", "ASPP" and "PSP".
+
+        explicit_activations : bool, optional
+            If True, uses explicit activation functions in the last layers.
+        
+        activations : List[List[str]], optional
+            Activation functions to apply to the outputs if `explicit_activations` is True.
+
+        Returns
+        -------
+        model : nn.Module
+            The constructed HRNet model.
         """
+        super(HighResolutionNet, self).__init__()
+
         if len(output_channels) == 0:
             raise ValueError("'output_channels' needs to has at least one value")
         if len(output_channels) != 1 and len(output_channels) != 2:
@@ -577,6 +515,9 @@ class HighResolutionNet(nn.Module):
         self.contrast = contrast
         self.z_down = cfg["Z_DOWN"]
         self.head_type = head_type
+        self.explicit_activations = explicit_activations
+        if self.explicit_activations:
+            self.out_activations, self.class_activation = prepare_activation_layers(activations)
 
         if self.ndim == 3:
             self.conv_call = nn.Conv3d
@@ -591,7 +532,6 @@ class HighResolutionNet(nn.Module):
 
         in_channels = image_shape[-1]
 
-        super(HighResolutionNet, self).__init__()
         self.conv1_block = ConvBlock(
             conv=self.conv_call,
             in_size=in_channels,
@@ -1005,6 +945,15 @@ class HighResolutionNet(nn.Module):
         feats = torch.cat([feat1, feat2, feat3, feat4], 1)
         out = self.last_block(feats)
         out = self.upsample_logits(out)
+
+        if self.explicit_activations:
+            # If there is only one activation, apply it to the whole tensor
+            if len(self.out_activations) == 1:
+                out = self.out_activations[0](out)
+            else:
+                for i, act in enumerate(self.out_activations):
+                    out[:, i:i+1] = act(out[:, i:i+1])
+
         out_dict = {
             "pred": out,
         }
@@ -1012,8 +961,14 @@ class HighResolutionNet(nn.Module):
             emb = self.proj_head(feats)
             out_dict["embed"] = emb
 
+        # Multi-head output
+        #   Instance segmentation: instances + classification
+        #   Detection: points + classification
         if self.multihead and self.last_class_head:
             class_head_out = self.last_class_head(feats)
+            if self.explicit_activations:
+                for i, act in enumerate(self.class_activation):
+                    class_head_out[:, i:i+1] = act(class_head_out[:, i:i+1])
             out_dict["class"] = class_head_out
 
         if len(out_dict.keys()) == 1:

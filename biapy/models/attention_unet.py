@@ -18,7 +18,7 @@ Classes:
 import torch
 import torch.nn as nn
 
-from biapy.models.blocks import DoubleConvBlock, UpBlock, get_norm_2d, get_norm_3d
+from biapy.models.blocks import DoubleConvBlock, UpBlock, get_norm_2d, get_norm_3d, prepare_activation_layers
 from typing import Dict
 from biapy.models.heads import ProjectionHead
 
@@ -49,6 +49,9 @@ class Attention_U_Net(nn.Module):
         last_class_head (nn.Module, optional): Classification head for multi-head setup
         pre_upsampling (nn.Module, optional): Pre-processing upsampling layer
         post_upsampling (nn.Module, optional): Post-processing upsampling layer
+        explicit_activations (bool): Whether to use explicit activation functions
+        out_activations (list): Activation functions for output channels
+        class_activation (list): Activation functions for classification head
     """
 
     def __init__(
@@ -66,6 +69,8 @@ class Attention_U_Net(nn.Module):
         upsampling_position="pre",
         contrast: bool = False,
         contrast_proj_dim: int = 256,
+        explicit_activations: bool = False,
+        activations: List[List[str]] = [],
     ):
         """
         Create 2D/3D U-Net with Attention blocks.
@@ -118,6 +123,12 @@ class Attention_U_Net(nn.Module):
         contrast_proj_dim : int, optional
             Dimension of the projection head for contrastive learning. Default is ``256``.
 
+        explicit_activations : bool, optional
+            If True, uses explicit activation functions in the last layers.
+        
+        activations : List[List[str]], optional
+            Activation functions to apply to the outputs if `explicit_activations` is True.
+
         Returns
         -------
         model : Torch model
@@ -153,6 +164,9 @@ class Attention_U_Net(nn.Module):
         self.output_channels = output_channels
         self.multihead = len(output_channels) == 2
         self.contrast = contrast
+        self.explicit_activations = explicit_activations
+        if self.explicit_activations:
+            self.out_activations, self.class_activation = prepare_activation_layers(activations)
         if self.ndim == 3:
             conv = nn.Conv3d
             convtranspose = nn.ConvTranspose3d
@@ -321,6 +335,15 @@ class Attention_U_Net(nn.Module):
 
         # Regular output
         out = self.last_block(feats)
+
+        if self.explicit_activations:
+            # If there is only one activation, apply it to the whole tensor
+            if len(self.out_activations) == 1:
+                out = self.out_activations[0](out)
+            else:
+                for i, act in enumerate(self.out_activations):
+                    out[:, i:i+1] = act(out[:, i:i+1])
+
         out_dict = {
             "pred": out,
         }
@@ -333,7 +356,11 @@ class Attention_U_Net(nn.Module):
         #   Instance segmentation: instances + classification
         #   Detection: points + classification
         if self.multihead and self.last_class_head:
-            out_dict["class"] = self.last_class_head(feats)
+            class_head_out = self.last_class_head(feats)
+            if self.explicit_activations:
+                for i, act in enumerate(self.class_activation):
+                    class_head_out[:, i:i+1] = act(class_head_out[:, i:i+1])
+            out_dict["class"] = class_head_out
 
         if len(out_dict.keys()) == 1:
             return out_dict["pred"]

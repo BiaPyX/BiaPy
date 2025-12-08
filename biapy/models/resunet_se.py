@@ -37,7 +37,8 @@ from biapy.models.blocks import (
     ResUpBlock,
     ConvBlock,
     get_norm_2d, 
-    get_norm_3d
+    get_norm_3d,
+    prepare_activation_layers
 )
 from biapy.models.heads import ProjectionHead
 
@@ -146,6 +147,12 @@ class ResUNet_SE(nn.Module):
         Dimension of the projection head for contrastive learning, if `contrast` is True.
         Defaults to `256`.
 
+    explicit_activations : bool, optional
+        If True, uses explicit activation functions in the last layers.
+
+    activations : List[List[str]], optional
+        Activation functions to apply to the outputs if `explicit_activations` is True.
+
     Returns
     -------
     model : nn.Module
@@ -178,6 +185,8 @@ class ResUNet_SE(nn.Module):
         extra_conv=True,
         contrast: bool = False,
         contrast_proj_dim: int = 256,
+        explicit_activations: bool = False,
+        activations: List[List[str]] = [],
     ):
         """
         Initialize the ResUNet_SE model.
@@ -222,6 +231,10 @@ class ResUNet_SE(nn.Module):
             Whether to add a contrastive learning projection head. Defaults to `False`.
         contrast_proj_dim : int, optional
             Dimension of the contrastive projection head. Defaults to `256`.
+        explicit_activations : bool, optional
+            If True, uses explicit activation functions in the last layers.
+        activations : List[List[str]], optional
+            Activation functions to apply to the outputs if `explicit_activations` is True.
 
         Raises
         ------
@@ -241,6 +254,9 @@ class ResUNet_SE(nn.Module):
         self.output_channels = output_channels
         self.multihead = len(output_channels) == 2
         self.contrast = contrast
+        self.explicit_activations = explicit_activations
+        if self.explicit_activations:
+            self.out_activations, self.class_activation = prepare_activation_layers(activations)
         if type(isotropy) == bool:
             isotropy = isotropy * len(feature_maps)
         if self.ndim == 3:
@@ -462,6 +478,15 @@ class ResUNet_SE(nn.Module):
 
         # Regular output
         out = self.last_block(feats)
+        
+        if self.explicit_activations:
+            # If there is only one activation, apply it to the whole tensor
+            if len(self.out_activations) == 1:
+                out = self.out_activations[0](out)
+            else:
+                for i, act in enumerate(self.out_activations):
+                    out[:, i:i+1] = act(out[:, i:i+1])
+
         out_dict = {
             "pred": out,
         }
@@ -474,7 +499,11 @@ class ResUNet_SE(nn.Module):
         #   Instance segmentation: instances + classification
         #   Detection: points + classification
         if self.multihead and self.last_class_head:
-            out_dict["class"] = self.last_class_head(feats)
+            class_head_out = self.last_class_head(feats)
+            if self.explicit_activations:
+                for i, act in enumerate(self.class_activation):
+                    class_head_out[:, i:i+1] = act(class_head_out[:, i:i+1])
+            out_dict["class"] = class_head_out
 
         if len(out_dict.keys()) == 1:
             return out_dict["pred"]
