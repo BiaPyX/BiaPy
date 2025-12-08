@@ -3146,7 +3146,7 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict):
                     del old_cfg["PROBLEM"]["INSTANCE_SEG"]["SYNAPSES"]["NORMALIZE_DISTANCES"]
 
     if "DATA" in old_cfg:
-        if "EXTRACT_RANDOM_PATCH" not in old_cfg["DATA"]:   
+        if "EXTRACT_RANDOM_PATCH" in old_cfg["DATA"]:   
             del old_cfg["DATA"]["EXTRACT_RANDOM_PATCH"]
         if "PROBABILITY_MAP" in old_cfg["DATA"]:
             del old_cfg["DATA"]["PROBABILITY_MAP"]
