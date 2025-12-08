@@ -178,7 +178,7 @@ def build_model(
             elif modelname == "hrnet32":
                 num_channels = 32
             elif modelname == "hrnet18":
-                num_channels = 32
+                num_channels = 18
             args["cfg"] = {
                 'Z_DOWN': cfg.MODEL.HRNET.Z_DOWN, 
                 'STAGE2': {
