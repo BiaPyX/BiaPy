@@ -1800,11 +1800,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     "'DATA.VAL.FILTER_SAMPLES.ENABLE' can not be enabled when 'PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER' is enabled too"
                 )
 
-    if cfg.DATA.EXTRACT_RANDOM_PATCH and cfg.DATA.PROBABILITY_MAP:
-        if cfg.DATA.W_FOREGROUND + cfg.DATA.W_BACKGROUND != 1:
-            raise ValueError(
-                "cfg.DATA.W_FOREGROUND+cfg.DATA.W_BACKGROUND need to sum 1. E.g. 0.94 and 0.06 respectively."
-            )
     if cfg.DATA.VAL.FROM_TRAIN and cfg.DATA.PREPROCESS.VAL:
         print(
             "WARNING: validation preprocessing will be done based on 'DATA.PREPROCESS.TRAIN', as 'DATA.VAL.FROM_TRAIN' is selected"
@@ -2046,10 +2041,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                             )
 
     if cfg.TRAIN.ENABLE:
-        if cfg.DATA.EXTRACT_RANDOM_PATCH and cfg.DATA.PROBABILITY_MAP:
-            if not cfg.PROBLEM.TYPE == "SEMANTIC_SEG":
-                raise ValueError("'DATA.PROBABILITY_MAP' can only be selected when 'PROBLEM.TYPE' is 'SEMANTIC_SEG'")
-
         if cfg.DATA.VAL.FROM_TRAIN and not cfg.DATA.VAL.CROSS_VAL and cfg.DATA.VAL.SPLIT_TRAIN <= 0:
             raise ValueError("'DATA.VAL.SPLIT_TRAIN' needs to be > 0 when 'DATA.VAL.FROM_TRAIN' == True")
 
@@ -2177,12 +2168,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             raise ValueError("'DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC' not in [0, 100] range")
         if not check_value(cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC, value_range=(0, 100)):
             raise ValueError("'DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC' not in [0, 100] range")
-        
-    if cfg.DATA.TRAIN.REPLICATE:
-        if cfg.PROBLEM.TYPE == "CLASSIFICATION" or (
-            cfg.PROBLEM.TYPE == "SELF_SUPERVISED" and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"
-        ):
-            print("WARNING: 'DATA.TRAIN.REPLICATE' has no effect in the selected workflow")
 
     ### Model ###
     if not model_will_be_read and cfg.MODEL.SOURCE == "biapy":
@@ -3161,6 +3146,14 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict):
                     del old_cfg["PROBLEM"]["INSTANCE_SEG"]["SYNAPSES"]["NORMALIZE_DISTANCES"]
 
     if "DATA" in old_cfg:
+        if "EXTRACT_RANDOM_PATCH" not in old_cfg["DATA"]:   
+            del old_cfg["DATA"]["EXTRACT_RANDOM_PATCH"]
+        if "PROBABILITY_MAP" in old_cfg["DATA"]:
+            del old_cfg["DATA"]["PROBABILITY_MAP"]
+        if "W_FOREGROUND" in old_cfg["DATA"]:
+            del old_cfg["DATA"]["W_FOREGROUND"]
+        if "W_BACKGROUND" in old_cfg["DATA"]:
+            del old_cfg["DATA"]["W_BACKGROUND"]
         if "TRAIN" in old_cfg["DATA"]:
             if "MINIMUM_FOREGROUND_PER" in old_cfg["DATA"]["TRAIN"]:
                 min_fore = old_cfg["DATA"]["TRAIN"]["MINIMUM_FOREGROUND_PER"]
@@ -3170,6 +3163,8 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict):
                     old_cfg["DATA"]["TRAIN"]["FILTER_SAMPLES"]["PROPS"] = [["foreground"]]
                     old_cfg["DATA"]["TRAIN"]["FILTER_SAMPLES"]["VALUES"] = [[min_fore]]
                     old_cfg["DATA"]["TRAIN"]["FILTER_SAMPLES"]["SIGNS"] = [["lt"]]
+            if "REPLICATE" in old_cfg["DATA"]["TRAIN"]:
+                del old_cfg["DATA"]["TRAIN"]["REPLICATE"]
         if "VAL" in old_cfg["DATA"]:
             if "BINARY_MASKS" in old_cfg["DATA"]["VAL"]:
                 del old_cfg["DATA"]["VAL"]["BINARY_MASKS"]

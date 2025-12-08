@@ -78,24 +78,6 @@ def create_train_val_augmentors(
     num_training_steps_per_epoch: int
         Number of training steps per epoch.
     """
-    # Calculate the probability map per image
-    prob_map = None
-    if cfg.DATA.PROBABILITY_MAP and cfg.DATA.EXTRACT_RANDOM_PATCH:
-        if os.path.exists(cfg.PATHS.PROB_MAP_DIR):
-            print("Loading probability map")
-            prob_map_file = os.path.join(cfg.PATHS.PROB_MAP_DIR, cfg.PATHS.PROB_MAP_FILENAME)
-            num_files = len(next(os_walk_clean(cfg.PATHS.PROB_MAP_DIR))[2])
-            prob_map = cfg.PATHS.PROB_MAP_DIR if num_files > 1 else np.load(prob_map_file)
-        else:
-            assert Y_train
-            prob_map = calculate_volume_prob_map(
-                Y_train,
-                (cfg.PROBLEM.NDIM == "3D"),
-                cfg.DATA.W_FOREGROUND,
-                cfg.DATA.W_BACKGROUND,
-                save_dir=cfg.PATHS.PROB_MAP_DIR,
-            )
-
     if cfg.PROBLEM.NDIM == "2D":
         if cfg.PROBLEM.TYPE == "CLASSIFICATION" or (
             cfg.PROBLEM.TYPE == "SELF_SUPERVISED" and cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking"
@@ -242,11 +224,8 @@ def create_train_val_augmentors(
             salt_pep_proportion=cfg.AUGMENTOR.SALT_AND_PEPPER_PROP,
             shape=cfg.DATA.PATCH_SIZE,
             resolution=cfg.DATA.TRAIN.RESOLUTION,
-            random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH,
-            prob_map=prob_map,
             n_classes=cfg.DATA.N_CLASSES,
             ignore_index=cfg.LOSS.IGNORE_INDEX,
-            extra_data_factor=cfg.DATA.TRAIN.REPLICATE,
             norm_module=norm_module,
             random_crop_scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
             convert_to_rgb=cfg.DATA.FORCE_RGB,
@@ -293,7 +272,6 @@ def create_train_val_augmentors(
             Y=Y_val,
             da=False,
             shape=cfg.DATA.PATCH_SIZE,
-            random_crops_in_DA=cfg.DATA.EXTRACT_RANDOM_PATCH,
             val=True,
             n_classes=cfg.DATA.N_CLASSES,
             ignore_index=cfg.LOSS.IGNORE_INDEX,

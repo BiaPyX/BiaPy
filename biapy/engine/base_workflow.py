@@ -507,7 +507,6 @@ class Base_Workflow(metaclass=ABCMeta):
             val_filter_signs=(
                 self.cfg.DATA.VAL.FILTER_SAMPLES.SIGNS if self.cfg.DATA.VAL.FILTER_SAMPLES.ENABLE else []
             ),
-            random_crops_in_DA=self.cfg.DATA.EXTRACT_RANDOM_PATCH,
             filter_by_entire_image=self.cfg.DATA.FILTER_BY_IMAGE,
             norm_before_filter=self.cfg.DATA.TRAIN.FILTER_SAMPLES.NORM_BEFORE,
             y_upscaling=self.cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,

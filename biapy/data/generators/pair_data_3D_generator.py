@@ -91,7 +91,7 @@ class Pair3DImageDataGenerator(PairBaseDataGenerator):
 
         return super().apply_transform(image, mask, e_im, e_mask)
 
-    def save_aug_samples(self, img, mask, orig_images, i, pos, out_dir, point_dict):
+    def save_aug_samples(self, img, mask, orig_images, i, pos, out_dir):
         """
         Save augmented and original samples for inspection.
 
@@ -109,8 +109,6 @@ class Pair3DImageDataGenerator(PairBaseDataGenerator):
             Index of the sample in the dataset.
         out_dir : str
             Directory to save the images.
-        point_dict : dict
-            Information about the crop and selected point for visualization.
         """
         aux = np.expand_dims(orig_images["o_x"], 0).astype(np.float32)
         save_tif(
@@ -143,78 +141,3 @@ class Pair3DImageDataGenerator(PairBaseDataGenerator):
             [str(i) + "_y_aug_" + str(pos) + "_" + self.trans_made + ".tif"],
             verbose=False,
         )
-        del img, mask
-
-        # Save the original images with a red point and a blue square that represents the point selected with
-        # the probability map and the random volume extracted from the original data
-        if self.random_crops_in_DA and self.prob_map is not None and i == 0:
-            aux, auxm = self.load_sample(pos)
-            if aux.max() < 1:
-                aux *= 255
-            if auxm.max() == 1:
-                auxm *= 255
-            aux, auxm = (aux).astype(np.uint8), auxm.astype(np.uint8)
-
-            print(
-                "The selected point of the random crop was [{},{},{}]".format(
-                    point_dict["oz"], point_dict["oy"], point_dict["ox"]
-                )
-            )
-
-            if aux.shape[-1] == 1:
-                aux = np.repeat(aux, 3, axis=3)
-            if auxm.shape[-1] == 1:
-                auxm = np.repeat(auxm, 3, axis=3)
-
-            for s in range(aux.shape[0]):
-                if s >= point_dict["s_z"] and s < point_dict["s_z"] + self.shape[0]:
-                    im = Image.fromarray(aux[s, ..., 0])
-                    im = im.convert("RGB")
-                    px = im.load()
-                    assert px is not None
-
-                    m = Image.fromarray(auxm[s, ..., 0])
-                    m = m.convert("RGB")
-                    py = m.load()
-                    assert py is not None
-
-                    # Paint a blue square that represents the crop made.
-                    # Here the axis are x, y and not y, x (numpy)
-                    for row in range(point_dict["s_x"], point_dict["s_x"] + self.shape[2]):
-                        px[row, point_dict["s_y"]] = (0, 0, 255)
-                        px[row, point_dict["s_y"] + self.shape[1] - 1] = (0, 0, 255)
-                        py[row, point_dict["s_y"]] = (0, 0, 255)
-                        py[row, point_dict["s_y"] + self.shape[1] - 1] = (0, 0, 255)
-                    for col in range(point_dict["s_y"], point_dict["s_y"] + self.shape[1]):
-                        px[point_dict["s_x"], col] = (0, 0, 255)
-                        px[point_dict["s_x"] + self.shape[2] - 1, col] = (0, 0, 255)
-                        py[point_dict["s_x"], col] = (0, 0, 255)
-                        py[point_dict["s_x"] + self.shape[2] - 1, col] = (0, 0, 255)
-
-                    # Paint the selected point in red
-                    if s == point_dict["oz"]:
-                        p_size = 6
-                        for row in range(point_dict["ox"] - p_size, point_dict["ox"] + p_size):
-                            for col in range(point_dict["oy"] - p_size, point_dict["oy"] + p_size):
-                                if col >= 0 and col < aux.shape[1] and row >= 0 and row < aux.shape[2]:
-                                    px[row, col] = (255, 0, 0)
-                                    py[row, col] = (255, 0, 0)
-
-                    aux[s] = im
-                    auxm[s] = m
-
-            aux = np.expand_dims(aux, 0).astype(np.float32)
-            save_tif(
-                aux,
-                out_dir,
-                [str(i) + "_" + str(pos) + "_mark_x" + self.trans_made + ".tif"],
-                verbose=False,
-            )
-
-            auxm = np.expand_dims(auxm, 0).astype(np.float32)
-            save_tif(
-                auxm,
-                out_dir,
-                [str(i) + "_" + str(pos) + "_mark_y" + self.trans_made + ".tif"],
-                verbose=False,
-            )

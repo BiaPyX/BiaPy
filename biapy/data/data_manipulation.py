@@ -495,7 +495,6 @@ def load_and_prepare_train_data(
             else:
                 yshape = Y_train.sample_list[i].get_shape()
 
-            # The shape is not saved when 'DATA.EXTRACT_RANDOM_PATCH' is activated so set the crop_shape
             if not xshape:
                 xshape = crop_shape[:-1]
             if not yshape:

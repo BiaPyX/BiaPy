@@ -35,7 +35,7 @@ all_test_info = {}
 all_test_info["Test1"] = {
     "enable": True,
     "jobname": "test1",
-    "description": "2D Semantic seg. Lucchi++. Basic DA. Extract random crops (probability map). replicate =3. unet. 2D stack as 3D. Post-proc: z-filtering.",
+    "description": "2D Semantic seg. Lucchi++. Basic DA. unet. 2D stack as 3D. Post-proc: z-filtering.",
     "yaml": "test_1.yaml",
     "internal_checks": [
         {"type": "regular", "pattern": "Test Foreground IoU (per image)", "gt": True, "value": 0.7},
@@ -66,7 +66,7 @@ all_test_info["Test3"] = {
 all_test_info["Test4"] = {
     "enable": True,
     "jobname": "test4",
-    "description": "2D Instance seg. Stardist 2D data. Basic DA. BC (auto). Replicate 2. resunet++. "
+    "description": "2D Instance seg. Stardist 2D data. Basic DA. BC (auto). resunet++. "
         "Post-proc: Clear border + remove instances by properties (leave only the bad ones).",
     "yaml": "test_4.yaml",
     "internal_checks": [
@@ -1177,13 +1177,9 @@ try:
             except yaml.YAMLError as exc:
                 raise ValueError(exc)
 
-        biapy_config['DATA']['EXTRACT_RANDOM_PATCH'] = True
-        biapy_config['DATA']['PROBABILITY_MAP'] = True
-
         biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(semantic_2d_data_outpath, "data", "train", "raw")
         biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(semantic_2d_data_outpath, "data", "train", "label")
         biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
-        biapy_config['DATA']['TRAIN']['REPLICATE'] = 2
         biapy_config['DATA']['TEST']['PATH'] = os.path.join(semantic_2d_data_outpath, "data", "test", "raw")
         biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(semantic_2d_data_outpath, "data", "test", "label")
         biapy_config['DATA']['TEST']['IN_MEMORY'] = False
@@ -1413,7 +1409,6 @@ try:
         biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(instance_seg_2d_data_outpath, "data", "train", "raw")
         biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(instance_seg_2d_data_outpath, "data", "train", "label")
         biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
-        biapy_config['DATA']['TRAIN']['REPLICATE'] = 2
         biapy_config['DATA']['TEST']['PATH'] = os.path.join(instance_seg_2d_data_outpath, "data", "test", "raw")
         biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(instance_seg_2d_data_outpath, "data", "test", "label")
         biapy_config['DATA']['TEST']['IN_MEMORY'] = False
@@ -2328,7 +2323,6 @@ try:
 
         biapy_config['DATA']['NORMALIZATION'] = {}
         biapy_config['DATA']['NORMALIZATION']['TYPE'] = "div"
-        biapy_config['DATA']['EXTRACT_RANDOM_PATCH'] = False
         biapy_config['DATA']['PATCH_SIZE'] = "(256,256,1)"
         biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(self_supervision_2d_data_outpath, "data", "train", "raw")
         biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
@@ -3201,7 +3195,6 @@ try:
                 raise ValueError(exc)
 
         biapy_config['DATA']['NORMALIZATION']['TYPE'] = "zero_mean_unit_variance"
-        biapy_config['DATA']['EXTRACT_RANDOM_PATCH'] = True
         biapy_config['DATA']['REFLECT_TO_COMPLETE_SHAPE'] = True
         biapy_config['DATA']['PATCH_SIZE'] = "(1024, 1024, 1)"
         biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(image_to_image_light_2d_data_outpath, "reduced_actin_lightmycells", "actin", "raw")

@@ -136,7 +136,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
     val : bool, optional
         Advise the generator that the images will be to validate the model to not make random crops (as the val.
-        data must be the same on each epoch). Valid when ``random_crops_in_DA`` is set.
+        data must be the same on each epoch).
 
     resize_shape : tuple of ints, optional
         If defined the input samples will be scaled into that shape.
