@@ -6,7 +6,7 @@ contrastive learning head.
 
 Reference:
     Road Extraction by Deep Residual U-Net
-    https://arxiv.org/pdf/1711.10684.pdf
+    https://ieeexplore.ieee.org/abstract/document/8309343
 """
 import torch
 import torch.nn as nn
@@ -42,7 +42,7 @@ class ResUNet(nn.Module):
         """
         Create 2D/3D Residual U-Net.
 
-        Reference: `Road Extraction by Deep Residual U-Net <https://arxiv.org/pdf/1711.10684.pdf>`_.
+        Reference: `Road Extraction by Deep Residual U-Net <https://ieeexplore.ieee.org/abstract/document/8309343>`_.
 
         Parameters
         ----------

@@ -19,8 +19,8 @@ This module relies on building blocks defined in `biapy.models.blocks`, such as
 
 References:
 
-- `U-Net: Convolutional Networks for Biomedical Image Segmentation <https://arxiv.org/abs/1505.04597>`_
-- `A ConvNet for the 2020s <https://arxiv.org/abs/2201.03545>`_.
+- `U-Net: Convolutional Networks for Biomedical Image Segmentation <https://link.springer.com/chapter/10.1007/978-3-319-24574-4_28>`_
+- `A ConvNet for the 2020s <https://openaccess.thecvf.com/content/CVPR2022/html/Liu_A_ConvNet_for_the_2020s_CVPR_2022_paper.html>`_.
 
 Image representation:
 
@@ -47,8 +47,8 @@ class U_NeXt_V1(nn.Module):
     and the efficiency and inductive biases of ConvNeXt. It is designed for
     biomedical image segmentation tasks.
 
-    Reference: `U-Net: Convolutional Networks for Biomedical Image Segmentation <https://arxiv.org/abs/1505.04597>`_,
-    `A ConvNet for the 2020s <https://arxiv.org/abs/2201.03545>`_.
+    Reference: `U-Net: Convolutional Networks for Biomedical Image Segmentation <https://link.springer.com/chapter/10.1007/978-3-319-24574-4_28>`_,
+    `A ConvNet for the 2020s <https://openaccess.thecvf.com/content/CVPR2022/html/Liu_A_ConvNet_for_the_2020s_CVPR_2022_paper.html>`_.
 
     Parameters
     ----------

@@ -19,8 +19,8 @@ This module relies on building blocks defined in `biapy.models.blocks`, such as
 
 References:
 
-- `U-Net: Convolutional Networks for Biomedical Image Segmentation <https://arxiv.org/abs/1505.04597>`_
-- `ConvNeXt V2: Co-designing and Scaling ConvNets with Masked Autoencoders <https://arxiv.org/abs/2301.00808>`_.
+- `U-Net: Convolutional Networks for Biomedical Image Segmentation <https://link.springer.com/chapter/10.1007/978-3-319-24574-4_28>`_
+- `ConvNeXt V2: Co-designing and Scaling ConvNets with Masked Autoencoders <https://openaccess.thecvf.com/content/CVPR2023/html/Woo_ConvNeXt_V2_Co-Designing_and_Scaling_ConvNets_With_Masked_Autoencoders_CVPR_2023_paper.html>`_.
 
 Image representation:
 
@@ -49,8 +49,8 @@ class U_NeXt_V2(nn.Module):
     integrating strong hierarchical feature learning with efficient and robust
     convolutional designs.
 
-    Reference: `U-Net: Convolutional Networks for Biomedical Image Segmentation <https://arxiv.org/abs/1505.04597>`_,
-    `ConvNeXt V2: Co-designing and Scaling ConvNets with Masked Autoencoders <https://arxiv.org/abs/2301.00808>`_.
+    Reference: `U-Net: Convolutional Networks for Biomedical Image Segmentation <https://link.springer.com/chapter/10.1007/978-3-319-24574-4_28>`_,
+    `ConvNeXt V2: Co-designing and Scaling ConvNets with Masked Autoencoders <https://openaccess.thecvf.com/content/CVPR2023/html/Woo_ConvNeXt_V2_Co-Designing_and_Scaling_ConvNets_With_Masked_Autoencoders_CVPR_2023_paper.html>`_.
 
     Parameters
     ----------

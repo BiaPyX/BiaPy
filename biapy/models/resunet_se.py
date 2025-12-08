@@ -18,7 +18,7 @@ This module relies on building blocks defined in `biapy.models.blocks`, such as
 `ResConvBlock`, `ResUpBlock`, `ConvBlock`, `ProjectionHead`, and normalization helpers.
 
 Reference:
-`Squeeze and Excitation Networks <https://arxiv.org/abs/1709.01507>`_.
+`Squeeze and Excitation Networks <https://openaccess.thecvf.com/content_cvpr_2018/html/Hu_Squeeze-and-Excitation_Networks_CVPR_2018_paper.html>`_.
 
 Image representation:
 
@@ -52,7 +52,7 @@ class ResUNet_SE(nn.Module):
     learning and propagation, leading to better performance in dense prediction
     tasks like image segmentation.
 
-    Reference: `Squeeze and Excitation Networks <https://arxiv.org/abs/1709.01507>`_.
+    Reference: `Squeeze and Excitation Networks <https://openaccess.thecvf.com/content_cvpr_2018/html/Hu_Squeeze-and-Excitation_Networks_CVPR_2018_paper.html>`_.
 
     Parameters
     ----------

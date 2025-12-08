@@ -6,7 +6,7 @@ contrastive learning head.
 
 Reference:
     U-Net: Convolutional Networks for Biomedical Image Segmentation
-    https://arxiv.org/abs/1505.04597
+    https://link.springer.com/chapter/10.1007/978-3-319-24574-4_28
 """
 import torch
 import torch.nn as nn
@@ -41,7 +41,7 @@ class U_Net(nn.Module):
         """
         Create 2D/3D U-Net.
 
-        Reference: `U-Net: Convolutional Networks for Biomedical Image Segmentation <https://arxiv.org/abs/1505.04597>`_.
+        Reference: `U-Net: Convolutional Networks for Biomedical Image Segmentation <https://link.springer.com/chapter/10.1007/978-3-319-24574-4_28>`_.
 
         Parameters
         ----------

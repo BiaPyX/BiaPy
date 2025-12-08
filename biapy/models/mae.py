@@ -1,5 +1,5 @@
 """
-This file implements the Masked Autoencoder (MAE) model with a Vision Transformer (ViT) backbone, as described in the paper "Masked Autoencoders Are Scalable Vision Learners" (https://arxiv.org/abs/2111.06377).
+This file implements the Masked Autoencoder (MAE) model with a Vision Transformer (ViT) backbone, as described in the paper "Masked Autoencoders Are Scalable Vision Learners" (https://openaccess.thecvf.com/content/CVPR2022/html/He_Masked_Autoencoders_Are_Scalable_Vision_Learners_CVPR_2022_paper).
 
 The MAE model is designed for self-supervised pre-training of Vision Transformers
 by reconstructing masked-out patches of an image. It consists of an encoder that
@@ -24,7 +24,7 @@ forward passes through encoder/decoder, and loss calculation.
 
 References:
 
-- Masked Autoencoders Are Scalable Vision Learners: https://arxiv.org/abs/2111.06377
+- Masked Autoencoders Are Scalable Vision Learners: https://openaccess.thecvf.com/content/CVPR2022/html/He_Masked_Autoencoders_Are_Scalable_Vision_Learners_CVPR_2022_paper
 - timm: https://github.com/rwightman/pytorch-image-models/tree/master/timm
 - DeiT: https://github.com/facebookresearch/deit
 """
@@ -57,7 +57,8 @@ class MaskedAutoencoderViT(nn.Module):
     It comprises an encoder to process unmasked patches and a decoder to reconstruct
     the full image, including the masked regions.
 
-    Reference: `Masked Autoencoders Are Scalable Vision Learners <https://arxiv.org/abs/2111.06377>`_.
+    Reference: `Masked Autoencoders Are Scalable Vision Learners 
+    <https://openaccess.thecvf.com/content/CVPR2022/html/He_Masked_Autoencoders_Are_Scalable_Vision_Learners_CVPR_2022_paper>`_.
 
     Parameters
     ----------

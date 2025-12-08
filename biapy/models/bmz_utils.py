@@ -570,6 +570,7 @@ def create_model_doc(
         author_mes += "\n"
 
     # preprocessing info
+    preproc_info = ""
     if biapy_cfg.DATA.NORMALIZATION.TYPE == "div":
         preproc_info = "- Division to 255 (or 65535 if uint16) to scale the data to [0,1] range.\n"
     elif biapy_cfg.DATA.NORMALIZATION.TYPE == "scale_range":
@@ -605,6 +606,23 @@ def create_model_doc(
 
     cfg_data_mes = ""
     if cfg_data != {}:
+        # Change data paths to generic ones
+        if "DATA" in cfg_data:
+            if "TRAIN" in cfg_data["DATA"]:
+                if "PATH" in cfg_data["DATA"]["TRAIN"]:
+                    cfg_data["DATA"]["TRAIN"]["PATH"] = "<path_to_training_data>"
+                if "GT_PATH" in cfg_data["DATA"]["TRAIN"]:
+                    cfg_data["DATA"]["TRAIN"]["GT_PATH"] = "<path_to_training_gt_data>"
+            if "VAL" in cfg_data["DATA"]:
+                if "PATH" in cfg_data["DATA"]["VAL"]:
+                    cfg_data["DATA"]["VAL"]["PATH"] = "<path_to_validation_data>"
+                if "GT_PATH" in cfg_data["DATA"]["VAL"]:
+                    cfg_data["DATA"]["VAL"]["GT_PATH"] = "<path_to_validation_gt_data>"
+            if "TEST" in cfg_data["DATA"]:
+                if "PATH" in cfg_data["DATA"]["TEST"]:
+                    cfg_data["DATA"]["TEST"]["PATH"] = "<path_to_test_data>"
+                if "GT_PATH" in cfg_data["DATA"]["TEST"]:
+                    cfg_data["DATA"]["TEST"]["GT_PATH"] = "<path_to_test_gt_data>"
         cfg_data_mes = yaml.safe_dump(
             cfg_data,
             sort_keys=False,           # keep insertion order
@@ -676,6 +694,7 @@ def create_model_doc(
         message += "## Technical specifications\n"
         message += "This model was trained using BiaPy (v{}). To reproduce the results, make sure to install the same BiaPy version and run it ".format(biapy.__version__)
         message += "with the configuration provided below. You will need to change the paths to the data accordingly.\n"
+        message += "\n"
         message += "```yaml\n"
         message += "{}\n".format(cfg_data_mes)
         message += "```\n"
@@ -693,10 +712,42 @@ def create_model_doc(
     message += "## References\n"
     message += "[1] Franco-Barranco, Daniel, et al. \"BiaPy: Accessible deep learning on bioimages.\" Nature Methods (2025): 1-3.\n"
     model_arch = biapy_cfg.MODEL.ARCHITECTURE.lower()
+    ref_count = 2
     if model_arch in ["unet", "resunet", "seunet", "resunet_se", "attention_unet"]:
-        message += "[2] Franco-Barranco, Daniel, Arrate Muñoz-Barrutia, and Ignacio Arganda-Carreras. \"Stable deep neural network architectures for mitochondria segmentation on electron microscopy volumes.\" Neuroinformatics 20.2 (2022): 437-450.\n"
+        message += f"[{ref_count}] Franco-Barranco, Daniel, Arrate Muñoz-Barrutia, and Ignacio Arganda-Carreras. \"Stable deep neural network architectures for mitochondria segmentation on electron microscopy volumes.\" Neuroinformatics 20.2 (2022): 437-450.\n"
+    elif model_arch  == "dfcan":
+        message += f"[{ref_count}] Qiao, Chang, et al. \"Evaluation and development of deep neural networks for image super-resolution in optical microscopy.\" Nature methods 18.2 (2021): 194-202.\n"
+    elif model_arch == "edsr":
+        message += f"[{ref_count}] Lim, Bee, et al. \"Enhanced deep residual networks for single image super-resolution.\" Proceedings of the IEEE conference on computer vision and pattern recognition workshops. 2017.\n"
+    elif model_arch == "efficientnet":
+        message += f"[{ref_count}] Tan, Mingxing, and Quoc Le. \"Efficientnet: Rethinking model scaling for convolutional neural networks.\" International conference on machine learning. PMLR, 2019.\n"
+    elif "hrnet" in model_arch:
+        message += f"[{ref_count}] Wang, Jingdong, et al. \"Deep high-resolution representation learning for visual recognition.\" IEEE transactions on pattern analysis and machine intelligence 43.10 (2020): 3349-3364.\n"
+    elif model_arch == "mae":
+        message += f"[{ref_count}] He, Kaiming, et al. \"Masked autoencoders are scalable vision learners.\" Proceedings of the IEEE/CVF conference on computer vision and pattern recognition. 2022.\n"
+    elif model_arch == "multiresunet":
+        message += f"[{ref_count}] Ibtehaz, Nabil, and M. Sohel Rahman. \"MultiResUNet: Rethinking the U-Net architecture for multimodal biomedical image segmentation.\" Neural networks 121 (2020): 74-87.\n"
+    elif model_arch == "rcan":
+        message += f"[{ref_count}] Zhang, Yulun, et al. \"Image super-resolution using very deep residual channel attention networks.\" Proceedings of the European conference on computer vision (ECCV). 2018.\n"
+    elif model_arch == "resunet++":
+        message += f"[{ref_count}] Jha, Debesh, et al. \"Resunet++: An advanced architecture for medical image segmentation.\" 2019 IEEE international symposium on multimedia (ISM). IEEE, 2019.\n"
+    elif model_arch in ["resunet_se", "seunet"]:
+        message += f"[{ref_count}] Hu, Jie, Li Shen, and Gang Sun. \"Squeeze-and-excitation networks.\" Proceedings of the IEEE conference on computer vision and pattern recognition. 2018.\n"
+    elif model_arch == "unet":
+        message += f"[{ref_count}] Ronneberger, Olaf, Philipp Fischer, and Thomas Brox. \"U-net: Convolutional networks for biomedical image segmentation.\" International Conference on Medical image computing and computer-assisted intervention. Cham: Springer international publishing, 2015.\n"
+    elif model_arch == "unetr":
+        message += f"[{ref_count}] Hatamizadeh, Ali, et al. \"Unetr: Transformers for 3d medical image segmentation.\" Proceedings of the IEEE/CVF winter conference on applications of computer vision. 2022.\n"
+    elif model_arch == "unext_v1":
+        message += f"[{ref_count}] Liu, Zhuang, et al. \"A convnet for the 2020s.\" Proceedings of the IEEE/CVF conference on computer vision and pattern recognition. 2022.\n"
+    elif model_arch == "unext_v2":
+        message += f"[{ref_count}] Woo, Sanghyun, et al. \"Convnext v2: Co-designing and scaling convnets with masked autoencoders.\" Proceedings of the IEEE/CVF conference on computer vision and pattern recognition. 2023.\n"
+    else:
+        print(f"[WARNING] No reference available for model architecture '{model_arch}'")
+        ref_count -= 1  # No reference added
+    ref_count += 1
     if biapy_cfg.PROBLEM.TYPE == "INSTANCE_SEG":
-        message += "[3] Franco-Barranco, Daniel, et al. \"Current progress and challenges in large-scale 3d mitochondria instance segmentation.\" IEEE transactions on medical imaging 42.12 (2023): 3956-3971.\n"
+        message += f"[{ref_count}] Franco-Barranco, Daniel, et al. \"Current progress and challenges in large-scale 3d mitochondria instance segmentation.\" IEEE transactions on medical imaging 42.12 (2023): 3956-3971.\n"
+        ref_count += 1
     f = open(doc_output_path, "w")
     f.write(message)
     f.close()
