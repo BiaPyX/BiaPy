@@ -1192,7 +1192,7 @@ try:
         biapy_config['TRAIN']['EPOCHS'] = 50
         biapy_config['TRAIN']['PATIENCE'] = -1
 
-        biapy_config['MODEL']['ARCHITECTURE'] = 'hrnet18'
+        biapy_config['MODEL']['ARCHITECTURE'] = 'hrnet32'
 
         biapy_config['LOSS'] = {}
         biapy_config['LOSS']['TYPE'] = "W_CE_DICE"
@@ -1920,9 +1920,9 @@ try:
         biapy_config['TRAIN']['LR_SCHEDULER']['MIN_LR'] = 5.E-6
         biapy_config['TRAIN']['LR_SCHEDULER']['WARMUP_COSINE_DECAY_EPOCHS'] = 15
 
-        biapy_config['MODEL']['ARCHITECTURE'] = 'hrnet48'
-        biapy_config['MODEL']['HRNET_48'] = {}
-        biapy_config['MODEL']['HRNET_48']['Z_DOWN'] = False
+        biapy_config['MODEL']['ARCHITECTURE'] = 'hrnet18'
+        biapy_config['MODEL']['HRNET'] = {}
+        biapy_config['MODEL']['HRNET']['Z_DOWN'] = False
         del biapy_config['MODEL']['FEATURE_MAPS']
         biapy_config['MODEL']['LOAD_CHECKPOINT'] = False
 

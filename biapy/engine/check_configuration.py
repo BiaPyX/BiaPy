@@ -3313,6 +3313,17 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict):
         if "LAST_ACTIVATION" in old_cfg["MODEL"]:
             del old_cfg["MODEL"]["LAST_ACTIVATION"]
 
+        if "HRNET_64" in old_cfg["MODEL"]:
+            old_cfg["MODEL"]["HRNET"] = old_cfg["MODEL"].pop("HRNET_64")
+        elif "HRNET_48" in old_cfg["MODEL"]:
+            old_cfg["MODEL"]["HRNET"] = old_cfg["MODEL"].pop("HRNET_48")
+        elif "HRNET_32" in old_cfg["MODEL"]:
+            old_cfg["MODEL"]["HRNET"] = old_cfg["MODEL"].pop("HRNET_32")
+        elif "HRNET_18" in old_cfg["MODEL"]:
+            old_cfg["MODEL"]["HRNET"] = old_cfg["MODEL"].pop("HRNET_18")
+        if "HRNET" in old_cfg["MODEL"]:
+            if "STAGE1" in old_cfg["MODEL"]["HRNET"]:
+                del old_cfg["MODEL"]["HRNET"]["STAGE1"]
     try:
         del old_cfg["PATHS"]["RESULT_DIR"]["BMZ_BUILD"]
     except:

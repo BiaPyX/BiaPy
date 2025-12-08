@@ -208,7 +208,7 @@ def build_model(
 
         network_stride = [4, 4]
         if ndim == 3:
-            network_stride = [4 if args["cfg"].Z_DOWN else 1] + network_stride
+            network_stride = [4 if args["cfg"]["Z_DOWN"] else 1] + network_stride
     else:
         if modelname == "simple_cnn":
             args = dict(
