@@ -760,7 +760,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.bmz_config["scanned_files"],
                 self.model_build_kwargs,
                 self.network_stride,
-            ) = build_model(self.cfg, self.model_output_channels["channels"], self.device)
+            ) = build_model(self.cfg, self.model_output_channels["channels"], self.activations, self.device)
         elif self.cfg.MODEL.SOURCE == "torchvision":
             self.model, self.torchvision_preprocessing = build_torchvision_model(self.cfg, self.device)
         # BioImage Model Zoo pretrained models
@@ -1173,16 +1173,24 @@ class Base_Workflow(metaclass=ABCMeta):
             return pred
 
         def __apply_acts(prediction, acts):
+            if len(acts) == 0:
+                return prediction
+            
+            if acts[0].lower() == "ce_softmax" and not training:
+                act = get_activation("softmax")
+                return act(prediction)
+            
             out_slices = []
             for i, activation in enumerate(acts):
                 # Ignore ce_sigmoid as torch.nn.BCEWithLogitsLoss will apply Sigmoid automatically in a way
                 # that is more stable numerically (ref: https://pytorch.org/docs/stable/generated/torch.nn.BCEWithLogitsLoss.html)
-                if (training and activation not in ["linear", "ce_sigmoid"]) or (not training and activation != "linear"):
+                # In the same way, ce_softmax is ignored during training as torch.nn.CrossEntropyLoss applies Softmax internally
+                if (training and activation not in ["linear", "ce_sigmoid", "ce_softmax"]) or (not training and activation != "linear"):
                     activation = "sigmoid" if activation == "ce_sigmoid" else activation
                     act = get_activation(activation.lower())
-                    out_slices.append(act(prediction[:, i, ...]).unsqueeze(1))
+                    out_slices.append(act(prediction[:, i:i+1, ...]))
                 else:
-                    out_slices.append(prediction[:, i, ...].unsqueeze(1))
+                    out_slices.append(prediction[:, i:i+1, ...])
 
             return torch.cat(out_slices, dim=1)
 

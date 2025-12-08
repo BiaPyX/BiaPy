@@ -110,7 +110,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         self.real_classes = self.cfg.DATA.N_CLASSES
         self.multihead = False
         for _ in range(self.model_output_channels["channels"][0]):
-            self.activations.append("ce_sigmoid")
+            self.activations.append("ce_softmax" if self.cfg.DATA.N_CLASSES > 2 else "ce_sigmoid")
         self.activations = [self.activations]
 
         super().define_activations_and_channels()
