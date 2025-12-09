@@ -25,7 +25,7 @@ import math
 import torch
 import torch.nn as nn
 from timm.models.vision_transformer import Block
-from typing import Dict
+from typing import Dict, List
 
 from biapy.models.blocks import DoubleConvBlock, ConvBlock,  get_norm_2d,  get_norm_3d, prepare_activation_layers
 from biapy.models.tr_layers import PatchEmbed

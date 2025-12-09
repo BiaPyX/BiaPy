@@ -32,7 +32,7 @@ Image representation:
 import torch
 import torch.nn as nn
 from torchvision.ops.misc import Permute
-from typing import Dict
+from typing import Dict, List
 
 from biapy.models.blocks import UpConvNeXtBlock_V1, ConvNeXtBlock_V1, prepare_activation_layers
 from biapy.models.heads import ProjectionHead

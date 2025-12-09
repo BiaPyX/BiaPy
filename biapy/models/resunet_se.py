@@ -30,7 +30,7 @@ Image created with `PlotNeuralNet <https://github.com/HarisIqbal88/PlotNeuralNet
 """
 import torch
 import torch.nn as nn
-from typing import Dict 
+from typing import Dict, List 
 
 from biapy.models.blocks import (
     ResConvBlock,

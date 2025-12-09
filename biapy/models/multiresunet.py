@@ -32,9 +32,10 @@ https://github.com/nibtehaz/MultiResUNet
 """
 import torch
 import torch.nn as nn
-from typing import Dict
+from typing import Dict, List
 
 from biapy.models.heads import ProjectionHead
+from biapy.models.blocks import prepare_activation_layers
 
 
 class Conv_batchnorm(torch.nn.Module):
@@ -415,47 +416,6 @@ class Respath(torch.nn.Module):
 
 
 class MultiResUnet(torch.nn.Module):
-    """
-    Create 2D/3D MultiResUNet model.
-
-    Reference: `MultiResUNet : Rethinking the U-Net Architecture for Multimodal Biomedical Image
-    Segmentation <https://arxiv.org/abs/1902.04049>`_.
-
-    Parameters
-    ----------
-    ndim : int
-        Number of dimensions of the input data.
-
-    input_channels: int
-        Number of channels in image.
-
-    alpha: float, optional
-        Alpha hyperparameter (default: 1.67)
-
-    z_down : List of ints, optional
-        Downsampling used in z dimension. Set it to ``1`` if the dataset is not isotropic.
-
-    output_channels : list of int, optional
-        Output channels of the network. It must be a list of lenght ``1`` or ``2``. When two
-        numbers are provided two task to be done is expected (multi-head). Possible scenarios are:
-        
-            * instances + classification on instance segmentation
-            * points + classification in detection.
-
-    upsampling_factor : tuple of ints, optional
-        Factor of upsampling for super resolution workflow for each dimension.
-
-    upsampling_position : str, optional
-        Whether the upsampling is going to be made previously (``pre`` option) to the model
-        or after the model (``post`` option).
-    
-    contrast : bool, optional
-        Whether to add contrastive learning head to the model. Default is ``False``.
-
-    contrast_proj_dim : int, optional
-        Dimension of the projection head for contrastive learning. Default is ``256``.
-    """
-
     def __init__(
         self,
         ndim,
@@ -467,37 +427,54 @@ class MultiResUnet(torch.nn.Module):
         upsampling_position="pre",
         contrast: bool = False,
         contrast_proj_dim: int = 256,
+        explicit_activations: bool = False,
+        activations: List[List[str]] = [],
     ):
         """
-        Initialize the MultiResUNet model.
+        Create 2D/3D MultiResUNet model.
 
-        Sets up the encoder (downsampling path), decoder (upsampling path),
-        skip connections (ResPaths), and optional super-resolution and multi-head
-        output layers. It dynamically selects 2D or 3D convolutional and
-        normalization layers based on `ndim`.
+        Reference: `MultiResUNet : Rethinking the U-Net Architecture for Multimodal Biomedical Image
+        Segmentation <https://arxiv.org/abs/1902.04049>`_.
 
         Parameters
         ----------
         ndim : int
-            Number of dimensions of the input data (2 for 2D, 3 for 3D).
-        input_channels : int
-            Number of channels in the input image.
-        alpha : float, optional
-            Alpha hyperparameter for MultiRes Blocks. Defaults to 1.67.
-        z_down : List[int], optional
-            Downsampling factors for the z-dimension at each pooling stage (for 3D).
-            Defaults to `[2, 2, 2, 2]`.
-        output_channels : List[int], optional
-            Output channels for the network's prediction head(s). Can be length 1 or 2.
-            Defaults to `[1]`.
-        upsampling_factor : Tuple[int, ...], optional
-            Factor for super-resolution upsampling. Defaults to `()`.
+            Number of dimensions of the input data.
+
+        input_channels: int
+            Number of channels in image.
+
+        alpha: float, optional
+            Alpha hyperparameter (default: 1.67)
+
+        z_down : List of ints, optional
+            Downsampling used in z dimension. Set it to ``1`` if the dataset is not isotropic.
+
+        output_channels : list of int, optional
+            Output channels of the network. It must be a list of lenght ``1`` or ``2``. When two
+            numbers are provided two task to be done is expected (multi-head). Possible scenarios are:
+            
+                * instances + classification on instance segmentation
+                * points + classification in detection.
+
+        upsampling_factor : tuple of ints, optional
+            Factor of upsampling for super resolution workflow for each dimension.
+
         upsampling_position : str, optional
-            Position of super-resolution upsampling ("pre" or "post"). Defaults to "pre".
+            Whether the upsampling is going to be made previously (``pre`` option) to the model
+            or after the model (``post`` option).
+        
         contrast : bool, optional
-            Whether to add a contrastive learning projection head. Defaults to `False`.
+            Whether to add contrastive learning head to the model. Default is ``False``.
+
         contrast_proj_dim : int, optional
-            Dimension of the contrastive projection head. Defaults to `256`.
+            Dimension of the projection head for contrastive learning. Default is ``256``.
+
+        explicit_activations : bool, optional
+            If True, uses explicit activation functions in the last layers. 
+        
+        activations : List[List[str]], optional
+            Activation functions to apply to the outputs if `explicit_activations` is True.
 
         Raises
         ------
@@ -510,6 +487,9 @@ class MultiResUnet(torch.nn.Module):
         self.output_channels = output_channels
         self.multihead = len(output_channels) == 2
         self.contrast = contrast
+        self.explicit_activations = explicit_activations
+        if self.explicit_activations:
+            self.out_activations, self.class_activation = prepare_activation_layers(activations)
         if len(output_channels) == 0:
             raise ValueError("'output_channels' needs to has at least one value")
         if len(output_channels) != 1 and len(output_channels) != 2:
@@ -701,6 +681,15 @@ class MultiResUnet(torch.nn.Module):
 
         # Regular output
         out = self.last_block(feats)
+
+        if self.explicit_activations:
+            # If there is only one activation, apply it to the whole tensor
+            if len(self.out_activations) == 1:
+                out = self.out_activations[0](out)
+            else:
+                for i, act in enumerate(self.out_activations):
+                    out[:, i:i+1] = act(out[:, i:i+1])
+
         out_dict = {
             "pred": out,
         }
@@ -713,7 +702,11 @@ class MultiResUnet(torch.nn.Module):
         #   Instance segmentation: instances + classification
         #   Detection: points + classification
         if self.multihead and self.last_class_head:
-            out_dict["class"] = self.last_class_head(feats)
+            class_head_out = self.last_class_head(feats)
+            if self.explicit_activations:
+                for i, act in enumerate(self.class_activation):
+                    class_head_out[:, i:i+1] = act(class_head_out[:, i:i+1])
+            out_dict["class"] = class_head_out
 
         if len(out_dict.keys()) == 1:
             return out_dict["pred"]
