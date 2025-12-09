@@ -3438,6 +3438,8 @@ try:
         biapy_config['TRAIN']['LR_SCHEDULER']['WARMUP_COSINE_DECAY_EPOCHS'] = 15
 
         biapy_config['MODEL']['ARCHITECTURE'] = 'hrnet32'
+        biapy_config['MODEL']['HRNET'] = {}
+        biapy_config['MODEL']['HRNET']["Z_DOWN"] = False
         biapy_config['AUGMENTOR']['BRIGHTNESS'] = True
         biapy_config['AUGMENTOR']['CONTRAST'] = True
         biapy_config['AUGMENTOR']['MISALIGNMENT'] = True
