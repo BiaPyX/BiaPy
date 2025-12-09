@@ -1340,17 +1340,17 @@ class Base_Workflow(metaclass=ABCMeta):
         self, x_batch: NDArray, y_batch: Optional[NDArray], stats_name="per_crop", disable_tqdm: bool = False
     ) -> NDArray:
         """
-        Predict a batch of data for the test phase.
+        Predict data for the test phase.
 
         Parameters
         ----------
         x_batch : NDArray
-            X batch data. Expected axes are: ``(batch, z, y, x, channels)`` for 3D and
-            ``(batch, y, x, channels)`` for 2D.
+            X data. Expected axes are: ``(num_patches, z, y, x, channels)`` for 3D and
+            ``(num_patches, y, x, channels)`` for 2D.
 
         y_batch: NDArray
-            Y batch data. Expected axes are: ``(batch, z, y, x, channels)`` for 3D and
-            ``(batch, y, x, channels)`` for 2D.
+            Y data. Expected axes are: ``(num_patches, z, y, x, channels)`` for 3D and
+            ``(num_patches, y, x, channels)`` for 2D.
 
         stats_name : str, optional
             Name of the statistics to save.
@@ -1799,12 +1799,20 @@ class Base_Workflow(metaclass=ABCMeta):
                         else:
                             pred = obj
                         del obj
+                    self.current_sample["X"] = f_name(
+                        self.current_sample["X"],
+                        original_data_shape[:-1] + (self.current_sample["X"].shape[-1],),
+                        padding=self.cfg.DATA.TEST.PADDING,
+                        overlap=self.cfg.DATA.TEST.OVERLAP,
+                        verbose=self.cfg.TEST.VERBOSE,
+                    )
                     assert isinstance(pred, np.ndarray)
                     if self.cfg.PROBLEM.NDIM != "3D":
                         self.current_sample["X"] = X_original.copy()
                         del X_original
                     else:
                         pred = np.expand_dims(pred, 0)
+                        self.current_sample["X"] = np.expand_dims(self.current_sample["X"], 0)
                         if self.current_sample["Y"] is not None:
                             self.current_sample["Y"] = np.expand_dims(self.current_sample["Y"], 0)
 
@@ -1827,7 +1835,17 @@ class Base_Workflow(metaclass=ABCMeta):
                         preserve_range=self.cfg.DATA.PREPROCESS.RESIZE.PRESERVE_RANGE,
                         anti_aliasing=self.cfg.DATA.PREPROCESS.RESIZE.ANTI_ALIASING,
                     )[0]
-
+                    self.current_sample["X"] = resize_images(
+                        [self.current_sample["X"]],
+                        output_shape=rescaled_shape,
+                        order=self.cfg.DATA.PREPROCESS.RESIZE.ORDER,
+                        mode=self.cfg.DATA.PREPROCESS.RESIZE.MODE,
+                        cval=self.cfg.DATA.PREPROCESS.RESIZE.CVAL,
+                        clip=self.cfg.DATA.PREPROCESS.RESIZE.CLIP,
+                        preserve_range=self.cfg.DATA.PREPROCESS.RESIZE.PRESERVE_RANGE,
+                        anti_aliasing=self.cfg.DATA.PREPROCESS.RESIZE.ANTI_ALIASING,
+                    )[0]
+                    
                     if self.current_sample["Y"] is not None:
                         self.current_sample["Y"] = resize_images(
                             [self.current_sample["Y"]],
@@ -1851,6 +1869,11 @@ class Base_Workflow(metaclass=ABCMeta):
                             )
                         if self.cfg.PROBLEM.NDIM == "2D":
                             pred = pred[:, -reflected_orig_shape[1] :, -reflected_orig_shape[2] :]
+                            self.current_sample["X"] = self.current_sample["X"][
+                                :,
+                                -reflected_orig_shape[1] :,
+                                -reflected_orig_shape[2] :,
+                            ]
                             if self.current_sample["Y"] is not None:
                                 self.current_sample["Y"] = self.current_sample["Y"][
                                     :,
@@ -1859,6 +1882,12 @@ class Base_Workflow(metaclass=ABCMeta):
                                 ]
                         else:
                             pred = pred[
+                                :,
+                                -reflected_orig_shape[1] :,
+                                -reflected_orig_shape[2] :,
+                                -reflected_orig_shape[3] :,
+                            ]
+                            self.current_sample["X"] = self.current_sample["X"][
                                 :,
                                 -reflected_orig_shape[1] :,
                                 -reflected_orig_shape[2] :,
