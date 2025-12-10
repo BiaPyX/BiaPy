@@ -1155,7 +1155,7 @@ class BiaPy:
 
                 self.export_model_to_bmz(self.cfg.PATHS.BMZ_EXPORT_PATH, bmz_cfg=bmz_cfg)
 
-        # Wait until the main process is done
-        self.wait_and_stop_ddp()
+        # # Wait until the main process is done
+        # self.wait_and_stop_ddp()
 
         print("FINISHED JOB {} !!".format(self.job_identifier))
