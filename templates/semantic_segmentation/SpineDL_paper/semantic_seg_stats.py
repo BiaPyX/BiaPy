@@ -1,3 +1,24 @@
+"""
+Agreement analysis for semantic segmentation (Plotly version with heatmaps)
+**Dataset-level IoU version**
+
+- Loads model predictions and expert annotations.
+- Computes IoU (per class and mean IoU) by aggregating intersections/unions
+  across the entire dataset (NOT per-image averaging).
+- Plots:
+  (1) Bar: Model vs each expert (overall mIoU across images, dataset-level)
+  (2) Bar: Model vs experts (per-class mIoU across images, dataset-level)
+  (3) Heatmap matrix: Agreement (mIoU) among Model + Experts (overall, dataset-level)
+  (4-8) Heatmap matrices per class: Agreement among Model + Experts (class IoU, dataset-level)
+
+Requirements:
+    pip install plotly kaleido pillow numpy scikit-image
+
+Assumptions:
+- Masks are indexed images (pixel values are class IDs).
+- File names match across model and expert folders.
+- All images for the same case have identical spatial size.
+"""
 import os
 import argparse
 from glob import glob
@@ -161,14 +182,17 @@ def parse_args():
     parser.add_argument(
         "--pred_folder", type=str, required=True,
         help="Path to the folder containing model predictions (segmentation masks).",
-        default="/data/dfranco/exp_results/lesion_medular37/per_image_binarized",
         metavar="PRED_FOLDER"
     )
     parser.add_argument(
         "--experts_root", type=str, required=True,
         help="Root folder containing N subfolders, one per expert's annotations.",
-        default="/data/dfranco/datasets/lesion_medular/semantic_seg/V11/test/label",
         metavar="EXPERTS_ROOT"
+    )
+    parser.add_argument(
+        "--output_dir", type=str, required=True,
+        help="Output directory to save all generated SVG plots and consensus GT masks.",
+        metavar="OUTPUT_DIR"
     )
 
     # --- Output Filenames (SVGs) ---
@@ -294,10 +318,13 @@ def main():
     cons_per_class, cons_overall = dataset_level_iou(
         preds, consensus_gt, keys, args.num_classes, void_label=args.consensus_void_label
     )
+    out_dir = args.output_dir
+    os.makedirs(out_dir, exist_ok=True)
 
     # Save the consensus GT masks to disk
-    save_consensus_gt(consensus_gt, args.output_consensus_dir)
-    print(f"Saved unanimous-consensus GT masks to: {args.output_consensus_dir}")
+    out_dir_consensus = os.path.join(out_dir, args.output_consensus_dir)
+    save_consensus_gt(consensus_gt, out_dir_consensus)
+    print(f"Saved unanimous-consensus GT masks to: {out_dir_consensus}")
 
     # ---------------------- FIGURE 1: BARS ----------------------
     fig1 = make_subplots(
@@ -349,8 +376,9 @@ def main():
         a.yshift = 12
         a.align = "center"
 
-    fig1.write_image(args.output_bars_svg, format="svg")
-    print(f"Saved: {args.output_bars_svg}")
+    fig1_out = os.path.join(out_dir, args.output_bars_svg)
+    fig1.write_image(fig1_out, format="svg")
+    print(f"Saved: {fig1_out}")
 
     # ---------------------- FIGURE 2: OVERALL MATRIX ----------------------
     fig2 = go.Figure()
@@ -380,8 +408,9 @@ def main():
         template="plotly_white",
         showlegend=False
     )
-    fig2.write_image(args.output_overall_svg, format="svg")
-    print(f"Saved: {args.output_overall_svg}")
+    fig2_out = os.path.join(out_dir, args.output_overall_svg)
+    fig2.write_image(fig2_out, format="svg")
+    print(f"Saved: {fig2_out}")
 
     # ---------------------- FIGURE 3: PER-CLASS MATRICES -------------------
     # Use the first 5 class names for subplot titles
@@ -462,8 +491,9 @@ def main():
         a.yshift = 10
         a.align = "center"
 
-    fig3.write_image(args.output_classes_svg, format="svg")
-    print(f"Saved: {args.output_classes_svg}")
+    fig3_out = os.path.join(out_dir, args.output_classes_svg)
+    fig3.write_image(fig3_out, format="svg")
+    print(f"Saved: {fig3_out}")
 
     # ---------------------- FIGURE 4: MODEL vs CONSENSUS (UNANIMOUS) PER-CLASS ----------------------
 
@@ -526,14 +556,14 @@ def main():
         ),
     )
 
-    fig4.write_image(args.output_consensus_svg, format="svg")
-    print(f"Saved: {args.output_consensus_svg}")
+    fig4_out = os.path.join(out_dir, args.output_consensus_svg)
+    fig4.write_image(fig4_out, format="svg")
+    print(f"Saved: {fig4_out}")
 
+    agreement_dir = os.path.join(out_dir, args.output_iou_agreement_dir)
     save_iou_agreement_maps(
-        preds, consensus_gt, keys, args.output_iou_agreement_dir, void_value=args.consensus_void_label
+        preds, consensus_gt, keys, agreement_dir, void_value=args.consensus_void_label
     )
-    print(f"Saved IoU agreement maps to: {args.output_iou_agreement_dir}")
-
-
+    print(f"Saved IoU agreement maps to: {agreement_dir}")
 if __name__ == "__main__":
     main()

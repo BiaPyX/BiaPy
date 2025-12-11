@@ -15,8 +15,8 @@ PROBLEM:
           GROWTH_MASK_CHANNELS: ["F"]
           GROWTH_MASK_CHANNELS_THRESH: [0.5]
         DATA_CHECK_MW: false
-  
-DATA: 
+
+DATA:
     PATCH_SIZE: (512, 512, 2)
     REFLECT_TO_COMPLETE_SHAPE: True
     NORMALIZATION:
@@ -25,8 +25,8 @@ DATA:
           ENABLE: True
           LOWER_PERC: 0.1
           UPPER_PERC: 99.8
-    TRAIN:                                                                                                              
-        PATH: /path/to/spinedl_neuron_data/train/raw
+    TRAIN:
+        PATH: /path/to/spinedl_neuron_data/train/raw                      
         GT_PATH: /path/to/spinedl_neuron_data/train/label
         IN_MEMORY: True
         FILTER_SAMPLES:
@@ -37,14 +37,14 @@ DATA:
           NORM_BEFORE: True
     VAL:
         FROM_TRAIN: False
-        PATH: /path/to/spinedl_neuron_data/validation/raw                           
+        PATH: /path/to/spinedl_neuron_data/validation/raw                      
         GT_PATH: /path/to/spinedl_neuron_data/validation/label
         IN_MEMORY: True
-    TEST:                                                                                                               
+    TEST:
         PATH: /path/to/spinedl_neuron_data/validation/raw                      
         GT_PATH: /path/to/spinedl_neuron_data/validation/label
         IN_MEMORY: False
-        LOAD_GT: False
+        LOAD_GT: True
         PADDING: (100,100)
 
 AUGMENTOR:
@@ -63,10 +63,12 @@ AUGMENTOR:
 
 MODEL:
     ARCHITECTURE: hrnet48
-    LOAD_CHECKPOINT: True
-    
+    HRNET:
+        HEAD_TYPE: "FCN"
+    LOAD_CHECKPOINT: False
+
 TRAIN:
-    ENABLE: False
+    ENABLE: True
     OPTIMIZER: ADAMW
     LR: 1.E-4
     BATCH_SIZE: 6
@@ -78,14 +80,14 @@ TRAIN:
         WARMUP_COSINE_DECAY_EPOCHS: 5
 
 LOSS:
-  CLASS_REBALANCE: True
-  
+  CLASS_REBALANCE: "auto"
+
 TEST:
     ENABLE: True
     AUGMENTATION: False
     FULL_IMG: False
     POST_PROCESSING:
-      MEASURE_PROPERTIES: 
+      MEASURE_PROPERTIES:
         ENABLE: False
         REMOVE_BY_PROPERTIES:
           ENABLE: False

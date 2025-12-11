@@ -1,0 +1,61 @@
+SYSTEM:
+    NUM_CPUS: -1
+    NUM_WORKERS: 2
+
+PROBLEM:
+    TYPE: INSTANCE_SEG
+    NDIM: 2D
+    INSTANCE_SEG:
+        DATA_CHANNELS: ["F", "P"]
+        DATA_CHANNEL_WEIGHTS : [1, 2]
+        WATERSHED:
+          SEED_CHANNELS: ["P"]
+          SEED_CHANNELS_THRESH: [0.3]
+          TOPOGRAPHIC_SURFACE_CHANNEL: "F"
+          GROWTH_MASK_CHANNELS: ["F"]
+          GROWTH_MASK_CHANNELS_THRESH: [0.5]
+        DATA_CHECK_MW: false
+  
+DATA: 
+    PATCH_SIZE: (512, 512, 2)
+    REFLECT_TO_COMPLETE_SHAPE: True
+    NORMALIZATION:
+        TYPE: 'div'
+        PERC_CLIP:
+          ENABLE: True
+          LOWER_PERC: 0.1
+          UPPER_PERC: 99.8
+    TEST:                                                                                                               
+        PATH: /path/to/spinedl_neuron_data/validation/raw                      
+        GT_PATH: /path/to/spinedl_neuron_data/validation/label
+        IN_MEMORY: False
+        LOAD_GT: False
+        PADDING: (100,100)
+
+MODEL:
+    ARCHITECTURE: hrnet48
+    HRNET:
+      HEAD_TYPE: 'FCN'
+    SOURCE: bmz
+    BMZ:
+      SOURCE_MODEL_ID: 'proactive-snail'
+    
+TRAIN:
+    ENABLE: False
+  
+TEST:
+    ENABLE: True
+    AUGMENTATION: False
+    FULL_IMG: False
+    POST_PROCESSING:
+      MEASURE_PROPERTIES: 
+        ENABLE: False
+        REMOVE_BY_PROPERTIES:
+          ENABLE: False
+          PROPS: [['npixels']]
+          VALUES: [[100]]
+          SIGNS: [["lt"]]
+      INSTANCE_REFINEMENT:
+        ENABLE: True
+        OPERATIONS: ["remove_small_objects", "fill_holes"]
+        VALUES: [10, 'none']

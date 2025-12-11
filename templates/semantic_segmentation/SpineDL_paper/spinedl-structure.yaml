@@ -15,64 +15,25 @@ DATA:
           ENABLE: True
           LOWER_PERC: 0.1
           UPPER_PERC: 99.8
-
-    TRAIN:                                                                                                              
-        PATH: /path/to/spinedl_structure_data/train/raw                    
-        GT_PATH: /path/to/spinedl_structure_data/train/label
-        IN_MEMORY: True
-        FILTER_SAMPLES:
-          ENABLE: false
-          PROPS: [['mean']]
-          VALUES: [[0.05]]
-          SIGNS: [["lt"]]
-          NORM_BEFORE: True
-    VAL:
-        FROM_TRAIN: False
-        PATH: /path/to/spinedl_structure_data/validation/raw
-        GT_PATH: /path/to/spinedl_structure_data/validation/label
-        IN_MEMORY: True
     TEST:                                                                                                               
         PATH: /path/to/spinedl_structure_data/validation/raw
         GT_PATH: /path/to/spinedl_structure_data/validation/label
         IN_MEMORY: True
-        LOAD_GT: True
+        LOAD_GT: False
         PADDING: (400,400)
         CHECK_DATA: False
 
-AUGMENTOR:
-    ENABLE: True
-    RANDOM_ROT: True
-    VFLIP: True
-    HFLIP: True
-    BRIGHTNESS: True
-    BRIGHTNESS_FACTOR: (-0.2, 0.2)
-    CONTRAST: True
-    CONTRAST_FACTOR: (-0.2, 0.2)
-    ELASTIC: True
-    ZOOM: false
-    ZOOM_RANGE: (0.8, 1.2)
-    AFFINE_MODE: 'reflect'
-
-LOSS:
-    CLASS_REBALANCE: "manual"
-    CLASS_WEIGHTS: [0.74, 0.86, 1.71, 0.79, 1.89]
-
 MODEL:
     ARCHITECTURE: hrnet48
-    LOAD_CHECKPOINT: True
+    HRNET:
+      HEAD_TYPE: 'FCN'
     N_CLASSES: 5
+    SOURCE: bmz
+    BMZ:
+        SOURCE_MODEL_ID: 'greedy-deer'
     
 TRAIN:
     ENABLE: False
-    OPTIMIZER: ADAMW
-    LR: 0.0001
-    BATCH_SIZE: 4
-    EPOCHS: 800
-    PATIENCE: 100
-    LR_SCHEDULER:
-        NAME: 'warmupcosine'
-        MIN_LR: 1.E-5
-        WARMUP_COSINE_DECAY_EPOCHS: 5
   
 TEST:
     ENABLE: True
