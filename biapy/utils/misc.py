@@ -515,13 +515,14 @@ def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=Non
             checkpoint["biapy_version"] if "biapy_version" in checkpoint else None,
         )
 
+    chk_model = checkpoint["model"] if "model" in checkpoint else checkpoint
     if not skip_unmatched_layers:
-        model_without_ddp.load_state_dict(checkpoint["model"], strict=False)
+        model_without_ddp.load_state_dict(chk_model, strict=False)
     else:
         # Filter out layers with mismatched shapes
         filtered_state_dict = {}
         model_state_dict = model_without_ddp.state_dict()
-        for k, v in checkpoint["model"].items():
+        for k, v in chk_model.items():
             if k in model_state_dict:
                 if v.shape == model_state_dict[k].shape:
                     filtered_state_dict[k] = v
