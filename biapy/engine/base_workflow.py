@@ -245,14 +245,23 @@ class Base_Workflow(metaclass=ABCMeta):
             self.bmz_config["preprocessing"], opts = check_bmz_args(self.cfg.MODEL.BMZ.SOURCE_MODEL_ID, self.cfg)
             print("[BMZ] Overriding preprocessing steps to the ones fixed in BMZ model: {}".format(self.bmz_config["preprocessing"]))
 
+            # Adapt configuration to match the one defined in the RDF
             option_list = []
             for key, val in opts.items():
                 old_val = get_cfg_key_value(cfg, key)
-                if old_val != val:
+                change = False
+
+                # Not changing patch size if only the channel dimension is different
+                if "DATA.PATCH_SIZE" in key:
+                    if old_val[:-1] != val[:-1]:
+                        change = True
+                elif old_val != val:
+                    change = True
+                if change:
                     print(f"[BMZ] Changed '{key}' from {old_val} to {val} as defined in the RDF")
-                option_list.append(key)
-                option_list.append(val)
-                
+                    option_list.append(key)
+                    option_list.append(val)
+                    
             print("Loading BioImage Model Zoo pretrained model . . .")
             self.bmz_config["original_bmz_config"] = load_description(self.cfg.MODEL.BMZ.SOURCE_MODEL_ID)
 
