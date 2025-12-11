@@ -515,14 +515,23 @@ def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=Non
             checkpoint["biapy_version"] if "biapy_version" in checkpoint else None,
         )
 
-    chk_model = checkpoint["model"] if "model" in checkpoint else checkpoint
+    if 'model' in checkpoint:
+        checkpoint_state_dict = checkpoint['model']
+    elif 'model_state_dict' in checkpoint:
+        checkpoint_state_dict = checkpoint['model_state_dict']
+    elif 'state_dict' in checkpoint:
+        # Common convention in PyTorch Lightning
+        checkpoint_state_dict = checkpoint['state_dict']
+    else:
+        checkpoint_state_dict = checkpoint
+
     if not skip_unmatched_layers:
-        model_without_ddp.load_state_dict(chk_model, strict=False)
+        model_without_ddp.load_state_dict(checkpoint_state_dict, strict=False)
     else:
         # Filter out layers with mismatched shapes
         filtered_state_dict = {}
         model_state_dict = model_without_ddp.state_dict()
-        for k, v in chk_model.items():
+        for k, v in checkpoint_state_dict.items():
             if k in model_state_dict:
                 if v.shape == model_state_dict[k].shape:
                     filtered_state_dict[k] = v
