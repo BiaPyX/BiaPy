@@ -1221,8 +1221,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
         # Switch to evaluation mode
         assert self.model_without_ddp
-        if self.cfg.MODEL.SOURCE != "bmz":
-            self.model_without_ddp.eval()
+        self.model_without_ddp.eval()
 
         # When not training was done
         if "test_output" not in self.bmz_config:
