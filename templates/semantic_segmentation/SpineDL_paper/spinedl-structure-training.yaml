@@ -32,10 +32,9 @@ DATA:
         GT_PATH: /path/to/spinedl_structure_data/validation/label
         IN_MEMORY: True
     TEST:                                                                                                               
-        PATH: /path/to/spinedl_structure_data/validation/raw
-        GT_PATH: /path/to/spinedl_structure_data/validation/label
+        PATH: /path/to/spinedl_structure_data/test/raw
         IN_MEMORY: False
-        LOAD_GT: True
+        LOAD_GT: False
         PADDING: (400,400)
         CHECK_DATA: False
 
