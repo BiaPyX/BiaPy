@@ -1,4 +1,4 @@
-# BiaPy version: 3.6.7
+# BiaPy version: 3.6.8
 # We try to mimic here N2Void project parameters 
 SYSTEM:
     NUM_CPUS: -1
