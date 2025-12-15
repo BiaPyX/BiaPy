@@ -938,6 +938,12 @@ def check_bmz_model_compatibility(
             channels = model_kwargs["output_channels"]
 
         if "biapy" in tags:
+            if "description" in m and "representation:" in m["description"]:
+                try:
+                    representation = m["description"].split("representation:")[1].split("\n")[0].strip().split("+")
+                    channel_code = [x.strip() for x in representation]
+                except Exception:
+                    print(f"[{specific_workflow}] couldn't extract channel representation from model RDF description: {m['description']}. Setting the default F+C\n")
             # CartoCell models
             if (
                 "cyst" in tags
