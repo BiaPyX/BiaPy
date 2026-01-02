@@ -410,6 +410,7 @@ def get_checkpoint_path(cfg, jobname):
     # Select the checkpoint source file
     if cfg.PATHS.CHECKPOINT_FILE != "":
         resume = cfg.PATHS.CHECKPOINT_FILE
+        resume, _ = os.path.splitext(resume)
     else:
         if cfg.MODEL.LOAD_CHECKPOINT_EPOCH == "last_on_train":
             all_checkpoints = glob.glob(os.path.join(checkpoint_dir, "{}-checkpoint-*".format(jobname)))
@@ -424,9 +425,7 @@ def get_checkpoint_path(cfg, jobname):
             resume = os.path.join(checkpoint_dir, "{}-checkpoint-best".format(jobname))
         else:
             raise NotImplementedError
-
-    root, extension = os.path.splitext(resume)
-    return root
+    return resume
 
 def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=None, just_extract_checkpoint_info=False, skip_unmatched_layers=False):
     """
