@@ -240,7 +240,6 @@ class Base_Workflow(metaclass=ABCMeta):
 
         # Load BioImage Model Zoo pretrained model information
         self.bmz_config = {}
-        self.bmz_pipeline = None
         if self.cfg.MODEL.SOURCE == "bmz":
             self.bmz_config["preprocessing"], opts = check_bmz_args(self.cfg.MODEL.BMZ.SOURCE_MODEL_ID, self.cfg)
             print("[BMZ] Overriding preprocessing steps to the ones fixed in BMZ model: {}".format(self.bmz_config["preprocessing"]))
@@ -606,31 +605,6 @@ class Base_Workflow(metaclass=ABCMeta):
         prediction : torch.Tensor
             Image prediction.
         """
-        # ##### OPTION 1: we need batch size information as apply_preprocessing fails if the batch is not the same as the
-        # ##### one fixed for the model. Last batch of the epoch can have less samples than batch size.
-        # ##### Check torch.utils.data.DataLoader() drop last arg.
-        # # Convert from Numpy to xarray.DataArray
-        # self.bmz_axes = self.bmz_config['original_bmz_config'].inputs[0].axes
-        # in_img = xr.DataArray(in_img.cpu().numpy(), dims=tuple(self.bmz_axes))
-
-        # # Apply pre-processing
-        # in_img = dict(zip([ipt.name for ipt in self.bmz_pipeline.input_specs], (in_img,)))
-        # self.bmz_computed_measures = {}
-        # self.bmz_pipeline.apply_preprocessing(in_img, self.bmz_computed_measures)
-        # # print(f"in_img: {in_img['input0'].shape} {in_img['input0'].min()} {in_img['input0'].max()}")
-        # # Predict
-        # prediction = self.model(torch.from_numpy(np.array(in_img['input0'])).to(self.device))
-
-        # # Apply post-processing (if any)
-        # if bool(self.bmz_pipeline.output_specs[0].postprocessing):
-        #     prediction = xr.DataArray(prediction.cpu().numpy(), dims=tuple(self.bmz_axes))
-        #     prediction = dict(zip([out.name for out in self.bmz_pipeline.output_specs], prediction))
-        #     self.bmz_pipeline.apply_postprocessing(prediction, self.bmz_computed_measures)
-
-        #     # Convert back to Tensor
-        #     prediction = torch.from_numpy(np.array(prediction)).to(self.device)
-
-        ##### OPTION 2: Just a normal model call, but the pre and post need to be done in BiaPy
         assert self.model
         prediction = self.model(in_img)
 
@@ -774,20 +748,6 @@ class Base_Workflow(metaclass=ABCMeta):
             self.model, self.torchvision_preprocessing = build_torchvision_model(self.cfg, self.device)
         # BioImage Model Zoo pretrained models
         elif self.cfg.MODEL.SOURCE == "bmz":
-            # Create a bioimage pipeline to create predictions
-            try:
-                self.bmz_pipeline = create_prediction_pipeline(
-                    self.bmz_config["original_bmz_config"],
-                    devices=None,
-                    weight_format="pytorch_state_dict",
-                )
-            except Exception as e:
-                print(f"The error thrown during the BMZ model load was:\n{e}")
-                raise ValueError(
-                    "An error ocurred when creating the BMZ model (see above). "
-                    "BiaPy only supports models prepared with pytorch_state_dict."
-                )
-
             if self.args.distributed:
                 raise ValueError("DDP can not be activated when loading a BMZ pretrained model")
 
