@@ -154,6 +154,8 @@ class Config:
         #          that is not in the foreground. Default: 'thick'.
         #   - 'H', 'V', 'Z' and 'Db' channels. Possible options:
         #       - 'norm': bool, whether to normalize the distances between 0 and 1. Default: True
+        #       - 'act': str, activation function to be used in the last layer of the model when this channel is selected. 
+        #          Options are: '', 'linear' and 'sigmoid'. Default: ''.
         #       - 'mask_values': bool, whether to mask the distance channel to only calculate the loss in non-zero values. Default: True
         #   - 'Dc' channel. Possible options:
         #       - 'type': str, the type of the channel. Options are: 'centroid', 'skeleton'. Default: 'centroid'

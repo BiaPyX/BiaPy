@@ -197,7 +197,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     self.activations.append("ce_sigmoid")
                     self.model_output_channels["channels"] += 1
                 elif channel in ["Db", "Dc", "Dn", "D", "H", "V", "Z"]:
-                    if dst.get(channel, {}).get("norm", True) and self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES[i] not in ["mse", "l1", "mae"]:
+                    if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES[i] not in ["mse", "l1", "mae"] or dst.get(channel, {}).get("act", "") == "sigmoid":
                         self.activations.append("ce_sigmoid")
                     else:
                         self.activations.append("linear")

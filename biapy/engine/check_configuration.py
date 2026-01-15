@@ -407,8 +407,13 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             # H / V / Z / Db — distance channels group
             for ch in ("H", "V", "Z", "Db"):
                 if ch in chs:
+                    norm = dst.get(ch, {}).get("norm", True)
+                    act = dst.get(ch, {}).get("act", "")
+                    if act == "" and norm:
+                        act = "sigmoid"
                     dst[ch] = {
-                        "norm": dst.get(ch, {}).get("norm", True),
+                        "norm": norm,
+                        "act": act,
                         "mask_values": dst.get(ch, {}).get("mask_values", True),
                     }
 
