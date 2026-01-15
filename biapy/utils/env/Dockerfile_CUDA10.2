@@ -25,7 +25,7 @@ RUN conda update --all
 ENV PATH="/opt/conda/bin:$PATH"
 RUN . /installations/miniconda3/etc/profile.d/conda.sh
 RUN conda update -qy conda \
-    && conda create -n BiaPy_env python=3.10 \
+    && conda create -n BiaPy_env python=3.11 \
     && conda init bash
 
 # Set up shell to use the created env
@@ -51,7 +51,7 @@ ENV HOME /home/user
 RUN echo 'export HOME=/home/user' >> ~/.bashrc
 
 # To remove CuDNN issue 
-WORKDIR /installations/miniconda3/envs/BiaPy_env/lib/python3.10/site-packages/nvidia/cuda_nvrtc/lib/
+WORKDIR /installations/miniconda3/envs/BiaPy_env/lib/python3.11/site-packages/nvidia/cuda_nvrtc/lib/
 RUN ln -s libnvrtc.so.11.2 libnvrtc.so
 
 ENTRYPOINT ["conda", "run", "--no-capture-output", "-n", "BiaPy_env", "python3", "-u", "/installations/BiaPy/main.py"]

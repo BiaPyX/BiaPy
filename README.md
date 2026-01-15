@@ -4,7 +4,7 @@
 
 <p align="left">
     <a href="https://www.python.org/">
-      <img src="https://img.shields.io/badge/Python-3.10-yellow.svg" /></a>
+      <img src="https://img.shields.io/badge/Python-3.11-yellow.svg" /></a>
     <a href= "https://pytorch.org/">
       <img src="https://img.shields.io/badge/PyTorch-2.9.1-orange.svg" /></a>
     <a href= "https://pypi.org/project/biapy/">

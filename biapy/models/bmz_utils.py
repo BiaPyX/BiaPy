@@ -115,7 +115,7 @@ def create_environment_file_for_model(building_dir):
     env = dict(
         name="biapy",
         dependencies=[
-            "python>=3.10",
+            "python>=3.11",
             "pip",
             {
                 "pip": [

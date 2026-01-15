@@ -24,17 +24,11 @@ RUN conda init bash && \
     conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main && \
     conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r && \
     conda update -y -n base -c defaults conda && \
-    conda create -n BiaPy_env python=3.10 && \
+    conda create -n BiaPy_env -c conda-forge python=3.11 biapy pytorch-gpu && \
     conda init bash
 
 # Set up shell to use the created env
 SHELL ["conda", "run", "-n", "BiaPy_env", "/bin/bash", "-c"]
-
-# Install Pytorch + CUDA 11.8
-RUN pip install torch==2.9.1 torchvision==0.24.1 --index-url https://download.pytorch.org/whl/cu126
-
-# Install BiaPy
-RUN pip install biapy
 
 # Clone BiaPy, as running it with python -c "" stops the container with no error after a few seconds running 
 ARG REPO=https://github.com/BiaPyX/BiaPy.git
@@ -49,7 +43,7 @@ ENV HOME /home/user
 RUN echo 'export HOME=/home/user' >> ~/.bashrc
 
 # To remove CuDNN issue 
-WORKDIR /installations/miniconda3/envs/BiaPy_env/lib/python3.10/site-packages/nvidia/cuda_nvrtc/lib/
+WORKDIR /installations/miniconda3/envs/BiaPy_env/lib/python3.11/site-packages/nvidia/cuda_nvrtc/lib/
 RUN ln -s libnvrtc.so.11.2 libnvrtc.so
 
 ENTRYPOINT ["conda", "run", "--no-capture-output", "-n", "BiaPy_env", "python3", "-u", "/installations/BiaPy/main.py"]
