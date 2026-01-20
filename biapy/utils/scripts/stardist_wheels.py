@@ -208,14 +208,24 @@ def main():
         polygons.append((xs, ys))
 
     # draw
-    dpi = 200
-    fig = plt.figure(figsize=(W/dpi, H/dpi), dpi=dpi)
-    ax = plt.axes([0, 0, 1, 1])
+    dpi = 100 # Use a standard DPI for calculation
+    # Calculate figure size so pixels = inches * dpi
+    fig = plt.figure(frameon=False)
+    fig.set_size_inches(W / dpi, H / dpi)
+
+    # Create an axes that spans the entire figure area (no margins)
+    ax = plt.Axes(fig, [0., 0., 1., 1.])
+    ax.set_axis_off()
+    fig.add_axes(ax)
+
     draw_polygons(ax, base, polygons, centers, lw_outline=args.lw_outline, lw_spoke=args.lw_spoke)
-    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(args.out, dpi=dpi)
+
+    output_path = args.out.replace(".png", ".svg") 
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path, format='svg', bbox_inches='tight', pad_inches=0)
+
     plt.close(fig)
-    print(f"Saved wheel overlay to: {args.out}")
+    print(f"Saved wheel overlay to: {output_path}")
 
 
 if __name__ == "__main__":
