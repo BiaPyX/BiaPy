@@ -137,58 +137,71 @@ class Config:
         _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS = ["B", "C"]
         # Details for each channel. It must be a list with a unique element: a dict of dicts. The details can be only set for the following channels:
         #   - 'F' channel. Possible options:
-        #       - 'erosion': int or list of ints, the erosion size to be applied to the channel. Default: 0
-        #       - 'dilation': int or list of ints, the dilation size to be applied to the channel. Default: 0
+        #       - 'erosion': int or list of ints, specifies the erosion size applied to the channel. Default: 0
+        #       - 'dilation': int or list of ints, specifies the dilation size applied to the channel. Default: 0
         #   - 'B' channel. Possible options:
-        #       - 'erosion': int or list of ints, the erosion size to be applied to the channel. Default: 0
-        #       - 'dilation': int or list of ints, the dilation size to be applied to the channel. Default: 0
+        #       - 'erosion': int or list of ints, specifies the erosion size applied to the channel. Default: 0
+        #       - 'dilation': int or list of ints, specifies the dilation size applied to the channel. Default: 0
         #   - 'P' channel. Possible options:
-        #       - 'type': str, the type of the channel. Options are: 'centroid', 'skeleton'. Default: 'centroid'
-        #       - 'dilation': int or list of ints, the dilation size to be applied to the channel. Default: 1
-        #       - 'erosion': int or list of ints, the erosion size to be applied to the channel. Useful when you want thinner skeletons
-        #          as they are 2-pixel thick. Default: 0
+        #       - 'type': str, specifies the reference used to define the channel. Options are 'centroid' or 'skeleton'. Default: 'centroid'
+        #       - 'dilation': int or list of ints, specifies the dilation size applied to the channel. Default: 1
+        #       - 'erosion': int or list of ints, specifies the erosion size applied to the channel. Useful for thinning skeletons,
+        #          which are typically 2 pixels thick. Default: 0
         #   - 'C' channel. Possible options:
-        #       - 'mode': str, how to create the contours. Corresponds to 'mode' arg of find_boundaries function from scikit-image. 
-        #          More info in: https://scikit-image.org/docs/stable/api/skimage.segmentation.html#skimage.segmentation.find_boundaries.
-        #          Options are: 'thick', 'inner', 'outer', 'subpixel' and 'dense'. The last one is used to label as contour every pixel
-        #          that is not in the foreground. Default: 'thick'.
+        #       - 'mode': str, specifies how contours are generated. Corresponds to the 'mode' argument of the
+        #          find_boundaries function from scikit-image.
+        #          More information at: https://scikit-image.org/docs/stable/api/skimage.segmentation.html#skimage.segmentation.find_boundaries.
+        #          Options are 'thick', 'inner', 'outer', 'subpixel', and 'dense'. The 'dense' option labels as contour
+        #          every pixel that is not part of the foreground. Default: 'thick'
         #   - 'H', 'V', 'Z' and 'Db' channels. Possible options:
-        #       - 'norm': bool, whether to normalize the distances between 0 and 1. Default: True
-        #       - 'act': str, activation function to be used in the last layer of the model when this channel is selected. 
-        #          Options are: '', 'linear' and 'sigmoid'. Default: ''.
-        #       - 'mask_values': bool, whether to mask the distance channel to only calculate the loss in non-zero values. Default: True
+        #       - 'norm': bool, specifies whether distances are normalized between 0 and 1. Default: True
+        #       - 'act': str, specifies the activation function used in the model’s final layer when this channel is selected.
+        #          Options are '', 'linear', and 'sigmoid'. Default: ''
+        #       - 'mask_values': bool, specifies whether to mask the distance channel so the loss is computed only on non-zero values.
+        #          Default: True
         #   - 'Dc' channel. Possible options:
-        #       - 'type': str, the type of the channel. Options are: 'centroid', 'skeleton'. Default: 'centroid'
-        #       - 'norm': bool, whether to normalize the distances between 0 and 1. Default: True
-        #       - 'mask_values': bool, whether to mask the distance channel to only calculate the loss in non-zero values. Default: True
+        #       - 'type': str, specifies the reference used to calculate the distance. Options are 'centroid' or 'skeleton'.
+        #         Default: 'centroid'
+        #       - 'norm': bool, specifies whether distances are normalized between 0 and 1. Default: True
+        #       - 'mask_values': bool, specifies whether to mask the distance channel so the loss is computed only on non-zero values.
+        #         Default: True
         #   - 'Dn' channel. Possible options:
-        #       - 'closing_size': int, the size of the closing to be applied to the combined distance map. Default: 0
-        #       - 'norm': bool, whether to normalize the distances between 0 and 1. Default: True
-        #       - 'mask_values': bool, whether to mask the distance channel to only calculate the loss in non-zero values. Default: True
-        #       - 'decline_power': int, the power to which the distances are raised to control the decline rate. Default: 3
+        #       - 'closing_size': int, specifies the size of the closing operation applied to the combined distance map.
+        #         Default: 0
+        #       - 'norm': bool, specifies whether distances are normalized between 0 and 1. Default: True
+        #       - 'mask_values': bool, specifies whether to mask the distance channel so the loss is computed only on non-zero values.
+        #         Default: True
+        #       - 'decline_power': int, specifies the power applied to distances to control the rate of decline. Default: 3
         #   - 'D' channel. Possible options:
-        #       - 'act': str, activation function to be used in the last layer of the model when this channel is selected. Options are: 
-        #         'tanh' and 'linear'. Default: 'tanh'
-        #       - 'alpha': int, value to scale the distances of the background when 'act' is 'tanh'. Default: 1
-        #       - 'beta': int, value to scale the distances of the foreground when 'act' is 'tanh'. Default: 1
-        #       - 'norm': bool, whether to normalize the distances between -1 and 1. Default: True
+        #       - 'act': str, specifies the activation function used in the model’s final layer when this channel is selected.
+        #         Options are 'tanh' and 'linear'. Default: 'tanh'
+        #       - 'alpha': int, specifies the scaling factor applied to background distances when 'act' is 'tanh'.
+        #         Default: 1
+        #       - 'beta': int, specifies the scaling factor applied to foreground distances when 'act' is 'tanh'.
+        #         Default: 1
+        #       - 'norm': bool, specifies whether distances are normalized between -1 and 1. Default: True
         #   - 'R' channel. Possible options:
-        #       - 'nrays': int, the number of rays to be used to represent the radial distances. Default: 32 (in 2D) and 96 (in 3D)
-        #       - 'norm': bool, whether to normalize the distances between 0 and 1. Default: True
-        #       - 'mask_values': bool, whether to mask the distance channel to only calculate the loss in non-zero values. Default: True
+        #       - 'nrays': int, specifies the number of rays used to represent radial distances.
+        #         Default: 32 for 2D data and 96 for 3D data
+        #       - 'norm': bool, specifies whether distances are normalized between 0 and 1. Default: True
+        #       - 'mask_values': bool, specifies whether to mask the distance channel so the loss is computed only on non-zero values.
+        #         Default: True
         #   - 'T' channel. Possible options:
-        #       - 'thickness': int, the thickness in pixels of the touching area. Default: 2
+        #       - 'thickness': int, specifies the thickness (in pixels) of the touching area. Default: 2
         #   - 'A' channel. Possible options:
-        #       - 'z_affinities': list of int, the offsets in x axis to be calculated. Default: [1]
-        #       - 'y_affinities': list of int, the offsets in y axis to be calculated. Default: [1]
-        #       - 'x_affinities': list of int, the offsets in z axis to be calculated. Default: [1]
-        #       - 'widen_borders': int, the size in pixels to widen the borders of the affinities. Default: 1
-        #       Notice that 'z_affinities', 'y_affinities' and 'x_affinities'  need to be lists of the same length. To reproduce the paper
-        #       "Superhuman Accuracy on the SNEMI3D Connectomics Challenge" the values are: 
-        #       'z_affinities': [1,2,3,4], 'y_affinities': [1,3,9,27] and 'x_affinities': [1,3,9,27]
+        #       - 'z_affinities': list of int, specifies offsets along the z axis. Default: [1]
+        #       - 'y_affinities': list of int, specifies offsets along the y axis. Default: [1]
+        #       - 'x_affinities': list of int, specifies offsets along the x axis. Default: [1]
+        #       - 'widen_borders': int, specifies the number of pixels used to widen affinity borders. Default: 1
+        #       Note that 'z_affinities', 'y_affinities', and 'x_affinities' must be lists of equal length.
+        #       To reproduce the paper "Superhuman Accuracy on the SNEMI3D Connectomics Challenge", use:
+        #       'z_affinities': [1, 2, 3, 4], 'y_affinities': [1, 3, 9, 27], and 'x_affinities': [1, 3, 9, 27]
         #   - 'E' channel. Possible options:
-        #       - 'center_mode': str, the center mode to use for the gaussian seeds. Default: "centroid". Options: "centroid" and "medoid"
-        #       - 'medoid_max_points': int, the maximum number of points to use when calculating the medoid. Default: 10000
+        #       - 'center_mode': str, specifies the center definition used for Gaussian seeds.
+        #         Options are 'centroid' and 'medoid'. Default: 'centroid'
+        #       - 'medoid_max_points': int, specifies the maximum number of points used when computing the medoid.
+        #         Default: 10000
+
         _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS = [{}]
         # Losses to be applied to each channel. If not provided, the losses will be set automatically depending on the channel.
         # The options are:
