@@ -951,10 +951,10 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         # If no normalization was applied, as is done with torchvision models, it can be an image of uint16
         # so we need to convert it to
         if img.dtype == np.uint16:
-            img = torch.from_numpy(img.copy().astype(np.float32))
+            img = torch.from_numpy(img.astype(np.float32))
         else:
             img = torch.from_numpy(img.copy())
-        mask = torch.from_numpy(mask.copy().astype(np.float32))
+        mask = torch.from_numpy(mask.copy())
 
         return img, mask
 
