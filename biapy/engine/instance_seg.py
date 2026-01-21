@@ -196,12 +196,24 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 if channel in ["B", "F", "P", "C", "T", "M", "F_pre", "F_post"]:
                     self.activations.append("ce_sigmoid")
                     self.model_output_channels["channels"] += 1
-                elif channel in ["Db", "Dc", "Dn", "D", "H", "V", "Z"]:
+                elif channel in ["Dc", "Dn", "D", "H", "V", "Z"]:
                     if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES[i] not in ["mse", "l1", "mae"] or dst.get(channel, {}).get("act", "") == "sigmoid":
                         self.activations.append("ce_sigmoid")
                     else:
                         self.activations.append("linear")
                     self.model_output_channels["channels"] += 1
+                elif channel == "Db":
+                    val_type = dst.get(channel, {}).get("val_type", "norm")
+                    if val_type == "discretize":
+                        for _ in range(11):  # Default 10 bins + background
+                            self.activations.append("ce_softmax")
+                            self.model_output_channels["channels"] += 1
+                    elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES[i] not in ["mse", "l1", "mae"] or dst.get(channel, {}).get("act", "") == "sigmoid":
+                        self.activations.append("ce_sigmoid")
+                        self.model_output_channels["channels"] += 1
+                    else:
+                        self.activations.append("linear")
+                        self.model_output_channels["channels"] += 1
                 elif channel == "D":
                     self.activations.append(dst.get("D", {}).get("act", "linear"))
                     self.model_output_channels["channels"] += 1
@@ -240,6 +252,8 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             self.multihead = False
 
         self.real_classes = self.model_output_channels["channels"][0]
+        if "Db" in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS and dst.get("Db", {}).get("val_type", "norm") == "discretize":
+            self.real_classes -= 10  # Default 10 bins
 
         super().define_activations_and_channels()
 
@@ -386,7 +400,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 out_channels = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
                 losses_to_use = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES,
                 channel_extra_opts = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0],
-                channels_expected = self.real_classes,
+                gt_channels_expected = self.real_classes,
                 n_classes=self.cfg.DATA.N_CLASSES,
                 class_rebalance=self.cfg.LOSS.CLASS_REBALANCE,
                 class_weights=self.cfg.LOSS.CLASS_WEIGHTS,

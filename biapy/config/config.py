@@ -153,12 +153,21 @@ class Config:
         #          More information at: https://scikit-image.org/docs/stable/api/skimage.segmentation.html#skimage.segmentation.find_boundaries.
         #          Options are 'thick', 'inner', 'outer', 'subpixel', and 'dense'. The 'dense' option labels as contour
         #          every pixel that is not part of the foreground. Default: 'thick'
-        #   - 'H', 'V', 'Z' and 'Db' channels. Possible options:
+        #   - 'H', 'V' and 'Z' channels. Possible options:
         #       - 'norm': bool, specifies whether distances are normalized between 0 and 1. Default: True
         #       - 'act': str, specifies the activation function used in the model’s final layer when this channel is selected.
         #          Options are '', 'linear', and 'sigmoid'. Default: ''
         #       - 'mask_values': bool, specifies whether to mask the distance channel so the loss is computed only on non-zero values.
         #          Default: True
+        #   - 'Db' channel. Possible options:
+        #       - 'val_type': str, to determine how to modify the distance values. Default: 'norm'. Options are:
+        #           - 'raw': to leave the distances as they are calculated.
+        #           - 'norm': to normalize the distances between 0 and 1.
+        #           - 'discretize': to discretize the distances into bins.
+        #       - 'bin_size': float, size of each bin when 'val_type' is 'discretize'. Default: 0.1
+        #       - 'act': str, activation function to be used in the last layer of the model when this channel is selected.
+        #          Options are: '', 'linear' and 'sigmoid'. Default: ''.
+        #       - 'mask_values': bool, whether to mask the distance channel to only calculate the loss in non-zero values. Default: True
         #   - 'Dc' channel. Possible options:
         #       - 'type': str, specifies the reference used to calculate the distance. Options are 'centroid' or 'skeleton'.
         #         Default: 'centroid'

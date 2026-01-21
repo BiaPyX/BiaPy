@@ -446,7 +446,7 @@ class Base_Workflow(metaclass=ABCMeta):
             Resulting targets.
         """
         # We do not use 'batch' input but in SSL workflow
-        return to_pytorch_format(targets, self.axes_order, self.device)
+        return to_pytorch_format(targets, self.axes_order, self.device, dtype=targets.dtype)
 
     def load_train_data(self):
         """Load training and validation data."""

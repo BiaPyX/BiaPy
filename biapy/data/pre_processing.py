@@ -394,8 +394,10 @@ def labels_into_channels(
         else:
             c_number += 1
 
-    if any(x for x in ["Db", "Dc", "Dn", "D", "H", "V", "Z", "R", "We"] if x in mode):
+    if any(x for x in ["Dc", "Dn", "D", "H", "V", "Z", "R", "We"] if x in mode):
         dtype = np.float32
+    elif "Db" in mode:
+        dtype = np.uint8 if channel_extra_opts.get("Db", {}).get("val_type", "norm") == "discretize" else np.float32
     elif "E_offset" in mode:
         dtype = instance_labels.dtype
         # Ensure that no floating-point dtype is used for the embeddings. 
@@ -412,6 +414,9 @@ def labels_into_channels(
         
     new_mask = np.zeros(instance_labels.shape[:-1] + (c_number,), dtype=dtype)
     vol = instance_labels[..., 0]
+
+    if np.issubdtype(vol.dtype, np.floating):
+        vol = vol.astype(np.uint32)
 
     # Precompute regionprops only when needed
     needs_props = False
@@ -628,13 +633,29 @@ def labels_into_channels(
         assert isinstance(db_channel, np.ndarray), "Expected db to be a numpy array"
 
         # Normalization
-        if channel_extra_opts.get("Db", {}).get("norm", False):
+        val_type = channel_extra_opts.get("Db", {}).get("val_type", "norm")
+        if val_type in ["norm", "discretize"]:
             db_channel = norm_channel(
                 db_channel, 
                 vol, 
                 instances,
             )
-        new_mask[..., mode.index("Db")] = db_channel
+            if val_type == "discretize":
+                db_dis_bin_size = channel_extra_opts.get("Db", {}).get("bin_size", 0.1)
+                db_dis_K = int(round(1.0 / db_dis_bin_size))  # 10
+            
+                db_channel = np.clip(db_channel, 0.0, 1.0)
+                fg = fg_mask.astype(bool)
+
+                # bin index in [0, K-1]
+                bin_idx = np.floor(db_channel / db_dis_bin_size).astype(np.uint8)
+                bin_idx = np.clip(bin_idx, 0, db_dis_K - 1)
+
+                labels = np.zeros(db_channel.shape, dtype=np.uint8)  # background = 0
+                labels[fg] = bin_idx[fg] + 1                         # foreground bins = 1..K
+                db_channel = labels
+
+        new_mask[...,  mode.index("Db")] = db_channel
 
     # ---------- Dn (distance to neighbor) ----------
     if "Dn" in mode:

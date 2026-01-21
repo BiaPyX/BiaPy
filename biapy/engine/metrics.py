@@ -336,24 +336,45 @@ class multiple_metrics:
             y_true = scale_target(y_true, _y_pred.shape[-self.ndim :])
 
         res_metrics = {}
-        for ch_pos, channel in enumerate(self.out_channels):
+        db_val_type = ""
+        for pred_ch_start, channel in enumerate(self.out_channels):
+            gt_ch_start = pred_ch_start
             if channel == "A":
                 assert self.channel_extra_opts is not None and "A" in self.channel_extra_opts, "Affinity channel options must be provided."
-                ch_pos_end = len(self.channel_extra_opts["A"].get("y_affinities", [1])) + ch_pos
+                pred_ch_end = len(self.channel_extra_opts["A"].get("y_affinities", [1])) + pred_ch_start
+                gt_ch_end = pred_ch_end
             elif channel == "R":
                 assert self.channel_extra_opts is not None and "R" in self.channel_extra_opts, "Rays channel options must be provided."
-                ch_pos_end = self.channel_extra_opts["R"].get("nrays", 32) + ch_pos
+                pred_ch_end = self.channel_extra_opts["R"].get("nrays", 32) + pred_ch_start
+                gt_ch_end = pred_ch_end
+            elif channel == "Db":
+                assert self.channel_extra_opts is not None and "Db" in self.channel_extra_opts, "Distance to border channel options must be provided."
+                db_val_type = self.channel_extra_opts.get("Db", {}).get("val_type", "norm")
+                if db_val_type == "discretize":
+                    db_dis_bin_size = self.channel_extra_opts.get("Db", {}).get("bin_size", 0.1)
+                    db_dis_K = int(round(1.0 / db_dis_bin_size))  # 10
+                    db_channels = db_dis_K + 1   
+                else:
+                    db_channels = 1
+                pred_ch_end = pred_ch_start + db_channels
+                gt_ch_end = pred_ch_end
             else:
-                ch_pos_end = ch_pos + 1
+                pred_ch_end = pred_ch_start + 1
+                gt_ch_end = pred_ch_end
 
-            if self.metric_names[ch_pos] not in res_metrics:
-                res_metrics[self.metric_names[ch_pos]] = []
+            if self.metric_names[pred_ch_start] not in res_metrics:
+                res_metrics[self.metric_names[pred_ch_start]] = []
 
             # Measure metric
-            if self.metric_names[ch_pos] == "IoU (classes)":
-                res_metrics[self.metric_names[ch_pos]].append(self.metric_func[ch_pos](_y_pred_class, y_true[:, 1]))
+            if self.metric_names[pred_ch_start] == "IoU (classes)":
+                res_metrics[self.metric_names[pred_ch_start]].append(self.metric_func[pred_ch_start](_y_pred_class, y_true[:, 1]))
             else:
-                res_metrics[self.metric_names[ch_pos]].append(self.metric_func[ch_pos](_y_pred[:, ch_pos:ch_pos_end], y_true[:, ch_pos:ch_pos_end]))
+                y_pred_slice = _y_pred[:, pred_ch_start:pred_ch_end]
+                y_true_slice = y_true[:, gt_ch_start:gt_ch_end]
+                if y_pred_slice.shape[1] != y_true_slice.shape[1] and "Db" == channel and db_val_type == "discretize":
+                    y_pred_slice = torch.argmax(y_pred_slice, dim=1).unsqueeze(1).float()
+                    y_true_slice = y_true_slice.float()
+                res_metrics[self.metric_names[pred_ch_start]].append(self.metric_func[pred_ch_start](y_pred_slice, y_true_slice))
 
         # Mean of same metric values
         for key, value in res_metrics.items():
@@ -1108,7 +1129,7 @@ class instance_segmentation_loss:
     channel_extra_opts : dict, optional
         Additional options for each output channel (e.g., {"D": {"mask_values": True}}).
     
-    channels_expected : int, optional
+    gt_channels_expected : int, optional
         Number of channels expected in the ground truth (default: 1).   
 
     n_classes : int, optional
@@ -1135,7 +1156,7 @@ class instance_segmentation_loss:
         out_channels=["F", "C"],
         losses_to_use=[],
         channel_extra_opts={},
-        channels_expected: int = 1,
+        gt_channels_expected: int = 1,
         n_classes=2,
         class_rebalance: str = "none",
         class_weights: List[float] = [],
@@ -1168,39 +1189,17 @@ class instance_segmentation_loss:
         self.weights = weights
         self.out_channels = [x for x in out_channels if x != "We"]
         self.extra_weight_in_borders = out_channels.count("We") > 0
-        self.channels_expected = channels_expected if not self.extra_weight_in_borders else channels_expected + 1
+        self.gt_channels_expected = gt_channels_expected if not self.extra_weight_in_borders else gt_channels_expected + 1
         self.channel_extra_opts = channel_extra_opts
         self.n_classes = n_classes
         if self.n_classes > 2:
-           self.channels_expected += 1  # for the class channel
+           self.gt_channels_expected += 1  # for the class channel
         self.class_rebalance = class_rebalance
         self.class_weights = class_weights if class_rebalance == "manual" else None
         self.ignore_index = ignore_index
         self.ignore_values = True if ignore_index != -1 else False
-        self.losses_to_use = []
-        self.loss_names = losses_to_use
-        for loss in losses_to_use:
-            loss = loss.lower()
-            assert loss in ["bce", "ce", "l1", "mae", "mse", "triplet"], (
-                "Loss {} not recognized. Available options are: 'bce', 'ce', 'l1', 'mae', 'mse' and 'triplet'".format(loss)
-            )
-            if loss == "ce" or loss == "bce":
-                if self.class_rebalance == "manual" and self.class_weights is not None:
-                    weight = torch.tensor(self.class_weights)
-                else:
-                    weight = None
-                self.losses_to_use.append(torch.nn.BCEWithLogitsLoss(weight=weight))
-            elif loss == "l1" or loss == "mae":
-                self.losses_to_use.append(torch.nn.L1Loss())
-            elif loss == "mse":
-                self.losses_to_use.append(torch.nn.MSELoss())
-            elif loss == "triplet":
-                self.losses_to_use.append(torch.nn.TripletMarginLoss(margin=1.0, p=2))
-
-        assert len(self.losses_to_use) == len(self.out_channels), (
-            "Number of losses ({}) and number of output channels ({}) do not match.".format(len(self.losses_to_use), len(self.out_channels))
-        )
-        self.class_channel_loss = torch.nn.CrossEntropyLoss()
+        self.losses_to_use = losses_to_use
+        self.class_channel_loss = torch.nn.CrossEntropyLoss() if self.n_classes > 2 else None
 
     def __call__(self, y_pred, y_true):
         """
@@ -1227,9 +1226,9 @@ class instance_segmentation_loss:
         if self.n_classes > 2 and isinstance(y_pred, dict) and "class" in y_pred:
             _y_pred_class = y_pred["class"]
 
-        assert (y_true.shape[1] == self.channels_expected), (
+        assert (y_true.shape[1] == self.gt_channels_expected), (
             "Seems that the GT loaded doesn't have {} channels as expected in {}. GT shape: {}".format(
-                self.channels_expected, self.out_channels, y_true.shape
+                self.gt_channels_expected, self.out_channels, y_true.shape
             )
         )
 
@@ -1239,16 +1238,30 @@ class instance_segmentation_loss:
 
         loss = 0
         for i, channel in enumerate(self.out_channels):
-            ch_pos = self.out_channels.index(channel)
+            pred_ch_start = self.out_channels.index(channel)
+            gt_ch_start = pred_ch_start
             if channel == "A":
-                ch_pos_end = len(self.channel_extra_opts["A"].get("y_affinities", [1])) + ch_pos
+                pred_ch_end = len(self.channel_extra_opts["A"].get("y_affinities", [1])) + pred_ch_start
+                gt_ch_end = pred_ch_end
             elif channel == "R":
-                ch_pos_end = self.channel_extra_opts["R"].get("nrays", 32) + ch_pos
+                pred_ch_end = self.channel_extra_opts["R"].get("nrays", 32) + pred_ch_start
+                gt_ch_end = pred_ch_end
+            elif channel == "Db":
+                val_type = self.channel_extra_opts.get("Db", {}).get("val_type", "norm")
+                if val_type == "discretize":
+                    db_dis_bin_size = self.channel_extra_opts.get("Db", {}).get("bin_size", 0.1)
+                    db_dis_K = int(round(1.0 / db_dis_bin_size))  # 10
+                    db_channels = db_dis_K + 1   
+                else:
+                    db_channels = 1
+                pred_ch_end = pred_ch_start + db_channels
+                gt_ch_end = pred_ch_start + 1
             else:
-                ch_pos_end = ch_pos + 1
+                pred_ch_end = pred_ch_start + 1
+                gt_ch_end = pred_ch_end
 
-            y_pred_slice = _y_pred[:, ch_pos:ch_pos_end]
-            y_true_slice = y_true[:, ch_pos:ch_pos_end]
+            y_pred_slice = _y_pred[:, pred_ch_start:pred_ch_end]
+            y_true_slice = y_true[:, gt_ch_start:gt_ch_end]
 
             # element-wise mask you wanted to use (float on same device)
             mask_vals = self.channel_extra_opts.get(channel, {}).get("mask_values", False)
@@ -1258,7 +1271,7 @@ class instance_segmentation_loss:
 
             # class-rebalance / ignore_index weights for BCE
             weight = None
-            if self.loss_names[i] in ["bce", "ce"] and channel in ["B","F","P","C","T","A","M","F_pre","F_post"]:
+            if self.losses_to_use[i] in ["bce", "ce"] and channel in ["B","F","P","C","T","A","M","F_pre","F_post"]:
                 if self.class_rebalance == "auto":
                     weight = weight_binary_ratio(y_true_slice).float()
                 elif self.class_rebalance == "manual" and self.class_weights is not None:
@@ -1268,15 +1281,17 @@ class instance_segmentation_loss:
                     weight = ignore_mask if weight is None else weight * ignore_mask
 
             # instantiate criterion with no reduction so we can mask safely
-            name = self.loss_names[i]
-            if name in ["bce", "ce"]:
+            if self.losses_to_use[i] == "bce":
                 crit = torch.nn.BCEWithLogitsLoss(weight=weight, reduction="none")
-            elif name in ["l1", "mae"]:
+            elif self.losses_to_use[i] == "ce":
+                crit = torch.nn.CrossEntropyLoss(weight=weight, reduction="none")
+                y_true_slice = y_true_slice.long().squeeze(1)
+            elif self.losses_to_use[i] in ["l1", "mae"]:
                 crit = torch.nn.L1Loss(reduction="none")
-            elif name == "mse":
+            elif self.losses_to_use[i] == "mse":
                 crit = torch.nn.MSELoss(reduction="none")
             else:
-                crit = self.losses_to_use[i]   # e.g. Triplet already reduced
+                raise ValueError("Loss function {} not recognized".format(self.losses_to_use[i]))
 
             loss_tensor = crit(y_pred_slice, y_true_slice)  # same shape as slice
 

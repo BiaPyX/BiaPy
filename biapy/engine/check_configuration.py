@@ -118,6 +118,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             assert set(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) == {"A"}, "'A' representation can only be used alone"
 
         if cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
+            # Pre-fill per-channel extra options only if the first details dict is empty
+            chs = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
+            dst = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0]
+
             # Set default values for some configurations that are more common, such as 'C', 'BC', 'BP', 'BD', 
             # 'BCM', 'BCD' and 'A'.
             seed_channels, seed_channels_thresh, growth_mask_channels, growth_mask_channel_ths = [], [], [], []
@@ -332,6 +336,21 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES == []:
                     opts.extend(["PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES", ['bce', 'l1']])
                     channel_loss_set = True
+            elif set(sorted_original_instance_channels) == {"Db"}:
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS == []:
+                    seed_channels = ["Db"]
+                    seed_channels_thresh = ["auto"]
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.TOPOGRAPHIC_SURFACE_CHANNEL == "":
+                    topo_surface_ch = "Db"
+                if cfg.PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS == []:
+                    growth_mask_channels = ["Db"]
+                    growth_mask_channel_ths = ["auto"]
+                if (
+                    cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES == [] 
+                    and "Db" in dst and dst["Db"].get("val_type", "norm") == "discretize"
+                ):
+                    opts.extend(["PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES", ['ce']])
+                    channel_loss_set = True
 
             if seed_channels == [] or seed_channels_thresh == [] or topo_surface_ch == "" or growth_mask_channels == [] or growth_mask_channel_ths == []:
                 print("WARNING: seems that the channels requested are custom so BiaPy did not fill some varibles by default.\n"
@@ -378,13 +397,13 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     ]
                 )
 
-            # Pre-fill per-channel extra options only if the first details dict is empty
-            chs = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
-            dst = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0]
-
             # F and B — foreground and background
             for ch in ("F", "B"):
                 if ch in chs:
+                    if ch in dst:
+                        assert [x for x in dst[ch].keys() if x not in ["erosion", "dilation"]] == [], (
+                            f"PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS for channel '{ch}' can only have 'erosion' and 'dilation' keys"
+                        )
                     dst[ch] = {
                         "erosion": dst.get(ch, {}).get("erosion", 0),
                         "dilation": dst.get(ch, {}).get("dilation", 0),
@@ -392,6 +411,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
             # P — point-like channel
             if "P" in chs:
+                if "P" in dst:
+                    assert [x for x in dst["P"].keys() if x not in ["type", "dilation", "erosion"]] == [], (
+                        "PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS for channel 'P' can only have 'type', 'dilation' and 'erosion' keys"
+                    )
                 dst["P"] = {
                     "type": dst.get("P", {}).get("type", "centroid"),
                     "dilation": dst.get("P", {}).get("dilation", 1),
@@ -400,13 +423,21 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
             # C — contours
             if "C" in chs:
+                if "C" in dst:
+                    assert [x for x in dst["C"].keys() if x not in ["mode"]] == [], (
+                        "PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS for channel 'C' can only have 'mode' key"
+                    )
                 dst["C"] = {
                     "mode": dst.get("C", {}).get("mode", "thick"),
                 }
 
-            # H / V / Z / Db — distance channels group
-            for ch in ("H", "V", "Z", "Db"):
+            # H / V / Z — distance channels group
+            for ch in ("H", "V", "Z"):
                 if ch in chs:
+                    if ch in dst:
+                        assert [x for x in dst[ch].keys() if x not in ["norm", "act", "mask_values"]] == [], (
+                            f"PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS for channel '{ch}' can only have 'norm', 'act' and 'mask_values' keys"
+                        )
                     norm = dst.get(ch, {}).get("norm", True)
                     act = dst.get(ch, {}).get("act", "")
                     if act == "" and norm:
@@ -416,17 +447,40 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                         "act": act,
                         "mask_values": dst.get(ch, {}).get("mask_values", True),
                     }
-
+            # Db — boundary distance-to-boundary
+            if "Db" in chs:
+                if "Db" in dst:
+                    assert [x for x in dst["Db"].keys() if x not in ["val_type", "bin_size", "act", "mask_values"]] == [], (
+                        "PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS for channel 'Db' can only have 'val_type', 'bin_size', 'act' and 'mask_values' keys"
+                    )
+                val_type = dst.get("Db", {}).get("val_type", 'norm')
+                act = dst.get("Db", {}).get("act", "")
+                if act == "" and val_type == "norm":
+                    act = "sigmoid"
+                dst["Db"] = {
+                    "val_type": val_type,
+                    "bin_size": dst.get("Db", {}).get("bin_size", 0.1),
+                    "act": act,
+                    "mask_values": dst.get("Db", {}).get("mask_values", True),
+                }
             # Dc — center/skeleton distance-to-center
             if "Dc" in chs:
+                if "Dc" in dst:
+                    assert [x for x in dst["Dc"].keys() if x not in ["type", "norm", "mask_values"]] == [], (
+                        "PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS for channel 'Dc' can only have 'type', 'norm' and 'mask_values' keys"
+                    )
                 dst["Dc"] = {
-                    "type": dst.get("Dc", {}).get("mode", "centroid"),
+                    "type": dst.get("Dc", {}).get("type", "centroid"),
                     "norm": dst.get("Dc", {}).get("norm", True),
                     "mask_values": dst.get("Dc", {}).get("mask_values", True),
                 }
 
             # Dn — normal / inverted distances
             if "Dn" in chs:
+                if "Dn" in dst:
+                    assert [x for x in dst["Dn"].keys() if x not in ["closing_size", "norm", "mask_values", "decline_power"]] == [], (
+                        "PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS for channel 'Dn' can only have 'closing_size', 'norm', 'mask_values' and 'decline_power' keys"
+                    )
                 dst["Dn"] = {
                     "closing_size": dst.get("Dn", {}).get("closing_size", 3),
                     "norm": dst.get("Dn", {}).get("norm", True),
@@ -436,6 +490,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
             # D — signed distance (global)
             if "D" in chs:
+                if "D" in dst:
+                    assert [x for x in dst["D"].keys() if x not in ["alpha", "beta", "act", "norm"]] == [], (
+                        "PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS for channel 'D' can only have 'alpha', 'beta', 'act' and 'norm' keys"
+                    )
                 dst["D"] = {
                     "alpha": dst.get("D", {}).get("alpha", 8),
                     "beta": dst.get("D", {}).get("beta", 50),
@@ -445,6 +503,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
             # R — star-convex/radial distances
             if "R" in chs:
+                if "R" in dst:
+                    assert [x for x in dst["R"].keys() if x not in ["nrays", "norm", "mask_values"]] == [], (
+                        "PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS for channel 'R' can only have 'nrays', 'norm' and 'mask_values' keys"
+                    )
                 nrays = dst.get("R", {}).get("nrays", "")
                 if nrays == "":
                     nrays = 32 if cfg.PROBLEM.NDIM == "2D" else 96
@@ -456,12 +518,20 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
             # T — touching thickness
             if "T" in chs:
+                if "T" in dst:
+                    assert [x for x in dst["T"].keys() if x not in ["thickness"]] == [], (
+                        "PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS for channel 'T' can only have 'thickness' key"
+                    )
                 dst["T"] = {
                     "thickness": dst.get("T", {}).get("thickness", 2),
                 }
 
             # A — pixel/voxel affinities (fixed: removed invalid 'mode')
             if "A" in chs:
+                if "A" in dst:
+                    assert [x for x in dst["A"].keys() if x not in ["z_affinities", "y_affinities", "x_affinities", "widen_borders"]] == [], (
+                        "PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS for channel 'A' can only have 'z_affinities', 'y_affinities', 'x_affinities' and 'widen_borders' keys"
+                    )
                 dst["A"] = {
                     "z_affinities": dst.get("A", {}).get("z_affinities", [1]),
                     "y_affinities": dst.get("A", {}).get("y_affinities", [1]),
@@ -478,6 +548,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
             # E — learned per-pixel features
             if "E" in chs:
+                if "E" in dst:
+                    assert [x for x in dst["E"].keys() if x not in ["center_mode", "medoid_max_points"]] == [], (
+                        "PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS for channel 'E' can only have 'center_mode' and 'medoid_max_points' keys"
+                    )
                 dst["E_offset"] = {
                     "center_mode": dst.get("E", {}).get("center_mode", "medoid"),
                     "medoid_max_points": dst.get("E", {}).get("medoid_max_points", 10000),
@@ -1365,21 +1439,26 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
                 elif key == "C":  # contours
                     _assert_str_in(val, "mode", {"thick", "inner", "outer", "subpixel", "dense"}, ctx)
-
-                elif key in ("H", "V", "Z", "Db"):  # distance channels group
-                    _assert_optional_bool(val, "norm", ctx)
-                    if "norm" in val:
-                        assert isinstance(val["norm"], bool)
+                elif key in ("H", "V", "Z"):  # distance channels group
+                    _assert_bool(val, "norm", ctx)
+                    assert isinstance(val["norm"], bool)
                     _assert_bool(val, "mask_values", ctx)
-
+                    _assert_str_in(val, "act", {"", "linear", "sigmoid"}, ctx)
+                elif key  == "Db":  # distance channels group
+                    _assert_optional_str_in(val, "val_type", {"raw", "norm", "discretize"}, ctx)
+                    if val["val_type"] == "discretize":
+                        assert set(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) == {"Db"}, "'Db' channel must be the only one used when 'val_type' is 'discretize'"
+                    _assert_float(val, "bin_size", ctx, min_val=0.0)
+                    _assert_str_in(val, "act", {"", "linear", "sigmoid"}, ctx)
+                    _assert_bool(val, "mask_values", ctx)
                 elif key == "Dc":  # distance-to-centroid
                     _assert_str_in(val, "type", {"centroid", "skeleton"}, ctx)
-                    _assert_optional_bool(val, "norm", ctx)
+                    _assert_bool(val, "norm", ctx)
                     _assert_bool(val, "mask_values", ctx)
 
                 elif key == "Dn":  # distances to closest neighbor
                     _assert_int(val, "closing_size", ctx, min_val=0)
-                    _assert_optional_bool(val, "norm", ctx)
+                    _assert_bool(val, "norm", ctx)
                     _assert_bool(val, "mask_values", ctx)
                     _assert_int(val, "decline_power", ctx, min_val=0)
 
@@ -1387,11 +1466,11 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     _assert_str_in(val, "act", {"tanh", "linear"}, ctx)
                     _assert_int(val, "alpha", ctx, min_val=0)
                     _assert_int(val, "beta", ctx, min_val=0)
-                    _assert_optional_bool(val, "norm", ctx)
+                    _assert_bool(val, "norm", ctx)
 
                 elif key == "R":  # star-convex/radial
                     _assert_int(val, "nrays", ctx, min_val=1)
-                    _assert_optional_bool(val, "norm", ctx)
+                    _assert_bool(val, "norm", ctx)
                     _assert_bool(val, "mask_values", ctx)
 
                 elif key == "T":  # touching thickness
@@ -2763,6 +2842,14 @@ def _assert_int(d, k, ctx, *, min_val=None):
     assert isinstance(d[k], int), f"'{ctx}' '{k}' must be an integer"
     if min_val is not None:
         assert d[k] >= min_val, f"'{ctx}' '{k}' must be >= {min_val}"
+    
+def _assert_float(d, k, ctx, *, min_val=None, max_val=None):
+    assert k in d, f"'{ctx}' must have '{k}' key"
+    assert isinstance(d[k], float), f"'{ctx}' '{k}' must be a float"
+    if min_val is not None:
+        assert d[k] >= min_val, f"'{ctx}' '{k}' must be >= {min_val}"
+    if max_val is not None:
+        assert d[k] <= max_val, f"'{ctx}' '{k}' must be <= {max_val}"
 
 def _assert_list(d, k, ctx, length=2):
     assert k in d, f"'{ctx}' must have '{k}' key"
@@ -2778,10 +2865,6 @@ def _assert_optional_str_in(d, k, allowed, ctx):
     if k in d:
         assert isinstance(d[k], str), f"'{ctx}' '{k}' must be a string"
         assert d[k] in allowed, f"'{ctx}' '{k}' must be one of {sorted(allowed)}"
-
-def _assert_optional_bool(d, k, ctx):
-    if k in d:
-        assert isinstance(d[k], bool), f"'{ctx}' '{k}' must be a boolean"
 
 def _assert_list_of_pos_ints(x, ctx):
     assert isinstance(x, list) and len(x) > 0, f"'{ctx}' must be a non-empty list"
