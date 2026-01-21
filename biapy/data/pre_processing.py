@@ -1254,6 +1254,7 @@ def synapse_channel_creation(
     mode: List[str] = ["F_pre", "F"],
     postsite_dilation: List[int] = [2, 4, 4],
     postsite_distance_channel_dilation: List[int] = [3, 10, 10],
+    verbose: bool = False,
 ):
     """
     Create different channels that represent a synapse segmentation problem to train an instance segmentation problem.
@@ -1334,6 +1335,9 @@ def synapse_channel_creation(
     print("Collecting all pre/post-synaptic points")
     for i in tqdm(it, disable=not is_main_process()):
         filename, data_shape = unique_files[i], unique_shapes[i]
+        
+        print("Processing file: {}".format(filename))
+
         # Take all the information within the dataset
         files = []
         file, ids = read_chunked_nested_data(filename, zarr_data_information["id_path"])
@@ -1366,6 +1370,8 @@ def synapse_channel_creation(
 
         # Link to each patch sample its corresponding pre/post synaptic sites
         pre_post_points = {}
+        pre_points_checked, post_points_checked = {}, {}
+        total_pre_points, total_post_points, pre_points_missed, post_points_missed = 0, 0, 0, 0
         for i in tqdm(range(len(partners)), disable=not is_main_process()):
             pre_id, post_id = partners[i]
             pre_position = ids.index(pre_id)
@@ -1383,11 +1389,14 @@ def synapse_channel_creation(
             ):
                 insert_pre = True
             else:
-                print(
-                    "WARNING: discarding presynaptic point {} which seems to be out of shape: {}".format(
-                        pre_loc, data_shape
+                if verbose:
+                    print(
+                        "WARNING: discarding presynaptic point {} which seems to be out of shape: {}".format(
+                            pre_loc, data_shape
+                        )
                     )
-                )
+                if pre_id not in pre_points_checked:
+                    pre_points_missed += 1
             # Post point in data shape
             if not (
                 (post_loc[0] < 0 or post_loc[0] >= data_shape[0])
@@ -1396,17 +1405,34 @@ def synapse_channel_creation(
             ):
                 insert_post = True
             else:
-                print(
-                    "WARNING: discarding postsynaptic point {} which seems to be out of shape: {}".format(
-                        post_loc, data_shape
+                if verbose:
+                    print(
+                        "WARNING: discarding postsynaptic point {} which seems to be out of shape: {}".format(
+                            post_loc, data_shape
+                        )
                     )
-                )
+                if post_id not in post_points_checked:
+                    post_points_missed += 1
 
             pre_key = str(pre_loc)
             if insert_pre and insert_post:
                 if pre_key not in pre_post_points:
                     pre_post_points[pre_key] = []
                 pre_post_points[pre_key].append(post_loc)
+
+            # Count unique pre/post points
+            if pre_id not in pre_points_checked:
+                total_pre_points += 1
+                pre_points_checked[pre_id] = True
+            if post_id not in post_points_checked:
+                total_post_points += 1
+                post_points_checked[post_id] = True
+
+        print("Total unique pre-synaptic points: {}".format(total_pre_points))
+        print("Total unique post-synaptic points: {}".format(total_post_points))
+        print("Total pre-synaptic points missed: {}".format(pre_points_missed))
+        print("Total post-synaptic points missed: {}".format(post_points_missed))
+        print("")
 
         if len(pre_post_points) > 0:
             # Create the Zarr file where the mask will be placed
