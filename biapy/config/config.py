@@ -210,7 +210,9 @@ class Config:
         #         Options are 'centroid' and 'medoid'. Default: 'centroid'
         #       - 'medoid_max_points': int, specifies the maximum number of points used when computing the medoid.
         #         Default: 10000
-
+        # For example:
+        #  DATA_CHANNELS = ['F', 'C']
+        #  DATA_CHANNELS_EXTRA_OPTS = [{'F': {'erosion': 2, 'dilation': 0}, 'C': {'mode': 'inner'}}]
         _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS = [{}]
         # Losses to be applied to each channel. If not provided, the losses will be set automatically depending on the channel.
         # The options are:
