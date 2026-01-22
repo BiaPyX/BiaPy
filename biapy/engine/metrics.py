@@ -1293,6 +1293,10 @@ class instance_segmentation_loss:
             else:
                 raise ValueError("Loss function {} not recognized".format(self.losses_to_use[i]))
 
+            if self.losses_to_use[i] != "ce":
+                y_pred_slice = y_pred_slice.float()
+                y_true_slice = y_true_slice.float()
+
             loss_tensor = crit(y_pred_slice, y_true_slice)  # same shape as slice
 
             # multiply by spatial border weights after crit
