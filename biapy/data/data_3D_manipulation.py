@@ -1183,6 +1183,7 @@ def ensure_3d_shape(
 
     # pop T in data_axes_order
     if data_axes_order is not None:
+        T_post = data_axes_order.index("T") if "T" in data_axes_order else None
         data_axes_order = data_axes_order.replace("T", "")
         if "Z" not in data_axes_order:
             if "C" in data_axes_order:
@@ -1191,6 +1192,9 @@ def ensure_3d_shape(
                 data_axes_order = data_axes_order.replace("I", "Z")
             elif "Q" in data_axes_order:
                 data_axes_order = data_axes_order.replace("Q", "Z")
+            else:
+                if len(data_axes_order) < img.ndim and T_post is not None:
+                    data_axes_order = data_axes_order[:T_post] + "Z" + data_axes_order[T_post:]
         if any([x for x in data_axes_order if x not in "ZYXC"]):
             data_axes_order = None
 
