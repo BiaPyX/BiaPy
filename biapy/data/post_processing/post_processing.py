@@ -328,7 +328,7 @@ def watershed_by_channels(
     print("Thresholds used: {}".format({"seed": seed_ths_used, "growth_mask": growth_mask_ths_used}))
 
     if remove_before:
-        seed_map = remove_small_objects(seed_map, thres_small_before)
+        seed_map = remove_small_objects(seed_map, max_size=thres_small_before)
         seed_map, _, _ = relabel_sequential(seed_map)
 
     assert isinstance(seed_map, np.ndarray) and growth_mask is not None, "Seed map and growth mask must be numpy arrays"
@@ -2550,11 +2550,11 @@ def apply_label_refinement(
         elif opt == "remove_small_objects":
             print("Removing small objects . . .")
             min_size = int(values[operations.index(opt)])
-            lbl_img = remove_small_objects(lbl_img, min_size=min_size)
+            lbl_img = remove_small_objects(lbl_img, max_size=min_size)
         elif opt == "remove_big_objects":
             print("Removing big objects . . .")
             min_size = int(values[operations.index(opt)])
-            lbl_img = lbl_img * (remove_small_objects(lbl_img, min_size=min_size) == 0)
+            lbl_img = lbl_img * (remove_small_objects(lbl_img, max_size=min_size) == 0)
         else:
             raise ValueError("Label refinement operation '{}' not recognized".format(opt))
     if not is_3d:
