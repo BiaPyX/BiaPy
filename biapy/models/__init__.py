@@ -28,12 +28,15 @@ from functools import partial
 from yacs.config import CfgNode as CN
 import ast
 from collections import deque, defaultdict
-from importlib import import_module
 import requests
+import sys
+import importlib
+import yaml
 
 from bioimageio.core.backends.pytorch_backend import load_torch_model
 from bioimageio.spec.model.v0_4 import ModelDescr as ModelDescr_v0_4
 from bioimageio.spec.model.v0_5 import ModelDescr as ModelDescr_v0_5
+from bioimageio.spec import load_description
 
 
 def build_model(
@@ -780,7 +783,15 @@ def check_bmz_args(
     workflow_specs["ndim"] = cfg.PROBLEM.NDIM
     workflow_specs["nclasses"] = cfg.DATA.N_CLASSES
 
-    preproc_info, error, error_message, opts = check_bmz_model_compatibility(model_dict, workflow_specs=workflow_specs)
+    (
+        preproc_info, 
+        error, 
+        error_message, 
+        opts
+    ) = check_bmz_model_compatibility(
+        model_dict, 
+        workflow_specs=workflow_specs, 
+    )
 
     if error:
         raise ValueError(f"Model {model_ID} can not be used in BiaPy. Message:\n{error_message}\n")
@@ -1144,6 +1155,27 @@ def check_bmz_model_compatibility(
         )
         return preproc_info, True, reason_message, opts
 
+    # --------- Dependency checks ---------
+    if "dependencies" in weights and weights["dependencies"] is not None:
+        try:
+            nickname = model_rdf.get("nickname") or model_rdf.get("alias")
+        except Exception:
+            return preproc_info, True, f"[{specific_workflow}] Couldn't extract model nickname from model description for dependency check.\n", opts
+        try:
+            current_model = load_description(nickname)
+        except Exception:
+            return preproc_info, True, f"[{specific_workflow}] Couldn't load model for dependency check.\n", opts
+        
+        ok, msg = True, ""
+        try:
+            file_bytes = current_model.weights.pytorch_state_dict.dependencies.get_reader()
+            ok, msg = can_import_env_deps(file_bytes, import_overrides={"pyyaml": "yaml"})
+        except Exception:
+            return preproc_info, True, f"[{specific_workflow}] Couldn't read dependencies file for dependency check.\n", opts
+
+        if not ok:
+            return preproc_info, True, f"[{specific_workflow}] Model has incompatible dependencies: {msg}\n", opts
+
     # All checks passed
     return preproc_info, False, "", opts
 
@@ -1335,3 +1367,78 @@ def build_torchvision_model(cfg: CN, device: torch.device) -> Tuple[nn.Module, C
     )
 
     return model, model_torchvision_weights.transforms()
+
+def can_import_env_deps(yaml_reader, import_overrides={'pyyaml': 'yaml', 'scikit-learn': 'sklearn'}) -> Tuple[bool, str]:
+    """
+    Check if all dependencies listed in a conda-style environment yaml file can be imported.
+
+    Parameters
+    ----------
+    yaml_reader : file-like object
+      A file-like object that provides the content of a conda-style environment yaml file.  
+    import_overrides : dict, optional
+      A dictionary mapping package names (as they appear in the yaml) to their corresponding
+      Python import names. This is useful for packages where the import name differs from the package name.
+      Example: {'pyyaml': 'yaml', 'scikit-learn': 'sklearn'}
+
+    Returns
+    -------
+    ok : bool
+      True if all dependencies can be imported, False otherwise.
+    msg : str
+      An empty string if all dependencies can be imported, otherwise a newline-separated
+      string listing the dependencies that failed to import.
+    """
+    import_overrides = {k.lower(): v for k, v in (import_overrides or {}).items()}
+
+    raw = yaml_reader.read()
+    if isinstance(raw, bytes):
+        text = raw.decode("utf-8", errors="replace")
+    else:
+        text = str(raw)
+
+    doc = yaml.safe_load(text) or {}
+    deps = doc.get("dependencies", []) if isinstance(doc, dict) else []
+
+    failures = []
+
+    def dist_to_import_name(dist: str) -> str:
+        # Most common mapping: "foo-bar" -> "foo_bar"
+        return import_overrides.get(dist.lower(), dist.replace("-", "_"))
+
+    def try_import(dist: str):
+        mod = dist_to_import_name(dist)
+        try:
+            importlib.import_module(mod)
+        except Exception:
+            failures.append(dist)
+
+    # Check conda-style deps and pip deps
+    for item in deps:
+        if isinstance(item, str):
+            s = item.strip()
+            low = s.lower()
+            if low.startswith("python="):
+                m = re.match(r"python\s*=\s*(\d+)\.(\d+)", low)
+                if m:
+                    req_major, req_minor = int(m.group(1)), int(m.group(2))
+                    if (sys.version_info.major, sys.version_info.minor) != (req_major, req_minor):
+                        failures.append(f"python={req_major}.{req_minor}")
+            elif low == "pip":
+                continue
+            else:
+                # Optional: try importing other conda deps if present
+                dist = re.split(r"[<>=!~\[]", s, maxsplit=1)[0].strip()
+                if dist:
+                    try_import(dist)
+
+        elif isinstance(item, dict) and "pip" in item and isinstance(item["pip"], list):
+            for req in item["pip"]:
+                req = str(req).strip()
+                dist = re.split(r"[<>=!~\[]", req, maxsplit=1)[0].strip()
+                if dist:
+                    try_import(dist)
+
+    ok = len(failures) == 0
+
+    return ok, ("" if ok else ", ".join(failures))

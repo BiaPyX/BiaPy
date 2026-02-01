@@ -41,7 +41,7 @@ from bioimageio.spec.model.v0_5 import (
     WeightsDescr,
     ArchitectureFromFileDescr,
     ModelDescr,
-    EnvironmentFileDescr,
+    FileDescr_dependencies,
 )
 from packaging.version import Version
 from bioimageio.spec._internal.io_basics import Sha256
@@ -1050,7 +1050,7 @@ class BiaPy:
             # Only if timm is required we create the env file
             if any([x for x in self.workflow.bmz_config["all_import_lines"] if "timm" in x]):
                 env_file_path = create_environment_file_for_model(building_dir)
-                env_descriptor = EnvironmentFileDescr(
+                env_descriptor = FileDescr_dependencies(
                     source=Path(env_file_path), sha256=Sha256(create_file_sha256sum(env_file_path))
                 )
         else:
