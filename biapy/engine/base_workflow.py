@@ -672,14 +672,21 @@ class Base_Workflow(metaclass=ABCMeta):
                         pred["pred"] = resize(pred["pred"], in_img.shape, mode=mode)
                     if "class" in pred:
                         pred["class"] = resize(pred["class"], in_img.shape, mode="nearest")
-                else:
+                elif not isinstance(pred, list):
                     if pred.shape[2:] != in_img.shape[2:]:
                         mode = "bilinear" if self.cfg.PROBLEM.NDIM == "2D" else "trilinear"
                         pred = resize(pred, in_img.shape, mode=mode)
-            if apply_act:
-                pred = self.apply_model_activations(pred, training=is_train)
+            
+            # Allow multiple outputs
+            if isinstance(pred, list):
+                for i in range(len(pred)):
+                    if apply_act:
+                        pred[i] = self.apply_model_activations(pred[i], training=is_train)
+            else:
+                if apply_act:
+                    pred = self.apply_model_activations(pred, training=is_train)
         elif self.cfg.MODEL.SOURCE == "bmz":
-            pred = self.apply_model_activations(self.bmz_model_call(in_img, is_train))
+            pred = self.apply_model_activations(self.bmz_model_call(in_img, is_train), training=is_train)
         elif self.cfg.MODEL.SOURCE == "torchvision":
             pred = self.torchvision_model_call(in_img, is_train)
         

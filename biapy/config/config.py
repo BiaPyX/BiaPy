@@ -419,7 +419,7 @@ class Config:
         _C.DATA.PATCH_SIZE = (256, 256, 1)
 
         # Whether to reshape the dimensions that does not satisfy the patch shape selected by padding it with reflect.
-        _C.DATA.REFLECT_TO_COMPLETE_SHAPE = False
+        _C.DATA.REFLECT_TO_COMPLETE_SHAPE = True
         # If 'DATA.PATCH_SIZE' selected has 3 channels, e.g. RGB images are expected, so will force grayscale images to be
         # converted into RGB (e.g. in ImageNet some of the images are grayscale)
         _C.DATA.FORCE_RGB = False
@@ -1277,6 +1277,12 @@ class Config:
         _C.MODEL.HRNET.STAGE4.NUM_BLOCKS = [4, 4, 4, 4]
         _C.MODEL.HRNET.STAGE4.NUM_CHANNELS = [18, 36, 72, 144]
 
+        _C.MODEL.STUNET = CN()
+        # Variant of the STUNet model. Options are: 'small', 'base', 'large'
+        _C.MODEL.STUNET.VARIANT = 'base'
+        # Whether to use a pretrained version of STUNet on ImageNet
+        _C.MODEL.STUNET.PRETRAINED = False
+        
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Loss
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

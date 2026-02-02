@@ -1216,6 +1216,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     if cfg.LOSS.TYPE != "CE" and cfg.PROBLEM.TYPE != "INSTANCE_SEG":
         print("WARNING: 'LOSS.IGNORE_INDEX' will not have effect, as it is only working when LOSS.TYPE is 'CE'")
 
+    model_arch = cfg.MODEL.ARCHITECTURE.lower()
+    
     if cfg.LOSS.CONTRAST.ENABLE:
         if cfg.LOSS.CONTRAST.MEMORY_SIZE <= 0:
             raise ValueError("'LOSS.CONTRAST.MEMORY_SIZE' needs to be greater than 0")
@@ -1230,6 +1232,9 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "'LOSS.CONTRAST.ENABLE' can only be set when 'PROBLEM.TYPE' is in ['SEMANTIC_SEG', 'INSTANCE_SEG', 'DETECTION']"
             )
         
+        if model_arch == "stunet":
+            raise ValueError("'LOSS.CONTRAST.ENABLE' can not be used with 'MODEL.ARCHITECTURE' set to 'stunet'")
+
     if cfg.TEST.ENABLE and cfg.TEST.ANALIZE_2D_IMGS_AS_3D_STACK and cfg.PROBLEM.NDIM == "3D":
         raise ValueError("'TEST.ANALIZE_2D_IMGS_AS_3D_STACK' makes no sense when the problem is 3D. Disable it.")
 
@@ -1273,7 +1278,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "'INSTANCE_SEG', 'DETECTION', 'CLASSIFICATION' and 'IMAGE_TO_IMAGE'"
         )
 
-    model_arch = cfg.MODEL.ARCHITECTURE.lower()
     model_will_be_read = cfg.MODEL.LOAD_CHECKPOINT and cfg.MODEL.LOAD_MODEL_FROM_CHECKPOINT
     #### Semantic segmentation ####
     if cfg.PROBLEM.TYPE == "SEMANTIC_SEG":
@@ -2285,7 +2289,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "hrnet32",
             "hrnet48",
             "hrnet64",
-        ], "MODEL.ARCHITECTURE not in ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'simple_cnn', 'efficientnet_b[0-7]', 'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae', 'unext_v1', 'unext_v2', 'hrnet18', 'hrnet32', 'hrnet48', 'hrnet64']"
+            "stunet",
+        ], "MODEL.ARCHITECTURE not in ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'simple_cnn', 'efficientnet_b[0-7]', 'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae', 'unext_v1', 'unext_v2', 'hrnet18', 'hrnet32', 'hrnet48', 'hrnet64', 'stunet']"
         if (
             model_arch
             not in [
@@ -2307,6 +2312,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "hrnet32",
                 "hrnet48",
                 "hrnet64",
+                "stunet",
             ]
             and cfg.PROBLEM.NDIM == "3D"
             and cfg.PROBLEM.TYPE != "CLASSIFICATION"
@@ -2332,6 +2338,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                         "hrnet32",
                         "hrnet48",
                         "hrnet64",
+                        "stunet",
                     ]
                 )
             )
@@ -2354,10 +2361,11 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "hrnet32",
                 "hrnet48",
                 "hrnet64",
+                "stunet",
             ]
         ):
             raise ValueError(
-                "'DATA.N_CLASSES' > 2 can only be used with 'MODEL.ARCHITECTURE' in ['unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'multiresunet', 'unetr', 'unext_v1', 'unext_v2', 'hrnet18', 'hrnet32', 'hrnet48', 'hrnet64']"
+                "'DATA.N_CLASSES' > 2 can only be used with 'MODEL.ARCHITECTURE' in ['unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'multiresunet', 'unetr', 'unext_v1', 'unext_v2', 'hrnet18', 'hrnet32', 'hrnet48', 'hrnet64', 'stunet']"
             )
 
         assert len(cfg.MODEL.FEATURE_MAPS) > 2, "'MODEL.FEATURE_MAPS' needs to have at least 3 values"
@@ -2445,9 +2453,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "hrnet32",
                 "hrnet48",
                 "hrnet64",
+                "stunet",
             ]:
                 raise ValueError(
-                    "Architectures available for {} are: ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'resunet_se', 'unetr', 'multiresunet', 'unext_v1', 'unext_v2', 'hrnet18', 'hrnet32', 'hrnet48', 'hrnet64']".format(
+                    "Architectures available for {} are: ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'resunet_se', 'unetr', 'multiresunet', 'unext_v1', 'unext_v2', 'hrnet18', 'hrnet32', 'hrnet48', 'hrnet64', 'stunet']".format(
                         cfg.PROBLEM.TYPE
                     )
                 )
@@ -2568,6 +2577,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "hrnet32",
             "hrnet48",
             "hrnet64",
+            "stunet",
         ]:
             z_size = cfg.DATA.PATCH_SIZE[0]
             sizes = cfg.DATA.PATCH_SIZE[1:-1]
@@ -2614,6 +2624,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             assert cfg.MODEL.HRNET.HEAD_TYPE in ["OCR", "ASPP", "PSP", "FCN"], "'MODEL.HRNET.HEAD_TYPE' not in ['OCR', 'ASPP', 'PSP', 'FCN']"
             if cfg.PROBLEM.NDIM == "3D" and cfg.MODEL.HRNET.HEAD_TYPE == "OCR":
                 raise ValueError("'OCR' head is not available for 3D 'HRNET' models. Please choose another head type: 'ASPP', 'PSP' or 'FCN'")
+        elif model_arch == "stunet":
+            assert cfg.MODEL.STUNET.VARIANT in ['small', 'base', 'large'], "'MODEL.STUNET.VARIANT' not in ['small', 'base', 'large']"
 
     if cfg.MODEL.LOAD_CHECKPOINT and check_data_paths:
         file = get_checkpoint_path(cfg, jobname)

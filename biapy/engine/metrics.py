@@ -205,24 +205,28 @@ class jaccard_index:
         jaccard : torch.Tensor
             Jaccard index value.
         """
-        if isinstance(y_pred, dict):
-            y_pred = y_pred["pred"]
+        _y_pred = y_pred["pred"] if isinstance(y_pred, dict) and "pred" in y_pred else y_pred
 
         # For those cases that are predicting 2 channels (binary case) we adapt the GT to match.
         # It's supposed to have 0 value as background and 1 as foreground
-        if self.model_source == "bmz" and self.num_classes <= 2 and y_pred.shape[1] != y_true.shape[1]:
+        if self.model_source == "bmz" and self.num_classes <= 2 and _y_pred.shape[1] != y_true.shape[1]:
             y_true = torch.cat((1 - y_true, y_true), 1)
-        else:
-            if y_pred.shape[-self.ndim :] != y_true.shape[-self.ndim :]:
-                y_true = scale_target(y_true, y_pred.shape[-self.ndim :])
 
-        if self.num_classes > 2:
-            if y_pred.shape[1] > 1:
-                y_true = y_true.squeeze()
-            if len(y_pred.shape) - 2 == len(y_true.shape):
-                y_true = y_true.unsqueeze(0)
+        if not isinstance(_y_pred, list):
+            _y_pred = [_y_pred]
 
-        return self.jaccard(y_pred, y_true)
+        iou = 0
+        for j, pd in enumerate(_y_pred):
+            _y_true = scale_target(y_true, pd.shape[-self.ndim :]) if pd.shape[-self.ndim :] != y_true.shape[-self.ndim :] else y_true
+
+            if self.num_classes > 2:
+                if pd.shape[1] > 1:
+                    _y_true = _y_true.squeeze()
+                if len(pd.shape) - 2 == len(_y_true.shape):
+                    _y_true = _y_true.unsqueeze(0)
+            iou += self.jaccard(pd, _y_true)
+
+        return iou/len(_y_pred)
 
 
 class multiple_metrics:
@@ -323,58 +327,63 @@ class multiple_metrics:
             _y_pred = y_pred["pred"]
         else:
             _y_pred = y_pred
-        num_channels = _y_pred.shape[1]
 
         # Check multi-head
         if isinstance(y_pred, dict) and "class" in y_pred:
-            num_channels +=  1
             _y_pred_class = torch.argmax(y_pred["class"], dim=1)
-        else:            
-            _y_pred_class = _y_pred[:, -1]
-
-        if _y_pred.shape[-self.ndim :] != y_true.shape[-self.ndim :]:
-            y_true = scale_target(y_true, _y_pred.shape[-self.ndim :])
+        else:      
+            # Just take the last channel as class prediction from the first output, which is assumed to be the main one
+            if isinstance(_y_pred, list):    
+                _y_pred_class = _y_pred[0][:, -1] 
+            else: 
+                _y_pred_class = _y_pred[:, -1]
+            
+        if not isinstance(_y_pred, list):
+            _y_pred = [_y_pred]
 
         res_metrics = {}
-        db_val_type = ""
-        for pred_ch_start, channel in enumerate(self.out_channels):
-            gt_ch_start = pred_ch_start
-            if channel == "A":
-                assert self.channel_extra_opts is not None and "A" in self.channel_extra_opts, "Affinity channel options must be provided."
-                pred_ch_end = len(self.channel_extra_opts["A"].get("y_affinities", [1])) + pred_ch_start
-                gt_ch_end = pred_ch_end
-            elif channel == "R":
-                assert self.channel_extra_opts is not None and "R" in self.channel_extra_opts, "Rays channel options must be provided."
-                pred_ch_end = self.channel_extra_opts["R"].get("nrays", 32) + pred_ch_start
-                gt_ch_end = pred_ch_end
-            elif channel == "Db":
-                assert self.channel_extra_opts is not None and "Db" in self.channel_extra_opts, "Distance to border channel options must be provided."
-                db_val_type = self.channel_extra_opts.get("Db", {}).get("val_type", "norm")
-                if db_val_type == "discretize":
-                    db_dis_bin_size = self.channel_extra_opts.get("Db", {}).get("bin_size", 0.1)
-                    db_dis_K = int(round(1.0 / db_dis_bin_size))  # 10
-                    db_channels = db_dis_K + 1   
+        for pd in _y_pred:
+            _y_true = scale_target(y_true, pd.shape[-self.ndim :]) if pd.shape[-self.ndim :] != y_true.shape[-self.ndim :] else y_true
+ 
+            db_val_type = ""
+            for pred_ch_start, channel in enumerate(self.out_channels):
+                gt_ch_start = pred_ch_start
+                if channel == "A":
+                    assert self.channel_extra_opts is not None and "A" in self.channel_extra_opts, "Affinity channel options must be provided."
+                    pred_ch_end = len(self.channel_extra_opts["A"].get("y_affinities", [1])) + pred_ch_start
+                    gt_ch_end = pred_ch_end
+                elif channel == "R":
+                    assert self.channel_extra_opts is not None and "R" in self.channel_extra_opts, "Rays channel options must be provided."
+                    pred_ch_end = self.channel_extra_opts["R"].get("nrays", 32) + pred_ch_start
+                    gt_ch_end = pred_ch_end
+                elif channel == "Db":
+                    assert self.channel_extra_opts is not None and "Db" in self.channel_extra_opts, "Distance to border channel options must be provided."
+                    db_val_type = self.channel_extra_opts.get("Db", {}).get("val_type", "norm")
+                    if db_val_type == "discretize":
+                        db_dis_bin_size = self.channel_extra_opts.get("Db", {}).get("bin_size", 0.1)
+                        db_dis_K = int(round(1.0 / db_dis_bin_size))  # 10
+                        db_channels = db_dis_K + 1   
+                    else:
+                        db_channels = 1
+                    pred_ch_end = pred_ch_start + db_channels
+                    gt_ch_end = pred_ch_end
                 else:
-                    db_channels = 1
-                pred_ch_end = pred_ch_start + db_channels
-                gt_ch_end = pred_ch_end
-            else:
-                pred_ch_end = pred_ch_start + 1
-                gt_ch_end = pred_ch_end
+                    pred_ch_end = pred_ch_start + 1
+                    gt_ch_end = pred_ch_end
 
-            if self.metric_names[pred_ch_start] not in res_metrics:
-                res_metrics[self.metric_names[pred_ch_start]] = []
+                if self.metric_names[pred_ch_start] not in res_metrics:
+                    res_metrics[self.metric_names[pred_ch_start]] = []
 
-            # Measure metric
-            if self.metric_names[pred_ch_start] == "IoU (classes)":
-                res_metrics[self.metric_names[pred_ch_start]].append(self.metric_func[pred_ch_start](_y_pred_class, y_true[:, 1]))
-            else:
-                y_pred_slice = _y_pred[:, pred_ch_start:pred_ch_end]
-                y_true_slice = y_true[:, gt_ch_start:gt_ch_end]
-                if y_pred_slice.shape[1] != y_true_slice.shape[1] and "Db" == channel and db_val_type == "discretize":
-                    y_pred_slice = torch.argmax(y_pred_slice, dim=1).unsqueeze(1).float()
-                    y_true_slice = y_true_slice.float()
-                res_metrics[self.metric_names[pred_ch_start]].append(self.metric_func[pred_ch_start](y_pred_slice, y_true_slice))
+                # Measure metric
+                if self.metric_names[pred_ch_start] == "IoU (classes)":
+                    res_metrics[self.metric_names[pred_ch_start]].append(self.metric_func[pred_ch_start](_y_pred_class, _y_true[:, 1]))
+                else:
+                    y_pred_slice = pd[:, pred_ch_start:pred_ch_end]
+                    y_true_slice = _y_true[:, gt_ch_start:gt_ch_end]
+                    if y_pred_slice.shape[1] != y_true_slice.shape[1] and "Db" == channel and db_val_type == "discretize":
+                        y_pred_slice = torch.argmax(y_pred_slice, dim=1).unsqueeze(1).float()
+                        y_true_slice = y_true_slice.float()
+                    res_metrics[self.metric_names[pred_ch_start]].append(self.metric_func[pred_ch_start](y_pred_slice, y_true_slice))
 
         # Mean of same metric values
         for key, value in res_metrics.items():
@@ -402,9 +411,8 @@ def scale_target(targets_: torch.Tensor, scaled_size: Tuple[int, ...]) -> torch.
     targets : torch.Tensor
         Scaled ground truth masks.
     """
-    targets = targets_.clone().float()
-    targets = F.interpolate(targets, size=scaled_size, mode="nearest")
-    return targets.long()
+    targets = F.interpolate(targets_.clone(), size=scaled_size, mode="nearest")
+    return targets
 
 class loss_encapsulation(nn.Module):
     """Just a wrapper to any other common loss deataching the prediction from the dict given by the model."""
@@ -494,6 +502,9 @@ class CrossEntropyLoss_wrapper:
         self.ignore_index = ignore_index if ignore_index != -1 else -100  # Default ignore index for CrossEntropyLoss
         self.device = device if device is not None else torch.device("cpu")
 
+        # For intermediate outputs weighting
+        self.gamma = 0.5
+
         if self.class_rebalance == "manual":
             self.class_weights = torch.tensor(class_weights, device=device, dtype=torch.float32)
 
@@ -534,32 +545,43 @@ class CrossEntropyLoss_wrapper:
         # It's supposed to have 0 value as background and 1 as foreground
         if self.model_source == "bmz" and self.num_classes <= 2 and _y_pred.shape[1] != y_true.shape[1]:
             y_true = torch.cat((1 - y_true, y_true), 1)
-        else:
-            if _y_pred.shape[-self.ndim :] != y_true.shape[-self.ndim :]:
-                y_true = scale_target(y_true, _y_pred.shape[-self.ndim :])
 
-        if self.class_rebalance == "auto":
-            if self.multihead:
-                weight_mask = weight_binary_ratio(y_true[:, 0])
-                loss_fn = torch.nn.BCEWithLogitsLoss(weight=weight_mask)
-            else:
-                if self.num_classes <= 2:
-                    weight_mask = weight_binary_ratio(y_true)
+        if not isinstance(_y_pred, list):
+            _y_pred = [_y_pred]
+            inter_output_weights = [1.0]
+        else:
+            w = [self.gamma**i for i in range(len(_y_pred))]
+            s = sum(w)
+            inter_output_weights = [x / s for x in w]
+
+        loss = 0
+        for j, pd in enumerate(_y_pred):
+            _y_true = scale_target(y_true, pd.shape[-self.ndim :]) if pd.shape[-self.ndim :] != y_true.shape[-self.ndim :] else y_true
+
+            if self.class_rebalance == "auto":
+                if self.multihead:
+                    weight_mask = weight_binary_ratio(_y_true[:, 0])
                     loss_fn = torch.nn.BCEWithLogitsLoss(weight=weight_mask)
                 else:
-                    loss_fn = self.loss
-        else:
-            loss_fn = self.loss
-
-        if self.multihead:
-            loss = loss_fn(_y_pred[:, 0], y_true[:, 0]) + self.class_channel_loss(
-                _y_pred_class, y_true[:, -1].type(torch.long)
-            )
-        else:
-            if self.num_classes <= 2:
-                loss = loss_fn(_y_pred, y_true)
+                    if self.num_classes <= 2:
+                        weight_mask = weight_binary_ratio(_y_true)
+                        loss_fn = torch.nn.BCEWithLogitsLoss(weight=weight_mask)
+                    else:
+                        loss_fn = self.loss
             else:
-                loss = loss_fn(_y_pred, y_true[:, 0].type(torch.long))
+                loss_fn = self.loss
+
+            if self.multihead:
+                _loss = loss_fn(pd[:, 0], _y_true[:, 0]) + self.class_channel_loss(
+                    _y_pred_class, _y_true[:, -1].type(torch.long)
+                )
+            else:
+                if self.num_classes <= 2:
+                    _loss = loss_fn(pd, _y_true)
+                else:
+                    _loss = loss_fn(pd, _y_true[:, 0].type(torch.long))
+            
+            loss += _loss * inter_output_weights[j]
 
         return loss
 
@@ -1153,6 +1175,7 @@ class instance_segmentation_loss:
     def __init__(
         self,
         weights=(1, 0.2),
+        ndim: int = 2,
         out_channels=["F", "C"],
         losses_to_use=[],
         channel_extra_opts={},
@@ -1171,6 +1194,9 @@ class instance_segmentation_loss:
             Weights to be applied to segmentation (binary and contours) and to distances respectively. E.g. ``(1, 0.2)``,
             ``1`` should be multipled by ``BCE`` for the first two channels and ``0.2`` to ``MSE`` for the last channel.
 
+        ndim : int, optional
+            Number of dimensions of the input data. 2 for 2D images, 3 for 3D volumes.
+
         out_channels : List of str, optional
             Channels to operate with.
 
@@ -1187,6 +1213,7 @@ class instance_segmentation_loss:
             Value to ignore in the loss calculation.
         """
         self.weights = weights
+        self.ndim = ndim
         self.out_channels = [x for x in out_channels if x != "We"]
         self.extra_weight_in_borders = out_channels.count("We") > 0
         self.gt_channels_expected = gt_channels_expected if not self.extra_weight_in_borders else gt_channels_expected + 1
@@ -1200,6 +1227,7 @@ class instance_segmentation_loss:
         self.ignore_values = True if ignore_index != -1 else False
         self.losses_to_use = losses_to_use
         self.class_channel_loss = torch.nn.CrossEntropyLoss() if self.n_classes > 2 else None
+        self.gamma = 0.5  # for intermediate outputs weighting
 
     def __call__(self, y_pred, y_true):
         """
@@ -1236,82 +1264,97 @@ class instance_segmentation_loss:
         if self.extra_weight_in_borders:
             w_borders = y_true[:, -1]
 
+        if not isinstance(_y_pred, list):
+            _y_pred = [_y_pred]
+            inter_output_weights = [1.0]
+        else:
+            w = [self.gamma**i for i in range(len(_y_pred))]
+            s = sum(w)
+            inter_output_weights = [x / s for x in w]
+
         loss = 0
-        for i, channel in enumerate(self.out_channels):
-            pred_ch_start = self.out_channels.index(channel)
-            gt_ch_start = pred_ch_start
-            if channel == "A":
-                pred_ch_end = len(self.channel_extra_opts["A"].get("y_affinities", [1])) + pred_ch_start
-                gt_ch_end = pred_ch_end
-            elif channel == "R":
-                pred_ch_end = self.channel_extra_opts["R"].get("nrays", 32) + pred_ch_start
-                gt_ch_end = pred_ch_end
-            elif channel == "Db":
-                val_type = self.channel_extra_opts.get("Db", {}).get("val_type", "norm")
-                if val_type == "discretize":
-                    db_dis_bin_size = self.channel_extra_opts.get("Db", {}).get("bin_size", 0.1)
-                    db_dis_K = int(round(1.0 / db_dis_bin_size))  # 10
-                    db_channels = db_dis_K + 1   
+        for idx, pd in enumerate(_y_pred):
+            inter_output_loss = 0
+            for i, channel in enumerate(self.out_channels):
+                pred_ch_start = self.out_channels.index(channel)
+                gt_ch_start = pred_ch_start
+                if channel == "A":
+                    pred_ch_end = len(self.channel_extra_opts["A"].get("y_affinities", [1])) + pred_ch_start
+                    gt_ch_end = pred_ch_end
+                elif channel == "R":
+                    pred_ch_end = self.channel_extra_opts["R"].get("nrays", 32) + pred_ch_start
+                    gt_ch_end = pred_ch_end
+                elif channel == "Db":
+                    val_type = self.channel_extra_opts.get("Db", {}).get("val_type", "norm")
+                    if val_type == "discretize":
+                        db_dis_bin_size = self.channel_extra_opts.get("Db", {}).get("bin_size", 0.1)
+                        db_dis_K = int(round(1.0 / db_dis_bin_size))  # 10
+                        db_channels = db_dis_K + 1   
+                    else:
+                        db_channels = 1
+                    pred_ch_end = pred_ch_start + db_channels
+                    gt_ch_end = pred_ch_start + 1
                 else:
-                    db_channels = 1
-                pred_ch_end = pred_ch_start + db_channels
-                gt_ch_end = pred_ch_start + 1
-            else:
-                pred_ch_end = pred_ch_start + 1
-                gt_ch_end = pred_ch_end
+                    pred_ch_end = pred_ch_start + 1
+                    gt_ch_end = pred_ch_end
 
-            y_pred_slice = _y_pred[:, pred_ch_start:pred_ch_end]
-            y_true_slice = y_true[:, gt_ch_start:gt_ch_end]
+                y_pred_slice = pd[:, pred_ch_start:pred_ch_end]
+                y_true_slice = y_true[:, gt_ch_start:gt_ch_end]
 
-            # element-wise mask you wanted to use (float on same device)
-            mask_vals = self.channel_extra_opts.get(channel, {}).get("mask_values", False)
-            mask = None
-            if mask_vals:
-                mask = (y_true_slice != 0).float()
+                # element-wise mask you wanted to use (float on same device)
+                mask_vals = self.channel_extra_opts.get(channel, {}).get("mask_values", False)
+                mask = None
+                if mask_vals:
+                    mask = (y_true_slice != 0).float()
 
-            # class-rebalance / ignore_index weights for BCE
-            weight = None
-            if self.losses_to_use[i] in ["bce", "ce"] and channel in ["B","F","P","C","T","A","M","F_pre","F_post"]:
-                if self.class_rebalance == "auto":
-                    weight = weight_binary_ratio(y_true_slice).float()
-                elif self.class_rebalance == "manual" and self.class_weights is not None:
-                    weight = torch.tensor(self.class_weights, device=y_true.device).float()
-                if self.ignore_values:
-                    ignore_mask = (y_true_slice != self.ignore_index).float()
-                    weight = ignore_mask if weight is None else weight * ignore_mask
+                # class-rebalance / ignore_index weights for BCE
+                weight = None
+                if self.losses_to_use[i] in ["bce", "ce"] and channel in ["B","F","P","C","T","A","M","F_pre","F_post"]:
+                    if self.class_rebalance == "auto":
+                        weight = weight_binary_ratio(y_true_slice).float()
+                    elif self.class_rebalance == "manual" and self.class_weights is not None:
+                        weight = torch.tensor(self.class_weights, device=y_true.device).float()
+                    if self.ignore_values:
+                        ignore_mask = (y_true_slice != self.ignore_index).float()
+                        weight = ignore_mask if weight is None else weight * ignore_mask
 
-            # instantiate criterion with no reduction so we can mask safely
-            if self.losses_to_use[i] == "bce":
-                crit = torch.nn.BCEWithLogitsLoss(weight=weight, reduction="none")
-            elif self.losses_to_use[i] == "ce":
-                crit = torch.nn.CrossEntropyLoss(weight=weight, reduction="none")
-                y_true_slice = y_true_slice.long().squeeze(1)
-            elif self.losses_to_use[i] in ["l1", "mae"]:
-                crit = torch.nn.L1Loss(reduction="none")
-            elif self.losses_to_use[i] == "mse":
-                crit = torch.nn.MSELoss(reduction="none")
-            else:
-                raise ValueError("Loss function {} not recognized".format(self.losses_to_use[i]))
+                # instantiate criterion with no reduction so we can mask safely
+                if self.losses_to_use[i] == "bce":
+                    crit = torch.nn.BCEWithLogitsLoss(weight=weight, reduction="none")
+                elif self.losses_to_use[i] == "ce":
+                    crit = torch.nn.CrossEntropyLoss(weight=weight, reduction="none")
+                    y_true_slice = y_true_slice.long().squeeze(1)
+                elif self.losses_to_use[i] in ["l1", "mae"]:
+                    crit = torch.nn.L1Loss(reduction="none")
+                elif self.losses_to_use[i] == "mse":
+                    crit = torch.nn.MSELoss(reduction="none")
+                else:
+                    raise ValueError("Loss function {} not recognized".format(self.losses_to_use[i]))
 
-            if self.losses_to_use[i] != "ce":
-                y_pred_slice = y_pred_slice.float()
-                y_true_slice = y_true_slice.float()
+                if y_pred_slice.shape[-self.ndim :] != y_true_slice.shape[-self.ndim :]:
+                    y_true_slice = scale_target(y_true_slice, y_pred_slice.shape[-self.ndim :])
 
-            loss_tensor = crit(y_pred_slice, y_true_slice)  # same shape as slice
+                if self.losses_to_use[i] != "ce":
+                    y_pred_slice = y_pred_slice.float()
+                    y_true_slice = y_true_slice.float()
+                
+                loss_tensor = crit(y_pred_slice, y_true_slice)  # same shape as slice
 
-            # multiply by spatial border weights after crit
-            if w_borders is not None:
-                loss_tensor = loss_tensor * w_borders
+                # multiply by spatial border weights after crit
+                if w_borders is not None:
+                    loss_tensor = loss_tensor * w_borders
 
-            # apply optional element mask AFTER computing the per-element loss
-            if mask is not None:
-                loss_tensor = loss_tensor * mask
-                denom = mask.sum().clamp_min(1.0)
-            else:
-                denom = torch.tensor(loss_tensor.numel(), device=loss_tensor.device, dtype=loss_tensor.dtype)
+                # apply optional element mask AFTER computing the per-element loss
+                if mask is not None:
+                    loss_tensor = loss_tensor * mask
+                    denom = mask.sum().clamp_min(1.0)
+                else:
+                    denom = torch.tensor(loss_tensor.numel(), device=loss_tensor.device, dtype=loss_tensor.dtype)
 
-            channel_loss_val = loss_tensor.sum() / denom
-            loss += self.weights[i] * channel_loss_val
+                channel_loss_val = loss_tensor.sum() / denom
+                inter_output_loss += self.weights[i] * channel_loss_val
+            
+            loss += inter_output_weights[idx] * inter_output_loss
 
         if self.n_classes > 2 and isinstance(y_pred, dict) and "class" in y_pred:
             loss += self.weights[-1] * self.class_channel_loss(_y_pred_class, y_true[:, -1].type(torch.long))

@@ -212,6 +212,17 @@ def build_model(
         network_stride = [4, 4]
         if ndim == 3:
             network_stride = [4 if args["cfg"]["Z_DOWN"] else 1] + network_stride
+    elif "stunet" in modelname:
+        callable_model = STUNet  # type: ignore
+        args = dict(
+            image_shape=cfg.DATA.PATCH_SIZE,
+            output_channels=output_channels,
+            variant=cfg.MODEL.STUNET.VARIANT,
+            deep_supervision=True,
+            explicit_activations=False,
+            activations=activations,
+        )
+        model = build_stunet(**args) # type: ignore
     else:
         if modelname == "simple_cnn":
             args = dict(

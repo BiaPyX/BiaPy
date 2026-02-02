@@ -397,6 +397,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         else:
             instance_loss = instance_segmentation_loss(
                 weights = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS,
+                ndim = self.dims,
                 out_channels = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
                 losses_to_use = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES,
                 channel_extra_opts = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0],
