@@ -1424,7 +1424,7 @@ class Config:
         # only save memory with the datatype change.
         _C.TEST.REDUCE_MEMORY = False
         # Whether to compute the metrics in CPU instead of GPU to reduce GPU memory consumption.
-        _C.TEST.METRICS_IN_CPU = True
+        _C.TEST.METRICS_IN_CPU = False
         # Whether to save the raw output of the model (before any post-processing) alongside the final prediction. It is placed normally
         # in a folder called 'per_image'
         _C.TEST.SAVE_MODEL_RAW_OUTPUT = True
