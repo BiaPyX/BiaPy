@@ -74,6 +74,7 @@ from biapy.data.data_3D_manipulation import (
     extract_3D_patch_with_overlap_and_padding_yield,
     order_dimensions,
     ensure_3d_shape,
+    looks_like_hdf5,
 )
 
 
@@ -357,7 +358,7 @@ def load_and_prepare_train_data(
         fids = next(os_walk_clean(train_path))[1]
 
         print("Gathering raw images for training data . . .")
-        if len(ids) == 0 or (len(ids) > 0 and any(ids[0].endswith(x) for x in [".h5", ".hdf5", ".hdf"])):  # Zarr
+        if len(ids) == 0 or (len(ids) > 0 and looks_like_hdf5(ids[0])):  # Zarr
             if len(ids) == 0 and len(fids) == 0:  # Trying Zarr
                 raise ValueError("No images found in dir {}".format(train_path))
 
@@ -406,7 +407,7 @@ def load_and_prepare_train_data(
             print("Gathering labels for training data . . .")
             ids = next(os_walk_clean(train_mask_path))[2]
             fids = next(os_walk_clean(train_mask_path))[1]
-            if len(ids) == 0 or (len(ids) > 0 and any(ids[0].endswith(x) for x in [".h5", ".hdf5", ".hdf"])):  # Zarr
+            if len(ids) == 0 or (len(ids) > 0 and looks_like_hdf5(ids[0])):  # Zarr
                 if len(ids) == 0 and len(fids) == 0:  # Trying Zarr
                     raise ValueError("No images found in dir {}".format(train_mask_path))
                 assert train_zarr_data_information
@@ -3259,7 +3260,7 @@ def load_img_data(
     file : str
         File of the data read. Useful to close it in case it is an H5 file.
     """
-    if any(path.endswith(x) for x in [".zarr", ".n5", ".h5", ".hdf5", ".hdf"]):
+    if looks_like_hdf5(path) or any(path.endswith(x) for x in [".zarr", ".n5"]):
         from biapy.data.data_3D_manipulation import (
             read_chunked_data,
             read_chunked_nested_data,
@@ -3300,7 +3301,7 @@ def read_img_as_ndarray(path: str, is_3d: bool = False) -> NDArray:
             img = np.load(path)
         elif path.endswith(".pt"):
             img = torch.load(path, weights_only=True, map_location="cpu").numpy()
-        elif any(path.endswith(x) for x in [".h5", ".hdf5", ".hdf"]):
+        elif looks_like_hdf5(path):
             img = h5py.File(path, "r")
             img = np.array(img[list(img)[0]])
         elif path.endswith(".zarr") or path.endswith(".n5"):
@@ -3487,7 +3488,7 @@ def check_masks(path: str, n_classes: int = 2, is_3d: bool = False):
     m = ""
     error = False
     for i in tqdm(range(len(ids))):
-        if any(ids[i].endswith(x) for x in [".zarr", ".n5", ".h5", ".hdf5", ".hdf"]):
+        if looks_like_hdf5(ids[i]) or any(ids[i].endswith(x) for x in [".zarr", ".n5"]):
             raise ValueError(
                 "Mask checking with Zarr not implemented in BiaPy yet. Disable 'DATA.*.CHECK_DATA' variables to continue"
             )

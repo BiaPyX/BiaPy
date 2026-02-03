@@ -22,6 +22,7 @@ from biapy.data.data_3D_manipulation import (
     ensure_3d_shape,
     insert_patch_in_efficient_file,
     order_dimensions,
+    looks_like_hdf5,
 )
 from biapy.data.data_manipulation import sample_satisfy_conds, save_tif, extract_patch_within_image
 from biapy.utils.misc import get_world_size, get_rank
@@ -170,7 +171,7 @@ class chunked_test_pair_data_generator(IterableDataset):
             self.Y_parallel_data = None
             self.Y_parallel_file = None
         self.filename = self.sample_to_process["X_filename"]
-        self.file_type = "h5" if any(self.filename.endswith(x) for x in [".h5", ".hdf5", ".hdf"]) else "zarr"
+        self.file_type = "h5" if looks_like_hdf5(self.filename) else "zarr"
         self.dir = self.sample_to_process["X_dir"]
         self.norm_module = norm_module
         self.input_axes = input_axes

@@ -1281,7 +1281,7 @@ def write_chunked_data(
 
     os.makedirs(data_dir, exist_ok=True)
 
-    if ext in [".hdf5", ".hdf", ".h5"]:
+    if looks_like_hdf5(filename):
         fid = h5py.File(os.path.join(data_dir, filename), "w")
         data = fid.create_dataset("data", data=data, dtype=dtype_str, compression="gzip")  # type: ignore
     # Zarr
@@ -1328,7 +1328,7 @@ def read_chunked_nested_data(
     >>> file_handler, dataset = read_chunked_nested_data("data.h5")
     >>> zarr_group, zarr_array = read_chunked_nested_data("data.zarr")
     """
-    if any(file.endswith(x) for x in [".h5", ".hdf5", ".hdf"]):
+    if looks_like_hdf5(file):
         return read_chunked_nested_h5(file, data_path)
     elif any(file.endswith(x) for x in [".n5", ".zarr"]):
         return read_chunked_nested_zarr(file, data_path)
@@ -1434,7 +1434,7 @@ def read_chunked_nested_h5(
     >>> file, dataset = read_chunked_nested_h5("data.h5")
     >>> file, subgroup_data = read_chunked_nested_h5("experiment.hdf5", "images/channel1")
     """
-    if not any(h5file.endswith(x) for x in [".h5", ".hdf5", ".hdf"]):
+    if not looks_like_hdf5(h5file):
         raise ValueError("Not implemented for other filetypes than H5")
 
     fid = h5py.File(h5file, "r")
@@ -1510,7 +1510,7 @@ def read_chunked_data(
         if not os.path.exists(filename):
             raise ValueError(f"File {filename} does not exist.")
 
-        if any(filename.endswith(x) for x in [".h5", ".hdf5", ".hdf"]):
+        if looks_like_hdf5(filename):
             fid = h5py.File(filename, "r")
             data = fid[list(fid)[0]]
         elif filename.endswith(".zarr"):
@@ -1528,3 +1528,84 @@ def read_chunked_data(
         return fid, data  # type: ignore
     else:
         raise ValueError("'filename' is expected to be a str")
+
+
+def looks_like_hdf5(path: str) -> bool:
+    """
+    Check if a given file path corresponds to an HDF5 file based on its extension.
+
+    Parameters
+    ----------
+    path : str
+        The file path to check.
+
+    Returns
+    -------
+    bool
+        True if the file has an HDF5 extension, False otherwise.
+    """
+    # robust extension handling (including ".hdf5.gz", etc.)
+    p = path.lower()
+    exts = (".h5", ".hdf5", ".hdf", ".he5")
+    if p.endswith(exts):
+        return True
+    # handle double extensions like ".h5.gz"
+    base, ext = os.path.splitext(p)
+    if ext in (".gz", ".bz2", ".xz", ".zip") and base.endswith(exts):
+        return True
+    return False
+
+def pick_chunks(shape: Tuple[int, ...], dtype: str, target_mb: float = 4.0) -> Tuple[int, ...]:
+    """
+    Pick chunk sizes for HDF5 datasets based on the shape and data type.
+
+    Parameters
+    ----------
+    shape : tuple of int
+        Shape of the dataset.
+    dtype : str
+        Data type of the dataset.
+    target_mb : float, optional
+        Target chunk size in megabytes. Default is 4.0 MB.
+
+    Returns
+    -------
+    tuple of int
+        Chunk sizes for each dimension of the dataset.
+    """
+    itemsize = np.dtype(dtype).itemsize
+    target_bytes = int(target_mb * 1024 * 1024)
+
+    # If it's 4D like Z,Y,X,C
+    if len(shape) == 4:
+        z, y, x, c = shape
+        cz, cy, cx, cc = min(z, 16), min(y, 256), min(x, 256), min(c, c)
+        # shrink until chunk is under target
+        while (cz * cy * cx * cc * itemsize) > target_bytes and (cx > 32 or cy > 32 or cz > 1):
+            if cx >= cy and cx > 32:
+                cx //= 2
+            elif cy > 32:
+                cy //= 2
+            elif cz > 1:
+                cz //= 2
+            else:
+                break
+        return (max(1, cz), max(32, cy), max(32, cx), max(1, cc))
+
+    # If it's 3D like Z,Y,X
+    if len(shape) == 3:
+        z, y, x = shape
+        cz, cy, cx = min(z, 16), min(y, 256), min(x, 256)
+        while (cz * cy * cx * itemsize) > target_bytes and (cx > 32 or cy > 32 or cz > 1):
+            if cx >= cy and cx > 32:
+                cx //= 2
+            elif cy > 32:
+                cy //= 2
+            elif cz > 1:
+                cz //= 2
+            else:
+                break
+        return (max(1, cz), max(32, cy), max(32, cx))
+
+    # fallback: let h5py decide
+    return True

@@ -36,6 +36,8 @@ from biapy.data.data_3D_manipulation import (
     read_chunked_data,
     read_chunked_nested_data,
     write_chunked_data,
+    looks_like_hdf5,
+    pick_chunks,
 )
 from biapy.data.data_manipulation import (
     read_img_as_ndarray,
@@ -90,7 +92,7 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
     if (
         cfg.PROBLEM.NDIM == "3D"
         and (len(zarr_files) > 0 and any(True for x in [".zarr", ".n5"] if x in zarr_files[0]))
-        or (len(h5_files) > 0 and any(h5_files[0].endswith(x) for x in [".h5", ".hdf5", ".hdf"]))
+        or (len(h5_files) > 0 and looks_like_hdf5(h5_files[0]))
     ):
         working_with_zarr_h5_files = True
         # Check if the raw images and labels are within the same file
@@ -106,7 +108,7 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
         if len(zarr_files) > 0 and any(True for x in [".zarr", ".n5"] if x in zarr_files[0]):
             print("Working with Zarr files . . .")
             img_files = [os.path.join(data_path, x) for x in zarr_files]
-        elif len(h5_files) > 0 and any(h5_files[0].endswith(x) for x in [".h5", ".hdf5", ".hdf"]):
+        elif len(h5_files) > 0 and looks_like_hdf5(h5_files[0]):
             print("Working with H5 files . . .")
             img_files = [os.path.join(data_path, x) for x in h5_files]
 
@@ -216,10 +218,6 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
                         imgfile, data = read_chunked_data(Y[i]["filepath"])
                     fname = os.path.join(getattr(cfg.DATA, tag).INSTANCE_CHANNELS_MASK_DIR, os.path.basename(Y[i]["filepath"]))
                     os.makedirs(getattr(cfg.DATA, tag).INSTANCE_CHANNELS_MASK_DIR, exist_ok=True)
-                    if any(fname.endswith(x) for x in [".h5", ".hdf5", ".hdf"]):
-                        fid_mask = h5py.File(fname, "w")
-                    else:  # Zarr file
-                        fid_mask = zarr.open_group(fname, mode="w")
 
                     # Determine data shape
                     out_data_shape = np.array(data.shape)
@@ -233,10 +231,21 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
                         out_data_order = getattr(cfg.DATA, tag).INPUT_IMG_AXES_ORDER
                         channel_pos = getattr(cfg.DATA, tag).INPUT_IMG_AXES_ORDER.index("C")
 
-                    if any(fname.endswith(x) for x in [".h5", ".hdf5", ".hdf"]):
-                        mask = fid_mask.create_dataset("data", shape=out_data_shape, dtype=dtype_str)
-                        # mask = fid_mask.create_dataset("data", out_data_shape, compression="lzf", dtype=dtype_str)
-                    else:
+                    is_h5 = looks_like_hdf5(fname)
+                    if is_h5:
+                        fname, _ = os.path.splitext(fname)
+                        fid_mask = h5py.File(fname + ".h5", "w")
+                        ds_kwargs = {
+                            "shape": out_data_shape,
+                            "dtype": dtype_str,
+                            "chunks": pick_chunks(out_data_shape, dtype_str, target_mb=4.0),
+                            "compression": "gzip",
+                            "compression_opts": 4,
+                            "shuffle": True
+                        }
+                        mask = fid_mask.create_dataset("data", **ds_kwargs)
+                    else:  # Zarr file
+                        fid_mask = zarr.open_group(fname, mode="w")
                         mask = fid_mask.create_dataset("data", shape=out_data_shape, dtype=dtype_str)
 
                     # Close H5 file read for the data shape
@@ -1438,10 +1447,6 @@ def synapse_channel_creation(
             # Create the Zarr file where the mask will be placed
             fname = os.path.join(savepath, os.path.basename(filename))
             os.makedirs(savepath, exist_ok=True)
-            if any(fname.endswith(x) for x in [".h5", ".hdf5", ".hdf"]):
-                fid_mask = h5py.File(fname, "w")
-            else:  # Zarr file
-                fid_mask = zarr.open_group(fname, mode="w")
 
             # Determine data shape
             out_data_shape = np.array(data_shape)
@@ -1455,10 +1460,21 @@ def synapse_channel_creation(
                 out_data_order = zarr_data_information["axes_order"]
                 c_axe_pos = zarr_data_information["axes_order"].index("C")
 
-            if any(fname.endswith(x) for x in [".h5", ".hdf5", ".hdf"]):
-                mask = fid_mask.create_dataset("data", shape=out_data_shape, dtype=dtype_str)
-                # mask = fid_mask.create_dataset("data", out_data_shape, compression="lzf", dtype=dtype_str)
-            else:
+            is_h5 = looks_like_hdf5(fname)
+            if is_h5:
+                fname, _ = os.path.splitext(fname)
+                fid_mask = h5py.File(fname + ".h5", "w")
+                ds_kwargs = {
+                    "shape": out_data_shape,
+                    "dtype": dtype_str,
+                    "chunks": pick_chunks(out_data_shape, dtype_str, target_mb=4.0),
+                    "compression": "gzip",
+                    "compression_opts": 4,
+                    "shuffle": True
+                }
+                mask = fid_mask.create_dataset("data", **ds_kwargs)
+            else:  # Zarr file
+                fid_mask = zarr.open_group(fname, mode="w")
                 mask = fid_mask.create_dataset("data", shape=out_data_shape, dtype=dtype_str)
 
             print("Paiting all postsynaptic sites")
