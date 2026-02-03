@@ -2,7 +2,6 @@
 
 SYSTEM:
     NUM_CPUS: -1
-    NUM_WORKERS: 2
 
 # Problem definition
 PROBLEM:
