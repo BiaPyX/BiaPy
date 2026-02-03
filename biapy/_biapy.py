@@ -13,7 +13,6 @@ from shutil import copyfile
 import numpy as np
 import importlib
 from yacs.config import CfgNode as CN
-import multiprocessing
 from typing import (
     Optional,
     Dict,
@@ -55,7 +54,9 @@ from biapy.utils.misc import (
     set_seed,
     get_rank,
     is_main_process,
+    get_world_size,
     setup_for_distributed,
+    compute_threads_and_workers,
 )
 from biapy.models.bmz_utils import (
     create_model_doc,
@@ -208,15 +209,23 @@ class BiaPy:
         set_seed(self.cfg.SYSTEM.SEED)
 
         # Number of CPU calculation
-        if self.cfg.SYSTEM.NUM_CPUS == -1:
-            self.cpu_count = multiprocessing.cpu_count()
-        else:
-            self.cpu_count = self.cfg.SYSTEM.NUM_CPUS
-        if self.cpu_count < 1:
-            self.cpu_count = 1  # At least 1 CPU
-        torch.set_num_threads(self.cpu_count)
-        self.cfg.merge_from_list(["SYSTEM.NUM_CPUS", self.cpu_count])
+        cpu_budget, cpu_per_rank, main_threads, num_workers = compute_threads_and_workers(
+            user_num_cpus=self.cfg.SYSTEM.NUM_CPUS,
+            world_size=get_world_size(),
+            training_samples=None,
+            max_workers_cap=8,  # To avoid too many workers that can lead to memory issues
+        )
+        # Set threads for the main (rank) process
+        torch.set_num_threads(main_threads)
+        torch.set_num_interop_threads(1)
+        self.cfg.merge_from_list(["SYSTEM.NUM_CPUS", cpu_budget])
 
+        print(
+            f"CPU budget(total)={cpu_budget} | per_rank={cpu_per_rank} | "
+            f"main_threads={main_threads} | num_workers(per_rank)={num_workers} | "
+            f"world_size={get_world_size()}"
+        )
+        
         check_configuration(self.cfg, self.job_identifier)
         print("Configuration details:")
         print(self.cfg)
@@ -234,7 +243,18 @@ class BiaPy:
         print("*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*")
         print(f"Initializing {name}")
         print("*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*\n")
-        self.workflow = getattr(mdl, name)(self.cfg, self.job_identifier, self.device, self.args)
+        self.workflow = getattr(mdl, name)(
+            self.cfg, 
+            self.job_identifier, 
+            self.device, 
+            system_dict={
+                "cpu_budget": cpu_budget,
+                "cpu_per_rank": cpu_per_rank,
+                "main_threads": main_threads,
+                "num_workers_hint": num_workers,
+            }, 
+            args=self.args
+        )
 
     def train(self):
         """Call training phase."""

@@ -64,7 +64,7 @@ class Detection_Workflow(Base_Workflow):
         Arguments used in BiaPy's call.
     """
 
-    def __init__(self, cfg, job_identifier, device, args, **kwargs):
+    def __init__(self, cfg, job_identifier, device, system_dict, args, **kwargs):
         """
         Initialize the Detection_Workflow.
 
@@ -84,7 +84,7 @@ class Detection_Workflow(Base_Workflow):
         **kwargs : dict
             Additional keyword arguments.
         """
-        super(Detection_Workflow, self).__init__(cfg, job_identifier, device, args, **kwargs)
+        super(Detection_Workflow, self).__init__(cfg, job_identifier, device, system_dict, args, **kwargs)
 
         self.original_test_mask_path = self.prepare_detection_data()
 

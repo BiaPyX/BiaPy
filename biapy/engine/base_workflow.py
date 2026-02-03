@@ -117,6 +117,7 @@ class Base_Workflow(metaclass=ABCMeta):
         cfg: CN,
         job_identifier: str,
         device: torch.device,
+        system_dict: Dict[str, int],
         args: argparse.Namespace,
     ):
         """
@@ -129,10 +130,20 @@ class Base_Workflow(metaclass=ABCMeta):
         ----------
         cfg : CN
             Running configuration.
+
         job_identifier : str
             Complete name of the running job.
+
         device : torch.device
             Device used.
+
+        system_dict : dict
+            System dictionary containing:
+                * 'cpu_budget': int, Total CPU budget.
+                * 'cpu_per_rank': int, CPU budget per rank.
+                * 'main_threads': int, Number of main threads.
+                * 'num_workers_hint': int, Hint for the number of workers.
+
         args : argparse.Namespace
             Arguments used in BiaPy's call.
         """
@@ -140,6 +151,7 @@ class Base_Workflow(metaclass=ABCMeta):
         self.args = args
         self.job_identifier = job_identifier
         self.device = device
+        self.system_dict = system_dict
         if self.cfg.TEST.METRICS_IN_CPU:
             self.test_device = torch.device("cpu")
         else:
@@ -570,6 +582,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.bmz_config["cover_gt"],
             ) = create_train_val_augmentors(
                 self.cfg,
+                system_dict=self.system_dict,
                 X_train=self.X_train,
                 X_val=self.X_val,
                 Y_train=self.Y_train,
@@ -1112,9 +1125,10 @@ class Base_Workflow(metaclass=ABCMeta):
                 cover_raw, 
                 cover_gt,
             ) = create_test_generator(
-                self.cfg,
-                self.X_test,
-                self.Y_test,
+                cfg=self.cfg,
+                system_dict=self.system_dict,
+                X_test=self.X_test,
+                Y_test=self.Y_test,
                 norm_module=self.test_norm_module,
             )
             # Save BMZ data if not available

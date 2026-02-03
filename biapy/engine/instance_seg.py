@@ -79,7 +79,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         Arguments used in BiaPy's call.
     """
 
-    def __init__(self, cfg, job_identifier, device, args, **kwargs):
+    def __init__(self, cfg, job_identifier, device, system_dict, args, **kwargs):
         """
         Initialize the Instance_Segmentation_Workflow.
 
@@ -99,7 +99,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         **kwargs : dict
             Additional keyword arguments.
         """
-        super(Instance_Segmentation_Workflow, self).__init__(cfg, job_identifier, device, args, **kwargs)
+        super(Instance_Segmentation_Workflow, self).__init__(cfg, job_identifier, device, system_dict, args, **kwargs)
 
         self.original_train_input_mask_axes_order = self.cfg.DATA.TRAIN.INPUT_MASK_AXES_ORDER
         self.original_test_path, self.original_test_mask_path = self.prepare_instance_data()

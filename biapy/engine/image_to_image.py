@@ -50,7 +50,7 @@ class Image_to_Image_Workflow(Base_Workflow):
         Arguments used in BiaPy's call.
     """
 
-    def __init__(self, cfg, job_identifier, device, args, **kwargs):
+    def __init__(self, cfg, job_identifier, device, system_dict, args, **kwargs):
         """
         Initialize the Image_to_Image_Workflow.
 
@@ -70,7 +70,7 @@ class Image_to_Image_Workflow(Base_Workflow):
         **kwargs : dict
             Additional keyword arguments.
         """
-        super(Image_to_Image_Workflow, self).__init__(cfg, job_identifier, device, args, **kwargs)
+        super(Image_to_Image_Workflow, self).__init__(cfg, job_identifier, device, system_dict, args, **kwargs)
         # From now on, no modification of the cfg will be allowed
         self.cfg.freeze()
 

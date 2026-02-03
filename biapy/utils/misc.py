@@ -36,11 +36,13 @@ from functools import partial
 import collections.abc
 import gc
 from typing import (
+    Optional,
     Tuple,
     List,
     Iterator,
 )
 from numpy.typing import NDArray
+import multiprocessing
 
 from torch import inf
 from datetime import timedelta
@@ -1038,3 +1040,60 @@ def os_walk_clean(
         dirs.sort(key=natural_key)
         files.sort(key=natural_key)
         yield root, dirs, files
+
+def resolve_cpu_budget(user_num_cpus: int) -> int:
+    """Total CPU cores budget for the entire job."""
+    if user_num_cpus == -1:
+        # If you use CPU affinity / SLURM cpuset, you may want to respect that instead of cpu_count()
+        return multiprocessing.cpu_count()
+    return max(1, int(user_num_cpus))
+
+def compute_threads_and_workers(
+    user_num_cpus: int,
+    world_size: int,
+    training_samples: Optional[int] = None,
+    max_workers_cap: int = 8
+) -> Tuple[int, int, int, int]:
+    """
+    Compute CPU budget, CPU per rank, main threads, and DataLoader workers per rank.
+
+    Parameters
+    ----------
+    user_num_cpus : int
+        User-specified number of CPUs (-1 to use all available).
+
+    world_size : int
+        Number of distributed ranks/processes.
+
+    training_samples : int, optional
+        Number of training samples (to limit workers for small datasets).
+
+    max_workers_cap : int, optional
+        Maximum cap on DataLoader workers per rank. Defaults to 8.
+
+    Returns
+    ------- 
+    Tuple[int, int, int, int]
+        - `cpu_budget`: Total CPU cores budget for the job.
+        - `cpu_per_rank`: CPU cores allocated per rank.
+        - `main_threads`: Number of main threads for training process.
+        - `num_workers`: Number of DataLoader workers per rank.
+    """
+    cpu_budget = resolve_cpu_budget(user_num_cpus)
+    world_size = max(1, int(world_size))
+
+    cpu_per_rank = max(1, cpu_budget // world_size)
+
+    # Conservative: keep training-process threads modest so DataLoader can breathe
+    main_threads = min(4, cpu_per_rank)
+
+    # Leave 1 core for OS/overhead
+    workers_per_rank_budget = max(0, cpu_per_rank - main_threads - 1)
+
+    num_workers = min(workers_per_rank_budget, max_workers_cap)
+
+    # Also don't spawn more workers than you have samples (helps tiny datasets)
+    if training_samples is not None:
+        num_workers = min(num_workers, max(0, int(training_samples)))
+
+    return cpu_budget, cpu_per_rank, main_threads, num_workers

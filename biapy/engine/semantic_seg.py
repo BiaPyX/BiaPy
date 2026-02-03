@@ -47,7 +47,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         Arguments used in BiaPy's call.
     """
 
-    def __init__(self, cfg, job_identifier, device, args, **kwargs):
+    def __init__(self, cfg, job_identifier, device, system_dict, args, **kwargs):
         """
         Initialize the Semantic_Segmentation_Workflow.
 
@@ -67,7 +67,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         **kwargs : dict
             Additional keyword arguments.
         """
-        super(Semantic_Segmentation_Workflow, self).__init__(cfg, job_identifier, device, args, **kwargs)
+        super(Semantic_Segmentation_Workflow, self).__init__(cfg, job_identifier, device, system_dict, args, **kwargs)
 
         if cfg.TRAIN.ENABLE and cfg.DATA.TRAIN.CHECK_DATA:
             check_masks(cfg.DATA.TRAIN.GT_PATH, n_classes=cfg.DATA.N_CLASSES, is_3d=(self.cfg.PROBLEM.NDIM == "3D"))
