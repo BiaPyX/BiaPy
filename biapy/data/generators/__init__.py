@@ -425,7 +425,6 @@ def create_train_val_augmentors(
 
 def create_test_generator(
     cfg: CN,
-    system_dict: Dict[str, Any],
     X_test: Any,
     Y_test: Any,
     norm_module: Normalization,
@@ -437,13 +436,6 @@ def create_test_generator(
     ----------
     cfg : Config
         BiaPy configuration.
-
-    system_dict : dict
-        System dictionary containing:
-            * 'cpu_budget': int, Total CPU budget.
-            * 'cpu_per_rank': int, CPU budget per rank.
-            * 'main_threads': int, Number of main threads.
-            * 'num_workers_hint': int, Hint for the number of workers.
 
     X_test : 4D Numpy array
         Test data. E.g. ``(num_of_images, y, x, channels)`` for ``2D`` or ``(num_of_images, z, y, x, channels)`` for ``3D``.
@@ -518,8 +510,8 @@ def create_test_generator(
     else:
         bmz_input_sample, mask_sample, _, _, _, _ = test_generator.load_sample(0, first_load=True) # type: ignore
     bmz_input_sample, cover_raw, cover_gt = extract_BMZ_sample_and_cover(
-        img=bmz_input_sample[0] if isinstance(bmz_input_sample, np.ndarray) else bmz_input_sample,
-        img_gt=mask_sample[0] if isinstance(mask_sample, np.ndarray) else mask_sample,
+        img=bmz_input_sample[0] if (isinstance(bmz_input_sample, np.ndarray) and not cfg.TEST.BY_CHUNKS.ENABLE) else bmz_input_sample,
+        img_gt=mask_sample[0] if (isinstance(mask_sample, np.ndarray) and not cfg.TEST.BY_CHUNKS.ENABLE) else mask_sample,
         patch_size=cfg.DATA.PATCH_SIZE,
         is_3d=cfg.PROBLEM.NDIM == "3D",
         input_axis_order=cfg.DATA.TEST.INPUT_IMG_AXES_ORDER,

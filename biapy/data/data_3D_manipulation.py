@@ -7,25 +7,22 @@ This module provides functions to process and manipulate 3D data volumes, includ
 - Padding and resizing
 - Efficient loading of large 3D files
 """
+from __future__ import annotations
+
 import os
 import math
+from typing import Any, List, Optional, Sequence, Tuple, Union
+
 import h5py
 import zarr
 import numpy as np
-from tqdm import tqdm
-from typing import (
-    List,
-    Tuple,
-    Optional,
-    Type,
-    Any,
-    Sequence,
-)
 from numpy.typing import NDArray
-
+from tqdm import tqdm
 from biapy.utils.misc import is_main_process
 from biapy.data.dataset import PatchCoords
 
+ZarrOrH5File = Union[zarr.Group, zarr.Array, h5py.File]
+ZarrOrH5Array = Union[zarr.Array, h5py.Dataset]
 
 def load_3D_efficient_files(
     data_path: List[str],
@@ -205,7 +202,7 @@ def load_img_part_from_efficient_file(
 
 
 def extract_patch_from_efficient_file(
-    data: zarr.hierarchy.Group | h5py._hl.dataset.Dataset,  # type: ignore
+    data: zarr.Array | h5py.Dataset,
     patch_coords: PatchCoords,
     data_axes_order: str = "ZYXC",
 ) -> NDArray:
@@ -263,7 +260,7 @@ def extract_patch_from_efficient_file(
 
 
 def insert_patch_in_efficient_file(
-    data: zarr.hierarchy.Group | h5py._hl.dataset.Dataset,  # type: ignore
+    data: zarr.Array | h5py.Dataset,
     patch: NDArray,
     patch_coords: PatchCoords,
     data_axes_order: str = "ZYXC",
@@ -822,7 +819,7 @@ def merge_3D_data_with_overlap(
 
 
 def extract_3D_patch_with_overlap_and_padding_yield(
-    data: zarr.hierarchy.Group | h5py._hl.dataset.Dataset,  # type: ignore
+    data: zarr.Array | h5py.Dataset,
     vol_shape: Tuple[int, ...],
     axes_order: str,
     overlap: Tuple[float, ...] = (0, 0, 0),
@@ -843,7 +840,7 @@ def extract_3D_patch_with_overlap_and_padding_yield(
 
     Parameters
     ----------
-    data : H5 dataset
+    data : Zarr array or H5 dataset
         Data to extract patches from. E.g. ``(z, y, x, channels)``.
     vol_shape : 4D int tuple
         Shape of the patches to create. E.g. ``(z, y, x, channels)``.
@@ -1246,7 +1243,7 @@ def write_chunked_data(
     data: NDArray,
     data_dir: str,
     filename: str,
-    crop_shape: Optional[Tuple[int | float] | List[int | float]] = None,
+    crop_shape: Optional[Sequence[int]] = None,
     dtype_str: str = "float32",
     verbose: bool = True,
 ):
@@ -1286,19 +1283,51 @@ def write_chunked_data(
         data = fid.create_dataset("data", data=data, dtype=dtype_str, compression="gzip")  # type: ignore
     # Zarr
     else:
-        data_zarr = zarr.open_array(
+        chunks = crop_shape if crop_shape is not None else pick_chunks(data.shape, dtype_str)
+
+        data_zarr = zarr.open(
             os.path.join(data_dir, filename),
             shape=data.shape,
             mode="w",
-            chunks=crop_shape,  # type: ignore
+            chunks=chunks,  # type: ignore
             dtype=dtype_str,
+            zarr_format=3,
         )
         data_zarr[:] = data
 
+def _first_array_in_group(g: zarr.Group) -> zarr.Array:
+    """Descend into the first array found (sorted by key) in a group."""
+    keys = sorted(list(g.keys()))
+    if not keys:
+        raise ValueError("Zarr group is empty (no arrays or subgroups).")
+    obj = g[keys[0]]
+    while isinstance(obj, zarr.Group):
+        subkeys = sorted(list(obj.keys()))
+        if not subkeys:
+            raise ValueError("Zarr group contains no arrays (only empty groups).")
+        obj = obj[subkeys[0]]
+    if not isinstance(obj, zarr.Array):
+        raise TypeError(f"Expected zarr.Array, found {type(obj)}")
+    return obj
+
+def _first_dataset_in_h5_group(g: h5py.Group) -> h5py.Dataset:
+    """Descend into the first dataset found (sorted by key) in an HDF5 group."""
+    keys = sorted(list(g.keys()))
+    if not keys:
+        raise ValueError("HDF5 group is empty (no datasets or subgroups).")
+    obj = g[keys[0]]
+    while isinstance(obj, h5py.Group):
+        subkeys = sorted(list(obj.keys()))
+        if not subkeys:
+            raise ValueError("HDF5 group contains no datasets (only empty groups).")
+        obj = obj[subkeys[0]]
+    if not isinstance(obj, h5py.Dataset):
+        raise TypeError(f"Expected h5py.Dataset, found {type(obj)}")
+    return obj
 
 def read_chunked_nested_data(
     file: str, data_path: str = ""
-) -> Tuple[Type[zarr.hierarchy.Group], Type[zarr.core.Array]] | Tuple[Type[h5py._hl.files.File], Type[h5py._hl.dataset.Dataset]]:  # type: ignore
+) -> Tuple[ZarrOrH5File, ZarrOrH5Array]:
     """Find recursively raw and ground truth data within a H5/Zarr file.
 
     This function automatically detects whether the input file is in HDF5 or Zarr format
@@ -1315,7 +1344,7 @@ def read_chunked_nested_data(
     -------
     tuple
         Returns one of:
-        - (zarr.hierarchy.Group, zarr.core.Array) for Zarr/N5 files
+        - (zarr.Group, zarr.core.Array) for Zarr/N5 files
         - (h5py.File, h5py.Dataset) for HDF5 files
 
     Raises
@@ -1336,9 +1365,7 @@ def read_chunked_nested_data(
         raise ValueError("Input file seems to not be either Zarr or H5")
 
 
-def read_chunked_nested_zarr(
-    zarrfile: str, data_path: str = ""
-) -> Tuple[Type[zarr.hierarchy.Group], Type[zarr.core.Array]]:  # type: ignore
+def read_chunked_nested_zarr(zarrfile: str, data_path: str = "") -> Tuple[zarr.Group, zarr.Array]:
     """Find recursively raw and ground truth data within a Zarr/N5 file.
 
     This function searches through a Zarr/N5 file hierarchy to locate array data
@@ -1356,7 +1383,7 @@ def read_chunked_nested_zarr(
     -------
     tuple
         A tuple containing:
-        - zarr.hierarchy.Group: The root group of the Zarr file
+        - zarr.Group: The root group of the Zarr file
         - zarr.core.Array: The found array data
 
     Raises
@@ -1372,9 +1399,9 @@ def read_chunked_nested_zarr(
     """
     if not any(zarrfile.endswith(x) for x in [".n5", ".zarr"]):
         raise ValueError("Not implemented for other filetypes than Zarr")
-    fid = zarr.open(zarrfile, "r")
+    fid = zarr.open(zarrfile, mode="r")
 
-    def find_obj(path: str, fid: zarr.hierarchy.Group):  # type: ignore
+    def find_obj(path: str, fid: zarr.Group):  # type: ignore
         obj = None
         rpath = path.split(".")
         if len(rpath) == 0:
@@ -1400,9 +1427,7 @@ def read_chunked_nested_zarr(
     return fid, data  # type: ignore
 
 
-def read_chunked_nested_h5(
-    h5file: str, data_path: str = ""
-) -> Tuple[Type[h5py._hl.files.File], Type[h5py._hl.dataset.Dataset]]:  # type: ignore
+def read_chunked_nested_h5(h5file: str, data_path: str = "") -> Tuple[h5py.File, h5py.Dataset]:
     """Find recursively raw and ground truth data within an HDF5 file.
 
     This function searches through an HDF5 file hierarchy to locate dataset objects
@@ -1439,33 +1464,32 @@ def read_chunked_nested_h5(
 
     fid = h5py.File(h5file, "r")
 
-    def find_obj(path: str, fid: h5py._hl.files.File) -> Optional[NDArray]:  # type: ignore
-        obj = None
-        rpath = path.split(".")
-        if len(rpath) == 0:
-            return None
-        else:
-            if len(rpath) > 1:
-                groups = list(fid.keys())
-                if rpath[0] not in groups:
-                    return None
-                obj = find_obj(".".join(rpath[1:]), fid[rpath[0]])
-            else:
-                arrays = list(fid.keys())
-                if rpath[0] not in arrays:
-                    return None
-                return fid[rpath[0]]
-        return obj
+    try:
+        if not data_path:
+            return fid, _first_dataset_in_h5_group(fid)
 
-    data = find_obj(data_path, fid)
-    if data is None and data_path != "":
-        raise ValueError(f"'{data_path}' not found in H5: {h5file}.")
-    return fid, data  # type: ignore
+        # allow both "a.b.c" and "a/b/c"
+        normalized = data_path.replace(".", "/").strip("/")
+        obj: h5py.Group | h5py.Dataset = fid
+        for part in normalized.split("/"):
+            if part not in obj:
+                raise ValueError(f"'{data_path}' not found in H5: {h5file}.")
+            obj = obj[part]
+
+        if isinstance(obj, h5py.Group):
+            return fid, _first_dataset_in_h5_group(obj)
+        if isinstance(obj, h5py.Dataset):
+            return fid, obj
+
+        raise TypeError(f"Unexpected HDF5 object type at '{data_path}': {type(obj)}")
+    except Exception:
+        fid.close()
+        raise
 
 
 def read_chunked_data(
     filename: str,
-) -> Tuple[Type[zarr.hierarchy.Group], Type[zarr.core.Array]] | Tuple[Type[h5py._hl.files.File], Type[h5py._hl.dataset.Dataset]]:  # type: ignore
+) -> Tuple[ZarrOrH5File, ZarrOrH5Array]:
     """Read and return the first dataset found in an HDF5 or Zarr file.
 
     This function automatically detects the file format (HDF5 or Zarr) and returns
@@ -1512,20 +1536,21 @@ def read_chunked_data(
 
         if looks_like_hdf5(filename):
             fid = h5py.File(filename, "r")
-            data = fid[list(fid)[0]]
-        elif filename.endswith(".zarr"):
-            fid = zarr.open(filename, "r")
-            if isinstance(fid, zarr.hierarchy.Group):  # type: ignore
-                if len(list((fid.group_keys()))) != 0:  # type: ignore
-                    data = fid[list(fid.group_keys())[0]]  # type: ignore
-                elif len(list((fid.array_keys()))) != 0:  # type: ignore
-                    data = fid[list(fid.array_keys())[0]]  # type: ignore
+            try:
+                data = _first_dataset_in_h5_group(fid)
+            except Exception:
+                fid.close()
+                raise
+        elif filename.endswith(".zarr") or filename.endswith(".n5"):
+            fid = zarr.open(filename, mode="r")
+            if isinstance(fid, zarr.Group):
+                data = _first_array_in_group(fid)
             else:
                 data = fid
         else:
             raise ValueError(f"File extension {filename} not recognized")
 
-        return fid, data  # type: ignore
+        return fid, data
     else:
         raise ValueError("'filename' is expected to be a str")
 
@@ -1576,36 +1601,31 @@ def pick_chunks(shape: Tuple[int, ...], dtype: str, target_mb: float = 4.0) -> T
     itemsize = np.dtype(dtype).itemsize
     target_bytes = int(target_mb * 1024 * 1024)
 
-    # If it's 4D like Z,Y,X,C
-    if len(shape) == 4:
-        z, y, x, c = shape
-        cz, cy, cx, cc = min(z, 16), min(y, 256), min(x, 256), min(c, c)
-        # shrink until chunk is under target
-        while (cz * cy * cx * cc * itemsize) > target_bytes and (cx > 32 or cy > 32 or cz > 1):
-            if cx >= cy and cx > 32:
-                cx //= 2
-            elif cy > 32:
-                cy //= 2
-            elif cz > 1:
-                cz //= 2
-            else:
-                break
-        return (max(1, cz), max(32, cy), max(32, cx), max(1, cc))
+    # start with a conservative cap per dimension (keeps metadata manageable)
+    chunks = [min(int(d), 256) for d in shape]
 
-    # If it's 3D like Z,Y,X
-    if len(shape) == 3:
-        z, y, x = shape
-        cz, cy, cx = min(z, 16), min(y, 256), min(x, 256)
-        while (cz * cy * cx * itemsize) > target_bytes and (cx > 32 or cy > 32 or cz > 1):
-            if cx >= cy and cx > 32:
-                cx //= 2
-            elif cy > 32:
-                cy //= 2
-            elif cz > 1:
-                cz //= 2
-            else:
-                break
-        return (max(1, cz), max(32, cy), max(32, cx))
+    # keep channels small-ish if present
+    if len(shape) >= 4:
+        chunks[-1] = min(int(shape[-1]), 16)
 
-    # fallback: let h5py decide
-    return True
+    def chunk_bytes() -> int:
+        n = 1
+        for c in chunks:
+            n *= max(1, int(c))
+        return n * itemsize
+
+    # shrink largest dims until under target
+    while chunk_bytes() > target_bytes:
+        # find a dim we can shrink (prefer spatial over channels)
+        # skip dims already at 1
+        candidates = [i for i, c in enumerate(chunks) if c > 1]
+        if not candidates:
+            break
+        # avoid shrinking channels first when possible
+        if len(shape) >= 4 and (len(chunks) - 1) in candidates and len(candidates) > 1:
+            candidates.remove(len(chunks) - 1)
+        # shrink the currently-largest candidate
+        i = max(candidates, key=lambda j: chunks[j])
+        chunks[i] = max(1, chunks[i] // 2)
+
+    return tuple(int(c) for c in chunks)

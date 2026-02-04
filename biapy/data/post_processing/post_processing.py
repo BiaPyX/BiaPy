@@ -1391,7 +1391,7 @@ def voronoi_on_mask(
 def remove_close_points_by_mask(
     points: NDArray | List[List[int | float]], 
     radius: float, 
-    raw_predictions: NDArray | Type[zarr.hierarchy.Group] | Type[zarr.core.Array], # type: ignore
+    raw_predictions: NDArray | Type[zarr.Group] | Type[zarr.Array],
     bin_th: float,
     resolution: List[int|float], 
     channel_to_look_into: int = 1,

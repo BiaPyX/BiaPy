@@ -13,7 +13,8 @@ import os
 import math
 import zarr
 import numpy as np
-from typing import Tuple, Optional, Dict, List, Callable
+import time
+from typing import Tuple, Optional, Dict, List, Callable 
 from numpy.typing import NDArray
 from tqdm import tqdm
 
@@ -28,7 +29,6 @@ from biapy.data.data_manipulation import sample_satisfy_conds, save_tif, extract
 from biapy.utils.misc import get_world_size, get_rank
 from biapy.data.dataset import PatchCoords
 from biapy.data.norm import Normalization
-
 
 class chunked_test_pair_data_generator(IterableDataset):
     """
@@ -466,12 +466,114 @@ class chunked_test_pair_data_generator(IterableDataset):
 
                 yield vol_id, img, mask, real_patch_in_data, added_pad, norm_extra_info
 
+    def _shared_zarr_path(self) -> str:
+        base = os.path.splitext(self.filename)[0]
+        return os.path.join(self.out_dir, f"{base}.zarr")
+
+    def _compute_out_shape(self, patch: NDArray) -> Tuple[int, ...]:
+        # Channel dimension should be equal to the number of channel of the prediction
+        out_shape = list(self.X_parallel_data.shape)
+
+        if "C" not in self.input_axes:
+            out_shape = list(out_shape) + [patch.shape[-1]]
+        else:
+            out_shape[self.input_axes.index("C")] = patch.shape[-1]
+
+        return tuple(int(v) for v in out_shape)
+
+    def _compute_out_chunks(self, out_data_shape: Tuple[int, ...], patch: NDArray) -> Tuple[int, ...]:
+        """
+        Compute the chunk shape for the output Zarr file. Chunking is aligned to output tiles 
+        (step sizes) to guarantee safe concurrent writes.
+
+        Parameters
+        ----------
+        out_data_shape : tuple of int
+            Shape of the output data.
+        
+        patch : NDArray
+            Sample patch to process.
+        
+        Returns
+        -------
+        tuple of int
+            Chunk shape for the output data.
+        """
+        # The output tile size (after removing padding) is the "step" size
+        write_tile_zyxc = (
+            self.step_z,  # crop_shape[0] - 2*padding[0]
+            self.step_y,  # crop_shape[1] - 2*padding[1]
+            self.step_x,  # crop_shape[2] - 2*padding[2]
+            patch.shape[-1],
+        )
+
+        # Adapt into dataset axes order (e.g. ZYXC -> whatever self.out_data_order is)
+        chunk_shape = order_dimensions(
+            write_tile_zyxc,
+            input_order="ZYXC",
+            output_order=self.out_data_order,
+            default_value=np.nan,
+        )
+        chunk_shape = tuple(
+            int(v) if not np.isnan(v) else int(out_data_shape[i])
+            for i, v in enumerate(chunk_shape)
+        )
+        return tuple(int(v) for v in chunk_shape)
+
+    def _open_or_create_shared_out(self, out_path: str, out_shape: Tuple[int, ...], out_chunks: Tuple[int, ...]):
+        """
+        Open or create the shared output Zarr file.
+
+        Parameters
+        ----------
+        out_path : str
+            Path to the output Zarr file.
+            
+        out_shape : tuple of int
+            Shape of the output data.
+
+        out_chunks : tuple of int
+            Chunk shape of the output data.
+        """
+        os.makedirs(self.out_dir, exist_ok=True)
+
+        # Fast path: already opened in this worker process
+        if self.out_data is not None:
+            return
+
+        # Try a few times to survive races where another process is creating metadata
+        last_err = None
+        for _ in range(20):
+            try:
+                # Create new (fail if exists)
+                self.out_data = zarr.open(
+                    out_path,
+                    mode="w-",
+                    shape=out_shape,
+                    chunks=out_chunks,
+                    dtype=self.dtype_str,
+                    zarr_format=3,
+                )
+                self.out_file = out_path
+                return
+            except Exception as e:
+                last_err = e
+                # If it already exists (or creation raced), open read/write
+                try:
+                    self.out_data = zarr.open(out_path, mode="r+", zarr_format=3)
+                    self.out_file = out_path
+                    return
+                except Exception:
+                    # Possibly metadata not fully written yet by creator
+                    time.sleep(0.05)
+
+        raise RuntimeError(f"Could not create/open shared Zarr at {out_path}. Last error: {last_err}")
+
     def insert_patch_in_file(self, patch: NDArray, patch_coords: PatchCoords):
         """
-        Insert patch into the output parallel file.
+        Insert patch into the output parallel file. Chunking is aligned to output tiles 
+        (step sizes) to guarantee safe concurrent writes.
         
-        It always creates a Zarr dataset using ``self.crop_shape`` as chunk size.
-
         Parameters
         ----------
         patch : int
@@ -481,110 +583,39 @@ class chunked_test_pair_data_generator(IterableDataset):
             Whether its the first time a sample is loaded to prevent normalizing it.
 
         """
-        # Create the data container if it was not created
-        if not self.out_file:
-            # Channel dimension should be equal to the number of channel of the prediction
-            out_data_shape = np.array(self.X_parallel_data.shape)
-            if "C" not in self.input_axes:
-                out_data_shape = tuple(out_data_shape) + (patch.shape[-1],)
-            else:
-                out_data_shape[self.input_axes.index("C")] = patch.shape[-1]
-                out_data_shape = tuple(out_data_shape)
-            self.out_data_shape = out_data_shape
+        out_path = self._shared_zarr_path()
 
-            if get_world_size() > 1:
-                data_filename = os.path.join(
-                    self.out_dir, f"rank{get_rank()}_" + os.path.splitext(self.filename)[0] + ".zarr"
-                )
-            else:
-                data_filename = os.path.join(
-                    self.out_dir, os.path.splitext(self.filename)[0] + ".zarr"
-                )
+        if self.out_file is None or self.out_data is None:
+            out_shape = self._compute_out_shape(patch)
+            out_chunks = self._compute_out_chunks(out_shape, patch)
+            self.out_data_shape = out_shape
+            self._open_or_create_shared_out(out_path, out_shape, out_chunks)
 
-            # Adapt the crop_shape into the dataset axes order
-            chunk_shape = order_dimensions(
-                self.crop_shape,
-                input_order="ZYXC",
-                output_order=self.out_data_order,
-                default_value=np.nan,
-            )
-            chunk_shape = tuple([int(val) if not np.isnan(val) else out_data_shape[i] for i, val in enumerate(chunk_shape)]) # type: ignore
-
-            os.makedirs(self.out_dir, exist_ok=True)
-            self.out_file = data_filename
-            self.out_data = zarr.open_array(
-                data_filename,
-                shape=out_data_shape,
-                mode="w",
-                chunks=chunk_shape,  # type: ignore
-                dtype=self.dtype_str,
-            )
-
+        # Insert the patch
         insert_patch_in_efficient_file(
             data=self.out_data,
             patch=patch,
             patch_coords=patch_coords,
             data_axes_order=self.out_data_order,
             patch_axes_order="ZYXC",
+            mode="replace",
         )
-
-    def merge_zarr_parts_into_one(self):
-        """Merge all parts of the Zarr data, created by each rank, into just one file."""
-        # Creates the final Zarr dataset
-        data_filename = os.path.join(self.out_dir, os.path.splitext(self.filename)[0] + ".zarr")
-        final_data = zarr.open_array(
-            data_filename,
-            shape=self.out_data_shape,
-            mode="w",
-            chunks=self.crop_shape,  # type: ignore
-            dtype=self.dtype_str,
-        )
-
-        for i in tqdm(range(get_world_size())):
-            zarr_of_rank_filename = os.path.join(
-                self.out_dir, f"rank{i}_" + os.path.splitext(self.filename)[0] + ".zarr"
-            )
-            print("[Rank {} ({})] Reading file {}".format(get_rank(), os.getpid(), zarr_of_rank_filename))
-            data = zarr.open_array(zarr_of_rank_filename, mode="r")
-
-            for z in range(math.ceil(data.shape[0] / self.crop_shape[0])):
-                for y in range(math.ceil(data.shape[1] / self.crop_shape[1])):
-                    for x in range(math.ceil(data.shape[2] / self.crop_shape[2])):
-                        coords = PatchCoords(
-                            z_start=z * self.crop_shape[0],
-                            z_end=min((z + 1) * self.crop_shape[0], data.shape[0]),
-                            y_start=y * self.crop_shape[1],
-                            y_end=min((y + 1) * self.crop_shape[1], data.shape[1]),
-                            x_start=x * self.crop_shape[2],
-                            x_end=min((x + 1) * self.crop_shape[2], data.shape[2]),
-                        )
-                        patch = data[
-                            coords.z_start : coords.z_end,
-                            coords.y_start : coords.y_end,
-                            coords.x_start : coords.x_end,
-                        ]
-                        patch = np.array(patch)
-
-                        # If the patch contains something
-                        if patch.max() != patch.min():
-                            insert_patch_in_efficient_file(
-                                data=final_data,
-                                patch=patch,
-                                patch_coords=coords,
-                                data_axes_order=self.out_data_order,
-                                patch_axes_order="ZYXC",
-                                mode="add",
-                            )
 
     def save_parallel_data_as_tif(self):
         """Save the final zarr into a tiff file."""
-        final_zarr_file = os.path.join(self.out_dir, os.path.splitext(self.filename)[0] + ".zarr")
+        final_zarr_file = self._shared_zarr_path()
         if not os.path.exists(final_zarr_file):
             print(f"Couldn't load Zarr data for saving. File {final_zarr_file} not found!")
         else:
-            data = np.array(zarr.open_array(final_zarr_file, mode="r"))
+            data = np.array(zarr.open(final_zarr_file, mode="r"))
             data = ensure_3d_shape(data)
-            save_tif(np.expand_dims(data, 0), self.out_dir, [os.path.splitext(self.filename)[0] + ".tif"], verbose=True)
+            save_tif(
+                np.expand_dims(data, 0),
+                self.out_dir,
+                [os.path.splitext(self.filename)[0] + ".tif"],
+                verbose=True,
+            )
+
 
     def close_open_files(self):
         """Close all files that may be open in the generator."""

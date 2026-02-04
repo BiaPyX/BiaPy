@@ -1130,7 +1130,6 @@ class Base_Workflow(metaclass=ABCMeta):
                 cover_gt,
             ) = create_test_generator(
                 cfg=self.cfg,
-                system_dict=self.system_dict,
                 X_test=self.X_test,
                 Y_test=self.Y_test,
                 norm_module=self.test_norm_module,
@@ -1468,6 +1467,7 @@ class Base_Workflow(metaclass=ABCMeta):
             # Create the generator
             self.test_generator = create_chunked_test_generator(
                 self.cfg,
+                system_dict=self.system_dict,
                 current_sample=self.current_sample,
                 norm_module=self.norm_module,
                 out_dir=self.cfg.PATHS.RESULT_DIR.PER_IMAGE,
@@ -1543,19 +1543,16 @@ class Base_Workflow(metaclass=ABCMeta):
                     )
                 dist.barrier()
 
-                if is_main_process():
-                    tgen.merge_zarr_parts_into_one()
-
-                if self.cfg.TEST.VERBOSE:
-                    print(
-                        f"[Rank {get_rank()} ({os.getpid()})] Waiting for master rank to create the final Zarr from all the parts . . ."
-                    )
-                dist.barrier()
-
             tgen.close_open_files()
 
-            if self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF and is_main_process():
-                tgen.save_parallel_data_as_tif()
+            # Only after everyone finished writing, optionally convert to TIF on rank0
+            if self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF:
+                if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
+                    dist.barrier()
+                if is_main_process():
+                    tgen.save_parallel_data_as_tif()
+                if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
+                    dist.barrier()
 
         if is_main_process():
             self.after_all_patch_prediction_by_chunks()
