@@ -772,9 +772,6 @@ class Base_Workflow(metaclass=ABCMeta):
             self.model, self.torchvision_preprocessing = build_torchvision_model(self.cfg, self.device)
         # BioImage Model Zoo pretrained models
         elif self.cfg.MODEL.SOURCE == "bmz":
-            if self.args.distributed:
-                raise ValueError("DDP can not be activated when loading a BMZ pretrained model")
-
             self.model = build_bmz_model(self.cfg, self.bmz_config["original_bmz_config"], self.device)
 
         self.model_without_ddp = self.model
