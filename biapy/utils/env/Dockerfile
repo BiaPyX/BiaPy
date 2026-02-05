@@ -1,50 +1,44 @@
 FROM nvidia/cuda:11.8.0-base-ubuntu22.04
 
-MAINTAINER Daniel Franco-Barranco "daniel.franco@dipc.org"
+LABEL maintainer="Daniel Franco-Barranco <daniel.franco@dipc.org>"
 
-ARG DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y \
-    wget \
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
+    libsndfile1 \
+    wget \
     libsm6 \
     libxext6 \
-	git
+    git \
+    software-properties-common \
+    && rm -rf /var/lib/apt/lists/*
 
-# Download and prepare conda
-RUN wget -q -P /tmp \
-    https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh && \
-    mkdir /installations && \
-    bash /tmp/Miniconda3-latest-Linux-x86_64.sh -b -p /installations/miniconda3 && \
-    rm /tmp/Miniconda3-latest-Linux-x86_64.sh && \
-    echo "export PATH=/installations/miniconda3/bin:$PATH" >> ~/.bashrc
+# Install Python 3.11 on Ubuntu 22.04 (deadsnakes)
+RUN add-apt-repository -y ppa:deadsnakes/ppa && \
+    apt-get update && apt-get install -y --no-install-recommends \
+      python3.11 python3.11-venv python3.11-distutils \
+    && rm -rf /var/lib/apt/lists/*
 
-ENV PATH /installations/miniconda3/bin:$PATH
+# Make python3/pip point to Python 3.11
+RUN wget -q https://bootstrap.pypa.io/get-pip.py && \
+    python3.11 get-pip.py && rm -f get-pip.py && \
+    ln -sf /usr/bin/python3.11 /usr/local/bin/python3 && \
+    ln -sf /usr/local/bin/pip /usr/local/bin/pip3
 
-RUN conda init bash && \
-    conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main && \
-    conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r && \
-    conda update -y -n base -c defaults conda && \
-    conda create -n BiaPy_env -c conda-forge python=3.11 biapy pytorch-gpu && \
-    conda init bash
+RUN pip3 install --no-cache-dir -U pip
 
-# Set up shell to use the created env
-SHELL ["conda", "run", "-n", "BiaPy_env", "/bin/bash", "-c"]
+# Important: pin numpy<2 to avoid binary-extension breakage in many stacks
+RUN pip3 install --no-cache-dir "numpy<2"
 
-# Clone BiaPy, as running it with python -c "" stops the container with no error after a few seconds running 
-ARG REPO=https://github.com/BiaPyX/BiaPy.git
-RUN git clone --depth 1 $REPO --branch $(git ls-remote --tags $REPO | cut -d/ -f3 | sort -V | tail -n1) /installations/BiaPy
+# Install PyTorch CUDA 11.8 wheels explicitly from cu118 index
+RUN pip3 install --no-cache-dir \
+      torch torchvision torchaudio \
+      --index-url https://download.pytorch.org/whl/cu118
 
-# This time clone the last commit (25729c ; v3.5.2) as some minor bugs were solved but not created a new release yet
-#RUN git clone --depth 1 https://github.com/BiaPyX/BiaPy.git /installations/BiaPy
+# Install BiaPy (master requires Python >=3.11)
+RUN pip3 install --no-cache-dir git+https://github.com/BiaPyX/BiaPy.git && \
+    rm -rf /root/.cache /tmp/* /var/tmp/*
 
-# User home directory
-RUN mkdir -p /home/user
-ENV HOME /home/user
-RUN echo 'export HOME=/home/user' >> ~/.bashrc
-
-# To remove CuDNN issue 
-WORKDIR /installations/miniconda3/envs/BiaPy_env/lib/python3.11/site-packages/nvidia/cuda_nvrtc/lib/
-RUN ln -s libnvrtc.so.11.2 libnvrtc.so
-
-ENTRYPOINT ["conda", "run", "--no-capture-output", "-n", "BiaPy_env", "python3", "-u", "/installations/BiaPy/main.py"]
-# ENTRYPOINT ["conda", "run", "--no-capture-output", "-n", "BiaPy_env", "python3", "-u", "-c", "from biapy import BiaPy; BiaPy(..)"]
+# Don't set ENTRYPOINT to empty; keep default shell/CMD behavior
+CMD ["python3"]
