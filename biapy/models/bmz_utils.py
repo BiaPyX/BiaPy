@@ -17,6 +17,8 @@ from typing import Any, Tuple
 from packaging.version import Version
 from skimage.transform import resize
 from numpy.typing import NDArray
+from tempfile import NamedTemporaryFile
+from pathlib import Path
 
 from bioimageio.spec.model.v0_4 import ModelDescr as ModelDescr_v0_4
 from bioimageio.spec.model.v0_5 import ModelDescr as ModelDescr_v0_5
@@ -32,6 +34,36 @@ from biapy.data.data_manipulation import imwrite, reduce_dtype, extract_patch_wi
 from biapy.data.dataset import PatchCoords
 from biapy.data.data_3D_manipulation import extract_patch_from_efficient_file
 
+def download_to_local_path(source, sha256=None, suffix=""):
+    """
+    Download a file from a given source and return the local path to the downloaded file. 
+    The file is saved in a temporary location and will be deleted when the program exits.
+
+    Parameters
+    ----------
+    source : str
+        The source URL or path to download the file from.
+
+    sha256 : str, optional
+        The expected SHA256 hash of the file to verify its integrity after downloading. If not provided, no verification is performed.
+
+    suffix : str, optional
+        The suffix to use for the temporary file (e.g., ".zip", ".onnx"). This can help with identifying the file type and ensuring proper handling.
+
+    Returns
+    -------
+    local_path : str
+        The local path to the downloaded file.
+    """
+
+    r = download(source, sha256=sha256)  # returns a BytesReader
+    # preserve suffix if possible (e.g. ".zip", ".onnx", ...)
+    suf = getattr(r, "suffix", "") or suffix
+
+    with NamedTemporaryFile(delete=False, suffix=suf) as f:
+        f.write(r.read())
+        return Path(f.name)
+    
 def get_bmz_model_info(
     model: ModelDescr_v0_4 | ModelDescr_v0_5, spec_version: Version = Version("0.4.0")
 ) -> Tuple[ImportantFileSource, Sha256 | None, ArchitectureFromFileDescr | ArchitectureFromLibraryDescr]:
@@ -58,7 +90,7 @@ def get_bmz_model_info(
     if spec_version > Version("0.5.0"):
         arch = model.weights.pytorch_state_dict.architecture
         if isinstance(arch, ArchitectureFromFileDescr):
-            arch_file_path = download(arch.source, sha256=arch.sha256).path
+            arch_file_path = download_to_local_path(arch.source, sha256=arch.sha256)
             arch_file_sha256 = arch.sha256
             arch_name = arch.callable
             arch_kwargs = arch.kwargs
@@ -81,10 +113,10 @@ def get_bmz_model_info(
         state_dict_sha256 = model.weights.pytorch_state_dict.sha256
     else:  # v0_4
         arch_file_sha256 = model.weights.pytorch_state_dict.architecture_sha256
-
-        arch_file_path = download(
-            model.weights.pytorch_state_dict.architecture.source_file, sha256=arch_file_sha256
-        ).path
+        arch_file_path = download_to_local_path(
+            model.weights.pytorch_state_dict.architecture.source_file, 
+            sha256=arch_file_sha256
+        )
         arch_name = model.weights.pytorch_state_dict.architecture.callable_name
         pytorch_architecture = ArchitectureFromFileDescr(
             source=arch_file_path,  # type: ignore
