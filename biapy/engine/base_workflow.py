@@ -38,6 +38,7 @@ from biapy.data.generators import (
     create_test_generator,
     create_chunked_test_generator,
     check_generator_consistence,
+    create_chunked_workflow_process_generator,
 )
 from biapy.utils.misc import (
     get_world_size,
@@ -319,6 +320,12 @@ class Base_Workflow(metaclass=ABCMeta):
                 upper_bound_val=cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_VALUE,
             )
 
+        # Chunked workflow process generator placeholder
+        self.test_chunked_workflow_process_vars = {
+            "out_dir": self.cfg.PATHS.RESULT_DIR.PER_IMAGE,
+            "dtype_str": self.dtype_str,
+        }
+    
     def define_activations_and_channels(self):
         """
         Define the activations to be applied to the model output and the channels that the model will output.
@@ -1431,135 +1438,6 @@ class Base_Workflow(metaclass=ABCMeta):
 
         return pred
 
-    def after_one_patch_prediction_by_chunks(
-        self, patch_id: int, patch: NDArray, patch_in_data: PatchCoords, added_pad: List[List[int]]
-    ):
-        """
-        Place any code that needs to be done after predicting one patch in "by chunks" setting.
-
-        Parameters
-        ----------
-        patch_id: int
-            Patch identifier.
-
-        patch : NDArray
-            Predicted patch.
-
-        patch_in_data : PatchCoords
-            Global coordinates of the patch.
-        
-        added_pad: List of list of ints
-            Padding added to the patch that should be not taken into account when processing the patch. 
-        """
-        raise NotImplementedError
-
-    def process_test_sample_by_chunks(self):
-        """
-        Process a sample in the inference phase.
-        
-        A final H5/Zarr file is created in "TZCYX" or "TZYXC" order
-        depending on ``DATA.TEST.INPUT_IMG_AXES_ORDER`` ('T' is always included).
-        """
-        if not self.cfg.TEST.REUSE_PREDICTIONS:
-            # Create the generator
-            self.test_generator = create_chunked_test_generator(
-                self.cfg,
-                system_dict=self.system_dict,
-                current_sample=self.current_sample,
-                norm_module=self.norm_module,
-                out_dir=self.cfg.PATHS.RESULT_DIR.PER_IMAGE,
-                dtype_str=self.dtype_str,
-            )
-            tgen: chunked_test_pair_data_generator = self.test_generator.dataset  # type: ignore
-
-            # Get parallel data shape is ZYX
-            _, z_dim, _, y_dim, x_dim = order_dimensions(
-                tgen.X_parallel_data.shape, self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER
-            )
-            self.parallel_data_shape = [z_dim, y_dim, x_dim]
-            samples_visited = {}
-            for obj_list in self.test_generator:
-                sampler_ids, img, mask, patch_in_data, added_pad, norm_extra_info = obj_list
-
-                if self.cfg.TEST.VERBOSE:
-                    print(
-                        "[Rank {} ({})] Patch number {} processing patches {} from {}".format(
-                            get_rank(), os.getpid(), sampler_ids, patch_in_data, self.parallel_data_shape
-                        )
-                    )
-
-                # Pass the batch through the model
-                pred = self.predict_batches_in_test(img, mask, disable_tqdm=True)
-
-                lbreaked = False
-                for i in range(pred.shape[0]):
-                    # Break the loop as those samples were created just to complete the last batch
-                    if sampler_ids[i] < sampler_ids[0] or sampler_ids[i] in samples_visited:
-                        print(
-                            "[Rank {} ({})] Patch {} discarded".format(
-                                get_rank(),
-                                os.getpid(),
-                                sampler_ids[i],
-                            )
-                        )
-                        lbreaked = True
-                        break
-
-                    single_pred = pred[i]
-                    single_pred_pad = added_pad[i]
-                    single_patch_in_data = patch_in_data[i]
-                    self.after_one_patch_prediction_by_chunks(
-                        sampler_ids[i], single_pred, single_patch_in_data, single_pred_pad
-                    )
-
-                    # Remove padding if added
-                    single_pred = single_pred[
-                        single_pred_pad[0][0] : single_pred.shape[0] - single_pred_pad[0][1],
-                        single_pred_pad[1][0] : single_pred.shape[1] - single_pred_pad[1][1],
-                        single_pred_pad[2][0] : single_pred.shape[2] - single_pred_pad[2][1],
-                    ]
-                    # Insert into the data
-                    tgen.insert_patch_in_file(single_pred, single_patch_in_data)
-
-                    samples_visited[sampler_ids[i]] = True
-
-                if lbreaked and sampler_ids[i] in samples_visited:
-                    print(
-                        "[Rank {} ({})] Finishing the loop. Seems that the patches are starting to repeat".format(
-                            get_rank(),
-                            os.getpid(),
-                        )
-                    )
-                    break
-
-            # Wait until all threads are done so the main thread can create the full size image
-            if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
-                if self.cfg.TEST.VERBOSE:
-                    print(
-                        f"[Rank {get_rank()} ({os.getpid()})] Finished predicting patches. Waiting for all ranks . . ."
-                    )
-                dist.barrier()
-
-            tgen.close_open_files()
-
-            # Only after everyone finished writing, optionally convert to TIF on rank0
-            if self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF:
-                if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
-                    dist.barrier()
-                if is_main_process():
-                    tgen.save_parallel_data_as_tif()
-                if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
-                    dist.barrier()
-
-        if is_main_process():
-            self.after_all_patch_prediction_by_chunks()
-
-        # Wait until all threads are done so the main thread can create the full size image
-        if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
-            if self.cfg.TEST.VERBOSE:
-                print(f"[Rank {get_rank()} ({os.getpid()})] Finished predicting sample. Waiting for all ranks . . .")
-            dist.barrier()
-
     def prepare_bmz_data(self, img):
         """
         Prepare required data for exporting a model into BMZ.
@@ -2225,6 +2103,258 @@ class Base_Workflow(metaclass=ABCMeta):
                 verbose=self.cfg.TEST.VERBOSE,
             )
 
-    def after_all_patch_prediction_by_chunks(self):
-        """Place any code that needs to be done after predicting all the patches, one by one, in the "by chunks" setting."""
+
+    #########################
+    ### BY CHUNKS METHODS ###
+    #########################
+    # The order of the execution of the "by chunks" methods is the following:
+    #   * 'process_test_sample_by_chunks': process a sample in the inference phase in "by chunks" setting, this is the main method 
+    #      that calls the other three methods below
+    #           1. 'after_one_chunk_raw_prediction': after predicting one chunk
+    #      Once the predictions for all the chunks are generated each workflow will process the generated zarr in an specific way. The 
+    #      process is the following:
+    #           2. 'after_all_chunk_prediction_workflow_process': process to be done after predicting all the chunks in all ranks
+    #              2.1 'after_one_chunk_workflow_process': process a list of chunks
+    #           3. 'after_all_chunk_prediction_workflow_process_master_rank': process to be done after predicting all the chunks 
+    #              but only on the master rank.
+    # 
+    def after_one_chunk_raw_prediction(
+        self, chunk_id: int, chunk: NDArray, chunk_in_data: PatchCoords, added_pad: List[List[int]]
+    ):
+        """
+        Place any code that needs to be done after predicting one chunk of data in "by chunks" setting.
+
+        Parameters
+        ----------
+        chunk_id: int
+            Chunk identifier.
+
+        chunk : NDArray
+            Predicted chunk
+
+        patch_in_data : PatchCoords
+            Global coordinates of the chunk.
+        
+        added_pad: List of list of ints
+            Padding added to the chunk in each dimension. The order of dimensions is the same as the input 
+            image, and the order of the list is: [[pad_before_dim1, pad_after_dim1], [pad_before_dim2, pad_after_dim2], ...]. 
+        """
         raise NotImplementedError
+
+    def after_one_chunk_workflow_process(self, chunks: List[NDArray]) -> Optional[List[NDArray]]:
+        """
+        Process a list of chunks during inference in "by chunks" setting. Each workflow should have 
+        its own implementation of this method.
+
+        Parameters
+        ----------
+        chunks : List[NDArray]
+            List of chunks. Expected axes are: ``(z, y, x, channels)`` for 3D and
+            ``(y, x, channels)`` for 2D.
+
+        Returns
+        -------
+        chunks : Optional[List[NDArray]]
+            Processed chunks.
+        """
+        raise NotImplementedError
+
+    def after_all_chunk_prediction_workflow_process(self):
+        """
+        Place any code that needs to be done after predicting all patches in "by chunks" setting.
+        This function is called on all ranks.
+        """
+        print("Processing generated predictions . . .")
+
+        # Create the generator
+        fpath = os.path.join(
+            self.cfg.PATHS.RESULT_DIR.PER_IMAGE, os.path.splitext(self.current_sample["X_filename"])[0] + ".zarr"
+        )
+        self.test_generator = create_chunked_workflow_process_generator(
+            self.cfg,
+            system_dict=self.system_dict,
+            model_predictions=fpath,
+            out_dir=self.test_chunked_workflow_process_vars["out_dir"],
+            dtype_str=self.test_chunked_workflow_process_vars["dtype_str"],
+        )
+        tgen: chunked_workflow_process_generator = self.test_generator.dataset  # type: ignore
+
+        # Get parallel data shape is ZYX
+        _, z_dim, _, y_dim, x_dim = order_dimensions(
+            tgen.X_parallel_data.shape, self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER
+        )
+        self.parallel_data_shape = [z_dim, y_dim, x_dim]
+        samples_visited = {}
+        for obj_list in self.test_generator:
+            sampler_ids, chunks, patch_in_data = obj_list
+
+            if self.cfg.TEST.VERBOSE:
+                print(
+                    "[Rank {} ({})] Patch number {} processing patches {} from {}".format(
+                        get_rank(), os.getpid(), sampler_ids, patch_in_data, self.parallel_data_shape
+                    )
+                )
+
+            processed_chunks = self.after_one_chunk_workflow_process(chunks)
+            assert processed_chunks is not None, "The after_one_chunk_workflow_process() method must return a value."
+
+            lbreaked = False
+            for i in range(len(processed_chunks)):
+                # Break the loop as those samples were created just to complete the last batch
+                if sampler_ids[i] < sampler_ids[0] or sampler_ids[i] in samples_visited:
+                    print(
+                        "[Rank {} ({})] Patch {} discarded".format(
+                            get_rank(),
+                            os.getpid(),
+                            sampler_ids[i],
+                        )
+                    )
+                    lbreaked = True
+                    break
+
+                tgen.insert_patch_in_file(processed_chunks[i], patch_in_data[i])
+                samples_visited[sampler_ids[i]] = True
+
+            if lbreaked and sampler_ids[i] in samples_visited:
+                print(
+                    "[Rank {} ({})] Finishing the loop. Seems that the patches are starting to repeat".format(
+                        get_rank(),
+                        os.getpid(),
+                    )
+                )
+                break
+
+        # Wait until all threads are done so the main thread can create the full size image
+        if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
+            if self.cfg.TEST.VERBOSE:
+                print(
+                    f"[Rank {get_rank()} ({os.getpid()})] Finished predicting patches. Waiting for all ranks . . ."
+                )
+            dist.barrier()
+
+        tgen.close_open_files()
+
+        # Only after everyone finished writing, optionally convert to TIF on rank0
+        if self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF:
+            if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
+                dist.barrier()
+            if is_main_process():
+                tgen.save_parallel_data_as_tif()
+            if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
+                dist.barrier()
+
+    def after_all_chunk_prediction_workflow_process_master_rank(self):
+        """
+        Place any code that needs to be done after predicting all the patches in the "by chunks" setting.
+        This function is only called on the master rank.
+        """
+        raise NotImplementedError
+
+    def process_test_sample_by_chunks(self):
+        """
+        Process a sample in the inference phase.
+        
+        A final H5/Zarr file is created in "TZCYX" or "TZYXC" order
+        depending on ``DATA.TEST.INPUT_IMG_AXES_ORDER`` ('T' is always included).
+        """
+        if not self.cfg.TEST.REUSE_PREDICTIONS:
+            # Create the generator
+            self.test_generator = create_chunked_test_generator(
+                self.cfg,
+                system_dict=self.system_dict,
+                current_sample=self.current_sample,
+                norm_module=self.norm_module,
+                out_dir=self.cfg.PATHS.RESULT_DIR.PER_IMAGE,
+                dtype_str=self.dtype_str,
+            )
+            tgen: chunked_test_pair_data_generator = self.test_generator.dataset  # type: ignore
+
+            # Get parallel data shape is ZYX
+            _, z_dim, _, y_dim, x_dim = order_dimensions(
+                tgen.X_parallel_data.shape, self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER
+            )
+            self.parallel_data_shape = [z_dim, y_dim, x_dim]
+            samples_visited = {}
+            for obj_list in self.test_generator:
+                sampler_ids, img, mask, patch_in_data, added_pad, norm_extra_info = obj_list
+
+                if self.cfg.TEST.VERBOSE:
+                    print(
+                        "[Rank {} ({})] Patch number {} processing patches {} from {}".format(
+                            get_rank(), os.getpid(), sampler_ids, patch_in_data, self.parallel_data_shape
+                        )
+                    )
+
+                # Pass the batch through the model
+                pred = self.predict_batches_in_test(img, mask, disable_tqdm=True)
+
+                lbreaked = False
+                for i in range(pred.shape[0]):
+                    # Break the loop as those samples were created just to complete the last batch
+                    if sampler_ids[i] < sampler_ids[0] or sampler_ids[i] in samples_visited:
+                        print(
+                            "[Rank {} ({})] Patch {} discarded".format(
+                                get_rank(),
+                                os.getpid(),
+                                sampler_ids[i],
+                            )
+                        )
+                        lbreaked = True
+                        break
+
+                    single_pred = pred[i]
+                    single_pred_pad = added_pad[i]
+                    single_patch_in_data = patch_in_data[i]
+                    self.after_one_chunk_raw_prediction(
+                        sampler_ids[i], single_pred, single_patch_in_data, single_pred_pad
+                    )
+
+                    # Remove padding if added
+                    single_pred = single_pred[
+                        single_pred_pad[0][0] : single_pred.shape[0] - single_pred_pad[0][1],
+                        single_pred_pad[1][0] : single_pred.shape[1] - single_pred_pad[1][1],
+                        single_pred_pad[2][0] : single_pred.shape[2] - single_pred_pad[2][1],
+                    ]
+                    # Insert into the data
+                    tgen.insert_patch_in_file(single_pred, single_patch_in_data)
+
+                    samples_visited[sampler_ids[i]] = True
+
+                if lbreaked and sampler_ids[i] in samples_visited:
+                    print(
+                        "[Rank {} ({})] Finishing the loop. Seems that the patches are starting to repeat".format(
+                            get_rank(),
+                            os.getpid(),
+                        )
+                    )
+                    break
+
+            # Wait until all threads are done so the main thread can create the full size image
+            if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
+                if self.cfg.TEST.VERBOSE:
+                    print(
+                        f"[Rank {get_rank()} ({os.getpid()})] Finished predicting patches. Waiting for all ranks . . ."
+                    )
+                dist.barrier()
+
+            tgen.close_open_files()
+
+            # Only after everyone finished writing, optionally convert to TIF on rank0
+            if self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF:
+                if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
+                    dist.barrier()
+                if is_main_process():
+                    tgen.save_parallel_data_as_tif()
+                if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
+                    dist.barrier()
+
+        self.after_all_chunk_prediction_workflow_process()
+
+        if is_main_process():
+            self.after_all_chunk_prediction_workflow_process_master_rank()
+
+        # Wait until all threads are done so the main thread can create the full size image
+        if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
+            if self.cfg.TEST.VERBOSE:
+                print(f"[Rank {get_rank()} ({os.getpid()})] Finished predicting sample. Waiting for all ranks . . .")
+            dist.barrier()

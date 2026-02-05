@@ -26,6 +26,7 @@ from biapy.data.generators.single_data_3D_generator import Single3DImageDataGene
 from biapy.data.generators.test_pair_data_generators import test_pair_data_generator
 from biapy.data.generators.test_single_data_generator import test_single_data_generator
 from biapy.data.generators.chunked_test_pair_data_generator import chunked_test_pair_data_generator
+from biapy.data.generators.chunked_workflow_process_generator import chunked_workflow_process_generator
 from biapy.data.pre_processing import preprocess_data
 from biapy.data.data_manipulation import save_tif
 from biapy.data.dataset import BiaPyDataset
@@ -652,6 +653,114 @@ def create_chunked_test_generator(
 
     return test_dataset
 
+def by_chunks_workflow_collate_fn(data):
+    """
+    Collate function to avoid the default one with type checking. It does nothing speciall but stack the images.
+
+    Parameters
+    ----------
+    data : tuple
+        Data tuple.
+
+    Returns
+    -------
+    data : tuple
+        Stacked data in batches.
+    """
+    return (
+        [x[0] for x in data],
+        [x[1] for x in data],
+        [x[2] for x in data],
+    )
+
+def create_chunked_workflow_process_generator(
+    cfg: CN,
+    system_dict: Dict[str, Any],
+    model_predictions: str,
+    out_dir: str,
+    dtype_str: str,
+) -> DataLoader:
+    """
+    Create a DataLoader for chunked test data using chunked_workflow_process_generator.
+
+    This function sets up a generator for efficient inference on large volumetric datasets
+    by processing data in chunks. It configures the generator with the appropriate axes,
+    patch size, padding, and normalization, and wraps it in a PyTorch DataLoader with
+    optimal worker settings for distributed or single-GPU environments.
+
+    Parameters
+    ----------
+    cfg : CN
+        BiaPy configuration node.
+    
+    system_dict : dict
+        System dictionary containing:
+            * 'cpu_budget': int, Total CPU budget.
+            * 'cpu_per_rank': int, CPU budget per rank.
+            * 'main_threads': int, Number of main threads.  
+            * 'num_workers_hint': int, Hint for the number of workers.
+
+    model_predictions : str
+        Path to the model predictions to process.
+
+    out_dir : str
+        Output directory to save results.
+
+    dtype_str : str
+        Data type string for output files.
+
+    Returns
+    -------
+    test_dataset : DataLoader
+        PyTorch DataLoader wrapping the chunked test data generator.
+    """
+    chunked_generator = chunked_workflow_process_generator(
+        model_predictions=model_predictions,
+        input_axes=cfg.DATA.TEST.INPUT_IMG_AXES_ORDER,
+        crop_shape=cfg.DATA.PATCH_SIZE,
+        out_dir=out_dir,
+        dtype_str=dtype_str,
+    )
+
+    # ---- Choose num_workers for this DataLoader ----
+    # Priority:
+    # 1) Respect explicit SYSTEM.NUM_WORKERS if set
+    # 2) Else reuse the precomputed hint from startup (system_dict["num_workers_hint"])
+    if cfg.SYSTEM.NUM_WORKERS != -1:
+        num_workers = max(0, int(cfg.SYSTEM.NUM_WORKERS))
+    else:
+        num_workers = int(system_dict.get("num_workers_hint", 0))
+
+    # Cap by dataset length if the generator supports __len__
+    try:
+        n_chunks = len(chunked_generator)  # may raise TypeError if __len__ not implemented
+        if n_chunks > 0:
+            num_workers = min(num_workers, n_chunks)
+        else:
+            num_workers = 0
+    except TypeError:
+        # length unknown -> keep computed num_workers
+        pass
+
+    # Ensure DataLoader workers don't each spawn many threads
+    def worker_init_fn(worker_id):
+        torch.set_num_threads(1)
+
+    print(f"Chunked test generator with {num_workers} workers")
+
+    test_dataset = DataLoader(
+        chunked_generator,
+        batch_size=cfg.TRAIN.BATCH_SIZE,
+        num_workers=num_workers,
+        collate_fn=by_chunks_workflow_collate_fn,
+        pin_memory=cfg.SYSTEM.PIN_MEM,
+        drop_last=False,
+        worker_init_fn=worker_init_fn,
+        persistent_workers=(num_workers > 0),
+        prefetch_factor=2 if num_workers > 0 else None,
+    )
+
+    return test_dataset
 
 def check_generator_consistence(
     gen: DataLoader, data_out_dir: str, mask_out_dir: str, filenames: List[str] | None = None

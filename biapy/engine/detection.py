@@ -904,25 +904,26 @@ class Detection_Workflow(Base_Workflow):
         else:
             raise NotImplementedError
 
-    def after_one_patch_prediction_by_chunks(
-        self, patch_id: int, patch: NDArray, patch_in_data: PatchCoords, added_pad: List[List[int]]
+    def after_one_chunk_raw_prediction(
+        self, chunk_id: int, chunk: NDArray, chunk_in_data: PatchCoords, added_pad: List[List[int]]
     ):
         """
-        Place any code that needs to be done after predicting one patch in "by chunks" setting.
+        Place any code that needs to be done after predicting one chunk of data in "by chunks" setting.
 
         Parameters
         ----------
-        patch_id: int
-            Patch identifier.
+        chunk_id: int
+            Chunk identifier.
 
-        patch : NDArray
-            Predicted patch.
+        chunk : NDArray
+            Predicted chunk
 
         patch_in_data : PatchCoords
-            Global coordinates of the patch.
+            Global coordinates of the chunk.
 
         added_pad: List of list of ints
-            Padding added to the patch that should be not taken into account when processing the patch.
+            Padding added to the chunk in each dimension. The order of dimensions is the same as the input 
+            image, and the order of the list is: [[pad_before_dim1, pad_after_dim1], [pad_before_dim2, pad_after_dim2], ....
         """
         df_patch = self.detection_process(patch, patch_pos=patch_in_data)
 
@@ -959,7 +960,32 @@ class Detection_Workflow(Base_Workflow):
                 index=False,
             )
 
-    def after_all_patch_prediction_by_chunks(self):
+    def after_one_chunk_workflow_process(self, chunks: List[NDArray]) -> Optional[List[NDArray]]:
+        """
+        Process a list of chunks during inference in "by chunks" setting. Each workflow should have 
+        its own implementation of this method.
+
+        Parameters
+        ----------
+        chunks : List[NDArray]
+            List of chunks. Expected axes are: ``(z, y, x, channels)`` for 3D and
+            ``(y, x, channels)`` for 2D.
+
+        Returns
+        -------
+        chunks : Optional[List[NDArray]]
+            Processed chunks.
+        """
+        pass
+    
+    def after_all_chunk_prediction_workflow_process(self):
+        """
+        Place any code that needs to be done after predicting all patches in "by chunks" setting.
+        This function is called on all ranks.
+        """
+        pass
+
+    def after_all_chunk_prediction_workflow_process_master_rank(self):
         """Excute stepes needed after predicting all the patches, one by one, in the "by chunks" setting."""
         assert isinstance(self.all_pred, list)
         filename, _ = os.path.splitext(self.current_sample["X_filename"])
