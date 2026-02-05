@@ -7,12 +7,15 @@ It handles data preparation, model setup, metrics, predictions, post-processing,
 and result saving for assigning a class to each pixel in 2D and 3D images.
 """
 import torch
+import os
 import numpy as np
 from skimage.transform import resize
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 from numpy.typing import NDArray
 from skimage.filters import threshold_otsu
 
+from biapy.data.data_3D_manipulation import read_chunked_data
+from biapy.data.dataset import PatchCoords
 from biapy.data.post_processing.post_processing import apply_binary_mask
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.data.data_manipulation import check_masks, save_tif
@@ -85,6 +88,12 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
 
         self.load_Y_val = True
         self.loss_dtype = torch.float32
+
+        # Chunked workflow process generator placeholder
+        self.test_chunked_workflow_process_vars = {
+            "out_dir": self.cfg.PATHS.RESULT_DIR.PER_IMAGE_BIN,
+            "dtype_str": "uint8" if not self.cfg.DATA.N_CLASSES > 255 else "uint16",
+        }
 
     def define_activations_and_channels(self):
         """
@@ -390,6 +399,8 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         if self.cfg.DATA.N_CLASSES <= 2:
             th = threshold_otsu(pred)
             pred = (pred > th).astype(np.uint8)
+        else:
+            pred = np.expand_dims(np.argmax(pred, axis=-1), -1)
         save_tif(
             pred,
             self.cfg.PATHS.RESULT_DIR.PER_IMAGE_BIN,
@@ -417,3 +428,66 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
     def after_all_images(self):
         """Execute steps needed after predicting all images."""
         super().after_all_images()
+
+
+    #########################
+    ### BY CHUNKS METHODS ###
+    #########################
+    def after_one_chunk_raw_prediction(
+        self, chunk_id: int, chunk: NDArray, chunk_in_data: PatchCoords, added_pad: List[List[int]]
+    ):
+        """
+        Place any code that needs to be done after predicting one chunk of data in "by chunks" setting.
+
+        Parameters
+        ----------
+        chunk_id: int
+            Chunk identifier.
+
+        chunk : NDArray
+            Predicted chunk
+
+        patch_in_data : PatchCoords
+            Global coordinates of the chunk.
+        
+        added_pad: List of list of ints
+            Padding added to the chunk in each dimension. The order of dimensions is the same as the input 
+            image, and the order of the list is: [[pad_before_dim1, pad_after_dim1], [pad_before_dim2, pad_after_dim2], .... 
+        """
+        pass
+
+    def after_one_chunk_workflow_process(self, chunks: List[NDArray]) -> Optional[List[NDArray]]:
+        """
+        Process a list of chunks during inference in "by chunks" setting. Each workflow should have 
+        its own implementation of this method.
+
+        Parameters
+        ----------
+        chunks : List[NDArray]
+            List of chunks. Expected axes are: ``(z, y, x, channels)`` for 3D and
+            ``(y, x, channels)`` for 2D.
+
+        Returns
+        -------
+        chunks : Optional[List[NDArray]]
+            Processed chunks.
+        """
+        for i in range(len(chunks)):
+            if self.cfg.DATA.N_CLASSES <= 2:
+                # Otsu thresholding is not applied here because it is not working well in those cases where there
+                # is no foreground mask in the patch, so we will just apply a simple binarization with a fixed 
+                # threshold of 0.5
+                # th = threshold_otsu(chunks[i])
+                chunks[i] = (chunks[i] > 0.5).astype(np.uint8)
+            else:
+                chunks[i] = np.expand_dims(np.argmax(chunks[i], axis=-1), -1)
+
+        return chunks
+
+    def after_all_chunk_prediction_workflow_process_master_rank(self):
+        """
+        Place any code that needs to be done after predicting all the patches in the "by chunks" setting.
+        This function is only called on the master rank.
+        """
+        # Nothing is needed here for semantic segmentation as the binarization is done after each patch prediction
+        pass
