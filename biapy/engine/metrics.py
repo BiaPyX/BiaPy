@@ -379,7 +379,7 @@ class multiple_metrics:
                     res_metrics[self.metric_names[pred_ch_start]].append(self.metric_func[pred_ch_start](_y_pred_class, _y_true[:, 1]))
                 else:
                     y_pred_slice = pd[:, pred_ch_start:pred_ch_end]
-                    y_true_slice = _y_true[:, gt_ch_start:gt_ch_end]
+                    y_true_slice = _y_true[:, gt_ch_start:gt_ch_end].float()
                     if y_pred_slice.shape[1] != y_true_slice.shape[1] and "Db" == channel and db_val_type == "discretize":
                         y_pred_slice = torch.argmax(y_pred_slice, dim=1).unsqueeze(1).float()
                         y_true_slice = y_true_slice.float()
@@ -1299,7 +1299,7 @@ class instance_segmentation_loss:
                     gt_ch_end = pred_ch_end
 
                 y_pred_slice = pd[:, pred_ch_start:pred_ch_end]
-                y_true_slice = y_true[:, gt_ch_start:gt_ch_end]
+                y_true_slice = y_true[:, gt_ch_start:gt_ch_end].float()
 
                 # element-wise mask you wanted to use (float on same device)
                 mask_vals = self.channel_extra_opts.get(channel, {}).get("mask_values", False)
