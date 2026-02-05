@@ -1132,7 +1132,7 @@ class BiaPy:
         from bioimageio.core import test_model
 
         summary = test_model(model_descr, absolute_tolerance=1e-3, relative_tolerance=1e-3)
-        summary.display()
+        # summary.display()
 
         # Saving the model into BMZ format
         model_path = os.path.join(building_dir, model_name + ".zip")
