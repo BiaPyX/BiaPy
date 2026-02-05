@@ -577,7 +577,7 @@ class CrossEntropyLoss_wrapper:
                 )
             else:
                 if self.num_classes <= 2:
-                    _loss = loss_fn(pd, _y_true)
+                    _loss = loss_fn(pd, _y_true.type(torch.float32))
                 else:
                     _loss = loss_fn(pd, _y_true[:, 0].type(torch.long))
             
