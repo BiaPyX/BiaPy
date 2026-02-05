@@ -1580,7 +1580,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         chunk : NDArray
             Predicted chunk
 
-        patch_in_data : PatchCoords
+        chunk_in_data : PatchCoords
             Global coordinates of the chunk.
         
         added_pad: List of list of ints
@@ -1590,17 +1590,16 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         if self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
             pass
             # Important to maintain calculate_metrics=False in the future call here
-            # pre_points_df, post_points_df = self.instance_seg_process(patch, filenames, out_dir, out_dir_post_proc, calculate_metrics=False)
-
+            # pre_points_df, post_points_df = self.instance_seg_process(chunk, filenames, out_dir, out_dir_post_proc, calculate_metrics=False)
         else:  # synapses
-            pre_points_df, post_points_df = self.synapse_seg_process(patch, calculate_metrics=False)
+            pre_points_df, post_points_df = self.synapse_seg_process(chunk, calculate_metrics=False)
 
             _filename, _ = os.path.splitext(os.path.basename(self.current_sample["X_filename"]))
             if pre_points_df is not None and len(pre_points_df) > 0:
                 # Remove possible points in the padded area
-                pre_points_df = pre_points_df[pre_points_df["axis-0"] < patch.shape[0] - added_pad[0][1]]
-                pre_points_df = pre_points_df[pre_points_df["axis-1"] < patch.shape[1] - added_pad[1][1]]
-                pre_points_df = pre_points_df[pre_points_df["axis-2"] < patch.shape[2] - added_pad[2][1]]
+                pre_points_df = pre_points_df[pre_points_df["axis-0"] < chunk.shape[0] - added_pad[0][1]]
+                pre_points_df = pre_points_df[pre_points_df["axis-1"] < chunk.shape[1] - added_pad[1][1]]
+                pre_points_df = pre_points_df[pre_points_df["axis-2"] < chunk.shape[2] - added_pad[2][1]]
                 pre_points_df["axis-0"] = pre_points_df["axis-0"] - added_pad[0][0]
                 pre_points_df["axis-1"] = pre_points_df["axis-1"] - added_pad[1][0]
                 pre_points_df["axis-2"] = pre_points_df["axis-2"] - added_pad[2][0]
@@ -1608,10 +1607,10 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 pre_points_df = pre_points_df[pre_points_df["axis-1"] >= 0]
                 pre_points_df = pre_points_df[pre_points_df["axis-2"] >= 0]
                 
-                # Add the patch shift to the detected coordinates so they represent global coords
-                pre_points_df["axis-0"] = pre_points_df["axis-0"] + patch_in_data.z_start
-                pre_points_df["axis-1"] = pre_points_df["axis-1"] + patch_in_data.y_start
-                pre_points_df["axis-2"] = pre_points_df["axis-2"] + patch_in_data.x_start
+                # Add the chunk shift to the detected coordinates so they represent global coords
+                pre_points_df["axis-0"] = pre_points_df["axis-0"] + chunk_in_data.z_start
+                pre_points_df["axis-1"] = pre_points_df["axis-1"] + chunk_in_data.y_start
+                pre_points_df["axis-2"] = pre_points_df["axis-2"] + chunk_in_data.x_start
 
                 # Save the csv file
                 if len(pre_points_df) > 0:
@@ -1619,16 +1618,16 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     pre_points_df.to_csv(
                         os.path.join(
                             self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
-                            _filename + "_patch" + str(patch_id).zfill(len(str(len(self.test_generator)))) + "_pre_points.csv",
+                            _filename + "_patch" + str(chunk_id).zfill(len(str(len(self.test_generator)))) + "_pre_points.csv",
                         ),
                         index=False,
                     )
                 
             if post_points_df is not None and len(post_points_df) > 0:
                 # Remove possible points in the padded area
-                post_points_df = post_points_df[post_points_df["axis-0"] < patch.shape[0] - added_pad[0][1]]
-                post_points_df = post_points_df[post_points_df["axis-1"] < patch.shape[1] - added_pad[1][1]]
-                post_points_df = post_points_df[post_points_df["axis-2"] < patch.shape[2] - added_pad[2][1]]
+                post_points_df = post_points_df[post_points_df["axis-0"] < chunk.shape[0] - added_pad[0][1]]
+                post_points_df = post_points_df[post_points_df["axis-1"] < chunk.shape[1] - added_pad[1][1]]
+                post_points_df = post_points_df[post_points_df["axis-2"] < chunk.shape[2] - added_pad[2][1]]
                 post_points_df["axis-0"] = post_points_df["axis-0"] - added_pad[0][0]
                 post_points_df["axis-1"] = post_points_df["axis-1"] - added_pad[1][0]
                 post_points_df["axis-2"] = post_points_df["axis-2"] - added_pad[2][0]
@@ -1636,10 +1635,10 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 post_points_df = post_points_df[post_points_df["axis-1"] >= 0]
                 post_points_df = post_points_df[post_points_df["axis-2"] >= 0]
 
-                # Add the patch shift to the detected coordinates so they represent global coords
-                post_points_df["axis-0"] = post_points_df["axis-0"] + patch_in_data.z_start
-                post_points_df["axis-1"] = post_points_df["axis-1"] + patch_in_data.y_start
-                post_points_df["axis-2"] = post_points_df["axis-2"] + patch_in_data.x_start
+                # Add the chunk shift to the detected coordinates so they represent global coords
+                post_points_df["axis-0"] = post_points_df["axis-0"] + chunk_in_data.z_start
+                post_points_df["axis-1"] = post_points_df["axis-1"] + chunk_in_data.y_start
+                post_points_df["axis-2"] = post_points_df["axis-2"] + chunk_in_data.x_start
 
                 # Save the csv file
                 if len(post_points_df) > 0:
@@ -1647,7 +1646,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     post_points_df.to_csv(
                         os.path.join(
                             self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
-                            _filename + "_patch" + str(patch_id).zfill(len(str(len(self.test_generator)))) + "_post_points.csv",
+                            _filename + "_patch" + str(chunk_id).zfill(len(str(len(self.test_generator)))) + "_post_points.csv",
                         ),
                         index=False,
                     )

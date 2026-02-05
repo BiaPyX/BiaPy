@@ -918,20 +918,20 @@ class Detection_Workflow(Base_Workflow):
         chunk : NDArray
             Predicted chunk
 
-        patch_in_data : PatchCoords
+        chunk_in_data : PatchCoords
             Global coordinates of the chunk.
 
         added_pad: List of list of ints
             Padding added to the chunk in each dimension. The order of dimensions is the same as the input 
             image, and the order of the list is: [[pad_before_dim1, pad_after_dim1], [pad_before_dim2, pad_after_dim2], ....
         """
-        df_patch = self.detection_process(patch, patch_pos=patch_in_data)
+        df_patch = self.detection_process(chunk, patch_pos=chunk_in_data)
 
         if df_patch is not None and len(df_patch) > 0:
             # Remove possible points in the padded area
-            df_patch = df_patch[df_patch["axis-0"] < patch.shape[0] - added_pad[0][1]]
-            df_patch = df_patch[df_patch["axis-1"] < patch.shape[1] - added_pad[1][1]]
-            df_patch = df_patch[df_patch["axis-2"] < patch.shape[2] - added_pad[2][1]]
+            df_patch = df_patch[df_patch["axis-0"] < chunk.shape[0] - added_pad[0][1]]
+            df_patch = df_patch[df_patch["axis-1"] < chunk.shape[1] - added_pad[1][1]]
+            df_patch = df_patch[df_patch["axis-2"] < chunk.shape[2] - added_pad[2][1]]
             df_patch["axis-0"] = df_patch["axis-0"] - added_pad[0][0]
             df_patch["axis-1"] = df_patch["axis-1"] - added_pad[1][0]
             df_patch["axis-2"] = df_patch["axis-2"] - added_pad[2][0]
@@ -939,10 +939,10 @@ class Detection_Workflow(Base_Workflow):
             df_patch = df_patch[df_patch["axis-1"] >= 0]
             df_patch = df_patch[df_patch["axis-2"] >= 0]
 
-            # Add the patch shift to the detected coordinates so they represent global coords
-            df_patch["axis-0"] = df_patch["axis-0"] + patch_in_data.z_start
-            df_patch["axis-1"] = df_patch["axis-1"] + patch_in_data.y_start
-            df_patch["axis-2"] = df_patch["axis-2"] + patch_in_data.x_start
+            # Add the chunk shift to the detected coordinates so they represent global coords
+            df_patch["axis-0"] = df_patch["axis-0"] + chunk_in_data.z_start
+            df_patch["axis-1"] = df_patch["axis-1"] + chunk_in_data.y_start
+            df_patch["axis-2"] = df_patch["axis-2"] + chunk_in_data.x_start
 
             # Save the csv file
             output_dir = (
@@ -955,7 +955,7 @@ class Detection_Workflow(Base_Workflow):
             df_patch.to_csv(
                 os.path.join(
                     output_dir,
-                    _filename + "_patch" + str(patch_id).zfill(len(str(len(self.test_generator)))) + "_points.csv",
+                    _filename + "_patch" + str(chunk_id).zfill(len(str(len(self.test_generator)))) + "_points.csv",
                 ),
                 index=False,
             )
