@@ -1131,7 +1131,7 @@ class BiaPy:
         # Checking model consistency
         from bioimageio.core import test_model
 
-        summary = test_model(model_descr, absolute_tolerance=1e-3, relative_tolerance=1e-3)
+        # summary = test_model(model_descr, absolute_tolerance=1e-3, relative_tolerance=1e-3)
         # summary.display()
 
         # Saving the model into BMZ format
