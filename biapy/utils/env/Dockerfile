@@ -33,7 +33,7 @@ RUN pip3 install --no-cache-dir "numpy<2"
 
 # Install PyTorch CUDA 11.8 wheels explicitly from cu118 index
 RUN pip3 install --no-cache-dir \
-      torch torchvision torchaudio \
+      torch torchvision \
       --index-url https://download.pytorch.org/whl/cu118
 
 # Install BiaPy (master requires Python >=3.11)
