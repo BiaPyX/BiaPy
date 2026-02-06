@@ -1108,6 +1108,7 @@ def check_bmz_model_compatibility(
                         "fixed_zero_mean_unit_variance",
                         "scale_range",
                         "scale_linear",
+                        "clip"
                     ]:
                         reason_message = (
                             f"[{specific_workflow}] Not recognized preprocessing found: {proc_id}\n"
@@ -1141,19 +1142,25 @@ def check_bmz_model_compatibility(
                         # scale_range -> scale_range (+ optional PERC_CLIP)
                         elif proc_id == "scale_range":
                             opts["DATA.NORMALIZATION.TYPE"] = "scale_range"
-
+                            min_percentile = float(preproc_info["kwargs"].get("min_percentile", 0))
+                            max_percentile = float(preproc_info["kwargs"].get("max_percentile", 100))
                             # Check if there is percentile clipping
-                            if (
-                                float(preproc_info["kwargs"]["min_percentile"]) != 0
-                                or float(preproc_info["kwargs"]["max_percentile"]) != 100
-                            ):
+                            if min_percentile != 0 or max_percentile != 100:
                                 opts["DATA.NORMALIZATION.PERC_CLIP.ENABLE"] = True
-                                opts["DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC"] = float(
-                                    preproc_info["kwargs"]["min_percentile"]
-                                )
-                                opts["DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC"] = float(
-                                    preproc_info["kwargs"]["max_percentile"]
-                                )
+                                opts["DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC"] = min_percentile
+                                opts["DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC"] = max_percentile
+                        elif proc_id == "clip":
+                            opts["DATA.NORMALIZATION.PERC_CLIP.ENABLE"] = True
+                            min_percentile = float(preproc_info["kwargs"].get("min_percentile", 0))
+                            max_percentile = float(preproc_info["kwargs"].get("max_percentile", 100))
+                            max_value = float(preproc_info["kwargs"].get("max_value", -1))
+                            min_value = float(preproc_info["kwargs"].get("min_value", -1))
+                            if min_percentile != 0 or max_percentile != 100:
+                                opts["DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC"] = min_percentile
+                                opts["DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC"] = max_percentile
+                            elif min_value != -1 or max_value != -1:
+                                opts["DATA.NORMALIZATION.PERC_CLIP.LOWER_VALUE"] = min_value
+                                opts["DATA.NORMALIZATION.PERC_CLIP.UPPER_VALUE"] = max_value
                 else:
                     reason_message = (
                         f"[{specific_workflow}] Not recognized preprocessing structure found: {preproc_info}\n"
