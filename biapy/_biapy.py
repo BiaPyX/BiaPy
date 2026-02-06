@@ -592,24 +592,34 @@ class BiaPy:
                         "There is no information about covers. You can: 1) provide it using bmz_config['covers'] or run the training phase, by calling train() or run_job() functions, so a cover can be generated."
                     )
 
-        # Preprocessing
-        # Actually Torchvision has its own preprocessing but it can not be adapted to BMZ easily, so for now
-        # we set it like we were using BiaPy backend
-
-        # TODO: waiting to implement percentile clipping to add ours:
-        #    https://github.com/bioimage-io/spec-bioimage-io/issues/665#issuecomment-2497953374
         # Add percentile norm
-        # if self.cfg.DATA.NORMALIZATION.PERC_CLIP:
-        #     min_percentile, max_percentile = 0, 100
-        #     if self.cfg.DATA.NORMALIZATION.PERC_CLIP:
-        #         min_percentile = self.cfg.DATA.NORMALIZATION.PERC_LOWER
-        #         max_percentile = self.cfg.DATA.NORMALIZATION.PERC_UPPER
-        #     perc_instructions = {
-        #         "axes": axes,
-        #         "max_percentile": max_percentile,
-        #         "min_percentile": min_percentile,
-        #     }
-        #     preprocessing[0]["kwargs"].update(perc_instructions)
+        preprocessing = []
+        # if self.cfg.DATA.NORMALIZATION.PERC_CLIP.ENABLE:
+        #     min_percentile = max(self.cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC, 0)
+        #     max_percentile = min(self.cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC, 100)
+        #     if min_percentile != 0 or max_percentile != 100:
+        #         preprocessing.append(
+        #             {
+        #                 "id": "clip",
+        #                 "kwargs": {
+        #                     "max_percentile": max_percentile,
+        #                     "min_percentile": min_percentile,
+        #                 },
+        #             }
+        #         )
+        #     else:
+        #         lower_value = self.cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_VALUE
+        #         upper_value = self.cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_VALUE
+        #         if lower_value != -1 or upper_value != -1:
+        #             preprocessing.append(
+        #                 {
+        #                     "id": "clip",
+        #                     "kwargs": {
+        #                         "max_value": upper_value if upper_value != -1 else None,
+        #                         "min_value": lower_value if lower_value != -1 else None,
+        #                     },
+        #                 }
+        #             )
 
         if self.cfg.DATA.NORMALIZATION.TYPE == "div":
             max_val = 255
@@ -620,16 +630,16 @@ class BiaPy:
                 if test_input.max() > max_val:
                     max_val = 65535
 
-            preprocessing = [
+            preprocessing.append(
                 {
                     "id": "scale_linear",
                     "kwargs": {"gain": float(1 / max_val), "offset": 0},
                 }
-            ]
+            )
         elif self.cfg.DATA.NORMALIZATION.TYPE == "scale_range":
             axes = ["channel"]
             axes += list("zyx") if self.cfg.PROBLEM.NDIM == "3D" else list("yx")
-            preprocessing = [
+            preprocessing.append(
                 {
                     "id": "scale_range",
                     "kwargs": {
@@ -638,13 +648,13 @@ class BiaPy:
                         "axes": axes,
                     },
                 }
-            ]
+            )
         else:  # zero_mean_unit_variance
             custom_mean = self.cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.MEAN_VAL
             custom_std = self.cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.STD_VAL
 
             if custom_mean != -1 and custom_std != -1:
-                preprocessing = [
+                preprocessing.append(
                     {
                         "id": "fixed_zero_mean_unit_variance",
                         "kwargs": {
@@ -652,18 +662,18 @@ class BiaPy:
                             "std": custom_std,
                         },
                     }
-                ]
+                )
             else:
                 axes = ["channel"]
                 axes += list("zyx") if self.cfg.PROBLEM.NDIM == "3D" else list("yx")
-                preprocessing = [
+                preprocessing.append(
                     {
                         "id": "zero_mean_unit_variance",
                         "kwargs": {
                             "axes": axes,
                         },
                     }
-                ]
+                )
 
         print("Pre-processing: {}".format(preprocessing))
 
