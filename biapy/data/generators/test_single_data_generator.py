@@ -177,7 +177,6 @@ class test_single_data_generator(Dataset):
         sample = self.X.sample_list[idx].copy()
         sample_extra_info = {}
 
-        import pdb; pdb.set_trace()
         img, img_file = load_img_data(
             self.X.dataset_info[sample.fid].path,
             is_3d=(self.ndim == 3),
