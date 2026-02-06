@@ -22,7 +22,7 @@ import re
 import torch
 import torch.nn as nn
 from torchinfo import summary
-from typing import Optional, Dict, Tuple, List, Callable
+from typing import Iterable, Optional, Dict, Tuple, List, Callable
 from packaging.version import Version
 from functools import partial
 from yacs.config import CfgNode as CN
@@ -33,6 +33,7 @@ import sys
 import importlib
 import yaml
 
+from bioimageio.spec.utils import download
 from bioimageio.core.backends.pytorch_backend import load_torch_model
 from bioimageio.spec.model.v0_4 import ModelDescr as ModelDescr_v0_4
 from bioimageio.spec.model.v0_5 import ModelDescr as ModelDescr_v0_5
@@ -1179,11 +1180,21 @@ def check_bmz_model_compatibility(
         
         ok, msg = True, ""
         try:
-            file_bytes = current_model.weights.pytorch_state_dict.dependencies.get_reader()
-            ok, msg = can_import_env_deps(file_bytes, import_overrides={"pyyaml": "yaml"})
-        except Exception:
+            deps = current_model.weights.pytorch_state_dict.dependencies
+            if deps is None:
+                # nothing to check
+                ok, msg = True, ""
+            elif hasattr(deps, "get_reader"):
+                # newer spec: dependencies is (or behaves like) a FileDescr
+                yaml_reader = deps.get_reader()
+                ok, msg = can_import_env_deps(yaml_reader)
+            else:
+                # v0.4 spec: deps is a Dependencies object with a .file FileSource_
+                # (see DependenciesNode.file in v0_4.py)
+                yaml_reader = download(deps.file)  # returns a file-like BytesReader
+                ok, msg = can_import_env_deps(yaml_reader) 
+        except Exception:            
             return preproc_info, True, f"[{specific_workflow}] Couldn't read dependencies file for dependency check.\n", opts
-
         if not ok:
             return preproc_info, True, f"[{specific_workflow}] Model has incompatible dependencies: {msg}\n", opts
 
@@ -1379,28 +1390,34 @@ def build_torchvision_model(cfg: CN, device: torch.device) -> Tuple[nn.Module, C
 
     return model, model_torchvision_weights.transforms()
 
-def can_import_env_deps(yaml_reader, import_overrides={'pyyaml': 'yaml', 'scikit-learn': 'sklearn'}) -> Tuple[bool, str]:
+def can_import_env_deps(
+    yaml_reader,
+    import_overrides={'pyyaml': 'yaml', 'scikit-learn': 'sklearn'},
+    allowlist: Optional[Iterable[str]] = {"pytorch", "torch", "pytorch-cuda", "pytorch-mutex", "torchvision"},
+) -> Tuple[bool, str]:
     """
     Check if all dependencies listed in a conda-style environment yaml file can be imported.
+    Dependencies whose *distribution name* is in `allowlist` are ignored.
 
     Parameters
     ----------
     yaml_reader : file-like object
-      A file-like object that provides the content of a conda-style environment yaml file.  
+      Provides the content of a conda-style environment yaml file.
+
     import_overrides : dict, optional
-      A dictionary mapping package names (as they appear in the yaml) to their corresponding
-      Python import names. This is useful for packages where the import name differs from the package name.
-      Example: {'pyyaml': 'yaml', 'scikit-learn': 'sklearn'}
+      Map dist name -> import name (e.g. {'pyyaml': 'yaml'}).
+
+    allowlist : Iterable[str], optional
+      Dist names to ignore if they fail import/version checks (case-insensitive).
+      Example: {"pytorch", "torch", "pytorch-cuda"}
 
     Returns
     -------
     ok : bool
-      True if all dependencies can be imported, False otherwise.
     msg : str
-      An empty string if all dependencies can be imported, otherwise a newline-separated
-      string listing the dependencies that failed to import.
     """
     import_overrides = {k.lower(): v for k, v in (import_overrides or {}).items()}
+    allow = {a.lower() for a in (allowlist or [])}
 
     raw = yaml_reader.read()
     if isinstance(raw, bytes):
@@ -1413,11 +1430,22 @@ def can_import_env_deps(yaml_reader, import_overrides={'pyyaml': 'yaml', 'scikit
 
     failures = []
 
+    def normalize_dist(dist: str) -> str:
+        # normalize to compare in allowlist
+        return dist.strip().lower()
+
+    def is_allowed(dist: str) -> bool:
+        d = normalize_dist(dist)
+        return d in allow
+
     def dist_to_import_name(dist: str) -> str:
         # Most common mapping: "foo-bar" -> "foo_bar"
-        return import_overrides.get(dist.lower(), dist.replace("-", "_"))
+        d = dist.lower()
+        return import_overrides.get(d, dist.replace("-", "_"))
 
     def try_import(dist: str):
+        if is_allowed(dist):
+            return
         mod = dist_to_import_name(dist)
         try:
             importlib.import_module(mod)
@@ -1429,16 +1457,19 @@ def can_import_env_deps(yaml_reader, import_overrides={'pyyaml': 'yaml', 'scikit
         if isinstance(item, str):
             s = item.strip()
             low = s.lower()
+
             if low.startswith("python="):
                 m = re.match(r"python\s*=\s*(\d+)\.(\d+)", low)
                 if m:
                     req_major, req_minor = int(m.group(1)), int(m.group(2))
                     if (sys.version_info.major, sys.version_info.minor) != (req_major, req_minor):
                         failures.append(f"python={req_major}.{req_minor}")
+
             elif low == "pip":
                 continue
+
             else:
-                # Optional: try importing other conda deps if present
+                # take dist name before any version/marker extras
                 dist = re.split(r"[<>=!~\[]", s, maxsplit=1)[0].strip()
                 if dist:
                     try_import(dist)
@@ -1451,5 +1482,4 @@ def can_import_env_deps(yaml_reader, import_overrides={'pyyaml': 'yaml', 'scikit
                     try_import(dist)
 
     ok = len(failures) == 0
-
     return ok, ("" if ok else ", ".join(failures))
