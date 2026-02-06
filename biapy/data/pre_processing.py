@@ -245,8 +245,8 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
                         }
                         mask = fid_mask.create_dataset("data", **ds_kwargs)
                     else:  # Zarr file
-                        fid_mask = zarr.open_group(fname, mode="w")
-                        mask = fid_mask.create_dataset("data", shape=out_data_shape, dtype=dtype_str)
+                        out_data_shape = tuple(int(s) for s in out_data_shape)
+                        mask = zarr.open(fname, mode="w", shape=out_data_shape, dtype=dtype_str, zarr_format=3)
 
                     # Close H5 file read for the data shape
                     if isinstance(imgfile, h5py.File):
@@ -1474,8 +1474,8 @@ def synapse_channel_creation(
                 }
                 mask = fid_mask.create_dataset("data", **ds_kwargs)
             else:  # Zarr file
-                fid_mask = zarr.open_group(fname, mode="w")
-                mask = fid_mask.create_dataset("data", shape=out_data_shape, dtype=dtype_str)
+                out_data_shape = tuple(int(s) for s in out_data_shape)
+                mask = zarr.open(fname, mode="w", shape=out_data_shape, dtype=dtype_str, zarr_format=3)
 
             print("Paiting all postsynaptic sites")
             width_reference = dilation_width
