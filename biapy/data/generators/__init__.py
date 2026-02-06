@@ -714,9 +714,14 @@ def create_chunked_workflow_process_generator(
     test_dataset : DataLoader
         PyTorch DataLoader wrapping the chunked test data generator.
     """
+    if "C" not in cfg.DATA.TEST.INPUT_IMG_AXES_ORDER:
+        out_data_order = cfg.DATA.TEST.INPUT_IMG_AXES_ORDER + "C"
+    else:
+        out_data_order = cfg.DATA.TEST.INPUT_IMG_AXES_ORDER
+
     chunked_generator = chunked_workflow_process_generator(
         model_predictions=model_predictions,
-        input_axes=cfg.DATA.TEST.INPUT_IMG_AXES_ORDER,
+        input_axes=out_data_order,
         crop_shape=cfg.DATA.PATCH_SIZE,
         out_dir=out_dir,
         dtype_str=dtype_str,

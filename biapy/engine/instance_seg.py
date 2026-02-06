@@ -1651,6 +1651,19 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         index=False,
                     )
 
+    def after_all_chunk_prediction_workflow_process(self):
+        """
+        Place any code that needs to be done after predicting all patches in "by chunks" setting.
+        This function is called on all ranks.
+        """
+        if self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
+            if self.cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE == "chunk_by_chunk":
+                raise NotImplementedError
+            else: 
+                pass
+        else: # synapses
+            super().after_all_chunk_prediction_workflow_process()
+
     def after_all_chunk_prediction_workflow_process_master_rank(self):
         """Execute steps needed after merging all predicted patches into the original image in "by chunks" setting."""
         assert isinstance(self.all_pred, list) and isinstance(self.all_gt, list)
