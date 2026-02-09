@@ -2123,7 +2123,7 @@ def measure_morphological_props_and_filter(
         extra_properties=(surface_area,)
     )
     for k, l in tqdm(enumerate(props["label"]), total=len(props["label"]), leave=False):
-        label_index = int(np.where(label_list == l)[0])
+        label_index = int(np.searchsorted(label_list, l))
         pixels = npixels[label_index]
 
         if image3d:
@@ -2380,7 +2380,7 @@ def repare_large_blobs(
 
                 # Merge neighbors with the big label
                 for i in range(len(neighbors)):
-                    ind = np.where(props["label"] == neighbors[i])[0]
+                    ind = int(np.searchsorted(props["label"], neighbors[i]))
 
                     # Only merge labels if the small neighbor instance is fully contained in the large one
                     contained_in_large_blob = True
