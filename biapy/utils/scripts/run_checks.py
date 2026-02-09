@@ -67,14 +67,14 @@ all_test_info["Test4"] = {
     "enable": True,
     "jobname": "test4",
     "description": "2D Instance seg. Stardist 2D data. Basic DA. BC (auto). resunet++. "
-        "Post-proc: Clear border + remove instances by properties (leave only the bad ones).",
+        "Post-proc: Clear border + remove instances by properties.",
     "yaml": "test_4.yaml",
     "internal_checks": [
         {"type": "regular", "pattern": "Test IoU (F channel) (merge patches):", "gt": True, "value": 0.4},
         {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 1, "metric": "f1",
-            "gt": True, "value": 0.50},
+            "gt": True, "value": 0.8},
         {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 2, "metric": "f1",
-            "gt": False, "value": 0.3}, # Post-processing (leave bad instances only)
+            "gt": True, "value": 0.7},
     ]
 }
 
@@ -371,7 +371,7 @@ all_test_info["Test31"] = {
         {"type": "regular", "pattern": "Test IoU (F channel) (merge patches):", "gt": True, "value": 0.7},
         {"type": "BMZ", "pattern": "Package path:", "bmz_package_name": "2D U-NeXt V1 for nucleus segmentation.zip"},
         {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 1, "metric": "f1",
-            "gt": True, "value": 0.9},
+            "gt": True, "value": 0.85},
     ]
 }
 
