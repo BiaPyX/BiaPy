@@ -1662,7 +1662,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             else: 
                 pass
         else: # synapses
-            super().after_all_chunk_prediction_workflow_process()
+            pass
 
     def after_all_chunk_prediction_workflow_process_master_rank(self):
         """Execute steps needed after merging all predicted patches into the original image in "by chunks" setting."""
