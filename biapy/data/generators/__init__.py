@@ -31,7 +31,7 @@ from biapy.data.pre_processing import preprocess_data
 from biapy.data.data_manipulation import save_tif
 from biapy.data.dataset import BiaPyDataset
 from biapy.data.norm import Normalization
-from biapy.utils.misc import get_rank, get_world_size, is_dist_avail_and_initialized, os_walk_clean
+from biapy.utils.misc import get_rank, get_world_size, is_dist_avail_and_initialized, os_walk_clean, is_main_process
 from biapy.models.bmz_utils import extract_BMZ_sample_and_cover
 
 def create_train_val_augmentors(
@@ -637,7 +637,8 @@ def create_chunked_test_generator(
     def worker_init_fn(worker_id):
         torch.set_num_threads(1)
 
-    print(f"Chunked test generator with {num_workers} workers")
+    if is_main_process():
+        print(f"Chunked test generator with {num_workers} workers")
 
     test_dataset = DataLoader(
         chunked_generator,

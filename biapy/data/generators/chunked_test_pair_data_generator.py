@@ -26,7 +26,7 @@ from biapy.data.data_3D_manipulation import (
     looks_like_hdf5,
 )
 from biapy.data.data_manipulation import sample_satisfy_conds, save_tif, extract_patch_within_image
-from biapy.utils.misc import get_world_size, get_rank
+from biapy.utils.misc import get_world_size, get_rank, is_main_process
 from biapy.data.dataset import PatchCoords
 from biapy.data.norm import Normalization
 
@@ -255,6 +255,16 @@ class chunked_test_pair_data_generator(IterableDataset):
         self.vols_per_x = math.ceil(self.x_dim / self.step_x)
 
         self.len = self.vols_per_z * self.vols_per_y * self.vols_per_x
+
+        
+        if is_main_process():
+            print(
+                f"Initialized chunked_test_pair_data_generator with sample {self.filename} and shape {self.X_parallel_data.shape}.\n"
+                f"Crop shape: {self.crop_shape}, padding: {self.padding}. Input axes: {self.input_axes}. Mask input axes: {self.mask_input_axes}.\n"
+                f"Output data axes order: {self.out_data_order}. "
+                ""
+            )
+
 
     def extract_and_prepare_sample(
         self, z: int, y: int, x: int, patch_coords: PatchCoords, extract: str = "image"

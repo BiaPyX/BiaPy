@@ -25,7 +25,7 @@ from biapy.data.data_3D_manipulation import (
     looks_like_hdf5,
 )
 from biapy.data.data_manipulation import load_img_data, save_tif, extract_patch_within_image
-from biapy.utils.misc import get_world_size, get_rank
+from biapy.utils.misc import get_world_size, get_rank, is_main_process
 from biapy.data.dataset import PatchCoords
 
 class chunked_workflow_process_generator(IterableDataset):
@@ -148,6 +148,14 @@ class chunked_workflow_process_generator(IterableDataset):
         self.vols_per_x = math.ceil(self.x_dim / self.step_x)
 
         self.len = self.vols_per_z * self.vols_per_y * self.vols_per_x
+
+        if is_main_process():
+            print(
+                f"Initialized chunked_workflow_process_generator with sample {self.filename} and shape {self.X_parallel_data.shape}.\n"
+                f"Crop shape: {self.crop_shape_zyx}. Input axes: {self.input_axes}. Output data axes order: {self.out_data_order}. "
+                ""
+            )
+
 
     def _extract_patch(self, patch_coords: PatchCoords) -> NDArray:
         """
