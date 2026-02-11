@@ -163,6 +163,7 @@ def init_devices(args, cfg):
     AssertionError
         If distributed training is attempted without GPUs when environment variables are set.
     """
+    args.distributed = False
     if args.dist_on_itp:
         args.rank = int(os.environ["OMPI_COMM_WORLD_RANK"])
         args.world_size = int(os.environ["OMPI_COMM_WORLD_SIZE"])
@@ -202,11 +203,12 @@ def init_devices(args, cfg):
     else:
         print("Not using distributed mode")
         setup_for_distributed(is_master=True)  # hack
-        args.distributed = False
-        if torch.cuda.is_available() and args.gpu is not None:
-            device = torch.device("cuda")
+        if torch.cuda.is_available() and args.gpu is not None and args.gpu != "":
+            device = torch.device(f"cuda:{args.gpu}")
+            print(f"**** Using GPU: '{device}' for training")
         else:
-            device = torch.device(cfg.SYSTEM.DEVICE)
+            device = torch.device(cfg.SYSTEM.DEVICE)  # e.g. "cpu"
+            print(f"**** Using '{device}' for training")
         return device
 
     args.distributed = True
