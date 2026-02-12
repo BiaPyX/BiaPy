@@ -1256,30 +1256,6 @@ def euler_integration(flow: NDArray, coords: NDArray, n_steps: int = 200, dt: fl
     return pos  # final positions for clustering
 
 
-def _unique_by_filepath(data_info: List[Dict]) -> Tuple[List[str], List[Tuple[int, ...]]]:
-    """
-    Deduplicate data_info entries by filepath, keeping the first occurrence and its full_shape.
-
-    Parameters
-    ----------
-    data_info : List[Dict]
-        List of dictionaries containing data information, each with keys "filepath" and "full_shape". 
-
-    Returns
-    -------
-    Tuple[List[str], List[Tuple[int, ...]]]
-        A tuple containing a list of unique filepaths and a corresponding list of their full shapes.
-    """
-
-    seen = {}
-    for d in data_info:
-        # keep first occurrence
-        seen.setdefault(d["filepath"], d["full_shape"])
-    files = list(seen.keys())
-    shapes = list(seen.values())
-    return files, shapes
-
-
 def _in_bounds(p: np.ndarray, shape_zyx: Tuple[int, int, int]) -> bool:
     """
     Check if a point p (z,y,x) is within the bounds of a shape (Z,Y,X). 
@@ -1427,11 +1403,20 @@ def synapse_channel_creation(
     channels = len(mode)
     F_pre_pos = mode.index("F_pre") if "F_pre" in mode else None
 
+    if "F_post" in mode:
+        dtype_str = "uint8"
+    else: # H, V, Z channels 
+        dtype_str = "float32"
     # footprints (keep both since you had them)
     pre_footprint = generate_ellipse_footprint(presite_dilation)
     post_footprint = generate_ellipse_footprint(postsite_dilation)
 
-    unique_files, unique_shapes = _unique_by_filepath(data_info)
+    unique_files = []
+    unique_shapes = []
+    for i in range(len(data_info)):
+        if data_info[i]["filepath"] not in unique_files:
+            unique_files.append(data_info[i]["filepath"])
+            unique_shapes.append(data_info[i]["full_shape"])
 
     rank = get_rank()
     world_size = get_world_size()
@@ -1522,7 +1507,7 @@ def synapse_channel_creation(
         # output file
         out_fname = os.path.join(savepath, os.path.basename(filename))
         mask, fid_mask, out_shape, out_order, c_pos = _make_output_array(
-            out_fname, shape_zyx, channels, zarr_data_information, dtype_str="float32"
+            out_fname, shape_zyx, channels, zarr_data_information, dtype_str=dtype_str
         )
 
         print("Painting all postsynaptic sites")
@@ -1551,13 +1536,13 @@ def synapse_channel_creation(
                 slice(bbox[4], bbox[5]),
                 slice(0, out_shape[c_pos]),
             )
-            data_slices = tuple(order_dimensions(slices_zyxc, input_order="ZYXC", output_order=out_order, default_value=0))
+            data_slices = tuple(order_dimensions(data_slices, input_order="ZYXC", output_order=out_order, default_value=0))
 
             pre_local = pre_point_global - np.asarray([bbox[0], bbox[2], bbox[4]], dtype=int)
 
             # ("F_pre", "H", "V", "Z") -> Synful style
             if set(mode) == {"F_pre", "H", "V", "Z"}:
-                seeds = np.zeros(patch_shape, dtype=np.uint64)
+                seeds = np.zeros(patch_shape, dtype=np.uint32)
                 mask_to_grow = np.zeros(patch_shape, dtype=np.uint8)
                 label_to_pre_site = {}
                 label_count = 1
