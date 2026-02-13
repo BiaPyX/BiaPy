@@ -204,7 +204,9 @@ def init_devices(args, cfg):
         print("Not using distributed mode")
         setup_for_distributed(is_master=True)  # hack
         if torch.cuda.is_available() and args.gpu is not None and args.gpu != "":
-            device = torch.device(f"cuda:{args.gpu}")
+            # We don't neeed 'cuda:gpu_number' because we have set CUDA_VISIBLE_DEVICES, 
+            # so the gpu_number is only used to know if we want to use GPU or not
+            device = torch.device(f"cuda")
             print(f"**** Using GPU: '{device}' for training")
         else:
             device = torch.device(cfg.SYSTEM.DEVICE)  # e.g. "cpu"
@@ -243,7 +245,7 @@ def init_devices(args, cfg):
     if args.rank == 0:
         device = torch.device("cuda" if torch.cuda.is_available() else cfg.SYSTEM.DEVICE)
     else:
-        device = torch.device(f"cuda:{args.rank}" if torch.cuda.is_available() else cfg.SYSTEM.DEVICE)
+        device = torch.device("cuda" if torch.cuda.is_available() else cfg.SYSTEM.DEVICE)
     return device
 
 
