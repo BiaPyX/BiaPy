@@ -2120,78 +2120,78 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     index=False,
                 )
 
-            if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
-                print("Calculating synapse detection stats after post-processing . . .")
-                # Calculate detection metrics
-                if len(pre_points) > 0:
-                    d_metrics, pre_gt_assoc, pre_fp = detection_metrics(
-                        gt_pre_points,
-                        pre_points,
-                        true_classes=None,
-                        pred_classes=[],
-                        tolerance=self.cfg.TEST.DET_TOLERANCE,
-                        resolution=resolution,
-                        bbox_to_consider=[],
-                        verbose=True,
-                    )
-                    print("Synapse detection (pre points) metrics (post-processing): {}".format(d_metrics))
-                    for n, item in enumerate(d_metrics.items()):
-                        metric = self.test_extra_metrics[n]
-                        if str(metric).lower() not in self.stats["merge_patches_post"]:
-                            self.stats["merge_patches_post"][str(metric.lower())] = 0
-                        self.stats["merge_patches_post"][str(metric).lower()] += item[1]
-                        self.current_sample_metrics[str(metric).lower() + " (pre points, post-processing)"] = item[1]
-                        
-                    # Save csv files with the associations between GT points and predicted ones
-                    pre_gt_assoc.to_csv(
-                        os.path.join(
-                            self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
-                            filename+"_pred_pre_locations_gt_assoc.csv",
-                        ),
-                        index=False,
-                    )
-                    pre_fp.to_csv(
-                        os.path.join(
-                            self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
-                            filename+"_pred_pre_locations_fp.csv",
-                        ),
-                        index=False,
-                    )
-                if len(post_points):
-                    d_metrics, post_gt_assoc, post_fp = detection_metrics(
-                        gt_post_points,
-                        post_points,
-                        true_classes=None,
-                        pred_classes=[],
-                        tolerance=self.cfg.TEST.DET_TOLERANCE,
-                        resolution=resolution,
-                        bbox_to_consider=[],
-                        verbose=True,
-                    )
-                    print("Synapse detection (post points) metrics (post-processing): {}".format(d_metrics))
-                    previous_pre_keys_num = len(d_metrics)
-                    for n, item in enumerate(d_metrics.items()):
-                        metric = self.test_extra_metrics[n+previous_pre_keys_num]
-                        if str(metric).lower() not in self.stats["merge_patches_post"]:
-                            self.stats["merge_patches_post"][str(metric.lower())] = 0
-                        self.stats["merge_patches_post"][str(metric).lower()] += item[1]
-                        self.current_sample_metrics[str(metric).lower() + " (post points, post-processing)"] = item[1]
+                if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
+                    print("Calculating synapse detection stats after post-processing . . .")
+                    # Calculate detection metrics
+                    if len(pre_points) > 0:
+                        d_metrics, pre_gt_assoc, pre_fp = detection_metrics(
+                            gt_pre_points,
+                            pre_points,
+                            true_classes=None,
+                            pred_classes=[],
+                            tolerance=self.cfg.TEST.DET_TOLERANCE,
+                            resolution=resolution,
+                            bbox_to_consider=[],
+                            verbose=True,
+                        )
+                        print("Synapse detection (pre points) metrics (post-processing): {}".format(d_metrics))
+                        for n, item in enumerate(d_metrics.items()):
+                            metric = self.test_extra_metrics[n]
+                            if str(metric).lower() not in self.stats["merge_patches_post"]:
+                                self.stats["merge_patches_post"][str(metric.lower())] = 0
+                            self.stats["merge_patches_post"][str(metric).lower()] += item[1]
+                            self.current_sample_metrics[str(metric).lower() + " (pre points, post-processing)"] = item[1]
+                            
+                        # Save csv files with the associations between GT points and predicted ones
+                        pre_gt_assoc.to_csv(
+                            os.path.join(
+                                self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
+                                filename+"_pred_pre_locations_gt_assoc.csv",
+                            ),
+                            index=False,
+                        )
+                        pre_fp.to_csv(
+                            os.path.join(
+                                self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
+                                filename+"_pred_pre_locations_fp.csv",
+                            ),
+                            index=False,
+                        )
+                    if len(post_points):
+                        d_metrics, post_gt_assoc, post_fp = detection_metrics(
+                            gt_post_points,
+                            post_points,
+                            true_classes=None,
+                            pred_classes=[],
+                            tolerance=self.cfg.TEST.DET_TOLERANCE,
+                            resolution=resolution,
+                            bbox_to_consider=[],
+                            verbose=True,
+                        )
+                        print("Synapse detection (post points) metrics (post-processing): {}".format(d_metrics))
+                        previous_pre_keys_num = len(d_metrics)
+                        for n, item in enumerate(d_metrics.items()):
+                            metric = self.test_extra_metrics[n+previous_pre_keys_num]
+                            if str(metric).lower() not in self.stats["merge_patches_post"]:
+                                self.stats["merge_patches_post"][str(metric.lower())] = 0
+                            self.stats["merge_patches_post"][str(metric).lower()] += item[1]
+                            self.current_sample_metrics[str(metric).lower() + " (post points, post-processing)"] = item[1]
 
-                    # Save csv files with the associations between GT points and predicted ones
-                    post_gt_assoc.to_csv(
-                        os.path.join(
-                            self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
-                            filename+"_pred_post_locations_gt_assoc.csv",
-                        ),
-                        index=False,
-                    )
-                    post_fp.to_csv(
-                        os.path.join(
-                            self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
-                            filename+"_pred_post_locations_fp.csv",
-                        ),
-                        index=False,
-                    )
+                        # Save csv files with the associations between GT points and predicted ones
+                        post_gt_assoc.to_csv(
+                            os.path.join(
+                                self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
+                                filename+"_pred_post_locations_gt_assoc.csv",
+                            ),
+                            index=False,
+                        )
+                        post_fp.to_csv(
+                            os.path.join(
+                                self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
+                                filename+"_pred_post_locations_fp.csv",
+                            ),
+                            index=False,
+                        )
 
             if self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF:
                 print("Preparing prediction and GT tiffs as auxiliary images for checking the output. . .")
