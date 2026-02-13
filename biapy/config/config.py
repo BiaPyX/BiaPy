@@ -304,10 +304,10 @@ class Config:
 
         #### For "synapses" type of instances (only available for 3D H5/Zarr data) ####
         _C.PROBLEM.INSTANCE_SEG.SYNAPSES = CN()
-        # Dilation in (z,y,x) to be made for the 'B' channel
+        # Dilation in (z,y,x) to be made for the presynaptic points
+        _C.PROBLEM.INSTANCE_SEG.SYNAPSES.PRESITE_DILATION = [2,4,4]
+        # Dilation in (z,y,x) to be made for the postsynaptic points
         _C.PROBLEM.INSTANCE_SEG.SYNAPSES.POSTSITE_DILATION = [2,4,4]
-        # Dilation in (z,y,x) to be made to construct the 'F' channel
-        _C.PROBLEM.INSTANCE_SEG.SYNAPSES.POSTSITE_DILATION_DISTANCE_CHANNELS = [3,10,10] 
         _C.PROBLEM.INSTANCE_SEG.SYNAPSES.POINT_CREATION_FUNCTION = "peak_local_max"
         # The minimal allowed distance separating peaks. To find the maximum number of peaks, use min_distance=1.
         _C.PROBLEM.INSTANCE_SEG.SYNAPSES.PEAK_LOCAL_MAX_MIN_DISTANCE = 1
