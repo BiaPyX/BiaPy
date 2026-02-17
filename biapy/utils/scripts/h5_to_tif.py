@@ -56,14 +56,20 @@ def main() -> None:
     # Import after inserting code_dir
     sys.path.insert(0, code_dir)
     try:
-        from biapy.data.data_manipulation import read_img_as_ndarray, save_tif
+        from biapy.data.data_manipulation import save_tif
+        from biapy.data.data_3D_manipulation import read_chunked_nested_data, ensure_3d_shape
+        
     except Exception as e:
         raise ImportError(
             "Could not import BiaPy functions. "
             "Check that --code-dir points to the correct BiaPy root."
         ) from e
 
-    data = read_img_as_ndarray(h5file, is_3d=True)
+    file, data = read_chunked_nested_data(h5file, data_path=args.dataset_key)
+    data = np.array(data)
+    data = ensure_3d_shape(data)
+    if isinstance(file, h5py.File):
+        file.close()
 
     save_tif(np.expand_dims(data, 0), out_dir, [os.path.basename(h5file)], verbose=True)
 
