@@ -1473,7 +1473,7 @@ def read_chunked_nested_h5(h5file: str, data_path: str = "") -> Tuple[h5py.File,
         obj: h5py.Group | h5py.Dataset = fid
         for part in normalized.split("/"):
             if part not in obj:
-                raise ValueError(f"'{data_path}' not found in H5: {h5file}.")
+                raise ValueError(f"'{data_path}' not found in H5: {h5file}. Available keys at this level: {list(obj.keys())}")
             obj = obj[part]
 
         if isinstance(obj, h5py.Group):
