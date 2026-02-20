@@ -218,7 +218,13 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     self.activations.append(dst.get("D", {}).get("act", "linear"))
                     self.model_output_channels["channels"] += 1
                 elif channel == "A":
+                    for _ in range(len(dst.get("A", {}).get("z_affinities", [1]))):
+                        self.model_output_channels["channels"] += 1
+                        self.activations.append("ce_sigmoid")
                     for _ in range(len(dst.get("A", {}).get("y_affinities", [1]))):
+                        self.model_output_channels["channels"] += 1
+                        self.activations.append("ce_sigmoid")
+                    for _ in range(len(dst.get("A", {}).get("x_affinities", [1]))):
                         self.model_output_channels["channels"] += 1
                         self.activations.append("ce_sigmoid")
                 elif channel == "R":
