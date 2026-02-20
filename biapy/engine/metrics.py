@@ -1307,6 +1307,9 @@ class instance_segmentation_loss:
                 if mask_vals:
                     mask = (y_true_slice != 0).float()
 
+                if y_pred_slice.shape[-self.ndim :] != y_true_slice.shape[-self.ndim :]:
+                    y_true_slice = scale_target(y_true_slice, y_pred_slice.shape[-self.ndim :])
+
                 # class-rebalance / ignore_index weights for BCE
                 weight = None
                 if self.losses_to_use[i] in ["bce", "ce"] and channel in ["B","F","P","C","T","A","M","F_pre","F_post"]:
@@ -1331,15 +1334,12 @@ class instance_segmentation_loss:
                 else:
                     raise ValueError("Loss function {} not recognized".format(self.losses_to_use[i]))
 
-                if y_pred_slice.shape[-self.ndim :] != y_true_slice.shape[-self.ndim :]:
-                    y_true_slice = scale_target(y_true_slice, y_pred_slice.shape[-self.ndim :])
-
                 if self.losses_to_use[i] != "ce":
                     y_pred_slice = y_pred_slice.float()
                     y_true_slice = y_true_slice.float()
-                
-                loss_tensor = crit(y_pred_slice, y_true_slice)  # same shape as slice
 
+                loss_tensor = crit(y_pred_slice, y_true_slice)  # same shape as slice
+                    
                 # multiply by spatial border weights after crit
                 if w_borders is not None:
                     loss_tensor = loss_tensor * w_borders
