@@ -594,32 +594,32 @@ class BiaPy:
 
         # Add percentile norm
         preprocessing = []
-        # if self.cfg.DATA.NORMALIZATION.PERC_CLIP.ENABLE:
-        #     min_percentile = max(self.cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC, 0)
-        #     max_percentile = min(self.cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC, 100)
-        #     if min_percentile != 0 or max_percentile != 100:
-        #         preprocessing.append(
-        #             {
-        #                 "id": "clip",
-        #                 "kwargs": {
-        #                     "max_percentile": max_percentile,
-        #                     "min_percentile": min_percentile,
-        #                 },
-        #             }
-        #         )
-        #     else:
-        #         lower_value = self.cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_VALUE
-        #         upper_value = self.cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_VALUE
-        #         if lower_value != -1 or upper_value != -1:
-        #             preprocessing.append(
-        #                 {
-        #                     "id": "clip",
-        #                     "kwargs": {
-        #                         "max_value": upper_value if upper_value != -1 else None,
-        #                         "min_value": lower_value if lower_value != -1 else None,
-        #                     },
-        #                 }
-        #             )
+        if self.cfg.DATA.NORMALIZATION.PERC_CLIP.ENABLE:
+            min_percentile = max(self.cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC, 0)
+            max_percentile = min(self.cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC, 100)
+            if min_percentile != 0 or max_percentile != 100:
+                preprocessing.append(
+                    {
+                        "id": "clip",
+                        "kwargs": {
+                            "max_percentile": max_percentile,
+                            "min_percentile": min_percentile,
+                        },
+                    }
+                )
+            else:
+                lower_value = self.cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_VALUE
+                upper_value = self.cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_VALUE
+                if lower_value != -1 or upper_value != -1:
+                    preprocessing.append(
+                        {
+                            "id": "clip",
+                            "kwargs": {
+                                "max_value": upper_value if upper_value != -1 else None,
+                                "min_value": lower_value if lower_value != -1 else None,
+                            },
+                        }
+                    )
 
         if self.cfg.DATA.NORMALIZATION.TYPE == "div":
             max_val = 255
@@ -1141,8 +1141,8 @@ class BiaPy:
         # Checking model consistency
         from bioimageio.core import test_model
 
-        # summary = test_model(model_descr, absolute_tolerance=1e-3, relative_tolerance=1e-3)
-        # summary.display()
+        summary = test_model(model_descr, absolute_tolerance=1e-3, relative_tolerance=1e-3)
+        summary.display()
 
         # Saving the model into BMZ format
         model_path = os.path.join(building_dir, model_name + ".zip")
