@@ -27,11 +27,13 @@ from biapy.data.post_processing.post_processing import (
     measure_morphological_props_and_filter,
     repare_large_blobs,
     apply_binary_mask,
-    create_synapses,
+    create_synapses_from_point_probs,
     remove_close_points,
     remove_close_points_by_mask,
     Embedding_cluster,
     apply_label_refinement,
+    from_local_synapse_csv_to_global,
+    extract_synful_synapses,
 )
 from biapy.data.post_processing.polygon_nms_postprocessing import stardist_instances_from_prediction
 from biapy.data.pre_processing import create_instance_channels
@@ -54,7 +56,7 @@ from biapy.utils.misc import (
     os_walk_clean,
 )
 from biapy.data.data_manipulation import read_img_as_ndarray, save_tif
-from biapy.data.data_3D_manipulation import read_chunked_data, read_chunked_nested_data, ensure_3d_shape
+from biapy.data.data_3D_manipulation import read_chunked_data, read_chunked_nested_data, ensure_3d_shape, load_synapse_gt_points
 from biapy.data.dataset import PatchCoords
 
 
@@ -110,7 +112,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         self.stats["inst_stats_merge_patches"] = None
         self.stats["inst_stats_merge_patches_post"] = None
         # Multi-head: instances + classification
-        if self.multihead:
+        if self.separated_class_channel:
             self.all_class_stats_merge_patches = []
             self.all_class_stats_merge_patches_post = []
             self.stats["class_stats_merge_patches"] = None
@@ -122,7 +124,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         self.stats["inst_stats_as_3D_stack"] = None
         self.stats["inst_stats_as_3D_stack_post"] = None
         # Multi-head: instances + classification
-        if self.multihead:
+        if self.separated_class_channel:
             self.all_class_stats_as_3D_stack = []
             self.all_class_stats_as_3D_stack_post = []
             self.stats["class_stats_as_3D_stack"] = None
@@ -134,7 +136,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         self.stats["inst_stats"] = None
         self.stats["inst_stats_post"] = None
         # Multi-head: instances + classification
-        if self.multihead:
+        if self.separated_class_channel:
             self.all_class_stats = []
             self.all_class_stats_post = []
             self.stats["class_stats"] = None
@@ -153,95 +155,110 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 self.test_gt_filenames = next(os_walk_clean(self.original_test_mask_path))[1]
 
         # Specific instance segmentation post-processing
-        if (
-            self.cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK
-            or self.cfg.TEST.POST_PROCESSING.INSTANCE_REFINEMENT.ENABLE
-            or self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.ENABLE
-            or self.cfg.TEST.POST_PROCESSING.REPARE_LARGE_BLOBS_SIZE != -1
-        ):
-            self.post_processing["instance_post"] = True
-        else:
-            self.post_processing["instance_post"] = False
-        
-        if self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "synapses":
+        self.post_processing["instance_post"] = False
+        if self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
+            if (
+                self.cfg.TEST.POST_PROCESSING.VORONOI_ON_MASK
+                or self.cfg.TEST.POST_PROCESSING.INSTANCE_REFINEMENT.ENABLE
+                or self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.ENABLE
+                or self.cfg.TEST.POST_PROCESSING.REPARE_LARGE_BLOBS_SIZE != -1
+            
+            ):
+                self.post_processing["instance_post"] = True
+        else:  # synapses        
             if (
                 self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_PRE_POINTS_RADIUS > 0 
                 or self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_POST_POINTS_RADIUS > 0
             ):
-                self.post_processing['per_image'] = True
+                self.post_processing["instance_post"] = True
 
         self.instances_already_created = False
 
     def define_activations_and_channels(self):
         """
-        Define the activations and output channels of the model.
+        Define the activations to be applied to the model output and the channels that the model will output.
 
         This function must define the following variables:
 
-        self.model_output_channels : List of functions
-            Metrics to be calculated during model's training.
+        self.model_output_channels : List of int
+            Number of channels for each output head of the model. E.g. [3] for a model with one head outputting 3 channels, 
+            [1, 5] for a model with two heads outputting 1 and 5 channels respectively, etc.
 
-        self.multihead : bool
-            Whether if the output of the model has more than one head.
+        self.model_output_channel_info : List of str
+            Information about the output channels.
 
-        self.activations : List of lists of str
-            Activations to be applied to the model output. Each dict will
-            match an output channel of the model. "linear" and "ce_sigmoid"
-            will not be applied. E.g. ["linear"].
+        self.separated_class_channel : bool
+            Whether if we should expect a separated output channel for classification.
+
+        self.head_activations : List of str
+            Activations to be applied to the model output. Each dict will match an output channel of the model. "linear" and "ce_sigmoid"
+            will not be applied. E.g. ["linear"] for a model with one head, ["linear", "sigmoid"] for a model with two heads, etc.
         """
-        self.activations = []
-        self.model_output_channels = {"type": "mask", "channels": 0}
+        self.model_output_channels = [0]
         dst = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0]
         for i, channel in enumerate(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS):
                 if channel in ["B", "F", "P", "C", "T", "M", "F_pre", "F_post"]:
-                    self.activations.append("ce_sigmoid")
-                    self.model_output_channels["channels"] += 1
+                    self.head_activations.append("ce_sigmoid")
+                    self.model_output_channels[0] += 1
+                    self.model_output_channel_info.append(channel)
                 elif channel in ["Dc", "Dn", "D", "H", "V", "Z"]:
                     if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES[i] not in ["mse", "l1", "mae"] or dst.get(channel, {}).get("act", "") == "sigmoid":
-                        self.activations.append("ce_sigmoid")
+                        self.head_activations.append("ce_sigmoid")
                     else:
-                        self.activations.append("linear")
-                    self.model_output_channels["channels"] += 1
+                        self.head_activations.append("linear")
+                    self.model_output_channels[0] += 1
+                    self.model_output_channel_info.append(channel)
                 elif channel == "Db":
                     val_type = dst.get(channel, {}).get("val_type", "norm")
                     if val_type == "discretize":
-                        for _ in range(11):  # Default 10 bins + background
-                            self.activations.append("ce_softmax")
-                            self.model_output_channels["channels"] += 1
+                        for i in range(11):  # Default 10 bins + background
+                            self.head_activations.append("ce_softmax")
+                            self.model_output_channels[0] += 1
+                            self.model_output_channel_info.append(channel+"_bin{}".format(i))
                     elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES[i] not in ["mse", "l1", "mae"] or dst.get(channel, {}).get("act", "") == "sigmoid":
-                        self.activations.append("ce_sigmoid")
-                        self.model_output_channels["channels"] += 1
+                        self.head_activations.append("ce_sigmoid")
+                        self.model_output_channels[0] += 1
+                        self.model_output_channel_info.append(channel)
                     else:
-                        self.activations.append("linear")
-                        self.model_output_channels["channels"] += 1
+                        self.head_activations.append("linear")
+                        self.model_output_channels[0] += 1
+                        self.model_output_channel_info.append(channel)
                 elif channel == "D":
-                    self.activations.append(dst.get("D", {}).get("act", "linear"))
-                    self.model_output_channels["channels"] += 1
+                    self.head_activations.append(dst.get("D", {}).get("act", "linear"))
+                    self.model_output_channels[0] += 1
+                    self.model_output_channel_info.append(channel)
                 elif channel == "A":
-                    for _ in range(len(dst.get("A", {}).get("z_affinities", [1]))):
-                        self.model_output_channels["channels"] += 1
-                        self.activations.append("ce_sigmoid")
-                    for _ in range(len(dst.get("A", {}).get("y_affinities", [1]))):
-                        self.model_output_channels["channels"] += 1
-                        self.activations.append("ce_sigmoid")
-                    for _ in range(len(dst.get("A", {}).get("x_affinities", [1]))):
-                        self.model_output_channels["channels"] += 1
-                        self.activations.append("ce_sigmoid")
+                    for i in range(len(dst.get("A", {}).get("z_affinities", [1]))):
+                        self.model_output_channels[0] += 1
+                        self.model_output_channel_info.append(channel+"_{}".format(i))
+                        self.head_activations.append("ce_sigmoid")
+                    for i in range(len(dst.get("A", {}).get("y_affinities", [1]))):
+                        self.model_output_channels[0] += 1
+                        self.model_output_channel_info.append(channel+"_{}".format(i))
+                        self.head_activations.append("ce_sigmoid")
+                    for i in range(len(dst.get("A", {}).get("x_affinities", [1]))):
+                        self.model_output_channels[0] += 1
+                        self.model_output_channel_info.append(channel+"_{}".format(i))
+                        self.head_activations.append("ce_sigmoid")
                 elif channel == "R":
-                    for _ in range(dst.get("R", {}).get("nrays", 32 if self.dims == 2 else 96)):
-                        self.activations.append("linear")
-                        self.model_output_channels["channels"] += 1
+                    for i in range(dst.get("R", {}).get("nrays", 32 if self.dims == 2 else 96)):
+                        self.head_activations.append("linear")
+                        self.model_output_channel_info.append(channel+"_{}".format(i))
+                        self.model_output_channels[0] += 1
                 elif channel == "E_offset":
-                    for _ in range(self.dims):
-                        self.activations.append("ce_sigmoid")
-                        self.model_output_channels["channels"] += 1
+                    for i in range(self.dims):
+                        self.head_activations.append("ce_sigmoid")
+                        self.model_output_channel_info.append(channel+"_{}".format(i))
+                        self.model_output_channels[0] += 1
                 elif channel == "E_sigma":
-                    for _ in range(self.dims):
-                        self.activations.append("ce_sigmoid")
-                        self.model_output_channels["channels"] += 1
+                    for i in range(self.dims):
+                        self.head_activations.append("ce_sigmoid")
+                        self.model_output_channel_info.append(channel+"_{}".format(i))
+                        self.model_output_channels[0] += 1
                 elif channel == "E_seediness":
-                    self.activations.append("ce_sigmoid")
-                    self.model_output_channels["channels"] += 1
+                    self.head_activations.append("ce_sigmoid")
+                    self.model_output_channel_info.append(channel)
+                    self.model_output_channels[0] += 1
                 elif channel == "We":
                     continue
                 else:
@@ -249,15 +266,14 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
         # Multi-head: instances + classification
         if self.cfg.DATA.N_CLASSES > 2:
-            self.activations = [self.activations, ["linear",]*self.cfg.DATA.N_CLASSES]
-            self.model_output_channels["channels"] = [self.model_output_channels["channels"], self.cfg.DATA.N_CLASSES]
-            self.multihead = True
+            self.head_activations += ["linear"] * self.cfg.DATA.N_CLASSES
+            self.model_output_channels += [self.cfg.DATA.N_CLASSES,]
+            self.model_output_channel_info += ["class"] * self.cfg.DATA.N_CLASSES
+            self.separated_class_channel = True
         else:
-            self.activations = [self.activations]
-            self.model_output_channels["channels"] = [self.model_output_channels["channels"]]
-            self.multihead = False
+            self.separated_class_channel = False
 
-        self.real_classes = self.model_output_channels["channels"][0]
+        self.real_classes = self.model_output_channels[0]
         if "Db" in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS and dst.get("Db", {}).get("val_type", "norm") == "discretize":
             self.real_classes -= 10  # Default 10 bins
 
@@ -321,7 +337,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 raise ValueError("Unknown channel: {}".format(channel))
         
         # Multi-head: instances + classification
-        if self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular" and self.multihead:
+        if self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular" and self.separated_class_channel:
             self.train_metric_names += ["IoU (classes)"]
             self.train_metric_best += ["max"]
             # Used to calculate IoU with the classification results
@@ -353,7 +369,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         self.test_metric_names = self.train_metric_names.copy()
 
         # Multi-head: instances + classification
-        if self.multihead:
+        if self.separated_class_channel:
             self.test_metric_names.append("IoU (classes)")
             # Used to calculate IoU with the classification results
             self.jaccard_index_matching = jaccard_index(
@@ -501,13 +517,13 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                             metric_logger.meters[list_names_to_use[k]].update(v)
                         k += 1
                 else:
-                    if isinstance(val[m], torch.Tensor):
-                        val = val.item() if not torch.isnan(val) else 0
+                    if isinstance(val, torch.Tensor):
+                        v = val.item() if not torch.isnan(val) else 0
                     else:
-                        v = val[m]
-                    out_metrics[list_names_to_use[i]] = val
+                        v = val
+                    out_metrics[list_names_to_use[i]] = v
                     if metric_logger:
-                        metric_logger.meters[list_names_to_use[i]].update(val)
+                        metric_logger.meters[list_names_to_use[i]].update(v)
         return out_metrics
 
     def instance_seg_process(self, pred, filenames, out_dir, out_dir_post_proc, calculate_metrics: bool = True):
@@ -541,7 +557,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         #############################
         if not self.instances_already_created:
             # Multi-head: instances + classification
-            if self.multihead:
+            if self.separated_class_channel:
                 class_channel = np.expand_dims(pred[..., -1], -1)
                 pred = pred[..., :-1]
 
@@ -591,7 +607,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 )
 
             # Multi-head: instances + classification
-            if self.multihead:
+            if self.separated_class_channel:
                 print("Adapting class channel . . .")
                 labels = np.unique(pred_labels)[1:]
                 new_class_channel = np.zeros(pred_labels.shape, dtype=pred_labels.dtype)
@@ -686,7 +702,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     _Y = read_img_as_ndarray(test_file, is_3d=self.cfg.PROBLEM.NDIM == "3D").squeeze()
 
             # Multi-head: instances + classification
-            if self.multihead:
+            if self.separated_class_channel:
                 # Channel check
                 error_shape = None
                 if self.cfg.PROBLEM.NDIM == "2D" and _Y.ndim != 3:
@@ -966,7 +982,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 pred_labels = pred_labels[0]
 
             # Multi-head: instances + classification
-            if self.multihead:
+            if self.separated_class_channel:
                 class_channel = np.where(pred_labels > 0, class_channel, 0)  # Adapt changes to post-processed pred_labels
                 save_tif(
                     np.expand_dims(
@@ -997,7 +1013,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 and (self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST)
             ):
                 # Multi-head: instances + classification
-                if self.multihead:
+                if self.separated_class_channel:
                     # Measure class IoU
                     class_iou = self.jaccard_index_matching(
                         torch.as_tensor(class_channel.squeeze().astype(np.int32)),
@@ -1108,8 +1124,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         filenames: Optional[List[str]] = None,
         out_dir: Optional[str] = None,
         out_dir_post_proc: Optional[str] = None,
-        calculate_metrics: bool = False,
-    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    ) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
         """
         Synapse segmentation workflow engine for test/inference.
         
@@ -1129,356 +1144,150 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
         out_dir_post_proc : str
             Output directory to save the post-processed instances.
-
-        calculate_metrics : bool, optional
-            Whether to calculate or not the metrics.
         """
         assert pred.ndim == 4, f"Prediction doesn't have 4 dim: {pred.shape}"
         #############################
         ### INSTANCE SEGMENTATION ###
         #############################
         threshold_abs = []
+        regular_process = False if self.cfg.TEST.BY_CHUNKS.ENABLE else True
         for c in range(pred.shape[-1]): 
             if self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE == "auto":
                 threshold_abs.append(threshold_otsu(pred[..., c]))
             else: # "manual", "relative_by_patch", "relative"
                 threshold_abs.append(self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.MIN_TH_TO_BE_PEAK)
 
-        pred, d_result = create_synapses(
-            data=pred,
-            channels=self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
-            point_creation_func=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.POINT_CREATION_FUNCTION,
-            min_th_to_be_peak=threshold_abs,
-            min_distance=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.PEAK_LOCAL_MAX_MIN_DISTANCE,
-            min_sigma=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.BLOB_LOG_MIN_SIGMA,
-            max_sigma=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.BLOB_LOG_MAX_SIGMA,
-            num_sigma=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.BLOB_LOG_NUM_SIGMA,
-            exclude_border=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.EXCLUDE_BORDER,
-            relative_th_value=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE in ["relative", "relative_by_patch"], 
-        )
-        if out_dir is not None:
-            save_tif(
-                np.expand_dims(pred, 0),
-                out_dir,
-                filenames,
+        if set(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) ==  {"F_post", "H", "V", "Z"}:
+            pre_points_df, post_points_df, pre_post_map_df = extract_synful_synapses(
+                data=pred,
+                channels=self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
+                threshold_abs=0.2,
+                min_distance=1,
+                cluster_distance=5.0,
+                out_dir=out_dir,
                 verbose=self.cfg.TEST.VERBOSE,
             )
-
-        total_pre_points = len([x for x in d_result["tag"] if x == "pre"])
-        pre_points = np.array(d_result["points"][:total_pre_points])
-        pre_points_df = pd.DataFrame(
-            zip(
-                d_result["ids"][:total_pre_points],
-                list(pre_points[:, 0]),
-                list(pre_points[:, 1]),
-                list(pre_points[:, 2]),
-                d_result["probabilities"][:total_pre_points],
-                [threshold_abs[0],]*total_pre_points,
-            ),
-            columns=[
-                "pre_id",
-                "axis-0",
-                "axis-1",
-                "axis-2",
-                "probability",
-                "pre th",
-            ],
-        )
-
-        # Save just the points and their probabilities
-        if out_dir is not None:
-            pre_points_df.to_csv(
-                os.path.join(
-                    out_dir,
-                    "pred_pre_locations.csv",
-                ),
-                index=False,
-            )
-
-        post_points = np.array(d_result["points"][total_pre_points:])
-        post_points_df = pd.DataFrame(
-            zip(
-                d_result["ids"][total_pre_points:],
-                list(post_points[:, 0]),
-                list(post_points[:, 1]),
-                list(post_points[:, 2]),
-                d_result["probabilities"][total_pre_points:],
-                [threshold_abs[1],]*len(post_points),
-            ),
-            columns=[
-                "post_id",
-                "axis-0",
-                "axis-1",
-                "axis-2",
-                "probability",
-                "post th",
-            ],
-        )
-
-        # Save just the points and their probabilities
-        if out_dir is not None:
-            post_points_df.to_csv(
-                os.path.join(
-                    out_dir,
-                    "pred_post_locations.csv",
-                ),
-                index=False,
-            )
-
-        # Create coordinate arrays
-        pre_points, post_points = [], []
-        for coord in zip(pre_points_df["axis-0"], pre_points_df["axis-1"], pre_points_df["axis-2"]):
-            pre_points.append(list(coord))
-        for coord in zip(post_points_df["axis-0"], post_points_df["axis-1"], post_points_df["axis-2"]):
-            post_points.append(list(coord))
-        pre_points = np.array(pre_points)
-        post_points = np.array(post_points)
-
-        pre_post_mapping = {}
-        pres, posts = [], []
-        pre_ids = pre_points_df["pre_id"].to_list()
-        post_ids = post_points_df["post_id"].to_list()
-        if len(pre_points) > 0 and len(post_points) > 0:
-            for i in range(len(pre_points)):
-                pre_post_mapping[pre_ids[i]] = []
-
-            # Match each post with a pre
-            distances = distance_matrix(post_points, pre_points)
-            for i in range(len(post_points)):
-                closest_pre_point = np.argmin(distances[i])
-                closest_pre_point = pre_ids[closest_pre_point]
-                pre_post_mapping[closest_pre_point].append(post_ids[i])
-
-            # Create pre/post lists so we can create the final dataframe
-            for i in pre_post_mapping.keys():
-                if len(pre_post_mapping[i]) > 0:
-                    for post_site in pre_post_mapping[i]:
-                        pres.append(i)
-                        posts.append(post_site)
-                else:
-                    # For those pre points that do not have any post points assigned just put a -1 value
-                    pres.append(i)
-                    posts.append(-1)
+            import pdb; pdb.set_trace()
         else:
-            if self.cfg.TEST.VERBOSE and not self.cfg.TEST.BY_CHUNKS.ENABLE:
-                print("No pre/post synaptic points found!")
-
-        # Create a mapping dataframe
-        pre_post_map_df = pd.DataFrame(
-            zip(
-                pres,
-                posts,
-            ),
-            columns=[
-                "pre_id",
-                "post_id",
-            ],
-        )
-        if out_dir is not None:
-            pre_post_map_df.to_csv(
-                os.path.join(
-                    out_dir,
-                    "pre_post_mapping.csv",
-                ),
-                index=False,
+            pre_points_df, pre_points, post_points_df, post_points = create_synapses_from_point_probs(
+                data=pred,
+                channels=self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
+                point_creation_func=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.POINT_CREATION_FUNCTION,
+                min_th_to_be_peak=threshold_abs,
+                min_distance=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.PEAK_LOCAL_MAX_MIN_DISTANCE,
+                min_sigma=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.BLOB_LOG_MIN_SIGMA,
+                max_sigma=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.BLOB_LOG_MAX_SIGMA,
+                num_sigma=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.BLOB_LOG_NUM_SIGMA,
+                exclude_border=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.EXCLUDE_BORDER,
+                relative_th_value=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE in ["relative", "relative_by_patch"], 
+                out_dir=out_dir,
+                filenames = filenames,
+                verbose=self.cfg.TEST.VERBOSE,
             )
-
-        if calculate_metrics and self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
+        
+        if regular_process and self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
             print("Calculating synapse detection stats . . .")
-            locations_path = self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_LOCATIONS_PATH
-            resolution_path = self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_RESOLUTION_PATH
-            partners_path = self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_PARTNERS_PATH
-            id_path = self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_ID_PATH
             filename = os.path.join(self.current_sample["X_dir"], self.current_sample["X_filename"])
-            file, ids = read_chunked_nested_data(filename, id_path)
-            ids = list(np.array(ids))
-            _, partners = read_chunked_nested_data(filename, partners_path)
-            partners = np.array(partners)
-            _, locations = read_chunked_nested_data(filename, locations_path)
-            locations = np.array(locations)
-            _, resolution = read_chunked_nested_data(filename, resolution_path)
-            try:
-                resolution = resolution.attrs["resolution"]
-            except:
-                raise ValueError(
-                    "There is no 'resolution' attribute in '{}'. Add it like: data['{}'].attrs['resolution'] = (8,8,8)".format(
-                        resolution_path, resolution_path
-                    )
-                )
-            gt_pre_points, gt_post_points = {}, {}
-            for i in tqdm(range(len(partners)), disable=not is_main_process()):
-                pre_id, post_id = partners[i]
-                pre_position = ids.index(pre_id)
-                post_position = ids.index(post_id)
-                pre_coord = locations[pre_position] // resolution
-                post_coord = locations[post_position] // resolution
-                if str(pre_coord) not in gt_pre_points:
-                    gt_pre_points[str(pre_coord)] = pre_coord
-                if str(post_coord) not in gt_post_points:
-                    gt_post_points[str(post_coord)] = post_coord
-            gt_pre_points = list(gt_pre_points.values())
-            gt_post_points = list(gt_post_points.values())
-
-            if isinstance(file, h5py.File):
-                file.close()
+            gt_pre_points, gt_post_points, resolution = load_synapse_gt_points(
+                locations_path = self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_LOCATIONS_PATH,
+                resolution_path = self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_RESOLUTION_PATH,
+                partners_path = self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_PARTNERS_PATH,
+                id_path = self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_ID_PATH,
+                data_filename = filename
+            )
+            assert out_dir is not None, "Output directory must be provided to save the synapse detection metrics results."
 
             # Calculate detection metrics
             if len(pre_points) > 0:
-                d_metrics, gt_assoc, fp = detection_metrics(
-                    gt_pre_points,
-                    pre_points,
-                    true_classes=None,
-                    pred_classes=[],
-                    tolerance=self.cfg.TEST.DET_TOLERANCE,
-                    resolution=resolution,
-                    bbox_to_consider=[],
-                    verbose=True,
-                )
-                print("Synapse detection (pre points) metrics: {}".format(d_metrics))
-                for n, item in enumerate(d_metrics.items()):
-                    metric = self.test_extra_metrics[n]
-                    if str(metric).lower() not in self.stats["merge_patches"]:
-                        self.stats["merge_patches"][str(metric.lower())] = 0
-                    self.stats["merge_patches"][str(metric).lower()] += item[1]
-                    self.current_sample_metrics[str(metric).lower() + " (pre points)"] = item[1]
-
-                # Save csv files with the associations between GT points and predicted ones
-                if out_dir:
-                    gt_assoc.to_csv(
-                        os.path.join(
-                            out_dir,
-                            "pred_pre_locations_gt_assoc.csv",
-                        )
-                    )
-                    fp.to_csv(
-                        os.path.join(
-                            out_dir,
-                            "pred_pre_locations_fp.csv",
-                        )
-                    )
-
-                d_metrics, gt_assoc, fp = detection_metrics(
-                    gt_post_points,
-                    post_points,
-                    true_classes=None,
-                    pred_classes=[],
-                    tolerance=self.cfg.TEST.DET_TOLERANCE, 
-                    resolution=resolution,
-                    bbox_to_consider=[],
-                    verbose=True,
-                )
-                print("Synapse detection (post points) metrics: {}".format(d_metrics))
-                previous_pre_keys_num = len(d_metrics)
-                for n, item in enumerate(d_metrics.items()):
-                    metric = self.test_extra_metrics[n+previous_pre_keys_num]
-                    if str(metric).lower() not in self.stats["merge_patches"]:
-                        self.stats["merge_patches"][str(metric.lower())] = 0
-                    self.stats["merge_patches"][str(metric).lower()] += item[1]
-                    self.current_sample_metrics[str(metric).lower() + " (post points)"] = item[1]
-                
-                # Save csv files with the associations between GT points and predicted ones
-                if out_dir:
-                    gt_assoc.to_csv(
-                        os.path.join(
-                            out_dir,
-                            "pred_post_locations_gt_assoc.csv",
-                        )
-                    )
-                    fp.to_csv(
-                        os.path.join(
-                            out_dir,
-                            "pred_post_locations_fp.csv",
-                        )
-                    )
+                self.calculate_synapse_det_metrics_on_points(gt_pre_points, pre_points, resolution, filename, out_dir, point_type="pre")
+            if len(post_points) > 0:
+                self.calculate_synapse_det_metrics_on_points(gt_post_points, post_points, resolution, filename, out_dir, point_type="post")
 
         ###################
         # Post-processing #
         ###################
         if self.post_processing["instance_post"]:
             print("TODO: post-processing")
-            if self.cfg.PROBLEM.NDIM == "2D":
-                pred = pred[0]
-
-            if out_dir_post_proc is not None:
-                save_tif(
-                    np.expand_dims(np.expand_dims(pred, -1), 0),
-                    out_dir_post_proc,
-                    filenames,
-                    verbose=self.cfg.TEST.VERBOSE,
-                )
-
-            if calculate_metrics and self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
-                print("Calculating synapse detection stats . . .")
-                # Calculate detection metrics
-                if len(pre_points) > 0:
-                    d_metrics, gt_assoc, fp = detection_metrics(
-                        gt_pre_points,
-                        pre_points,
-                        true_classes=None,
-                        pred_classes=[],
-                        tolerance=self.cfg.TEST.DET_TOLERANCE,
-                        resolution=resolution,
-                        bbox_to_consider=[],
-                        verbose=True,
-                    )
-                    print("Synapse detection (pre points) metrics (post-processing): {}".format(d_metrics))
-                    for n, item in enumerate(d_metrics.items()):
-                        metric = self.test_extra_metrics[n]
-                        if str(metric).lower() not in self.stats["merge_patches_post"]:
-                            self.stats["merge_patches_post"][str(metric.lower())] = 0
-                        self.stats["merge_patches_post"][str(metric).lower()] += item[1]
-                        self.current_sample_metrics[str(metric).lower() + " (pre points, post-processing)"] = item[1]
-                        
-                    # Save csv files with the associations between GT points and predicted ones
-                    if out_dir_post_proc:
-                        gt_assoc.to_csv(
-                            os.path.join(
-                                out_dir_post_proc,
-                                "pred_pre_locations_gt_assoc.csv",
-                            )
-                        )
-                        fp.to_csv(
-                            os.path.join(
-                                out_dir_post_proc,
-                                "pred_pre_locations_fp.csv",
-                            )
-                        )
-
-                    d_metrics, gt_assoc, fp = detection_metrics(
-                        gt_post_points,
-                        post_points,
-                        true_classes=None,
-                        pred_classes=[],
-                        tolerance=self.cfg.TEST.DET_TOLERANCE,
-                        resolution=resolution,
-                        bbox_to_consider=[],
-                        verbose=True,
-                    )
-                    print("Synapse detection (post points) metrics (post-processing): {}".format(d_metrics))
-                    previous_pre_keys_num = len(d_metrics)
-                    for n, item in enumerate(d_metrics.items()):
-                        metric = self.test_extra_metrics[n+previous_pre_keys_num]
-                        if str(metric).lower() not in self.stats["merge_patches_post"]:
-                            self.stats["merge_patches_post"][str(metric.lower())] = 0
-                        self.stats["merge_patches_post"][str(metric).lower()] += item[1]
-                        self.current_sample_metrics[str(metric).lower() + " (post points, post-processing)"] = item[1]
-                        
-                    # Save csv files with the associations between GT points and predicted ones
-                    if out_dir_post_proc:
-                        gt_assoc.to_csv(
-                            os.path.join(
-                                out_dir_post_proc,
-                                "pred_post_locations_gt_assoc.csv",
-                            )
-                        )
-                        fp.to_csv(
-                            os.path.join(
-                                out_dir_post_proc,
-                                "pred_post_locations_fp.csv",
-                            )
-                        )
 
         return pre_points_df, post_points_df
+
+    def calculate_synapse_det_metrics_on_points(self, 
+        gt_points: NDArray | List[int], 
+        pred_points: NDArray, 
+        resolution: List[int | float], 
+        filename: str, 
+        out_dir: str, 
+        point_type: str ="pre", 
+        post_processing: bool=False
+    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """
+        Calculate synapse detection metrics on the predicted points and save the associations between GT points and predicted ones.
+
+        Parameters
+        ----------
+        gt_points : np.array or list of int
+            Ground truth synapse points.
+
+        pred_points : np.array
+            Predicted synapse points.
+
+        resolution : list
+            Image resolution.
+
+        filename : str
+            Filename of the predicted image.
+
+        out_dir : str
+            Output directory to save the csv files with the associations between GT points and predicted ones.
+
+        point_type : str
+            Type of synaptic point to calculate the metrics on. E.g. "pre" or "post".
+        
+        post_processing : bool
+            Whether the predicted points are from the post-processing step or not. Used for printing and saving the results.
+
+        Returns
+        -------
+        gt_assoc : pd.DataFrame
+            DataFrame with the associations between GT points and predicted ones.
+        
+        fps : pd.DataFrame
+            DataFrame with the false positive predicted points.
+        """
+        d_metrics, gt_assoc, fps = detection_metrics(
+            gt_points,
+            pred_points,
+            true_classes=None,
+            pred_classes=[],
+            tolerance=self.cfg.TEST.DET_TOLERANCE,
+            resolution=resolution,
+            bbox_to_consider=[],
+            verbose=True,
+        )
+        print("Synapse detection ({} points) metrics{}: {}".format(point_type, " (post-processing)" if post_processing else "", d_metrics))
+        for n, item in enumerate(d_metrics.items()):
+            metric = self.test_extra_metrics[n]
+            if str(metric).lower() not in self.stats["merge_patches"]:
+                self.stats["merge_patches"][str(metric.lower())] = 0
+            self.stats["merge_patches"][str(metric).lower()] += item[1]
+            self.current_sample_metrics[str(metric).lower() + f" ({point_type} points{(' post-processing' if post_processing else '')})"] = item[1]
+
+        # Save csv files with the associations between GT points and predicted ones
+        gt_assoc.to_csv(
+            os.path.join(
+                out_dir,
+                filename+f"_pred_{point_type}_locations_gt_assoc.csv",
+            ),
+            index=False,
+        )
+        fps.to_csv(
+            os.path.join(
+                out_dir,
+                filename+f"_pred_{point_type}_locations_fp.csv",
+            ),
+            index=False,
+        )
+        return gt_assoc, fps
 
     def process_test_sample(self):
         """Process a sample in the inference phase."""
@@ -1598,7 +1407,10 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             # Important to maintain calculate_metrics=False in the future call here
             # pre_points_df, post_points_df = self.instance_seg_process(chunk, filenames, out_dir, out_dir_post_proc, calculate_metrics=False)
         else:  # synapses
-            pre_points_df, post_points_df = self.synapse_seg_process(chunk, calculate_metrics=False)
+            if set(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) ==  {"F_post", "H", "V", "Z"}:
+                raise NotImplementedError
+    
+            pre_points_df, post_points_df = self.synapse_seg_process(chunk)
 
             _filename, _ = os.path.splitext(os.path.basename(self.current_sample["X_filename"]))
             if pre_points_df is not None and len(pre_points_df) > 0:
@@ -1690,128 +1502,171 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
                 self.after_merge_patches(np.expand_dims(pred, 0))
         else:
-            # In this case we need only to merge all local points so it will be done by the main thread. The rest will wait
-            filename = os.path.splitext(self.current_sample["X_filename"])[0]
-            pre_points_df, post_points_df, pre_post_map_df = None, None, None
-            if not self.cfg.TEST.REUSE_PREDICTIONS:
-                # For synapses we need to map the pre to the post points. It needs to be done here and not patch by patch as
-                # some pre points may lay in other chunks of the data.
-                input_dir = self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK
-                all_pred_files = next(os_walk_clean(input_dir))[2]
-                all_pred_files = [x for x in all_pred_files if filename + "_patch" in x]
-                all_pre_point_files = [x for x in all_pred_files if "_pre_points.csv" in x and "all_points.csv" not in x]
-                all_post_point_files = [x for x in all_pred_files if "_post_points.csv" in x and "all_points.csv" not in x]
-                all_pre_dfs, all_post_dfs = [], []
-
-                # Collect pre dataframes 
-                if len(all_pre_point_files) > 0:
-                    for pre_file in all_pre_point_files:
-                        pre_file_path = os.path.join(input_dir, pre_file)
-                        pred_pre_df = pd.read_csv(pre_file_path, index_col=False)
-                        if len(pred_pre_df) > 0:
-                            pred_pre_df = pred_pre_df.drop(columns=["pre th"])
-                            all_pre_dfs.append(pred_pre_df)
-
-                # Collect post dataframes 
-                if len(all_post_point_files) > 0:
-                    for post_file in all_post_point_files:
-                        post_file_path = os.path.join(input_dir, post_file)
-                        pred_post_df = pd.read_csv(post_file_path, index_col=False)
-                        if len(pred_post_df) > 0:
-                            pred_post_df = pred_post_df.drop(columns=["post th"])
-                            all_post_dfs.append(pred_post_df)      
-
-                # Save then the pre and post sites separately
-                if len(all_pre_dfs) > 0:
-                    pre_points_df = pd.concat(all_pre_dfs, ignore_index=True)
-                    pre_points_df.sort_values(by=["axis-0"])
-
-                    pre_th_global = self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.MIN_TH_TO_BE_PEAK
-                    if self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE == "manual":
-                        print(f"Using global threshold (pre-points): {pre_th_global}")
-                    elif self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE == "relative":
-                        max_val = max(pre_points_df["probability"])
-                        pre_th_global = max_val*self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.MIN_TH_TO_BE_PEAK
-                        print(f"Using global threshold (pre-points): {pre_th_global} (max: {max_val})")
-                    pre_points_df = pre_points_df[pre_points_df["probability"] > pre_th_global]
-
-                    pre_points_df["pre_id"] = list(range(1, len(pre_points_df)+1))
-                    os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, exist_ok=True)
-                    pre_points_df.to_csv(
-                        os.path.join(
-                            self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
-                            filename+"_pred_pre_locations.csv",
-                        ),
-                        index=False,
-                    )
-                if len(all_post_dfs) > 0:
-                    post_points_df = pd.concat(all_post_dfs, ignore_index=True)
-                    post_points_df.sort_values(by=["axis-0"])
-
-                    post_th_global = self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.MIN_TH_TO_BE_PEAK
-                    if self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE == "manual":
-                        print(f"Using global threshold (post-points): {post_th_global}")
-                    elif self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE == "relative":
-                        max_val = max(post_points_df["probability"])
-                        post_th_global = max_val*self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.MIN_TH_TO_BE_PEAK
-                        print(f"Using global threshold (post-points): {post_th_global} (max: {max_val})")
-                    post_points_df = post_points_df[post_points_df["probability"] > post_th_global]
-
-                    post_points_df["post_id"] = list(range(1, len(post_points_df)+1))
-                    os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, exist_ok=True)
-                    post_points_df.to_csv(
-                        os.path.join(
-                            self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
-                            filename+"_pred_post_locations.csv",
-                        ),
-                        index=False,
-                    )
-
-                # Create coordinate arrays
-                pre_points, post_points = [], []
-                if len(all_pre_dfs) > 0 and pre_points_df is not None:
-                    for coord in zip(pre_points_df["axis-0"], pre_points_df["axis-1"], pre_points_df["axis-2"]):
-                        pre_points.append(list(coord))
-                if len(all_post_dfs) > 0 and post_points_df is not None:
-                    for coord in zip(post_points_df["axis-0"], post_points_df["axis-1"], post_points_df["axis-2"]):
-                        post_points.append(list(coord))
-                pre_points = np.array(pre_points)
-                post_points = np.array(post_points)
-
-                pre_post_mapping = {}
-                pres, posts = [], []
-                if len(pre_points) > 0 and pre_points_df is not None and len(post_points) > 0 and post_points_df is not None:
-                    pre_ids = pre_points_df["pre_id"].to_list()
-                    if len(post_points) > 0 and post_points_df is not None:
-                        post_ids = post_points_df["post_id"].to_list()
-                    for i in range(len(pre_points)):
-                        pre_post_mapping[pre_ids[i]] = []
-
-                    # Match each post with a pre
-                    distances = distance_matrix(post_points, pre_points)
-                    for i in range(len(post_points)):
-                        closest_pre_point = np.argmin(distances[i])
-                        closest_pre_point = pre_ids[closest_pre_point]
-                        pre_post_mapping[closest_pre_point].append(post_ids[i])
-
-                    # Create pre/post lists so we can create the final dataframe
-                    for i in pre_post_mapping.keys():
-                        if len(pre_post_mapping[i]) > 0:
-                            for post_site in pre_post_mapping[i]:
-                                pres.append(i)
-                                posts.append(post_site)
-                        else:
-                            # For those pre points that do not have any post points assigned just put a -1 value
-                            pres.append(i)
-                            posts.append(-1)
+            if set(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) ==  {"F_post", "H", "V", "Z"}:
+                if self.cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE == "chunk_by_chunk":
+                    raise NotImplementedError
                 else:
-                    if self.cfg.TEST.VERBOSE:
-                        if len(pre_points) == 0:
-                            print("No pre synaptic points found!")
-                        if len(post_points) == 0:
-                            print("No post synaptic points found!")
+                    # Load H5/Zarr and convert it into numpy array
+                    fpath = os.path.join(
+                        self.cfg.PATHS.RESULT_DIR.PER_IMAGE, os.path.splitext(self.current_sample["X_filename"])[0] + ".zarr"
+                    )
+                    pred_file, pred = read_chunked_data(fpath)
+                    pred = np.squeeze(np.array(pred, dtype=self.dtype))
+                    if isinstance(pred_file, h5py.File):
+                        pred_file.close()
 
-                if len(pres) > 0 and len(posts) > 0:
+                    pred = ensure_3d_shape(pred, fpath)
+
+                    self.after_merge_patches(np.expand_dims(pred, 0))
+            else:
+                pre_points_df, pre_points, pre_th_global, post_points_df, post_points, post_th_global = from_local_synapse_csv_to_global(
+                    filename=os.path.splitext(self.current_sample["X_filename"])[0],
+                    reuse_predictions=self.cfg.TEST.REUSE_PREDICTIONS,
+                    csv_dir=self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
+                    min_th_to_be_peak=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.MIN_TH_TO_BE_PEAK,
+                    th_type=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE,
+                    verbose=self.cfg.TEST.VERBOSE,
+                )
+
+                if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
+                    print("Calculating synapse detection stats . . .")
+                    filename = os.path.join(self.current_sample["X_dir"], self.current_sample["X_filename"])
+                    gt_pre_points, gt_post_points, resolution = load_synapse_gt_points(
+                        locations_path = self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_LOCATIONS_PATH,
+                        resolution_path = self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_RESOLUTION_PATH,
+                        partners_path = self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_PARTNERS_PATH,
+                        id_path = self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_ID_PATH,
+                        data_filename = filename
+                    )
+
+                    # Calculate detection metrics
+                    if len(pre_points) > 0:
+                        self.calculate_synapse_det_metrics_on_points(gt_pre_points, pre_points, resolution, filename, self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, point_type="pre")
+                    if len(post_points) > 0:
+                        self.calculate_synapse_det_metrics_on_points(gt_post_points, post_points, resolution, filename, self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, point_type="post")
+
+                # Remove close points
+                if self.post_processing["instance_post"]:
+                    if (
+                        len(pre_points) > 0 
+                        and pre_points_df is not None 
+                        and self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_PRE_POINTS_RADIUS > 0
+                    ):
+                        if self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_POINTS_RADIUS_BY_MASK:    
+                            # Load H5/Zarr and convert it into numpy array
+                            fpath = os.path.join(
+                                self.cfg.PATHS.RESULT_DIR.PER_IMAGE, os.path.splitext(self.current_sample["X_filename"])[0] + ".zarr"
+                            )
+                            pred_file, pred = read_chunked_data(fpath) 
+                            
+                            pre_points, pre_dropped_pos = remove_close_points_by_mask(  # type: ignore
+                                points=pre_points,
+                                radius=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_PRE_POINTS_RADIUS,
+                                raw_predictions=pred,
+                                bin_th=pre_th_global,
+                                resolution=resolution,
+                                channel_to_look_into=1, # post channel
+                                ndim=self.dims,
+                                return_drops=True,
+                            )
+
+                            if isinstance(pred_file, h5py.File):
+                                pred_file.close()
+                        else:
+                            pre_points, pre_dropped_pos = remove_close_points(  # type: ignore
+                                pre_points,
+                                self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_PRE_POINTS_RADIUS,
+                                resolution,
+                                ndim=self.dims,
+                                return_drops=True,
+                            )
+                        pre_points_df.drop(pre_points_df.index[pre_dropped_pos], inplace=True)  # type: ignore
+                        os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING, exist_ok=True)
+                        pre_points_df.to_csv(
+                            os.path.join(
+                                self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
+                                str(filename)+"_pred_pre_locations.csv",
+                            ),
+                            index=False,
+                        )
+
+                    if (
+                        len(post_points) > 0 
+                        and post_points_df is not None 
+                        and self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_POST_POINTS_RADIUS > 0
+                    ):   
+                        if self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_POINTS_RADIUS_BY_MASK:    
+                            # Load H5/Zarr and convert it into numpy array
+                            fpath = os.path.join(
+                                self.cfg.PATHS.RESULT_DIR.PER_IMAGE, os.path.splitext(self.current_sample["X_filename"])[0] + ".zarr"
+                            )
+                            pred_file, pred = read_chunked_data(fpath) 
+                            
+                            post_points, post_dropped_pos = remove_close_points_by_mask(  # type: ignore
+                                points=post_points,
+                                radius=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_POST_POINTS_RADIUS,
+                                raw_predictions=pred,
+                                bin_th=post_th_global,
+                                resolution=resolution,
+                                channel_to_look_into=1, # post channel
+                                ndim=self.dims,
+                                return_drops=True,
+                            )
+
+                            if isinstance(pred_file, h5py.File):
+                                pred_file.close()
+                        else:
+                            post_points, post_dropped_pos = remove_close_points(  # type: ignore
+                                post_points,
+                                self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_POST_POINTS_RADIUS,
+                                resolution,
+                                ndim=self.dims,
+                                return_drops=True,
+                            )
+                        post_points_df.drop(post_points_df.index[post_dropped_pos], inplace=True)  # type: ignore
+
+                        os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING, exist_ok=True)
+                        post_points_df.to_csv(
+                            os.path.join(
+                                self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
+                                str(filename)+"_pred_post_locations.csv",
+                            ),
+                            index=False,
+                        )
+
+                    pre_post_mapping = {}
+                    pres, posts = [], []
+                    if len(pre_points) > 0 and pre_points_df is not None and len(post_points) > 0 and post_points_df is not None:
+                        pre_ids = pre_points_df["pre_id"].to_list()
+                        if len(post_points) > 0 and post_points_df is not None:
+                            post_ids = post_points_df["post_id"].to_list()
+                        for i in range(len(pre_points)):
+                            pre_post_mapping[pre_ids[i]] = []
+
+                        # Match each post with a pre
+                        distances = distance_matrix(post_points, pre_points)
+                        for i in range(len(post_points)):
+                            closest_pre_point = np.argmin(distances[i])
+                            closest_pre_point = pre_ids[closest_pre_point]
+                            pre_post_mapping[closest_pre_point].append(post_ids[i])
+
+                        # Create pre/post lists so we can create the final dataframe
+                        for i in pre_post_mapping.keys():
+                            if len(pre_post_mapping[i]) > 0:
+                                for post_site in pre_post_mapping[i]:
+                                    pres.append(i)
+                                    posts.append(post_site)
+                            else:
+                                # For those pre points that do not have any post points assigned just put a -1 value
+                                pres.append(i)
+                                posts.append(-1)
+                    else:
+                        if self.cfg.TEST.VERBOSE:
+                            if len(pre_points) == 0:
+                                print("No pre synaptic points found!")
+                            if len(post_points) == 0:
+                                print("No post synaptic points found!")
+
                     # Create a mapping dataframe
                     pre_post_map_df = pd.DataFrame(
                         zip(
@@ -1823,527 +1678,182 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                             "post_id",
                         ],
                     )
-                    pre_post_map_df.sort_values(by=["pre_id", "post_id"])
                     pre_post_map_df.to_csv(
                         os.path.join(
-                            self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
-                            filename+"_pre_post_mapping.csv",
-                        ),
-                        index=False,
-                    )
-            else:
-                # Read the dataframes
-                pre_points_df = pd.read_csv(
-                    os.path.join(
-                        self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
-                        filename+"_pred_pre_locations.csv",
-                    )
-                )
-                post_points_df = pd.read_csv(
-                    os.path.join(
-                        self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
-                        filename+"_pred_post_locations.csv",
-                    )
-                )
-                pre_post_map_df = pd.read_csv(
-                    os.path.join(
-                        self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
-                        filename+"_pre_post_mapping.csv",
-                    )
-                )
-
-                # Create coordinate arrays
-                pre_points, post_points = [], []
-                for coord in zip(pre_points_df["axis-0"], pre_points_df["axis-1"], pre_points_df["axis-2"]):
-                    pre_points.append(list(coord))
-                for coord in zip(post_points_df["axis-0"], post_points_df["axis-1"], post_points_df["axis-2"]):
-                    post_points.append(list(coord))
-                pre_points = np.array(pre_points)
-                post_points = np.array(post_points)
-
-                post_th_global = self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.MIN_TH_TO_BE_PEAK
-                pre_th_global = self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.MIN_TH_TO_BE_PEAK
-                if self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE == "manual":
-                    print(f"Using global threshold (pre-points): {pre_th_global}")
-                    print(f"Using global threshold (post-points): {post_th_global}")
-                elif self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE == "relative":
-                    max_val = max(pre_points_df["probability"]) if len(pre_points_df) > 0 else 1
-                    pre_th_global = max_val*self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.MIN_TH_TO_BE_PEAK
-                    print(f"Using global threshold (pre-points): {pre_th_global} (max: {max_val})")
-                    max_val = max(post_points_df["probability"]) if len(post_points_df) > 0 else 1
-                    post_th_global = max_val*self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.MIN_TH_TO_BE_PEAK
-                    print(f"Using global threshold (post-points): {post_th_global} (max: {max_val})")
-
-            if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
-                print("Calculating synapse detection stats . . .")
-                locations_path = self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_LOCATIONS_PATH
-                resolution_path = self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_RESOLUTION_PATH
-                partners_path = self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_PARTNERS_PATH
-                id_path = self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_ID_PATH
-                data_filename = os.path.join(self.current_sample["X_dir"], self.current_sample["X_filename"])
-                file, ids = read_chunked_nested_data(data_filename, id_path)
-                ids = list(np.array(ids))
-                _, partners = read_chunked_nested_data(data_filename, partners_path)
-                partners = np.array(partners)
-                _, locations = read_chunked_nested_data(data_filename, locations_path)
-                locations = np.array(locations)
-                _, resolution = read_chunked_nested_data(data_filename, resolution_path)
-                try:
-                    resolution = resolution.attrs["resolution"]
-                except:
-                    raise ValueError(
-                        "There is no 'resolution' attribute in '{}'. Add it like: data['{}'].attrs['resolution'] = (8,8,8)".format(
-                            resolution_path, resolution_path
-                        )
-                    )
-                gt_pre_points, gt_post_points = {}, {}
-                for i in tqdm(range(len(partners)), disable=not is_main_process()):
-                    pre_id, post_id = partners[i]
-                    pre_position = ids.index(pre_id)
-                    post_position = ids.index(post_id)
-                    pre_coord = locations[pre_position] // resolution
-                    post_coord = locations[post_position] // resolution
-                    if str(pre_coord) not in gt_pre_points:
-                        gt_pre_points[str(pre_coord)] = pre_coord
-                    if str(post_coord) not in gt_post_points:
-                        gt_post_points[str(post_coord)] = post_coord
-                gt_pre_points = list(gt_pre_points.values())
-                gt_post_points = list(gt_post_points.values())
-
-                if isinstance(file, h5py.File):
-                    file.close()
-
-                # Calculate detection metrics
-                if len(pre_points) > 0:
-                    d_metrics, pre_gt_assoc, pre_fp = detection_metrics(
-                        gt_pre_points,
-                        pre_points,
-                        true_classes=None,
-                        pred_classes=[],
-                        tolerance=self.cfg.TEST.DET_TOLERANCE,
-                        resolution=resolution,
-                        bbox_to_consider=[],
-                        verbose=True,
-                    )
-                    print("Synapse detection (pre points) metrics: {}".format(d_metrics))
-                    for n, item in enumerate(d_metrics.items()):
-                        metric = self.test_extra_metrics[n]
-                        if str(metric).lower() not in self.stats["merge_patches"]:
-                            self.stats["merge_patches"][str(metric.lower())] = 0
-                        self.stats["merge_patches"][str(metric).lower()] += item[1]
-                        self.current_sample_metrics[str(metric).lower() + " (pre points)"] = item[1]
-
-                    # Save csv files with the associations between GT points and predicted ones
-                    pre_gt_assoc.to_csv(
-                        os.path.join(
-                            self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
-                            filename+"_pred_pre_locations_gt_assoc.csv",
-                        ),
-                        index=False,
-                    )
-                    pre_fp.to_csv(
-                        os.path.join(
-                            self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
-                            filename+"_pred_pre_locations_fp.csv",
-                        ),
-                        index=False,
-                    )
-                 
-                if len(post_points):
-                    d_metrics, post_gt_assoc, post_fp = detection_metrics(
-                        gt_post_points,
-                        post_points,
-                        true_classes=None,
-                        pred_classes=[],
-                        tolerance=self.cfg.TEST.DET_TOLERANCE,
-                        resolution=resolution,
-                        bbox_to_consider=[],
-                        verbose=True,
-                    )
-                    print("Synapse detection (post points) metrics: {}".format(d_metrics))
-                    previous_pre_keys_num = len(d_metrics)
-                    for n, item in enumerate(d_metrics.items()):
-                        metric = self.test_extra_metrics[n+previous_pre_keys_num]
-                        if str(metric).lower() not in self.stats["merge_patches"]:
-                            self.stats["merge_patches"][str(metric.lower())] = 0
-                        self.stats["merge_patches"][str(metric).lower()] += item[1]
-                        self.current_sample_metrics[str(metric).lower() + " (post points)"] = item[1]
-
-                    # Save csv files with the associations between GT points and predicted ones
-                    post_gt_assoc.to_csv(
-                        os.path.join(
-                            self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
-                            filename+"_pred_post_locations_gt_assoc.csv",
-                        ),
-                        index=False,
-                    )
-                    post_fp.to_csv(
-                        os.path.join(
-                            self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
-                            filename+"_pred_post_locations_fp.csv",
-                        ),
-                        index=False,
-                    )
-
-            # Remove close points
-            if self.post_processing['per_image']:
-                if (
-                    len(pre_points) > 0 
-                    and pre_points_df is not None 
-                    and self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_PRE_POINTS_RADIUS > 0
-                ):
-                    if self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_POINTS_RADIUS_BY_MASK:    
-                        # Load H5/Zarr and convert it into numpy array
-                        fpath = os.path.join(
-                            self.cfg.PATHS.RESULT_DIR.PER_IMAGE, os.path.splitext(self.current_sample["X_filename"])[0] + ".zarr"
-                        )
-                        pred_file, pred = read_chunked_data(fpath) 
-                        
-                        pre_points, pre_dropped_pos = remove_close_points_by_mask(  # type: ignore
-                            points=pre_points,
-                            radius=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_PRE_POINTS_RADIUS,
-                            raw_predictions=pred,
-                            bin_th=pre_th_global,
-                            resolution=resolution,
-                            channel_to_look_into=1, # post channel
-                            ndim=self.dims,
-                            return_drops=True,
-                        )
-
-                        if isinstance(pred_file, h5py.File):
-                            pred_file.close()
-                    else:
-                        pre_points, pre_dropped_pos = remove_close_points(  # type: ignore
-                            pre_points,
-                            self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_PRE_POINTS_RADIUS,
-                            resolution,
-                            ndim=self.dims,
-                            return_drops=True,
-                        )
-                    pre_points_df.drop(pre_points_df.index[pre_dropped_pos], inplace=True)  # type: ignore
-                    os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING, exist_ok=True)
-                    pre_points_df.to_csv(
-                        os.path.join(
                             self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
-                            filename+"_pred_pre_locations.csv",
+                            str(filename)+"_pre_post_mapping.csv",
                         ),
                         index=False,
                     )
 
-                if (
-                    len(post_points) > 0 
-                    and post_points_df is not None 
-                    and self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_POST_POINTS_RADIUS > 0
-                ):   
-                    if self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_POINTS_RADIUS_BY_MASK:    
-                        # Load H5/Zarr and convert it into numpy array
-                        fpath = os.path.join(
-                            self.cfg.PATHS.RESULT_DIR.PER_IMAGE, os.path.splitext(self.current_sample["X_filename"])[0] + ".zarr"
-                        )
-                        pred_file, pred = read_chunked_data(fpath) 
-                        
-                        post_points, post_dropped_pos = remove_close_points_by_mask(  # type: ignore
-                            points=post_points,
-                            radius=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_POST_POINTS_RADIUS,
-                            raw_predictions=pred,
-                            bin_th=post_th_global,
-                            resolution=resolution,
-                            channel_to_look_into=1, # post channel
-                            ndim=self.dims,
-                            return_drops=True,
-                        )
-
-                        if isinstance(pred_file, h5py.File):
-                            pred_file.close()
-                    else:
-                        post_points, post_dropped_pos = remove_close_points(  # type: ignore
-                            post_points,
-                            self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_POST_POINTS_RADIUS,
-                            resolution,
-                            ndim=self.dims,
-                            return_drops=True,
-                        )
-                    post_points_df.drop(post_points_df.index[post_dropped_pos], inplace=True)  # type: ignore
-
-                    os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING, exist_ok=True)
-                    post_points_df.to_csv(
-                        os.path.join(
-                            self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
-                            filename+"_pred_post_locations.csv",
-                        ),
-                        index=False,
-                    )
-
-                pre_post_mapping = {}
-                pres, posts = [], []
-                if len(pre_points) > 0 and pre_points_df is not None and len(post_points) > 0 and post_points_df is not None:
-                    pre_ids = pre_points_df["pre_id"].to_list()
-                    if len(post_points) > 0 and post_points_df is not None:
-                        post_ids = post_points_df["post_id"].to_list()
-                    for i in range(len(pre_points)):
-                        pre_post_mapping[pre_ids[i]] = []
-
-                    # Match each post with a pre
-                    distances = distance_matrix(post_points, pre_points)
-                    for i in range(len(post_points)):
-                        closest_pre_point = np.argmin(distances[i])
-                        closest_pre_point = pre_ids[closest_pre_point]
-                        pre_post_mapping[closest_pre_point].append(post_ids[i])
-
-                    # Create pre/post lists so we can create the final dataframe
-                    for i in pre_post_mapping.keys():
-                        if len(pre_post_mapping[i]) > 0:
-                            for post_site in pre_post_mapping[i]:
-                                pres.append(i)
-                                posts.append(post_site)
-                        else:
-                            # For those pre points that do not have any post points assigned just put a -1 value
-                            pres.append(i)
-                            posts.append(-1)
-                else:
-                    if self.cfg.TEST.VERBOSE:
-                        if len(pre_points) == 0:
-                            print("No pre synaptic points found!")
-                        if len(post_points) == 0:
-                            print("No post synaptic points found!")
-
-                # Create a mapping dataframe
-                pre_post_map_df = pd.DataFrame(
-                    zip(
-                        pres,
-                        posts,
-                    ),
-                    columns=[
-                        "pre_id",
-                        "post_id",
-                    ],
-                )
-                pre_post_map_df.to_csv(
-                    os.path.join(
-                        self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
-                        filename+"_pre_post_mapping.csv",
-                    ),
-                    index=False,
-                )
-
-                if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
-                    print("Calculating synapse detection stats after post-processing . . .")
-                    # Calculate detection metrics
-                    if len(pre_points) > 0:
-                        d_metrics, pre_gt_assoc, pre_fp = detection_metrics(
-                            gt_pre_points,
-                            pre_points,
-                            true_classes=None,
-                            pred_classes=[],
-                            tolerance=self.cfg.TEST.DET_TOLERANCE,
-                            resolution=resolution,
-                            bbox_to_consider=[],
-                            verbose=True,
-                        )
-                        print("Synapse detection (pre points) metrics (post-processing): {}".format(d_metrics))
-                        for n, item in enumerate(d_metrics.items()):
-                            metric = self.test_extra_metrics[n]
-                            if str(metric).lower() not in self.stats["merge_patches_post"]:
-                                self.stats["merge_patches_post"][str(metric.lower())] = 0
-                            self.stats["merge_patches_post"][str(metric).lower()] += item[1]
-                            self.current_sample_metrics[str(metric).lower() + " (pre points, post-processing)"] = item[1]
+                    if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
+                        print("Calculating synapse detection stats after post-processing . . .")
+                        if len(pre_points) > 0:
+                            pre_gt_assoc, pre_fp = self.calculate_synapse_det_metrics_on_points(
+                                gt_pre_points, 
+                                pre_points, 
+                                resolution, 
+                                filename, 
+                                self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING, 
+                                point_type="pre", 
+                                post_processing=True
+                            )
+                        if len(post_points) > 0:
+                            post_gt_assoc, post_fp = self.calculate_synapse_det_metrics_on_points(
+                                gt_post_points, 
+                                post_points, 
+                                resolution, 
+                                filename, 
+                                self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING, 
+                                point_type="post", 
+                                post_processing=True
+                            )
                             
-                        # Save csv files with the associations between GT points and predicted ones
-                        pre_gt_assoc.to_csv(
-                            os.path.join(
-                                self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
-                                filename+"_pred_pre_locations_gt_assoc.csv",
-                            ),
-                            index=False,
-                        )
-                        pre_fp.to_csv(
-                            os.path.join(
-                                self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
-                                filename+"_pred_pre_locations_fp.csv",
-                            ),
-                            index=False,
-                        )
-                    if len(post_points):
-                        d_metrics, post_gt_assoc, post_fp = detection_metrics(
-                            gt_post_points,
-                            post_points,
-                            true_classes=None,
-                            pred_classes=[],
-                            tolerance=self.cfg.TEST.DET_TOLERANCE,
-                            resolution=resolution,
-                            bbox_to_consider=[],
-                            verbose=True,
-                        )
-                        print("Synapse detection (post points) metrics (post-processing): {}".format(d_metrics))
-                        previous_pre_keys_num = len(d_metrics)
-                        for n, item in enumerate(d_metrics.items()):
-                            metric = self.test_extra_metrics[n+previous_pre_keys_num]
-                            if str(metric).lower() not in self.stats["merge_patches_post"]:
-                                self.stats["merge_patches_post"][str(metric.lower())] = 0
-                            self.stats["merge_patches_post"][str(metric).lower()] += item[1]
-                            self.current_sample_metrics[str(metric).lower() + " (post points, post-processing)"] = item[1]
+                if self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF:
+                    print("Preparing prediction and GT tiffs as auxiliary images for checking the output. . .")
+                    sshape = list(self.current_sample["X"].shape)
+                    assert len(sshape) >= 3
+                    if len(sshape) == 3:
+                        sshape += [
+                            2,
+                        ]
+                    else:
+                        sshape[-1] = 2
 
-                        # Save csv files with the associations between GT points and predicted ones
-                        post_gt_assoc.to_csv(
-                            os.path.join(
-                                self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
-                                filename+"_pred_post_locations_gt_assoc.csv",
-                            ),
-                            index=False,
-                        )
-                        post_fp.to_csv(
-                            os.path.join(
-                                self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
-                                filename+"_pred_post_locations_fp.csv",
-                            ),
-                            index=False,
+                    aux_tif = np.zeros(sshape, dtype=np.uint16)
+                    # Paint pre points
+                    if pre_points_df is not None:
+                        pre_ids = pre_points_df["pre_id"].to_list()
+                        assert len(pre_points) == len(pre_ids)
+                        for j, cor in enumerate(pre_points):
+                            z, y, x = cor  # type: ignore
+                            z, y, x = int(z), int(y), int(x)
+                            aux_tif[z, y, x, 0] = pre_ids[j]
+                            aux_tif[z, y, x, 0] = pre_ids[j]
+
+                    # Paint post points
+                    if post_points_df is not None:
+                        post_ids = post_points_df["post_id"].to_list()
+                        assert len(post_points) == len(post_ids)
+                        for j, cor in enumerate(post_points):
+                            z, y, x = cor  # type: ignore
+                            z, y, x = int(z), int(y), int(x)
+                            aux_tif[z, y, x, 1] = post_ids[j]
+
+                    out_dir = (
+                        self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING
+                        if self.post_processing["instance_post"]
+                        else self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK
+                    )
+                    if pre_points_df is not None or post_points_df is not None:
+                        # Dilate and save the predicted points
+                        for c in range(aux_tif.shape[-1]):
+                            aux_tif[..., c] = dilation(aux_tif[..., c], ball(3))
+
+                        save_tif(
+                            np.expand_dims(aux_tif, 0),
+                            out_dir,
+                            [str(filename) + "_points.tif"],
+                            verbose=self.cfg.TEST.VERBOSE,
                         )
 
-            if self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF:
-                print("Preparing prediction and GT tiffs as auxiliary images for checking the output. . .")
-                sshape = list(self.current_sample["X"].shape)
-                assert len(sshape) >= 3
-                if len(sshape) == 3:
-                    sshape += [
-                        2,
-                    ]
-                else:
-                    sshape[-1] = 2
-
-                aux_tif = np.zeros(sshape, dtype=np.uint16)
-                # Paint pre points
-                if pre_points_df is not None:
-                    pre_ids = pre_points_df["pre_id"].to_list()
-                    assert len(pre_points) == len(pre_ids)
-                    for j, cor in enumerate(pre_points):
+                    aux_tif = np.zeros(sshape, dtype=np.uint16)
+                    for j, cor in enumerate(gt_pre_points):
                         z, y, x = cor  # type: ignore
-                        z, y, x = int(z), int(y), int(x)
-                        aux_tif[z, y, x, 0] = pre_ids[j]
-                        aux_tif[z, y, x, 0] = pre_ids[j]
-
-                # Paint post points
-                if post_points_df is not None:
-                    post_ids = post_points_df["post_id"].to_list()
-                    assert len(post_points) == len(post_ids)
-                    for j, cor in enumerate(post_points):
+                        z, y, x = int(z)-1, int(y)-1, int(x)-1
+                        try:
+                            aux_tif[z, y, x, 0] = j+1
+                        except:
+                            pass
+                    for j, cor in enumerate(gt_post_points):
                         z, y, x = cor  # type: ignore
-                        z, y, x = int(z), int(y), int(x)
-                        aux_tif[z, y, x, 1] = post_ids[j]
-
-                out_dir = (
-                    self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING
-                    if self.post_processing['per_image']
-                    else self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK
-                )
-                if pre_points_df is not None or post_points_df is not None:
-                    # Dilate and save the predicted points
+                        z, y, x = int(z)-1, int(y)-1, int(x)-1
+                        try:
+                            aux_tif[z, y, x, 1] = j+1
+                        except:
+                            pass
+                    
                     for c in range(aux_tif.shape[-1]):
                         aux_tif[..., c] = dilation(aux_tif[..., c], ball(3))
-
+                        
                     save_tif(
                         np.expand_dims(aux_tif, 0),
                         out_dir,
-                        [filename + "_points.tif"],
+                        [str(filename) + "_gt_ids.tif"],
                         verbose=self.cfg.TEST.VERBOSE,
-                    )
-
-                aux_tif = np.zeros(sshape, dtype=np.uint16)
-                for j, cor in enumerate(gt_pre_points):
-                    z, y, x = cor  # type: ignore
-                    z, y, x = int(z)-1, int(y)-1, int(x)-1
-                    try:
-                        aux_tif[z, y, x, 0] = j+1
-                    except:
-                        pass
-                for j, cor in enumerate(gt_post_points):
-                    z, y, x = cor  # type: ignore
-                    z, y, x = int(z)-1, int(y)-1, int(x)-1
-                    try:
-                        aux_tif[z, y, x, 1] = j+1
-                    except:
-                        pass
-                
-                for c in range(aux_tif.shape[-1]):
-                    aux_tif[..., c] = dilation(aux_tif[..., c], ball(3))
-                    
-                save_tif(
-                    np.expand_dims(aux_tif, 0),
-                    out_dir,
-                    [filename + "_gt_ids.tif"],
-                    verbose=self.cfg.TEST.VERBOSE,
-                )        
-                if (self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST):
-                    if len(pre_points) > 0:   
-                        print(
-                            "Creating the image with a summary of detected points and false positives with colors (pre-points) . . ."
-                        )
-                        aux_tif = np.zeros(sshape[:-1] + [3,], dtype=np.uint8)
-                        
-                        print("Painting TPs and FNs (pre-points) . . .")
-                        for j, cor in tqdm(enumerate(gt_pre_points), total=len(gt_pre_points)):
-                            z, y, x = cor  # type: ignore
-                            z, y, x = int(z)-1, int(y)-1, int(x)-1
-                            tag = pre_gt_assoc[pre_gt_assoc["gt_id"]==j+1]["tag"].iloc[0]
-                            color = (0, 255, 0) if tag == "TP" else (255, 0, 0)  # Green or red
-                            try:
-                                aux_tif[z, y, x] = color
-                            except:
-                                pass
-
-                        print("Painting FPs (pre-points) . . .")
-                        for index, row in tqdm(pre_fp.iterrows(), total=len(pre_fp)):
-                            z,y,x = int(row['axis-0']), int(row['axis-1']), int(row['axis-2'])
-                            try:
-                                aux_tif[z, y, x] = (0,0,255) # Blue
-                            except:
-                                pass
-                        
-                        print("Dilating points (pre-points) . . .")
-                        for c in range(aux_tif.shape[-1]):
-                            aux_tif[..., c] = dilation(aux_tif[..., c], ball(3))
-
-                        save_tif(
-                            np.expand_dims(aux_tif, 0),
-                            out_dir,
-                            [filename + "_pre_point_assoc.tif"],
-                            verbose=self.cfg.TEST.VERBOSE,
-                        )   
-                    if len(post_points) > 0:
-                        print(
-                            "Creating the image with a summary of detected points and false positives with colors (post-points) . . ."
-                        )
-                        aux_tif = np.zeros(sshape[:-1] + [3,], dtype=np.uint8)
-                        
-                        print("Painting TPs and FNs (post-points) . . .")
-                        for j, cor in tqdm(enumerate(gt_post_points), total=len(gt_post_points)):
-                            z, y, x = cor  # type: ignore
-                            z, y, x = int(z)-1, int(y)-1, int(x)-1
-                            tag = post_gt_assoc[post_gt_assoc["gt_id"]==j+1]["tag"].iloc[0]
-                            color = (0, 255, 0) if tag == "TP" else (255, 0, 0)  # Green or red
-                            try:
-                                aux_tif[z, y, x] = color
-                            except:
-                                pass
-
-                        print("Painting FPs (post-points) . . .")
-                        for index, row in tqdm(post_fp.iterrows(), total=len(post_fp)):
-                            z,y,x = int(row['axis-0']), int(row['axis-1']), int(row['axis-2'])
-                            try:
-                                aux_tif[z, y, x] = (0,0,255) # Blue
-                            except:
-                                pass
+                    )        
+                    if (self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST):
+                        if len(pre_points) > 0:   
+                            print(
+                                "Creating the image with a summary of detected points and false positives with colors (pre-points) . . ."
+                            )
+                            aux_tif = np.zeros(sshape[:-1] + [3,], dtype=np.uint8)
                             
-                        print("Dilating points (post-points) . . .")
-                        for c in range(aux_tif.shape[-1]):
-                            aux_tif[..., c] = dilation(aux_tif[..., c], ball(3))
+                            print("Painting TPs and FNs (pre-points) . . .")
+                            for j, cor in tqdm(enumerate(gt_pre_points), total=len(gt_pre_points)):
+                                z, y, x = cor  # type: ignore
+                                z, y, x = int(z)-1, int(y)-1, int(x)-1
+                                tag = pre_gt_assoc[pre_gt_assoc["gt_id"]==j+1]["tag"].iloc[0]
+                                color = (0, 255, 0) if tag == "TP" else (255, 0, 0)  # Green or red
+                                try:
+                                    aux_tif[z, y, x] = color
+                                except:
+                                    pass
 
-                        save_tif(
-                            np.expand_dims(aux_tif, 0),
-                            out_dir,
-                            [filename + "_post_point_assoc.tif"],
-                            verbose=self.cfg.TEST.VERBOSE,
-                        )   
-                        del aux_tif
+                            print("Painting FPs (pre-points) . . .")
+                            for index, row in tqdm(pre_fp.iterrows(), total=len(pre_fp)):
+                                z,y,x = int(row['axis-0']), int(row['axis-1']), int(row['axis-2'])
+                                try:
+                                    aux_tif[z, y, x] = (0,0,255) # Blue
+                                except:
+                                    pass
+                            
+                            print("Dilating points (pre-points) . . .")
+                            for c in range(aux_tif.shape[-1]):
+                                aux_tif[..., c] = dilation(aux_tif[..., c], ball(3))
+
+                            save_tif(
+                                np.expand_dims(aux_tif, 0),
+                                out_dir,
+                                [str(filename) + "_pre_point_assoc.tif"],
+                                verbose=self.cfg.TEST.VERBOSE,
+                            )   
+                        if len(post_points) > 0:
+                            print(
+                                "Creating the image with a summary of detected points and false positives with colors (post-points) . . ."
+                            )
+                            aux_tif = np.zeros(sshape[:-1] + [3,], dtype=np.uint8)
+                            
+                            print("Painting TPs and FNs (post-points) . . .")
+                            for j, cor in tqdm(enumerate(gt_post_points), total=len(gt_post_points)):
+                                z, y, x = cor  # type: ignore
+                                z, y, x = int(z)-1, int(y)-1, int(x)-1
+                                tag = post_gt_assoc[post_gt_assoc["gt_id"]==j+1]["tag"].iloc[0]
+                                color = (0, 255, 0) if tag == "TP" else (255, 0, 0)  # Green or red
+                                try:
+                                    aux_tif[z, y, x] = color
+                                except:
+                                    pass
+
+                            print("Painting FPs (post-points) . . .")
+                            for index, row in tqdm(post_fp.iterrows(), total=len(post_fp)):
+                                z,y,x = int(row['axis-0']), int(row['axis-1']), int(row['axis-2'])
+                                try:
+                                    aux_tif[z, y, x] = (0,0,255) # Blue
+                                except:
+                                    pass
+                                
+                            print("Dilating points (post-points) . . .")
+                            for c in range(aux_tif.shape[-1]):
+                                aux_tif[..., c] = dilation(aux_tif[..., c], ball(3))
+
+                            save_tif(
+                                np.expand_dims(aux_tif, 0),
+                                out_dir,
+                                [str(filename) + "_post_point_assoc.tif"],
+                                verbose=self.cfg.TEST.VERBOSE,
+                            )   
+                            del aux_tif
 
     def after_full_image(self, pred: NDArray):
         """
@@ -2464,7 +1974,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         )
 
                 # Multi-head: instances + classification
-                if self.multihead:
+                if self.separated_class_channel:
                     # Merge patches
                     if len(self.all_class_stats_merge_patches) > 0:
                         self.stats["class_stats_merge_patches"] = np.mean(self.all_class_stats_merge_patches)
@@ -2534,7 +2044,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                                 print(f"      {self.stats['inst_stats_post'][i]}")
 
                         # Multi-head: instances + classification
-                        if self.multihead:
+                        if self.separated_class_channel:
                             # Merge patches
                             if self.stats["class_stats_merge_patches"]:
                                 print(f"      Merge patches classification IoU: {self.stats['class_stats_merge_patches']}")

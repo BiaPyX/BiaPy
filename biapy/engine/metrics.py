@@ -460,7 +460,7 @@ class CrossEntropyLoss_wrapper:
         self,
         num_classes: int,
         ndim: int = 2,
-        multihead: bool = False,
+        separated_class_channel: bool = False,
         model_source: str = "biapy",
         class_rebalance: str = "none",
         class_weights: List[float] = [],
@@ -478,8 +478,8 @@ class CrossEntropyLoss_wrapper:
         ndim : int, optional
             Number of dimensions of the input data. 2 for 2D images, 3 for 3D volumes.
 
-        multihead : bool, optional
-            For multihead predictions e.g. points + classification in detection.
+        separated_class_channel : bool, optional
+            For separated_class_channel predictions e.g. points + classification in detection.
 
         model_source : str, optional
             Source of the model. It can be "biapy", "bmz" or "torchvision".
@@ -495,7 +495,7 @@ class CrossEntropyLoss_wrapper:
         """
         self.ndim = ndim
         self.model_source = model_source
-        self.multihead = multihead
+        self.separated_class_channel = separated_class_channel
         self.num_classes = num_classes
         self.class_rebalance = class_rebalance
         self.class_weights = None
@@ -512,7 +512,7 @@ class CrossEntropyLoss_wrapper:
             self.loss = torch.nn.BCEWithLogitsLoss()
         else:
             self.loss = torch.nn.CrossEntropyLoss(ignore_index=self.ignore_index, weight=self.class_weights)
-        if self.multihead:
+        if self.separated_class_channel:
             self.class_channel_loss = torch.nn.CrossEntropyLoss(ignore_index=self.ignore_index)
 
     def __call__(self, y_pred, y_true):
@@ -532,12 +532,12 @@ class CrossEntropyLoss_wrapper:
         loss : torch.Tensor
             Loss value.
         """
-        if self.multihead:
+        if self.separated_class_channel:
             _y_pred = y_pred["pred"]
             _y_pred_class = y_pred["class"]
             assert (
                 y_true.shape[1] == 2
-            ), f"In multihead setting the ground truth is expected to have 2 channels. Provided {y_true.shape}"
+            ), f"In separated_class_channel setting the ground truth is expected to have 2 channels. Provided {y_true.shape}"
         else:
             _y_pred = y_pred["pred"] if isinstance(y_pred, dict) and "pred" in y_pred else y_pred
 
@@ -559,7 +559,7 @@ class CrossEntropyLoss_wrapper:
             _y_true = scale_target(y_true, pd.shape[-self.ndim :]) if pd.shape[-self.ndim :] != y_true.shape[-self.ndim :] else y_true
 
             if self.class_rebalance == "auto":
-                if self.multihead:
+                if self.separated_class_channel:
                     weight_mask = weight_binary_ratio(_y_true[:, 0])
                     loss_fn = torch.nn.BCEWithLogitsLoss(weight=weight_mask)
                 else:
@@ -571,7 +571,7 @@ class CrossEntropyLoss_wrapper:
             else:
                 loss_fn = self.loss
 
-            if self.multihead:
+            if self.separated_class_channel:
                 _loss = loss_fn(pd[:, 0], _y_true[:, 0]) + self.class_channel_loss(
                     _y_pred_class, _y_true[:, -1].type(torch.long)
                 )
@@ -1370,7 +1370,7 @@ def detection_metrics(
     resolution: List[int | float] = [1, 1, 1],
     bbox_to_consider=[],
     verbose=False,
-):
+) -> Tuple[Dict[str, float], pd.DataFrame, pd.DataFrame]:
     """
     Calculate detection metrics (precision, recall, F1) for point-based object detection.
 
@@ -1498,6 +1498,20 @@ def detection_metrics(
 
     # Create two dataframes with the GT and prediction points association made and another one with the FPs
     df, df_fp = None, None
+    df_columns =[
+        "gt_id",
+        "pred_id",
+        "distance",
+        "tag",
+        "axis-0",
+        "axis-1",
+        "axis-2",
+        "gt_class",
+        "pred_axis-0",
+        "pred_axis-1",
+        "pred_axis-2",
+        "pred_class",
+    ]
     if len(_true) > 0:
         _true = np.array(true, dtype=np.float32)
         _pred = np.array(pred, dtype=np.float32)
@@ -1540,20 +1554,7 @@ def detection_metrics(
                 pred_coords[..., 2],
                 pred_class,
             ),  # type: ignore
-            columns=[
-                "gt_id",
-                "pred_id",
-                "distance",
-                "tag",
-                "axis-0",
-                "axis-1",
-                "axis-2",
-                "gt_class",
-                "pred_axis-0",
-                "pred_axis-1",
-                "pred_axis-2",
-                "pred_class",
-            ],
+            columns=df_columns,
         )
         df_fp = pd.DataFrame(
             zip(
@@ -1650,6 +1651,14 @@ def detection_metrics(
             "TP (class)": int(TP_classes),
             "FN (class)": int(FN_classes),
         }
+    if df is None:
+        if "gt_class" in df_columns:
+            df_columns.remove("gt_class")
+        if "pred_class" in df_columns:
+            df_columns.remove("pred_class")
+        df = pd.DataFrame(columns=df_columns)
+    if df_fp is None:
+        df_fp = pd.DataFrame(columns=["pred_id", "axis-0", "axis-1", "axis-2", "tag"])
     return r_dict, df, df_fp
 
 

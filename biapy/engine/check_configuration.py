@@ -79,23 +79,25 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         # Define the custom order once
         CUSTOM_ORDER = {
             "F": 0, # Foreground
-            "B": 1, # Background
-            "C": 3, # contours
-            "H": 4, # Horizontal distance
-            "V": 5, # Vertical distance
-            "Z": 6, # Z distance
-            "Db": 7, # Distance (boundary)
-            "Dc": 8, # Distance (center/skeleton)
-            "Dn": 9, # Distance (neighbor)
-            "D": 10, # Distance (signed)
-            "T": 11, # Touching area
-            "A": 12,  # Affinities
-            "E": 13,  # Embeddings
-            "E_offset": 14,  # Embeddings (offsets)
-            "E_sigma": 15,  # Embeddings (sigma)
-            "E_seediness": 16,  # Embeddings (seediness)
-            "R": 17,  # Radial distances
-            "M": 18,  # Legacy mask (B + C)
+            "F_pre": 1,  # Foreground for synapses (pre-synaptic sites)
+            "F_post": 2,  # Foreground for synapses (post-synaptic sites)
+            "B": 3, # Background
+            "C": 4, # contours
+            "H": 5, # Horizontal distance
+            "V": 6, # Vertical distance
+            "Z": 7, # Z distance
+            "Db": 8, # Distance (boundary)
+            "Dc": 9, # Distance (center/skeleton)
+            "Dn": 10, # Distance (neighbor)
+            "D": 11, # Distance (signed)
+            "T": 12, # Touching area
+            "A": 13,  # Affinities
+            "E": 14,  # Embeddings
+            "E_offset": 15,  # Embeddings (offsets)
+            "E_sigma": 16,  # Embeddings (sigma)
+            "E_seediness": 17,  # Embeddings (seediness)
+            "R": 18,  # Radial distances
+            "M": 19,  # Legacy mask (B + C)   
         }
 
         def get_sort_key(weights):
@@ -570,22 +572,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             if cfg.PROBLEM.INSTANCE_SEG.BORDER_EXTRA_WEIGHTS == "unet-like" and "We" not in sorted_original_instance_channels:
                 sorted_original_instance_channels.append("We")
 
-            # Create unique folder names for instance segmentation channel masks
-            # depending on the channels and their options
-            suffix = ""
-            dst = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0]
-            for ch in sorted_original_instance_channels:
-                suffix += f"_{ch}"
-                for entry in dst.get(ch, {}):
-                    eval = str(dst[ch][entry]).replace(" ", "").replace("[", "").replace("]", "").replace("(", "").replace(")", "").replace(",", "-")
-                    suffix += f".{entry}-{eval}"
-            train_channel_mask_dir = cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR + suffix
-            opts.extend(["DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR", train_channel_mask_dir])
-            val_channel_mask_dir = cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR + suffix
-            opts.extend(["DATA.VAL.INSTANCE_CHANNELS_MASK_DIR", val_channel_mask_dir])
-            test_channel_mask_dir = cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR + suffix
-            opts.extend(["DATA.TEST.INSTANCE_CHANNELS_MASK_DIR", test_channel_mask_dir])
-
             replace_channels = False
             if sorted_original_instance_channels != original_instance_channels:
                 replace_channels = True
@@ -610,19 +596,60 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     opts.extend(["PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS", "watershed"])
 
         else: # synapses
-            # Create unique folder names for instance segmentation channel masks
-            # depending on the channels and their options
-            suffix = "_preDilation-"
-            suffix += "".join(str(cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.PRESITE_DILATION)[1:-1].replace(",","")).replace(" ","_")
-            suffix += "_postDilation-"
-            suffix += "".join(str(cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.POSTSITE_DILATION)[1:-1].replace(",","")).replace(" ","_")
+            chs = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS
+            dst = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0]
 
-            train_channel_mask_dir = cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR + suffix
-            opts.extend(["DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR", train_channel_mask_dir])
-            val_channel_mask_dir = cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR + suffix
-            opts.extend(["DATA.VAL.INSTANCE_CHANNELS_MASK_DIR", val_channel_mask_dir])
-            test_channel_mask_dir = cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR + suffix
-            opts.extend(["DATA.TEST.INSTANCE_CHANNELS_MASK_DIR", test_channel_mask_dir])
+            # F and B — foreground and background
+            for ch in ("F_pre", "F_post"):
+                if ch in chs:
+                    if ch in dst:
+                        assert [x for x in dst[ch].keys() if x not in ["dilation"]] == [], (
+                            "PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS for channel '{}' can only have 'dilation' key not {}".format(ch, [x for x in dst[ch].keys() if x not in ["dilation"]])
+                        )
+                    dst[ch] = {
+                        "dilation": dst.get(ch, {}).get("dilation", 0),
+                    }
+
+            # H / V / Z — distance channels group
+            # If any of H, V or Z is requested, we normalize all of them by default
+            force_norm = False
+            for k in ["H", "V", "Z"]:
+                if k in chs and k in dst and "norm" in dst[k] and dst[k]["norm"]:
+                    force_norm = True
+                    break
+            for ch in ("H", "V", "Z"):
+                if ch in chs:
+                    if ch in dst:
+                        assert [x for x in dst[ch].keys() if x not in ["norm", "act", "mask_values"]] == [], (
+                            "PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS for channel '{}' can only have 'norm', 'act' and 'mask_values' keys not {}".format(ch, [x for x in dst[ch].keys() if x not in ["norm", "act", "mask_values"]])
+                        )
+                    norm = dst.get(ch, {}).get("norm", force_norm)
+                    act = dst.get(ch, {}).get("act", "")
+                    if act == "" and norm:
+                        act = "sigmoid"
+                    dst[ch] = {
+                        "norm": norm,
+                        "act": act,
+                        "mask_values": dst.get(ch, {}).get("mask_values", True),
+                    }
+
+        # Create unique folder names for instance segmentation channel masks
+        # depending on the channels and their options
+        suffix = ""
+        dst = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0]
+        for ch in [x for x in sorted_original_instance_channels if x in ["F_pre", "F_post"]]:
+            suffix += f"_{ch}"
+            for entry in dst.get(ch, {}):
+                eval = str(dst[ch][entry]).replace(" ", "").replace("[", "").replace("]", "").replace("(", "").replace(")", "").replace(",", "-")
+                suffix += f".{entry}-{eval}"
+        suffix += f"_HVZ_norm-{force_norm}"
+
+        train_channel_mask_dir = cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR + suffix
+        opts.extend(["DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR", train_channel_mask_dir])
+        val_channel_mask_dir = cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR + suffix
+        opts.extend(["DATA.VAL.INSTANCE_CHANNELS_MASK_DIR", val_channel_mask_dir])
+        test_channel_mask_dir = cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR + suffix
+        opts.extend(["DATA.TEST.INSTANCE_CHANNELS_MASK_DIR", test_channel_mask_dir])
 
         if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES == []:
             if not channel_loss_set:
@@ -1521,7 +1548,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             for x in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
                 assert x in ["F_pre", "F_post", "H", "V", "Z"], "PROBLEM.INSTANCE_SEG.DATA_CHANNELS not in ['F_pre', 'F_post', 'H', 'V', 'Z']"
 
-            if set(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) not in [{"F_pre", "F_post"}, {"F_pre", "H", "V", "Z"}]:
+            if set(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) not in [{"F_pre", "F_post"}, {"F_post", "H", "V", "Z"}]:
                 raise ValueError("PROBLEM.INSTANCE_SEG.DATA_CHANNELS not 'F_pre' + 'F_post' or 'F_pre' + 'H' + 'V' + 'Z', which are the unique configurations supported for synapse detection")
 
             if not cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA or cfg.PROBLEM.NDIM != "3D":

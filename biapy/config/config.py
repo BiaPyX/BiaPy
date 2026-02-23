@@ -126,14 +126,13 @@ class Config:
         #     are well separated. We grouped here all the channels involved in this process
         #
         #### For "synapse" type of instances ####
-        # Possible options: 'B' and 'BF' (still experimental). This variable defines the channels to be used to represent synapse instances based on the input 
-        # synapse sites. The meaning of each letter is a follows:
-        #   * In 'B', the first and second channels represent the pre and post points as 3D points, respectively.
+        # Possible options: 
+        #   * 'F_pre' and 'F_post': each one is a binary representation of the presynaptic and postsynaptic sites, respectively. 
+        #   * 'F_pre', 'H', 'V', 'Z': 'F_pre' is a binary representation of the presynaptic sites, while 'H', 'V' and 'Z' are the horizontal, 
+        #      vertical and depth distances to the closest postsynaptic site, respectively. This setting is inspired by the paper 
+        #      "Automatic detection of synaptic partners in a whole-brain Drosophila electron microscopy data set" 
+        #      (https://www.nature.com/articles/s41592-021-01183-7).
         #
-        #   * In 'BF':
-        #       - 'B' stands for 'Binary mask', it is a binary representation of each postsynaptic site
-        #       - 'F' stands for 'Flow' and contains the distance values to the corresponding presynaptic site (of each postsynaptic 
-        #         site) for each dimension.
         _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS = ["B", "C"]
         # Details for each channel. It must be a list with a unique element: a dict of dicts. The details can be only set for the following channels:
         #   - 'F' channel. Possible options:
@@ -210,6 +209,18 @@ class Config:
         #         Options are 'centroid' and 'medoid'. Default: 'centroid'
         #       - 'medoid_max_points': int, specifies the maximum number of points used when computing the medoid.
         #         Default: 10000
+        # For synapse type of instances, the options are:
+        #   - 'F_pre' channel. Possible options: 
+        #       - 'dilation': int or list of ints, specifies the dilation size applied to the channel. Default: [1,10,10]
+        #   - 'F_post' channel. Possible options: 
+        #       - 'dilation': int or list of ints, specifies the dilation size applied to the channel. Default: [1,10,10]
+        #   - 'H', 'V' and 'Z' channels. Possible options:
+        #       - 'norm': bool, specifies whether distances are normalized between 0 and 1. Default: True
+        #       - 'act': str, specifies the activation function used in the model’s final layer when this channel is selected.
+        #         Options are '', 'linear', and 'sigmoid'. Default: ''
+        #       - 'mask_values': bool, specifies whether to mask the distance channel so the loss is computed only on non-zero values.
+        #         Default: True
+        #
         # For example:
         #  DATA_CHANNELS = ['F', 'C']
         #  DATA_CHANNELS_EXTRA_OPTS = [{'F': {'erosion': 2, 'dilation': 0}, 'C': {'mode': 'inner'}}]
@@ -304,10 +315,9 @@ class Config:
 
         #### For "synapses" type of instances (only available for 3D H5/Zarr data) ####
         _C.PROBLEM.INSTANCE_SEG.SYNAPSES = CN()
-        # Dilation in (z,y,x) to be made for the presynaptic points
-        _C.PROBLEM.INSTANCE_SEG.SYNAPSES.PRESITE_DILATION = [2,4,4]
-        # Dilation in (z,y,x) to be made for the postsynaptic points
-        _C.PROBLEM.INSTANCE_SEG.SYNAPSES.POSTSITE_DILATION = [2,4,4]
+        # Method to create the points from the synapse prediction (in "F_pre" + "F_post" setting). Options are:
+        #   - 'peak_local_max' to use the skimage.feature.peak_local_max function to create the points 
+        #   - 'blob_log' to use the skimage.feature.blob_log function to create the points
         _C.PROBLEM.INSTANCE_SEG.SYNAPSES.POINT_CREATION_FUNCTION = "peak_local_max"
         # The minimal allowed distance separating peaks. To find the maximum number of peaks, use min_distance=1.
         _C.PROBLEM.INSTANCE_SEG.SYNAPSES.PEAK_LOCAL_MAX_MIN_DISTANCE = 1

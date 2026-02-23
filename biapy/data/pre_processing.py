@@ -22,6 +22,7 @@ from skimage.filters import gaussian, median
 from yacs.config import CfgNode as CN
 from numpy.typing import NDArray
 from typing import List, Optional, Dict, Tuple, Sequence
+from scipy.spatial import cKDTree
 
 from biapy.data.dataset import BiaPyDataset
 from biapy.utils.util import (
@@ -154,8 +155,7 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
                 zarr_data_information=zarr_data_information,
                 savepath=getattr(cfg.DATA, tag).INSTANCE_CHANNELS_MASK_DIR,
                 mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
-                presite_dilation=cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.PRESITE_DILATION,
-                postsite_dilation=cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.POSTSITE_DILATION,
+                channel_extra_opts=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0],
             )
         else:  # regular instances, not synapses
             mask = None
@@ -1302,7 +1302,34 @@ def _bbox_from_points(points_zyx: np.ndarray, width_zyx: np.ndarray, shape_zyx: 
 
 def _make_output_array(fname: str, data_shape_zyx, channels: int, zinfo: Dict, dtype_str="float32"):
     """
+    Create an output array for the generated mask, either as a Zarr or HDF5 dataset depending on the file extension of `fname`.
+
+    Parameters
+    ----------
+    fname : str
+        The filename for the output array. If it ends with .h5 or .hdf the function will create an HDF5 dataset; otherwise, it will 
+        create a Zarr array.
+    data_shape_zyx : Tuple[int, int, int]
+        The shape of the data in (Z,Y,X) order.
+    channels : int
+        The number of channels in the output array.
+    zinfo : Dict
+        A dictionary containing metadata, including the "axes_order" key which specifies the order of axes in the output array (e.g. "ZYXC" or "ZCYX").
+    dtype_str : str
+        The data type for the output array (default: "float32").    
     
+    Returns
+    -------
+    mask : Zarr array or HDF5 dataset
+        The created output array for the generated mask.
+    fid_mask : h5py.File or None
+        The HDF5 file object if an HDF5 dataset was created, or None if a Zarr array was created.
+    out_shape : Tuple[int, ...]
+        The shape of the output array, including channels, in the order specified by `zinfo["axes_order"]`.
+    out_order : str
+        The order of axes in the output array, as specified by `zinfo["axes_order"]` with "C" for channels if not already included.
+    c_pos : int or None
+        The position of the channel axis in the output array, or None if channels are added as the last axis.
     """
     os.makedirs(os.path.dirname(fname), exist_ok=True)
 
@@ -1345,8 +1372,7 @@ def synapse_channel_creation(
     zarr_data_information: Dict,
     savepath: str,
     mode: List[str] = ["F_pre", "F_post"],
-    presite_dilation: List[int] = [2, 4, 4],
-    postsite_dilation: List[int] = [2, 4, 4],
+    channel_extra_opts: Dict[str, Dict] = {},
     verbose: bool = False,
 ):
     """
@@ -1386,12 +1412,6 @@ def synapse_channel_creation(
     mode : List, optional
         Operation mode. 
 
-    presite_dilation : tuple of ints, optional
-        Dilation to be used in the presynapse sites ('F' channel).
-
-    postsite_dilation : tuple of ints, optional
-        Dilation to be used in the postsynapse sites ('F' channel).
-
     Returns
     -------
     new_mask : 5D Numpy array
@@ -1400,13 +1420,24 @@ def synapse_channel_creation(
     patch_offset : list of list
         Pixels used on each axis to pad the patch in order to not cut some of the values in the edges.
     """
-    channels = len(mode)
+    # -------------------------------------------------------
+    # 1. Determine Channel Count based on Mode
+    # -------------------------------------------------------
+    if set(mode) == {"F_pre", "F_post"}:
+        channels = 2
+        dtype_str = "uint8"
+    elif set(mode) == {"F_post", "H", "V", "Z"}:
+        channels = 4
+        dtype_str = "float32"
+        norm = True if any([channel_extra_opts.get(k, {}).get("norm", True) for k in ["H", "V", "Z"]]) else False
+    else:
+        raise ValueError(f"Unsupported mode: {mode}. Supported modes are: {{'F_pre', 'F_post'}} and {{'F_post', 'H', 'V', 'Z'}}")  
+    
     F_pre_pos = mode.index("F_pre") if "F_pre" in mode else None
 
-    if "F_post" in mode:
-        dtype_str = "uint8"
-    else: # H, V, Z channels 
-        dtype_str = "float32"
+    presite_dilation = channel_extra_opts.get("F_pre", {}).get("dilation", [1, 10, 10])
+    postsite_dilation = channel_extra_opts.get("F_post", {}).get("dilation", [1, 10, 10])
+
     # footprints (keep both since you had them)
     pre_footprint = generate_ellipse_footprint(presite_dilation)
     post_footprint = generate_ellipse_footprint(postsite_dilation)
@@ -1422,6 +1453,7 @@ def synapse_channel_creation(
     world_size = get_world_size()
     it = range(rank, len(unique_files), world_size)
 
+    width = np.array([max(a,b) for a,b in zip(presite_dilation, postsite_dilation)])    
     print("Collecting all pre/post-synaptic points")
     for idx in tqdm(it, disable=not is_main_process()):
         filename, data_shape = unique_files[idx], tuple(unique_shapes[idx])
@@ -1510,9 +1542,9 @@ def synapse_channel_creation(
             out_fname, shape_zyx, channels, zarr_data_information, dtype_str=dtype_str
         )
 
-        print("Painting all postsynaptic sites")
-        width = np.asarray(presite_dilation, dtype=int)
-
+        # -------------------------------------------------------
+        # MAIN LOOP: Process each synapse
+        # -------------------------------------------------------
         for pre_point_global, post_sites in tqdm(pre_post_points.items(), disable=not is_main_process()):
             if not post_sites:
                 continue
@@ -1520,13 +1552,17 @@ def synapse_channel_creation(
             pre_point_global = np.asarray(pre_point_global, dtype=int)
             post_sites_arr = np.asarray(post_sites, dtype=int)
 
-            # bbox points include: first post + (optional) pre + all posts
+            # Define patch bounding box to load/write
             bbox_points = []
             if set(mode) == {"F_pre", "F_post"}:
                 bbox_points.append(pre_point_global)
-            bbox_points.append(post_sites_arr)
-            bbox_points = np.vstack([p if p.ndim == 2 else p[None, :] for p in bbox_points])
+                bbox_points.append(post_sites_arr)
+            else: # mode == {"F_pre", "H", "V", "Z"}
+                # Fallback for Synful mode
+                bbox_points.append(pre_point_global)
+                bbox_points.append(post_sites_arr)
 
+            bbox_points = np.vstack([p if p.ndim == 2 else p[None, :] for p in bbox_points])
             bbox = _bbox_from_points(bbox_points, width, shape_zyx)
             patch_shape = (bbox[1] - bbox[0], bbox[3] - bbox[2], bbox[5] - bbox[4])
 
@@ -1540,8 +1576,11 @@ def synapse_channel_creation(
 
             pre_local = pre_point_global - np.asarray([bbox[0], bbox[2], bbox[4]], dtype=int)
 
-            # ("F_pre", "H", "V", "Z") -> Synful style
-            if set(mode) == {"F_pre", "H", "V", "Z"}:
+            
+            # -------------------------------------------------------
+            # MODE: Synful (F_post, H, V, Z)
+            # -------------------------------------------------------
+            if set(mode) == {"F_post", "H", "V", "Z"}:
                 seeds = np.zeros(patch_shape, dtype=np.uint32)
                 mask_to_grow = np.zeros(patch_shape, dtype=np.uint8)
                 label_to_pre_site = {}
@@ -1561,27 +1600,43 @@ def synapse_channel_creation(
                     label_count += 1
                     mask_to_grow[post_local[0], post_local[1], post_local[2]] = 1
 
-                channel_0 = binary_dilation_scipy(mask_to_grow, iterations=1, structure=pre_footprint)
+                channel_0 = binary_dilation_scipy(mask_to_grow, iterations=1, structure=post_footprint)
                 mask_to_grow = binary_dilation_scipy(mask_to_grow, iterations=1, structure=post_footprint)
 
-                for z in range(len(seeds)):
-                    semantic = edt.edt(mask_to_grow[z], anisotropy=resolution, parallel=-1)
-                    seeds[z] = watershed(-semantic, seeds[z], mask=mask_to_grow[z])
+                seed_coords = np.argwhere(seeds > 0)
+                seed_labels = seeds[seed_coords[:, 0], seed_coords[:, 1], seed_coords[:, 2]]
+
+                # 2. Get coordinates of the pixels inside the dilated mask
+                mask_coords = np.argwhere(mask_to_grow > 0)
+
+                if len(seed_coords) > 0 and len(mask_coords) > 0:
+                    # 3. Apply anisotropy resolution weighting for accurate physical distances
+                    res_array = np.array(resolution)
+                    scaled_seed_coords = seed_coords * res_array
+                    scaled_mask_coords = mask_coords * res_array
+
+                    # 4. Build KDTree and find the nearest seed for every mask pixel
+                    tree = cKDTree(scaled_seed_coords)
+                    _, indices = tree.query(scaled_mask_coords)
+
+                    # 5. Reconstruct the seeds volume strictly within the mask footprint
+                    new_seeds = np.zeros_like(seeds)
+                    new_seeds[mask_coords[:, 0], mask_coords[:, 1], mask_coords[:, 2]] = seed_labels[indices]
+                    seeds = new_seeds
 
                 out_map = create_flow_channels(
                     seeds,
                     ref_point="presynaptic",
                     label_to_pre_site=label_to_pre_site,
-                    normalize_values=True,
+                    normalize_values=norm,
                 )
 
                 # put channel_0 into the correct slot
-                if F_pre_pos == 0:
-                    out_map = np.concatenate([channel_0[..., None], out_map], axis=-1)
-                else:
-                    out_map = np.concatenate([out_map, channel_0[..., None]], axis=-1)
+                out_map = np.concatenate([channel_0[..., None], out_map], axis=-1)
 
-            # (F_pre, F_post)
+            # -------------------------------------------------------
+            # MODE: SimpSyn (F_pre, F_post)
+            # -------------------------------------------------------
             else:
                 out_map = np.zeros(patch_shape + (channels,), dtype=np.uint8)
 
@@ -1620,7 +1675,7 @@ def synapse_channel_creation(
 
             patch = out_map.transpose(transpose_order)
 
-            # write only where empty
+            # write only where empty (background check)
             target = mask[data_slices]
             mask[data_slices] = target + patch * (target == 0)
 
@@ -1870,8 +1925,8 @@ def create_detection_masks(cfg: CN, data_type: str = "train"):
     cfg : YACS CN object
         Configuration.
 
-        data_type: str, optional
-                Wheter to create train, validation or test masks.
+    data_type: str, optional
+        Wheter to create train, validation or test masks.
     """
     assert data_type in ["train", "val", "test"]
 

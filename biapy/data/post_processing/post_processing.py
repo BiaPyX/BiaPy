@@ -20,8 +20,7 @@ import zarr
 import difflib
 from tqdm import tqdm
 from scipy.signal import find_peaks
-from scipy.spatial import cKDTree # type: ignore
-from scipy.spatial.distance import cdist
+from scipy.spatial import cKDTree, distance_matrix
 from scipy.ndimage import rotate, grey_dilation, grey_erosion, binary_erosion, binary_dilation, median_filter, binary_fill_holes, find_objects, gaussian_filter, distance_transform_edt
 from scipy.signal import savgol_filter
 from skimage import morphology
@@ -32,6 +31,10 @@ from skimage.measure import label, regionprops_table, marching_cubes, mesh_surfa
 from skimage.exposure import equalize_adapthist
 from skimage.feature import peak_local_max, blob_log
 from scipy.ndimage import binary_dilation as binary_dilation_scipy
+from scipy.cluster.hierarchy import linkage, fcluster
+import torch.nn.functional as F
+import pandas as pd
+import csv 
 
 from typing import (
     Tuple,
@@ -438,7 +441,7 @@ class Embedding_cluster:
 
         Parameters
         ----------
-        pred : np.ndarray
+        pred : NDArray
             Model predictions with shape:
             - 2D: (Y, X, C=5)  with channels [off_y, off_x, sig_y, sig_x, seed]
             - 3D: (Z, Y, X, C=7) with channels [off_z, off_y, off_x, sig_z, sig_y, sig_x, seed]
@@ -457,7 +460,7 @@ class Embedding_cluster:
 
         Returns
         -------
-        np.ndarray
+        NDArray
             Instance labels with shape (*spatial,), dtype uint8 if max(label) ≤ 255 else uint16.
         """
         assert pred.ndim in (3, 4), f"Expected (Y,X,C) or (Z,Y,X,C); got {pred.shape}"
@@ -531,7 +534,7 @@ class Embedding_cluster:
         return labels
 
 
-def create_synapses(
+def create_synapses_from_point_probs(
     data: NDArray,
     channels: List[str],
     point_creation_func: str = "peak_local_max",
@@ -542,7 +545,10 @@ def create_synapses(
     num_sigma: int=2,
     exclude_border: bool = False,
     relative_th_value: bool = False,
-) -> Tuple[NDArray, Dict]:
+    out_dir: Optional[str] = None,
+    filenames: Optional[List[str]] = None,
+    verbose: bool = True,
+) -> Tuple[pd.DataFrame, NDArray, pd.DataFrame, NDArray]:
     """
     Create synapses pre/post points from the given ``data``.
 
@@ -587,16 +593,33 @@ def create_synapses(
     relative_th_value : bool, optional
         To use ``min_th_to_be_peak`` as a relative threshold to the maximum value, i.e. ``threshold_rel`` is set instead of 
         ``threshold_abs`` in the ``peak_local_max`` or ``blob_log`` call. 
+
+    out_dir : str, optional
+        Directory to save the output data into. If None, the output data will not be saved.
+
+    filenames : List of str, optional
+        List of filenames to save the output data into. If None, the output data will not be saved. E.g. ``["pred_points.tif"]``.
+    
+    verbose : bool, optional
+        Whether to print the progress of the function or not.
+    
+    Returns
+    -------
+    Tuple[pd.DataFrame, NDArray, pd.DataFrame, NDArray]
+        pre_points_df: DataFrame with pre points.
+        pre_points: Array with pre points.
+        post_points_df: DataFrame with post points.
+        post_points: Array with post points.
+        
     """
     assert point_creation_func in ["peak_local_max", "blob_log"]
 
     d_result = {}
     ids, probs = [], []
-    if set(channels) == {"F_pre","F"}:
-        raise ValueError("Not implemented")
+    if set(channels) != {"F_pre","F_post"}:
+        raise NotImplementedError("For now, only {'F_pre', 'F_post'} channels are supported.")
     
     # Assuming {"F_pre", "F_post"} channels from now on
-
     # Take the coords of the predicted points
     all_coords = []
     max_value = 0
@@ -666,7 +689,522 @@ def create_synapses(
     d_result["probabilities"] = probs
     d_result["points"] = np.concatenate(all_coords, axis=0)
 
-    return new_data, d_result
+    if out_dir is not None and filenames is not None:
+        save_tif(
+            np.expand_dims(new_data, 0),
+            out_dir,
+            filenames,
+            verbose=verbose,
+        )
+
+    total_pre_points = len([x for x in d_result["tag"] if x == "pre"])
+    pre_points = np.array(d_result["points"][:total_pre_points])
+    pre_points_df = pd.DataFrame(
+        zip(
+            d_result["ids"][:total_pre_points],
+            list(pre_points[:, 0]),
+            list(pre_points[:, 1]),
+            list(pre_points[:, 2]),
+            d_result["probabilities"][:total_pre_points],
+            [min_th_to_be_peak[0],]*total_pre_points,
+        ),
+        columns=[
+            "pre_id",
+            "axis-0",
+            "axis-1",
+            "axis-2",
+            "probability",
+            "pre th",
+        ],
+    )
+
+    # Save just the points and their probabilities
+    if out_dir is not None:
+        pre_points_df.to_csv(
+            os.path.join(
+                out_dir,
+                "pred_pre_locations.csv",
+            ),
+            index=False,
+        )
+
+    post_points = np.array(d_result["points"][total_pre_points:])
+    post_points_df = pd.DataFrame(
+        zip(
+            d_result["ids"][total_pre_points:],
+            list(post_points[:, 0]),
+            list(post_points[:, 1]),
+            list(post_points[:, 2]),
+            d_result["probabilities"][total_pre_points:],
+            [min_th_to_be_peak[1],]*len(post_points),
+        ),
+        columns=[
+            "post_id",
+            "axis-0",
+            "axis-1",
+            "axis-2",
+            "probability",
+            "post th",
+        ],
+    )
+
+    # Save just the points and their probabilities
+    if out_dir is not None:
+        post_points_df.to_csv(
+            os.path.join(
+                out_dir,
+                "pred_post_locations.csv",
+            ),
+            index=False,
+        )
+
+    # Create coordinate arrays
+    pre_points, post_points = [], []
+    for coord in zip(pre_points_df["axis-0"], pre_points_df["axis-1"], pre_points_df["axis-2"]):
+        pre_points.append(list(coord))
+    for coord in zip(post_points_df["axis-0"], post_points_df["axis-1"], post_points_df["axis-2"]):
+        post_points.append(list(coord))
+    pre_points = np.array(pre_points)
+    post_points = np.array(post_points)
+
+    pre_post_mapping = {}
+    pres, posts = [], []
+    pre_ids = pre_points_df["pre_id"].to_list()
+    post_ids = post_points_df["post_id"].to_list()
+    if len(pre_points) > 0 and len(post_points) > 0:
+        for i in range(len(pre_points)):
+            pre_post_mapping[pre_ids[i]] = []
+
+        # Match each post with a pre
+        distances = distance_matrix(post_points, pre_points)
+        for i in range(len(post_points)):
+            closest_pre_point = np.argmin(distances[i])
+            closest_pre_point = pre_ids[closest_pre_point]
+            pre_post_mapping[closest_pre_point].append(post_ids[i])
+
+        # Create pre/post lists so we can create the final dataframe
+        for i in pre_post_mapping.keys():
+            if len(pre_post_mapping[i]) > 0:
+                for post_site in pre_post_mapping[i]:
+                    pres.append(i)
+                    posts.append(post_site)
+            else:
+                # For those pre points that do not have any post points assigned just put a -1 value
+                pres.append(i)
+                posts.append(-1)
+    else:
+        if verbose:
+            print("No pre/post synaptic points found!")
+
+    # Create a mapping dataframe
+    pre_post_map_df = pd.DataFrame(
+        zip(
+            pres,
+            posts,
+        ),
+        columns=[
+            "pre_id",
+            "post_id",
+        ],
+    )
+    if out_dir is not None:
+        pre_post_map_df.to_csv(
+            os.path.join(
+                out_dir,
+                "pre_post_mapping.csv",
+            ),
+            index=False,
+        )
+
+    return pre_points_df, np.array(d_result["points"][:total_pre_points]), post_points_df, np.array(d_result["points"][total_pre_points:])
+
+def from_local_synapse_csv_to_global(
+    filename: str, 
+    reuse_predictions: bool,
+    csv_dir: str, 
+    min_th_to_be_peak: float = 0.2,
+    th_type: str = "manual",
+    verbose: bool = True
+) -> Tuple[pd.DataFrame, NDArray, float,  pd.DataFrame, NDArray, float]:
+    """
+    Create global pre/post points CSV files from the local ones. If ``reuse_predictions`` is True, it will look for the already created global 
+    CSV files and load them instead of creating them again.
+
+    Parameters
+    ----------
+    filename: str
+        Base filename to look for in the CSV directory. E.g. "pred_points".
+
+    reuse_predictions: bool
+        Whether to reuse the already created pre/post points CSV files.
+
+    csv_dir: str
+        Directory where the predicted points CSV files are located and where the output CSV files will be saved.
+
+    min_th_to_be_peak: float, optional
+        Minimum threshold to be considered a peak when creating the pre/post points. If ``th_type`` is "relative", 
+        this value will be multiplied by the maximum probability value in the predicted points to get the actual threshold.
+
+    th_type: str, optional
+        Type of threshold to be used when creating the pre/post points. Options: ["manual", "relative"]. If "manual",
+        the ``min_th_to_be_peak`` value will be used as the actual threshold. If "relative", the ``min_th_to_be_peak`` 
+        value will be multiplied by the maximum probability value in the predicted points to get the actual threshold.
+
+    verbose: bool, optional
+        Whether to print the progress of the function or not.   
+
+    Returns
+    -------
+    Tuple[pd.DataFrame, NDArray, float,  pd.DataFrame, NDArray, float]
+        pre_points_df: DataFrame with pre points.
+        pre_points: Array with pre points.  
+        pre_th: Threshold used for pre points.
+        post_points_df: DataFrame with post points.
+        post_points: Array with post points.
+        post_th: Threshold used for post points.
+    """
+    # In this case we need only to merge all local points so it will be done by the main thread. The rest will wait
+    pre_points_df, post_points_df, pre_post_map_df = None, None, None
+    if not reuse_predictions:
+        # For synapses we need to map the pre to the post points. It needs to be done here and not patch by patch as
+        # some pre points may lay in other chunks of the data.
+        all_pred_files = next(os_walk_clean(csv_dir))[2]
+        all_pred_files = [x for x in all_pred_files if filename + "_patch" in x]
+        all_pre_point_files = [x for x in all_pred_files if "_pre_points.csv" in x and "all_points.csv" not in x]
+        all_post_point_files = [x for x in all_pred_files if "_post_points.csv" in x and "all_points.csv" not in x]
+        all_pre_dfs, all_post_dfs = [], []
+
+        # Collect pre dataframes 
+        if len(all_pre_point_files) > 0:
+            for pre_file in all_pre_point_files:
+                pre_file_path = os.path.join(csv_dir, pre_file)
+                pred_pre_df = pd.read_csv(pre_file_path, index_col=False)
+                if len(pred_pre_df) > 0:
+                    pred_pre_df = pred_pre_df.drop(columns=["pre th"])
+                    all_pre_dfs.append(pred_pre_df)
+
+        # Collect post dataframes 
+        if len(all_post_point_files) > 0:
+            for post_file in all_post_point_files:
+                post_file_path = os.path.join(csv_dir, post_file)
+                pred_post_df = pd.read_csv(post_file_path, index_col=False)
+                if len(pred_post_df) > 0:
+                    pred_post_df = pred_post_df.drop(columns=["post th"])
+                    all_post_dfs.append(pred_post_df)      
+
+        # Save then the pre and post sites separately
+        if len(all_pre_dfs) > 0:
+            pre_points_df = pd.concat(all_pre_dfs, ignore_index=True)
+            pre_points_df.sort_values(by=["axis-0"])
+
+            pre_th_global = min_th_to_be_peak
+            if th_type == "manual":
+                print(f"Using global threshold (pre-points): {pre_th_global}")
+            elif th_type == "relative":
+                max_val = max(pre_points_df["probability"])
+                pre_th_global = max_val*min_th_to_be_peak
+                print(f"Using global threshold (pre-points): {pre_th_global} (max: {max_val})")
+            pre_points_df = pre_points_df[pre_points_df["probability"] > pre_th_global]
+
+            pre_points_df["pre_id"] = list(range(1, len(pre_points_df)+1))
+            os.makedirs(csv_dir, exist_ok=True)
+            pre_points_df.to_csv(
+                os.path.join(
+                    csv_dir,
+                    filename+"_pred_pre_locations.csv",
+                ),
+                index=False,
+            )
+        if len(all_post_dfs) > 0:
+            post_points_df = pd.concat(all_post_dfs, ignore_index=True)
+            post_points_df.sort_values(by=["axis-0"])
+
+            post_th_global = min_th_to_be_peak
+            if th_type == "manual":
+                print(f"Using global threshold (post-points): {post_th_global}")
+            elif th_type == "relative":
+                max_val = max(post_points_df["probability"])
+                post_th_global = max_val*min_th_to_be_peak
+                print(f"Using global threshold (post-points): {post_th_global} (max: {max_val})")
+            post_points_df = post_points_df[post_points_df["probability"] > post_th_global]
+
+            post_points_df["post_id"] = list(range(1, len(post_points_df)+1))
+            os.makedirs(csv_dir, exist_ok=True)
+            post_points_df.to_csv(
+                os.path.join(
+                    csv_dir,
+                    filename+"_pred_post_locations.csv",
+                ),
+                index=False,
+            )
+
+        # Create coordinate arrays
+        pre_points, post_points = [], []
+        if len(all_pre_dfs) > 0 and pre_points_df is not None:
+            for coord in zip(pre_points_df["axis-0"], pre_points_df["axis-1"], pre_points_df["axis-2"]):
+                pre_points.append(list(coord))
+        if len(all_post_dfs) > 0 and post_points_df is not None:
+            for coord in zip(post_points_df["axis-0"], post_points_df["axis-1"], post_points_df["axis-2"]):
+                post_points.append(list(coord))
+        pre_points = np.array(pre_points)
+        post_points = np.array(post_points)
+
+        pre_post_mapping = {}
+        pres, posts = [], []
+        if len(pre_points) > 0 and pre_points_df is not None and len(post_points) > 0 and post_points_df is not None:
+            pre_ids = pre_points_df["pre_id"].to_list()
+            if len(post_points) > 0 and post_points_df is not None:
+                post_ids = post_points_df["post_id"].to_list()
+            for i in range(len(pre_points)):
+                pre_post_mapping[pre_ids[i]] = []
+
+            # Match each post with a pre
+            distances = distance_matrix(post_points, pre_points)
+            for i in range(len(post_points)):
+                closest_pre_point = np.argmin(distances[i])
+                closest_pre_point = pre_ids[closest_pre_point]
+                pre_post_mapping[closest_pre_point].append(post_ids[i])
+
+            # Create pre/post lists so we can create the final dataframe
+            for i in pre_post_mapping.keys():
+                if len(pre_post_mapping[i]) > 0:
+                    for post_site in pre_post_mapping[i]:
+                        pres.append(i)
+                        posts.append(post_site)
+                else:
+                    # For those pre points that do not have any post points assigned just put a -1 value
+                    pres.append(i)
+                    posts.append(-1)
+        else:
+            if verbose:
+                if len(pre_points) == 0:
+                    print("No pre synaptic points found!")
+                if len(post_points) == 0:
+                    print("No post synaptic points found!")
+
+        if len(pres) > 0 and len(posts) > 0:
+            # Create a mapping dataframe
+            pre_post_map_df = pd.DataFrame(
+                zip(
+                    pres,
+                    posts,
+                ),
+                columns=[
+                    "pre_id",
+                    "post_id",
+                ],
+            )
+            pre_post_map_df.sort_values(by=["pre_id", "post_id"])
+            pre_post_map_df.to_csv(
+                os.path.join(
+                    csv_dir,
+                    filename+"_pre_post_mapping.csv",
+                ),
+                index=False,
+            )
+    else:
+        # Read the dataframes
+        pre_points_df = pd.read_csv(
+            os.path.join(
+                csv_dir,
+                filename+"_pred_pre_locations.csv",
+            )
+        )
+        post_points_df = pd.read_csv(
+            os.path.join(
+                csv_dir,
+                filename+"_pred_post_locations.csv",
+            )
+        )
+        pre_post_map_df = pd.read_csv(
+            os.path.join(
+                csv_dir,
+                filename+"_pre_post_mapping.csv",
+            )
+        )
+
+        # Create coordinate arrays
+        pre_points, post_points = [], []
+        for coord in zip(pre_points_df["axis-0"], pre_points_df["axis-1"], pre_points_df["axis-2"]):
+            pre_points.append(list(coord))
+        for coord in zip(post_points_df["axis-0"], post_points_df["axis-1"], post_points_df["axis-2"]):
+            post_points.append(list(coord))
+        pre_points = np.array(pre_points)
+        post_points = np.array(post_points)
+
+        post_th_global = min_th_to_be_peak
+        pre_th_global = min_th_to_be_peak
+        if th_type == "manual":
+            print(f"Using global threshold (pre-points): {pre_th_global}")
+            print(f"Using global threshold (post-points): {post_th_global}")
+        elif th_type == "relative":
+            max_val = max(pre_points_df["probability"]) if len(pre_points_df) > 0 else 1
+            pre_th_global = max_val*min_th_to_be_peak
+            print(f"Using global threshold (pre-points): {pre_th_global} (max: {max_val})")
+            max_val = max(post_points_df["probability"]) if len(post_points_df) > 0 else 1
+            post_th_global = max_val*min_th_to_be_peak
+            print(f"Using global threshold (post-points): {post_th_global} (max: {max_val})")
+            
+    if pre_points_df is None:
+        pre_points_df = pd.DataFrame(
+            columns=[
+                "pre_id",
+                "axis-0",
+                "axis-1",
+                "axis-2",
+                "probability",
+                "pre th",
+            ],
+        )
+    if post_points_df is None:
+        post_points_df = pd.DataFrame(
+            columns=[
+                "post_id",
+                "axis-0",
+                "axis-1",
+                "axis-2",
+                "probability",
+                "post th",
+            ],
+        )
+
+    return pre_points_df, pre_points, pre_th_global, post_points_df, post_points, post_th_global 
+
+def extract_synful_synapses(
+    data: np.ndarray,
+    channels: List[str] = ["F_post", "H", "V", "Z"],
+    threshold_abs: float = 0.2,
+    min_distance: int = 1,
+    cluster_distance: float = 5.0,
+    out_dir: Optional[str] = None,
+    verbose: bool = True,
+) -> Tuple[pd.DataFrame, np.ndarray, pd.DataFrame, np.ndarray]:
+    """
+    Create synapses pre/post points from Synful vector predictions.
+
+    Parameters
+    ----------
+    data : 4D Numpy array
+        Model predictions. E.g. ``(397, 1450, 2000, 4)``.
+    channels : List of str
+        Channel layout. Default is ["F_post", "H", "V", "Z"].
+    threshold_abs : float, optional
+        Minimum probability in F_post to be considered a post-synaptic site.
+    min_distance : int, optional
+        The minimal allowed distance separating post-synaptic peaks.
+    cluster_distance : float, optional
+        Maximum voxel distance to cluster projected pre-sites into the same unique T-bar.
+    out_dir : str, optional
+        Directory to save the CSV outputs. If None, nothing is saved to disk.
+    verbose : bool, optional
+        Print progress.
+
+    Returns
+    -------
+    Tuple[pd.DataFrame, NDArray, pd.DataFrame, NDArray]
+        pre_points_df: DataFrame with pre points.
+        pre_points: Array with pre points.
+        post_points_df: DataFrame with post points.
+        post_points: Array with post points.
+    """
+    req_channels = {"F_post", "H", "V", "Z"}
+    if set(channels) != req_channels:
+        raise ValueError(f"Channels must contain exactly {req_channels}. Got {channels}")
+
+    # Dynamically grab the indices based on the provided channel list
+    f_post_idx = channels.index("F_post")
+    h_idx = channels.index("H")  # Assuming H maps to Y (axis-1)
+    v_idx = channels.index("V")  # Assuming V maps to X (axis-2)
+    z_idx = channels.index("Z")  # Assuming Z maps to Z (axis-0)
+
+    if verbose:
+        print("Extracting post-synaptic sites...")
+    
+    # 1. Find post-synaptic locations using the F_post channel
+    post_coords = peak_local_max(
+        data[..., f_post_idx],
+        min_distance=min_distance,
+        threshold_abs=threshold_abs,
+    ).astype(int)
+
+    if len(post_coords) == 0:
+        if verbose:
+            print("No post-synaptic points found!")
+        empty_df = pd.DataFrame()
+        empty_arr = np.array([])
+        return empty_df, empty_arr, empty_df, empty_arr
+
+    # 2. Extract vectors and project pre-sites
+    post_data = []
+    projected_pres = []
+
+    for i, (z, y, x) in enumerate(post_coords):
+        post_id = i + 1
+        prob = data[z, y, x, f_post_idx]
+        
+        # Get vectors at this exact voxel
+        dy = data[z, y, x, h_idx]
+        dx = data[z, y, x, v_idx]
+        dz = data[z, y, x, z_idx]
+
+        # Calculate projected pre-location (Post_Coord + Vector)
+        pre_z = z + dz
+        pre_y = y + dy
+        pre_x = x + dx
+
+        post_data.append((post_id, z, y, x, prob))
+        projected_pres.append([pre_z, pre_y, pre_x])
+
+    post_points_df = pd.DataFrame(
+        post_data, columns=["post_id", "axis-0", "axis-1", "axis-2", "probability"]
+    )
+
+    if verbose:
+        print(f"Found {len(post_data)} post-synaptic sites. Clustering projected pre-sites...")
+
+    # 3. Cluster the projected pre-sites
+    if len(projected_pres) > 1:
+        # Single linkage hierarchical clustering
+        Z_link = linkage(projected_pres, method='single', metric='euclidean')
+        pre_labels = fcluster(Z_link, t=cluster_distance, criterion='distance')
+    else:
+        pre_labels = np.array([1])
+
+    post_points_df["pre_id"] = pre_labels
+
+    # 4. Calculate centroids of the clustered pre-sites
+    pre_data = []
+    unique_pre_ids = np.unique(pre_labels)
+    
+    for pid in unique_pre_ids:
+        # Get all projected vectors belonging to this pre_id
+        cluster_points = np.array(projected_pres)[pre_labels == pid]
+        # Average them to get the final coordinate
+        centroid = np.mean(cluster_points, axis=0)
+        pre_data.append((pid, centroid[0], centroid[1], centroid[2]))
+
+    pre_points_df = pd.DataFrame(
+        pre_data, columns=["pre_id", "axis-0", "axis-1", "axis-2"]
+    )
+
+    # 5. Create mapping DataFrame
+    pre_post_map_df = post_points_df[["pre_id", "post_id"]].copy()
+
+    # Save to disk
+    if out_dir is not None:
+        os.makedirs(out_dir, exist_ok=True)
+        if verbose:
+            print(f"Saving CSV files to {out_dir}...")
+            
+        pre_points_df.to_csv(os.path.join(out_dir, "pred_pre_locations.csv"), index=False)
+        post_points_df.to_csv(os.path.join(out_dir, "pred_post_locations.csv"), index=False)
+        pre_post_map_df.to_csv(os.path.join(out_dir, "pre_post_mapping.csv"), index=False)
+
+    # 6. Extract numpy arrays for the return tuple
+    pre_points = pre_points_df[["axis-0", "axis-1", "axis-2"]].to_numpy()
+    post_points = post_points_df[["axis-0", "axis-1", "axis-2"]].to_numpy()
+
+    return pre_points_df, pre_points, post_points_df, post_points
 
 def apply_median_filtering(
     data: NDArray, 

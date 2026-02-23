@@ -1629,3 +1629,78 @@ def pick_chunks(shape: Tuple[int, ...], dtype: str, target_mb: float = 4.0) -> T
         chunks[i] = max(1, chunks[i] // 2)
 
     return tuple(int(c) for c in chunks)
+
+
+def load_synapse_gt_points(
+    locations_path: str, 
+    resolution_path: str, 
+    partners_path: str, 
+    id_path: str, 
+    data_filename: str
+) -> Tuple[List[int], List[int], List[int | float]]:
+    """
+    Load synapse ground truth points from the given paths.
+
+    Parameters
+    ----------
+    locations_path : str
+        Path to the synapse locations within the data file.
+
+    resolution_path : str
+        Path to the synapse resolution within the data file.
+    
+    partners_path : str
+        Path to the synapse partners within the data file.
+    
+    id_path : str   
+        Path to the synapse ids within the data file.
+
+    data_filename : str
+        Path to the data file.
+
+    Returns
+    -------
+    gt_pre_points : list of numpy arrays    
+        List of pre-synaptic points coordinates.
+
+    gt_post_points : list of numpy arrays
+        List of post-synaptic points coordinates.
+
+    resolution : tuple of int or float
+        Resolution of the synapse coordinates.
+    """
+    file, ids = read_chunked_nested_data(data_filename, id_path)
+    ids = list(np.array(ids))
+    _, partners = read_chunked_nested_data(data_filename, partners_path)
+    partners = np.array(partners)
+    _, locations = read_chunked_nested_data(data_filename, locations_path)
+    locations = np.array(locations)
+    _, resolution = read_chunked_nested_data(data_filename, resolution_path)
+    try:
+        resolution = resolution.attrs["resolution"]
+    except:
+        raise ValueError(
+            "There is no 'resolution' attribute in '{}'. Add it like: data['{}'].attrs['resolution'] = (8,8,8)".format(
+                resolution_path, resolution_path
+            )
+        )
+    resolution = list(resolution)
+
+    gt_pre_points, gt_post_points = {}, {}
+    for i in tqdm(range(len(partners)), disable=not is_main_process()):
+        pre_id, post_id = partners[i]
+        pre_position = ids.index(pre_id)
+        post_position = ids.index(post_id)
+        pre_coord = locations[pre_position] // resolution
+        post_coord = locations[post_position] // resolution
+        if str(pre_coord) not in gt_pre_points:
+            gt_pre_points[str(pre_coord)] = pre_coord
+        if str(post_coord) not in gt_post_points:
+            gt_post_points[str(post_coord)] = post_coord
+    gt_pre_points = list(gt_pre_points.values())
+    gt_post_points = list(gt_post_points.values())
+
+    if isinstance(file, h5py.File):
+        file.close()
+
+    return gt_pre_points, gt_post_points, resolution
