@@ -300,7 +300,7 @@ class STUNet(nn.Module):
         self.out_head_map = []
         self.heads = nn.Sequential()
         for i, out_ch in enumerate(output_channels):
-            self.heads.append(nn.Conv3d(self.input_channels, out_ch, kernel_size=1, padding="same"))
+            self.heads.append(nn.Conv3d(output_channels[0], out_ch, kernel_size=1, padding="same"))
             self.out_head_map += [i] * out_ch
 
         init_weights(self)
