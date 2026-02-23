@@ -572,6 +572,22 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             if cfg.PROBLEM.INSTANCE_SEG.BORDER_EXTRA_WEIGHTS == "unet-like" and "We" not in sorted_original_instance_channels:
                 sorted_original_instance_channels.append("We")
 
+            # Create unique folder names for instance segmentation channel masks
+            # depending on the channels and their options
+            suffix = ""
+            dst = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0]
+            for ch in sorted_original_instance_channels:
+                suffix += f"_{ch}"
+                for entry in dst.get(ch, {}):
+                    eval = str(dst[ch][entry]).replace(" ", "").replace("[", "").replace("]", "").replace("(", "").replace(")", "").replace(",", "-")
+                    suffix += f".{entry}-{eval}"
+            train_channel_mask_dir = cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR + suffix
+            opts.extend(["DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR", train_channel_mask_dir])
+            val_channel_mask_dir = cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR + suffix
+            opts.extend(["DATA.VAL.INSTANCE_CHANNELS_MASK_DIR", val_channel_mask_dir])
+            test_channel_mask_dir = cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR + suffix
+            opts.extend(["DATA.TEST.INSTANCE_CHANNELS_MASK_DIR", test_channel_mask_dir])
+
             replace_channels = False
             if sorted_original_instance_channels != original_instance_channels:
                 replace_channels = True
@@ -633,23 +649,23 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                         "mask_values": dst.get(ch, {}).get("mask_values", True),
                     }
 
-        # Create unique folder names for instance segmentation channel masks
-        # depending on the channels and their options
-        suffix = ""
-        dst = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0]
-        for ch in [x for x in sorted_original_instance_channels if x in ["F_pre", "F_post"]]:
-            suffix += f"_{ch}"
-            for entry in dst.get(ch, {}):
-                eval = str(dst[ch][entry]).replace(" ", "").replace("[", "").replace("]", "").replace("(", "").replace(")", "").replace(",", "-")
-                suffix += f".{entry}-{eval}"
-        suffix += f"_HVZ_norm-{force_norm}"
+            # Create unique folder names for instance segmentation channel masks
+            # depending on the channels and their options
+            suffix = ""
+            dst = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0]
+            for ch in [x for x in sorted_original_instance_channels if x in ["F_pre", "F_post"]]:
+                suffix += f"_{ch}"
+                for entry in dst.get(ch, {}):
+                    eval = str(dst[ch][entry]).replace(" ", "").replace("[", "").replace("]", "").replace("(", "").replace(")", "").replace(",", "-")
+                    suffix += f".{entry}-{eval}"
+            suffix += f"_HVZ_norm-{force_norm}"
 
-        train_channel_mask_dir = cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR + suffix
-        opts.extend(["DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR", train_channel_mask_dir])
-        val_channel_mask_dir = cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR + suffix
-        opts.extend(["DATA.VAL.INSTANCE_CHANNELS_MASK_DIR", val_channel_mask_dir])
-        test_channel_mask_dir = cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR + suffix
-        opts.extend(["DATA.TEST.INSTANCE_CHANNELS_MASK_DIR", test_channel_mask_dir])
+            train_channel_mask_dir = cfg.DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR + suffix
+            opts.extend(["DATA.TRAIN.INSTANCE_CHANNELS_MASK_DIR", train_channel_mask_dir])
+            val_channel_mask_dir = cfg.DATA.VAL.INSTANCE_CHANNELS_MASK_DIR + suffix
+            opts.extend(["DATA.VAL.INSTANCE_CHANNELS_MASK_DIR", val_channel_mask_dir])
+            test_channel_mask_dir = cfg.DATA.TEST.INSTANCE_CHANNELS_MASK_DIR + suffix
+            opts.extend(["DATA.TEST.INSTANCE_CHANNELS_MASK_DIR", test_channel_mask_dir])
 
         if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES == []:
             if not channel_loss_set:
