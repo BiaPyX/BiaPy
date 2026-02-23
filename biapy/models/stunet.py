@@ -21,38 +21,12 @@ Notes:
 from __future__ import annotations
 
 from collections import OrderedDict
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import torch
 from torch import nn
 
-from biapy.models.blocks import prepare_activation_layers
-
-
-# --------------------------------------------------------------------------------------
-# Initialization (replacement for nnU-Net's InitWeights_He)
-# --------------------------------------------------------------------------------------
-
-class InitWeights_He:
-    """Kaiming/He initialization compatible with nnU-Net's default settings."""
-    def __init__(self, neg_slope: float = 1e-2):
-        self.neg_slope = float(neg_slope)
-
-    def __call__(self, module: nn.Module) -> None:
-        if isinstance(module, (nn.Conv3d, nn.ConvTranspose3d)):
-            nn.init.kaiming_normal_(module.weight, a=self.neg_slope)
-            if module.bias is not None:
-                nn.init.zeros_(module.bias)
-        elif isinstance(module, (nn.InstanceNorm3d, nn.BatchNorm3d)):
-            if hasattr(module, "weight") and module.weight is not None:
-                nn.init.ones_(module.weight)
-            if hasattr(module, "bias") and module.bias is not None:
-                nn.init.zeros_(module.bias)
-
-
-# --------------------------------------------------------------------------------------
-# Building blocks
-# --------------------------------------------------------------------------------------
+from biapy.models.blocks import init_weights, prepare_activation_layers
 
 class BasicResBlock(nn.Module):
     """
@@ -136,8 +110,21 @@ class STUNet(nn.Module):
     image_shape : Tuple[int, ...]
         Shape of the input image (including channels as last dimension).
 
-    output_channels : List[int]
-        Number of output channels (one value for single-head, two for multi-head).  
+    output_channels : list of int, optional
+        Output channels of the network. If one value is provided, the model will have a single output head. 
+        If two values are provided, the model will have two output heads (e.g. for multi-task learning with 
+        instance segmentation and classification).
+
+    output_channel_info : list of str, optional
+        Information about the type of output channels. Possible values are:
+        - "X": where X is a letter, e.g. "F" for foreground, "D" for distance, "R" for rays, "C" for cpntours, etc.
+        - "class": classification (e.g. for multi-task learning)
+
+    explicit_activations : bool, optional
+        If True, uses explicit activation functions in the last layers.
+    
+    head_activations : List[str], optional
+        Activation functions to apply to each output head if `explicit_activations` is True.
 
     depth : Sequence[int]
         Number of residual blocks per stage.
@@ -154,7 +141,7 @@ class STUNet(nn.Module):
     explicit_activations : bool, optional
         If True, uses explicit activation functions in the last layers.
 
-    activations : List[List[str]], optional
+    head_activations : List[List[str]], optional
         Activation functions to apply to the outputs if `explicit_activations` is True.
 
     deep_supervision : bool
@@ -169,12 +156,13 @@ class STUNet(nn.Module):
         self,
         image_shape: Tuple[int, ...] = (256, 256, 1),
         output_channels: List[int] = [1],
+        output_channel_info=["F"],
+        explicit_activations: bool = False,
+        head_activations: List[str] = ["ce_sigmoid"],
         depth: Sequence[int] = (1, 1, 1, 1, 1, 1),
         dims: Sequence[int] = (32, 64, 128, 256, 512, 512),
         pool_op_kernel_sizes: Optional[Sequence[Sequence[int]]] = None,
         conv_kernel_sizes: Optional[Sequence[Sequence[int]]] = None,
-        explicit_activations: bool = False,
-        activations: List[List[str]] = [],
         *,
         deep_supervision: bool = True,
     ):
@@ -182,18 +170,23 @@ class STUNet(nn.Module):
 
         if len(output_channels) == 0:
             raise ValueError("'output_channels' needs to has at least one value")
-        if len(output_channels) != 1 and len(output_channels) != 2:
-            raise ValueError(f"'output_channels' must be a list of one or two values at max, not {output_channels}")
+        print("Selected output channels:")        
+        for i, info in enumerate(output_channel_info):
+            print(f"  - {i} channel for {info} output")
         self.output_channels = output_channels
-        self.multihead = len(output_channels) == 2
+        self.output_channel_info = output_channel_info
+        self.explicit_activations = explicit_activations
+        self.return_class = True if "class" in output_channel_info else False
         self.image_shape = image_shape
         self.ndim = 3 if len(image_shape) == 4 else 2
         self.input_channels = int(image_shape[-1])
-        self.weightInitializer = InitWeights_He(1e-2)
 
-        self.explicit_activations = explicit_activations
         if self.explicit_activations:
-            self.out_activations, self.class_activation = prepare_activation_layers(activations)
+            assert len(head_activations) == len(output_channels), "If 'explicit_activations' is True, 'head_activations' needs to "
+            "have the same number of values as 'output_channels'"
+            self.head_activations, self.class_head_activations = prepare_activation_layers(head_activations, output_channel_info)
+            if self.return_class and self.class_head_activations is None:
+                raise ValueError("If 'return_class' is True, 'head_activations' must be provided.")
 
         if self.ndim == 3:
             self.conv_op = nn.Conv3d
@@ -303,16 +296,30 @@ class STUNet(nn.Module):
         # Deep supervision upscalers (OrgMIM uses identity lambdas)
         self.upscale_logits_ops = nn.ModuleList([nn.Identity() for _ in range(num_pool - 1)])
 
-        # Multi-head:
-        #   Instance segmentation: instances + classification
-        #   Detection: points + classification
-        self.last_class_head = None
-        if self.multihead:
-            self.last_class_head = self.conv_op(self.input_channels, output_channels[1], kernel_size=1, padding="same")
+        # To store which head corresponds to which output channel in the multi-head scenario
+        self.out_head_map = []
+        self.heads = nn.Sequential()
+        for i, out_ch in enumerate(output_channels):
+            self.heads.append(nn.Conv3d(self.input_channels, out_ch, kernel_size=1, padding="same"))
+            self.out_head_map += [i] * out_ch
 
-        self.apply(self.weightInitializer)
+        init_weights(self)
 
     def forward(self, x: torch.Tensor):
+        """
+        Forward pass of the model.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input tensor of shape (batch_size, channels, height, width) for 2D or (batch_size, channels, depth, height, width) for 3D.
+
+        Returns
+        -------
+        Dict or torch.Tensor
+            Model output. Returns a dictionary if multi-head or contrastive outputs are enabled,
+            otherwise returns the main prediction tensor.
+        """
         skips: List[torch.Tensor] = []
         seg_outputs: List[torch.Tensor] = []
 
@@ -332,35 +339,43 @@ class STUNet(nn.Module):
             seg_outputs.append(self.final_nonlin(self.seg_outputs[u](x)))
 
         # Regular output
-        if self._deep_supervision:
-            out = [seg_outputs[-1]] + [
-                    op(aux) for op, aux in zip(list(self.upscale_logits_ops)[::-1], seg_outputs[:-1][::-1])
-                ]
-        else:
-            out = [seg_outputs[-1]]
+        # if self._deep_supervision:
+        #     feats = [seg_outputs[-1]] + [
+        #             op(aux) for op, aux in zip(list(self.upscale_logits_ops)[::-1], seg_outputs[:-1][::-1])
+        #         ]
+        # else:
+        # For now we deactivate deep supervision 
+        feats = seg_outputs[-1]
 
-        for j in range(len(out)):
-            if self.explicit_activations:
-                # If there is only one activation, apply it to the whole tensor
-                if len(self.out_activations) == 1:
-                    out[j] = self.out_activations[0](out[j])
-                else:
-                    for i, act in enumerate(self.out_activations):
-                        out[j][:, i:i+1] = act(out[j][:, i:i+1])
+        out_dict = {}
+
+        # Pass the features through the output heads
+        class_outs, outs = [], []
+        for i, head_id in enumerate(self.out_head_map):
+            if "class" not in self.output_channel_info[i]:
+                outs.append(self.heads[head_id](feats))
+            else:
+                class_outs.append(self.heads[head_id](feats))  
+        outs = torch.cat(outs, dim=1)
+
+        # Apply head_activations to the output heads if explicit_activations is True
+        if self.explicit_activations:
+            # If there is only one activation, apply it to the whole tensor
+            if len(self.head_activations) == 1:
+                outs = self.head_activations[0](outs)
+            else:
+                for i, act in enumerate(self.head_activations):
+                    outs[:, i:i+1] = act(outs[:, i:i+1])
+
+            if self.return_class and self.class_head_activations is not None:
+                for i, act in enumerate(self.class_head_activations):
+                    class_outs[i] = act(class_outs[i])
 
         out_dict = {
-            "pred": out,
+            "pred": outs,
         }
-
-        # Multi-head output
-        #   Instance segmentation: instances + classification
-        #   Detection: points + classification
-        if self.multihead and self.last_class_head:
-            class_head_out = self.last_class_head(out[0])
-            if self.explicit_activations:
-                for i, act in enumerate(self.class_activation):
-                    class_head_out[:, i:i+1] = act(class_head_out[:, i:i+1])
-            out_dict["class"] = class_head_out
+        if self.return_class:
+            out_dict["class"] = torch.cat(class_outs, dim=1)
 
         if len(out_dict.keys()) == 1:
             return out_dict["pred"]
@@ -384,50 +399,53 @@ def _common_kernels():
     return conv_kernel_sizes, pool_op_kernel_sizes
 
 
-def STUNet_base(image_shape: Tuple[int, ...] = (256, 256, 1), output_channels: List[int] = [1], *, deep_supervision: bool = True,
-                explicit_activations: bool = False, activations: List[List[str]] = []) -> STUNet:
+def STUNet_base(image_shape: Tuple[int, ...] = (256, 256, 1), output_channels: List[int] = [1], output_channel_info: List[str] = ["F"], 
+                deep_supervision: bool = True, explicit_activations: bool = False, head_activations: List[str] = []) -> STUNet:
     conv_kernel_sizes, pool_op_kernel_sizes = _common_kernels()
     return STUNet(
         image_shape=image_shape,
         output_channels=output_channels,
+        output_channel_info=output_channel_info,
+        head_activations=head_activations,
+        explicit_activations=explicit_activations,
         depth=[1] * 6,
         dims=[32, 64, 128, 256, 512, 512],
         pool_op_kernel_sizes=pool_op_kernel_sizes,
         conv_kernel_sizes=conv_kernel_sizes,
         deep_supervision=deep_supervision,
-        explicit_activations=explicit_activations,
-        activations=activations,
     )
 
-def STUNet_small(image_shape: Tuple[int, ...] = (256, 256, 1), output_channels: List[int] = [1], *, deep_supervision: bool = True,
-                explicit_activations: bool = False, activations: List[List[str]] = []) -> STUNet:
+def STUNet_small(image_shape: Tuple[int, ...] = (256, 256, 1), output_channels: List[int] = [1], output_channel_info: List[str] = ["F"], 
+                 deep_supervision: bool = True, explicit_activations: bool = False, head_activations: List[str] = []) -> STUNet:
     conv_kernel_sizes, pool_op_kernel_sizes = _common_kernels()
     return STUNet(
         image_shape=image_shape,
         output_channels=output_channels,
+        output_channel_info=output_channel_info,
+        head_activations=head_activations,
+        explicit_activations=explicit_activations,
         depth=[1] * 6,
         dims=[16, 32, 64, 128, 256, 256],
         pool_op_kernel_sizes=pool_op_kernel_sizes,
         conv_kernel_sizes=conv_kernel_sizes,
-        deep_supervision=deep_supervision,
-        explicit_activations=explicit_activations,
-        activations=activations,
+        deep_supervision=deep_supervision,  
     )
 
 
-def STUNet_large(image_shape: Tuple[int, ...] = (256, 256, 1), output_channels: List[int] = [1], *, deep_supervision: bool = True,
-                explicit_activations: bool = False, activations: List[List[str]] = []) -> STUNet:
+def STUNet_large(image_shape: Tuple[int, ...] = (256, 256, 1), output_channels: List[int] = [1], output_channel_info: List[str] = ["F"], 
+                 deep_supervision: bool = True, explicit_activations: bool = False, head_activations: List[str] = []) -> STUNet:
     conv_kernel_sizes, pool_op_kernel_sizes = _common_kernels()
     return STUNet(
         image_shape=image_shape,
         output_channels=output_channels,
+        output_channel_info=output_channel_info,
+        head_activations=head_activations,
+        explicit_activations=explicit_activations,
         depth=[2] * 6,
         dims=[64, 128, 256, 512, 1024, 1024],
         pool_op_kernel_sizes=pool_op_kernel_sizes,
         conv_kernel_sizes=conv_kernel_sizes,
         deep_supervision=deep_supervision,
-        explicit_activations=explicit_activations,
-        activations=activations,
     )
 
 
@@ -478,9 +496,10 @@ def build_stunet(
     variant: str,
     image_shape: Tuple[int, ...] = (256, 256, 1),
     output_channels: List[int] = [1],
-    deep_supervision: bool = True,
+    output_channel_info=["F"],
     explicit_activations: bool = False,
-    activations: List[List[str]] = [],
+    head_activations: List[str] = ["ce_sigmoid"],
+    deep_supervision: bool = True,
     pretrained: Union[bool, str] = False,
     map_location: str = "cpu",
 ) -> STUNet:
@@ -495,12 +514,16 @@ def build_stunet(
         Shape of the input image (including channels as last dimension).
     output_channels : List[int]
         Number of output channels (one value for single-head, two for multi-head).  
+    output_channel_info : list of str
+        Information about the type of output channels. Possible values are:
+        - "X": where X is a letter, e.g. "F" for foreground, "D" for distance, "R" for rays, "C" for cpntours, etc.
+        - "class": classification (e.g. for multi-task learning)
+    explicit_activations : bool
+        Whether to apply explicit head_activations to outputs.    
+    head_activations : List[List[str]]
+        Activation functions for outputs.
     deep_supervision : bool
         Whether to enable deep supervision (multiple outputs).
-    explicit_activations : bool
-        Whether to apply explicit activations to outputs.
-    activations : List[List[str]]
-        Activation functions for outputs.
     pretrained : Union[bool, str]
         If True, load default pretrained weights for the variant.
         If str, it can be a key in PRETRAINED_STUNET or a URL.
@@ -510,20 +533,20 @@ def build_stunet(
     v = variant.lower()
     if v == "small":
         model = STUNet_small(
-            image_shape=image_shape, output_channels=output_channels, deep_supervision=deep_supervision,
-            explicit_activations=explicit_activations, activations=activations,
+            image_shape=image_shape, output_channels=output_channels, output_channel_info=output_channel_info, 
+            deep_supervision=deep_supervision, explicit_activations=explicit_activations, head_activations=head_activations,
         )
         default_key = "orgmim_cnn_small"
     elif v == "base":
         model = STUNet_base(
-            image_shape=image_shape, output_channels=output_channels, deep_supervision=deep_supervision,
-            explicit_activations=explicit_activations, activations=activations,
+            image_shape=image_shape, output_channels=output_channels, output_channel_info=output_channel_info, 
+            deep_supervision=deep_supervision, explicit_activations=explicit_activations, head_activations=head_activations,
         )
         default_key = "orgmim_cnn_base"
     elif v == "large":
         model = STUNet_large(
-            image_shape=image_shape, output_channels=output_channels, deep_supervision=deep_supervision,
-            explicit_activations=explicit_activations, activations=activations,
+            image_shape=image_shape, output_channels=output_channels, output_channel_info=output_channel_info, 
+            deep_supervision=deep_supervision, explicit_activations=explicit_activations, head_activations=head_activations,
         )
         default_key = "orgmim_cnn_large"
     else:

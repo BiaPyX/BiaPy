@@ -41,7 +41,11 @@ from bioimageio.spec import load_description
 
 
 def build_model(
-    cfg: CN, output_channels: int, activations: List[str], device: torch.device
+    cfg: CN, 
+    output_channels: List[int], 
+    output_channel_info: List[str], 
+    head_activations: List[str], 
+    device: torch.device
 ) -> Tuple[nn.Module, str, Dict, set, List[str], Dict, Tuple[int, ...]]:
     # model, model_file, model_name, args
     """
@@ -52,8 +56,14 @@ def build_model(
     cfg : YACS CN object
         Configuration.
 
-    output_channels : int
-        Number of output channels.
+    output_channels : List[int]
+        Number of output channels for each head.
+
+    output_channel_info : List[str]
+        Information about each output channel.
+
+    head_activations : List[str]
+        Activation functions for each output head.
 
     device : Torch device
         Using device. Most commonly "cpu" or "cuda" for GPU, but also potentially "mps",
@@ -104,10 +114,11 @@ def build_model(
             upsample_layer=cfg.MODEL.UPSAMPLE_LAYER,
             z_down=cfg.MODEL.Z_DOWN,
             output_channels=output_channels,
+            output_channel_info=output_channel_info,
+            head_activations=head_activations,
+            explicit_activations=False,
             contrast=cfg.LOSS.CONTRAST.ENABLE,
             contrast_proj_dim=cfg.LOSS.CONTRAST.PROJ_DIM,
-            activations=activations,
-            explicit_activations=False,
         )
         if modelname == "unet":
             callable_model = U_Net  # type: ignore
@@ -139,10 +150,11 @@ def build_model(
                 isotropy=cfg.MODEL.ISOTROPY,
                 stem_k_size=cfg.MODEL.CONVNEXT_STEM_K_SIZE,
                 output_channels=output_channels,
+                output_channel_info=output_channel_info,
+                head_activations=head_activations,
+                explicit_activations=False,
                 contrast=cfg.LOSS.CONTRAST.ENABLE,
                 contrast_proj_dim=cfg.LOSS.CONTRAST.PROJ_DIM,
-                activations=activations,
-                explicit_activations=False,
             )
             if modelname == "unext_v1":
                 callable_model = U_NeXt_V1  # type: ignore
@@ -167,7 +179,8 @@ def build_model(
             contrast=cfg.LOSS.CONTRAST.ENABLE,
             contrast_proj_dim=cfg.LOSS.CONTRAST.PROJ_DIM,
             head_type=cfg.MODEL.HRNET.HEAD_TYPE,
-            activations=activations,
+            head_activations=head_activations,
+            output_channel_info=output_channel_info,
             explicit_activations=False,
         )
 
@@ -221,7 +234,8 @@ def build_model(
             variant=cfg.MODEL.STUNET.VARIANT,
             deep_supervision=True,
             explicit_activations=False,
-            activations=activations,
+            head_activations=head_activations,
+            output_channel_info=output_channel_info,
         )
         model = build_stunet(**args) # type: ignore
     else:
@@ -230,6 +244,7 @@ def build_model(
                 image_shape=cfg.DATA.PATCH_SIZE,
                 activation=cfg.MODEL.ACTIVATION.lower(),
                 n_classes=cfg.DATA.N_CLASSES,
+                head_activations=head_activations,
             )
             model = simple_CNN(**args)  # type: ignore
             callable_model = simple_CNN  # type: ignore
@@ -284,6 +299,9 @@ def build_model(
                 mlp_ratio=cfg.MODEL.VIT_MLP_RATIO,
                 num_filters=cfg.MODEL.UNETR_VIT_NUM_FILTERS,
                 output_channels=output_channels,
+                output_channel_info=output_channel_info,
+                head_activations=head_activations,
+                explicit_activations=False,
                 decoder_activation=cfg.MODEL.UNETR_DEC_ACTIVATION.lower(),
                 ViT_hidd_mult=cfg.MODEL.UNETR_VIT_HIDD_MULT,
                 normalization=cfg.MODEL.NORMALIZATION,
@@ -291,8 +309,6 @@ def build_model(
                 k_size=cfg.MODEL.UNETR_DEC_KERNEL_SIZE,
                 contrast=cfg.LOSS.CONTRAST.ENABLE,
                 contrast_proj_dim=cfg.LOSS.CONTRAST.PROJ_DIM,
-                activations=activations,
-                explicit_activations=False,
             )
             model = UNETR(**args)  # type: ignore
             callable_model = UNETR  # type: ignore
@@ -975,7 +991,7 @@ def check_bmz_model_compatibility(
             ):
                 channel_code = ["F", "C", "M"]
 
-            # Handle multihead
+            # Handle separated_class_channel
             assert isinstance(channels, list)
             if len(channels) == 2:
                 classes = channels[-1]

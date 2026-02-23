@@ -148,7 +148,7 @@ class simple_CNN(nn.Module):
             w = image_shape[2] // 4
             f = z * h * w * second_block_features
 
-        self.last_block = nn.Sequential(
+        self.heads = nn.Sequential(
             nn.Flatten(),
             nn.Dropout(0.5),
             nn.Linear(f, n_classes),
@@ -179,5 +179,5 @@ class simple_CNN(nn.Module):
         """
         out = self.block1(x)
         out = self.block2(out)
-        out = self.last_block(out)
+        out = self.heads(out)
         return out

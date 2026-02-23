@@ -97,30 +97,31 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
 
     def define_activations_and_channels(self):
         """
-        Define the model output channels and activations to be applied to them.
+        Define the activations to be applied to the model output and the channels that the model will output.
 
         This function must define the following variables:
 
-        self.model_output_channels : List of functions
-            Metrics to be calculated during model's training.
+        self.model_output_channels : List of int
+            Number of channels for each output head of the model. E.g. [3] for a model with one head outputting 3 channels, 
+            [1, 5] for a model with two heads outputting 1 and 5 channels respectively, etc.
 
-        self.multihead : bool
-            Whether if the output of the model has more than one head.
+        self.model_output_channel_info : List of str
+            Information about the output channels.
 
-        self.activations : List of lists of str
-            Activations to be applied to the model output. Each dict will
-            match an output channel of the model. "linear" and "ce_sigmoid"
-            will not be applied. E.g. ["linear"].
+        self.separated_class_channel : bool
+            Whether if we should expect a separated output channel for classification.
+
+        self.head_activations : List of str
+            Activations to be applied to the model output. Each dict will match an output channel of the model. "linear" and "ce_sigmoid"
+            will not be applied. E.g. ["linear"] for a model with one head, ["linear", "sigmoid"] for a model with two heads, etc.
         """
-        self.model_output_channels = {
-            "type": "mask",
-            "channels": [1 if self.cfg.DATA.N_CLASSES <= 2 else self.cfg.DATA.N_CLASSES],
-        }
+        self.model_output_channels = [1 if self.cfg.DATA.N_CLASSES <= 2 else self.cfg.DATA.N_CLASSES]
         self.real_classes = self.cfg.DATA.N_CLASSES
-        self.multihead = False
-        for _ in range(self.model_output_channels["channels"][0]):
-            self.activations.append("ce_softmax" if self.cfg.DATA.N_CLASSES > 2 else "ce_sigmoid")
-        self.activations = [self.activations]
+        self.separated_class_channel = False
+        self.head_activations = []
+        for i in range(self.model_output_channels[0]):
+            self.head_activations.append("ce_softmax" if self.cfg.DATA.N_CLASSES > 2 else "ce_sigmoid")
+            self.model_output_channel_info.append("pred{}".format(i))
 
         super().define_activations_and_channels()
 

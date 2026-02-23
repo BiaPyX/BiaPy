@@ -35,7 +35,15 @@ import torch
 import torch.nn as nn
 from typing import Dict, List
 
-from biapy.models.blocks import DoubleConvBlock, UpBlock, ConvBlock, get_norm_2d, get_norm_3d, prepare_activation_layers
+from biapy.models.blocks import (
+    DoubleConvBlock, 
+    UpBlock, 
+    ConvBlock, 
+    get_norm_2d, 
+    get_norm_3d, 
+    prepare_activation_layers, 
+    init_weights
+)
 from biapy.models.heads import ProjectionHead
 
 
@@ -48,112 +56,6 @@ class SE_U_Net(nn.Module):
     leading to better performance in dense prediction tasks like image segmentation.
 
     Reference: `Squeeze and Excitation Networks <https://openaccess.thecvf.com/content_cvpr_2018/html/Hu_Squeeze-and-Excitation_Networks_CVPR_2018_paper.html>`_.
-
-    Parameters
-    ----------
-    image_shape : Tuple[int, ...]
-        Dimensions of the input image. E.g., `(y, x, channels)` for 2D or
-        `(z, y, x, channels)` for 3D. The last element `image_shape[-1]`
-        should be the number of input channels.
-
-    activation : str, optional
-        Activation layer to use throughout the network (e.g., "ELU", "ReLU").
-        Defaults to "ELU".
-
-    feature_maps : List[int], optional
-        A list specifying the number of feature maps (channels) at each level
-        of the U-Net. The length of this list defines the depth of the U-Net.
-        Defaults to `[32, 64, 128, 256]`.
-
-    drop_values : List[float], optional
-        A list of dropout probabilities to apply at each level of the U-Net.
-        Its length should match the number of levels (i.e., `len(feature_maps)`).
-        Defaults to `[0.1, 0.1, 0.1, 0.1]`.
-
-    normalization : str, optional
-        Type of normalization layer to use throughout the network. Options include
-        `'bn'` (Batch Normalization), `'sync_bn'` (Synchronized Batch Normalization for multi-GPU),
-        `'in'` (Instance Normalization), `'gn'` (Group Normalization), or `'none'`.
-        Defaults to "none".
-
-    k_size : int, optional
-        Kernel size for most convolutional layers in the network. Defaults to 3.
-
-    upsample_layer : str, optional
-        Type of layer to use for upsampling in the decoder path.
-        Two options: "convtranspose" (using `nn.ConvTranspose2d`/`3d`) or
-        "upsampling" (using `nn.Upsample` followed by convolution).
-        Defaults to "convtranspose".
-
-    z_down : List[int], optional
-        For 3D data, a list of downsampling factors for the z-dimension at each
-        pooling stage in the encoder. Set elements to `1` if the dataset is not
-        isotropic and z-downsampling is not desired at that stage.
-        Its length should match the number of pooling stages (`len(feature_maps) - 1`).
-        Defaults to `[2, 2, 2, 2]`.
-
-    output_channels : List[int], optional
-        Specifies the number of output channels for the final prediction head(s).
-        Must be a list of length 1 for a single output task (e.g., semantic segmentation)
-        or length 2 for multi-head tasks (e.g., instances + classification in instance segmentation,
-        or points + classification in detection). Defaults to `[1]`.
-
-    upsampling_factor : Tuple[int, ...], optional
-        Factor of upsampling for super-resolution workflows. If provided,
-        it dictates the kernel and stride for an initial or final transposed
-        convolution. Defaults to an empty tuple `()`, meaning no super-resolution.
-
-    upsampling_position : str, optional
-        Determines where super-resolution upsampling is applied:
-
-        - ``"pre"``: Upsampling is performed *before* the main U-Net model.
-        - ``"post"``: Upsampling is performed *after* the main U-Net model.
-        
-        Defaults to "pre".
-
-    isotropy : bool or List[bool], optional
-        Controls whether to use 3D or 2D convolutions at each U-Net level when
-        the input is 3D.
-
-        - If `True` (bool), all levels use 3D convolutions.
-        - If `False` (bool), all levels use 2D convolutions (1xKxK kernels for 3D input).
-        - If `List[bool]`, specifies for each level (encoder/decoder pair) whether
-          to use 3D (True) or 2D (False) kernels. Its length should match `len(feature_maps)`.
-        
-        Defaults to False.
-
-    larger_io : bool, optional
-        If True, uses extra and larger kernels (k_size+2) in the input and
-        output layers for potentially better initial/final feature extraction.
-        Defaults to True.
-
-    contrast : bool, optional
-        Whether to add a contrastive learning projection head to the model.
-        If True, an additional output `embed` will be available in the forward pass.
-        Defaults to `False`.
-
-    contrast_proj_dim : int, optional
-        Dimension of the projection head for contrastive learning, if `contrast` is True.
-        Defaults to `256`.
-
-    explicit_activations : bool, optional
-        If True, uses explicit activation functions in the last layers.
-    
-    activations : List[List[str]], optional
-        Activation functions to apply to the outputs if `explicit_activations` is True.
-
-    Returns
-    -------
-    model : nn.Module
-        The constructed SE_U_Net model.
-
-    Calling this function with its default parameters returns the following network:
-
-    .. image:: ../../img/models/unet.png
-        :width: 100%
-        :align: center
-
-    Image created with `PlotNeuralNet <https://github.com/HarisIqbal88/PlotNeuralNet>`_.
     """
 
     def __init__(
@@ -167,14 +69,15 @@ class SE_U_Net(nn.Module):
         upsample_layer="convtranspose",
         z_down=[2, 2, 2, 2],
         output_channels=[1],
+        output_channel_info=["F"],
+        explicit_activations: bool = False,
+        head_activations: List[str] = ["ce_sigmoid"],
         upsampling_factor=(),
         upsampling_position="pre",
         isotropy=False,
         larger_io=True,
         contrast: bool = False,
         contrast_proj_dim: int = 256,
-        explicit_activations: bool = False,
-        activations: List[List[str]] = [],
     ):
         """
         Initialize the SE_U_Net model.
@@ -186,80 +89,103 @@ class SE_U_Net(nn.Module):
 
         Parameters
         ----------
-        image_shape : Tuple[int, ...], optional
-            Input image dimensions. E.g., `(256, 256, 1)` for 2D or `(32, 256, 256, 1)` for 3D.
-            The last element is the number of input channels. Defaults to (256, 256, 1).
+        image_shape : 3D/4D tuple
+            Dimensions of the input image. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
+
         activation : str, optional
-            Activation layer to use (e.g., "ELU", "ReLU", "SiLU"). Defaults to "ELU".
-        feature_maps : List[int], optional
-            Number of feature maps (channels) at each U-Net level. The length of this
-            list determines the depth of the U-Net. Defaults to `[32, 64, 128, 256]`.
-        drop_values : List[float], optional
-            Dropout probabilities for each level of the U-Net. Its length should match
-            `len(feature_maps)`. Defaults to `[0.1, 0.1, 0.1, 0.1]`.
+            Activation layer to be used throughout the model.
+
+        feature_maps : array of ints, optional
+            Feature maps to use on each level.
+
+        drop_values : float, optional
+            Dropout value to be fixed.
+
         normalization : str, optional
-            Type of normalization layer (e.g., 'bn', 'sync_bn', 'in', 'gn', 'none').
-            Defaults to "none".
+            Normalization layer (one of ``'bn'``, ``'sync_bn'`` ``'in'``, ``'gn'`` or ``'none'``).
+
         k_size : int, optional
-            Kernel size for most convolutional layers. Defaults to 3.
+            Kernel size.
+
         upsample_layer : str, optional
-            Method for upsampling in the decoder: "convtranspose" (using `nn.ConvTranspose`)
-            or "upsampling" (using `nn.Upsample` followed by convolution).
-            Defaults to "convtranspose".
-        z_down : List[int], optional
-            For 3D data, downsampling factors for the z-dimension at each pooling stage.
-            Set to `1` for isotropic data or to prevent z-downsampling.
-            Defaults to `[2, 2, 2, 2]`.
-        output_channels : List[int], optional
-            Number of channels for the final prediction head(s). Can be a list of
-            length 1 for single-task output or length 2 for multi-task output
-            (e.g., instances + classification). Defaults to `[1]`.
-        upsampling_factor : Tuple[int, ...], optional
-            Factor for super-resolution upsampling. If provided, a transposed
-            convolution layer is added at the beginning or end of the model.
-            Defaults to `()`.
-        upsampling_position : str, optional
-            Position of super-resolution upsampling: "pre" (before U-Net) or
-            "post" (after U-Net). Defaults to "pre".
-        isotropy : bool | List[bool], optional
-            Controls the use of 3D vs. 2D convolutions for 3D input.
-            - `bool`: Applies the same setting to all levels (True for 3D kernels, False for 2D kernels).
-            - `List[bool]`: Specifies per level. Defaults to False (2D kernels for 3D input).
-        larger_io : bool, optional
-            If True, uses larger kernels (`k_size + 2`) for the initial input
-            and final output convolutional layers. Defaults to True.
-        contrast : bool, optional
-            If True, adds a `ProjectionHead` for contrastive learning, outputting
-            an `embed` tensor in the forward pass. Defaults to `False`.
-        contrast_proj_dim : int, optional
-            Output dimension of the contrastive projection head, if `contrast` is True.
-            Defaults to `256`.
+            Type of layer to use to make upsampling. Two options: "convtranspose" or "upsampling".
+
+        z_down : List of ints, optional
+            Downsampling used in z dimension. Set it to ``1`` if the dataset is not isotropic.
+
+        output_channels : list of int, optional
+            Output channels of the network. If one value is provided, the model will have a single output head. 
+            If two values are provided, the model will have two output heads (e.g. for multi-task learning with 
+            instance segmentation and classification).
+
+        output_channel_info : list of str, optional
+            Information about the type of output channels. Possible values are:
+            - "X": where X is a letter, e.g. "F" for foreground, "D" for distance, "R" for rays, "C" for cpntours, etc.
+            - "class": classification (e.g. for multi-task learning)
+
         explicit_activations : bool, optional
             If True, uses explicit activation functions in the last layers.
-        activations : List[List[str]], optional
-            Activation functions to apply to the outputs if `explicit_activations` is True.
+        
+        head_activations : List[str], optional
+            Activation functions to apply to each output head if `explicit_activations` is True.
 
-        Raises
-        ------
-        ValueError
-            If 'output_channels' is an empty list or contains more than two values.
+        upsampling_factor : tuple of ints, optional
+            Factor of upsampling for super resolution workflow for each dimension.
+
+        upsampling_position : str, optional
+            Whether the upsampling is going to be made previously (``pre`` option) to the model
+            or after the model (``post`` option).
+
+        isotropy : bool or list of bool, optional
+            Whether to use 3d or 2d convolutions at each U-Net level even if input is 3d.
+
+        larger_io : bool, optional
+            Whether to use extra and larger kernels in the input and output layers.
+
+        contrast : bool, optional
+            Whether to add contrastive learning head to the model. Default is ``False``.
+
+        contrast_proj_dim : int, optional
+            Dimension of the projection head for contrastive learning. Default is ``256``.
+
+        Returns
+        -------
+        model : Torch model
+            Residual U-Net model.
+
+
+        Calling this function with its default parameters returns the following network:
+
+        .. image:: ../../img/models/unet.png
+            :width: 100%
+            :align: center
+
+        Image created with `PlotNeuralNet <https://github.com/HarisIqbal88/PlotNeuralNet>`_.
         """
         super(SE_U_Net, self).__init__()
 
         if len(output_channels) == 0:
             raise ValueError("'output_channels' needs to has at least one value")
-        if len(output_channels) != 1 and len(output_channels) != 2:
-            raise ValueError(f"'output_channels' must be a list of one or two values at max, not {output_channels}")
+        if contrast and len(output_channels) > 2:
+            raise ValueError("If 'contrast' is True, 'output_channels' can only have two values at max: one for the main output and one for the class.")
+        print("Selected output channels:")        
+        for i, info in enumerate(output_channel_info):
+            print(f"  - {i} channel for {info} output")
 
         self.depth = len(feature_maps) - 1
         self.ndim = 3 if len(image_shape) == 4 else 2
         self.z_down = z_down
         self.output_channels = output_channels
-        self.multihead = len(output_channels) == 2
+        self.output_channel_info = output_channel_info
+        self.return_class = True if "class" in output_channel_info else False
         self.contrast = contrast
         self.explicit_activations = explicit_activations
         if self.explicit_activations:
-            self.out_activations, self.class_activation = prepare_activation_layers(activations)
+            assert len(head_activations) == len(output_channels), "If 'explicit_activations' is True, 'head_activations' needs to "
+            "have the same number of values as 'output_channels'"
+            self.head_activations, self.class_head_activations = prepare_activation_layers(head_activations, output_channel_info)
+            if self.return_class and self.class_head_activations is None:
+                raise ValueError("If 'return_class' is True, 'head_activations' must be provided.")
         if type(isotropy) == bool:
             isotropy = isotropy * len(feature_maps)
         if self.ndim == 3:
@@ -391,9 +317,12 @@ class SE_U_Net(nn.Module):
                 stride=upsampling_factor,
             )
 
+        # To store which head corresponds to which output channel in the multi-head scenario
+        self.out_head_map = []
+
         if self.contrast:
             # extra added layers
-            self.last_block = nn.Sequential(
+            self.heads = nn.Sequential(
                 conv(feature_maps[0], feature_maps[0], kernel_size=3, stride=1, padding=1),
                 norm_func(normalization, feature_maps[0]),
                 dropout(0.10),
@@ -401,45 +330,29 @@ class SE_U_Net(nn.Module):
             )
 
             self.proj_head = ProjectionHead(ndim=self.ndim, in_channels=feature_maps[0], proj_dim=contrast_proj_dim)
+            self.out_head_map += [0] * output_channels[0]
         else:
-            self.last_block = conv(feature_maps[0], output_channels[0], kernel_size=1, padding="same")
+            self.heads = nn.Sequential()
+            for i, out_ch in enumerate(output_channels):
+                self.heads.append(conv(feature_maps[0], out_ch, kernel_size=1, padding="same"))
+                self.out_head_map += [i] * out_ch
 
-        # Multi-head:
-        #   Instance segmentation: instances + classification
-        #   Detection: points + classification
-        self.last_class_head = None
-        if self.multihead:
-            self.last_class_head = conv(feature_maps[0], output_channels[1], kernel_size=1, padding="same")
-
-        self.apply(self._init_weights)
+        init_weights(self)
 
     def forward(self, x) -> Dict | torch.Tensor:
         """
-        Perform the forward pass of the SE_U_Net model.
-
-        The input `x` first undergoes optional pre-upsampling for super-resolution
-        and an optional larger input convolution. It then passes through the
-        encoder path (downsampling blocks with pooling), followed by a bottleneck.
-        The decoder path upsamples features, concatenates them with corresponding
-        skip connections from the encoder, and processes them through upsampling blocks.
-        Finally, optional post-upsampling and the final prediction head(s) are applied.
+        Forward pass of the model.
 
         Parameters
         ----------
         x : torch.Tensor
-            The input image tensor.
-            Expected shape for 2D: `(batch_size, input_channels, height, width)`.
-            Expected shape for 3D: `(batch_size, input_channels, depth, height, width)`.
+            Input tensor of shape (batch_size, channels, height, width) for 2D or (batch_size, channels, depth, height, width) for 3D.
 
         Returns
         -------
-        Dict | torch.Tensor
-            If `contrast` is True or `multihead` is True, returns a dictionary
-            containing different output tensors (e.g., "pred", "embed", "class").
-            Otherwise, returns only the primary prediction tensor.
-            The primary prediction tensor ("pred") will have `output_channels[0]`
-            channels and spatial dimensions corresponding to the original input
-            (or upsampled input if `upsampling_position` is "pre").
+        Dict or torch.Tensor
+            Model output. Returns a dictionary if multi-head or contrastive outputs are enabled,
+            otherwise returns the main prediction tensor.
         """
         # Super-resolution
         if self.pre_upsampling:
@@ -449,18 +362,17 @@ class SE_U_Net(nn.Module):
         if self.conv_in:
             x = self.conv_in(x)
 
-        # Down
+        # Encoder
         blocks = []
         for i, layers in enumerate(zip(self.down_path, self.mpooling_layers)):
             down, pool = layers
             x = down(x)
-            if i != len(self.down_path):
-                blocks.append(x)
-                x = pool(x)
+            blocks.append(x)
+            x = pool(x)
 
         x = self.bottleneck(x)
 
-        # Up
+        # Decoder
         for i, up in enumerate(self.up_path):
             x = up(x, blocks[-i - 1])
 
@@ -473,62 +385,41 @@ class SE_U_Net(nn.Module):
         if self.post_upsampling:
             feats = self.post_upsampling(feats)
 
-        # Regular output
-        out = self.last_block(feats)
+        out_dict = {}
 
+        # Pass the features through the output heads
+        class_outs, outs = [], []
+        for i, head_id in enumerate(self.out_head_map):
+            if "class" not in self.output_channel_info[i]:
+                outs.append(self.heads[head_id](feats))
+            else:
+                class_outs.append(self.heads[head_id](feats))  
+        outs = torch.cat(outs, dim=1)
+
+        # Apply activations to the output heads if explicit_activations is True
         if self.explicit_activations:
             # If there is only one activation, apply it to the whole tensor
-            if len(self.out_activations) == 1:
-                out = self.out_activations[0](out)
+            if len(self.head_activations) == 1:
+                outs = self.head_activations[0](outs)
             else:
-                for i, act in enumerate(self.out_activations):
-                    out[:, i:i+1] = act(out[:, i:i+1])
+                for i, act in enumerate(self.head_activations):
+                    outs[:, i:i+1] = act(outs[:, i:i+1])
+
+            if self.return_class and self.class_head_activations is not None:
+                for i, act in enumerate(self.class_head_activations):
+                    class_outs[i] = act(class_outs[i])
 
         out_dict = {
-            "pred": out,
+            "pred": outs,
         }
+        if self.return_class:
+            out_dict["class"] = torch.cat(class_outs, dim=1)
 
         # Contrastive learning head
         if self.contrast:
             out_dict["embed"] = self.proj_head(feats)
 
-        # Multi-head output
-        #   Instance segmentation: instances + classification
-        #   Detection: points + classification
-        if self.multihead and self.last_class_head:
-            class_head_out = self.last_class_head(feats)
-            if self.explicit_activations:
-                for i, act in enumerate(self.class_activation):
-                    class_head_out[:, i:i+1] = act(class_head_out[:, i:i+1])
-            out_dict["class"] = class_head_out
-
-
         if len(out_dict.keys()) == 1:
             return out_dict["pred"]
         else:
             return out_dict
-
-    def _init_weights(self, m):
-        """
-        Initialize the weights of convolutional, linear, and LayerNorm layers.
-
-        Applies Xavier uniform initialization to convolutional and linear layer weights
-        (with bias set to 0 if present). For LayerNorm, weights are set to 1.0 and
-        biases to 0. This method is typically called using `model.apply()`.
-
-        Parameters
-        ----------
-        m : nn.Module
-            The module whose weights are to be initialized.
-        """
-        if isinstance(m, nn.Conv2d) or isinstance(m, nn.Conv3d):
-            nn.init.xavier_uniform_(m.weight)
-            if m.bias is not None:
-                nn.init.constant_(m.bias, 0)
-        elif isinstance(m, nn.Linear):
-            nn.init.xavier_uniform_(m.weight)
-            if isinstance(m, nn.Linear) and m.bias is not None:
-                nn.init.constant_(m.bias, 0)
-        elif isinstance(m, nn.LayerNorm):
-            nn.init.constant_(m.bias, 0)
-            nn.init.constant_(m.weight, 1.0)

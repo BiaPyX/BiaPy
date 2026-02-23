@@ -214,9 +214,10 @@ class Base_Workflow(metaclass=ABCMeta):
 
         self.mask_path = ""
         self.is_y_mask = False
-        self.model_output_channels = {}
-        self.activations = []
-        self.multihead = None
+        self.model_output_channels = []
+        self.model_output_channel_info = []
+        self.head_activations = []
+        self.separated_class_channel = None
         self.train_metrics = []
         self.train_metric_best = []
         self.train_metric_names = []
@@ -332,46 +333,53 @@ class Base_Workflow(metaclass=ABCMeta):
 
         This function must define the following variables:
 
-        self.model_output_channels : List of functions
-            Metrics to be calculated during model's training.
+        self.model_output_channels : List of int
+            Number of channels for each output head of the model. E.g. [3] for a model with one head outputting 3 channels, 
+            [1, 5] for a model with two heads outputting 1 and 5 channels respectively, etc.
 
-        self.multihead : bool
-            Whether if the output of the model has more than one head.
+        self.model_output_channel_info : List of str
+            Information about the output channels.
 
-        self.activations : List of dicts
-            Activations to be applied to the model output. Each dict will
-            match an output channel of the model. If ':' is used the activation
-            will be applied to all channels at once. "linear" and "ce_sigmoid"
-            will not be applied. E.g. [{":": "linear"}].
+        self.separated_class_channel : bool
+            Whether if we should expect a separated output channel for classification.
+
+        self.head_activations : List of str
+            Activations to be applied to the model output. Each dict will match an output channel of the model. "linear" and "ce_sigmoid"
+            will not be applied. E.g. ["linear"] for a model with one head, ["linear", "sigmoid"] for a model with two heads, etc.
         """
         if not self.model_output_channels:
             raise ValueError(
                 "'model_output_channels' needs to be defined. Correct define_activations_and_channels() function"
             )
-        else:
-            if not isinstance(self.model_output_channels, dict):
-                raise ValueError("'self.model_output_channels' must be a dict")
-            if "type" not in self.model_output_channels:
-                raise ValueError("'self.model_output_channels' must have 'type' key")
-            if "channels" not in self.model_output_channels:
-                raise ValueError("'self.model_output_channels' must have 'channels' key")
-        if self.multihead is None:
-            raise ValueError("'multihead' needs to be defined. Correct define_activations_and_channels() function")
-        if not self.activations:
-            raise ValueError("'activations' needs to be defined. Correct define_activations_and_channels() function")
-        else:
-            if not isinstance(self.activations, list):
-                raise ValueError("'self.activations' must be a list of lists")
-            for x in self.activations:
-                if not isinstance(x, list):
-                    raise ValueError("'self.activations' must be a list of lists")
-                for y in x:
-                    if not isinstance(y, str):
-                        raise ValueError("'self.activations' must be a list of str")
+        if not isinstance(self.model_output_channels, list):
+            raise ValueError("'self.model_output_channels' must be a list")
+        for x in self.model_output_channels:
+            if not isinstance(x, int):
+                raise ValueError("'self.model_output_channels' must be a list of integers")
 
-            assert len(self.activations) == len(self.model_output_channels["channels"]), "Activations and output channels do not match"
-            for k in range(len(self.activations)):
-                assert len(self.activations[k]) == self.model_output_channels["channels"][k], "Activations and output channels do not match per head"
+        if self.model_output_channel_info is None:
+            raise ValueError("'model_output_channel_info' needs to be defined. Correct define_activations_and_channels() function")
+        if not isinstance(self.model_output_channel_info, list):
+            raise ValueError("'self.model_output_channel_info' must be a list")
+        for x in self.model_output_channel_info:
+            if not isinstance(x, str):
+                raise ValueError("'self.model_output_channel_info' must be a list of strings")
+
+        if self.separated_class_channel is None:
+            raise ValueError("'separated_class_channel' needs to be defined. Correct define_activations_and_channels() function")
+        if not self.head_activations:
+            raise ValueError("'self.head_activations' needs to be defined. Correct define_activations_and_channels() function")
+        if not isinstance(self.head_activations, list):
+            raise ValueError("'self.head_activations' must be a list of strings")
+        for x in self.head_activations:
+            if not isinstance(x, str):
+                raise ValueError("'self.head_activations' must be a list of strings")
+
+        head_number = sum(self.model_output_channels)
+        assert len(self.head_activations) == head_number, "Activations and output channels do not match. "
+        "{} activations vs {} output channels".format(len(self.head_activations), head_number)
+        assert len(self.head_activations) == len(self.model_output_channel_info), "Activations and output channel info do not match. "
+        "{} activations vs {} channel info".format(len(self.head_activations), len(self.model_output_channel_info))
 
         if self.real_classes == -1:
             raise ValueError(
@@ -691,7 +699,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 and self.cfg.PROBLEM.TYPE not in ["CLASSIFICATION", "SUPER_RESOLUTION"]
             ):
                 if isinstance(pred, dict):
-                    if pred["pred"].shape[2:] != in_img.shape[2:]:
+                    if "pred" in pred and pred["pred"].shape[2:] != in_img.shape[2:]:
                         mode = "bilinear" if self.cfg.PROBLEM.NDIM == "2D" else "trilinear"
                         pred["pred"] = resize(pred["pred"], in_img.shape, mode=mode)
                     if "class" in pred:
@@ -774,7 +782,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.bmz_config["scanned_files"],
                 self.model_build_kwargs,
                 self.network_stride,
-            ) = build_model(self.cfg, self.model_output_channels["channels"], self.activations, self.device)
+            ) = build_model(self.cfg, self.model_output_channels, self.model_output_channel_info, self.head_activations, self.device)
         elif self.cfg.MODEL.SOURCE == "torchvision":
             self.model, self.torchvision_preprocessing = build_torchvision_model(self.cfg, self.device)
         # BioImage Model Zoo pretrained models
@@ -1192,11 +1200,12 @@ class Base_Workflow(metaclass=ABCMeta):
             return torch.cat(out_slices, dim=1)
 
         if isinstance(pred, dict):
-            pred["pred"] = __apply_acts(pred["pred"], self.activations[0])
+            pred["pred"] = __apply_acts(pred["pred"], self.head_activations)
             if "class" in pred:
-                pred["class"] = __apply_acts(pred["class"], self.activations[1])
+                class_acts = [self.head_activations[i] for i, info in enumerate(self.model_output_channel_info) if "class" in info]
+                pred["class"] = __apply_acts(pred["class"], class_acts)
         else:
-            pred = __apply_acts(pred, self.activations[0])
+            pred = __apply_acts(pred, self.head_activations)
         return pred
 
     @torch.no_grad()
@@ -1539,7 +1548,7 @@ class Base_Workflow(metaclass=ABCMeta):
         self.bmz_config["postprocessing"] = []
         if self.cfg.MODEL.SOURCE == "biapy":
             # Check activations to be inserted as postprocessing in BMZ
-            act = list(self.activations[0])
+            act = list(self.head_activations[0])
             for ac in act:
                 if ac in ["ce_sigmoid", "Sigmoid"]:
                     self.bmz_config["postprocessing"].append("sigmoid")
@@ -1780,7 +1789,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     )
 
                 # Argmax if needed
-                if self.cfg.DATA.N_CLASSES > 2 and self.cfg.DATA.TEST.ARGMAX_TO_OUTPUT and not self.multihead:
+                if self.cfg.DATA.N_CLASSES > 2 and self.cfg.DATA.TEST.ARGMAX_TO_OUTPUT and not self.separated_class_channel:
                     _type = np.uint8 if self.cfg.DATA.N_CLASSES < 255 else np.uint16
                     pred = np.expand_dims(np.argmax(pred, -1), -1).astype(_type)
 
@@ -1894,7 +1903,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 )
 
                 # Argmax if needed
-                if self.cfg.DATA.N_CLASSES > 2 and self.cfg.DATA.TEST.ARGMAX_TO_OUTPUT and not self.multihead:
+                if self.cfg.DATA.N_CLASSES > 2 and self.cfg.DATA.TEST.ARGMAX_TO_OUTPUT and not self.separated_class_channel:
                     _type = np.uint8 if self.cfg.DATA.N_CLASSES < 255 else np.uint16
                     pred = np.expand_dims(np.argmax(pred, -1), -1).astype(_type)
 

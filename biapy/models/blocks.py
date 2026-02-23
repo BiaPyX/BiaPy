@@ -1801,40 +1801,45 @@ def get_activation(activation: str = "relu") -> nn.Module:
     }
     return activation_dict[activation]
 
-def prepare_activation_layers(activations: List[List[str]]) -> Tuple[nn.ModuleList, Optional[nn.ModuleList]]:
+def prepare_activation_layers(activations: List[str], output_channel_info: List[str]) -> Tuple[nn.ModuleList, Optional[nn.ModuleList]]:
     """ 
     Prepare activation layers for the output and classification heads.
     
     Parameters
     ----------
-    activations : List[List[str]]
-        A list containing two lists of activation function names. The first list corresponds to the output head,
-        and the second list corresponds to the classification head.
+    activations : List[str]
+        A list of activation function names.
+
+    output_channel_info : List[str]
+        A list of strings indicating the type of output channels.
 
     Returns
     -------
     out_activations : nn.ModuleList
         A ModuleList containing the activation layers for the output head.
+
     class_activation : nn.ModuleList or None
         A ModuleList containing the activation layers for the classification head, or None if not provided.
     """
     activation_list = []
-    for out_list in activations:
-        activation_list.append([])
-        for activation in out_list:
-            if activation == "ce_softmax":
-                activation = "softmax"
-                act = get_activation(activation.lower())
-                activation_list[-1].append(act)
-                break
-            else:
-                activation = "sigmoid" if activation == "ce_sigmoid" else activation
-                act = get_activation(activation.lower())
-                activation_list[-1].append(act)
-            
-    out_activations = nn.ModuleList(activation_list[0])
-    class_activation = nn.ModuleList(activation_list[1]) if len(activation_list) > 1 else None
-    return out_activations, class_activation   
+    class_activation_list = []
+    for i, activation in enumerate(activations):
+        activation = activation.lower().removeprefix("ce_")
+        act = get_activation(activation.lower())
+        if "class" in output_channel_info[i]:
+            class_activation_list.append(act)
+        else:
+            activation_list.append(act)
+
+        # We break the loop after finding the fist softmax activation since we assume that there is only one 
+        # softmax activation for the classification head (if any)
+        if "softmax" in activation:
+            break
+
+    if len(class_activation_list) > 0:
+        return nn.ModuleList(activation_list), nn.ModuleList(class_activation_list)
+    else:
+        return nn.ModuleList(activation_list), None
 
 def get_norm_3d(norm: str, out_channels: int, bn_momentum: float = 0.1) -> nn.Module:
     """
@@ -2032,3 +2037,44 @@ class ResUNetPlusPlus_AttentionBlock(nn.Module):
         out = self.conv_encoder(x1) + self.conv_decoder(x2)
         out = self.conv_attn(out)
         return out * x2
+
+
+def init_weights(model: nn.Module):
+    """
+    Applies Xavier initialization to the model.
+    If the model has `synapse_det=True` and a `heads` module list, 
+    the first head (heatmap) gets a CenterNet-style focal bias of -4.59.
+    """
+    # 1. Safely locate the heatmap head directly from the model instance
+    output_channel_info = getattr(model, "output_channel_info", [""])
+    heads = getattr(model, "heads", None)
+
+    # We assume heads[0] is the heatmap if synapse_det is True
+    hm_head = None
+    if output_channel_info and "bbox_heatmap" in output_channel_info and heads is not None and len(heads) > 0:
+        hm_head = heads[output_channel_info.index("bbox_heatmap")]
+
+    # 2. Define the exact initialization logic
+    def _apply_init(m):
+        if isinstance(m, (nn.Conv2d, nn.Conv3d)):
+            nn.init.xavier_uniform_(m.weight)
+            if m.bias is not None:
+                # Apply the prior probability bias strictly to the heatmap head
+                if hm_head is not None and m is hm_head:
+                    nn.init.constant_(m.bias, -4.59)
+                else:
+                    nn.init.constant_(m.bias, 0)
+                    
+        elif isinstance(m, nn.Linear):
+            nn.init.xavier_uniform_(m.weight)
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+                
+        elif isinstance(m, nn.LayerNorm):
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+            if m.weight is not None:
+                nn.init.constant_(m.weight, 1.0)
+
+    # 3. Apply it to the model
+    model.apply(_apply_init)

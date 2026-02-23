@@ -107,36 +107,36 @@ class Detection_Workflow(Base_Workflow):
 
     def define_activations_and_channels(self):
         """
-        Define the activations and output channels of the model.
+        Define the activations to be applied to the model output and the channels that the model will output.
 
         This function must define the following variables:
 
-        self.model_output_channels : List of functions
-            Metrics to be calculated during model's training.
+        self.model_output_channels : List of int
+            Number of channels for each output head of the model. E.g. [3] for a model with one head outputting 3 channels, 
+            [1, 5] for a model with two heads outputting 1 and 5 channels respectively, etc.
 
-        self.multihead : bool
-            Whether if the output of the model has more than one head.
+        self.model_output_channel_info : List of str
+            Information about the output channels.
 
-        self.activations : List of lists of str
-            Activations to be applied to the model output. Each dict will
-            match an output channel of the model. "linear" and "ce_sigmoid"
-            will not be applied. E.g. ["linear"].
+        self.separated_class_channel : bool
+            Whether if we should expect a separated output channel for classification.
+
+        self.head_activations : List of str
+            Activations to be applied to the model output. Each dict will match an output channel of the model. "linear" and "ce_sigmoid"
+            will not be applied. E.g. ["linear"] for a model with one head, ["linear", "sigmoid"] for a model with two heads, etc.
         """
-        self.model_output_channels = {
-            "type": "mask",
-            "channels": 1,
-        }
-
         # Multi-head: points + classification
         if self.cfg.DATA.N_CLASSES > 2:
-            self.activations = [["ce_sigmoid"], ["linear"]]
-            self.model_output_channels["channels"] = [self.model_output_channels["channels"], self.cfg.DATA.N_CLASSES]
-            self.multihead = True
+            self.head_activations = ["ce_sigmoid", "ce_softmax"]
+            self.model_output_channels = [1, self.cfg.DATA.N_CLASSES]
+            self.model_output_channel_info = ["points", "class"]
+            self.separated_class_channel = True
         else:
-            self.activations = [["ce_sigmoid"]]
-            self.model_output_channels["channels"] = [self.model_output_channels["channels"]]
-            self.multihead = False
-        self.real_classes = self.model_output_channels["channels"][0]
+            self.head_activations = ["ce_sigmoid"]
+            self.model_output_channel_info = ["points"]
+            self.model_output_channels = [1]
+            self.separated_class_channel = False
+        self.real_classes = self.model_output_channels[0]
 
         super().define_activations_and_channels()
 
@@ -173,7 +173,7 @@ class Detection_Workflow(Base_Workflow):
                 self.train_metric_best.append("max")
 
         # Multi-head: detection + classification
-        if self.multihead:
+        if self.separated_class_channel:
             self.train_metric_names.append("IoU (classes)")
             self.train_metric_best += ["max"]
 
@@ -195,7 +195,7 @@ class Detection_Workflow(Base_Workflow):
                 self.test_metric_names.append("IoU")
 
         # Multi-head: detection + classification
-        if self.multihead:
+        if self.separated_class_channel:
             self.test_metric_names.append("IoU (classes)")
 
         self.test_metrics.append(
@@ -212,7 +212,7 @@ class Detection_Workflow(Base_Workflow):
         # Workflow specific metrics calculated in a different way than calling metric_calculation(). These metrics are
         # always calculated
         self.test_extra_metrics = ["Precision", "Recall", "F1", "TP", "FP", "FN"]
-        if self.multihead:
+        if self.separated_class_channel:
             self.test_extra_metrics += ["Precision (class)", "Recall (class)", "F1 (class)", "TP (class)", "FN (class)"]
         self.test_metric_names += self.test_extra_metrics
 
@@ -220,7 +220,7 @@ class Detection_Workflow(Base_Workflow):
             self.loss = CrossEntropyLoss_wrapper(
                 num_classes=self.cfg.DATA.N_CLASSES,
                 ndim=self.dims,
-                multihead=self.multihead,
+                separated_class_channel=self.separated_class_channel,
                 model_source=self.cfg.MODEL.SOURCE,
                 class_rebalance=self.cfg.LOSS.CLASS_REBALANCE,
                 class_weights=self.cfg.LOSS.CLASS_WEIGHTS,
@@ -336,7 +336,7 @@ class Detection_Workflow(Base_Workflow):
         assert pred.ndim == 4, f"Prediction doesn't have 4 dim: {pred.shape}"
 
         # Multi-head: points + classification
-        if self.multihead:
+        if self.separated_class_channel:
             class_channel = np.expand_dims(pred[..., -1], -1)
             pred = pred[..., :-1]
 
@@ -381,7 +381,7 @@ class Detection_Workflow(Base_Workflow):
 
         # Decide the class for each point
         pred_points_classes = []
-        if self.multihead:
+        if self.separated_class_channel:
             for point in pred_points:
                 if self.dims == 3:
                     point_area = class_channel[
@@ -426,7 +426,7 @@ class Detection_Workflow(Base_Workflow):
                 for i in range(points_pred_mask.shape[0]):
                     points_pred_mask[i] = dilation(points_pred_mask[i], disk(3))
 
-                if self.multihead:
+                if self.separated_class_channel:
                     class_channel = np.zeros(points_pred_mask.shape, dtype=np.uint8)
                     for n in range(len(pred_points)):
                         class_channel = np.where(points_pred_mask == n + 1, pred_points_classes[n], class_channel)
@@ -457,7 +457,7 @@ class Detection_Workflow(Base_Workflow):
                         verbose=self.cfg.TEST.VERBOSE,
                     )
 
-                if self.multihead:
+                if self.separated_class_channel:
                     points_pred_mask = points_pred_mask[..., 0]
                 else:
                     points_pred_mask = points_pred_mask.squeeze()
@@ -618,7 +618,7 @@ class Detection_Workflow(Base_Workflow):
             df = df.sort_values(by=["pred_id"])
             del aux
 
-            if not self.multihead:
+            if not self.separated_class_channel:
                 df = df.drop(columns=["class"])
 
             if not self.cfg.TEST.BY_CHUNKS.ENABLE:
@@ -635,7 +635,7 @@ class Detection_Workflow(Base_Workflow):
         # Calculate detection metrics
         if self.use_gt and not self.cfg.TEST.BY_CHUNKS.ENABLE:
             all_channel_d_metrics = [0, 0, 0, 0, 0, 0]
-            if self.multihead:
+            if self.separated_class_channel:
                 all_channel_d_metrics += [0, 0, 0, 0, 0]
 
             # Read the GT coordinates from the CSV file
@@ -667,7 +667,7 @@ class Detection_Workflow(Base_Workflow):
                 if "class" not in df_gt:
                     raise ValueError("DATA.N_CLASSES > 2 but no class specified in the CSV file")
             gt_points_classes = None
-            if self.multihead:
+            if self.separated_class_channel:
                 if "class" not in df_gt:
                     raise ValueError("'class' column not present in the CSV file")
                 gt_points_classes = df_gt["class"].tolist()
@@ -757,7 +757,7 @@ class Detection_Workflow(Base_Workflow):
                 all_channel_d_metrics[3] += d_metrics["TP"]
                 all_channel_d_metrics[4] += d_metrics["FP"]
                 all_channel_d_metrics[5] += d_metrics["FN"]
-                if self.multihead:
+                if self.separated_class_channel:
                     all_channel_d_metrics[6] += d_metrics["Precision (class)"]
                     all_channel_d_metrics[7] += d_metrics["Recall (class)"]
                     all_channel_d_metrics[8] += d_metrics["F1 (class)"]

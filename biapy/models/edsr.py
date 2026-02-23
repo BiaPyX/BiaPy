@@ -73,7 +73,7 @@ class EDSR(nn.Module):
             self.resblock.append(SR_convblock(conv, num_filters))
 
         self.last_conv_of_block = conv(num_filters, num_filters, kernel_size=3, padding="same")
-        self.last_block = nn.Sequential(
+        self.heads = nn.Sequential(
             SR_upsampling(conv, num_filters, upsampling_factor),
             conv(num_filters, num_channels, kernel_size=3, padding="same"),
         )
@@ -113,7 +113,7 @@ class EDSR(nn.Module):
         out = out + x_new
 
         # Final upsampling and output
-        out = self.last_block(out)
+        out = self.heads(out)
         return out
 
 
