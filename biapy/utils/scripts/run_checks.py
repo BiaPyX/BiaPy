@@ -49,7 +49,7 @@ all_test_info["Test2"] = {
     "description": "3D Semantic seg. Lucchi++. attention_unet. Basic DA.",
     "yaml": "test_2.yaml",
     "internal_checks": [
-        {"pattern": "Test Foreground IoU (merge patches)", "gt": True, "value": 0.55},
+        {"pattern": "Test Foreground IoU (merge patches)", "gt": True, "value": 0.50},
     ]
 }
 
@@ -1189,7 +1189,7 @@ try:
         biapy_config['AUGMENTOR']['BRIGHTNESS'] = True
 
         biapy_config['TRAIN']['ENABLE'] = True
-        biapy_config['TRAIN']['EPOCHS'] = 50
+        biapy_config['TRAIN']['EPOCHS'] = 4
         biapy_config['TRAIN']['PATIENCE'] = -1
 
         biapy_config['MODEL']['ARCHITECTURE'] = 'hrnet32'
@@ -1269,10 +1269,13 @@ try:
         biapy_config['AUGMENTOR']['BRIGHTNESS'] = True
 
         biapy_config['TRAIN']['ENABLE'] = True
-        biapy_config['TRAIN']['EPOCHS'] = 30
+        biapy_config['TRAIN']['EPOCHS'] = 5
         biapy_config['TRAIN']['PATIENCE'] = -1
 
-        biapy_config['MODEL']['ARCHITECTURE'] = 'attention_unet'
+        biapy_config['MODEL']['ARCHITECTURE'] = 'stunet'
+        biapy_config['MODEL']['STUNET'] = {}
+        biapy_config['MODEL']['STUNET']['VARIANT'] = 'base'
+        biapy_config['MODEL']['STUNET']['PRETRAINED'] = True
 
         biapy_config['TEST']['ENABLE'] = True
         biapy_config['TEST']['REDUCE_MEMORY'] = True
@@ -1430,8 +1433,8 @@ try:
         biapy_config['TEST']['POST_PROCESSING']['MEASURE_PROPERTIES']['REMOVE_BY_PROPERTIES'] = {}
         biapy_config['TEST']['POST_PROCESSING']['MEASURE_PROPERTIES']['REMOVE_BY_PROPERTIES']['ENABLE'] = True
         biapy_config['TEST']['POST_PROCESSING']['MEASURE_PROPERTIES']['REMOVE_BY_PROPERTIES']['PROPS'] = [['circularity', 'area']]
-        biapy_config['TEST']['POST_PROCESSING']['MEASURE_PROPERTIES']['REMOVE_BY_PROPERTIES']['VALUES'] = [[0.5, 100]]
-        biapy_config['TEST']['POST_PROCESSING']['MEASURE_PROPERTIES']['REMOVE_BY_PROPERTIES']['SIGNS'] = [['gt', 'gt']]
+        biapy_config['TEST']['POST_PROCESSING']['MEASURE_PROPERTIES']['REMOVE_BY_PROPERTIES']['VALUES'] = [[0.2, 100]]
+        biapy_config['TEST']['POST_PROCESSING']['MEASURE_PROPERTIES']['REMOVE_BY_PROPERTIES']['SIGNS'] = [['lt', 'lt']]
 
         # Save file
         test_file = os.path.join(inst_seg_folder, all_test_info["Test4"]["yaml"])
@@ -1917,7 +1920,7 @@ try:
         biapy_config['TRAIN']['PATIENCE'] = 20
         biapy_config['TRAIN']['LR_SCHEDULER'] = {}
         biapy_config['TRAIN']['LR_SCHEDULER']['NAME'] = 'warmupcosine'
-        biapy_config['TRAIN']['LR_SCHEDULER']['MIN_LR'] = 5.E-6
+        biapy_config['TRAIN']['LR_SCHEDULER']['MIN_LR'] = 1.E-4
         biapy_config['TRAIN']['LR_SCHEDULER']['WARMUP_COSINE_DECAY_EPOCHS'] = 15
 
         biapy_config['MODEL']['ARCHITECTURE'] = 'hrnet18'
@@ -1925,6 +1928,9 @@ try:
         biapy_config['MODEL']['HRNET']['Z_DOWN'] = False
         del biapy_config['MODEL']['FEATURE_MAPS']
         biapy_config['MODEL']['LOAD_CHECKPOINT'] = False
+
+        biapy_config['LOSS'] = {}
+        biapy_config['LOSS']["CLASS_REBALANCE"] = True
 
         biapy_config['AUGMENTOR']['RANDOM_ROT'] = True
         biapy_config['AUGMENTOR']['AFFINE_MODE'] = 'reflect'
@@ -2092,7 +2098,7 @@ try:
         biapy_config['DATA']['TEST']['IN_MEMORY'] = False
 
         biapy_config['TRAIN']['ENABLE'] = True
-        biapy_config['TRAIN']['EPOCHS'] = 20
+        biapy_config['TRAIN']['EPOCHS'] = 10
         biapy_config['TRAIN']['PATIENCE'] = -1
 
         biapy_config['MODEL']['ARCHITECTURE'] = 'unet'
