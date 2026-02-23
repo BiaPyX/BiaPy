@@ -628,18 +628,13 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
             # H / V / Z — distance channels group
             # If any of H, V or Z is requested, we normalize all of them by default
-            force_norm = False
-            for k in ["H", "V", "Z"]:
-                if k in chs and k in dst and "norm" in dst[k] and dst[k]["norm"]:
-                    force_norm = True
-                    break
             for ch in ("H", "V", "Z"):
                 if ch in chs:
                     if ch in dst:
                         assert [x for x in dst[ch].keys() if x not in ["norm", "act", "mask_values"]] == [], (
                             "PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS for channel '{}' can only have 'norm', 'act' and 'mask_values' keys not {}".format(ch, [x for x in dst[ch].keys() if x not in ["norm", "act", "mask_values"]])
                         )
-                    norm = dst.get(ch, {}).get("norm", force_norm)
+                    norm = dst.get(ch, {}).get("norm", True)
                     act = dst.get(ch, {}).get("act", "")
                     if act == "" and norm:
                         act = "sigmoid"
@@ -648,7 +643,11 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                         "act": act,
                         "mask_values": dst.get(ch, {}).get("mask_values", True),
                     }
-
+            force_norm = False
+            for k in ["H", "V", "Z"]:
+                if k in chs and k in dst and "norm" in dst[k] and dst[k]["norm"]:
+                    force_norm = True
+                    break
             # Create unique folder names for instance segmentation channel masks
             # depending on the channels and their options
             suffix = ""
