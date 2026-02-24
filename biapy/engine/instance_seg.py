@@ -1158,7 +1158,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 threshold_abs.append(self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.MIN_TH_TO_BE_PEAK)
 
         if set(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) ==  {"F_post", "H", "V", "Z"}:
-            pre_points_df, post_points_df, pre_post_map_df = extract_synful_synapses(
+            pre_points_df, pre_points, post_points_df, post_points = extract_synful_synapses(
                 data=pred,
                 channels=self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
                 threshold_abs=0.2,
@@ -1167,7 +1167,6 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 out_dir=out_dir,
                 verbose=self.cfg.TEST.VERBOSE,
             )
-            import pdb; pdb.set_trace()
         else:
             pre_points_df, pre_points, post_points_df, post_points = create_synapses_from_point_probs(
                 data=pred,
@@ -1408,7 +1407,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             # pre_points_df, post_points_df = self.instance_seg_process(chunk, filenames, out_dir, out_dir_post_proc, calculate_metrics=False)
         else:  # synapses
             if set(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) ==  {"F_post", "H", "V", "Z"}:
-                raise NotImplementedError
+                return
     
             pre_points_df, post_points_df = self.synapse_seg_process(chunk)
 
