@@ -195,70 +195,90 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             will not be applied. E.g. ["linear"] for a model with one head, ["linear", "sigmoid"] for a model with two heads, etc.
         """
         self.model_output_channels = [0]
+        set_model_output_channels = True
+        if self.cfg.PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO != []:
+            set_model_output_channels = False
+            self.model_output_channels = []
+            for head_channels in self.cfg.PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO:
+                self.model_output_channels.append(len(head_channels))
+
         dst = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0]
         for i, channel in enumerate(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS):
                 if channel in ["B", "F", "P", "C", "T", "M", "F_pre", "F_post"]:
                     self.head_activations.append("ce_sigmoid")
-                    self.model_output_channels[0] += 1
                     self.model_output_channel_info.append(channel)
+                    if set_model_output_channels:
+                        self.model_output_channels[0] += 1
                 elif channel in ["Dc", "Dn", "D", "H", "V", "Z"]:
                     if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES[i] not in ["mse", "l1", "mae"] or dst.get(channel, {}).get("act", "") == "sigmoid":
                         self.head_activations.append("ce_sigmoid")
                     else:
                         self.head_activations.append("linear")
-                    self.model_output_channels[0] += 1
+                    if set_model_output_channels:
+                        self.model_output_channels[0] += 1
                     self.model_output_channel_info.append(channel)
                 elif channel == "Db":
                     val_type = dst.get(channel, {}).get("val_type", "norm")
                     if val_type == "discretize":
                         for i in range(11):  # Default 10 bins + background
                             self.head_activations.append("ce_softmax")
-                            self.model_output_channels[0] += 1
+                            if set_model_output_channels:
+                                self.model_output_channels[0] += 1
                             self.model_output_channel_info.append(channel+"_bin{}".format(i))
                     elif self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES[i] not in ["mse", "l1", "mae"] or dst.get(channel, {}).get("act", "") == "sigmoid":
                         self.head_activations.append("ce_sigmoid")
-                        self.model_output_channels[0] += 1
+                        if set_model_output_channels:
+                            self.model_output_channels[0] += 1
                         self.model_output_channel_info.append(channel)
                     else:
                         self.head_activations.append("linear")
-                        self.model_output_channels[0] += 1
+                        if set_model_output_channels:
+                            self.model_output_channels[0] += 1
                         self.model_output_channel_info.append(channel)
                 elif channel == "D":
                     self.head_activations.append(dst.get("D", {}).get("act", "linear"))
-                    self.model_output_channels[0] += 1
+                    if set_model_output_channels:
+                        self.model_output_channels[0] += 1
                     self.model_output_channel_info.append(channel)
                 elif channel == "A":
                     for i in range(len(dst.get("A", {}).get("z_affinities", [1]))):
-                        self.model_output_channels[0] += 1
+                        if set_model_output_channels:
+                            self.model_output_channels[0] += 1
                         self.model_output_channel_info.append(channel+"_{}".format(i))
                         self.head_activations.append("ce_sigmoid")
                     for i in range(len(dst.get("A", {}).get("y_affinities", [1]))):
-                        self.model_output_channels[0] += 1
+                        if set_model_output_channels:
+                            self.model_output_channels[0] += 1
                         self.model_output_channel_info.append(channel+"_{}".format(i))
                         self.head_activations.append("ce_sigmoid")
                     for i in range(len(dst.get("A", {}).get("x_affinities", [1]))):
-                        self.model_output_channels[0] += 1
+                        if set_model_output_channels:
+                            self.model_output_channels[0] += 1
                         self.model_output_channel_info.append(channel+"_{}".format(i))
                         self.head_activations.append("ce_sigmoid")
                 elif channel == "R":
                     for i in range(dst.get("R", {}).get("nrays", 32 if self.dims == 2 else 96)):
                         self.head_activations.append("linear")
                         self.model_output_channel_info.append(channel+"_{}".format(i))
-                        self.model_output_channels[0] += 1
+                        if set_model_output_channels:
+                            self.model_output_channels[0] += 1
                 elif channel == "E_offset":
                     for i in range(self.dims):
                         self.head_activations.append("ce_sigmoid")
                         self.model_output_channel_info.append(channel+"_{}".format(i))
-                        self.model_output_channels[0] += 1
+                        if set_model_output_channels:
+                            self.model_output_channels[0] += 1
                 elif channel == "E_sigma":
                     for i in range(self.dims):
                         self.head_activations.append("ce_sigmoid")
                         self.model_output_channel_info.append(channel+"_{}".format(i))
-                        self.model_output_channels[0] += 1
+                        if set_model_output_channels:
+                            self.model_output_channels[0] += 1
                 elif channel == "E_seediness":
                     self.head_activations.append("ce_sigmoid")
                     self.model_output_channel_info.append(channel)
-                    self.model_output_channels[0] += 1
+                    if set_model_output_channels:
+                        self.model_output_channels[0] += 1
                 elif channel == "We":
                     continue
                 else:
@@ -273,7 +293,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         else:
             self.separated_class_channel = False
 
-        self.real_classes = self.model_output_channels[0]
+        self.real_classes = len(self.model_output_channel_info)
         if "Db" in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS and dst.get("Db", {}).get("val_type", "norm") == "discretize":
             self.real_classes -= 10  # Default 10 bins
 
