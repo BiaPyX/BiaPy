@@ -667,7 +667,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             opts.extend(["DATA.TEST.INSTANCE_CHANNELS_MASK_DIR", test_channel_mask_dir])
 
             if set(sorted_original_instance_channels) == {"F_post", "H", "V", "Z"}:
-                cfg.PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO = [["F_post"], ["H", "V", "Z"]]
+                opts.extend(["PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO", [["F_post"], ["H", "V", "Z"]]])
 
         if cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES == []:
             if not channel_loss_set:
