@@ -917,6 +917,25 @@ def extract_3D_patch_with_overlap_and_padding_yield(
     ):
         raise ValueError("'overlap' values must be floats between range [0, 1)")
 
+    if padding[0] >= vol_shape[0] // 2:
+        raise ValueError(
+            "'Padding' can not be greater than half of 'vol_shape'. Max value for the given input shape {} is {}".format(
+                vol_shape, ((vol_shape[0] // 2) - 1, (vol_shape[1] // 2) - 1, (vol_shape[2] // 2) - 1)
+            )
+        )
+    if padding[1] >= vol_shape[1] // 2:
+        raise ValueError(
+            "'Padding' can not be greater than half of 'vol_shape'. Max value for the given input shape {} is {}".format(
+                vol_shape, ((vol_shape[0] // 2) - 1, (vol_shape[1] // 2) - 1, (vol_shape[2] // 2) - 1)
+            )
+        )
+    if padding[2] >= vol_shape[2] // 2:
+        raise ValueError(
+            "'Padding' can not be greater than half of 'vol_shape'. Max value for the given input shape {} is {}".format(
+                vol_shape, ((vol_shape[0] // 2) - 1, (vol_shape[1] // 2) - 1, (vol_shape[2] // 2) - 1)
+            )
+        )
+
     padded_data_shape = [
         z_dim + padding[0] * 2,
         y_dim + padding[1] * 2,
