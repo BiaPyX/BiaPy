@@ -170,7 +170,18 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_PRE_POINTS_RADIUS > 0 
                 or self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_POST_POINTS_RADIUS > 0
             ):
-                self.post_processing["instance_post"] = True
+                # The "instance_post" is related to matching metrics aftwerwards, so it is more related 
+                # to the regular instance segmentation workflow than to the synapse detection one, where 
+                # we have specific metrics for the synapse detection performance.
+                self.post_processing["per_image"] = True
+
+            self.synapse_method = ""
+            if all(ch in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS for ch in ["F_pre", "F_post"]) and len(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) == 2:
+                self.synapse_method = "simpsyn"
+            elif all(ch in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS for ch in ["F_post", "Z", "V", "H"]) and len(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) == 4:
+                self.synapse_method = "synful"
+            else:
+                raise ValueError("Unknown synapse prediction method for the given channels. Please check the documentation for more details.")
 
         self.instances_already_created = False
 
@@ -209,7 +220,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     self.model_output_channel_info.append(channel)
                     if set_model_output_channels:
                         self.model_output_channels[0] += 1
-                elif channel in ["Dc", "Dn", "D", "H", "V", "Z"]:
+                elif channel in ["Dc", "Dn", "D", "Z", "V", "H"]:
                     if self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES[i] not in ["mse", "l1", "mae"] or dst.get(channel, {}).get("act", "") == "sigmoid":
                         self.head_activations.append("ce_sigmoid")
                     else:
@@ -334,7 +345,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 m = "IoU ({} channel)".format(channel) if channel != "A" else "IoU ({} channels)".format(channel)
                 self.train_metric_names += [m]
                 self.train_metric_best += ["max"]
-            elif channel in ["Db", "Dc", "Dn", "D", "H", "V", "Z", "R"]:
+            elif channel in ["Db", "Dc", "Dn", "D", "Z", "V", "H", "R"]:
                 m = "L1 ({} channel)".format(channel) if channel != "R" else "L1 ({} channels)".format(channel)
                 self.train_metric_names += ["L1 ({} channel)".format(channel)]
                 self.train_metric_best += ["min"]
@@ -1144,6 +1155,8 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         filenames: Optional[List[str]] = None,
         out_dir: Optional[str] = None,
         out_dir_post_proc: Optional[str] = None,
+        calculate_metrics: bool = True,
+        do_post_processing: bool = True,
     ) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
         """
         Synapse segmentation workflow engine for test/inference.
@@ -1164,20 +1177,27 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
         out_dir_post_proc : str
             Output directory to save the post-processed instances.
+    
+        calculate_metrics : bool, optional
+            Whether to calculate or not the metrics. Normally we disable it when doring inference per chunks
+            as the metrics are calculated at the end on the whole image.
+
+        do_post_processing : bool
+            Whether to do or not the post-processing step. Normally we disable it when doring inference per chunks
+            as the post-processing is done at the end on the whole image.
         """
         assert pred.ndim == 4, f"Prediction doesn't have 4 dim: {pred.shape}"
         #############################
         ### INSTANCE SEGMENTATION ###
         #############################
         threshold_abs = []
-        regular_process = False if self.cfg.TEST.BY_CHUNKS.ENABLE else True
         for c in range(pred.shape[-1]): 
             if self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE == "auto":
                 threshold_abs.append(threshold_otsu(pred[..., c]))
             else: # "manual", "relative_by_patch", "relative"
                 threshold_abs.append(self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.MIN_TH_TO_BE_PEAK)
 
-        if set(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) ==  {"F_post", "H", "V", "Z"}:
+        if self.synapse_method == "synful":
             pre_points_df, pre_points, post_points_df, post_points = extract_synful_synapses(
                 data=pred,
                 channels=self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
@@ -1204,7 +1224,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 verbose=self.cfg.TEST.VERBOSE,
             )
         
-        if regular_process and self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
+        if calculate_metrics and self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
             print("Calculating synapse detection stats . . .")
             filename = os.path.join(self.current_sample["X_dir"], self.current_sample["X_filename"])
             gt_pre_points, gt_post_points, resolution = load_synapse_gt_points(
@@ -1225,7 +1245,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         ###################
         # Post-processing #
         ###################
-        if self.post_processing["instance_post"]:
+        if do_post_processing and self.post_processing["per_image"]:
             print("TODO: post-processing")
 
         return pre_points_df, post_points_df
@@ -1283,13 +1303,15 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             bbox_to_consider=[],
             verbose=True,
         )
+        point_metrics = [x for x in self.test_extra_metrics if point_type in str(x).lower()]
+        stat_key = "merge_patches" if not post_processing else "merge_patches_post"
         print("Synapse detection ({} points) metrics{}: {}".format(point_type, " (post-processing)" if post_processing else "", d_metrics))
         for n, item in enumerate(d_metrics.items()):
-            metric = self.test_extra_metrics[n]
-            if str(metric).lower() not in self.stats["merge_patches"]:
-                self.stats["merge_patches"][str(metric.lower())] = 0
-            self.stats["merge_patches"][str(metric).lower()] += item[1]
-            self.current_sample_metrics[str(metric).lower() + f" ({point_type} points{(' post-processing' if post_processing else '')})"] = item[1]
+            metric = point_metrics[n]
+            if str(metric).lower() not in self.stats[stat_key]:
+                self.stats[stat_key][str(metric.lower())] = 0
+            self.stats[stat_key][str(metric).lower()] += item[1]
+            self.current_sample_metrics[str(metric).lower() + f" ({point_type} points{(', post-processing' if post_processing else '')})"] = item[1]
 
         # Save csv files with the associations between GT points and predicted ones
         gt_assoc.to_csv(
@@ -1426,10 +1448,10 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             # Important to maintain calculate_metrics=False in the future call here
             # pre_points_df, post_points_df = self.instance_seg_process(chunk, filenames, out_dir, out_dir_post_proc, calculate_metrics=False)
         else:  # synapses
-            if set(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) ==  {"F_post", "H", "V", "Z"}:
+            if self.synapse_method == "synful":
                 return
     
-            pre_points_df, post_points_df = self.synapse_seg_process(chunk)
+            pre_points_df, post_points_df = self.synapse_seg_process(chunk, calculate_metrics=False, do_post_processing=False)
 
             _filename, _ = os.path.splitext(os.path.basename(self.current_sample["X_filename"]))
             if pre_points_df is not None and len(pre_points_df) > 0:
@@ -1521,7 +1543,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
                 self.after_merge_patches(np.expand_dims(pred, 0))
         else:
-            if set(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) ==  {"F_post", "H", "V", "Z"}:
+            if self.synapse_method == "synful":
                 if self.cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE == "chunk_by_chunk":
                     raise NotImplementedError
                 else:
@@ -1565,7 +1587,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         self.calculate_synapse_det_metrics_on_points(gt_post_points, post_points, resolution, filename, self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, point_type="post")
 
                 # Remove close points
-                if self.post_processing["instance_post"]:
+                if self.post_processing["per_image"]:
                     if (
                         len(pre_points) > 0 
                         and pre_points_df is not None 
@@ -1761,7 +1783,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
                     out_dir = (
                         self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING
-                        if self.post_processing["instance_post"]
+                        if self.post_processing["per_image"]
                         else self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK
                     )
                     if pre_points_df is not None or post_points_df is not None:

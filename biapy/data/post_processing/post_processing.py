@@ -1072,7 +1072,7 @@ def from_local_synapse_csv_to_global(
 
 def extract_synful_synapses(
     data: np.ndarray,
-    channels: List[str] = ["F_post", "H", "V", "Z"],
+    channels: List[str] = ["F_post", "Z", "V", "H"],
     threshold_abs: float = 0.2,
     min_distance: int = 1,
     cluster_distance: float = 5.0,
@@ -1087,7 +1087,7 @@ def extract_synful_synapses(
     data : 4D Numpy array
         Model predictions. E.g. ``(397, 1450, 2000, 4)``.
     channels : List of str
-        Channel layout. Default is ["F_post", "H", "V", "Z"].
+        Channel layout. Default is ["F_post", "Z", "V", "H"].
     threshold_abs : float, optional
         Minimum probability in F_post to be considered a post-synaptic site.
     min_distance : int, optional
@@ -1107,15 +1107,15 @@ def extract_synful_synapses(
         post_points_df: DataFrame with post points.
         post_points: Array with post points.
     """
-    req_channels = {"F_post", "H", "V", "Z"}
+    req_channels = {"F_post", "Z", "V", "H"}
     if set(channels) != req_channels:
         raise ValueError(f"Channels must contain exactly {req_channels}. Got {channels}")
 
     # Dynamically grab the indices based on the provided channel list
     f_post_idx = channels.index("F_post")
-    h_idx = channels.index("H")  # Assuming H maps to Y (axis-1)
-    v_idx = channels.index("V")  # Assuming V maps to X (axis-2)
-    z_idx = channels.index("Z")  # Assuming Z maps to Z (axis-0)
+    h_idx = channels.index("H")  # Assuming H maps to Y
+    v_idx = channels.index("V")  # Assuming V maps to X
+    z_idx = channels.index("Z")  # Assuming Z maps to Z
 
     if verbose:
         print("Extracting post-synaptic sites...")

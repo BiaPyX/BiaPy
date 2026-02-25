@@ -211,15 +211,17 @@ class Config:
         #         Default: 10000
         # For synapse type of instances, the options are:
         #   - 'F_pre' channel. Possible options: 
-        #       - 'dilation': int or list of ints, specifies the dilation size applied to the channel. Default: [1,10,10]
+        #       - 'dilation': int or list of ints, specifies the dilation size applied to the channel. Default: [1,3,3]
         #   - 'F_post' channel. Possible options: 
-        #       - 'dilation': int or list of ints, specifies the dilation size applied to the channel. Default: [1,10,10]
+        #       - 'dilation': int or list of ints, specifies the dilation size applied to the channel. Default: [1,3,3]
         #   - 'H', 'V' and 'Z' channels. Possible options:
-        #       - 'norm': bool, specifies whether distances are normalized between 0 and 1. Default: True
+        #       - 'norm': bool, specifies whether distances are normalized between 0 and 1. Default: False
         #       - 'act': str, specifies the activation function used in the model’s final layer when this channel is selected.
         #         Options are '', 'linear', and 'sigmoid'. Default: ''
         #       - 'mask_values': bool, specifies whether to mask the distance channel so the loss is computed only on non-zero values.
         #         Default: True
+        #       - 'dilation': int or list of ints, specifies the dilation size applied to the channel. In the case of the synapses this
+        #         will represent the area that will define the distance channels. Default: [3,25,25]
         #
         # For example:
         #  DATA_CHANNELS = ['F', 'C']
@@ -235,7 +237,7 @@ class Config:
         # Information on how the channels are distributed in the model's output heads. It must be a list of list of strings, where each 
         # inner list contains the channels that are going to be predicted in the same head. If not provided, it will be set automatically
         # with all the channels in one head, i.e. [DATA_CHANNELS]. This variable is important to determine how to apply the losses and 
-        # post-processing methods to the different channels. For example, if "H", "V" and "Z" channels are in the same head, it is likely 
+        # post-processing methods to the different channels. For example, if "V", "H" and "Z" channels are in the same head, it is likely 
         # that they are representing distance maps and therefore the model will be able to learn them together
         _C.PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO = []
 

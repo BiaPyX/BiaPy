@@ -21,7 +21,7 @@ from skimage.color import rgb2gray
 from skimage.filters import gaussian, median
 from yacs.config import CfgNode as CN
 from numpy.typing import NDArray
-from typing import List, Optional, Dict, Tuple, Sequence
+from typing import List, Optional, Dict, Tuple, Sequence, Union
 from scipy.spatial import cKDTree
 
 from biapy.data.dataset import BiaPyDataset
@@ -403,7 +403,7 @@ def labels_into_channels(
         else:
             c_number += 1
 
-    if any(x for x in ["Dc", "Dn", "D", "H", "V", "Z", "R", "We"] if x in mode):
+    if any(x for x in ["Dc", "Dn", "D", "Z", "V", "H", "R", "We"] if x in mode):
         dtype = np.float32
     elif "Db" in mode:
         dtype = np.uint8 if channel_extra_opts.get("Db", {}).get("val_type", "norm") == "discretize" else np.float32
@@ -430,7 +430,7 @@ def labels_into_channels(
     # Precompute regionprops only when needed
     needs_props = False
     if (
-        any(x in mode for x in ("H", "V", "Z"))
+        any(x in mode for x in ("Z", "V", "H"))
         or ("P" in mode and channel_extra_opts.get("P", {}).get("type", "") == "skeleton")
         or ("Dc" in mode)
     ):
@@ -454,9 +454,9 @@ def labels_into_channels(
     bg_mask = (vol == 0).astype(np.uint8)
 
     # Precompute flow channels if any of H/V/Z is requested
-    if any(ch in mode for ch in ("H", "V", "Z")):
+    if any(ch in mode for ch in ("Z", "V", "H")):
         norm_flag = True
-        for ch in ("H", "V", "Z"): 
+        for ch in ("Z", "V", "H"): 
             if ch in channel_extra_opts and "norm" in channel_extra_opts[ch]:
                 norm_flag = bool(channel_extra_opts[ch]["norm"])
                 break
@@ -1412,6 +1412,18 @@ def synapse_channel_creation(
     mode : List, optional
         Operation mode. 
 
+    channel_extra_opts : dict, optional
+        Extra options for specific channels. For example, dilation for the "F_pre" and "F_post" channels. Expected keys are:
+            * ``"F_pre"``: options for the "F_pre" channel. Expected keys are:
+                * ``"dilation"``: list of 3 ints specifying the dilation in z,y,x for the "F_pre" channel (default: [1,10,10]).
+            * ``"F_post"``: options for the "F_post" channel. Expected keys are:
+                * ``"dilation"``: list of 3 ints specifying the dilation in z,y,x for the "F_post" channel (default: [1,10,10]).
+            * ``"H"``, ``"V"``, ``"Z"``: options for the distance channels. Expected keys are:
+                * ``"norm"``: whether to normalize the distance channels per instance (default: True).
+
+    verbose : bool, optional
+        Whether to print warnings about out-of-bounds synaptic points (default: False).
+
     Returns
     -------
     new_mask : 5D Numpy array
@@ -1423,20 +1435,25 @@ def synapse_channel_creation(
     # -------------------------------------------------------
     # 1. Determine Channel Count based on Mode
     # -------------------------------------------------------
-    if set(mode) == {"F_pre", "F_post"}:
+    selected_mode = ""
+    if all(ch in mode for ch in ["F_pre", "F_post"]) and len(mode) == 2:
         channels = 2
         dtype_str = "uint8"
-    elif set(mode) == {"F_post", "H", "V", "Z"}:
+        selected_mode = "simpsyn"
+    elif all(ch in mode for ch in ["F_post", "Z", "V", "H"]) and len(mode) == 4:
         channels = 4
         dtype_str = "float32"
-        norm = True if any([channel_extra_opts.get(k, {}).get("norm", True) for k in ["H", "V", "Z"]]) else False
+        norm = True if any([channel_extra_opts.get(k, {}).get("norm", True) for k in ["Z", "V", "H"]]) else False
+        selected_mode = "synful"
     else:
         raise ValueError(f"Unsupported mode: {mode}. Supported modes are: {{'F_pre', 'F_post'}} and {{'F_post', 'H', 'V', 'Z'}}")  
     
     F_pre_pos = mode.index("F_pre") if "F_pre" in mode else None
-
-    presite_dilation = channel_extra_opts.get("F_pre", {}).get("dilation", [1, 10, 10])
-    postsite_dilation = channel_extra_opts.get("F_post", {}).get("dilation", [1, 10, 10])
+    if selected_mode == "synful":
+        presite_dilation = channel_extra_opts.get("H", {}).get("dilation", [3, 25, 25])
+    else:
+        presite_dilation = channel_extra_opts.get("F_pre", {}).get("dilation", [1, 3, 3])
+    postsite_dilation = channel_extra_opts.get("F_post", {}).get("dilation", [1, 3, 3])    
 
     # footprints (keep both since you had them)
     pre_footprint = generate_ellipse_footprint(presite_dilation)
@@ -1542,102 +1559,60 @@ def synapse_channel_creation(
             out_fname, shape_zyx, channels, zarr_data_information, dtype_str=dtype_str
         )
 
-        # -------------------------------------------------------
-        # MAIN LOOP: Process each synapse
-        # -------------------------------------------------------
-        for pre_point_global, post_sites in tqdm(pre_post_points.items(), disable=not is_main_process()):
-            if not post_sites:
-                continue
-
-            pre_point_global = np.asarray(pre_point_global, dtype=int)
-            post_sites_arr = np.asarray(post_sites, dtype=int)
-
-            # Define patch bounding box to load/write
-            bbox_points = []
-            if set(mode) == {"F_pre", "F_post"}:
-                bbox_points.append(pre_point_global)
-                bbox_points.append(post_sites_arr)
-            else: # mode == {"F_pre", "H", "V", "Z"}
-                # Fallback for Synful mode
-                bbox_points.append(pre_point_global)
-                bbox_points.append(post_sites_arr)
-
-            bbox_points = np.vstack([p if p.ndim == 2 else p[None, :] for p in bbox_points])
-            bbox = _bbox_from_points(bbox_points, width, shape_zyx)
-            patch_shape = (bbox[1] - bbox[0], bbox[3] - bbox[2], bbox[5] - bbox[4])
-
-            data_slices = (
-                slice(bbox[0], bbox[1]),
-                slice(bbox[2], bbox[3]),
-                slice(bbox[4], bbox[5]),
-                slice(0, out_shape[c_pos]),
+        if selected_mode == "synful":
+            _process_synapses_by_chunks_of_data(
+                channel_mode=mode,
+                selected_mode=selected_mode,
+                resolution=resolution,
+                pre_post_points=pre_post_points,
+                shape_zyx=shape_zyx,
+                mask=mask,
+                fid_mask=fid_mask,
+                out_shape=out_shape,
+                out_order=out_order,
+                c_pos=c_pos,
+                width=width,
+                pre_footprint=pre_footprint,
+                post_footprint=post_footprint,
+                norm=norm,
             )
-            data_slices = tuple(order_dimensions(data_slices, input_order="ZYXC", output_order=out_order, default_value=0))
-
-            pre_local = pre_point_global - np.asarray([bbox[0], bbox[2], bbox[4]], dtype=int)
-
+        else:
+            if selected_mode not in ["simpsyn"]:
+                raise NotImplementedError(f"Mode {selected_mode} not implemented for processing by synapse pairs.")
             
-            # -------------------------------------------------------
-            # MODE: Synful (F_post, H, V, Z)
-            # -------------------------------------------------------
-            if set(mode) == {"F_post", "H", "V", "Z"}:
-                seeds = np.zeros(patch_shape, dtype=np.uint32)
-                mask_to_grow = np.zeros(patch_shape, dtype=np.uint8)
-                label_to_pre_site = {}
-                label_count = 1
+            print("Processing synapse pairs . . .")
+            for pre_point_global, post_sites in tqdm(pre_post_points.items(), disable=not is_main_process()):
+                if not post_sites:
+                    continue
 
-                for post_global in post_sites_arr:
-                    post_local = post_global - np.asarray([bbox[0], bbox[2], bbox[4]], dtype=int)
-                    if not _in_bounds(post_local, patch_shape):
-                        raise ValueError(f"Point {post_local.tolist()} out of shape: {patch_shape}")
+                pre_point_global = np.asarray(pre_point_global, dtype=int)
+                post_sites_arr = np.asarray(post_sites, dtype=int)
 
-                    seeds[
-                        max(0, post_local[0] - width[0]) : min(post_local[0] + width[0], seeds.shape[0]),
-                        post_local[1],
-                        post_local[2],
-                    ] = label_count
-                    label_to_pre_site[label_count] = pre_local.tolist()
-                    label_count += 1
-                    mask_to_grow[post_local[0], post_local[1], post_local[2]] = 1
+                # Define patch bounding box to load/write
+                bbox_points = []
+                if selected_mode == "simpsyn":
+                    bbox_points.append(pre_point_global)
+                    bbox_points.append(post_sites_arr)
+                else: 
+                    raise NotImplementedError(f"Mode {selected_mode} not implemented for processing by synapse pairs.")
 
-                channel_0 = binary_dilation_scipy(mask_to_grow, iterations=1, structure=post_footprint)
-                mask_to_grow = binary_dilation_scipy(mask_to_grow, iterations=1, structure=post_footprint)
+                bbox_points = np.vstack([p if p.ndim == 2 else p[None, :] for p in bbox_points])
+                bbox = _bbox_from_points(bbox_points, width, shape_zyx)
+                patch_shape = (bbox[1] - bbox[0], bbox[3] - bbox[2], bbox[5] - bbox[4])
 
-                seed_coords = np.argwhere(seeds > 0)
-                seed_labels = seeds[seed_coords[:, 0], seed_coords[:, 1], seed_coords[:, 2]]
-
-                # 2. Get coordinates of the pixels inside the dilated mask
-                mask_coords = np.argwhere(mask_to_grow > 0)
-
-                if len(seed_coords) > 0 and len(mask_coords) > 0:
-                    # 3. Apply anisotropy resolution weighting for accurate physical distances
-                    res_array = np.array(resolution)
-                    scaled_seed_coords = seed_coords * res_array
-                    scaled_mask_coords = mask_coords * res_array
-
-                    # 4. Build KDTree and find the nearest seed for every mask pixel
-                    tree = cKDTree(scaled_seed_coords)
-                    _, indices = tree.query(scaled_mask_coords)
-
-                    # 5. Reconstruct the seeds volume strictly within the mask footprint
-                    new_seeds = np.zeros_like(seeds)
-                    new_seeds[mask_coords[:, 0], mask_coords[:, 1], mask_coords[:, 2]] = seed_labels[indices]
-                    seeds = new_seeds
-
-                out_map = create_flow_channels(
-                    seeds,
-                    ref_point="presynaptic",
-                    label_to_pre_site=label_to_pre_site,
-                    normalize_values=norm,
+                data_slices = (
+                    slice(bbox[0], bbox[1]),
+                    slice(bbox[2], bbox[3]),
+                    slice(bbox[4], bbox[5]),
+                    slice(0, out_shape[c_pos]),
                 )
+                data_slices = tuple(order_dimensions(data_slices, input_order="ZYXC", output_order=out_order, default_value=0))
 
-                # put channel_0 into the correct slot
-                out_map = np.concatenate([channel_0[..., None], out_map], axis=-1)
+                pre_local = pre_point_global - np.asarray([bbox[0], bbox[2], bbox[4]], dtype=int)
 
-            # -------------------------------------------------------
-            # MODE: SimpSyn (F_pre, F_post)
-            # -------------------------------------------------------
-            else:
+                # -------------------------------------------------------
+                # MODE: SimpSyn (F_pre, F_post)
+                # -------------------------------------------------------
                 out_map = np.zeros(patch_shape + (channels,), dtype=np.uint8)
 
                 # Pre point
@@ -1666,22 +1641,318 @@ def synapse_channel_creation(
                     structure = pre_footprint if c == F_pre_pos else post_footprint
                     out_map[..., c] = binary_dilation_scipy(out_map[..., c], iterations=1, structure=structure)
 
-            # transpose into output order before writing
-            current_order = np.arange(out_map.ndim)
-            transpose_order = order_dimensions(
-                current_order, input_order="ZYXC", output_order=out_order, default_value=np.nan
-            )
-            transpose_order = [int(x) for x in transpose_order if not np.isnan(x)]
+                # -------------------------------------------------------
 
-            patch = out_map.transpose(transpose_order)
+                # transpose into output order before writing
+                current_order = np.arange(out_map.ndim)
+                transpose_order = order_dimensions(
+                    current_order, input_order="ZYXC", output_order=out_order, default_value=np.nan
+                )
+                transpose_order = [int(x) for x in transpose_order if not np.isnan(x)]
 
-            # write only where empty (background check)
-            target = mask[data_slices]
-            mask[data_slices] = target + patch * (target == 0)
+                patch = out_map.transpose(transpose_order)
 
-        if isinstance(fid_mask, h5py.File):
-            fid_mask.close()
+                # write only where empty (background check)
+                target = mask[data_slices]
+                mask[data_slices] = target + patch * (target == 0)
 
+            if isinstance(fid_mask, h5py.File):
+                fid_mask.close()
+
+
+def _process_synapses_by_chunks_of_data(
+    channel_mode: List[str],
+    selected_mode: str,
+    resolution: Sequence[float],
+    pre_post_points: Dict[Tuple[int, int, int], List[Tuple[int, int, int]]],
+    shape_zyx: Tuple[int, int, int],
+    mask: Union[h5py.Dataset, zarr.Array], 
+    fid_mask: Optional[h5py.File],
+    out_shape: Tuple[int, ...], 
+    out_order: str, 
+    c_pos: Optional[int],
+    width: np.ndarray,
+    pre_footprint: np.ndarray, 
+    post_footprint: np.ndarray,
+    norm: bool,
+):
+    """
+    Process synapses by iterating over chunks of the data, loading only the relevant synapse points for each chunk, and writing the output mask incrementally. 
+    This is more memory efficient for large datasets with many synapses.
+
+    Parameters
+    ----------
+    channel_mode : List[str]
+        The list of channel names in the output mask (e.g. ["F_pre", "F_post"] or ["F_post", "H", "V", "Z"]).
+
+    selected_mode : str
+        The selected mode of operation, either "simpsyn" for simple synapse pairs or "synful" for the full synapse representation with distance channels.
+
+    resolution : Sequence[float]
+        The physical resolution of the data in (Z,Y,X) order.
+
+    pre_post_points : Dict[Tuple[int, int, int], List[Tuple[int, int, int]]]
+        A dictionary mapping presynaptic point coordinates (z,y,x) to a list of postsynaptic point coordinates (z,y,x) that are partners of the presynaptic point.
+
+    shape_zyx : Tuple[int, int, int]
+        The shape of the data in (Z,Y,X) order.
+
+    mask : Union[h5py.Dataset, zarr.Array]
+        The output array (Zarr or HDF5 dataset) where the generated mask will be written.
+
+    fid_mask : Optional[h5py.File]
+        The HDF5 file object if an HDF5 dataset was created, or None if a Zarr array was created.
+
+    out_shape : Tuple[int, ...]
+        The shape of the output array, including channels, in the order specified by `out_order`.
+
+    out_order : str
+        The order of axes in the output array (e.g. "ZYXC" or "ZCYX").
+
+    c_pos : Optional[int]
+        The position of the channel axis in the output array, or None if channels are added as the last axis.
+
+    width : np.ndarray
+        An array of shape (3,) specifying the margin to add in each dimension (z,y,x) around synaptic points to ensure they are fully captured in the output mask.
+
+    pre_footprint : np.ndarray
+        The structuring element to use for dilating the presynaptic points.
+
+    post_footprint : np.ndarray
+        The structuring element to use for dilating the postsynaptic points.
+
+    norm : bool
+        Whether to normalize the distance channels per instance (only relevant for "synful" mode).
+    """
+    print("Processing synapses by chunks of data . . .")
+    if selected_mode != "synful":
+        raise NotImplementedError(f"Mode {selected_mode} not implemented for processing by chunks.")
+
+    # ---------
+    # Chunking
+    # ---------
+    # Work in ZYX chunk space (ignore channel chunks)
+    if getattr(mask, "chunks", None) is not None and mask.chunks is not None:
+        # mask is Zarr/h5 dataset with chunks; order is out_order (e.g. ZYXC or CZYX etc)
+        # Extract chunk sizes in Z,Y,X from out_order:
+        chunk_map = {ax: mask.chunks[i] for i, ax in enumerate(out_order)}
+        cz, cy, cx = int(chunk_map.get("Z", 64)), int(chunk_map.get("Y", 256)), int(chunk_map.get("X", 256))
+    else:
+        # fallback
+        cz, cy, cx = 64, 256, 256
+
+    print("Using chunk size (Z,Y,X):", (cz, cy, cx))
+
+    # -----------------------
+    # Halo must cover:
+    #   1) seed "column" extent (width)
+    #   2) dilation reach of pre_footprint and post_footprint
+    # -----------------------
+    def _footprint_radius(fp):
+        # fp is a binary structure (odd dims typical). Radius = center index per axis.
+        fp = np.asarray(fp)
+        return np.array([fp.shape[0] // 2, fp.shape[1] // 2, fp.shape[2] // 2], dtype=int)
+
+    seed_reach = np.asarray(width, dtype=int)                  # your seed z-column reach (and any extra you encoded in width)
+    pre_reach  = _footprint_radius(pre_footprint)             # dilation reach for grown mask
+    post_reach = _footprint_radius(post_footprint)            # dilation reach for F_post map
+
+    # Use the max reach per axis, add 1 voxel safety margin
+    halo = np.maximum.reduce([seed_reach, pre_reach, post_reach]) + 1
+    # -----------------------
+
+    # ---------------------------------------------------------
+    # Build a spatial index: chunk_id -> list of synapse entries
+    # ---------------------------------------------------------
+    # This avoids scanning *all* synapses for every chunk.
+    syn_items = list(pre_post_points.items())
+    chunk_to_syn = {}
+
+    print("Building spatial index for synapses . . .")
+    for syn_id, (pre_pt, post_list) in enumerate(syn_items):
+        pre_pt = np.asarray(pre_pt, dtype=int)
+        if not post_list:
+            continue
+        posts = np.asarray(post_list, dtype=int)
+
+        # bbox that the synapse can affect (points + halo)
+        pts = np.vstack([pre_pt[None, :], posts])
+        bbox = _bbox_from_points(pts, halo, shape_zyx)  # [z0,z1,y0,y1,x0,x1]
+
+        # chunks overlapped by this bbox
+        z0, z1, y0, y1, x0, x1 = map(int, bbox)
+        cz0, cz1 = z0 // cz, (max(z1 - 1, 0)) // cz
+        cy0, cy1 = y0 // cy, (max(y1 - 1, 0)) // cy
+        cx0, cx1 = x0 // cx, (max(x1 - 1, 0)) // cx
+
+        for iz in range(cz0, cz1 + 1):
+            for iy in range(cy0, cy1 + 1):
+                for ix in range(cx0, cx1 + 1):
+                    chunk_to_syn.setdefault((iz, iy, ix), []).append(syn_id)
+
+    # ---------------------------
+    # Iterate chunks and write out
+    # ---------------------------
+    z_max, y_max, x_max = map(int, shape_zyx)
+    ncz = (z_max + cz - 1) // cz
+    ncy = (y_max + cy - 1) // cy
+    ncx = (x_max + cx - 1) // cx
+
+    res_array = np.asarray(resolution, dtype=np.float32)  # (Z,Y,X)
+
+    print("Iterating over chunks to build output mask . . .")
+    for iz in tqdm(range(ncz), disable=not is_main_process(), total=ncz):
+        z0c, z1c = iz * cz, min((iz + 1) * cz, z_max)
+        for iy in tqdm(range(ncy), disable=not is_main_process(), total=ncy):
+            y0c, y1c = iy * cy, min((iy + 1) * cy, y_max)
+            for ix in tqdm(range(ncx), disable=not is_main_process(), total=ncx):
+                x0c, x1c = ix * cx, min((ix + 1) * cx, x_max)
+
+                syn_ids = chunk_to_syn.get((iz, iy, ix), [])
+                if not syn_ids:
+                    continue
+
+                # Core bbox (the chunk) and extended bbox (chunk + halo)
+                core_bbox = np.array([z0c, z1c, y0c, y1c, x0c, x1c], dtype=int)
+
+                ext_bbox = core_bbox.copy()
+                ext_bbox[0] = max(0, ext_bbox[0] - halo[0]); ext_bbox[1] = min(z_max, ext_bbox[1] + halo[0])
+                ext_bbox[2] = max(0, ext_bbox[2] - halo[1]); ext_bbox[3] = min(y_max, ext_bbox[3] + halo[1])
+                ext_bbox[4] = max(0, ext_bbox[4] - halo[2]); ext_bbox[5] = min(x_max, ext_bbox[5] + halo[2])
+
+                patch_shape = (ext_bbox[1] - ext_bbox[0], ext_bbox[3] - ext_bbox[2], ext_bbox[5] - ext_bbox[4])
+                if patch_shape[0] <= 0 or patch_shape[1] <= 0 or patch_shape[2] <= 0:
+                    continue
+
+                # Where the core chunk sits inside the extended patch (for cropping halo away before writing)
+                z0p = core_bbox[0] - ext_bbox[0]; z1p = z0p + (core_bbox[1] - core_bbox[0])
+                y0p = core_bbox[2] - ext_bbox[2]; y1p = y0p + (core_bbox[3] - core_bbox[2])
+                x0p = core_bbox[4] - ext_bbox[4]; x1p = x0p + (core_bbox[5] - core_bbox[4])
+
+                # -------------------------------------------------------
+                # Build seeds/masks for ALL synapses that touch this chunk
+                # -------------------------------------------------------
+                seeds = np.zeros(patch_shape, dtype=np.uint32)
+                mask_to_grow = np.zeros(patch_shape, dtype=np.uint8)
+                label_to_pre_site = {}
+                label_count = 1
+
+                # Add all post markers into this patch
+                for syn_id in syn_ids:
+                    pre_pt, post_list = syn_items[syn_id]
+                    if not post_list:
+                        continue
+
+                    pre_pt = np.asarray(pre_pt, dtype=int)
+                    posts = np.asarray(post_list, dtype=int)
+
+                    # pre_local for flow reference
+                    pre_local = pre_pt - np.asarray([ext_bbox[0], ext_bbox[2], ext_bbox[4]], dtype=int)
+
+                    # Skip if presyn point is outside patch (shouldn't happen with our indexing, but safe)
+                    if not _in_bounds(pre_local, patch_shape):
+                        continue
+
+                    for post_pt in posts:
+                        post_local = post_pt - np.asarray([ext_bbox[0], ext_bbox[2], ext_bbox[4]], dtype=int)
+                        if not _in_bounds(post_local, patch_shape):
+                            continue
+
+                        # seed "column" along Z, but DO NOT overwrite existing labels
+                        z0s = max(0, int(post_local[0]) - int(width[0]))
+                        z1s = min(int(post_local[0]) + int(width[0]), seeds.shape[0])
+                        yy, xx = int(post_local[1]), int(post_local[2])
+
+                        col = seeds[z0s:z1s, yy, xx]
+                        empty = (col == 0)
+                        if empty.any():
+                            col[empty] = label_count
+                            seeds[z0s:z1s, yy, xx] = col
+                            label_to_pre_site[label_count] = pre_local.tolist()
+                            label_count += 1
+
+                        mask_to_grow[int(post_local[0]), yy, xx] = 1
+
+                if label_count == 1:
+                    continue  # no seeds placed
+
+                # ----------
+                # Dilations 
+                # ----------
+                post_site_map = binary_dilation_scipy(mask_to_grow, iterations=1, structure=post_footprint)
+                mask_grow = binary_dilation_scipy(mask_to_grow, iterations=1, structure=pre_footprint)
+
+                # --------------------------------------------
+                # Fast overlap resolution: KDTree on seed voxels
+                # --------------------------------------------
+                seed_coords = np.argwhere(seeds > 0)
+                if seed_coords.size == 0:
+                    continue
+                seed_labels = seeds[seed_coords[:, 0], seed_coords[:, 1], seed_coords[:, 2]]
+
+                mask_coords = np.argwhere(mask_grow > 0)
+                if mask_coords.size == 0:
+                    continue
+
+                scaled_seed_coords = seed_coords * res_array
+                scaled_mask_coords = mask_coords * res_array
+
+                tree = cKDTree(scaled_seed_coords)
+                _, nn = tree.query(scaled_mask_coords, workers=-1)
+
+                grown_labels = np.zeros_like(seeds)
+                grown_labels[mask_coords[:, 0], mask_coords[:, 1], mask_coords[:, 2]] = seed_labels[nn]
+                seeds = grown_labels
+
+                # -----------------
+                # Create flow maps
+                # -----------------
+                axis_order = "".join([x for x in channel_mode if x in ["H", "V", "Z"]])
+                out_flow = create_flow_channels(
+                    seeds,
+                    ref_point="presynaptic",
+                    label_to_pre_site=label_to_pre_site,
+                    normalize_values=norm,
+                    resolution=resolution,
+                    axis_order=axis_order,
+                )
+
+                stack = []
+                for c in channel_mode:
+                    if c == "F_post":
+                        stack.append(post_site_map[..., None].astype(np.uint8))
+                    else:
+                        j = axis_order.index(c)
+                        stack.append(out_flow[..., j : j + 1].astype(np.float32))
+                out_map = np.concatenate(stack, axis=-1)  # ZYXC in patch space
+
+                # -------------------------------
+                # Crop halo, transpose, and write
+                # -------------------------------
+                out_core = out_map[z0p:z1p, y0p:y1p, x0p:x1p, :]
+
+                current_order = np.arange(out_core.ndim)
+                transpose_order = order_dimensions(
+                    current_order, input_order="ZYXC", output_order=out_order, default_value=np.nan
+                )
+                transpose_order = [int(x) for x in transpose_order if not np.isnan(x)]
+                patch = out_core.transpose(transpose_order)
+
+                data_slices = (
+                    slice(core_bbox[0], core_bbox[1]),
+                    slice(core_bbox[2], core_bbox[3]),
+                    slice(core_bbox[4], core_bbox[5]),
+                    slice(0, out_shape[c_pos]),
+                )
+                data_slices = tuple(
+                    order_dimensions(data_slices, input_order="ZYXC", output_order=out_order, default_value=0)
+                )
+
+                target = mask[data_slices]
+                mask[data_slices] = target + patch * (target == 0)
+
+    if isinstance(fid_mask, h5py.File):
+        fid_mask.close()
 
 def create_flow_channels(
     data: NDArray, 
@@ -1689,6 +1960,8 @@ def create_flow_channels(
     label_to_pre_site: Optional[Dict] = None, 
     normalize_values: bool = True,
     calc_props: Optional[Dict] = None,
+    axis_order: str = "ZYX",
+    resolution: List[int|float] = [1,1,1], 
 ):
     """
     Obtain the horizontal and vertical distance maps for each instance.
@@ -1713,6 +1986,9 @@ def create_flow_channels(
 
     calc_props : dict, optional
         If region properties have already been calculated, they can be provided here to avoid recalculation.
+
+    resolution : list of int or float, optional
+        Physical resolution of the data in each dimension. Used to scale the flow values to physical units if provided. Default is [1,1,1] (isotropic).
 
     Returns
     -------
@@ -1855,6 +2131,11 @@ def create_flow_channels(
             if dim == 3:
                 if np.max(inst_z) > 0:
                     inst_z[inst_z > 0] /= np.amax(inst_z[inst_z > 0])
+        else:
+            inst_y = inst_y * resolution[-2]  # Scale Y axis
+            inst_x = inst_x * resolution[-1]  # Scale X axis
+            if dim == 3:
+                inst_z = inst_z * resolution[0]  # Scale Z axis
 
         if dim == 2:
             x_map_box = x_map[inst_box[0] : inst_box[1], inst_box[2] : inst_box[3]]
@@ -1872,10 +2153,15 @@ def create_flow_channels(
             x_map_box = x_map[inst_box[0] : inst_box[1], inst_box[2] : inst_box[3], inst_box[4] : inst_box[5]]
             x_map_box[inst_map > 0] = inst_x[inst_map > 0]
 
-    if dim == 2:
-        hv_map = np.dstack([y_map, x_map])
-    else:
-        hv_map = np.stack([z_map, y_map, x_map], axis=-1)
+    stack = []
+    for x in axis_order:
+        if x == "Z":
+            stack.append(z_map)
+        elif x == "V":
+            stack.append(y_map)
+        elif x == "H":
+            stack.append(x_map)
+    hv_map = np.stack(stack, axis=-1)
 
     return hv_map
 
