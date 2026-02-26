@@ -180,6 +180,8 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 self.synapse_method = "simpsyn"
             elif all(ch in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS for ch in ["F_post", "Z", "V", "H"]) and len(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) == 4:
                 self.synapse_method = "synful"
+            elif all(ch in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS for ch in ["F_cleft"]) and len(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) == 1:
+                self.synapse_method = "cleft"
             else:
                 raise ValueError("Unknown synapse prediction method for the given channels. Please check the documentation for more details.")
 
@@ -215,7 +217,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
         dst = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0]
         for i, channel in enumerate(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS):
-                if channel in ["B", "F", "P", "C", "T", "M", "F_pre", "F_post"]:
+                if channel in ["B", "F", "P", "C", "T", "M", "F_pre", "F_post", "F_cleft"]:
                     self.head_activations.append("ce_sigmoid")
                     self.model_output_channel_info.append(channel)
                     if set_model_output_channels:
@@ -363,6 +365,9 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 self.train_metric_best += ["max"]
             elif channel == "F_post":
                 self.train_metric_names += ["IoU (post-sites)"]
+                self.train_metric_best += ["max"]
+            elif channel == "F_cleft":
+                self.train_metric_names += ["IoU (clefts)"]
                 self.train_metric_best += ["max"]
             else:
                 raise ValueError("Unknown channel: {}".format(channel))

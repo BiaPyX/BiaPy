@@ -11,7 +11,15 @@ import numpy as np
 from tqdm import tqdm
 import pandas as pd
 from skimage.segmentation import clear_border, find_boundaries, watershed
-from scipy.ndimage import generic_filter, generate_binary_structure, grey_closing, center_of_mass, map_coordinates, binary_dilation as binary_dilation_scipy
+from scipy.ndimage import (
+    generic_filter, 
+    generate_binary_structure, 
+    grey_closing, 
+    center_of_mass, 
+    map_coordinates, 
+    uniform_filter,
+    binary_dilation as binary_dilation_scipy
+)
 from skimage.morphology import disk, binary_dilation, binary_erosion, skeletonize
 from skimage.measure import label, regionprops_table
 from skimage.transform import resize
@@ -122,6 +130,7 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
             data_within_zarr_path=path_to_gt_data,
         )
         zarr_data_information = {
+            "raw_data_path": getattr(cfg.DATA, tag).INPUT_ZARR_MULTIPLE_DATA_RAW_PATH,
             "axes_order": getattr(cfg.DATA, tag).INPUT_IMG_AXES_ORDER,
             "z_axe_pos": getattr(cfg.DATA, tag).INPUT_IMG_AXES_ORDER.index("Z"),
             "y_axe_pos": getattr(cfg.DATA, tag).INPUT_IMG_AXES_ORDER.index("Y"),
@@ -1367,6 +1376,26 @@ def _make_output_array(fname: str, data_shape_zyx, channels: int, zinfo: Dict, d
 
     return mask, fid_mask, out_shape, out_order, c_pos
 
+def _clip_slices(z, y, x, hz, hy, hx, Z, Y, X):
+    z0, z1 = max(0, z - hz), min(Z, z + hz + 1)
+    y0, y1 = max(0, y - hy), min(Y, y + hy + 1)
+    x0, x1 = max(0, x - hx), min(X, x + hx + 1)
+    return slice(z0, z1), slice(y0, y1), slice(x0, x1)
+
+def _beam_score(smoothed, z, y, x, beam_hw, score_mode="p10"):
+    hz, hy, hx = beam_hw
+    Z, Y, X = smoothed.shape
+    slz, sly, slx = _clip_slices(z, y, x, hz, hy, hx, Z, Y, X)
+    slab = smoothed[slz, sly, slx]
+    if slab.size == 0:
+        return np.inf
+    if score_mode == "min":
+        return float(slab.min())
+    elif score_mode == "p10":
+        return float(np.percentile(slab, 10))
+    else:
+        raise ValueError(f"Unknown score_mode: {score_mode}")
+    
 def synapse_channel_creation(
     data_info: Dict,
     zarr_data_information: Dict,
@@ -1393,7 +1422,8 @@ def synapse_channel_creation(
     zarr_data_information : dict
         Information when using Zarr/H5 files. Assumes that the H5/Zarr files contain the information according
         `CREMI data format <https://cremi.org/data/>`__. The following keys are expected:
-
+            * ``"raw_data_path"``: path within the file where the raw data is stored. Reference in CREMI: ``volumes/raw``
+            * ``"axes_order"``: order of the axes in the file. E.g. "ZYX" or "ZCYX".
             * ``"z_axe_pos"``: position of z axis of the data within the file.
             * ``"y_axe_pos"``: position of y axis of the data within the file.
             * ``"x_axe_pos"``: position of x axis of the data within the file.
@@ -1445,10 +1475,24 @@ def synapse_channel_creation(
         dtype_str = "float32"
         norm = True if any([channel_extra_opts.get(k, {}).get("norm", True) for k in ["Z", "V", "H"]]) else False
         selected_mode = "synful"
+    elif all(ch in mode for ch in ["F_cleft"]) and len(mode) == 1:
+        channels = 1
+        dtype_str = "uint8"
+        selected_mode = "cleft"
+        cleft_dilation = channel_extra_opts.get("F_cleft", {}).get("dilation", [1, 3, 3])    
+        cleft_footprint = generate_ellipse_footprint(cleft_dilation)
+        cleft_search_dilation = channel_extra_opts.get("F_cleft", {}).get("search_dilation", [1, 5, 5])
+        cleft_n_samples = int(channel_extra_opts.get("F_cleft", {}).get("n_samples", 51))
+        cleft_t_range = channel_extra_opts.get("F_cleft", {}).get("t_range", (0.15, 0.85))
+
+        beam_halfwidth = channel_extra_opts.get("F_cleft", {}).get("beam_halfwidth", [0, 3, 3])  # [hz, hy, hx]
+        drop_rel = float(channel_extra_opts.get("F_cleft", {}).get("drop_rel", 0.20))  # 20% drop from baseline
+        drop_abs = float(channel_extra_opts.get("F_cleft", {}).get("drop_abs", 10.0))  # absolute drop in intensity units
+        baseline_frac = float(channel_extra_opts.get("F_cleft", {}).get("baseline_frac", 0.15))  # first 15% of path = baseline
+        min_persist = int(channel_extra_opts.get("F_cleft", {}).get("min_persist", 2))  # must stay dark for N steps
     else:
-        raise ValueError(f"Unsupported mode: {mode}. Supported modes are: {{'F_pre', 'F_post'}} and {{'F_post', 'H', 'V', 'Z'}}")  
-    
-    F_pre_pos = mode.index("F_pre") if "F_pre" in mode else None
+        raise ValueError(f"Unsupported mode: {mode}")  
+
     if selected_mode == "synful":
         presite_dilation = channel_extra_opts.get("H", {}).get("dilation", [3, 25, 25])
     else:
@@ -1499,6 +1543,9 @@ def synapse_channel_creation(
                     zarr_data_information["resolution_path"], zarr_data_information["resolution_path"]
                 )
             )
+
+        if selected_mode == "cleft":
+            data_file, raw_data = read_chunked_nested_data(filename, zarr_data_information["raw_data_path"])
 
         # Close files
         for f in files:
@@ -1577,7 +1624,7 @@ def synapse_channel_creation(
                 norm=norm,
             )
         else:
-            if selected_mode not in ["simpsyn"]:
+            if selected_mode not in ["simpsyn", "cleft"]:
                 raise NotImplementedError(f"Mode {selected_mode} not implemented for processing by synapse pairs.")
             
             print("Processing synapse pairs . . .")
@@ -1590,11 +1637,8 @@ def synapse_channel_creation(
 
                 # Define patch bounding box to load/write
                 bbox_points = []
-                if selected_mode == "simpsyn":
-                    bbox_points.append(pre_point_global)
-                    bbox_points.append(post_sites_arr)
-                else: 
-                    raise NotImplementedError(f"Mode {selected_mode} not implemented for processing by synapse pairs.")
+                bbox_points.append(pre_point_global)
+                bbox_points.append(post_sites_arr)
 
                 bbox_points = np.vstack([p if p.ndim == 2 else p[None, :] for p in bbox_points])
                 bbox = _bbox_from_points(bbox_points, width, shape_zyx)
@@ -1613,36 +1657,128 @@ def synapse_channel_creation(
                 # -------------------------------------------------------
                 # MODE: SimpSyn (F_pre, F_post)
                 # -------------------------------------------------------
-                out_map = np.zeros(patch_shape + (channels,), dtype=np.uint8)
+                if selected_mode == "simpsyn":
+                    out_map = np.zeros(patch_shape + (channels,), dtype=np.uint8)
 
-                # Pre point
-                out_map[
-                    max(0, pre_local[0] - 1) : min(pre_local[0] + 1, out_map.shape[0]),
-                    pre_local[1],
-                    pre_local[2],
-                    F_pre_pos,
-                ] = 1
-
-                # Post points
-                for post_global in post_sites_arr:
-                    post_local = post_global - np.asarray([bbox[0], bbox[2], bbox[4]], dtype=int)
-                    if not _in_bounds(post_local, patch_shape):
-                        raise ValueError(f"Point {post_local.tolist()} out of shape: {patch_shape}")
-
+                    # Pre point
                     out_map[
-                        max(0, post_local[0] - 1) : min(post_local[0] + 1, out_map.shape[0]),
-                        post_local[1],
-                        post_local[2],
-                        1,
+                        max(0, pre_local[0] - 1) : min(pre_local[0] + 1, out_map.shape[0]),
+                        pre_local[1],
+                        pre_local[2],
+                        mode.index("F_pre"),
                     ] = 1
 
-                # Dilate each channel
-                for c in range(out_map.shape[-1]):
-                    structure = pre_footprint if c == F_pre_pos else post_footprint
-                    out_map[..., c] = binary_dilation_scipy(out_map[..., c], iterations=1, structure=structure)
+                    # Post points
+                    for post_global in post_sites_arr:
+                        post_local = post_global - np.asarray([bbox[0], bbox[2], bbox[4]], dtype=int)
+                        if not _in_bounds(post_local, patch_shape):
+                            raise ValueError(f"Point {post_local.tolist()} out of shape: {patch_shape}")
+
+                        out_map[
+                            max(0, post_local[0] - 1) : min(post_local[0] + 1, out_map.shape[0]),
+                            post_local[1],
+                            post_local[2],
+                            mode.index("F_post"),
+                        ] = 1
+
+                    # Dilate each channel
+                    for c in range(out_map.shape[-1]):
+                        structure = pre_footprint if c == mode.index("F_pre") else post_footprint
+                        out_map[..., c] = binary_dilation_scipy(out_map[..., c], iterations=1, structure=structure)
 
                 # -------------------------------------------------------
+                # MODE: Cleft (F_cleft)
+                # -------------------------------------------------------
+                elif selected_mode == "cleft":
+                    cleft_pos = 0
+                    out_map = np.zeros(patch_shape + (channels,), dtype=np.uint8)
+                    
+                    # Extract raw patch for cleft processing
+                    raw_data_slices = (
+                        slice(bbox[0], bbox[1]),
+                        slice(bbox[2], bbox[3]),
+                        slice(bbox[4], bbox[5])
+                    )
+                    raw_data_slices = tuple(order_dimensions(raw_data_slices, input_order="ZYX", output_order=zarr_data_information["axes_order"], default_value=0))
+                    raw_patch = np.asarray(raw_data[raw_data_slices], dtype=np.uint8)
 
+                    # 2) Pre-smooth with a local-mean filter to make "darkest" more stable
+                    sz, sy, sx = [int(x) for x in cleft_search_dilation]
+                    smoothed = uniform_filter(raw_patch, size=(2 * sz + 1, 2 * sy + 1, 2 * sx + 1), mode="nearest")
+
+                    # 3) For each (pre, post), find darkest point along the segment and seed it
+                    a, b = cleft_t_range
+                    ts = np.linspace(a, b, cleft_n_samples, dtype=np.float32)
+
+                    cleft_seed = np.zeros(patch_shape, dtype=np.uint8)
+                    pre_f = pre_local.astype(np.float32)
+                    Z, Y, X = patch_shape
+
+                    beam_hw = [int(x) for x in beam_halfwidth]
+
+                    a, b = cleft_t_range
+                    ts = np.linspace(a, b, cleft_n_samples, dtype=np.float32)
+
+                    for post_global in post_sites_arr:
+                        post_local = post_global - np.asarray([bbox[0], bbox[2], bbox[4]], dtype=int)
+                        if not _in_bounds(post_local, patch_shape):
+                            continue
+                        post_f = post_local.astype(np.float32)
+
+                        # Sample points from POST -> PRE (important for "first drop")
+                        pts = post_f[None, :] + ts[:, None] * (pre_f[None, :] - post_f[None, :])
+
+                        # Compute beam score along the path
+                        prof = np.full((len(ts),), np.inf, dtype=np.float32)
+                        coords = np.round(pts).astype(int)
+
+                        for i, (z, y, x) in enumerate(coords):
+                            if 0 <= z < Z and 0 <= y < Y and 0 <= x < X:
+                                prof[i] = _beam_score(smoothed, z, y, x, beam_hw, score_mode="p10")
+
+                        # Baseline = robust bright-ish level near the POST side
+                        nb = max(3, int(np.ceil(baseline_frac * len(ts))))
+                        base_vals = prof[:nb]
+                        base_vals = base_vals[np.isfinite(base_vals)]
+                        if base_vals.size == 0:
+                            # fallback: midpoint
+                            mid = np.round((pre_f + post_f) * 0.5).astype(int)
+                            mid = np.clip(mid, [0, 0, 0], np.array(patch_shape) - 1)
+                            cleft_seed[tuple(mid.tolist())] = 1
+                            continue
+
+                        baseline = float(np.median(base_vals))
+
+                        # Threshold for "first dark region"
+                        # Condition: prof <= baseline - max(abs_drop, rel_drop * baseline)
+                        thr = baseline - max(drop_abs, drop_rel * baseline)
+
+                        # Find earliest index that crosses threshold and stays low for min_persist steps
+                        hit_idx = None
+                        for i in range(nb, len(ts)):
+                            if prof[i] <= thr:
+                                # persist check (hysteresis)
+                                j_end = min(len(ts), i + min_persist)
+                                if np.all(prof[i:j_end] <= thr):
+                                    hit_idx = i
+                                    break
+
+                        if hit_idx is None:
+                            # Fallback: choose minimum in the middle range (still safer than global min)
+                            mid0 = nb
+                            mid1 = len(ts)
+                            i_min = int(np.nanargmin(prof[mid0:mid1])) + mid0
+                            hit_idx = i_min
+
+                        z, y, x = coords[hit_idx]
+                        z, y, x = int(np.clip(z, 0, Z - 1)), int(np.clip(y, 0, Y - 1)), int(np.clip(x, 0, X - 1))
+                        cleft_seed[z, y, x] = 1
+
+                    # 4) Paint the cleft "ball" using your existing dilation footprint
+                    out_map[..., cleft_pos] = binary_dilation_scipy(cleft_seed, iterations=1, structure=cleft_footprint).astype(np.uint8)
+                else:
+                    raise NotImplementedError(f"Mode {selected_mode} not implemented for processing by synapse pairs.")
+                
                 # transpose into output order before writing
                 current_order = np.arange(out_map.ndim)
                 transpose_order = order_dimensions(
@@ -1658,6 +1794,8 @@ def synapse_channel_creation(
 
             if isinstance(fid_mask, h5py.File):
                 fid_mask.close()
+            if "data_file" in locals():
+                data_file.close()
 
 
 def _process_synapses_by_chunks_of_data(
@@ -1729,229 +1867,180 @@ def _process_synapses_by_chunks_of_data(
         raise NotImplementedError(f"Mode {selected_mode} not implemented for processing by chunks.")
 
     # ---------
-    # Chunking
+    # 1. Improved Halo Calculation
     # ---------
-    # Work in ZYX chunk space (ignore channel chunks)
-    if getattr(mask, "chunks", None) is not None and mask.chunks is not None:
-        # mask is Zarr/h5 dataset with chunks; order is out_order (e.g. ZYXC or CZYX etc)
-        # Extract chunk sizes in Z,Y,X from out_order:
-        chunk_map = {ax: mask.chunks[i] for i, ax in enumerate(out_order)}
-        cz, cy, cx = int(chunk_map.get("Z", 64)), int(chunk_map.get("Y", 256)), int(chunk_map.get("X", 256))
-    else:
-        # fallback
-        cz, cy, cx = 64, 256, 256
-
-    print("Using chunk size (Z,Y,X):", (cz, cy, cx))
-
-    # -----------------------
-    # Halo must cover:
-    #   1) seed "column" extent (width)
-    #   2) dilation reach of pre_footprint and post_footprint
-    # -----------------------
     def _footprint_radius(fp):
-        # fp is a binary structure (odd dims typical). Radius = center index per axis.
         fp = np.asarray(fp)
-        return np.array([fp.shape[0] // 2, fp.shape[1] // 2, fp.shape[2] // 2], dtype=int)
+        return np.array([s // 2 for s in fp.shape], dtype=int)
 
-    seed_reach = np.asarray(width, dtype=int)                  # your seed z-column reach (and any extra you encoded in width)
-    pre_reach  = _footprint_radius(pre_footprint)             # dilation reach for grown mask
-    post_reach = _footprint_radius(post_footprint)            # dilation reach for F_post map
+    seed_reach = np.asarray(width, dtype=int)
+    pre_reach  = _footprint_radius(pre_footprint)
+    post_reach = _footprint_radius(post_footprint)
 
-    # Use the max reach per axis, add 1 voxel safety margin
-    halo = np.maximum.reduce([seed_reach, pre_reach, post_reach]) + 1
-    # -----------------------
+    # Use the max reach across all operations. 
+    # We add a +2 safety buffer to prevent float rounding issues in KDTree/resolution scaling
+    halo = np.maximum.reduce([seed_reach, pre_reach, post_reach]) + 2
+    
+    # Chunks
+    cz, cy, cx = 64, 256, 256
 
     # ---------------------------------------------------------
-    # Build a spatial index: chunk_id -> list of synapse entries
+    # 3. Spatial Index (Crucial Fix: Use index_halo)
     # ---------------------------------------------------------
-    # This avoids scanning *all* synapses for every chunk.
     syn_items = list(pre_post_points.items())
     chunk_to_syn = {}
 
     print("Building spatial index for synapses . . .")
     for syn_id, (pre_pt, post_list) in enumerate(syn_items):
+        if not post_list: continue
+        
         pre_pt = np.asarray(pre_pt, dtype=int)
-        if not post_list:
-            continue
         posts = np.asarray(post_list, dtype=int)
-
-        # bbox that the synapse can affect (points + halo)
         pts = np.vstack([pre_pt[None, :], posts])
-        bbox = _bbox_from_points(pts, halo, shape_zyx)  # [z0,z1,y0,y1,x0,x1]
+        
+        # We calculate the BBox including the halo. 
+        # This ensures the synapse is registered in every chunk it COULD bleed into.
+        zmin, ymin, xmin = np.min(pts, axis=0) - halo
+        zmax, ymax, xmax = np.max(pts, axis=0) + halo
 
-        # chunks overlapped by this bbox
-        z0, z1, y0, y1, x0, x1 = map(int, bbox)
-        cz0, cz1 = z0 // cz, (max(z1 - 1, 0)) // cz
-        cy0, cy1 = y0 // cy, (max(y1 - 1, 0)) // cy
-        cx0, cx1 = x0 // cx, (max(x1 - 1, 0)) // cx
+        cz0, cz1 = max(0, zmin // cz), min((shape_zyx[0] - 1) // cz, zmax // cz)
+        cy0, cy1 = max(0, ymin // cy), min((shape_zyx[1] - 1) // cy, ymax // cy)
+        cx0, cx1 = max(0, xmin // cx), min((shape_zyx[2] - 1) // cx, xmax // cx)
 
-        for iz in range(cz0, cz1 + 1):
-            for iy in range(cy0, cy1 + 1):
-                for ix in range(cx0, cx1 + 1):
+        for iz in range(int(cz0), int(cz1) + 1):
+            for iy in range(int(cy0), int(cy1) + 1):
+                for ix in range(int(cx0), int(cx1) + 1):
                     chunk_to_syn.setdefault((iz, iy, ix), []).append(syn_id)
 
     # ---------------------------
-    # Iterate chunks and write out
+    # 4. Processing Loop
     # ---------------------------
     z_max, y_max, x_max = map(int, shape_zyx)
-    ncz = (z_max + cz - 1) // cz
-    ncy = (y_max + cy - 1) // cy
-    ncx = (x_max + cx - 1) // cx
+    ncz, ncy, ncx = (z_max + cz - 1) // cz, (y_max + cy - 1) // cy, (x_max + cx - 1) // cx
+    res_array = np.asarray(resolution, dtype=np.float32)
 
-    res_array = np.asarray(resolution, dtype=np.float32)  # (Z,Y,X)
-
-    print("Iterating over chunks to build output mask . . .")
-    for iz in tqdm(range(ncz), disable=not is_main_process(), total=ncz):
+    for iz in tqdm(range(ncz), disable=not is_main_process()):
         z0c, z1c = iz * cz, min((iz + 1) * cz, z_max)
-        for iy in tqdm(range(ncy), disable=not is_main_process(), total=ncy):
+        for iy in range(ncy):
             y0c, y1c = iy * cy, min((iy + 1) * cy, y_max)
-            for ix in tqdm(range(ncx), disable=not is_main_process(), total=ncx):
+            for ix in range(ncx):
                 x0c, x1c = ix * cx, min((ix + 1) * cx, x_max)
 
                 syn_ids = chunk_to_syn.get((iz, iy, ix), [])
-                if not syn_ids:
-                    continue
+                if not syn_ids: continue
 
-                # Core bbox (the chunk) and extended bbox (chunk + halo)
-                core_bbox = np.array([z0c, z1c, y0c, y1c, x0c, x1c], dtype=int)
+                # Define patch with halo
+                ext_bbox = [
+                    max(0, z0c - halo[0]), min(z_max, z1c + halo[0]),
+                    max(0, y0c - halo[1]), min(y_max, y1c + halo[1]),
+                    max(0, x0c - halo[2]), min(x_max, x1c + halo[2])
+                ]
+                
+                patch_shape = (ext_bbox[1]-ext_bbox[0], ext_bbox[3]-ext_bbox[2], ext_bbox[5]-ext_bbox[4])
+                offset = np.array([ext_bbox[0], ext_bbox[2], ext_bbox[4]])
 
-                ext_bbox = core_bbox.copy()
-                ext_bbox[0] = max(0, ext_bbox[0] - halo[0]); ext_bbox[1] = min(z_max, ext_bbox[1] + halo[0])
-                ext_bbox[2] = max(0, ext_bbox[2] - halo[1]); ext_bbox[3] = min(y_max, ext_bbox[3] + halo[1])
-                ext_bbox[4] = max(0, ext_bbox[4] - halo[2]); ext_bbox[5] = min(x_max, ext_bbox[5] + halo[2])
-
-                patch_shape = (ext_bbox[1] - ext_bbox[0], ext_bbox[3] - ext_bbox[2], ext_bbox[5] - ext_bbox[4])
-                if patch_shape[0] <= 0 or patch_shape[1] <= 0 or patch_shape[2] <= 0:
-                    continue
-
-                # Where the core chunk sits inside the extended patch (for cropping halo away before writing)
-                z0p = core_bbox[0] - ext_bbox[0]; z1p = z0p + (core_bbox[1] - core_bbox[0])
-                y0p = core_bbox[2] - ext_bbox[2]; y1p = y0p + (core_bbox[3] - core_bbox[2])
-                x0p = core_bbox[4] - ext_bbox[4]; x1p = x0p + (core_bbox[5] - core_bbox[4])
-
-                # -------------------------------------------------------
-                # Build seeds/masks for ALL synapses that touch this chunk
-                # -------------------------------------------------------
                 seeds = np.zeros(patch_shape, dtype=np.uint32)
                 mask_to_grow = np.zeros(patch_shape, dtype=np.uint8)
                 label_to_pre_site = {}
                 label_count = 1
 
-                # Add all post markers into this patch
                 for syn_id in syn_ids:
                     pre_pt, post_list = syn_items[syn_id]
-                    if not post_list:
-                        continue
+                    pre_local = np.asarray(pre_pt) - offset
+                    
+                    for post_pt in post_list:
+                        post_local = np.asarray(post_pt) - offset
+                        
+                        # We allow points slightly outside the patch because their dilation 
+                        # footprint (up to 'halo' size) will bleed back into the patch core.
+                        is_relevant = np.all(
+                            (post_local >= -halo) & 
+                            (post_local < np.asarray(patch_shape) + halo)
+                        )
 
-                    pre_pt = np.asarray(pre_pt, dtype=int)
-                    posts = np.asarray(post_list, dtype=int)
+                        if is_relevant:
+                            # 1. Calculate Z-column range for the seed
+                            z_idx = int(post_local[0])
+                            z0s = max(0, z_idx - seed_reach[0])
+                            z1s = min(patch_shape[0], z_idx + seed_reach[0] + 1)
+                            
+                            # 2. Coordinates for Y and X
+                            yy, xx = int(post_local[1]), int(post_local[2])
 
-                    # pre_local for flow reference
-                    pre_local = pre_pt - np.asarray([ext_bbox[0], ext_bbox[2], ext_bbox[4]], dtype=int)
+                            # Only write if the column center (yy, xx) is inside the patch bounds
+                            if 0 <= yy < patch_shape[1] and 0 <= xx < patch_shape[2]:
+                                if z0s < z1s: # Ensure valid slice
+                                    col = seeds[z0s:z1s, yy, xx]
+                                    empty = (col == 0)
+                                    if empty.any():
+                                        col[empty] = label_count
+                                        seeds[z0s:z1s, yy, xx] = col
+                                        label_to_pre_site[label_count] = pre_local.tolist()
+                                        
+                                        # Draw the single-pixel seed for dilation
+                                        if 0 <= z_idx < patch_shape[0]:
+                                            mask_to_grow[z_idx, yy, xx] = 1
+                                            
+                                        label_count += 1
 
-                    # Skip if presyn point is outside patch (shouldn't happen with our indexing, but safe)
-                    if not _in_bounds(pre_local, patch_shape):
-                        continue
+                if label_count == 1: continue
 
-                    for post_pt in posts:
-                        post_local = post_pt - np.asarray([ext_bbox[0], ext_bbox[2], ext_bbox[4]], dtype=int)
-                        if not _in_bounds(post_local, patch_shape):
-                            continue
+                # --- Dilation & Flow (Now safe because halo ensures full shapes) ---
+                post_site_map = binary_dilation_scipy(mask_to_grow, structure=post_footprint)
+                mask_grow = binary_dilation_scipy(mask_to_grow, structure=pre_footprint)
 
-                        # seed "column" along Z, but DO NOT overwrite existing labels
-                        z0s = max(0, int(post_local[0]) - int(width[0]))
-                        z1s = min(int(post_local[0]) + int(width[0]), seeds.shape[0])
-                        yy, xx = int(post_local[1]), int(post_local[2])
-
-                        col = seeds[z0s:z1s, yy, xx]
-                        empty = (col == 0)
-                        if empty.any():
-                            col[empty] = label_count
-                            seeds[z0s:z1s, yy, xx] = col
-                            label_to_pre_site[label_count] = pre_local.tolist()
-                            label_count += 1
-
-                        mask_to_grow[int(post_local[0]), yy, xx] = 1
-
-                if label_count == 1:
-                    continue  # no seeds placed
-
-                # ----------
-                # Dilations 
-                # ----------
-                post_site_map = binary_dilation_scipy(mask_to_grow, iterations=1, structure=post_footprint)
-                mask_grow = binary_dilation_scipy(mask_to_grow, iterations=1, structure=pre_footprint)
-
-                # --------------------------------------------
-                # Fast overlap resolution: KDTree on seed voxels
-                # --------------------------------------------
                 seed_coords = np.argwhere(seeds > 0)
-                if seed_coords.size == 0:
-                    continue
-                seed_labels = seeds[seed_coords[:, 0], seed_coords[:, 1], seed_coords[:, 2]]
-
                 mask_coords = np.argwhere(mask_grow > 0)
-                if mask_coords.size == 0:
-                    continue
+                
+                if seed_coords.size > 0 and mask_coords.size > 0:
+                    tree = cKDTree(seed_coords * res_array)
+                    _, nn = tree.query(mask_coords * res_array, workers=-1)
+                    grown_labels = np.zeros_like(seeds)
+                    grown_labels[mask_coords[:,0], mask_coords[:,1], mask_coords[:,2]] = seeds[seed_coords[nn,0], seed_coords[nn,1], seed_coords[nn,2]]
+                    
+                    axis_order = "".join([x for x in channel_mode if x in ["H", "V", "Z"]])
+                    out_flow = create_flow_channels(
+                        grown_labels,
+                        ref_point="presynaptic",
+                        label_to_pre_site=label_to_pre_site,
+                        normalize_values=norm,
+                        resolution=resolution,
+                        axis_order=axis_order,
+                    )
 
-                scaled_seed_coords = seed_coords * res_array
-                scaled_mask_coords = mask_coords * res_array
+                    # Assemble & Crop
+                    stack = []
+                    for c in channel_mode:
+                        if c == "F_post": stack.append(post_site_map[..., None])
+                        else:
+                            j = axis_order.index(c)
+                            stack.append(out_flow[..., j:j+1])
+                    
+                    out_map = np.concatenate(stack, axis=-1)
+                    
+                    # CROP: Extract only the core chunk from the halo-extended patch
+                    z0p, z1p = z0c - ext_bbox[0], (z0c - ext_bbox[0]) + (z1c - z0c)
+                    y0p, y1p = y0c - ext_bbox[2], (y0c - ext_bbox[2]) + (y1c - y0c)
+                    x0p, x1p = x0c - ext_bbox[4], (x0c - ext_bbox[4]) + (x1c - x0c)
+                    out_core = out_map[z0p:z1p, y0p:y1p, x0p:x1p, :]
 
-                tree = cKDTree(scaled_seed_coords)
-                _, nn = tree.query(scaled_mask_coords, workers=-1)
+                    # Transpose and Write
+                    transpose_order = [out_order.find(ax) for ax in "ZYXC"]
+                    patch = out_core.transpose(np.argsort(transpose_order)) # Simplified transpose
 
-                grown_labels = np.zeros_like(seeds)
-                grown_labels[mask_coords[:, 0], mask_coords[:, 1], mask_coords[:, 2]] = seed_labels[nn]
-                seeds = grown_labels
+                    # Prepare slices for the target dataset
+                    data_slices = []
+                    for ax in out_order:
+                        if ax == 'Z': data_slices.append(slice(z0c, z1c))
+                        elif ax == 'Y': data_slices.append(slice(y0c, y1c))
+                        elif ax == 'X': data_slices.append(slice(x0c, x1c))
+                        elif ax == 'C': data_slices.append(slice(0, out_shape[c_pos]))
+                    
+                    # Accumulate (prevents overwriting edges with zeros)
+                    target = mask[tuple(data_slices)]
+                    mask[tuple(data_slices)] = target + patch.astype(target.dtype) * (target == 0)
 
-                # -----------------
-                # Create flow maps
-                # -----------------
-                axis_order = "".join([x for x in channel_mode if x in ["H", "V", "Z"]])
-                out_flow = create_flow_channels(
-                    seeds,
-                    ref_point="presynaptic",
-                    label_to_pre_site=label_to_pre_site,
-                    normalize_values=norm,
-                    resolution=resolution,
-                    axis_order=axis_order,
-                )
-
-                stack = []
-                for c in channel_mode:
-                    if c == "F_post":
-                        stack.append(post_site_map[..., None].astype(np.uint8))
-                    else:
-                        j = axis_order.index(c)
-                        stack.append(out_flow[..., j : j + 1].astype(np.float32))
-                out_map = np.concatenate(stack, axis=-1)  # ZYXC in patch space
-
-                # -------------------------------
-                # Crop halo, transpose, and write
-                # -------------------------------
-                out_core = out_map[z0p:z1p, y0p:y1p, x0p:x1p, :]
-
-                current_order = np.arange(out_core.ndim)
-                transpose_order = order_dimensions(
-                    current_order, input_order="ZYXC", output_order=out_order, default_value=np.nan
-                )
-                transpose_order = [int(x) for x in transpose_order if not np.isnan(x)]
-                patch = out_core.transpose(transpose_order)
-
-                data_slices = (
-                    slice(core_bbox[0], core_bbox[1]),
-                    slice(core_bbox[2], core_bbox[3]),
-                    slice(core_bbox[4], core_bbox[5]),
-                    slice(0, out_shape[c_pos]),
-                )
-                data_slices = tuple(
-                    order_dimensions(data_slices, input_order="ZYXC", output_order=out_order, default_value=0)
-                )
-
-                target = mask[data_slices]
-                mask[data_slices] = target + patch * (target == 0)
-
-    if isinstance(fid_mask, h5py.File):
+    if isinstance(fid_mask, h5py.File): 
         fid_mask.close()
 
 def create_flow_channels(

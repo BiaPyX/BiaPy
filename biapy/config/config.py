@@ -214,6 +214,8 @@ class Config:
         #       - 'dilation': int or list of ints, specifies the dilation size applied to the channel. Default: [1,3,3]
         #   - 'F_post' channel. Possible options: 
         #       - 'dilation': int or list of ints, specifies the dilation size applied to the channel. Default: [1,3,3]
+        #   - 'F_cleft' channel. Possible options:
+        #       - 'dilation': int or list of ints, specifies the dilation size applied to the channel. Default: [1,3,3]
         #   - 'H', 'V' and 'Z' channels. Possible options:
         #       - 'norm': bool, specifies whether distances are normalized between 0 and 1. Default: False
         #       - 'act': str, specifies the activation function used in the model’s final layer when this channel is selected.

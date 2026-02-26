@@ -616,7 +616,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             dst = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0]
 
             # F and B — foreground and background
-            for ch in ("F_pre", "F_post"):
+            for ch in ("F_pre", "F_post", "F_cleft"):
                 if ch in chs:
                     if ch in dst:
                         assert [x for x in dst[ch].keys() if x not in ["dilation"]] == [], (
@@ -651,7 +651,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             # depending on the channels and their options
             suffix = ""
             dst = cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0]
-            for ch in [x for x in sorted_original_instance_channels if x in ["F_pre", "F_post", "Z"]]:
+            for ch in [x for x in sorted_original_instance_channels if x in ["F_pre", "F_post", "F_cleft", "Z"]]:
                 suffix += f"_{ch}" if ch != "Z" else "_ZVH"
                 for entry in dst.get(ch, {}):
                     eval = str(dst[ch][entry]).replace(" ", "").replace("[", "").replace("]", "").replace("(", "").replace(")", "").replace(",", "-")
@@ -671,7 +671,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             if not channel_loss_set:
                 losses = []
                 for ch in sorted_original_instance_channels:
-                    if ch in ["F", "B", "C", "P", "T", "A", "M", "F_pre", "F_post"]:
+                    if ch in ["F", "B", "C", "P", "T", "A", "M", "F_pre", "F_post", "F_cleft"]:
                         losses.append("bce")
                     elif ch in ["Z", "V", "H", "Db", "Dc", "Dn", "D", "R"]:
                         losses.append("l1")
@@ -1560,13 +1560,17 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             )
 
         else:  # synapses
-            assert cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE in ["manual", "auto", "relative_by_patch", "relative"], "'PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE' must be one of ['manual', 'auto']"
             for x in cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS:
-                assert x in ["F_pre", "F_post", "Z", "V", "H"], "PROBLEM.INSTANCE_SEG.DATA_CHANNELS not in ['F_pre', 'F_post', 'H', 'V', 'Z']"
-
-            if set(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) not in [{"F_pre", "F_post"}, {"F_post", "Z", "V", "H"}]:
-                raise ValueError("PROBLEM.INSTANCE_SEG.DATA_CHANNELS not 'F_pre' + 'F_post' or 'F_pre' + 'H' + 'V' + 'Z', which are the unique configurations supported for synapse detection")
-
+                assert x in ["F_pre", "F_post", "F_cleft", "Z", "V", "H"], "PROBLEM.INSTANCE_SEG.DATA_CHANNELS not in ['F_pre', 'F_post', 'F_cleft', 'H', 'V', 'Z']"
+            if set(sorted_original_instance_channels) == {"F_pre", "F_post"}:
+                assert cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE in ["manual", "auto", "relative_by_patch", "relative"], "'PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE' must be one of ['manual', 'auto']"
+            elif set(sorted_original_instance_channels) == {"F_post", "Z", "V", "H"}:
+                pass
+            elif set(sorted_original_instance_channels) == {"F_cleft"}:
+                pass
+            else: 
+                raise ValueError("Synapse representation {} not supported".format(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS))
+            
             if not cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA or cfg.PROBLEM.NDIM != "3D":
                 raise ValueError(
                     "Synapse detection is only available for 3D Zarr/H5 data. Please set 'DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA' "
