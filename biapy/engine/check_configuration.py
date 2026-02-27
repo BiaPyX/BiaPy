@@ -1568,6 +1568,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 pass
             elif set(sorted_original_instance_channels) == {"F_cleft"}:
                 pass
+            elif set(sorted_original_instance_channels) == {"F_post"}:
+                pass
             else: 
                 raise ValueError("Synapse representation {} not supported".format(cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS))
             

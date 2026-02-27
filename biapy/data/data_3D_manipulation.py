@@ -1656,7 +1656,7 @@ def load_synapse_gt_points(
     partners_path: str, 
     id_path: str, 
     data_filename: str
-) -> Tuple[List[int], List[int], List[int | float]]:
+) -> Tuple[List[int], List[int], List[int], List[int | float]]:
     """
     Load synapse ground truth points from the given paths.
 
@@ -1684,6 +1684,9 @@ def load_synapse_gt_points(
 
     gt_post_points : list of numpy arrays
         List of post-synaptic points coordinates.
+
+    gt_cleft_points : list of numpy arrays
+        List of synaptic cleft points coordinates.
 
     resolution : tuple of int or float
         Resolution of the synapse coordinates.
@@ -1719,7 +1722,13 @@ def load_synapse_gt_points(
     gt_pre_points = list(gt_pre_points.values())
     gt_post_points = list(gt_post_points.values())
 
+    # For synaptic cleft points, we take the midpoint between pre and post-synaptic points
+    gt_cleft_points = []
+    for pre, post in zip(gt_pre_points, gt_post_points):
+        cleft_point = (pre + post) / 2
+        gt_cleft_points.append(cleft_point)
+
     if isinstance(file, h5py.File):
         file.close()
 
-    return gt_pre_points, gt_post_points, resolution
+    return gt_pre_points, gt_post_points, gt_cleft_points, resolution

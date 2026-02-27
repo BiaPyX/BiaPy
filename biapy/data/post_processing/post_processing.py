@@ -560,7 +560,7 @@ def create_synapses_from_point_probs(
     Parameters
     ----------
     data : 4D Numpy array
-        Binary foreground labels and contours data to apply watershed into. E.g. ``(397, 1450, 2000, 2)``.
+        Data to extract synapse points from. E.g. ``(397, 1450, 2000, 2)``.
 
     channels : List of str
         Channel type used.
@@ -612,160 +612,41 @@ def create_synapses_from_point_probs(
         post_points: Array with post points.
         
     """
-    assert point_creation_func in ["peak_local_max", "blob_log"]
+    if not (all(ch in channels for ch in ["F_pre", "F_post"]) and len(channels) == 2):
+        raise NotImplementedError("For now, only 'F_pre' + 'F_post' channels are supported.")
 
-    d_result = {}
-    ids, probs = [], []
-    if set(channels) != {"F_pre","F_post"}:
-        raise NotImplementedError("For now, only {'F_pre', 'F_post'} channels are supported.")
-    
-    # Assuming {"F_pre", "F_post"} channels from now on
-    # Take the coords of the predicted points
-    all_coords = []
-    max_value = 0
-    data = data.astype(np.float32)
-    for c in range(data.shape[-1]):
-        if relative_th_value:
-            threshold_abs = None
-            threshold_rel = min_th_to_be_peak[c]
-        else:
-            threshold_abs = min_th_to_be_peak[c]
-            threshold_rel = None
-
-        if point_creation_func == "peak_local_max":
-            coords = peak_local_max(
-                data[..., c],
-                min_distance=min_distance,
-                threshold_abs=threshold_abs,
-                threshold_rel=threshold_rel,
-                exclude_border=exclude_border,
-            )
-            coords = coords.astype(int)
-        else:
-            coords = blob_log(
-                data[..., c] * 255,
-                min_sigma=min_sigma,
-                max_sigma=max_sigma,
-                num_sigma=num_sigma,
-                threshold=threshold_abs, # type: ignore
-                threshold_rel=threshold_rel,
-                exclude_border=exclude_border,
-            )
-            coords = coords[:, :3].astype(int)  # Remove sigma
-
-        all_coords.append(coords)
-        max_value += len(coords)
-    
-    # Choose appropiate dtype
-    if max_value < 255:
-        appropiate_dtype = np.uint8
-    elif max_value < 65535:
-        appropiate_dtype = np.uint16
-    else:
-        appropiate_dtype = np.uint32
-    new_data = np.zeros(data.shape, dtype=appropiate_dtype)
-
-    lbl_cont = 1
-    ellipse_footprint_cpd = generate_ellipse_footprint([2,4,4])
-    for c, coords in enumerate(all_coords):
-        for coord in coords:
-            z,y,x = coord
-            new_data[int(z), int(y), int(x), c] = lbl_cont
-            probs.append(float(data[z,y,x,c]))
-            ids.append(lbl_cont)
-            lbl_cont += 1
-
-        # Dilate the labels
-        new_data[...,c] = binary_dilation_scipy(
-            new_data[...,c],
-            iterations=1,
-            structure=ellipse_footprint_cpd,
-        )
-
-    d_result["ids"] = ids
-    first_tag = "pre" if channels.index("F_pre") == 0 else "post"
-    second_tag = 'post' if first_tag == 'pre' else 'pre'
-    d_result["tag"] = ([first_tag,]*len(all_coords[0])) + ([second_tag,]*len(all_coords[1]))
-    d_result["probabilities"] = probs
-    d_result["points"] = np.concatenate(all_coords, axis=0)
-
-    if out_dir is not None and filenames is not None:
-        save_tif(
-            np.expand_dims(new_data, 0),
-            out_dir,
-            filenames,
-            verbose=verbose,
-        )
-
-    total_pre_points = len([x for x in d_result["tag"] if x == "pre"])
-    pre_points = np.array(d_result["points"][:total_pre_points])
-    pre_points_df = pd.DataFrame(
-        zip(
-            d_result["ids"][:total_pre_points],
-            list(pre_points[:, 0]),
-            list(pre_points[:, 1]),
-            list(pre_points[:, 2]),
-            d_result["probabilities"][:total_pre_points],
-            [min_th_to_be_peak[0],]*total_pre_points,
-        ),
-        columns=[
-            "pre_id",
-            "axis-0",
-            "axis-1",
-            "axis-2",
-            "probability",
-            "pre th",
-        ],
+    F_pre_pos = channels.index("F_pre")
+    F_post_pos = channels.index("F_post")
+    pre_points_df, pre_points = extract_points_in_predictions(
+        data=data[..., F_pre_pos], 
+        point_type="pre",
+        point_creation_func=point_creation_func,
+        min_th_to_be_peak=min_th_to_be_peak[F_pre_pos],
+        min_distance=min_distance,
+        min_sigma=min_sigma,
+        max_sigma=max_sigma,
+        num_sigma=num_sigma,
+        exclude_border=exclude_border,
+        relative_th_value=relative_th_value,
+        out_dir=out_dir,
+        filenames=filenames,
+        verbose=verbose,
     )
-
-    # Save just the points and their probabilities
-    if out_dir is not None:
-        pre_points_df.to_csv(
-            os.path.join(
-                out_dir,
-                "pred_pre_locations.csv",
-            ),
-            index=False,
-        )
-
-    post_points = np.array(d_result["points"][total_pre_points:])
-    post_points_df = pd.DataFrame(
-        zip(
-            d_result["ids"][total_pre_points:],
-            list(post_points[:, 0]),
-            list(post_points[:, 1]),
-            list(post_points[:, 2]),
-            d_result["probabilities"][total_pre_points:],
-            [min_th_to_be_peak[1],]*len(post_points),
-        ),
-        columns=[
-            "post_id",
-            "axis-0",
-            "axis-1",
-            "axis-2",
-            "probability",
-            "post th",
-        ],
+    post_points_df, post_points = extract_points_in_predictions(
+        data=data[..., F_post_pos], 
+        point_type="post",
+        point_creation_func=point_creation_func,
+        min_th_to_be_peak=min_th_to_be_peak[F_post_pos], 
+        min_distance=min_distance,
+        min_sigma=min_sigma,
+        max_sigma=max_sigma,
+        num_sigma=num_sigma,
+        exclude_border=exclude_border,
+        relative_th_value=relative_th_value,
+        out_dir=out_dir,
+        filenames=filenames,
+        verbose=verbose,
     )
-
-    # Save just the points and their probabilities
-    if out_dir is not None:
-        post_points_df.to_csv(
-            os.path.join(
-                out_dir,
-                "pred_post_locations.csv",
-            ),
-            index=False,
-        )
-
-    # Create coordinate arrays
-    pre_points, post_points = [], []
-    for coord in zip(pre_points_df["axis-0"], pre_points_df["axis-1"], pre_points_df["axis-2"]):
-        pre_points.append(list(coord))
-    for coord in zip(post_points_df["axis-0"], post_points_df["axis-1"], post_points_df["axis-2"]):
-        post_points.append(list(coord))
-    pre_points = np.array(pre_points)
-    post_points = np.array(post_points)
 
     pre_post_mapping = {}
     pres, posts = [], []
@@ -816,7 +697,187 @@ def create_synapses_from_point_probs(
             index=False,
         )
 
-    return pre_points_df, np.array(d_result["points"][:total_pre_points]), post_points_df, np.array(d_result["points"][total_pre_points:])
+    return pre_points_df, pre_points, post_points_df, post_points
+
+
+def extract_points_in_predictions(
+    data: NDArray,
+    point_type: str,
+    point_creation_func: str = "peak_local_max",
+    min_th_to_be_peak: float = 0.2,
+    min_distance: int=1,
+    min_sigma: int=5,
+    max_sigma: int=10,
+    num_sigma: int=2,
+    exclude_border: bool = False,
+    relative_th_value: bool = False,
+    out_dir: Optional[str] = None,
+    filenames: Optional[List[str]] = None,
+    verbose: bool = True,
+) -> Tuple[pd.DataFrame, NDArray]:
+    """
+    Extract points from predicted ``data``.
+
+    Find more info regarding ``min_distance``, ``min_sigma`` and ``exclude_border`` arguments in 
+    `peak_local_max <https://scikit-image.org/docs/0.25.x/api/skimage.feature.html#skimage.feature.peak_local_max>`__ 
+    and `blob_log <https://scikit-image.org/docs/0.25.x/api/skimage.feature.html#skimage.feature.blob_log>`__ 
+    functions.  
+    
+    Parameters
+    ----------
+    data : 3D Numpy array
+        Data to extract points from. E.g. ``(397, 1450, 2000)``.
+
+    point_type : str
+        Type of points to be extracted. Options: ["cleft", "pre", "post"].
+
+    point_creation_func : str, optional
+        Function to be used in the pre/post point creation. Options: ["peak_local_max", "blob_log"]
+    
+    min_th_to_be_peak : float, optional
+        Minimum value in ``data`` to be used as the minimum when creating the points. 
+        
+    min_distance : int, optional
+        The minimal allowed distance separating peaks. To find the maximum number of peaks, use ``min_distance=1``.
+
+    min_sigma : int, optional
+        The minimum standard deviation for Gaussian kernel. Keep this low to detect smaller blobs. The standard deviations
+        of the Gaussian filter are given for each axis as a sequence, or as a single number, in which case it is equal for
+        all axes.
+        
+    max_sigma : int, optional
+        The maximum standard deviation for Gaussian kernel. Keep this high to detect larger blobs. The standard deviations 
+        of the Gaussian filter are given for each axis as a sequence, or as a single number, in which case it is equal for 
+        all axes.
+
+    num_sigma : int, optional
+        The number of intermediate values of standard deviations to consider between ``min_sigma`` and ``max_sigma``.
+
+    exclude_border: bool, optional
+        To exclude border-pixels of the border of the image.
+
+    relative_th_value : bool, optional
+        To use ``min_th_to_be_peak`` as a relative threshold to the maximum value, i.e. ``threshold_rel`` is set instead of 
+        ``threshold_abs`` in the ``peak_local_max`` or ``blob_log`` call. 
+
+    out_dir : str, optional
+        Directory to save the output data into. If None, the output data will not be saved.
+
+    filenames : List of str, optional
+        List of filenames to save the output data into. If None, the output data will not be saved. E.g. ``["pred_points.tif"]``.
+    
+    verbose : bool, optional
+        Whether to print the progress of the function or not.
+    
+    Returns
+    -------
+    Tuple[pd.DataFrame, NDArray, pd.DataFrame, NDArray]
+        pred_points_df: DataFrame with predicted points.
+        pred_points: Array with predicted points.
+    """
+    assert point_creation_func in ["peak_local_max", "blob_log"]
+    assert point_type in ["cleft", "pre", "post"]
+    d_result = {}
+    ids, probs = [], []
+
+    if relative_th_value:
+        threshold_abs = None
+        threshold_rel = min_th_to_be_peak
+    else:
+        threshold_abs = min_th_to_be_peak
+        threshold_rel = None
+
+    if point_creation_func == "peak_local_max":
+        coords = peak_local_max(
+            data,
+            min_distance=min_distance,
+            threshold_abs=threshold_abs,
+            threshold_rel=threshold_rel,
+            exclude_border=exclude_border,
+        )
+        coords = coords.astype(int)
+    else:
+        coords = blob_log(
+            data * 255,
+            min_sigma=min_sigma,
+            max_sigma=max_sigma,
+            num_sigma=num_sigma,
+            threshold=threshold_abs, # type: ignore
+            threshold_rel=threshold_rel,
+            exclude_border=exclude_border,
+        )
+        coords = coords[:, :3].astype(int)  # Remove sigma
+    
+    # Choose appropiate dtype
+    if len(coords) < 255:
+        appropiate_dtype = np.uint8
+    elif len(coords) < 65535:
+        appropiate_dtype = np.uint16
+    else:
+        appropiate_dtype = np.uint32
+    new_data = np.zeros(data.shape, dtype=appropiate_dtype)
+
+    lbl_cont = 1
+    ellipse_footprint_cpd = generate_ellipse_footprint([2,4,4])
+    for coord in coords:
+        z,y,x = coord
+        new_data[int(z), int(y), int(x)] = lbl_cont
+        probs.append(float(data[z,y,x]))
+        ids.append(lbl_cont)
+        lbl_cont += 1
+
+    # Dilate the labels
+    new_data = binary_dilation_scipy(
+        new_data,
+        iterations=1,
+        structure=ellipse_footprint_cpd,
+    )
+
+    d_result["ids"] = ids
+    first_tag = point_type
+    d_result["tag"] = [first_tag,]*len(coords)
+    d_result["probabilities"] = probs
+    d_result["points"] = coords
+
+    total_points = len([x for x in d_result["tag"] if x == point_type])
+    points = np.array(d_result["points"][:total_points])
+    points_df = pd.DataFrame(
+        zip(
+            d_result["ids"][:total_points],
+            list(points[:, 0]),
+            list(points[:, 1]),
+            list(points[:, 2]),
+            d_result["probabilities"][:total_points],
+            [min_th_to_be_peak,]*total_points,
+        ),
+        columns=[
+            f"{point_type}_id",
+            "axis-0",
+            "axis-1",
+            "axis-2",
+            "probability",
+            f"{point_type} th",
+        ],
+    )
+    
+    # Save just the points and their probabilities
+    if out_dir is not None:
+        points_df.to_csv(
+            os.path.join(
+                out_dir,
+                f"pred_{point_type}_locations.csv",
+            ),
+            index=False,
+        )
+        if filenames is not None:
+            save_tif(
+                np.expand_dims(np.expand_dims(new_data, 0),-1),
+                out_dir,
+                filenames,
+                verbose=verbose,
+            )
+
+    return points_df, np.array(d_result["points"][:total_points])
 
 def from_local_synapse_csv_to_global(
     filename: str, 

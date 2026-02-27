@@ -28,6 +28,7 @@ from biapy.data.post_processing.post_processing import (
     repare_large_blobs,
     apply_binary_mask,
     create_synapses_from_point_probs,
+    extract_points_in_predictions,
     remove_close_points,
     remove_close_points_by_mask,
     Embedding_cluster,
@@ -182,6 +183,8 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 self.synapse_method = "synful"
             elif all(ch in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS for ch in ["F_cleft"]) and len(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) == 1:
                 self.synapse_method = "cleft"
+            elif all(ch in self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS for ch in ["F_post"]) and len(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS) == 1:
+                self.synapse_method = "F_post_only"
             else:
                 raise ValueError("Unknown synapse prediction method for the given channels. Please check the documentation for more details.")
 
@@ -1162,7 +1165,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         out_dir_post_proc: Optional[str] = None,
         calculate_metrics: bool = True,
         do_post_processing: bool = True,
-    ) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
+    ) -> Dict:
         """
         Synapse segmentation workflow engine for test/inference.
         
@@ -1190,6 +1193,11 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         do_post_processing : bool
             Whether to do or not the post-processing step. Normally we disable it when doring inference per chunks
             as the post-processing is done at the end on the whole image.
+
+        Returns
+        -------
+        Dict[str, Any]
+            A dictionary containing the predicted synapse-related points.
         """
         assert pred.ndim == 4, f"Prediction doesn't have 4 dim: {pred.shape}"
         #############################
@@ -1212,7 +1220,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 out_dir=out_dir,
                 verbose=self.cfg.TEST.VERBOSE,
             )
-        else:
+        elif self.synapse_method == "simpsyn":
             pre_points_df, pre_points, post_points_df, post_points = create_synapses_from_point_probs(
                 data=pred,
                 channels=self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
@@ -1228,24 +1236,60 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 filenames = filenames,
                 verbose=self.cfg.TEST.VERBOSE,
             )
-        
+        elif self.synapse_method == "cleft":
+            cleft_points_df, cleft_points = extract_points_in_predictions(
+                data=pred[...,0],
+                point_type="cleft",
+                point_creation_func=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.POINT_CREATION_FUNCTION,
+                min_th_to_be_peak=threshold_abs[0],
+                min_distance=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.PEAK_LOCAL_MAX_MIN_DISTANCE,
+                min_sigma=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.BLOB_LOG_MIN_SIGMA,
+                max_sigma=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.BLOB_LOG_MAX_SIGMA,
+                num_sigma=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.BLOB_LOG_NUM_SIGMA,
+                exclude_border=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.EXCLUDE_BORDER,
+                relative_th_value=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE in ["relative", "relative_by_patch"], 
+                out_dir=out_dir,
+                filenames = filenames,
+                verbose=self.cfg.TEST.VERBOSE,
+            )
+        elif self.synapse_method == "F_post_only":
+            post_points_df, post_points = extract_points_in_predictions(
+                data=pred[...,0],
+                point_type="post",
+                point_creation_func=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.POINT_CREATION_FUNCTION,
+                min_th_to_be_peak=threshold_abs[0],
+                min_distance=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.PEAK_LOCAL_MAX_MIN_DISTANCE,
+                min_sigma=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.BLOB_LOG_MIN_SIGMA,
+                max_sigma=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.BLOB_LOG_MAX_SIGMA,
+                num_sigma=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.BLOB_LOG_NUM_SIGMA,
+                exclude_border=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.EXCLUDE_BORDER,
+                relative_th_value=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE in ["relative", "relative_by_patch"], 
+                out_dir=out_dir,
+                filenames = filenames,
+                verbose=self.cfg.TEST.VERBOSE,
+            )
+        else:
+            raise ValueError(f"Synapse method {self.synapse_method} not recognized.")
+
         if calculate_metrics and self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
             print("Calculating synapse detection stats . . .")
-            filename = os.path.join(self.current_sample["X_dir"], self.current_sample["X_filename"])
-            gt_pre_points, gt_post_points, resolution = load_synapse_gt_points(
+            gt_pre_points, gt_post_points, gt_cleft_points, resolution = load_synapse_gt_points(
                 locations_path = self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_LOCATIONS_PATH,
                 resolution_path = self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_RESOLUTION_PATH,
                 partners_path = self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_PARTNERS_PATH,
                 id_path = self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_ID_PATH,
-                data_filename = filename
+                data_filename = os.path.join(self.current_sample["X_dir"], self.current_sample["X_filename"]),
             )
             assert out_dir is not None, "Output directory must be provided to save the synapse detection metrics results."
 
-            # Calculate detection metrics
-            if len(pre_points) > 0:
-                self.calculate_synapse_det_metrics_on_points(gt_pre_points, pre_points, resolution, filename, out_dir, point_type="pre")
-            if len(post_points) > 0:
-                self.calculate_synapse_det_metrics_on_points(gt_post_points, post_points, resolution, filename, out_dir, point_type="post")
+            if self.synapse_method == "cleft":
+                self.calculate_synapse_det_metrics_on_points(gt_cleft_points, cleft_points, resolution, self.current_sample["X_filename"], out_dir, point_type="cleft")
+            else:
+                # Calculate detection metrics
+                if "pre_points" in locals() and len(pre_points) > 0:
+                    self.calculate_synapse_det_metrics_on_points(gt_pre_points, pre_points, resolution, self.current_sample["X_filename"], out_dir, point_type="pre")
+                if "post_points" in locals() and  len(post_points) > 0:
+                    self.calculate_synapse_det_metrics_on_points(gt_post_points, post_points, resolution, self.current_sample["X_filename"], out_dir, point_type="post")
 
         ###################
         # Post-processing #
@@ -1253,7 +1297,15 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         if do_post_processing and self.post_processing["per_image"]:
             print("TODO: post-processing")
 
-        return pre_points_df, post_points_df
+        out = {}
+        if "cleft_points_df" in locals():
+            out["cleft"] = cleft_points_df
+        if "post_points_df" in locals():
+            out["post"] = post_points_df
+        if "pre_points_df" in locals():
+            out["pre"] = pre_points_df
+
+        return out
 
     def calculate_synapse_det_metrics_on_points(self, 
         gt_points: NDArray | List[int], 
@@ -1455,62 +1507,37 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         else:  # synapses
             if self.synapse_method == "synful":
                 return
-    
-            pre_points_df, post_points_df = self.synapse_seg_process(chunk, calculate_metrics=False, do_post_processing=False)
 
+            # "simpsyn", "cleft" or "F_post_only"
+            outs = self.synapse_seg_process(chunk, calculate_metrics=False, do_post_processing=False)
             _filename, _ = os.path.splitext(os.path.basename(self.current_sample["X_filename"]))
-            if pre_points_df is not None and len(pre_points_df) > 0:
+
+            npatches = len(str(len(self.test_generator)))
+            for key in outs:
+                point_df = outs[key]
                 # Remove possible points in the padded area
-                pre_points_df = pre_points_df[pre_points_df["axis-0"] < chunk.shape[0] - added_pad[0][1]]
-                pre_points_df = pre_points_df[pre_points_df["axis-1"] < chunk.shape[1] - added_pad[1][1]]
-                pre_points_df = pre_points_df[pre_points_df["axis-2"] < chunk.shape[2] - added_pad[2][1]]
-                pre_points_df["axis-0"] = pre_points_df["axis-0"] - added_pad[0][0]
-                pre_points_df["axis-1"] = pre_points_df["axis-1"] - added_pad[1][0]
-                pre_points_df["axis-2"] = pre_points_df["axis-2"] - added_pad[2][0]
-                pre_points_df = pre_points_df[pre_points_df["axis-0"] >= 0]
-                pre_points_df = pre_points_df[pre_points_df["axis-1"] >= 0]
-                pre_points_df = pre_points_df[pre_points_df["axis-2"] >= 0]
+                point_df = point_df[point_df["axis-0"] < chunk.shape[0] - added_pad[0][1]]
+                point_df = point_df[point_df["axis-1"] < chunk.shape[1] - added_pad[1][1]]
+                point_df = point_df[point_df["axis-2"] < chunk.shape[2] - added_pad[2][1]]
+                point_df["axis-0"] = point_df["axis-0"] - added_pad[0][0]
+                point_df["axis-1"] = point_df["axis-1"] - added_pad[1][0]
+                point_df["axis-2"] = point_df["axis-2"] - added_pad[2][0]
+                point_df = point_df[point_df["axis-0"] >= 0]
+                point_df = point_df[point_df["axis-1"] >= 0]
+                point_df = point_df[point_df["axis-2"] >= 0]
                 
                 # Add the chunk shift to the detected coordinates so they represent global coords
-                pre_points_df["axis-0"] = pre_points_df["axis-0"] + chunk_in_data.z_start
-                pre_points_df["axis-1"] = pre_points_df["axis-1"] + chunk_in_data.y_start
-                pre_points_df["axis-2"] = pre_points_df["axis-2"] + chunk_in_data.x_start
+                point_df["axis-0"] = point_df["axis-0"] + chunk_in_data.z_start
+                point_df["axis-1"] = point_df["axis-1"] + chunk_in_data.y_start
+                point_df["axis-2"] = point_df["axis-2"] + chunk_in_data.x_start
 
                 # Save the csv file
-                if len(pre_points_df) > 0:
+                if len(point_df) > 0:
                     os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, exist_ok=True)
-                    pre_points_df.to_csv(
+                    point_df.to_csv(
                         os.path.join(
                             self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
-                            _filename + "_patch" + str(chunk_id).zfill(len(str(len(self.test_generator)))) + "_pre_points.csv",
-                        ),
-                        index=False,
-                    )
-                
-            if post_points_df is not None and len(post_points_df) > 0:
-                # Remove possible points in the padded area
-                post_points_df = post_points_df[post_points_df["axis-0"] < chunk.shape[0] - added_pad[0][1]]
-                post_points_df = post_points_df[post_points_df["axis-1"] < chunk.shape[1] - added_pad[1][1]]
-                post_points_df = post_points_df[post_points_df["axis-2"] < chunk.shape[2] - added_pad[2][1]]
-                post_points_df["axis-0"] = post_points_df["axis-0"] - added_pad[0][0]
-                post_points_df["axis-1"] = post_points_df["axis-1"] - added_pad[1][0]
-                post_points_df["axis-2"] = post_points_df["axis-2"] - added_pad[2][0]
-                post_points_df = post_points_df[post_points_df["axis-0"] >= 0]
-                post_points_df = post_points_df[post_points_df["axis-1"] >= 0]
-                post_points_df = post_points_df[post_points_df["axis-2"] >= 0]
-
-                # Add the chunk shift to the detected coordinates so they represent global coords
-                post_points_df["axis-0"] = post_points_df["axis-0"] + chunk_in_data.z_start
-                post_points_df["axis-1"] = post_points_df["axis-1"] + chunk_in_data.y_start
-                post_points_df["axis-2"] = post_points_df["axis-2"] + chunk_in_data.x_start
-
-                # Save the csv file
-                if len(post_points_df) > 0:
-                    os.makedirs(self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK, exist_ok=True)
-                    post_points_df.to_csv(
-                        os.path.join(
-                            self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
-                            _filename + "_patch" + str(chunk_id).zfill(len(str(len(self.test_generator)))) + "_post_points.csv",
+                            _filename + "_patch" + str(chunk_id).zfill(npatches) + "_" + key + "_points.csv",
                         ),
                         index=False,
                     )
@@ -1531,13 +1558,14 @@ class Instance_Segmentation_Workflow(Base_Workflow):
     def after_all_chunk_prediction_workflow_process_master_rank(self):
         """Execute steps needed after merging all predicted patches into the original image in "by chunks" setting."""
         assert isinstance(self.all_pred, list) and isinstance(self.all_gt, list)
+        filename = os.path.basename(self.current_sample["X_filename"])
         if self.cfg.PROBLEM.INSTANCE_SEG.TYPE == "regular":
             if self.cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE == "chunk_by_chunk":
                 raise NotImplementedError
             else:
                 # Load H5/Zarr and convert it into numpy array
                 fpath = os.path.join(
-                    self.cfg.PATHS.RESULT_DIR.PER_IMAGE, os.path.splitext(self.current_sample["X_filename"])[0] + ".zarr"
+                    self.cfg.PATHS.RESULT_DIR.PER_IMAGE, os.path.splitext(filename)[0] + ".zarr"
                 )
                 pred_file, pred = read_chunked_data(fpath)
                 pred = np.squeeze(np.array(pred, dtype=self.dtype))
@@ -1554,7 +1582,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 else:
                     # Load H5/Zarr and convert it into numpy array
                     fpath = os.path.join(
-                        self.cfg.PATHS.RESULT_DIR.PER_IMAGE, os.path.splitext(self.current_sample["X_filename"])[0] + ".zarr"
+                        self.cfg.PATHS.RESULT_DIR.PER_IMAGE, os.path.splitext(filename)[0] + ".zarr"
                     )
                     pred_file, pred = read_chunked_data(fpath)
                     pred = np.squeeze(np.array(pred, dtype=self.dtype))
@@ -1564,9 +1592,11 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     pred = ensure_3d_shape(pred, fpath)
 
                     self.after_merge_patches(np.expand_dims(pred, 0))
-            else:
+            elif self.synapse_method == "F_post_only":
+                raise NotImplementedError("Post-only synapse detection method not implemented yet.")
+            elif self.synapse_method == "simpsyn":
                 pre_points_df, pre_points, pre_th_global, post_points_df, post_points, post_th_global = from_local_synapse_csv_to_global(
-                    filename=os.path.splitext(self.current_sample["X_filename"])[0],
+                    filename=os.path.splitext(filename)[0],
                     reuse_predictions=self.cfg.TEST.REUSE_PREDICTIONS,
                     csv_dir=self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK,
                     min_th_to_be_peak=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.MIN_TH_TO_BE_PEAK,
@@ -1576,13 +1606,12 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
                 if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
                     print("Calculating synapse detection stats . . .")
-                    filename = os.path.join(self.current_sample["X_dir"], self.current_sample["X_filename"])
-                    gt_pre_points, gt_post_points, resolution = load_synapse_gt_points(
+                    gt_pre_points, gt_post_points, gt_cleft_points, resolution = load_synapse_gt_points(
                         locations_path = self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_LOCATIONS_PATH,
                         resolution_path = self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_RESOLUTION_PATH,
                         partners_path = self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_PARTNERS_PATH,
                         id_path = self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_ID_PATH,
-                        data_filename = filename
+                        data_filename = os.path.join(self.current_sample["X_dir"], filename),
                     )
 
                     # Calculate detection metrics
@@ -1601,7 +1630,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         if self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_POINTS_RADIUS_BY_MASK:    
                             # Load H5/Zarr and convert it into numpy array
                             fpath = os.path.join(
-                                self.cfg.PATHS.RESULT_DIR.PER_IMAGE, os.path.splitext(self.current_sample["X_filename"])[0] + ".zarr"
+                                self.cfg.PATHS.RESULT_DIR.PER_IMAGE, os.path.splitext(filename)[0] + ".zarr"
                             )
                             pred_file, pred = read_chunked_data(fpath) 
                             
@@ -1644,7 +1673,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         if self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.REMOVE_CLOSE_POINTS_RADIUS_BY_MASK:    
                             # Load H5/Zarr and convert it into numpy array
                             fpath = os.path.join(
-                                self.cfg.PATHS.RESULT_DIR.PER_IMAGE, os.path.splitext(self.current_sample["X_filename"])[0] + ".zarr"
+                                self.cfg.PATHS.RESULT_DIR.PER_IMAGE, os.path.splitext(filename)[0] + ".zarr"
                             )
                             pred_file, pred = read_chunked_data(fpath) 
                             

@@ -1490,6 +1490,10 @@ def synapse_channel_creation(
         drop_abs = float(channel_extra_opts.get("F_cleft", {}).get("drop_abs", 10.0))  # absolute drop in intensity units
         baseline_frac = float(channel_extra_opts.get("F_cleft", {}).get("baseline_frac", 0.15))  # first 15% of path = baseline
         min_persist = int(channel_extra_opts.get("F_cleft", {}).get("min_persist", 2))  # must stay dark for N steps
+    elif all(ch in mode for ch in ["F_post"]) and len(mode) == 1:
+        channels = 1
+        dtype_str = "uint8"
+        selected_mode = "F_post_only"
     else:
         raise ValueError(f"Unsupported mode: {mode}")  
 
@@ -1624,7 +1628,7 @@ def synapse_channel_creation(
                 norm=norm,
             )
         else:
-            if selected_mode not in ["simpsyn", "cleft"]:
+            if selected_mode not in ["simpsyn", "cleft", "F_post_only"]:
                 raise NotImplementedError(f"Mode {selected_mode} not implemented for processing by synapse pairs.")
             
             print("Processing synapse pairs . . .")
@@ -1776,6 +1780,26 @@ def synapse_channel_creation(
 
                     # 4) Paint the cleft "ball" using your existing dilation footprint
                     out_map[..., cleft_pos] = binary_dilation_scipy(cleft_seed, iterations=1, structure=cleft_footprint).astype(np.uint8)
+
+                elif selected_mode == "F_post_only":
+                    out_map = np.zeros(patch_shape + (channels,), dtype=np.uint8)
+
+                    # Post points only
+                    for post_global in post_sites_arr:
+                        post_local = post_global - np.asarray([bbox[0], bbox[2], bbox[4]], dtype=int)
+                        if not _in_bounds(post_local, patch_shape):
+                            raise ValueError(f"Point {post_local.tolist()} out of shape: {patch_shape}")
+
+                        out_map[
+                            max(0, post_local[0] - 1) : min(post_local[0] + 1, out_map.shape[0]),
+                            post_local[1],
+                            post_local[2],
+                            0,
+                        ] = 1
+
+                    # Dilate the channel
+                    structure = post_footprint
+                    out_map[..., 0] = binary_dilation_scipy(out_map[..., 0], iterations=1, structure=structure)
                 else:
                     raise NotImplementedError(f"Mode {selected_mode} not implemented for processing by synapse pairs.")
                 
