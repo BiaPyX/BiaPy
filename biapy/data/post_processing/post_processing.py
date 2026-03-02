@@ -1056,6 +1056,9 @@ def extract_synapse_connectivity(
                 th_type=th_type,
             )
 
+        post_th_global = point_library["post"]["th"]
+        pre_th_global = point_library["pre"]["th"]
+
         # Create coordinate arrays
         pre_points, post_points = [], []
         pre_points_df = point_library["pre"]["df"]
