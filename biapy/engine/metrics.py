@@ -1420,14 +1420,17 @@ def detection_metrics(
     if true_classes is not None and pred_classes is not None:
         if len(true_classes) != len(true):
             raise ValueError("'true' and 'true_classes' length must be the same")
-        if len(pred_classes) != len(pred_classes):
+        if len(pred_classes) != len(pred):
             raise ValueError("'pred' and 'pred_classes' length must be the same")
         class_metrics = True
     else:
         class_metrics = False
 
     _true = np.array(true, dtype=np.float32)
-    _pred = np.array(pred, dtype=np.float32)
+    if len(pred) > 0:
+        _pred = np.array(pred, dtype=np.float32)
+    else:
+        _pred = np.zeros((0, 3), dtype=np.float32)
 
     TP, FP, FN = 0, 0, 0
     tag = ["FN" for x in _true]
@@ -1514,7 +1517,10 @@ def detection_metrics(
     ]
     if len(_true) > 0:
         _true = np.array(true, dtype=np.float32)
-        _pred = np.array(pred, dtype=np.float32)
+        if len(pred) > 0:
+            _pred = np.array(pred, dtype=np.float32)
+        else:
+            _pred = np.zeros((0, 3), dtype=np.float32)
 
         # Capture FP coords
         fp_coords = np.zeros((len(fp_preds), _pred.shape[-1]))
@@ -1526,7 +1532,7 @@ def detection_metrics(
                 pred_fp_class[i] = int(pred_classes[fp_preds[i] - 1])
 
         # Capture prediction coords
-        pred_coords = np.zeros((len(pred_id_assoc), 3), dtype=np.float32)
+        pred_coords = np.zeros((len(pred_id_assoc), _pred.shape[-1]), dtype=np.float32)
         pred_class = [-1] * len(pred_id_assoc)
         if not class_metrics:
             true_classes = [-1] * len(pred_id_assoc)
@@ -1537,7 +1543,7 @@ def detection_metrics(
                     assert pred_classes is not None
                     pred_class[i] = int(pred_classes[pred_id_assoc[i] - 1])
             else:
-                pred_coords[i] = [0, 0, 0]
+                pred_coords[i] = [0] * _pred.shape[-1]
 
         df = pd.DataFrame(
             zip(

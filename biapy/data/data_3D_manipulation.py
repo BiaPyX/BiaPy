@@ -1656,7 +1656,7 @@ def load_synapse_gt_points(
     partners_path: str, 
     id_path: str, 
     data_filename: str
-) -> Tuple[List[int], List[int], List[int], List[int | float]]:
+) -> Dict[str, list]:
     """
     Load synapse ground truth points from the given paths.
 
@@ -1731,4 +1731,4 @@ def load_synapse_gt_points(
     if isinstance(file, h5py.File):
         file.close()
 
-    return gt_pre_points, gt_post_points, gt_cleft_points, resolution
+    return {"pre": gt_pre_points, "post": gt_post_points, "cleft": gt_cleft_points, "resolution": resolution}
