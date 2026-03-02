@@ -238,9 +238,10 @@ class Config:
         _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES = []
         # Information on how the channels are distributed in the model's output heads. It must be a list of list of strings, where each 
         # inner list contains the channels that are going to be predicted in the same head. If not provided, it will be set automatically
-        # with all the channels in one head, i.e. [DATA_CHANNELS]. This variable is important to determine how to apply the losses and 
-        # post-processing methods to the different channels. For example, if "V", "H" and "Z" channels are in the same head, it is likely 
-        # that they are representing distance maps and therefore the model will be able to learn them together
+        # with all the channels in one head, i.e. [DATA_CHANNELS]. For example, if "V", "H" and "Z" channels are in the same head, it is likely 
+        # that they are representing distance maps and therefore the model will be able to learn them together. On the other hand, if "C" channel 
+        # is in a different head than "H", "V" and "Z", it is likely that the model will be able to learn better the contours of the instances 
+        # separately from the distance maps.
         _C.PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO = []
 
         # Weights to be applied to the channels.
