@@ -410,6 +410,19 @@ all_test_info["Test34"] = {
     ]
 }
 
+all_test_info["Test35"] = {
+    "enable": True,
+    "jobname": "test35",
+    "description": "3D Instance seg. Cyst data. BCM. BMZ pretrained model: 'venomous-swan'. Post-proc: Clear border + Voronoi",
+    "yaml": "test_35.yaml",
+    "internal_checks": [
+        {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 1, "metric": "f1",
+            "gt": True, "value": 0.8},
+        {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 2, "metric": "f1",
+            "gt": True, "value": 0.85}, # Post-processing
+    ]
+}
+
 ################################################
 # NO-DEVS: DO NOT TOUCH BELOW THIS LINE
 ################################################
@@ -4087,6 +4100,84 @@ try:
         test_results.append(correct)
 except Exception as e:
     print("An error occurred during Test 34 execution.")
+    print(e)
+    test_results.append(False)
+
+
+#~~~~~~~~~~~~
+# Test 35
+#~~~~~~~~~~~~
+try:
+    if all_test_info["Test35"]["enable"]:
+        print("######")
+        print("Running Test 35")
+        print_inventory(all_test_info["Test35"])
+
+        #*******************
+        # File preparation
+        #*******************
+        # Open config file
+        with open(instance_seg_3d_template_local, 'r') as stream:
+            try:
+                biapy_config = yaml.safe_load(stream)
+            except yaml.YAMLError as exc:
+                raise ValueError(exc)
+
+        # biapy_config['PROBLEM']['INSTANCE_SEG']['DATA_CHANNELS'] = 'BCM'
+        biapy_config['PROBLEM']['INSTANCE_SEG']['DATA_MW_TH_TYPE'] = "auto"
+
+        biapy_config['DATA']['REFLECT_TO_COMPLETE_SHAPE'] = True
+        biapy_config['DATA']['PATCH_SIZE'] = "(80, 80, 80, 1)"
+        biapy_config['DATA']['TEST']['PATH'] = os.path.join(instance_seg_cyst_data_outpath, "validation", "x")
+        biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(instance_seg_cyst_data_outpath, "validation", "y")
+        biapy_config['DATA']['TEST']['IN_MEMORY'] = True
+        biapy_config['DATA']['TEST']['LOAD_GT'] = True
+
+        biapy_config['TRAIN']['ENABLE'] = False
+
+        biapy_config['MODEL']['SOURCE'] = 'bmz'
+        biapy_config['MODEL']['BMZ'] = {}
+        biapy_config['MODEL']['BMZ']['SOURCE_MODEL_ID'] = 'venomous-swan'
+
+        biapy_config['TEST']['ENABLE'] = True
+        biapy_config['TEST']['FULL_IMG'] = False
+        biapy_config['TEST']['POST_PROCESSING'] = {}
+        biapy_config['TEST']['POST_PROCESSING']['CLEAR_BORDER'] = True
+        biapy_config['TEST']['POST_PROCESSING']['VORONOI_ON_MASK'] = True
+
+        # Save file
+        test_file = os.path.join(inst_seg_folder, all_test_info["Test35"]["yaml"])
+        with open(test_file, 'w') as outfile:
+            yaml.dump(biapy_config, outfile, default_flow_style=False)
+
+        # Run
+        runjob(all_test_info["Test35"], results_folder, test_file, biapy_folder)
+
+        # Check
+        results = []
+        correct = True
+        res, last_lines = check_finished(all_test_info["Test35"], "Test 35")
+        if not res:
+            correct = False
+            print("Internal check not passed: seems that it didn't finish")
+        results.append(res)
+        int_checks = 1
+        for checks in all_test_info["Test35"]["internal_checks"]:
+            if checks["type"] == "regular":
+                results.append(check_value(last_lines, checks["pattern"], checks["value"], checks["gt"]))
+            else:
+                results.append(check_DatasetMatching(last_lines, checks["pattern"], checks["value"], gt=checks["gt"],
+                    value_to_check=checks["nApparition"], metric=checks["metric"]))
+            int_checks += 1
+            if not results[-1]:
+                correct = False
+                print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
+
+        # Test result
+        print_result(results, all_test_info["Test35"]["jobname"], int_checks)
+        test_results.append(correct)
+except Exception as e:
+    print("An error occurred during Test 35 execution.")
     print(e)
     test_results.append(False)
 
