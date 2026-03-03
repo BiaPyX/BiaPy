@@ -305,10 +305,13 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 else:
                     raise ValueError("Unknown channel: {}".format(channel))
 
+        for i in range(len(self.model_output_channel_info)):
+            self.model_output_channel_info[i] = self.model_output_channel_info[i].lstrip("+")
+
         # Multi-head: instances + classification
         self.gt_channels_expected = len(self.head_activations)
         if self.cfg.DATA.N_CLASSES > 2:
-            self.head_activations += ["linear"] * self.cfg.DATA.N_CLASSES
+            self.head_activations += ["ce_softmax"] * self.cfg.DATA.N_CLASSES
             self.model_output_channels += [self.cfg.DATA.N_CLASSES,]
             self.model_output_channel_info += ["class"]
             self.gt_channels_expected += 1

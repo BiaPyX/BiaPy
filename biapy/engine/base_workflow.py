@@ -701,13 +701,16 @@ class Base_Workflow(metaclass=ABCMeta):
                 if isinstance(pred, dict):
                     if "pred" in pred and pred["pred"].shape[2:] != in_img.shape[2:]:
                         mode = "bilinear" if self.cfg.PROBLEM.NDIM == "2D" else "trilinear"
-                        pred["pred"] = resize(pred["pred"], in_img.shape, mode=mode)
-                    if "class" in pred:
-                        pred["class"] = resize(pred["class"], in_img.shape, mode="nearest")
+                        sshape = (in_img.shape[0],) + (pred["pred"].shape[1],) + in_img.shape[2:]
+                        pred["pred"] = resize(pred["pred"], sshape, mode=mode)
+                    if "class" in pred and pred["class"].shape[2:] != in_img.shape[2:]:
+                        sshape = (in_img.shape[0],) + (pred["class"].shape[1],) + in_img.shape[2:]
+                        pred["class"] = resize(pred["class"], sshape, mode="nearest")
                 elif not isinstance(pred, list):
                     if pred.shape[2:] != in_img.shape[2:]:
                         mode = "bilinear" if self.cfg.PROBLEM.NDIM == "2D" else "trilinear"
-                        pred = resize(pred, in_img.shape, mode=mode)
+                        sshape = (in_img.shape[0],) + (pred.shape[1],) + in_img.shape[2:]
+                        pred = resize(pred, sshape, mode=mode)
             
             # Allow multiple outputs
             if isinstance(pred, list):
@@ -1202,7 +1205,8 @@ class Base_Workflow(metaclass=ABCMeta):
         if isinstance(pred, dict):
             pred["pred"] = __apply_acts(pred["pred"], self.head_activations)
             if "class" in pred:
-                class_acts = [self.head_activations[i] for i, info in enumerate(self.model_output_channel_info) if "class" in info]
+                class_pos = self.model_output_channel_info.index("class")
+                class_acts = self.head_activations[-self.model_output_channels[class_pos]:]
                 pred["class"] = __apply_acts(pred["class"], class_acts)
         else:
             pred = __apply_acts(pred, self.head_activations)
