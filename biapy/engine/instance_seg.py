@@ -215,9 +215,11 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         if self.cfg.PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO != []:
             set_model_output_channels = False
             self.model_output_channels = []
+            count = 0
             for head_channels in self.cfg.PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO:
-                self.model_output_channels.append(len(head_channels))
-                self.model_output_channel_info.append("+".join(head_channels))
+                self.model_output_channels.append(head_channels)
+                self.model_output_channel_info.append("+".join(self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS[count:count+head_channels]))
+                count += head_channels
         else:
             self.model_output_channels = [0]
             self.model_output_channel_info = [""]

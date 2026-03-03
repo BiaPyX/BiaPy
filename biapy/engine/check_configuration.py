@@ -665,7 +665,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             opts.extend(["DATA.TEST.INSTANCE_CHANNELS_MASK_DIR", test_channel_mask_dir])
 
             if set(sorted_original_instance_channels) == {"F_post", "Z", "V", "H"}:
-                opts.extend(["PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO", [["F_post"], ["Z", "V", "H"]]])
+                opts.extend(["PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO", [1, 3]])
 
         if len(cfg.PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO) > 0:
             assert sum(cfg.PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO) == len(sorted_original_instance_channels), "The total number of channels in 'PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO' "
