@@ -116,7 +116,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
             will not be applied. E.g. ["linear"] for a model with one head, ["linear", "sigmoid"] for a model with two heads, etc.
         """
         self.model_output_channels = [1 if self.cfg.DATA.N_CLASSES <= 2 else self.cfg.DATA.N_CLASSES]
-        self.real_classes = self.cfg.DATA.N_CLASSES
+        self.gt_channels_expected = self.cfg.DATA.N_CLASSES
         self.separated_class_channel = False
         self.head_activations = []
         for i in range(self.model_output_channels[0]):

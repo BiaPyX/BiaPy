@@ -226,7 +226,7 @@ class Base_Workflow(metaclass=ABCMeta):
         self.test_metric_names = []
         self.loss = None
         self.memory_bank = None
-        self.real_classes = -1 
+        self.gt_channels_expected = -1 
         self.train_metrics_message = ""
         self.test_metrics_message = ""
         
@@ -378,12 +378,12 @@ class Base_Workflow(metaclass=ABCMeta):
         head_number = sum(self.model_output_channels)
         assert len(self.head_activations) == head_number, "Activations and output channels do not match. "
         "{} activations vs {} output channels".format(len(self.head_activations), head_number)
-        assert len(self.head_activations) == len(self.model_output_channel_info), "Activations and output channel info do not match. "
-        "{} activations vs {} channel info".format(len(self.head_activations), len(self.model_output_channel_info))
+        assert len(self.model_output_channels) == len(self.model_output_channel_info), "Output channel info and output channels do not match. "
+        "{} output channel info vs {} output channels".format(len(self.model_output_channel_info), len(self.model_output_channels))
 
-        if self.real_classes == -1:
+        if self.gt_channels_expected == -1:
             raise ValueError(
-                "'real_classes' needs to be defined. Correct define_activations_and_channels() function"
+                "'gt_channels_expected' needs to be defined. Correct define_activations_and_channels() function"
             )
 
     def define_metrics(self):   
@@ -857,7 +857,7 @@ class Base_Workflow(metaclass=ABCMeta):
         contrast_init_iter = 0
         if self.cfg.LOSS.CONTRAST.ENABLE:
             self.memory_bank = MemoryBank(
-                num_classes=self.real_classes,
+                num_classes=self.gt_channels_expected,
                 memory_size = self.cfg.LOSS.CONTRAST.MEMORY_SIZE,
                 feature_dims = self.cfg.LOSS.CONTRAST.PROJ_DIM,
                 network_stride = self.network_stride,

@@ -136,7 +136,7 @@ class Detection_Workflow(Base_Workflow):
             self.model_output_channel_info = ["points"]
             self.model_output_channels = [1]
             self.separated_class_channel = False
-        self.real_classes = self.model_output_channels[0]
+        self.gt_channels_expected = self.model_output_channels[0]
 
         super().define_activations_and_channels()
 

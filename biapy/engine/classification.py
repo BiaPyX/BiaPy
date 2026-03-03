@@ -101,7 +101,7 @@ class Classification_Workflow(Base_Workflow):
             will not be applied. E.g. ["linear"] for a model with one head, ["linear", "sigmoid"] for a model with two heads, etc.
         """
         self.model_output_channels = [self.cfg.DATA.N_CLASSES]
-        self.real_classes = self.cfg.DATA.N_CLASSES
+        self.gt_channels_expected = self.cfg.DATA.N_CLASSES
         self.separated_class_channel = False
         self.head_activations = ["ce_softmax"]* self.model_output_channels[0]
         self.model_output_channel_info = ["pred{}".format(i) for i in range(self.model_output_channels[0])]

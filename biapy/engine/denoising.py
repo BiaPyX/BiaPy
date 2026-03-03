@@ -101,7 +101,7 @@ class Denoising_Workflow(Base_Workflow):
             will not be applied. E.g. ["linear"] for a model with one head, ["linear", "sigmoid"] for a model with two heads, etc.
         """
         self.model_output_channels = [self.cfg.DATA.PATCH_SIZE[-1]]
-        self.real_classes = self.model_output_channels[0]
+        self.gt_channels_expected = self.model_output_channels[0]
         self.separated_class_channel = False
         self.head_activations = ["linear"] * self.model_output_channels[0]
         self.model_output_channel_info = ["pred{}".format(i) for i in range(self.model_output_channels[0])]

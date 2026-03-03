@@ -2474,6 +2474,15 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     if len(cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING) == 0:
         opts.extend(["PROBLEM.SUPER_RESOLUTION.UPSCALING", (1,) * dim_count])
 
+    if cfg.PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD:
+        if cfg.PROBLEM.TYPE != "INSTANCE_SEG":
+            opts.extend(["PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD", False])
+        else:
+            if cfg.MODEL.LARGER_IO:
+                raise ValueError("'MODEL.LARGER_IO' can not be True when 'PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD' is True")
+            if cfg.LOSS.CONTRAST.ENABLE:
+                raise ValueError("'LOSS.CONTRAST.ENABLE' can not be True when 'PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD' is True")
+            
     if len(opts) > 0:
         cfg.merge_from_list(opts)
         opts = []

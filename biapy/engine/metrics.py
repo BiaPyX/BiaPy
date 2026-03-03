@@ -1219,8 +1219,6 @@ class instance_segmentation_loss:
         self.gt_channels_expected = gt_channels_expected if not self.extra_weight_in_borders else gt_channels_expected + 1
         self.channel_extra_opts = channel_extra_opts
         self.n_classes = n_classes
-        if self.n_classes > 2:
-           self.gt_channels_expected += 1  # for the class channel
         self.class_rebalance = class_rebalance
         self.class_weights = class_weights if class_rebalance == "manual" else None
         self.ignore_index = ignore_index
