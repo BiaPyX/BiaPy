@@ -4061,7 +4061,7 @@ try:
         biapy_config['TRAIN']['PATIENCE'] = 5
         biapy_config['TRAIN']['BATCH_SIZE'] = 4
 
-        biapy_config['MODEL']['ARCHITECTURE'] = 'resunet'
+        biapy_config['MODEL']['ARCHITECTURE'] = 'unext_v1'
         biapy_config['MODEL']['N_CLASSES'] = 7
 
         biapy_config['TEST']['ENABLE'] = True
