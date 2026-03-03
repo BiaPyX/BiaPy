@@ -503,7 +503,7 @@ class MultiResUnet(torch.nn.Module):
         self.contrast = contrast
         self.explicit_activations = explicit_activations
         if self.explicit_activations:
-            assert len(head_activations) == len(output_channels), "If 'explicit_activations' is True, 'head_activations' needs to "
+            assert len(head_activations) == sum(output_channels), "If 'explicit_activations' is True, 'head_activations' needs to "
             "have the same number of values as 'output_channels'"
             self.head_activations, self.class_head_activations = prepare_activation_layers(head_activations, output_channel_info)
             if self.return_class and self.class_head_activations is None:
@@ -524,7 +524,7 @@ class MultiResUnet(torch.nn.Module):
 
         # Super-resolution
         self.pre_upsampling = None
-        if len(upsampling_factor) > 1 and upsampling_position == "pre":
+        if len(upsampling_factor) > 0 and upsampling_position == "pre":
             self.pre_upsampling = convtranspose(
                 input_channels,
                 input_channels,
@@ -601,7 +601,7 @@ class MultiResUnet(torch.nn.Module):
 
         # Super-resolution
         self.post_upsampling = None
-        if len(upsampling_factor) > 1 and upsampling_position == "post":
+        if len(upsampling_factor) > 0 and upsampling_position == "post":
             self.post_upsampling = convtranspose(
                 self.in_filters9,
                 self.in_filters9,

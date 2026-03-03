@@ -24,6 +24,7 @@ import torch.nn as nn
 from typing import Dict, List
 
 from biapy.models.blocks import (
+    ConvBlock,
     ResConvBlock,
     ResUpBlock,
     SqExBlock,
@@ -54,11 +55,14 @@ class ResUNetPlusPlus(nn.Module):
         upsample_layer="convtranspose",
         z_down=[2, 2, 2, 2],
         output_channels=[1],
+        separated_decoders=False,
         output_channel_info=["F"],
         explicit_activations: bool = False,
         head_activations: List[str] = ["ce_sigmoid"],
         upsampling_factor=(),
         upsampling_position="pre",
+        isotropy=False,
+        larger_io=True,
         contrast: bool = False,
         contrast_proj_dim: int = 256,
     ):
@@ -98,6 +102,9 @@ class ResUNetPlusPlus(nn.Module):
             If two values are provided, the model will have two output heads (e.g. for multi-task learning with 
             instance segmentation and classification).
 
+        separated_decoders : bool, optional
+            Whether to use separated decoders for each output head.
+
         output_channel_info : list of str, optional
             Information about the type of output channels. Possible values are:
             - "X": where X is a letter, e.g. "F" for foreground, "D" for distance, "R" for rays, "C" for cpntours, etc.
@@ -115,6 +122,12 @@ class ResUNetPlusPlus(nn.Module):
         upsampling_position : str, optional
             Whether the upsampling is going to be made previously (``pre`` option) to the model
             or after the model (``post`` option).
+
+        isotropy : bool or list of bool, optional
+            Whether to use 3d or 2d convolutions at each U-Net level even if input is 3d.
+
+        larger_io : bool, optional
+            Whether to use extra and larger kernels in the input and output layers.
 
         contrast : bool, optional
             Whether to add contrastive learning head to the model. Default is ``False``.
@@ -155,11 +168,13 @@ class ResUNetPlusPlus(nn.Module):
         self.contrast = contrast
         self.explicit_activations = explicit_activations
         if self.explicit_activations:
-            assert len(head_activations) == len(output_channels), "If 'explicit_activations' is True, 'head_activations' needs to "
+            assert len(head_activations) == sum(output_channels), "If 'explicit_activations' is True, 'head_activations' needs to "
             "have the same number of values as 'output_channels'"
             self.head_activations, self.class_head_activations = prepare_activation_layers(head_activations, output_channel_info)
             if self.return_class and self.class_head_activations is None:
                 raise ValueError("If 'return_class' is True, 'head_activations' must be provided.")
+        if type(isotropy) == bool:
+            isotropy = [isotropy] * len(feature_maps)
         if self.ndim == 3:
             conv = nn.Conv3d
             convtranspose = nn.ConvTranspose3d
@@ -175,7 +190,7 @@ class ResUNetPlusPlus(nn.Module):
 
         # Super-resolution
         self.pre_upsampling = None
-        if len(upsampling_factor) > 1 and upsampling_position == "pre":
+        if len(upsampling_factor) > 0 and upsampling_position == "pre":
             self.pre_upsampling = convtranspose(
                 image_shape[-1],
                 image_shape[-1],
@@ -187,16 +202,38 @@ class ResUNetPlusPlus(nn.Module):
         self.down_path = nn.ModuleList()
         self.mpooling_layers = nn.ModuleList()
         self.sqex_blocks = nn.ModuleList()
+        in_channels = image_shape[-1]
+
+        # extra (larger) input layer
+        if larger_io:
+            kernel_size = (k_size + 2, k_size + 2) if self.ndim == 2 else (k_size + 2, k_size + 2, k_size + 2)
+            if not isotropy[0] and self.ndim == 3:
+                kernel_size = (1, k_size + 2, k_size + 2)
+            self.conv_in = ConvBlock(
+                conv=conv,
+                in_size=in_channels,
+                out_size=feature_maps[0],
+                k_size=kernel_size,
+                act=activation,
+                norm=normalization,
+            )
+            in_channels = feature_maps[0]
+        else:
+            self.conv_in = None
+            
+        kernel_size = (k_size, k_size) if self.ndim == 2 else (k_size, k_size, k_size)
+        if not isotropy[0] and self.ndim == 3:
+            kernel_size = (1, k_size, k_size)
         self.down_path.append(
             ResConvBlock(
                 conv=conv,
-                in_size=image_shape[-1],
+                in_size=in_channels,
                 out_size=feature_maps[0],
-                k_size=k_size,
+                k_size=kernel_size,
                 act=activation,
                 norm=normalization,
                 dropout=drop_values[0],
-                skip_k_size=k_size,
+                skip_k_size=kernel_size,
                 skip_norm=normalization,
                 first_block=True,
             )
@@ -206,16 +243,19 @@ class ResUNetPlusPlus(nn.Module):
         self.mpooling_layers.append(pooling(mpool))
         in_channels = feature_maps[0]
         for i in range(self.depth):
+            kernel_size = (k_size, k_size) if self.ndim == 2 else (k_size, k_size, k_size)
+            if not isotropy[i] and self.ndim == 3:
+                kernel_size = (1, k_size, k_size)
             self.down_path.append(
                 ResConvBlock(
                     conv=conv,
                     in_size=in_channels,
                     out_size=feature_maps[i + 1],
-                    k_size=k_size,
+                    k_size=kernel_size,
                     act=activation,
                     norm=normalization,
                     dropout=drop_values[i],
-                    skip_k_size=k_size,
+                    skip_k_size=kernel_size,
                     skip_norm=normalization,
                     first_block=False,
                 )
@@ -225,6 +265,7 @@ class ResUNetPlusPlus(nn.Module):
             in_channels = feature_maps[i + 1]
             if i != self.depth - 1:
                 self.sqex_blocks.append(SqExBlock(in_channels, ndim=self.ndim))
+
         self.sqex_blocks.append(
             None
         )  # So it can be used zip() with the length of self.down_path and self.mpooling_layers
@@ -236,57 +277,80 @@ class ResUNetPlusPlus(nn.Module):
         )
 
         # DECODER
-        self.up_path = nn.ModuleList()
-        self.attentions = nn.ModuleList()
-        for i in range(self.depth - 1, -1, -1):
-            self.attentions.append(
-                ResUNetPlusPlus_AttentionBlock(
-                    conv=conv,
-                    maxpool=pooling,
-                    input_encoder=feature_maps[i],
-                    input_decoder=feature_maps[i + 2],
-                    output_dim=feature_maps[i + 2],
-                    norm=normalization,
-                    z_down=z_down[i + 1],
+        self.num_decoders = 1 if not separated_decoders else len(output_channels)
+        self.up_paths = nn.ModuleList([nn.ModuleList() for _ in range(self.num_decoders)])
+        self.attentions = nn.ModuleList([nn.ModuleList() for _ in range(self.num_decoders)])
+        for j in range(self.num_decoders):
+            in_channels = feature_maps[-1]
+            for i in range(self.depth - 1, -1, -1):
+                kernel_size = (k_size, k_size) if self.ndim == 2 else (k_size, k_size, k_size)
+                if not isotropy[i] and self.ndim == 3:
+                    kernel_size = (1, k_size, k_size)
+                self.attentions[j].append(
+                    ResUNetPlusPlus_AttentionBlock(
+                        conv=conv,
+                        maxpool=pooling,
+                        input_encoder=feature_maps[i], 
+                        input_decoder=feature_maps[i + 2],
+                        output_dim=feature_maps[i + 2],
+                        norm=normalization,
+                        z_down=z_down[i + 1],
+                    ) # type: ignore
+                ) 
+                self.up_paths[j].append(
+                    ResUpBlock(
+                        ndim=self.ndim,
+                        convtranspose=convtranspose,
+                        in_size=feature_maps[i + 2], 
+                        out_size=feature_maps[i + 1],
+                        in_size_bridge=feature_maps[i],
+                        z_down=z_down[i + 1],
+                        up_mode=upsample_layer,
+                        conv=conv,
+                        k_size=kernel_size,
+                        act=activation,
+                        norm=normalization,
+                        dropout=drop_values[i + 2],
+                        skip_k_size=kernel_size,
+                        skip_norm=normalization,
+                    ) # type: ignore
                 )
-            )
-            self.up_path.append(
-                ResUpBlock(
-                    ndim=self.ndim,
-                    convtranspose=convtranspose,
-                    in_size=feature_maps[i + 2],
-                    out_size=feature_maps[i + 1],
-                    in_size_bridge=feature_maps[i],
-                    z_down=z_down[i + 1],
-                    up_mode=upsample_layer,
+        self.aspp_out = nn.ModuleList()
+        for _ in range(self.num_decoders):
+            self.aspp_out.append(ASPP(
+                conv=conv,
+                in_dims=feature_maps[1],
+                out_dims=feature_maps[0],
+                norm=normalization,
+            ))
+
+        # extra (larger) output layer
+        if larger_io:
+            kernel_size = (k_size + 2, k_size + 2) if self.ndim == 2 else (k_size + 2, k_size + 2, k_size + 2)
+            if not isotropy[0] and self.ndim == 3:
+                kernel_size = (1, k_size + 2, k_size + 2)
+            self.conv_out = nn.ModuleList([
+                ConvBlock(
                     conv=conv,
-                    k_size=k_size,
+                    in_size=feature_maps[0],
+                    out_size=feature_maps[0],
+                    k_size=kernel_size,
                     act=activation,
                     norm=normalization,
-                    dropout=drop_values[i + 2],
-                    skip_k_size=k_size,
-                    skip_norm=normalization,
-                )
-            )
-        self.aspp_out = ASPP(
-            conv=conv,
-            in_dims=feature_maps[1],
-            out_dims=feature_maps[0],
-            norm=normalization,
-        )
-
+                ) for _ in range(self.num_decoders)
+            ])
+        else:
+            self.conv_out = None
+        
         # Super-resolution
         self.post_upsampling = None
-        if len(upsampling_factor) > 1 and upsampling_position == "post":
+        if len(upsampling_factor) > 0 and upsampling_position == "post":
             self.post_upsampling = convtranspose(
                 feature_maps[0],
                 feature_maps[0],
                 kernel_size=upsampling_factor,
                 stride=upsampling_factor,
             )
-
-        # To store which head corresponds to which output channel in the multi-head scenario
-        self.out_head_map = []
 
         if self.contrast:
             # extra added layers
@@ -298,12 +362,10 @@ class ResUNetPlusPlus(nn.Module):
             )
 
             self.proj_head = ProjectionHead(ndim=self.ndim, in_channels=feature_maps[0], proj_dim=contrast_proj_dim)
-            self.out_head_map += [0] * output_channels[0]
         else:
             self.heads = nn.Sequential()
             for i, out_ch in enumerate(output_channels):
                 self.heads.append(conv(feature_maps[0], out_ch, kernel_size=1, padding="same"))
-                self.out_head_map += [i] * out_ch
 
         init_weights(self)
 
@@ -326,6 +388,10 @@ class ResUNetPlusPlus(nn.Module):
         if self.pre_upsampling:
             x = self.pre_upsampling(x)
 
+        # extra large-kernel input layer
+        if self.conv_in:
+            x = self.conv_in(x)
+
         # Down
         blocks = []
         for i, layers in enumerate(zip(self.down_path, self.sqex_blocks, self.mpooling_layers)):
@@ -338,30 +404,39 @@ class ResUNetPlusPlus(nn.Module):
                     x = pool(x)
                 blocks.append(x)
 
-        x = self.aspp_bridge(x)
+        x_bot = self.aspp_bridge(x)
 
-        # Up
-        for i, layers in enumerate(zip(self.attentions, self.up_path)):
-            att, up = layers
-            x = att(blocks[-i - 2], x)
-            x = up(x, blocks[-i - 2])
+        # Decoder
+        feats = []
+        for j in range(self.num_decoders):
+            x = x_bot
+            for i, layers in enumerate(zip(self.attentions[j], self.up_paths[j])):
+                att, up = layers
+                x = att(blocks[-i - 2], x)
+                x = up(x, blocks[-i - 2])
+            x = self.aspp_out[j](x)
+            feats.append(x)
 
-        x = self.aspp_out(x)
+        # extra large-kernel output layer
+        if self.conv_out:
+            for j in range(self.num_decoders):
+                feats[j] = self.conv_out[j](feats[j])
 
-        feats = x
         # Super-resolution
         if self.post_upsampling:
-            feats = self.post_upsampling(feats)
+            feats[0] = self.post_upsampling(feats[0])
 
         out_dict = {}
 
         # Pass the features through the output heads
         class_outs, outs = [], []
-        for i, head_id in enumerate(self.out_head_map):
-            if "class" not in self.output_channel_info[i]:
-                outs.append(self.heads[head_id](feats))
+        for i, head in enumerate(self.heads):
+            feat = feats[i] if self.num_decoders > 1 else feats[0]
+            if "class" in self.output_channel_info[i]:
+                class_outs.append(head(feat))
             else:
-                class_outs.append(self.heads[head_id](feats))  
+                outs.append(head(feat))
+
         outs = torch.cat(outs, dim=1)
 
         # Apply activations to the output heads if explicit_activations is True
@@ -385,7 +460,7 @@ class ResUNetPlusPlus(nn.Module):
 
         # Contrastive learning head
         if self.contrast:
-            out_dict["embed"] = self.proj_head(feats)
+            out_dict["embed"] = self.proj_head(feats[0])
 
         if len(out_dict.keys()) == 1:
             return out_dict["pred"]

@@ -532,7 +532,7 @@ class HighResolutionNet(nn.Module):
         self.head_type = head_type
         self.explicit_activations = explicit_activations
         if self.explicit_activations:
-            assert len(head_activations) == len(output_channels), "If 'explicit_activations' is True, 'head_activations' needs to "
+            assert len(head_activations) == sum(output_channels), "If 'explicit_activations' is True, 'head_activations' needs to "
             "have the same number of values as 'output_channels'"
             self.head_activations, self.class_head_activations = prepare_activation_layers(head_activations, output_channel_info)
             if self.return_class and self.class_head_activations is None:

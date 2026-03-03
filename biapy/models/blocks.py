@@ -1119,7 +1119,7 @@ class ResConvBlock(nn.Module):
         act=None,
         norm="none",
         dropout=0,
-        skip_k_size=1,
+        skip_k_size: int | Tuple[int, ...] =1,
         skip_norm="none",
         first_block=False,
         se_block=False,
@@ -1155,7 +1155,7 @@ class ResConvBlock(nn.Module):
         dropout : float, optional
             Dropout value to be fixed within the `ConvBlock` components.
             If 0, no dropout is applied. Defaults to 0.
-        skip_k_size : int, optional
+        skip_k_size : int or tuple, optional
             Kernel size for the convolution in the skip connection path.
             Used to adjust channel dimensions if `in_size` and `out_size` differ
             or to ensure correct output shape. Defaults to 1.
@@ -1316,7 +1316,7 @@ class ResUpBlock(nn.Module):
         Normalization layer type to use within the `ResConvBlock`.
         Options include `'bn'`, `'sync_bn'`, `'in'`, `'gn'`, or `'none'`.
         Defaults to "none".
-    skip_k_size : int, optional
+    skip_k_size : int or tuple, optional
         Kernel size for the skip connection convolution within the `ResConvBlock`.
         Used in ResUNet++. Defaults to 1.
     skip_norm : str, optional
@@ -1345,7 +1345,7 @@ class ResUpBlock(nn.Module):
         k_size,
         act=None,
         norm="none",
-        skip_k_size=1,
+        skip_k_size: int | tuple[int, ...] = 1,
         skip_norm="none",
         dropout=0,
         se_block=False,

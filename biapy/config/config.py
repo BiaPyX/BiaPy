@@ -243,6 +243,8 @@ class Config:
         # is in a different head than "H", "V" and "Z", it is likely that the model will be able to learn better the contours of the instances 
         # separately from the distance maps.
         _C.PROBLEM.INSTANCE_SEG.CHANNELS_PER_HEAD_INFO = []
+        # Whether to use a different decoder for each head in the model.
+        _C.PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD = False
 
         # Weights to be applied to the channels.
         _C.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS = (1, 1)

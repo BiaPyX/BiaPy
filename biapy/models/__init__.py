@@ -119,43 +119,31 @@ def build_model(
             explicit_activations=False,
             contrast=cfg.LOSS.CONTRAST.ENABLE,
             contrast_proj_dim=cfg.LOSS.CONTRAST.PROJ_DIM,
+            separated_decoders=cfg.PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD,
+            isotropy=cfg.MODEL.ISOTROPY,
+            larger_io=cfg.MODEL.LARGER_IO,
         )
         if modelname == "unet":
             callable_model = U_Net  # type: ignore
         elif modelname == "resunet":
             callable_model = ResUNet  # type: ignore
-            args["isotropy"] = cfg.MODEL.ISOTROPY
-            args["larger_io"] = cfg.MODEL.LARGER_IO
         elif modelname == "resunet++":
             callable_model = ResUNetPlusPlus  # type: ignore
         elif modelname == "attention_unet":
             callable_model = Attention_U_Net  # type: ignore
         elif modelname == "seunet":
             callable_model = SE_U_Net  # type: ignore
-            args["isotropy"] = cfg.MODEL.ISOTROPY
-            args["larger_io"] = cfg.MODEL.LARGER_IO
         elif modelname == "resunet_se":
             callable_model = ResUNet_SE  # type: ignore
-            args["isotropy"] = cfg.MODEL.ISOTROPY
-            args["larger_io"] = cfg.MODEL.LARGER_IO
         elif modelname in ["unext_v1", "unext_v2"]:
-            args = dict(
-                image_shape=cfg.DATA.PATCH_SIZE,
-                feature_maps=cfg.MODEL.FEATURE_MAPS,
-                upsample_layer=cfg.MODEL.UPSAMPLE_LAYER,
-                z_down=cfg.MODEL.Z_DOWN,
-                cn_layers=cfg.MODEL.CONVNEXT_LAYERS,
-                layer_scale=cfg.MODEL.CONVNEXT_LAYER_SCALE,
-                stochastic_depth_prob=cfg.MODEL.CONVNEXT_SD_PROB,
-                isotropy=cfg.MODEL.ISOTROPY,
-                stem_k_size=cfg.MODEL.CONVNEXT_STEM_K_SIZE,
-                output_channels=output_channels,
-                output_channel_info=output_channel_info,
-                head_activations=head_activations,
-                explicit_activations=False,
-                contrast=cfg.LOSS.CONTRAST.ENABLE,
-                contrast_proj_dim=cfg.LOSS.CONTRAST.PROJ_DIM,
-            )
+            args["cn_layers"] = cfg.MODEL.CONVNEXT_LAYERS
+            args["stochastic_depth_prob"] = cfg.MODEL.CONVNEXT_SD_PROB
+            args["stem_k_size"] = cfg.MODEL.CONVNEXT_STEM_K_SIZE
+            del args["activation"] # ConvNeXt uses GELU activation by default
+            del args["drop_values"] # ConvNeXt uses DropPath for regularization, not standard dropout
+            del args["normalization"] # ConvNeXt uses LayerNorm, not BatchNorm or GroupNorm
+            del args["k_size"] # ConvNeXt uses 7x7 kernels in the early layers, but this is fixed in the model definition
+            del args["larger_io"] # ConvNeXt does not use larger input/output layers, but this is fixed in the model definition
             if modelname == "unext_v1":
                 callable_model = U_NeXt_V1  # type: ignore
             else:
