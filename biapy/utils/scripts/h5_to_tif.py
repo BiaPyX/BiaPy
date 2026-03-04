@@ -30,6 +30,7 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument(
         "--dataset-key",
+        type=str,
         default="main",
         help="HDF5 dataset key to read (default: main).",
     )
@@ -67,11 +68,17 @@ def main() -> None:
 
     file, data = read_chunked_nested_data(h5file, data_path=args.dataset_key)
     data = np.array(data)
+    if data.max() == 0:
+        print("Warning: data is all zeros, check that the dataset key is correct.")
+
     data = ensure_3d_shape(data)
     if isinstance(file, h5py.File):
         file.close()
 
-    save_tif(np.expand_dims(data, 0), out_dir, [os.path.basename(h5file)], verbose=True)
+    basename, _ = os.path.splitext(os.path.basename(h5file))
+    new_name = basename+"_"+args.dataset_key + ".tif"
+    print(f"Saving TIFF to {out_dir} with name {new_name}...")
+    save_tif(np.expand_dims(data, 0), out_dir, [new_name], verbose=True)
 
 if __name__ == "__main__":
     main()
