@@ -1360,8 +1360,8 @@ class instance_segmentation_loss:
         return loss
 
 def detection_metrics(
-    true,
-    pred,
+    true_points,
+    pred_points,
     true_classes=None,
     pred_classes=None,
     tolerance=10,
@@ -1374,10 +1374,10 @@ def detection_metrics(
 
     Parameters
     ----------
-    true : List of list
+    true_points : List of list
         List containing coordinates of ground truth points. E.g. ``[[5,3,2], [4,6,7]]``.
 
-    pred : 4D Tensor
+    pred_points : 4D Tensor
         List containing coordinates of predicted points. E.g. ``[[5,3,2], [4,6,7]]``.
 
     true_classes : List of ints, optional
@@ -1416,17 +1416,17 @@ def detection_metrics(
         raise ValueError("'pred_classes' must be provided when 'true_classes' is set")
 
     if true_classes is not None and pred_classes is not None:
-        if len(true_classes) != len(true):
-            raise ValueError("'true' and 'true_classes' length must be the same")
-        if len(pred_classes) != len(pred):
-            raise ValueError("'pred' and 'pred_classes' length must be the same")
+        if len(true_classes) != len(true_points):
+            raise ValueError("'true_points' and 'true_classes' length must be the same")
+        if len(pred_classes) != len(pred_points):
+            raise ValueError("'pred_points' and 'pred_classes' length must be the same")
         class_metrics = True
     else:
         class_metrics = False
 
-    _true = np.array(true, dtype=np.float32)
-    if len(pred) > 0:
-        _pred = np.array(pred, dtype=np.float32)
+    _true = np.array(true_points, dtype=np.float32)
+    if len(pred_points) > 0:
+        _pred = np.array(pred_points, dtype=np.float32)
     else:
         _pred = np.zeros((0, 3), dtype=np.float32)
 
@@ -1454,7 +1454,7 @@ def detection_metrics(
             # Filter out those point outside the defined bounding box
             consider_point = False
             if len(bbox_to_consider) > 0:
-                point = true[true_ind[i]]
+                point = true_points[true_ind[i]]
                 if (
                     bbox_to_consider[0][0] <= point[0] <= bbox_to_consider[0][1]
                     and bbox_to_consider[1][0] <= point[1] <= bbox_to_consider[1][1]
@@ -1485,7 +1485,7 @@ def detection_metrics(
     fp_tags = ["FP" for x in fp_preds]
     if len(bbox_to_consider) > 0:
         for i in range(len(fp_preds)):
-            point = pred[fp_preds[i] - 1]
+            point = pred_points[fp_preds[i] - 1]
             if not (
                 bbox_to_consider[0][0] <= point[0] <= bbox_to_consider[0][1]
                 and bbox_to_consider[1][0] <= point[1] <= bbox_to_consider[1][1]
@@ -1514,9 +1514,9 @@ def detection_metrics(
         "pred_class",
     ]
     if len(_true) > 0:
-        _true = np.array(true, dtype=np.float32)
-        if len(pred) > 0:
-            _pred = np.array(pred, dtype=np.float32)
+        _true = np.array(true_points, dtype=np.float32)
+        if len(pred_points) > 0:
+            _pred = np.array(pred_points, dtype=np.float32)
         else:
             _pred = np.zeros((0, 3), dtype=np.float32)
 
@@ -1619,10 +1619,10 @@ def detection_metrics(
                 "Points in ground truth: {} ({} total but {} not considered), Points in prediction: {} "
                 "({} total but {} not considered)".format(
                     len(_true),
-                    len(true),
+                    len(true_points),
                     TP_not_considered,
                     len(_pred),
-                    len(pred),
+                    len(pred_points),
                     FP_not_considered,
                 )
             )

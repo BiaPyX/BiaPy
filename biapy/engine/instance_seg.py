@@ -1294,7 +1294,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
 
         if calculate_metrics and self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
             print("Calculating synapse detection stats . . .")
-            gt_pre_points, gt_post_points, gt_cleft_points, resolution = load_synapse_gt_points(
+            gt_info = load_synapse_gt_points(
                 locations_path = self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_LOCATIONS_PATH,
                 resolution_path = self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_RESOLUTION_PATH,
                 partners_path = self.cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA_PARTNERS_PATH,
@@ -1307,9 +1307,18 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             for key in points_available:
                 if key not in ["pre", "post", "cleft"]:
                     raise ValueError(f"Unknown point type {key} found in points_available. Expected 'pre', 'post' or 'cleft'.")
-                assert "points" in points_available[key], f"'points' key not found for {key} in points_available."
-                target_gt_points = gt_pre_points if key == "pre" else gt_post_points if key == "post" else gt_cleft_points
-                self.calculate_synapse_det_metrics_on_points(target_gt_points, points_available[key]["points"], resolution, self.current_sample["X_filename"], out_dir, point_type=key)
+                points_available[key]["gt"] = gt_info[key]
+
+                assert "points" in points_available[key], f"Points not found for key {key} in points_available. Found keys: {points_available[key].keys()}"
+                assert "gt" in points_available[key], f"GT not found for key {key} in points_available. Found keys: {points_available[key].keys()}"
+                points_available[key]["gt_assoc"], points_available[key]["fps"] = self.calculate_synapse_det_metrics_on_points(
+                    points_available[key]["gt"], 
+                    points_available[key]["points"], 
+                    gt_info["resolution"], 
+                    self.current_sample["X_filename"], 
+                    out_dir, 
+                    point_type=key
+                )
 
         ###################
         # Post-processing #
@@ -1363,8 +1372,8 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             DataFrame with the false positive predicted points.
         """
         d_metrics, gt_assoc, fps = detection_metrics(
-            gt_points,
-            pred_points,
+            true_points=gt_points,
+            pred_points=pred_points,
             true_classes=None,
             pred_classes=[],
             tolerance=self.cfg.TEST.DET_TOLERANCE,
