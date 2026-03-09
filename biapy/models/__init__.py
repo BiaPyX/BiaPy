@@ -146,9 +146,9 @@ def build_model(
             del args["larger_io"] # ConvNeXt does not use larger input/output layers, but this is fixed in the model definition
             if modelname == "unext_v1":
                 callable_model = U_NeXt_V1  # type: ignore
+                args["layer_scale"] = cfg.MODEL.CONVNEXT_LAYER_SCALE
             else:
                 callable_model = U_NeXt_V2  # type: ignore
-                del args["layer_scale"]
 
         if cfg.PROBLEM.TYPE == "SUPER_RESOLUTION":
             args["upsampling_factor"] = cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING
