@@ -104,7 +104,7 @@ class Denoising_Workflow(Base_Workflow):
         self.gt_channels_expected = self.model_output_channels[0]
         self.separated_class_channel = False
         self.head_activations = ["linear"] * self.model_output_channels[0]
-        self.model_output_channel_info = ["pred{}".format(i) for i in range(self.model_output_channels[0])]
+        self.model_output_channel_info = ["pred{}".format(i) for i in range(len(self.model_output_channels))]
 
         super().define_activations_and_channels()
 
