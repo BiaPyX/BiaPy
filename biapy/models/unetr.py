@@ -347,9 +347,6 @@ class UNETR(nn.Module):
             )
         )
 
-        # To store which head corresponds to which output channel in the multi-head scenario
-        self.out_head_map = []
-
         if self.contrast:
             # extra added layers
             self.heads = nn.Sequential(
@@ -360,12 +357,10 @@ class UNETR(nn.Module):
             )
 
             self.proj_head = ProjectionHead(ndim=self.ndim, in_channels=num_filters, proj_dim=contrast_proj_dim)
-            self.out_head_map += [0] * output_channels[0]
         else:
             self.heads = nn.Sequential()
             for i, out_ch in enumerate(output_channels):
                 self.heads.append(conv(num_filters, out_ch, kernel_size=1, padding="same"))
-                self.out_head_map += [i] * out_ch
 
         init_weights(self)
 
@@ -458,11 +453,11 @@ class UNETR(nn.Module):
 
         # Pass the features through the output heads
         class_outs, outs = [], []
-        for i, head_id in enumerate(self.out_head_map):
+        for i, head in enumerate(self.heads):
             if "class" not in self.output_channel_info[i]:
-                outs.append(self.heads[head_id](feats))
+                outs.append(head(feats))
             else:
-                class_outs.append(self.heads[head_id](feats))  
+                class_outs.append(head(feats))  
         outs = torch.cat(outs, dim=1)
 
         # Apply activations to the output heads if explicit_activations is True

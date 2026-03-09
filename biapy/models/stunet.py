@@ -297,11 +297,9 @@ class STUNet(nn.Module):
         self.upscale_logits_ops = nn.ModuleList([nn.Identity() for _ in range(num_pool - 1)])
 
         # To store which head corresponds to which output channel in the multi-head scenario
-        self.out_head_map = []
         self.heads = nn.Sequential()
         for i, out_ch in enumerate(output_channels):
             self.heads.append(nn.Conv3d(output_channels[0], out_ch, kernel_size=1, padding="same"))
-            self.out_head_map += [i] * out_ch
 
         init_weights(self)
 
@@ -351,11 +349,11 @@ class STUNet(nn.Module):
 
         # Pass the features through the output heads
         class_outs, outs = [], []
-        for i, head_id in enumerate(self.out_head_map):
+        for i, head in enumerate(self.heads):
             if "class" not in self.output_channel_info[i]:
-                outs.append(self.heads[head_id](feats))
+                outs.append(head(feats))
             else:
-                class_outs.append(self.heads[head_id](feats))  
+                class_outs.append(head(feats))  
         outs = torch.cat(outs, dim=1)
 
         # Apply head_activations to the output heads if explicit_activations is True

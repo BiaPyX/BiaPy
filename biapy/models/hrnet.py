@@ -612,7 +612,6 @@ class HighResolutionNet(nn.Module):
         in_channels = sum(self.stage4_cfg["NUM_CHANNELS"])
 
         self.heads = nn.Sequential()
-        self.out_head_map = []
         if head_type in ["ASPP", "PSP", "OCR"]:
             if head_type == "ASPP":
                 self.heads.append(
@@ -646,10 +645,8 @@ class HighResolutionNet(nn.Module):
                         scale=1.0,  
                     )
                 )
-            self.out_head_map = [0] * self.output_channels[0]
             # Add the head for classification if needed
             if len(self.output_channels) > 1:
-                self.out_head_map = [1] * self.output_channels[1]
                 self.heads.append(self.conv_call(in_channels, self.output_channels[1], kernel_size=1, padding="same"))
         elif head_type == "FCN":
             if self.contrast:
@@ -659,15 +656,12 @@ class HighResolutionNet(nn.Module):
                     self.dropout(0.10),
                     self.conv_call(in_channels, self.output_channels[0], kernel_size=1, stride=1, padding=0, bias=False),
                 )
-                self.out_head_map = [0] * self.output_channels[0]
                 # Add the head for classification if needed
                 if len(self.output_channels) > 1:
-                    self.out_head_map = [1] * self.output_channels[1]
                     self.heads.append(self.conv_call(in_channels, self.output_channels[1], kernel_size=1, padding="same"))
             else:
                 for i, out_ch in enumerate(output_channels):
                     self.heads.append(self.conv_call(in_channels, out_ch, kernel_size=1, padding="same"))
-                    self.out_head_map += [i] * out_ch
         else:
             raise ValueError(f"head_type '{head_type}' is not supported. Choose from: 'ASPP', 'PSP', 'FCN'.")
 
@@ -977,11 +971,11 @@ class HighResolutionNet(nn.Module):
 
         # Pass the features through the output heads
         class_outs, outs = [], []
-        for i, head_id in enumerate(self.out_head_map):
+        for i, head in enumerate(self.heads):
             if "class" not in self.output_channel_info[i]:
-                outs.append(self.heads[head_id](feats))
+                outs.append(head(feats))
             else:
-                class_outs.append(self.heads[head_id](feats))  
+                class_outs.append(head(feats))  
         outs = torch.cat(outs, dim=1)
 
         # Apply activations to the output heads if explicit_activations is True

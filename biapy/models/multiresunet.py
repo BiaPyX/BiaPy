@@ -609,9 +609,6 @@ class MultiResUnet(torch.nn.Module):
                 stride=upsampling_factor,
             )
 
-        # To store which head corresponds to which output channel in the multi-head scenario
-        self.out_head_map = []
-
         if self.contrast:
             # extra added layers
             self.heads = nn.Sequential(
@@ -622,12 +619,10 @@ class MultiResUnet(torch.nn.Module):
             )
 
             self.proj_head = ProjectionHead(ndim=self.ndim, in_channels=self.in_filters9, proj_dim=contrast_proj_dim)
-            self.out_head_map += [0] * output_channels[0]
         else:
             self.heads = nn.Sequential()
             for i, out_ch in enumerate(output_channels):
                 self.heads.append(conv(self.in_filters9, out_ch, kernel_size=1, padding="same"))
-                self.out_head_map += [i] * out_ch
 
     def forward(self, x: torch.Tensor) -> Dict | torch.Tensor:
         """
@@ -687,11 +682,11 @@ class MultiResUnet(torch.nn.Module):
 
         # Pass the features through the output heads
         class_outs, outs = [], []
-        for i, head_id in enumerate(self.out_head_map):
+        for i, head in enumerate(self.heads):
             if "class" not in self.output_channel_info[i]:
-                outs.append(self.heads[head_id](feats))
+                outs.append(head(feats))
             else:
-                class_outs.append(self.heads[head_id](feats))  
+                class_outs.append(head(feats))  
         outs = torch.cat(outs, dim=1)
 
         # Apply activations to the output heads if explicit_activations is True
