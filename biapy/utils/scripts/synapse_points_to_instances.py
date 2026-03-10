@@ -12,7 +12,6 @@ from skimage.measure import label, regionprops_table
 from scipy import ndimage
 import torch 
 
-sys.path.insert(0, '/net/fibserver1/data/raw/scratch/dfranco/BiaPy')  # Adjust this path as needed
 from biapy.data.data_manipulation import save_tif
 from biapy.data.data_3D_manipulation import read_chunked_nested_data
 
@@ -145,7 +144,7 @@ def return_no_empty_mask(predictor, z, y, x, image_embeddings, shape, min_size=2
             first = False
             print("     Mask empty. Trying another point")
 
-    return acc_out_mask.squeeze(), ref_area
+    return acc_out_mask.squeeze(), acc_out_mask.sum()
 
 parser = argparse.ArgumentParser(
     description="Creates a new dataset adjusting its resolution",
@@ -334,11 +333,6 @@ for n, id_ in tqdm(enumerate(file_ids), total=len(file_ids)):
             p_new = get_safe_inward_point(out, (y, x), search_radius=int(resolution[0]*0.3))
             p_new = np.round(p_new).astype(int)
 
-            # Something weird happened as the new point should be inside the object
-            if out[p_new[0],p_new[1]] == 0:
-                import pdb; pdb.set_trace()
-                continue 
-
             for dz in slc_to_process:
                 z_new = z + dz
                 if z_new < 0 or z_new >= data.shape[0]:
@@ -372,10 +366,6 @@ for n, id_ in tqdm(enumerate(file_ids), total=len(file_ids)):
             micro_sam_seg[z, update_indices, 1] = c_post + 1
             point_info["post"][c_post + 1] = [max(z-1,0), min(data.shape[0], z+1)]
 
-            # # Debug
-            # if (z,y,x) == (17,132,1105):
-            #     import pdb; pdb.set_trace()
-
             ###########################
             # Fill one slice above and one slice below with the segmentation from micro_sam, using the centroid of the segmented region as prompt
             ###########################
@@ -383,11 +373,6 @@ for n, id_ in tqdm(enumerate(file_ids), total=len(file_ids)):
             # Create a new point within the object towards the maximum of the distance transform
             p_new = get_safe_inward_point(out, (y, x), search_radius=int(resolution[0]*0.3))
             p_new = np.round(p_new).astype(int)
-
-            # Something weird happened as the new point should be inside the object
-            if out[p_new[0],p_new[1]] == 0:
-                import pdb; pdb.set_trace()
-                continue 
             
             for dz in slc_to_process:
                 z_new = z + dz
@@ -410,21 +395,15 @@ for n, id_ in tqdm(enumerate(file_ids), total=len(file_ids)):
     name = os.path.splitext(id_)[0]+"_binarized.tif"
     save_tif(np.expand_dims((micro_sam_seg > 0).astype(np.uint8),0), output_data_folder, ["all_"+name], verbose=True)
 
-    ref_channel = 0
-    ref_tag = "pre"
-    target_channel = 1
-    target_tag = "post"
-    len_points = c_pre 
-
     # Look instance by instance if there are overlaps between other channel's mask
-    for i in range(len_points):
+    for i in range(c_pre):
         instance = i+1
-        if instance in point_info[ref_tag]:
-            z_start = point_info[ref_tag][instance][0]
-            z_end = point_info[ref_tag][instance][1]
+        if instance in point_info["pre"]:
+            z_start = point_info["pre"][instance][0]
+            z_end = point_info["pre"][instance][1]
 
-            pre_patch = micro_sam_seg[z_start:z_end, ..., ref_channel]
-            post_patch = micro_sam_seg[z_start:z_end, ..., target_channel]
+            pre_patch = micro_sam_seg[z_start:z_end, ..., 0]
+            post_patch = micro_sam_seg[z_start:z_end, ..., 1]
             instance_mask = (pre_patch == instance)
 
             # if there is any instance in the target channel that overlaps the reference channel
