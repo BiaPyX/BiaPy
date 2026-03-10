@@ -67,69 +67,31 @@ def keep_largest_component(mask):
     new_mask = (labels == largest_label).astype(np.uint8)
     return new_mask, area
 
-def dotpath_to_h5(path: str) -> str:
-    """Convert 'volumes.raw' -> '/volumes/raw'. If already slash-based, keep it."""
-    path = path.strip()
-    if path.startswith('/'):
-        return path
-    return '/' + path.replace('.', '/')
-
-
-def pick_chunks(shape, dtype, target_mb=4.0):
-    """Heuristic chunk picker aiming ~target_mb per chunk for 3D volumes."""
-    dt = np.dtype(dtype)
-    itemsize = dt.itemsize
-    target_bytes = int(target_mb * 1024 * 1024)
-
-    # Let h5py decide for non-3D arrays
-    if len(shape) != 3:
-        return True
-
-    z, y, x = shape
-    # Start with a reasonable chunk; scale down to fit target_bytes
-    cz, cy, cx = min(z, 32), min(y, 256), min(x, 256)
-    while cz * cy * cx * itemsize > target_bytes and (cz > 1 or cy > 16 or cx > 16):
-        if cx >= cy and cx > 16:
-            cx //= 2
-        elif cy > 16:
-            cy //= 2
-        elif cz > 1:
-            cz //= 2
-        else:
-            break
-    return (max(1, cz), max(16, cy), max(16, cx))
-
-
-def copy_h5_tree(fin: h5py.File, fout: h5py.File, skip_paths):
-    """Copy an HDF5 hierarchy from fin to fout, skipping objects whose full paths are in skip_paths."""
-    skip_paths = set(skip_paths)
-
-    def _copy_group(src_group: h5py.Group, dst_group: h5py.Group, group_path: str):
-        # Copy group attributes
-        for k, v in src_group.attrs.items():
-            dst_group.attrs[k] = v
-
-        for name, obj in src_group.items():
-            src_path = f"{group_path}/{name}" if group_path != "" else f"/{name}"
-            if src_path in skip_paths:
-                continue
-
-            if isinstance(obj, h5py.Group):
-                dst_sub = dst_group.require_group(name)
-                _copy_group(obj, dst_sub, src_path)
-            else:
-                # Dataset (or other object). Use HDF5-level copy (doesn't load full data into memory).
-                fin.copy(src_path, dst_group, name=name)
-
-    _copy_group(fin, fout, "")
-
-def push_point_fixed(p_a, p_b, distance):
-    direction = p_b - p_a
-    # Normalize the vector to length 1 (unit vector)
-    unit_vector = direction / np.linalg.norm(direction)
+def push_pre_point_away(pre_point, post_points, distance):
+    """
+    Pushes the pre_point further away from the consensus center 
+    of the post_points cluster.
+    """
+    pre_point = np.array(pre_point)
+    post_points = np.array(post_points)
     
-    # Add the fixed distance to Point B
-    return p_b + (unit_vector * distance)
+    # 1. Find the "center" of the post cluster (the trident head)
+    post_centroid = np.mean(post_points, axis=0)
+    
+    # 2. Calculate the vector pointing FROM the cluster TO the pre_point
+    # This represents the "outward" direction
+    outward_direction = pre_point - post_centroid
+    
+    # 3. Normalize the vector to unit length
+    norm = np.linalg.norm(outward_direction)
+    if norm == 0:
+        return pre_point  # Safety check if points are identical
+        
+    unit_vector = outward_direction / norm
+    
+    # 4. Push the pre_point further along that outward path
+    # New Point = original pre_point + (direction * distance)
+    return pre_point + (unit_vector * distance)
 
 def _in_bounds(p: np.ndarray, shape_zyx: tuple) -> bool:
     """
@@ -150,7 +112,7 @@ def _in_bounds(p: np.ndarray, shape_zyx: tuple) -> bool:
     # p is (3,) z,y,x
     return bool(np.all((p >= 0) & (p < np.asarray(shape_zyx))))
 
-def return_no_empty_mask(predictor, z, y, x, image_embeddings, shape):
+def return_no_empty_mask(predictor, z, y, x, image_embeddings, shape, min_size=20):
     
     # Try a few points in case the first point is returning an empty mask
     first = True
@@ -166,15 +128,24 @@ def return_no_empty_mask(predictor, z, y, x, image_embeddings, shape):
             image_embeddings=image_embeddings, 
             i=z,
         )
-        if out.max():
-            break
+        out = out.squeeze().astype(np.uint8)
+        out, ref_area = keep_largest_component(out)
+        if "acc_out_mask" not in locals():
+            acc_out_mask = out
+        else:
+            # accumulate the masks from different points to increase the chance of getting a non-empty mask
+            acc_out_mask = np.logical_or(acc_out_mask, out)
+        if out.max() == 1:
+            if ref_area < min_size:  # if the segmented area is too small, it's likely a false positive, so we try another point
+                print(f"     Mask too small (area={ref_area}). Trying another point")
+                continue
+            else:
+                break
         else:
             first = False
             print("     Mask empty. Trying another point")
 
-    out = out.squeeze().astype(np.uint8)
-    out, ref_area = keep_largest_component(out)
-    return out, ref_area
+    return acc_out_mask.squeeze(), ref_area
 
 parser = argparse.ArgumentParser(
     description="Creates a new dataset adjusting its resolution",
@@ -183,8 +154,6 @@ parser = argparse.ArgumentParser(
 
 parser.add_argument("-input_data", "--input_data", required=True, help="Directory to the folder where the data reside")
 parser.add_argument("-output_data", "--output_data", required=True, help="Directory to the folder where the new data will be saved")
-parser.add_argument("-output_resolution", "--output_resolution", type=str, required=True, help="Output data resolution, e.g. '(8,8,8)'")
-
 
 parser.add_argument("-resolution_in_data", "--resolution_in_data", default="volumes.raw", type=str,
                     help="Path to the dataset that contains the 'resolution' attribute, e.g. 'volumes.raw' in CREMI format")
@@ -197,11 +166,6 @@ parser.add_argument("-ids_in_file", "--ids_in_file", default="annotations.ids", 
 parser.add_argument("-partners_in_file", "--partners_in_file", default="annotations.presynaptic_site.partners", type=str,
                     help="Path to the partners inside each h5 datafile, e.g. 'annotations.presynaptic_site.partners' in CREMI format")
 args = vars(parser.parse_args())
-
-try:
-    out_resolution = ast.literal_eval(args['output_resolution'])
-except Exception:
-    raise ValueError(f"'{args['output_resolution']}' could not be converted into a tuple that represents the resolution")
 
 input_data_folder = args['input_data']
 inpdata = args['input_data'].rstrip('/')
@@ -216,6 +180,11 @@ predictor = get_sam_model(model_type="vit_b_lm")
 
 # Read images
 for n, id_ in tqdm(enumerate(file_ids), total=len(file_ids)):
+    out_filename = os.path.join(output_data_folder, "filtered_"+os.path.splitext(id_)[0]+".tif")
+    if os.path.exists(out_filename):
+        print(f"File {out_filename} already exists, skipping.")
+        continue
+
     filename = os.path.join(input_data_folder, id_)
     print(f"FILE: {filename}")
 
@@ -253,35 +222,21 @@ for n, id_ in tqdm(enumerate(file_ids), total=len(file_ids)):
             )
         )
 
-    res_ratio = np.array(resolution) / np.array(out_resolution)
-    res_z = res_ratio[0]
-
-    new_shape = (
-        int(data.shape[0] * res_z),
-        int(data.shape[1] * res_ratio[1]),
-        int(data.shape[2] * res_ratio[2]),
-    )
-    print(f"Data shape from {data.shape} to {new_shape}")
+    if resolution[0] > 30:
+        slc_to_process = [-1,1]
+        push_pixels = 15
+    else:
+        slc_to_process = [-2,-1,1,2]
+        push_pixels = 25
 
     # Put all images within same range
     if data.dtype != np.uint8:
         data = (((data - data.min()) / (data.max() - data.min() + 1e-6)) * 255).astype(np.uint8)
 
-    # dtype_old = data.dtype
-    # data = resize(
-    #     data,
-    #     new_shape,
-    #     order=1,
-    #     mode="reflect",
-    #     clip=True,
-    #     preserve_range=True,
-    #     anti_aliasing=True,
-    # ).astype(dtype_old)
-    # data_shape = new_shape
-
     id_to_pos = {sid: i for i, sid in enumerate(ids)}
     shape_zyx = tuple(int(x) for x in data_shape)
-    pre_points, post_points = [], []
+    pre_post_points = {}  # pre_loc tuple -> list[post_loc tuple]
+    pre_points, post_points = set(), set()
     for i in tqdm(range(len(partners))):
         pre_id, post_id = partners[i]
         pre_idx = id_to_pos.get(pre_id)
@@ -293,23 +248,32 @@ for n, id_ in tqdm(enumerate(file_ids), total=len(file_ids)):
         pre_loc = (locations[pre_idx] // resolution).astype(int)
         post_loc = (locations[post_idx] // resolution).astype(int)
 
-        # If we can we tryh to push the pre point a bit far so we ensure it 
-        # is more centered in the pre synaptic cell
-        pre_loc_pushed = push_point_fixed(post_loc, pre_loc, 10)
-
-        if _in_bounds(pre_loc_pushed, shape_zyx):
-            pre_loc = pre_loc_pushed
-            pre_ok = True
-        else:
-            pre_ok = _in_bounds(pre_loc, shape_zyx)
+        pre_ok = _in_bounds(pre_loc, shape_zyx)
         post_ok = _in_bounds(post_loc, shape_zyx)
 
-        pre_points.append(pre_loc) if pre_ok else None
-        post_points.append(post_loc) if post_ok else None
+        if pre_ok and post_ok:
+            pre_key = tuple(pre_loc.tolist())
+            pre_post_points.setdefault(pre_key, []).append(tuple(post_loc.tolist()))
 
+    # Push pre points a bit further in the consensus direction of their post points to ensure they are more centered
+    # in the pre synaptic cell and less likely to be on the edge where the segmentation is more difficult
+    for pre_key, post_locs in pre_post_points.items():
+        pre_point = np.array(pre_key)
+
+        # If we can we try to push the pre point a bit far so we ensure it 
+        # is more centered in the pre synaptic cell
+        pre_loc_pushed = push_pre_point_away(pre_point, post_locs, push_pixels)
+        pre_loc_pushed = np.round(pre_loc_pushed).astype(int)
+        new_pre_ok = _in_bounds(pre_loc_pushed, shape_zyx)
+        ref_point = pre_point if not new_pre_ok else pre_loc_pushed
+
+        pre_points.add(tuple(ref_point.tolist()))
+        for post_loc in post_locs:
+            post_points.add(post_loc)
+    
     # Sort by z to make it easier to visualize in the debugger
-    pre_points.sort(key=lambda p: p[0])
-    post_points.sort(key=lambda p: p[0])
+    pre_points = sorted(pre_points, key=lambda p: p[0])
+    post_points = sorted(post_points, key=lambda p: p[0])
 
     expected_keys = ['features', 'input_size', 'original_size']
     # Save the embeddings for later use (optional, can be commented out if not needed)
@@ -338,11 +302,6 @@ for n, id_ in tqdm(enumerate(file_ids), total=len(file_ids)):
     micro_sam_seg = np.zeros(data.shape + (2,), dtype=np.uint16)
     c_pre, c_post = 0, 0 
     point_info = {"pre": {}, "post": {}}
-
-    if resolution[0] > 30:
-        slc_to_process = [-1,1]
-    else:
-        slc_to_process = [-2,-1,1,2]
 
     print("Segmenting neurons with micro_sam slice by slice. . .")
     for z in tqdm(range(data.shape[0]), total=data.shape[0]):
@@ -379,27 +338,19 @@ for n, id_ in tqdm(enumerate(file_ids), total=len(file_ids)):
             if out[p_new[0],p_new[1]] == 0:
                 import pdb; pdb.set_trace()
                 continue 
-            
+
             for dz in slc_to_process:
                 z_new = z + dz
                 if z_new < 0 or z_new >= data.shape[0]:
                     continue
                 
-                out2 = segment_from_points(
-                    predictor=predictor,
-                    points=np.array([[p_new[0],p_new[1]]]), 
-                    labels=np.array([1]),  
-                    image_embeddings=image_embeddings, 
-                    i=z_new,
-                )
-                out2 = out2.squeeze().astype(np.uint8)
-                out2, area = keep_largest_component(out2)
-                if area > ref_area*2:  # if the segmented area in the new slice is more than 50% of the original area, keep it. Otherwise, discard it to avoid false positives
+                out2, ref_area2 = return_no_empty_mask(predictor, z_new, p_new[0], p_new[1], image_embeddings, data.shape)
+                if ref_area2 > ref_area*2:  # if the segmented area in the new slice is more than 50% of the original area, keep it. Otherwise, discard it to avoid false positives
                     continue
 
-                is_empty = (micro_sam_seg[z,...,0] == 0)
+                is_empty = (micro_sam_seg[z_new,...,0] == 0)
                 update_indices = out2.astype(bool) & is_empty
-                micro_sam_seg[z, update_indices, 0] = c_pre + 1
+                micro_sam_seg[z_new, update_indices, 0] = c_pre + 1
             
             c_pre += 1
             if c_pre % 10 == 0:
@@ -443,22 +394,14 @@ for n, id_ in tqdm(enumerate(file_ids), total=len(file_ids)):
                 if z_new < 0 or z_new >= data.shape[0]:
                     continue
                 
-                out2 = segment_from_points(
-                    predictor=predictor,
-                    points=np.array([[p_new[0],p_new[1]]]), 
-                    labels=np.array([1]),  
-                    image_embeddings=image_embeddings, 
-                    i=z_new,
-                )
-                out2 = out2.squeeze().astype(np.uint8)
-                out2, area = keep_largest_component(out2)
-                if area > ref_area*2:  # if the segmented area in the new slice is more than 50% of the original area, keep it. Otherwise, discard it to avoid false positives
+                out2, ref_area2 = return_no_empty_mask(predictor, z_new, p_new[0], p_new[1], image_embeddings, data.shape)
+                if ref_area2 > ref_area*2:  # if the segmented area in the new slice is more than 50% of the original area, keep it. Otherwise, discard it to avoid false positives
                     continue
 
-                is_empty = (micro_sam_seg[z,...,1] == 0)
+                is_empty = (micro_sam_seg[z_new,...,1] == 0)
                 update_indices = out2.astype(bool) & is_empty
-                micro_sam_seg[z, update_indices, 1] = c_post + 1
-            
+                micro_sam_seg[z_new, update_indices, 1] = c_post + 1
+
             c_post += 1
             if c_post % 10 == 0:
                 print(f"Processed {c_post} postsynaptic points out of {len(post_points)}")
@@ -513,6 +456,12 @@ for n, id_ in tqdm(enumerate(file_ids), total=len(file_ids)):
 
     save_tif(np.expand_dims(micro_sam_seg,0), output_data_folder, ["filtered_"+id_], verbose=True)
     name = os.path.splitext(id_)[0]+"_binarized.tif"
-    save_tif(np.expand_dims((micro_sam_seg > 0).astype(np.uint8),0), output_data_folder, ["filtered_"+name], verbose=True)
+    micro_sam_seg = (micro_sam_seg > 0).astype(np.uint8)
+    print("")
+    for z in range(micro_sam_seg.shape[0]):
+         for c in range(micro_sam_seg.shape[-1]):
+            micro_sam_seg[z,...,c] = ndimage.binary_closing(micro_sam_seg[z,...,c], structure=np.ones((3,3)))
+            micro_sam_seg[z,...,c] = ndimage.binary_opening(micro_sam_seg[z,...,c], structure=np.ones((3,3)))
+    save_tif(np.expand_dims(micro_sam_seg,0), output_data_folder, ["filtered_"+name], verbose=True)
 
 print("Done!")
