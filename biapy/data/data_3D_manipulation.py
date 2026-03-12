@@ -254,7 +254,18 @@ def extract_patch_from_efficient_file(
     except:
         raise ValueError(f"Read data axes ({data.shape}) do not match the expected axis order ({data_axes_order})")
 
-    img = ensure_3d_shape(img.squeeze(), data_axes_order=data_axes_order)
+    # Try to correct the axes
+    if img.ndim != len(data_axes_order):
+        empty_axes = [
+            (patch_coords.z_end - patch_coords.z_start) <= 1,
+            (patch_coords.y_end - patch_coords.y_start) <= 1,
+            (patch_coords.x_end - patch_coords.x_start) <= 1,
+        ]
+        axes_to_add = [i for i, empty in enumerate(empty_axes) if empty]
+        if axes_to_add:
+            img = np.expand_dims(img, axis=tuple(axes_to_add))
+
+    img = ensure_3d_shape(img, data_axes_order=data_axes_order)
 
     return img
 
