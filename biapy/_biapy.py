@@ -194,10 +194,15 @@ class BiaPy:
 
         # GPU selection
         os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+        os.environ["CUDA_VISIBLE_DEVICES"] = self.args.gpu
+
         opts = []
-        if self.args.gpu:
+        if self.args.gpu != "" and torch.cuda.is_available() and torch.cuda.device_count() > 0:
             os.environ["CUDA_VISIBLE_DEVICES"] = self.args.gpu
             self.num_gpus = len(np.unique(np.array(self.args.gpu.strip().split(","))))
+            opts.extend(["SYSTEM.NUM_GPUS", self.num_gpus])
+        else:
+            self.num_gpus = 0
             opts.extend(["SYSTEM.NUM_GPUS", self.num_gpus])
 
         # GPU management
