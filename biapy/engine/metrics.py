@@ -1277,7 +1277,7 @@ class instance_segmentation_loss:
                 pred_ch_start = self.out_channels.index(channel)
                 gt_ch_start = pred_ch_start
                 if channel == "A":
-                    pred_ch_end = len(self.channel_extra_opts["A"].get("y_affinities", [1])) + pred_ch_start
+                    pred_ch_end = pd.shape[1]
                     gt_ch_end = pred_ch_end
                 elif channel == "R":
                     pred_ch_end = self.channel_extra_opts["R"].get("nrays", 32) + pred_ch_start

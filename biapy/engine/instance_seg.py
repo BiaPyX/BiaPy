@@ -264,20 +264,23 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                         self.model_output_channels[0] += 1
                         self.model_output_channel_info[0] += "+" + channel
                 elif channel == "A":
-                    for i in range(len(dst.get("A", {}).get("z_affinities", [1]))):
+                    z_affinities = dst.get("A", {}).get("z_affinities", [1])
+                    for i in range(len(z_affinities)):
                         if set_model_output_channels:
                             self.model_output_channels[0] += 1
-                            self.model_output_channel_info[0] += "+" + channel+"_{}".format(i)
+                            self.model_output_channel_info[0] += "+" + channel+"z_{}".format(z_affinities[i])
                         self.head_activations.append("ce_sigmoid")
-                    for i in range(len(dst.get("A", {}).get("y_affinities", [1]))):
+                    y_affinities = dst.get("A", {}).get("y_affinities", [1])
+                    for i in range(len(y_affinities)):
                         if set_model_output_channels:
                             self.model_output_channels[0] += 1
-                            self.model_output_channel_info[0] += "+" + channel+"_{}".format(i)
+                            self.model_output_channel_info[0] += "+" + channel+"y_{}".format(y_affinities[i])
                         self.head_activations.append("ce_sigmoid")
-                    for i in range(len(dst.get("A", {}).get("x_affinities", [1]))):
+                    x_affinities = dst.get("A", {}).get("x_affinities", [1])
+                    for i in range(len(x_affinities)):
                         if set_model_output_channels:
                             self.model_output_channels[0] += 1
-                            self.model_output_channel_info[0] += "+" + channel+"_{}".format(i)
+                            self.model_output_channel_info[0] += "+" + channel+"x_{}".format(x_affinities[i])
                         self.head_activations.append("ce_sigmoid")
                 elif channel == "R":
                     for i in range(dst.get("R", {}).get("nrays", 32 if self.dims == 2 else 96)):
