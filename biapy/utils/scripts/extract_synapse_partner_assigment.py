@@ -249,13 +249,12 @@ for n, id_ in tqdm(enumerate(raw_file_ids), total=len(raw_file_ids)):
             label_cube = pad_and_reflect(label_cube, patch_size + (label_cube.shape[-1],), pad_type=pad_type, verbose=False)
 
             # Identify where each class exists
-            post_mask = label_cube[..., 0] > 0
-            pre_mask = label_cube[..., 1] > 0
+            pre_mask = label_cube[..., 0] > 0
+            post_mask = label_cube[..., 1] > 0
             new_label = np.zeros(label_cube.shape[:-1], dtype=label_cube.dtype)
-            # Assign values: Class 1 takes priority, then Class 2
-            # (Or vice versa, depending on which you want to 'win' if they overlap)
-            new_label[pre_mask] = 2 
-            new_label[post_mask] = 1
+            # Post after pre so any possible overlaps are assigned to post
+            new_label[pre_mask] = 1 
+            new_label[post_mask] = 2
             label_cube = np.expand_dims(new_label, -1)
 
             raw_cube = raw_data[
