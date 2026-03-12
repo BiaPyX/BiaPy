@@ -68,7 +68,7 @@ parser.add_argument("-raw_input_data", "--raw_input_data", required=True, help="
 parser.add_argument("-label_input_data", "--label_input_data", required=True, help="Directory to the folder where the labels generated with micro_sam reside")
 parser.add_argument("-output_data", "--output_data", required=True, help="Directory to the folder where the new data will be saved")
 
-parser.add_argument("-patch_to_extract", "--patch_to_extract", type=tuple, default=(8,96,96), help="Directory to the folder where the new data will be saved")
+parser.add_argument("-patch_size", "--patch_size", type=int, nargs=3, default=(8,96,96), help="Directory to the folder where the new data will be saved")
 parser.add_argument("-resolution_in_data", "--resolution_in_data", default="volumes.raw", type=str,
                     help="Path to the dataset that contains the 'resolution' attribute, e.g. 'volumes.raw' in CREMI format")
 parser.add_argument("-locations_in_file", "--locations_in_file", default="annotations.locations", type=str,
@@ -86,13 +86,11 @@ inpdata = args['raw_input_data'].rstrip('/')
 label_data_folder = args['label_input_data']
 output_data_folder = args['output_data']
 last_folder = os.path.basename(inpdata)
-patch_size = tuple(args['patch_to_extract'])
+patch_size = tuple(args['patch_size'])
 
 print(f"Processing {input_data_folder} folder . . .")
 raw_file_ids = sorted(next(os.walk(input_data_folder))[2])
 raw_file_ids = [f for f in raw_file_ids if f.endswith('.h5') or f.endswith('.hdf5') or f.endswith('.hdf')]
-label_file_ids = sorted(next(os.walk(label_data_folder))[2])
-label_file_ids = [f for f in label_file_ids if f.endswith('.tiff') or f.endswith('.tif')]
 
 # Read images
 for n, id_ in tqdm(enumerate(raw_file_ids), total=len(raw_file_ids)):
@@ -240,6 +238,8 @@ for n, id_ in tqdm(enumerate(raw_file_ids), total=len(raw_file_ids)):
                     pad_type[2] = "even"
                 else:
                     pad_type[2] = "right"
+            
+            tag = f"z{z_min}-{z_max}_y{y_min}-{y_max}_x{x_min}-{x_max}"
 
             label_cube = seg_data[
                 z_min:z_max,
@@ -248,14 +248,22 @@ for n, id_ in tqdm(enumerate(raw_file_ids), total=len(raw_file_ids)):
             ]
             label_cube = pad_and_reflect(label_cube, patch_size + (label_cube.shape[-1],), pad_type=pad_type, verbose=True)
 
+            # Identify where each class exists
+            post_mask = label_cube[..., 0] > 0
+            pre_mask = label_cube[..., 1] > 0
+            new_label = np.zeros(label_cube.shape[:-1], dtype=label_cube.dtype)
+            # Assign values: Class 1 takes priority, then Class 2
+            # (Or vice versa, depending on which you want to 'win' if they overlap)
+            new_label[pre_mask] = 2 
+            new_label[post_mask] = 1
+            label_cube = np.expand_dims(new_label, -1)
+
             raw_cube = raw_data[
                 z_min:z_max,
                 y_min:y_max,
                 x_min:x_max
             ]
             raw_cube = pad_and_reflect(np.expand_dims(raw_cube,-1), patch_size + (raw_cube.shape[-1],), pad_type=pad_type, verbose=True)
-
-            tag = f"z{z_min}-{z_max}_y{y_min}-{y_max}_x{x_min}-{x_max}"
             save_tif(np.expand_dims(raw_cube,0), os.path.join(output_data_folder, "raw"), [f"raw_{name}_{tag}.tif"], verbose=True)
             save_tif(np.expand_dims(label_cube,0), os.path.join(output_data_folder, "label"), [f"label_{name}_{tag}.tif"], verbose=True)
 
