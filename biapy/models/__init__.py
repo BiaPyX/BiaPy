@@ -1040,8 +1040,11 @@ def check_bmz_model_compatibility(
                     _axes_order += "c"
                     input_image_shape += [1]
                 elif "id" in axis:
+                    if isinstance(axis.get("size"), int):
+                        input_image_shape += [axis["size"]]
+                    elif isinstance(axis.get("size"), dict) and "min" in axis["size"]:
+                        input_image_shape += [axis["size"]["min"]]
                     _axes_order += axis["id"]
-                    input_image_shape += [axis["size"]]
             elif "id" in axis:
                 if axis["id"] == "channel":
                     _axes_order += "c" 
@@ -1054,6 +1057,11 @@ def check_bmz_model_compatibility(
                     _axes_order += axis["id"]
         axes_order = _axes_order
     
+    for x in input_image_shape:
+        if not isinstance(x, int):
+            reason_message = f"[{specific_workflow}] couldn't extract input image shape from model RDF: {input_image_shape}\n"
+            return preproc_info, True, reason_message, opts
+
     try:
         opts["DATA.PATCH_SIZE"] = tuple(input_image_shape[2:] + [input_image_shape[1]]) # (z) y x c
     except Exception:
