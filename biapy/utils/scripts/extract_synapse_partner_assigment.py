@@ -246,7 +246,7 @@ for n, id_ in tqdm(enumerate(raw_file_ids), total=len(raw_file_ids)):
                 y_min:y_max,
                 x_min:x_max
             ]
-            label_cube = pad_and_reflect(label_cube, patch_size + (label_cube.shape[-1],), pad_type=pad_type, verbose=True)
+            label_cube = pad_and_reflect(label_cube, patch_size + (label_cube.shape[-1],), pad_type=pad_type, verbose=False)
 
             # Identify where each class exists
             post_mask = label_cube[..., 0] > 0
@@ -263,8 +263,8 @@ for n, id_ in tqdm(enumerate(raw_file_ids), total=len(raw_file_ids)):
                 y_min:y_max,
                 x_min:x_max
             ]
-            raw_cube = pad_and_reflect(np.expand_dims(raw_cube,-1), patch_size + (raw_cube.shape[-1],), pad_type=pad_type, verbose=True)
-            save_tif(np.expand_dims(raw_cube,0), os.path.join(output_data_folder, "raw"), [f"raw_{name}_{tag}.tif"], verbose=True)
-            save_tif(np.expand_dims(label_cube,0), os.path.join(output_data_folder, "label"), [f"label_{name}_{tag}.tif"], verbose=True)
+            raw_cube = pad_and_reflect(np.expand_dims(raw_cube,-1), patch_size + (raw_cube.shape[-1],), pad_type=pad_type, verbose=False)
+            save_tif(np.expand_dims(raw_cube,0), os.path.join(output_data_folder, "raw"), [f"raw_{name}_{tag}.tif"], verbose=False)
+            save_tif(np.expand_dims(label_cube,0), os.path.join(output_data_folder, "label"), [f"label_{name}_{tag}.tif"], verbose=False)
 
 print("Done!")
