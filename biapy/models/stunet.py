@@ -290,8 +290,12 @@ class STUNet(nn.Module):
         # Outputs (one per decoder stage, nnU-Net style)
         # -----------------------------------------
         self.seg_outputs = nn.ModuleList()
-        for ds in range(len(self.conv_blocks_localization)):
-            self.seg_outputs.append(nn.Conv3d(dims[-2 - ds], output_channels[0], kernel_size=1, padding="same"))
+        if self._deep_supervision:
+            for ds in range(len(self.conv_blocks_localization)):
+                self.seg_outputs.append(nn.Conv3d(dims[-2 - ds], output_channels[0], kernel_size=1, padding="same"))
+        else:
+            # Only create the final resolution head
+            self.seg_outputs.append(nn.Conv3d(dims[0], output_channels[0], kernel_size=1, padding="same"))
 
         # Deep supervision upscalers (OrgMIM uses identity lambdas)
         self.upscale_logits_ops = nn.ModuleList([nn.Identity() for _ in range(num_pool - 1)])
@@ -330,11 +334,14 @@ class STUNet(nn.Module):
         x = self.conv_blocks_context[-1](x)
 
         # decoder
+        seg_output_cont = 0
         for u in range(len(self.conv_blocks_localization)):
             x = self.upsample_layers[u](x)
             x = torch.cat((x, skips[-(u + 1)]), dim=1)
             x = self.conv_blocks_localization[u](x)
-            seg_outputs.append(self.final_nonlin(self.seg_outputs[u](x)))
+            if self._deep_supervision or u == len(self.conv_blocks_localization) - 1:
+                seg_outputs.append(self.final_nonlin(self.seg_outputs[seg_output_cont](x)))
+                seg_output_cont += 1
 
         # Regular output
         # if self._deep_supervision:
