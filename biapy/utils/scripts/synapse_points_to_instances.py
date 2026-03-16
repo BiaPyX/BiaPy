@@ -12,6 +12,7 @@ from skimage.measure import label, regionprops_table
 from scipy import ndimage
 import torch 
 
+sys.path.insert(0, '/net/fibserver1/data/raw/scratch/dfranco/BiaPy')  # Adjust this path as needed
 from biapy.data.data_manipulation import save_tif
 from biapy.data.data_3D_manipulation import read_chunked_nested_data
 
@@ -147,7 +148,7 @@ def return_no_empty_mask(predictor, z, y, x, image_embeddings, shape, min_size=2
     return acc_out_mask.squeeze(), acc_out_mask.sum()
 
 parser = argparse.ArgumentParser(
-    description="Creates a new dataset adjusting its resolution",
+    description="Create a new dataset of neuron segmentation using micro_sam by using pre/post synaptic points as prompts for micro_sam",
     formatter_class=argparse.ArgumentDefaultsHelpFormatter
 )
 

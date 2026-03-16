@@ -11,6 +11,7 @@ from scipy import ndimage
 import torch 
 from pathlib import Path
 
+sys.path.insert(0, '/net/fibserver1/data/raw/scratch/dfranco/BiaPy')  # Adjust this path as needed
 from biapy.data.data_manipulation import save_tif, read_img_as_ndarray, pad_and_reflect
 from biapy.data.data_3D_manipulation import read_chunked_nested_data
 
@@ -60,7 +61,7 @@ def _in_bounds(p: np.ndarray, shape_zyx: tuple) -> bool:
     return bool(np.all((p >= 0) & (p < np.asarray(shape_zyx))))
 
 parser = argparse.ArgumentParser(
-    description="Creates a new dataset adjusting its resolution",
+    description="Composes a dataset for synapse partner assigment problem based on segmentations made by micro_sam. Basically crops the segmentation in desired cubes to train a deep learning model",
     formatter_class=argparse.ArgumentDefaultsHelpFormatter
 )
 
@@ -68,7 +69,7 @@ parser.add_argument("-raw_input_data", "--raw_input_data", required=True, help="
 parser.add_argument("-label_input_data", "--label_input_data", required=True, help="Directory to the folder where the labels generated with micro_sam reside")
 parser.add_argument("-output_data", "--output_data", required=True, help="Directory to the folder where the new data will be saved")
 
-parser.add_argument("-patch_size", "--patch_size", type=int, nargs=3, default=(8,96,96), help="Directory to the folder where the new data will be saved")
+parser.add_argument("-patch_size", "--patch_size", type=int, nargs=3, default=(8,96,96), help="Size of the extracted patches (z, y, x)")
 parser.add_argument("-resolution_in_data", "--resolution_in_data", default="volumes.raw", type=str,
                     help="Path to the dataset that contains the 'resolution' attribute, e.g. 'volumes.raw' in CREMI format")
 parser.add_argument("-locations_in_file", "--locations_in_file", default="annotations.locations", type=str,
