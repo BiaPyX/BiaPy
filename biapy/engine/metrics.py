@@ -349,8 +349,7 @@ class multiple_metrics:
             for pred_ch_start, channel in enumerate(self.out_channels):
                 gt_ch_start = pred_ch_start
                 if channel == "A":
-                    assert self.channel_extra_opts is not None and "A" in self.channel_extra_opts, "Affinity channel options must be provided."
-                    pred_ch_end = len(self.channel_extra_opts["A"].get("y_affinities", [1])) + pred_ch_start
+                    pred_ch_end = pd.shape[1]
                     gt_ch_end = pred_ch_end
                 elif channel == "R":
                     assert self.channel_extra_opts is not None and "R" in self.channel_extra_opts, "Rays channel options must be provided."
