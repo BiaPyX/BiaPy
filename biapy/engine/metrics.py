@@ -181,11 +181,11 @@ class jaccard_index:
         self.ignore_index = ignore_index if ignore_index != -1 else None
         if self.num_classes > 2:
             self.jaccard = JaccardIndex(
-                task="multiclass", threshold=self.t, num_classes=self.num_classes, ignore_index=ignore_index
+                task="multiclass", threshold=self.t, num_classes=self.num_classes, ignore_index=self.ignore_index
             ).to(self.device, non_blocking=True)
         else:
             self.jaccard = JaccardIndex(
-                task="binary", threshold=self.t, num_classes=self.num_classes, ignore_index=ignore_index
+                task="binary", threshold=self.t, num_classes=self.num_classes, ignore_index=self.ignore_index
             ).to(self.device, non_blocking=True)
 
     def __call__(self, y_pred, y_true):
@@ -224,7 +224,7 @@ class jaccard_index:
                     _y_true = _y_true.squeeze()
                 if len(pd.shape) - 2 == len(_y_true.shape):
                     _y_true = _y_true.unsqueeze(0)
-            iou += self.jaccard(pd, _y_true)
+            iou += self.jaccard(pd, _y_true.long() if _y_true.is_floating_point() else _y_true)
 
         return iou/len(_y_pred)
 
