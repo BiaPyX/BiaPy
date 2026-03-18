@@ -7,25 +7,22 @@ This module provides functions to process and manipulate 3D data volumes, includ
 - Padding and resizing
 - Efficient loading of large 3D files
 """
+from __future__ import annotations
+
 import os
 import math
+from typing import Any, List, Optional, Sequence, Tuple, Union
+
 import h5py
 import zarr
 import numpy as np
-from tqdm import tqdm
-from typing import (
-    List,
-    Tuple,
-    Optional,
-    Type,
-    Any,
-    Sequence,
-)
 from numpy.typing import NDArray
-
+from tqdm import tqdm
 from biapy.utils.misc import is_main_process
 from biapy.data.dataset import PatchCoords
 
+ZarrOrH5File = Union[zarr.Group, zarr.Array, h5py.File]
+ZarrOrH5Array = Union[zarr.Array, h5py.Dataset]
 
 def load_3D_efficient_files(
     data_path: List[str],
@@ -205,7 +202,7 @@ def load_img_part_from_efficient_file(
 
 
 def extract_patch_from_efficient_file(
-    data: zarr.hierarchy.Group | h5py._hl.dataset.Dataset,  # type: ignore
+    data: zarr.Array | h5py.Dataset,
     patch_coords: PatchCoords,
     data_axes_order: str = "ZYXC",
 ) -> NDArray:
@@ -257,13 +254,24 @@ def extract_patch_from_efficient_file(
     except:
         raise ValueError(f"Read data axes ({data.shape}) do not match the expected axis order ({data_axes_order})")
 
-    img = ensure_3d_shape(img.squeeze(), data_axes_order=data_axes_order)
+    # Try to correct the axes
+    if img.ndim != len(data_axes_order):
+        empty_axes = [
+            (patch_coords.z_end - patch_coords.z_start) <= 1,
+            (patch_coords.y_end - patch_coords.y_start) <= 1,
+            (patch_coords.x_end - patch_coords.x_start) <= 1,
+        ]
+        axes_to_add = [i for i, empty in enumerate(empty_axes) if empty]
+        if axes_to_add:
+            img = np.expand_dims(img, axis=tuple(axes_to_add))
+
+    img = ensure_3d_shape(img, data_axes_order=data_axes_order)
 
     return img
 
 
 def insert_patch_in_efficient_file(
-    data: zarr.hierarchy.Group | h5py._hl.dataset.Dataset,  # type: ignore
+    data: zarr.Array | h5py.Dataset,
     patch: NDArray,
     patch_coords: PatchCoords,
     data_axes_order: str = "ZYXC",
@@ -822,7 +830,7 @@ def merge_3D_data_with_overlap(
 
 
 def extract_3D_patch_with_overlap_and_padding_yield(
-    data: zarr.hierarchy.Group | h5py._hl.dataset.Dataset,  # type: ignore
+    data: zarr.Array | h5py.Dataset,
     vol_shape: Tuple[int, ...],
     axes_order: str,
     overlap: Tuple[float, ...] = (0, 0, 0),
@@ -843,7 +851,7 @@ def extract_3D_patch_with_overlap_and_padding_yield(
 
     Parameters
     ----------
-    data : H5 dataset
+    data : Zarr array or H5 dataset
         Data to extract patches from. E.g. ``(z, y, x, channels)``.
     vol_shape : 4D int tuple
         Shape of the patches to create. E.g. ``(z, y, x, channels)``.
@@ -919,6 +927,25 @@ def extract_3D_patch_with_overlap_and_padding_yield(
         or (overlap[2] >= 1 or overlap[2] < 0)
     ):
         raise ValueError("'overlap' values must be floats between range [0, 1)")
+
+    if padding[0] >= vol_shape[0] // 2:
+        raise ValueError(
+            "'Padding' can not be greater than half of 'vol_shape'. Max value for the given input shape {} is {}".format(
+                vol_shape, ((vol_shape[0] // 2) - 1, (vol_shape[1] // 2) - 1, (vol_shape[2] // 2) - 1)
+            )
+        )
+    if padding[1] >= vol_shape[1] // 2:
+        raise ValueError(
+            "'Padding' can not be greater than half of 'vol_shape'. Max value for the given input shape {} is {}".format(
+                vol_shape, ((vol_shape[0] // 2) - 1, (vol_shape[1] // 2) - 1, (vol_shape[2] // 2) - 1)
+            )
+        )
+    if padding[2] >= vol_shape[2] // 2:
+        raise ValueError(
+            "'Padding' can not be greater than half of 'vol_shape'. Max value for the given input shape {} is {}".format(
+                vol_shape, ((vol_shape[0] // 2) - 1, (vol_shape[1] // 2) - 1, (vol_shape[2] // 2) - 1)
+            )
+        )
 
     padded_data_shape = [
         z_dim + padding[0] * 2,
@@ -1246,7 +1273,7 @@ def write_chunked_data(
     data: NDArray,
     data_dir: str,
     filename: str,
-    crop_shape: Optional[Tuple[int | float] | List[int | float]] = None,
+    crop_shape: Optional[Sequence[int]] = None,
     dtype_str: str = "float32",
     verbose: bool = True,
 ):
@@ -1281,24 +1308,56 @@ def write_chunked_data(
 
     os.makedirs(data_dir, exist_ok=True)
 
-    if ext in [".hdf5", ".hdf", ".h5"]:
+    if looks_like_hdf5(filename):
         fid = h5py.File(os.path.join(data_dir, filename), "w")
         data = fid.create_dataset("data", data=data, dtype=dtype_str, compression="gzip")  # type: ignore
     # Zarr
     else:
-        data_zarr = zarr.open_array(
+        chunks = crop_shape if crop_shape is not None else pick_chunks(data.shape, dtype_str)
+
+        data_zarr = zarr.open(
             os.path.join(data_dir, filename),
             shape=data.shape,
             mode="w",
-            chunks=crop_shape,  # type: ignore
+            chunks=chunks,  # type: ignore
             dtype=dtype_str,
+            zarr_format=3,
         )
         data_zarr[:] = data
 
+def _first_array_in_group(g: zarr.Group) -> zarr.Array:
+    """Descend into the first array found (sorted by key) in a group."""
+    keys = sorted(list(g.keys()))
+    if not keys:
+        raise ValueError("Zarr group is empty (no arrays or subgroups).")
+    obj = g[keys[0]]
+    while isinstance(obj, zarr.Group):
+        subkeys = sorted(list(obj.keys()))
+        if not subkeys:
+            raise ValueError("Zarr group contains no arrays (only empty groups).")
+        obj = obj[subkeys[0]]
+    if not isinstance(obj, zarr.Array):
+        raise TypeError(f"Expected zarr.Array, found {type(obj)}")
+    return obj
+
+def _first_dataset_in_h5_group(g: h5py.Group) -> h5py.Dataset:
+    """Descend into the first dataset found (sorted by key) in an HDF5 group."""
+    keys = sorted(list(g.keys()))
+    if not keys:
+        raise ValueError("HDF5 group is empty (no datasets or subgroups).")
+    obj = g[keys[0]]
+    while isinstance(obj, h5py.Group):
+        subkeys = sorted(list(obj.keys()))
+        if not subkeys:
+            raise ValueError("HDF5 group contains no datasets (only empty groups).")
+        obj = obj[subkeys[0]]
+    if not isinstance(obj, h5py.Dataset):
+        raise TypeError(f"Expected h5py.Dataset, found {type(obj)}")
+    return obj
 
 def read_chunked_nested_data(
     file: str, data_path: str = ""
-) -> Tuple[Type[zarr.hierarchy.Group], Type[zarr.core.Array]] | Tuple[Type[h5py._hl.files.File], Type[h5py._hl.dataset.Dataset]]:  # type: ignore
+) -> Tuple[ZarrOrH5File, ZarrOrH5Array]:
     """Find recursively raw and ground truth data within a H5/Zarr file.
 
     This function automatically detects whether the input file is in HDF5 or Zarr format
@@ -1315,7 +1374,7 @@ def read_chunked_nested_data(
     -------
     tuple
         Returns one of:
-        - (zarr.hierarchy.Group, zarr.core.Array) for Zarr/N5 files
+        - (zarr.Group, zarr.core.Array) for Zarr/N5 files
         - (h5py.File, h5py.Dataset) for HDF5 files
 
     Raises
@@ -1328,7 +1387,7 @@ def read_chunked_nested_data(
     >>> file_handler, dataset = read_chunked_nested_data("data.h5")
     >>> zarr_group, zarr_array = read_chunked_nested_data("data.zarr")
     """
-    if any(file.endswith(x) for x in [".h5", ".hdf5", ".hdf"]):
+    if looks_like_hdf5(file):
         return read_chunked_nested_h5(file, data_path)
     elif any(file.endswith(x) for x in [".n5", ".zarr"]):
         return read_chunked_nested_zarr(file, data_path)
@@ -1336,9 +1395,7 @@ def read_chunked_nested_data(
         raise ValueError("Input file seems to not be either Zarr or H5")
 
 
-def read_chunked_nested_zarr(
-    zarrfile: str, data_path: str = ""
-) -> Tuple[Type[zarr.hierarchy.Group], Type[zarr.core.Array]]:  # type: ignore
+def read_chunked_nested_zarr(zarrfile: str, data_path: str = "") -> Tuple[zarr.Group, zarr.Array]:
     """Find recursively raw and ground truth data within a Zarr/N5 file.
 
     This function searches through a Zarr/N5 file hierarchy to locate array data
@@ -1356,7 +1413,7 @@ def read_chunked_nested_zarr(
     -------
     tuple
         A tuple containing:
-        - zarr.hierarchy.Group: The root group of the Zarr file
+        - zarr.Group: The root group of the Zarr file
         - zarr.core.Array: The found array data
 
     Raises
@@ -1372,9 +1429,9 @@ def read_chunked_nested_zarr(
     """
     if not any(zarrfile.endswith(x) for x in [".n5", ".zarr"]):
         raise ValueError("Not implemented for other filetypes than Zarr")
-    fid = zarr.open(zarrfile, "r")
+    fid = zarr.open(zarrfile, mode="r")
 
-    def find_obj(path: str, fid: zarr.hierarchy.Group):  # type: ignore
+    def find_obj(path: str, fid: zarr.Group):  # type: ignore
         obj = None
         rpath = path.split(".")
         if len(rpath) == 0:
@@ -1400,9 +1457,7 @@ def read_chunked_nested_zarr(
     return fid, data  # type: ignore
 
 
-def read_chunked_nested_h5(
-    h5file: str, data_path: str = ""
-) -> Tuple[Type[h5py._hl.files.File], Type[h5py._hl.dataset.Dataset]]:  # type: ignore
+def read_chunked_nested_h5(h5file: str, data_path: str = "") -> Tuple[h5py.File, h5py.Dataset]:
     """Find recursively raw and ground truth data within an HDF5 file.
 
     This function searches through an HDF5 file hierarchy to locate dataset objects
@@ -1434,38 +1489,37 @@ def read_chunked_nested_h5(
     >>> file, dataset = read_chunked_nested_h5("data.h5")
     >>> file, subgroup_data = read_chunked_nested_h5("experiment.hdf5", "images/channel1")
     """
-    if not any(h5file.endswith(x) for x in [".h5", ".hdf5", ".hdf"]):
+    if not looks_like_hdf5(h5file):
         raise ValueError("Not implemented for other filetypes than H5")
 
     fid = h5py.File(h5file, "r")
 
-    def find_obj(path: str, fid: h5py._hl.files.File) -> Optional[NDArray]:  # type: ignore
-        obj = None
-        rpath = path.split(".")
-        if len(rpath) == 0:
-            return None
-        else:
-            if len(rpath) > 1:
-                groups = list(fid.keys())
-                if rpath[0] not in groups:
-                    return None
-                obj = find_obj(".".join(rpath[1:]), fid[rpath[0]])
-            else:
-                arrays = list(fid.keys())
-                if rpath[0] not in arrays:
-                    return None
-                return fid[rpath[0]]
-        return obj
+    try:
+        if not data_path:
+            return fid, _first_dataset_in_h5_group(fid)
 
-    data = find_obj(data_path, fid)
-    if data is None and data_path != "":
-        raise ValueError(f"'{data_path}' not found in H5: {h5file}.")
-    return fid, data  # type: ignore
+        # allow both "a.b.c" and "a/b/c"
+        normalized = data_path.replace(".", "/").strip("/")
+        obj: h5py.Group | h5py.Dataset = fid
+        for part in normalized.split("/"):
+            if part not in obj:
+                raise ValueError(f"'{data_path}' not found in H5: {h5file}. Available keys at this level: {list(obj.keys())}")
+            obj = obj[part]
+
+        if isinstance(obj, h5py.Group):
+            return fid, _first_dataset_in_h5_group(obj)
+        if isinstance(obj, h5py.Dataset):
+            return fid, obj
+
+        raise TypeError(f"Unexpected HDF5 object type at '{data_path}': {type(obj)}")
+    except Exception:
+        fid.close()
+        raise
 
 
 def read_chunked_data(
     filename: str,
-) -> Tuple[Type[zarr.hierarchy.Group], Type[zarr.core.Array]] | Tuple[Type[h5py._hl.files.File], Type[h5py._hl.dataset.Dataset]]:  # type: ignore
+) -> Tuple[ZarrOrH5File, ZarrOrH5Array]:
     """Read and return the first dataset found in an HDF5 or Zarr file.
 
     This function automatically detects the file format (HDF5 or Zarr) and returns
@@ -1510,21 +1564,182 @@ def read_chunked_data(
         if not os.path.exists(filename):
             raise ValueError(f"File {filename} does not exist.")
 
-        if any(filename.endswith(x) for x in [".h5", ".hdf5", ".hdf"]):
+        if looks_like_hdf5(filename):
             fid = h5py.File(filename, "r")
-            data = fid[list(fid)[0]]
-        elif filename.endswith(".zarr"):
-            fid = zarr.open(filename, "r")
-            if isinstance(fid, zarr.hierarchy.Group):  # type: ignore
-                if len(list((fid.group_keys()))) != 0:  # type: ignore
-                    data = fid[list(fid.group_keys())[0]]  # type: ignore
-                elif len(list((fid.array_keys()))) != 0:  # type: ignore
-                    data = fid[list(fid.array_keys())[0]]  # type: ignore
+            try:
+                data = _first_dataset_in_h5_group(fid)
+            except Exception:
+                fid.close()
+                raise
+        elif filename.endswith(".zarr") or filename.endswith(".n5"):
+            fid = zarr.open(filename, mode="r")
+            if isinstance(fid, zarr.Group):
+                data = _first_array_in_group(fid)
             else:
                 data = fid
         else:
             raise ValueError(f"File extension {filename} not recognized")
 
-        return fid, data  # type: ignore
+        return fid, data
     else:
         raise ValueError("'filename' is expected to be a str")
+
+
+def looks_like_hdf5(path: str) -> bool:
+    """
+    Check if a given file path corresponds to an HDF5 file based on its extension.
+
+    Parameters
+    ----------
+    path : str
+        The file path to check.
+
+    Returns
+    -------
+    bool
+        True if the file has an HDF5 extension, False otherwise.
+    """
+    # robust extension handling (including ".hdf5.gz", etc.)
+    p = path.lower()
+    exts = (".h5", ".hdf5", ".hdf", ".he5")
+    if p.endswith(exts):
+        return True
+    # handle double extensions like ".h5.gz"
+    base, ext = os.path.splitext(p)
+    if ext in (".gz", ".bz2", ".xz", ".zip") and base.endswith(exts):
+        return True
+    return False
+
+def pick_chunks(shape: Tuple[int, ...], dtype: str, target_mb: float = 4.0) -> Tuple[int, ...]:
+    """
+    Pick chunk sizes for HDF5 datasets based on the shape and data type.
+
+    Parameters
+    ----------
+    shape : tuple of int
+        Shape of the dataset.
+    dtype : str
+        Data type of the dataset.
+    target_mb : float, optional
+        Target chunk size in megabytes. Default is 4.0 MB.
+
+    Returns
+    -------
+    tuple of int
+        Chunk sizes for each dimension of the dataset.
+    """
+    itemsize = np.dtype(dtype).itemsize
+    target_bytes = int(target_mb * 1024 * 1024)
+
+    # start with a conservative cap per dimension (keeps metadata manageable)
+    chunks = [min(int(d), 256) for d in shape]
+
+    # keep channels small-ish if present
+    if len(shape) >= 4:
+        chunks[-1] = min(int(shape[-1]), 16)
+
+    def chunk_bytes() -> int:
+        n = 1
+        for c in chunks:
+            n *= max(1, int(c))
+        return n * itemsize
+
+    # shrink largest dims until under target
+    while chunk_bytes() > target_bytes:
+        # find a dim we can shrink (prefer spatial over channels)
+        # skip dims already at 1
+        candidates = [i for i, c in enumerate(chunks) if c > 1]
+        if not candidates:
+            break
+        # avoid shrinking channels first when possible
+        if len(shape) >= 4 and (len(chunks) - 1) in candidates and len(candidates) > 1:
+            candidates.remove(len(chunks) - 1)
+        # shrink the currently-largest candidate
+        i = max(candidates, key=lambda j: chunks[j])
+        chunks[i] = max(1, chunks[i] // 2)
+
+    return tuple(int(c) for c in chunks)
+
+
+def load_synapse_gt_points(
+    locations_path: str, 
+    resolution_path: str, 
+    partners_path: str, 
+    id_path: str, 
+    data_filename: str
+) -> Dict[str, list]:
+    """
+    Load synapse ground truth points from the given paths.
+
+    Parameters
+    ----------
+    locations_path : str
+        Path to the synapse locations within the data file.
+
+    resolution_path : str
+        Path to the synapse resolution within the data file.
+    
+    partners_path : str
+        Path to the synapse partners within the data file.
+    
+    id_path : str   
+        Path to the synapse ids within the data file.
+
+    data_filename : str
+        Path to the data file.
+
+    Returns
+    -------
+    gt_pre_points : list of numpy arrays    
+        List of pre-synaptic points coordinates.
+
+    gt_post_points : list of numpy arrays
+        List of post-synaptic points coordinates.
+
+    gt_cleft_points : list of numpy arrays
+        List of synaptic cleft points coordinates.
+
+    resolution : tuple of int or float
+        Resolution of the synapse coordinates.
+    """
+    file, ids = read_chunked_nested_data(data_filename, id_path)
+    ids = list(np.array(ids))
+    _, partners = read_chunked_nested_data(data_filename, partners_path)
+    partners = np.array(partners)
+    _, locations = read_chunked_nested_data(data_filename, locations_path)
+    locations = np.array(locations)
+    _, resolution = read_chunked_nested_data(data_filename, resolution_path)
+    try:
+        resolution = resolution.attrs["resolution"]
+    except:
+        raise ValueError(
+            "There is no 'resolution' attribute in '{}'. Add it like: data['{}'].attrs['resolution'] = (8,8,8)".format(
+                resolution_path, resolution_path
+            )
+        )
+    resolution = list(resolution)
+
+    gt_pre_points, gt_post_points = {}, {}
+    for i in tqdm(range(len(partners)), disable=not is_main_process()):
+        pre_id, post_id = partners[i]
+        pre_position = ids.index(pre_id)
+        post_position = ids.index(post_id)
+        pre_coord = locations[pre_position] // resolution
+        post_coord = locations[post_position] // resolution
+        if str(pre_coord) not in gt_pre_points:
+            gt_pre_points[str(pre_coord)] = pre_coord
+        if str(post_coord) not in gt_post_points:
+            gt_post_points[str(post_coord)] = post_coord
+    gt_pre_points = list(gt_pre_points.values())
+    gt_post_points = list(gt_post_points.values())
+
+    # For synaptic cleft points, we take the midpoint between pre and post-synaptic points
+    gt_cleft_points = []
+    for pre, post in zip(gt_pre_points, gt_post_points):
+        cleft_point = (pre + post) / 2
+        gt_cleft_points.append(cleft_point)
+
+    if isinstance(file, h5py.File):
+        file.close()
+
+    return {"pre": gt_pre_points, "post": gt_post_points, "cleft": gt_cleft_points, "resolution": resolution}

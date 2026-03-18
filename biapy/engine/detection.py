@@ -38,7 +38,7 @@ from biapy.engine.metrics import (
 )
 from biapy.data.pre_processing import create_detection_masks
 from biapy.engine.base_workflow import Base_Workflow
-from biapy.data.data_3D_manipulation import order_dimensions, write_chunked_data
+from biapy.data.data_3D_manipulation import order_dimensions, write_chunked_data, looks_like_hdf5
 from biapy.data.data_manipulation import save_tif
 from biapy.data.dataset import PatchCoords
 
@@ -64,7 +64,7 @@ class Detection_Workflow(Base_Workflow):
         Arguments used in BiaPy's call.
     """
 
-    def __init__(self, cfg, job_identifier, device, args, **kwargs):
+    def __init__(self, cfg, job_identifier, device, system_dict, args, **kwargs):
         """
         Initialize the Detection_Workflow.
 
@@ -84,7 +84,7 @@ class Detection_Workflow(Base_Workflow):
         **kwargs : dict
             Additional keyword arguments.
         """
-        super(Detection_Workflow, self).__init__(cfg, job_identifier, device, args, **kwargs)
+        super(Detection_Workflow, self).__init__(cfg, job_identifier, device, system_dict, args, **kwargs)
 
         self.original_test_mask_path = self.prepare_detection_data()
 
@@ -107,36 +107,36 @@ class Detection_Workflow(Base_Workflow):
 
     def define_activations_and_channels(self):
         """
-        Define the activations and output channels of the model.
+        Define the activations to be applied to the model output and the channels that the model will output.
 
         This function must define the following variables:
 
-        self.model_output_channels : List of functions
-            Metrics to be calculated during model's training.
+        self.model_output_channels : List of int
+            Number of channels for each output head of the model. E.g. [3] for a model with one head outputting 3 channels, 
+            [1, 5] for a model with two heads outputting 1 and 5 channels respectively, etc.
 
-        self.multihead : bool
-            Whether if the output of the model has more than one head.
+        self.model_output_channel_info : List of str
+            Information about the output channels.
 
-        self.activations : List of lists of str
-            Activations to be applied to the model output. Each dict will
-            match an output channel of the model. "linear" and "ce_sigmoid"
-            will not be applied. E.g. ["linear"].
+        self.separated_class_channel : bool
+            Whether if we should expect a separated output channel for classification.
+
+        self.head_activations : List of str
+            Activations to be applied to the model output. Each dict will match an output channel of the model. "linear" and "ce_sigmoid"
+            will not be applied. E.g. ["linear"] for a model with one head, ["linear", "sigmoid"] for a model with two heads, etc.
         """
-        self.model_output_channels = {
-            "type": "mask",
-            "channels": 1,
-        }
-
         # Multi-head: points + classification
         if self.cfg.DATA.N_CLASSES > 2:
-            self.activations = [["ce_sigmoid"], ["linear"]]
-            self.model_output_channels["channels"] = [self.model_output_channels["channels"], self.cfg.DATA.N_CLASSES]
-            self.multihead = True
+            self.head_activations = ["ce_sigmoid", "ce_softmax"]
+            self.model_output_channels = [1, self.cfg.DATA.N_CLASSES]
+            self.model_output_channel_info = ["points", "class"]
+            self.separated_class_channel = True
         else:
-            self.activations = [["ce_sigmoid"]]
-            self.model_output_channels["channels"] = [self.model_output_channels["channels"]]
-            self.multihead = False
-        self.real_classes = self.model_output_channels["channels"][0]
+            self.head_activations = ["ce_sigmoid"]
+            self.model_output_channel_info = ["points"]
+            self.model_output_channels = [1]
+            self.separated_class_channel = False
+        self.gt_channels_expected = self.model_output_channels[0]
 
         super().define_activations_and_channels()
 
@@ -173,7 +173,7 @@ class Detection_Workflow(Base_Workflow):
                 self.train_metric_best.append("max")
 
         # Multi-head: detection + classification
-        if self.multihead:
+        if self.separated_class_channel:
             self.train_metric_names.append("IoU (classes)")
             self.train_metric_best += ["max"]
 
@@ -195,7 +195,7 @@ class Detection_Workflow(Base_Workflow):
                 self.test_metric_names.append("IoU")
 
         # Multi-head: detection + classification
-        if self.multihead:
+        if self.separated_class_channel:
             self.test_metric_names.append("IoU (classes)")
 
         self.test_metrics.append(
@@ -212,7 +212,7 @@ class Detection_Workflow(Base_Workflow):
         # Workflow specific metrics calculated in a different way than calling metric_calculation(). These metrics are
         # always calculated
         self.test_extra_metrics = ["Precision", "Recall", "F1", "TP", "FP", "FN"]
-        if self.multihead:
+        if self.separated_class_channel:
             self.test_extra_metrics += ["Precision (class)", "Recall (class)", "F1 (class)", "TP (class)", "FN (class)"]
         self.test_metric_names += self.test_extra_metrics
 
@@ -220,7 +220,7 @@ class Detection_Workflow(Base_Workflow):
             self.loss = CrossEntropyLoss_wrapper(
                 num_classes=self.cfg.DATA.N_CLASSES,
                 ndim=self.dims,
-                multihead=self.multihead,
+                separated_class_channel=self.separated_class_channel,
                 model_source=self.cfg.MODEL.SOURCE,
                 class_rebalance=self.cfg.LOSS.CLASS_REBALANCE,
                 class_weights=self.cfg.LOSS.CLASS_WEIGHTS,
@@ -336,7 +336,7 @@ class Detection_Workflow(Base_Workflow):
         assert pred.ndim == 4, f"Prediction doesn't have 4 dim: {pred.shape}"
 
         # Multi-head: points + classification
-        if self.multihead:
+        if self.separated_class_channel:
             class_channel = np.expand_dims(pred[..., -1], -1)
             pred = pred[..., :-1]
 
@@ -381,7 +381,7 @@ class Detection_Workflow(Base_Workflow):
 
         # Decide the class for each point
         pred_points_classes = []
-        if self.multihead:
+        if self.separated_class_channel:
             for point in pred_points:
                 if self.dims == 3:
                     point_area = class_channel[
@@ -426,7 +426,7 @@ class Detection_Workflow(Base_Workflow):
                 for i in range(points_pred_mask.shape[0]):
                     points_pred_mask[i] = dilation(points_pred_mask[i], disk(3))
 
-                if self.multihead:
+                if self.separated_class_channel:
                     class_channel = np.zeros(points_pred_mask.shape, dtype=np.uint8)
                     for n in range(len(pred_points)):
                         class_channel = np.where(points_pred_mask == n + 1, pred_points_classes[n], class_channel)
@@ -441,7 +441,7 @@ class Detection_Workflow(Base_Workflow):
                 else:
                     points_pred_mask = np.expand_dims(points_pred_mask, -1)
 
-                if file_ext in [".hdf5", ".hdf", ".h5", ".zarr", ".n5"]:
+                if looks_like_hdf5(self.current_sample["X_filename"]) or file_ext in [".zarr", ".n5"]:
                     write_chunked_data(
                         np.expand_dims(points_pred_mask, 0),
                         out_dir,
@@ -457,7 +457,7 @@ class Detection_Workflow(Base_Workflow):
                         verbose=self.cfg.TEST.VERBOSE,
                     )
 
-                if self.multihead:
+                if self.separated_class_channel:
                     points_pred_mask = points_pred_mask[..., 0]
                 else:
                     points_pred_mask = points_pred_mask.squeeze()
@@ -492,7 +492,7 @@ class Detection_Workflow(Base_Workflow):
                     comp_signs=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGNS,
                 )
 
-                if file_ext in [".hdf5", ".hdf", ".h5", ".zarr", ".n5"]:
+                if looks_like_hdf5(self.current_sample["X_filename"]) or file_ext in [".zarr", ".n5"]:
                     write_chunked_data(
                         np.expand_dims(np.expand_dims(points_pred_mask, -1), 0),
                         self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
@@ -618,7 +618,7 @@ class Detection_Workflow(Base_Workflow):
             df = df.sort_values(by=["pred_id"])
             del aux
 
-            if not self.multihead:
+            if not self.separated_class_channel:
                 df = df.drop(columns=["class"])
 
             if not self.cfg.TEST.BY_CHUNKS.ENABLE:
@@ -635,7 +635,7 @@ class Detection_Workflow(Base_Workflow):
         # Calculate detection metrics
         if self.use_gt and not self.cfg.TEST.BY_CHUNKS.ENABLE:
             all_channel_d_metrics = [0, 0, 0, 0, 0, 0]
-            if self.multihead:
+            if self.separated_class_channel:
                 all_channel_d_metrics += [0, 0, 0, 0, 0]
 
             # Read the GT coordinates from the CSV file
@@ -667,7 +667,7 @@ class Detection_Workflow(Base_Workflow):
                 if "class" not in df_gt:
                     raise ValueError("DATA.N_CLASSES > 2 but no class specified in the CSV file")
             gt_points_classes = None
-            if self.multihead:
+            if self.separated_class_channel:
                 if "class" not in df_gt:
                     raise ValueError("'class' column not present in the CSV file")
                 gt_points_classes = df_gt["class"].tolist()
@@ -757,7 +757,7 @@ class Detection_Workflow(Base_Workflow):
                 all_channel_d_metrics[3] += d_metrics["TP"]
                 all_channel_d_metrics[4] += d_metrics["FP"]
                 all_channel_d_metrics[5] += d_metrics["FN"]
-                if self.multihead:
+                if self.separated_class_channel:
                     all_channel_d_metrics[6] += d_metrics["Precision (class)"]
                     all_channel_d_metrics[7] += d_metrics["Recall (class)"]
                     all_channel_d_metrics[8] += d_metrics["F1 (class)"]
@@ -836,7 +836,7 @@ class Detection_Workflow(Base_Workflow):
                 # Dilate and save the GT ids for the current class
                 for i in range(gt_id_img.shape[0]):
                     gt_id_img[i] = dilation(gt_id_img[i], disk(3))
-                if file_ext in [".hdf5", ".hdf", ".h5", ".zarr", ".n5"]:
+                if looks_like_hdf5(self.current_sample["X_filename"]) or file_ext in [".zarr", ".n5"]:
                     write_chunked_data(
                         np.expand_dims(np.expand_dims(gt_id_img, -1), 0),
                         self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
@@ -867,7 +867,7 @@ class Detection_Workflow(Base_Workflow):
                 for i in range(points_pred_mask_color.shape[0]):
                     for j in range(points_pred_mask_color.shape[-1]):
                         points_pred_mask_color[i, ..., j] = dilation(points_pred_mask_color[i, ..., j], disk(3))
-                if file_ext in [".hdf5", ".hdf", ".h5", ".zarr", ".n5"]:
+                if looks_like_hdf5(self.current_sample["X_filename"]) or file_ext in [".zarr", ".n5"]:
                     write_chunked_data(
                         np.expand_dims(points_pred_mask_color, 0),
                         self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
@@ -904,33 +904,34 @@ class Detection_Workflow(Base_Workflow):
         else:
             raise NotImplementedError
 
-    def after_one_patch_prediction_by_chunks(
-        self, patch_id: int, patch: NDArray, patch_in_data: PatchCoords, added_pad: List[List[int]]
+    def after_one_chunk_raw_prediction(
+        self, chunk_id: int, chunk: NDArray, chunk_in_data: PatchCoords, added_pad: List[List[int]]
     ):
         """
-        Place any code that needs to be done after predicting one patch in "by chunks" setting.
+        Place any code that needs to be done after predicting one chunk of data in "by chunks" setting.
 
         Parameters
         ----------
-        patch_id: int
-            Patch identifier.
+        chunk_id: int
+            Chunk identifier.
 
-        patch : NDArray
-            Predicted patch.
+        chunk : NDArray
+            Predicted chunk
 
-        patch_in_data : PatchCoords
-            Global coordinates of the patch.
+        chunk_in_data : PatchCoords
+            Global coordinates of the chunk.
 
         added_pad: List of list of ints
-            Padding added to the patch that should be not taken into account when processing the patch.
+            Padding added to the chunk in each dimension. The order of dimensions is the same as the input 
+            image, and the order of the list is: [[pad_before_dim1, pad_after_dim1], [pad_before_dim2, pad_after_dim2], ....
         """
-        df_patch = self.detection_process(patch, patch_pos=patch_in_data)
+        df_patch = self.detection_process(chunk, patch_pos=chunk_in_data)
 
         if df_patch is not None and len(df_patch) > 0:
             # Remove possible points in the padded area
-            df_patch = df_patch[df_patch["axis-0"] < patch.shape[0] - added_pad[0][1]]
-            df_patch = df_patch[df_patch["axis-1"] < patch.shape[1] - added_pad[1][1]]
-            df_patch = df_patch[df_patch["axis-2"] < patch.shape[2] - added_pad[2][1]]
+            df_patch = df_patch[df_patch["axis-0"] < chunk.shape[0] - added_pad[0][1]]
+            df_patch = df_patch[df_patch["axis-1"] < chunk.shape[1] - added_pad[1][1]]
+            df_patch = df_patch[df_patch["axis-2"] < chunk.shape[2] - added_pad[2][1]]
             df_patch["axis-0"] = df_patch["axis-0"] - added_pad[0][0]
             df_patch["axis-1"] = df_patch["axis-1"] - added_pad[1][0]
             df_patch["axis-2"] = df_patch["axis-2"] - added_pad[2][0]
@@ -938,10 +939,10 @@ class Detection_Workflow(Base_Workflow):
             df_patch = df_patch[df_patch["axis-1"] >= 0]
             df_patch = df_patch[df_patch["axis-2"] >= 0]
 
-            # Add the patch shift to the detected coordinates so they represent global coords
-            df_patch["axis-0"] = df_patch["axis-0"] + patch_in_data.z_start
-            df_patch["axis-1"] = df_patch["axis-1"] + patch_in_data.y_start
-            df_patch["axis-2"] = df_patch["axis-2"] + patch_in_data.x_start
+            # Add the chunk shift to the detected coordinates so they represent global coords
+            df_patch["axis-0"] = df_patch["axis-0"] + chunk_in_data.z_start
+            df_patch["axis-1"] = df_patch["axis-1"] + chunk_in_data.y_start
+            df_patch["axis-2"] = df_patch["axis-2"] + chunk_in_data.x_start
 
             # Save the csv file
             output_dir = (
@@ -954,12 +955,37 @@ class Detection_Workflow(Base_Workflow):
             df_patch.to_csv(
                 os.path.join(
                     output_dir,
-                    _filename + "_patch" + str(patch_id).zfill(len(str(len(self.test_generator)))) + "_points.csv",
+                    _filename + "_patch" + str(chunk_id).zfill(len(str(len(self.test_generator)))) + "_points.csv",
                 ),
                 index=False,
             )
 
-    def after_all_patch_prediction_by_chunks(self):
+    def after_one_chunk_workflow_process(self, chunks: List[NDArray]) -> Optional[List[NDArray]]:
+        """
+        Process a list of chunks during inference in "by chunks" setting. Each workflow should have 
+        its own implementation of this method.
+
+        Parameters
+        ----------
+        chunks : List[NDArray]
+            List of chunks. Expected axes are: ``(z, y, x, channels)`` for 3D and
+            ``(y, x, channels)`` for 2D.
+
+        Returns
+        -------
+        chunks : Optional[List[NDArray]]
+            Processed chunks.
+        """
+        pass
+    
+    def after_all_chunk_prediction_workflow_process(self):
+        """
+        Place any code that needs to be done after predicting all patches in "by chunks" setting.
+        This function is called on all ranks.
+        """
+        pass
+
+    def after_all_chunk_prediction_workflow_process_master_rank(self):
         """Excute stepes needed after predicting all the patches, one by one, in the "by chunks" setting."""
         assert isinstance(self.all_pred, list)
         filename, _ = os.path.splitext(self.current_sample["X_filename"])

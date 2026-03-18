@@ -18,6 +18,7 @@ from biapy.data.data_manipulation import (
     sample_satisfy_conds,
     pad_and_reflect,
 )
+from biapy.data.data_3D_manipulation import looks_like_hdf5
 from biapy.data.dataset import BiaPyDataset, DataSample
 from biapy.data.norm import Normalization
 
@@ -182,7 +183,7 @@ class test_single_data_generator(Dataset):
             data_within_zarr_path=sample.get_path_in_zarr(),
         )
 
-        if any(self.X.dataset_info[sample.fid].path.endswith(x) for x in [".zarr", ".n5", ".h5", ".hdf5", ".hdf"]):
+        if looks_like_hdf5(self.X.dataset_info[sample.fid].path) or any(self.X.dataset_info[sample.fid].path.endswith(x) for x in [".zarr", ".n5"]):
             if img_file and isinstance(img_file, h5py.File):
                 sample_extra_info["img_file_to_close"] = img_file
         else:

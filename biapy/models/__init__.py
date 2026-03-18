@@ -22,22 +22,30 @@ import re
 import torch
 import torch.nn as nn
 from torchinfo import summary
-from typing import Optional, Dict, Tuple, List, Callable
+from typing import Iterable, Optional, Dict, Tuple, List, Callable
 from packaging.version import Version
 from functools import partial
 from yacs.config import CfgNode as CN
 import ast
 from collections import deque, defaultdict
-from importlib import import_module
 import requests
+import sys
+import importlib
+import yaml
 
+from bioimageio.spec.utils import download
 from bioimageio.core.backends.pytorch_backend import load_torch_model
 from bioimageio.spec.model.v0_4 import ModelDescr as ModelDescr_v0_4
 from bioimageio.spec.model.v0_5 import ModelDescr as ModelDescr_v0_5
+from bioimageio.spec import load_description
 
 
 def build_model(
-    cfg: CN, output_channels: int, activations: List[str], device: torch.device
+    cfg: CN, 
+    output_channels: List[int], 
+    output_channel_info: List[str], 
+    head_activations: List[str], 
+    device: torch.device
 ) -> Tuple[nn.Module, str, Dict, set, List[str], Dict, Tuple[int, ...]]:
     # model, model_file, model_name, args
     """
@@ -48,8 +56,14 @@ def build_model(
     cfg : YACS CN object
         Configuration.
 
-    output_channels : int
-        Number of output channels.
+    output_channels : List[int]
+        Number of output channels for each head.
+
+    output_channel_info : List[str]
+        Information about each output channel.
+
+    head_activations : List[str]
+        Activation functions for each output head.
 
     device : Torch device
         Using device. Most commonly "cpu" or "cuda" for GPU, but also potentially "mps",
@@ -100,51 +114,41 @@ def build_model(
             upsample_layer=cfg.MODEL.UPSAMPLE_LAYER,
             z_down=cfg.MODEL.Z_DOWN,
             output_channels=output_channels,
+            output_channel_info=output_channel_info,
+            head_activations=head_activations,
+            explicit_activations=False,
             contrast=cfg.LOSS.CONTRAST.ENABLE,
             contrast_proj_dim=cfg.LOSS.CONTRAST.PROJ_DIM,
-            activations=activations,
-            explicit_activations=False,
+            separated_decoders=cfg.PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD,
+            isotropy=cfg.MODEL.ISOTROPY,
+            larger_io=cfg.MODEL.LARGER_IO,
         )
         if modelname == "unet":
             callable_model = U_Net  # type: ignore
         elif modelname == "resunet":
             callable_model = ResUNet  # type: ignore
-            args["isotropy"] = cfg.MODEL.ISOTROPY
-            args["larger_io"] = cfg.MODEL.LARGER_IO
         elif modelname == "resunet++":
             callable_model = ResUNetPlusPlus  # type: ignore
         elif modelname == "attention_unet":
             callable_model = Attention_U_Net  # type: ignore
         elif modelname == "seunet":
             callable_model = SE_U_Net  # type: ignore
-            args["isotropy"] = cfg.MODEL.ISOTROPY
-            args["larger_io"] = cfg.MODEL.LARGER_IO
         elif modelname == "resunet_se":
             callable_model = ResUNet_SE  # type: ignore
-            args["isotropy"] = cfg.MODEL.ISOTROPY
-            args["larger_io"] = cfg.MODEL.LARGER_IO
         elif modelname in ["unext_v1", "unext_v2"]:
-            args = dict(
-                image_shape=cfg.DATA.PATCH_SIZE,
-                feature_maps=cfg.MODEL.FEATURE_MAPS,
-                upsample_layer=cfg.MODEL.UPSAMPLE_LAYER,
-                z_down=cfg.MODEL.Z_DOWN,
-                cn_layers=cfg.MODEL.CONVNEXT_LAYERS,
-                layer_scale=cfg.MODEL.CONVNEXT_LAYER_SCALE,
-                stochastic_depth_prob=cfg.MODEL.CONVNEXT_SD_PROB,
-                isotropy=cfg.MODEL.ISOTROPY,
-                stem_k_size=cfg.MODEL.CONVNEXT_STEM_K_SIZE,
-                output_channels=output_channels,
-                contrast=cfg.LOSS.CONTRAST.ENABLE,
-                contrast_proj_dim=cfg.LOSS.CONTRAST.PROJ_DIM,
-                activations=activations,
-                explicit_activations=False,
-            )
+            args["cn_layers"] = cfg.MODEL.CONVNEXT_LAYERS
+            args["stochastic_depth_prob"] = cfg.MODEL.CONVNEXT_SD_PROB
+            args["stem_k_size"] = cfg.MODEL.CONVNEXT_STEM_K_SIZE
+            del args["activation"] # ConvNeXt uses GELU activation by default
+            del args["drop_values"] # ConvNeXt uses DropPath for regularization, not standard dropout
+            del args["normalization"] # ConvNeXt uses LayerNorm, not BatchNorm or GroupNorm
+            del args["k_size"] # ConvNeXt uses 7x7 kernels in the early layers, but this is fixed in the model definition
+            del args["larger_io"] # ConvNeXt does not use larger input/output layers, but this is fixed in the model definition
             if modelname == "unext_v1":
                 callable_model = U_NeXt_V1  # type: ignore
+                args["layer_scale"] = cfg.MODEL.CONVNEXT_LAYER_SCALE
             else:
                 callable_model = U_NeXt_V2  # type: ignore
-                del args["layer_scale"]
 
         if cfg.PROBLEM.TYPE == "SUPER_RESOLUTION":
             args["upsampling_factor"] = cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING
@@ -163,7 +167,8 @@ def build_model(
             contrast=cfg.LOSS.CONTRAST.ENABLE,
             contrast_proj_dim=cfg.LOSS.CONTRAST.PROJ_DIM,
             head_type=cfg.MODEL.HRNET.HEAD_TYPE,
-            activations=activations,
+            head_activations=head_activations,
+            output_channel_info=output_channel_info,
             explicit_activations=False,
         )
 
@@ -209,12 +214,25 @@ def build_model(
         network_stride = [4, 4]
         if ndim == 3:
             network_stride = [4 if args["cfg"]["Z_DOWN"] else 1] + network_stride
+    elif "stunet" in modelname:
+        callable_model = STUNet  # type: ignore
+        args = dict(
+            image_shape=cfg.DATA.PATCH_SIZE,
+            output_channels=output_channels,
+            variant=cfg.MODEL.STUNET.VARIANT,
+            deep_supervision=False,
+            explicit_activations=False,
+            head_activations=head_activations,
+            output_channel_info=output_channel_info,
+        )
+        model = build_stunet(**args) # type: ignore
     else:
         if modelname == "simple_cnn":
             args = dict(
                 image_shape=cfg.DATA.PATCH_SIZE,
                 activation=cfg.MODEL.ACTIVATION.lower(),
                 n_classes=cfg.DATA.N_CLASSES,
+                head_activations=head_activations,
             )
             model = simple_CNN(**args)  # type: ignore
             callable_model = simple_CNN  # type: ignore
@@ -269,6 +287,9 @@ def build_model(
                 mlp_ratio=cfg.MODEL.VIT_MLP_RATIO,
                 num_filters=cfg.MODEL.UNETR_VIT_NUM_FILTERS,
                 output_channels=output_channels,
+                output_channel_info=output_channel_info,
+                head_activations=head_activations,
+                explicit_activations=False,
                 decoder_activation=cfg.MODEL.UNETR_DEC_ACTIVATION.lower(),
                 ViT_hidd_mult=cfg.MODEL.UNETR_VIT_HIDD_MULT,
                 normalization=cfg.MODEL.NORMALIZATION,
@@ -276,8 +297,6 @@ def build_model(
                 k_size=cfg.MODEL.UNETR_DEC_KERNEL_SIZE,
                 contrast=cfg.LOSS.CONTRAST.ENABLE,
                 contrast_proj_dim=cfg.LOSS.CONTRAST.PROJ_DIM,
-                activations=activations,
-                explicit_activations=False,
             )
             model = UNETR(**args)  # type: ignore
             callable_model = UNETR  # type: ignore
@@ -780,7 +799,15 @@ def check_bmz_args(
     workflow_specs["ndim"] = cfg.PROBLEM.NDIM
     workflow_specs["nclasses"] = cfg.DATA.N_CLASSES
 
-    preproc_info, error, error_message, opts = check_bmz_model_compatibility(model_dict, workflow_specs=workflow_specs)
+    (
+        preproc_info, 
+        error, 
+        error_message, 
+        opts
+    ) = check_bmz_model_compatibility(
+        model_dict, 
+        workflow_specs=workflow_specs, 
+    )
 
     if error:
         raise ValueError(f"Model {model_ID} can not be used in BiaPy. Message:\n{error_message}\n")
@@ -952,7 +979,7 @@ def check_bmz_model_compatibility(
             ):
                 channel_code = ["F", "C", "M"]
 
-            # Handle multihead
+            # Handle separated_class_channel
             assert isinstance(channels, list)
             if len(channels) == 2:
                 classes = channels[-1]
@@ -1013,8 +1040,11 @@ def check_bmz_model_compatibility(
                     _axes_order += "c"
                     input_image_shape += [1]
                 elif "id" in axis:
+                    if isinstance(axis.get("size"), int):
+                        input_image_shape += [axis["size"]]
+                    elif isinstance(axis.get("size"), dict) and "min" in axis["size"]:
+                        input_image_shape += [axis["size"]["min"]]
                     _axes_order += axis["id"]
-                    input_image_shape += [axis["size"]]
             elif "id" in axis:
                 if axis["id"] == "channel":
                     _axes_order += "c" 
@@ -1027,6 +1057,11 @@ def check_bmz_model_compatibility(
                     _axes_order += axis["id"]
         axes_order = _axes_order
     
+    for x in input_image_shape:
+        if not isinstance(x, int):
+            reason_message = f"[{specific_workflow}] couldn't extract input image shape from model RDF: {input_image_shape}\n"
+            return preproc_info, True, reason_message, opts
+
     try:
         opts["DATA.PATCH_SIZE"] = tuple(input_image_shape[2:] + [input_image_shape[1]]) # (z) y x c
     except Exception:
@@ -1085,6 +1120,7 @@ def check_bmz_model_compatibility(
                         "fixed_zero_mean_unit_variance",
                         "scale_range",
                         "scale_linear",
+                        "clip"
                     ]:
                         reason_message = (
                             f"[{specific_workflow}] Not recognized preprocessing found: {proc_id}\n"
@@ -1118,19 +1154,25 @@ def check_bmz_model_compatibility(
                         # scale_range -> scale_range (+ optional PERC_CLIP)
                         elif proc_id == "scale_range":
                             opts["DATA.NORMALIZATION.TYPE"] = "scale_range"
-
+                            min_percentile = float(preproc_info["kwargs"].get("min_percentile", 0))
+                            max_percentile = float(preproc_info["kwargs"].get("max_percentile", 100))
                             # Check if there is percentile clipping
-                            if (
-                                float(preproc_info["kwargs"]["min_percentile"]) != 0
-                                or float(preproc_info["kwargs"]["max_percentile"]) != 100
-                            ):
+                            if min_percentile != 0 or max_percentile != 100:
                                 opts["DATA.NORMALIZATION.PERC_CLIP.ENABLE"] = True
-                                opts["DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC"] = float(
-                                    preproc_info["kwargs"]["min_percentile"]
-                                )
-                                opts["DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC"] = float(
-                                    preproc_info["kwargs"]["max_percentile"]
-                                )
+                                opts["DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC"] = min_percentile
+                                opts["DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC"] = max_percentile
+                        elif proc_id == "clip":
+                            opts["DATA.NORMALIZATION.PERC_CLIP.ENABLE"] = True
+                            min_percentile = float(preproc_info["kwargs"].get("min_percentile", 0))
+                            max_percentile = float(preproc_info["kwargs"].get("max_percentile", 100))
+                            max_value = float(preproc_info["kwargs"].get("max_value", -1))
+                            min_value = float(preproc_info["kwargs"].get("min_value", -1))
+                            if min_percentile != 0 or max_percentile != 100:
+                                opts["DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC"] = min_percentile
+                                opts["DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC"] = max_percentile
+                            elif min_value != -1 or max_value != -1:
+                                opts["DATA.NORMALIZATION.PERC_CLIP.LOWER_VALUE"] = min_value
+                                opts["DATA.NORMALIZATION.PERC_CLIP.UPPER_VALUE"] = max_value
                 else:
                     reason_message = (
                         f"[{specific_workflow}] Not recognized preprocessing structure found: {preproc_info}\n"
@@ -1143,6 +1185,37 @@ def check_bmz_model_compatibility(
             f"[{specific_workflow}] Currently no postprocessing is supported. Found: {model_kwargs['postprocessing']}\n"
         )
         return preproc_info, True, reason_message, opts
+
+    # --------- Dependency checks ---------
+    if "dependencies" in weights and weights["dependencies"] is not None:
+        try:
+            nickname = model_rdf.get("nickname") or model_rdf.get("alias")
+        except Exception:
+            return preproc_info, True, f"[{specific_workflow}] Couldn't extract model nickname from model description for dependency check.\n", opts
+        try:
+            current_model = load_description(nickname)
+        except Exception:
+            return preproc_info, True, f"[{specific_workflow}] Couldn't load model for dependency check.\n", opts
+        
+        ok, msg = True, ""
+        try:
+            deps = current_model.weights.pytorch_state_dict.dependencies
+            if deps is None:
+                # nothing to check
+                ok, msg = True, ""
+            elif hasattr(deps, "get_reader"):
+                # newer spec: dependencies is (or behaves like) a FileDescr
+                yaml_reader = deps.get_reader()
+                ok, msg = can_import_env_deps(yaml_reader)
+            else:
+                # v0.4 spec: deps is a Dependencies object with a .file FileSource_
+                # (see DependenciesNode.file in v0_4.py)
+                yaml_reader = download(deps.file)  # returns a file-like BytesReader
+                ok, msg = can_import_env_deps(yaml_reader) 
+        except Exception:            
+            return preproc_info, True, f"[{specific_workflow}] Couldn't read dependencies file for dependency check.\n", opts
+        if not ok:
+            return preproc_info, True, f"[{specific_workflow}] Model has incompatible dependencies: {msg}\n", opts
 
     # All checks passed
     return preproc_info, False, "", opts
@@ -1335,3 +1408,97 @@ def build_torchvision_model(cfg: CN, device: torch.device) -> Tuple[nn.Module, C
     )
 
     return model, model_torchvision_weights.transforms()
+
+def can_import_env_deps(
+    yaml_reader,
+    import_overrides={'pyyaml': 'yaml', 'scikit-learn': 'sklearn'},
+    allowlist: Optional[Iterable[str]] = {"pytorch", "torch", "pytorch-cuda", "pytorch-mutex", "torchvision"},
+) -> Tuple[bool, str]:
+    """
+    Check if all dependencies listed in a conda-style environment yaml file can be imported.
+    Dependencies whose *distribution name* is in `allowlist` are ignored.
+
+    Parameters
+    ----------
+    yaml_reader : file-like object
+      Provides the content of a conda-style environment yaml file.
+
+    import_overrides : dict, optional
+      Map dist name -> import name (e.g. {'pyyaml': 'yaml'}).
+
+    allowlist : Iterable[str], optional
+      Dist names to ignore if they fail import/version checks (case-insensitive).
+      Example: {"pytorch", "torch", "pytorch-cuda"}
+
+    Returns
+    -------
+    ok : bool
+    msg : str
+    """
+    import_overrides = {k.lower(): v for k, v in (import_overrides or {}).items()}
+    allow = {a.lower() for a in (allowlist or [])}
+
+    raw = yaml_reader.read()
+    if isinstance(raw, bytes):
+        text = raw.decode("utf-8", errors="replace")
+    else:
+        text = str(raw)
+
+    doc = yaml.safe_load(text) or {}
+    deps = doc.get("dependencies", []) if isinstance(doc, dict) else []
+
+    failures = []
+
+    def normalize_dist(dist: str) -> str:
+        # normalize to compare in allowlist
+        return dist.strip().lower()
+
+    def is_allowed(dist: str) -> bool:
+        d = normalize_dist(dist)
+        return d in allow
+
+    def dist_to_import_name(dist: str) -> str:
+        # Most common mapping: "foo-bar" -> "foo_bar"
+        d = dist.lower()
+        return import_overrides.get(d, dist.replace("-", "_"))
+
+    def try_import(dist: str):
+        if is_allowed(dist):
+            return
+        mod = dist_to_import_name(dist)
+        try:
+            importlib.import_module(mod)
+        except Exception:
+            failures.append(dist)
+
+    # Check conda-style deps and pip deps
+    for item in deps:
+        if isinstance(item, str):
+            s = item.strip()
+            low = s.lower()
+
+            if low.startswith("python="):
+                m = re.match(r"python\s*=\s*(\d+)\.(\d+)", low)
+                if m:
+                    req_major, req_minor = int(m.group(1)), int(m.group(2))
+                    if (sys.version_info.major, sys.version_info.minor) != (req_major, req_minor):
+                        failures.append(f"python={req_major}.{req_minor}")
+
+            elif low == "pip":
+                continue
+
+            else:
+                # take dist name before any version/marker extras
+                dist = re.split(r"[<>=!~\[]", s, maxsplit=1)[0].strip()
+                if dist:
+                    try_import(dist)
+
+        elif isinstance(item, dict) and "pip" in item and isinstance(item["pip"], list):
+            for req in item["pip"]:
+                req = str(req).strip()
+                dist = re.split(r"[<>=!~\[]", req, maxsplit=1)[0].strip()
+                if dist:
+                    try_import(dist)
+
+    ok = len(failures) == 0
+    return ok, ("" if ok else ", ".join(failures))

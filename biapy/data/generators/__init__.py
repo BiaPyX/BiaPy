@@ -6,7 +6,7 @@ augmenting, and batching image and mask data for deep learning workflows in BiaP
 It supports 2D and 3D data, chunked loading, distributed training, and advanced
 augmentation pipelines.
 """
-import os
+import torch
 from typing import List, Dict, Any, Tuple, Optional
 from torch.utils.data import (
     DistributedSampler,
@@ -26,15 +26,17 @@ from biapy.data.generators.single_data_3D_generator import Single3DImageDataGene
 from biapy.data.generators.test_pair_data_generators import test_pair_data_generator
 from biapy.data.generators.test_single_data_generator import test_single_data_generator
 from biapy.data.generators.chunked_test_pair_data_generator import chunked_test_pair_data_generator
+from biapy.data.generators.chunked_workflow_process_generator import chunked_workflow_process_generator
 from biapy.data.pre_processing import preprocess_data
 from biapy.data.data_manipulation import save_tif
 from biapy.data.dataset import BiaPyDataset
 from biapy.data.norm import Normalization
-from biapy.utils.misc import get_rank, get_world_size, is_dist_avail_and_initialized, os_walk_clean
+from biapy.utils.misc import get_rank, get_world_size, is_dist_avail_and_initialized, os_walk_clean, is_main_process
 from biapy.models.bmz_utils import extract_BMZ_sample_and_cover
 
 def create_train_val_augmentors(
     cfg: CN,
+    system_dict: Dict[str, Any],
     X_train: BiaPyDataset,
     X_val: BiaPyDataset,
     norm_module: Normalization,
@@ -48,6 +50,13 @@ def create_train_val_augmentors(
     ----------
     cfg : Config
         BiaPy configuration.
+
+    system_dict : dict
+        System dictionary containing:
+            * 'cpu_budget': int, Total CPU budget.
+            * 'cpu_per_rank': int, CPU budget per rank.
+            * 'main_threads': int, Number of main threads.
+            * 'num_workers_hint': int, Hint for the number of workers.
 
     X_train : BiaPyDataset
         Loaded train X data.
@@ -307,20 +316,33 @@ def create_train_val_augmentors(
     total_batch_size = cfg.TRAIN.BATCH_SIZE * get_world_size() * cfg.TRAIN.ACCUM_ITER
     training_samples = len(train_generator)
 
+    # ---- Choose num_workers for this DataLoader ----
+    # Priority:
+    # 1) If user explicitly set SYSTEM.NUM_WORKERS != -1 => respect it
+    # 2) Else use the precomputed hint from startup
+    if cfg.SYSTEM.NUM_WORKERS != -1:
+        num_workers = max(0, int(cfg.SYSTEM.NUM_WORKERS))
+    else:
+        # Use the value computed earlier at startup
+        num_workers = int(system_dict.get("num_workers_hint", 0))
+
+    # Don't spawn more workers than samples (helps tiny datasets / edge cases)
+    num_workers = min(num_workers, training_samples) if training_samples > 0 else 0
+
+    # Ensure DataLoader workers don't each spawn many threads
+    def worker_init_fn(worker_id):
+        torch.set_num_threads(1)
+
     # Set num_workers
     if is_dist_avail_and_initialized() and cfg.SYSTEM.NUM_GPUS >= 1:
-        DataLoader_shuffle = None
-        if cfg.SYSTEM.NUM_WORKERS == -1:
-            num_workers = 2 * cfg.SYSTEM.NUM_GPUS
-        else:
-            # To not create more than 2 processes per GPU
-            num_workers = min(cfg.SYSTEM.NUM_WORKERS, 2 * cfg.SYSTEM.NUM_GPUS)
         sampler_train = DistributedSampler(
-            train_generator, num_replicas=get_world_size(), rank=get_rank(), shuffle=True
+            train_generator,
+            num_replicas=get_world_size(),
+            rank=get_rank(),
+            shuffle=True
         )
+        DataLoader_shuffle = False  # IMPORTANT: shuffle must be False when sampler is used
     else:
-        # Reduce number of workers in case there is no training data
-        num_workers = min(5, training_samples) if cfg.SYSTEM.NUM_WORKERS == -1 else cfg.SYSTEM.NUM_WORKERS
         sampler_train = None
         DataLoader_shuffle = True
 
@@ -335,8 +357,11 @@ def create_train_val_augmentors(
         sampler=sampler_train,
         batch_size=cfg.TRAIN.BATCH_SIZE,
         num_workers=num_workers,
-        pin_memory=cfg.SYSTEM.PIN_MEM,
+        pin_memory=(cfg.SYSTEM.PIN_MEM and cfg.SYSTEM.NUM_GPUS > 0),
         drop_last=False,
+        worker_init_fn=worker_init_fn,
+        persistent_workers=(num_workers > 0),
+        prefetch_factor=2 if num_workers > 0 else None,
     )
 
     # Save a sample to export the model to BMZ
@@ -370,18 +395,30 @@ def create_train_val_augmentors(
                 "This will slightly alter validation results as extra duplicate entries are added to achieve "
                 "equal num of samples per-process."
             )
-        sampler_val = DistributedSampler(val_generator, num_replicas=get_world_size(), rank=get_rank(), shuffle=False)
+        sampler_val = DistributedSampler(
+            val_generator,
+            num_replicas=get_world_size(),
+            rank=get_rank(),
+            shuffle=False
+        )
     else:
         sampler_val = SequentialSampler(val_generator)
+
+    # Don't spawn more workers than validation samples
+    val_samples = len(val_generator)
+    num_workers_val = min(num_workers, val_samples) if val_samples > 0 else 0
 
     val_dataset = DataLoader(
         val_generator,
         sampler=sampler_val,
         batch_size=cfg.TRAIN.BATCH_SIZE,
-        num_workers=num_workers,
-        pin_memory=cfg.SYSTEM.PIN_MEM,
+        num_workers=num_workers_val,
+        pin_memory=(cfg.SYSTEM.PIN_MEM and cfg.SYSTEM.NUM_GPUS > 0),
         drop_last=False,
         shuffle=False,
+        worker_init_fn=worker_init_fn,
+        persistent_workers=(num_workers_val > 0),
+        prefetch_factor=2 if num_workers_val > 0 else None,
     )
 
     return train_dataset, val_dataset, data_norm, num_training_steps_per_epoch, bmz_input_sample, cover_raw, cover_gt
@@ -474,8 +511,8 @@ def create_test_generator(
     else:
         bmz_input_sample, mask_sample, _, _, _, _ = test_generator.load_sample(0, first_load=True) # type: ignore
     bmz_input_sample, cover_raw, cover_gt = extract_BMZ_sample_and_cover(
-        img=bmz_input_sample[0] if isinstance(bmz_input_sample, np.ndarray) else bmz_input_sample,
-        img_gt=mask_sample[0] if isinstance(mask_sample, np.ndarray) else mask_sample,
+        img=bmz_input_sample[0] if (isinstance(bmz_input_sample, np.ndarray) and not cfg.TEST.BY_CHUNKS.ENABLE) else bmz_input_sample,
+        img_gt=mask_sample[0] if (isinstance(mask_sample, np.ndarray) and not cfg.TEST.BY_CHUNKS.ENABLE) else mask_sample,
         patch_size=cfg.DATA.PATCH_SIZE,
         is_3d=cfg.PROBLEM.NDIM == "3D",
         input_axis_order=cfg.DATA.TEST.INPUT_IMG_AXES_ORDER,
@@ -519,6 +556,7 @@ def by_chunks_collate_fn(data):
 
 def create_chunked_test_generator(
     cfg: CN,
+    system_dict: Dict[str, Any],
     current_sample: Dict,
     norm_module: Normalization,
     out_dir: str,
@@ -536,12 +574,23 @@ def create_chunked_test_generator(
     ----------
     cfg : CN
         BiaPy configuration node.
+    
+    system_dict : dict
+        System dictionary containing:
+            * 'cpu_budget': int, Total CPU budget.
+            * 'cpu_per_rank': int, CPU budget per rank.
+            * 'main_threads': int, Number of main threads.  
+            * 'num_workers_hint': int, Hint for the number of workers.
+
     current_sample : dict
         Dictionary containing the sample to process (e.g., file pointers, data arrays).
+
     norm_module : Normalization
         Normalization module to apply to the data.
+
     out_dir : str
         Output directory to save results.
+
     dtype_str : str
         Data type string for output files.
 
@@ -564,28 +613,160 @@ def create_chunked_test_generator(
         instance_problem = cfg.PROBLEM.TYPE == "INSTANCE_SEG",
     )
 
-    # Set num_workers
-    if is_dist_avail_and_initialized() and cfg.SYSTEM.NUM_GPUS >= 1:
-        if cfg.SYSTEM.NUM_WORKERS == -1:
-            num_workers = 2 * cfg.SYSTEM.NUM_GPUS
-        else:
-            # To not create more than 2 processes per GPU
-            num_workers = min(cfg.SYSTEM.NUM_WORKERS, 2 * cfg.SYSTEM.NUM_GPUS)
+    # ---- Choose num_workers for this DataLoader ----
+    # Priority:
+    # 1) Respect explicit SYSTEM.NUM_WORKERS if set
+    # 2) Else reuse the precomputed hint from startup (system_dict["num_workers_hint"])
+    if cfg.SYSTEM.NUM_WORKERS != -1:
+        num_workers = max(0, int(cfg.SYSTEM.NUM_WORKERS))
     else:
-        num_workers = 5 if cfg.SYSTEM.NUM_WORKERS == -1 else cfg.SYSTEM.NUM_WORKERS
-    print(f"Test generator with {num_workers} workers")
+        num_workers = int(system_dict.get("num_workers_hint", 0))
+
+    # Cap by dataset length if the generator supports __len__
+    try:
+        n_chunks = len(chunked_generator)  # may raise TypeError if __len__ not implemented
+        if n_chunks > 0:
+            num_workers = min(num_workers, n_chunks)
+        else:
+            num_workers = 0
+    except TypeError:
+        # length unknown -> keep computed num_workers
+        pass
+
+    # Ensure DataLoader workers don't each spawn many threads
+    def worker_init_fn(worker_id):
+        torch.set_num_threads(1)
+
+    if is_main_process():
+        print(f"Chunked test generator with {num_workers} workers")
 
     test_dataset = DataLoader(
         chunked_generator,
         batch_size=cfg.TRAIN.BATCH_SIZE,
         num_workers=num_workers,
         collate_fn=by_chunks_collate_fn,
-        pin_memory=cfg.SYSTEM.PIN_MEM,
+        pin_memory=(cfg.SYSTEM.PIN_MEM and cfg.SYSTEM.NUM_GPUS > 0),
         drop_last=False,
+        worker_init_fn=worker_init_fn,
+        persistent_workers=(num_workers > 0),
+        prefetch_factor=2 if num_workers > 0 else None,
     )
 
     return test_dataset
 
+def by_chunks_workflow_collate_fn(data):
+    """
+    Collate function to avoid the default one with type checking. It does nothing speciall but stack the images.
+
+    Parameters
+    ----------
+    data : tuple
+        Data tuple.
+
+    Returns
+    -------
+    data : tuple
+        Stacked data in batches.
+    """
+    return (
+        [x[0] for x in data],
+        [x[1] for x in data],
+        [x[2] for x in data],
+    )
+
+def create_chunked_workflow_process_generator(
+    cfg: CN,
+    system_dict: Dict[str, Any],
+    model_predictions: str,
+    out_dir: str,
+    dtype_str: str,
+) -> DataLoader:
+    """
+    Create a DataLoader for chunked test data using chunked_workflow_process_generator.
+
+    This function sets up a generator for efficient inference on large volumetric datasets
+    by processing data in chunks. It configures the generator with the appropriate axes,
+    patch size, padding, and normalization, and wraps it in a PyTorch DataLoader with
+    optimal worker settings for distributed or single-GPU environments.
+
+    Parameters
+    ----------
+    cfg : CN
+        BiaPy configuration node.
+    
+    system_dict : dict
+        System dictionary containing:
+            * 'cpu_budget': int, Total CPU budget.
+            * 'cpu_per_rank': int, CPU budget per rank.
+            * 'main_threads': int, Number of main threads.  
+            * 'num_workers_hint': int, Hint for the number of workers.
+
+    model_predictions : str
+        Path to the model predictions to process.
+
+    out_dir : str
+        Output directory to save results.
+
+    dtype_str : str
+        Data type string for output files.
+
+    Returns
+    -------
+    test_dataset : DataLoader
+        PyTorch DataLoader wrapping the chunked test data generator.
+    """
+    if "C" not in cfg.DATA.TEST.INPUT_IMG_AXES_ORDER:
+        out_data_order = cfg.DATA.TEST.INPUT_IMG_AXES_ORDER + "C"
+    else:
+        out_data_order = cfg.DATA.TEST.INPUT_IMG_AXES_ORDER
+
+    chunked_generator = chunked_workflow_process_generator(
+        model_predictions=model_predictions,
+        input_axes=out_data_order,
+        crop_shape=cfg.DATA.PATCH_SIZE,
+        out_dir=out_dir,
+        dtype_str=dtype_str,
+    )
+
+    # ---- Choose num_workers for this DataLoader ----
+    # Priority:
+    # 1) Respect explicit SYSTEM.NUM_WORKERS if set
+    # 2) Else reuse the precomputed hint from startup (system_dict["num_workers_hint"])
+    if cfg.SYSTEM.NUM_WORKERS != -1:
+        num_workers = max(0, int(cfg.SYSTEM.NUM_WORKERS))
+    else:
+        num_workers = int(system_dict.get("num_workers_hint", 0))
+
+    # Cap by dataset length if the generator supports __len__
+    try:
+        n_chunks = len(chunked_generator)  # may raise TypeError if __len__ not implemented
+        if n_chunks > 0:
+            num_workers = min(num_workers, n_chunks)
+        else:
+            num_workers = 0
+    except TypeError:
+        # length unknown -> keep computed num_workers
+        pass
+
+    # Ensure DataLoader workers don't each spawn many threads
+    def worker_init_fn(worker_id):
+        torch.set_num_threads(1)
+
+    print(f"Chunked test generator with {num_workers} workers")
+
+    test_dataset = DataLoader(
+        chunked_generator,
+        batch_size=cfg.TRAIN.BATCH_SIZE,
+        num_workers=num_workers,
+        collate_fn=by_chunks_workflow_collate_fn,
+        pin_memory=(cfg.SYSTEM.PIN_MEM and cfg.SYSTEM.NUM_GPUS > 0),
+        drop_last=False,
+        worker_init_fn=worker_init_fn,
+        persistent_workers=(num_workers > 0),
+        prefetch_factor=2 if num_workers > 0 else None,
+    )
+
+    return test_dataset
 
 def check_generator_consistence(
     gen: DataLoader, data_out_dir: str, mask_out_dir: str, filenames: List[str] | None = None
@@ -620,79 +801,3 @@ def check_generator_consistence(
             save_tif(np.expand_dims(X_test[k], 0), data_out_dir, fil, verbose=False)
             save_tif(np.expand_dims(Y_test[k], 0), mask_out_dir, fil, verbose=False)
             c += 1
-
-
-# To accelerate each first batch in epoch without need to.
-# Sources: https://discuss.pytorch.org/t/enumerate-dataloader-slow/87778/4
-#          https://github.com/huggingface/pytorch-image-models/pull/140/files
-# Explanation:
-# When using the data loader of pytorch, at the beginning of every epoch, we have to wait a
-# lot and the training speed is very low from the first iteration. It is because the pytorch
-# data loader is reinitialized from scratch. With this, we do not waste time, and just the
-# first initialization of the the dataloader at the first epoch takes time, but for the next
-# epochs, the first iteration of every new epoch is as fast as the iterations in the middle
-# of an epoch.
-class MultiEpochsDataLoader(DataLoader):
-    """
-    DataLoader that reuses workers across epochs for faster first-batch loading.
-
-    This class avoids the slow first batch at the start of every epoch by keeping
-    worker processes alive, improving training speed in PyTorch.
-    """
-
-    def __init__(self, *args, **kwargs):
-        """
-        Initialize the MultiEpochsDataLoader.
-
-        Parameters
-        ----------
-        *args : tuple
-            Arguments passed to the standard DataLoader.
-        **kwargs : dict
-            Keyword arguments passed to the standard DataLoader.
-        """
-        super().__init__(*args, **kwargs)
-        self._DataLoader__initialized = False
-        self.batch_sampler = _RepeatSampler(self.batch_sampler)
-        self._DataLoader__initialized = True
-        self.iterator = super().__iter__()
-
-    def __len__(self):
-        """
-        Return the number of batches.
-
-        Returns
-        -------
-        int
-            Number of batches in the dataset.
-        """
-        return len(self.batch_sampler.sampler)  # type: ignore
-
-    def __iter__(self):
-        """
-        Iterate over the batches.
-
-        Yields
-        ------
-        batch : Any
-            Next batch from the iterator.
-        """
-        for i in range(len(self)):
-            yield next(self.iterator)
-
-
-class _RepeatSampler(object):
-    """
-    Sampler that repeats forever.
-
-    Parameters
-    ----------
-    sampler (Sampler)
-    """
-
-    def __init__(self, sampler):
-        self.sampler = sampler
-
-    def __iter__(self):
-        while True:
-            yield from iter(self.sampler)

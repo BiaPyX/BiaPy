@@ -13,7 +13,6 @@ from shutil import copyfile
 import numpy as np
 import importlib
 from yacs.config import CfgNode as CN
-import multiprocessing
 from typing import (
     Optional,
     Dict,
@@ -41,7 +40,7 @@ from bioimageio.spec.model.v0_5 import (
     WeightsDescr,
     ArchitectureFromFileDescr,
     ModelDescr,
-    EnvironmentFileDescr,
+    FileDescr_dependencies,
 )
 from packaging.version import Version
 from bioimageio.spec._internal.io_basics import Sha256
@@ -55,7 +54,9 @@ from biapy.utils.misc import (
     set_seed,
     get_rank,
     is_main_process,
+    get_world_size,
     setup_for_distributed,
+    compute_threads_and_workers,
 )
 from biapy.models.bmz_utils import (
     create_model_doc,
@@ -193,10 +194,15 @@ class BiaPy:
 
         # GPU selection
         os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+        os.environ["CUDA_VISIBLE_DEVICES"] = self.args.gpu
+
         opts = []
-        if self.args.gpu:
+        if self.args.gpu != "" and torch.cuda.is_available() and torch.cuda.device_count() > 0:
             os.environ["CUDA_VISIBLE_DEVICES"] = self.args.gpu
             self.num_gpus = len(np.unique(np.array(self.args.gpu.strip().split(","))))
+            opts.extend(["SYSTEM.NUM_GPUS", self.num_gpus])
+        else:
+            self.num_gpus = 0
             opts.extend(["SYSTEM.NUM_GPUS", self.num_gpus])
 
         # GPU management
@@ -208,15 +214,23 @@ class BiaPy:
         set_seed(self.cfg.SYSTEM.SEED)
 
         # Number of CPU calculation
-        if self.cfg.SYSTEM.NUM_CPUS == -1:
-            self.cpu_count = multiprocessing.cpu_count()
-        else:
-            self.cpu_count = self.cfg.SYSTEM.NUM_CPUS
-        if self.cpu_count < 1:
-            self.cpu_count = 1  # At least 1 CPU
-        torch.set_num_threads(self.cpu_count)
-        self.cfg.merge_from_list(["SYSTEM.NUM_CPUS", self.cpu_count])
+        cpu_budget, cpu_per_rank, main_threads, num_workers = compute_threads_and_workers(
+            user_num_cpus=self.cfg.SYSTEM.NUM_CPUS,
+            world_size=get_world_size(),
+            training_samples=None,
+            max_workers_cap=8,  # To avoid too many workers that can lead to memory issues
+        )
+        # Set threads for the main (rank) process
+        torch.set_num_threads(main_threads)
+        torch.set_num_interop_threads(1)
+        self.cfg.merge_from_list(["SYSTEM.NUM_CPUS", cpu_budget])
 
+        print(
+            f"CPU budget(total)={cpu_budget} | per_rank={cpu_per_rank} | "
+            f"main_threads={main_threads} | num_workers(per_rank)={num_workers} | "
+            f"world_size={get_world_size()}"
+        )
+        
         check_configuration(self.cfg, self.job_identifier)
         print("Configuration details:")
         print(self.cfg)
@@ -234,7 +248,18 @@ class BiaPy:
         print("*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*")
         print(f"Initializing {name}")
         print("*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*\n")
-        self.workflow = getattr(mdl, name)(self.cfg, self.job_identifier, self.device, self.args)
+        self.workflow = getattr(mdl, name)(
+            self.cfg, 
+            self.job_identifier, 
+            self.device, 
+            system_dict={
+                "cpu_budget": cpu_budget,
+                "cpu_per_rank": cpu_per_rank,
+                "main_threads": main_threads,
+                "num_workers_hint": num_workers,
+            }, 
+            args=self.args
+        )
 
     def train(self):
         """Call training phase."""
@@ -572,24 +597,34 @@ class BiaPy:
                         "There is no information about covers. You can: 1) provide it using bmz_config['covers'] or run the training phase, by calling train() or run_job() functions, so a cover can be generated."
                     )
 
-        # Preprocessing
-        # Actually Torchvision has its own preprocessing but it can not be adapted to BMZ easily, so for now
-        # we set it like we were using BiaPy backend
-
-        # TODO: waiting to implement percentile clipping to add ours:
-        #    https://github.com/bioimage-io/spec-bioimage-io/issues/665#issuecomment-2497953374
         # Add percentile norm
-        # if self.cfg.DATA.NORMALIZATION.PERC_CLIP:
-        #     min_percentile, max_percentile = 0, 100
-        #     if self.cfg.DATA.NORMALIZATION.PERC_CLIP:
-        #         min_percentile = self.cfg.DATA.NORMALIZATION.PERC_LOWER
-        #         max_percentile = self.cfg.DATA.NORMALIZATION.PERC_UPPER
-        #     perc_instructions = {
-        #         "axes": axes,
-        #         "max_percentile": max_percentile,
-        #         "min_percentile": min_percentile,
-        #     }
-        #     preprocessing[0]["kwargs"].update(perc_instructions)
+        preprocessing = []
+        if self.cfg.DATA.NORMALIZATION.PERC_CLIP.ENABLE:
+            min_percentile = max(self.cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC, 0)
+            max_percentile = min(self.cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC, 100)
+            if min_percentile != 0 or max_percentile != 100:
+                preprocessing.append(
+                    {
+                        "id": "clip",
+                        "kwargs": {
+                            "max_percentile": max_percentile,
+                            "min_percentile": min_percentile,
+                        },
+                    }
+                )
+            else:
+                lower_value = self.cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_VALUE
+                upper_value = self.cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_VALUE
+                if lower_value != -1 or upper_value != -1:
+                    preprocessing.append(
+                        {
+                            "id": "clip",
+                            "kwargs": {
+                                "max_value": upper_value if upper_value != -1 else None,
+                                "min_value": lower_value if lower_value != -1 else None,
+                            },
+                        }
+                    )
 
         if self.cfg.DATA.NORMALIZATION.TYPE == "div":
             max_val = 255
@@ -600,16 +635,16 @@ class BiaPy:
                 if test_input.max() > max_val:
                     max_val = 65535
 
-            preprocessing = [
+            preprocessing.append(
                 {
                     "id": "scale_linear",
                     "kwargs": {"gain": float(1 / max_val), "offset": 0},
                 }
-            ]
+            )
         elif self.cfg.DATA.NORMALIZATION.TYPE == "scale_range":
             axes = ["channel"]
             axes += list("zyx") if self.cfg.PROBLEM.NDIM == "3D" else list("yx")
-            preprocessing = [
+            preprocessing.append(
                 {
                     "id": "scale_range",
                     "kwargs": {
@@ -618,13 +653,13 @@ class BiaPy:
                         "axes": axes,
                     },
                 }
-            ]
+            )
         else:  # zero_mean_unit_variance
             custom_mean = self.cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.MEAN_VAL
             custom_std = self.cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.STD_VAL
 
             if custom_mean != -1 and custom_std != -1:
-                preprocessing = [
+                preprocessing.append(
                     {
                         "id": "fixed_zero_mean_unit_variance",
                         "kwargs": {
@@ -632,18 +667,18 @@ class BiaPy:
                             "std": custom_std,
                         },
                     }
-                ]
+                )
             else:
                 axes = ["channel"]
                 axes += list("zyx") if self.cfg.PROBLEM.NDIM == "3D" else list("yx")
-                preprocessing = [
+                preprocessing.append(
                     {
                         "id": "zero_mean_unit_variance",
                         "kwargs": {
                             "axes": axes,
                         },
                     }
-                ]
+                )
 
         print("Pre-processing: {}".format(preprocessing))
 
@@ -1050,7 +1085,7 @@ class BiaPy:
             # Only if timm is required we create the env file
             if any([x for x in self.workflow.bmz_config["all_import_lines"] if "timm" in x]):
                 env_file_path = create_environment_file_for_model(building_dir)
-                env_descriptor = EnvironmentFileDescr(
+                env_descriptor = FileDescr_dependencies(
                     source=Path(env_file_path), sha256=Sha256(create_file_sha256sum(env_file_path))
                 )
         else:

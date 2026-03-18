@@ -429,11 +429,12 @@ class HighResolutionNet(nn.Module):
         image_shape: Tuple[int, ...] = (256, 256, 1),
         normalization: str = "none",
         output_channels: List[int] = [1],
+        output_channel_info=["F"],
+        explicit_activations: bool = False  ,
+        head_activations: List[str] = ["ce_sigmoid"],
         contrast: bool = False,
         contrast_proj_dim: int = 256,
         head_type: str = "FCN",
-        explicit_activations: bool = False,
-        activations: List[List[str]] = [],
     ):
         """
         Implements a 2D/3D High-Resolution Net (HRNet) model.
@@ -469,10 +470,20 @@ class HighResolutionNet(nn.Module):
             Defaults to "none".
 
         output_channels : List[int], optional
-            Specifies the number of output channels for the final prediction head(s).
-            Must be a list of length 1 for a single output task (e.g., semantic segmentation)
-            or length 2 for multi-head tasks (e.g., instances + classification in instance segmentation,
-            or points + classification in detection). Defaults to `[1]`.
+            Output channels of the network. If one value is provided, the model will have a single output head. 
+            If two values are provided, the model will have two output heads (e.g. for multi-task learning with 
+            instance segmentation and classification).
+
+        output_channel_info : list of str, optional
+            Information about the type of output channels. Possible values are:
+            - "X": where X is a letter, e.g. "F" for foreground, "D" for distance, "R" for rays, "C" for cpntours, etc.
+            - "class": classification (e.g. for multi-task learning)
+
+        explicit_activations : bool, optional
+            If True, uses explicit activation functions in the last layers.
+        
+        head_activations : List[str], optional
+            Activation functions to apply to each output head if `explicit_activations` is True.
 
         contrast : bool, optional
             If True, an additional projection head (`ProjectionHead`) is created to generate
@@ -486,9 +497,6 @@ class HighResolutionNet(nn.Module):
 
         explicit_activations : bool, optional
             If True, uses explicit activation functions in the last layers.
-        
-        activations : List[List[str]], optional
-            Activation functions to apply to the outputs if `explicit_activations` is True.
 
         Returns
         -------
@@ -499,8 +507,14 @@ class HighResolutionNet(nn.Module):
 
         if len(output_channels) == 0:
             raise ValueError("'output_channels' needs to has at least one value")
-        if len(output_channels) != 1 and len(output_channels) != 2:
-            raise ValueError(f"'output_channels' must be a list of one or two values at max, not {output_channels}")
+        if len(output_channels) > 2:
+            if contrast:
+                raise ValueError("If 'contrast' is True, 'output_channels' can only have two values at max: one for the main output and one for the class.")
+            if head_type != "FCN":
+                raise ValueError("If 'head_type' is not 'FCN', 'output_channels' can only have two values at max: one for the main output and one for the class.")
+        print("Selected output channels:")        
+        for i, info in enumerate(output_channel_info):
+            print(f"  - {i} channel for {info} output")
 
         self.blocks_dict = {
             "BASIC": HRBasicBlock, 
@@ -509,7 +523,8 @@ class HighResolutionNet(nn.Module):
             "CONVNEXT_V2": ConvNeXtBlock_V2,
         }
         self.output_channels = output_channels
-        self.multihead = len(output_channels) == 2
+        self.output_channel_info = output_channel_info
+        self.return_class = True if "class" in output_channel_info else False
         self.in_size = 64
         self.ndim = 3 if len(image_shape) == 4 else 2
         self.contrast = contrast
@@ -517,7 +532,11 @@ class HighResolutionNet(nn.Module):
         self.head_type = head_type
         self.explicit_activations = explicit_activations
         if self.explicit_activations:
-            self.out_activations, self.class_activation = prepare_activation_layers(activations)
+            assert len(head_activations) == sum(output_channels), "If 'explicit_activations' is True, 'head_activations' needs to "
+            "have the same number of values as 'output_channels'"
+            self.head_activations, self.class_head_activations = prepare_activation_layers(head_activations, output_channel_info)
+            if self.return_class and self.class_head_activations is None:
+                raise ValueError("If 'return_class' is True, 'head_activations' must be provided.")
 
         if self.ndim == 3:
             self.conv_call = nn.Conv3d
@@ -592,51 +611,57 @@ class HighResolutionNet(nn.Module):
 
         in_channels = sum(self.stage4_cfg["NUM_CHANNELS"])
 
-        if head_type == "ASPP":
-            self.last_block = nn.Sequential(
-                ASPP(
-                    conv=self.conv_call,
-                    in_dims=in_channels,
-                    out_dims=256,
-                    norm=normalization,
-                    rate=[6, 12, 18],
-                ),
-                self.conv_call(256, self.output_channels[0], kernel_size=1, padding=0, bias=True),
-            )  
-        elif head_type == "PSP":
-            self.last_block = nn.Sequential(
-                PSP(
-                    conv=self.conv_call,         
-                    in_dims=in_channels,
-                    out_dims=256,
-                    norm=normalization,         
-                    pool_sizes=[1, 2, 3, 6],      
-                ),
-                self.conv_call(256, self.output_channels[0], kernel_size=1, padding=0, bias=True),
-            )  
-        elif head_type == "OCR":
-            self.last_block = nn.Sequential(
-                OCRHead(
-                    conv=self.conv_call,         
-                    in_dims=in_channels,
-                    out_dims=256,
-                    num_classes=self.output_channels[0],
-                    norm=normalization,         
-                    key_dims=256,
-                    scale=1.0,  
-                ),
-                self.conv_call(256, self.output_channels[0], kernel_size=1, padding=0, bias=True),
-            )  
+        self.heads = nn.Sequential()
+        if head_type in ["ASPP", "PSP", "OCR"]:
+            if head_type == "ASPP":
+                self.heads.append(
+                    ASPP(
+                        conv=self.conv_call,
+                        in_dims=in_channels,
+                        out_dims=256,
+                        norm=normalization,
+                        rate=[6, 12, 18],
+                    )
+                )
+            elif head_type == "PSP":
+                self.heads.append(
+                    PSP(
+                        conv=self.conv_call,         
+                        in_dims=in_channels,
+                        out_dims=256,
+                        norm=normalization,         
+                        pool_sizes=[1, 2, 3, 6],      
+                    )
+                )
+            elif head_type == "OCR":
+                self.heads.append(
+                    OCRHead(
+                        conv=self.conv_call,         
+                        in_dims=in_channels,
+                        out_dims=256,
+                        num_classes=self.output_channels[0],
+                        norm=normalization,         
+                        key_dims=256,
+                        scale=1.0,  
+                    )
+                )
+            # Add the head for classification if needed
+            if len(self.output_channels) > 1:
+                self.heads.append(self.conv_call(in_channels, self.output_channels[1], kernel_size=1, padding="same"))
         elif head_type == "FCN":
             if self.contrast:
-                self.last_block = nn.Sequential(
+                self.heads = nn.Sequential(
                     self.conv_call(in_channels, in_channels, kernel_size=3, stride=1, padding=1),
                     self.norm_func(normalization, in_channels),
                     self.dropout(0.10),
                     self.conv_call(in_channels, self.output_channels[0], kernel_size=1, stride=1, padding=0, bias=False),
                 )
+                # Add the head for classification if needed
+                if len(self.output_channels) > 1:
+                    self.heads.append(self.conv_call(in_channels, self.output_channels[1], kernel_size=1, padding="same"))
             else:
-                self.last_block = self.conv_call(in_channels, self.output_channels[0], kernel_size=1, padding="same")
+                for i, out_ch in enumerate(output_channels):
+                    self.heads.append(self.conv_call(in_channels, out_ch, kernel_size=1, padding="same"))
         else:
             raise ValueError(f"head_type '{head_type}' is not supported. Choose from: 'ASPP', 'PSP', 'FCN'.")
 
@@ -654,12 +679,6 @@ class HighResolutionNet(nn.Module):
             mode=mode,       
             align_corners=False,
         )
-        # Multi-head:
-        #   Instance segmentation: instances + classification
-        #   Detection: points + classification
-        self.last_class_head = None
-        if self.multihead:
-            self.last_class_head = self.conv_call(in_channels, self.output_channels[1], kernel_size=1, padding="same")
 
     def _make_transition_layer(
         self,
@@ -894,9 +913,11 @@ class HighResolutionNet(nn.Module):
         Returns
         -------
         Dict or torch.Tensor
-            If `contrast` is True or `multihead` is True, returns a dictionary
-            containing output tensors (e.g., 'pred', 'embed', 'class').
-            Otherwise, returns a single prediction tensor.
+            If there is only one output head, returns a tensor with the predictions.
+            If there are multiple output heads (e.g. for multi-task learning), returns a dictionary with keys:
+                - "pred": tensor with the main predictions (e.g. segmentation map)
+                - "class": tensor with the classification output (if `return_class` is True)
+                - "embed": tensor with the contrastive learning embedding (if `contrast` is True)
         """
         x = self.conv1_block(input)
         x = self.conv2_block(x)
@@ -943,33 +964,42 @@ class HighResolutionNet(nn.Module):
             feat4 = F.interpolate(y_list[3], size=(d, h, w), mode="trilinear", align_corners=True)
 
         feats = torch.cat([feat1, feat2, feat3, feat4], 1)
-        out = self.last_block(feats)
+        out = self.heads(feats)
         out = self.upsample_logits(out)
 
+        out_dict = {}
+
+        # Pass the features through the output heads
+        class_outs, outs = [], []
+        for i, head in enumerate(self.heads):
+            if "class" not in self.output_channel_info[i]:
+                outs.append(head(feats))
+            else:
+                class_outs.append(head(feats))  
+        outs = torch.cat(outs, dim=1)
+
+        # Apply activations to the output heads if explicit_activations is True
         if self.explicit_activations:
             # If there is only one activation, apply it to the whole tensor
-            if len(self.out_activations) == 1:
-                out = self.out_activations[0](out)
+            if len(self.head_activations) == 1:
+                outs = self.head_activations[0](outs)
             else:
-                for i, act in enumerate(self.out_activations):
-                    out[:, i:i+1] = act(out[:, i:i+1])
+                for i, act in enumerate(self.head_activations):
+                    outs[:, i:i+1] = act(outs[:, i:i+1])
+
+            if self.return_class and self.class_head_activations is not None:
+                for i, act in enumerate(self.class_head_activations):
+                    class_outs[i] = act(class_outs[i])
 
         out_dict = {
-            "pred": out,
+            "pred": outs,
         }
-        if self.contrast:
-            emb = self.proj_head(feats)
-            out_dict["embed"] = emb
+        if self.return_class:
+            out_dict["class"] = torch.cat(class_outs, dim=1)
 
-        # Multi-head output
-        #   Instance segmentation: instances + classification
-        #   Detection: points + classification
-        if self.multihead and self.last_class_head:
-            class_head_out = self.last_class_head(feats)
-            if self.explicit_activations:
-                for i, act in enumerate(self.class_activation):
-                    class_head_out[:, i:i+1] = act(class_head_out[:, i:i+1])
-            out_dict["class"] = class_head_out
+        # Contrastive learning head
+        if self.contrast:
+            out_dict["embed"] = self.proj_head(feats)
 
         if len(out_dict.keys()) == 1:
             return out_dict["pred"]

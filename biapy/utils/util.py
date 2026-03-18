@@ -626,25 +626,37 @@ def seg2aff_pni(img, dz=1, dy=1, dx=1, dtype: DTypeLike = np.float32):
     assert dz and abs(dz) < img.shape[0]
     if dz > 0:
         ret[0, dz:, :, :] = (img[dz:, :, :] == img[:-dz, :, :]) & (img[dz:, :, :] > 0)
+        # Pad missing starting border by broadcasting the first valid slice
+        ret[0, :dz, :, :] = ret[0, dz:dz+1, :, :]
     else:
         dz = abs(dz)
         ret[0, :-dz, :, :] = (img[dz:, :, :] == img[:-dz, :, :]) & (img[dz:, :, :] > 0)
+        # Pad missing ending border by broadcasting the last valid slice
+        ret[0, -dz:, :, :] = ret[0, -dz-1:-dz, :, :]
 
     # y-affinity.
     assert dy and abs(dy) < img.shape[1]
     if dy > 0:
         ret[1, :, dy:, :] = (img[:, dy:, :] == img[:, :-dy, :]) & (img[:, dy:, :] > 0)
+        # Pad missing starting border
+        ret[1, :, :dy, :] = ret[1, :, dy:dy+1, :]
     else:
         dy = abs(dy)
         ret[1, :, :-dy, :] = (img[:, dy:, :] == img[:, :-dy, :]) & (img[:, dy:, :] > 0)
+        # Pad missing ending border
+        ret[1, :, -dy:, :] = ret[1, :, -dy-1:-dy, :]
 
     # x-affinity.
     assert dx and abs(dx) < img.shape[2]
     if dx > 0:
         ret[2, :, :, dx:] = (img[:, :, dx:] == img[:, :, :-dx]) & (img[:, :, dx:] > 0)
+        # Pad missing starting border
+        ret[2, :, :, :dx] = ret[2, :, :, dx:dx+1]
     else:
         dx = abs(dx)
         ret[2, :, :, :-dx] = (img[:, :, dx:] == img[:, :, :-dx]) & (img[:, :, dx:] > 0)
+        # Pad missing ending border
+        ret[2, :, :, -dx:] = ret[2, :, :, -dx-1:-dx]
 
     return ret
 

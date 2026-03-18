@@ -423,12 +423,13 @@ class MultiResUnet(torch.nn.Module):
         alpha=1.67,
         z_down=[2, 2, 2, 2],
         output_channels=[1],
+        output_channel_info=["F"],
+        explicit_activations: bool = False,
+        head_activations: List[str] = ["ce_sigmoid"],
         upsampling_factor=(),
         upsampling_position="pre",
         contrast: bool = False,
         contrast_proj_dim: int = 256,
-        explicit_activations: bool = False,
-        activations: List[List[str]] = [],
     ):
         """
         Create 2D/3D MultiResUNet model.
@@ -451,11 +452,20 @@ class MultiResUnet(torch.nn.Module):
             Downsampling used in z dimension. Set it to ``1`` if the dataset is not isotropic.
 
         output_channels : list of int, optional
-            Output channels of the network. It must be a list of lenght ``1`` or ``2``. When two
-            numbers are provided two task to be done is expected (multi-head). Possible scenarios are:
-            
-                * instances + classification on instance segmentation
-                * points + classification in detection.
+            Output channels of the network. If one value is provided, the model will have a single output head. 
+            If two values are provided, the model will have two output heads (e.g. for multi-task learning with 
+            instance segmentation and classification).
+
+        output_channel_info : list of str, optional
+            Information about the type of output channels. Possible values are:
+            - "X": where X is a letter, e.g. "F" for foreground, "D" for distance, "R" for rays, "C" for cpntours, etc.
+            - "class": classification (e.g. for multi-task learning)
+
+        explicit_activations : bool, optional
+            If True, uses explicit activation functions in the last layers.
+        
+        head_activations : List[str], optional
+            Activation functions to apply to each output head if `explicit_activations` is True.
 
         upsampling_factor : tuple of ints, optional
             Factor of upsampling for super resolution workflow for each dimension.
@@ -470,30 +480,34 @@ class MultiResUnet(torch.nn.Module):
         contrast_proj_dim : int, optional
             Dimension of the projection head for contrastive learning. Default is ``256``.
 
-        explicit_activations : bool, optional
-            If True, uses explicit activation functions in the last layers. 
-        
-        activations : List[List[str]], optional
-            Activation functions to apply to the outputs if `explicit_activations` is True.
-
         Raises
         ------
         ValueError
             If 'output_channels' is empty or has more than two values.
         """
         super().__init__()
+
+        if len(output_channels) == 0:
+            raise ValueError("'output_channels' needs to has at least one value")
+        if contrast and len(output_channels) > 2:
+            raise ValueError("If 'contrast' is True, 'output_channels' can only have two values at max: one for the main output and one for the class.")
+        print("Selected output channels:")        
+        for i, info in enumerate(output_channel_info):
+            print(f"  - {i} channel for {info} output")
+
         self.ndim = ndim
         self.alpha = alpha
         self.output_channels = output_channels
-        self.multihead = len(output_channels) == 2
+        self.output_channel_info = output_channel_info
+        self.return_class = True if "class" in output_channel_info else False
         self.contrast = contrast
         self.explicit_activations = explicit_activations
         if self.explicit_activations:
-            self.out_activations, self.class_activation = prepare_activation_layers(activations)
-        if len(output_channels) == 0:
-            raise ValueError("'output_channels' needs to has at least one value")
-        if len(output_channels) != 1 and len(output_channels) != 2:
-            raise ValueError(f"'output_channels' must be a list of one or two values at max, not {output_channels}")
+            assert len(head_activations) == sum(output_channels), "If 'explicit_activations' is True, 'head_activations' needs to "
+            "have the same number of values as 'output_channels'"
+            self.head_activations, self.class_head_activations = prepare_activation_layers(head_activations, output_channel_info)
+            if self.return_class and self.class_head_activations is None:
+                raise ValueError("If 'return_class' is True, 'head_activations' must be provided.")
 
         if self.ndim == 3:
             conv = nn.Conv3d
@@ -510,7 +524,7 @@ class MultiResUnet(torch.nn.Module):
 
         # Super-resolution
         self.pre_upsampling = None
-        if len(upsampling_factor) > 1 and upsampling_position == "pre":
+        if len(upsampling_factor) > 0 and upsampling_position == "pre":
             self.pre_upsampling = convtranspose(
                 input_channels,
                 input_channels,
@@ -587,7 +601,7 @@ class MultiResUnet(torch.nn.Module):
 
         # Super-resolution
         self.post_upsampling = None
-        if len(upsampling_factor) > 1 and upsampling_position == "post":
+        if len(upsampling_factor) > 0 and upsampling_position == "post":
             self.post_upsampling = convtranspose(
                 self.in_filters9,
                 self.in_filters9,
@@ -597,7 +611,7 @@ class MultiResUnet(torch.nn.Module):
 
         if self.contrast:
             # extra added layers
-            self.last_block = nn.Sequential(
+            self.heads = nn.Sequential(
                 conv(self.in_filters9, self.in_filters9, kernel_size=3, stride=1, padding=1),
                 batchnorm_layer,
                 dropout(0.10),
@@ -606,39 +620,24 @@ class MultiResUnet(torch.nn.Module):
 
             self.proj_head = ProjectionHead(ndim=self.ndim, in_channels=self.in_filters9, proj_dim=contrast_proj_dim)
         else:
-            self.last_block = Conv_batchnorm(
-                conv,
-                batchnorm_layer,
-                self.in_filters9,
-                output_channels[0],
-                kernel_size=1,
-                activation="None",
-            )
-
-        # Multi-head:
-        #   Instance segmentation: instances + classification
-        #   Detection: points + classification
-        self.last_class_head = None
-        if self.multihead:
-            self.last_class_head = conv(self.in_filters9, output_channels[1], kernel_size=1, padding="same")
+            self.heads = nn.Sequential()
+            for i, out_ch in enumerate(output_channels):
+                self.heads.append(conv(self.in_filters9, out_ch, kernel_size=1, padding="same"))
 
     def forward(self, x: torch.Tensor) -> Dict | torch.Tensor:
         """
-        Perform the forward pass of the ResPath.
-
-        The input `x` passes through a sequence of `respath_length` residual
-        convolutional blocks. Each block involves a convolutional path and
-        a shortcut connection, followed by batch normalization and ReLU activation.
+        Forward pass of the model.
 
         Parameters
         ----------
         x : torch.Tensor
-            The input tensor to the ResPath.
+            Input tensor of shape (batch_size, channels, height, width) for 2D or (batch_size, channels, depth, height, width) for 3D.
 
         Returns
         -------
-        torch.Tensor
-            The output tensor after processing through all residual blocks in the ResPath.
+        Dict or torch.Tensor
+            Model output. Returns a dictionary if multi-head or contrastive outputs are enabled,
+            otherwise returns the main prediction tensor.
         """
         # Super-resolution
         if self.pre_upsampling:
@@ -679,34 +678,39 @@ class MultiResUnet(torch.nn.Module):
         if self.post_upsampling:
             feats = self.post_upsampling(feats)
 
-        # Regular output
-        out = self.last_block(feats)
+        out_dict = {}
 
+        # Pass the features through the output heads
+        class_outs, outs = [], []
+        for i, head in enumerate(self.heads):
+            if "class" not in self.output_channel_info[i]:
+                outs.append(head(feats))
+            else:
+                class_outs.append(head(feats))  
+        outs = torch.cat(outs, dim=1)
+
+        # Apply activations to the output heads if explicit_activations is True
         if self.explicit_activations:
             # If there is only one activation, apply it to the whole tensor
-            if len(self.out_activations) == 1:
-                out = self.out_activations[0](out)
+            if len(self.head_activations) == 1:
+                outs = self.head_activations[0](outs)
             else:
-                for i, act in enumerate(self.out_activations):
-                    out[:, i:i+1] = act(out[:, i:i+1])
+                for i, act in enumerate(self.head_activations):
+                    outs[:, i:i+1] = act(outs[:, i:i+1])
+
+            if self.return_class and self.class_head_activations is not None:
+                for i, act in enumerate(self.class_head_activations):
+                    class_outs[i] = act(class_outs[i])
 
         out_dict = {
-            "pred": out,
+            "pred": outs,
         }
+        if self.return_class:
+            out_dict["class"] = torch.cat(class_outs, dim=1)
 
         # Contrastive learning head
         if self.contrast:
             out_dict["embed"] = self.proj_head(feats)
-
-        # Multi-head output
-        #   Instance segmentation: instances + classification
-        #   Detection: points + classification
-        if self.multihead and self.last_class_head:
-            class_head_out = self.last_class_head(feats)
-            if self.explicit_activations:
-                for i, act in enumerate(self.class_activation):
-                    class_head_out[:, i:i+1] = act(class_head_out[:, i:i+1])
-            out_dict["class"] = class_head_out
 
         if len(out_dict.keys()) == 1:
             return out_dict["pred"]

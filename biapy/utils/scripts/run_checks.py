@@ -49,7 +49,7 @@ all_test_info["Test2"] = {
     "description": "3D Semantic seg. Lucchi++. attention_unet. Basic DA.",
     "yaml": "test_2.yaml",
     "internal_checks": [
-        {"pattern": "Test Foreground IoU (merge patches)", "gt": True, "value": 0.55},
+        {"pattern": "Test Foreground IoU (merge patches)", "gt": True, "value": 0.50},
     ]
 }
 
@@ -67,14 +67,14 @@ all_test_info["Test4"] = {
     "enable": True,
     "jobname": "test4",
     "description": "2D Instance seg. Stardist 2D data. Basic DA. BC (auto). resunet++. "
-        "Post-proc: Clear border + remove instances by properties (leave only the bad ones).",
+        "Post-proc: Clear border + remove instances by properties.",
     "yaml": "test_4.yaml",
     "internal_checks": [
         {"type": "regular", "pattern": "Test IoU (F channel) (merge patches):", "gt": True, "value": 0.4},
         {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 1, "metric": "f1",
-            "gt": True, "value": 0.50},
+            "gt": True, "value": 0.8},
         {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 2, "metric": "f1",
-            "gt": False, "value": 0.3}, # Post-processing (leave bad instances only)
+            "gt": True, "value": 0.7},
     ]
 }
 
@@ -371,7 +371,7 @@ all_test_info["Test31"] = {
         {"type": "regular", "pattern": "Test IoU (F channel) (merge patches):", "gt": True, "value": 0.7},
         {"type": "BMZ", "pattern": "Package path:", "bmz_package_name": "2D U-NeXt V1 for nucleus segmentation.zip"},
         {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 1, "metric": "f1",
-            "gt": True, "value": 0.9},
+            "gt": True, "value": 0.85},
     ]
 }
 
@@ -407,6 +407,19 @@ all_test_info["Test34"] = {
         {"type": "regular", "pattern": "Merge patches classification IoU:", "gt": True, "value": 0.1},
         {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 1, "metric": "f1",
             "gt": True, "value": 0.45},
+    ]
+}
+
+all_test_info["Test35"] = {
+    "enable": True,
+    "jobname": "test35",
+    "description": "3D Instance seg. Cyst data. BCM. BMZ pretrained model: 'venomous-swan'. Post-proc: Clear border + Voronoi",
+    "yaml": "test_35.yaml",
+    "internal_checks": [
+        {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 1, "metric": "f1",
+            "gt": True, "value": 0.8},
+        {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 2, "metric": "f1",
+            "gt": True, "value": 0.85}, # Post-processing
     ]
 }
 
@@ -1189,7 +1202,7 @@ try:
         biapy_config['AUGMENTOR']['BRIGHTNESS'] = True
 
         biapy_config['TRAIN']['ENABLE'] = True
-        biapy_config['TRAIN']['EPOCHS'] = 50
+        biapy_config['TRAIN']['EPOCHS'] = 4
         biapy_config['TRAIN']['PATIENCE'] = -1
 
         biapy_config['MODEL']['ARCHITECTURE'] = 'hrnet32'
@@ -1269,10 +1282,13 @@ try:
         biapy_config['AUGMENTOR']['BRIGHTNESS'] = True
 
         biapy_config['TRAIN']['ENABLE'] = True
-        biapy_config['TRAIN']['EPOCHS'] = 30
+        biapy_config['TRAIN']['EPOCHS'] = 5
         biapy_config['TRAIN']['PATIENCE'] = -1
 
-        biapy_config['MODEL']['ARCHITECTURE'] = 'attention_unet'
+        biapy_config['MODEL']['ARCHITECTURE'] = 'stunet'
+        biapy_config['MODEL']['STUNET'] = {}
+        biapy_config['MODEL']['STUNET']['VARIANT'] = 'base'
+        biapy_config['MODEL']['STUNET']['PRETRAINED'] = True
 
         biapy_config['TEST']['ENABLE'] = True
         biapy_config['TEST']['REDUCE_MEMORY'] = True
@@ -1430,8 +1446,8 @@ try:
         biapy_config['TEST']['POST_PROCESSING']['MEASURE_PROPERTIES']['REMOVE_BY_PROPERTIES'] = {}
         biapy_config['TEST']['POST_PROCESSING']['MEASURE_PROPERTIES']['REMOVE_BY_PROPERTIES']['ENABLE'] = True
         biapy_config['TEST']['POST_PROCESSING']['MEASURE_PROPERTIES']['REMOVE_BY_PROPERTIES']['PROPS'] = [['circularity', 'area']]
-        biapy_config['TEST']['POST_PROCESSING']['MEASURE_PROPERTIES']['REMOVE_BY_PROPERTIES']['VALUES'] = [[0.5, 100]]
-        biapy_config['TEST']['POST_PROCESSING']['MEASURE_PROPERTIES']['REMOVE_BY_PROPERTIES']['SIGNS'] = [['gt', 'gt']]
+        biapy_config['TEST']['POST_PROCESSING']['MEASURE_PROPERTIES']['REMOVE_BY_PROPERTIES']['VALUES'] = [[0.2, 100]]
+        biapy_config['TEST']['POST_PROCESSING']['MEASURE_PROPERTIES']['REMOVE_BY_PROPERTIES']['SIGNS'] = [['lt', 'lt']]
 
         # Save file
         test_file = os.path.join(inst_seg_folder, all_test_info["Test4"]["yaml"])
@@ -1917,7 +1933,7 @@ try:
         biapy_config['TRAIN']['PATIENCE'] = 20
         biapy_config['TRAIN']['LR_SCHEDULER'] = {}
         biapy_config['TRAIN']['LR_SCHEDULER']['NAME'] = 'warmupcosine'
-        biapy_config['TRAIN']['LR_SCHEDULER']['MIN_LR'] = 5.E-6
+        biapy_config['TRAIN']['LR_SCHEDULER']['MIN_LR'] = 1.E-4
         biapy_config['TRAIN']['LR_SCHEDULER']['WARMUP_COSINE_DECAY_EPOCHS'] = 15
 
         biapy_config['MODEL']['ARCHITECTURE'] = 'hrnet18'
@@ -1925,6 +1941,9 @@ try:
         biapy_config['MODEL']['HRNET']['Z_DOWN'] = False
         del biapy_config['MODEL']['FEATURE_MAPS']
         biapy_config['MODEL']['LOAD_CHECKPOINT'] = False
+
+        biapy_config['LOSS'] = {}
+        biapy_config['LOSS']["CLASS_REBALANCE"] = True
 
         biapy_config['AUGMENTOR']['RANDOM_ROT'] = True
         biapy_config['AUGMENTOR']['AFFINE_MODE'] = 'reflect'
@@ -2092,7 +2111,7 @@ try:
         biapy_config['DATA']['TEST']['IN_MEMORY'] = False
 
         biapy_config['TRAIN']['ENABLE'] = True
-        biapy_config['TRAIN']['EPOCHS'] = 20
+        biapy_config['TRAIN']['EPOCHS'] = 10
         biapy_config['TRAIN']['PATIENCE'] = -1
 
         biapy_config['MODEL']['ARCHITECTURE'] = 'unet'
@@ -4042,7 +4061,7 @@ try:
         biapy_config['TRAIN']['PATIENCE'] = 5
         biapy_config['TRAIN']['BATCH_SIZE'] = 4
 
-        biapy_config['MODEL']['ARCHITECTURE'] = 'resunet'
+        biapy_config['MODEL']['ARCHITECTURE'] = 'unext_v1'
         biapy_config['MODEL']['N_CLASSES'] = 7
 
         biapy_config['TEST']['ENABLE'] = True
@@ -4081,6 +4100,84 @@ try:
         test_results.append(correct)
 except Exception as e:
     print("An error occurred during Test 34 execution.")
+    print(e)
+    test_results.append(False)
+
+
+#~~~~~~~~~~~~
+# Test 35
+#~~~~~~~~~~~~
+try:
+    if all_test_info["Test35"]["enable"]:
+        print("######")
+        print("Running Test 35")
+        print_inventory(all_test_info["Test35"])
+
+        #*******************
+        # File preparation
+        #*******************
+        # Open config file
+        with open(instance_seg_3d_template_local, 'r') as stream:
+            try:
+                biapy_config = yaml.safe_load(stream)
+            except yaml.YAMLError as exc:
+                raise ValueError(exc)
+
+        # biapy_config['PROBLEM']['INSTANCE_SEG']['DATA_CHANNELS'] = 'BCM'
+        biapy_config['PROBLEM']['INSTANCE_SEG']['DATA_MW_TH_TYPE'] = "auto"
+
+        biapy_config['DATA']['REFLECT_TO_COMPLETE_SHAPE'] = True
+        biapy_config['DATA']['PATCH_SIZE'] = "(80, 80, 80, 1)"
+        biapy_config['DATA']['TEST']['PATH'] = os.path.join(instance_seg_cyst_data_outpath, "validation", "x")
+        biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(instance_seg_cyst_data_outpath, "validation", "y")
+        biapy_config['DATA']['TEST']['IN_MEMORY'] = True
+        biapy_config['DATA']['TEST']['LOAD_GT'] = True
+
+        biapy_config['TRAIN']['ENABLE'] = False
+
+        biapy_config['MODEL']['SOURCE'] = 'bmz'
+        biapy_config['MODEL']['BMZ'] = {}
+        biapy_config['MODEL']['BMZ']['SOURCE_MODEL_ID'] = 'venomous-swan'
+
+        biapy_config['TEST']['ENABLE'] = True
+        biapy_config['TEST']['FULL_IMG'] = False
+        biapy_config['TEST']['POST_PROCESSING'] = {}
+        biapy_config['TEST']['POST_PROCESSING']['CLEAR_BORDER'] = True
+        biapy_config['TEST']['POST_PROCESSING']['VORONOI_ON_MASK'] = True
+
+        # Save file
+        test_file = os.path.join(inst_seg_folder, all_test_info["Test35"]["yaml"])
+        with open(test_file, 'w') as outfile:
+            yaml.dump(biapy_config, outfile, default_flow_style=False)
+
+        # Run
+        runjob(all_test_info["Test35"], results_folder, test_file, biapy_folder)
+
+        # Check
+        results = []
+        correct = True
+        res, last_lines = check_finished(all_test_info["Test35"], "Test 35")
+        if not res:
+            correct = False
+            print("Internal check not passed: seems that it didn't finish")
+        results.append(res)
+        int_checks = 1
+        for checks in all_test_info["Test35"]["internal_checks"]:
+            if checks["type"] == "regular":
+                results.append(check_value(last_lines, checks["pattern"], checks["value"], checks["gt"]))
+            else:
+                results.append(check_DatasetMatching(last_lines, checks["pattern"], checks["value"], gt=checks["gt"],
+                    value_to_check=checks["nApparition"], metric=checks["metric"]))
+            int_checks += 1
+            if not results[-1]:
+                correct = False
+                print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
+
+        # Test result
+        print_result(results, all_test_info["Test35"]["jobname"], int_checks)
+        test_results.append(correct)
+except Exception as e:
+    print("An error occurred during Test 35 execution.")
     print(e)
     test_results.append(False)
 

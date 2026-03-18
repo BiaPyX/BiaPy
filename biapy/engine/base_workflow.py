@@ -23,7 +23,6 @@ from yacs.config import CfgNode as CN
 import pandas as pd
 
 import biapy
-from bioimageio.core import create_prediction_pipeline
 from bioimageio.spec import load_description
 
 from biapy.models import (
@@ -39,6 +38,7 @@ from biapy.data.generators import (
     create_test_generator,
     create_chunked_test_generator,
     check_generator_consistence,
+    create_chunked_workflow_process_generator,
 )
 from biapy.utils.misc import (
     get_world_size,
@@ -71,7 +71,12 @@ from biapy.data.data_2D_manipulation import (
     crop_data_with_overlap,
     merge_data_with_overlap,
 )
-from biapy.data.data_3D_manipulation import crop_3D_data_with_overlap, merge_3D_data_with_overlap, order_dimensions
+from biapy.data.data_3D_manipulation import (
+    crop_3D_data_with_overlap, 
+    merge_3D_data_with_overlap, 
+    order_dimensions,
+    looks_like_hdf5,
+)
 from biapy.data.data_manipulation import (
     load_and_prepare_train_data,
     load_and_prepare_test_data,
@@ -117,6 +122,7 @@ class Base_Workflow(metaclass=ABCMeta):
         cfg: CN,
         job_identifier: str,
         device: torch.device,
+        system_dict: Dict[str, int],
         args: argparse.Namespace,
     ):
         """
@@ -129,10 +135,20 @@ class Base_Workflow(metaclass=ABCMeta):
         ----------
         cfg : CN
             Running configuration.
+
         job_identifier : str
             Complete name of the running job.
+
         device : torch.device
             Device used.
+
+        system_dict : dict
+            System dictionary containing:
+                * 'cpu_budget': int, Total CPU budget.
+                * 'cpu_per_rank': int, CPU budget per rank.
+                * 'main_threads': int, Number of main threads.
+                * 'num_workers_hint': int, Hint for the number of workers.
+
         args : argparse.Namespace
             Arguments used in BiaPy's call.
         """
@@ -140,6 +156,7 @@ class Base_Workflow(metaclass=ABCMeta):
         self.args = args
         self.job_identifier = job_identifier
         self.device = device
+        self.system_dict = system_dict
         if self.cfg.TEST.METRICS_IN_CPU:
             self.test_device = torch.device("cpu")
         else:
@@ -197,9 +214,10 @@ class Base_Workflow(metaclass=ABCMeta):
 
         self.mask_path = ""
         self.is_y_mask = False
-        self.model_output_channels = {}
-        self.activations = []
-        self.multihead = None
+        self.model_output_channels = []
+        self.model_output_channel_info = []
+        self.head_activations = []
+        self.separated_class_channel = None
         self.train_metrics = []
         self.train_metric_best = []
         self.train_metric_names = []
@@ -208,7 +226,7 @@ class Base_Workflow(metaclass=ABCMeta):
         self.test_metric_names = []
         self.loss = None
         self.memory_bank = None
-        self.real_classes = -1 
+        self.gt_channels_expected = -1 
         self.train_metrics_message = ""
         self.test_metrics_message = ""
         
@@ -303,56 +321,69 @@ class Base_Workflow(metaclass=ABCMeta):
                 upper_bound_val=cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_VALUE,
             )
 
+        # Chunked workflow process generator placeholder
+        self.test_chunked_workflow_process_vars = {
+            "out_dir": self.cfg.PATHS.RESULT_DIR.PER_IMAGE,
+            "dtype_str": self.dtype_str,
+        }
+    
     def define_activations_and_channels(self):
         """
         Define the activations to be applied to the model output and the channels that the model will output.
 
         This function must define the following variables:
 
-        self.model_output_channels : List of functions
-            Metrics to be calculated during model's training.
+        self.model_output_channels : List of int
+            Number of channels for each output head of the model. E.g. [3] for a model with one head outputting 3 channels, 
+            [1, 5] for a model with two heads outputting 1 and 5 channels respectively, etc.
 
-        self.multihead : bool
-            Whether if the output of the model has more than one head.
+        self.model_output_channel_info : List of str
+            Information about the output channels.
 
-        self.activations : List of dicts
-            Activations to be applied to the model output. Each dict will
-            match an output channel of the model. If ':' is used the activation
-            will be applied to all channels at once. "linear" and "ce_sigmoid"
-            will not be applied. E.g. [{":": "linear"}].
+        self.separated_class_channel : bool
+            Whether if we should expect a separated output channel for classification.
+
+        self.head_activations : List of str
+            Activations to be applied to the model output. Each dict will match an output channel of the model. "linear" and "ce_sigmoid"
+            will not be applied. E.g. ["linear"] for a model with one head, ["linear", "sigmoid"] for a model with two heads, etc.
         """
         if not self.model_output_channels:
             raise ValueError(
                 "'model_output_channels' needs to be defined. Correct define_activations_and_channels() function"
             )
-        else:
-            if not isinstance(self.model_output_channels, dict):
-                raise ValueError("'self.model_output_channels' must be a dict")
-            if "type" not in self.model_output_channels:
-                raise ValueError("'self.model_output_channels' must have 'type' key")
-            if "channels" not in self.model_output_channels:
-                raise ValueError("'self.model_output_channels' must have 'channels' key")
-        if self.multihead is None:
-            raise ValueError("'multihead' needs to be defined. Correct define_activations_and_channels() function")
-        if not self.activations:
-            raise ValueError("'activations' needs to be defined. Correct define_activations_and_channels() function")
-        else:
-            if not isinstance(self.activations, list):
-                raise ValueError("'self.activations' must be a list of lists")
-            for x in self.activations:
-                if not isinstance(x, list):
-                    raise ValueError("'self.activations' must be a list of lists")
-                for y in x:
-                    if not isinstance(y, str):
-                        raise ValueError("'self.activations' must be a list of str")
+        if not isinstance(self.model_output_channels, list):
+            raise ValueError("'self.model_output_channels' must be a list")
+        for x in self.model_output_channels:
+            if not isinstance(x, int):
+                raise ValueError("'self.model_output_channels' must be a list of integers")
 
-            assert len(self.activations) == len(self.model_output_channels["channels"]), "Activations and output channels do not match"
-            for k in range(len(self.activations)):
-                assert len(self.activations[k]) == self.model_output_channels["channels"][k], "Activations and output channels do not match per head"
+        if self.model_output_channel_info is None:
+            raise ValueError("'model_output_channel_info' needs to be defined. Correct define_activations_and_channels() function")
+        if not isinstance(self.model_output_channel_info, list):
+            raise ValueError("'self.model_output_channel_info' must be a list")
+        for x in self.model_output_channel_info:
+            if not isinstance(x, str):
+                raise ValueError("'self.model_output_channel_info' must be a list of strings")
 
-        if self.real_classes == -1:
+        if self.separated_class_channel is None:
+            raise ValueError("'separated_class_channel' needs to be defined. Correct define_activations_and_channels() function")
+        if not self.head_activations:
+            raise ValueError("'self.head_activations' needs to be defined. Correct define_activations_and_channels() function")
+        if not isinstance(self.head_activations, list):
+            raise ValueError("'self.head_activations' must be a list of strings")
+        for x in self.head_activations:
+            if not isinstance(x, str):
+                raise ValueError("'self.head_activations' must be a list of strings")
+
+        head_number = sum(self.model_output_channels)
+        assert len(self.head_activations) == head_number, "Activations and output channels do not match. "
+        "{} activations vs {} output channels".format(len(self.head_activations), head_number)
+        assert len(self.model_output_channels) == len(self.model_output_channel_info), "Output channel info and output channels do not match. "
+        "{} output channel info vs {} output channels".format(len(self.model_output_channel_info), len(self.model_output_channels))
+
+        if self.gt_channels_expected == -1:
             raise ValueError(
-                "'real_classes' needs to be defined. Correct define_activations_and_channels() function"
+                "'gt_channels_expected' needs to be defined. Correct define_activations_and_channels() function"
             )
 
     def define_metrics(self):   
@@ -570,6 +601,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.bmz_config["cover_gt"],
             ) = create_train_val_augmentors(
                 self.cfg,
+                system_dict=self.system_dict,
                 X_train=self.X_train,
                 X_val=self.X_val,
                 Y_train=self.Y_train,
@@ -667,19 +699,29 @@ class Base_Workflow(metaclass=ABCMeta):
                 and self.cfg.PROBLEM.TYPE not in ["CLASSIFICATION", "SUPER_RESOLUTION"]
             ):
                 if isinstance(pred, dict):
-                    if pred["pred"].shape[2:] != in_img.shape[2:]:
+                    if "pred" in pred and pred["pred"].shape[2:] != in_img.shape[2:]:
                         mode = "bilinear" if self.cfg.PROBLEM.NDIM == "2D" else "trilinear"
-                        pred["pred"] = resize(pred["pred"], in_img.shape, mode=mode)
-                    if "class" in pred:
-                        pred["class"] = resize(pred["class"], in_img.shape, mode="nearest")
-                else:
+                        sshape = (in_img.shape[0],) + (pred["pred"].shape[1],) + in_img.shape[2:]
+                        pred["pred"] = resize(pred["pred"], sshape, mode=mode)
+                    if "class" in pred and pred["class"].shape[2:] != in_img.shape[2:]:
+                        sshape = (in_img.shape[0],) + (pred["class"].shape[1],) + in_img.shape[2:]
+                        pred["class"] = resize(pred["class"], sshape, mode="nearest")
+                elif not isinstance(pred, list):
                     if pred.shape[2:] != in_img.shape[2:]:
                         mode = "bilinear" if self.cfg.PROBLEM.NDIM == "2D" else "trilinear"
-                        pred = resize(pred, in_img.shape, mode=mode)
-            if apply_act:
-                pred = self.apply_model_activations(pred, training=is_train)
+                        sshape = (in_img.shape[0],) + (pred.shape[1],) + in_img.shape[2:]
+                        pred = resize(pred, sshape, mode=mode)
+            
+            # Allow multiple outputs
+            if isinstance(pred, list):
+                for i in range(len(pred)):
+                    if apply_act:
+                        pred[i] = self.apply_model_activations(pred[i], training=is_train)
+            else:
+                if apply_act:
+                    pred = self.apply_model_activations(pred, training=is_train)
         elif self.cfg.MODEL.SOURCE == "bmz":
-            pred = self.apply_model_activations(self.bmz_model_call(in_img, is_train))
+            pred = self.apply_model_activations(self.bmz_model_call(in_img, is_train), training=is_train)
         elif self.cfg.MODEL.SOURCE == "torchvision":
             pred = self.torchvision_model_call(in_img, is_train)
         
@@ -748,14 +790,11 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.bmz_config["scanned_files"],
                 self.model_build_kwargs,
                 self.network_stride,
-            ) = build_model(self.cfg, self.model_output_channels["channels"], self.activations, self.device)
+            ) = build_model(self.cfg, self.model_output_channels, self.model_output_channel_info, self.head_activations, self.device)
         elif self.cfg.MODEL.SOURCE == "torchvision":
             self.model, self.torchvision_preprocessing = build_torchvision_model(self.cfg, self.device)
         # BioImage Model Zoo pretrained models
         elif self.cfg.MODEL.SOURCE == "bmz":
-            if self.args.distributed:
-                raise ValueError("DDP can not be activated when loading a BMZ pretrained model")
-
             self.model = build_bmz_model(self.cfg, self.bmz_config["original_bmz_config"], self.device)
 
         self.model_without_ddp = self.model
@@ -826,7 +865,7 @@ class Base_Workflow(metaclass=ABCMeta):
         contrast_init_iter = 0
         if self.cfg.LOSS.CONTRAST.ENABLE:
             self.memory_bank = MemoryBank(
-                num_classes=self.real_classes,
+                num_classes=self.gt_channels_expected,
                 memory_size = self.cfg.LOSS.CONTRAST.MEMORY_SIZE,
                 feature_dims = self.cfg.LOSS.CONTRAST.PROJ_DIM,
                 network_stride = self.network_stride,
@@ -1110,9 +1149,9 @@ class Base_Workflow(metaclass=ABCMeta):
                 cover_raw, 
                 cover_gt,
             ) = create_test_generator(
-                self.cfg,
-                self.X_test,
-                self.Y_test,
+                cfg=self.cfg,
+                X_test=self.X_test,
+                Y_test=self.Y_test,
                 norm_module=self.test_norm_module,
             )
             # Save BMZ data if not available
@@ -1169,11 +1208,13 @@ class Base_Workflow(metaclass=ABCMeta):
             return torch.cat(out_slices, dim=1)
 
         if isinstance(pred, dict):
-            pred["pred"] = __apply_acts(pred["pred"], self.activations[0])
+            pred["pred"] = __apply_acts(pred["pred"], self.head_activations)
             if "class" in pred:
-                pred["class"] = __apply_acts(pred["class"], self.activations[1])
+                class_pos = self.model_output_channel_info.index("class")
+                class_acts = self.head_activations[-self.model_output_channels[class_pos]:]
+                pred["class"] = __apply_acts(pred["class"], class_acts)
         else:
-            pred = __apply_acts(pred, self.activations[0])
+            pred = __apply_acts(pred, self.head_activations)
         return pred
 
     @torch.no_grad()
@@ -1230,7 +1271,7 @@ class Base_Workflow(metaclass=ABCMeta):
             _, file_extension = os.path.splitext(self.current_sample["X_filename"])
             if self.cfg.TEST.BY_CHUNKS.ENABLE and self.cfg.PROBLEM.NDIM == "3D":
                 by_chunks = True
-                if file_extension not in [".hdf5", ".hdf", ".h5", ".zarr", ".n5"]:
+                if not looks_like_hdf5(self.current_sample["X_filename"]) and file_extension not in [".zarr", ".n5"]:
                     print(
                         "WARNING: You are not using an image format that can extract patches without loading it entirely into memory. "
                         "The image formats that support this are: '.hdf5', '.hdf', '.h5', '.zarr' and '.n5'. "
@@ -1415,137 +1456,6 @@ class Base_Workflow(metaclass=ABCMeta):
 
         return pred
 
-    def after_one_patch_prediction_by_chunks(
-        self, patch_id: int, patch: NDArray, patch_in_data: PatchCoords, added_pad: List[List[int]]
-    ):
-        """
-        Place any code that needs to be done after predicting one patch in "by chunks" setting.
-
-        Parameters
-        ----------
-        patch_id: int
-            Patch identifier.
-
-        patch : NDArray
-            Predicted patch.
-
-        patch_in_data : PatchCoords
-            Global coordinates of the patch.
-        
-        added_pad: List of list of ints
-            Padding added to the patch that should be not taken into account when processing the patch. 
-        """
-        raise NotImplementedError
-
-    def process_test_sample_by_chunks(self):
-        """
-        Process a sample in the inference phase.
-        
-        A final H5/Zarr file is created in "TZCYX" or "TZYXC" order
-        depending on ``DATA.TEST.INPUT_IMG_AXES_ORDER`` ('T' is always included).
-        """
-        if not self.cfg.TEST.REUSE_PREDICTIONS:
-            # Create the generator
-            self.test_generator = create_chunked_test_generator(
-                self.cfg,
-                current_sample=self.current_sample,
-                norm_module=self.norm_module,
-                out_dir=self.cfg.PATHS.RESULT_DIR.PER_IMAGE,
-                dtype_str=self.dtype_str,
-            )
-            tgen: chunked_test_pair_data_generator = self.test_generator.dataset  # type: ignore
-
-            # Get parallel data shape is ZYX
-            _, z_dim, _, y_dim, x_dim = order_dimensions(
-                tgen.X_parallel_data.shape, self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER
-            )
-            self.parallel_data_shape = [z_dim, y_dim, x_dim]
-            samples_visited = {}
-            for obj_list in self.test_generator:
-                sampler_ids, img, mask, patch_in_data, added_pad, norm_extra_info = obj_list
-
-                if self.cfg.TEST.VERBOSE:
-                    print(
-                        "[Rank {} ({})] Patch number {} processing patches {} from {}".format(
-                            get_rank(), os.getpid(), sampler_ids, patch_in_data, self.parallel_data_shape
-                        )
-                    )
-
-                # Pass the batch through the model
-                pred = self.predict_batches_in_test(img, mask, disable_tqdm=True)
-
-                lbreaked = False
-                for i in range(pred.shape[0]):
-                    # Break the loop as those samples were created just to complete the last batch
-                    if sampler_ids[i] < sampler_ids[0] or sampler_ids[i] in samples_visited:
-                        print(
-                            "[Rank {} ({})] Patch {} discarded".format(
-                                get_rank(),
-                                os.getpid(),
-                                sampler_ids[i],
-                            )
-                        )
-                        lbreaked = True
-                        break
-
-                    single_pred = pred[i]
-                    single_pred_pad = added_pad[i]
-                    single_patch_in_data = patch_in_data[i]
-                    self.after_one_patch_prediction_by_chunks(
-                        sampler_ids[i], single_pred, single_patch_in_data, single_pred_pad
-                    )
-
-                    # Remove padding if added
-                    single_pred = single_pred[
-                        single_pred_pad[0][0] : single_pred.shape[0] - single_pred_pad[0][1],
-                        single_pred_pad[1][0] : single_pred.shape[1] - single_pred_pad[1][1],
-                        single_pred_pad[2][0] : single_pred.shape[2] - single_pred_pad[2][1],
-                    ]
-                    # Insert into the data
-                    tgen.insert_patch_in_file(single_pred, single_patch_in_data)
-
-                    samples_visited[sampler_ids[i]] = True
-
-                if lbreaked and sampler_ids[i] in samples_visited:
-                    print(
-                        "[Rank {} ({})] Finishing the loop. Seems that the patches are starting to repeat".format(
-                            get_rank(),
-                            os.getpid(),
-                        )
-                    )
-                    break
-
-            # Wait until all threads are done so the main thread can create the full size image
-            if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
-                if self.cfg.TEST.VERBOSE:
-                    print(
-                        f"[Rank {get_rank()} ({os.getpid()})] Finished predicting patches. Waiting for all ranks . . ."
-                    )
-                dist.barrier()
-
-                if is_main_process():
-                    tgen.merge_zarr_parts_into_one()
-
-                if self.cfg.TEST.VERBOSE:
-                    print(
-                        f"[Rank {get_rank()} ({os.getpid()})] Waiting for master rank to create the final Zarr from all the parts . . ."
-                    )
-                dist.barrier()
-
-            tgen.close_open_files()
-
-            if self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF and is_main_process():
-                tgen.save_parallel_data_as_tif()
-
-        if is_main_process():
-            self.after_all_patch_prediction_by_chunks()
-
-        # Wait until all threads are done so the main thread can create the full size image
-        if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
-            if self.cfg.TEST.VERBOSE:
-                print(f"[Rank {get_rank()} ({os.getpid()})] Finished predicting sample. Waiting for all ranks . . .")
-            dist.barrier()
-
     def prepare_bmz_data(self, img):
         """
         Prepare required data for exporting a model into BMZ.
@@ -1647,7 +1557,7 @@ class Base_Workflow(metaclass=ABCMeta):
         self.bmz_config["postprocessing"] = []
         if self.cfg.MODEL.SOURCE == "biapy":
             # Check activations to be inserted as postprocessing in BMZ
-            act = list(self.activations[0])
+            act = list(self.head_activations[0])
             for ac in act:
                 if ac in ["ce_sigmoid", "Sigmoid"]:
                     self.bmz_config["postprocessing"].append("sigmoid")
@@ -1888,7 +1798,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     )
 
                 # Argmax if needed
-                if self.cfg.DATA.N_CLASSES > 2 and self.cfg.DATA.TEST.ARGMAX_TO_OUTPUT and not self.multihead:
+                if self.cfg.DATA.N_CLASSES > 2 and self.cfg.DATA.TEST.ARGMAX_TO_OUTPUT and not self.separated_class_channel:
                     _type = np.uint8 if self.cfg.DATA.N_CLASSES < 255 else np.uint16
                     pred = np.expand_dims(np.argmax(pred, -1), -1).astype(_type)
 
@@ -2002,7 +1912,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 )
 
                 # Argmax if needed
-                if self.cfg.DATA.N_CLASSES > 2 and self.cfg.DATA.TEST.ARGMAX_TO_OUTPUT and not self.multihead:
+                if self.cfg.DATA.N_CLASSES > 2 and self.cfg.DATA.TEST.ARGMAX_TO_OUTPUT and not self.separated_class_channel:
                     _type = np.uint8 if self.cfg.DATA.N_CLASSES < 255 else np.uint16
                     pred = np.expand_dims(np.argmax(pred, -1), -1).astype(_type)
 
@@ -2211,6 +2121,258 @@ class Base_Workflow(metaclass=ABCMeta):
                 verbose=self.cfg.TEST.VERBOSE,
             )
 
-    def after_all_patch_prediction_by_chunks(self):
-        """Place any code that needs to be done after predicting all the patches, one by one, in the "by chunks" setting."""
+
+    #########################
+    ### BY CHUNKS METHODS ###
+    #########################
+    # The order of the execution of the "by chunks" methods is the following:
+    #   * 'process_test_sample_by_chunks': process a sample in the inference phase in "by chunks" setting, this is the main method 
+    #      that calls the other three methods below
+    #           1. 'after_one_chunk_raw_prediction': after predicting one chunk
+    #      Once the predictions for all the chunks are generated each workflow will process the generated zarr in an specific way. The 
+    #      process is the following:
+    #           2. 'after_all_chunk_prediction_workflow_process': process to be done after predicting all the chunks in all ranks
+    #              2.1 'after_one_chunk_workflow_process': process a list of chunks
+    #           3. 'after_all_chunk_prediction_workflow_process_master_rank': process to be done after predicting all the chunks 
+    #              but only on the master rank.
+    # 
+    def after_one_chunk_raw_prediction(
+        self, chunk_id: int, chunk: NDArray, chunk_in_data: PatchCoords, added_pad: List[List[int]]
+    ):
+        """
+        Place any code that needs to be done after predicting one chunk of data in "by chunks" setting.
+
+        Parameters
+        ----------
+        chunk_id: int
+            Chunk identifier.
+
+        chunk : NDArray
+            Predicted chunk
+
+        patch_in_data : PatchCoords
+            Global coordinates of the chunk.
+        
+        added_pad: List of list of ints
+            Padding added to the chunk in each dimension. The order of dimensions is the same as the input 
+            image, and the order of the list is: [[pad_before_dim1, pad_after_dim1], [pad_before_dim2, pad_after_dim2], ...]. 
+        """
         raise NotImplementedError
+
+    def after_one_chunk_workflow_process(self, chunks: List[NDArray]) -> Optional[List[NDArray]]:
+        """
+        Process a list of chunks during inference in "by chunks" setting. Each workflow should have 
+        its own implementation of this method.
+
+        Parameters
+        ----------
+        chunks : List[NDArray]
+            List of chunks. Expected axes are: ``(z, y, x, channels)`` for 3D and
+            ``(y, x, channels)`` for 2D.
+
+        Returns
+        -------
+        chunks : Optional[List[NDArray]]
+            Processed chunks.
+        """
+        raise NotImplementedError
+
+    def after_all_chunk_prediction_workflow_process(self):
+        """
+        Place any code that needs to be done after predicting all patches in "by chunks" setting.
+        This function is called on all ranks.
+        """
+        print("Processing generated predictions . . .")
+
+        # Create the generator
+        fpath = os.path.join(
+            self.cfg.PATHS.RESULT_DIR.PER_IMAGE, os.path.splitext(self.current_sample["X_filename"])[0] + ".zarr"
+        )
+        self.test_generator = create_chunked_workflow_process_generator(
+            self.cfg,
+            system_dict=self.system_dict,
+            model_predictions=fpath,
+            out_dir=self.test_chunked_workflow_process_vars["out_dir"],
+            dtype_str=self.test_chunked_workflow_process_vars["dtype_str"],
+        )
+        tgen: chunked_workflow_process_generator = self.test_generator.dataset  # type: ignore
+
+        # Get parallel data shape is ZYX
+        _, z_dim, _, y_dim, x_dim = order_dimensions(
+            tgen.X_parallel_data.shape, self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER
+        )
+        self.parallel_data_shape = [z_dim, y_dim, x_dim]
+        samples_visited = {}
+        for obj_list in self.test_generator:
+            sampler_ids, chunks, patch_in_data = obj_list
+
+            if self.cfg.TEST.VERBOSE:
+                print(
+                    "[Rank {} ({})] Patch number {} processing patches {} from {}".format(
+                        get_rank(), os.getpid(), sampler_ids, patch_in_data, self.parallel_data_shape
+                    )
+                )
+
+            processed_chunks = self.after_one_chunk_workflow_process(chunks)
+            assert processed_chunks is not None, "The after_one_chunk_workflow_process() method must return a value."
+
+            lbreaked = False
+            for i in range(len(processed_chunks)):
+                # Break the loop as those samples were created just to complete the last batch
+                if sampler_ids[i] < sampler_ids[0] or sampler_ids[i] in samples_visited:
+                    print(
+                        "[Rank {} ({})] Patch {} discarded".format(
+                            get_rank(),
+                            os.getpid(),
+                            sampler_ids[i],
+                        )
+                    )
+                    lbreaked = True
+                    break
+
+                tgen.insert_patch_in_file(processed_chunks[i], patch_in_data[i])
+                samples_visited[sampler_ids[i]] = True
+
+            if lbreaked and sampler_ids[i] in samples_visited:
+                print(
+                    "[Rank {} ({})] Finishing the loop. Seems that the patches are starting to repeat".format(
+                        get_rank(),
+                        os.getpid(),
+                    )
+                )
+                break
+
+        # Wait until all threads are done so the main thread can create the full size image
+        if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
+            if self.cfg.TEST.VERBOSE:
+                print(
+                    f"[Rank {get_rank()} ({os.getpid()})] Finished predicting patches. Waiting for all ranks . . ."
+                )
+            dist.barrier()
+
+        tgen.close_open_files()
+
+        # Only after everyone finished writing, optionally convert to TIF on rank0
+        if self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF:
+            if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
+                dist.barrier()
+            if is_main_process():
+                tgen.save_parallel_data_as_tif()
+            if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
+                dist.barrier()
+
+    def after_all_chunk_prediction_workflow_process_master_rank(self):
+        """
+        Place any code that needs to be done after predicting all the patches in the "by chunks" setting.
+        This function is only called on the master rank.
+        """
+        raise NotImplementedError
+
+    def process_test_sample_by_chunks(self):
+        """
+        Process a sample in the inference phase.
+        
+        A final H5/Zarr file is created in "TZCYX" or "TZYXC" order
+        depending on ``DATA.TEST.INPUT_IMG_AXES_ORDER`` ('T' is always included).
+        """
+        if not self.cfg.TEST.REUSE_PREDICTIONS:
+            # Create the generator
+            self.test_generator = create_chunked_test_generator(
+                self.cfg,
+                system_dict=self.system_dict,
+                current_sample=self.current_sample,
+                norm_module=self.norm_module,
+                out_dir=self.cfg.PATHS.RESULT_DIR.PER_IMAGE,
+                dtype_str=self.dtype_str,
+            )
+            tgen: chunked_test_pair_data_generator = self.test_generator.dataset  # type: ignore
+
+            # Get parallel data shape is ZYX
+            _, z_dim, _, y_dim, x_dim = order_dimensions(
+                tgen.X_parallel_data.shape, self.cfg.DATA.TEST.INPUT_IMG_AXES_ORDER
+            )
+            self.parallel_data_shape = [z_dim, y_dim, x_dim]
+            samples_visited = {}
+            for obj_list in self.test_generator:
+                sampler_ids, img, mask, patch_in_data, added_pad, norm_extra_info = obj_list
+
+                if self.cfg.TEST.VERBOSE:
+                    print(
+                        "[Rank {} ({})] Patch number {} processing patches {} from {}".format(
+                            get_rank(), os.getpid(), sampler_ids, patch_in_data, self.parallel_data_shape
+                        )
+                    )
+
+                # Pass the batch through the model
+                pred = self.predict_batches_in_test(img, mask, disable_tqdm=True)
+
+                lbreaked = False
+                for i in range(pred.shape[0]):
+                    # Break the loop as those samples were created just to complete the last batch
+                    if sampler_ids[i] < sampler_ids[0] or sampler_ids[i] in samples_visited:
+                        print(
+                            "[Rank {} ({})] Patch {} discarded".format(
+                                get_rank(),
+                                os.getpid(),
+                                sampler_ids[i],
+                            )
+                        )
+                        lbreaked = True
+                        break
+
+                    single_pred = pred[i]
+                    single_pred_pad = added_pad[i]
+                    single_patch_in_data = patch_in_data[i]
+                    self.after_one_chunk_raw_prediction(
+                        sampler_ids[i], single_pred, single_patch_in_data, single_pred_pad
+                    )
+
+                    # Remove padding if added
+                    single_pred = single_pred[
+                        single_pred_pad[0][0] : single_pred.shape[0] - single_pred_pad[0][1],
+                        single_pred_pad[1][0] : single_pred.shape[1] - single_pred_pad[1][1],
+                        single_pred_pad[2][0] : single_pred.shape[2] - single_pred_pad[2][1],
+                    ]
+                    # Insert into the data
+                    tgen.insert_patch_in_file(single_pred, single_patch_in_data)
+
+                    samples_visited[sampler_ids[i]] = True
+
+                if lbreaked and sampler_ids[i] in samples_visited:
+                    print(
+                        "[Rank {} ({})] Finishing the loop. Seems that the patches are starting to repeat".format(
+                            get_rank(),
+                            os.getpid(),
+                        )
+                    )
+                    break
+
+            # Wait until all threads are done so the main thread can create the full size image
+            if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
+                if self.cfg.TEST.VERBOSE:
+                    print(
+                        f"[Rank {get_rank()} ({os.getpid()})] Finished predicting patches. Waiting for all ranks . . ."
+                    )
+                dist.barrier()
+
+            tgen.close_open_files()
+
+            # Only after everyone finished writing, optionally convert to TIF on rank0
+            if self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF:
+                if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
+                    dist.barrier()
+                if is_main_process():
+                    tgen.save_parallel_data_as_tif()
+                if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
+                    dist.barrier()
+
+        self.after_all_chunk_prediction_workflow_process()
+
+        if is_main_process():
+            self.after_all_chunk_prediction_workflow_process_master_rank()
+
+        # Wait until all threads are done so the main thread can create the full size image
+        if self.cfg.SYSTEM.NUM_GPUS > 1 and is_dist_avail_and_initialized():
+            if self.cfg.TEST.VERBOSE:
+                print(f"[Rank {get_rank()} ({os.getpid()})] Finished predicting sample. Waiting for all ranks . . .")
+            dist.barrier()
