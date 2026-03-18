@@ -701,6 +701,7 @@ class Base_Workflow(metaclass=ABCMeta):
         print("###############")
         print("# Build model #")
         print("###############")
+        
         if self.cfg.MODEL.SOURCE == "biapy":
             # Obtain model spec from checkpoint
             if self.cfg.MODEL.LOAD_CHECKPOINT and self.cfg.MODEL.LOAD_MODEL_FROM_CHECKPOINT:
@@ -725,12 +726,16 @@ class Base_Workflow(metaclass=ABCMeta):
                     if self.cfg.PROBLEM.PRINT_OLD_KEY_CHANGES:
                         print("The following changes were made in order to adapt the loaded input configuration from checkpoint into the current configuration version:")
                         diff_between_configs(saved_cfg, tmp_cfg)
-                    # Save current BMZ config
-                    tmp_BMZ_config = self.cfg.MODEL.BMZ.clone()
-                    update_dict_with_existing_keys(self.cfg["MODEL"], tmp_cfg["MODEL"])
-                    # Restore BMZ config
-                    self.cfg["MODEL"]["BMZ"] = tmp_BMZ_config
+                    
+                    # Save current model config
+                    tmp_BMZ_config = self.cfg.MODEL.clone()
 
+                    update_dict_with_existing_keys(self.cfg["MODEL"], tmp_cfg["MODEL"])
+
+                    # Restore some model config
+                    self.cfg["MODEL"]["BMZ"] = tmp_BMZ_config["BMZ"]
+                    self.cfg["MODEL"]["OUT_CHECKPOINT_FORMAT"] = tmp_BMZ_config["OUT_CHECKPOINT_FORMAT"]
+                    
                     # Check if the merge is coherent
                     self.cfg["MODEL"]["LOAD_CHECKPOINT"] = True
                     self.cfg["MODEL"]["LOAD_MODEL_FROM_CHECKPOINT"] = False
