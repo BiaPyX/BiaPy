@@ -1186,6 +1186,8 @@ class Config:
         # Downsampling to be made in Z. This value will be the third integer of the MaxPooling operation. When facing
         # anysotropic datasets set it to get better performance
         _C.MODEL.Z_DOWN = [0, 0, 0, 0]
+        # Downsampling to be made in XY. This value will be the first and second integer of the MaxPooling operation. When facing anysotropic datasets set it to get better performance
+        _C.MODEL.YX_DOWN = [2, 2, 2, 2]
         # For each level of the model (U-Net levels), set to true or false if the dimensions of the feature maps are isotropic.
         _C.MODEL.ISOTROPY = [True, True, True, True, True]
         # Include extra convolutional layers with larger kernel at the beginning and end of the U-Net-like model.

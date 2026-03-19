@@ -112,6 +112,7 @@ def build_model(
             normalization=cfg.MODEL.NORMALIZATION,
             k_size=cfg.MODEL.KERNEL_SIZE,
             upsample_layer=cfg.MODEL.UPSAMPLE_LAYER,
+            yx_down=cfg.MODEL.YX_DOWN,
             z_down=cfg.MODEL.Z_DOWN,
             output_channels=output_channels,
             output_channel_info=output_channel_info,

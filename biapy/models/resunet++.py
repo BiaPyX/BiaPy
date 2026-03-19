@@ -54,6 +54,7 @@ class ResUNetPlusPlus(nn.Module):
         k_size=3,
         upsample_layer="convtranspose",
         z_down=[2, 2, 2, 2],
+        yx_down=[2, 2, 2, 2],
         output_channels=[1],
         separated_decoders=False,
         output_channel_info=["F"],
@@ -96,6 +97,9 @@ class ResUNetPlusPlus(nn.Module):
 
         z_down : List of ints, optional
             Downsampling used in z dimension. Set it to ``1`` if the dataset is not isotropic.
+
+        yx_down : List of ints, optional
+            Downsampling used in y and x dimensions. Set it to ``1`` if the dataset is not isotropic.
 
         output_channels : list of int, optional
             Output channels of the network. If one value is provided, the model will have a single output head. 
@@ -162,6 +166,7 @@ class ResUNetPlusPlus(nn.Module):
         self.depth = len(feature_maps) - 2
         self.ndim = 3 if len(image_shape) == 4 else 2
         self.z_down = z_down
+        self.yx_down = yx_down
         self.output_channels = output_channels
         self.output_channel_info = output_channel_info
         self.return_class = True if "class" in output_channel_info else False
@@ -239,7 +244,7 @@ class ResUNetPlusPlus(nn.Module):
             )
         )
         self.sqex_blocks.append(SqExBlock(feature_maps[0], ndim=self.ndim))
-        mpool = (z_down[0], 2, 2) if self.ndim == 3 else (2, 2)
+        mpool = (z_down[0], self.yx_down[0], self.yx_down[0]) if self.ndim == 3 else (self.yx_down[0], self.yx_down[0])
         self.mpooling_layers.append(pooling(mpool))
         in_channels = feature_maps[0]
         for i in range(self.depth):
@@ -260,7 +265,7 @@ class ResUNetPlusPlus(nn.Module):
                     first_block=False,
                 )
             )
-            mpool = (z_down[i + 1], 2, 2) if self.ndim == 3 else (2, 2)
+            mpool = (z_down[i + 1], self.yx_down[i + 1], self.yx_down[i + 1]) if self.ndim == 3 else (self.yx_down[i + 1], self.yx_down[i + 1])
             self.mpooling_layers.append(pooling(mpool))
             in_channels = feature_maps[i + 1]
             if i != self.depth - 1:
@@ -295,6 +300,7 @@ class ResUNetPlusPlus(nn.Module):
                         output_dim=feature_maps[i + 2],
                         norm=normalization,
                         z_down=z_down[i + 1],
+                        yx_down=yx_down[i + 1],
                     ) # type: ignore
                 ) 
                 self.up_paths[j].append(
@@ -305,6 +311,7 @@ class ResUNetPlusPlus(nn.Module):
                         out_size=feature_maps[i + 1],
                         in_size_bridge=feature_maps[i],
                         z_down=z_down[i + 1],
+                        yx_down=yx_down[i + 1],
                         up_mode=upsample_layer,
                         conv=conv,
                         k_size=kernel_size,

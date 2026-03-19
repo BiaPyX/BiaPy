@@ -47,6 +47,7 @@ class Attention_U_Net(nn.Module):
         k_size=3,
         upsample_layer="convtranspose",
         z_down=[2, 2, 2, 2],
+        yx_down=[2, 2, 2, 2],
         output_channels=[1],
         separated_decoders=False,
         output_channel_info=["F"],
@@ -89,6 +90,9 @@ class Attention_U_Net(nn.Module):
 
         z_down : List of ints, optional
             Downsampling used in z dimension. Set it to ``1`` if the dataset is not isotropic.
+
+        yx_down : List of ints, optional
+            Downsampling used in y and x dimensions. Set it to ``1`` if the dataset is not isotropic.
 
         output_channels : list of int, optional
             Output channels of the network. If one value is provided, the model will have a single output head. 
@@ -163,6 +167,7 @@ class Attention_U_Net(nn.Module):
         self.depth = len(feature_maps) - 1
         self.ndim = 3 if len(image_shape) == 4 else 2
         self.z_down = z_down
+        self.yx_down = yx_down
         self.output_channels = output_channels
         self.output_channel_info = output_channel_info
         self.return_class = True if "class" in output_channel_info else False
@@ -236,7 +241,7 @@ class Attention_U_Net(nn.Module):
                     dropout=drop_values[i],
                 )
             )
-            mpool = (z_down[i], 2, 2) if self.ndim == 3 else (2, 2)
+            mpool = (z_down[i], yx_down[i], yx_down[i]) if self.ndim == 3 else (yx_down[i], yx_down[i])
             self.mpooling_layers.append(pooling(mpool))
             in_channels = feature_maps[i]
 
@@ -269,6 +274,7 @@ class Attention_U_Net(nn.Module):
                         in_size=in_channels,
                         out_size=feature_maps[i],
                         z_down=z_down[i],
+                        yx_down=yx_down[i],
                         up_mode=upsample_layer,
                         conv=conv,
                         k_size=kernel_size,

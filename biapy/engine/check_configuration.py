@@ -2440,6 +2440,30 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             else:
                 raise ValueError("'MODEL.FEATURE_MAPS' and 'MODEL.DROPOUT_VALUES' lengths must be equal")
 
+    # Adjust YX_DOWN 
+    if all(x == 0 for x in cfg.MODEL.YX_DOWN):
+        if model_arch == "multiresunet":
+            opts.extend(["MODEL.YX_DOWN", (2, 2, 2, 2)])
+        else:
+            opts.extend(["MODEL.YX_DOWN", (2,) * (len(cfg.MODEL.FEATURE_MAPS) - 1)])
+    elif any([False for x in cfg.MODEL.YX_DOWN if x != 1 and x != 2]):
+        raise ValueError("'MODEL.YX_DOWN' needs to be 1 or 2")
+    else:
+        if model_arch == "multiresunet" and len(cfg.MODEL.YX_DOWN) != 4:
+            raise ValueError("'MODEL.YX_DOWN' length must be 4 when using 'multiresunet'")
+        elif model_arch in [
+            "unet",
+            "resunet",
+            "resunet++",
+            "seunet",
+            "resunet_se",
+            "attention_unet",
+            "unext_v1",
+            "unext_v2",
+        ]:
+            if len(cfg.MODEL.FEATURE_MAPS) - 1 != len(cfg.MODEL.YX_DOWN):
+                raise ValueError("'MODEL.FEATURE_MAPS' length minus one and 'MODEL.YX_DOWN' length must be equal")
+
     # Adjust Z_DOWN values to feature maps
     if all(x == 0 for x in cfg.MODEL.Z_DOWN):
         if model_arch == "multiresunet":
@@ -2642,42 +2666,51 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             z_size = cfg.DATA.PATCH_SIZE[0]
             sizes = cfg.DATA.PATCH_SIZE[1:-1]
 
-            if "hrnet" not in model_arch:
-                for i in range(len(cfg.MODEL.FEATURE_MAPS) - 1):
-                    if not all(
-                        [False for x in sizes if x % (np.power(2, (i + 1))) != 0 or z_size % cfg.MODEL.Z_DOWN[i] != 0]
-                    ):
-                        m = (
-                            "The 'DATA.PATCH_SIZE' provided is not divisible by 2 in each of the U-Net's levels. You can:\n 1) Reduce the number "
-                            + "of levels (by reducing 'cfg.MODEL.FEATURE_MAPS' array's length)\n 2) Increase 'DATA.PATCH_SIZE'"
-                        )
-                        if cfg.PROBLEM.NDIM == "3D":
-                            m += (
-                                "\n 3) If the Z axis is the problem, as the patch size is normally less than in other axis due to resolution, you "
-                                + "can tune 'MODEL.Z_DOWN' variable to not downsample the image in all U-Net levels"
-                            )
-                        raise ValueError(m)
-                    z_size = z_size // cfg.MODEL.Z_DOWN[i]
-            else:
-                
-                # Check that the input patch size is divisible in every level of the HRNet selected
-                hrnet_zdown_div = 2 if cfg.MODEL.HRNET.Z_DOWN else 1
+            is_hrnet = "hrnet" in model_arch
+            is_3d = cfg.PROBLEM.NDIM == "3D"
 
-                for i in range(4):
-                    if not all(
-                        [False for x in sizes if x % (np.power(2, (i + 1))) != 0 or z_size % hrnet_zdown_div != 0]
-                    ):
-                        m = (
-                            f"The 'DATA.PATCH_SIZE' provided is not divisible by 2 in each of the HRNET's levels. You can:\n 1) Reduce the number "
-                            + "of levels (by reducing 'cfg.MODEL.FEATURE_MAPS' array's length)\n 2) Increase 'DATA.PATCH_SIZE'"
+            # 1. Setup the downsampling schedules based on the architecture
+            if is_hrnet:
+                num_levels = 4
+                yx_down_schedule = [2] * num_levels
+                z_down_schedule = [2 if cfg.MODEL.HRNET.Z_DOWN else 1] * num_levels
+                z_param_name = "MODEL.HRNET.Z_DOWN"
+            else:
+                num_levels = len(cfg.MODEL.FEATURE_MAPS) - 1
+                yx_down_schedule = cfg.MODEL.YX_DOWN
+                z_down_schedule = cfg.MODEL.Z_DOWN
+                z_param_name = "MODEL.Z_DOWN"
+
+            # Isolate the current sizes to simulate downsampling iteratively
+            current_z = cfg.DATA.PATCH_SIZE[0] if is_3d else 1
+            current_yx = list(cfg.DATA.PATCH_SIZE[1:-1])
+
+            # 2. Single loop to validate divisibility and simulate downsampling
+            for i in range(num_levels):
+                yx_factor = yx_down_schedule[i]
+                z_factor = z_down_schedule[i] if is_3d else 1
+
+                # Check divisibility using clean generator expressions
+                yx_invalid = any(dim % yx_factor != 0 for dim in current_yx)
+                z_invalid = is_3d and (current_z % z_factor != 0)
+
+                if yx_invalid or z_invalid:
+                    m = (
+                        f"The 'DATA.PATCH_SIZE' provided is not divisible by the downsampling factor at level {i} of the {model_arch}. "
+                        "You can:\n"
+                        " 1) Reduce the number of levels (by reducing 'cfg.MODEL.FEATURE_MAPS' array length)\n"
+                        " 2) Increase 'DATA.PATCH_SIZE'"
+                    )
+                    if is_3d:
+                        m += (
+                            f"\n 3) If the Z axis is the problem (often smaller due to resolution), you "
+                            f"can tune '{z_param_name}' to not downsample the Z axis in all levels."
                         )
-                        if cfg.PROBLEM.NDIM == "3D":
-                            m += (
-                                "\n 3) If the Z axis is the problem, as the patch size is normally less than in other axis due to resolution, you "
-                                + f"can tune 'MODEL.HRNET.Z_DOWN' variable to not downsample the image in all U-Net levels"
-                            )
-                        raise ValueError(m)
-                    z_size = z_size // 2 if cfg.MODEL.HRNET.Z_DOWN else z_size
+                    raise ValueError(m)
+
+                # Apply downsampling to prepare for the next level's check
+                current_yx = [dim // yx_factor for dim in current_yx]
+                current_z = current_z // z_factor
 
         if "hrnet" in model_arch:
             assert cfg.MODEL.HRNET.BLOCK_TYPE in ['BASIC', 'BOTTLENECK', 'CONVNEXT_V1', 'CONVNEXT_V2'], "'MODEL.HRNET.BLOCK_TYPE' not in ['BASIC', 'BOTTLENECK', 'CONVNEXT_V1', 'CONVNEXT_V2']"

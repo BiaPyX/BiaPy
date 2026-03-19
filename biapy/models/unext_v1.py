@@ -57,6 +57,7 @@ class U_NeXt_V1(nn.Module):
         feature_maps=[32, 64, 128, 256],
         upsample_layer="convtranspose",
         z_down=[2, 2, 2, 2],
+        yx_down=[2, 2, 2, 2],
         output_channels=[1],
         separated_decoders=False,
         output_channel_info=["F"],
@@ -105,6 +106,11 @@ class U_NeXt_V1(nn.Module):
             isotropic and z-downsampling is not desired at that stage.
             Its length should match the number of pooling stages (`len(feature_maps) - 1`).
             Defaults to `[2, 2, 2, 2]`.
+
+        yx_down : List[int], optional
+            A list of downsampling factors for the y and x dimensions at each pooling
+            stage in the encoder. Its length should match the number of pooling stages
+            (`len(feature_maps) - 1`). Defaults to `[2, 2, 2, 2]`.
 
         output_channels : List[int], optional
             Output channels of the network. If one value is provided, the model will have a single output head. 
@@ -187,6 +193,7 @@ class U_NeXt_V1(nn.Module):
         self.depth = len(feature_maps) - 1
         self.ndim = 3 if len(image_shape) == 4 else 2
         self.z_down = z_down
+        self.yx_down = yx_down
         self.output_channels = output_channels
         self.output_channel_info = output_channel_info
         self.return_class = True if "class" in output_channel_info else False
@@ -271,7 +278,7 @@ class U_NeXt_V1(nn.Module):
             sd_probs.append(sd_probs_stage)
 
             # Downsampling
-            mpool = (z_down[i], 2, 2) if self.ndim == 3 else (2, 2)
+            mpool = (z_down[i], yx_down[i], yx_down[i]) if self.ndim == 3 else (yx_down[i], yx_down[i])
             self.downsample_layers.append(
                 nn.Sequential(
                     pre_ln_permutation,
@@ -311,13 +318,14 @@ class U_NeXt_V1(nn.Module):
                     kernel_size = (1, 7, 7)
                 self.up_paths[j].append(
                     UpConvNeXtBlock_V1(
-                        self.ndim,
-                        convtranspose,
-                        in_channels,
-                        feature_maps[i],
-                        z_down[i],
-                        upsample_layer,
-                        conv,
+                        ndim=self.ndim,
+                        convtranspose=convtranspose,
+                        in_size=in_channels,
+                        out_size=feature_maps[i],
+                        z_down=z_down[i],
+                        yx_down=yx_down[i],
+                        up_mode=upsample_layer,
+                        conv=conv,
                         attention_gate=False,
                         cn_layers=cn_layers[i],
                         sd_probs=sd_probs[i],
