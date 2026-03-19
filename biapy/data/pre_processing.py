@@ -195,23 +195,22 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
                         )
                     else:
                         class_channel = np.expand_dims(img[..., 1].copy(), -1)
-                        img = labels_into_channels(
-                            img,
-                            mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
-                            channel_extra_opts=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0],
-                            save_dir=getattr(cfg.PATHS, tag + "_INSTANCE_CHANNELS_CHECK"),
-                        )
-                        img = np.concatenate([
-                            np.expand_dims(img,0), 
-                            np.expand_dims(class_channel,0)
-                        ], axis=-1)
                 else:
-                    img = labels_into_channels(
-                        img,
-                        mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
-                        channel_extra_opts=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0],
-                        save_dir=getattr(cfg.PATHS, tag + "_INSTANCE_CHANNELS_CHECK"),
-                    )
+                    if img.shape[-1] != 1:
+                        raise ValueError(
+                            "Expected instance segmentation GT images to have a single channel containing the instance labels, "
+                            "but got image with shape {} ({} channels). Check the image file: {}".format(img.shape, img.shape[-1], img.shape, img_path)
+                        )
+
+                img = labels_into_channels(
+                    img,
+                    mode=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
+                    channel_extra_opts=cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0],
+                    save_dir=getattr(cfg.PATHS, tag + "_INSTANCE_CHANNELS_CHECK"),
+                )
+
+                if cfg.DATA.N_CLASSES > 2:
+                    img = np.concatenate([img, class_channel], axis=-1)
 
                 # Create the Zarr file where the mask will be placed
                 if mask is None or os.path.basename(Y[i]["filepath"]) != last_parallel_file:
@@ -300,10 +299,9 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
         N = len(Y)
         it = range(rank, N, world_size)
         for i in tqdm(it, disable=not is_main_process()):
-            img = read_img_as_ndarray(
-                os.path.join(getattr(cfg.DATA, tag).GT_PATH, Y[i]),
-                is_3d=not cfg.PROBLEM.NDIM == "2D",
-            )
+            img_path = os.path.join(getattr(cfg.DATA, tag).GT_PATH, Y[i])
+            img = read_img_as_ndarray(img_path, is_3d=not cfg.PROBLEM.NDIM == "2D")
+
             if cfg.DATA.N_CLASSES > 2:
                 if img.shape[-1] != 2:
                     raise ValueError(
@@ -312,6 +310,12 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
                         "(second channel)."
                     )
                 class_channel = np.expand_dims(img[..., 1].copy(), -1)
+            else:
+                if img.shape[-1] != 1:
+                    raise ValueError(
+                        "Expected instance segmentation GT images to have a single channel containing the instance labels, "
+                        "but got image with shape {} ({} channels). Check the image file: {}".format(img.shape, img.shape[-1], img.shape, img_path)
+                    )
 
             img = labels_into_channels(
                 img,
