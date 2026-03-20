@@ -1187,7 +1187,7 @@ class Config:
         # anysotropic datasets set it to get better performance
         _C.MODEL.Z_DOWN = [0, 0, 0, 0]
         # Downsampling to be made in XY. This value will be the first and second integer of the MaxPooling operation. When facing anysotropic datasets set it to get better performance
-        _C.MODEL.YX_DOWN = [2, 2, 2, 2]
+        _C.MODEL.YX_DOWN = [0, 0, 0, 0]
         # For each level of the model (U-Net levels), set to true or false if the dimensions of the feature maps are isotropic.
         _C.MODEL.ISOTROPY = [True, True, True, True, True]
         # Include extra convolutional layers with larger kernel at the beginning and end of the U-Net-like model.
@@ -1276,31 +1276,33 @@ class Config:
         # These parameters can be used as a template for building custom HRNet versions
         _C.MODEL.HRNET = CN()
         # Whether to downsample the input in Z or not
-        _C.MODEL.HRNET.Z_DOWN = True
+        _C.MODEL.HRNET.Z_DOWN = [0, 0, 0]
+        # Downsampling to be made in XY. This value will be the first and second integer of the MaxPooling operation. 
+        # When facing anysotropic datasets set it to get better performance
+        _C.MODEL.HRNET.YX_DOWN = [0, 0, 0]
         # Type of block to use in HRNet. Options: 'BASIC', 'BOTTLENECK', 'CONVNEXT_V1' and 'CONVNEXT_V2'
         _C.MODEL.HRNET.BLOCK_TYPE = 'BASIC'
-        # Indicate whether to use a custom configuration for HRNet or use a predefined one. If set to True 
-        # MODEL.HRNET.STAGE2, MODEL.HRNET.STAGE3 and MODEL.HRNET.STAGE4 will be used. If False, the configuration
-        # will be set depending on the selected architecture (see PROBLEM.MODEL_ARCHITECTURE)
-        _C.MODEL.HRNET.HEAD_TYPE = "FCN" # Options: "OCR", "ASPP", "PSP", "FCN"
-        _C.MODEL.HRNET.CUSTOM = False
-
-        # These stages are used for HRNet18, HRNet32, HRNet48 and HRNet64
-        _C.MODEL.HRNET.STAGE2 = CN()
-        _C.MODEL.HRNET.STAGE2.NUM_MODULES = 1
-        _C.MODEL.HRNET.STAGE2.NUM_BRANCHES = 2
-        _C.MODEL.HRNET.STAGE2.NUM_BLOCKS = [4, 4]
-        _C.MODEL.HRNET.STAGE2.NUM_CHANNELS = [18, 36]
-        _C.MODEL.HRNET.STAGE3 = CN()
-        _C.MODEL.HRNET.STAGE3.NUM_MODULES = 4
-        _C.MODEL.HRNET.STAGE3.NUM_BRANCHES = 3
-        _C.MODEL.HRNET.STAGE3.NUM_BLOCKS = [4, 4, 4]
-        _C.MODEL.HRNET.STAGE3.NUM_CHANNELS = [18, 36, 72]
-        _C.MODEL.HRNET.STAGE4 = CN()
-        _C.MODEL.HRNET.STAGE4.NUM_MODULES = 3
-        _C.MODEL.HRNET.STAGE4.NUM_BRANCHES = 4
-        _C.MODEL.HRNET.STAGE4.NUM_BLOCKS = [4, 4, 4, 4]
-        _C.MODEL.HRNET.STAGE4.NUM_CHANNELS = [18, 36, 72, 144]
+        # Indicate whether to use a custom configuration for HRNet or use a predefined one. Options: "OCR", "ASPP", "PSP", "FCN"
+        _C.MODEL.HRNET.HEAD_TYPE = "FCN"
+        # Whether to use a custom configuration for HRNet or use a predefined one. Options: "18" (hrnet18), "32" (hrnet32), 
+        # "48" (hrnet48), "64" (hrnet64) or "custom"
+        _C.MODEL.HRNET.VARIANT = "W48"
+        # Number of stages in the HRNet. This value will determine the length of the rest of the lists. Only used if MODEL.HRNET.VARIANT = "custom"
+        _C.MODEL.HRNET.NUM_STAGES = 3
+        # Number of modules in each stage. Only used if MODEL.HRNET.VARIANT = "custom". A module is a sequence of blocks (see MODEL.HRNET.BLOCK_TYPE) 
+        # that are not connected with the rest of branches. In each stage, after the modules, a fusion is made between all the branches. So, the 
+        # number of modules will determine how many times the fusion is made in each stage.
+        _C.MODEL.HRNET.NUM_MODULES = [1, 4, 3]
+        # Number of branches in each stage. Only used if MODEL.HRNET.VARIANT = "custom". The number of branches will determine how many parallel convolutions 
+        # are made in each stage and how many feature maps with different resolutions are generated.
+        _C.MODEL.HRNET.NUM_BRANCHES = [2, 3, 4]
+        # Number of blocks in each branch of each stage. Only used if MODEL.HRNET.VARIANT = "custom". A block is a convolutional operation 
+        # (see MODEL.HRNET.BLOCK_TYPE) that is repeated a certain number of times in each branch. The number of blocks will determine the 
+        # depth of the model.
+        _C.MODEL.HRNET.NUM_BLOCKS = [[4, 4], [4, 4, 4], [4, 4, 4, 4]]
+        # Number of channels in each block of each branch of each stage. Only used if MODEL.HRNET.VARIANT = "custom". The number of channels 
+        # will determine the width of the model.
+        _C.MODEL.HRNET.NUM_CHANNELS = [[18, 36], [18, 36, 72], [18, 36, 72, 144]]
 
         _C.MODEL.STUNET = CN()
         # Variant of the STUNet model. Options are: 'small', 'base', 'large'

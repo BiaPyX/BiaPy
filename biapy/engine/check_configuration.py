@@ -2336,12 +2336,9 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "mae",
             "unext_v1",
             "unext_v2",
-            "hrnet18",
-            "hrnet32",
-            "hrnet48",
-            "hrnet64",
+            "hrnet",
             "stunet",
-        ], "MODEL.ARCHITECTURE not in ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'simple_cnn', 'efficientnet_b[0-7]', 'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae', 'unext_v1', 'unext_v2', 'hrnet18', 'hrnet32', 'hrnet48', 'hrnet64', 'stunet']"
+        ], "MODEL.ARCHITECTURE not in ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'simple_cnn', 'efficientnet_b[0-7]', 'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae', 'unext_v1', 'unext_v2', 'hrnet', 'stunet']"
         if (
             model_arch
             not in [
@@ -2359,10 +2356,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "unext_v2",
                 "dfcan",
                 "rcan",
-                "hrnet18",
-                "hrnet32",
-                "hrnet48",
-                "hrnet64",
+                "hrnet",
                 "stunet",
             ]
             and cfg.PROBLEM.NDIM == "3D"
@@ -2385,10 +2379,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                         "unext_v2",
                         "dfcan",
                         "rcan",
-                        "hrnet18",
-                        "hrnet32",
-                        "hrnet48",
-                        "hrnet64",
+                        "hrnet",
                         "stunet",
                     ]
                 )
@@ -2408,15 +2399,12 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "unetr",
                 "unext_v1",
                 "unext_v2",
-                "hrnet18",
-                "hrnet32",
-                "hrnet48",
-                "hrnet64",
+                "hrnet",
                 "stunet",
             ]
         ):
             raise ValueError(
-                "'DATA.N_CLASSES' > 2 can only be used with 'MODEL.ARCHITECTURE' in ['unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'multiresunet', 'unetr', 'unext_v1', 'unext_v2', 'hrnet18', 'hrnet32', 'hrnet48', 'hrnet64', 'stunet']"
+                "'DATA.N_CLASSES' > 2 can only be used with 'MODEL.ARCHITECTURE' in ['unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'multiresunet', 'unetr', 'unext_v1', 'unext_v2', 'hrnet', 'stunet']"
             )
 
         assert len(cfg.MODEL.FEATURE_MAPS) > 2, "'MODEL.FEATURE_MAPS' needs to have at least 3 values"
@@ -2463,6 +2451,15 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         ]:
             if len(cfg.MODEL.FEATURE_MAPS) - 1 != len(cfg.MODEL.YX_DOWN):
                 raise ValueError("'MODEL.FEATURE_MAPS' length minus one and 'MODEL.YX_DOWN' length must be equal")
+    if "hrnet" in model_arch:
+        if all(x == 0 for x in cfg.MODEL.HRNET.YX_DOWN):
+            opts.extend(["MODEL.HRNET.YX_DOWN", (2,) * (len(cfg.MODEL.HRNET.NUM_BLOCKS))])
+        elif any([False for x in cfg.MODEL.HRNET.YX_DOWN if x != 1 and x != 2]):
+            raise ValueError("'MODEL.HRNET.YX_DOWN' needs to be 1 or 2")
+        else:
+            if len(cfg.MODEL.HRNET.NUM_BLOCKS) != len(cfg.MODEL.HRNET.YX_DOWN):
+                raise ValueError("'MODEL.HRNET.NUM_BLOCKS' length and 'MODEL.HRNET.YX_DOWN' length must be equal")
+        assert cfg.MODEL.HRNET.VARIANT in ["W18", "W32", "W48", "W64", "custom"], "'MODEL.HRNET.VARIANT' needs to be in ['W18', 'W32', 'W48', 'W64', 'custom']"
 
     # Adjust Z_DOWN values to feature maps
     if all(x == 0 for x in cfg.MODEL.Z_DOWN):
@@ -2487,6 +2484,14 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         ]:
             if len(cfg.MODEL.FEATURE_MAPS) - 1 != len(cfg.MODEL.Z_DOWN):
                 raise ValueError("'MODEL.FEATURE_MAPS' length minus one and 'MODEL.Z_DOWN' length must be equal")
+    if "hrnet" in model_arch:
+        if all(x == 0 for x in cfg.MODEL.HRNET.Z_DOWN):
+            opts.extend(["MODEL.HRNET.Z_DOWN", (2,) * (len(cfg.MODEL.HRNET.NUM_BLOCKS))])
+        elif any([False for x in cfg.MODEL.HRNET.Z_DOWN if x != 1 and x != 2]):
+            raise ValueError("'MODEL.HRNET.Z_DOWN' needs to be 1 or 2")
+        else:
+            if len(cfg.MODEL.HRNET.NUM_BLOCKS) != len(cfg.MODEL.HRNET.Z_DOWN):
+                raise ValueError("'MODEL.HRNET.NUM_BLOCKS' length and 'MODEL.HRNET.Z_DOWN' length must be equal")
 
     # Adjust ISOTROPY values to feature maps
     if all(x == True for x in cfg.MODEL.ISOTROPY):
@@ -2533,14 +2538,11 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "multiresunet",
                 "unext_v1",
                 "unext_v2",
-                "hrnet18",
-                "hrnet32",
-                "hrnet48",
-                "hrnet64",
+                "hrnet",
                 "stunet",
             ]:
                 raise ValueError(
-                    "Architectures available for {} are: ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'resunet_se', 'unetr', 'multiresunet', 'unext_v1', 'unext_v2', 'hrnet18', 'hrnet32', 'hrnet48', 'hrnet64', 'stunet']".format(
+                    "Architectures available for {} are: ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'resunet_se', 'unetr', 'multiresunet', 'unext_v1', 'unext_v2', 'hrnet', 'stunet']".format(
                         cfg.PROBLEM.TYPE
                     )
                 )
@@ -2587,13 +2589,11 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "multiresunet",
                 "unext_v1",
                 "unext_v2",
-                "hrnet18",
-                "hrnet32",
-                "hrnet48",
-                "hrnet64",
+                "hrnet",
+                "stunet",
             ]:
                 raise ValueError(
-                    "Architectures available for 'IMAGE_TO_IMAGE' are: ['edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'resunet_se', 'seunet', 'attention_unet', 'unetr', 'multiresunet', 'unext_v1', 'unext_v2', 'hrnet18', 'hrnet32', 'hrnet48', 'hrnet64']"
+                    "Architectures available for 'IMAGE_TO_IMAGE' are: ['edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'resunet_se', 'seunet', 'attention_unet', 'unetr', 'multiresunet', 'unext_v1', 'unext_v2', 'hrnet', 'stunet']"
                 )
             # Not allowed archs
             if cfg.PROBLEM.NDIM == "3D" and model_arch == "wdsr":
@@ -2616,14 +2616,11 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "wdsr",
                 "vit",
                 "mae",
-                "hrnet18",
-                "hrnet32",
-                "hrnet48",
-                "hrnet64",
+                "hrnet",
             ]:
                 raise ValueError(
                     "'SELF_SUPERVISED' models available are these: ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'resunet_se', "
-                    "'unetr', 'unext_v1', 'unext_v2', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae', 'hrnet18', 'hrnet32', 'hrnet48', 'hrnet64']"
+                    "'unetr', 'unext_v1', 'unext_v2', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae', 'hrnet']"
                 )
 
             # Not allowed archs
@@ -2657,10 +2654,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "multiresunet",
             "unext_v1",
             "unext_v2",
-            "hrnet18",
-            "hrnet32",
-            "hrnet48",
-            "hrnet64",
+            "hrnet",
             "stunet",
         ]:
             z_size = cfg.DATA.PATCH_SIZE[0]
@@ -2673,7 +2667,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             if is_hrnet:
                 num_levels = 4
                 yx_down_schedule = [2] * num_levels
-                z_down_schedule = [2 if cfg.MODEL.HRNET.Z_DOWN else 1] * num_levels
+                z_down_schedule = cfg.MODEL.HRNET.Z_DOWN
                 z_param_name = "MODEL.HRNET.Z_DOWN"
             else:
                 num_levels = len(cfg.MODEL.FEATURE_MAPS) - 1
@@ -3516,9 +3510,64 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict):
             old_cfg["MODEL"]["HRNET"] = old_cfg["MODEL"].pop("HRNET_32")
         elif "HRNET_18" in old_cfg["MODEL"]:
             old_cfg["MODEL"]["HRNET"] = old_cfg["MODEL"].pop("HRNET_18")
+
         if "HRNET" in old_cfg["MODEL"]:
             if "STAGE1" in old_cfg["MODEL"]["HRNET"]:
                 del old_cfg["MODEL"]["HRNET"]["STAGE1"]
+
+            variant_str = None
+            # 1. Migrate CUSTOM boolean to VARIANT string
+            if "CUSTOM" in old_cfg["MODEL"]["HRNET"]:
+                is_custom = old_cfg["MODEL"]["HRNET"].pop("CUSTOM")
+                if is_custom:
+                    variant_str = "custom"
+            if 'hrnet' in old_cfg["MODEL"]["ARCHITECTURE"].lower():
+                modelname = old_cfg["MODEL"]["ARCHITECTURE"]
+                # Extract base channels dynamically (e.g., 'hrnet32' -> 32)
+                match = re.search(r'\d+', modelname)
+                if match and variant_str != "custom":
+                    variant_str = "W" + str(int(match.group()))
+                old_cfg["MODEL"]["ARCHITECTURE"] = "hrnet"
+                
+            # Fallback if variant wasn't explicitly captured from old keys
+            if variant_str is None:
+                variant_str = old_cfg["MODEL"]["HRNET"].get("VARIANT", "W18")
+            
+            old_cfg["MODEL"]["HRNET"]["VARIANT"] = str(variant_str)
+
+            # 2. Extract nested stages into the new dynamic flat lists
+            if "STAGE2" in old_cfg["MODEL"]["HRNET"]:
+                num_stages = 0
+                num_modules = []
+                num_branches = []
+                num_blocks = []
+                num_channels = []
+                
+                for stage_idx in [2, 3, 4, 5]: # Checking up to STAGE5 just in case
+                    stage_key = f"STAGE{stage_idx}"
+                    if stage_key in old_cfg["MODEL"]["HRNET"]:
+                        num_stages += 1
+                        stage_cfg = old_cfg["MODEL"]["HRNET"].pop(stage_key)
+                        num_modules.append(stage_cfg.get("NUM_MODULES", 1))
+                        num_branches.append(stage_cfg.get("NUM_BRANCHES", stage_idx))
+                        num_blocks.append(stage_cfg.get("NUM_BLOCKS", [4] * stage_idx))
+                        num_channels.append(stage_cfg.get("NUM_CHANNELS", [18 * (2**i) for i in range(stage_idx)]))
+                
+                if num_stages > 0:
+                    old_cfg["MODEL"]["HRNET"]["NUM_STAGES"] = num_stages
+                    old_cfg["MODEL"]["HRNET"]["NUM_MODULES"] = num_modules
+                    old_cfg["MODEL"]["HRNET"]["NUM_BRANCHES"] = num_branches
+                    old_cfg["MODEL"]["HRNET"]["NUM_BLOCKS"] = num_blocks
+                    old_cfg["MODEL"]["HRNET"]["NUM_CHANNELS"] = num_channels
+            
+            # 3. Migrate Z_DOWN from bool to list and initialize YX_DOWN
+            n_stages = old_cfg["MODEL"]["HRNET"].get("NUM_STAGES", 3)
+            
+            if "Z_DOWN" in old_cfg["MODEL"]["HRNET"]:
+                z_down_val = old_cfg["MODEL"]["HRNET"]["Z_DOWN"]
+                if isinstance(z_down_val, bool):
+                    old_cfg["MODEL"]["HRNET"]["Z_DOWN"] = [2 if z_down_val else 1] * n_stages
+
     try:
         del old_cfg["PATHS"]["RESULT_DIR"]["BMZ_BUILD"]
     except:

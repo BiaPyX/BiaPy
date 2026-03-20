@@ -251,7 +251,6 @@ class HighResolutionModule(nn.Module):
             List of branches created for the High Resolution Module.
         """
         branches = []
-
         for i in range(num_branches):
             branches.append(self._make_one_branch(i, block, num_blocks, num_channels, norm=norm))
 
@@ -430,7 +429,7 @@ class HighResolutionNet(nn.Module):
         normalization: str = "none",
         output_channels: List[int] = [1],
         output_channel_info=["F"],
-        explicit_activations: bool = False  ,
+        explicit_activations: bool = False,
         head_activations: List[str] = ["ce_sigmoid"],
         contrast: bool = False,
         contrast_proj_dim: int = 256,
@@ -528,12 +527,10 @@ class HighResolutionNet(nn.Module):
         self.in_size = 64
         self.ndim = 3 if len(image_shape) == 4 else 2
         self.contrast = contrast
-        self.z_down = cfg["Z_DOWN"]
         self.head_type = head_type
         self.explicit_activations = explicit_activations
         if self.explicit_activations:
-            assert len(head_activations) == sum(output_channels), "If 'explicit_activations' is True, 'head_activations' needs to "
-            "have the same number of values as 'output_channels'"
+            assert len(head_activations) == sum(output_channels), "If 'explicit_activations' is True, 'head_activations' needs to have the same number of values as 'output_channels'"
             self.head_activations, self.class_head_activations = prepare_activation_layers(head_activations, output_channel_info)
             if self.return_class and self.class_head_activations is None:
                 raise ValueError("If 'return_class' is True, 'head_activations' must be provided.")
@@ -542,22 +539,35 @@ class HighResolutionNet(nn.Module):
             self.conv_call = nn.Conv3d
             self.norm_func = get_norm_3d
             self.dropout = nn.Dropout3d
-            mpool = (2, 2, 2) if self.z_down else (1, 2, 2)
         else:
             self.conv_call = nn.Conv2d
             self.norm_func = get_norm_2d
             self.dropout = nn.Dropout2d
-            mpool = (2, 2)
+
+        # ---------------------------------------------------------
+        # Dynamic Configuration Initialization
+        # ---------------------------------------------------------
+        num_stages = cfg.get("NUM_STAGES", 3)
+        yx_down_list = cfg.get("YX_DOWN", [2] * num_stages)
+        z_down_list = cfg.get("Z_DOWN", [True] * num_stages)
+
+        # Helper to safely retrieve the correct max-pooling factor per stage
+        def get_mpool(idx):
+            yx = yx_down_list[idx] if isinstance(yx_down_list, list) and idx < len(yx_down_list) else 2
+            z_val = z_down_list[idx] if isinstance(z_down_list, list) and idx < len(z_down_list) else z_down_list
+            return (z_val, yx, yx) if self.ndim == 3 else (yx, yx)
 
         in_channels = image_shape[-1]
+        mpool_stem = get_mpool(0)
 
+        # Initial Stem Layers
         self.conv1_block = ConvBlock(
             conv=self.conv_call,
             in_size=in_channels,
             out_size=64,
             k_size=3,
             padding=1,
-            stride=mpool,
+            stride=mpool_stem,
             act="none",
             norm=normalization,
             bias=False,
@@ -568,48 +578,51 @@ class HighResolutionNet(nn.Module):
             out_size=64,
             k_size=3,
             padding=1,
-            stride=mpool,
+            stride=mpool_stem,
             act="relu",
             norm=normalization,
             bias=False,
         )
         self.layer1 = self._make_layer(HRBottleneck, 64, 64, 4, norm=normalization)
+        
+        # ---------------------------------------------------------
+        # Dynamic Stage Creation
+        # ---------------------------------------------------------
+        self.transitions = nn.ModuleList()
+        self.stages = nn.ModuleList()
+        # layer1 uses HRBottleneck which expands the 64 base channels by 4 (64 * 4 = 256)
+        pre_stage_channels = [64 * HRBottleneck.expansion]
 
-        self.stage2_cfg = cfg["STAGE2"]
-        num_channels = self.stage2_cfg["NUM_CHANNELS"]
-        block = self.blocks_dict[self.stage2_cfg["BLOCK"]]
-        num_channels = [num_channels[i] * block.expansion for i in range(len(num_channels))]
+        for i in range(num_stages):
+            mpool_stage = get_mpool(i)
+            
+            b_type = cfg["BLOCK_TYPE"][i] if isinstance(cfg["BLOCK_TYPE"], list) else cfg["BLOCK_TYPE"]
+            block = self.blocks_dict[b_type]
+            
+            cur_channels = [ch * block.expansion for ch in cfg["NUM_CHANNELS"][i]]
 
-        self.transition1 = self._make_transition_layer([256], num_channels, norm=normalization, mpool=mpool)
+            # Construct Transition Layer for this stage
+            self.transitions.append(
+                self._make_transition_layer(pre_stage_channels, cur_channels, norm=normalization, mpool=mpool_stage)
+            )
 
-        self.stage2, pre_stage_channels = self._make_stage(
-            self.stage2_cfg, num_channels, norm=normalization, mpool=mpool
-        )
+            # Construct High Resolution Modules for this stage
+            stage_cfg = {
+                "NUM_MODULES": cfg["NUM_MODULES"][i],
+                "NUM_BRANCHES": cfg["NUM_BRANCHES"][i],
+                "NUM_BLOCKS": cfg["NUM_BLOCKS"][i],
+                "NUM_CHANNELS": cur_channels,
+                "BLOCK": b_type,
+            }
 
-        self.stage3_cfg = cfg["STAGE3"]
-        num_channels = self.stage3_cfg["NUM_CHANNELS"]
-        block = self.blocks_dict[self.stage3_cfg["BLOCK"]]
-        num_channels = [num_channels[i] * block.expansion for i in range(len(num_channels))]
-        self.transition2 = self._make_transition_layer(
-            pre_stage_channels, num_channels, norm=normalization, mpool=mpool
-        )
-        self.stage3, pre_stage_channels = self._make_stage(
-            self.stage3_cfg, num_channels, norm=normalization, mpool=mpool
-        )
+            is_last_stage = (i == num_stages - 1)
+            stage, pre_stage_channels = self._make_stage(
+                stage_cfg, cur_channels, multi_scale_output=True, norm=normalization, mpool=mpool_stage
+            )
+            self.stages.append(stage)
 
-        self.stage4_cfg = cfg["STAGE4"]
-        num_channels = self.stage4_cfg["NUM_CHANNELS"]
-        block = self.blocks_dict[self.stage4_cfg["BLOCK"]]
-        num_channels = [num_channels[i] * block.expansion for i in range(len(num_channels))]
-        self.transition3 = self._make_transition_layer(
-            pre_stage_channels, num_channels, norm=normalization, mpool=mpool
-        )
-
-        self.stage4, pre_stage_channels = self._make_stage(
-            self.stage4_cfg, num_channels, multi_scale_output=True, norm=normalization, mpool=mpool
-        )
-
-        in_channels = sum(self.stage4_cfg["NUM_CHANNELS"])
+        # The final input channels for heads is the sum of all branch channels in the final stage
+        head_in_channels = sum(pre_stage_channels)
 
         self.heads = nn.Sequential()
         if head_type in ["ASPP", "PSP", "OCR"]:
@@ -617,7 +630,7 @@ class HighResolutionNet(nn.Module):
                 self.heads.append(
                     ASPP(
                         conv=self.conv_call,
-                        in_dims=in_channels,
+                        in_dims=head_in_channels,
                         out_dims=256,
                         norm=normalization,
                         rate=[6, 12, 18],
@@ -627,7 +640,7 @@ class HighResolutionNet(nn.Module):
                 self.heads.append(
                     PSP(
                         conv=self.conv_call,         
-                        in_dims=in_channels,
+                        in_dims=head_in_channels,
                         out_dims=256,
                         norm=normalization,         
                         pool_sizes=[1, 2, 3, 6],      
@@ -637,7 +650,7 @@ class HighResolutionNet(nn.Module):
                 self.heads.append(
                     OCRHead(
                         conv=self.conv_call,         
-                        in_dims=in_channels,
+                        in_dims=head_in_channels,
                         out_dims=256,
                         num_classes=self.output_channels[0],
                         norm=normalization,         
@@ -647,33 +660,38 @@ class HighResolutionNet(nn.Module):
                 )
             # Add the head for classification if needed
             if len(self.output_channels) > 1:
-                self.heads.append(self.conv_call(in_channels, self.output_channels[1], kernel_size=1, padding="same"))
+                self.heads.append(self.conv_call(head_in_channels, self.output_channels[1], kernel_size=1, padding="same"))
         elif head_type == "FCN":
             if self.contrast:
                 self.heads = nn.Sequential(
-                    self.conv_call(in_channels, in_channels, kernel_size=3, stride=1, padding=1),
-                    self.norm_func(normalization, in_channels),
+                    self.conv_call(head_in_channels, head_in_channels, kernel_size=3, stride=1, padding=1),
+                    self.norm_func(normalization, head_in_channels),
                     self.dropout(0.10),
-                    self.conv_call(in_channels, self.output_channels[0], kernel_size=1, stride=1, padding=0, bias=False),
+                    self.conv_call(head_in_channels, self.output_channels[0], kernel_size=1, stride=1, padding=0, bias=False),
                 )
-                # Add the head for classification if needed
                 if len(self.output_channels) > 1:
-                    self.heads.append(self.conv_call(in_channels, self.output_channels[1], kernel_size=1, padding="same"))
+                    self.heads.append(self.conv_call(head_in_channels, self.output_channels[1], kernel_size=1, padding="same"))
             else:
                 for i, out_ch in enumerate(output_channels):
-                    self.heads.append(self.conv_call(in_channels, out_ch, kernel_size=1, padding="same"))
+                    self.heads.append(self.conv_call(head_in_channels, out_ch, kernel_size=1, padding="same"))
         else:
             raise ValueError(f"head_type '{head_type}' is not supported. Choose from: 'ASPP', 'PSP', 'FCN'.")
 
         if self.contrast:
-            self.proj_head = ProjectionHead(ndim=self.ndim, in_channels=in_channels, proj_dim=contrast_proj_dim)
+            self.proj_head = ProjectionHead(ndim=self.ndim, in_channels=head_in_channels, proj_dim=contrast_proj_dim)
         
+        # ---------------------------------------------------------
+        # Dynamic Upsample Calculation
+        # Branch 0's resolution is solely dictated by conv1 and conv2 
+        # (Stem layers), applying mpool twice. We invert that here.
+        # ---------------------------------------------------------
         if self.ndim == 2:
-            scale_factor = 4
+            scale_factor = (mpool_stem[0]**2, mpool_stem[1]**2)
             mode = "bilinear"
         else:
-            scale_factor = (1, 4, 4) if not self.z_down else (4, 4, 4)
+            scale_factor = (mpool_stem[0]**2, mpool_stem[1]**2, mpool_stem[2]**2)
             mode = "trilinear"
+
         self.upsample_logits = nn.Upsample(
             scale_factor=scale_factor,      
             mode=mode,       
@@ -921,49 +939,51 @@ class HighResolutionNet(nn.Module):
         """
         x = self.conv1_block(input)
         x = self.conv2_block(x)
-
         x = self.layer1(x)
-        x_list = []
-        for i in range(self.stage2_cfg["NUM_BRANCHES"]):
-            if self.transition1[i] is not None:
-                x_list.append(self.transition1[i](x))
-            else:
-                x_list.append(x)
-        y_list = self.stage2(x_list)
-
-        x_list = []
-        for i in range(self.stage3_cfg["NUM_BRANCHES"]):
-            if self.transition2[i] is not None:
-                x_list.append(self.transition2[i](y_list[-1]))
-            else:
-                x_list.append(y_list[i])
-        y_list = self.stage3(x_list)
-
-        if os.environ.get("drop_stage4"):
-            return y_list
-
-        x_list = []
-        for i in range(self.stage4_cfg["NUM_BRANCHES"]):
-            if self.transition3[i] is not None:
-                x_list.append(self.transition3[i](y_list[-1]))
-            else:
-                x_list.append(y_list[i])
-        y_list = self.stage4(x_list)
+        
+        y_list = [x]
+        
+        # ---------------------------------------------------------
+        # Dynamic Forward Pass through stages
+        # ---------------------------------------------------------
+        for i in range(len(self.stages)):
+            x_list = []
+            transition = self.transitions[i]
+            stage = self.stages[i]
+            num_branches = len(transition) 
+            
+            for j in range(num_branches):
+                if transition[j] is not None:
+                    # Modify existing branch
+                    if j < len(y_list):
+                        x_list.append(transition[j](y_list[j]))
+                    # Generate new branch from lowest resolution branch
+                    else:
+                        x_list.append(transition[j](y_list[-1]))
+                else:
+                    x_list.append(y_list[j])
+                    
+            y_list = stage(x_list)
+            
+            # Check drop_stage4 dynamically on the second-to-last stage
+            if os.environ.get("drop_stage4") and i == len(self.stages) - 2:
+                return y_list
 
         feat1 = y_list[0]
+        feats_to_cat = [feat1]
 
         if feat1.ndim == 4:
-            _, _, h, w = y_list[0].size()
-            feat2 = F.interpolate(y_list[1], size=(h, w), mode="bilinear", align_corners=True)
-            feat3 = F.interpolate(y_list[2], size=(h, w), mode="bilinear", align_corners=True)
-            feat4 = F.interpolate(y_list[3], size=(h, w), mode="bilinear", align_corners=True)
+            target_size = (feat1.shape[2], feat1.shape[3])
+            mode = "bilinear"
         else:
-            _, _, d, h, w = y_list[0].size()
-            feat2 = F.interpolate(y_list[1], size=(d, h, w), mode="trilinear", align_corners=True)
-            feat3 = F.interpolate(y_list[2], size=(d, h, w), mode="trilinear", align_corners=True)
-            feat4 = F.interpolate(y_list[3], size=(d, h, w), mode="trilinear", align_corners=True)
+            target_size = (feat1.shape[2], feat1.shape[3], feat1.shape[4])
+            mode = "trilinear"
+            
+        for i in range(1, len(y_list)):
+            feats_to_cat.append(F.interpolate(y_list[i], size=target_size, mode=mode, align_corners=True))
 
-        feats = torch.cat([feat1, feat2, feat3, feat4], 1)
+        feats = torch.cat(feats_to_cat, dim=1)
+        
         out = self.heads(feats)
         out = self.upsample_logits(out)
 
@@ -1005,4 +1025,3 @@ class HighResolutionNet(nn.Module):
             return out_dict["pred"]
         else:
             return out_dict
-

@@ -18,6 +18,7 @@ normalization, dropout) accordingly.
 
 from importlib import import_module
 import os
+import math
 import re
 import torch
 import torch.nn as nn
@@ -173,48 +174,52 @@ def build_model(
             explicit_activations=False,
         )
 
-        if cfg.MODEL.HRNET.CUSTOM:
+        variant = str(cfg.MODEL.HRNET.VARIANT).lower()
+        if variant == "custom":
+            # Pass the full custom configuration exactly as defined in the yaml/config
             args["cfg"] = cfg.MODEL.HRNET
         else:
-            if modelname == "hrnet64":
-                num_channels = 64
-            elif modelname == "hrnet48":
-                num_channels = 48
-            elif modelname == "hrnet32":
-                num_channels = 32
-            elif modelname == "hrnet18":
-                num_channels = 18
+            # Extract base channels directly from the variant string
+            try:
+                base_channels = int(variant.replace("w", ""))  # Remove 'w' prefix if present and convert to int
+            except ValueError:
+                raise ValueError(
+                    f"Invalid MODEL.HRNET.VARIANT: '{variant}'. "
+                    "Expected 'W18', 'W32', 'W48', 'W64', or 'custom'."
+                )
+
+            # Auto-generate standard HRNet topology
+            num_stages = 3
+            num_modules = [1, 4, 3]
+            num_branches = [2, 3, 4]
+
+            # Procedurally generate blocks and channels based on the number of branches
+            num_blocks = [[4] * b for b in num_branches]
+            num_channels = [[base_channels * (2**i) for i in range(b)] for b in num_branches]
+
             args["cfg"] = {
-                'Z_DOWN': cfg.MODEL.HRNET.Z_DOWN, 
-                'STAGE2': {
-                    'NUM_MODULES': 1, 
-                    'NUM_BRANCHES': 2, 
-                    'NUM_BLOCKS': [4, 4], 
-                    'NUM_CHANNELS': [num_channels, num_channels*2], 
-                    'BLOCK': 'BASIC'
-                },
-                'STAGE3': {
-                    'NUM_MODULES': 4, 
-                    'NUM_BRANCHES': 3, 
-                    'NUM_BLOCKS': [4, 4, 4], 
-                    'NUM_CHANNELS': [num_channels, num_channels*2, num_channels*4], 
-                    'BLOCK': 'BASIC',
-                },
-                'STAGE4': {
-                    'NUM_MODULES': 3, 
-                    'NUM_BRANCHES': 4, 
-                    'NUM_BLOCKS': [4, 4, 4, 4], 
-                    'NUM_CHANNELS': [num_channels, num_channels*2, num_channels*4, num_channels*8], 
-                    'BLOCK': 'BASIC'
-                }
-            } 
+                'Z_DOWN': cfg.MODEL.HRNET.Z_DOWN,
+                'YX_DOWN': cfg.MODEL.HRNET.YX_DOWN,
+                'BLOCK_TYPE': cfg.MODEL.HRNET.BLOCK_TYPE,
+                'NUM_STAGES': num_stages,
+                'NUM_MODULES': num_modules,
+                'NUM_BRANCHES': num_branches,
+                'NUM_BLOCKS': num_blocks,
+                'NUM_CHANNELS': num_channels,
+            }
 
         callable_model = HighResolutionNet  # type: ignore
         model = callable_model(**args)
 
-        network_stride = [4, 4]
+        # Calculate YX total stride (e.g., [2, 2, 2] -> 8)
+        yx_schedule = args["cfg"].get("YX_DOWN", [2, 2, 2])
+        yx_total_stride = math.prod(yx_schedule)
+        network_stride = [yx_total_stride, yx_total_stride]
         if ndim == 3:
-            network_stride = [4 if args["cfg"]["Z_DOWN"] else 1] + network_stride
+            z_schedule = args["cfg"].get("Z_DOWN")
+            z_total_stride = math.prod(z_schedule)          
+            network_stride = [z_total_stride] + network_stride
+
     elif "stunet" in modelname:
         callable_model = STUNet  # type: ignore
         args = dict(
