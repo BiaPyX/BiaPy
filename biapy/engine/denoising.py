@@ -24,9 +24,10 @@ from biapy.data.data_3D_manipulation import (
     merge_3D_data_with_overlap,
 )
 from biapy.engine.base_workflow import Base_Workflow
+from biapy.models import build_discriminator
 from biapy.data.data_manipulation import save_tif
-from biapy.utils.misc import to_pytorch_format, is_main_process, MetricLogger
-from biapy.engine.metrics import n2v_loss_mse, loss_encapsulation
+from biapy.utils.misc import to_pytorch_format, MetricLogger
+from biapy.engine.metrics import n2v_loss_mse, loss_encapsulation, ComposedGANLoss
 
 
 class Denoising_Workflow(Base_Workflow):
@@ -72,10 +73,20 @@ class Denoising_Workflow(Base_Workflow):
         # From now on, no modification of the cfg will be allowed
         self.cfg.freeze()
 
+        self.is_gan_mode = str(cfg.LOSS.TYPE).upper() == "COMPOSED_GAN"
+        self.discriminator = None
+        self.discriminator_without_ddp = None
+        self.optimizer_d = None
+        self.lr_scheduler_d = None
+
         # Workflow specific training variables
-        self.mask_path = cfg.DATA.TRAIN.GT_PATH if cfg.PROBLEM.DENOISING.LOAD_GT_DATA else None
+        if self.is_gan_mode:
+            self.mask_path = cfg.DATA.TRAIN.GT_PATH
+            self.load_Y_val = True
+        else:
+            self.mask_path = cfg.DATA.TRAIN.GT_PATH if cfg.PROBLEM.DENOISING.LOAD_GT_DATA else None
+            self.load_Y_val = cfg.PROBLEM.DENOISING.LOAD_GT_DATA
         self.is_y_mask = False
-        self.load_Y_val = cfg.PROBLEM.DENOISING.LOAD_GT_DATA
 
         self.norm_module.mask_norm = "as_image"
         self.test_norm_module.mask_norm = "as_image"
@@ -166,6 +177,8 @@ class Denoising_Workflow(Base_Workflow):
         # print("Overriding 'LOSS.TYPE' to set it to N2V loss (masked MSE)")
         if self.cfg.LOSS.TYPE == "MSE":
             self.loss = loss_encapsulation(n2v_loss_mse)
+        elif self.cfg.LOSS.TYPE == "COMPOSED_GAN":
+            self.loss = ComposedGANLoss(cfg=self.cfg, device=self.device)
 
         super().define_metrics()
 
@@ -232,7 +245,11 @@ class Denoising_Workflow(Base_Workflow):
 
         with torch.no_grad():
             for i, metric in enumerate(list_to_use):
-                val = metric(_output.contiguous(), _targets[:, _output.shape[1]:].contiguous())
+                if self.is_gan_mode:
+                    target_for_metric = _targets.contiguous()
+                else:
+                    target_for_metric = _targets[:, _output.shape[1]:].contiguous()
+                val = metric(_output.contiguous(), target_for_metric)
                 val = val.item() if not torch.isnan(val) else 0
                 out_metrics[list_names_to_use[i]] = val
 
@@ -327,6 +344,36 @@ class Denoising_Workflow(Base_Workflow):
                 [self.current_sample["X_filename"]],
                 verbose=self.cfg.TEST.VERBOSE,
             )
+
+    def prepare_model(self):
+        """Build generator model and discriminator when running denoising in GAN mode."""
+        super().prepare_model()
+        
+        # It is not a GAN model, or we alredy have a discriminator loaded from checkpoint
+        if not self.is_gan_mode or self.discriminator is not None:
+            return
+
+        print("#######################")
+        print("# Build Discriminator #")
+        print("#######################")
+        self.discriminator = build_discriminator(self.cfg, self.device)
+        self.discriminator_without_ddp = self.discriminator
+
+        if self.args.distributed:
+            self.discriminator = torch.nn.parallel.DistributedDataParallel(
+                self.discriminator,
+                device_ids=[self.args.gpu],
+                find_unused_parameters=False,
+            )
+            self.discriminator_without_ddp = self.discriminator.module
+
+        if self.cfg.MODEL.SOURCE == "biapy" and self.cfg.MODEL.LOAD_CHECKPOINT and self.checkpoint_path:
+            checkpoint = torch.load(self.checkpoint_path, map_location=self.device)
+            if "discriminator_state_dict" in checkpoint:
+                self.discriminator_without_ddp.load_state_dict(checkpoint["discriminator_state_dict"])
+                print("Discriminator weights loaded successfully.")
+            else:
+                print("Warning: 'discriminator_state_dict' not found in checkpoint.")
 
     def torchvision_model_call(self, in_img: torch.Tensor, is_train: bool = False) -> torch.Tensor | None:
         """

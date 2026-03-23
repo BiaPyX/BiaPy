@@ -1242,7 +1242,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     ], "LOSS.CLASS_REBALANCE not in ['none', 'auto'] for INSTANCE_SEG workflow"
     elif cfg.PROBLEM.TYPE == "DENOISING":
         loss = "MSE" if cfg.LOSS.TYPE == "" else cfg.LOSS.TYPE
-        assert loss == "MSE", "LOSS.TYPE must be 'MSE'"
+        assert loss in ["MSE", "COMPOSED_GAN"], "LOSS.TYPE must be in ['MSE', 'COMPOSED_GAN'] for DENOISING"
     elif cfg.PROBLEM.TYPE == "CLASSIFICATION":
         loss = "CE" if cfg.LOSS.TYPE == "" else cfg.LOSS.TYPE
         assert loss == "CE", "LOSS.TYPE must be 'CE'"
@@ -1797,12 +1797,16 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
     #### Denoising ####
     elif cfg.PROBLEM.TYPE == "DENOISING":
-        if cfg.DATA.TEST.LOAD_GT:
-            raise ValueError(
-                "Denoising is made in an unsupervised way so there is no ground truth required. Disable 'DATA.TEST.LOAD_GT'"
-            )
-        if not check_value(cfg.PROBLEM.DENOISING.N2V_PERC_PIX):
-            raise ValueError("PROBLEM.DENOISING.N2V_PERC_PIX not in [0, 1] range")
+        if cfg.LOSS.TYPE == "COMPOSED_GAN":
+            if not cfg.DATA.TRAIN.GT_PATH and not cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA:
+                raise ValueError("Denoising with COMPOSED_GAN is supervised. 'DATA.TRAIN.GT_PATH' is required.")
+        else:
+            if cfg.DATA.TEST.LOAD_GT:
+                raise ValueError(
+                    "Denoising is made in an unsupervised way so there is no ground truth required. Disable 'DATA.TEST.LOAD_GT'"
+                )
+            if not check_value(cfg.PROBLEM.DENOISING.N2V_PERC_PIX):
+                raise ValueError("PROBLEM.DENOISING.N2V_PERC_PIX not in [0, 1] range")
         if cfg.MODEL.SOURCE == "torchvision":
             raise ValueError("'MODEL.SOURCE' as 'torchvision' is not available in denoising workflow")
 
@@ -2341,6 +2345,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "hrnet48",
             "hrnet64",
             "stunet",
+            "nafnet",
         ], "MODEL.ARCHITECTURE not in ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'simple_cnn', 'efficientnet_b[0-7]', 'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae', 'unext_v1', 'unext_v2', 'hrnet18', 'hrnet32', 'hrnet48', 'hrnet64', 'stunet']"
         if (
             model_arch
@@ -2514,6 +2519,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "hrnet48",
                 "hrnet64",
                 "stunet",
+                "nafnet",
             ]:
                 raise ValueError(
                     "Architectures available for {} are: ['unet', 'resunet', 'resunet++', 'seunet', 'attention_unet', 'resunet_se', 'unetr', 'multiresunet', 'unext_v1', 'unext_v2', 'hrnet18', 'hrnet32', 'hrnet48', 'hrnet64', 'stunet']".format(
@@ -2976,6 +2982,7 @@ def compare_configurations_without_model(actual_cfg, old_cfg, header_message="",
         "DATA.PATCH_SIZE",
         "PROBLEM.INSTANCE_SEG.DATA_CHANNELS",
         "PROBLEM.SUPER_RESOLUTION.UPSCALING",
+        "MODEL.ARCHITECTURE_D",
         "DATA.N_CLASSES",
     ]
 

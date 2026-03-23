@@ -1162,12 +1162,15 @@ class Config:
         #   * Semantic segmentation: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'resunet_se', 'unetr', 'unext_v1', 'unext_v2'
         #   * Instance segmentation: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'resunet_se', 'unetr', 'unext_v1', 'unext_v2'
         #   * Detection: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'resunet_se', 'unetr', 'unext_v1', 'unext_v2'
-        #   * Denoising: 'unet', 'resunet', 'resunet++', 'attention_unet', 'seunet', 'resunet_se', 'unext_v1', 'unext_v2'
+        #   * Denoising: 'unet', 'resunet', 'resunet++', 'attention_unet', 'seunet', 'resunet_se', 'unext_v1', 'unext_v2', 'nafnet'
         #   * Super-resolution: 'edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'multiresunet', 'unext_v1', 'unext_v2'
         #   * Self-supervision: 'unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'resunet_se', 'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae', 'unext_v1', 'unext_v2'
         #   * Classification: 'simple_cnn', 'vit', 'efficientnet_b[0-7]' (only 2D)
         #   * Image to image: 'edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'unetr', 'multiresunet', 'unext_v1', 'unext_v2'
         _C.MODEL.ARCHITECTURE = "unet"
+        # Architecture of the network. Possible values are:
+        #   * 'patchgan'
+        _C.MODEL.ARCHITECTURE_D = "patchgan"
         # Number of feature maps on each level of the network.
         _C.MODEL.FEATURE_MAPS = [16, 32, 64, 128, 256]
         # Values to make the dropout with. Set to 0 to prevent dropout. When using it with 'ViT' or 'unetr'
@@ -1306,6 +1309,26 @@ class Config:
         # Whether to use a pretrained version of STUNet on ImageNet
         _C.MODEL.STUNET.PRETRAINED = False
         
+        # NafNet 
+        _C.MODEL.NAFNET = CN()
+        # Base number of channels (width) used in the first layer and base levels.
+        _C.MODEL.NAFNET.WIDTH = 16
+        # Number of NAFBlocks stacked at the bottleneck (deepest level).
+        _C.MODEL.NAFNET.MIDDLE_BLK_NUM = 12
+        # Number of NAFBlocks assigned to each downsampling level of the encoder.
+        _C.MODEL.NAFNET.ENC_BLK_NUMS = [2, 2, 4, 8]
+        # Number of NAFBlocks assigned to each upsampling level of the decoder.
+        _C.MODEL.NAFNET.DEC_BLK_NUMS = [2, 2, 2, 2]
+        # Channel expansion factor for the depthwise convolution within the gating unit.
+        _C.MODEL.NAFNET.DW_EXPAND = 2
+        # Expansion factor for the hidden layer within the feed-forward network.
+        _C.MODEL.NAFNET.FFN_EXPAND = 2
+        
+        # Discriminator PATCHGAN
+        _C.MODEL.PATCHGAN = CN()
+        # Number of initial convolutional filters in the first layer of the discriminator.
+        _C.MODEL.PATCHGAN.BASE_FILTERS = 64
+
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Loss
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1371,7 +1394,24 @@ class Config:
         _C.LOSS.CONTRAST.MEMORY_SIZE = 5000
         _C.LOSS.CONTRAST.PROJ_DIM = 256
         _C.LOSS.CONTRAST.PIXEL_UPD_FREQ = 10
-        
+
+        # Fine-grained GAN composition. Set any weight to 0.0 to disable that term.
+        # Used when LOSS.TYPE == "COMPOSED_GAN".
+        _C.LOSS.COMPOSED_GAN = CN()
+        # Weight for adversarial BCE term.
+        _C.LOSS.COMPOSED_GAN.LAMBDA_GAN = 1.0
+        # Weight for L1 reconstruction term.
+        _C.LOSS.COMPOSED_GAN.LAMBDA_RECON = 10.0
+        # Weight for MSE reconstruction term.
+        _C.LOSS.COMPOSED_GAN.DELTA_MSE = 0.0
+        # Weight for VGG perceptual term.
+        _C.LOSS.COMPOSED_GAN.ALPHA_PERCEPTUAL = 0.0
+        # Weight for SSIM term.
+        _C.LOSS.COMPOSED_GAN.GAMMA_SSIM = 1.0
+
+        # Backward-compatible alias for previous naming.
+        _C.LOSS.GAN = CN()
+
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Training phase
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1381,12 +1421,18 @@ class Config:
         _C.TRAIN.VERBOSE = False
         # Optimizer to use. Possible values: "SGD", "ADAM" or "ADAMW"
         _C.TRAIN.OPTIMIZER = "SGD"
+        # Optimizer to use. Possible values: "SGD", "ADAM" or "ADAMW" for GAN discriminator
+        _C.TRAIN.OPTIMIZER_D = "SGD"
         # Learning rate
         _C.TRAIN.LR = 1.0e-4
+        # Learning rate for GAN discriminator
+        _C.TRAIN.LR_D = 1.0e-4
         # Weight decay
         _C.TRAIN.W_DECAY = 0.02
         # Coefficients used for computing running averages of gradient and its square. Used in ADAM and ADAMW optmizers
         _C.TRAIN.OPT_BETAS = (0.9, 0.999)
+        # Coefficients used for computing running averages of gradient and its square. Used in ADAM and ADAMW optmizers for GANS discriminator
+        _C.TRAIN.OPT_BETAS_D = (0.5, 0.999)
         # Batch size
         _C.TRAIN.BATCH_SIZE = 2
         # If memory or # gpus is limited, use this variable to maintain the effective batch size, which is

@@ -18,6 +18,8 @@ from pytorch_msssim import SSIM
 import torch.nn.functional as F
 import torch.nn as nn
 from typing import Optional, List, Tuple, Dict
+from torchvision import transforms
+from torchvision.models import vgg16, VGG16_Weights
 
 def jaccard_index_numpy(y_true, y_pred):
     """
@@ -2163,3 +2165,114 @@ class SpatialEmbLoss(nn.Module):
         loss = loss / B
         iou = iou / B
         return loss + prediction.sum() * 0, float(iou), "IoU" # keep graph identical to originals
+
+class VGGLoss(nn.Module):
+    def __init__(self, device):
+        super().__init__()
+        self.vgg = vgg16(weights=VGG16_Weights.IMAGENET1K_V1).features[:16].eval().to(device)
+        for param in self.vgg.parameters():
+            param.requires_grad = False
+        self.loss = nn.L1Loss()
+        self.preprocess = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    
+    def forward(self, pred, target):
+        if isinstance(pred, dict):
+            pred = pred["pred"]
+        if isinstance(target, dict):
+            target = target["pred"]
+
+        # If 3D, fold Depth (dim 2) into Batch (dim 0) -> (B*D, C, H, W)
+        if pred.dim() == 5:
+            B, C, D, H, W = pred.shape
+            pred = pred.permute(0, 2, 1, 3, 4).reshape(B * D, C, H, W)
+            target = target.permute(0, 2, 1, 3, 4).reshape(B * D, C, H, W)
+
+        # 2D behavior remains identical
+        if pred.shape[1] == 1:
+            pred = pred.repeat(1, 3, 1, 1)
+            target = target.repeat(1, 3, 1, 1)
+            
+        pred = self.preprocess(pred)
+        target = self.preprocess(target)
+        pred_vgg = self.vgg(pred)
+        target_vgg = self.vgg(target)
+        return self.loss(pred_vgg, target_vgg)
+
+class ComposedGANLoss(nn.Module):
+    """
+    Dynamic composite loss for GANs.
+    Only instantiates heavy loss models (like VGG) if their config weight is > 0.
+    """
+    def __init__(self, cfg, device):
+        super().__init__()
+        self.device = device
+        self.w_gan = cfg.LOSS.COMPOSED_GAN.LAMBDA_GAN
+        self.w_l1 = cfg.LOSS.COMPOSED_GAN.LAMBDA_RECON
+        self.w_vgg = cfg.LOSS.COMPOSED_GAN.ALPHA_PERCEPTUAL
+        self.w_ssim = cfg.LOSS.COMPOSED_GAN.GAMMA_SSIM
+        self.w_mse = cfg.LOSS.COMPOSED_GAN.DELTA_MSE
+
+        # Dont load the vgg if not       
+        if self.w_vgg > 0:
+            self.vgg = VGGLoss(device)
+        if self.w_ssim > 0:
+            self.ssim = StructuralSimilarityIndexMeasure(data_range=1.0).to(device)
+            
+        # Standard lightweight losses are always initialized
+        self.l1 = nn.L1Loss()
+        self.mse = nn.MSELoss()
+        self.bce = nn.BCEWithLogitsLoss() 
+
+    def forward_generator(self, pred, target, d_fake):
+        # Dict extraction
+        if isinstance(pred, dict): pred = pred["pred"]
+        if isinstance(target, dict): target = target["pred"]
+
+        # NaN Band-aid
+        pred = torch.nan_to_num(pred, nan=0.0, posinf=1.0, neginf=-1.0)
+        target = torch.nan_to_num(target, nan=0.0, posinf=1.0, neginf=-1.0)
+
+        total_loss = torch.tensor(0.0, device=self.device)
+        
+        # 2. Dynamically build the loss based on config weights
+        if self.w_l1 > 0:
+            total_loss += self.w_l1 * self.l1(pred, target)
+            
+        if self.w_mse > 0:
+            total_loss += self.w_mse * self.mse(pred, target)
+            
+        if self.w_vgg > 0:
+            total_loss += self.w_vgg * self.vgg(pred, target)
+            
+        if self.w_ssim > 0:
+            # SSIM requires 4D tensors. Safely route 3D to 2D slices.
+            if pred.dim() == 5:
+                B, C, D, H, W = pred.shape
+                pred_ssim = pred.permute(0, 2, 1, 3, 4).reshape(B * D, C, H, W)
+                target_ssim = target.permute(0, 2, 1, 3, 4).reshape(B * D, C, H, W)
+                total_loss += self.w_ssim * (1.0 - self.ssim(pred_ssim, target_ssim))
+            else:
+                total_loss += self.w_ssim * (1.0 - self.ssim(pred, target))
+                
+        if self.w_gan > 0:
+            total_loss += self.w_gan * self.bce(d_fake, torch.ones_like(d_fake))
+
+        # NaN Safety Check
+        if torch.isnan(total_loss):
+            print("Warning: NaN detected in generator loss. Returning zero loss.")
+            total_loss = torch.tensor(0.0, requires_grad=True).to(self.device)
+
+        return total_loss
+
+    def forward_discriminator(self, d_real, d_fake):
+        # Calculate Adversarial Loss for Discriminator
+        real_loss = self.bce(d_real, torch.full_like(d_real, 0.9)) # Label smoothing (0.9 instead of 1.0)
+        fake_loss = self.bce(d_fake, torch.zeros_like(d_fake))
+        total_loss = (real_loss + fake_loss) / 2.0
+        
+        # NaN Safety Check
+        if torch.isnan(total_loss):
+            print("Warning: NaN detected in discriminator loss. Returning zero loss.")
+            total_loss = torch.tensor(0.0, requires_grad=True).to(self.device)
+        
+        return total_loss

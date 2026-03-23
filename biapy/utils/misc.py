@@ -305,7 +305,19 @@ def get_grad_norm_(parameters, norm_type: float = 2.0) -> torch.Tensor:
     return total_norm
 
 
-def save_model(cfg, biapy_version, jobname, epoch, model_without_ddp, optimizer, model_build_kwargs=None, extension="pth"):
+def save_model(
+    cfg,
+    biapy_version,
+    jobname,
+    epoch,
+    model_without_ddp,
+    optimizer,
+    model_build_kwargs=None,
+    extension="pth",
+    discriminator_without_ddp=None,
+    optimizer_d=None,
+    extra_checkpoint_items=None,
+):
     """
     Save the model checkpoint to the specified path.
 
@@ -333,6 +345,12 @@ def save_model(cfg, biapy_version, jobname, epoch, model_without_ddp, optimizer,
     extension : str, optional
         The file extension for the checkpoint file. Options are 'pth' (native PyTorch format)
         or 'safetensors' (https://github.com/huggingface/safetensors). Defaults to "pth".
+    discriminator_without_ddp : Optional[nn.Module], optional
+        Optional discriminator model to include in checkpoints for GAN training.
+    optimizer_d : Optional[torch.optim.Optimizer], optional
+        Optional discriminator optimizer state to include in checkpoints for GAN training.
+    extra_checkpoint_items : Optional[dict], optional
+        Additional custom fields to append to the checkpoint payload.
 
     Returns
     -------
@@ -351,6 +369,13 @@ def save_model(cfg, biapy_version, jobname, epoch, model_without_ddp, optimizer,
             "cfg": cfg,
             "biapy_version": biapy_version,
         }
+
+        if discriminator_without_ddp is not None:
+            to_save["discriminator_state_dict"] = discriminator_without_ddp.state_dict()
+        if optimizer_d is not None:
+            to_save["optimizer_d_state_dict"] = optimizer_d.state_dict()
+        if extra_checkpoint_items:
+            to_save.update(extra_checkpoint_items)
 
         save_on_master(to_save, checkpoint_path)
     if len(checkpoint_paths) > 0:

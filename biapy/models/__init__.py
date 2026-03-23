@@ -366,6 +366,20 @@ def build_model(
             )
             model = MaskedAutoencoderViT(**args)  # type: ignore
             callable_model = MaskedAutoencoderViT  # type: ignore
+        elif modelname == "nafnet":
+            args = dict(
+                img_channel=cfg.DATA.PATCH_SIZE[-1], 
+                width=cfg.MODEL.NAFNET.WIDTH, 
+                middle_blk_num=cfg.MODEL.NAFNET.MIDDLE_BLK_NUM,
+                enc_blk_nums=cfg.MODEL.NAFNET.ENC_BLK_NUMS,
+                dec_blk_nums=cfg.MODEL.NAFNET.DEC_BLK_NUMS,
+                drop_out_rate=cfg.MODEL.DROPOUT_VALUES[0], 
+                dw_expand=cfg.MODEL.NAFNET.DW_EXPAND,
+                ffn_expand=cfg.MODEL.NAFNET.FFN_EXPAND
+            )
+            callable_model = NAFNet   # type: ignore
+            model = callable_model(**args)  # type: ignore
+
     # Check the network created
     model.to(device)
     if cfg.PROBLEM.NDIM == "2D":
@@ -405,6 +419,75 @@ def build_model(
 
     return model, str(callable_model.__name__), collected_sources, all_import_lines, scanned_files, args, network_stride  # type: ignore
 
+def build_discriminator(cfg: CN, device: torch.device):
+    """
+    Build selected model.
+
+    Parameters
+    ----------
+    cfg : YACS CN object
+        Configuration.
+
+    device : Torch device
+        Using device. Most commonly "cpu" or "cuda" for GPU, but also potentially "mps",
+        "xpu", "xla" or "meta".
+
+    Returns
+    -------
+    """
+    # 1. Standardize name and Import the module
+    modelname = str(cfg.MODEL.ARCHITECTURE_D).lower()
+    
+    print("###############")
+    print(f"# Build {modelname.upper()} Disc #")
+    print("###############")
+
+    # Dynamic import like build_model
+    mdl = import_module("biapy.models." + modelname)
+    
+    names = [x for x in mdl.__dict__ if not x.startswith("_")]
+    globals().update({k: getattr(mdl, k) for k in names})
+
+    # 2. Model building block
+    if modelname == "patchgan":
+        args = dict(
+            in_channels=cfg.DATA.PATCH_SIZE[-1], 
+            base_filters=cfg.MODEL.PATCHGAN.BASE_FILTERS
+        )
+        callable_model = PatchGANDiscriminator  # type: ignore
+    else:
+        raise ValueError(f"Discriminator {modelname} is not implemented or registered.")
+
+    # Instantiate
+    model = callable_model(**args)
+    model.to(device)
+
+    # 3. Summary Logic 
+    if cfg.PROBLEM.NDIM == "2D":
+        sample_size = (
+            1,
+            cfg.DATA.PATCH_SIZE[2],
+            cfg.DATA.PATCH_SIZE[0],
+            cfg.DATA.PATCH_SIZE[1],
+        )
+    else:
+        sample_size = (
+            1,
+            cfg.DATA.PATCH_SIZE[3],
+            cfg.DATA.PATCH_SIZE[0],
+            cfg.DATA.PATCH_SIZE[1],
+            cfg.DATA.PATCH_SIZE[2],
+        )
+
+    summary(
+        model,
+        input_size=sample_size,
+        col_names=("input_size", "output_size", "num_params"),
+        depth=10,
+        device=device.type,
+    )
+
+    return model
 
 def init_embedding_output(model: nn.Module, n_sigma: int = 2):
     """

@@ -837,6 +837,11 @@ class Base_Workflow(metaclass=ABCMeta):
         self.plot_values = {}
         self.plot_values["loss"] = []
         self.plot_values["val_loss"] = []
+        if getattr(self, "is_gan_mode", False):
+            self.plot_values["loss_g"] = []
+            self.plot_values["loss_d"] = []
+            self.plot_values["val_loss_g"] = []
+            self.plot_values["val_loss_d"] = []
         for i in range(len(self.train_metric_names)):
             self.plot_values[self.train_metric_names[i]] = []
             self.plot_values["val_" + self.train_metric_names[i]] = []
@@ -853,9 +858,28 @@ class Base_Workflow(metaclass=ABCMeta):
         assert (
             self.start_epoch is not None and self.model is not None and self.model_without_ddp is not None and self.loss
         )
-        self.optimizer, self.lr_scheduler = prepare_optimizer(
-            self.cfg, self.model_without_ddp, len(self.train_generator)
-        )
+        is_gan_mode = getattr(self, "is_gan_mode", False)
+        if is_gan_mode:
+            discriminator_wo_ddp = getattr(self, "discriminator_without_ddp", None)
+            if discriminator_wo_ddp is None:
+                raise ValueError("GAN mode requires a discriminator model before training")
+            optimizers, schedulers = prepare_optimizer(
+                self.cfg,
+                {
+                    "generator": self.model_without_ddp,
+                    "discriminator": discriminator_wo_ddp,
+                },
+                len(self.train_generator),
+                is_gan=True,
+            )
+            self.optimizer = optimizers["generator"]
+            self.lr_scheduler = schedulers["generator"]
+            self.optimizer_d = optimizers["discriminator"]
+            self.lr_scheduler_d = schedulers["discriminator"]
+        else:
+            self.optimizer, self.lr_scheduler = prepare_optimizer(
+                self.cfg, self.model_without_ddp, len(self.train_generator)
+            )
 
         contrast_init_iter = 0
         if self.cfg.LOSS.CONTRAST.ENABLE:
@@ -910,6 +934,9 @@ class Base_Workflow(metaclass=ABCMeta):
                 memory_bank=self.memory_bank,
                 total_iters=total_iters,
                 contrast_warmup_iters=contrast_init_iter,
+                model_d=getattr(self, "discriminator", None) if is_gan_mode else None,
+                optimizer_d=getattr(self, "optimizer_d", None) if is_gan_mode else None,
+                lr_scheduler_d=getattr(self, "lr_scheduler_d", None) if is_gan_mode else None,
             )
             total_iters += iterations_done
 
@@ -929,6 +956,8 @@ class Base_Workflow(metaclass=ABCMeta):
                         epoch=epoch + 1,
                         model_build_kwargs=self.model_build_kwargs,
                         extension=self.cfg.MODEL.OUT_CHECKPOINT_FORMAT,
+                        discriminator_without_ddp=getattr(self, "discriminator_without_ddp", None) if is_gan_mode else None,
+                        optimizer_d=getattr(self, "optimizer_d", None) if is_gan_mode else None,
                     )
 
             # Validation
@@ -944,24 +973,29 @@ class Base_Workflow(metaclass=ABCMeta):
                     data_loader=self.val_generator,
                     lr_scheduler=self.lr_scheduler,
                     memory_bank=self.memory_bank,
+                    model_d=getattr(self, "discriminator", None) if is_gan_mode else None,
+                    lr_scheduler_d=getattr(self, "lr_scheduler_d", None) if is_gan_mode else None,
+                    device=self.device if is_gan_mode else None,
                 )
 
+                val_loss_key = "loss_g" if is_gan_mode else "loss"
+
                 # Save checkpoint is val loss improved
-                if test_stats["loss"] < self.val_best_loss:
+                if test_stats[val_loss_key] < self.val_best_loss:
                     f = os.path.join(
                         self.cfg.PATHS.CHECKPOINT,
                         "{}-checkpoint-best.pth".format(self.job_identifier),
                     )
                     print(
                         "Val loss improved from {} to {}, saving model to {}".format(
-                            self.val_best_loss, test_stats["loss"], f
+                            self.val_best_loss, test_stats[val_loss_key], f
                         )
                     )
                     m = " "
                     for i in range(len(self.val_best_metric)):
                         self.val_best_metric[i] = test_stats[self.train_metric_names[i]]
                         m += f"{self.train_metric_names[i]}: {self.val_best_metric[i]:.4f} "
-                    self.val_best_loss = test_stats["loss"]
+                    self.val_best_loss = test_stats[val_loss_key]
 
                     if is_main_process():
                         self.checkpoint_path = save_model(
@@ -973,12 +1007,14 @@ class Base_Workflow(metaclass=ABCMeta):
                             epoch="best",
                             model_build_kwargs=self.model_build_kwargs,
                             extension=self.cfg.MODEL.OUT_CHECKPOINT_FORMAT,
+                            discriminator_without_ddp=getattr(self, "discriminator_without_ddp", None) if is_gan_mode else None,
+                            optimizer_d=getattr(self, "optimizer_d", None) if is_gan_mode else None,
                         )
                 print(f"[Val] best loss: {self.val_best_loss:.4f} best " + m)
 
                 # Store validation stats
                 if self.log_writer:
-                    self.log_writer.update(test_loss=test_stats["loss"], head="perf", step=epoch)
+                    self.log_writer.update(test_loss=test_stats[val_loss_key], head="perf", step=epoch)
                     for i in range(len(self.train_metric_names)):
                         self.log_writer.update(
                             test_iou=test_stats[self.train_metric_names[i]],
@@ -1006,9 +1042,20 @@ class Base_Workflow(metaclass=ABCMeta):
                     f.write(json.dumps(log_stats) + "\n")
 
                 # Create training plot
-                self.plot_values["loss"].append(train_stats["loss"])
+                train_loss_key = "loss_g" if is_gan_mode else "loss"
+                val_loss_key = "loss_g" if is_gan_mode else "loss"
+                self.plot_values["loss"].append(train_stats[train_loss_key])
                 if self.val_generator:
-                    self.plot_values["val_loss"].append(test_stats["loss"])
+                    self.plot_values["val_loss"].append(test_stats[val_loss_key])
+                if is_gan_mode:
+                    if "loss_g" in self.plot_values:
+                        self.plot_values["loss_g"].append(train_stats.get("loss_g", 0))
+                    if "loss_d" in self.plot_values:
+                        self.plot_values["loss_d"].append(train_stats.get("loss_d", 0))
+                    if self.val_generator and "val_loss_g" in self.plot_values:
+                        self.plot_values["val_loss_g"].append(test_stats.get("loss_g", 0))
+                    if self.val_generator and "val_loss_d" in self.plot_values:
+                        self.plot_values["val_loss_d"].append(test_stats.get("loss_d", 0))
                 for i in range(len(self.train_metric_names)):
                     self.plot_values[self.train_metric_names[i]].append(train_stats[self.train_metric_names[i]])
                     if self.val_generator:
@@ -1024,7 +1071,8 @@ class Base_Workflow(metaclass=ABCMeta):
                     )
 
             if self.val_generator and self.early_stopping:
-                self.early_stopping(test_stats["loss"])
+                val_loss_key = "loss_g" if is_gan_mode else "loss"
+                self.early_stopping(test_stats[val_loss_key])
                 if self.early_stopping.early_stop:
                     print("Early stopping")
                     break
@@ -1043,7 +1091,8 @@ class Base_Workflow(metaclass=ABCMeta):
         self.total_training_time_str = str(datetime.timedelta(seconds=int(total_time)))
         print("Training time: {}".format(self.total_training_time_str))
 
-        self.train_metrics_message += ("Train loss: {}\n".format(train_stats["loss"]))
+        train_loss_key = "loss_g" if is_gan_mode else "loss"
+        self.train_metrics_message += ("Train loss: {}\n".format(train_stats[train_loss_key]))
         for i in range(len(self.train_metric_names)):
             self.train_metrics_message += ("Train {}: {}\n".format(self.train_metric_names[i], train_stats[self.train_metric_names[i]]))
         if self.val_generator:
