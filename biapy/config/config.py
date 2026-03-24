@@ -696,8 +696,6 @@ class Config:
         _C.DATA.TEST.BINARY_MASKS = os.path.join("user_data", "test", "bin_mask")
         # Test data resolution. Need to be provided in (z,y,x) order. Only applies when _C.PROBLEM.TYPE = 'DETECTION' now.
         _C.DATA.TEST.RESOLUTION = (-1,)
-        # Whether to apply argmax to the predicted images
-        _C.DATA.TEST.ARGMAX_TO_OUTPUT = True
         # Order of the axes of the image when using Zarr/H5 images in test data.
         _C.DATA.TEST.INPUT_IMG_AXES_ORDER = "TZCYX"
         # Order of the axes of the mask when using Zarr/H5 images in test data.

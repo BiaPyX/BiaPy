@@ -400,7 +400,9 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
             th = threshold_otsu(pred)
             pred = (pred > th).astype(np.uint8)
         else:
-            pred = np.expand_dims(np.argmax(pred, axis=-1), -1)
+            _type = np.uint8 if self.cfg.DATA.N_CLASSES < 255 else np.uint16
+            pred = np.expand_dims(np.argmax(pred, -1), -1).astype(_type)
+
         save_tif(
             pred,
             self.cfg.PATHS.RESULT_DIR.PER_IMAGE_BIN,

@@ -1797,11 +1797,6 @@ class Base_Workflow(metaclass=ABCMeta):
                         verbose=self.cfg.TEST.VERBOSE,
                     )
 
-                # Argmax if needed
-                if self.cfg.DATA.N_CLASSES > 2 and self.cfg.DATA.TEST.ARGMAX_TO_OUTPUT and not self.separated_class_channel:
-                    _type = np.uint8 if self.cfg.DATA.N_CLASSES < 255 else np.uint16
-                    pred = np.expand_dims(np.argmax(pred, -1), -1).astype(_type)
-
                 # Calculate the metrics
                 if self.current_sample["Y"] is not None:
                     metric_values = self.metric_calculation(output=pred, targets=self.current_sample["Y"], train=False)
@@ -1910,11 +1905,6 @@ class Base_Workflow(metaclass=ABCMeta):
                     [self.current_sample["X_filename"]],
                     verbose=self.cfg.TEST.VERBOSE,
                 )
-
-                # Argmax if needed
-                if self.cfg.DATA.N_CLASSES > 2 and self.cfg.DATA.TEST.ARGMAX_TO_OUTPUT and not self.separated_class_channel:
-                    _type = np.uint8 if self.cfg.DATA.N_CLASSES < 255 else np.uint16
-                    pred = np.expand_dims(np.argmax(pred, -1), -1).astype(_type)
 
                 if self.cfg.TEST.POST_PROCESSING.APPLY_MASK:
                     pred = apply_binary_mask(pred, self.cfg.DATA.TEST.BINARY_MASKS)

@@ -3359,7 +3359,9 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict):
         if "VAL" in old_cfg["DATA"]:
             if "BINARY_MASKS" in old_cfg["DATA"]["VAL"]:
                 del old_cfg["DATA"]["VAL"]["BINARY_MASKS"]
-
+        if "TEST" in old_cfg["DATA"]:
+            if "ARGMAX_TO_OUTPUT" in old_cfg["DATA"]["TEST"]:
+                del old_cfg["DATA"]["TEST"]["ARGMAX_TO_OUTPUT"]
         if "NORMALIZATION" in old_cfg["DATA"]:
             if "PERC_CLIP" in old_cfg["DATA"]["NORMALIZATION"]:
                 val = old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"]
