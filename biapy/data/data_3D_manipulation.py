@@ -1570,9 +1570,12 @@ def read_chunked_data(
                 data = _first_dataset_in_h5_group(fid)
             except Exception:
                 fid.close()
-                raise
+                raise ValueError(f"No datasets found in HDF5 file {filename}.")
         elif filename.endswith(".zarr") or filename.endswith(".n5"):
-            fid = zarr.open(filename, mode="r")
+            try:
+                fid = zarr.open(filename, mode="r")
+            except Exception as e:
+                raise ValueError(f"Error opening Zarr file {filename}: {e}")
             if isinstance(fid, zarr.Group):
                 data = _first_array_in_group(fid)
             else:

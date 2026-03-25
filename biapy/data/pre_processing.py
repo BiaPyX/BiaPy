@@ -70,12 +70,7 @@ def create_instance_channels(cfg: CN, data_type: str = "train"):
         Wheter to create training or validation instance channels.
     """
     assert data_type in ["train", "val", "test"]
-    if data_type == "train":
-        tag = "TRAIN"
-    elif data_type == "val":
-        tag = "VAL"
-    else:  # test
-        tag = "TEST"
+    tag = data_type.upper()
 
     # Checking if the user inputted Zarr/H5 files
     if getattr(cfg.DATA, tag).INPUT_ZARR_MULTIPLE_DATA:
@@ -2332,35 +2327,32 @@ def create_detection_masks(cfg: CN, data_type: str = "train"):
         Wheter to create train, validation or test masks.
     """
     assert data_type in ["train", "val", "test"]
-
-    if data_type == "train":
-        tag = "TRAIN"
-    elif data_type == "val":
-        tag = "VAL"
-    else:
-        tag = "TEST"
+    tag = data_type.upper()
+    
     img_dir = getattr(cfg.DATA, tag).PATH
     label_dir = getattr(cfg.DATA, tag).GT_PATH
     out_dir = getattr(cfg.DATA, tag).DETECTION_MASK_DIR
+    
     img_ids = next(os_walk_clean(img_dir))[2]
     working_with_chunked_data = False
     if len(img_ids) == 0:
         img_ids = next(os_walk_clean(img_dir))[1]
         working_with_chunked_data = True
+    
     if len(img_ids) == 0:
         raise ValueError(f"No data found in folder {img_dir}")
+    
     img_ext = "." + img_ids[0].split(".")[-1]
-    if working_with_chunked_data and img_ext not in [".n5", ".zarr"]:
-        raise ValueError(f"No data found in folder {img_dir}")
     ids = next(os_walk_clean(label_dir))[2]
 
     channels = 2 if cfg.DATA.N_CLASSES > 2 else 1
-    dtype = np.uint8 if cfg.DATA.N_CLASSES < 255 else np.uint16
+    dtype_str = "uint8" if cfg.DATA.N_CLASSES < 255 else "uint16"
     if len(img_ids) != len(ids):
         raise ValueError(
             "Different number of CSV files and images found ({} vs {}). "
             "Please check that every image has one and only one CSV file".format(len(ids), len(img_ids))
         )
+
     if cfg.PROBLEM.NDIM == "2D":
         req_columns = ["axis-0", "axis-1"] if channels == 1 else ["axis-0", "axis-1", "class"]
     else:
@@ -2369,268 +2361,129 @@ def create_detection_masks(cfg: CN, data_type: str = "train"):
     cpd = cfg.PROBLEM.DETECTION.CENTRAL_POINT_DILATION
     ellipse_footprint = generate_ellipse_footprint(cpd)
 
-    print("Creating {} detection masks . . .".format(data_type))
-    for i in range(len(ids)):
+    # Distribute files by rank
+    rank = get_rank()
+    world_size = get_world_size()
+    it = range(rank, len(ids), world_size)
+
+    print(f"Rank {rank}: Creating {data_type} detection masks . . .")
+    for i in tqdm(it, disable=not is_main_process()):
         img_filename = os.path.splitext(ids[i])[0] + img_ext
-        if not os.path.exists(os.path.join(out_dir, img_filename)) and not os.path.exists(
-            os.path.join(out_dir, img_ids[i])
-        ):
-            file_path = os.path.join(label_dir, ids[i])
-            print("Attempting to create mask from CSV file: {}".format(file_path))
-            if not os.path.exists(os.path.join(img_dir, img_filename)):
-                print(
-                    "WARNING: The image seems to have different name than its CSV file. Using the CSV file that's "
-                    "in the same spot (within the CSV files list) where the image is in its own list of images. Check if it is correct!"
-                )
-                img_filename = img_ids[i]
-            print("Its respective image seems to be: {}".format(os.path.join(img_dir, img_filename)))
+        file_path = os.path.join(label_dir, ids[i])
+        out_path = os.path.join(out_dir, img_filename)
 
-            df = pd.read_csv(file_path)
-            df = df.dropna()
-            if img_ext not in [".zarr", ".n5"]:
-                img = read_img_as_ndarray(
-                    os.path.join(img_dir, img_filename),
-                    is_3d=not cfg.PROBLEM.NDIM == "2D",
-                )
-                shape = img.shape[:-1]
-            else:
-                img_zarr_file, img = read_chunked_data(os.path.join(img_dir, img_filename))
-                shape = img.shape if img.ndim == 3 else img.shape[:-1]
-
-                if isinstance(img_zarr_file, h5py.File):
-                    img_zarr_file.close()
-                del img_zarr_file
-
-            del img
-
-            # Discard first index column to not have error if it is not sorted
-            p_number = df.iloc[:, 0].to_list()
-            df = df.rename(columns=lambda x: x.strip())  # trim spaces in column names
-            cols_not_in_file = [x for x in req_columns if x not in df.columns]
-            if len(cols_not_in_file) > 0:
-                if len(cols_not_in_file) == 1:
-                    m = f"'{cols_not_in_file[0]}' column is not present in CSV file: {file_path}"
-                else:
-                    m = f"{cols_not_in_file} columns are not present in CSV file: {file_path}"
-                raise ValueError(m)
-
-            # Convert them to int in case they are floats
-            df["axis-0"] = df["axis-0"].astype("int")
-            df["axis-1"] = df["axis-1"].astype("int")
-            if cfg.PROBLEM.NDIM == "3D":
-                df["axis-2"] = df["axis-2"].astype("int")
-
-            df = df.sort_values(by=["axis-0"])
-
-            # Obtain the points
-            z_axis_point = df["axis-0"]
-            y_axis_point = df["axis-1"]
-            if cfg.PROBLEM.NDIM == "3D":
-                x_axis_point = df["axis-2"]
-
-            # Class column present
-            if "class" in req_columns:
-                df["class"] = df["class"].astype("int")
-                class_point = np.array(df["class"])
-            else:
-                if cfg.DATA.N_CLASSES > 2:
-                    raise ValueError("DATA.N_CLASSES > 2 but no class specified in CSV file")
-                class_point = [1] * len(z_axis_point)
-
-            # Create masks
-            print("Creating all points . . .")
-            mask = np.zeros((shape + (channels,)), dtype=dtype)
-            for j in tqdm(
-                range(len(z_axis_point)),
-                disable=not is_main_process(),
-                total=len(z_axis_point),
-                leave=False,
-            ):
-                a0_coord = z_axis_point[j]
-                a1_coord = y_axis_point[j]
-                if cfg.PROBLEM.NDIM == "3D":
-                    a2_coord = x_axis_point[j]
-                c_point = class_point[j]
-
-                if c_point > cfg.DATA.N_CLASSES:
-                    raise ValueError(
-                        "Class {} detected while 'DATA.N_CLASSES' was set to {}. Please check it!".format(
-                            c_point, cfg.DATA.N_CLASSES
-                        )
-                    )
-
-                # Paint the point
-                if cfg.PROBLEM.NDIM == "3D":
-                    if a0_coord < mask.shape[0] and a1_coord < mask.shape[1] and a2_coord < mask.shape[2]:
-                        patch_coords = [
-                            max(0, a0_coord - 1 - cpd[0]),
-                            min(mask.shape[0], a0_coord + 1 + cpd[0]),
-                            max(0, a1_coord - 1 - cpd[1]),
-                            min(mask.shape[1], a1_coord + 1 + cpd[1]),
-                            max(0, a2_coord - 1 - cpd[2]),
-                            min(mask.shape[2], a2_coord + 1 + cpd[2]),
-                        ]
-                        patch_shape = (
-                            patch_coords[1] - patch_coords[0],
-                            patch_coords[3] - patch_coords[2],
-                            patch_coords[5] - patch_coords[4],
-                        )
-                        if (
-                            1
-                            in mask[
-                                patch_coords[0] : patch_coords[1],
-                                patch_coords[2] : patch_coords[3],
-                                patch_coords[4] : patch_coords[5],
-                                0,
-                            ]
-                        ):
-                            print(
-                                "WARNING: possible duplicated point in (3,9,9) neighborhood: coords {} , class {} "
-                                "(point number {} in CSV)".format((a0_coord, a1_coord, a2_coord), c_point, p_number[j])
-                            )
-
-                        # Move coordinates to local patch boundaries
-                        a0_coord = a0_coord - patch_coords[0]
-                        a1_coord = a1_coord - patch_coords[2]
-                        a2_coord = a2_coord - patch_coords[4]
-
-                        patch = np.zeros(patch_shape, dtype=dtype)
-                        patch[a0_coord, a1_coord - 1 : a1_coord + 1, a2_coord - 1 : a2_coord + 1] = 1
-                    else:
-                        print(
-                            "WARNING: discarding point {} which seems to be out of shape: {}".format(
-                                [a0_coord, a1_coord, a2_coord], shape
-                            )
-                        )
-                else:
-                    if a0_coord < mask.shape[0] and a1_coord < mask.shape[1]:
-                        patch_coords = [
-                            max(0, a0_coord - 1 - cpd[0]),
-                            min(mask.shape[0], a0_coord + 1 + cpd[0]),
-                            max(0, a1_coord - 1 - cpd[1]),
-                            min(mask.shape[1], a1_coord + 1 + cpd[1]),
-                        ]
-                        patch_shape = (
-                            patch_coords[1] - patch_coords[0],
-                            patch_coords[3] - patch_coords[2],
-                        )
-
-                        if (
-                            1
-                            in mask[
-                                patch_coords[0] : patch_coords[1],
-                                patch_coords[2] : patch_coords[3],
-                                0,
-                            ]
-                        ):
-                            print(
-                                "WARNING: possible duplicated point in (9,9) neighborhood: coords {} , class {} "
-                                "(point number {} in CSV)".format((a0_coord, a1_coord), c_point, p_number[j])
-                            )
-
-                        # Move coordinates to local patch boundaries
-                        a0_coord = a0_coord - patch_coords[0]
-                        a1_coord = a1_coord - patch_coords[2]
-
-                        patch = np.zeros(patch_shape, dtype=dtype)
-                        patch[a0_coord, a1_coord - 1 : a1_coord + 1] = 1
-                    else:
-                        print(
-                            "WARNING: discarding point {} which seems to be out of shape: {}".format(
-                                [a0_coord, a1_coord], shape
-                            )
-                        )
-                patch = binary_dilation_scipy(patch, iterations=1, structure=ellipse_footprint)
-                patch = np.expand_dims(patch, -1)
-                if channels > 1:
-                    patch = np.concatenate([patch, patch.copy() * c_point], axis=-1)
-
-                # Insert the information without touching previous points
-                if cfg.PROBLEM.NDIM == "3D":
-                    mask[
-                        patch_coords[0] : patch_coords[1],
-                        patch_coords[2] : patch_coords[3],
-                        patch_coords[4] : patch_coords[5],
-                    ] = patch * (
-                        mask[
-                            patch_coords[0] : patch_coords[1],
-                            patch_coords[2] : patch_coords[3],
-                            patch_coords[4] : patch_coords[5],
-                        ]
-                        == 0
-                    )
-                else:
-                    mask[
-                        patch_coords[0] : patch_coords[1],
-                        patch_coords[2] : patch_coords[3],
-                    ] = patch * (
-                        mask[
-                            patch_coords[0] : patch_coords[1],
-                            patch_coords[2] : patch_coords[3],
-                        ]
-                        == 0
-                    )
-
-            if cfg.PROBLEM.DETECTION.CHECK_POINTS_CREATED:
-                print("Check points created to see if some of them are very close that create a large label")
-                error_found = False
-                for ch in tqdm(
-                    range(mask.shape[-1]),
-                    total=len(mask),
-                    leave=False,
-                    disable=not is_main_process(),
-                ):
-                    _, index, counts = np.unique(
-                        label(clear_border(mask[..., ch])),  # type: ignore
-                        return_counts=True,
-                        return_index=True,
-                    )  # type: ignore
-                    # 0 is background so valid element is 1. We will compare that value with the rest
-                    if len(counts) > 1:
-                        ref_value = counts[1]
-
-                        for k in range(2, len(counts)):
-                            if abs(ref_value - counts[k]) > 5:
-                                point = np.unravel_index(index[k], mask[..., ch].shape)
-                                print(
-                                    "WARNING: There is a point (coords {}) with size very different from "
-                                    "the rest. Maybe that cell has several labels: please check it! Normally all point "
-                                    "have {} pixels but this one has {}.".format(point, ref_value, counts[k])
-                                )
-                                error_found = True
-
-                if error_found:
-                    raise ValueError(
-                        "Duplicate points have been found so please check them before continuing. "
-                        "If you consider that the points are valid simply disable "
-                        "'PROBLEM.DETECTION.CHECK_POINTS_CREATED' so this check is not done again!"
-                    )
-            if working_with_chunked_data:
-                write_chunked_data(
-                    np.expand_dims(mask, 0),
-                    out_dir,
-                    img_filename,
-                    crop_shape=cfg.DATA.PATCH_SIZE,
-                    dtype_str="uint8",
-                    verbose=True,
-                )
-            else:
-                save_tif(np.expand_dims(mask, 0), out_dir, [img_filename])
+        if os.path.exists(out_path):
+            continue
+        
+        if not os.path.exists(os.path.join(img_dir, img_filename)):
+            print("WARNING: No image found for CSV file: {}. Using the image that's in the same spot (within the CSV files list) where"
+                "the CSV file is in its own list of CSV files. Check if it is correct!".format(file_path)
+            )
+            img_filename = img_ids[i]
+            
+        # 1. Get shape information without loading the whole image
+        if img_ext not in [".zarr", ".n5"]:
+            img_info = read_img_as_ndarray(os.path.join(img_dir, img_filename), is_3d=not cfg.PROBLEM.NDIM == "2D")
+            shape = img_info.shape[:-1]
+            is_h5 = False
         else:
-            if os.path.exists(os.path.join(out_dir, img_filename)):
-                print(
-                    "Mask file {} found for CSV file: {}".format(
-                        os.path.join(out_dir, img_filename),
-                        file_path,
-                    )
-                )
+            img_zarr_file, img_data = read_chunked_data(os.path.join(img_dir, img_filename))
+            shape = img_data.shape if img_data.ndim == 3 else img_data.shape[:-1]
+            if isinstance(img_zarr_file, h5py.File): img_zarr_file.close()
+            is_h5 = looks_like_hdf5(img_filename)
+
+        # 2. Initialize the disk-backed mask (Zarr or H5) instead of np.zeros
+        os.makedirs(out_dir, exist_ok=True)
+        out_shape = shape + (channels,)
+        
+        if working_with_chunked_data:
+            if is_h5:
+                fid_mask = h5py.File(out_path, "w")
+                ds_kwargs = {
+                    "shape": out_shape,
+                    "dtype": dtype_str,
+                    "chunks": pick_chunks(out_shape, dtype_str, target_mb=4.0),
+                    "compression": "gzip",
+                    "compression_opts": 4,
+                    "shuffle": True
+                }
+                mask = fid_mask.create_dataset("data", **ds_kwargs)
             else:
-                print(
-                    "Mask file {} found for CSV file: {}".format(
-                        os.path.join(out_dir, img_ids[i]),
-                        file_path,
-                    )
-                )
+                mask = zarr.open(out_path, mode="w", shape=out_shape, dtype=dtype_str, zarr_format=3)
+        else:
+            mask = np.zeros(out_shape, dtype=dtype_str)
+
+        # 3. Process CSV points
+        df = pd.read_csv(file_path).dropna()
+        df = df.rename(columns=lambda x: x.strip())
+        cols_not_in_file = [x for x in req_columns if x not in df.columns]
+        if len(cols_not_in_file) > 0:
+            if len(cols_not_in_file) == 1:
+                m = f"'{cols_not_in_file[0]}' column is not present in CSV file: {file_path}"
+            else:
+                m = f"{cols_not_in_file} columns are not present in CSV file: {file_path}"
+            raise ValueError(m)
+
+        # Obtaining coords (axis-0: Z, axis-1: Y, axis-2: X)
+        coords = [df["axis-0"].astype(int), df["axis-1"].astype(int)]
+        if cfg.PROBLEM.NDIM == "3D":
+            coords.append(df["axis-2"].astype(int))
+        
+        class_points = df["class"].astype(int) if "class" in df.columns else [1] * len(coords[0])
+
+        # 4. Paint points directly into the disk-backed array
+        for j in range(len(coords[0])):
+            c_point = class_points[j]
+            # Define local patch to dilate
+            p_coords = []
+            for dim in range(len(shape)):
+                p_coords.append(max(0, coords[dim][j] - 1 - cpd[dim]))
+                p_coords.append(min(shape[dim], coords[dim][j] + 1 + cpd[dim]))
+
+            # Slicing logic
+            if cfg.PROBLEM.NDIM == "3D":
+                s_z = slice(p_coords[0], p_coords[1])
+                s_y = slice(p_coords[2], p_coords[3])
+                s_x = slice(p_coords[4], p_coords[5])
+                local_mask = mask[s_z, s_y, s_x, 0]
+                # Relative center for dilation
+                rel_c = [coords[0][j]-p_coords[0], coords[1][j]-p_coords[2], coords[2][j]-p_coords[4]]
+            else:
+                s_y = slice(p_coords[0], p_coords[1])
+                s_x = slice(p_coords[2], p_coords[3])
+                local_mask = mask[s_y, s_x, 0]
+                rel_c = [coords[0][j]-p_coords[0], coords[1][j]-p_coords[2]]
+
+            # Paint and Dilate
+            patch = np.zeros(local_mask.shape, dtype=np.uint8)
+            # Simple center painting
+            if cfg.PROBLEM.NDIM == "3D":
+                patch[rel_c[0], rel_c[1], rel_c[2]] = 1
+            else:
+                patch[rel_c[0], rel_c[1]] = 1
+
+            patch = binary_dilation_scipy(patch, iterations=1, structure=ellipse_footprint)
+
+            # Write back to Zarr/H5 (only where mask was 0 to avoid overlapping issues)
+            update = patch.astype(dtype_str)
+            if cfg.PROBLEM.NDIM == "3D":
+                current_val = mask[s_z, s_y, s_x, :]
+                current_val[..., 0] = np.where(current_val[..., 0] == 0, update, current_val[..., 0])
+                if channels > 1:
+                    current_val[..., 1] = np.where(current_val[..., 1] == 0, update * c_point, current_val[..., 1])
+                mask[s_z, s_y, s_x, :] = current_val
+            else:
+                current_val = mask[s_y, s_x, :]
+                current_val[..., 0] = np.where(current_val[..., 0] == 0, update, current_val[..., 0])
+                if channels > 1:
+                    current_val[..., 1] = np.where(current_val[..., 1] == 0, update * c_point, current_val[..., 1])
+                mask[s_y, s_x, :] = current_val
+
+        # Finalize
+        if is_h5 and working_with_chunked_data:
+            fid_mask.close()
+        elif not working_with_chunked_data:
+            save_tif(np.expand_dims(mask, 0), out_dir, [img_filename])
 
 
 #######
