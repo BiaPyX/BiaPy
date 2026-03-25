@@ -2665,12 +2665,15 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
             # 1. Setup the downsampling schedules based on the architecture
             if is_hrnet:
-                num_levels = 4
-                yx_down_schedule = [2] * num_levels
+                num_downsamplings = 3 if cfg.MODEL.HRNET.VARIANT != "custom" else len(cfg.MODEL.HRNET.NUM_BLOCKS)
+                yx_down_schedule = [2] * num_downsamplings
                 z_down_schedule = cfg.MODEL.HRNET.Z_DOWN
                 z_param_name = "MODEL.HRNET.Z_DOWN"
             else:
-                num_levels = len(cfg.MODEL.FEATURE_MAPS) - 1
+                if model_arch == "multiresunet":
+                    num_downsamplings = 4
+                else:
+                    num_downsamplings = len(cfg.MODEL.FEATURE_MAPS) - 1
                 yx_down_schedule = cfg.MODEL.YX_DOWN
                 z_down_schedule = cfg.MODEL.Z_DOWN
                 z_param_name = "MODEL.Z_DOWN"
@@ -2680,7 +2683,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             current_yx = list(cfg.DATA.PATCH_SIZE[1:-1])
 
             # 2. Single loop to validate divisibility and simulate downsampling
-            for i in range(num_levels):
+            for i in range(num_downsamplings):
                 yx_factor = yx_down_schedule[i]
                 z_factor = z_down_schedule[i] if is_3d else 1
 
