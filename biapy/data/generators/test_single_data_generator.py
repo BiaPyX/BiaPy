@@ -225,8 +225,10 @@ class test_single_data_generator(Dataset):
         norm_extra_info = None
         if not first_load:
             img = np.array(img)
-            norm_info = self.X.dataset_info[sample.fid].norm_info if self.X.dataset_info[sample.fid].norm_info is not None else self.norm_module
-            img, norm_extra_info = normalize_image(img, norm_module=norm_info)
+            xnorm_info = norm_module=self.X.dataset_info[sample.fid].norm_info
+            if xnorm_info is None:
+                xnorm_info = self.norm_module
+            img, norm_extra_info = normalize_image(img, norm_module=xnorm_info)
             assert isinstance(img, np.ndarray)
 
         if self.convert_to_rgb and img.shape[-1] == 1:

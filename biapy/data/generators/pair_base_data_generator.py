@@ -510,7 +510,6 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                     instance_problem=instance_problem,
                     apply_norm=False
                 )
-                print("Sample {} mask normalization info: {}".format(i, new_mask_norm))
                 if self.mask_norm is None:
                     self.mask_norm = new_mask_norm
                 else:
@@ -897,7 +896,10 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             )
 
         if not first_load:
-            img, _ = normalize_image(img, norm_module=self.X.dataset_info[sample.fid].norm_info)
+            xnorm_info = norm_module=self.X.dataset_info[sample.fid].norm_info
+            if xnorm_info is None:
+                xnorm_info = self.norm_module
+            img, _ = normalize_image(img, norm_module=xnorm_info)
             mask, _ = normalize_mask(mask, norm_module=self.mask_norm)
             assert isinstance(img, np.ndarray) and isinstance(mask, np.ndarray)
 

@@ -290,8 +290,10 @@ class test_pair_data_generator(Dataset):
             if not first_load:
                 # Normalization
                 img = np.array(img)
-                norm_info = self.X.dataset_info[sample.fid].norm_info if self.X.dataset_info[sample.fid].norm_info is not None else self.norm_module
-                img, norm_extra_info = normalize_image(img, norm_module=norm_info)
+                xnorm_info = norm_module=self.X.dataset_info[sample.fid].norm_info
+                if xnorm_info is None:
+                    xnorm_info = self.norm_module
+                img, norm_extra_info = normalize_image(img, norm_module=xnorm_info)
                 assert isinstance(img, np.ndarray)
                 if self.provide_Y:
                     mask = np.array(mask)

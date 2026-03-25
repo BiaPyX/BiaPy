@@ -396,7 +396,10 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         # X normalization
         if not first_load:
-            img, _ = normalize_image(img, norm_module=self.X.dataset_info[sample.fid].norm_info)
+            xnorm_info = norm_module=self.X.dataset_info[sample.fid].norm_info
+            if xnorm_info is None:
+                xnorm_info = self.norm_module
+            img, _ = normalize_image(img, norm_module=xnorm_info)
             assert isinstance(img, np.ndarray)
 
         if self.convert_to_rgb and img.shape[-1] == 1:
