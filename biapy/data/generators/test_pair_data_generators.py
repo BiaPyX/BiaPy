@@ -8,7 +8,7 @@ from numpy.typing import NDArray
 from biapy.data.data_manipulation import load_img_data, sample_satisfy_conds, pad_and_reflect
 from biapy.data.data_3D_manipulation import looks_like_hdf5
 from biapy.data.dataset import BiaPyDataset, DataSample
-from biapy.data.norm import Normalization
+from biapy.data.norm import normalize_image, normalize_mask, update_mask_norm_info
 
 
 class test_pair_data_generator(Dataset):
@@ -26,7 +26,7 @@ class test_pair_data_generator(Dataset):
     ndim : int
         Dimensions of the data (``2`` for 2D and ``3`` for 3D).
 
-    norm_module : Normalization
+    norm_module : Dict
         Normalization module that defines the normalization steps to apply.
 
     test_by_chunks : bool, optional
@@ -88,7 +88,7 @@ class test_pair_data_generator(Dataset):
         X: BiaPyDataset,
         Y: BiaPyDataset,
         ndim: int,
-        norm_module: Normalization,
+        norm_module: Dict,
         test_by_chunks: bool = False,
         provide_Y: bool = False,
         seed: int = 42,
@@ -146,7 +146,14 @@ class test_pair_data_generator(Dataset):
 
         if mask is not None and not test_by_chunks:
             # Store which channels are binary or not (e.g. distance transform channel is not binary)
-            self.norm_module.set_stats_from_mask(mask, n_classes=n_classes, ignore_index=ignore_index, instance_problem=instance_problem)
+            mask, self.mask_norm = normalize_mask(
+                mask, 
+                norm_module=self.norm_module, 
+                n_classes=n_classes, 
+                ignore_index=ignore_index, 
+                instance_problem=instance_problem,
+                apply_norm=False
+            )
 
     def load_sample(
         self,
@@ -283,26 +290,24 @@ class test_pair_data_generator(Dataset):
             if not first_load:
                 # Normalization
                 img = np.array(img)
-                self.norm_module.set_stats_from_image(img)
-                img, norm_extra_info = self.norm_module.apply_image_norm(img)
+                norm_info = self.X.dataset_info[sample.fid].norm_info if self.X.dataset_info[sample.fid].norm_info is not None else self.norm_module
+                img, norm_extra_info = normalize_image(img, norm_module=norm_info)
                 assert isinstance(img, np.ndarray)
                 if self.provide_Y:
                     mask = np.array(mask)
-                    self.norm_module.set_stats_from_mask( mask, n_classes=self.n_classes,
-                        ignore_index=self.ignore_index, instance_problem=self.instance_problem)
-                    mask, _ = self.norm_module.apply_mask_norm(mask)
+                    mask, _ = normalize_mask(mask, norm_module=self.mask_norm)
                     assert isinstance(mask, np.ndarray)
 
             img = np.expand_dims(img, 0)
             if self.provide_Y:
                 mask = np.expand_dims(np.array(mask), 0)
-                if self.norm_module.mask_norm == "as_mask":
+                if self.norm_module["mask_norm"] == "as_mask":
                     mask = mask.astype(np.uint8)
 
             if self.convert_to_rgb:
                 if img.shape[-1] == 1:
                     img = np.repeat(img, 3, axis=-1)
-                if self.norm_module.mask_norm == "as_image" and mask and mask.shape[-1] == 1:
+                if self.norm_module["mask_norm"] == "as_image" and mask and mask.shape[-1] == 1:
                     mask = np.repeat(mask, 3, axis=-1)
 
             # Data channel check
@@ -370,6 +375,3 @@ class test_pair_data_generator(Dataset):
         test_sample.update(sample_extra_info)
 
         return test_sample
-
-    def get_data_normalization(self):
-        return self.norm_module

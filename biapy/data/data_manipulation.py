@@ -66,7 +66,7 @@ import torch.nn.functional as F
 from skimage.transform import resize as sk_resize
 
 from biapy.data.dataset import BiaPyDataset, DatasetFile, DataSample, PatchCoords
-from biapy.data.norm import Normalization
+from biapy.data.norm import normalize_image, normalize_mask
 from biapy.utils.misc import is_main_process, os_walk_clean
 from biapy.data.data_2D_manipulation import crop_data_with_overlap, ensure_2d_shape
 from biapy.data.data_3D_manipulation import (
@@ -89,7 +89,7 @@ def load_and_prepare_train_data(
     val_in_memory: bool,
     val_ov: Tuple[float, ...],
     val_padding: Tuple[int, ...],
-    norm_module: Normalization,
+    norm_module: Dict,
     crop_shape: Tuple[int, ...],
     cross_val: bool = False,
     cross_val_nsplits: int = 5,
@@ -159,7 +159,7 @@ def load_and_prepare_train_data(
     val_padding : 2D/3D int tuple, optional
         Size of padding to be added on each axis to the val data. Shape is ``(y, x)`` for 2D or ``(z, y, x)`` for 3D.
 
-    norm_module : Normalization
+    norm_module : Dict
         Information about the normalization.
 
     crop_shape : 3D/4D int tuple, optional
@@ -368,11 +368,6 @@ def load_and_prepare_train_data(
                                  "format images, but using these is only available for 3D problems")
             train_using_zarr = True
 
-            if norm_module.measure_by == "image":
-                print(
-                    "WARNING: normalization by image is not possible when using Zarr/H5 files. It will be done by patch instead."
-                )
-
             assert train_zarr_data_information
             X_train = samples_from_zarr(
                 list_of_data=fids if len(ids) == 0 else ids,
@@ -384,7 +379,6 @@ def load_and_prepare_train_data(
                 is_mask=False,
                 is_3d=is_3d,
             )
-            norm_module.measure_by = "patch"
         else:
             X_train = samples_from_image_list(
                 list_of_data=ids,
@@ -421,7 +415,6 @@ def load_and_prepare_train_data(
                     is_mask=True,
                     is_3d=is_3d,
                 )
-                norm_module.measure_by = "patch"
             else:
 
                 # Calculate shape with upsampling
@@ -656,11 +649,6 @@ def load_and_prepare_train_data(
                     raise ValueError("Zarr image handle is only available for 3D problems")
                 val_using_zarr = True
 
-                if norm_module.measure_by == "image":
-                    print(
-                        "WARNING: normalization by image is not possible when using Zarr/H5 files. It will be done by patch instead."
-                    )
-
                 assert val_zarr_data_information
                 X_val = samples_from_zarr(
                     list_of_data=val_fids,
@@ -672,7 +660,6 @@ def load_and_prepare_train_data(
                     is_mask=False,
                     is_3d=is_3d,
                 )
-                norm_module.measure_by = "patch"
             else:
                 X_val = samples_from_image_list(
                     list_of_data=val_ids,
@@ -714,7 +701,6 @@ def load_and_prepare_train_data(
                         is_mask=True,
                         is_3d=is_3d,
                     )
-                    norm_module.measure_by = "patch"
                 else:
                     assert len(val_gt_ids) == len(val_ids), (
                         "Number of validation raw images ({}) and validation labels ({}) must be the same. "
@@ -1093,7 +1079,7 @@ def load_and_prepare_test_data(
 
 def load_and_prepare_cls_test_data(
     test_path: str,
-    norm_module: Normalization,
+    norm_module: Dict,
     use_val_as_test: bool,
     expected_classes: int,
     crop_shape: Tuple[int, ...],
@@ -1110,7 +1096,7 @@ def load_and_prepare_cls_test_data(
     train_path : str
         Path to the training data.
 
-    norm_module : Normalization
+    norm_module : Dict
         Information about the normalization.
 
     use_val_as_test : bool
@@ -1254,7 +1240,7 @@ def load_data_from_dir(data_path: str, is_3d: bool = False) -> List[NDArray]:
 
 def load_cls_data_from_dir(
     data_path: str,
-    norm_module: Normalization,
+    norm_module: Dict,
     expected_classes: int,
     crop_shape: Optional[Tuple[int, ...]],
     is_3d: bool = True,
@@ -1271,7 +1257,7 @@ def load_cls_data_from_dir(
     data_path : str
         Path to read the images from.
 
-    norm_module : Normalization
+    norm_module : Dict
         Information about the normalization.
 
     expected_classes : int
@@ -1332,7 +1318,7 @@ def load_and_prepare_train_data_cls(
     val_path: str,
     val_in_memory: bool,
     expected_classes: int,
-    norm_module: Normalization,
+    norm_module: Dict,
     crop_shape: Tuple[int, ...],
     cross_val: bool = False,
     cross_val_nsplits: int = 5,
@@ -1374,6 +1360,9 @@ def load_and_prepare_train_data_cls(
 
     expected_classes : int
         Expected number of classes to be loaded.
+
+    norm_module : Dict    
+        Information about the normalization.
 
     crop_shape : 3D/4D int tuple
         Shape of the crops. E.g. ``(y, x, channels)`` for 2D and ``(z, y, x, channels)`` for 3D.
@@ -1631,7 +1620,7 @@ def samples_from_image_list(
     crop_shape: Tuple[int, ...],
     ov: Tuple[float, ...],
     padding: Tuple[int, ...],
-    norm_module: Normalization,
+    norm_module: Dict,
     crop: bool = True,
     is_mask: bool = False,
     is_3d: bool = True,
@@ -1661,7 +1650,7 @@ def samples_from_image_list(
     padding : 2D/3D int tuple
         Size of padding to be added on each axis. Shape is ``(y, x)`` for 2D or ``(z, y, x)`` for 3D.
 
-    norm_module : Normalization
+    norm_module : Dict
         Information about the normalization.
 
     crop : bool, optional
@@ -1765,15 +1754,17 @@ def samples_from_image_list(
             tot_samples_to_insert = len(crop_coords)
         else:
             tot_samples_to_insert = 1
+        
+        if is_mask:
+            img, norm_info = normalize_mask(img, norm_module=norm_module, apply_norm=False)
+        else:
+            img, norm_info = normalize_image(img, norm_module=norm_module, apply_norm=False)
 
         dataset_file = DatasetFile(
             path=os.path.join(data_path, list_of_data[i]),
             shape=original_data_shape,
+            norm_info=norm_info
         )
-        # Depending on the normalization choosen we need to set the stats into the DatasetFile
-        norm_module.set_stats_from_image(img)
-        norm_module.set_DatasetFile_from_stats(dataset_file)
-
         dataset_info.append(dataset_file)
         for j in range(tot_samples_to_insert):
             data_sample = DataSample(
@@ -1956,7 +1947,7 @@ def samples_from_image_list_multiple_raw_one_gt(
     crop_shape: Tuple[int, ...],
     ov: Tuple[float, ...],
     padding: Tuple[int, ...],
-    norm_module: Normalization,
+    norm_module: Dict,
     crop: bool = True,
     is_3d: bool = True,
     reflect_to_complete_shape: bool = True,
@@ -1985,7 +1976,7 @@ def samples_from_image_list_multiple_raw_one_gt(
     padding : 2D/3D int tuple
         Size of padding to be added on each axis. Shape is ``(y, x)`` for 2D or ``(z, y, x)`` for 3D.
 
-    norm_module : Normalization
+    norm_module : Dict
         Information about the normalization.
 
     crop : bool, optional
@@ -2109,10 +2100,12 @@ def samples_from_image_list_multiple_raw_one_gt(
         else:
             gt_tot_samples_to_insert = 1
 
-        data_file = DatasetFile(path=os.path.join(gt_path, id_, gt_id), shape=original_data_shape)
-        # Depending on the normalization choosen we need to set the stats into the DatasetFile
-        norm_module.set_stats_from_image(gt_sample)
-        norm_module.set_DatasetFile_from_stats(data_file)
+        gt_sample, norm_info = normalize_image(gt_sample, norm_module=norm_module, apply_norm=False)
+        data_file = DatasetFile(
+            path=os.path.join(gt_path, id_, gt_id), 
+            shape=original_data_shape, 
+            norm_info=norm_info
+        )
 
         gt_dataset_info.append(data_file)
         for i in range(gt_tot_samples_to_insert):
@@ -2188,13 +2181,12 @@ def samples_from_image_list_multiple_raw_one_gt(
             else:
                 tot_samples_to_insert = 1
 
+            raw_sample, norm_info = normalize_image(raw_sample, norm_module=norm_module, apply_norm=False)
             dataset_file = DatasetFile(
                 path=os.path.join(associated_raw_image_dir, raw_sample_id),
                 shape=original_data_shape,
+                norm_info=norm_info
             )
-            # Depending on the normalization choosen we need to set the stats into the DatasetFile
-            norm_module.set_stats_from_image(raw_sample)
-            norm_module.set_DatasetFile_from_stats(dataset_file)
 
             dataset_info.append(dataset_file)
             for i in range(tot_samples_to_insert):
@@ -2215,7 +2207,7 @@ def samples_from_image_list_multiple_raw_one_gt(
 
 def samples_from_class_list(
     data_path: str,
-    norm_module: Normalization,
+    norm_module: Dict,
     crop_shape: Optional[Tuple[int, ...]] = None,
     expected_classes: int = -1,
     is_3d: bool = True,
@@ -2224,7 +2216,6 @@ def samples_from_class_list(
 ) -> BiaPyDataset:
     """
     Create dataset samples from the given path taking into account that each subfolder represents a class.
-
     This function does not load the data.
 
     Parameters
@@ -2232,7 +2223,7 @@ def samples_from_class_list(
     data_path : str
         Directory of the images to read.
 
-    norm_module : Normalization
+    norm_module : Dict
         Information about the normalization.
 
     crop_shape : 3D/4D int tuple, optional
@@ -2329,16 +2320,14 @@ def samples_from_class_list(
                     f"of {data_range_expected}) in the folder. Current image: {img_path}"
                 )
 
+            img, norm_info = normalize_image(img, norm_module=norm_module, apply_norm=False)
             dataset_file = DatasetFile(
                 path=img_path,
                 shape=img.shape,
                 class_name=class_name,
                 class_num=c_num if gt_loaded else -1,
+                norm_info=norm_info
             )
-
-            # Depending on the normalization choosen we need to set the stats into the DatasetFile
-            norm_module.set_stats_from_image(img)
-            norm_module.set_DatasetFile_from_stats(dataset_file)
 
             xdataset_info.append(dataset_file)
             sample_dict = DataSample(
@@ -2362,7 +2351,7 @@ def filter_samples_by_properties(
     reflect_to_complete_shape: bool = False,
     filter_by_entire_image: bool = True,
     norm_before_filter: bool = False,
-    norm_module: Optional[Normalization] = None,
+    norm_module: Optional[Dict] = None,
     y_dataset: Optional[BiaPyDataset] = None,
     zarr_data_information: Optional[Dict] = None,
     save_filtered_images: bool = True,
@@ -2427,7 +2416,7 @@ def filter_samples_by_properties(
     norm_before_filter : bool, optional
         Whether to apply normalization before filtering. Be aware then that the values for filtering may change.
 
-    norm_module : Normalization
+    norm_module : Dict
         Information about the normalization.
 
     y_dataset : BiaPyDataset, optional
@@ -2518,10 +2507,10 @@ def filter_samples_by_properties(
 
             if norm_before_filter:
                 assert norm_module is not None
-                img, _ = norm_module.apply_image_norm(img)
+                img, _ = normalize_image(img, norm_module=norm_module)
                 if use_Y_data:
                     assert mask is not None
-                    mask, _ = norm_module.apply_mask_norm(mask)
+                    mask, _ = normalize_mask(mask, norm_module=norm_module)
                     assert isinstance(mask, np.ndarray)
             assert isinstance(img, np.ndarray)
             satisfy_conds = sample_satisfy_conds(
@@ -2609,12 +2598,12 @@ def filter_samples_by_properties(
 
                 if norm_before_filter:
                     assert norm_module is not None
-                    norm_module.set_stats_from_DatasetFile(x_dataset.dataset_info[sample.fid])
-                    xdata, _ = norm_module.apply_image_norm(xdata)
+                    norm_info = x_dataset.dataset_info[sample.fid].norm_info
+                    xdata, _ = normalize_image(xdata, norm_module=norm_info)
                     if use_Y_data:
                         assert ydata is not None and y_dataset is not None
-                        norm_module.set_stats_from_DatasetFile(y_dataset.dataset_info[sample.fid])
-                        ydata, _ = norm_module.apply_mask_norm(ydata)
+                        norm_info = y_dataset.dataset_info[sample.fid]
+                        ydata, _ = normalize_mask(ydata, norm_module=norm_info)
 
                 if save_filtered_images and save_filtered_images_dir:
                     if "xdata_fil_example" in locals():

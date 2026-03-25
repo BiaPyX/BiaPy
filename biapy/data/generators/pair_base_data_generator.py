@@ -27,7 +27,7 @@ from biapy.utils.misc import is_main_process, os_walk_clean
 from biapy.data.data_manipulation import pad_and_reflect, load_img_data, extract_patch_within_image
 from biapy.data.data_3D_manipulation import extract_patch_from_efficient_file
 from biapy.data.dataset import BiaPyDataset
-from biapy.data.norm import Normalization
+from biapy.data.norm import normalize_image, normalize_mask, update_mask_norm_info
 
 
 class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
@@ -45,7 +45,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
     Y : BiaPyDataset
         Y dataset.
 
-    norm_module : Normalization
+    norm_module : Dict
         Normalization module that defines the normalization steps to apply.
 
     seed : int, optional
@@ -337,7 +337,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         ndim: int,
         X: BiaPyDataset,
         Y: BiaPyDataset,
-        norm_module: Normalization,
+        norm_module: Dict,
         seed: int = 0,
         da: bool = True,
         da_prob: float = 0.5,
@@ -482,7 +482,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         # X data analysis
         img, _ = self.load_sample(0, first_load=True)
-        if norm_module.type in ["div", "scale_range"]:
+        if norm_module["type"] in ["div", "scale_range"]:
             if shape[-1] != img.shape[-1]:
                 raise ValueError(
                     "Channel of the patch size given {} does not correspond with the loaded image {}. "
@@ -493,7 +493,8 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         # Y data analysis
         # Loop over a few masks to ensure foreground class is present to decide normalization
-        if self.norm_module.mask_norm == "as_mask":
+        self.mask_norm = None
+        if self.norm_module["mask_norm"] == "as_mask":
             print("Checking which channel of the mask needs normalization . . .")
             n_samples = min(50, len(self.X.sample_list))
             if instance_problem:
@@ -501,22 +502,34 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             for i in tqdm(range(n_samples), total=n_samples):
                 _, mask = self.load_sample(i, first_load=True)
                 # Store which channels are binary or not (e.g. distance transform channel is not binary)
-                self.norm_module.set_stats_from_mask(mask, n_classes=n_classes, ignore_index=ignore_index, instance_problem=instance_problem)
+                mask, new_mask_norm = normalize_mask(
+                    mask, 
+                    norm_module=self.norm_module, 
+                    n_classes=n_classes, 
+                    ignore_index=ignore_index, 
+                    instance_problem=instance_problem,
+                    apply_norm=False
+                )
+                print("Sample {} mask normalization info: {}".format(i, new_mask_norm))
+                if self.mask_norm is None:
+                    self.mask_norm = new_mask_norm
+                else:
+                    self.mask_norm = update_mask_norm_info(self.mask_norm, new_mask_norm)
 
-        # Check if any channel is not binary to set no_bin_channel_found to True
-        if self.norm_module.channel_info:
+            # Check if any channel is not binary to set no_bin_channel_found to True
             self.no_bin_channel_found = any(
-                self.norm_module.get_channel_info(j)["type"] == "no_bin"
-                for j in range(len(self.norm_module.channel_info))
+                self.mask_norm["per_channel_info"][j]["type"] == "no_bin"
+                for j in range(len(self.mask_norm["per_channel_info"]))
             )
+        else:
+            self.mask_norm = self.norm_module
 
         _, mask = self.load_sample(0)
         self.Y_channels = mask.shape[-1]
         self.Y_dtype = mask.dtype
         del mask
 
-        print("Normalization config used for X: {}".format(self.norm_module))
-        print("Normalization config used for Y: {}".format(norm_module.mask_norm))
+        print("Normalization config used for Y: {}".format(self.mask_norm))
 
         if self.ndim == 2:
             resolution = tuple(resolution[i] for i in [1, 0])  # y, x -> x, y
@@ -817,9 +830,9 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         # Y data
         # "gt_associated_id" available only in PROBLEM.IMAGE_TO_IMAGE.MULTIPLE_RAW_ONE_TARGET_LOADER
-        id = sample.get_gt_associated_id()
-        if id is not None:
-            msample = self.Y.sample_list[id]
+        gt_id = sample.get_gt_associated_id()
+        if gt_id is not None:
+            msample = self.Y.sample_list[gt_id]
             mask, _ = load_img_data(
                 self.Y.dataset_info[msample.fid].path,
                 is_3d=(self.ndim == 3),
@@ -884,17 +897,14 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             )
 
         if not first_load:
-            self.norm_module.set_stats_from_DatasetFile(self.X.dataset_info[sample.fid])
-            img, _ = self.norm_module.apply_image_norm(img)
-
-            self.norm_module.set_stats_from_DatasetFile(self.Y.dataset_info[msample.fid])
-            mask, _ = self.norm_module.apply_mask_norm(mask)
+            img, _ = normalize_image(img, norm_module=self.X.dataset_info[sample.fid].norm_info)
+            mask, _ = normalize_mask(mask, norm_module=self.mask_norm)
             assert isinstance(img, np.ndarray) and isinstance(mask, np.ndarray)
 
         if self.convert_to_rgb:
             if img.shape[-1] == 1:
                 img = np.repeat(img, 3, axis=-1)
-            if self.norm_module.mask_norm == "as_image" and mask.shape[-1] == 1:
+            if self.norm_module["mask_norm"] == "as_image" and mask.shape[-1] == 1:
                 mask = np.repeat(mask, 3, axis=-1)
 
         return img, mask
@@ -1001,7 +1011,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 e_new_mask = []
                 e_heat = []
             for j in range(mask.shape[-1]):
-                if self.norm_module.get_channel_info(j)["type"] == "no_bin":
+                if self.mask_norm["per_channel_info"][j]["type"] == "no_bin":
                     heat.append(np.expand_dims(mask[..., j], -1))
                     if self.cutmix:
                         e_heat.append(np.expand_dims(e_mask[..., j], -1)) # type: ignore
@@ -1042,7 +1052,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 zoom_range=self.zoom_range,
                 zoom_in_z=self.zoom_in_z,
                 mode=self.affine_mode,
-                mask_type=self.norm_module.mask_norm,
+                mask_type=self.norm_module["mask_norm"],
             )  # type: ignore
 
         # Apply random rotations
@@ -1053,7 +1063,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 heat=heat,
                 angles=self.rnd_rot_range,
                 mode=self.affine_mode,
-                mask_type=self.norm_module.mask_norm,
+                mask_type=self.norm_module["mask_norm"],
             )  # type: ignore
 
         # Apply square rotations
@@ -1064,7 +1074,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 heat=heat,
                 angles=[90, 180, 270],
                 mode=self.affine_mode,
-                mask_type=self.norm_module.mask_norm,
+                mask_type=self.norm_module["mask_norm"],
             )  # type: ignore
 
         # Apply cblur
@@ -1165,7 +1175,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 heat=heat,
                 alpha=self.e_alpha,
                 sigma=self.e_sigma,
-                mask_type=self.norm_module.mask_norm,
+                mask_type=self.norm_module["mask_norm"],
                 mode=self.e_mode
             ) # type: ignore
 
@@ -1174,7 +1184,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 image, mask=mask, heat=heat,
                 shear=self.shear_range,
                 mode=self.affine_mode,
-                mask_type=self.norm_module.mask_norm,
+                mask_type=self.norm_module["mask_norm"],
             ) # type: ignore
         
         if self.shift and random.uniform(0, 1) < self.da_prob:
@@ -1182,7 +1192,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                 image, mask=mask, heat=heat,
                 shift_range=self.shift_range,
                 mode=self.affine_mode,
-                mask_type=self.norm_module.mask_norm,
+                mask_type=self.norm_module["mask_norm"],
             ) # type: ignore
 
         if self.vflip and random.uniform(0, 1) < self.da_prob:
@@ -1223,9 +1233,9 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         if self.no_bin_channel_found:
             new_mask = []
             hi, mi = 0, 0
-            for j in range(len(self.norm_module.channel_info)):  # type: ignore
-                if self.norm_module.get_channel_info(j)["type"] == "no_bin":
-                    new_mask.append(np.expand_dims(heat[..., hi], -1)) # type: ignore
+            for j in range(len(self.mask_norm["per_channel_info"])):
+                if self.mask_norm["per_channel_info"][j]["type"] == "no_bin":
+                    new_mask.append(np.expand_dims(heat[..., hi], -1))
                     hi += 1
                 else:
                     new_mask.append(np.expand_dims(mask[..., mi], -1))
@@ -1445,7 +1455,3 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             if self.n2v_structMask is not None:
                 self.apply_structN2Vmask_func(img[..., c], coords, self.n2v_structMask)
         return img, mask
-
-    def get_data_normalization(self) -> Normalization:
-        """Get data normalization."""
-        return self.norm_module

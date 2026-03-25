@@ -85,9 +85,9 @@ all_test_info["Test5"] = {
     "yaml": "test_5.yaml",
     "internal_checks": [
         {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 1, "metric": "f1",
-            "gt": True, "value": 0.45},
+            "gt": True, "value": 0.8},
         {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 2, "metric": "f1",
-            "gt": True, "value": 0.45}, # Post-processing
+            "gt": True, "value": 0.8}, # Post-processing
     ]
 }
 
@@ -108,11 +108,11 @@ all_test_info["Test7"] = {
     "enable": True,
     "jobname": "test7",
     "description": "2D Detection. Stardist v2 2D data. zero_mean_unit_variance norm, percentile clip. Basic DA. "
-        "multiresunet. Post-proc: remove close points + det weatershed",
+        "multiresunet. Post-proc: remove close points + det watershed",
     "yaml": "test_7.yaml",
     "internal_checks": [
-        {"type": "regular", "pattern": "Test Foreground IoU (merge patches):", "gt": True, "value": 0.2},
-        {"type": "regular", "pattern": "Test F1 (merge patches)", "gt": True, "value": 0.7},
+        {"type": "regular", "pattern": "Test Foreground IoU (merge patches):", "gt": True, "value": 0.5},
+        {"type": "regular", "pattern": "Test F1 (merge patches)", "gt": True, "value": 0.85},
     ]
 }
 
@@ -120,7 +120,7 @@ all_test_info["Test8"] = {
     "enable": True,
     "jobname": "test8",
     "description": "3D Detection. NucMM-Z 3D data. zero_mean_unit_variance norm, percentile clip. Basic DA. "
-        "unetr. Post-proc: remove close points + det weatershed",
+        "unetr. Post-proc: remove close points + det watershed",
     "yaml": "test_8.yaml",
     "internal_checks": [
         {"type": "regular", "pattern": "Test F1 (merge patches)", "gt": True, "value": 0.2},
@@ -142,7 +142,7 @@ all_test_info["Test9"] = {
     "enable": True,
     "jobname": "test9",
     "description": "2D Denoising. Convallaria data. zero_mean_unit_variance norm. Basic DA."
-        "unetr. Post-proc: remove close points + det weatershed",
+        "unetr. Post-proc: remove close points + det watershed",
     "yaml": "test_9.yaml",
     "internal_checks": [
         {"type": "regular", "pattern": "Validation MSE:", "gt": False, "value": 1.},
@@ -153,7 +153,7 @@ all_test_info["Test10"] = {
     "enable": True,
     "jobname": "test10",
     "description": "3D Denoising. Flywing 3D data. zero_mean_unit_variance norm. Basic DA. "
-        "resunet. Post-proc: remove close points + det weatershed",
+        "resunet. Post-proc: remove close points + det watershed",
     "yaml": "test_10.yaml",
     "internal_checks": [
         {"type": "regular", "pattern": "Validation MSE:", "gt": False, "value": 1.},

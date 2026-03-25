@@ -29,7 +29,7 @@ from biapy.data.data_3D_manipulation import (
     merge_3D_data_with_overlap,
 )
 from biapy.data.data_manipulation import save_tif
-
+from biapy.data.norm import undo_image_norm
 
 class Image_to_Image_Workflow(Base_Workflow):
     """
@@ -77,8 +77,8 @@ class Image_to_Image_Workflow(Base_Workflow):
         self.mask_path = cfg.DATA.TRAIN.GT_PATH
         self.is_y_mask = False
 
-        self.norm_module.mask_norm = "as_image"
-        self.test_norm_module.mask_norm = "as_image"
+        self.norm_module["mask_norm"] = "as_image"
+        self.test_norm_module["mask_norm"] = "as_image"
 
     def define_activations_and_channels(self):
         """
@@ -492,7 +492,7 @@ class Image_to_Image_Workflow(Base_Workflow):
                         ]
 
         # Undo normalization
-        pred = self.norm_module.undo_image_norm(pred, self.current_sample["X_norm"])
+        pred = undo_image_norm(pred, self.current_sample["X_norm"])
         assert isinstance(pred, np.ndarray)
 
         # Save image

@@ -25,7 +25,7 @@ from biapy.utils.misc import is_main_process
 from biapy.data.data_manipulation import load_img_data
 from biapy.data.data_3D_manipulation import extract_patch_from_efficient_file
 from biapy.data.dataset import BiaPyDataset
-from biapy.data.norm import Normalization
+from biapy.data.norm import normalize_image
 
 class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
     """
@@ -39,7 +39,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
     X : BiaPyDataset
         X data.
 
-    norm_module : Normalization
+    norm_module : Dict
         Normalization module that defines the normalization steps to apply.
 
     seed : int, optional
@@ -157,7 +157,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self,
         ndim: int,
         X: BiaPyDataset,
-        norm_module: Normalization,
+        norm_module: Dict,
         seed: int = 0,
         da: bool = True,
         da_prob: float = 0.5,
@@ -396,8 +396,7 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         # X normalization
         if not first_load:
-            self.norm_module.set_stats_from_DatasetFile(self.X.dataset_info[sample.fid])
-            img, _ = self.norm_module.apply_image_norm(img)
+            img, _ = normalize_image(img, norm_module=self.X.dataset_info[sample.fid].norm_info)
             assert isinstance(img, np.ndarray)
 
         if self.convert_to_rgb and img.shape[-1] == 1:
@@ -659,14 +658,3 @@ class SingleBaseDataGenerator(Dataset, metaclass=ABCMeta):
 
         print("### END TR-SAMPLES ###")
         return sample_x
-
-    def get_data_normalization(self):
-        """
-        Return the normalization module used by the generator.
-
-        Returns
-        -------
-        Normalization
-            The normalization module.
-        """
-        return self.norm_module

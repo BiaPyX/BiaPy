@@ -625,10 +625,7 @@ def create_model_doc(
         else:
             preproc_info += f"Using provided lower and upper percentiles of {biapy_cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC} and {biapy_cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC}, respectively, to calculate the values to clip the data before normalization.\n"
 
-    if biapy_cfg.DATA.NORMALIZATION.MEASURE_BY == "image":
-        preproc_info += "- Normalization and percentile clipping values calculated from the complete image.\n"
-    else:
-        preproc_info += "- Normalization and percentile clipping values calculated from each patch.\n"
+    preproc_info += "- Normalization and percentile clipping values calculated from the complete image.\n"
  
     try:
         with open(cfg_file, "r") as file:

@@ -33,7 +33,7 @@ from biapy.data.data_manipulation import save_tif
 from biapy.utils.misc import to_pytorch_format, MetricLogger
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.engine.metrics import SSIM_loss, W_MAE_SSIM_loss, W_MSE_SSIM_loss, loss_encapsulation
-
+from biapy.data.norm import undo_image_norm
 
 class Super_resolution_Workflow(Base_Workflow):
     """
@@ -86,8 +86,8 @@ class Super_resolution_Workflow(Base_Workflow):
         self.is_y_mask = False
         self.load_Y_val = True
 
-        self.norm_module.mask_norm = "as_image"
-        self.test_norm_module.mask_norm = "as_image"
+        self.norm_module["mask_norm"] = "as_image"
+        self.test_norm_module["mask_norm"] = "as_image"
 
     def define_activations_and_channels(self):
         """
@@ -470,7 +470,7 @@ class Super_resolution_Workflow(Base_Workflow):
                         ]
 
         # Undo normalization
-        pred = self.norm_module.undo_image_norm(pred, self.current_sample["X_norm"])
+        pred = undo_image_norm(pred, self.current_sample["X_norm"])
         assert isinstance(pred, np.ndarray)
 
         # Save image

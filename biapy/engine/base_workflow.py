@@ -92,7 +92,7 @@ from biapy.data.post_processing.post_processing import (
 )
 from biapy.data.post_processing import apply_post_processing
 from biapy.data.pre_processing import preprocess_data
-from biapy.data.norm import Normalization
+from biapy.data.norm import normalize_image, normalize_mask
 from biapy.data.generators.chunked_test_pair_data_generator import chunked_test_pair_data_generator
 from biapy.data.dataset import PatchCoords
 from biapy.models.memory_bank import MemoryBank
@@ -167,7 +167,6 @@ class Base_Workflow(metaclass=ABCMeta):
         self.post_processing = {}
         self.post_processing["per_image"] = False
         self.post_processing["as_3D_stack"] = False
-        self.data_norm = None
         self.model = None
         self.model_build_kwargs = None
         self.checkpoint_path = None
@@ -291,35 +290,40 @@ class Base_Workflow(metaclass=ABCMeta):
         self.define_metrics()
 
         # Normalization checks
-        print("Creating normalization module . . .")
-        self.norm_module = Normalization(
-            type=cfg.DATA.NORMALIZATION.TYPE,
-            measure_by=cfg.DATA.NORMALIZATION.MEASURE_BY,
-            mask_norm="as_mask",
-            out_dtype="float32" if not cfg.TEST.REDUCE_MEMORY else "float16",
-            percentile_clip=cfg.DATA.NORMALIZATION.PERC_CLIP.ENABLE,
-            per_lower_bound=cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC,
-            per_upper_bound=cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC,
-            lower_bound_val=cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_VALUE,
-            upper_bound_val=cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_VALUE,
-            mean=cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.MEAN_VAL,
-            std=cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.STD_VAL,
-        )
+        print("Creating normalization module . . .")        
+        self.norm_module = {
+            "type": cfg.DATA.NORMALIZATION.TYPE,
+            "mask_norm": "as_mask",
+            "out_dtype": "float32" if not cfg.TEST.REDUCE_MEMORY else "float16",
+            "percentile_clip": cfg.DATA.NORMALIZATION.PERC_CLIP.ENABLE,
+            "per_lower_bound": cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC,
+            "per_upper_bound": cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC,
+            "lower_bound_val": cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_VALUE,
+            "upper_bound_val": cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_VALUE,
+            "mean": cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.MEAN_VAL,
+            "std": cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.STD_VAL,
+        }
+        print("Normalization module created with the following configuration:")
+        for key, val in self.norm_module.items():
+            print(f"  {key}: {val}")
+
         self.test_norm_module = self.norm_module.copy()
-        self.test_norm_module.train_normalization = False
+        self.test_norm_module["train_normalization"] = False
         if self.cfg.MODEL.SOURCE == "torchvision":
             print("Creating normalization module . . .")
-            self.torchvision_norm = Normalization(
-                type="scale_range",
-                measure_by="image",
-                mask_norm="as_mask",
-                out_dtype="float32" if not cfg.TEST.REDUCE_MEMORY else "float16",
-                percentile_clip=cfg.DATA.NORMALIZATION.PERC_CLIP.ENABLE,
-                per_lower_bound=cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC,
-                per_upper_bound=cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC,
-                lower_bound_val=cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_VALUE,
-                upper_bound_val=cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_VALUE,
-            )
+            self.torchvision_norm = {
+                "type": "scale_range",
+                "mask_norm": "as_mask",
+                "out_dtype": "float32" if not cfg.TEST.REDUCE_MEMORY else "float16",
+                "percentile_clip": cfg.DATA.NORMALIZATION.PERC_CLIP.ENABLE,
+                "per_lower_bound": cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC,
+                "per_upper_bound": cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC,
+                "lower_bound_val": cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_VALUE,
+                "upper_bound_val": cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_VALUE,
+            }
+            print("Torchvision normalization module created with the following configuration:")
+            for key, val in self.torchvision_norm.items():
+                print(f"  {key}: {val}")
 
         # Chunked workflow process generator placeholder
         self.test_chunked_workflow_process_vars = {
@@ -594,7 +598,6 @@ class Base_Workflow(metaclass=ABCMeta):
             (
                 self.train_generator,
                 self.val_generator,
-                self.data_norm,
                 self.num_training_steps_per_epoch,
                 self.bmz_config["test_input"],
                 self.bmz_config["cover_raw"],
@@ -1144,7 +1147,6 @@ class Base_Workflow(metaclass=ABCMeta):
             print("############################")
             (
                 self.test_generator, 
-                self.data_norm, 
                 test_input, 
                 cover_raw, 
                 cover_gt,
@@ -1509,8 +1511,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
             # Apply normalization
             if apply_norm:
-                self.norm_module.set_stats_from_image(self.bmz_config[sample_key])
-                self.bmz_config[sample_key], _ = self.norm_module.apply_image_norm(self.bmz_config[sample_key])
+                self.bmz_config[sample_key], _ = normalize_image(self.bmz_config[sample_key], self.norm_module)
                 self.bmz_config[sample_key] = self.bmz_config[sample_key].astype(np.float32)
 
         # Save test_input without the normalization if not already saved

@@ -3379,6 +3379,8 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict):
                             "PERC_UPPER"
                         ]
                         del old_cfg["DATA"]["NORMALIZATION"]["PERC_UPPER"]
+            if "MEASURE_BY" in old_cfg["DATA"]["NORMALIZATION"]:
+                del old_cfg["DATA"]["NORMALIZATION"]["MEASURE_BY"]
 
             if "TYPE" in old_cfg["DATA"]["NORMALIZATION"] and old_cfg["DATA"]["NORMALIZATION"]["TYPE"] == "custom":
                 old_cfg["DATA"]["NORMALIZATION"]["TYPE"] = "zero_mean_unit_variance"
@@ -3512,6 +3514,9 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict):
             old_cfg["MODEL"]["HRNET"] = old_cfg["MODEL"].pop("HRNET_32")
         elif "HRNET_18" in old_cfg["MODEL"]:
             old_cfg["MODEL"]["HRNET"] = old_cfg["MODEL"].pop("HRNET_18")
+
+        if "hrnet" in old_cfg["MODEL"]["ARCHITECTURE"].lower():
+            old_cfg["MODEL"]["ARCHITECTURE"] = "hrnet"
 
         if "HRNET" in old_cfg["MODEL"]:
             if "STAGE1" in old_cfg["MODEL"]["HRNET"]:

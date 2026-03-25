@@ -27,7 +27,7 @@ from biapy.engine.base_workflow import Base_Workflow
 from biapy.data.data_manipulation import save_tif
 from biapy.utils.misc import to_pytorch_format, is_main_process, MetricLogger
 from biapy.engine.metrics import n2v_loss_mse, loss_encapsulation
-
+from biapy.data.norm import undo_image_norm
 
 class Denoising_Workflow(Base_Workflow):
     """
@@ -77,8 +77,8 @@ class Denoising_Workflow(Base_Workflow):
         self.is_y_mask = False
         self.load_Y_val = cfg.PROBLEM.DENOISING.LOAD_GT_DATA
 
-        self.norm_module.mask_norm = "as_image"
-        self.test_norm_module.mask_norm = "as_image"
+        self.norm_module["mask_norm"] = "as_image"
+        self.test_norm_module["mask_norm"] = "as_image"
 
     def define_activations_and_channels(self):
         """
@@ -315,8 +315,8 @@ class Denoising_Workflow(Base_Workflow):
                     ]  # type: ignore
 
         # Undo normalization
+        pred = undo_image_norm(pred, self.current_sample["X_norm"])
         assert isinstance(pred, np.ndarray)
-        pred = self.norm_module.undo_image_norm(pred, self.current_sample["X_norm"])
 
         # Save image
         if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "" and self.cfg.TEST.SAVE_MODEL_RAW_OUTPUT:

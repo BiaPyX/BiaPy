@@ -20,7 +20,7 @@ from biapy.data.data_manipulation import (
 )
 from biapy.data.data_3D_manipulation import looks_like_hdf5
 from biapy.data.dataset import BiaPyDataset, DataSample
-from biapy.data.norm import Normalization
+from biapy.data.norm import normalize_image
 
 
 class test_single_data_generator(Dataset):
@@ -35,7 +35,7 @@ class test_single_data_generator(Dataset):
     X : BiaPyDataset
         X data.
 
-    norm_module : Normalization
+    norm_module : Dict
         Normalization module that defines the normalization steps to apply.
 
     provide_Y: bool, optional
@@ -92,7 +92,7 @@ class test_single_data_generator(Dataset):
         self,
         ndim: int,
         X: BiaPyDataset,
-        norm_module: Normalization,
+        norm_module: Dict,
         provide_Y: bool = False,
         seed: int = 42,
         crop_center: bool = False,
@@ -224,8 +224,9 @@ class test_single_data_generator(Dataset):
         # Normalization
         norm_extra_info = None
         if not first_load:
-            self.norm_module.set_stats_from_image(np.array(img))
-            img, norm_extra_info = self.norm_module.apply_image_norm(np.array(img))
+            img = np.array(img)
+            norm_info = self.X.dataset_info[sample.fid].norm_info if self.X.dataset_info[sample.fid].norm_info is not None else self.norm_module
+            img, norm_extra_info = normalize_image(img, norm_module=norm_info)
             assert isinstance(img, np.ndarray)
 
         if self.convert_to_rgb and img.shape[-1] == 1:
@@ -287,6 +288,3 @@ class test_single_data_generator(Dataset):
             test_sample["Y"] = img_class
 
         return test_sample
-
-    def get_data_normalization(self) -> Normalization:
-        return self.norm_module

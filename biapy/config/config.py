@@ -466,22 +466,18 @@ class Config:
         _C.DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC = -1.0
         # Lower and upper values to clip. If these are provided the percentiles are not calculated based on 
         # 'DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC' and 'DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC' 
-        _C.DATA.NORMALIZATION.PERC_CLIP.LOWER_VALUE = -1.0
-        _C.DATA.NORMALIZATION.PERC_CLIP.UPPER_VALUE = -1.0
+        _C.DATA.NORMALIZATION.PERC_CLIP.LOWER_VALUE = [-1.0]
+        _C.DATA.NORMALIZATION.PERC_CLIP.UPPER_VALUE = [-1.0]
         # Normalization type to use. Possible options:
         #   'div' to divide values from 0/255 (or 0/65535 if uint16) in [0,1] range
         #   'scale_range' same as 'div' but scaling the range to [0-max] and then dividing by the maximum value of the data
         #    and not by 255 or 65535
         #   'zero_mean_unit_variance' to substract the mean and divide by std. 
         _C.DATA.NORMALIZATION.TYPE = "zero_mean_unit_variance"
-        # Whether to based the normalization on values extracted from the complete image or from each patch. When working with 
-        # large images such as Zarr or H5 it is done by patch automatically. The values are also applied for the percentage
-        # clipping. Options: ['image', 'patch']
-        _C.DATA.NORMALIZATION.MEASURE_BY = "image"
         # Custom normalization variables: mean and std (they are calculated if not provided)
         _C.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR = CN()
-        _C.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.MEAN_VAL = -1.0
-        _C.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.STD_VAL = -1.0
+        _C.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.MEAN_VAL = [-1.0]
+        _C.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.STD_VAL = [-1.0]
 
         # Train
         _C.DATA.TRAIN = CN()
