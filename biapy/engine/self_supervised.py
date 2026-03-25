@@ -353,7 +353,10 @@ class Self_supervised_Workflow(Base_Workflow):
         if train and isinstance(_output, torch.Tensor) and isinstance(_targets, torch.Tensor):
             if self.cfg.DATA.NORMALIZATION.TYPE in ["div", "scale_range"]:
                 output = torch.clamp(output, min=0, max=1)
-                _targets = torch.clamp(_targets, min=0, max=1)
+                try:
+                    _targets = torch.clamp(_targets, min=0, max=1)
+                except Exception as e:
+                    _targets = _targets.to(torch.float32).clamp(min=0, max=1)
             elif self.cfg.DATA.NORMALIZATION.TYPE == "zero_mean_unit_variance":
                 _output = (_output - torch.min(_output)) / (torch.max(_output) - torch.min(_output) + 1e-8)
                 _targets = (_targets - torch.min(_targets)) / (torch.max(_targets) - torch.min(_targets) + 1e-8)
