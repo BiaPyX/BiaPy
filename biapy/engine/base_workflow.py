@@ -1195,17 +1195,14 @@ class Base_Workflow(metaclass=ABCMeta):
         # Do not apply any activation when using masking as pretext task
         if self.cfg.PROBLEM.TYPE == "SELF_SUPERVISED" and self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK.lower() == "masking":
             return pred
-            
-        # For semantic segmentation and classification problems, we consider that all the channels are "class" channels
-        if self.cfg.PROBLEM.TYPE in ["SEMANTIC_SEG", "CLASSIFICATION"]:
-            real_channel_info = ["class"] * sum(self.model_output_channels)
-        else:
-            real_channel_info = self.model_output_channel_info
 
         # 1. Expand channel info to map 1-to-1 with every channel
         all_channel_info = []
-        for i, c_info in enumerate(real_channel_info):
+        for i, c_info in enumerate(self.model_output_channel_info):
             for _ in range(self.model_output_channels[i]):
+                # For semantic segmentation and classification problems, we consider that all the channels are "class" channels
+                if self.cfg.PROBLEM.TYPE in ["SEMANTIC_SEG", "CLASSIFICATION"]:
+                    c_info = "class"
                 all_channel_info.append(c_info)
 
         def __apply_acts(tensor, acts, c_infos):
