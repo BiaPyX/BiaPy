@@ -44,7 +44,6 @@ from biapy.data.data_3D_manipulation import (
     order_dimensions,
     read_chunked_data,
     read_chunked_nested_data,
-    write_chunked_data,
     looks_like_hdf5,
     pick_chunks,
 )

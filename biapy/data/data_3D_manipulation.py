@@ -1269,62 +1269,6 @@ def ensure_3d_shape(
     return img
 
 
-def write_chunked_data(
-    data: NDArray,
-    data_dir: str,
-    filename: str,
-    crop_shape: Optional[Sequence[int]] = None,
-    dtype_str: str = "float32",
-    verbose: bool = True,
-):
-    """
-    Save images in the given directory into 'ZYXC' format.
-
-    Parameters
-    ----------
-    data : 4D numpy array
-        Data to save. E.g. ``(z, y, x, channels)``.
-
-    data_dir : str
-        Path to store X images.
-
-    filename : str
-        Filename of the data to use.
-
-    crop_shape: tuple/list of int/float
-        Crop shape to be used in determining Zarr chunks.
-
-    dtype_str : str, optional
-        Data type to use when saving.
-
-    verbose : bool, optional
-        To print saving information.
-    """
-    data = ensure_3d_shape(data)
-
-    ext = os.path.splitext(filename)[1]
-    if verbose:
-        print("Saving {} data as {} in folder: {}".format(data.shape, ext, data_dir))
-
-    os.makedirs(data_dir, exist_ok=True)
-
-    if looks_like_hdf5(filename):
-        fid = h5py.File(os.path.join(data_dir, filename), "w")
-        data = fid.create_dataset("data", data=data, dtype=dtype_str, compression="gzip")  # type: ignore
-    # Zarr
-    else:
-        chunks = crop_shape if crop_shape is not None else pick_chunks(data.shape, dtype_str)
-
-        data_zarr = zarr.open(
-            os.path.join(data_dir, filename),
-            shape=data.shape,
-            mode="w",
-            chunks=chunks,  # type: ignore
-            dtype=dtype_str,
-            zarr_format=3,
-        )
-        data_zarr[:] = data
-
 def _first_array_in_group(g: zarr.Group) -> zarr.Array:
     """Descend into the first array found (sorted by key) in a group."""
     keys = sorted(list(g.keys()))

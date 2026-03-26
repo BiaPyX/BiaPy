@@ -38,7 +38,7 @@ from biapy.engine.metrics import (
 )
 from biapy.data.pre_processing import create_detection_masks
 from biapy.engine.base_workflow import Base_Workflow
-from biapy.data.data_3D_manipulation import order_dimensions, write_chunked_data, looks_like_hdf5
+from biapy.data.data_3D_manipulation import order_dimensions, looks_like_hdf5
 from biapy.data.data_manipulation import save_tif
 from biapy.data.dataset import PatchCoords
 
@@ -441,21 +441,12 @@ class Detection_Workflow(Base_Workflow):
                 else:
                     points_pred_mask = np.expand_dims(points_pred_mask, -1)
 
-                if looks_like_hdf5(self.current_sample["X_filename"]) or file_ext in [".zarr", ".n5"]:
-                    write_chunked_data(
-                        np.expand_dims(points_pred_mask, 0),
-                        out_dir,
-                        self.current_sample["X_filename"],
-                        dtype_str="uint8",
-                        verbose=self.cfg.TEST.VERBOSE,
-                    )
-                else:
-                    save_tif(
-                        np.expand_dims(points_pred_mask, 0),
-                        out_dir,
-                        [self.current_sample["X_filename"]],
-                        verbose=self.cfg.TEST.VERBOSE,
-                    )
+                save_tif(
+                    np.expand_dims(points_pred_mask, 0),
+                    out_dir,
+                    [self.current_sample["X_filename"]],
+                    verbose=self.cfg.TEST.VERBOSE,
+                )
 
                 if self.separated_class_channel:
                     points_pred_mask = points_pred_mask[..., 0]
@@ -492,21 +483,12 @@ class Detection_Workflow(Base_Workflow):
                     comp_signs=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.SIGNS,
                 )
 
-                if looks_like_hdf5(self.current_sample["X_filename"]) or file_ext in [".zarr", ".n5"]:
-                    write_chunked_data(
-                        np.expand_dims(np.expand_dims(points_pred_mask, -1), 0),
-                        self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
-                        self.current_sample["X_filename"],
-                        dtype_str="uint8",
-                        verbose=self.cfg.TEST.VERBOSE,
-                    )
-                else:
-                    save_tif(
-                        np.expand_dims(np.expand_dims(points_pred_mask, 0), -1),
-                        self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,
-                        [self.current_sample["X_filename"]],
-                        verbose=self.cfg.TEST.VERBOSE,
-                    )
+                save_tif(
+                    np.expand_dims(np.expand_dims(points_pred_mask, 0), -1),
+                    self.cfg.PATHS.RESULT_DIR.PER_IMAGE_POST_PROCESSING,
+                    [self.current_sample["X_filename"]],
+                    verbose=self.cfg.TEST.VERBOSE,
+                )
             del points_pred_mask
 
         # Save coords in a couple of csv files
@@ -836,21 +818,13 @@ class Detection_Workflow(Base_Workflow):
                 # Dilate and save the GT ids for the current class
                 for i in range(gt_id_img.shape[0]):
                     gt_id_img[i] = dilation(gt_id_img[i], disk(3))
-                if looks_like_hdf5(self.current_sample["X_filename"]) or file_ext in [".zarr", ".n5"]:
-                    write_chunked_data(
-                        np.expand_dims(np.expand_dims(gt_id_img, -1), 0),
-                        self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
-                        os.path.splitext(self.current_sample["X_filename"])[0] + "_gt_ids" + file_ext,
-                        dtype_str="uint32",
-                        verbose=self.cfg.TEST.VERBOSE,
-                    )
-                else:
-                    save_tif(
-                        np.expand_dims(np.expand_dims(gt_id_img, 0), -1),
-                        self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
-                        [os.path.splitext(self.current_sample["X_filename"])[0] + "_gt_ids" + file_ext],
-                        verbose=self.cfg.TEST.VERBOSE,
-                    )
+
+                save_tif(
+                    np.expand_dims(np.expand_dims(gt_id_img, 0), -1),
+                    self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
+                    [os.path.splitext(self.current_sample["X_filename"])[0] + "_gt_ids" + file_ext],
+                    verbose=self.cfg.TEST.VERBOSE,
+                )
 
                 # FP
                 if fp is not None:
@@ -867,21 +841,13 @@ class Detection_Workflow(Base_Workflow):
                 for i in range(points_pred_mask_color.shape[0]):
                     for j in range(points_pred_mask_color.shape[-1]):
                         points_pred_mask_color[i, ..., j] = dilation(points_pred_mask_color[i, ..., j], disk(3))
-                if looks_like_hdf5(self.current_sample["X_filename"]) or file_ext in [".zarr", ".n5"]:
-                    write_chunked_data(
-                        np.expand_dims(points_pred_mask_color, 0),
-                        self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
-                        self.current_sample["X_filename"],
-                        dtype_str="uint8",
-                        verbose=self.cfg.TEST.VERBOSE,
-                    )
-                else:
-                    save_tif(
-                        np.expand_dims(points_pred_mask_color, 0),
-                        self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
-                        [self.current_sample["X_filename"]],
-                        verbose=self.cfg.TEST.VERBOSE,
-                    )
+
+                save_tif(
+                    np.expand_dims(points_pred_mask_color, 0),
+                    self.cfg.PATHS.RESULT_DIR.DET_ASSOC_POINTS,
+                    [self.current_sample["X_filename"]],
+                    verbose=self.cfg.TEST.VERBOSE,
+                )
 
         return df
 
