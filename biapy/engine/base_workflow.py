@@ -1196,9 +1196,15 @@ class Base_Workflow(metaclass=ABCMeta):
         if self.cfg.PROBLEM.TYPE == "SELF_SUPERVISED" and self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK.lower() == "masking":
             return pred
             
+        # For semantic segmentation and classification problems, we consider that all the channels are "class" channels
+        if self.cfg.PROBLEM.TYPE in ["SEMANTIC_SEG", "CLASSIFICATION"]:
+            real_channel_info = ["class"] * sum(self.model_output_channels)
+        else:
+            real_channel_info = self.model_output_channel_info
+
         # 1. Expand channel info to map 1-to-1 with every channel
         all_channel_info = []
-        for i, c_info in enumerate(self.model_output_channel_info):
+        for i, c_info in enumerate(real_channel_info):
             for _ in range(self.model_output_channels[i]):
                 all_channel_info.append(c_info)
 
@@ -1207,14 +1213,14 @@ class Base_Workflow(metaclass=ABCMeta):
                 return tensor
 
             out_slices = []
-            
+
             # Find the exact index where "class" channels begin
             class_start_idx = len(c_infos)
             for i, info in enumerate(c_infos):
                 if "class" in info.lower():
                     class_start_idx = i
                     break
-
+            
             # --- PART A: Process standard channels (1-by-1) ---
             for i in range(min(class_start_idx, tensor.shape[1])):
                 chunk = tensor[:, i:i+1, ...]
