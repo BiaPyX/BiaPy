@@ -130,7 +130,7 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         self.head_activations = []
         for i in range(self.model_output_channels[0]):
             self.head_activations.append("ce_softmax" if self.cfg.DATA.N_CLASSES > 2 else "ce_sigmoid")
-        self.model_output_channel_info = ["pred{}".format(i) for i in range(len(self.model_output_channels))]
+        self.model_output_channel_info = ["class{}".format(i) for i in range(len(self.model_output_channels))]
         super().define_activations_and_channels()
 
     def define_metrics(self):

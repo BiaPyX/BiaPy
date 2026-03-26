@@ -113,7 +113,7 @@ class Classification_Workflow(Base_Workflow):
         self.gt_channels_expected = self.cfg.DATA.N_CLASSES
         self.separated_class_channel = False
         self.head_activations = ["ce_softmax"]* self.model_output_channels[0]
-        self.model_output_channel_info = ["pred{}".format(i) for i in range(len(self.model_output_channels))]
+        self.model_output_channel_info = ["class{}".format(i) for i in range(len(self.model_output_channels))]
         
         super().define_activations_and_channels()
 

@@ -1195,37 +1195,66 @@ class Base_Workflow(metaclass=ABCMeta):
         # Do not apply any activation when using masking as pretext task
         if self.cfg.PROBLEM.TYPE == "SELF_SUPERVISED" and self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK.lower() == "masking":
             return pred
+            
+        # 1. Expand channel info to map 1-to-1 with every channel
+        all_channel_info = []
+        for i, c_info in enumerate(self.model_output_channel_info):
+            for _ in range(self.model_output_channels[i]):
+                all_channel_info.append(c_info)
 
-        def __apply_acts(prediction, acts):
+        def __apply_acts(tensor, acts, c_infos):
             if len(acts) == 0:
-                return prediction
-            
-            if acts[0].lower() == "ce_softmax" and not training:
-                act = get_activation("softmax")
-                return act(prediction)
-            
+                return tensor
+
             out_slices = []
-            for i, activation in enumerate(acts):
-                # Ignore ce_sigmoid as torch.nn.BCEWithLogitsLoss will apply Sigmoid automatically in a way
-                # that is more stable numerically (ref: https://pytorch.org/docs/stable/generated/torch.nn.BCEWithLogitsLoss.html)
-                # In the same way, ce_softmax is ignored during training as torch.nn.CrossEntropyLoss applies Softmax internally
-                if (training and activation not in ["linear", "ce_sigmoid", "ce_softmax"]) or (not training and activation != "linear"):
-                    activation = "sigmoid" if activation == "ce_sigmoid" else activation
-                    act = get_activation(activation.lower())
-                    out_slices.append(act(prediction[:, i:i+1, ...]))
+            
+            # Find the exact index where "class" channels begin
+            class_start_idx = len(c_infos)
+            for i, info in enumerate(c_infos):
+                if "class" in info.lower():
+                    class_start_idx = i
+                    break
+
+            # --- PART A: Process standard channels (1-by-1) ---
+            for i in range(min(class_start_idx, tensor.shape[1])):
+                chunk = tensor[:, i:i+1, ...]
+                act_str = acts[i].lower()
+                
+                # Skip if linear, or if training and it's handled by the loss function
+                if act_str == "linear" or (training and act_str in ["ce_sigmoid", "ce_softmax"]):
+                    out_slices.append(chunk)
                 else:
-                    out_slices.append(prediction[:, i:i+1, ...])
+                    clean_act = "sigmoid" if act_str == "ce_sigmoid" else act_str
+                    act_fn = get_activation(clean_act)
+                    out_slices.append(act_fn(chunk))
 
-            return torch.cat(out_slices, dim=1)
+            # --- PART B: Process the entire "class" block (all at once) ---
+            if class_start_idx < tensor.shape[1]:
+                class_chunk = tensor[:, class_start_idx:, ...]
+                act_str = acts[class_start_idx].lower()
+                
+                # Skip if linear, or if training and it's handled by the loss function
+                if act_str == "linear" or (training and act_str in ["ce_sigmoid", "ce_softmax"]):
+                    out_slices.append(class_chunk)
+                else:
+                    # Apply a single activation to the whole multidimensional block
+                    clean_act = "softmax" if "softmax" in act_str else ("sigmoid" if act_str == "ce_sigmoid" else act_str)
+                    act_fn = get_activation(clean_act)
+                    out_slices.append(act_fn(class_chunk))
 
+            return torch.cat(out_slices, dim=1) if out_slices else tensor
+
+        # 2. Apply to inputs (handling both Dict and Tensor formats)
         if isinstance(pred, dict):
-            pred["pred"] = __apply_acts(pred["pred"], self.head_activations)
+            pred_len = pred["pred"].shape[1]
+            pred["pred"] = __apply_acts(pred["pred"], self.head_activations[:pred_len], all_channel_info[:pred_len])
+            
             if "class" in pred:
-                class_pos = self.model_output_channel_info.index("class")
-                class_acts = self.head_activations[-self.model_output_channels[class_pos]:]
-                pred["class"] = __apply_acts(pred["class"], class_acts)
+                class_len = pred["class"].shape[1]
+                pred["class"] = __apply_acts(pred["class"], self.head_activations[-class_len:], all_channel_info[-class_len:])
         else:
-            pred = __apply_acts(pred, self.head_activations)
+            pred = __apply_acts(pred, self.head_activations, all_channel_info)
+            
         return pred
 
     @torch.no_grad()
@@ -1560,7 +1589,10 @@ class Base_Workflow(metaclass=ABCMeta):
         # Save output
         _prepare_bmz_sample("test_output", pred.clone().cpu().detach().numpy().astype(np.float32), apply_norm=False)
         if "cover_gt" not in self.bmz_config or ("cover_gt" in self.bmz_config and self.bmz_config["cover_gt"] is None):
-            self.bmz_config["cover_gt"] = self.bmz_config["test_output"].copy().transpose(0, *range(2, self.bmz_config["test_output"].ndim), 1)[0]
+            if self.bmz_config["test_output"].ndim == 1:  # Classification
+                self.bmz_config["cover_gt"] = self.bmz_config["test_output"].copy()
+            else:
+                self.bmz_config["cover_gt"] = self.bmz_config["test_output"].copy().transpose(0, *range(2, self.bmz_config["test_output"].ndim), 1)[0]
             if self.cfg.DATA.N_CLASSES > 2 and self.cfg.PROBLEM.TYPE == "SEMANTIC_SEG":
                 self.bmz_config["cover_gt"] = np.expand_dims(np.argmax(self.bmz_config["cover_gt"], -1), -1)
             
