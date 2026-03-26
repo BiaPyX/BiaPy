@@ -489,6 +489,10 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
                     "Please, check the channels of the images!".format(shape[-1], img.shape[-1])
                 )
         self.Y_channels = img.shape[-1]
+        xnorm_info = self.X.dataset_info[self.X.sample_list[0].fid].norm_info
+        if xnorm_info is None:
+            xnorm_info = self.norm_module
+        img, xnorm_example = normalize_image(img, norm_module=xnorm_info)
         del img
 
         # Y data analysis
@@ -528,6 +532,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
         self.Y_dtype = mask.dtype
         del mask
 
+        print("Normalization config used for X (first sample): {}".format(xnorm_info))
         print("Normalization config used for Y: {}".format(self.mask_norm))
 
         if self.ndim == 2:
