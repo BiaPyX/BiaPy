@@ -571,7 +571,7 @@ class CrossEntropyLoss_wrapper:
                 loss_fn = self.loss
 
             if self.separated_class_channel:
-                _loss = loss_fn(pd[:, 0], _y_true[:, 0]) + self.class_channel_loss(
+                _loss = loss_fn(pd[:, 0], _y_true[:, 0].float()) + self.class_channel_loss(
                     _y_pred_class, _y_true[:, -1].type(torch.long)
                 )
             else:
