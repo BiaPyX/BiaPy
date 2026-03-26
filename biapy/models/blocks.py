@@ -1823,7 +1823,11 @@ def get_activation(activation: str = "relu") -> nn.Module:
     }
     return activation_dict[activation]
 
-def prepare_activation_layers(activations: List[str], output_channel_info: List[str]) -> Tuple[nn.ModuleList, Optional[nn.ModuleList]]:
+def prepare_activation_layers(
+    activations: List[str], 
+    output_channel_info: List[str],
+    output_channels: List[int]
+    ) -> Tuple[nn.ModuleList, Optional[nn.ModuleList]]:
     """ 
     Prepare activation layers for the output and classification heads.
     
@@ -1835,6 +1839,9 @@ def prepare_activation_layers(activations: List[str], output_channel_info: List[
     output_channel_info : List[str]
         A list of strings indicating the type of output channels.
 
+    output_channels : List[int]
+        A list of integers indicating the number of channels for each output head.
+
     Returns
     -------
     out_activations : nn.ModuleList
@@ -1845,17 +1852,23 @@ def prepare_activation_layers(activations: List[str], output_channel_info: List[
     """
     activation_list = []
     class_activation_list = []
-    for i, activation in enumerate(activations):
-        activation = activation.lower().removeprefix("ce_")
+
+    all_channel_info = []
+    for i, c_info in enumerate(output_channel_info):
+        for j in range(output_channels[i]):
+            all_channel_info.append(c_info)
+
+    for i, c_info in enumerate(all_channel_info):
+        activation = activations[i].lower().removeprefix("ce_")
         act = get_activation(activation.lower())
-        if "class" in output_channel_info[i]:
+        if "class" in c_info:
             class_activation_list.append(act)
         else:
             activation_list.append(act)
-
         # We break the loop after finding the fist softmax activation since we assume that there is only one 
         # softmax activation for the classification head (if any)
         if "softmax" in activation:
+            break_outer = True
             break
 
     if len(class_activation_list) > 0:
