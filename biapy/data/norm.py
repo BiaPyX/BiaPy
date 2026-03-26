@@ -219,6 +219,7 @@ def normalize_mask(
     n_classes: int = 1,
     instance_problem: bool = False,
     apply_norm: bool = True,
+    is_training: bool = True,
 ) -> Tuple[NDArray | torch.Tensor, dict]:
     """
     Apply normalization to a mask.
@@ -255,6 +256,11 @@ def normalize_mask(
     apply_norm : bool
         Whether to apply the normalization or just compute the normalization information. If False, the function will return the original mask and the computed 
         normalization information without applying the normalization.
+
+    is_training : bool
+        Whether the normalization is being applied in training or not. If False, the normalization will be applied as if the mask were an image, as we do not want
+        to apply the normalization as if it were a mask in test/validation as it could be that the model is expecting the mask to be normalized as an image in 
+        test/validation if the normalization information was computed from an image.
 
     Returns
     -------
@@ -305,9 +311,12 @@ def normalize_mask(
                     mask[..., j] = mask[..., j] / 255
 
     # Continue normalization as if it were an image
-    elif norm_module["mask_norm"] == "as_image":
+    # Normalization in test should not be applied to mask/ground truth data
+    elif norm_module["mask_norm"] == "as_image" and is_training:
         mask, norm_info = normalize_image(img=mask, norm_module=norm_module, apply_norm=apply_norm) 
         norm_info["mask_norm"] = norm_module["mask_norm"]
+    else:
+        norm_info = norm_module.copy()
 
     return mask, norm_info
 
