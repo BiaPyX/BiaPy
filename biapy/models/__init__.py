@@ -238,7 +238,6 @@ def build_model(
                 image_shape=cfg.DATA.PATCH_SIZE,
                 activation=cfg.MODEL.ACTIVATION.lower(),
                 n_classes=cfg.DATA.N_CLASSES,
-                head_activations=head_activations,
             )
             model = simple_CNN(**args)  # type: ignore
             callable_model = simple_CNN  # type: ignore
