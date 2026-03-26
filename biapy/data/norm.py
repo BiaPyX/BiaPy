@@ -307,6 +307,7 @@ def normalize_mask(
     # Continue normalization as if it were an image
     elif norm_module["mask_norm"] == "as_image":
         mask, norm_info = normalize_image(img=mask, norm_module=norm_module, apply_norm=apply_norm) 
+        norm_info["mask_norm"] = norm_module["mask_norm"]
 
     return mask, norm_info
 
