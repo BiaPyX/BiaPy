@@ -896,7 +896,7 @@ class PairBaseDataGenerator(Dataset, metaclass=ABCMeta):
             )
 
         if not first_load:
-            xnorm_info = norm_module=self.X.dataset_info[sample.fid].norm_info
+            xnorm_info = self.X.dataset_info[sample.fid].norm_info
             if xnorm_info is None:
                 xnorm_info = self.norm_module
             img, _ = normalize_image(img, norm_module=xnorm_info)

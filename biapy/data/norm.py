@@ -520,6 +520,11 @@ def norm_range01(
     if max_val_to_div is None and min_val_to_div is not None:
         raise ValueError("If 'min_val_to_div' is provided, 'max_val_to_div' should also be provided")
 
+    # If the data is already in the range [0, 1], we will not apply the normalization and we will return the original data 
+    # and the values used to do the normalization as 1 and 0 respectively to be able to undo the normalization correctly if needed
+    if data.min() == 0 and data.max() == 1:
+        return data, 1.0, 0.0
+
     # Changing dtype to floating tensor
     if isinstance(data, torch.Tensor):
         if not torch.is_floating_point(data):

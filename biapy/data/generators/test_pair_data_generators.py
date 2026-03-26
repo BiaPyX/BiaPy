@@ -290,7 +290,7 @@ class test_pair_data_generator(Dataset):
             if not first_load:
                 # Normalization
                 img = np.array(img)
-                xnorm_info = norm_module=self.X.dataset_info[sample.fid].norm_info
+                xnorm_info = self.X.dataset_info[sample.fid].norm_info
                 if xnorm_info is None:
                     xnorm_info = self.norm_module
                 img, norm_extra_info = normalize_image(img, norm_module=xnorm_info)

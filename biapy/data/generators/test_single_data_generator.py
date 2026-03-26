@@ -225,7 +225,7 @@ class test_single_data_generator(Dataset):
         norm_extra_info = None
         if not first_load:
             img = np.array(img)
-            xnorm_info = norm_module=self.X.dataset_info[sample.fid].norm_info
+            xnorm_info = self.X.dataset_info[sample.fid].norm_info
             if xnorm_info is None:
                 xnorm_info = self.norm_module
             img, norm_extra_info = normalize_image(img, norm_module=xnorm_info)
