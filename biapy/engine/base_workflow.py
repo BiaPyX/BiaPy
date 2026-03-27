@@ -254,7 +254,7 @@ class Base_Workflow(metaclass=ABCMeta):
         # Tochvision variables
         self.torchvision_preprocessing = None
 
-        # Load BioImage Model Zoo pretrained model information
+        # Load pretrained model configuration if needed and check consistency with current configuration
         self.bmz_config = {}
         if self.cfg.MODEL.SOURCE == "biapy":
             # Obtain model spec from checkpoint
@@ -302,7 +302,8 @@ class Base_Workflow(metaclass=ABCMeta):
                     if "norm" in self.cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT:
                         print("Normalization instructions will be loaded from checkpoint.")
                         update_dict_with_existing_keys(self.cfg["DATA"]["NORMALIZATION"], tmp_cfg["DATA"]["NORMALIZATION"])
-
+        
+        # Load BioImage Model Zoo pretrained model information
         elif self.cfg.MODEL.SOURCE == "bmz":
             self.bmz_config["preprocessing"], opts = check_bmz_args(self.cfg.MODEL.BMZ.SOURCE_MODEL_ID, self.cfg)
             print("[BMZ] Overriding preprocessing steps to the ones fixed in BMZ model: {}".format(self.bmz_config["preprocessing"]))
