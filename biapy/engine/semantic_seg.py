@@ -429,8 +429,16 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
             Model prediction.
         """
         # Save simple binarization of predictions
+        if self.cfg.DATA.N_CLASSES <= 2:
+            th = threshold_otsu(pred)
+            pred = (pred > th).astype(np.uint8)
+        else:
+            _type = np.uint8 if self.cfg.DATA.N_CLASSES < 255 else np.uint16
+            pred = np.expand_dims(np.argmax(pred, -1), -1).astype(_type)
+
+        # Save simple binarization of predictions
         save_tif(
-            (pred > 0.5).astype(np.uint8),
+            pred,
             self.cfg.PATHS.RESULT_DIR.FULL_IMAGE_BIN,
             [self.current_sample["X_filename"]],
             verbose=self.cfg.TEST.VERBOSE,

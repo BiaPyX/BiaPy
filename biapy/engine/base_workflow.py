@@ -1938,7 +1938,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 else:
                     pred = self.model_call_func(self.current_sample["X"])
 
-                # Multi-head concatenationç
+                # Multi-head concatenation
                 if isinstance(pred, dict):
                     if "class" in pred:
                         pred = torch.cat((pred["pred"], torch.argmax(pred["class"], dim=1).unsqueeze(1)), dim=1)
