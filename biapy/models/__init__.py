@@ -1143,11 +1143,11 @@ def check_bmz_model_compatibility(
                             else:
                                 mean, std = -1.0, -1.0
 
-                            if isinstance(mean, list):
-                                mean = float(mean[-1])
-                            if isinstance(std, list):
-                                std = float(std[-1])
-                                
+                            if not isinstance(mean, list):
+                                mean = [float(mean)]
+                            if not isinstance(std, list):
+                                std = [float(std)]
+
                             opts["DATA.NORMALIZATION.TYPE"] = "zero_mean_unit_variance"
                             opts["DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.MEAN_VAL"] = mean
                             opts["DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.STD_VAL"] = std
