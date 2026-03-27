@@ -1186,23 +1186,7 @@ class Config:
         _C.MODEL.ISOTROPY = [True, True, True, True, True]
         # Include extra convolutional layers with larger kernel at the beginning and end of the U-Net-like model.
         _C.MODEL.LARGER_IO = False
-        # Checkpoint: set to True to load previous training weigths (needed for inference or to make fine-tunning)
-        _C.MODEL.LOAD_CHECKPOINT = False
-        # When loading checkpoints whether only model's weights are going to be loaded or optimizer, epochs and loss_scaler.
-        _C.MODEL.LOAD_CHECKPOINT_ONLY_WEIGHTS = True
-        # Decide which checkpoint to load from job's dir if PATHS.CHECKPOINT_FILE is ''.
-        # Options: 'best_on_val' or 'last_on_train'
-        _C.MODEL.LOAD_CHECKPOINT_EPOCH = "best_on_val"
-        # Whether to load the model from the checkpoint instead of builiding it following 'MODEL.ARCHITECTURE' when 'MODEL.SOURCE' is "biapy"
-        _C.MODEL.LOAD_MODEL_FROM_CHECKPOINT = True
-        # Format of the output checkpoint. Options are 'pth' (native PyTorch format) or 'safetensors' (https://github.com/huggingface/safetensors)
-        _C.MODEL.OUT_CHECKPOINT_FORMAT = "pth"
-        # To skip loading those layers that do not match in shape with the given checkpoint. If this is set to False a regular load function will be 
-        # done, which will fail if a layer mismatch is found. Only works when 'MODEL.LOAD_MODEL_FROM_CHECKPOINT' is True
-        _C.MODEL.SKIP_UNMATCHED_LAYERS = False
-        # Epochs to save a checkpoint of the model apart from the ones saved with LOAD_CHECKPOINT_ONLY_WEIGHTS. Set it to -1 to
-        # not do it.
-        _C.MODEL.SAVE_CKPT_FREQ = -1
+
         # Number of ConvNeXtBlocks in each level.
         _C.MODEL.CONVNEXT_LAYERS = [2, 2, 2, 2, 2]  # CONVNEXT_LAYERS
         # Maximum Stochastic Depth probability for the U-NeXt model.
@@ -1211,6 +1195,31 @@ class Config:
         _C.MODEL.CONVNEXT_LAYER_SCALE = 1e-6
         # Size of the stem kernel in the U-NeXt model.
         _C.MODEL.CONVNEXT_STEM_K_SIZE = 2
+
+        # To load a model (and more items if available) from a given checkpoint. Items that can be loaded are defined in 'MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT'.
+        _C.MODEL.LOAD_CHECKPOINT = False
+        # List of items to load from the checkpoint (if available). Options are:
+        #   * "weights": to load the model weights
+        #   * "norm": to load the normalization used. Unless you know that the checkpoint was trained with the same normalization as the one defined in the config, 
+        #   it is recommended to load it from the checkpoint if "weights" is also specified, as the model will expect the input data to be normalized accordingly.
+        #   * "model_arch": to load the model architecture
+        #   * "optimizer": to load the optimizer state dict
+        #   * "epoch": to load the epoch number from which the training will be resumed
+        #
+        # Defining it with "weights" and "model_arch" will allow to load the model weights and architecture, but not the
+        # optimizer state, which is useful when doing inference or fine-tunning. Defining it with all options
+        # will allow to resume training from a checkpoint.
+        _C.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT = ["weights", "norm", "model_arch"]
+        # Decide which checkpoint to load from job's dir if PATHS.CHECKPOINT_FILE is ''.
+        # Options: 'best_on_val' or 'last_on_train'
+        _C.MODEL.LOAD_CHECKPOINT_EPOCH = "best_on_val"
+        # Format of the output checkpoint. Options are 'pth' (native PyTorch format) or 'safetensors' (https://github.com/huggingface/safetensors)
+        _C.MODEL.OUT_CHECKPOINT_FORMAT = "pth"
+        # To skip loading those layers that do not match in shape with the given checkpoint. If this is set to False a regular load function will be 
+        # done, which will fail if a layer mismatch is found. Only works when 'MODEL.LOAD_MODEL_FROM_CHECKPOINT' is True
+        _C.MODEL.SKIP_UNMATCHED_LAYERS = False
+        # Epochs to save a checkpoint of the model apart from the best of the validation. Set it to -1 to not do it.
+        _C.MODEL.SAVE_CKPT_FREQ = -1
 
         # TRANSFORMERS MODELS
         # Type of model. Options are "custom", "vit_base_patch16", "vit_large_patch16" and "vit_huge_patch16". On custom setting

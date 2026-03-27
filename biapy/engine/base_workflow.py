@@ -58,7 +58,6 @@ from biapy.utils.misc import (
 from biapy.engine.check_configuration import (
     convert_old_model_cfg_to_current_version,
     diff_between_configs,
-    compare_configurations_without_model,
     check_configuration,
 )
 from biapy.utils.util import (
@@ -257,7 +256,54 @@ class Base_Workflow(metaclass=ABCMeta):
 
         # Load BioImage Model Zoo pretrained model information
         self.bmz_config = {}
-        if self.cfg.MODEL.SOURCE == "bmz":
+        if self.cfg.MODEL.SOURCE == "biapy":
+            # Obtain model spec from checkpoint
+            if self.cfg.MODEL.LOAD_CHECKPOINT:
+                # Take cfg from the checkpoint
+                saved_cfg, biapy_ckpt_version = load_model_checkpoint(
+                    cfg=self.cfg,
+                    jobname=self.job_identifier,
+                    model_without_ddp=None,
+                    device=self.device,
+                    just_extract_checkpoint_info=True,
+                    skip_unmatched_layers=self.cfg.MODEL.SKIP_UNMATCHED_LAYERS,
+                )
+                if saved_cfg:
+                    if len(self.cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT) > 0:
+                        print("Checkpoint file loaded. Extracting the following items (if available): {} . Checking consistency with current configuration . . .".format(", ".join(self.cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT)))
+                        # Checks that this config and previous represent the same workflow
+                        header_message = "There is an inconsistency between the configuration loaded from checkpoint and the actual one. Error:\n"
+                        tmp_cfg = convert_old_model_cfg_to_current_version(saved_cfg.clone())
+
+                        # Override model specs
+                        if self.cfg.PROBLEM.PRINT_OLD_KEY_CHANGES:
+                            print("The following changes were made in order to adapt the loaded input configuration from checkpoint into the current configuration version:")
+                            diff_between_configs(saved_cfg, tmp_cfg)
+
+                    if "model_arch" in self.cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT:
+                        print("Model architecture will be loaded from checkpoint.")
+                        # Save current model config
+                        tmp_BMZ_config = self.cfg.MODEL.clone()
+
+                        update_dict_with_existing_keys(self.cfg["MODEL"], tmp_cfg["MODEL"])
+
+                        # Restore some model config
+                        self.cfg["MODEL"]["BMZ"] = tmp_BMZ_config["BMZ"]
+                        self.cfg["MODEL"]["OUT_CHECKPOINT_FORMAT"] = tmp_BMZ_config["OUT_CHECKPOINT_FORMAT"]
+                        
+                        # Check if the merge is coherent
+                        self.cfg["MODEL"]["LOAD_CHECKPOINT"] = True
+                        self.cfg["MODEL"]["LOAD_MODEL_FROM_CHECKPOINT"] = False
+                        check_configuration(self.cfg, self.job_identifier)
+
+                    if "weights" in self.cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT and "norm" not in self.cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT:
+                        print("WARNING: Weights will be loaded from checkpoint but not normalization instructions. This can lead to inconsistent results if the normalization instructions in the current configuration are different from the ones used in the checkpoint. Consider adding 'norm' to 'MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT' to avoid this issue.")
+
+                    if "norm" in self.cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT:
+                        print("Normalization instructions will be loaded from checkpoint.")
+                        update_dict_with_existing_keys(self.cfg["DATA"]["NORMALIZATION"], tmp_cfg["DATA"]["NORMALIZATION"])
+
+        elif self.cfg.MODEL.SOURCE == "bmz":
             self.bmz_config["preprocessing"], opts = check_bmz_args(self.cfg.MODEL.BMZ.SOURCE_MODEL_ID, self.cfg)
             print("[BMZ] Overriding preprocessing steps to the ones fixed in BMZ model: {}".format(self.bmz_config["preprocessing"]))
 
@@ -757,43 +803,6 @@ class Base_Workflow(metaclass=ABCMeta):
         print("###############")
         
         if self.cfg.MODEL.SOURCE == "biapy":
-            # Obtain model spec from checkpoint
-            if self.cfg.MODEL.LOAD_CHECKPOINT and self.cfg.MODEL.LOAD_MODEL_FROM_CHECKPOINT:
-                # Take cfg from the checkpoint
-                saved_cfg, biapy_ckpt_version = load_model_checkpoint(
-                    cfg=self.cfg,
-                    jobname=self.job_identifier,
-                    model_without_ddp=None,
-                    device=self.device,
-                    just_extract_checkpoint_info=True,
-                    skip_unmatched_layers=self.cfg.MODEL.SKIP_UNMATCHED_LAYERS,
-                )
-                if saved_cfg:
-                    # Checks that this config and previous represent same workflow
-                    header_message = "There is an inconsistency between the configuration loaded from checkpoint and the actual one. Error:\n"
-                    tmp_cfg = convert_old_model_cfg_to_current_version(saved_cfg.clone())
-                    compare_configurations_without_model(
-                        self.cfg, tmp_cfg, header_message, old_cfg_version=biapy_ckpt_version
-                    )
-
-                    # Override model specs
-                    if self.cfg.PROBLEM.PRINT_OLD_KEY_CHANGES:
-                        print("The following changes were made in order to adapt the loaded input configuration from checkpoint into the current configuration version:")
-                        diff_between_configs(saved_cfg, tmp_cfg)
-                    
-                    # Save current model config
-                    tmp_BMZ_config = self.cfg.MODEL.clone()
-
-                    update_dict_with_existing_keys(self.cfg["MODEL"], tmp_cfg["MODEL"])
-
-                    # Restore some model config
-                    self.cfg["MODEL"]["BMZ"] = tmp_BMZ_config["BMZ"]
-                    self.cfg["MODEL"]["OUT_CHECKPOINT_FORMAT"] = tmp_BMZ_config["OUT_CHECKPOINT_FORMAT"]
-                    
-                    # Check if the merge is coherent
-                    self.cfg["MODEL"]["LOAD_CHECKPOINT"] = True
-                    self.cfg["MODEL"]["LOAD_MODEL_FROM_CHECKPOINT"] = False
-                    check_configuration(self.cfg, self.job_identifier)
             (
                 self.model,
                 self.bmz_config["callable_model"],

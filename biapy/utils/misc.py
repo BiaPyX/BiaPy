@@ -447,7 +447,11 @@ def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=Non
         The configuration object. Key parameters:
         - `cfg.PATHS.CHECKPOINT_FILE`: Explicit path to checkpoint.
         - `cfg.MODEL.LOAD_CHECKPOINT_EPOCH`: Strategy for checkpoint selection.
-        - `cfg.MODEL.LOAD_CHECKPOINT_ONLY_WEIGHTS`: If True, only model weights are loaded.
+        - `cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT`: List of items to load from the checkpoint (if available). Options are:
+          - "weights": Load model weights.
+          - "model_arch": Load model architecture.
+          - "optimizer": Load optimizer state.
+          - "epoch": Load epoch number.
     jobname : str
         The name of the current job/experiment.
     model_without_ddp : nn.Module
@@ -550,15 +554,12 @@ def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=Non
 
     print("Model weights loaded!")
 
-    if cfg.MODEL.LOAD_CHECKPOINT_ONLY_WEIGHTS:
-        return start_epoch, resume
-
     # Load also opt, epoch and scaler info
-    if "optimizer" in checkpoint and optimizer is not None:
+    if "optimizer" in checkpoint and optimizer is not None and "optimizer" in cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT:
         optimizer.load_state_dict(checkpoint["optimizer"], strict=False)
         print("Optimizer info loaded!")
 
-    if "epoch" in checkpoint:
+    if "epoch" in checkpoint and "epoch" in cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT:
         start_epoch = checkpoint["epoch"]
         if isinstance(start_epoch, str):
             start_epoch = 0

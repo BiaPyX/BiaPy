@@ -1325,7 +1325,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "'INSTANCE_SEG', 'DETECTION', 'CLASSIFICATION' and 'IMAGE_TO_IMAGE'"
         )
 
-    model_will_be_read = cfg.MODEL.LOAD_CHECKPOINT and cfg.MODEL.LOAD_MODEL_FROM_CHECKPOINT
+    for item in cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT:
+        if item not in ["weights", "norm", "model_arch", "optimizer", "epoch"]:
+            raise ValueError("'MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT' can only have items in ['weights', 'norm', 'model_arch', 'optimizer', 'epoch']")
+    model_will_be_read = cfg.MODEL.LOAD_CHECKPOINT and "model_arch" in cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT
     #### Semantic segmentation ####
     if cfg.PROBLEM.TYPE == "SEMANTIC_SEG":
         if not model_will_be_read and cfg.MODEL.SOURCE == "biapy":
@@ -2666,7 +2669,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             # 1. Setup the downsampling schedules based on the architecture
             if is_hrnet:
                 num_downsamplings = 3 if cfg.MODEL.HRNET.VARIANT != "custom" else len(cfg.MODEL.HRNET.NUM_BLOCKS)
-                yx_down_schedule = [2] * num_downsamplings
+                yx_down_schedule = cfg.MODEL.HRNET.YX_DOWN
                 z_down_schedule = cfg.MODEL.HRNET.Z_DOWN
                 z_param_name = "MODEL.HRNET.Z_DOWN"
             else:
@@ -2680,7 +2683,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
             # Isolate the current sizes to simulate downsampling iteratively
             current_z = cfg.DATA.PATCH_SIZE[0] if is_3d else 1
-            current_yx = list(cfg.DATA.PATCH_SIZE[1:-1])
+            current_yx = list(cfg.DATA.PATCH_SIZE[1:-1]) if is_3d else list(cfg.DATA.PATCH_SIZE[:-1])
 
             # 2. Single loop to validate divisibility and simulate downsampling
             for i in range(num_downsamplings):
@@ -2974,89 +2977,7 @@ def _assert_list_of_pos_ints(x, ctx):
         assert isinstance(v, int) and v > 0, f"'{ctx}[{i}]' must be a positive integer"
 
 
-def compare_configurations_without_model(actual_cfg, old_cfg, header_message="", old_cfg_version=None):
-    """
-    Compare two BiaPy configurations and raise an error if critical workflow variables differ.
-
-    This function checks that key configuration variables (such as problem type, patch size,
-    number of classes, and data channels) match between the current and previous configuration.
-    It ignores model-specific parameters and allows for some backward compatibility.
-
-    Parameters
-    ----------
-    actual_cfg : yacs.config.CfgNode
-        The current configuration object.
-    old_cfg : yacs.config.CfgNode or dict
-        The previous configuration object to compare against.
-    header_message : str, optional
-        Message to prepend to any error or warning (default: "").
-    old_cfg_version : str or None, optional
-        Version string of the old configuration, for backward compatibility (default: None).
-
-    Raises
-    ------
-    ValueError
-        If a critical configuration variable does not match and cannot be ignored.
-    """
-    print("Comparing configurations . . .")
-
-    vars_to_compare = [
-        "PROBLEM.TYPE",
-        "PROBLEM.NDIM",
-        "DATA.PATCH_SIZE",
-        "PROBLEM.INSTANCE_SEG.DATA_CHANNELS",
-        "PROBLEM.SUPER_RESOLUTION.UPSCALING",
-        "DATA.N_CLASSES",
-    ]
-
-    def get_attribute_recursive(var, attr):
-        att = attr.split(".")
-        if len(att) == 1:
-            return getattr(var, att[0])
-        else:
-            return get_attribute_recursive(getattr(var, att[0]), ".".join(att[1:]))
-
-    # Old configuration translation
-    dim_count = 2 if old_cfg.PROBLEM.NDIM == "2D" else 3
-    # BiaPy version less than 3.5.5
-    if old_cfg_version is None:
-        if isinstance(old_cfg["PROBLEM"]["SUPER_RESOLUTION"]["UPSCALING"], int):
-            old_cfg["PROBLEM"]["SUPER_RESOLUTION"]["UPSCALING"] = (
-                old_cfg["PROBLEM"]["SUPER_RESOLUTION"]["UPSCALING"],
-            ) * dim_count
-
-    for var_to_compare in vars_to_compare:
-        current_value = get_attribute_recursive(actual_cfg, var_to_compare)
-        old_value = get_attribute_recursive(old_cfg, var_to_compare)
-        if current_value != old_value:
-            error_message, warning_message = "", ""
-            if var_to_compare == "DATA.N_CLASSES":
-                if not actual_cfg.MODEL.SKIP_UNMATCHED_LAYERS:
-                    error_message = header_message \
-                        + f"The '{var_to_compare}' value of the compared configurations does not match: " \
-                        + f"{current_value} (current configuration) vs {old_value} (from loaded configuration). " \
-                        + "If you want to load all weights from the checkpoint that match in shape with your model " \
-                        + "(e.g., to fine-tune the head), set 'MODEL.SKIP_UNMATCHED_LAYERS' to True."
-            # Allow SSL pretrainings
-            elif not (var_to_compare == "PROBLEM.TYPE" and old_value == "SELF_SUPERVISED"):
-                error_message = header_message \
-                    + f"The '{var_to_compare}' value of the compared configurations does not match: " \
-                    + f"{current_value} (current configuration) vs {old_value} (from loaded configuration)"
-            elif var_to_compare == "DATA.PATCH_SIZE" and any([new for new, old in zip(current_value,old_value) if new < old]):
-                warning_message = \
-                    f"WARNING: The 'DATA.PATCH_SIZE' value used for training the model that you are trying to load was {old_value}." \
-                    + f"It seems that one of the values in your 'DATA.PATCH_SIZE', which is {current_value}, is smaller so may be causing " \
-                    + "an error during model building process"
-                
-            if error_message != "":
-                raise ValueError( error_message )
-            if warning_message != "":
-                print( warning_message )
-            
-    print("Configurations seem to be compatible. Continuing . . .")
-
-
-def convert_old_model_cfg_to_current_version(old_cfg: dict):
+def convert_old_model_cfg_to_current_version(old_cfg: dict) -> dict:
     """
     Convert old configuration to the current BiaPy version.
     
@@ -3431,6 +3352,11 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict):
         del old_cfg["TEST"]["BY_CHUNKS"]["FORMAT"]
 
     if "MODEL" in old_cfg:
+        load_checkpoint = True if "LOAD_CHECKPOINT" in old_cfg["MODEL"] and old_cfg["MODEL"]["LOAD_CHECKPOINT"] else False
+        if "LOAD_MODEL_FROM_CHECKPOINT" in old_cfg["MODEL"]:
+            if old_cfg["MODEL"]["LOAD_MODEL_FROM_CHECKPOINT"] and load_checkpoint:
+                old_cfg["MODEL"]["ITEMS_TO_LOAD_FROM_CHECKPOINT"] = ["weights", "norm", "model_arch"]
+            del old_cfg["MODEL"]["LOAD_MODEL_FROM_CHECKPOINT"]
         if "BATCH_NORMALIZATION" in old_cfg["MODEL"]:
             if old_cfg["MODEL"]["BATCH_NORMALIZATION"]:
                 old_cfg["MODEL"]["NORMALIZATION"] = "bn"
@@ -3596,7 +3522,7 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict):
             del old_cfg["PATHS"]["LWR_Y_FILE"]
         if "UPR_Y_FILE" in old_cfg["PATHS"]:
             del old_cfg["PATHS"]["UPR_Y_FILE"]  
-        
+
     return old_cfg
 
 def diff_between_configs(old_dict: Dict | Config, new_dict: Dict | Config, path: str=""):
