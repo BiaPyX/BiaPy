@@ -3303,6 +3303,29 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict) -> dict:
                             "PERC_UPPER"
                         ]
                         del old_cfg["DATA"]["NORMALIZATION"]["PERC_UPPER"]
+
+                if (
+                    "LOWER_VALUE" in old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"] 
+                    and not isinstance(old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"]["LOWER_VALUE"], list)
+                ):
+                    old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"]["LOWER_VALUE"] = [old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"]["LOWER_VALUE"]]
+
+                if (
+                    "UPPER_VALUE" in old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"] 
+                    and not isinstance(old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"]["UPPER_VALUE"], list)
+                ):
+                    old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"]["UPPER_VALUE"] = [old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"]["UPPER_VALUE"]]
+            if "ZERO_MEAN_UNIT_VAR" in old_cfg["DATA"]["NORMALIZATION"]:
+                if (
+                    "MEAN_VAL" in old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"]
+                    and not isinstance(old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"]["MEAN_VAL"], list)
+                ):
+                    old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"]["MEAN_VAL"] = [old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"]["MEAN_VAL"]]
+                if (
+                    "STD_VAL" in old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"]
+                    and not isinstance(old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"]["STD_VAL"], list)
+                ):
+                    old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"]["STD_VAL"] = [old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"]["STD_VAL"]]   
             if "MEASURE_BY" in old_cfg["DATA"]["NORMALIZATION"]:
                 del old_cfg["DATA"]["NORMALIZATION"]["MEASURE_BY"]
 
@@ -3311,13 +3334,13 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict) -> dict:
                 if "CUSTOM_MEAN" in old_cfg["DATA"]["NORMALIZATION"]:
                     old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"] = {}
                     mean = old_cfg["DATA"]["NORMALIZATION"]["CUSTOM_MEAN"]
-                    old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"]["MEAN_VAL"] = mean
+                    old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"]["MEAN_VAL"] = [mean]
                     del old_cfg["DATA"]["NORMALIZATION"]["CUSTOM_MEAN"]
                 if "CUSTOM_STD" in old_cfg["DATA"]["NORMALIZATION"]:
                     if "ZERO_MEAN_UNIT_VAR" not in old_cfg["DATA"]["NORMALIZATION"]:
                         old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"] = {}
                     std = old_cfg["DATA"]["NORMALIZATION"]["CUSTOM_STD"]
-                    old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"]["STD_VAL"] = std
+                    old_cfg["DATA"]["NORMALIZATION"]["ZERO_MEAN_UNIT_VAR"]["STD_VAL"] = [std]
                     del old_cfg["DATA"]["NORMALIZATION"]["CUSTOM_STD"]
                 if "CUSTOM_MODE" in old_cfg["DATA"]["NORMALIZATION"]:
                     del old_cfg["DATA"]["NORMALIZATION"]["CUSTOM_MODE"]
