@@ -632,7 +632,9 @@ class BiaPy:
                 test_input = (
                     self.workflow.bmz_config["test_input"] if "test_input" not in bmz_cfg else bmz_cfg["test_input"]
                 )
-                if test_input.max() > max_val:
+                if test_input.max() == 1:
+                    max_val = 1
+                elif test_input.max() > 255:
                     max_val = 65535
 
             preprocessing.append(
@@ -658,7 +660,7 @@ class BiaPy:
             custom_mean = self.cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.MEAN_VAL
             custom_std = self.cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.STD_VAL
 
-            if custom_mean != -1 and custom_std != -1:
+            if custom_mean != [-1] and custom_std != [-1]:
                 preprocessing.append(
                     {
                         "id": "fixed_zero_mean_unit_variance",
