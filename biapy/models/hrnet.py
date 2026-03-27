@@ -48,7 +48,7 @@ class HighResolutionModule(nn.Module):
         num_channels: List[int],
         multi_scale_output: bool = True,
         norm: str = "none",
-        mpool: Tuple[int, ...] = (2, 2),
+        branch_strides: List[Tuple[int, ...]] = None,
     ):
         """
         Initialize a High Resolution Module.
@@ -86,10 +86,10 @@ class HighResolutionModule(nn.Module):
             The type of normalization layer to apply within the module's blocks
             and fusion layers (e.g., 'bn', 'sync_bn', 'in', 'gn', 'none').
             Defaults to "none".
-        mpool : Tuple[int, ...], optional
-            The downsampling factor for max-pooling operations, primarily used
-            in the fusion layers when features from higher resolution branches
-            are downsampled to match lower resolution ones. Defaults to (2, 2).
+        branch_strides : List[Tuple[int, ...]], optional
+            The strides for each branch, primarily used in the fusion layers when
+            features from higher resolution branches are downsampled to match lower
+            resolution ones. Defaults to None.
 
         Raises
         ------
@@ -112,8 +112,10 @@ class HighResolutionModule(nn.Module):
 
         self.multi_scale_output = multi_scale_output
 
+        self.branch_strides = branch_strides
         self.branches = self._make_branches(num_branches, blocks, num_blocks, num_channels, norm=norm)
-        self.fuse_layers = self._make_fuse_layers(norm=norm, mpool=mpool)
+        self.fuse_layers = self._make_fuse_layers(norm=norm)
+
         self.relu = nn.ReLU(inplace=False)
 
     def _check_branches(
@@ -256,7 +258,7 @@ class HighResolutionModule(nn.Module):
 
         return nn.ModuleList(branches)
 
-    def _make_fuse_layers(self, norm: str, mpool: Tuple[int, ...] = (2, 2)):
+    def _make_fuse_layers(self, norm: str):
         """
         Construct the fusion layers for exchanging information between branches.
 
@@ -269,10 +271,6 @@ class HighResolutionModule(nn.Module):
         ----------
         norm : str
             Normalization layer type to use within the fusion layers.
-        mpool : Tuple[int, ...], optional
-            Downsampling factor for pooling operations when features are downsampled
-            from a higher resolution branch to a lower resolution one during fusion.
-            Defaults to (2, 2).
 
         Returns
         -------
@@ -305,37 +303,56 @@ class HighResolutionModule(nn.Module):
                 elif j == i:
                     fuse_layer.append(None)
                 else:
+                    # Calculate true relative downsample factor
+                    stride_j = self.branch_strides[j]
+                    stride_i = self.branch_strides[i]
+                    rel_stride = tuple(si // sj for si, sj in zip(stride_i, stride_j))
+
+                    # Determine downsample steps dynamically
+                    if all(s == 1 for s in rel_stride):
+                        num_steps = 1
+                        step_strides = [tuple([1] * len(rel_stride))]
+                    else:
+                        max_factor = max(rel_stride)
+                        num_steps = 0
+                        temp_factor = max_factor
+                        while temp_factor > 1:
+                            num_steps += 1
+                            temp_factor //= 2
+                        
+                        step_strides = []
+                        current_rel = list(rel_stride)
+                        for _ in range(num_steps):
+                            s = []
+                            for d in range(len(current_rel)):
+                                if current_rel[d] > 1:
+                                    s.append(2)
+                                    current_rel[d] //= 2
+                                else:
+                                    s.append(1)
+                            step_strides.append(tuple(s))
+
                     conv3x3s = []
-                    for k in range(i - j):
-                        if k == i - j - 1:
-                            num_outchannels_conv3x3 = num_inchannels[i]
-                            conv3x3s.append(
-                                ConvBlock(
-                                    conv=self.conv_call,
-                                    in_size=num_inchannels[j],
-                                    out_size=num_outchannels_conv3x3,
-                                    k_size=3,
-                                    padding=1,
-                                    stride=mpool,
-                                    norm=norm,
-                                    bias=False,
-                                )
+                    in_ch = num_inchannels[j]
+                    for k in range(num_steps):
+                        out_ch = num_inchannels[i] if k == num_steps - 1 else in_ch
+                        act = "none" if k == num_steps - 1 else "relu"
+
+                        conv3x3s.append(
+                            ConvBlock(
+                                conv=self.conv_call,
+                                in_size=in_ch,
+                                out_size=out_ch,
+                                k_size=3,
+                                padding=1,
+                                stride=step_strides[k],
+                                act=act,
+                                norm=norm,
+                                bias=False,
                             )
-                        else:
-                            num_outchannels_conv3x3 = num_inchannels[j]
-                            conv3x3s.append(
-                                ConvBlock(
-                                    conv=self.conv_call,
-                                    in_size=num_inchannels[j],
-                                    out_size=num_outchannels_conv3x3,
-                                    k_size=3,
-                                    padding=1,
-                                    stride=mpool,
-                                    act="relu",
-                                    norm=norm,
-                                    bias=False,
-                                ),
-                            )
+                        )
+                        in_ch = out_ch
+
                     fuse_layer.append(nn.Sequential(*conv3x3s))
             fuse_layers.append(nn.ModuleList(fuse_layer))
 
@@ -593,6 +610,10 @@ class HighResolutionNet(nn.Module):
         # layer1 uses HRBottleneck which expands the 64 base channels by 4 (64 * 4 = 256)
         pre_stage_channels = [64 * HRBottleneck.expansion]
 
+        # Calculate absolute stride out of the stem (which downsamples twice)
+        stem_stride = tuple(s * s for s in mpool_stem)
+        current_strides = [stem_stride]
+
         for i in range(num_stages):
             mpool_stage = get_mpool(i)
             
@@ -606,6 +627,17 @@ class HighResolutionNet(nn.Module):
                 self._make_transition_layer(pre_stage_channels, cur_channels, norm=normalization, mpool=mpool_stage)
             )
 
+            # Update absolute strides tracking for all branches
+            num_branches_cur = len(cur_channels)
+            num_branches_pre = len(current_strides)
+            for j in range(num_branches_cur):
+                if j >= num_branches_pre:
+                    steps = j - num_branches_pre + 1
+                    new_stride = current_strides[-1]
+                    for _ in range(steps):
+                        new_stride = tuple(a * b for a, b in zip(new_stride, mpool_stage))
+                    current_strides.append(new_stride)
+
             # Construct High Resolution Modules for this stage
             stage_cfg = {
                 "NUM_MODULES": cfg["NUM_MODULES"][i],
@@ -617,7 +649,7 @@ class HighResolutionNet(nn.Module):
 
             is_last_stage = (i == num_stages - 1)
             stage, pre_stage_channels = self._make_stage(
-                stage_cfg, cur_channels, multi_scale_output=True, norm=normalization, mpool=mpool_stage
+                stage_cfg, cur_channels, multi_scale_output=True, norm=normalization, branch_strides=current_strides
             )
             self.stages.append(stage)
 
@@ -839,7 +871,7 @@ class HighResolutionNet(nn.Module):
         num_inchannels,
         multi_scale_output=True,
         norm="none",
-        mpool: Tuple[int, ...] = (2, 2),
+        branch_strides=None,
     ):
         """
         Construct a full stage of the HRNet, consisting of multiple HighResolutionModule instances.
@@ -868,8 +900,8 @@ class HighResolutionNet(nn.Module):
             Normalization layer to use (one of 'bn', 'sync_bn', 'in',
             'gn', or 'none'). Default is 'none'.
 
-        mpool : Tuple[int, ...], optional
-            Downsampling factor for the pooling operation. Used to downsample the features. Default is (2, 2).
+        branch_strides : List[int], optional
+            Strides for each branch in the stage. Default is None.
 
         Returns
         -------
@@ -903,7 +935,7 @@ class HighResolutionNet(nn.Module):
                     num_channels=num_channels,
                     multi_scale_output=reset_multi_scale_output,
                     norm=norm,
-                    mpool=mpool,
+                    branch_strides=branch_strides,
                 )
             )
             num_inchannels = modules[-1].get_num_inchannels()
