@@ -200,45 +200,29 @@ for n, id_ in tqdm(enumerate(raw_file_ids), total=len(raw_file_ids)):
             if not _in_bounds(mid_point, shape_zyx):
                 continue
             
-            pad_type = ["even", "even", "even"]
             z_min = mid_point[0] - patch_size[0]//2
             if z_min <= 0:
                 z_min = 0
-                pad_type[0] = "left"
 
             z_max = mid_point[0] + patch_size[0]//2
             if z_max >= shape_zyx[0]:
                 z_max = shape_zyx[0]-1
-                if pad_type[0] != "even":
-                    pad_type[0] = "even"
-                else:
-                    pad_type[0] = "right"
 
             y_min = mid_point[1] - patch_size[1]//2
             if y_min <= 0:
                 y_min = 0
-                pad_type[1] = "left"
 
             y_max = mid_point[1] + patch_size[1]//2
             if y_max >= shape_zyx[1]:
                 y_max = shape_zyx[1]-1
-                if pad_type[1] != "even":
-                    pad_type[1] = "even"
-                else:
-                    pad_type[1] = "right"
             
             x_min = mid_point[2] - patch_size[2]//2
             if x_min <= 0:
                 x_min = 0
-                pad_type[2] = "left"
 
             x_max = mid_point[2] + patch_size[2]//2
             if x_max >= shape_zyx[2]:
                 x_max = shape_zyx[2]-1
-                if pad_type[2] != "even":
-                    pad_type[2] = "even"
-                else:
-                    pad_type[2] = "right"
             
             tag = f"z{z_min}-{z_max}_y{y_min}-{y_max}_x{x_min}-{x_max}"
 
@@ -247,7 +231,7 @@ for n, id_ in tqdm(enumerate(raw_file_ids), total=len(raw_file_ids)):
                 y_min:y_max,
                 x_min:x_max
             ]
-            label_cube = pad_and_reflect(label_cube, patch_size + (label_cube.shape[-1],), pad_type=pad_type, verbose=False)
+            label_cube = pad_and_reflect(label_cube, patch_size + (label_cube.shape[-1],), verbose=False)
 
             # Identify where each class exists
             pre_mask = label_cube[..., 0] > 0
@@ -263,7 +247,7 @@ for n, id_ in tqdm(enumerate(raw_file_ids), total=len(raw_file_ids)):
                 y_min:y_max,
                 x_min:x_max
             ]
-            raw_cube = pad_and_reflect(np.expand_dims(raw_cube,-1), patch_size + (raw_cube.shape[-1],), pad_type=pad_type, verbose=False)
+            raw_cube = pad_and_reflect(np.expand_dims(raw_cube,-1), patch_size + (raw_cube.shape[-1],), verbose=False)
             save_tif(np.expand_dims(raw_cube,0), os.path.join(output_data_folder, "raw"), [f"raw_{name}_{tag}.tif"], verbose=False)
             save_tif(np.expand_dims(label_cube,0), os.path.join(output_data_folder, "label"), [f"label_{name}_{tag}.tif"], verbose=False)
 

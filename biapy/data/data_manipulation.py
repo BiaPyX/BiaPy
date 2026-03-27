@@ -3052,12 +3052,7 @@ def load_images_to_dataset(
             )
         )
 
-def pad_and_reflect(
-    img: NDArray,
-    patch_shape: Tuple[int, ...],
-    pad_type: str | List[str] = "even",
-    verbose: bool = False,
-) -> NDArray:
+def pad_and_reflect(img: NDArray, crop_shape: Tuple[int, ...], verbose: bool = False) -> NDArray:
     """
     Load data from a directory.
 
@@ -3066,15 +3061,8 @@ def pad_and_reflect(
     img : 3D/4D Numpy array
         Image to pad. E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
 
-    patch_shape : Tuple of 3/4 int, optional
+    crop_shape : Tuple of 3/4 int, optional
         Shape of the subvolumes to create when cropping.  E.g. ``(y, x, channels)`` or ``(z, y, x, channels)``.
-
-    pad_type : str or list of str, optional
-        Select where to add the padding. If a list is provided it is expected to define the type of padding 
-        for every axis. Options:
-            * ``'left'`` to add padding in the left side
-            * ``'right'``  to add padding in the left side
-            * ``'even'`` to add padding evenly on both sides (extra pixel goes to the left if diff is odd)
 
     verbose : bool, optional
         Whether to output information.
@@ -3084,53 +3072,50 @@ def pad_and_reflect(
     img : 3D/4D Numpy array
         Image padded. E.g. ``(y, x, channels)`` for 2D and ``(z, y, x, channels)`` for 3D.
     """
-    if img.ndim not in (3, 4):
-        raise ValueError(f"Unsupported image ndim: {img.ndim}")
-
-    if len(patch_shape) < img.ndim:
+    if img.ndim == 4 and len(crop_shape) < 4:
         raise ValueError(
-            f"'patch_shape' must have at least {img.ndim} values. Provided: {patch_shape}"
+            f"'crop_shape' needs to have 4 at least values as the input array has 4 dims. Provided crop_shape: {crop_shape}"
+        )
+    if img.ndim == 3 and len(crop_shape) < 3:
+        raise ValueError(
+            f"'crop_shape' needs to have 3 at least values as the input array has 3 dims. Provided crop_shape: {crop_shape}"
         )
 
-    def _split_padding(diff: int, pad_type: str):
-        if pad_type == "left":
-            return diff, 0
-        elif pad_type == "right":
-            return 0, diff
-        else:  # even
-            left = diff // 2 + diff % 2  # extra goes left
-            right = diff // 2
-            return left, right
-            
-    spatial_dims = img.ndim - 1  # ignore channels
+    if img.ndim == 4:
+        if img.shape[0] < crop_shape[0]:
+            diff = crop_shape[0] - img.shape[0]
+            o_shape = img.shape
+            img = np.pad(img, ((diff, 0), (0, 0), (0, 0), (0, 0)), "reflect")
+            if verbose:
+                print("Reflected from {} to {}".format(o_shape, img.shape))
 
-    # Broadcast single pad_type
-    if isinstance(pad_type, str):
-        pad_type = [pad_type] * spatial_dims
+        if img.shape[1] < crop_shape[1]:
+            diff = crop_shape[1] - img.shape[1]
+            o_shape = img.shape
+            img = np.pad(img, ((0, 0), (diff, 0), (0, 0), (0, 0)), "reflect")
+            if verbose:
+                print("Reflected from {} to {}".format(o_shape, img.shape))
 
-    if len(pad_type) != spatial_dims:
-        raise ValueError(
-            f"pad_type must have {spatial_dims} values (one per spatial axis). Got {pad_type}"
-        )
+        if img.shape[2] < crop_shape[2]:
+            diff = crop_shape[2] - img.shape[2]
+            o_shape = img.shape
+            img = np.pad(img, ((0, 0), (0, 0), (diff, 0), (0, 0)), "reflect")
+            if verbose:
+                print("Reflected from {} to {}".format(o_shape, img.shape))
+    else:
+        if img.shape[0] < crop_shape[0]:
+            diff = crop_shape[0] - img.shape[0]
+            o_shape = img.shape
+            img = np.pad(img, ((diff, 0), (0, 0), (0, 0)), "reflect")
+            if verbose:
+                print("Reflected from {} to {}".format(o_shape, img.shape))
 
-    for p in pad_type:
-        if p not in ["left", "right", "even"]:
-            raise ValueError(f"Invalid pad_type value: {p}")
-
-    pad_width = [(0, 0)] * img.ndim
-
-    for d in range(spatial_dims):
-        if img.shape[d] < patch_shape[d]:
-            diff = patch_shape[d] - img.shape[d]
-            left, right = _split_padding(diff, pad_type[d])
-            pad_width[d] = (left, right)
-
-    if any(p != (0, 0) for p in pad_width):
-        o_shape = img.shape
-        img = np.pad(img, pad_width, mode="reflect")
-        if verbose:
-            print(f"Reflected from {o_shape} to {img.shape} ({pad_width})")
-
+        if img.shape[1] < crop_shape[1]:
+            diff = crop_shape[1] - img.shape[1]
+            o_shape = img.shape
+            img = np.pad(img, ((0, 0), (diff, 0), (0, 0)), "reflect")
+            if verbose:
+                print("Reflected from {} to {}".format(o_shape, img.shape))
     return img
 
 
