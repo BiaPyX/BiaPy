@@ -5,6 +5,7 @@ Agreement analysis for semantic segmentation (Plotly version with heatmaps)
 - Loads model predictions and expert annotations.
 - Computes IoU (per class and mean IoU) by aggregating intersections/unions
   across the entire dataset (NOT per-image averaging).
+- Prints formatted metric tables to the console.
 - Plots:
   (1) Bar: Model vs each expert (overall mIoU across images, dataset-level)
   (2) Bar: Model vs experts (per-class mIoU across images, dataset-level)
@@ -12,7 +13,7 @@ Agreement analysis for semantic segmentation (Plotly version with heatmaps)
   (4-8) Heatmap matrices per class: Agreement among Model + Experts (class IoU, dataset-level)
 
 Requirements:
-    pip install plotly kaleido pillow numpy scikit-image
+    pip install plotly kaleido pillow numpy scikit-image pandas
 
 Assumptions:
 - Masks are indexed images (pixel values are class IDs).
@@ -23,6 +24,7 @@ import os
 import argparse
 from glob import glob
 import numpy as np
+import pandas as pd
 from PIL import Image
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -318,6 +320,61 @@ def main():
     cons_per_class, cons_overall = dataset_level_iou(
         preds, consensus_gt, keys, args.num_classes, void_label=args.consensus_void_label
     )
+    
+    # ==============================================================================
+    #                             PRINT METRICS TO CONSOLE
+    # ==============================================================================
+    print("\n" + "="*80)
+    print("SEMANTIC SEGMENTATION AGREEMENT METRICS (Dataset-Level IoU)")
+    print("="*80)
+
+    # --- Print 1: Model vs Experts (Overall mIoU) ---
+    df_overall = pd.DataFrame({
+        "Annotator": [f"Expert {i+1}" for i in range(len(experts))],
+        "Overall mIoU": [round(val, 4) for val in model_vs_expert_overall]
+    })
+    print("\n--- Model vs Experts (Overall mIoU) ---")
+    print(df_overall.to_string(index=False))
+
+    # --- Print 2: Model vs Experts (Per-Class mIoU) ---
+    perclass_dict = {"Annotator": [f"Expert {i+1}" for i in range(len(experts))]}
+    for c_idx, c_name in enumerate(args.class_names):
+        perclass_dict[c_name] = [round(val, 4) for val in model_vs_expert_perclass[:, c_idx]]
+    df_perclass = pd.DataFrame(perclass_dict)
+
+    # Add Mean row
+    mean_row = {"Annotator": "Mean (Across Experts)"}
+    for c_idx, c_name in enumerate(args.class_names):
+        mean_row[c_name] = round(mean_perclass_model[c_idx], 4)
+    df_perclass = pd.concat([df_perclass, pd.DataFrame([mean_row])], ignore_index=True)
+
+    print("\n--- Model vs Experts (Per-Class mIoU) ---")
+    print(df_perclass.to_string(index=False))
+
+    # --- Print 3: Overall Pairwise Agreement Matrix ---
+    print("\n--- Pairwise Agreement Matrix (Overall mIoU) ---")
+    df_mat_overall = pd.DataFrame(overall_mat.round(4), index=names, columns=names)
+    print(df_mat_overall.to_string())
+
+    # --- Print 4: Per-Class Pairwise Agreement Matrices ---
+    for c_idx, c_name in enumerate(args.class_names):
+        print(f"\n--- Pairwise Agreement Matrix: {c_name} ---")
+        df_mat_class = pd.DataFrame(perclass_mats[c_idx].round(4), index=names, columns=names)
+        print(df_mat_class.to_string())
+
+    # --- Print 5: Model vs Unanimous-Consensus GT ---
+    print("\n--- Model vs Unanimous-Consensus GT (Dataset-Level IoU) ---")
+    cons_dict = {
+        "Class": args.class_names, 
+        "IoU": [round(val, 4) for val in cons_per_class]
+    }
+    df_cons = pd.DataFrame(cons_dict)
+    # Append overall
+    df_cons = pd.concat([df_cons, pd.DataFrame([{"Class": "OVERALL", "IoU": round(cons_overall, 4)}])], ignore_index=True)
+    print(df_cons.to_string(index=False))
+    print("="*80 + "\n")
+    # ==============================================================================
+
     out_dir = args.output_dir
     os.makedirs(out_dir, exist_ok=True)
 
