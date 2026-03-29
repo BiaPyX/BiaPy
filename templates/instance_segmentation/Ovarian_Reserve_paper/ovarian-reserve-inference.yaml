@@ -1,0 +1,75 @@
+# Ovarian reserve inference workflow compatible with recent BiaPy versions
+
+# System configuration
+SYSTEM:
+  NUM_WORKERS: 5  # Number of data-loading workers; increase if your machine has more CPUs and RAM
+
+# Problem definition
+PROBLEM:
+  TYPE: INSTANCE_SEG  # Instance segmentation workflow
+  NDIM: 3D            # Input data are 3D volumes
+  INSTANCE_SEG:
+    DATA_CHANNELS: BCD                 # Prediction targets: Binary mask + Contour + Distance map
+    DATA_MW_TH_TYPE: manual            # Use manually defined watershed thresholds below
+    DATA_MW_TH_BINARY_MASK: 0.5        # Threshold for the binary mask channel before watershed
+    DATA_MW_TH_CONTOUR: 0.2            # Threshold for the contour channel
+    DATA_MW_TH_DISTANCE: 1.0           # Threshold for the distance channel
+    DATA_REMOVE_SMALL_OBJ_BEFORE: 10   # Remove tiny objects before watershed (in voxels)
+    DATA_REMOVE_BEFORE_MW: true        # Enable object cleanup before marker-controlled watershed
+    DISTANCE_CHANNEL_MASK: true        # Use the distance channel as part of the watershed preparation
+
+# Data paths and preprocessing
+DATA:
+  NORMALIZATION:
+    TYPE: zero_mean_unit_variance      # Standardise intensities using mean/std normalization
+  PATCH_SIZE: (40,128,128,1)           # Network input patch size: (z, y, x, channels)
+  REFLECT_TO_COMPLETE_SHAPE: true      # Mirror-pad borders if image size is not divisible by patch size
+  EXTRACT_RANDOM_PATCH: false          # Do not sample random patches; process the whole test volume by chunks
+  TEST:
+    PATH: "/home/user/raw_ovary/"            # Folder with Zenodo TIFF volumes or your own TIFF test data
+    LOAD_GT: false                            # Ground-truth masks are not required for inference
+    IN_MEMORY: false                          # Keep false for large ovaries to reduce RAM usage
+    RESOLUTION: (5,0.867,0.867)               # Physical voxel size in microns: (z, y, x)
+    OVERLAP: (0,0,0)                          # No overlap between inference patches
+    PADDING: (10,50,50)                       # Extra border context added to each chunk during inference
+
+# Deep learning model configuration
+MODEL:
+  ARCHITECTURE: resunet              # Residual U-Net architecture
+  FEATURE_MAPS: [48, 64, 80, 96]     # Number of feature maps at each encoder/decoder level
+  Z_DOWN: [1, 1, 1]                  # Do not downsample along z between levels
+  DROPOUT_VALUES: [0, 0, 0, 0]       # No dropout in the published configuration
+  LOAD_CHECKPOINT: true              # Load pretrained weights from PATHS.CHECKPOINT_FILE
+
+# Path configuration
+PATHS:
+  CHECKPOINT_FILE: "/home/user/ovarian_reserve_model.pth"  # Full path to the pretrained model checkpoint
+
+# Loss function (kept for compatibility even when only doing inference)
+LOSS:
+  TYPE: CE  # Cross-entropy over the instance-segmentation representation channels
+
+# Training section disabled for inference-only workflow
+TRAIN:
+  ENABLE: false
+
+# Test / inference configuration
+TEST:
+  ENABLE: true                 # Run inference on test images
+  REDUCE_MEMORY: true          # Prefer lower-memory execution for large 3D volumes
+  BY_CHUNKS:
+    ENABLE: true                           # Process the full ovary volume chunk by chunk
+    FORMAT: zarr                           # Internal temporary storage format during chunked inference
+    SAVE_OUT_TIF: true                     # Also export final predictions as TIFF files
+    INPUT_IMG_AXES_ORDER: ZYX              # Zenodo TIFF volumes are 3D with no explicit channel axis
+    WORKFLOW_PROCESS:
+      ENABLE: true                        # Reconstruct the full prediction from all chunks
+      TYPE: entire_pred                   # Apply the workflow to the entire predicted volume
+  POST_PROCESSING:
+    MEASURE_PROPERTIES:
+      ENABLE: true                        # Measure object properties and optionally remove implausible objects
+      REMOVE_BY_PROPERTIES:
+        ENABLE: true
+        PROPS: [["npixels"], ["sphericity", "npixels"]]  # Properties used to discard artifacts
+        VALUES: [[150], [0.01, 2000]]                        # Threshold values for each property rule
+        SIGNS: [["le"], ["lt", "lt"]]                    # Comparison operators: <= 150 voxels, sphericity < 0.01, npixels < 2000

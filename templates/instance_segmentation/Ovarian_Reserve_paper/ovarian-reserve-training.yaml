@@ -1,0 +1,107 @@
+# Ovarian reserve training workflow compatible with recent BiaPy versions
+
+# System configuration
+SYSTEM:
+  NUM_WORKERS: 5  # Number of workers used to load training data
+
+# Problem definition
+PROBLEM:
+  TYPE: INSTANCE_SEG  # Instance segmentation workflow
+  NDIM: 3D            # The model is configured for 3D data
+  INSTANCE_SEG:
+    DATA_CHANNELS: BCD                 # Prediction targets: Binary mask + Contour + Distance map
+    DATA_MW_TH_TYPE: manual            # Use the manual watershed thresholds defined below
+    DATA_MW_TH_BINARY_MASK: 0.5        # Threshold for binary mask channel
+    DATA_MW_TH_CONTOUR: 0.2            # Threshold for contour channel
+    DATA_MW_TH_DISTANCE: 1.0           # Threshold for distance channel
+    DATA_REMOVE_SMALL_OBJ_BEFORE: 10   # Remove tiny objects before watershed (in voxels)
+    DATA_REMOVE_BEFORE_MW: true        # Clean predictions before watershed post-processing
+
+# Data paths and preprocessing
+DATA:
+  NORMALIZATION:
+    TYPE: zero_mean_unit_variance      # Standard mean/std normalisation for fluorescence images
+  PATCH_SIZE: (40, 128, 128, 1)        # Model input patch size: (z, y, x, channels)
+  REFLECT_TO_COMPLETE_SHAPE: true      # Mirror-pad borders when shapes are not exact multiples of patch size
+  CHECK_GENERATORS: false              # Disable generator preview checks to simplify execution
+  EXTRACT_RANDOM_PATCH: false          # Use deterministic patch extraction instead of random sampling
+  TRAIN:
+    PATH: "/home/user/oocyte_training/raw/"      # Folder with raw training TIFFs from oocyte_training.zip
+    GT_PATH: "/home/user/oocyte_training/label/" # Folder with matching label TIFFs from oocyte_training.zip
+    IN_MEMORY: true                               # Load training data into RAM for faster training if memory allows
+  VAL:
+    FROM_TRAIN: true   # Create validation data automatically from the training set
+    SPLIT_TRAIN: 0.1   # Reserve 10% of the training set for validation
+  TEST:
+    PATH: "/home/user/raw_ovary/"                # Folder with full 3D Zenodo ovaries used as test data
+    LOAD_GT: false                                # No ground truth is required for these test volumes
+    RESOLUTION: (5,0.867,0.867)                   # Physical voxel size in microns: (z, y, x)
+    CHECK_DATA: false                             # Skip some extra integrity checks for faster startup
+    PADDING: (10,50,50)                           # Extra context around each inference chunk
+    OVERLAP: (0,0,0)                              # No overlap between inference chunks
+    FILTER_SAMPLES:
+      ENABLE: true             # Discard extremely dark samples during test chunk extraction
+      PROPS: [["mean"]]       # Property to measure on each sample/chunk
+      VALUES: [[50.0]]         # Threshold value for filtering
+      SIGNS: [["lt"]]         # Remove samples whose mean intensity is lower than 50.0
+
+# Data augmentation
+AUGMENTOR:
+  DA_PROB: 0.5          # Probability of applying each augmentation transform
+  ENABLE: true          # Enable data augmentation during training
+  RANDOM_ROT: true      # Apply random rotations
+  VFLIP: true           # Vertical flips
+  HFLIP: true           # Horizontal flips
+  ZFLIP: true           # Flips along the z axis
+  AFFINE_MODE: reflect  # Use reflected borders during geometric transformations
+  GRIDMASK: true        # Randomly mask grid-like regions to improve robustness
+  GRID_RATIO: 0.7       # Relative size of masked regions in gridmask
+  ELASTIC: true         # Elastic deformations to improve invariance to morphology changes
+
+# Deep learning model configuration
+MODEL:
+  ARCHITECTURE: resunet           # Residual U-Net architecture
+  FEATURE_MAPS: [48, 64, 80, 96]  # Number of feature maps at each level of the network
+  Z_DOWN: [1, 1, 1]               # Keep z resolution unchanged through downsampling stages
+  DROPOUT_VALUES: [0, 0, 0, 0]    # No dropout in this configuration
+  LOAD_CHECKPOINT: false          # Start training from scratch; set true to fine-tune from a checkpoint
+
+# Loss function
+LOSS:
+  TYPE: CE  # Cross-entropy loss on the BCD output representation
+
+# Training configuration
+TRAIN:
+  ENABLE: true         # Enable training
+  OPTIMIZER: ADAMW     # Optimizer used during training
+  LR: 1.0e-4           # Initial learning rate
+  BATCH_SIZE: 4        # Number of patches per training step
+  EPOCHS: 800          # Maximum number of epochs
+  PATIENCE: 100        # Early stopping patience
+  LR_SCHEDULER:
+    NAME: reduceonplateau          # Reduce the learning rate when validation stops improving
+    MIN_LR: 1.0e-6                 # Lower bound for the learning rate
+    REDUCEONPLATEAU_PATIENCE: 80   # Number of stagnant epochs before reducing LR
+
+# Test / inference after training
+TEST:
+  ENABLE: true
+  BY_CHUNKS:
+    ENABLE: true                         # Process full ovaries chunk by chunk during evaluation
+    FORMAT: zarr                         # Internal temporary storage format for chunked prediction
+    SAVE_OUT_TIF: true                   # Save final prediction volumes as TIFF files
+    INPUT_IMG_AXES_ORDER: ZYX            # Input test data are TIFF volumes with axis order ZYX
+    WORKFLOW_PROCESS:
+      ENABLE: true                      # Reconstruct a full-volume prediction from all chunks
+      TYPE: entire_pred                 # Apply the workflow to the full predicted volume
+  REUSE_PREDICTIONS: false              # Recompute predictions instead of reusing old outputs
+  REDUCE_MEMORY: true                   # Lower memory usage during testing
+  AUGMENTATION: false                   # Disable test-time augmentation
+  POST_PROCESSING:
+    MEASURE_PROPERTIES:
+      ENABLE: true                      # Measure instance properties and remove implausible detections
+      REMOVE_BY_PROPERTIES:
+        ENABLE: true
+        PROPS: [["npixels"], ["sphericity", "npixels"]]  # Properties used for cleanup
+        VALUES: [[150], [0.01, 2000]]                        # Thresholds applied to each property set
+        SIGNS: [["le"], ["lt", "lt"]]                    # Remove tiny objects and low-sphericity small artifacts
