@@ -336,7 +336,7 @@ class HighResolutionModule(nn.Module):
                     in_ch = num_inchannels[j]
                     for k in range(num_steps):
                         out_ch = num_inchannels[i] if k == num_steps - 1 else in_ch
-                        act = "none" if k == num_steps - 1 else "relu"
+                        _act = "none" if k == num_steps - 1 else self.activation
 
                         conv3x3s.append(
                             ConvBlock(
@@ -346,7 +346,7 @@ class HighResolutionModule(nn.Module):
                                 k_size=3,
                                 padding=1,
                                 stride=step_strides[k],
-                                act=act,
+                                act=_act,
                                 norm=norm,
                                 bias=False,
                             )
@@ -451,6 +451,7 @@ class HighResolutionNet(nn.Module):
         contrast: bool = False,
         contrast_proj_dim: int = 256,
         head_type: str = "FCN",
+        activation: str = "relu",
     ):
         """
         Implements a 2D/3D High-Resolution Net (HRNet) model.
@@ -514,6 +515,9 @@ class HighResolutionNet(nn.Module):
         explicit_activations : bool, optional
             If True, uses explicit activation functions in the last layers.
 
+        activation : str, optional
+            Activation function to use in the HRNet blocks. Default is "relu".
+
         Returns
         -------
         model : nn.Module
@@ -546,6 +550,7 @@ class HighResolutionNet(nn.Module):
         self.contrast = contrast
         self.head_type = head_type
         self.explicit_activations = explicit_activations
+        self.activation = activation
         if self.explicit_activations:
             assert len(head_activations) == sum(output_channels), "If 'explicit_activations' is True, 'head_activations' needs to have the same number of values as 'output_channels'"
             self.head_activations, self.class_head_activations = prepare_activation_layers(head_activations, output_channel_info, output_channels)
@@ -596,7 +601,7 @@ class HighResolutionNet(nn.Module):
             k_size=3,
             padding=1,
             stride=mpool_stem,
-            act="relu",
+            act=self.activation,
             norm=normalization,
             bias=False,
         )
@@ -778,7 +783,7 @@ class HighResolutionNet(nn.Module):
                             k_size=3,
                             padding=1,
                             stride=1,
-                            act="relu",
+                            act=self.activation,
                             norm=norm,
                             bias=False,
                         )
@@ -798,7 +803,7 @@ class HighResolutionNet(nn.Module):
                             k_size=3,
                             padding=1,
                             stride=mpool,
-                            act="relu",
+                            act=self.activation,
                             norm=norm,
                             bias=False,
                         )

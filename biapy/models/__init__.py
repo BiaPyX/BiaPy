@@ -164,7 +164,7 @@ def build_model(
     elif "hrnet" in modelname:
         args = dict(
             image_shape=cfg.DATA.PATCH_SIZE,
-            normalization="sync_bn",
+            normalization=cfg.MODEL.NORMALIZATION,
             output_channels=output_channels,
             contrast=cfg.LOSS.CONTRAST.ENABLE,
             contrast_proj_dim=cfg.LOSS.CONTRAST.PROJ_DIM,
@@ -172,6 +172,7 @@ def build_model(
             head_activations=head_activations,
             output_channel_info=output_channel_info,
             explicit_activations=False,
+            activation=cfg.MODEL.ACTIVATION.lower(),
         )
 
         variant = str(cfg.MODEL.HRNET.VARIANT).lower()
