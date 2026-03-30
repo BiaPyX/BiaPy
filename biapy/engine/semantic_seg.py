@@ -23,7 +23,7 @@ from biapy.utils.misc import to_pytorch_format, to_numpy_format, MetricLogger
 from biapy.engine.metrics import (
     jaccard_index,
     CrossEntropyLoss_wrapper,
-    DiceBCELoss,
+    DiceCELoss,
     DiceLoss,
     ContrastCELoss,
 )
@@ -202,7 +202,13 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         elif self.cfg.LOSS.TYPE == "DICE":
             semantic_loss = DiceLoss()
         elif self.cfg.LOSS.TYPE == "W_CE_DICE":
-            semantic_loss = DiceBCELoss(w_dice=self.cfg.LOSS.WEIGHTS[0], w_bce=self.cfg.LOSS.WEIGHTS[1])
+            semantic_loss = DiceCELoss(
+                num_classes=self.cfg.DATA.N_CLASSES,
+                ignore_index=self.cfg.LOSS.IGNORE_INDEX,
+                class_weights=self.cfg.LOSS.CLASS_WEIGHTS,
+                w_dice=self.cfg.LOSS.WEIGHTS[0],
+                w_bce=self.cfg.LOSS.WEIGHTS[1],
+            )
 
         if self.cfg.LOSS.CONTRAST.ENABLE: 
             self.loss = ContrastCELoss(

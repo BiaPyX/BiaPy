@@ -586,102 +586,144 @@ class CrossEntropyLoss_wrapper:
 
 
 class DiceLoss(nn.Module):
+    def __init__(self, batch_dice: bool = True, smooth: float = 1e-5):
+        super().__init__()
+        self.batch_dice = batch_dice
+        self.smooth = smooth
+
+    def forward(self, y_pred, y_true):
+        # 1. Apply Sigmoid or Softmax to predictions to get probabilities
+        if y_pred.shape[1] == 1:
+            y_pred = torch.sigmoid(y_pred)
+        else:
+            y_pred = torch.softmax(y_pred, dim=1)
+            
+        # Ensure y_true is one-hot encoded if predicting multiple classes
+        if y_pred.shape != y_true.shape:
+            y_true = torch.nn.functional.one_hot(y_true.to(torch.int64), num_classes=y_pred.shape[1])
+            y_true = y_true.permute(0, 4, 1, 2, 3).squeeze(1) # Adjust permute based on 2D/3D
+
+        y_true = y_true.float()
+
+        # 2. Decide which axes to sum over.
+        # For a tensor [Batch, Channels, Height, Width] (2D) or [B, C, D, H, W] (3D):
+        # If batch_dice is True, we sum over the Batch dimension (0) AND the spatial dimensions.
+        # If False, we ONLY sum over the spatial dimensions, leaving Batch intact.
+        axes = list(range(2, len(y_pred.shape))) # e.g., [2, 3] for 2D
+        if self.batch_dice:
+            axes = [0] + axes # e.g., [0, 2, 3] for 2D
+
+        # 3. Calculate Intersection and Union
+        intersection = torch.sum(y_pred * y_true, dim=axes)
+        union = torch.sum(y_pred, dim=axes) + torch.sum(y_true, dim=axes)
+        
+        # 4. Compute Dice
+        dice = (2.0 * intersection + self.smooth) / (union + self.smooth)
+        
+        # 5. Return loss (1 - Dice). Mean across remaining dimensions (Channels/Batches)
+        return 1.0 - torch.mean(dice)
+
+class DiceCELoss(nn.Module):
     """
-    Dice loss for binary segmentation.
-
-    Based on `Kaggle implementation <https://www.kaggle.com/code/bigironsphere/loss-function-library-keras-pytorch>`_.
+    Combines Cross Entropy (or Binary Cross Entropy) and Dice Loss.
     """
-
-    def __init__(self):
-        """Initialize the DiceLoss module."""
-        super(DiceLoss, self).__init__()
-
-    def forward(self, inputs, targets, smooth=1):
-        """
-        Compute the Dice loss.
-
-        Parameters
-        ----------
-        inputs : torch.Tensor or dict
-            Predicted logits. If a dict, expects the prediction under the "pred" key.
-        targets : torch.Tensor
-            Ground truth masks.
-        smooth : float, optional
-            Smoothing factor to avoid division by zero (default: 1).
-
-        Returns
-        -------
-        loss : torch.Tensor
-            Dice loss value (1 - Dice coefficient).
-        """
-        if isinstance(inputs, dict):
-            inputs = inputs["pred"]
-        inputs = F.sigmoid(inputs)
-
-        # flatten label and prediction tensors
-        inputs = inputs.view(-1)
-        targets = targets.view(-1)
-
-        intersection = (inputs * targets).sum()
-        dice = (2.0 * intersection + smooth) / (inputs.sum() + targets.sum() + smooth)
-
-        return 1 - dice
-
-
-class DiceBCELoss(nn.Module):
-    """
-    Combined Dice and BCE loss for binary segmentation.
-     
-    Based on `Kaggle implementation <https://www.kaggle.com/code/bigironsphere/loss-function-library-keras-pytorch>`_ implementation.
-    """
-
-    def __init__(self, w_dice=0.5, w_bce=0.5):
-        """
-        Initialize the DiceBCELoss module.
-
-        Parameters
-        ----------
-        w_dice : float, optional
-            Weight for the Dice loss component (default: 0.5).
-        w_bce : float, optional
-            Weight for the BCE loss component (default: 0.5).
-        """
-        super(DiceBCELoss, self).__init__()
+    def __init__(
+        self, 
+        num_classes: int, 
+        batch_dice: bool = True, 
+        smooth: float = 1e-5, 
+        ignore_index: int = -1,
+        class_weights: torch.Tensor = None
+        w_ce: float = 1.0,
+        w_dice: float = 1.0
+    ):
+        super(DiceCELoss, self).__init__()
+        self.num_classes = num_classes
+        self.batch_dice = batch_dice
+        self.smooth = smooth
+        self.ignore_index = ignore_index
+        self.w_ce = w_ce
         self.w_dice = w_dice
-        self.w_bce = w_bce
 
-    def forward(self, inputs, targets, smooth=1):
+        # Initialize the appropriate Cross Entropy function
+        if self.num_classes <= 2:
+            # For binary segmentation
+            self.ce_loss = nn.BCEWithLogitsLoss(weight=class_weights)
+        else:
+            # For multi-class segmentation
+            self.ce_loss = nn.CrossEntropyLoss(weight=class_weights, ignore_index=ignore_index)
+
+    def forward(self, y_pred: torch.Tensor, y_true: torch.Tensor) -> torch.Tensor:
         """
-        Compute the weighted sum of Dice loss and BCE loss.
-
         Parameters
         ----------
-        inputs : torch.Tensor or dict
-            Predicted logits. If a dict, expects the prediction under the "pred" key.
-        targets : torch.Tensor
-            Ground truth masks.
-        smooth : float, optional
-            Smoothing factor to avoid division by zero (default: 1).
-
-        Returns
-        -------
-        loss : torch.Tensor
-            Weighted sum of Dice loss and BCE loss.
+        y_pred : torch.Tensor
+            Predicted logits (before sigmoid/softmax). 
+            Shape: (B, C, H, W) for 2D or (B, C, D, H, W) for 3D.
+            For binary, C is usually 1.
+        y_true : torch.Tensor
+            Ground truth labels. 
+            Shape: (B, 1, H, W) or (B, H, W).
         """
-        if isinstance(inputs, dict):
-            inputs = inputs["pred"]
-        inputs = F.sigmoid(inputs)
+        
+        # 1. CROSS ENTROPY LOSS
+        if self.num_classes <= 2:
+            # BCE expects targets to be float and match prediction shape
+            ce_target = y_true.view_as(y_pred).float()
+            ce_l = self.ce_loss(y_pred, ce_target)
+        else:
+            # CE expects targets to be long and missing the channel dimension
+            if y_true.ndim == y_pred.ndim:
+                ce_target = y_true.squeeze(1)  # Remove channel dim: (B, 1, H, W) -> (B, H, W)
+            else:
+                ce_target = y_true
+            ce_l = self.ce_loss(y_pred, ce_target.long())
 
-        # flatten label and prediction tensors
-        inputs = inputs.view(-1)
-        targets = targets.view(-1)
 
-        intersection = (inputs * targets).sum()
-        dice_loss = 1 - (2.0 * intersection + smooth) / (inputs.sum() + targets.sum() + smooth)
-        BCE = F.binary_cross_entropy(inputs, targets, reduction="mean")
-        Dice_BCE = (BCE * self.w_bce) + (dice_loss * self.w_dice)
+        # 2. DICE LOSS
+        # Apply activations to logits to get probabilities
+        if self.num_classes <= 2:
+            pred_probs = torch.sigmoid(y_pred)
+            dice_target = y_true.view_as(pred_probs).float()
+        else:
+            pred_probs = torch.softmax(y_pred, dim=1)
+            # One-hot encode the target for multi-class Dice
+            if y_true.ndim == y_pred.ndim:
+                y_true_squeezed = y_true.squeeze(1).long()
+            else:
+                y_true_squeezed = y_true.long()
+                
+            dice_target = F.one_hot(y_true_squeezed, num_classes=self.num_classes)
+            # one_hot puts the class dim at the end (B, H, W, C). Move it to dim 1 (B, C, H, W)
+            # The permutation changes depending on 2D vs 3D data
+            if y_pred.ndim == 4: # 2D: (B, C, H, W)
+                dice_target = dice_target.permute(0, 3, 1, 2)
+            elif y_pred.ndim == 5: # 3D: (B, C, D, H, W)
+                dice_target = dice_target.permute(0, 4, 1, 2, 3)
+            
+            dice_target = dice_target.float()
 
-        return Dice_BCE
+        # Determine which axes to sum over
+        # Spatial dimensions are from axis 2 to the end
+        axes = list(range(2, y_pred.ndim)) 
+        
+        # If batch_dice is True, sum over the Batch dimension (0) as well!
+        if self.batch_dice:
+            axes = [0] + axes
+
+        # Calculate Intersection and Union
+        intersection = torch.sum(pred_probs * dice_target, dim=axes)
+        
+        # Using the standard Dice formulation (sum of squares is also an option, but this is default)
+        union = torch.sum(pred_probs, dim=axes) + torch.sum(dice_target, dim=axes)
+
+        # Compute Dice coefficient per class (and optionally per sample if batch_dice is False)
+        dice = (2.0 * intersection + self.smooth) / (union + self.smooth)
+
+        # Mean across remaining dimensions (Classes, and Batches if batch_dice is False)
+        dice_l = 1.0 - torch.mean(dice)
+
+        return self.w_ce * ce_l + self.w_dice * dice_l
 
 
 class ContrastCELoss(nn.Module):

@@ -32,7 +32,7 @@ from biapy.utils.misc import (
 from biapy.engine.metrics import (
     detection_metrics,
     multiple_metrics,
-    DiceBCELoss,
+    DiceCELoss,
     DiceLoss,
     CrossEntropyLoss_wrapper,
 )
@@ -239,7 +239,13 @@ class Detection_Workflow(Base_Workflow):
         elif self.cfg.LOSS.TYPE == "DICE":
             self.loss = DiceLoss()
         elif self.cfg.LOSS.TYPE == "W_CE_DICE":
-            self.loss = DiceBCELoss(w_dice=self.cfg.LOSS.WEIGHTS[0], w_bce=self.cfg.LOSS.WEIGHTS[1])
+            self.loss = DiceCELoss(
+                num_classes=self.cfg.DATA.N_CLASSES,
+                ignore_index=self.cfg.LOSS.IGNORE_INDEX,
+                class_weights=self.cfg.LOSS.CLASS_WEIGHTS,
+                w_dice=self.cfg.LOSS.WEIGHTS[0],
+                w_bce=self.cfg.LOSS.WEIGHTS[1],
+            )
 
         super().define_metrics()
 

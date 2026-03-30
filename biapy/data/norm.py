@@ -557,7 +557,7 @@ def norm_range01(
 
     if apply_norm:
         data = (data - _min_val_to_div) / (  # type: ignore
-            _max_val_to_div - _min_val_to_div + eps
+            max(_max_val_to_div - _min_val_to_div, eps)
         )
 
     return data, _max_val_to_div, _min_val_to_div
@@ -615,7 +615,7 @@ def zero_mean_unit_variance_normalization(
     std = data.std() if std is None else std
 
     if apply_norm:
-        data = (data - mean) / (std + eps)
+        data = (data - mean) / (max(std, eps))
 
     return data, mean, std
 

@@ -1212,11 +1212,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     "'LOSS.CLASS_REBALANCE' can not be set to 'auto' when 'DATA.N_CLASSES' > 2 as it is only valid for binary problems. " \
                     "Use 'manual' and 'LOSS.CLASS_WEIGHTS' if you really want to rebalance classes. If not, set 'LOSS.CLASS_REBALANCE' to 'none'."
                 )
-        if loss == "W_CE_DICE":
-            assert (
-                len(cfg.LOSS.WEIGHTS) == 2
-            ), "'LOSS.WEIGHTS' needs to be a list of two floats when using LOSS.TYPE == 'W_CE_DICE'"
-            assert sum(cfg.LOSS.WEIGHTS) == 1, "'LOSS.WEIGHTS' values need to sum 1"
     elif cfg.PROBLEM.TYPE in [
         "SUPER_RESOLUTION",
         "SELF_SUPERVISED",
