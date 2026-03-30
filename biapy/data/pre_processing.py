@@ -2369,17 +2369,18 @@ def create_detection_masks(cfg: CN, data_type: str = "train"):
     for i in tqdm(it, disable=not is_main_process()):
         img_filename = os.path.splitext(ids[i])[0] + img_ext
         file_path = os.path.join(label_dir, ids[i])
-        out_path = os.path.join(out_dir, img_filename)
-
-        if os.path.exists(out_path):
-            continue
         
         if not os.path.exists(os.path.join(img_dir, img_filename)):
             print("WARNING: No image found for CSV file: {}. Using the image that's in the same spot (within the CSV files list) where"
                 "the CSV file is in its own list of CSV files. Check if it is correct!".format(file_path)
             )
             img_filename = img_ids[i]
-            
+
+        out_path = os.path.join(out_dir, img_filename)
+
+        if os.path.exists(out_path):
+            continue
+               
         # 1. Get shape information without loading the whole image
         if img_ext not in [".zarr", ".n5"]:
             img_info = read_img_as_ndarray(os.path.join(img_dir, img_filename), is_3d=not cfg.PROBLEM.NDIM == "2D")
