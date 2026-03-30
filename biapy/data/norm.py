@@ -145,21 +145,21 @@ def normalize_image(
                 assert isinstance(norm_module["mean"], list), "'mean' should be a list of float values, just one to be applied to all the channels or one per channel"
                 if norm_module["mean"][0] != -1:
                     if len(norm_module["mean"]) == 1:
-                        mean = float(norm_module["mean"][0])
+                        mean = [float(norm_module["mean"][0])] * img.shape[-1]
                     else:
                         assert len(norm_module["mean"]) == img.shape[-1], "If more that one mean value is provided, the number of mean values should be the same as the "
                         "number of channels in the input image"
-                        mean = float(norm_module["mean"][c])
+                        mean = norm_module["mean"]
 
             if "std" in norm_module:
                 assert isinstance(norm_module["std"], list), "'std' should be a list of float values, just one to be applied to all the channels or one per channel"
                 if norm_module["std"][0] != -1:
                     if len(norm_module["std"]) == 1:
-                        std = float(norm_module["std"][0])
+                        std = [float(norm_module["std"][0])] * img.shape[-1]
                     else:
                         assert len(norm_module["std"]) == img.shape[-1], "If more that one std value is provided, the number of std values should be the same as the "
                         "number of channels in the input image"
-                        std = float(norm_module["std"][c])
+                        std = norm_module["std"]
 
     # Changing dtype to floating tensor
     if isinstance(img, torch.Tensor):
