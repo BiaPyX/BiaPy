@@ -280,6 +280,13 @@ class Base_Workflow(metaclass=ABCMeta):
                             print("The following changes were made in order to adapt the loaded input configuration from checkpoint into the current configuration version:")
                             diff_between_configs(saved_cfg, tmp_cfg)
 
+                    if "weights" in self.cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT and "norm" not in self.cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT:
+                        print("WARNING: Weights will be loaded from checkpoint but not normalization instructions. This can lead to inconsistent results if the normalization instructions in the current configuration are different from the ones used in the checkpoint. Consider adding 'norm' to 'MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT' to avoid this issue.")
+
+                    if "norm" in self.cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT:
+                        print("Normalization instructions will be loaded from checkpoint.")
+                        update_dict_with_existing_keys(self.cfg["DATA"]["NORMALIZATION"], tmp_cfg["DATA"]["NORMALIZATION"])
+
                     if "model_arch" in self.cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT:
                         print("Model architecture will be loaded from checkpoint.")
                         # Save current model config
@@ -295,13 +302,6 @@ class Base_Workflow(metaclass=ABCMeta):
                         self.cfg["MODEL"]["LOAD_CHECKPOINT"] = True
                         self.cfg["MODEL"]["LOAD_MODEL_FROM_CHECKPOINT"] = False
                         check_configuration(self.cfg, self.job_identifier)
-
-                    if "weights" in self.cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT and "norm" not in self.cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT:
-                        print("WARNING: Weights will be loaded from checkpoint but not normalization instructions. This can lead to inconsistent results if the normalization instructions in the current configuration are different from the ones used in the checkpoint. Consider adding 'norm' to 'MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT' to avoid this issue.")
-
-                    if "norm" in self.cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT:
-                        print("Normalization instructions will be loaded from checkpoint.")
-                        update_dict_with_existing_keys(self.cfg["DATA"]["NORMALIZATION"], tmp_cfg["DATA"]["NORMALIZATION"])
         
         # Load BioImage Model Zoo pretrained model information
         elif self.cfg.MODEL.SOURCE == "bmz":
