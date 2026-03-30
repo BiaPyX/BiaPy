@@ -1902,7 +1902,7 @@ def get_norm_3d(norm: str, out_channels: int, bn_momentum: float = 0.1) -> nn.Mo
     selected_norm = {
         "bn": nn.BatchNorm3d,
         "sync_bn": nn.SyncBatchNorm,
-        "in": nn.InstanceNorm3d,
+        "in": nn.InstanceNorm3d(affine=True),
         "gn": lambda channels: nn.GroupNorm(8, channels),
         "none": nn.Identity,
     }[norm]
@@ -1936,7 +1936,7 @@ def get_norm_2d(norm: str, out_channels: int, bn_momentum: float = 0.1) -> nn.Mo
     selected_norm = {
         "bn": nn.BatchNorm2d,
         "sync_bn": nn.SyncBatchNorm,
-        "in": nn.InstanceNorm2d,
+        "in": nn.InstanceNorm2d(affine=True),
         "gn": lambda channels: nn.GroupNorm(16, channels),
         "none": nn.Identity,
     }[norm]

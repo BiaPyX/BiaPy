@@ -1168,7 +1168,7 @@ class Config:
         # a list with just one number must be provided
         _C.MODEL.DROPOUT_VALUES = [0.0, 0.0, 0.0, 0.0, 0.0]
         # Normalization layer (one of 'bn', 'sync_bn' 'in', 'gn' or 'none').
-        _C.MODEL.NORMALIZATION = "bn"
+        _C.MODEL.NORMALIZATION = ""
         # Kernel size
         _C.MODEL.KERNEL_SIZE = 3
         # Upsampling layer to use in the model. Options: ["upsampling", "convtranspose"]

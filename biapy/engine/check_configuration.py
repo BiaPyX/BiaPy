@@ -2512,7 +2512,11 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 raise ValueError("'MODEL.LARGER_IO' can not be True when 'PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD' is True")
             if cfg.LOSS.CONTRAST.ENABLE:
                 raise ValueError("'LOSS.CONTRAST.ENABLE' can not be True when 'PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD' is True")
-            
+    
+    if cfg.MODEL.NORMALIZATION == "":
+        opts.extend(["MODEL.NORMALIZATION", "in"])
+    assert cfg.MODEL.NORMALIZATION in ["in", "bn", "sync_bn", "gn", "ln"], "'MODEL.NORMALIZATION' needs to be in ['in', 'bn', 'sync_bn', 'gn', 'ln']"
+
     if len(opts) > 0:
         cfg.merge_from_list(opts)
         opts = []
