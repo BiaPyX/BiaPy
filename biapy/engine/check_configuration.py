@@ -1212,6 +1212,9 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     "'LOSS.CLASS_REBALANCE' can not be set to 'auto' when 'DATA.N_CLASSES' > 2 as it is only valid for binary problems. " \
                     "Use 'manual' and 'LOSS.CLASS_WEIGHTS' if you really want to rebalance classes. If not, set 'LOSS.CLASS_REBALANCE' to 'none'."
                 )
+            if cfg.LOSS.CLASS_WEIGHTS != [] and len(cfg.LOSS.CLASS_WEIGHTS) != cfg.DATA.N_CLASSES:
+                raise ValueError("'LOSS.CLASS_WEIGHTS' must be a list of length equal to the number of classes")
+
     elif cfg.PROBLEM.TYPE in [
         "SUPER_RESOLUTION",
         "SELF_SUPERVISED",

@@ -647,7 +647,10 @@ class DiceCELoss(nn.Module):
         self.w_dice = w_dice
         self.device = device
 
-        class_weights_tensor = torch.tensor(class_weights, device=device, dtype=torch.float32) if class_weights is not None else None
+        class_weights_tensor = None
+        if class_weights is not None and len(class_weights) > 0:
+            class_weights_tensor = torch.tensor(class_weights, device=device, dtype=torch.float32)
+
         # Initialize the appropriate Cross Entropy function
         if self.num_classes <= 2:
             # For binary segmentation
