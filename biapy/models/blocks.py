@@ -1809,12 +1809,12 @@ def get_activation(activation: str = "relu") -> nn.Module:
         "none",
     ], "Get unknown activation key {}".format(activation)
     activation_dict = {
-        "relu": nn.ReLU(),
+        "relu": nn.ReLU(inplace=True),
         "tanh": nn.Tanh(),
-        "leaky_relu": nn.LeakyReLU(negative_slope=0.2),
-        "elu": nn.ELU(alpha=1.0),
+        "leaky_relu": nn.LeakyReLU(inplace=True),
+        "elu": nn.ELU(alpha=1.0, inplace=True),
         "gelu": nn.GELU(),
-        "silu": nn.SiLU(),
+        "silu": nn.SiLU(inplace=True),
         "sigmoid": nn.Sigmoid(),
         "softmax": nn.Softmax(dim=1),
         "linear": nn.Identity(),
@@ -1897,19 +1897,21 @@ def get_norm_3d(norm: str, out_channels: int, bn_momentum: float = 0.1) -> nn.Mo
         "in",
         "none",
     ], "Get unknown normalization layer key {}".format(norm)
-    if norm == "gn":
-        assert out_channels % 8 == 0, "GN requires channels to separable into 8 groups"
     selected_norm = {
         "bn": nn.BatchNorm3d,
         "sync_bn": nn.SyncBatchNorm,
-        "in": nn.InstanceNorm3d(affine=True),
-        "gn": lambda channels: nn.GroupNorm(8, channels),
+        "in": nn.InstanceNorm3d,
+        "gn": nn.GroupNorm,
         "none": nn.Identity,
     }[norm]
-    if norm in ["bn", "sync_bn", "in"]:
+    if norm in ["bn", "sync_bn"]:
         return selected_norm(out_channels, momentum=bn_momentum)
+    elif norm == "in":
+        return selected_norm(out_channels, affine=True, momentum=bn_momentum)
+    elif norm == "gn":
+        return selected_norm(out_channels, num_groups=8)
     else:
-        return selected_norm(out_channels)
+        return selected_norm()
 
 
 def get_norm_2d(norm: str, out_channels: int, bn_momentum: float = 0.1) -> nn.Module:
@@ -1936,14 +1938,18 @@ def get_norm_2d(norm: str, out_channels: int, bn_momentum: float = 0.1) -> nn.Mo
     selected_norm = {
         "bn": nn.BatchNorm2d,
         "sync_bn": nn.SyncBatchNorm,
-        "in": nn.InstanceNorm2d(affine=True),
-        "gn": lambda channels: nn.GroupNorm(16, channels),
+        "in": nn.InstanceNorm2d,
+        "gn": nn.GroupNorm,
         "none": nn.Identity,
     }[norm]
-    if norm in ["bn", "sync_bn", "in"]:
+    if norm in ["bn", "sync_bn"]:
         return selected_norm(out_channels, momentum=bn_momentum)
+    elif norm == "in":
+        return selected_norm(out_channels, affine=True, momentum=bn_momentum)
+    elif norm == "gn":
+        return selected_norm(out_channels, num_groups=16)
     else:
-        return selected_norm(out_channels)
+        return selected_norm()
 
 
 class ResUNetPlusPlus_AttentionBlock(nn.Module):
