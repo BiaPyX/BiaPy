@@ -33,7 +33,8 @@ from biapy.models.blocks import (
     get_norm_2d, 
     ConvNeXtBlock_V2,
     ConvNeXtBlock_V1,
-    prepare_activation_layers
+    prepare_activation_layers,
+    get_activation,
 )
 from biapy.models.heads import ASPP, ProjectionHead, PSP, OCRHead
 
@@ -49,6 +50,7 @@ class HighResolutionModule(nn.Module):
         multi_scale_output: bool = True,
         norm: str = "none",
         branch_strides: List[Tuple[int, ...]] = None,
+        activation: str = "relu",
     ):
         """
         Initialize a High Resolution Module.
@@ -90,7 +92,9 @@ class HighResolutionModule(nn.Module):
             The strides for each branch, primarily used in the fusion layers when
             features from higher resolution branches are downsampled to match lower
             resolution ones. Defaults to None.
-
+        activation : str, optional
+            The activation function to use within the blocks and fusion layers.
+            Defaults to "relu".
         Raises
         ------
         ValueError
@@ -114,9 +118,9 @@ class HighResolutionModule(nn.Module):
 
         self.branch_strides = branch_strides
         self.branches = self._make_branches(num_branches, blocks, num_blocks, num_channels, norm=norm)
+        self.activation_str = activation
+        self.activation = get_activation(activation)
         self.fuse_layers = self._make_fuse_layers(norm=norm)
-
-        self.relu = nn.ReLU(inplace=False)
 
     def _check_branches(
         self, num_branches: int, num_blocks: List[int], num_inchannels: List[int], num_channels: List[int]
@@ -336,7 +340,7 @@ class HighResolutionModule(nn.Module):
                     in_ch = num_inchannels[j]
                     for k in range(num_steps):
                         out_ch = num_inchannels[i] if k == num_steps - 1 else in_ch
-                        _act = "none" if k == num_steps - 1 else self.activation
+                        _act = "none" if k == num_steps - 1 else self.activation_str
 
                         conv3x3s.append(
                             ConvBlock(
@@ -434,7 +438,7 @@ class HighResolutionModule(nn.Module):
                         )
                 else:
                     y = y + self.fuse_layers[i][j](x[j])
-            x_fuse.append(self.relu(y))
+            x_fuse.append(self.activation(y))
 
         return x_fuse
 
@@ -941,6 +945,7 @@ class HighResolutionNet(nn.Module):
                     multi_scale_output=reset_multi_scale_output,
                     norm=norm,
                     branch_strides=branch_strides,
+                    activation=self.activation,
                 )
             )
             num_inchannels = modules[-1].get_num_inchannels()
