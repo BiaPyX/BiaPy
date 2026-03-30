@@ -609,12 +609,12 @@ def create_model_doc(
         preproc_info = "- Scaling the range to [0-max] and then dividing by the maximum value of the data.\n"
     elif biapy_cfg.DATA.NORMALIZATION.TYPE == "zero_mean_unit_variance":    
         preproc_info = "- Zero mean and unit variance normalization. "
-        if biapy_cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.MEAN_VAL > 0:
-            preproc_info += f"Using provided mean value of {biapy_cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.MEAN_VAL}. "
+        if len(biapy_cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.MEAN_VAL) > 0:
+            preproc_info += f"Using provided mean values: {biapy_cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.MEAN_VAL}. "
         else:
             preproc_info += "Mean value calculated from the training data. "
-        if biapy_cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.STD_VAL > 0:
-            preproc_info += f"Using provided std value of {biapy_cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.STD_VAL}.\n"
+        if len(biapy_cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.STD_VAL) > 0:
+            preproc_info += f"Using provided std values: {biapy_cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.STD_VAL}.\n"
         else:
             preproc_info += "Std value calculated from the training data.\n"
 
