@@ -2694,8 +2694,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 z_factor = z_down_schedule[i] if is_3d else 1
 
                 # Check divisibility using clean generator expressions
-                yx_invalid = any(dim % yx_factor != 0 for dim in current_yx)
-                z_invalid = is_3d and (current_z % z_factor != 0)
+                yx_invalid = any(dim % yx_factor != 0 or yx_factor <= 2 for dim in current_yx)
+                z_invalid = is_3d and (current_z % z_factor != 0 or z_factor <= 2)
 
                 if yx_invalid or z_invalid:
                     m = (
