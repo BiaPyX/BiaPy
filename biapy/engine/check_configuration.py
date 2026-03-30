@@ -2465,7 +2465,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             num_blocks = [[4] * b for b in num_branches]
             num_channels = [[base_channels * (2**i) for i in range(b)] for b in num_branches]
 
-            opts.extend(["MODEL.HRNET.Z_DOWN", (2,) * (len(cfg.MODEL.HRNET.NUM_BLOCKS))])
+            opts.extend(["MODEL.HRNET.Z_DOWN", (1,) * (len(cfg.MODEL.HRNET.NUM_BLOCKS))])
             opts.extend(["MODEL.HRNET.YX_DOWN", (2,) * (len(cfg.MODEL.HRNET.NUM_BLOCKS))])
             opts.extend(["MODEL.HRNET.BLOCK_TYPE", 'BASIC'])
             opts.extend(["MODEL.HRNET.NUM_STAGES", num_stages])
@@ -2504,14 +2504,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         ]:
             if len(cfg.MODEL.FEATURE_MAPS) - 1 != len(cfg.MODEL.Z_DOWN):
                 raise ValueError("'MODEL.FEATURE_MAPS' length minus one and 'MODEL.Z_DOWN' length must be equal")
-    if "hrnet" in model_arch:
-        if all(x == 0 for x in cfg.MODEL.HRNET.Z_DOWN):
-            opts.extend(["MODEL.HRNET.Z_DOWN", (2,) * (len(cfg.MODEL.HRNET.NUM_BLOCKS))])
-        elif any([False for x in cfg.MODEL.HRNET.Z_DOWN if x != 1 and x != 2]):
-            raise ValueError("'MODEL.HRNET.Z_DOWN' needs to be 1 or 2")
-        else:
-            if len(cfg.MODEL.HRNET.NUM_BLOCKS) != len(cfg.MODEL.HRNET.Z_DOWN):
-                raise ValueError("'MODEL.HRNET.NUM_BLOCKS' length and 'MODEL.HRNET.Z_DOWN' length must be equal")
 
     # Adjust ISOTROPY values to feature maps
     if all(x == True for x in cfg.MODEL.ISOTROPY):
