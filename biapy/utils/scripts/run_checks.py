@@ -653,7 +653,7 @@ def download_onedrive_file(drive_link, out_filename, attempts=5):
         print(f"Trying to download {drive_link} (attempt {i+1})")
         try:
             # Send a GET request to the URL
-            response = requests.get(url, stream=True)
+            response = requests.get(drive_link, stream=True)
 
             # Check if the request was successful
             if response.status_code == 200:
