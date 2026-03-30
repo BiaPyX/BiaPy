@@ -1205,8 +1205,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         ], "LOSS.TYPE not in ['CE', 'DICE', 'W_CE_DICE']"
 
         if cfg.DATA.N_CLASSES > 2:
-            if loss != "CE":
-                raise ValueError("'DATA.N_CLASSES' are only used with 'CE' loss and not with {}".format(loss))
+            if loss not in ["CE", 'W_CE_DICE']:
+                raise ValueError("'DATA.N_CLASSES' are only used in ['CE', 'W_CE_DICE'] losses and not with {}".format(loss))
             if cfg.LOSS.CLASS_REBALANCE == "auto":
                 raise ValueError(
                     "'LOSS.CLASS_REBALANCE' can not be set to 'auto' when 'DATA.N_CLASSES' > 2 as it is only valid for binary problems. " \
@@ -2510,7 +2510,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     
     if cfg.MODEL.NORMALIZATION == "":
         opts.extend(["MODEL.NORMALIZATION", "in"])
-    assert cfg.MODEL.NORMALIZATION in ["in", "bn", "sync_bn", "gn", "ln"], "'MODEL.NORMALIZATION' needs to be in ['in', 'bn', 'sync_bn', 'gn', 'ln']"
+    else:
+        assert cfg.MODEL.NORMALIZATION in ["in", "bn", "sync_bn", "gn", "ln"], "'MODEL.NORMALIZATION' needs to be in ['in', 'bn', 'sync_bn', 'gn', 'ln']"
 
     if len(opts) > 0:
         cfg.merge_from_list(opts)

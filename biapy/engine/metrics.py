@@ -633,25 +633,28 @@ class DiceCELoss(nn.Module):
         batch_dice: bool = True, 
         smooth: float = 1e-5, 
         ignore_index: int = -1,
-        class_weights: torch.Tensor = None
+        class_weights: List[float | int] = None,
         w_ce: float = 1.0,
-        w_dice: float = 1.0
+        w_dice: float = 1.0,
+        device: torch.device = torch.device("cpu")
     ):
         super(DiceCELoss, self).__init__()
         self.num_classes = num_classes
         self.batch_dice = batch_dice
         self.smooth = smooth
-        self.ignore_index = ignore_index
+        self.ignore_index = ignore_index if ignore_index != -1 else -100  # Default ignore index for CrossEntropyLoss
         self.w_ce = w_ce
         self.w_dice = w_dice
+        self.device = device
 
+        class_weights_tensor = torch.tensor(class_weights, device=device, dtype=torch.float32) if class_weights is not None else None
         # Initialize the appropriate Cross Entropy function
         if self.num_classes <= 2:
             # For binary segmentation
-            self.ce_loss = nn.BCEWithLogitsLoss(weight=class_weights)
+            self.ce_loss = nn.BCEWithLogitsLoss(weight=class_weights_tensor)
         else:
             # For multi-class segmentation
-            self.ce_loss = nn.CrossEntropyLoss(weight=class_weights, ignore_index=ignore_index)
+            self.ce_loss = nn.CrossEntropyLoss(weight=class_weights_tensor, ignore_index=self.ignore_index)
 
     def forward(self, y_pred: torch.Tensor, y_true: torch.Tensor) -> torch.Tensor:
         """

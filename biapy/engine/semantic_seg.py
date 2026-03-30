@@ -207,7 +207,8 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
                 ignore_index=self.cfg.LOSS.IGNORE_INDEX,
                 class_weights=self.cfg.LOSS.CLASS_WEIGHTS,
                 w_dice=self.cfg.LOSS.WEIGHTS[0],
-                w_bce=self.cfg.LOSS.WEIGHTS[1],
+                w_ce=self.cfg.LOSS.WEIGHTS[1],
+                device=self.device,
             )
 
         if self.cfg.LOSS.CONTRAST.ENABLE: 
