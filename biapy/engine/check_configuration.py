@@ -2453,14 +2453,33 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             if len(cfg.MODEL.FEATURE_MAPS) - 1 != len(cfg.MODEL.YX_DOWN):
                 raise ValueError("'MODEL.FEATURE_MAPS' length minus one and 'MODEL.YX_DOWN' length must be equal")
     if "hrnet" in model_arch:
-        if all(x == 0 for x in cfg.MODEL.HRNET.YX_DOWN):
+        assert cfg.MODEL.HRNET.VARIANT in ["W18", "W32", "W48", "W64", "custom"], "'MODEL.HRNET.VARIANT' needs to be in ['W18', 'W32', 'W48', 'W64', 'custom']"
+        if cfg.MODEL.HRNET.VARIANT != "custom":
+            # Extract base channels directly from the variant string
+            base_channels = int(cfg.MODEL.HRNET.VARIANT.lower().replace("w", ""))  # Remove 'w' prefix if present and convert to int
+            num_stages = 3
+            num_modules = [1, 4, 3]
+            num_branches = [2, 3, 4]
+
+            # Procedurally generate blocks and channels based on the number of branches
+            num_blocks = [[4] * b for b in num_branches]
+            num_channels = [[base_channels * (2**i) for i in range(b)] for b in num_branches]
+
+            opts.extend(["MODEL.HRNET.Z_DOWN", (2,) * (len(cfg.MODEL.HRNET.NUM_BLOCKS))])
             opts.extend(["MODEL.HRNET.YX_DOWN", (2,) * (len(cfg.MODEL.HRNET.NUM_BLOCKS))])
-        elif any([False for x in cfg.MODEL.HRNET.YX_DOWN if x != 1 and x != 2]):
-            raise ValueError("'MODEL.HRNET.YX_DOWN' needs to be 1 or 2")
+            opts.extend(["MODEL.HRNET.BLOCK_TYPE", 'BASIC'])
+            opts.extend(["MODEL.HRNET.NUM_STAGES", num_stages])
+            opts.extend(["MODEL.HRNET.NUM_MODULES", num_modules])
+            opts.extend(["MODEL.HRNET.NUM_BRANCHES", num_branches])
+            opts.extend(["MODEL.HRNET.NUM_BLOCKS", num_blocks])
+            opts.extend(["MODEL.HRNET.NUM_CHANNELS", num_channels])
         else:
             if len(cfg.MODEL.HRNET.NUM_BLOCKS) != len(cfg.MODEL.HRNET.YX_DOWN):
                 raise ValueError("'MODEL.HRNET.NUM_BLOCKS' length and 'MODEL.HRNET.YX_DOWN' length must be equal")
-        assert cfg.MODEL.HRNET.VARIANT in ["W18", "W32", "W48", "W64", "custom"], "'MODEL.HRNET.VARIANT' needs to be in ['W18', 'W32', 'W48', 'W64', 'custom']"
+            if any([False for x in cfg.MODEL.HRNET.YX_DOWN if x != 1 and x != 2]):
+                raise ValueError("'MODEL.HRNET.YX_DOWN' needs to be 1 or 2")
+            if any([False for x in cfg.MODEL.HRNET.Z_DOWN if x != 1 and x != 2]):
+                raise ValueError("'MODEL.HRNET.Z_DOWN' needs to be 1 or 2")
 
     # Adjust Z_DOWN values to feature maps
     if all(x == 0 for x in cfg.MODEL.Z_DOWN):
@@ -2671,7 +2690,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
             # 1. Setup the downsampling schedules based on the architecture
             if is_hrnet:
-                num_downsamplings = 3 if cfg.MODEL.HRNET.VARIANT != "custom" else len(cfg.MODEL.HRNET.NUM_BLOCKS)
+                num_downsamplings = len(cfg.MODEL.HRNET.NUM_BLOCKS)
                 yx_down_schedule = cfg.MODEL.HRNET.YX_DOWN
                 z_down_schedule = cfg.MODEL.HRNET.Z_DOWN
                 z_param_name = "MODEL.HRNET.Z_DOWN"
@@ -2694,8 +2713,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 z_factor = z_down_schedule[i] if is_3d else 1
 
                 # Check divisibility using clean generator expressions
-                yx_invalid = any(dim % yx_factor != 0 or yx_factor <= 2 for dim in current_yx)
-                z_invalid = is_3d and (current_z % z_factor != 0 or z_factor <= 2)
+                yx_invalid = any(dim % yx_factor != 0 or dim <= 2 for dim in current_yx)
+                z_invalid = is_3d and (current_z % z_factor != 0 or current_z <= 2)
 
                 if yx_invalid or z_invalid:
                     m = (
