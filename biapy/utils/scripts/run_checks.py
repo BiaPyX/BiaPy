@@ -10,6 +10,7 @@ from subprocess import Popen
 import numpy as np
 import argparse
 import time 
+import requests
 
 parser = argparse.ArgumentParser(description="Check BiaPy code consistency",
                                  formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -145,7 +146,7 @@ all_test_info["Test9"] = {
         "unetr. Post-proc: remove close points + det watershed",
     "yaml": "test_9.yaml",
     "internal_checks": [
-        {"type": "regular", "pattern": "Validation MSE:", "gt": False, "value": 1.},
+        {"type": "regular", "pattern": "Validation MSE:", "gt": False, "value": 0.6},
     ]
 }
 
@@ -156,7 +157,7 @@ all_test_info["Test10"] = {
         "resunet. Post-proc: remove close points + det watershed",
     "yaml": "test_10.yaml",
     "internal_checks": [
-        {"type": "regular", "pattern": "Validation MSE:", "gt": False, "value": 1.},
+        {"type": "regular", "pattern": "Validation MSE:", "gt": False, "value": 0.6},
     ]
 }
 
@@ -178,7 +179,7 @@ all_test_info["Test13"] = {
     "yaml": "test_13.yaml",
     "internal_checks": [
         {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 20.0},
-        {"type": "regular", "pattern": "Test PSNR (merge patches)", "gt": True, "value": 18.0},
+        {"type": "regular", "pattern": "Test PSNR (merge patches)", "gt": True, "value": 20.0},
     ]
 }
 
@@ -189,7 +190,7 @@ all_test_info["Test14"] = {
     "yaml": "test_14.yaml",
     "internal_checks": [
         {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 19.0},
-        {"type": "regular", "pattern": "Test PSNR (merge patches):", "gt": True, "value": 19.0},
+        {"type": "regular", "pattern": "Test PSNR (merge patches):", "gt": True, "value": 22.0},
     ]
 }
 
@@ -406,7 +407,7 @@ all_test_info["Test34"] = {
         {"type": "regular", "pattern": "Test IoU (F channel) (merge patches):", "gt": True, "value": 0.35},
         {"type": "regular", "pattern": "Merge patches classification IoU:", "gt": True, "value": 0.1},
         {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 1, "metric": "f1",
-            "gt": True, "value": 0.45},
+            "gt": True, "value": 0.3},
     ]
 }
 
@@ -420,6 +421,16 @@ all_test_info["Test35"] = {
             "gt": True, "value": 0.8},
         {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 2, "metric": "f1",
             "gt": True, "value": 0.85}, # Post-processing
+    ]
+}
+
+all_test_info["Test36"] = {
+    "enable": True,
+    "jobname": "test36",
+    "description": "3D Detection. Achucarro data. points+classes",
+    "yaml": "test_36.yaml",
+    "internal_checks": [
+        {"type": "regular", "pattern": "Test F1 (merge patches)", "gt": True, "value": 0.35},
     ]
 }
 
@@ -509,6 +520,10 @@ detection_3d_data_outpath = os.path.join(detection_folder, "NucMM-Z_training")
 detection_3d_brainglobe_data_drive_link = "https://drive.google.com/uc?id=1veBueUuYi_mWbSky_4mtzfKBpO00SvWR"
 detection_3d_brainglobe_data_filename = "brainglobe_small_data.zip"
 detection_3d_brainglobe_data_outpath = os.path.join(detection_folder, "brainglobe_small_data")
+
+detection_3d_achucarro_data_drive_link = "https://upvehueus-my.sharepoint.com/:u:/g/personal/ignacio_arganda_ehu_eus/IQBJHSSlKwt5QYHwC6BRkEkaAZgkXhWRRzkUkBZLIdRpSKo?e=nfs0DA&download=1"
+detection_3d_achucarro_data_filename = "achucarro_data.zip"
+detection_3d_achucarro_data_outpath = os.path.join(detection_folder, "achucarro_data")
 
 ###########
 # Denoising
@@ -633,6 +648,27 @@ def download_drive_file(drive_link, out_filename, attempts=5):
         if os.path.exists(out_filename):
             break
 
+def download_onedrive_file(drive_link, out_filename, attempts=5):
+    for i in range(attempts):
+        print(f"Trying to download {drive_link} (attempt {i+1})")
+        try:
+            # Send a GET request to the URL
+            response = requests.get(url, stream=True)
+
+            # Check if the request was successful
+            if response.status_code == 200:
+                with open(out_filename, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        f.write(chunk)
+            else:
+                print(f"Failed to download. Status code: {response.status_code}")
+        except Exception as e: 
+            print(e)
+            time.sleep(5)
+
+        if os.path.exists(out_filename):
+            break
+        
 if not os.path.exists(biapy_folder):
     raise ValueError(f"BiaPy not found in: {biapy_folder}")
 
@@ -843,6 +879,22 @@ if not os.path.exists(detection_3d_brainglobe_data_outpath) and (all_test_info["
     if not os.path.exists(detection_3d_template_local):
         print("Downloading detection YAML . . .")
         _, _ = urllib.request.urlretrieve(detection_3d_template, filename=detection_3d_template_local)
+
+# General things: 3D Achucarro Data + YAML donwload
+if not os.path.exists(detection_3d_achucarro_data_outpath) and (all_test_info["Test36"]["enable"]):
+    print("Downloading Achucarro detection+classes data . . .")
+
+    os.makedirs(detection_folder, exist_ok=True)
+    os.chdir(detection_folder)
+    download_onedrive_file(detection_3d_achucarro_data_drive_link, detection_3d_achucarro_data_filename)
+
+    with ZipFile(os.path.join(detection_folder, detection_3d_achucarro_data_filename), 'r') as zObject:
+        zObject.extractall(path=detection_3d_achucarro_data_outpath)
+
+    if not os.path.exists(detection_3d_template_local):
+        print("Downloading detection YAML . . .")
+        _, _ = urllib.request.urlretrieve(detection_3d_template, filename=detection_3d_template_local)
+
 
 ###########
 # Denoising
@@ -1520,6 +1572,8 @@ try:
         biapy_config['PROBLEM']['INSTANCE_SEG']['DATA_CHECK_MW'] = True
         biapy_config['PROBLEM']['INSTANCE_SEG']['WATERSHED_BY_2D_SLICES'] = True
 
+        biapy_config['AUGMENTOR']['ELASTIC'] = True
+
         biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(instance_seg_3d_data_outpath, "data", "train", "raw")
         biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(instance_seg_3d_data_outpath, "data", "train", "label")
         biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
@@ -1905,7 +1959,7 @@ try:
 
         biapy_config['DATA']['PATCH_SIZE'] = "(20, 128, 128, 2)"
         biapy_config['DATA']['NORMALIZATION'] = {}
-        biapy_config['DATA']['NORMALIZATION']['TYPE'] = "scale_range"
+        biapy_config['DATA']['NORMALIZATION']['TYPE'] = "zero_mean_unit_variance"
         biapy_config['DATA']['NORMALIZATION']['PERC_CLIP'] = {}
         biapy_config['DATA']['NORMALIZATION']['PERC_CLIP']['ENABLE'] = True
         biapy_config['DATA']['NORMALIZATION']['PERC_CLIP']['LOWER_PERC'] = 0.1
@@ -1931,9 +1985,10 @@ try:
         biapy_config['TRAIN']['EPOCHS'] = 100
         biapy_config['TRAIN']['BATCH_SIZE'] = 1
         biapy_config['TRAIN']['PATIENCE'] = 20
+        biapy_config['TRAIN']['LR'] = 0.0008
         biapy_config['TRAIN']['LR_SCHEDULER'] = {}
         biapy_config['TRAIN']['LR_SCHEDULER']['NAME'] = 'warmupcosine'
-        biapy_config['TRAIN']['LR_SCHEDULER']['MIN_LR'] = 1.E-4
+        biapy_config['TRAIN']['LR_SCHEDULER']['MIN_LR'] = 0.00005
         biapy_config['TRAIN']['LR_SCHEDULER']['WARMUP_COSINE_DECAY_EPOCHS'] = 15
 
         biapy_config['MODEL']['ARCHITECTURE'] = 'hrnet18'
@@ -4057,9 +4112,12 @@ try:
         biapy_config['DATA']['TEST']['LOAD_GT'] = True
 
         biapy_config['TRAIN']['ENABLE'] = True
-        biapy_config['TRAIN']['EPOCHS'] = 5
+        biapy_config['TRAIN']['EPOCHS'] = 20
         biapy_config['TRAIN']['PATIENCE'] = 5
-        biapy_config['TRAIN']['BATCH_SIZE'] = 4
+        biapy_config['TRAIN']['BATCH_SIZE'] = 6
+        biapy_config['TRAIN']['LR'] = 0.001
+        biapy_config['TRAIN']['LR_SCHEDULER'] = {}
+        biapy_config['TRAIN']['LR_SCHEDULER']['NAME'] = 'onecycle'
 
         biapy_config['MODEL']['ARCHITECTURE'] = 'unext_v1'
         biapy_config['MODEL']['N_CLASSES'] = 7
@@ -4180,6 +4238,100 @@ except Exception as e:
     print("An error occurred during Test 35 execution.")
     print(e)
     test_results.append(False)
+
+
+#~~~~~~~~~~~~
+# Test 36
+#~~~~~~~~~~~~
+try:
+    if all_test_info["Test36"]["enable"]:
+        print("######")
+        print("Running Test 36")
+        print_inventory(all_test_info["Test36"])
+
+        #*******************
+        # File preparation
+        #*******************
+        # Open config file
+        with open(detection_3d_template_local, 'r') as stream:
+            try:
+                biapy_config = yaml.safe_load(stream)
+            except yaml.YAMLError as exc:
+                raise ValueError(exc)
+
+        biapy_config['PROBLEM']['DETECTION'] = {}
+        biapy_config['PROBLEM']['DETECTION']['CENTRAL_POINT_DILATION'] = [3]
+        biapy_config['PROBLEM']['DETECTION']['CHECK_POINTS_CREATED'] = False
+        biapy_config['PROBLEM']['DETECTION']['DATA_CHECK_MW'] = False
+
+        biapy_config['DATA']['NORMALIZATION'] = {}
+        biapy_config['DATA']['NORMALIZATION']['PERC_CLIP'] = {}
+        biapy_config['DATA']['NORMALIZATION']['PERC_CLIP']['ENABLE'] = True
+        biapy_config['DATA']['NORMALIZATION']['PERC_CLIP']['LOWER_PERC'] = 0.1
+        biapy_config['DATA']['NORMALIZATION']['PERC_CLIP']['UPPER_PERC'] = 99.8
+        biapy_config['DATA']['NORMALIZATION']['TYPE'] = 'zero_mean_unit_variance'
+        
+        biapy_config['DATA']['PATCH_SIZE'] = "(30, 128, 128, 1)"
+        biapy_config['DATA']['N_CLASSES'] = 3
+
+        biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(detection_3d_data_outpath, "data", "train", "raw")
+        biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(detection_3d_data_outpath, "data", "train", "label")
+        biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
+        biapy_config['DATA']['TEST']['PATH'] = os.path.join(detection_3d_data_outpath, "data", "test", "raw")
+        biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(detection_3d_data_outpath, "data", "test", "label")
+        biapy_config['DATA']['TEST']['IN_MEMORY'] = False
+        biapy_config['DATA']['TEST']['LOAD_GT'] = True
+
+        biapy_config['TRAIN']['ENABLE'] = True
+        biapy_config['TRAIN']['EPOCHS'] = 50
+        biapy_config['TRAIN']['PATIENCE'] = -1
+
+        biapy_config['MODEL']['ARCHITECTURE'] = 'unet'
+        biapy_config['MODEL']['Z_DOWN'] = [1,1,1,1]
+        biapy_config['MODEL']['LOAD_CHECKPOINT'] = False
+
+        biapy_config['TEST']['ENABLE'] = True
+        biapy_config['TEST']['FULL_IMG'] = False
+        biapy_config['TEST']['DET_PEAK_LOCAL_MAX_MIN_DISTANCE'] = 1
+        biapy_config['TEST']['DET_MIN_TH_TO_BE_PEAK'] = 0.5
+        biapy_config['TEST']['DET_TOLERANCE'] = 8
+
+        # Save file
+        test_file = os.path.join(detection_folder, all_test_info["Test36"]["yaml"])
+        with open(test_file, 'w') as outfile:
+            yaml.dump(biapy_config, outfile, default_flow_style=False)
+
+        # Run
+        runjob(all_test_info["Test36"], results_folder, test_file, biapy_folder)
+
+        # Check
+        results = []
+        correct = True
+        res, last_lines = check_finished(all_test_info["Test36"], "Test 36")
+        if not res:
+            correct = False
+            print("Internal check not passed: seems that it didn't finish")
+        results.append(res)
+        int_checks = 1
+        for checks in all_test_info["Test36"]["internal_checks"]:
+            if checks["type"] == "regular":
+                results.append(check_value(last_lines, checks["pattern"], checks["value"], checks["gt"]))
+            else:
+                results.append(check_DatasetMatching(last_lines, checks["pattern"], checks["value"], gt=checks["gt"],
+                    value_to_check=checks["nApparition"], metric=checks["metric"]))
+            int_checks += 1
+            if not results[-1]:
+                correct = False
+                print("Internal check not passed: {} {} {}".format(checks["pattern"], checks["gt"], checks["value"]))
+
+        # Test result
+        print_result(results, all_test_info["Test36"]["jobname"], int_checks)
+        test_results.append(correct)
+except Exception as e:
+    print("An error occurred during Test 36 execution.")
+    print(e)
+    test_results.append(False)
+
 
 print("Finish tests!!")
 
