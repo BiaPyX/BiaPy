@@ -3852,3 +3852,35 @@ def resize(input_data, size, mode="bilinear", **kwargs):
         return sk_resize(input_data, size, order=order, **kwargs)
     else:
         raise TypeError("Input must be a torch.Tensor or a numpy.ndarray")
+
+
+def decide_dtype(num_values: int) -> np.dtype:
+    """
+    Decide the smallest unsigned integer dtype that can hold the given number of values.
+
+    Parameters
+    ----------
+    num_values : int
+        The number of distinct values that need to be represented.
+
+    Returns
+    -------
+    np.dtype
+        The smallest unsigned integer dtype that can represent `num_values` distinct values.
+        Possible return values are np.uint8, np.uint16, or np.uint32.
+
+    Raises
+    ------
+    ValueError
+        If `num_values` is negative or exceeds the maximum representable by np.uint32.
+    """
+    if num_values < 0:
+        raise ValueError("Number of values must be non-negative.")
+    elif num_values <= 256:
+        return np.uint8
+    elif num_values <= 65536:
+        return np.uint16
+    elif num_values <= 4294967296:
+        return np.uint32
+    else:
+        raise ValueError("Number of values exceeds the maximum representable by uint32.")

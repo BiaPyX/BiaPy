@@ -39,7 +39,7 @@ from biapy.engine.metrics import (
 from biapy.data.pre_processing import create_detection_masks
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.data.data_3D_manipulation import order_dimensions, looks_like_hdf5
-from biapy.data.data_manipulation import save_tif
+from biapy.data.data_manipulation import save_tif, decide_dtype
 from biapy.data.dataset import PatchCoords
 
 
@@ -430,7 +430,9 @@ class Detection_Workflow(Base_Workflow):
             file_ext = os.path.splitext(self.current_sample["X_filename"])[1]
             if self.cfg.TEST.VERBOSE:
                 print("Creating the images with detected points . . .")
-            points_pred_mask = np.zeros(pred.shape[:-1], dtype=np.uint8)
+
+            dtype = decide_dtype(len(pred_points))
+            points_pred_mask = np.zeros(pred.shape[:-1], dtype=dtype)
 
             if len(pred_points) > 0:
                 # Paint the points
@@ -443,7 +445,7 @@ class Detection_Workflow(Base_Workflow):
                     points_pred_mask[i] = dilation(points_pred_mask[i], disk(3))
 
                 if self.separated_class_channel:
-                    class_channel = np.zeros(points_pred_mask.shape, dtype=np.uint8)
+                    class_channel = np.zeros(points_pred_mask.shape, dtype=dtype)
                     for n in range(len(pred_points)):
                         class_channel = np.where(points_pred_mask == n + 1, pred_points_classes[n], class_channel)
 
@@ -812,10 +814,11 @@ class Detection_Workflow(Base_Workflow):
                         print("No points found in GT!")
                     print("Creating the image with a summary of detected points and false positives with colors . . .")
 
-                points_pred_mask_color = np.zeros(pred_shape[:-1] + (3,), dtype=np.uint8)
+                dtype = decide_dtype(len(gt_coordinates))
+                points_pred_mask_color = np.zeros(pred_shape[:-1] + (3,), dtype=dtype)
 
                 # TP and FN
-                gt_id_img = np.zeros(pred_shape[:-1], dtype=np.uint32)
+                gt_id_img = np.zeros(pred_shape[:-1], dtype=dtype)
                 for j, cor in enumerate(gt_coordinates):
                     z, y, x = cor
                     z, y, x = int(z), int(y), int(x)

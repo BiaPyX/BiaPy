@@ -51,6 +51,7 @@ from biapy.data.data_manipulation import (
     read_img_as_ndarray,
     load_data_from_dir,
     save_tif,
+    decide_dtype,
 )
 
 #########################
@@ -421,10 +422,7 @@ def labels_into_channels(
         # as integer or binary channels, ensuring that the subsequent 
         # data augmentation processes the samples as intended.
         if np.issubdtype(dtype, np.floating):
-            if instance_labels.max() > 255:
-                dtype = np.uint16
-            else:
-                dtype = np.uint8
+            dtype = decide_dtype(instance_labels.max())
     else:
         dtype = np.uint8
         
@@ -1012,7 +1010,7 @@ def unet_border_weight_map(
         d_bg = edt.edt(inst != 0, anisotropy=resolution, parallel=-1).astype(np.float32, copy=False)
 
         denom = 2.0 * (sigma ** 2)
-        w_border = w0 * np.exp(-((d_obj + d_bg) ** 2) / denom, dtype=np.float64)
+        w_border = w0 * np.exp(-((d_obj + d_bg) ** 2) / denom, dtype=np.float32)
         w_border = w_border.astype(np.float32, copy=False)
 
         if apply_only_background:
@@ -1038,7 +1036,7 @@ def unet_border_weight_map(
 
     # Border emphasis term
     denom = 2.0 * (sigma ** 2)
-    w_border = w0 * np.exp(-((d1 + d2) ** 2) / denom, dtype=np.float64)
+    w_border = w0 * np.exp(-((d1 + d2) ** 2) / denom, dtype=np.float32)
     w_border = w_border.astype(np.float32, copy=False)
 
     if apply_only_background:
