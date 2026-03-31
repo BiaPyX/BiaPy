@@ -346,7 +346,7 @@ def crop_3D_data_with_overlap(
     verbose: bool = True,
     median_padding: bool = False,
     load_data: bool = True,
-) -> Tuple[NDArray, NDArray, List[PatchCoords]] | Tuple[NDArray, List[PatchCoords]] | List[PatchCoords]:
+) -> Union[Tuple[NDArray, NDArray, List['PatchCoords']], Tuple[NDArray, List['PatchCoords']], List['PatchCoords']]:
     """
     Crop 3D data into smaller volumes with a defined overlap. The opposite function is :func:`~merge_3D_data_with_overlap`.
 
@@ -556,11 +556,10 @@ def crop_3D_data_with_overlap(
                 )
             )
         )
-        print("{} patches per (z,y,x) axis".format((vols_per_z, vols_per_x, vols_per_y)))
+        print("{} patches per (z,y,x) axis".format((vols_per_z, vols_per_y, vols_per_x)))
 
     total_vol = vols_per_z * vols_per_y * vols_per_x
     if load_data:
-
         cropped_data = np.zeros((total_vol,) + padded_vol_shape, dtype=data.dtype)
         if data_mask is not None:
             cropped_data_mask = np.zeros(
@@ -603,7 +602,8 @@ def crop_3D_data_with_overlap(
                 c += 1
 
     if verbose:
-        print("**** New data shape is: {}".format(cropped_data.shape))
+        if load_data:
+            print("**** New data shape is: {}".format(cropped_data.shape))
         print("### END 3D-OV-CROP ###")
 
     if load_data:
@@ -614,7 +614,7 @@ def crop_3D_data_with_overlap(
     else:
         return crop_coords
 
-def _get_spline_window_3D(crop_shape: Tuple[int, ...], power: int = 2) -> NDArray:
+def _get_spline_window_3D(crop_shape: Tuple[int, ...], overlap_pixels: Tuple[int, int, int], power: int = 2) -> NDArray:
     """
     Generate a 3D squared spline window for smooth blending. The window is designed to have values close 
     to 1 in the center of the patch and smoothly taper to 0 towards the edges, with the transition controlled
@@ -625,6 +625,9 @@ def _get_spline_window_3D(crop_shape: Tuple[int, ...], power: int = 2) -> NDArra
     crop_shape : tuple of int
         Shape of the 3D patch for which to generate the window, in the form (z, y, x, channels).
 
+    overlap_pixels: tuple of int
+        The exact number of overlapping pixels in the (z, y, x) dimensions to apply the taper across.
+        
     power : int, optional
         Power to control the steepness of the window. Higher values will create a sharper transition from 1 to 0.
         Default is 2, which creates a smooth quadratic tapering.    
@@ -635,30 +638,24 @@ def _get_spline_window_3D(crop_shape: Tuple[int, ...], power: int = 2) -> NDArra
         A 3D window of shape (z, y, x, 1) that can be applied to the patch for smooth blending. The values are normalized
         so that the average is 1, ensuring that the overall intensity of the patch is preserved when blended with others.
     """
-    def _spline_window_1D(size, power=2):
-        intersection = int(size / 4)
-        wind_outer = (abs(2 * (scipy.signal.windows.triang(size))) ** power) / 2
-        wind_outer[intersection:-intersection] = 0
-
-        wind_inner = 1 - (abs(2 * (scipy.signal.windows.triang(size) - 1)) ** power) / 2
-        wind_inner[:intersection] = 0
-        wind_inner[-intersection:] = 0
-
-        wind = wind_inner + wind_outer
-        wind = wind / np.average(wind)
+    def _spline_window_1D(size, ov_pixels, power=2):
+        wind = np.ones(size, dtype=np.float32)
+        if ov_pixels > 0:
+            ov_pixels = min(ov_pixels, size // 2)
+            x = np.linspace(0, 1, ov_pixels + 2)[1:-1]
+            taper = (x ** power) / (x ** power + (1 - x) ** power + 1e-8)
+            wind[:ov_pixels] = taper
+            wind[-ov_pixels:] = taper[::-1]
         return wind
 
     # Generate 1D splines for Z, Y, and X dimensions
-    wind_z = _spline_window_1D(crop_shape[0], power)
-    wind_y = _spline_window_1D(crop_shape[1], power)
-    wind_x = _spline_window_1D(crop_shape[2], power)
+    wind_z = _spline_window_1D(crop_shape[0], overlap_pixels[0], power)
+    wind_y = _spline_window_1D(crop_shape[1], overlap_pixels[1], power)
+    wind_x = _spline_window_1D(crop_shape[2], overlap_pixels[2], power)
 
     # Expand dims to perform outer product for 3D window
-    # wind_z shape: (z, 1, 1)
     wind_z = wind_z[:, None, None]
-    # wind_y shape: (1, y, 1)
     wind_y = wind_y[None, :, None]
-    # wind_x shape: (1, 1, x)
     wind_x = wind_x[None, None, :]
     
     # Broadcast multiply to get shape (z, y, x)
@@ -694,15 +691,15 @@ def merge_3D_data_with_overlap(
         Data mask to crop. E.g. ``(volume_number, z, y, x, channels)``.
 
     overlap : Tuple of 3 floats, optional
-         Amount of minimum overlap on x, y and z dimensions. Should be the same as used in
-         :func:`~crop_3D_data_with_overlap`. The values must be on range ``[0, 1)``, that is, ``0%`` or ``99%`` of
-         overlap. E.g. ``(z, y, x)``.
+        Amount of minimum overlap on x, y and z dimensions. Should be the same as used in
+        :func:`~crop_3D_data_with_overlap`. The values must be on range ``[0, 1)``, that is, ``0%`` or ``99%`` of
+        overlap. E.g. ``(z, y, x)``.
 
     padding : tuple of ints, optional
         Size of padding to be added on each axis ``(z, y, x)``. E.g. ``(24, 24, 24)``.
 
     verbose : bool, optional
-         To print information about the crop to be made.
+        To print information about the crop to be made.
 
     Returns
     -------
@@ -712,6 +709,8 @@ def merge_3D_data_with_overlap(
     merged_data_mask : 5D Numpy array, optional
         Cropped image data masks. E.g. ``(z, y, x, channels)``.
     """
+    assert data.ndim == 5, f"data expected to be 5 dimensional, given {data.shape}"
+    assert len(orig_vol_shape) == 4, f"orig_vol_shape expected to be 4 dimensional, given {orig_vol_shape}"
     if data_mask is not None:
         if data.shape[:-1] != data_mask.shape[:-1]:
             raise ValueError(
@@ -790,27 +789,14 @@ def merge_3D_data_with_overlap(
     step_x -= ovx_per_block
     last_x -= ovx_per_block * (vols_per_x - 1)
 
-    # Real overlap calculation for printing
-    real_ov_z = ovz_per_block / (pad_input_shape[1] - padding[0] * 2)
-    real_ov_y = ovy_per_block / (pad_input_shape[2] - padding[1] * 2)
-    real_ov_x = ovx_per_block / (pad_input_shape[3] - padding[2] * 2)
-
-    if verbose:
-        print("Real overlapping (%): {}".format((real_ov_z, real_ov_y, real_ov_x)))
-        print(
-            "Real overlapping (pixels): {}".format(
-                (
-                    (pad_input_shape[1] - padding[0] * 2) * real_ov_z,
-                    (pad_input_shape[2] - padding[1] * 2) * real_ov_y,
-                    (pad_input_shape[3] - padding[2] * 2) * real_ov_x,
-                )
-            )
-        )
-        print("{} patches per (z,y,x) axis".format((vols_per_z, vols_per_y, vols_per_x)))
+    # Calculate exact overlap in pixels for the dynamic window
+    overlap_pixels_z = (pad_input_shape[1] - padding[0] * 2) - step_z
+    overlap_pixels_y = (pad_input_shape[2] - padding[1] * 2) - step_y
+    overlap_pixels_x = (pad_input_shape[3] - padding[2] * 2) - step_x
 
     # Generate the smooth blending window for the 3D patches
     patch_shape = (data.shape[1], data.shape[2], data.shape[3])
-    spline_window = _get_spline_window_3D(patch_shape)
+    spline_window = _get_spline_window_3D(patch_shape, (overlap_pixels_z, overlap_pixels_y, overlap_pixels_x))
 
     c = 0
     for z in range(vols_per_z):

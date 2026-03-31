@@ -59,7 +59,7 @@ def crop_data_with_overlap(
     padding: Tuple[int, ...] = (0, 0),
     verbose: bool = True,
     load_data: bool = True,
-) -> Tuple[NDArray, NDArray, List[PatchCoords]] | Tuple[NDArray, List[PatchCoords]] | List[PatchCoords]:
+) -> Union[Tuple[NDArray, NDArray, List[PatchCoords]], Tuple[NDArray, List[PatchCoords]], List[PatchCoords]]:
     """
     Crop data into small square pieces with overlap.
     
@@ -204,24 +204,21 @@ def crop_data_with_overlap(
         print("Minimum overlap selected: {}".format(overlap))
         print("Padding: {}".format(padding))
 
-    if (overlap[0] >= 1 or overlap[0] < 0) and (overlap[1] >= 1 or overlap[1] < 0):
-        raise ValueError("'overlap' values must be floats between range [0, 1)")
-
     padded_data = np.pad(
         data,
-        ((0, 0), (padding[1], padding[1]), (padding[0], padding[0]), (0, 0)),
+        ((0, 0), (padding[0], padding[0]), (padding[1], padding[1]), (0, 0)),
         "reflect",
     )
     if data_mask is not None:
         padded_data_mask = np.pad(
             data_mask,
-            ((0, 0), (padding[1], padding[1]), (padding[0], padding[0]), (0, 0)),
+            ((0, 0), (padding[0], padding[0]), (padding[1], padding[1]), (0, 0)),
             "reflect",
         )
 
     # Calculate overlapping variables
-    overlap_x = 1 if overlap[0] == 0 else 1 - overlap[0]
-    overlap_y = 1 if overlap[1] == 0 else 1 - overlap[1]
+    overlap_y = 1 if overlap[0] == 0 else 1 - overlap[0]
+    overlap_x = 1 if overlap[1] == 0 else 1 - overlap[1]
 
     # Y
     step_y = int((crop_shape[0] - padding[0] * 2) * overlap_y)
@@ -244,14 +241,16 @@ def crop_data_with_overlap(
     real_ov_x = ovx_per_block / (crop_shape[1] - padding[1] * 2)
 
     if verbose:
-        print("Real overlapping (%): {}".format(real_ov_x, real_ov_y))
+        print("Real overlapping (%): {}".format((real_ov_y, real_ov_x)))
         print(
             "Real overlapping (pixels): {}".format(
-                (crop_shape[1] - padding[1] * 2) * real_ov_x,
-                (crop_shape[0] - padding[0] * 2) * real_ov_y,
+                (
+                    (crop_shape[0] - padding[0] * 2) * real_ov_y,
+                    (crop_shape[1] - padding[1] * 2) * real_ov_x,
+                )
             )
         )
-        print("{} patches per (x,y) axis".format(crops_per_x, crops_per_y))
+        print("{} patches per (y,x) axis".format((crops_per_y, crops_per_x)))
 
     total_vol = data.shape[0] * (crops_per_x) * (crops_per_y)
     if load_data:
@@ -296,7 +295,8 @@ def crop_data_with_overlap(
                 c += 1
 
     if verbose:
-        print("**** New data shape is: {}".format(cropped_data.shape))
+        if load_data:
+            print("**** New data shape is: {}".format(cropped_data.shape))
         print("### END OV-CROP ###")
 
     if load_data:
@@ -308,7 +308,7 @@ def crop_data_with_overlap(
         return crop_coords
 
 
-def _get_spline_window_2D(crop_shape: Tuple[int, ...], power: int = 2) -> NDArray:
+def _get_spline_window_2D(crop_shape: Tuple[int, ...], overlap_pixels: Tuple[int, int], power: int = 2) -> NDArray:
     """
     Generate a 2D squared spline window for smooth blending. The window is designed to have values close 
     to 1 in the center of the patch and smoothly taper to 0 towards the edges, with the transition controlled
@@ -318,6 +318,9 @@ def _get_spline_window_2D(crop_shape: Tuple[int, ...], power: int = 2) -> NDArra
     ----------   
     crop_shape : tuple of int
         Shape of the 2D patch for which to generate the window, in the form (y, x).
+
+    overlap_pixels: tuple of int
+        The exact number of overlapping pixels in the (y, x) dimensions to apply the taper across.
 
     power : int, optional
         Power to control the steepness of the window. Higher values will create a sharper transition from 1 to 0.
@@ -329,23 +332,18 @@ def _get_spline_window_2D(crop_shape: Tuple[int, ...], power: int = 2) -> NDArra
         A 2D window of shape (y, x, 1) that can be applied to the patch for smooth blending. The values are normalized
         so that the average is 1, ensuring that the overall intensity of the patch is preserved when blended with others.
     """
-    def _spline_window_1D(size, power=2):
-        intersection = int(size / 4)
-        # Using scipy.signal.windows.triang to avoid deprecation warnings in newer scipy versions
-        wind_outer = (abs(2 * (scipy.signal.windows.triang(size))) ** power) / 2
-        wind_outer[intersection:-intersection] = 0
-
-        wind_inner = 1 - (abs(2 * (scipy.signal.windows.triang(size) - 1)) ** power) / 2
-        wind_inner[:intersection] = 0
-        wind_inner[-intersection:] = 0
-
-        wind = wind_inner + wind_outer
-        wind = wind / np.average(wind)
+    def _spline_window_1D(size, ov_pixels, power=2):
+        wind = np.ones(size, dtype=np.float32)
+        if ov_pixels > 0:
+            ov_pixels = min(ov_pixels, size // 2)
+            x = np.linspace(0, 1, ov_pixels + 2)[1:-1]
+            taper = (x ** power) / (x ** power + (1 - x) ** power + 1e-8)
+            wind[:ov_pixels] = taper
+            wind[-ov_pixels:] = taper[::-1]
         return wind
 
-    # Generate 1D splines for Y and X dimensions
-    wind_y = _spline_window_1D(crop_shape[0], power)
-    wind_x = _spline_window_1D(crop_shape[1], power)
+    wind_y = _spline_window_1D(crop_shape[0], overlap_pixels[0], power)
+    wind_x = _spline_window_1D(crop_shape[1], overlap_pixels[1], power)
 
     # Expand dims to perform outer product for 2D window
     wind_y = np.expand_dims(wind_y, -1)   # shape (y, 1)
@@ -423,19 +421,18 @@ def merge_data_with_overlap(
                 f"{(data.shape[1] // 2) - 1, (data.shape[2] // 2) - 1}"
             )
 
+    if (overlap[0] >= 1 or overlap[0] < 0) or (overlap[1] >= 1 or overlap[1] < 0):
+        raise ValueError("'overlap' values must be floats between range [0, 1)")
+
     if verbose:
         print("### MERGE-OV-CROP ###")
         print(f"Merging {data.shape} images into {original_shape} with smooth blending . . .")
         print(f"Overlap selected: {overlap}")
         print(f"Padding: {padding}")
 
-    if (overlap[0] >= 1 or overlap[0] < 0) or (overlap[1] >= 1 or overlap[1] < 0):
-        raise ValueError("'overlap' values must be floats between range [0, 1)")
-
-    padding = tuple(padding[i] for i in [1, 0])
-
-    # Remove the padding from patches if present
     pad_input_shape = data.shape
+    
+    # Strip padding logically based on (Y, X)
     data = data[
         :,
         padding[0] : data.shape[1] - padding[0],
@@ -455,8 +452,8 @@ def merge_data_with_overlap(
     weight_map_counter = np.zeros(original_shape[:-1] + (1,), dtype=np.float32)
 
     # Calculate overlapping steps
-    overlap_x = 1 if overlap[0] == 0 else 1 - overlap[0]
-    overlap_y = 1 if overlap[1] == 0 else 1 - overlap[1]
+    overlap_y = 1 if overlap[0] == 0 else 1 - overlap[0]
+    overlap_x = 1 if overlap[1] == 0 else 1 - overlap[1]
 
     padded_data_shape = [
         original_shape[1] + 2 * padding[0],
@@ -479,9 +476,13 @@ def merge_data_with_overlap(
     step_x -= ovx_per_block
     last_x -= ovx_per_block * (crops_per_x - 1)
 
+    # Calculate exact overlap in pixels for the dynamic window
+    overlap_pixels_y = (pad_input_shape[1] - padding[0] * 2) - step_y
+    overlap_pixels_x = (pad_input_shape[2] - padding[1] * 2) - step_x
+    
     # Generate the smooth blending window for the patches
     patch_shape = (data.shape[1], data.shape[2], data.shape[3])
-    spline_window = _get_spline_window_2D(patch_shape)
+    spline_window = _get_spline_window_2D(patch_shape, (overlap_pixels_y, overlap_pixels_x))
 
     c = 0
     for z in range(original_shape[0]):
@@ -504,17 +505,15 @@ def merge_data_with_overlap(
                 
                 # Accumulate the weights (only needs to be done once per spatial location)
                 weight_map_counter[z, y_start:y_end, x_start:x_end] += spline_window
-
+                
                 c += 1
 
     # Normalize the data by dividing by the accumulated weights
     # Adding a small epsilon (1e-18) to prevent division by zero in untouched border areas
-    merged_data = np.true_divide(merged_data, weight_map_counter + 1e-18)
-    merged_data = merged_data.astype(data.dtype)
+    merged_data = np.true_divide(merged_data, weight_map_counter + 1e-18).astype(data.dtype)
     
     if data_mask is not None:
-        merged_data_mask = np.true_divide(merged_data_mask, weight_map_counter + 1e-18)
-        merged_data_mask = merged_data_mask.astype(data_mask.dtype)
+        merged_data_mask = np.true_divide(merged_data_mask, weight_map_counter + 1e-18).astype(data_mask.dtype)
 
     if verbose:
         print(f"**** New data shape is: {merged_data.shape}")
