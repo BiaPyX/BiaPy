@@ -10,10 +10,7 @@ PROBLEM:
   NDIM: 3D            # The model is configured for 3D data
   INSTANCE_SEG:
     DATA_CHANNELS: BCD                 # Prediction targets: Binary mask + Contour + Distance map
-    DATA_MW_TH_TYPE: manual            # Use the manual watershed thresholds defined below
-    DATA_MW_TH_BINARY_MASK: 0.5        # Threshold for binary mask channel
-    DATA_MW_TH_CONTOUR: 0.2            # Threshold for contour channel
-    DATA_MW_TH_DISTANCE: 1.0           # Threshold for distance channel
+    DATA_MW_TH_TYPE: auto              # Use automatic watershed thresholds
     DATA_REMOVE_SMALL_OBJ_BEFORE: 10   # Remove tiny objects before watershed (in voxels)
     DATA_REMOVE_BEFORE_MW: true        # Clean predictions before watershed post-processing
 
@@ -26,14 +23,15 @@ DATA:
   CHECK_GENERATORS: false              # Disable generator preview checks to simplify execution
   EXTRACT_RANDOM_PATCH: false          # Use deterministic patch extraction instead of random sampling
   TRAIN:
-    PATH: "/home/user/oocyte_training/raw/"      # Folder with raw training TIFFs from oocyte_training.zip
-    GT_PATH: "/home/user/oocyte_training/label/" # Folder with matching label TIFFs from oocyte_training.zip
+    PATH: "/home/user/oocyte_training/train/raw/"      # Folder with raw training TIFFs (example from oocyte_training.zip)
+    GT_PATH: "/home/user/oocyte_training/train/label/" # Folder with matching label TIFFs (example from oocyte_training.zip)
     IN_MEMORY: true                               # Load training data into RAM for faster training if memory allows
   VAL:
-    FROM_TRAIN: true   # Create validation data automatically from the training set
-    SPLIT_TRAIN: 0.1   # Reserve 10% of the training set for validation
+    FROM_TRAIN: false  # Use a separate validation set instead of splitting the training data
+    PATH: "/home/user/oocyte_training/val/raw/"      # Folder with raw training TIFFs (example from oocyte_training.zip)
+    GT_PATH: "/home/user/oocyte_training/val/label/" # Folder with matching label TIFFs (example from oocyte_training.zip)
   TEST:
-    PATH: "/home/user/raw_ovary/"                # Folder with full 3D Zenodo ovaries used as test data
+    PATH: "/home/user/raw_ovary/"                 # Folder with full 3D Zenodo ovaries used as test data (example from raw_ovary.rar)
     LOAD_GT: false                                # No ground truth is required for these test volumes
     RESOLUTION: (5,0.867,0.867)                   # Physical voxel size in microns: (z, y, x)
     CHECK_DATA: false                             # Skip some extra integrity checks for faster startup
@@ -41,9 +39,9 @@ DATA:
     OVERLAP: (0,0,0)                              # No overlap between inference chunks
     FILTER_SAMPLES:
       ENABLE: true             # Discard extremely dark samples during test chunk extraction
-      PROPS: [["mean"]]       # Property to measure on each sample/chunk
+      PROPS: [["mean"]]        # Property to measure on each sample/chunk
       VALUES: [[50.0]]         # Threshold value for filtering
-      SIGNS: [["lt"]]         # Remove samples whose mean intensity is lower than 50.0
+      SIGNS: [["lt"]]          # Remove samples whose mean intensity is lower than 50.0
 
 # Data augmentation
 AUGMENTOR:

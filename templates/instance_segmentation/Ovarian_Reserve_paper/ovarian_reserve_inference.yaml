@@ -10,10 +10,7 @@ PROBLEM:
   NDIM: 3D            # Input data are 3D volumes
   INSTANCE_SEG:
     DATA_CHANNELS: BCD                 # Prediction targets: Binary mask + Contour + Distance map
-    DATA_MW_TH_TYPE: manual            # Use manually defined watershed thresholds below
-    DATA_MW_TH_BINARY_MASK: 0.5        # Threshold for the binary mask channel before watershed
-    DATA_MW_TH_CONTOUR: 0.2            # Threshold for the contour channel
-    DATA_MW_TH_DISTANCE: 1.0           # Threshold for the distance channel
+    DATA_MW_TH_TYPE: auto              # Use automatic watershed thresholds
     DATA_REMOVE_SMALL_OBJ_BEFORE: 10   # Remove tiny objects before watershed (in voxels)
     DATA_REMOVE_BEFORE_MW: true        # Enable object cleanup before marker-controlled watershed
     DISTANCE_CHANNEL_MASK: true        # Use the distance channel as part of the watershed preparation
