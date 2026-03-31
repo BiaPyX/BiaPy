@@ -471,7 +471,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 patch_size=self.cfg.DATA.PATCH_SIZE,
                 ndims=self.dims,
                 anisotropy=self.resolution,
-                weights=self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS,
+                channel_weights=self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS,
                 center_mode=self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0].get("E_offset", {}).get("center_mode", "centroid"),
                 medoid_max_points=self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0].get("E_offset", {}).get("medoid_max_points", 10000),
             ).to(self.device, non_blocking=True)
@@ -483,7 +483,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
             )
         else:
             instance_loss = instance_segmentation_loss(
-                weights = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS,
+                channel_weights = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS,
                 ndim = self.dims,
                 out_channels = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
                 losses_to_use = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES,

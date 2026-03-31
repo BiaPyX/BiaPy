@@ -17,7 +17,7 @@ from torchmetrics.image import StructuralSimilarityIndexMeasure
 from pytorch_msssim import SSIM
 import torch.nn.functional as F
 import torch.nn as nn
-from typing import Optional, List, Tuple, Dict
+from typing import Optional, List, Tuple, Dict, Union
 
 def jaccard_index_numpy(y_true, y_pred):
     """
@@ -450,9 +450,8 @@ class loss_encapsulation(nn.Module):
        
 class CrossEntropyLoss_wrapper:
     """
-    Wrapper for PyTorch's CrossEntropyLoss and BCEWithLogitsLoss.
-
-    Supports multi-head, class rebalancing, and ignore index.
+    Wrapper for PyTorch's CrossEntropyLoss and BCEWithLogitsLoss. Supports multi-head (separated_class_channel), deep supervision lists, 
+    class rebalancing, and channel weighting.
     """
 
     def __init__(
@@ -463,6 +462,7 @@ class CrossEntropyLoss_wrapper:
         model_source: str = "biapy",
         class_rebalance: str = "none",
         class_weights: List[float] = [],
+        channel_weights = (1, 1),
         ignore_index: int = -1,
         device=None,
     ):
@@ -486,6 +486,13 @@ class CrossEntropyLoss_wrapper:
         class_rebalance: str, optional
             Whether to reweight classes (inside loss function) or not. Options are: "none", "auto" and "manual".
 
+        class_weights : list of float, optional
+            List of weights for each class to be used in "manual" class rebalancing. E.g. ``[0.7, 0.3]`` for 2 classes.
+
+        channel_weights : 2 float tuple, optional
+            Weights to be applied to segmentation (binary and contours) and to distances respectively. E.g. ``(1, 0.2)``,
+            ``1`` should be multipled by ``BCE`` for the first two channels and ``0.2`` to ``MSE`` for the last channel.
+
         ignore_index : int, optional
             Value to ignore in the loss calculation. If not provided, no value will be ignored.
         
@@ -498,6 +505,7 @@ class CrossEntropyLoss_wrapper:
         self.num_classes = num_classes
         self.class_rebalance = class_rebalance
         self.class_weights = None
+        self.channel_weights = channel_weights
         self.ignore_index = ignore_index if ignore_index != -1 else -100  # Default ignore index for CrossEntropyLoss
         self.device = device if device is not None else torch.device("cpu")
 
@@ -547,6 +555,7 @@ class CrossEntropyLoss_wrapper:
 
         if not isinstance(_y_pred, list):
             _y_pred = [_y_pred]
+            _y_pred_class = [_y_pred_class] if self.separated_class_channel else None
             inter_output_weights = [1.0]
         else:
             w = [self.gamma**i for i in range(len(_y_pred))]
@@ -571,8 +580,11 @@ class CrossEntropyLoss_wrapper:
                 loss_fn = self.loss
 
             if self.separated_class_channel:
-                _loss = loss_fn(pd[:, 0], _y_true[:, 0].float()) + self.class_channel_loss(
-                    _y_pred_class, _y_true[:, -1].type(torch.long)
+                _loss = (
+                    self.channel_weights[0] * loss_fn(pd[:, 0], _y_true[:, 0].float()) 
+                    + self.channel_weights[1] * self.class_channel_loss(
+                        _y_pred_class[j], _y_true[:, -1].type(torch.long)
+                    )
                 )
             else:
                 if self.num_classes <= 2:
@@ -625,111 +637,214 @@ class DiceLoss(nn.Module):
 
 class DiceCELoss(nn.Module):
     """
-    Combines Cross Entropy (or Binary Cross Entropy) and Dice Loss.
+    Combines Cross Entropy (or Binary Cross Entropy) and Dice Loss. Supports multi-head (separated_class_channel), deep supervision lists, 
+    class rebalancing, and channel weighting.
     """
     def __init__(
-        self, 
-        num_classes: int, 
-        batch_dice: bool = True, 
-        smooth: float = 1e-5, 
-        ignore_index: int = -1,
-        class_weights: List[float | int] = None,
+        self,
+        num_classes: int,
+        ndim: int = 2,
+        separated_class_channel: bool = False,
+        batch_dice: bool = True,
+        smooth: float = 1e-5,
+        model_source: str = "biapy",
+        class_rebalance: str = "none",
+        class_weights: List[float] = [],
+        channel_weights: Tuple[float, float] = (1.0, 1.0),
         w_ce: float = 1.0,
         w_dice: float = 1.0,
-        device: torch.device = torch.device("cpu")
+        ignore_index: int = -1,
+        device=None,
     ):
-        super(DiceCELoss, self).__init__()
-        self.num_classes = num_classes
-        self.batch_dice = batch_dice
-        self.smooth = smooth
-        self.ignore_index = ignore_index if ignore_index != -1 else -100  # Default ignore index for CrossEntropyLoss
-        self.w_ce = w_ce
-        self.w_dice = w_dice
-        self.device = device
-
-        class_weights_tensor = None
-        if class_weights is not None and len(class_weights) > 0:
-            class_weights_tensor = torch.tensor(class_weights, device=device, dtype=torch.float32)
-
-        # Initialize the appropriate Cross Entropy function
-        if self.num_classes <= 2:
-            # For binary segmentation
-            self.ce_loss = nn.BCEWithLogitsLoss(weight=class_weights_tensor)
-        else:
-            # For multi-class segmentation
-            self.ce_loss = nn.CrossEntropyLoss(weight=class_weights_tensor, ignore_index=self.ignore_index)
-
-    def forward(self, y_pred: torch.Tensor, y_true: torch.Tensor) -> torch.Tensor:
         """
+        Initialize DiceCELoss.
+
         Parameters
         ----------
-        y_pred : torch.Tensor
-            Predicted logits (before sigmoid/softmax). 
-            Shape: (B, C, H, W) for 2D or (B, C, D, H, W) for 3D.
-            For binary, C is usually 1.
-        y_true : torch.Tensor
-            Ground truth labels. 
-            Shape: (B, 1, H, W) or (B, H, W).
-        """
+        num_classes : int
+            Number of classes.
+
+        ndim : int, optional
+            Number of dimensions of the input data. 2 for 2D images, 3 for 3D volumes.
         
-        # 1. CROSS ENTROPY LOSS
-        if self.num_classes <= 2:
-            # BCE expects targets to be float and match prediction shape
-            ce_target = y_true.view_as(y_pred).float()
-            ce_l = self.ce_loss(y_pred, ce_target)
+        separated_class_channel : bool, optional
+            For separated_class_channel predictions e.g. points + classification in detection.
+
+        batch_dice : bool, optional
+            Whether to calculate Dice loss across the batch dimension or not.
+
+        smooth : float, optional
+            Smoothing factor to avoid division by zero in Dice loss.
+        
+        model_source : str, optional
+            Source of the model. It can be "biapy", "bmz" or "torchvision".
+        
+        class_rebalance: str, optional
+            Whether to reweight classes (inside loss function) or not. Options are: "none", "auto" and "manual".
+
+        class_weights : list of float, optional
+            List of weights for each class to be used in "manual" class rebalancing. E.g. ``[0.7, 0.3]`` for 2 classes.
+
+        channel_weights : tuple of float, optional
+            Weights to be applied to segmentation (binary and contours) and to distances respectively. E.g. ``(1, 0.2)``, ``1`` should be multipled by
+            ``BCE`` for the first two channels and ``0.2`` to ``MSE`` for the last channel.
+
+        w_ce : float, optional
+            Weight for the Cross Entropy component of the loss.
+
+        w_dice : float, optional
+            Weight for the Dice component of the loss.
+        
+        ignore_index : int, optional
+            Value to ignore in the loss calculation. If not provided, no value will be ignored.
+        
+        device : Torch device, optional
+            Using device. Most commonly "cpu" or "cuda" for GPU, but also potentially "mps", "xpu", "xla" or "meta".
+        """
+        super(DiceCELoss, self).__init__()
+        self.num_classes = num_classes
+        self.ndim = ndim
+        self.separated_class_channel = separated_class_channel
+        self.batch_dice = batch_dice
+        self.smooth = smooth
+        self.model_source = model_source
+        self.class_rebalance = class_rebalance
+        self.channel_weights = channel_weights
+        self.w_ce = w_ce
+        self.w_dice = w_dice
+        self.ignore_index = ignore_index if ignore_index != -1 else -100
+        self.device = device if device is not None else torch.device("cpu")
+        self.gamma = 0.5  # For intermediate outputs weighting
+
+        self.class_weights_tensor = None
+        if class_weights is not None and len(class_weights) > 0:
+            self.class_weights_tensor = torch.tensor(class_weights, device=self.device, dtype=torch.float32)
+
+        # Initialize standard CE/BCE
+        if num_classes <= 2:
+            self.loss = torch.nn.BCEWithLogitsLoss(weight=self.class_weights_tensor)
         else:
-            # CE expects targets to be long and missing the channel dimension
-            if y_true.ndim == y_pred.ndim:
-                ce_target = y_true.squeeze(1)  # Remove channel dim: (B, 1, H, W) -> (B, H, W)
-            else:
-                ce_target = y_true
-            ce_l = self.ce_loss(y_pred, ce_target.long())
+            self.loss = torch.nn.CrossEntropyLoss(ignore_index=self.ignore_index, weight=self.class_weights_tensor)
+        
+        # Initialize Classification Head Loss
+        if self.separated_class_channel:
+            self.class_channel_loss = torch.nn.CrossEntropyLoss(ignore_index=self.ignore_index)
 
-
-        # 2. DICE LOSS
-        # Apply activations to logits to get probabilities
+    def _compute_dice(self, y_pred: torch.Tensor, y_true: torch.Tensor) -> torch.Tensor:
+        """Helper function to compute Dice loss on spatial outputs."""
         if self.num_classes <= 2:
             pred_probs = torch.sigmoid(y_pred)
             dice_target = y_true.view_as(pred_probs).float()
         else:
             pred_probs = torch.softmax(y_pred, dim=1)
-            # One-hot encode the target for multi-class Dice
             if y_true.ndim == y_pred.ndim:
                 y_true_squeezed = y_true.squeeze(1).long()
             else:
                 y_true_squeezed = y_true.long()
                 
             dice_target = F.one_hot(y_true_squeezed, num_classes=self.num_classes)
-            # one_hot puts the class dim at the end (B, H, W, C). Move it to dim 1 (B, C, H, W)
-            # The permutation changes depending on 2D vs 3D data
             if y_pred.ndim == 4: # 2D: (B, C, H, W)
                 dice_target = dice_target.permute(0, 3, 1, 2)
             elif y_pred.ndim == 5: # 3D: (B, C, D, H, W)
                 dice_target = dice_target.permute(0, 4, 1, 2, 3)
-            
             dice_target = dice_target.float()
 
-        # Determine which axes to sum over
-        # Spatial dimensions are from axis 2 to the end
         axes = list(range(2, y_pred.ndim)) 
-        
-        # If batch_dice is True, sum over the Batch dimension (0) as well!
         if self.batch_dice:
             axes = [0] + axes
 
-        # Calculate Intersection and Union
         intersection = torch.sum(pred_probs * dice_target, dim=axes)
-        
-        # Using the standard Dice formulation (sum of squares is also an option, but this is default)
         union = torch.sum(pred_probs, dim=axes) + torch.sum(dice_target, dim=axes)
-
-        # Compute Dice coefficient per class (and optionally per sample if batch_dice is False)
         dice = (2.0 * intersection + self.smooth) / (union + self.smooth)
 
-        # Mean across remaining dimensions (Classes, and Batches if batch_dice is False)
-        dice_l = 1.0 - torch.mean(dice)
+        return 1.0 - torch.mean(dice)
 
-        return self.w_ce * ce_l + self.w_dice * dice_l
+    def forward(self, y_pred: Union[torch.Tensor, dict, List], y_true: torch.Tensor) -> torch.Tensor:
+        """
+        Calculates Dice + CE Loss mimicking CrossEntropyLoss_wrapper structure.
+
+        Parameters
+        ----------
+        y_pred : torch.Tensor, dict, or list of Tensors
+            Model predictions. Can be a single tensor, a dict with "pred" and optionally "
+            class" keys, or a list of tensors for deep supervision.
+        y_true : torch.Tensor
+            Ground truth masks.
+
+        Returns
+        -------
+        loss : torch.Tensor
+            Combined Dice + CE loss value.
+        """
+        # 1. Extract predictions dict if needed
+        if self.separated_class_channel:
+            _y_pred = y_pred["pred"]
+            _y_pred_class = y_pred["class"]
+            assert (
+                y_true.shape[1] == 2
+            ), f"In separated_class_channel setting the ground truth is expected to have 2 channels. Provided {y_true.shape}"
+        else:
+            _y_pred = y_pred["pred"] if isinstance(y_pred, dict) and "pred" in y_pred else y_pred
+
+        # 2. Handle specific model source adaptations
+        if self.model_source == "bmz" and self.num_classes <= 2 and _y_pred.shape[1] != y_true.shape[1]:
+            y_true = torch.cat((1 - y_true, y_true), 1)
+
+        # 3. Handle Lists for Deep Supervision
+        if not isinstance(_y_pred, list):
+            _y_pred = [_y_pred]
+            _y_pred_class = [_y_pred_class] if self.separated_class_channel else None
+            inter_output_weights = [1.0]
+        else:
+            w = [self.gamma**i for i in range(len(_y_pred))]
+            s = sum(w)
+            inter_output_weights = [x / s for x in w]
+
+        # 4. Loop over outputs and calculate combined loss
+        loss = 0
+        for j, pd in enumerate(_y_pred):
+            # Assumes `scale_target` is defined globally in your environment
+            _y_true = scale_target(y_true, pd.shape[-self.ndim :]) if pd.shape[-self.ndim :] != y_true.shape[-self.ndim :] else y_true
+
+            # Determine CE loss function (handles 'auto' rebalancing)
+            if self.class_rebalance == "auto":
+                if self.separated_class_channel:
+                    weight_mask = weight_binary_ratio(_y_true[:, 0]) # Assumes global function
+                    loss_fn = torch.nn.BCEWithLogitsLoss(weight=weight_mask)
+                else:
+                    if self.num_classes <= 2:
+                        weight_mask = weight_binary_ratio(_y_true) # Assumes global function
+                        loss_fn = torch.nn.BCEWithLogitsLoss(weight=weight_mask)
+                    else:
+                        loss_fn = self.loss
+            else:
+                loss_fn = self.loss
+
+            # Calculate Loss based on routing
+            if self.separated_class_channel:
+                # Spatial branch (CE + Dice)
+                ce_spatial = loss_fn(pd[:, 0], _y_true[:, 0].float())
+                dice_spatial = self._compute_dice(pd[:, 0].unsqueeze(1), _y_true[:, 0].unsqueeze(1))
+                combined_spatial_loss = (self.w_ce * ce_spatial) + (self.w_dice * dice_spatial)
+
+                # Classification branch (CE only)
+                class_loss = self.class_channel_loss(_y_pred_class[j], _y_true[:, -1].type(torch.long))
+
+                # Apply channel weights
+                _loss = (self.channel_weights[0] * combined_spatial_loss) + (self.channel_weights[1] * class_loss)
+            
+            else:
+                if self.num_classes <= 2:
+                    ce_l = loss_fn(pd, _y_true.type(torch.float32))
+                else:
+                    ce_l = loss_fn(pd, _y_true[:, 0].type(torch.long))
+                
+                dice_l = self._compute_dice(pd, _y_true)
+                _loss = (self.w_ce * ce_l) + (self.w_dice * dice_l)
+            
+            loss += _loss * inter_output_weights[j]
+
+        return loss
 
 
 class ContrastCELoss(nn.Module):
@@ -1186,7 +1301,7 @@ class instance_segmentation_loss:
 
     Parameters
     ----------
-    weights : tuple of float, optional
+    channel_weights : tuple of float, optional
         Weights to be applied to each output channel loss. E.g. (1, 0.2).
 
     out_channels : List of str, optional
@@ -1212,16 +1327,11 @@ class instance_segmentation_loss:
 
     ignore_index : int, optional
         Value to ignore in the loss calculation (default: -1).
-
-    Usage
-    -----
-    loss_fn = instance_segmentation_loss(weights=(1, 0.2), out_channels=["F", "C"])
-    loss = loss_fn(y_pred, y_true)
     """
 
     def __init__(
         self,
-        weights=(1, 0.2),
+        channel_weights=(1, 1),
         ndim: int = 2,
         out_channels=["F", "C"],
         losses_to_use=[],
@@ -1237,7 +1347,7 @@ class instance_segmentation_loss:
 
         Parameters
         ----------
-        weights : 2 float tuple, optional
+        channel_weights : 2 float tuple, optional
             Weights to be applied to segmentation (binary and contours) and to distances respectively. E.g. ``(1, 0.2)``,
             ``1`` should be multipled by ``BCE`` for the first two channels and ``0.2`` to ``MSE`` for the last channel.
 
@@ -1247,9 +1357,20 @@ class instance_segmentation_loss:
         out_channels : List of str, optional
             Channels to operate with.
 
+        losses_to_use : list of str, optional
+            List of loss functions to use for each output channel (e.g., ["ce", "bce", "mae"]).
+        
         channel_extra_opts : dict, optional
             Additional options for each output channel (e.g., {"B": {"mask_values": True}}).
 
+        gt_channels_expected : int, optional
+            Number of channels expected in the ground truth (default: 1). This is used to check that the GT loaded has the
+            expected number of channels. If ``extra_weight_in_borders`` is True, then 1 channel will be added to the expected
+            GT channels to account for the extra weight in borders channel.
+
+        n_classes : int, optional
+            Number of classes for the class channel (default: 2).
+        
         class_rebalance: str, optional
             Whether to reweight classes (inside loss function) or not. Options are: "none", "auto" and "manual".
 
@@ -1259,7 +1380,7 @@ class instance_segmentation_loss:
         ignore_index : int, optional
             Value to ignore in the loss calculation.
         """
-        self.weights = weights
+        self.channel_weights = channel_weights
         self.ndim = ndim
         self.out_channels = [x for x in out_channels if x != "We"]
         self.extra_weight_in_borders = out_channels.count("We") > 0
@@ -1273,6 +1394,11 @@ class instance_segmentation_loss:
         self.losses_to_use = losses_to_use
         self.class_channel_loss = torch.nn.CrossEntropyLoss() if self.n_classes > 2 else None
         self.gamma = 0.5  # for intermediate outputs weighting
+
+        if len(self.losses_to_use) != 0:
+            assert len(self.out_channels) == len(self.losses_to_use), "Length of out_channels and losses_to_use should be the same. Provided {} and {}".format(
+                self.out_channels, self.losses_to_use
+            )
 
     def __call__(self, y_pred, y_true):
         """
@@ -1311,6 +1437,7 @@ class instance_segmentation_loss:
 
         if not isinstance(_y_pred, list):
             _y_pred = [_y_pred]
+            _y_pred_class = [_y_pred_class] if self.n_classes > 2 and isinstance(y_pred, dict) and "class" in y_pred else None
             inter_output_weights = [1.0]
         else:
             w = [self.gamma**i for i in range(len(_y_pred))]
@@ -1397,12 +1524,12 @@ class instance_segmentation_loss:
                     denom = torch.tensor(loss_tensor.numel(), device=loss_tensor.device, dtype=loss_tensor.dtype)
 
                 channel_loss_val = loss_tensor.sum() / denom
-                inter_output_loss += self.weights[i] * channel_loss_val
+                inter_output_loss += self.channel_weights[i] * channel_loss_val
+            
+            if self.n_classes > 2 and isinstance(y_pred, dict) and "class" in y_pred:
+                loss += self.channel_weights[-1] * self.class_channel_loss(_y_pred_class[idx], y_true[:, -1].type(torch.long))
             
             loss += inter_output_weights[idx] * inter_output_loss
-
-        if self.n_classes > 2 and isinstance(y_pred, dict) and "class" in y_pred:
-            loss += self.weights[-1] * self.class_channel_loss(_y_pred_class, y_true[:, -1].type(torch.long))
 
         return loss
 
@@ -1995,7 +2122,7 @@ class SpatialEmbLoss(nn.Module):
         Method to compute object center: "centroid" or "medoid".
     medoid_max_points : int, optional
         Maximum number of points to use when computing medoid (to avoid O(N^2) complexity).
-    weights : List of float, optional
+    channel_weights : List of float, optional
         Weights for the different loss components: [foreground, instance, variance, seed].
     """
 
@@ -2006,7 +2133,7 @@ class SpatialEmbLoss(nn.Module):
         ndims: int = 2, 
         center_mode: str = "centroid",      # "centroid" or "medoid"
         medoid_max_points: Optional[int] = 10000,  # cap to avoid O(N^2) on huge objects
-        weights: List[float] = [1.0, 1.0, 1.0],
+        channel_weights: List[float] = [1.0, 1.0, 1.0],
     ):
         super().__init__()
 
@@ -2023,11 +2150,11 @@ class SpatialEmbLoss(nn.Module):
         pixel_y = anisotropy[1]
         pixel_x = anisotropy[2]
 
-        self.weights = weights
-        self.foreground_weight = self.weights[0]
-        self.w_inst = self.weights[1]
-        self.w_var = self.weights[2]
-        self.w_seed = self.weights[3]
+        self.channel_weights = channel_weights
+        self.foreground_weight = self.channel_weights[0]
+        self.w_inst = self.channel_weights[1]
+        self.w_var = self.channel_weights[2]
+        self.w_seed = self.channel_weights[3]
 
         # Build max-size 3D coordinate grid buffer; for 2D we will slice z=1.
         # This lets one class handle both 2D (uses x,y) and 3D (uses x,y,z).

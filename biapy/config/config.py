@@ -246,7 +246,9 @@ class Config:
         # Whether to use a different decoder for each head in the model.
         _C.PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD = False
 
-        # Weights to be applied to the channels.
+        # Weights to be applied to the channels. Notice that these weights are not applied directly to the loss, but to the predicted channels before
+        # calculating the loss. The length of the list must be equal to the number of channels. 
+        # Notice that this is different from LOSS.WEIGHTS, which are used to apply weights to different losses.
         _C.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS = (1, 1)
         # Whether to add an extra weight map to the loss calculation to focus on the borders between instances. Different weighting maps 
         # can be defined. Options: ["unet-like", ""]
@@ -382,6 +384,10 @@ class Config:
         _C.PROBLEM.DETECTION.CHECK_POINTS_CREATED = True
         # Whether to save watershed check files
         _C.PROBLEM.DETECTION.DATA_CHECK_MW = False
+        # Weights to be applied to the channels when doing detection with classes. Notice that these weights are not applied directly to the loss,
+        # but to the predicted channels before calculating the loss. The length of the list must be equal to the number of channels. 
+        # Notice that this is different from LOSS.WEIGHTS, which are used to apply weights to different losses.
+        _C.PROBLEM.DETECTION.DATA_CHANNEL_WEIGHTS = (1, 1)
 
         ### DENOISING
         # Based Noise2Void paper: https://arxiv.org/abs/1811.10980
@@ -1354,9 +1360,10 @@ class Config:
         #       * "W_MAE_SSIM": MAE and SSIM (with a weight term on each one that must sum 1).
         #       * "W_MSE_SSIM": MSE and SSIM (with a weight term on each one that must sum 1).
         _C.LOSS.TYPE = ""
-        # Weights to be applied in multiple loss combination cases, by multiplying the corresponding weight to each loss.
-        # It works for all the workflows but the instance segmentation one, as in that case the weights must be set
-        # in PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS
+        # Weights to be applied in multiple loss combination cases, by multiplying the corresponding weight to each loss. For example, in the case of "W_CE_DICE", the final loss will be: 
+        # LOSS.WEIGHTS[0] * CE + LOSS.WEIGHTS[1] * DICE. The length of the list must be equal to the number of losses that are combined.   
+        # Notice that PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS and PROBLEM.DETECTION.DATA_CHANNEL_WEIGHTS are weights that are applied to the output channels of the model and not to the 
+        # losses, so they are different from these LOSS.WEIGHTS.
         _C.LOSS.WEIGHTS = [1.0, 1.0]
         # To weight classes in an imbalanced dataset. Options available are:
         #   * 'none': no class rebalancing is applied

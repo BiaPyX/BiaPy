@@ -227,11 +227,12 @@ class Detection_Workflow(Base_Workflow):
 
         if self.cfg.LOSS.TYPE == "CE":
             self.loss = CrossEntropyLoss_wrapper(
-                num_classes=self.cfg.DATA.N_CLASSES,
+                num_classes=2, # in detection the first channel is always binary, even if there are more classes in the classification channel
                 ndim=self.dims,
                 separated_class_channel=self.separated_class_channel,
                 model_source=self.cfg.MODEL.SOURCE,
                 class_rebalance=self.cfg.LOSS.CLASS_REBALANCE,
+                channel_weights = self.cfg.PROBLEM.DETECTION.DATA_CHANNEL_WEIGHTS,
                 class_weights=self.cfg.LOSS.CLASS_WEIGHTS,
                 ignore_index=self.cfg.LOSS.IGNORE_INDEX,
                 device=self.device,
@@ -240,8 +241,14 @@ class Detection_Workflow(Base_Workflow):
             self.loss = DiceLoss()
         elif self.cfg.LOSS.TYPE == "W_CE_DICE":
             self.loss = DiceCELoss(
-                num_classes=self.cfg.DATA.N_CLASSES,
+                num_classes=2, # in detection the first channel is always binary, even if there are more classes in the classification channel
+                ndim=self.dims,
+                batch_dice=True,
+                separated_class_channel=self.separated_class_channel,
+                model_source=self.cfg.MODEL.SOURCE,
+                class_rebalance=self.cfg.LOSS.CLASS_REBALANCE,
                 ignore_index=self.cfg.LOSS.IGNORE_INDEX,
+                channel_weights = self.cfg.PROBLEM.DETECTION.DATA_CHANNEL_WEIGHTS,
                 class_weights=self.cfg.LOSS.CLASS_WEIGHTS,
                 w_dice=self.cfg.LOSS.WEIGHTS[0],
                 w_ce=self.cfg.LOSS.WEIGHTS[1],
