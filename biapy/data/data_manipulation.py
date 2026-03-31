@@ -64,6 +64,7 @@ from tqdm import tqdm
 from sklearn.model_selection import train_test_split, StratifiedKFold
 import torch.nn.functional as F
 from skimage.transform import resize as sk_resize
+import nibabel as nib
 
 from biapy.data.dataset import BiaPyDataset, DatasetFile, DataSample, PatchCoords
 from biapy.data.norm import normalize_image, normalize_mask
@@ -3289,6 +3290,8 @@ def read_img_as_ndarray(path: str, is_3d: bool = False) -> NDArray:
             img = np.load(path)
         elif path.endswith(".pt"):
             img = torch.load(path, weights_only=True, map_location="cpu").numpy()
+        elif path.endswith(".nii.gz"):
+            img = nib.load(path)
         elif looks_like_hdf5(path):
             img = h5py.File(path, "r")
             img = np.array(img[list(img)[0]])
