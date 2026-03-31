@@ -1193,10 +1193,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             raise ValueError("'top-5-accuracy' can only be used when DATA.N_CLASSES >= 5")
 
     loss = ""
-    if cfg.PROBLEM.TYPE in [
-        "SEMANTIC_SEG",
-        "DETECTION",
-    ]:
+    if cfg.PROBLEM.TYPE == "SEMANTIC_SEG":
         loss = "CE" if cfg.LOSS.TYPE == "" else cfg.LOSS.TYPE
         assert loss in [
             "CE",
@@ -1212,6 +1209,19 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     "'LOSS.CLASS_REBALANCE' can not be set to 'auto' when 'DATA.N_CLASSES' > 2 as it is only valid for binary problems. " \
                     "Use 'manual' and 'LOSS.CLASS_WEIGHTS' if you really want to rebalance classes. If not, set 'LOSS.CLASS_REBALANCE' to 'none'."
                 )
+            if cfg.LOSS.CLASS_WEIGHTS != [] and len(cfg.LOSS.CLASS_WEIGHTS) != cfg.DATA.N_CLASSES:
+                raise ValueError("'LOSS.CLASS_WEIGHTS' must be a list of length equal to the number of classes")
+    elif cfg.PROBLEM.TYPE == "DETECTION":
+        loss = "CE" if cfg.LOSS.TYPE == "" else cfg.LOSS.TYPE
+        assert loss in [
+            "CE",
+            "DICE",
+            "W_CE_DICE",
+        ], "LOSS.TYPE not in ['CE', 'DICE', 'W_CE_DICE']"
+
+        if cfg.DATA.N_CLASSES > 2:
+            if loss not in ["CE", 'W_CE_DICE']:
+                raise ValueError("'DATA.N_CLASSES' are only used in ['CE', 'W_CE_DICE'] losses and not with {}".format(loss))
             if cfg.LOSS.CLASS_WEIGHTS != [] and len(cfg.LOSS.CLASS_WEIGHTS) != cfg.DATA.N_CLASSES:
                 raise ValueError("'LOSS.CLASS_WEIGHTS' must be a list of length equal to the number of classes")
 
@@ -1753,6 +1763,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "'TEST.DET_IGNORE_POINTS_OUTSIDE_BOX' needs to be of " f"{dim_count} dimension"
             )
 
+        if cfg.DATA.N_CLASSES > 2 and len(cfg.PROBLEM.DETECTION.DATA_CHANNEL_WEIGHTS) != 2:
+            raise ValueError("When 'DATA.N_CLASSES' > 2, 'PROBLEM.DETECTION.DATA_CHANNEL_WEIGHTS' needs to have two weights: one for the background "
+            "and one for the foreground")
+            
     #### Super-resolution ####
     elif cfg.PROBLEM.TYPE == "SUPER_RESOLUTION":
         if not (cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING):

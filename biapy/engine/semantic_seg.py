@@ -204,6 +204,11 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
         elif self.cfg.LOSS.TYPE == "W_CE_DICE":
             semantic_loss = DiceCELoss(
                 num_classes=self.cfg.DATA.N_CLASSES,
+                ndim=self.dims,
+                batch_dice=True,
+                separated_class_channel=self.separated_class_channel,
+                model_source=self.cfg.MODEL.SOURCE,
+                class_rebalance=self.cfg.LOSS.CLASS_REBALANCE,
                 ignore_index=self.cfg.LOSS.IGNORE_INDEX,
                 class_weights=self.cfg.LOSS.CLASS_WEIGHTS,
                 w_dice=self.cfg.LOSS.WEIGHTS[0],

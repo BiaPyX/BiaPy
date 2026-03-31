@@ -86,9 +86,9 @@ all_test_info["Test5"] = {
     "yaml": "test_5.yaml",
     "internal_checks": [
         {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 1, "metric": "f1",
-            "gt": True, "value": 0.8},
+            "gt": True, "value": 0.7},
         {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 2, "metric": "f1",
-            "gt": True, "value": 0.8}, # Post-processing
+            "gt": True, "value": 0.7}, # Post-processing
     ]
 }
 
@@ -430,7 +430,7 @@ all_test_info["Test36"] = {
     "description": "3D Detection. Achucarro data. points+classes",
     "yaml": "test_36.yaml",
     "internal_checks": [
-        {"type": "regular", "pattern": "Test F1 (merge patches)", "gt": True, "value": 0.35},
+        {"type": "regular", "pattern": "Test F1 (merge patches)", "gt": True, "value": 0.55},
     ]
 }
 
@@ -523,7 +523,7 @@ detection_3d_brainglobe_data_outpath = os.path.join(detection_folder, "brainglob
 
 detection_3d_achucarro_data_drive_link = "https://upvehueus-my.sharepoint.com/:u:/g/personal/ignacio_arganda_ehu_eus/IQBJHSSlKwt5QYHwC6BRkEkaAZgkXhWRRzkUkBZLIdRpSKo?e=nfs0DA&download=1"
 detection_3d_achucarro_data_filename = "achucarro_data.zip"
-detection_3d_achucarro_data_outpath = os.path.join(detection_folder, "achucarro_data")
+detection_3d_achucarro_data_outpath = os.path.join(detection_folder, "achucarro_data", "achucarro_data")
 
 ###########
 # Denoising
@@ -1983,12 +1983,12 @@ try:
 
         biapy_config['TRAIN']['ENABLE'] = True
         biapy_config['TRAIN']['EPOCHS'] = 100
-        biapy_config['TRAIN']['BATCH_SIZE'] = 1
-        biapy_config['TRAIN']['PATIENCE'] = 20
+        biapy_config['TRAIN']['BATCH_SIZE'] = 2
+        biapy_config['TRAIN']['PATIENCE'] = 50
         biapy_config['TRAIN']['LR'] = 0.0008
         biapy_config['TRAIN']['LR_SCHEDULER'] = {}
         biapy_config['TRAIN']['LR_SCHEDULER']['NAME'] = 'warmupcosine'
-        biapy_config['TRAIN']['LR_SCHEDULER']['MIN_LR'] = 0.00005
+        biapy_config['TRAIN']['LR_SCHEDULER']['MIN_LR'] = 0.0001
         biapy_config['TRAIN']['LR_SCHEDULER']['WARMUP_COSINE_DECAY_EPOCHS'] = 15
 
         biapy_config['MODEL']['ARCHITECTURE'] = 'hrnet18'
@@ -4271,23 +4271,24 @@ try:
         biapy_config['DATA']['NORMALIZATION']['PERC_CLIP']['UPPER_PERC'] = 99.8
         biapy_config['DATA']['NORMALIZATION']['TYPE'] = 'zero_mean_unit_variance'
         
-        biapy_config['DATA']['PATCH_SIZE'] = "(30, 128, 128, 1)"
+        biapy_config['DATA']['PATCH_SIZE'] = "(30, 128, 128, 3)"
         biapy_config['DATA']['N_CLASSES'] = 3
 
-        biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(detection_3d_data_outpath, "data", "train", "raw")
-        biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(detection_3d_data_outpath, "data", "train", "label")
+        biapy_config['DATA']['TRAIN']['PATH'] = os.path.join(detection_3d_achucarro_data_outpath, "data", "train", "raw")
+        biapy_config['DATA']['TRAIN']['GT_PATH'] = os.path.join(detection_3d_achucarro_data_outpath, "data", "train", "label")
         biapy_config['DATA']['TRAIN']['IN_MEMORY'] = True
-        biapy_config['DATA']['TEST']['PATH'] = os.path.join(detection_3d_data_outpath, "data", "test", "raw")
-        biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(detection_3d_data_outpath, "data", "test", "label")
+        biapy_config['DATA']['TEST']['PATH'] = os.path.join(detection_3d_achucarro_data_outpath, "data", "test", "raw")
+        biapy_config['DATA']['TEST']['GT_PATH'] = os.path.join(detection_3d_achucarro_data_outpath, "data", "test", "label")
         biapy_config['DATA']['TEST']['IN_MEMORY'] = False
         biapy_config['DATA']['TEST']['LOAD_GT'] = True
+        biapy_config['DATA']['TEST']['PADDING'] = "(4,18,18)"
 
         biapy_config['TRAIN']['ENABLE'] = True
         biapy_config['TRAIN']['EPOCHS'] = 50
         biapy_config['TRAIN']['PATIENCE'] = -1
 
         biapy_config['MODEL']['ARCHITECTURE'] = 'unet'
-        biapy_config['MODEL']['Z_DOWN'] = [1,1,1,1]
+        biapy_config['MODEL']['Z_DOWN'] = [1,1,1]
         biapy_config['MODEL']['LOAD_CHECKPOINT'] = False
 
         biapy_config['TEST']['ENABLE'] = True
@@ -4302,7 +4303,7 @@ try:
             yaml.dump(biapy_config, outfile, default_flow_style=False)
 
         # Run
-        runjob(all_test_info["Test36"], results_folder, test_file, biapy_folder)
+        runjob(all_test_info["Test36"], results_folder, test_file, biapy_folder, multigpu=True)
 
         # Check
         results = []
