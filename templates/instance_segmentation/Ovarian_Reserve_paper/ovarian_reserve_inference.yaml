@@ -2,80 +2,86 @@
 
 # System configuration
 SYSTEM:
-  NUM_WORKERS: 5  # Number of data-loading workers; increase if your machine has more CPUs and RAM
+  NUM_WORKERS: 5  # Number of workers used to load training data
 
 # Problem definition
 PROBLEM:
   TYPE: INSTANCE_SEG  # Instance segmentation workflow
-  NDIM: 3D            # Input data are 3D volumes
+  NDIM: 3D            # The model is configured for 3D data
   INSTANCE_SEG:
     DATA_CHANNELS: BCD                 # Prediction targets: Binary mask + Contour + Distance map
-    DATA_MW_TH_TYPE: auto              # Use automatic watershed thresholds
+    DATA_MW_TH_TYPE: auto              # Use the automatic watershed thresholds
     DATA_REMOVE_SMALL_OBJ_BEFORE: 10   # Remove tiny objects before watershed (in voxels)
-    DATA_REMOVE_BEFORE_MW: true        # Enable object cleanup before marker-controlled watershed
+    DATA_REMOVE_BEFORE_MW: true        # Clean predictions before watershed post-processing
 
 # Data paths and preprocessing
 DATA:
   NORMALIZATION:
-    TYPE: zero_mean_unit_variance      # Standardise intensities using mean/std normalization
-  PATCH_SIZE: (40,128,128,1)           # Network input patch size: (z, y, x, channels)
-  REFLECT_TO_COMPLETE_SHAPE: true      # Mirror-pad borders if image size is not divisible by patch size
+    TYPE: zero_mean_unit_variance      # Standard mean/std normalisation for fluorescence images
+  PATCH_SIZE: (40, 128, 128, 1)        # Model input patch size: (z, y, x, channels)
+  REFLECT_TO_COMPLETE_SHAPE: true      # Mirror-pad borders when shapes are not exact multiples of patch size
   CHECK_GENERATORS: false              # Disable generator preview checks to simplify execution
-  EXTRACT_RANDOM_PATCH: false          # Do not sample random patches; process the whole test volume by chunks
+  EXTRACT_RANDOM_PATCH: false          # Use deterministic patch extraction instead of random sampling
+  TRAIN:
+    PATH: "/home/user/oocyte_training/train/raw/"      # Folder with raw training TIFFs from oocyte_training.zip
+    GT_PATH: "/home/user/oocyte_training/train/label/" # Folder with matching label TIFFs from oocyte_training.zip
+    IN_MEMORY: true                               # Load training data into RAM for faster training if memory allows
+  VAL:
+    FROM_TRAIN: true   # Create validation data automatically from the training set
+    SPLIT_TRAIN: 0.1   # Reserve 10% of the training set for validation
   TEST:
-    PATH: "/home/user/raw_ovary/"             # Folder with Zenodo TIFF volumes or your own TIFF test data
-    LOAD_GT: false                            # Ground-truth masks are not required for inference
-    IN_MEMORY: false                          # Keep false for large ovaries to reduce RAM usage
-    RESOLUTION: (5,0.867,0.867)               # Physical voxel size in microns: (z, y, x)
-    CHECK_DATA: false                         # Skip some extra integrity checks for faster startup
-    OVERLAP: (0,0,0)                          # No overlap between inference patches
-    PADDING: (10,50,50)                       # Extra border context added to each chunk during inference
+    PATH: "/home/user/oocyte_training/val/raw/"       # Folder with full 3D Zenodo ovaries used as test data
+    GT_PATH: "/home/user/oocyte_training/val/label/"  # Folder with matching label TIFFs from oocyte_val.zip
+    LOAD_GT: true                                 # Load ground truth for these test volumes
+    RESOLUTION: (5,0.867,0.867)                   # Physical voxel size in microns: (z, y, x)
+    CHECK_DATA: false                             # Skip some extra integrity checks for faster startup
+    PADDING: (10,50,50)                           # Extra context around each inference chunk
+    OVERLAP: (0,0,0)                              # No overlap between inference chunks
     FILTER_SAMPLES:
-      ENABLE: true             # Discard extremely dark samples during test chunk extraction
+      ENABLE: true            # Discard extremely dark samples during test chunk extraction
       PROPS: [["mean"]]       # Property to measure on each sample/chunk
-      VALUES: [[50.0]]         # Threshold value for filtering
+      VALUES: [[50.0]]        # Threshold value for filtering
       SIGNS: [["lt"]]         # Remove samples whose mean intensity is lower than 50.0
 
 # Deep learning model configuration
 MODEL:
-  ARCHITECTURE: resunet              # Residual U-Net architecture
-  FEATURE_MAPS: [48, 64, 80, 96]     # Number of feature maps at each encoder/decoder level
-  Z_DOWN: [1, 1, 1]                  # Do not downsample along z between levels
-  DROPOUT_VALUES: [0, 0, 0, 0]       # No dropout in the published configuration
-  LOAD_CHECKPOINT: true              # Load pretrained weights from PATHS.CHECKPOINT_FILE
+  ARCHITECTURE: resunet           # Residual U-Net architecture
+  FEATURE_MAPS: [48, 64, 80, 96]  # Number of feature maps at each level of the network
+  Z_DOWN: [1, 1, 1]               # Keep z resolution unchanged through downsampling stages
+  DROPOUT_VALUES: [0, 0, 0, 0]    # No dropout in this configuration
+  LOAD_CHECKPOINT: true           # Load model weights from a checkpoint for inference
 
 # Path configuration
 PATHS:
-  CHECKPOINT_FILE: "/home/user/ovarian_reserve_model.pth"  # Full path to the pretrained model checkpoint
+  CHECKPOINT_FILE: "/home/user/ovarian_reserve/ovarian_reserve_pretrained.pth" # Full path to the pretrained model checkpoint
 
-# Loss function (kept for compatibility even when only doing inference)
+# Loss function
 LOSS:
-  TYPE: CE  # Cross-entropy over the instance-segmentation representation channels
+  TYPE: CE  # Cross-entropy loss on the BCD output representation
 
-# Training section disabled for inference-only workflow
+# Training configuration
 TRAIN:
-  ENABLE: false
+  ENABLE: false        # Disable training
 
-# Test / inference configuration
+# Test / inference after training
 TEST:
-  ENABLE: true                 # Run inference on test images
-  REDUCE_MEMORY: true          # Prefer lower-memory execution for large 3D volumes
-  BY_CHUNKS:
-    ENABLE: true                           # Process the full ovary volume chunk by chunk
-    FORMAT: zarr                           # Internal temporary storage format during chunked inference
-    SAVE_OUT_TIF: true                     # Also export final predictions as TIFF files
-    INPUT_IMG_AXES_ORDER: ZYX              # Zenodo TIFF volumes are 3D with no explicit channel axis
-    WORKFLOW_PROCESS:
-      ENABLE: true                        # Reconstruct the full prediction from all chunks
-      TYPE: entire_pred                   # Apply the workflow to the entire predicted volume
+  ENABLE: true
+  #BY_CHUNKS:
+  #  ENABLE: false                        # Process full ovaries chunk by chunk during evaluation
+  #  FORMAT: zarr                         # Internal temporary storage format for chunked prediction
+  #  SAVE_OUT_TIF: true                   # Save final prediction volumes as TIFF files
+  #  INPUT_IMG_AXES_ORDER: ZYX            # Input test data are TIFF volumes with axis order ZYX
+  #  WORKFLOW_PROCESS:
+  #    ENABLE: true                      # Reconstruct a full-volume prediction from all chunks
+  #    TYPE: entire_pred                 # Apply the workflow to the full predicted volume
   REUSE_PREDICTIONS: false              # Recompute predictions instead of reusing old outputs
   REDUCE_MEMORY: true                   # Lower memory usage during testing
   AUGMENTATION: false                   # Disable test-time augmentation
   POST_PROCESSING:
     MEASURE_PROPERTIES:
-      ENABLE: true                        # Measure object properties and optionally remove implausible objects
+      ENABLE: true                      # Measure instance properties and remove implausible detections
       REMOVE_BY_PROPERTIES:
         ENABLE: true
-        PROPS: [["npixels"], ["sphericity", "npixels"]]  # Properties used to discard artifacts
-        VALUES: [[150], [0.01, 2000]]                    # Threshold values for each property rule
-        SIGNS: [["le"], ["lt", "lt"]]                    # Comparison operators: <= 150 voxels, sphericity < 0.01, npixels < 2000
+        PROPS: [["npixels"], ["sphericity", "npixels"]]  # Properties used for cleanup
+        VALUES: [[150], [0.01, 2000]]                        # Thresholds applied to each property set
+        SIGNS: [["le"], ["lt", "lt"]]                    # Remove tiny objects and low-sphericity small artifacts
