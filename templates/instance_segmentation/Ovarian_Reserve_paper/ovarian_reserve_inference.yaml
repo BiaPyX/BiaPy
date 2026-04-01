@@ -66,14 +66,14 @@ TRAIN:
 # Test / inference after training
 TEST:
   ENABLE: true
-  #BY_CHUNKS:
-  #  ENABLE: false                        # Process full ovaries chunk by chunk during evaluation
-  #  FORMAT: zarr                         # Internal temporary storage format for chunked prediction
-  #  SAVE_OUT_TIF: true                   # Save final prediction volumes as TIFF files
-  #  INPUT_IMG_AXES_ORDER: ZYX            # Input test data are TIFF volumes with axis order ZYX
-  #  WORKFLOW_PROCESS:
-  #    ENABLE: true                      # Reconstruct a full-volume prediction from all chunks
-  #    TYPE: entire_pred                 # Apply the workflow to the full predicted volume
+  BY_CHUNKS:
+    ENABLE: false                        # Process full ovaries chunk by chunk during evaluation
+    FORMAT: zarr                         # Internal temporary storage format for chunked prediction
+    SAVE_OUT_TIF: true                   # Save final prediction volumes as TIFF files
+    INPUT_IMG_AXES_ORDER: ZYX            # Input test data are TIFF volumes with axis order ZYX
+    WORKFLOW_PROCESS:
+      ENABLE: true                      # Reconstruct a full-volume prediction from all chunks
+      TYPE: entire_pred                 # Apply the workflow to the full predicted volume
   REUSE_PREDICTIONS: false              # Recompute predictions instead of reusing old outputs
   REDUCE_MEMORY: true                   # Lower memory usage during testing
   AUGMENTATION: false                   # Disable test-time augmentation
@@ -83,5 +83,5 @@ TEST:
       REMOVE_BY_PROPERTIES:
         ENABLE: true
         PROPS: [["npixels"], ["sphericity", "npixels"]]  # Properties used for cleanup
-        VALUES: [[150], [0.01, 2000]]                        # Thresholds applied to each property set
+        VALUES: [[150], [0.01, 2000]]                    # Thresholds applied to each property set
         SIGNS: [["le"], ["lt", "lt"]]                    # Remove tiny objects and low-sphericity small artifacts
