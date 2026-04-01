@@ -13,7 +13,6 @@ PROBLEM:
     DATA_MW_TH_TYPE: auto              # Use automatic watershed thresholds
     DATA_REMOVE_SMALL_OBJ_BEFORE: 10   # Remove tiny objects before watershed (in voxels)
     DATA_REMOVE_BEFORE_MW: true        # Enable object cleanup before marker-controlled watershed
-    DISTANCE_CHANNEL_MASK: true        # Use the distance channel as part of the watershed preparation
 
 # Data paths and preprocessing
 DATA:
@@ -21,14 +20,21 @@ DATA:
     TYPE: zero_mean_unit_variance      # Standardise intensities using mean/std normalization
   PATCH_SIZE: (40,128,128,1)           # Network input patch size: (z, y, x, channels)
   REFLECT_TO_COMPLETE_SHAPE: true      # Mirror-pad borders if image size is not divisible by patch size
+  CHECK_GENERATORS: false              # Disable generator preview checks to simplify execution
   EXTRACT_RANDOM_PATCH: false          # Do not sample random patches; process the whole test volume by chunks
   TEST:
-    PATH: "/home/user/raw_ovary/"            # Folder with Zenodo TIFF volumes or your own TIFF test data
+    PATH: "/home/user/raw_ovary/"             # Folder with Zenodo TIFF volumes or your own TIFF test data
     LOAD_GT: false                            # Ground-truth masks are not required for inference
     IN_MEMORY: false                          # Keep false for large ovaries to reduce RAM usage
     RESOLUTION: (5,0.867,0.867)               # Physical voxel size in microns: (z, y, x)
+    CHECK_DATA: false                         # Skip some extra integrity checks for faster startup
     OVERLAP: (0,0,0)                          # No overlap between inference patches
     PADDING: (10,50,50)                       # Extra border context added to each chunk during inference
+    FILTER_SAMPLES:
+      ENABLE: true             # Discard extremely dark samples during test chunk extraction
+      PROPS: [["mean"]]       # Property to measure on each sample/chunk
+      VALUES: [[50.0]]         # Threshold value for filtering
+      SIGNS: [["lt"]]         # Remove samples whose mean intensity is lower than 50.0
 
 # Deep learning model configuration
 MODEL:
@@ -62,11 +68,14 @@ TEST:
     WORKFLOW_PROCESS:
       ENABLE: true                        # Reconstruct the full prediction from all chunks
       TYPE: entire_pred                   # Apply the workflow to the entire predicted volume
+  REUSE_PREDICTIONS: false              # Recompute predictions instead of reusing old outputs
+  REDUCE_MEMORY: true                   # Lower memory usage during testing
+  AUGMENTATION: false                   # Disable test-time augmentation
   POST_PROCESSING:
     MEASURE_PROPERTIES:
       ENABLE: true                        # Measure object properties and optionally remove implausible objects
       REMOVE_BY_PROPERTIES:
         ENABLE: true
         PROPS: [["npixels"], ["sphericity", "npixels"]]  # Properties used to discard artifacts
-        VALUES: [[150], [0.01, 2000]]                        # Threshold values for each property rule
+        VALUES: [[150], [0.01, 2000]]                    # Threshold values for each property rule
         SIGNS: [["le"], ["lt", "lt"]]                    # Comparison operators: <= 150 voxels, sphericity < 0.01, npixels < 2000
