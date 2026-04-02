@@ -251,101 +251,90 @@ def compute_metrics_for_image_lsa(nn_mask: np.ndarray, tol_px: int, man_clusters
         
     return metrics
 
-
 def measure_metrics(experts_df: pd.DataFrame, nn_imgs_1: dict[str, np.ndarray], tol_px: int, out_folder: str, debug: bool):
     os.makedirs(out_folder, exist_ok=True)
-    
     if debug:
         debug_dir = os.path.join(out_folder, "debug_images")
         os.makedirs(debug_dir, exist_ok=True)
 
     nn1_base_to_file = {os.path.splitext(fname)[0]: fname for fname in nn_imgs_1.keys()}
-    gt_basenames = set(experts_df["file"].unique())
-
-    common = sorted(gt_basenames.intersection(set(nn1_base_to_file.keys())))
-    if not common:
-        raise RuntimeError("No overlapping images between GT and predictions.")
-
+    common = sorted(set(experts_df["file"].unique()).intersection(set(nn1_base_to_file.keys())))
+    
     per_file_records = []
-    for base in tqdm(common, desc="Processing overlapping sections"):
-        print("n--- Processing file: {} ---".format(base))
+    for base in tqdm(common, desc="Processing sections"):
         df_file = experts_df[experts_df["file"] == base]
         nn_mask = nn_imgs_1[nn1_base_to_file[base]]
         H, W = nn_mask.shape
+        
+        # Identify source
+        source_group = "External" if "UCF" in base else "Internal"
         
         man_clusters = cluster_manual_points_lsa(df_file, eps=tol_px)
         img_metrics = compute_metrics_for_image_lsa(nn_mask, tol_px, man_clusters)
         
         for k in range(1, 6):
-            tp = img_metrics[k]["TP"]
-            fp = img_metrics[k]["FP"]
-            fn = img_metrics[k]["FN"]
-            
+            tp, fp, fn = img_metrics[k]["TP"], img_metrics[k]["FP"], img_metrics[k]["FN"]
             precision = tp / (tp + fp) if (tp + fp) > 0 else np.nan
             recall = tp / (tp + fn) if (tp + fn) > 0 else np.nan
-            
-            if pd.isna(precision) or pd.isna(recall) or (precision + recall) == 0:
-                f1 = np.nan
-            else:
-                f1 = 2 * (precision * recall) / (precision + recall)
+            f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else np.nan
 
             per_file_records.append({
                 "File": base,
-                "Threshold": f"≥ {k} Experts",
+                "Source": source_group,
                 "K": k,
                 "Precision": precision,
                 "Recall": recall,
                 "F1_Score": f1
             })
             
-            # --- DEBUG TIFF GENERATION ---
             if debug:
-                # 1) GT TIFF (Grayscale)
-                gt_img = draw_points((H, W), img_metrics[k]["gt_pts"], color_val=255, radius=3)
+                gt_img = draw_points((H, W), img_metrics[k]["gt_pts"], color_val=255)
                 tifffile.imwrite(os.path.join(debug_dir, f"{base}_GT_class{k}.tif"), gt_img)
-                
-                # 2) Evaluation TIFF (RGB)
-                # TP -> Green (0, 255, 0)
-                # FP -> Blue  (0, 0, 255)
-                # FN -> Red   (255, 0, 0)
-                eval_img = draw_points((H, W), img_metrics[k]["tp_pts"], color_val=(0, 255, 0), radius=3)
-                eval_img = draw_points((H, W), img_metrics[k]["fp_pts"], color_val=(0, 0, 255), img=eval_img, radius=3)
-                eval_img = draw_points((H, W), img_metrics[k]["fn_pts"], color_val=(255, 0, 0), img=eval_img, radius=3)
+                eval_img = draw_points((H, W), img_metrics[k]["tp_pts"], color_val=(0, 255, 0))
+                eval_img = draw_points((H, W), img_metrics[k]["fp_pts"], color_val=(0, 0, 255), img=eval_img)
+                eval_img = draw_points((H, W), img_metrics[k]["fn_pts"], color_val=(255, 0, 0), img=eval_img)
                 tifffile.imwrite(os.path.join(debug_dir, f"{base}_Eval_class{k}.tif"), eval_img)
 
     per_file_df = pd.DataFrame(per_file_records)
     
+    # --- 1. Original Summary Table ---
     summary_records = []
     for k in range(1, 6):
         k_df = per_file_df[per_file_df["K"] == k]
-        
-        p_mean, p_std = k_df["Precision"].mean(), k_df["Precision"].std()
-        r_mean, r_std = k_df["Recall"].mean(), k_df["Recall"].std()
-        f1_mean, f1_std = k_df["F1_Score"].mean(), k_df["F1_Score"].std()
-        
         summary_records.append({
             "Consensus": f"≥ {k} Experts",
-            "Precision (Macro)": f"{p_mean:.4f} ± {p_std:.4f}" if not pd.isna(p_std) else f"{p_mean:.4f} ± 0.0000",
-            "Recall (Macro)": f"{r_mean:.4f} ± {r_std:.4f}" if not pd.isna(r_std) else f"{r_mean:.4f} ± 0.0000",
-            "F1_Score (Macro)": f"{f1_mean:.4f} ± {f1_std:.4f}" if not pd.isna(f1_std) else f"{f1_mean:.4f} ± 0.0000",
+            "Precision (Macro)": f"{k_df['Precision'].mean():.4f} ± {k_df['Precision'].std():.4f}",
+            "Recall (Macro)": f"{k_df['Recall'].mean():.4f} ± {k_df['Recall'].std():.4f}",
+            "F1_Score (Macro)": f"{k_df['F1_Score'].mean():.4f} ± {k_df['F1_Score'].std():.4f}",
         })
+    
+    # --- 2. NEW Internal vs External Table ---
+    split_records = []
+    for k in range(1, 6):
+        for src in ["Internal", "External"]:
+            sub_df = per_file_df[(per_file_df["K"] == k) & (per_file_df["Source"] == src)]
+            if not sub_df.empty:
+                f1_m, f1_s = sub_df["F1_Score"].mean(), sub_df["F1_Score"].std()
+                split_records.append({
+                    "Consensus": f"≥ {k} Experts",
+                    "Source": src,
+                    "F1_Score": f"{f1_m:.4f} ± {f1_s:.4f}" if not pd.isna(f1_s) else f"{f1_m:.4f} ± 0.0000"
+                })
+    
+    split_df = pd.DataFrame(split_records)
 
-    summary_df = pd.DataFrame(summary_records)
-    
+    # Printing results
     print("\n" + "="*80)
-    print(f"OBJECT DETECTION MACRO METRICS (Dual LSA, Tolerance = {tol_px} px)")
+    print("INTERNAL VS EXTERNAL COMPARISON (F1 Score)")
     print("="*80)
-    print(summary_df.to_string(index=False))
+    print(split_df.to_string(index=False))
     print("="*80)
-    
-    summary_out = os.path.join(out_folder, "metrics_summary_macro.csv")
-    per_file_out = os.path.join(out_folder, "metrics_per_file.csv")
-    
-    summary_df.to_csv(summary_out, index=False)
-    per_file_df.to_csv(per_file_out, index=False)
-    print(f"\n[+] Results successfully saved to: {out_folder}")
-    if debug:
-        print(f"[+] Debug images generated in: {debug_dir}")
+
+    # Save CSVs
+    per_file_df.to_csv(os.path.join(out_folder, "metrics_per_file.csv"), index=False)
+    pd.DataFrame(summary_records).to_csv(os.path.join(out_folder, "metrics_summary_macro.csv"), index=False)
+    split_df.to_csv(os.path.join(out_folder, "metrics_summary_internal_vs_external.csv"), index=False)
+    print(f"\n[+] Detailed split saved to: metrics_summary_internal_vs_external.csv")
 
 # -----------------------------
 # Main
