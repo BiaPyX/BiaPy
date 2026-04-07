@@ -246,7 +246,7 @@ def create_train_val_augmentors(
             dic["zflip"] = cfg.AUGMENTOR.ZFLIP
         if cfg.PROBLEM.TYPE == "INSTANCE_SEG":
             dic["instance_problem"] = True
-        elif cfg.PROBLEM.TYPE == "DENOISING" and cfg.LOSS.TYPE != "COMPOSED_GAN":
+        elif cfg.PROBLEM.TYPE == "DENOISING" and cfg.MODEL.ARCHITECTURE != 'nafnet':
             dic["n2v"] = True
             dic["n2v_perc_pix"] = cfg.PROBLEM.DENOISING.N2V_PERC_PIX
             dic["n2v_manipulator"] = cfg.PROBLEM.DENOISING.N2V_MANIPULATOR
@@ -293,7 +293,7 @@ def create_train_val_augmentors(
         )
         if cfg.PROBLEM.TYPE == "INSTANCE_SEG":
             dic["instance_problem"] = True
-        elif cfg.PROBLEM.TYPE == "DENOISING" and cfg.LOSS.TYPE != "COMPOSED_GAN":
+        elif cfg.PROBLEM.TYPE == "DENOISING" and cfg.MODEL.ARCHITECTURE != 'nafnet':
             dic["n2v"] = True
             dic["n2v_perc_pix"] = cfg.PROBLEM.DENOISING.N2V_PERC_PIX
             dic["n2v_manipulator"] = cfg.PROBLEM.DENOISING.N2V_MANIPULATOR

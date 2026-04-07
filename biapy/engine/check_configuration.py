@@ -1797,9 +1797,12 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
     #### Denoising ####
     elif cfg.PROBLEM.TYPE == "DENOISING":
-        if cfg.LOSS.TYPE == "COMPOSED_GAN":
+        if cfg.PROBLEM.DENOISING.LOAD_GT_DATA or cfg.LOSS.TYPE == "COMPOSED_GAN":
             if not cfg.DATA.TRAIN.GT_PATH and not cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA:
-                raise ValueError("Denoising with COMPOSED_GAN is supervised. 'DATA.TRAIN.GT_PATH' is required.")
+                raise ValueError(
+                    "Supervised denoising (e.g., with COMPOSED_GAN or LOAD_GT_DATA=True) "
+                    "requires ground truth. 'DATA.TRAIN.GT_PATH' must be provided."
+                )
         else:
             if cfg.DATA.TEST.LOAD_GT:
                 raise ValueError(
@@ -2720,11 +2723,26 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     assert cfg.MODEL.OUT_CHECKPOINT_FORMAT in ["pth", "safetensors"], "MODEL.OUT_CHECKPOINT_FORMAT not in ['pth', 'safetensors']"
 
     ### Train ###
-    assert cfg.TRAIN.OPTIMIZER in [
-        "SGD",
-        "ADAM",
-        "ADAMW",
-    ], "TRAIN.OPTIMIZER not in ['SGD', 'ADAM', 'ADAMW']"
+    if not isinstance(cfg.TRAIN.OPTIMIZER, list):
+        raise ValueError("'TRAIN.OPTIMIZER' must be a list")
+    if not isinstance(cfg.TRAIN.LR, list):
+        raise ValueError("'TRAIN.LR' must be a list")
+    if not isinstance(cfg.TRAIN.OPT_BETAS, list):
+        raise ValueError("'TRAIN.OPT_BETAS' must be a list")
+    if len(cfg.TRAIN.OPTIMIZER) != len(cfg.TRAIN.LR):
+        raise ValueError("'TRAIN.OPTIMIZER' and 'TRAIN.LR' must have the same length")
+    print(cfg.TRAIN.OPT_BETAS)
+    print(len(cfg.TRAIN.OPT_BETAS))
+    if len(cfg.TRAIN.OPT_BETAS) not in [1, len(cfg.TRAIN.OPTIMIZER)]:
+        raise ValueError("'TRAIN.OPT_BETAS' must have length 1 or match 'TRAIN.OPTIMIZER' length")
+
+    for beta_pair in cfg.TRAIN.OPT_BETAS:
+        if not isinstance(beta_pair, (list, tuple)) or len(beta_pair) != 2:
+            raise ValueError("Each entry in 'TRAIN.OPT_BETAS' must be a tuple/list of length 2")
+
+    for opt in cfg.TRAIN.OPTIMIZER:
+        if opt not in ["SGD", "ADAM", "ADAMW"]:
+            raise ValueError("'TRAIN.OPTIMIZER' values must be in ['SGD', 'ADAM', 'ADAMW']")
 
     if cfg.TRAIN.ENABLE and cfg.TRAIN.LR_SCHEDULER.NAME != "":
         if cfg.TRAIN.LR_SCHEDULER.NAME not in [
@@ -2982,7 +3000,6 @@ def compare_configurations_without_model(actual_cfg, old_cfg, header_message="",
         "DATA.PATCH_SIZE",
         "PROBLEM.INSTANCE_SEG.DATA_CHANNELS",
         "PROBLEM.SUPER_RESOLUTION.UPSCALING",
-        "MODEL.ARCHITECTURE_D",
         "DATA.N_CLASSES",
     ]
 

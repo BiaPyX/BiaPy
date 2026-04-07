@@ -305,19 +305,7 @@ def get_grad_norm_(parameters, norm_type: float = 2.0) -> torch.Tensor:
     return total_norm
 
 
-def save_model(
-    cfg,
-    biapy_version,
-    jobname,
-    epoch,
-    model_without_ddp,
-    optimizer,
-    model_build_kwargs=None,
-    extension="pth",
-    discriminator_without_ddp=None,
-    optimizer_d=None,
-    extra_checkpoint_items=None,
-):
+def save_model(cfg, biapy_version, jobname, epoch, model_without_ddp, optimizer, model_build_kwargs=None, extension="pth"):
     """
     Save the model checkpoint to the specified path.
 
@@ -337,7 +325,7 @@ def save_model(
         The current epoch number.
     model_without_ddp : nn.Module
         The model instance, typically the unwrapped model if using DistributedDataParallel.
-    optimizer : torch.optim.Optimizer
+    optimizer : List[torch.optim.Optimizer]
         The optimizer's state.
     model_build_kwargs : Optional[Dict], optional
         Keyword arguments used to build the model, useful for re-instantiating
@@ -345,12 +333,6 @@ def save_model(
     extension : str, optional
         The file extension for the checkpoint file. Options are 'pth' (native PyTorch format)
         or 'safetensors' (https://github.com/huggingface/safetensors). Defaults to "pth".
-    discriminator_without_ddp : Optional[nn.Module], optional
-        Optional discriminator model to include in checkpoints for GAN training.
-    optimizer_d : Optional[torch.optim.Optimizer], optional
-        Optional discriminator optimizer state to include in checkpoints for GAN training.
-    extra_checkpoint_items : Optional[dict], optional
-        Additional custom fields to append to the checkpoint payload.
 
     Returns
     -------
@@ -364,18 +346,15 @@ def save_model(
         to_save = {
             "model_build_kwargs": model_build_kwargs,
             "model": model_without_ddp.state_dict(),
-            "optimizer": optimizer.state_dict(),
+            "optimizer": [opt.state_dict() for opt in optimizer] if optimizer else None,
             "epoch": epoch,
             "cfg": cfg,
             "biapy_version": biapy_version,
         }
-
-        if discriminator_without_ddp is not None:
-            to_save["discriminator_state_dict"] = discriminator_without_ddp.state_dict()
-        if optimizer_d is not None:
-            to_save["optimizer_d_state_dict"] = optimizer_d.state_dict()
-        if extra_checkpoint_items:
-            to_save.update(extra_checkpoint_items)
+        
+        # For Gan Models
+        if hasattr(model_without_ddp, 'discriminator'):
+            to_save["discriminator_state_dict"] = model_without_ddp.discriminator.state_dict()
 
         save_on_master(to_save, checkpoint_path)
     if len(checkpoint_paths) > 0:
@@ -479,8 +458,8 @@ def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=Non
         The model instance (unwrapped if DDP is used) to load weights into.
     device : torch.device
         The device to map the loaded checkpoint to.
-    optimizer : Optional[torch.optim.Optimizer], optional
-        The optimizer instance to load state into. If None, optimizer state is not loaded.
+    optimizer : Optional[List[torch.optim.Optimizer]], optional
+        The list of optimizer instances to load state into. If None, optimizer state is not loaded.
         Defaults to None.
     just_extract_checkpoint_info : bool, optional
         If True, only the configuration (`cfg`) and BiaPy version from the checkpoint
@@ -575,13 +554,27 @@ def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=Non
 
     print("Model weights loaded!")
 
+    if "discriminator_state_dict" in checkpoint:
+        if hasattr(model_without_ddp, 'discriminator') and model_without_ddp.discriminator is not None:
+            # We use strict=False just in case there are minor architecture changes
+            model_without_ddp.discriminator.load_state_dict(checkpoint["discriminator_state_dict"], strict=False)
+            print("Discriminator weights loaded!")
+    
     if cfg.MODEL.LOAD_CHECKPOINT_ONLY_WEIGHTS:
         return start_epoch, resume
 
     # Load also opt, epoch and scaler info
     if "optimizer" in checkpoint and optimizer is not None:
-        optimizer.load_state_dict(checkpoint["optimizer"], strict=False)
-        print("Optimizer info loaded!")
+        # im leaving this for prior non list optimizers for backward compatibility,
+        checkpoint_optimizer = checkpoint["optimizer"]
+        if isinstance(checkpoint_optimizer, dict):
+            checkpoint_optimizer = [checkpoint_optimizer]
+
+        loaded_optimizers = 0
+        for opt, opt_state in zip(optimizer, checkpoint_optimizer):
+            opt.load_state_dict(opt_state)
+            loaded_optimizers += 1
+        print(f"Optimizer info loaded for {loaded_optimizers}/{len(optimizer)} optimizer(s)!")
 
     if "epoch" in checkpoint:
         start_epoch = checkpoint["epoch"]

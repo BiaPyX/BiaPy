@@ -29,18 +29,15 @@ def train_one_epoch(
     metric_function: Callable,
     prepare_targets: Callable,
     data_loader: DataLoader,
-    optimizer: Optimizer,
+    optimizer: list[Optimizer],
     device: torch.device,
     epoch: int,
     log_writer: Optional[TensorboardLogger] = None,
-    lr_scheduler: Optional[Scheduler] = None,
+    lr_scheduler: Optional[list[Optional[Scheduler]]] = None,
     verbose: bool = False,
     memory_bank: Optional[MemoryBank] = None,
     total_iters: int=0,
     contrast_warmup_iters: int=0,
-    model_d: Optional[nn.Module | nn.parallel.DistributedDataParallel] = None,
-    optimizer_d: Optional[Optimizer] = None,
-    lr_scheduler_d: Optional[Scheduler] = None,
 ):
     """
     Train the model for one epoch.
@@ -64,7 +61,7 @@ def train_one_epoch(
         Function to prepare targets for loss/metrics.
     data_loader : DataLoader
         Training data loader.
-    optimizer : Optimizer
+    optimizer : List[Optimizer]
         Optimizer for model parameters.
     device : torch.device
         Device to use.
@@ -72,7 +69,7 @@ def train_one_epoch(
         Current epoch number.
     log_writer : TensorboardLogger, optional
         Logger for TensorBoard.
-    lr_scheduler : Scheduler, optional
+    lr_scheduler : List[Scheduler], optional
         Learning rate scheduler.
     verbose : bool, optional
         Verbosity flag.
@@ -90,28 +87,23 @@ def train_one_epoch(
     int
         Number of steps (batches) processed.
     """
-    is_gan = model_d is not None and optimizer_d is not None
-
     # Switch to training mode
     model.train(True)
-    if is_gan:
-        model_d.train(True)
+    has_discriminator = hasattr(model, "discriminator") and model.discriminator is not None
+    lr_scheduler = [None] * len(optimizer) if lr_scheduler is None else lr_scheduler
 
     # Ensure correct order of each epoch info by adding loss first
     metric_logger = MetricLogger(delimiter="  ", verbose=verbose)
-    if is_gan:
-        metric_logger.add_meter("loss_g", SmoothedValue())
-        metric_logger.add_meter("loss_d", SmoothedValue())
-    else:
-        metric_logger.add_meter("loss", SmoothedValue())
+    for i in range(len(optimizer)):
+        loss_name = "loss" if i == 0 else f"loss_{i}"
+        metric_logger.add_meter(loss_name, SmoothedValue())
 
     # Set up the header for logging
     header = "Epoch: [{}]".format(epoch + 1)
     print_freq = 10
 
-    optimizer.zero_grad()
-    if is_gan:
-        optimizer_d.zero_grad()
+    for opt in optimizer:
+        opt.zero_grad()
 
     for step, (batch, targets) in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
 
@@ -120,13 +112,10 @@ def train_one_epoch(
         if (
             epoch % cfg.TRAIN.ACCUM_ITER == 0
             and cfg.TRAIN.LR_SCHEDULER.NAME == "warmupcosine"
-            and lr_scheduler
-            and isinstance(lr_scheduler, WarmUpCosineDecayScheduler)
         ):
-            lr_scheduler.adjust_learning_rate(optimizer, step / len(data_loader) + epoch)
-            if is_gan and lr_scheduler_d and isinstance(lr_scheduler_d, WarmUpCosineDecayScheduler):
-                lr_scheduler_d.adjust_learning_rate(optimizer_d, step / len(data_loader) + epoch)
-
+            for sched, opt in zip(lr_scheduler, optimizer):
+                if sched and isinstance(sched, WarmUpCosineDecayScheduler):
+                    sched.adjust_learning_rate(opt, step / len(data_loader) + epoch)
 
         # Gather inputs
         targets = prepare_targets(targets, batch)
@@ -137,91 +126,25 @@ def train_one_epoch(
                 f" Input: {batch.shape[1:-1]} vs PATCH_SIZE: {cfg.DATA.PATCH_SIZE[:-1]}"
             )
 
-        if is_gan:
-            assert model_d is not None and optimizer_d is not None
-
-            if (
-                torch.isnan(batch).any()
-                or torch.isinf(batch).any()
-                or torch.isnan(targets).any()
-                or torch.isinf(targets).any()
-            ):
-                print("Warning: NaN or Inf detected in input. Skipping batch.")
-                continue
-
-            # Phase 1: discriminator update
-            optimizer_d.zero_grad()
-            fake_img = model_call_func(batch, is_train=True)
-            if isinstance(fake_img, dict):
-                fake_img = fake_img["pred"]
-            fake_img = torch.clamp(fake_img, 0, 1)
-
-            d_real = model_d(targets)
-            d_fake = model_d(fake_img.detach())
-            loss_d = loss_function.forward_discriminator(d_real, d_fake)
-
-            if torch.isnan(loss_d) or torch.isinf(loss_d):
-                print("Warning: NaN or Inf detected in discriminator loss. Skipping batch.")
-                continue
-
-            loss_d.backward()
-            optimizer_d.step()
-
-            if lr_scheduler_d and isinstance(lr_scheduler_d, OneCycleLR) and cfg.TRAIN.LR_SCHEDULER.NAME == "onecycle":
-                lr_scheduler_d.step()
-
-            # Phase 2: generator update
-            optimizer.zero_grad()
-            outputs = model_call_func(batch, is_train=True)
-            if isinstance(outputs, dict):
-                outputs = outputs["pred"]
-            outputs = torch.clamp(outputs, 0, 1)
-
-            d_fake_for_g = model_d(outputs)
-            loss = loss_function.forward_generator(outputs, targets, d_fake_for_g)
-
-            if torch.isnan(loss) or torch.isinf(loss):
-                print("Warning: NaN or Inf detected in generator loss. Skipping batch.")
-                continue
-
-            loss.backward()
-            optimizer.step()
-
-            if lr_scheduler and isinstance(lr_scheduler, OneCycleLR) and cfg.TRAIN.LR_SCHEDULER.NAME == "onecycle":
-                lr_scheduler.step()
-
-            metric_function(outputs, targets, metric_logger=metric_logger)
-
-            loss_g_value = loss.item()
-            loss_d_value = loss_d.item()
-            metric_logger.update(loss_g=loss_g_value, loss_d=loss_d_value)
-
-            if log_writer:
-                log_writer.update(loss_g=all_reduce_mean(loss_g_value), head="loss")
-                log_writer.update(loss_d=all_reduce_mean(loss_d_value), head="loss")
-
-            max_lr_g = 0.0
-            max_lr_d = 0.0
-            for group in optimizer.param_groups:
-                max_lr_g = max(max_lr_g, group["lr"])
-            for group in optimizer_d.param_groups:
-                max_lr_d = max(max_lr_d, group["lr"])
-
-            if step == 0:
-                metric_logger.add_meter("lr_g", SmoothedValue(window_size=1, fmt="{value:.6f}"))
-                metric_logger.add_meter("lr_d", SmoothedValue(window_size=1, fmt="{value:.6f}"))
-
-            metric_logger.update(lr_g=max_lr_g, lr_d=max_lr_d)
-            if log_writer:
-                log_writer.update(lr_g=max_lr_g, head="opt")
-                log_writer.update(lr_d=max_lr_d, head="opt")
-            continue
-
         # Pass the images through the model
         outputs = model_call_func(batch, is_train=True)
 
         # Loss function call
-        if memory_bank is not None:
+        losses = []
+        if has_discriminator and len(optimizer) > 1:
+            fake_img = outputs["pred"] if isinstance(outputs, dict) else outputs
+            fake_img = torch.clamp(fake_img, 0, 1)
+
+            d_fake_for_g = model.discriminator(fake_img)
+            loss_g = loss_function.forward_generator(fake_img, targets, d_fake_for_g)
+            losses.append(loss_g)
+
+            d_real = model.discriminator(targets)
+            d_fake = model.discriminator(fake_img.detach())
+            loss_d = loss_function.forward_discriminator(d_real, d_fake)
+            losses.append(loss_d)
+            
+        elif memory_bank is not None:
             if total_iters + step >= contrast_warmup_iters:
                 with_embed = True
             else:
@@ -240,20 +163,23 @@ def train_one_epoch(
             memory_bank.dequeue_and_enqueue(
                 outputs['key'], targets.detach(),
             )
+            losses.append(loss)
         else:
             loss = loss_function(outputs, targets)
+            losses.append(loss)
 
         # Separate metric if precalculated inside the loss (e.g. Embedding loss)
         precalculated_metric, precalculated_metric_name = None, None
-        if isinstance(loss, tuple):
-            precalculated_metric = loss[1]
-            precalculated_metric_name = loss[2]
-            loss = loss[0]
+        if isinstance(losses[0], tuple):
+            precalculated_metric = losses[0][1]
+            precalculated_metric_name = losses[0][2]
+            losses[0] = losses[0][0]
 
-        loss_value = loss.item()
-        if not math.isfinite(loss_value):
-            print("Loss is {}, stopping training".format(loss_value))
-            sys.exit(1)
+        for l_val in losses:
+            loss_value = l_val.item()
+            if not math.isfinite(loss_value):
+                print("Loss is {}, stopping training".format(loss_value))
+                sys.exit(1)
 
         # Calculate the metrics
         if precalculated_metric is None:
@@ -262,38 +188,45 @@ def train_one_epoch(
             metric_logger.meters[precalculated_metric_name].update(precalculated_metric)
 
         # Forward pass scaling the loss
-        loss /= cfg.TRAIN.ACCUM_ITER
         if (step + 1) % cfg.TRAIN.ACCUM_ITER == 0:
-            loss.backward()
-            optimizer.step()  # update weight
-            optimizer.zero_grad()
-            if lr_scheduler and isinstance(lr_scheduler, OneCycleLR) and cfg.TRAIN.LR_SCHEDULER.NAME == "onecycle":
-                lr_scheduler.step()
+            for i, (opt, loss_tensor) in enumerate(zip(optimizer, losses)):
+                loss_tensor = loss_tensor / cfg.TRAIN.ACCUM_ITER
+
+                loss_tensor.backward()
+                opt.step()  # update weight
+                opt.zero_grad()
+                
+                if lr_scheduler[i] and isinstance(lr_scheduler[i], OneCycleLR) and cfg.TRAIN.LR_SCHEDULER.NAME == "onecycle":
+                    lr_scheduler[i].step()
 
         if device.type != "cpu":
             getattr(torch, device.type).synchronize()
 
         # Update loss in loggers
-        metric_logger.update(loss=loss_value)
-        loss_value_reduce = all_reduce_mean(loss_value)
-        if log_writer:
-            log_writer.update(loss=loss_value_reduce, head="loss")
+        for i, loss_tensor in enumerate(losses):
+            loss_name = "loss" if i == 0 else f"loss_{i}"
+            val = loss_tensor.item() * cfg.TRAIN.ACCUM_ITER
+            metric_logger.update(**{loss_name: val})
+            loss_value_reduce = all_reduce_mean(val)
+            if log_writer:
+                log_writer.update(head="loss", **{loss_name: loss_value_reduce})
 
         # Update lr in loggers
-        max_lr = 0.0
-        for group in optimizer.param_groups:
-            max_lr = max(max_lr, group["lr"])
-        if step == 0:
-            metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value:.6f}"))
-        metric_logger.update(lr=max_lr)
-        if log_writer:
-            log_writer.update(lr=max_lr, head="opt")
+        for i, opt in enumerate(optimizer):
+            lr_name = "lr" if i == 0 else f"lr_{i}"
+            max_lr = 0.0
+            for group in opt.param_groups:
+                max_lr = max(max_lr, group["lr"])
+            if step == 0:
+                metric_logger.add_meter(lr_name, SmoothedValue(window_size=1, fmt="{value:.6f}"))
+            metric_logger.update(**{lr_name: max_lr})
+            if log_writer:
+                log_writer.update(head="opt", **{lr_name: max_lr})
 
-    if is_gan and cfg.TRAIN.LR_SCHEDULER.NAME not in ["reduceonplateau", "onecycle", "warmupcosine"]:
-        if lr_scheduler:
-            lr_scheduler.step()
-        if lr_scheduler_d:
-            lr_scheduler_d.step()
+    if cfg.TRAIN.LR_SCHEDULER.NAME not in ["reduceonplateau", "onecycle", "warmupcosine"]:
+        for sched in lr_scheduler:
+            if sched:
+                sched.step()
 
     # Gather the stats from all processes
     metric_logger.synchronize_between_processes()
@@ -311,11 +244,8 @@ def evaluate(
     prepare_targets: Callable,
     epoch: int,
     data_loader: DataLoader,
-    lr_scheduler: Optional[Scheduler] = None,
+    lr_scheduler: Optional[list[Optional[Scheduler]]] = None,
     memory_bank: Optional[MemoryBank] = None,
-    model_d: Optional[nn.Module | nn.parallel.DistributedDataParallel] = None,
-    lr_scheduler_d: Optional[Scheduler] = None,
-    device: Optional[torch.device] = None,
 ):
     """
     Evaluate the model on the validation set.
@@ -351,21 +281,17 @@ def evaluate(
     dict
         Dictionary of averaged metrics for the validation set.
     """
-    is_gan = model_d is not None
-
+    has_discriminator = hasattr(model, "discriminator") and model.discriminator is not None
     # Ensure correct order of each epoch info by adding loss first
     metric_logger = MetricLogger(delimiter="  ")
-    if is_gan:
-        metric_logger.add_meter("loss_g", SmoothedValue())
-        metric_logger.add_meter("loss_d", SmoothedValue())
-    else:
-        metric_logger.add_meter("loss", SmoothedValue())
+    num_losses = 2 if has_discriminator and len(lr_scheduler) > 1 else 1
+    for i in range(num_losses):
+        loss_name = "loss" if i == 0 else f"loss_{i}"
+        metric_logger.add_meter(loss_name, SmoothedValue())
     header = "Epoch: [{}]".format(epoch + 1)
 
     # Switch to evaluation mode
     model.eval()
-    if is_gan:
-        model_d.eval()
 
     for batch in metric_logger.log_every(data_loader, 10, header):
         # Gather inputs
@@ -373,34 +299,25 @@ def evaluate(
         targets = batch[1]
         targets = prepare_targets(targets, images)
 
-        if is_gan:
-            assert model_d is not None
-            outputs = model_call_func(images, is_train=False)
-            if isinstance(outputs, dict):
-                outputs = outputs["pred"]
-            outputs = torch.clamp(outputs, 0, 1)
-
-            d_fake_val = model_d(outputs)
-            d_real_val = model_d(targets)
-            loss = loss_function.forward_generator(outputs, targets, d_fake_val)
-            loss_d = loss_function.forward_discriminator(d_real_val, d_fake_val)
-
-            loss_value = loss.item()
-            if not math.isfinite(loss_value):
-                print(f"Validation loss is {loss_value}, skipping batch.")
-                continue
-
-            metric_function(outputs, targets, metric_logger=metric_logger)
-            metric_logger.update(loss_g=loss_value, loss_d=loss_d.item())
-            continue
-
         # Pass the images through the model
-        outputs = model_call_func(images, is_train=True)
-
+        outputs = model_call_func(images, is_train=True) # Im not Undertanding why is this True? 
+        
         # Loss function call
-        if memory_bank is not None:
-            with_embed = False
+        losses = []
+        if has_discriminator and len(lr_scheduler) > 1:
+            fake_img = outputs["pred"] if isinstance(outputs, dict) else outputs
+            fake_img = torch.clamp(fake_img, 0, 1)
 
+            d_fake_for_g = model.discriminator(fake_img)
+            loss_g = loss_function.forward_generator(fake_img, targets, d_fake_for_g)
+            losses.append(loss_g)
+
+            d_real = model.discriminator(targets)
+            d_fake = model.discriminator(fake_img.detach())
+            loss_d = loss_function.forward_discriminator(d_real, d_fake)
+            losses.append(loss_d)
+            
+        elif memory_bank is not None:
             outputs = {
                 "pred": outputs["pred"],
                 "embed": outputs["embed"],
@@ -408,22 +325,24 @@ def evaluate(
                 'pixel_queue': memory_bank.pixel_queue,
                 'segment_queue': memory_bank.segment_queue,
             }
-
             loss = loss_function(outputs, targets, with_embed=with_embed)
+            losses.append(loss)
         else:
             loss = loss_function(outputs, targets)
+            losses.append(loss)
 
         # Separate metric if precalculated inside the loss (e.g. Embedding loss)
         precalculated_metric, precalculated_metric_name = None, None
-        if isinstance(loss, tuple):
-            precalculated_metric = loss[1]
-            precalculated_metric_name = loss[2]
-            loss = loss[0]
+        if isinstance(losses[0], tuple):
+            precalculated_metric = losses[0][1]
+            precalculated_metric_name = losses[0][2]
+            losses[0] = losses[0][0]
 
-        loss_value = loss.item()
-        if not math.isfinite(loss_value):
-            print("Loss is {}, stopping training".format(loss_value))
-            sys.exit(1)
+        for l_val in losses:
+            loss_value = l_val.item()
+            if not math.isfinite(loss_value):
+                print("Loss is {}, stopping training".format(loss_value))
+                sys.exit(1)
 
         # Calculate the metrics
         if precalculated_metric is not None:
@@ -432,7 +351,9 @@ def evaluate(
             metric_function(outputs, targets, metric_logger=metric_logger)
 
         # Update loss in loggers
-        metric_logger.update(loss=loss)
+        for i, loss_tensor in enumerate(losses):
+            loss_name = "loss" if i == 0 else f"loss_{i}"
+            metric_logger.update(**{loss_name: loss_tensor.item()})
 
     # Gather the stats from all processes
     metric_logger.synchronize_between_processes()
@@ -441,11 +362,9 @@ def evaluate(
 
     # Apply reduceonplateau scheduler if the global validation has been reduced
     if cfg.TRAIN.LR_SCHEDULER.NAME == "reduceonplateau":
-        if is_gan:
-            if lr_scheduler and isinstance(lr_scheduler, ReduceLROnPlateau):
-                lr_scheduler.step(metric_logger.meters["loss_g"].global_avg, epoch=epoch)
-            if lr_scheduler_d and isinstance(lr_scheduler_d, ReduceLROnPlateau):
-                lr_scheduler_d.step(metric_logger.meters["loss_d"].global_avg, epoch=epoch)
-        elif lr_scheduler and isinstance(lr_scheduler, ReduceLROnPlateau):
-            lr_scheduler.step(metric_logger.meters["loss"].global_avg, epoch=epoch)
+        for i, sched in enumerate(lr_scheduler):
+            if sched and isinstance(sched, ReduceLROnPlateau):
+                loss_name = "loss" if i == 0 else f"loss_{i}"
+                sched.step(metric_logger.meters[loss_name].global_avg, epoch=epoch)
+
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}

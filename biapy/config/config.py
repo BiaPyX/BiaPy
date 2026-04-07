@@ -1170,7 +1170,6 @@ class Config:
         _C.MODEL.ARCHITECTURE = "unet"
         # Architecture of the network. Possible values are:
         #   * 'patchgan'
-        _C.MODEL.ARCHITECTURE_D = "patchgan"
         # Number of feature maps on each level of the network.
         _C.MODEL.FEATURE_MAPS = [16, 32, 64, 128, 256]
         # Values to make the dropout with. Set to 0 to prevent dropout. When using it with 'ViT' or 'unetr'
@@ -1323,11 +1322,12 @@ class Config:
         _C.MODEL.NAFNET.DW_EXPAND = 2
         # Expansion factor for the hidden layer within the feed-forward network.
         _C.MODEL.NAFNET.FFN_EXPAND = 2
-        
+        # Discriminator architecture
+        _C.MODEL.NAFNET.ARCHITECTURE_D = "patchgan"
         # Discriminator PATCHGAN
-        _C.MODEL.PATCHGAN = CN()
+        _C.MODEL.NAFNET.PATCHGAN = CN()
         # Number of initial convolutional filters in the first layer of the discriminator.
-        _C.MODEL.PATCHGAN.BASE_FILTERS = 64
+        _C.MODEL.NAFNET.PATCHGAN.BASE_FILTERS = 64
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Loss
@@ -1409,9 +1409,6 @@ class Config:
         # Weight for SSIM term.
         _C.LOSS.COMPOSED_GAN.GAMMA_SSIM = 1.0
 
-        # Backward-compatible alias for previous naming.
-        _C.LOSS.GAN = CN()
-
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Training phase
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1419,20 +1416,14 @@ class Config:
         _C.TRAIN.ENABLE = False
         # Enable verbosity
         _C.TRAIN.VERBOSE = False
-        # Optimizer to use. Possible values: "SGD", "ADAM" or "ADAMW"
-        _C.TRAIN.OPTIMIZER = "SGD"
-        # Optimizer to use. Possible values: "SGD", "ADAM" or "ADAMW" for GAN discriminator
-        _C.TRAIN.OPTIMIZER_D = "SGD"
-        # Learning rate
-        _C.TRAIN.LR = 1.0e-4
-        # Learning rate for GAN discriminator
-        _C.TRAIN.LR_D = 1.0e-4
+        # Optimizer(s) to use. Possible values: "SGD", "ADAM" or "ADAMW".
+        _C.TRAIN.OPTIMIZER = ["SGD"]
+        # Learning rate(s). 
+        _C.TRAIN.LR = [1.0e-4]
         # Weight decay
         _C.TRAIN.W_DECAY = 0.02
         # Coefficients used for computing running averages of gradient and its square. Used in ADAM and ADAMW optmizers
-        _C.TRAIN.OPT_BETAS = (0.9, 0.999)
-        # Coefficients used for computing running averages of gradient and its square. Used in ADAM and ADAMW optmizers for GANS discriminator
-        _C.TRAIN.OPT_BETAS_D = (0.5, 0.999)
+        _C.TRAIN.OPT_BETAS = [(0.9, 0.999)]
         # Batch size
         _C.TRAIN.BATCH_SIZE = 2
         # If memory or # gpus is limited, use this variable to maintain the effective batch size, which is

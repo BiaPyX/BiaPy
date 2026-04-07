@@ -2167,7 +2167,36 @@ class SpatialEmbLoss(nn.Module):
         return loss + prediction.sum() * 0, float(iou), "IoU" # keep graph identical to originals
 
 class VGGLoss(nn.Module):
+    """Perceptual loss based on VGG16 feature activations.
+
+    This loss compares intermediate VGG feature maps of prediction and target
+    images using an L1 distance. It is commonly used as a perceptual term in
+    image-to-image GAN training.
+
+    Notes
+    -----
+    - Uses pretrained ``torchvision.models.vgg16`` features up to layer ``:16``.
+    - Supports both 2D `(B, C, H, W)` and 3D `(B, C, D, H, W)` tensors.
+      For 3D inputs, depth is folded into batch to reuse 2D VGG.
+    - Single-channel inputs are replicated to 3 channels before VGG.
+
+    References
+    ----------
+    - Johnson et al., "Perceptual Losses for Real-Time Style Transfer and
+      Super-Resolution", ECCV 2016.
+      https://arxiv.org/abs/1603.08155
+    - Implementation adapted for this project from:
+      https://github.com/GolpedeRemo37/NafNet-in-AI4Life-Microscopy-Supervised-Denoising-Challenge
+    """
+
     def __init__(self, device):
+        """Initialize VGG perceptual loss.
+
+        Parameters
+        ----------
+        device : torch.device
+            Device where VGG features and loss operations are executed.
+        """
         super().__init__()
         self.vgg = vgg16(weights=VGG16_Weights.IMAGENET1K_V1).features[:16].eval().to(device)
         for param in self.vgg.parameters():
@@ -2176,6 +2205,20 @@ class VGGLoss(nn.Module):
         self.preprocess = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     
     def forward(self, pred, target):
+        """Compute perceptual distance between prediction and target.
+
+        Parameters
+        ----------
+        pred : torch.Tensor or dict
+            Predicted image tensor. If dict, prediction is taken from ``pred['pred']``.
+        target : torch.Tensor or dict
+            Target image tensor. If dict, target is taken from ``target['pred']``.
+
+        Returns
+        -------
+        torch.Tensor
+            Scalar perceptual loss value (L1 over VGG features).
+        """
         if isinstance(pred, dict):
             pred = pred["pred"]
         if isinstance(target, dict):
@@ -2199,11 +2242,45 @@ class VGGLoss(nn.Module):
         return self.loss(pred_vgg, target_vgg)
 
 class ComposedGANLoss(nn.Module):
+    """Weighted composite loss for generator and discriminator training.
+
+    This class combines multiple objectives for GAN-based image restoration:
+
+    - Adversarial BCE term
+    - L1 reconstruction term
+    - MSE reconstruction term
+    - VGG perceptual term
+    - SSIM term
+
+    Each term is controlled by configuration weights under
+    ``LOSS.COMPOSED_GAN``. Heavy components (VGG/SSIM modules) are created only
+    when their weight is greater than zero.
+
+    References
+    ----------
+    - Isola et al., "Image-to-Image Translation with Conditional Adversarial
+        Networks", CVPR 2017 (pix2pix).
+        https://arxiv.org/abs/1611.07004
+    - Generator family inspiration (NAFNet/NAFSSR):
+        Chu et al., "NAFSSR: Stereo Image Super-Resolution Using NAFNet",
+        CVPR Workshops 2022.
+        https://openaccess.thecvf.com/content/CVPR2022W/NTIRE/html/Chu_NAFSSR_Stereo_Image_Super-Resolution_Using_NAFNet_CVPRW_2022_paper.html
+    - Structural/perceptual metrics are implemented with torchmetrics
+        (e.g., ``torchmetrics.image.StructuralSimilarityIndexMeasure``).
+    - Implementation adapted for this project from:
+        https://github.com/GolpedeRemo37/NafNet-in-AI4Life-Microscopy-Supervised-Denoising-Challenge
     """
-    Dynamic composite loss for GANs.
-    Only instantiates heavy loss models (like VGG) if their config weight is > 0.
-    """
+
     def __init__(self, cfg, device):
+        """Initialize composed GAN loss from configuration.
+
+        Parameters
+        ----------
+        cfg : yacs.config.CfgNode
+                Global configuration node. Uses ``cfg.LOSS.COMPOSED_GAN`` weights.
+        device : torch.device
+                Device where loss terms are computed.
+        """
         super().__init__()
         self.device = device
         self.w_gan = cfg.LOSS.COMPOSED_GAN.LAMBDA_GAN
@@ -2224,6 +2301,22 @@ class ComposedGANLoss(nn.Module):
         self.bce = nn.BCEWithLogitsLoss() 
 
     def forward_generator(self, pred, target, d_fake):
+        """Compute weighted generator loss.
+
+        Parameters
+        ----------
+        pred : torch.Tensor or dict
+            Generator prediction. If dict, reads ``pred['pred']``.
+        target : torch.Tensor or dict
+            Ground-truth target. If dict, reads ``target['pred']``.
+        d_fake : torch.Tensor
+            Discriminator logits for generated samples.
+
+        Returns
+        -------
+        torch.Tensor
+            Scalar generator loss as weighted sum of active terms.
+        """
         # Dict extraction
         if isinstance(pred, dict): pred = pred["pred"]
         if isinstance(target, dict): target = target["pred"]
@@ -2265,6 +2358,22 @@ class ComposedGANLoss(nn.Module):
         return total_loss
 
     def forward_discriminator(self, d_real, d_fake):
+        """Compute discriminator adversarial loss.
+
+        Uses BCE with one-sided label smoothing for real logits.
+
+        Parameters
+        ----------
+        d_real : torch.Tensor
+            Discriminator logits for real samples.
+        d_fake : torch.Tensor
+            Discriminator logits for generated samples.
+
+        Returns
+        -------
+        torch.Tensor
+            Scalar discriminator loss.
+        """
         # Calculate Adversarial Loss for Discriminator
         real_loss = self.bce(d_real, torch.full_like(d_real, 0.9)) # Label smoothing (0.9 instead of 1.0)
         fake_loss = self.bce(d_fake, torch.zeros_like(d_fake))
