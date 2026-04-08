@@ -76,18 +76,21 @@ def create_plots(results, metrics, job_id, chartOutDir):
     os.environ["QT_QPA_PLATFORM"] = "offscreen"
 
     # Loss
-    plt.plot(results["loss"])
-    if "val_loss" in results:
-        plt.plot(results["val_loss"])
-    plt.title("Model JOBID=" + job_id + " loss")
-    plt.ylabel("Value")
-    plt.xlabel("Epoch")
-    if "val_loss" in results:
-        plt.legend(["Train loss", "Val. loss"], loc="upper left")
-    else:
-        plt.legend(["Train loss"], loc="upper left")
-    plt.savefig(os.path.join(chartOutDir, job_id + "_loss.png"))
-    plt.clf()
+    loss_keys = ["loss"] + [k for k in results if "loss" in k and k not in ["loss", "val_loss"]]
+    for loss_key in loss_keys:
+        val_loss_key = f"val_{loss_key}"
+        plt.plot(results[loss_key])
+        if val_loss_key in results:
+            plt.plot(results[val_loss_key])
+        plt.title("Model JOBID=" + job_id + " " + loss_key)
+        plt.ylabel("Value")
+        plt.xlabel("Epoch")
+        if val_loss_key in results:
+            plt.legend([f"Train {loss_key}", f"Val. {loss_key}"], loc="upper left")
+        else:
+            plt.legend([f"Train {loss_key}"], loc="upper left")
+        plt.savefig(os.path.join(chartOutDir, job_id + "_" + loss_key + ".png"))
+        plt.clf()
 
     # Metric
     for i in range(len(metrics)):

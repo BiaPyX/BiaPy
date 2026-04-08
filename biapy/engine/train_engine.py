@@ -192,6 +192,9 @@ def train_one_epoch(
             for i, (opt, loss_tensor) in enumerate(zip(optimizer, losses)):
                 loss_tensor = loss_tensor / cfg.TRAIN.ACCUM_ITER
 
+                if has_discriminator and i == 1:
+                    opt.zero_grad()
+
                 loss_tensor.backward()
                 opt.step()  # update weight
                 opt.zero_grad()
@@ -279,7 +282,7 @@ def evaluate(
     has_discriminator = hasattr(model, "discriminator") and model.discriminator is not None
     # Ensure correct order of each epoch info by adding loss first
     metric_logger = MetricLogger(delimiter="  ")
-    num_losses = 2 if has_discriminator and len(lr_scheduler) > 1 else 1
+    num_losses = 2 if has_discriminator else 1
     for i in range(num_losses):
         loss_name = "loss" if i == 0 else f"loss_{i}"
         metric_logger.add_meter(loss_name, SmoothedValue())
@@ -299,7 +302,7 @@ def evaluate(
         
         # Loss function call
         losses = []
-        if has_discriminator and len(lr_scheduler) > 1:
+        if has_discriminator:
             fake_img = outputs["pred"] if isinstance(outputs, dict) else outputs
             fake_img = torch.clamp(fake_img, 0, 1)
 
@@ -313,6 +316,8 @@ def evaluate(
             losses.append(loss_d)
             
         elif memory_bank is not None:
+            with_embed = False
+
             outputs = {
                 "pred": outputs["pred"],
                 "embed": outputs["embed"],

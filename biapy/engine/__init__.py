@@ -51,11 +51,13 @@ def prepare_optimizer(
     
     if hasattr(model_without_ddp, 'discriminator') and model_without_ddp.discriminator is not None:
         param_groups = [
-            [p for n, p in model_without_ddp.named_parameters() if not n.startswith("discriminator.")], # Generator
-            model_without_ddp.discriminator.parameters()                                                # Discriminator
+            # Generator
+            [p for n, p in model_without_ddp.named_parameters() if not n.startswith("discriminator.")], # should this be and p.requires_grad, same below? 
+            # Discriminator
+            [p for p in model_without_ddp.discriminator.parameters()] 
         ]
     else:
-        param_groups = [model_without_ddp.parameters()]
+        param_groups = [[p for p in model_without_ddp.parameters()]]
 
     ## Not quite sure if this is the best place to do this
     if len(cfg.TRAIN.OPTIMIZER) != len(param_groups):
@@ -66,14 +68,14 @@ def prepare_optimizer(
         )
 
     for i in range(len(cfg.TRAIN.OPTIMIZER)):
-        lr = cfg.TRAIN.LR if cfg.TRAIN.LR_SCHEDULER.NAME != "warmupcosine" else cfg.TRAIN.LR_SCHEDULER.MIN_LR
+        lr = cfg.TRAIN.LR if cfg.TRAIN.LR_SCHEDULER.NAME != "warmupcosine" else [cfg.TRAIN.LR_SCHEDULER.MIN_LR] * len(cfg.TRAIN.LR)
         opt_args = {}
         if cfg.TRAIN.OPTIMIZER[i] in ["ADAM", "ADAMW"]:
             opt_args["betas"] = cfg.TRAIN.OPT_BETAS[i] if i < len(cfg.TRAIN.OPT_BETAS) else cfg.TRAIN.OPT_BETAS[0]
         optimizer = timm.optim.create_optimizer_v2(
             param_groups[i],
             opt=cfg.TRAIN.OPTIMIZER[i],
-            lr=lr,
+            lr=lr[i],
             weight_decay=cfg.TRAIN.W_DECAY,
             **opt_args,
         )
