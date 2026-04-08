@@ -223,11 +223,6 @@ def train_one_epoch(
             if log_writer:
                 log_writer.update(head="opt", **{lr_name: max_lr})
 
-    if cfg.TRAIN.LR_SCHEDULER.NAME not in ["reduceonplateau", "onecycle", "warmupcosine"]:
-        for sched in lr_scheduler:
-            if sched:
-                sched.step()
-
     # Gather the stats from all processes
     metric_logger.synchronize_between_processes()
     print("[Train] averaged stats:", metric_logger)

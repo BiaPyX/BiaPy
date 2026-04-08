@@ -346,7 +346,7 @@ def save_model(cfg, biapy_version, jobname, epoch, model_without_ddp, optimizer,
         to_save = {
             "model_build_kwargs": model_build_kwargs,
             "model": model_without_ddp.state_dict(),
-            "optimizer": [opt.state_dict() for opt in optimizer] if optimizer else None,
+            "optimizer": [opt.state_dict() for opt in optimizer], # should i check if none? if i leave empty it uses default.
             "epoch": epoch,
             "cfg": cfg,
             "biapy_version": biapy_version,

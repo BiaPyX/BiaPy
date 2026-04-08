@@ -40,9 +40,9 @@ def prepare_optimizer(
 
     Returns
     -------
-    optimizer : List[Optimizer]
+    optimizers : List[Optimizer]
         Configured optimizers for the models.
-    lr_scheduler : Scheduler or None
+    lr_schedulers : List[Scheduler | None]
         Configured learning rate schedulers, or None if not specified.
     """
 
