@@ -361,7 +361,7 @@ def evaluate(
     print("[Val] averaged stats:", metric_logger)
 
     # Apply reduceonplateau scheduler if the global validation has been reduced
-    if cfg.TRAIN.LR_SCHEDULER.NAME == "reduceonplateau":
+    if lr_scheduler and cfg.TRAIN.LR_SCHEDULER.NAME == "reduceonplateau":
         for i, sched in enumerate(lr_scheduler):
             if sched and isinstance(sched, ReduceLROnPlateau):
                 loss_name = "loss" if i == 0 else f"loss_{i}"
