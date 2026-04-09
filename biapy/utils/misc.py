@@ -448,6 +448,7 @@ def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=Non
         - `cfg.PATHS.CHECKPOINT_FILE`: Explicit path to checkpoint.
         - `cfg.MODEL.LOAD_CHECKPOINT_EPOCH`: Strategy for checkpoint selection.
         - `cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT`: List of items to load from the checkpoint (if available). Options are:
+
           - "weights": Load model weights.
           - "model_arch": Load model architecture.
           - "optimizer": Load optimizer state.

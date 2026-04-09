@@ -324,6 +324,7 @@ def update_mask_norm_info(old_mask_norm_info: Dict, new_mask_norm_info: Dict) ->
     """
     Update the mask normalization information by replacing the values of the old mask normalization information with the 
     ones of the new mask normalization information when they are more restrictive. For example:
+
         - orig_dtype: float will be set instead of int, as it is more restrictive.
         - For each channel:
             - type: "no_bin" will be set instead of "bin" or "classes", and "classes" will be set instead of "bin", as they are more restrictive.

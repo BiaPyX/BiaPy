@@ -464,7 +464,7 @@ class Embedding_cluster:
         Returns
         -------
         NDArray
-            Instance labels with shape (*spatial,), dtype uint8 if max(label) ≤ 255 else uint16.
+            Instance labels with shape ``(*spatial,)``, dtype uint8 if max(label) ≤ 255 else uint16.
         """
         assert pred.ndim in (3, 4), f"Expected (Y,X,C) or (Z,Y,X,C); got {pred.shape}"
         spatial = pred.shape[:-1]

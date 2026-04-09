@@ -3580,7 +3580,7 @@ def diff_between_configs(old_dict: Dict | Config, new_dict: Dict | Config, path:
     """
     Print differences between two given configurations.
 
-    Paramaters
+    Parameters
     ----------
     old_dict : Config or Dict
         First dictionary to compare against ``new_dict``.

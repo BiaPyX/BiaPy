@@ -1411,26 +1411,27 @@ def synapse_channel_creation(
         All patches that can be extracted from all the Zarr/H5 samples in ``data_path``.
         Keys created are:
 
-            * ``"filepath"``: path to the file where the patch was extracted.
-            * ``"full_shape"``: shape of the data within the file where the patch was extracted.
-            * ``"patch_coords"``: coordinates of the data that represents the patch.
+        * ``"filepath"``: path to the file where the patch was extracted.
+        * ``"full_shape"``: shape of the data within the file where the patch was extracted.
+        * ``"patch_coords"``: coordinates of the data that represents the patch.
 
     zarr_data_information : dict
         Information when using Zarr/H5 files. Assumes that the H5/Zarr files contain the information according
         `CREMI data format <https://cremi.org/data/>`__. The following keys are expected:
-            * ``"raw_data_path"``: path within the file where the raw data is stored. Reference in CREMI: ``volumes/raw``
-            * ``"axes_order"``: order of the axes in the file. E.g. "ZYX" or "ZCYX".
-            * ``"z_axe_pos"``: position of z axis of the data within the file.
-            * ``"y_axe_pos"``: position of y axis of the data within the file.
-            * ``"x_axe_pos"``: position of x axis of the data within the file.
-            * ``"id_path"``: path within the file where the ``ids`` are stored.
-              Reference in CREMI: ``annotations/ids``
-            * ``"partners_path"``: path within the file where ``partners`` is stored.
-              Reference in CREMI: ``annotations/partners``
-            * ``"locations_path"``: path within the file where ``locations`` is stored.
-              Reference in CREMI: ``annotations/locations``
-            * ``"resolution_path"``: path within the file where ``resolution`` is stored.
-              Reference in CREMI: ``["volumes/raw"].attrs["offset"]``
+
+        * ``"raw_data_path"``: path within the file where the raw data is stored. Reference in CREMI: ``volumes/raw``
+        * ``"axes_order"``: order of the axes in the file. E.g. "ZYX" or "ZCYX".
+        * ``"z_axe_pos"``: position of z axis of the data within the file.
+        * ``"y_axe_pos"``: position of y axis of the data within the file.
+        * ``"x_axe_pos"``: position of x axis of the data within the file.
+        * ``"id_path"``: path within the file where the ``ids`` are stored.
+          Reference in CREMI: ``annotations/ids``
+        * ``"partners_path"``: path within the file where ``partners`` is stored.
+          Reference in CREMI: ``annotations/partners``
+        * ``"locations_path"``: path within the file where ``locations`` is stored.
+          Reference in CREMI: ``annotations/locations``
+        * ``"resolution_path"``: path within the file where ``resolution`` is stored.
+          Reference in CREMI: ``["volumes/raw"].attrs["offset"]``
 
     savepath : str
         Path to save the data created.
@@ -1440,12 +1441,18 @@ def synapse_channel_creation(
 
     channel_extra_opts : dict, optional
         Extra options for specific channels. For example, dilation for the "F_pre" and "F_post" channels. Expected keys are:
-            * ``"F_pre"``: options for the "F_pre" channel. Expected keys are:
-                * ``"dilation"``: list of 3 ints specifying the dilation in z,y,x for the "F_pre" channel (default: [1,10,10]).
-            * ``"F_post"``: options for the "F_post" channel. Expected keys are:
-                * ``"dilation"``: list of 3 ints specifying the dilation in z,y,x for the "F_post" channel (default: [1,10,10]).
-            * ``"H"``, ``"V"``, ``"Z"``: options for the distance channels. Expected keys are:
-                * ``"norm"``: whether to normalize the distance channels per instance (default: True).
+
+        * ``"F_pre"``: options for the "F_pre" channel. Expected keys are:
+
+          * ``"dilation"``: list of 3 ints specifying the dilation in z,y,x for the "F_pre" channel (default: [1,10,10]).
+
+        * ``"F_post"``: options for the "F_post" channel. Expected keys are:
+
+          * ``"dilation"``: list of 3 ints specifying the dilation in z,y,x for the "F_post" channel (default: [1,10,10]).
+
+        * ``"H"``, ``"V"``, ``"Z"``: options for the distance channels. Expected keys are:
+
+          * ``"norm"``: whether to normalize the distance channels per instance (default: True).
 
     verbose : bool, optional
         Whether to print warnings about out-of-bounds synaptic points (default: False).

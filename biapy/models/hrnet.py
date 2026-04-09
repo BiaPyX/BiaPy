@@ -975,6 +975,7 @@ class HighResolutionNet(nn.Module):
         Dict or torch.Tensor
             If there is only one output head, returns a tensor with the predictions.
             If there are multiple output heads (e.g. for multi-task learning), returns a dictionary with keys:
+
                 - "pred": tensor with the main predictions (e.g. segmentation map)
                 - "class": tensor with the classification output (if `return_class` is True)
                 - "embed": tensor with the contrastive learning embedding (if `contrast` is True)

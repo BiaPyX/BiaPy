@@ -103,7 +103,8 @@ class Denoising_Workflow(Base_Workflow):
 
         Example of a correct definition of the function for a model with two output heads: 1) the first one will be predicting foreground
         and contours; 2) the second one will classify into 3 classes the predicted objects. In this case the following definition would
-        be correct:
+        be correct::
+
             self.model_output_channels = [1, 3]
             self.model_output_channel_info = ["mask", "class"]
             self.separated_class_channel = True
