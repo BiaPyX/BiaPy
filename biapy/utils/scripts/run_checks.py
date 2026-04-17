@@ -36,11 +36,12 @@ all_test_info = {}
 all_test_info["Test1"] = {
     "enable": True,
     "jobname": "test1",
-    "description": "2D Semantic seg. Lucchi++. Basic DA. unet. 2D stack as 3D. Post-proc: z-filtering.",
+    "description": "2D Semantic seg. Lucchi++. Basic DA. unet. 2D stack as 3D. Post-proc: z-filtering. BMZ export through YAML.",
     "yaml": "test_1.yaml",
     "internal_checks": [
         {"type": "regular", "pattern": "Test Foreground IoU (per image)", "gt": True, "value": 0.7},
         {"type": "regular", "pattern": "Test Foreground IoU (as 3D stack - post-processing)", "gt": True, "value": 0.7},
+        {"type": "BMZ", "pattern": "Package path:", "bmz_package_name":  "lucchi2Dsegmentation.zip"},    
     ]
 }
 
@@ -108,12 +109,13 @@ all_test_info["Test6"] = {
 all_test_info["Test7"] = {
     "enable": True,
     "jobname": "test7",
-    "description": "2D Detection. Stardist v2 2D data. zero_mean_unit_variance norm, percentile clip. Basic DA. "
+    "description": "2D Detection. Stardist v2 2D data. zero_mean_unit_variance norm, percentile clip. Basic DA. Export model to BMZ. "
         "multiresunet. Post-proc: remove close points + det watershed",
     "yaml": "test_7.yaml",
     "internal_checks": [
         {"type": "regular", "pattern": "Test Foreground IoU (merge patches):", "gt": True, "value": 0.5},
         {"type": "regular", "pattern": "Test F1 (merge patches)", "gt": True, "value": 0.85},
+        {"type": "BMZ", "pattern": "Package path:", "bmz_package_name":  "biapy_model.zip"},
     ]
 }
 
@@ -142,8 +144,7 @@ all_test_info["Test11"] = {
 all_test_info["Test9"] = {
     "enable": True,
     "jobname": "test9",
-    "description": "2D Denoising. Convallaria data. zero_mean_unit_variance norm. Basic DA."
-        "unetr. Post-proc: remove close points + det watershed",
+    "description": "2D Denoising. LongBeach data (N2V RGB data). zero_mean_unit_variance norm. Basic DA.",
     "yaml": "test_9.yaml",
     "internal_checks": [
         {"type": "regular", "pattern": "Validation MSE:", "gt": False, "value": 0.6},
@@ -158,6 +159,7 @@ all_test_info["Test10"] = {
     "yaml": "test_10.yaml",
     "internal_checks": [
         {"type": "regular", "pattern": "Validation MSE:", "gt": False, "value": 0.6},
+        {"type": "BMZ", "pattern": "Package path:", "bmz_package_name":  "lucchi2Dsegmentation.zip"},    
     ]
 }
 
@@ -169,6 +171,7 @@ all_test_info["Test12"] = {
     "internal_checks": [
         {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 22.0},
         {"type": "regular", "pattern": "Test PSNR (merge patches)", "gt": True, "value": 23.0},
+        {"type": "BMZ", "pattern": "Package path:", "bmz_package_name":  "biapy_model.zip"},
     ]
 }
 
@@ -186,11 +189,12 @@ all_test_info["Test13"] = {
 all_test_info["Test14"] = {
     "enable": True,
     "jobname": "test14",
-    "description": "2D self-supervision. Lucchi data. Cross-val. Basic DA. rcan",
+    "description": "2D self-supervision. Lucchi data. Cross-val. Basic DA. rcan. Export BMZ model.",
     "yaml": "test_14.yaml",
     "internal_checks": [
         {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 19.0},
         {"type": "regular", "pattern": "Test PSNR (merge patches):", "gt": True, "value": 22.0},
+        {"type": "BMZ", "pattern": "Package path:", "bmz_package_name":  "biapy_model.zip"},
     ]
 }
 
@@ -251,6 +255,7 @@ all_test_info["Test20"] = {
     "yaml": "test20.yaml",
     "internal_checks": [
         {"type": "regular", "pattern": "Validation Top 5 accuracy:", "gt": True, "value": 0.9},
+        {"type": "BMZ", "pattern": "Package path:", "bmz_package_name":  "biapy_model.zip"},
     ]
 }
 
@@ -271,6 +276,7 @@ all_test_info["Test22"] = {
     "yaml": "test22.yaml",
     "internal_checks": [
         {"type": "regular", "pattern": "Validation Top 5 accuracy:", "gt": True, "value": 0.7},
+        {"type": "BMZ", "pattern": "Package path:", "bmz_package_name":  "biapy_model.zip"},
     ]
 }
 
@@ -391,10 +397,11 @@ all_test_info["Test32"] = {
 all_test_info["Test33"] = {
     "enable": True,
     "jobname": "test33",
-    "description": "2D image to image. lightmycells 2D data. preprocess: resize. Val in memory, train not in memory. Basic DA. attention_unet",
+    "description": "2D image to image. lightmycells 2D data. preprocess: resize. Val in memory, train not in memory. Basic DA. attention_unet. Export BMZ model.",
     "yaml": "test_33.yaml",
     "internal_checks": [
         {"type": "regular", "pattern": "Validation PSNR:", "gt": True, "value": 8.5},
+        {"type": "BMZ", "pattern": "Package path:", "bmz_package_name":  "biapy_model.zip"},
     ]
 }
 
@@ -427,10 +434,11 @@ all_test_info["Test35"] = {
 all_test_info["Test36"] = {
     "enable": True,
     "jobname": "test36",
-    "description": "3D Detection. Achucarro data. points+classes",
+    "description": "3D Detection. Achucarro data. points+classes. Export model to BMZ",
     "yaml": "test_36.yaml",
     "internal_checks": [
         {"type": "regular", "pattern": "Test F1 (merge patches)", "gt": True, "value": 0.55},
+        {"type": "BMZ", "pattern": "Package path:", "bmz_package_name":  "biapy_model.zip"},
     ]
 }
 
@@ -1259,6 +1267,17 @@ try:
 
         biapy_config['MODEL']['ARCHITECTURE'] = 'hrnet32'
 
+        biapy_config['BMZ'] = {}
+        biapy_config['BMZ']['EXPORT'] = {}
+        biapy_config['BMZ']['EXPORT']['ENABLE'] = True
+        biapy_config['BMZ']['EXPORT']['MODEL_NAME'] = "lucchi2Dsegmentation"
+        biapy_config['BMZ']['EXPORT']['DESCRIPTION'] = "2D mitochondria segmentation"
+        biapy_config['BMZ']['EXPORT']['AUTHORS'] = [{"name": "Daniel Franco-Barranco", "github_user": "danifranco"}]
+        biapy_config['BMZ']['EXPORT']['TAGS'] = ["mitochondria",  "electron microscopy"]
+        biapy_config['BMZ']['EXPORT']['CITE'] = [{"text": "model", "doi": "10.1109/TPAMI.2020.2983686"}, {"text": "training library", "doi": "10.1038/s41592-025-02699-y"}]
+        biapy_config['BMZ']['EXPORT']['DATASET_INFO'] = [{"name": "lucchi++", "doi": "10.5281/zenodo.17829532", "image_modality": "electron microscopy"}]
+        biapy_config['BMZ']['EXPORT']['MODEL_VERSION'] = "0.1.0"
+
         biapy_config['LOSS'] = {}
         biapy_config['LOSS']['TYPE'] = "W_CE_DICE"
         
@@ -1800,8 +1819,13 @@ try:
         with open(test_file, 'w') as outfile:
             yaml.dump(biapy_config, outfile, default_flow_style=False)
 
-        # Run
-        runjob(all_test_info["Test7"], results_folder, test_file, biapy_folder)
+        bmz_package_name = None
+        for checks in all_test_info["Test7"]["internal_checks"]:
+            if checks["type"] != "regular":
+                bmz_package_name = checks['bmz_package_name']
+                break
+        assert bmz_package_name is not None, "bmz_package_name not found"
+        runjob(all_test_info["Test7"], results_folder, test_file, biapy_folder, bmz=True, bmz_package=bmz_package_name)
 
         # Check
         results = []
@@ -2181,7 +2205,14 @@ try:
             yaml.dump(biapy_config, outfile, default_flow_style=False)
 
         # Run
-        runjob(all_test_info["Test10"], results_folder, test_file, biapy_folder)
+        bmz_package_name = None
+        for checks in all_test_info["Test10"]["internal_checks"]:
+            if checks["type"] != "regular":
+                bmz_package_name = checks['bmz_package_name']
+                break
+        assert bmz_package_name is not None, "bmz_package_name not found"
+        runjob(all_test_info["Test10"], results_folder, test_file, biapy_folder, bmz=True, bmz_package=bmz_package_name)
+
 
         # Check
         results = []
@@ -2262,7 +2293,13 @@ try:
             yaml.dump(biapy_config, outfile, default_flow_style=False)
 
         # Run
-        runjob(all_test_info["Test12"], results_folder, test_file, biapy_folder)
+        bmz_package_name = None
+        for checks in all_test_info["Test12"]["internal_checks"]:
+            if checks["type"] != "regular":
+                bmz_package_name = checks['bmz_package_name']
+                break
+        assert bmz_package_name is not None, "bmz_package_name not found"
+        runjob(all_test_info["Test12"], results_folder, test_file, biapy_folder, bmz=True, bmz_package=bmz_package_name)
 
         # Check
         results = []
@@ -2427,7 +2464,13 @@ try:
             yaml.dump(biapy_config, outfile, default_flow_style=False)
 
         # Run
-        runjob(all_test_info["Test14"], results_folder, test_file, biapy_folder)
+        bmz_package_name = None
+        for checks in all_test_info["Test14"]["internal_checks"]:
+            if checks["type"] != "regular":
+                bmz_package_name = checks['bmz_package_name']
+                break
+        assert bmz_package_name is not None, "bmz_package_name not found"
+        runjob(all_test_info["Test14"], results_folder, test_file, biapy_folder, bmz=True, bmz_package=bmz_package_name)
 
         # Check
         results = []
@@ -2974,7 +3017,13 @@ try:
             yaml.dump(biapy_config, outfile, default_flow_style=False)
 
         # Run
-        runjob(all_test_info["Test21"], results_folder, test_file, biapy_folder)
+        bmz_package_name = None
+        for checks in all_test_info["Test21"]["internal_checks"]:
+            if checks["type"] != "regular":
+                bmz_package_name = checks['bmz_package_name']
+                break
+        assert bmz_package_name is not None, "bmz_package_name not found"
+        runjob(all_test_info["Test21"], results_folder, test_file, biapy_folder, bmz=True, bmz_package=bmz_package_name)
 
         # Check
         results = []
@@ -3059,7 +3108,14 @@ try:
             yaml.dump(biapy_config, outfile, default_flow_style=False)
 
         # Run
-        runjob(all_test_info["Test22"], results_folder, test_file, biapy_folder)
+        bmz_package_name = None
+        for checks in all_test_info["Test22"]["internal_checks"]:
+            if checks["type"] != "regular":
+                bmz_package_name = checks['bmz_package_name']
+                break
+        assert bmz_package_name is not None, "bmz_package_name not found"
+        runjob(all_test_info["Test22"], results_folder, test_file, biapy_folder, bmz=True, bmz_package=bmz_package_name)
+
 
         # Check
         results = []
@@ -4047,7 +4103,14 @@ try:
             yaml.dump(biapy_config, outfile, default_flow_style=False)
 
         # Run
-        runjob(all_test_info["Test33"], results_folder, test_file, biapy_folder)
+        bmz_package_name = None
+        for checks in all_test_info["Test33"]["internal_checks"]:
+            if checks["type"] != "regular":
+                bmz_package_name = checks['bmz_package_name']
+                break
+        assert bmz_package_name is not None, "bmz_package_name not found"
+        runjob(all_test_info["Test33"], results_folder, test_file, biapy_folder, bmz=True, bmz_package=bmz_package_name)
+
 
         # Check
         results = []
@@ -4303,7 +4366,13 @@ try:
             yaml.dump(biapy_config, outfile, default_flow_style=False)
 
         # Run
-        runjob(all_test_info["Test36"], results_folder, test_file, biapy_folder, multigpu=True)
+        bmz_package_name = None
+        for checks in all_test_info["Test36"]["internal_checks"]:
+            if checks["type"] != "regular":
+                bmz_package_name = checks['bmz_package_name']
+                break
+        assert bmz_package_name is not None, "bmz_package_name not found"
+        runjob(all_test_info["Test36"], results_folder, test_file, biapy_folder, bmz=True, bmz_package=bmz_package_name)
 
         # Check
         results = []
