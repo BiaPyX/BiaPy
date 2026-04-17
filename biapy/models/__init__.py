@@ -1002,9 +1002,9 @@ def check_bmz_model_compatibility(
                 channel_code = ["A"] # wild-whale
 
         opts["PROBLEM.INSTANCE_SEG.DATA_CHANNELS"] = channel_code
-        opts["PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS"] = [
-            1,
-        ] * channels
+        opts["PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS"] = [1,] * channels
+        opts["PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES"] = [1.,] * channels
+
         if classes != 2:
             opts["DATA.N_CLASSES"] = max(2, classes)
         if channel_code == "A":
