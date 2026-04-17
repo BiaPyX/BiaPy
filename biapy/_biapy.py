@@ -626,6 +626,7 @@ class BiaPy:
                         }
                     )
 
+        axes = list("zyx") if self.cfg.PROBLEM.NDIM == "3D" else list("yx")
         if self.cfg.DATA.NORMALIZATION.TYPE == "div":
             max_val = 255
             if not reuse_original_bmz_config:
@@ -644,8 +645,6 @@ class BiaPy:
                 }
             )
         elif self.cfg.DATA.NORMALIZATION.TYPE == "scale_range":
-            axes = ["channel"]
-            axes += list("zyx") if self.cfg.PROBLEM.NDIM == "3D" else list("yx")
             preprocessing.append(
                 {
                     "id": "scale_range",
@@ -665,14 +664,13 @@ class BiaPy:
                     {
                         "id": "fixed_zero_mean_unit_variance",
                         "kwargs": {
-                            "mean": custom_mean,
-                            "std": custom_std,
+                            "mean": [custom_mean],
+                            "std": [custom_std],
+                            "axis": "channel",
                         },
                     }
                 )
             else:
-                axes = ["channel"]
-                axes += list("zyx") if self.cfg.PROBLEM.NDIM == "3D" else list("yx")
                 preprocessing.append(
                     {
                         "id": "zero_mean_unit_variance",

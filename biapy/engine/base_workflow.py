@@ -1349,6 +1349,7 @@ class Base_Workflow(metaclass=ABCMeta):
                         if "Y_filename" in self.current_sample:
                             me += " (GT: {})".format(self.current_sample["Y_filename"])
                         print(me)
+                        print("Normalization used: {}".format(self.current_sample["X_norm"]))
                     discarded = self.process_test_sample()
 
             # If process_test_sample() returns True means that the sample was skipped due to filter set
@@ -1564,8 +1565,14 @@ class Base_Workflow(metaclass=ABCMeta):
 
             # Apply normalization
             if apply_norm:
-                self.bmz_config[sample_key], _ = normalize_image(self.bmz_config[sample_key], self.norm_module)
-                self.bmz_config[sample_key] = self.bmz_config[sample_key].astype(np.float32)
+                if self.cfg.PROBLEM.NDIM == "2D":
+                    # Transpose to (b,y,x,c) for normalization and back to (b,c,y,x) after
+                    self.bmz_config[sample_key], _ = normalize_image(self.bmz_config[sample_key].transpose(0, 2, 3, 1), self.norm_module)
+                    self.bmz_config[sample_key] = self.bmz_config[sample_key].astype(np.float32).transpose(0, 3, 1, 2)
+                else:  
+                    # Transpose to (b,z,y,x,c) for normalization and back to (b,c,z,y,x) after
+                    self.bmz_config[sample_key], _ = normalize_image(self.bmz_config[sample_key].transpose(0, 2, 3, 4, 1), self.norm_module)
+                    self.bmz_config[sample_key] = self.bmz_config[sample_key].astype(np.float32).transpose(0, 4, 1, 2, 3)
 
         # Save test_input without the normalization if not already saved
         if "test_input" not in self.bmz_config:
