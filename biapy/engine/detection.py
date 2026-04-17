@@ -439,7 +439,7 @@ class Detection_Workflow(Base_Workflow):
             if self.cfg.TEST.VERBOSE:
                 print("Creating the images with detected points . . .")
 
-            dtype = decide_dtype(len(pred_points))
+            dtype = decide_dtype(len(pred_points)+1)
             points_pred_mask = np.zeros(pred.shape[:-1], dtype=dtype)
 
             if len(pred_points) > 0:
@@ -822,7 +822,7 @@ class Detection_Workflow(Base_Workflow):
                         print("No points found in GT!")
                     print("Creating the image with a summary of detected points and false positives with colors . . .")
 
-                dtype = decide_dtype(len(gt_coordinates))
+                dtype = decide_dtype(len(gt_coordinates)+1)
                 points_pred_mask_color = np.zeros(pred_shape[:-1] + (3,), dtype=dtype)
 
                 # TP and FN
