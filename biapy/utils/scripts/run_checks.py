@@ -31,17 +31,17 @@ ngpus = len(gpu_list)
 print(f"Using GPU: '{gpu}' (single-gpu checks) ; GPUs: '{gpus}' (multi-gpu checks)")
 
 data_folder = os.path.join(os.getcwd(), args.out_folder) 
-biapy_folder = os.getcwd() if args.biapy_folder == "" else args.biapy_folder
+BIAPY_FOLDER = os.getcwd() if args.biapy_folder == "" else args.biapy_folder
 
 print(f"Out folder: {data_folder}")
-print(f"Running in folder: {biapy_folder}")
+print(f"Running in folder: {BIAPY_FOLDER}")
 
-bmz_folder = os.path.join(data_folder, "bmz_files")
-bmz_script = os.path.join(biapy_folder, "biapy", "utils", "scripts", "export_bmz_test.py")
-results_folder = os.path.join(data_folder, "output")
+BMZ_FOLDER = os.path.join(data_folder, "bmz_files")
+bmz_script = os.path.join(BIAPY_FOLDER, "biapy", "utils", "scripts", "export_bmz_test.py")
+RESULTS_FOLDER = os.path.join(data_folder, "output")
 
-if not os.path.exists(biapy_folder):
-    raise ValueError(f"BiaPy not found in: {biapy_folder}")
+if not os.path.exists(BIAPY_FOLDER):
+    raise ValueError(f"BiaPy not found in: {BIAPY_FOLDER}")
 
 # ---------------------------------------------------------
 # HELPER FUNCTIONS
@@ -142,7 +142,7 @@ def check_DatasetMatching(last_lines, pattern_to_find, ref_value, gt=True, value
 
 def check_finished(test_info):
     # get the last lines of the output file
-    jobdir = os.path.join(results_folder, test_info["jobname"])
+    jobdir = os.path.join(RESULTS_FOLDER, test_info["jobname"])
     jobout_file = os.path.join(jobdir, test_info["jobname"]+"_1")
     logfile = open(jobout_file, 'r')
     last_lines = logfile.readlines()
@@ -167,25 +167,25 @@ def print_result(finished_good, jobname, int_checks):
     print("######")
 
 
-def runjob(test_info, results_folder, yaml_file, biapy_folder, multigpu=False, bmz_by_command=False, bmz_package=None, reuse_original_bmz_config=False):
+def runjob(test_info, yaml_file, multigpu=False, bmz_by_command=False, bmz_package=None, reuse_original_bmz_config=False):
     # Declare the log file
-    jobdir = os.path.join(results_folder, test_info["jobname"])
+    jobdir = os.path.join(RESULTS_FOLDER, test_info["jobname"])
     jobout_file = os.path.join(jobdir, test_info["jobname"]+"_1")
     os.makedirs(jobdir, exist_ok=True)
     logfile = open(jobout_file, 'w')
     
     # Run the process and wait until finishes
-    os.chdir(biapy_folder)
+    os.chdir(BIAPY_FOLDER)
     print(f"Log: {jobout_file}")
     if bmz_by_command and bmz_package is not None:
-        os.makedirs(bmz_folder, exist_ok=True)
+        os.makedirs(BMZ_FOLDER, exist_ok=True)
         cmd = ["python", "-u", bmz_script, 
-               "--code_dir", biapy_folder,
+               "--code_dir", BIAPY_FOLDER,
                "--jobname", test_info["jobname"],
                "--config", yaml_file, 
-               "--result_dir", results_folder, 
+               "--result_dir", RESULTS_FOLDER, 
                "--model_name", str(bmz_package.split(".")[:-1][0]),
-               "--bmz_folder", bmz_folder,
+               "--bmz_folder", BMZ_FOLDER,
                "--gpu", gpu]
         if reuse_original_bmz_config:
             cmd += ["--reuse_original_bmz_config"]
@@ -193,10 +193,10 @@ def runjob(test_info, results_folder, yaml_file, biapy_folder, multigpu=False, b
         if multigpu:
             cmd = ["python", "-u", "-m", "torch.distributed.run", "--nproc_per_node="+str(ngpus),
                 f"--master-port={np.random.randint(low=1500, high=7000, size=1)[0]}", "main.py",
-                "--config", yaml_file, "--result_dir", results_folder, "--name", test_info["jobname"], "--run_id", "1",
+                "--config", yaml_file, "--result_dir", RESULTS_FOLDER, "--name", test_info["jobname"], "--run_id", "1",
                 "--gpu", gpus]
         else:
-            cmd = ["python", "-u", "main.py", "--config", yaml_file, "--result_dir", results_folder, "--name",
+            cmd = ["python", "-u", "main.py", "--config", yaml_file, "--result_dir", RESULTS_FOLDER, "--name",
                 test_info["jobname"], "--run_id", "1", "--gpu", gpu]
             
     print(f"Command: {' '.join(cmd)}")
@@ -226,17 +226,18 @@ all_test_info["Test1"] = {
     "enable": True,
     "jobname": "test1",
     "description": "2D Semantic seg. Lucchi++. Basic DA. unet. 2D stack as 3D. Post-proc: z-filtering. BMZ export through YAML.",
+    "template_path": os.path.join(data_folder, "semantic_seg", "2d_semantic_segmentation.yaml"),
     "yaml": "test_1.yaml",
     "yaml_modifications": {
         "DATA": {
             "TRAIN": {
-                "PATH": os.path.join(data_folder, "semantic_seg", "fibsem_epfl_2D", "train", "raw"),
-                "GT_PATH": os.path.join(data_folder, "semantic_seg", "fibsem_epfl_2D", "train", "label"),
+                "PATH": os.path.join(data_folder, "semantic_seg", "fibsem_epfl_2D", "data", "train", "raw"),
+                "GT_PATH": os.path.join(data_folder, "semantic_seg", "fibsem_epfl_2D", "data", "train", "label"),
                 "IN_MEMORY": True,
             },
             "TEST": {
-                "PATH": os.path.join(data_folder, "semantic_seg", "fibsem_epfl_2D", "test", "raw"),
-                "GT_PATH": os.path.join(data_folder, "semantic_seg", "fibsem_epfl_2D", "test", "label"),
+                "PATH": os.path.join(data_folder, "semantic_seg", "fibsem_epfl_2D", "data", "test", "raw"),
+                "GT_PATH": os.path.join(data_folder, "semantic_seg", "fibsem_epfl_2D", "data", "test", "label"),
                 "IN_MEMORY": False,
                 "LOAD_GT": True,
             },
@@ -292,6 +293,7 @@ all_test_info["Test2"] = {
     "enable": True,
     "jobname": "test2",
     "description": "3D Semantic seg. Lucchi++. attention_unet. Basic DA.",
+    "template_path": os.path.join(data_folder, "semantic_seg", "3d_semantic_segmentation.yaml"),
     "yaml": "test_2.yaml",
     "yaml_modifications": {
         "AUGMENTOR": {
@@ -300,13 +302,13 @@ all_test_info["Test2"] = {
         },
         "DATA": {
             "TRAIN": {
-                "PATH": os.path.join(data_folder, "semantic_seg", "fibsem_epfl_3D", "train", "raw"),
-                "GT_PATH": os.path.join(data_folder, "semantic_seg", "fibsem_epfl_3D", "train", "label"),
+                "PATH": os.path.join(data_folder, "semantic_seg", "fibsem_epfl_3D", "data", "train", "raw"),
+                "GT_PATH": os.path.join(data_folder, "semantic_seg", "fibsem_epfl_3D", "data", "train", "label"),
                 "IN_MEMORY": True,
             },
             "TEST": {
-                "PATH": os.path.join(data_folder, "semantic_seg", "fibsem_epfl_3D", "test", "raw"),
-                "GT_PATH": os.path.join(data_folder, "semantic_seg", "fibsem_epfl_3D", "test", "label"),
+                "PATH": os.path.join(data_folder, "semantic_seg", "fibsem_epfl_3D", "data", "test", "raw"),
+                "GT_PATH": os.path.join(data_folder, "semantic_seg", "fibsem_epfl_3D", "data", "test", "label"),
                 "IN_MEMORY": False,
                 "LOAD_GT": True,
             },
@@ -342,6 +344,7 @@ all_test_info["Test3"] = {
     "jobname": "test3",
     "description": "2D Instance seg. Stardist 2D data. Basic DA. BC (auto). resunet++. "
         "Post-proc: Clear border + remove instances by properties.",
+    "template_path": os.path.join(data_folder, "instance_seg", "2d_instance_segmentation.yaml"),
     "yaml": "test_3.yaml",
     "yaml_modifications": {
         "PROBLEM": {
@@ -358,13 +361,13 @@ all_test_info["Test3"] = {
         },      
         "DATA": {
             "TRAIN": {
-                "PATH": os.path.join(data_folder, "instance_seg", "Stardist_v2_2D", "train", "raw"),
-                "GT_PATH": os.path.join(data_folder, "instance_seg", "Stardist_v2_2D", "train", "label"),
+                "PATH": os.path.join(data_folder, "instance_seg", "Stardist_v2_2D", "data", "train", "raw"),
+                "GT_PATH": os.path.join(data_folder, "instance_seg", "Stardist_v2_2D", "data", "train", "label"),
                 "IN_MEMORY": True,
             },
             "TEST": {
-                "PATH": os.path.join(data_folder, "instance_seg", "Stardist_v2_2D", "test", "raw"),
-                "GT_PATH": os.path.join(data_folder, "instance_seg", "Stardist_v2_2D", "test", "label"),
+                "PATH": os.path.join(data_folder, "instance_seg", "Stardist_v2_2D", "data", "test", "raw"),
+                "GT_PATH": os.path.join(data_folder, "instance_seg", "Stardist_v2_2D", "data", "test", "label"),
                 "IN_MEMORY": False,
                 "LOAD_GT": True,
             },
@@ -413,6 +416,7 @@ all_test_info["Test4"] = {
     "enable": True,
     "jobname": "test4",
     "description": "3D Instance seg. Demo 3D data. Basic DA. BCD (manual). resunet. Watershed multiple options. Post-proc: Clear border",
+    "template_path": os.path.join(data_folder, "instance_seg", "3d_instance_segmentation.yaml"),
     "yaml": "test_4.yaml",
     "yaml_modifications": {
         "PROBLEM": {
@@ -439,13 +443,13 @@ all_test_info["Test4"] = {
         },
         "DATA": {
             "TRAIN": {
-                "PATH": os.path.join(data_folder, "instance_seg", "demo3D_3D", "train", "raw"),
-                "GT_PATH": os.path.join(data_folder, "instance_seg", "demo3D_3D", "train", "label"),
+                "PATH": os.path.join(data_folder, "instance_seg", "demo3D_3D", "data", "train", "raw"),
+                "GT_PATH": os.path.join(data_folder, "instance_seg", "demo3D_3D", "data", "train", "label"),
                 "IN_MEMORY": True,
             },
             "TEST": {
-                "PATH": os.path.join(data_folder, "instance_seg", "demo3D_3D", "test", "raw"),
-                "GT_PATH": os.path.join(data_folder, "instance_seg", "demo3D_3D", "test", "label"),
+                "PATH": os.path.join(data_folder, "instance_seg", "demo3D_3D", "data", "test", "raw"),
+                "GT_PATH": os.path.join(data_folder, "instance_seg", "demo3D_3D", "data", "test", "label"),
                 "IN_MEMORY": False,
                 "LOAD_GT": True
             }
@@ -482,6 +486,7 @@ all_test_info["Test5"] = {
     "enable": True,
     "jobname": "test5",
     "description": "3D Instance seg. Cyst data. Basic DA. BCM (auto). resunet. Post-proc: Clear border + Voronoi + remove by props",
+    "template_path": os.path.join(data_folder, "instance_seg", "3d_instance_segmentation.yaml"),
     "yaml": "test_5.yaml",
     "yaml_modifications": {
         'PROBLEM': {
@@ -500,19 +505,19 @@ all_test_info["Test5"] = {
             'REFLECT_TO_COMPLETE_SHAPE': True,
             'PATCH_SIZE': "(80, 80, 80, 1)",
             "TRAIN": {
-                "PATH": os.path.join(data_folder, "instance_seg", "CartoCell", "train", "raw"),
-                "GT_PATH": os.path.join(data_folder, "instance_seg", "CartoCell", "train", "label"),
+                "PATH": os.path.join(data_folder, "instance_seg", "CartoCell", "train_M2", "x"),
+                "GT_PATH": os.path.join(data_folder, "instance_seg", "CartoCell", "train_M2", "y"),
                 "IN_MEMORY": True,
             },
             "VAL": {
-                "PATH": os.path.join(data_folder, "instance_seg", "CartoCell", "validation", "raw"),
-                "GT_PATH": os.path.join(data_folder, "instance_seg", "CartoCell", "validation", "label"),
+                "PATH": os.path.join(data_folder, "instance_seg", "CartoCell", "validation", "x"),
+                "GT_PATH": os.path.join(data_folder, "instance_seg", "CartoCell", "validation", "y"),
                 "IN_MEMORY": True,
                 "FROM_TRAIN": False
             },
             "TEST": {
-                "PATH": os.path.join(data_folder, "instance_seg", "CartoCell", "test", "raw"),
-                "GT_PATH": os.path.join(data_folder, "instance_seg", "CartoCell", "test", "label"),
+                "PATH": os.path.join(data_folder, "instance_seg", "CartoCell", "validation", "x"),
+                "GT_PATH": os.path.join(data_folder, "instance_seg", "CartoCell", "validation", "y"),
                 "IN_MEMORY": False,
                 "LOAD_GT": True
             },
@@ -556,6 +561,7 @@ all_test_info["Test6"] = {
     "jobname": "test6",
     "description": "2D Detection. Stardist v2 2D data. zero_mean_unit_variance norm, percentile clip. Basic DA. Export model to BMZ. "
         "multiresunet. Post-proc: remove close points + det watershed",
+    "template_path": os.path.join(data_folder, "detection", "2d_detection.yaml"),
     "yaml": "test_6.yaml",
     "yaml_modifications": {
         "PROBLEM": {
@@ -576,13 +582,13 @@ all_test_info["Test6"] = {
                 "TYPE": "zero_mean_unit_variance"
             },
             "TRAIN": {
-                "PATH": os.path.join(data_folder, "detection", "Stardist_v2_detection", "train", "raw"),
-                "GT_PATH": os.path.join(data_folder, "detection", "Stardist_v2_detection", "train", "label"),
+                "PATH": os.path.join(data_folder, "detection", "Stardist_v2_detection", "data", "train", "raw"),
+                "GT_PATH": os.path.join(data_folder, "detection", "Stardist_v2_detection", "data", "train", "label"),
                 "IN_MEMORY": True,
             },
             "TEST": {
-                "PATH": os.path.join(data_folder, "detection", "Stardist_v2_detection", "test", "raw"),
-                "GT_PATH": os.path.join(data_folder, "detection", "Stardist_v2_detection", "test", "label"),
+                "PATH": os.path.join(data_folder, "detection", "Stardist_v2_detection", "data", "test", "raw"),
+                "GT_PATH": os.path.join(data_folder, "detection", "Stardist_v2_detection", "data", "test", "label"),
                 "IN_MEMORY": False,
                 "LOAD_GT": True,
             },
@@ -634,6 +640,7 @@ all_test_info["Test8"] = {
     "jobname": "test8",
     "description": "3D Detection. NucMM-Z 3D data. zero_mean_unit_variance norm, percentile clip. Basic DA. "
         "unetr. Post-proc: remove close points + det watershed",
+    "template_path": os.path.join(data_folder, "detection", "3d_detection.yaml"),
     "yaml": "test_8.yaml",
     "yaml_modifications": {
         "PROBLEM": {
@@ -653,13 +660,13 @@ all_test_info["Test8"] = {
                 "TYPE": "zero_mean_unit_variance"
             },
             "TRAIN": {
-                "PATH": os.path.join(data_folder, "detection", "NucMM-Z", "train", "raw"),
-                "GT_PATH": os.path.join(data_folder, "detection", "NucMM-Z", "train", "label"),
+                "PATH": os.path.join(data_folder, "detection", "NucMM-Z", "data", "train", "raw"),
+                "GT_PATH": os.path.join(data_folder, "detection", "NucMM-Z", "data", "train", "label"),
                 "IN_MEMORY": True,
             },
             "TEST": {
-                "PATH": os.path.join(data_folder, "detection", "NucMM-Z", "test", "raw"),
-                "GT_PATH": os.path.join(data_folder, "detection", "NucMM-Z", "test", "label"),
+                "PATH": os.path.join(data_folder, "detection", "NucMM-Z", "data", "test", "raw"),
+                "GT_PATH": os.path.join(data_folder, "detection", "NucMM-Z", "data", "test", "label"),
                 "IN_MEMORY": False,
                 "LOAD_GT": True,
             },
@@ -711,6 +718,7 @@ all_test_info["Test9"] = {
     "jobname": "test9",
     "description": "3D Detection. Zarr 3D data (Brainglobe). zero_mean_unit_variance norm, percentile norm, per image. "
         "filter samples: foreground + mean. warmupcosine. Basic DA. resunet. test by chunks: Zarr. Post-proc: remove close points",
+    "template_path": os.path.join(data_folder, "detection", "3d_detection.yaml"),
     "yaml": "test_9.yaml",
     "yaml_modifications": {
         "PROBLEM": {
@@ -737,16 +745,16 @@ all_test_info["Test9"] = {
                     "VALUES": [[1.0e-22]],
                     "SIGNS": [["lt"]]
                 },
-                "PATH": os.path.join(data_folder, "detection", "Brainglobe", "train", "raw"),
-                "GT_PATH": os.path.join(data_folder, "detection", "Brainglobe", "train", "label"),   
+                "PATH": os.path.join(data_folder, "detection", "brainglobe_small_data", "data", "3D_ch2ch4_Zarr"),
+                "GT_PATH": os.path.join(data_folder, "detection", "brainglobe_small_data", "data", "y"),   
                 "IN_MEMORY": True,
             },
             "VAL": {
                 "SPLIT_TRAIN": 0.1
             },
             "TEST": {
-                "PATH": os.path.join(data_folder, "detection", "Brainglobe", "test", "raw"),
-                "GT_PATH": os.path.join(data_folder, "detection", "Brainglobe", "test", "label"),    
+                "PATH": os.path.join(data_folder, "detection", "brainglobe_small_data", "data", "3D_ch2ch4_Zarr"),
+                "GT_PATH": os.path.join(data_folder, "detection", "brainglobe_small_data", "data", "y"),    
                 "IN_MEMORY": False,
                 "LOAD_GT": True,
                 "PADDING": "(0,18,18)"  
@@ -810,6 +818,7 @@ all_test_info["Test10"] = {
     "enable": True,
     "jobname": "test10",
     "description": "2D Denoising. LongBeach data (N2V RGB data). zero_mean_unit_variance norm. Basic DA.",
+    "template_path": os.path.join(data_folder, "denoising", "2d_denoising.yaml"),
     "yaml": "test_10.yaml",
     "yaml_modifications": {
         "PROBLEM": {
@@ -823,11 +832,11 @@ all_test_info["Test10"] = {
                 "TYPE": "zero_mean_unit_variance"
             },
             "TRAIN": {
-                "PATH": os.path.join(data_folder, "denoising", "Noise2Void_RGB", "train"),
+                "PATH": os.path.join(data_folder, "denoising", "Noise2Void_RGB"),
                 "IN_MEMORY": False,
             },
             "TEST": {
-                "PATH": os.path.join(data_folder, "denoising", "Noise2Void_RGB", "test"),
+                "PATH": os.path.join(data_folder, "denoising", "Noise2Void_RGB"),
                 "IN_MEMORY": False,
                 "LOAD_GT": True,
             },
@@ -860,6 +869,7 @@ all_test_info["Test11"] = {
     "jobname": "test11",
     "description": "3D Denoising. Flywing 3D data. zero_mean_unit_variance norm. Basic DA. "
         "resunet. Post-proc: remove close points + det watershed",
+    "template_path": os.path.join(data_folder, "denoising", "3d_denoising.yaml"),
     "yaml": "test_11.yaml",
     "yaml_modifications": {
         "PROBLEM": {
@@ -872,11 +882,11 @@ all_test_info["Test11"] = {
                 "TYPE": "zero_mean_unit_variance"
             },
             "TRAIN": {
-                "PATH": os.path.join(data_folder, "denoising", "flywing3D", "train"),
+                "PATH": os.path.join(data_folder, "denoising", "flywing3D", "data", "train"),
                 "IN_MEMORY": True,
             },
             "TEST": {
-                "PATH": os.path.join(data_folder, "denoising", "flywing3D", "test"),
+                "PATH": os.path.join(data_folder, "denoising", "flywing3D", "data", "test"),
                 "IN_MEMORY": True,
             },
         },
@@ -908,12 +918,13 @@ all_test_info["Test12"] = {
     "enable": True,
     "jobname": "test12",
     "description": "2D super-resolution. SR 2D data. Cross-val. Basic DA. DFCAN",
+    "template_path": os.path.join(data_folder, "sr", "2d_super_resolution.yaml"),
     "yaml": "test_12.yaml",
     "yaml_modifications": {
         "DATA": {
             "TRAIN": {
-                "PATH": os.path.join(data_folder, "sr", "sr_data_2D", "train", "LR"),
-                "GT_PATH": os.path.join(data_folder, "sr", "sr_data_2D", "train", "HR"),
+                "PATH": os.path.join(data_folder, "sr", "sr_data_2D", "data", "train", "LR"),
+                "GT_PATH": os.path.join(data_folder, "sr", "sr_data_2D", "data", "train", "HR"),
                 "IN_MEMORY": True,
                 "FILTER_SAMPLES": {
                     "ENABLE": True,
@@ -928,8 +939,8 @@ all_test_info["Test12"] = {
                 "CROSS_VAL_FOLD": 2
             },
             "TEST": {
-                "PATH": os.path.join(data_folder, "sr", "sr_data_2D", "test", "LR"),
-                "GT_PATH": os.path.join(data_folder, "sr", "sr_data_2D", "test", "HR"),
+                "PATH": os.path.join(data_folder, "sr", "sr_data_2D", "data", "test", "LR"),
+                "GT_PATH": os.path.join(data_folder, "sr", "sr_data_2D", "data", "test", "HR"),
                 "IN_MEMORY": False,
                 "USE_VAL_AS_TEST": True
             },
@@ -962,6 +973,7 @@ all_test_info["Test13"] = {
     "enable": True,
     "jobname": "test13",
     "description": "3D super-resolution. SR 3D data. Cross-val. Basic DA. resunet. one-cycle",
+    "template_path": os.path.join(data_folder, "sr", "3d_super_resolution.yaml"),
     "yaml": "test_13.yaml",
     "yaml_modifications": {
         "PROBLEM": {
@@ -972,8 +984,8 @@ all_test_info["Test13"] = {
         "DATA": {
             "PATCH_SIZE": "(6,128,128,1)",
             "TRAIN": {
-                "PATH": os.path.join(data_folder, "sr", "sr_data_3D", "train", "LR"),
-                "GT_PATH": os.path.join(data_folder, "sr", "sr_data_3D", "train", "HR"),
+                "PATH": os.path.join(data_folder, "sr", "sr_data_3D", "data", "train", "LR"),
+                "GT_PATH": os.path.join(data_folder, "sr", "sr_data_3D", "data", "train", "HR"),
                 "IN_MEMORY": True,
             },
             "VAL": {
@@ -982,8 +994,8 @@ all_test_info["Test13"] = {
                 "CROSS_VAL_FOLD": 4
             },
             "TEST": {
-                "PATH": os.path.join(data_folder, "sr", "sr_data_3D", "test", "LR"),
-                "GT_PATH": os.path.join(data_folder, "sr", "sr_data_3D", "test", "HR"),
+                "PATH": os.path.join(data_folder, "sr", "sr_data_3D", "data", "test", "LR"),
+                "GT_PATH": os.path.join(data_folder, "sr", "sr_data_3D", "data", "test", "HR"),
                 "IN_MEMORY": False,
                 "USE_VAL_AS_TEST": True
             },
@@ -1024,6 +1036,7 @@ all_test_info["Test14"] = {
     "enable": True,
     "jobname": "test14",
     "description": "2D self-supervision. Lucchi data. Cross-val. Basic DA. rcan. Export BMZ model.",
+    "template_path": os.path.join(data_folder, "ssl", "2d_self_supervision.yaml"),
     "yaml": "test_14.yaml",
     "yaml_modifications": {
         "DATA": {
@@ -1061,7 +1074,7 @@ all_test_info["Test14"] = {
             "ENABLE": True,
         },
         "PATHS": {
-            "CHECKPOINT_FILE": os.path.join(data_folder, "checkpoints", "test14_checkpoint.pth")
+            "CHECKPOINT_FILE": os.path.join(data_folder, "ssl", "test14_checkpoint", "test14_checkpoint.pth")
         }
     },
     "bmz_by_command": True,
@@ -1078,6 +1091,7 @@ all_test_info["Test15"] = {
     "enable": True,
     "jobname": "test15",
     "description": "2D self-supervision. Lucchi data. Cross-val. Basic DA. mae, masking: random",
+    "template_path": os.path.join(data_folder, "ssl", "2d_self_supervision.yaml"),
     "yaml": "test_15.yaml",
     "yaml_modifications": {
         "PROBLEM": {
@@ -1130,6 +1144,7 @@ all_test_info["Test16"] = {
     "enable": True,
     "jobname": "test16",
     "description": "2D self-supervision. Lucchi data. Cross-val. Basic DA. mae, masking: grid",
+    "template_path": os.path.join(data_folder, "ssl", "2d_self_supervision.yaml"),
     "yaml": "test16.yaml",
     "yaml_modifications": {
         "PROBLEM": {
@@ -1182,6 +1197,7 @@ all_test_info["Test17"] = {
     "enable": True,
     "jobname": "test17",
     "description": "3D self-supervision. Lucchi data. Basic DA. resunet++",
+    "template_path": os.path.join(data_folder, "ssl", "3d_self_supervision.yaml"),
     "yaml": "test17.yaml",
     "yaml_modifications": {
         'PROBLEM': {
@@ -1229,6 +1245,7 @@ all_test_info["Test18"] = {
     "enable": True,
     "jobname": "test18",
     "description": "3D self-supervision. Lucchi data. Cross-val. Basic DA. mae, masking: random",
+    "template_path": os.path.join(data_folder, "ssl", "3d_self_supervision.yaml"),
     "yaml": "test18.yaml",
     "yaml_modifications": {
         "PROBLEM": {
@@ -1279,6 +1296,7 @@ all_test_info["Test19"] = {
     "enable": True,
     "jobname": "test19",
     "description": "2D classification. DermaMNIST 2D data. preprocess: resize, Cross-val. Basic DA. ViT",
+    "template_path": os.path.join(data_folder, "classification", "2d_classification.yaml"),
     "yaml": "test19.yaml",
     "yaml_modifications": {
         "DATA": {
@@ -1335,6 +1353,7 @@ all_test_info["Test20"] = {
     "enable": True,
     "jobname": "test20",
     "description": "2D classification. butterfly data. preprocess: resize. Basic DA. efficientnet_b1",
+    "template_path": os.path.join(data_folder, "classification", "2d_classification.yaml"),
     "yaml": "test20.yaml",
     "yaml_modifications": {
         "DATA": {
@@ -1383,6 +1402,7 @@ all_test_info["Test21"] = {
     "enable": True,
     "jobname": "test21",
     "description": "3D classification. DermaMNIST 3D data. preprocess: resize, Cross-val. Basic DA. simple_cnn",
+    "template_path": os.path.join(data_folder, "classification", "3d_classification.yaml"),
     "yaml": "test21.yaml",
     "yaml_modifications": {
         "DATA": {
@@ -1439,6 +1459,7 @@ all_test_info["Test22"] = {
     "enable": True,
     "jobname": "test22",
     "description": "2D image to image. Dapi 2D data. preprocess: resize, Cross-val. Basic DA. multiresunet",
+    "template_path": os.path.join(data_folder, "image_to_image", "2d_image_to_image.yaml"),
     "yaml": "test22.yaml",
     "yaml_modifications": {
         "DATA": {
@@ -1488,6 +1509,7 @@ all_test_info["Test23"] = {
     "enable": True,
     "jobname": "test23",
     "description": "2D image to image. lightmycells 2D data. extract random. val and train not in memory. Basic DA. UNETR",
+    "template_path": os.path.join(data_folder, "image_to_image", "2d_image_to_image_light.yaml"),
     "yaml": "test23.yaml",
     "yaml_modifications": {
         "DATA": {
@@ -1548,6 +1570,7 @@ all_test_info["Test24"] = {
     "jobname": "test24",
     "description": "3D Instance seg. Zarr 3D data SNEMI. in memory false. input zarr multiple data raw: 'volumes.raw'"
         "warmupcosine. inference, by chunks, zarr multiple data, workflow process: entire pred.",
+    "template_path": os.path.join(data_folder, "instance_seg", "3d_instance_segmentation.yaml"),
     "yaml": "test_24.yaml",
     "yaml_modifications": {
         "PROBLEM": {
@@ -1638,6 +1661,7 @@ all_test_info["Test25"] = {
     "enable": True,
     "jobname": "test25",
     "description": "3D Image to image. Nuclear_Pore_complex_3D data. in memory true. val 0.1 of train.",
+    "template_path": os.path.join(data_folder, "image_to_image", "3d_image_to_image.yaml"),
     "yaml": "test_25.yaml",
     "yaml_modifications": {
         "DATA": {
@@ -1686,6 +1710,7 @@ all_test_info["Test26"] = {
     "jobname": "test26",
     "description": "2D instance segmentation. BMZ 'stupendous-blowfish' model import, inference and export. "
         "zero_mean_unit_variance + format_version: 0.5.3 ",
+    "template_path": os.path.join(data_folder, "instance_seg", "2d_instance_segmentation.yaml"),
     "yaml": "test_26.yaml",
     "yaml_modifications": {
         "PROBLEM": {
@@ -1732,6 +1757,7 @@ all_test_info["Test27"] = {
     "jobname": "test27",
     "description": "2D instance segmentation. BMZ 'hiding-blowfish' model import, inference and export."
         "scale_range + format_version: 0.4.10",
+    "template_path": os.path.join(data_folder, "instance_seg", "2d_instance_segmentation.yaml"),
     "yaml": "test_27.yaml",
     "yaml_modifications": {
         "PROBEM": {
@@ -1775,6 +1801,7 @@ all_test_info["Test28"] = {
     "jobname": "test28",
     "description": "2D instance segmentation. BMZ 'frank-boar' model import, finetunning and export (reusing model original info)."
         "zero_mean_unit_variance + format_version: 0.5.3 ",
+    "template_path": os.path.join(data_folder, "instance_seg", "2d_instance_segmentation.yaml"),
     "yaml": "test_28.yaml",
     "yaml_modifications": {
         "PROBLEM": {
@@ -1828,6 +1855,7 @@ all_test_info["Test29"] = {
     "enable": True,
     "jobname": "test29",
     "description": "2D Instance seg. Conic 2D data (multihead). Basic DA. BC (auto). resunet++. ",
+    "template_path": os.path.join(data_folder, "instance_seg", "2d_instance_segmentation.yaml"),
     "yaml": "test_29.yaml",
     "yaml_modifications": {
         "PROBLEM": {
@@ -1887,6 +1915,7 @@ all_test_info["Test30"] = {
     "enable": True,
     "jobname": "test30",
     "description": "3D Instance seg. Cyst data. BCM. BMZ pretrained model: 'venomous-swan'. Post-proc: Clear border + Voronoi",
+    "template_path": os.path.join(data_folder, "instance_seg", "3d_instance_segmentation.yaml"),
     "yaml": "test_30.yaml",
     "yaml_modifications": {
         "PROBLEM": {
@@ -1898,8 +1927,8 @@ all_test_info["Test30"] = {
             "REFLECT_TO_COMPLETE_SHAPE": True,
             "PATCH_SIZE": "(80, 80, 80, 1)",
             "TEST": {
-                "PATH": os.path.join(data_folder, "instance_seg", "CartoCell", "data", "validation", "x"),
-                "GT_PATH": os.path.join(data_folder, "instance_seg", "CartoCell", "data", "validation", "y"),
+                "PATH": os.path.join(data_folder, "instance_seg", "CartoCell", "validation", "x"),
+                "GT_PATH": os.path.join(data_folder, "instance_seg", "CartoCell", "validation", "y"),
                 "IN_MEMORY": True,
                 "LOAD_GT": True
             },
@@ -1932,6 +1961,7 @@ all_test_info["Test31"] = {
     "enable": True,
     "jobname": "test31",
     "description": "3D Detection. Achucarro data. points+classes. Export model to BMZ",
+    "template_path": os.path.join(data_folder, "detection", "3d_detection.yaml"),
     "yaml": "test_31.yaml",
     "yaml_modifications": {
         "PROBLEM": {
@@ -2003,16 +2033,14 @@ DATASETS = [
             {
                 "template": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/semantic_segmentation/2d_semantic_segmentation.yaml",
                 "template_local": "2d_semantic_segmentation.yaml",
-                "drive_link": "https://drive.google.com/uc?id=1DfUoVHf__xk-s4BWSKbkfKYMnES-9RJt",
+                "url": "https://drive.google.com/uc?id=1DfUoVHf__xk-s4BWSKbkfKYMnES-9RJt",
                 "filename": "fibsem_epfl_2D.zip",
-                "outpath": "fibsem_epfl_2D"
             },
             {
                 "template": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/semantic_segmentation/3d_semantic_segmentation.yaml",
                 "template_local": "3d_semantic_segmentation.yaml",
-                "drive_link": "https://drive.google.com/uc?id=10Cf11PtERq4pDHCJroekxu_hf10EZzwG",
+                "url": "https://drive.google.com/uc?id=10Cf11PtERq4pDHCJroekxu_hf10EZzwG",
                 "filename": "fibsem_epfl_3D.zip",
-                "outpath": "fibsem_epfl_3D"
             }
         ]
     },
@@ -2022,41 +2050,34 @@ DATASETS = [
             {
                 "template": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/instance_segmentation/2d_instance_segmentation.yaml",
                 "template_local": "2d_instance_segmentation.yaml",
-                "drive_link": "https://drive.google.com/uc?id=1b7_WDDGEEaEoIpO_1EefVr0w0VQaetmg",
+                "url": "https://drive.google.com/uc?id=1b7_WDDGEEaEoIpO_1EefVr0w0VQaetmg",
                 "filename": "Stardist_v2_2D.zip",
-                "outpath": "Stardist_v2_2D"
             },
             {
-                "drive_link": "https://github.com/stardist/stardist/releases/download/0.1.0/dsb2018.zip",
+                "url": "https://github.com/stardist/stardist/releases/download/0.1.0/dsb2018.zip",
                 "filename": "dsb2018.zip",
-                "outpath": "dsb2018"
             },
             {
                 "template": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/instance_segmentation/3d_instance_segmentation.yaml",
                 "template_local": "3d_instance_segmentation.yaml",
-                "drive_link": "https://drive.google.com/uc?id=1fdL35ZTNw5hhiKau1gadaGu-rc5ZU_C7",
+                "url": "https://drive.google.com/uc?id=1fdL35ZTNw5hhiKau1gadaGu-rc5ZU_C7",
                 "filename": "demo3D_3D.zip",
-                "outpath": "demo3D_3D"
             },
             {
-                "drive_link": "https://zenodo.org/records/10973241/files/CartoCell.zip?download=1",
+                "url": "https://zenodo.org/records/10973241/files/CartoCell.zip?download=1",
                 "filename": "CartoCell.zip",
-                "outpath": "CartoCell"
             },
             {
-                "drive_link": "https://drive.google.com/uc?id=1Ralex5SvYUZbXoDkWoaCjb6d_iWuuOHp",
+                "url": "https://drive.google.com/uc?id=1Ralex5SvYUZbXoDkWoaCjb6d_iWuuOHp",
                 "filename": "snemi_zarr.zip",
-                "outpath": "snemi_zarr"
             },
             {
-                "drive_link": "https://drive.google.com/uc?id=1xrSsK23-2KfxCanaNJD7dldewWboKIw5",
+                "url": "https://drive.google.com/uc?id=1xrSsK23-2KfxCanaNJD7dldewWboKIw5",
                 "filename": "MitoEM_human_2d_toy_data.zip",
-                "outpath": "MitoEM_human_2d_toy_data"
             },
             {
-                "drive_link": "https://drive.google.com/uc?id=1QGV0gP8N8B8-EmcAPNQAudr2dqXYzhss",
+                "url": "https://drive.google.com/uc?id=1QGV0gP8N8B8-EmcAPNQAudr2dqXYzhss",
                 "filename": "Conic.zip",
-                "outpath": "Conic"
             }
         ]
     },
@@ -2066,26 +2087,22 @@ DATASETS = [
             {
                 "template": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/detection/2d_detection.yaml",
                 "template_local": "2d_detection.yaml",
-                "drive_link": "https://drive.google.com/uc?id=1pWqQhcWY15b5fVLZDkPS-vnE-RU6NlYf",
+                "url": "https://drive.google.com/uc?id=1pWqQhcWY15b5fVLZDkPS-vnE-RU6NlYf",
                 "filename": "Stardist_v2_detection.zip",
-                "outpath": "Stardist_v2_detection"
             },
             {
                 "template": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/detection/3d_detection.yaml",
                 "template_local": "3d_detection.yaml",
-                "drive_link": "https://drive.google.com/uc?id=19P4AcvBPJXeW7QRj92Jh1keunGa5fi8d",
+                "url": "https://drive.google.com/uc?id=19P4AcvBPJXeW7QRj92Jh1keunGa5fi8d",
                 "filename": "NucMM-Z_training.zip",
-                "outpath": "NucMM-Z_training"
             },
             {
-                "drive_link": "https://drive.google.com/uc?id=1veBueUuYi_mWbSky_4mtzfKBpO00SvWR",
+                "url": "https://drive.google.com/uc?id=1veBueUuYi_mWbSky_4mtzfKBpO00SvWR",
                 "filename": "brainglobe_small_data.zip",
-                "outpath": "brainglobe_small_data"
             },
             {
-                "drive_link": "https://upvehueus-my.sharepoint.com/:u:/g/personal/ignacio_arganda_ehu_eus/IQDcqg87-HIaTKsCdzT3_cyDAbNsr6WDiuvFsSfz_gisO-s?e=hcrpIG&download=1",
+                "url": "https://upvehueus-my.sharepoint.com/:u:/g/personal/ignacio_arganda_ehu_eus/IQDcqg87-HIaTKsCdzT3_cyDAbNsr6WDiuvFsSfz_gisO-s?e=hcrpIG&download=1",
                 "filename": "achucarro_data.zip",
-                "outpath": "achucarro_data",
             }
         ]
     },
@@ -2095,16 +2112,14 @@ DATASETS = [
             {
                 "template": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/denoising/2d_denoising.yaml",
                 "template_local": "2d_denoising.yaml",
-                "drive_link": "https://drive.google.com/uc?id=1ZCNBWkOJc4XOtfKHP7M0g1yIVzqtwS76",
+                "url": "https://drive.google.com/uc?id=1ZCNBWkOJc4XOtfKHP7M0g1yIVzqtwS76",
                 "filename": "Noise2Void_RGB.zip",
-                "outpath": "Noise2Void_RGB"
             },
             {
                 "template": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/denoising/3d_denoising.yaml",
                 "template_local": "3d_denoising.yaml",
-                "drive_link": "https://drive.google.com/uc?id=1OIjnUoJKdnbClBlpzk7V5R8wtoLont-r",
+                "url": "https://drive.google.com/uc?id=1OIjnUoJKdnbClBlpzk7V5R8wtoLont-r",
                 "filename": "flywing3D.zip",
-                "outpath": "flywing3D"
             }
         ]
     },
@@ -2114,16 +2129,14 @@ DATASETS = [
             {
                 "template": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/super-resolution/2d_super-resolution.yaml",
                 "template_local": "2d_super_resolution.yaml",
-                "drive_link": "https://drive.google.com/uc?id=1rtrR_jt8hcBEqvwx_amFBNR7CMP5NXLo",
+                "url": "https://drive.google.com/uc?id=1rtrR_jt8hcBEqvwx_amFBNR7CMP5NXLo",
                 "filename": "sr_data_2D.zip",
-                "outpath": "sr_data_2D"
             },
             {
                 "template": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/super-resolution/3d_super-resolution.yaml",
                 "template_local": "3d_super_resolution.yaml",
-                "drive_link": "https://drive.google.com/uc?id=1TfQVK7arJiRAVmKHRebsfi8NEas8ni4s",
+                "url": "https://drive.google.com/uc?id=1TfQVK7arJiRAVmKHRebsfi8NEas8ni4s",
                 "filename": "sr_data_3D.zip",
-                "outpath": "sr_data_3D"
             }
         ]
     },
@@ -2133,21 +2146,18 @@ DATASETS = [
             {
                 "template": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/self-supervised/2d_self-supervised.yaml",
                 "template_local": "2d_self_supervision.yaml",
-                "drive_link": "https://drive.google.com/uc?id=1DfUoVHf__xk-s4BWSKbkfKYMnES-9RJt",
+                "url": "https://drive.google.com/uc?id=1DfUoVHf__xk-s4BWSKbkfKYMnES-9RJt",
                 "filename": "fibsem_epfl_2D.zip",
-                "outpath": "fibsem_epfl_2D"
             },
             {
-                "drive_link": "https://drive.google.com/uc?id=1bLB-oYx0JFAvSGv1Fa0F-vK26U_HlPtQ",
+                "url": "https://drive.google.com/uc?id=1bLB-oYx0JFAvSGv1Fa0F-vK26U_HlPtQ",
                 "filename": "test14_checkpoint.pth",
-                "outpath": "checkpoints" 
             },
             {
                 "template": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/self-supervised/3d_self-supervised.yaml",
                 "template_local": "3d_self_supervision.yaml",
-                "drive_link": "https://drive.google.com/uc?id=10Cf11PtERq4pDHCJroekxu_hf10EZzwG",
+                "url": "https://drive.google.com/uc?id=10Cf11PtERq4pDHCJroekxu_hf10EZzwG",
                 "filename": "fibsem_epfl_3D.zip",
-                "outpath": "fibsem_epfl_3D"
             }
         ]
     },
@@ -2157,21 +2167,18 @@ DATASETS = [
             {
                 "template": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/classification/2d_classification.yaml",
                 "template_local": "2d_classification.yaml",
-                "drive_link": "https://drive.google.com/uc?id=15_pnH4_tJcwhOhNqFsm26NQuJbNbFSIN",
+                "url": "https://drive.google.com/uc?id=15_pnH4_tJcwhOhNqFsm26NQuJbNbFSIN",
                 "filename": "DermaMNIST_2D.zip",
-                "outpath": "DermaMNIST_2D"
             },
             {
-                "drive_link": "https://drive.google.com/uc?id=1m4_3UAgUsZ8FDjB4HyfA50Sht7_XkfdB",
+                "url": "https://drive.google.com/uc?id=1m4_3UAgUsZ8FDjB4HyfA50Sht7_XkfdB",
                 "filename": "butterfly_data.zip",
-                "outpath": "butterfly_data"
             },
             {
                 "template": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/classification/3d_classification.yaml",
                 "template_local": "3d_classification.yaml",
-                "drive_link": "https://drive.google.com/uc?id=1pypWJ4Z9sRLPlVHbG6zpwmS6COkm3wUg",
+                "url": "https://drive.google.com/uc?id=1pypWJ4Z9sRLPlVHbG6zpwmS6COkm3wUg",
                 "filename": "DermaMNIST_3D.zip",
-                "outpath": "DermaMNIST_3D"
             }
         ]
     },
@@ -2181,23 +2188,20 @@ DATASETS = [
             {
                 "template": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/image-to-image/2d_image-to-image.yaml",
                 "template_local": "2d_image_to_image.yaml",
-                "drive_link": "https://drive.google.com/uc?id=1L8AXNjh0_updVI3-v1duf6CbcZb8uZK7",
+                "url": "https://drive.google.com/uc?id=1L8AXNjh0_updVI3-v1duf6CbcZb8uZK7",
                 "filename": "Dapi_dataset.zip",
-                "outpath": "Dapi_dataset"
             },
             {
                 "template": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/image-to-image/lightmycells/lightmycells_actin.yaml",
                 "template_local": "2d_image_to_image_light.yaml",
-                "drive_link": "https://drive.google.com/uc?id=1SU4u-bcM1ZaDzEYg-d8W3zP6Yq2o8eKV",
+                "url": "https://drive.google.com/uc?id=1SU4u-bcM1ZaDzEYg-d8W3zP6Yq2o8eKV",
                 "filename": "reduced_actin_lightmycells.zip",
-                "outpath": "reduced_actin_lightmycells"
             },
             {
                 "template": "https://raw.githubusercontent.com/BiaPyX/BiaPy/master/templates/image-to-image/3d_image-to-image.yaml",
                 "template_local": "3d_image_to_image.yaml",
-                "drive_link": "https://drive.google.com/uc?id=1jL0bn2X3OFaV5T-6KR1g6fPDllH-LWzm",
+                "url": "https://drive.google.com/uc?id=1jL0bn2X3OFaV5T-6KR1g6fPDllH-LWzm",
                 "filename": "Nuclear_Pore_complex_3D.zip",
-                "outpath": "Nuclear_Pore_complex_3D"
             }
         ]
     }
@@ -2210,24 +2214,34 @@ for category in DATASETS:
     
     for item in category["data"]:
         # Download Template
-        template_local_path = os.path.join(target_folder, item["template_local"])
-        if not os.path.exists(template_local_path) and "template" in item:
-            urllib.request.urlretrieve(item["template"], template_local_path)
-            
+        if "template_local" in item:
+            template_local_path = os.path.join(target_folder, item["template_local"])
+            if not os.path.exists(template_local_path) and "template" in item:
+                urllib.request.urlretrieve(item["template"], template_local_path)
+                
         # Download and Extract Data
         out_filename = os.path.join(target_folder, item["filename"])
-        out_path = os.path.join(target_folder, item["outpath"])
+        outpath, fextension = os.path.splitext(item["filename"])
+        out_path = os.path.join(target_folder, outpath)
         
         if not os.path.exists(out_path):
-            if "onedrive" in item.get("drive_link", "").lower() or "sharepoint" in item.get("drive_link", "").lower():
-                download_onedrive_file(item["drive_link"], out_filename)
+            if fextension in ['.pth', '.safetensors']:
+                os.makedirs(out_path, exist_ok=True)
+                download_drive_file(item["url"], os.path.join(out_path, item["filename"]))
             else:
-                download_drive_file(item["drive_link"], out_filename)
-                
-            # Unzip if downloaded file is a zip
-            if os.path.exists(out_filename) and out_filename.endswith(".zip"):
-                with ZipFile(out_filename, 'r') as zip_ref:
-                    zip_ref.extractall(target_folder)
+                if "onedrive" in item.get("url", "").lower() or "sharepoint" in item.get("url", "").lower():
+                    download_onedrive_file(item["url"], out_filename)
+                elif "zenodo" in item.get("url", "").lower():
+                    urllib.request.urlretrieve(item["url"], filename=out_filename)
+                else:
+                    download_drive_file(item["url"], out_filename)
+
+                # Unzip if downloaded file is a zip
+                if os.path.exists(out_filename) and fextension == ".zip":
+                    with ZipFile(out_filename, 'r') as zip_ref:
+                        zip_ref.extractall(out_path)
+        else:
+            print(f"Data already exists at {out_path}, skipping download.")
 
 # ---------------------------------------------------------
 # 5. TEST EXECUTION LOOP
@@ -2266,17 +2280,9 @@ for test_key, test_info in all_test_info.items():
         print(f"Generated specific config: {yaml_out_file}")
 
         # 1. Run the BiaPy Execution
-        bmz_package_name = None
-        for checks in all_test_info["Test7"]["internal_checks"]:
-            if checks["type"] != "regular":
-                bmz_package_name = checks['bmz_package_name']
-                break
-        assert bmz_package_name is not None, "bmz_package_name not found"
         args = {
             "test_info": test_info,
-            "results_folder": results_folder,
             "yaml_file": yaml_out_file,
-            "biapy_folder": biapy_folder,
             "multigpu": test_info.get("multigpu", True),
             "bmz_by_command": test_info.get("bmz_by_command", False),
             "bmz_package": test_info.get("bmz_package", None),
@@ -2301,7 +2307,7 @@ for test_key, test_info in all_test_info.items():
                                                      gt=checks["gt"], value_to_check=checks["nApparition"], 
                                                      metric=checks["metric"]))
             elif checks["type"] == "BMZ":
-                bmz_file_path = os.path.join(bmz_folder, checks['bmz_package_name'])
+                bmz_file_path = os.path.join(BMZ_FOLDER, checks['bmz_package_name'])
                 results.append(check_bmz_file_created(last_lines, checks["pattern"], bmz_file_path))
             elif checks["type"] == "BMZ_weight_agreement":
                 results.append(check_bmz_weight_agreement(last_lines, checks["pattern"]))
@@ -2316,7 +2322,7 @@ for test_key, test_info in all_test_info.items():
         # 3. Print test results and append to main list
         print_result(results, test_info["jobname"], int_checks)
         test_results.append(correct)
-
+        import pdb; pdb.set_trace()
     except Exception as e:
         print(f"An error occurred during {test_key} execution.")
         print(e)
