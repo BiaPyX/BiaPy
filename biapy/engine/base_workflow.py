@@ -321,14 +321,17 @@ class Base_Workflow(metaclass=ABCMeta):
                 elif old_val != val:
                     change = True
                 if change:
-                    print(f"[BMZ] Changed '{key}' from {old_val} to {val} as defined in the RDF")
+                    print(f"[BMZ] Changed '{key}' from '{old_val}' to '{val}' as defined in the RDF")
                     option_list.append(key)
                     option_list.append(val)
-                    
+
             print("Loading BioImage Model Zoo pretrained model . . .")
             self.bmz_config["original_bmz_config"] = load_description(self.cfg.MODEL.BMZ.SOURCE_MODEL_ID)
 
             self.cfg.merge_from_list(option_list)
+
+            # Check consistency of the resulting configuration after merging with the BMZ model configuration
+            check_configuration(self.cfg, self.job_identifier)
 
         # Save number of channels to be created by the model
         self.define_activations_and_channels()

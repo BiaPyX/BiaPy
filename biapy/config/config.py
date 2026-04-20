@@ -256,7 +256,7 @@ class Config:
         # Defines how the instances are created. Options:
         #   - "watershed" to use watershed algorithm
         #   - "agglomeration" to use agglomeration algorithm
-        #   - "stardist" to use agglomeration algorithm
+        #   - "stardist" to use stardist algorithm
         #   - "embeddings" to use embedding-based clustering algorithms
         _C.PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS = ""
 

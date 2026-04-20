@@ -1002,8 +1002,16 @@ def check_bmz_model_compatibility(
                 channel_code = ["A"] # wild-whale
 
         opts["PROBLEM.INSTANCE_SEG.DATA_CHANNELS"] = channel_code
-        opts["PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS"] = [1,] * channels
-        opts["PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES"] = [1.,] * channels
+        opts["PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS"] = (1, 1)
+        opts["PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES"] = []
+        if any([x for x in ["F_pre", "F_post", "F_cleft"] if x in channel_code]):
+            opts["PROBLEM.INSTANCE_SEG.TYPE"] = "synapses"
+        else:
+            opts["PROBLEM.INSTANCE_SEG.TYPE"] = "regular"
+        opts["PROBLEM.INSTANCE_SEG.WATERSHED.SEED_CHANNELS"] = []
+        opts["PROBLEM.INSTANCE_SEG.WATERSHED.TOPOGRAPHIC_SURFACE_CHANNEL"] = ""
+        opts["PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS"] = []
+        opts["PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS"] = ""
 
         if classes != 2:
             opts["DATA.N_CLASSES"] = max(2, classes)
