@@ -17,7 +17,7 @@ import numpy as np
 from tqdm import tqdm
 from abc import ABCMeta, abstractmethod
 import torch.distributed as dist
-from typing import Dict, Optional, List
+from typing import Any, Dict, Optional, List
 from numpy.typing import NDArray
 from yacs.config import CfgNode as CN
 import pandas as pd
@@ -268,6 +268,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     just_extract_checkpoint_info=True,
                     skip_unmatched_layers=self.cfg.MODEL.SKIP_UNMATCHED_LAYERS,
                 )
+                assert isinstance(saved_cfg, CN), "There was an error loading the checkpoint configuration. The loaded configuration is not a YACS CfgNode object but of type {}. Check that the checkpoint file is not corrupted.".format(type(saved_cfg))
                 if saved_cfg:
                     if len(self.cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT) > 0:
                         print("Checkpoint file loaded. Extracting the following items (if available): {} . Checking consistency with current configuration . . .".format(", ".join(self.cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT)))
@@ -728,7 +729,7 @@ class Base_Workflow(metaclass=ABCMeta):
 
     def model_call_func(
         self, in_img: NDArray | torch.Tensor, is_train: bool = False, apply_act: bool = True
-    ) -> torch.Tensor:
+    ) -> Any:
         """
         Call a regular Pytorch model.
 
@@ -783,7 +784,7 @@ class Base_Workflow(metaclass=ABCMeta):
                         pred[i] = self.apply_model_activations(pred[i], training=is_train)
             else:
                 if apply_act:
-                    pred = self.apply_model_activations(pred, training=is_train)
+                    pred = self.apply_model_activations(pred, training=is_train) # type: ignore
         elif self.cfg.MODEL.SOURCE == "bmz":
             pred = self.apply_model_activations(self.bmz_model_call(in_img, is_train), training=is_train)
         elif self.cfg.MODEL.SOURCE == "torchvision":
@@ -885,6 +886,7 @@ class Base_Workflow(metaclass=ABCMeta):
         assert (
             self.start_epoch is not None and self.model is not None and self.model_without_ddp is not None and self.loss
         )
+        assert isinstance(self.start_epoch, int), "'start_epoch' should be an integer"
         self.optimizer, self.lr_scheduler = prepare_optimizer(
             self.cfg, self.model_without_ddp, len(self.train_generator)
         )
@@ -1187,7 +1189,7 @@ class Base_Workflow(metaclass=ABCMeta):
             if "test_input" not in self.bmz_config:
                 self.bmz_config["test_input"] = test_input
 
-    def apply_model_activations(self, pred: torch.Tensor, training=False) -> torch.Tensor:
+    def apply_model_activations(self, pred: torch.Tensor | Dict, training=False) -> torch.Tensor | Dict:
         """
         Apply the last activation (if any) to the model's output.
 
@@ -1593,6 +1595,8 @@ class Base_Workflow(metaclass=ABCMeta):
         # MAE
         if isinstance(pred, dict) and "mask" in pred:
             pred = self.apply_model_activations(pred)
+            assert isinstance(pred, dict), "The model output should be a dictionary containing 'pred' and 'mask' for the MAE pretext task."
+            assert "pred" in pred and "mask" in pred, "The model output should contain 'pred' and 'mask' for the MAE pretext task."
             mask = pred["mask"]
             pred = pred["pred"]
             pred, _, _ = self.model_without_ddp.save_images(
@@ -1600,7 +1604,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 pred,
                 mask,
                 self.dtype,
-            )
+            ) # type: ignore
             pred = torch.from_numpy(pred)
         else:
             pred = self.apply_model_activations(pred)

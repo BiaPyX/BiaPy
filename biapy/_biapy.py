@@ -171,7 +171,7 @@ class BiaPy:
             copyfile(self.args.config, self.cfg_file)
 
         # Merge configuration file with the default settings
-        self.cfg = Config(self.job_dir, self.job_identifier)
+        cfg_manager = Config(self.job_dir, self.job_identifier)
 
         # Translates the input config it to current version
         with open(self.args.config, "r", encoding="utf8") as stream:
@@ -183,14 +183,12 @@ class BiaPy:
             except yaml.YAMLError as exc:
                 raise ValueError("Error reading the configuration file. Please check the file format: {}".format(exc))
         temp_cfg = CN(convert_old_model_cfg_to_current_version(original_cfg))
-        if self.cfg._C.PROBLEM.PRINT_OLD_KEY_CHANGES:
+        if cfg_manager._C.PROBLEM.PRINT_OLD_KEY_CHANGES:
             print("The following changes were made in order to adapt the input configuration:")
             diff_between_configs(original_cfg, temp_cfg)
         del original_cfg
-        self.cfg._C.merge_from_other_cfg(temp_cfg)
-
-        update_dependencies(self.cfg)
-        # self.cfg.freeze()
+        cfg_manager._C.merge_from_other_cfg(temp_cfg)
+        update_dependencies(cfg_manager)
 
         # GPU selection
         os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
@@ -206,9 +204,9 @@ class BiaPy:
             opts.extend(["SYSTEM.NUM_GPUS", self.num_gpus])
 
         # GPU management
-        self.device = init_devices(self.args, self.cfg.get_cfg_defaults())
-        self.cfg._C.merge_from_list(opts)
-        self.cfg : CN = self.cfg.get_cfg_defaults()
+        self.device = init_devices(self.args, cfg_manager.get_cfg_defaults())
+        cfg_manager._C.merge_from_list(opts)
+        self.cfg: CN = cfg_manager.get_cfg_defaults()
 
         # Reproducibility
         set_seed(self.cfg.SYSTEM.SEED)

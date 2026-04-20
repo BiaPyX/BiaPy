@@ -41,7 +41,7 @@ def create_train_val_augmentors(
     norm_module: Dict,
     Y_train: Optional[BiaPyDataset] = None,
     Y_val: Optional[BiaPyDataset] = None,
-) -> Tuple[DataLoader, DataLoader, Dict, int, NDArray, NDArray, NDArray]:
+) -> Tuple[DataLoader, DataLoader, int, NDArray, NDArray, NDArray]:
     """
     Create training and validation generators.
 
@@ -433,7 +433,7 @@ def create_test_generator(
     X_test: Any,
     Y_test: Any,
     norm_module: Dict,
-) -> Tuple[test_pair_data_generator | test_single_data_generator, Dict, NDArray, NDArray, NDArray]:
+) -> Tuple[test_pair_data_generator | test_single_data_generator, NDArray, NDArray, NDArray]:
     """
     Create test data generator.
 

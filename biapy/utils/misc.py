@@ -433,7 +433,7 @@ def get_checkpoint_path(cfg, jobname):
             raise NotImplementedError
     return resume
 
-def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=None, just_extract_checkpoint_info=False, skip_unmatched_layers=False):
+def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=None, just_extract_checkpoint_info=False, skip_unmatched_layers=False) -> Tuple[int | CN | None, str | None]:
     """
     Load a model checkpoint from disk.
 
@@ -521,8 +521,8 @@ def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=Non
                 "the model will be built based on the current configuration"
             )
         return (
-            checkpoint["cfg"] if "cfg" in checkpoint else None,
-            checkpoint["biapy_version"] if "biapy_version" in checkpoint else None,
+            CN(checkpoint["cfg"]) if "cfg" in checkpoint else None,
+            str(checkpoint["biapy_version"]) if "biapy_version" in checkpoint else None,
         )
 
     if 'model' in checkpoint:
@@ -543,10 +543,13 @@ def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=Non
         model_state_dict = model_without_ddp.state_dict()
         for k, v in checkpoint_state_dict.items():
             if k in model_state_dict:
-                if v.shape == model_state_dict[k].shape:
-                    filtered_state_dict[k] = v
+                if torch.is_tensor(v):
+                    if v.shape == model_state_dict[k].shape:
+                        filtered_state_dict[k] = v
+                    else:
+                        print(f"Skipping layer '{k}' due to shape mismatch: checkpoint {v.shape} vs model {model_state_dict[k].shape}")
                 else:
-                    print(f"Skipping layer '{k}' due to shape mismatch: checkpoint {v.shape} vs model {model_state_dict[k].shape}")
+                    print(f"Skipping layer '{k}' because its value is not a tensor (type {type(v)})")
             else:
                 print(f"Skipping unexpected layer '{k}' not found in model.")
 
@@ -560,10 +563,13 @@ def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=Non
         optimizer.load_state_dict(checkpoint["optimizer"], strict=False)
         print("Optimizer info loaded!")
 
+    start_epoch = 0
     if "epoch" in checkpoint and "epoch" in cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT:
         start_epoch = checkpoint["epoch"]
         if isinstance(start_epoch, str):
             start_epoch = 0
+        else:
+            start_epoch = int(start_epoch) # type: ignore
         print("Epoch loaded!")
 
     return start_epoch, resume
