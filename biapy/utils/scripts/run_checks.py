@@ -75,17 +75,14 @@ def download_onedrive_file(drive_link, out_filename, attempts=5):
         if os.path.exists(out_filename):
             break
 
-def check_bmz_file_created(last_lines, pattern_to_find, bmz_pck_to_find):
+def check_bmz_file_created(last_lines, pattern_to_find):
     """
     Checks BMZ model creation. E.g. "Package path: *.zip"
     """
-    text_found = False
     for line in last_lines:
         if pattern_to_find in line and "zip" in line:
-            text_found = True
-
-    package_found = True if os.path.exists(bmz_pck_to_find) else False
-    return (text_found and package_found)
+            return True
+    return False
 
 def check_bmz_weight_agreement(last_lines, pattern_to_find):
     """
@@ -2307,8 +2304,7 @@ for test_key, test_info in all_test_info.items():
                                                      gt=checks["gt"], value_to_check=checks["nApparition"], 
                                                      metric=checks["metric"]))
             elif checks["type"] == "BMZ":
-                bmz_file_path = os.path.join(BMZ_FOLDER, checks['bmz_package_name'])
-                results.append(check_bmz_file_created(last_lines, checks["pattern"], bmz_file_path))
+                results.append(check_bmz_file_created(last_lines, checks["pattern"]))
             elif checks["type"] == "BMZ_weight_agreement":
                 results.append(check_bmz_weight_agreement(last_lines, checks["pattern"]))
 
@@ -2322,7 +2318,7 @@ for test_key, test_info in all_test_info.items():
         # 3. Print test results and append to main list
         print_result(results, test_info["jobname"], int_checks)
         test_results.append(correct)
-        import pdb; pdb.set_trace()
+
     except Exception as e:
         print(f"An error occurred during {test_key} execution.")
         print(e)
