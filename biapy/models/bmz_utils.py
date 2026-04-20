@@ -556,7 +556,7 @@ def create_model_doc(
         workflow_name = "Image to image"
         workflow_tag = "image_to_image"
 
-    if biapy_cfg.PROBLEM.TYPE in ["DENOISING", "SUPER_RESOLUTION", "IMAGE_TO_IMAGE"]:
+    if biapy_cfg.PROBLEM.TYPE in ["DENOISING", "SUPER_RESOLUTION", "IMAGE_TO_IMAGE", "SELF_SUPERVISED"]:
         metrics_used = (
             "Metrics to measure the similarity between the prediction and the ground truth in different ways:"
         )
