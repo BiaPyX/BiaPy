@@ -2111,8 +2111,9 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
     if cfg.TEST.ENABLE:
         if cfg.DATA.TEST.USE_VAL_AS_TEST and check_data_paths:
-            if not os.path.exists(cfg.DATA.TEST.PATH):
-                raise ValueError("Test data not found: {}".format(cfg.DATA.TEST.PATH))
+            path_to_check = cfg.DATA.VAL.PATH if not cfg.DATA.VAL.FROM_TRAIN else cfg.DATA.TRAIN.PATH
+            if not os.path.exists(path_to_check):
+                raise ValueError("Test data not found: {}".format(path_to_check))
             if (
                 cfg.DATA.TEST.LOAD_GT
                 and not os.path.exists(cfg.DATA.TEST.GT_PATH)
