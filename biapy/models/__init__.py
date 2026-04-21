@@ -253,7 +253,6 @@ def build_model(
                 in_chans=cfg.DATA.PATCH_SIZE[-1],
                 ndim=ndim,
                 num_classes=cfg.DATA.N_CLASSES,
-                norm_layer=partial(nn.LayerNorm, eps=1e-6),
             )
             if cfg.MODEL.VIT_MODEL == "custom":
                 args2 = dict(
@@ -355,7 +354,6 @@ def build_model(
                 patch_size=cfg.MODEL.VIT_TOKEN_SIZE,
                 in_chans=cfg.DATA.PATCH_SIZE[-1],
                 ndim=ndim,
-                norm_layer=partial(nn.LayerNorm, eps=1e-6),
                 embed_dim=cfg.MODEL.VIT_EMBED_DIM,
                 depth=cfg.MODEL.VIT_NUM_LAYERS,
                 num_heads=cfg.MODEL.VIT_NUM_HEADS,
@@ -365,7 +363,7 @@ def build_model(
                 mlp_ratio=cfg.MODEL.VIT_MLP_RATIO,
                 masking_type=cfg.MODEL.MAE_MASK_TYPE,
                 mask_ratio=cfg.MODEL.MAE_MASK_RATIO,
-                device=device,
+                return_just_preds=False,
             )
             model = MaskedAutoencoderViT(**args)  # type: ignore
             callable_model = MaskedAutoencoderViT  # type: ignore

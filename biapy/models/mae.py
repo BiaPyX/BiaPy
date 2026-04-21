@@ -111,9 +111,9 @@ class MaskedAutoencoderViT(nn.Module):
         Percentage of the input image patches to mask out. Value between 0 and 1.
         Only applicable when `masking_type` is "random". Defaults to 0.5.
 
-    device : Torch device, optional
+    device : str, optional
         The device (e.g., 'cuda', 'cpu') where the model parameters and input tensors
-        will be stored. Defaults to None, inferring from input.
+        will be stored.
 
     Returns
     -------
@@ -134,11 +134,11 @@ class MaskedAutoencoderViT(nn.Module):
         decoder_embed_dim=512,
         decoder_depth=8,
         decoder_num_heads=16,
-        norm_layer=nn.LayerNorm,
         norm_pix_loss=False,
         masking_type="random",
         mask_ratio=0.5,
-        device=None,
+        return_just_preds=False,
+        device="cpu",
     ):
         """
         Initialize the Masked Autoencoder Vision Transformer (MAE-ViT) model.
@@ -173,16 +173,16 @@ class MaskedAutoencoderViT(nn.Module):
             Number of transformer decoder blocks. Defaults to 8.
         decoder_num_heads : int, optional
             Number of attention heads in the decoder's multi-head attention. Defaults to 16.
-        norm_layer : Type[nn.Module], optional
-            The normalization layer class to use (e.g., `nn.LayerNorm`). Defaults to `nn.LayerNorm`.
         norm_pix_loss : bool, optional
             If True, normalize pixel values per patch (mean 0, variance 1) before computing the reconstruction loss. Defaults to False.
         masking_type : str, optional
             Specifies the masking strategy: "random" for random patch dropout, or "grid" for a structured checkerboard-like mask. Defaults to "random".
         mask_ratio : float, optional
             The proportion of patches to mask when `masking_type` is "random". Value between 0 and 1. Defaults to 0.5.
-        device : Optional[torch.device], optional
-            The device on which to place the model and its parameters. If None, it will be inferred. Defaults to None.
+        return_just_preds : bool, optional
+            If True, only return the predicted values without additional metadata. Defaults to False.
+        device : str, optional
+            The device on which to place the model and its parameters. If None, it will be inferred.
 
         Raises
         ------
@@ -194,8 +194,10 @@ class MaskedAutoencoderViT(nn.Module):
         self.in_chans = in_chans
         self.mask_ratio = mask_ratio
         self.masking_type = masking_type
-
+        dev = torch.device("cuda" if torch.cuda.is_available() and device == "cuda" else "cpu")
+        norm_layer = partial(nn.LayerNorm, eps=1e-6)
         assert masking_type in ["random", "grid"]
+        self.return_just_preds = return_just_preds
         # --------------------------------------------------------------------------
         # MAE encoder specifics
         self.patch_embed = PatchEmbed(
@@ -263,7 +265,7 @@ class MaskedAutoencoderViT(nn.Module):
             # Define grid mask, as it doesn't change over epochs
             D, L = embed_dim, self.patch_embed.num_patches
             if self.ndim == 2:
-                self.mask = torch.zeros([img_size // patch_size, img_size // patch_size], device=device)
+                self.mask = torch.zeros([img_size // patch_size, img_size // patch_size], device=dev)
                 self.mask[::2, ::2] = 1
                 self.mask[1::2, 1::2] = 1
             else:
@@ -273,7 +275,7 @@ class MaskedAutoencoderViT(nn.Module):
                         img_size // patch_size,
                         img_size // patch_size,
                     ],
-                    device=device,
+                    device=dev,
                 )
                 self.mask[::2, ::2, ::2] = 1
                 self.mask[1::2, 1::2, 1::2] = 1
@@ -626,7 +628,7 @@ class MaskedAutoencoderViT(nn.Module):
         loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
         return loss
 
-    def forward(self, imgs) -> dict:
+    def forward(self, imgs) -> dict | torch.Tensor:
         """
         Perform the complete forward pass of the Masked Autoencoder.
 
@@ -656,6 +658,8 @@ class MaskedAutoencoderViT(nn.Module):
         pred = self.forward_decoder(latent, ids_restore)  # [N, L, p*p*3]
         loss = self.forward_loss(imgs, pred, mask)
 
+        if self.return_just_preds:
+            return pred
         return { "loss": loss, "pred": pred, "mask": mask}
 
     def save_images(self, _x, _y, _mask, dtype):
@@ -767,7 +771,6 @@ def mae_vit_base_patch16_dec512d8b(**kwargs):
         decoder_depth=8,
         decoder_num_heads=16,
         mlp_ratio=4,
-        norm_layer=partial(nn.LayerNorm, eps=1e-6),
         **kwargs,
     )
     return model
@@ -801,7 +804,6 @@ def mae_vit_large_patch16_dec512d8b(**kwargs):
         decoder_depth=8,
         decoder_num_heads=16,
         mlp_ratio=4,
-        norm_layer=partial(nn.LayerNorm, eps=1e-6),
         **kwargs,
     )
     return model
@@ -835,7 +837,6 @@ def mae_vit_huge_patch14_dec512d8b(**kwargs):
         decoder_depth=8,
         decoder_num_heads=16,
         mlp_ratio=4,
-        norm_layer=partial(nn.LayerNorm, eps=1e-6),
         **kwargs,
     )
     return model
