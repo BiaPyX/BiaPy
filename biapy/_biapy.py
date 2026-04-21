@@ -724,51 +724,55 @@ class BiaPy:
             test_output = (
                 self.workflow.bmz_config["test_output"] if "test_output" not in bmz_cfg else bmz_cfg["test_output"]
             )
-            output_axes = [
-                BatchAxis(size=1),
-                ChannelAxis(channel_names=[Identifier("channel" + str(i)) for i in range(test_output.shape[1])]),
-            ]
             np.save(test_output_path, test_output)
-            if self.cfg.PROBLEM.NDIM == "3D":
-                if test_input.shape[test_output.ndim-3] >= 20:
-                    output_axes += [
-                        SpaceOutputAxisWithHalo(
-                            halo=(test_input.shape[test_output.ndim-3]//8) & ~1, 
-                                id=AxisId("z"), 
-                                size=SizeReference(
-                                    tensor_id='input0', # type: ignore
-                                    axis_id='z', # type: ignore
-                                    offset=0,
-                                ),
-                            scale=float(test_input.shape[test_input.ndim-3]/test_output.shape[test_output.ndim-3]),
-                        )
-                    ]
-                else:
-                    output_axes += [SpaceOutputAxis(id=AxisId("z"), size=test_input.shape[test_output.ndim-3])]
-            output_axes += [
-                SpaceOutputAxisWithHalo(
-                    halo=(test_input.shape[test_output.ndim-2]//8) & ~1, 
-                    id=AxisId("y"), 
-                    size=SizeReference(
-                        tensor_id='input0', # type: ignore
-                        axis_id='y', # type: ignore
-                        offset=0,
+            # Classification workflow
+            if len(test_output.shape) == 1:
+                output_axes = [SpaceOutputAxis(id=AxisId("z"), size=test_input.shape[0])]
+            else:
+                output_axes = [
+                    BatchAxis(size=1),
+                    ChannelAxis(channel_names=[Identifier("channel" + str(i)) for i in range(test_output.shape[1])]),
+                ]
+                if self.cfg.PROBLEM.NDIM == "3D":
+                    if test_input.shape[test_output.ndim-3] >= 20:
+                        output_axes += [
+                            SpaceOutputAxisWithHalo(
+                                halo=(test_input.shape[test_output.ndim-3]//8) & ~1, 
+                                    id=AxisId("z"), 
+                                    size=SizeReference(
+                                        tensor_id='input0', # type: ignore
+                                        axis_id='z', # type: ignore
+                                        offset=0,
+                                    ),
+                                scale=float(test_input.shape[test_input.ndim-3]/test_output.shape[test_output.ndim-3]),
+                            )
+                        ]
+                    else:
+                        output_axes += [SpaceOutputAxis(id=AxisId("z"), size=test_input.shape[test_output.ndim-3])]
+                output_axes += [
+                    SpaceOutputAxisWithHalo(
+                        halo=(test_input.shape[test_output.ndim-2]//8) & ~1, 
+                        id=AxisId("y"), 
+                        size=SizeReference(
+                            tensor_id='input0', # type: ignore
+                            axis_id='y', # type: ignore
+                            offset=0,
+                        ),
+                        scale=float(test_input.shape[test_input.ndim-2]/test_output.shape[test_output.ndim-2]),
+                    )
+                ]
+                output_axes += [
+                    SpaceOutputAxisWithHalo(
+                        halo=(test_input.shape[test_output.ndim-1]//8) & ~1,  
+                        id=AxisId("x"),
+                        size=SizeReference(
+                            tensor_id='input0', # type: ignore
+                            axis_id='x', # type: ignore
+                            offset=0,
+                        ),
+                        scale=float(test_input.shape[test_input.ndim-1]/test_output.shape[test_output.ndim-1]),
                     ),
-                    scale=float(test_input.shape[test_input.ndim-2]/test_output.shape[test_output.ndim-2]),
-                )
-            ]
-            output_axes += [
-                SpaceOutputAxisWithHalo(
-                    halo=(test_input.shape[test_output.ndim-1]//8) & ~1,  
-                    id=AxisId("x"),
-                    size=SizeReference(
-                        tensor_id='input0', # type: ignore
-                        axis_id='x', # type: ignore
-                        offset=0,
-                    ),
-                    scale=float(test_input.shape[test_input.ndim-1]/test_output.shape[test_output.ndim-1]),
-                ),
-            ]
+                ]
             data_descr = IntervalOrRatioDataDescr(type="float32")
             output_descr = OutputTensorDescr(
                 id=TensorId("output0"),
@@ -1072,6 +1076,9 @@ class BiaPy:
             model_kwargs = self.workflow.model_build_kwargs.copy()
             if "explicit_activations" in model_kwargs:
                 model_kwargs["explicit_activations"] = True
+            if "return_just_preds" in model_kwargs:
+                model_kwargs["return_just_preds"] = True
+
             pytorch_architecture = ArchitectureFromFileDescr(
                 source=Path(arch_file_path),
                 sha256=Sha256(arch_file_sha256),
@@ -1106,7 +1113,7 @@ class BiaPy:
             sha256=state_dict_sha256,
             architecture=pytorch_architecture,
             pytorch_version=torch.__version__,  # type: ignore
-            dependencies=env_descriptor,
+            dependencies=env_descriptor.model_dump() if env_descriptor else None,  # type: ignore
         )
 
         # torchscript = TorchscriptWeightsDescr(

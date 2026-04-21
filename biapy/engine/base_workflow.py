@@ -1594,7 +1594,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 mask,
                 self.dtype,
             ) # type: ignore
-            pred = torch.from_numpy(pred)
+            pred = torch.from_numpy(pred.transpose(0, 3, 1, 2))
         else:
             pred = self.apply_model_activations(pred)
             # Multi-head concatenation
