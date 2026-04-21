@@ -497,17 +497,9 @@ def load_stunet_pretrained_encoder_from_ckpt(model: STUNet, checkpoint: Dict[str
     print("[STUNet] Pretrained encoder loaded")
 
 
-def build_stunet(
-    variant: str,
-    image_shape: Tuple[int, ...] = (256, 256, 1),
-    output_channels: List[int] = [1],
-    output_channel_info=["F"],
-    explicit_activations: bool = False,
-    head_activations: List[str] = ["ce_sigmoid"],
-    deep_supervision: bool = True,
-    pretrained: Union[bool, str] = False,
-    map_location: str = "cpu",
-) -> STUNet:
+def build_stunet(variant: str, image_shape: Tuple[int, ...] = (256, 256, 1), output_channels: List[int] = [1], output_channel_info=["F"], 
+                 explicit_activations: bool = False, head_activations: List[str] = ["ce_sigmoid"], deep_supervision: bool = True, 
+                 pretrained: Union[bool, str] = False, map_location: str = "cpu") -> STUNet:
     """
     Build a STUNet model (small, base, large) with optional pretrained encoder loading.
 

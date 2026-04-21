@@ -222,7 +222,7 @@ def build_model(
             network_stride = [z_total_stride] + network_stride
 
     elif "stunet" in modelname:
-        callable_model = STUNet  # type: ignore
+        callable_model = build_stunet  # type: ignore
         args = dict(
             image_shape=cfg.DATA.PATCH_SIZE,
             output_channels=output_channels,
