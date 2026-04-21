@@ -609,18 +609,18 @@ def create_model_doc(
         preproc_info = "- Scaling the range to [0-max] and then dividing by the maximum value of the data.\n"
     elif biapy_cfg.DATA.NORMALIZATION.TYPE == "zero_mean_unit_variance":    
         preproc_info = "- Zero mean and unit variance normalization. "
-        if len(biapy_cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.MEAN_VAL) > 0:
+        if any(x for x in biapy_cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.MEAN_VAL if x > 0):
             preproc_info += f"Using provided mean values: {biapy_cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.MEAN_VAL}. "
         else:
             preproc_info += "Mean value calculated from the training data. "
-        if len(biapy_cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.STD_VAL) > 0:
+        if any(x for x in biapy_cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.STD_VAL if x > 0):
             preproc_info += f"Using provided std values: {biapy_cfg.DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.STD_VAL}.\n"
         else:
             preproc_info += "Std value calculated from the training data.\n"
 
     if biapy_cfg.DATA.NORMALIZATION.PERC_CLIP.ENABLE:
         preproc_info += "- Percentile clipping. "
-        if biapy_cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_VALUE >= 0 and biapy_cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_VALUE >= 0:
+        if any(x for x in biapy_cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_VALUE if x >= 0) and any(x for x in biapy_cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_VALUE if x >= 0):
             preproc_info += f"Using provided lower and upper values of {biapy_cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_VALUE} and {biapy_cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_VALUE}, respectively, to clip the data before normalization.\n"
         else:
             preproc_info += f"Using provided lower and upper percentiles of {biapy_cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC} and {biapy_cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC}, respectively, to calculate the values to clip the data before normalization.\n"
