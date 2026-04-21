@@ -34,6 +34,7 @@ from bioimageio.spec.model.v0_5 import (
     OutputTensorDescr,
     IntervalOrRatioDataDescr,
     SpaceInputAxis,
+    SpaceOutputAxis,
     SpaceOutputAxisWithHalo,
     SizeReference,
     TensorId,
@@ -636,12 +637,13 @@ class BiaPy:
                 elif test_input.max() > 255:
                     max_val = 65535
 
-            preprocessing.append(
-                {
-                    "id": "scale_linear",
-                    "kwargs": {"gain": float(1 / max_val), "offset": 0},
-                }
-            )
+            if max_val != 1:
+                preprocessing.append(
+                    {
+                        "id": "scale_linear",
+                        "kwargs": {"gain": float(1 / max_val), "offset": 0},
+                    }
+                )
         elif self.cfg.DATA.NORMALIZATION.TYPE == "scale_range":
             preprocessing.append(
                 {
@@ -728,18 +730,21 @@ class BiaPy:
             ]
             np.save(test_output_path, test_output)
             if self.cfg.PROBLEM.NDIM == "3D":
-                output_axes += [
-                    SpaceOutputAxisWithHalo(
-                        halo=(test_input.shape[2]//8) & ~1, 
-                            id=AxisId("z"), 
-                            size=SizeReference(
-                                tensor_id='input0', # type: ignore
-                                axis_id='z', # type: ignore
-                                offset=0,
-                            ),
-                        scale=float(test_input.shape[2]/test_output.shape[2]),
-                    )
-                ]
+                if test_input.shape[test_output.ndim-3] >= 20:
+                    output_axes += [
+                        SpaceOutputAxisWithHalo(
+                            halo=(test_input.shape[test_output.ndim-3]//8) & ~1, 
+                                id=AxisId("z"), 
+                                size=SizeReference(
+                                    tensor_id='input0', # type: ignore
+                                    axis_id='z', # type: ignore
+                                    offset=0,
+                                ),
+                            scale=float(test_input.shape[test_input.ndim-3]/test_output.shape[test_output.ndim-3]),
+                        )
+                    ]
+                else:
+                    output_axes += [SpaceOutputAxis(id=AxisId("z"), size=test_input.shape[test_output.ndim-3])]
             output_axes += [
                 SpaceOutputAxisWithHalo(
                     halo=(test_input.shape[test_output.ndim-2]//8) & ~1, 
