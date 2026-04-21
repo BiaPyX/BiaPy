@@ -20,6 +20,7 @@ Adapted from:
 https://github.com/yjn870/WDSR-pytorch/tree/master
 """
 import math
+from typing import Sequence
 import torch
 import torch.nn as nn
 import torch.nn.init as init
@@ -73,7 +74,7 @@ class wdsr(nn.Module):
         """
         super(wdsr, self).__init__()
         # Extract the single integer scale factor from the input
-        if type(scale) is tuple:
+        if type(scale) is not int and isinstance(scale, Sequence):
             scale = scale[0]
         
         kernel_size = 3 # Kernel size for main body convolutions

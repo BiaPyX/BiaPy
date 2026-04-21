@@ -205,7 +205,16 @@ def extract_BMZ_sample_and_cover(
     cover_raw, cover_gt = None, img_gt
     mask_available = img_gt is not None and isinstance(img_gt, np.ndarray)
     dims = 2 if not is_3d else 3
-    ref_img = img_gt if mask_available else img
+    scale = [1,] * dims
+    if mask_available:
+        # Probably in SR workflow
+        if img.shape[:-1] != img_gt.shape[:-1]:
+            ref_img = img
+            scale = [x//y for x,y in zip(img_gt.shape[:-1], img.shape[:-1])]
+        else:
+            ref_img = img_gt
+    else:
+        ref_img = img
     if isinstance(ref_img, np.ndarray):    
         if dims == 2:
             H, W, C = ref_img.shape
@@ -263,6 +272,14 @@ def extract_BMZ_sample_and_cover(
             img, patch, is_3d=True if is_3d else False
         )
         if mask_available:
+            patch = PatchCoords(
+                z_start=z_start*scale[0] if is_3d else None,
+                z_end=z_start*scale[0]+patch_size[0]*scale[0] if is_3d else None,
+                y_start=y_start*scale[-2],
+                y_end=y_start*scale[-2]+patch_size[-3]*scale[-2],
+                x_start=x_start*scale[-1],
+                x_end=x_start*scale[-1]+patch_size[-2]*scale[-1],
+            )
             rimg_gt = extract_patch_within_image(
                 img_gt, patch, is_3d=True if is_3d else False
             )
@@ -288,6 +305,14 @@ def extract_BMZ_sample_and_cover(
             img, patch, data_axes_order=input_axis_order,
         )
         if mask_available:
+            patch = PatchCoords(
+                z_start=0 if is_3d else None,
+                z_end=0+patch_size[0]*scale[0] if is_3d else None,
+                y_start=0,
+                y_end=0+patch_size[-3]*scale[-2],
+                x_start=0,
+                x_end=0+patch_size[-2]*scale[-1],
+            )
             rimg_gt = extract_patch_from_efficient_file(
                 img_gt, patch, data_axes_order=input_axis_order,
             )   

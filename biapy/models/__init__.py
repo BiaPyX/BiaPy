@@ -317,13 +317,10 @@ def build_model(
             model = EDSR(args)  # type: ignore
             callable_model = EDSR  # type: ignore
         elif modelname == "rcan":
-            scale = cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING
-            if type(scale) is tuple:
-                scale = scale[0]
             args = dict(
                 ndim=ndim,
                 filters=cfg.MODEL.RCAN_CONV_FILTERS,
-                scale=scale,
+                scale=cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING,
                 num_rg=cfg.MODEL.RCAN_RG_BLOCK_NUM,
                 num_rcab=cfg.MODEL.RCAN_RCAB_BLOCK_NUM,
                 reduction=cfg.MODEL.RCAN_REDUCTION_RATIO,

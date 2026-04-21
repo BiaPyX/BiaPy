@@ -1547,18 +1547,7 @@ class Base_Workflow(metaclass=ABCMeta):
             if len(img.shape) == 2:  # Classification
                 self.bmz_config[sample_key] = img[0]
             else:
-                if self.cfg.PROBLEM.NDIM == "2D":
-                    self.bmz_config[sample_key] = img[
-                        0, :, : self.cfg.DATA.PATCH_SIZE[0], : self.cfg.DATA.PATCH_SIZE[1]
-                    ].copy()
-                else:
-                    self.bmz_config[sample_key] = img[
-                        0,
-                        :,
-                        : self.cfg.DATA.PATCH_SIZE[0],
-                        : self.cfg.DATA.PATCH_SIZE[1],
-                        : self.cfg.DATA.PATCH_SIZE[2],
-                    ].copy()
+                self.bmz_config[sample_key] = img[0].copy()
 
             # Ensure dimensions
             if self.cfg.PROBLEM.NDIM == "2D":

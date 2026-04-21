@@ -730,38 +730,38 @@ class BiaPy:
             if self.cfg.PROBLEM.NDIM == "3D":
                 output_axes += [
                     SpaceOutputAxisWithHalo(
-                        halo=(test_output.shape[2]//8) & ~1, 
+                        halo=(test_input.shape[2]//8) & ~1, 
                             id=AxisId("z"), 
                             size=SizeReference(
                                 tensor_id='input0', # type: ignore
                                 axis_id='z', # type: ignore
                                 offset=0,
                             ),
-                        scale=float(test_input.shape[2]//test_output.shape[2]),
+                        scale=float(test_input.shape[2]/test_output.shape[2]),
                     )
                 ]
             output_axes += [
                 SpaceOutputAxisWithHalo(
-                    halo=(test_output.shape[test_output.ndim-2]//8) & ~1, 
+                    halo=(test_input.shape[test_output.ndim-2]//8) & ~1, 
                     id=AxisId("y"), 
                     size=SizeReference(
                         tensor_id='input0', # type: ignore
                         axis_id='y', # type: ignore
                         offset=0,
                     ),
-                    scale=float(test_input.shape[test_input.ndim-2]//test_output.shape[test_output.ndim-2]),
+                    scale=float(test_input.shape[test_input.ndim-2]/test_output.shape[test_output.ndim-2]),
                 )
             ]
             output_axes += [
                 SpaceOutputAxisWithHalo(
-                    halo=(test_output.shape[test_output.ndim-1]//8) & ~1,  
+                    halo=(test_input.shape[test_output.ndim-1]//8) & ~1,  
                     id=AxisId("x"),
                     size=SizeReference(
                         tensor_id='input0', # type: ignore
                         axis_id='x', # type: ignore
                         offset=0,
                     ),
-                    scale=float(test_input.shape[test_input.ndim-1]//test_output.shape[test_output.ndim-1]),
+                    scale=float(test_input.shape[test_input.ndim-1]/test_output.shape[test_output.ndim-1]),
                 ),
             ]
             data_descr = IntervalOrRatioDataDescr(type="float32")
@@ -775,6 +775,7 @@ class BiaPy:
             outputs = [output_descr]
         else:
             inputs = []
+            input_shapes = []
             for i, input in enumerate(self.workflow.bmz_config["original_bmz_config"].inputs):
                 if type(input) != InputTensorDescr:
                     # Read tensor
@@ -786,6 +787,7 @@ class BiaPy:
                         test_tensor = ensure_2d_shape(test_tensor, test_tensor_local_path)
                     else:
                         test_tensor = ensure_3d_shape(test_tensor, test_tensor_local_path)
+                    input_shapes.append(test_tensor.shape)
 
                     # Create axes object
                     input_axes = []
@@ -835,6 +837,7 @@ class BiaPy:
                     else:
                         test_tensor = ensure_3d_shape(test_tensor, test_tensor_local_path)
 
+                    input_shape = input_shapes[i] if i < len(input_shapes) else input_shapes[0]
                     # Create axes object
                     output_axes = []
                     for letter in output.axes:
@@ -849,7 +852,7 @@ class BiaPy:
                         elif letter == "z":
                             output_axes.append(
                                 SpaceOutputAxisWithHalo(
-                                    halo=(test_tensor.shape[0]//8) & ~1, 
+                                    halo=(input_shape.shape[0]//8) & ~1, 
                                         id=AxisId(str(letter)), 
                                         size=SizeReference(
                                             tensor_id='input0', # type: ignore
@@ -861,7 +864,7 @@ class BiaPy:
                         elif letter == "y":
                             output_axes.append(
                                 SpaceOutputAxisWithHalo(
-                                    halo=(test_tensor.shape[test_tensor.ndim-2]//8) & ~1, 
+                                    halo=(input_shape.shape[1]//8) & ~1, 
                                     id=AxisId(str(letter)), 
                                     size=SizeReference(
                                         tensor_id='input0', # type: ignore
@@ -873,7 +876,7 @@ class BiaPy:
                         elif letter == "x":
                             output_axes.append(
                                 SpaceOutputAxisWithHalo(
-                                halo=(test_tensor.shape[test_tensor.ndim-1]//8) & ~1, 
+                                halo=(input_shape.shape[2]//8) & ~1, 
                                 id=AxisId(str(letter)), 
                                 size=SizeReference(
                                         tensor_id='input0', # type: ignore
