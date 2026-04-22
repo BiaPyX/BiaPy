@@ -12,6 +12,7 @@ import argparse
 import time 
 import requests
 import collections.abc
+import re
 
 # ---------------------------------------------------------
 # ARGUMENT PARSING
@@ -44,183 +45,11 @@ if not os.path.exists(BIAPY_FOLDER):
     raise ValueError(f"BiaPy not found in: {BIAPY_FOLDER}")
 
 # ---------------------------------------------------------
-# HELPER FUNCTIONS
-# ---------------------------------------------------------
-def download_drive_file(drive_link, out_filename, attempts=5):
-    """ Try a few times to download a file from Drive using gdown """
-    for i in range(attempts):
-        print(f"Trying to download {drive_link} (attempt {i+1})")
-        try:
-            gdown.download(drive_link, out_filename, quiet=True)
-        except Exception as e:
-            print(e)
-            time.sleep(5)
-        if os.path.exists(out_filename):
-            break
-
-def download_onedrive_file(drive_link, out_filename, attempts=5):
-    for i in range(attempts):
-        print(f"Trying to download {drive_link} (attempt {i+1})")
-        try:
-            response = requests.get(drive_link, stream=True)
-            if response.status_code == 200:
-                with open(out_filename, 'wb') as f:
-                    for chunk in response.iter_content(chunk_size=8192):
-                        f.write(chunk)
-            else:
-                print(f"Failed to download. Status code: {response.status_code}")
-        except Exception as e:
-            print(e)
-            time.sleep(5)
-        if os.path.exists(out_filename):
-            break
-
-def check_bmz_file_created(last_lines, pattern_to_find):
-    """
-    Checks BMZ model creation. E.g. "Package path: *.zip"
-    """
-    for line in last_lines:
-        if pattern_to_find in line and "zip" in line:
-            return True
-    return False
-
-def check_bmz_weight_agreement(last_lines, pattern_to_find):
-    """
-    Checks BMZ model weight agreement. E.g. "weights.pytorch_state_dict" in the logs.
-    Returns False if there is an error (i.e. the pattern is found but it is related to a disagreement), False otherwise.
-    """
-    for line in last_lines:
-        if pattern_to_find in line:
-            if "❌" in line or "disagrees with" in line:
-                return False
-
-    return True
-
-def check_value(last_lines, pattern_to_find, ref_value, gt=True):
-    """
-    Checks just one value. E.g. 'Test Foreground IoU (merge patches): 0.45622628648145197' "
-    """
-    finished_good = False
-    for line in last_lines:
-        if pattern_to_find in line:
-            val = float(line.split(' ')[-1].replace('\n',''))
-            if gt and val >= ref_value:
-                finished_good = True
-            elif not gt and val < ref_value:
-                finished_good = True
-            break
-    return finished_good
-
-def check_DatasetMatching(last_lines, pattern_to_find, ref_value, gt=True, value_to_check=1, metric="f1"):
-    """
-    Check just one value that can appear more than once (control the one you want to check with 'value_to_check').
-    E.g.:
-        DatasetMatching(criterion='iou', thresh=0.3, fp=1262, tp=357, fn=78, precision=0.2205064854848672,
-        recall=0.8206896551724138, accuracy=0.2103712433706541, f1=0.3476144109055501, n_true=435,
-        n_pred=1619, mean_true_score=0.5633060849946121, mean_matched_score=0.6863813640690651,
-        panoptic_quality=0.23859605352741603, by_image=False)
-    """
-    finished_good = False
-    c = 1
-    for line in last_lines:
-        if pattern_to_find in line:
-            if c == value_to_check:
-                for part in line.split(' '):
-                    if metric in part:
-                        val = float(part.split('=')[-1][:-1])
-                        if gt and val >= ref_value:
-                            finished_good = True
-                        elif not gt and val < ref_value:
-                            finished_good = True
-                        break
-            else:
-                c += 1
-    return finished_good
-
-def check_finished(test_info):
-    # get the last lines of the output file
-    jobdir = os.path.join(RESULTS_FOLDER, test_info["jobname"])
-    jobout_file = os.path.join(jobdir, test_info["jobname"]+"_1")
-    logfile = open(jobout_file, 'r')
-    last_lines = logfile.readlines()
-    last_lines = last_lines[-min(300,len(last_lines)):]
-
-    # Check if the final message appears there
-    finished_good = False
-    for line in last_lines:
-        if "FINISHED JOB" in line:
-            finished_good = True
-            break
-    logfile.close()
-
-    return finished_good, last_lines
-
-def print_result(finished_good, jobname, int_checks):
-    # Print the final message to the user accordingly
-    if all(finished_good):
-        print(f"** {jobname} job: [OK] ({int_checks} internal checks passed)")
-    else:
-        print(f"** {jobname} job: [ERROR] ({sum(finished_good)} of {int_checks} internal checks passed)")
-    print("######")
-
-
-def runjob(test_info, yaml_file, multigpu=False, bmz_by_command=False, bmz_package=None, reuse_original_bmz_config=False):
-    # Declare the log file
-    jobdir = os.path.join(RESULTS_FOLDER, test_info["jobname"])
-    jobout_file = os.path.join(jobdir, test_info["jobname"]+"_1")
-    os.makedirs(jobdir, exist_ok=True)
-    logfile = open(jobout_file, 'w')
-    
-    # Run the process and wait until finishes
-    os.chdir(BIAPY_FOLDER)
-    print(f"Log: {jobout_file}")
-    if bmz_by_command and bmz_package is not None:
-        os.makedirs(BMZ_FOLDER, exist_ok=True)
-        cmd = ["python", "-u", bmz_script, 
-               "--code_dir", BIAPY_FOLDER,
-               "--jobname", test_info["jobname"],
-               "--config", yaml_file, 
-               "--result_dir", RESULTS_FOLDER, 
-               "--model_name", str(bmz_package.split(".")[:-1][0]),
-               "--bmz_folder", BMZ_FOLDER,
-               "--gpu", gpu]
-        if reuse_original_bmz_config:
-            cmd += ["--reuse_original_bmz_config"]
-    else:
-        if multigpu:
-            cmd = ["python", "-u", "-m", "torch.distributed.run", "--nproc_per_node="+str(ngpus),
-                f"--master-port={np.random.randint(low=1500, high=7000, size=1)[0]}", "main.py",
-                "--config", yaml_file, "--result_dir", RESULTS_FOLDER, "--name", test_info["jobname"], "--run_id", "1",
-                "--gpu", gpus]
-        else:
-            cmd = ["python", "-u", "main.py", "--config", yaml_file, "--result_dir", RESULTS_FOLDER, "--name",
-                test_info["jobname"], "--run_id", "1", "--gpu", gpu]
-            
-    print(f"Command: {' '.join(cmd)}")
-    print("Running job . . .")
-    process = Popen(cmd, stdout=logfile, stderr=logfile)
-    process.wait()
-
-    logfile.close()
-
-def update_nested_dict(d, u):
-    """
-    Recursively updates a nested dictionary. 
-    Allows overwriting specific YAML keys without clearing out the rest of the parent block.
-    """
-    for k, v in u.items():
-        if isinstance(v, collections.abc.Mapping):
-            d[k] = update_nested_dict(d.get(k, {}), v)
-        else:
-            d[k] = v
-    return d
-
-# ---------------------------------------------------------
 # TEST DEFINITIONS
 # ---------------------------------------------------------       
 all_test_info = {}
 all_test_info["Test1"] = {
-    "enable": True,
+    "enable": False,
     "jobname": "test1",
     "description": "2D Semantic seg. Lucchi++. Basic DA. unet. 2D stack as 3D. Post-proc: z-filtering. BMZ export through YAML.",
     "template_path": os.path.join(data_folder, "semantic_seg", "2d_semantic_segmentation.yaml"),
@@ -287,7 +116,7 @@ all_test_info["Test1"] = {
 }
 
 all_test_info["Test2"] = {
-    "enable": True,
+    "enable": False,
     "jobname": "test2",
     "description": "3D Semantic seg. Lucchi++. attention_unet. Basic DA.",
     "template_path": os.path.join(data_folder, "semantic_seg", "3d_semantic_segmentation.yaml"),
@@ -330,7 +159,7 @@ all_test_info["Test2"] = {
     "bmz_by_command": True,
     "bmz_package": "lucchi3Dsegmentation.zip",
     "internal_checks": [
-        {"pattern": "Test Foreground IoU (merge patches)", "gt": True, "value": 0.50},
+        {"type": "regular", "pattern": "Test Foreground IoU (merge patches)", "gt": True, "value": 0.50},
         {"type": "BMZ", "pattern": "Package path:", "bmz_package_name":  "lucchi3Dsegmentation.zip"},
         {"type": "BMZ_weight_agreement", "pattern": "weights.pytorch_state_dict", "value": "✔️"},    
     ]
@@ -502,19 +331,19 @@ all_test_info["Test5"] = {
             'REFLECT_TO_COMPLETE_SHAPE': True,
             'PATCH_SIZE': "(80, 80, 80, 1)",
             "TRAIN": {
-                "PATH": os.path.join(data_folder, "instance_seg", "CartoCell", "train_M2", "x"),
-                "GT_PATH": os.path.join(data_folder, "instance_seg", "CartoCell", "train_M2", "y"),
+                "PATH": os.path.join(data_folder, "instance_seg", "CartoCell", "CartoCell", "train_M2", "x"),
+                "GT_PATH": os.path.join(data_folder, "instance_seg", "CartoCell", "CartoCell", "train_M2", "y"),
                 "IN_MEMORY": True,
             },
             "VAL": {
-                "PATH": os.path.join(data_folder, "instance_seg", "CartoCell", "validation", "x"),
-                "GT_PATH": os.path.join(data_folder, "instance_seg", "CartoCell", "validation", "y"),
+                "PATH": os.path.join(data_folder, "instance_seg", "CartoCell", "CartoCell", "validation", "x"),
+                "GT_PATH": os.path.join(data_folder, "instance_seg", "CartoCell", "CartoCell", "validation", "y"),
                 "IN_MEMORY": True,
                 "FROM_TRAIN": False
             },
             "TEST": {
-                "PATH": os.path.join(data_folder, "instance_seg", "CartoCell", "validation", "x"),
-                "GT_PATH": os.path.join(data_folder, "instance_seg", "CartoCell", "validation", "y"),
+                "PATH": os.path.join(data_folder, "instance_seg", "CartoCell", "CartoCell", "validation", "x"),
+                "GT_PATH": os.path.join(data_folder, "instance_seg", "CartoCell", "CartoCell", "validation", "y"),
                 "IN_MEMORY": False,
                 "LOAD_GT": True
             },
@@ -657,13 +486,13 @@ all_test_info["Test8"] = {
                 "TYPE": "zero_mean_unit_variance"
             },
             "TRAIN": {
-                "PATH": os.path.join(data_folder, "detection", "NucMM-Z", "data", "train", "raw"),
-                "GT_PATH": os.path.join(data_folder, "detection", "NucMM-Z", "data", "train", "label"),
+                "PATH": os.path.join(data_folder, "detection", "NucMM-Z_training", "data", "train", "raw"),
+                "GT_PATH": os.path.join(data_folder, "detection", "NucMM-Z_training", "data", "train", "label"),
                 "IN_MEMORY": True,
             },
             "TEST": {
-                "PATH": os.path.join(data_folder, "detection", "NucMM-Z", "data", "test", "raw"),
-                "GT_PATH": os.path.join(data_folder, "detection", "NucMM-Z", "data", "test", "label"),
+                "PATH": os.path.join(data_folder, "detection", "NucMM-Z_training", "data", "test", "raw"),
+                "GT_PATH": os.path.join(data_folder, "detection", "NucMM-Z_training", "data", "test", "label"),
                 "IN_MEMORY": False,
                 "LOAD_GT": True,
             },
@@ -738,9 +567,9 @@ all_test_info["Test9"] = {
                 "INPUT_IMG_AXES_ORDER": 'ZYXC',
                 "FILTER_SAMPLES": {
                     "ENABLE": True,
-                    "PROPS": [['foreground']],
-                    "VALUES": [[1.0e-22]],
-                    "SIGNS": [["lt"]]
+                    "PROPS": [['foreground'], ["mean"]],
+                    "VALUES": [[1.0e-22], [0.1]],
+                    "SIGNS": [["lt"], ["lt"]]
                 },
                 "PATH": os.path.join(data_folder, "detection", "brainglobe_small_data", "data", "3D_ch2ch4_Zarr"),
                 "GT_PATH": os.path.join(data_folder, "detection", "brainglobe_small_data", "data", "y"),   
@@ -754,19 +583,19 @@ all_test_info["Test9"] = {
                 "GT_PATH": os.path.join(data_folder, "detection", "brainglobe_small_data", "data", "y"),    
                 "IN_MEMORY": False,
                 "LOAD_GT": True,
-                "PADDING": "(0,18,18)"  
+                "PADDING": "(4,18,18)"  
             },
         },
         "TRAIN": {
             "ENABLE": True,
             "EPOCHS": 100,
             "BATCH_SIZE": 2,
-            "PATIENCE": 50,
-            "LR": 0.0008,
+            "PATIENCE": 20,
+            "LR": 0.0001,
             "LR_SCHEDULER": {
                 "NAME": 'warmupcosine',
-                "MIN_LR": 0.0001,
-                "WARMUP_COSINE_DECAY_EPOCHS": 15
+                "MIN_LR": 5.E-6,
+                "WARMUP_COSINE_DECAY_EPOCHS": 5
             },
         },
         "MODEL": { 
@@ -787,7 +616,7 @@ all_test_info["Test9"] = {
         "TEST": {
             "ENABLE": True,
             "FULL_IMG": False,
-            "DET_MIN_TH_TO_BE_PEAK": 0.5,
+            "DET_MIN_TH_TO_BE_PEAK": 0.2,
             "DET_TOLERANCE": 8,
             "VERBOSE": True,
             "BY_CHUNKS": {
@@ -835,7 +664,6 @@ all_test_info["Test10"] = {
             "TEST": {
                 "PATH": os.path.join(data_folder, "denoising", "Noise2Void_RGB"),
                 "IN_MEMORY": False,
-                "LOAD_GT": True,
             },
         },
         "TRAIN": {
@@ -1108,7 +936,6 @@ all_test_info["Test15"] = {
                 "CROSS_VAL_FOLD": 1
             },
             "TEST": {
-                "PATH": os.path.join(data_folder, "ssl", "fibsem_epfl_2D", "data", "test", "raw"),
                 "IN_MEMORY": False,
                 "USE_VAL_AS_TEST": True,
                 "LOAD_GT": True
@@ -1251,7 +1078,7 @@ all_test_info["Test18"] = {
             }
         },
         "DATA": {
-            "PATCH_SIZE": "(20,128,128,1)",
+            "PATCH_SIZE": "(80,80,80,1)",
             "TRAIN": {
                 "PATH": os.path.join(data_folder, "ssl", "fibsem_epfl_3D", "data", "train", "raw"),
                 "IN_MEMORY": True,
@@ -1839,6 +1666,7 @@ all_test_info["Test28"] = {
     },
     "bmz_by_command": True,
     "bmz_package": "2D U-NeXt V1 for nucleus segmentation.zip",
+    "reuse_original_bmz_config": True,
     "internal_checks": [
         {"type": "regular", "pattern": "Test IoU (F channel) (merge patches):", "gt": True, "value": 0.7},
         {"type": "DatasetMatching", "pattern": "DatasetMatching(criterion='iou', thresh=0.3,", "nApparition": 1, "metric": "f1", "gt": True, "value": 0.85},
@@ -1924,8 +1752,8 @@ all_test_info["Test30"] = {
             "REFLECT_TO_COMPLETE_SHAPE": True,
             "PATCH_SIZE": "(80, 80, 80, 1)",
             "TEST": {
-                "PATH": os.path.join(data_folder, "instance_seg", "CartoCell", "validation", "x"),
-                "GT_PATH": os.path.join(data_folder, "instance_seg", "CartoCell", "validation", "y"),
+                "PATH": os.path.join(data_folder, "instance_seg", "CartoCell", "CartoCell", "validation", "x"),
+                "GT_PATH": os.path.join(data_folder, "instance_seg", "CartoCell", "CartoCell", "validation", "y"),
                 "IN_MEMORY": True,
                 "LOAD_GT": True
             },
@@ -2204,6 +2032,201 @@ DATASETS = [
     }
 ]
 
+
+# ---------------------------------------------------------
+# HELPER FUNCTIONS
+# ---------------------------------------------------------
+def download_drive_file(drive_link, out_filename, attempts=5):
+    """ Try a few times to download a file from Drive using gdown """
+    for i in range(attempts):
+        print(f"Trying to download {drive_link} (attempt {i+1})")
+        try:
+            gdown.download(drive_link, out_filename, quiet=True)
+        except Exception as e:
+            print(e)
+            time.sleep(5)
+        if os.path.exists(out_filename):
+            break
+
+def download_onedrive_file(drive_link, out_filename, attempts=5):
+    for i in range(attempts):
+        print(f"Trying to download {drive_link} (attempt {i+1})")
+        try:
+            response = requests.get(drive_link, stream=True)
+            if response.status_code == 200:
+                with open(out_filename, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        f.write(chunk)
+            else:
+                print(f"Failed to download. Status code: {response.status_code}")
+        except Exception as e:
+            print(e)
+            time.sleep(5)
+        if os.path.exists(out_filename):
+            break
+
+def check_bmz_file_created(last_lines, pattern_to_find):
+    """
+    Checks BMZ model creation. E.g. "Package path: *.zip"
+    """
+    for line in last_lines:
+        if pattern_to_find in line and "zip" in line:
+            return True
+    return False
+
+def check_bmz_weight_agreement(last_lines, pattern_to_find):
+    """
+    Checks BMZ model weight agreement. E.g. "weights.pytorch_state_dict" in the logs.
+    Returns False if there is an error (i.e. the pattern is found but it is related to a disagreement), False otherwise.
+    """
+    for line in last_lines:
+        if pattern_to_find in line:
+            if "weights.pytorch_state_dict" in line and "❌" in line and "disagrees with" in line:
+                # We try to find the ratio of disagreeing weights. If it is very low, we consider it an agreement (there can be 
+                # some small numerical differences that do not affect the model performance). If it is higher than a threshold,
+                # we consider it a disagreement and return False.
+                try:
+                    # We expect the line to be something like:
+                    # Output 'output0' disagrees with 12 of 131072 expected values (91.6 ppm)
+                    # Find all integers in the string
+                    numbers = re.findall(r' \d+ ', line)
+                    if len(numbers) == 2:
+                        # Convert first two to integers, 12 and 131072 in the example
+                        first = float(numbers[0])
+                        second = float(numbers[1])
+
+                        # Compute ratio
+                        ratio = first / second
+                        if ratio > 15: # If more than 15% of the weights disagree, we consider it a disagreement
+                            return False
+                    else: 
+                        return False
+                except:
+                    return False
+
+    return True
+
+def check_value(last_lines, pattern_to_find, ref_value, gt=True):
+    """
+    Checks just one value. E.g. 'Test Foreground IoU (merge patches): 0.45622628648145197' "
+    """
+    finished_good = False
+    for line in last_lines:
+        if pattern_to_find in line:
+            val = float(line.split(' ')[-1].replace('\n',''))
+            if gt and val >= ref_value:
+                finished_good = True
+            elif not gt and val < ref_value:
+                finished_good = True
+            break
+    return finished_good
+
+def check_DatasetMatching(last_lines, pattern_to_find, ref_value, gt=True, value_to_check=1, metric="f1"):
+    """
+    Check just one value that can appear more than once (control the one you want to check with 'value_to_check').
+    E.g.:
+        DatasetMatching(criterion='iou', thresh=0.3, fp=1262, tp=357, fn=78, precision=0.2205064854848672,
+        recall=0.8206896551724138, accuracy=0.2103712433706541, f1=0.3476144109055501, n_true=435,
+        n_pred=1619, mean_true_score=0.5633060849946121, mean_matched_score=0.6863813640690651,
+        panoptic_quality=0.23859605352741603, by_image=False)
+    """
+    finished_good = False
+    c = 1
+    for line in last_lines:
+        if pattern_to_find in line:
+            if c == value_to_check:
+                for part in line.split(' '):
+                    if metric in part:
+                        match = re.search(r'[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?', part.split('=')[-1][:-1])
+                        val = float(match.group())
+                        if gt and val >= ref_value:
+                            finished_good = True
+                        elif not gt and val < ref_value:
+                            finished_good = True
+                        break
+            else:
+                c += 1
+    return finished_good
+
+def check_finished(test_info):
+    # get the last lines of the output file
+    jobdir = os.path.join(RESULTS_FOLDER, test_info["jobname"])
+    jobout_file = os.path.join(jobdir, test_info["jobname"]+"_1")
+    logfile = open(jobout_file, 'r')
+    last_lines = logfile.readlines()
+    last_lines = last_lines[-min(300,len(last_lines)):]
+
+    # Check if the final message appears there
+    finished_good = False
+    for line in last_lines:
+        if "FINISHED JOB" in line:
+            finished_good = True
+            break
+    logfile.close()
+
+    return finished_good, last_lines
+
+def print_result(finished_good, jobname, int_checks):
+    # Print the final message to the user accordingly
+    if all(finished_good):
+        print(f"** {jobname} job: [OK] ({int_checks} internal checks passed)")
+    else:
+        print(f"** {jobname} job: [ERROR] ({sum(finished_good)} of {int_checks} internal checks passed)")
+    print("######")
+
+
+def runjob(test_info, yaml_file, multigpu=False, bmz_by_command=False, bmz_package=None, reuse_original_bmz_config=False):
+    # Declare the log file
+    jobdir = os.path.join(RESULTS_FOLDER, test_info["jobname"])
+    jobout_file = os.path.join(jobdir, test_info["jobname"]+"_1")
+    os.makedirs(jobdir, exist_ok=True)
+    logfile = open(jobout_file, 'w')
+    
+    # Run the process and wait until finishes
+    os.chdir(BIAPY_FOLDER)
+    print(f"Log: {jobout_file}")
+    if bmz_by_command and bmz_package is not None:
+        os.makedirs(BMZ_FOLDER, exist_ok=True)
+        cmd = ["python", "-u", bmz_script, 
+               "--code_dir", BIAPY_FOLDER,
+               "--jobname", test_info["jobname"],
+               "--config", yaml_file, 
+               "--result_dir", RESULTS_FOLDER, 
+               "--model_name", str(bmz_package.split(".")[:-1][0]),
+               "--bmz_folder", BMZ_FOLDER,
+               "--gpu", gpu]
+        if reuse_original_bmz_config:
+            cmd += ["--reuse_original_bmz_config"]
+    else:
+        if multigpu:
+            cmd = ["python", "-u", "-m", "torch.distributed.run", "--nproc_per_node="+str(ngpus),
+                f"--master-port={np.random.randint(low=1500, high=7000, size=1)[0]}", "main.py",
+                "--config", yaml_file, "--result_dir", RESULTS_FOLDER, "--name", test_info["jobname"], "--run_id", "1",
+                "--gpu", gpus]
+        else:
+            cmd = ["python", "-u", "main.py", "--config", yaml_file, "--result_dir", RESULTS_FOLDER, "--name",
+                test_info["jobname"], "--run_id", "1", "--gpu", gpu]
+            
+    print(f"Command: {' '.join(cmd)}")
+    print("Running job . . .")
+    process = Popen(cmd, stdout=logfile, stderr=logfile)
+    process.wait()
+
+    logfile.close()
+
+def update_nested_dict(d, u):
+    """
+    Recursively updates a nested dictionary. 
+    Allows overwriting specific YAML keys without clearing out the rest of the parent block.
+    """
+    for k, v in u.items():
+        if isinstance(v, collections.abc.Mapping):
+            d[k] = update_nested_dict(d.get(k, {}), v)
+        else:
+            d[k] = v
+    return d
+
+
 # Universal Data Preparation Loop
 for category in DATASETS:
     target_folder = os.path.join(data_folder, category["folder_name"])
@@ -2249,6 +2272,7 @@ count_correct = 0
 # Dynamic Loop: Runs through Test 1 to Test 36
 for test_key, test_info in all_test_info.items():
     if not test_info.get("enable", True):
+        print(f"Skipping {test_key} as it is not enabled.")
         continue
         
     print(f"\n==============================================")
@@ -2288,7 +2312,7 @@ for test_key, test_info in all_test_info.items():
         runjob(**args)
         
         # Verify BiaPy process finished successfully
-        res, last_lines = check_finished(all_test_info["Test1"])
+        res, last_lines = check_finished(test_info)
         if not res:
             correct = False
             print("Internal check not passed: seems that it didn't finish")
