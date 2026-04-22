@@ -734,10 +734,10 @@ class BiaPy:
                     ChannelAxis(channel_names=[Identifier("channel" + str(i)) for i in range(test_output.shape[1])]),
                 ]
                 if self.cfg.PROBLEM.NDIM == "3D":
-                    if test_input.shape[test_output.ndim-3] >= 20:
+                    if test_output.shape[test_output.ndim-3] >= 20:
                         output_axes += [
                             SpaceOutputAxisWithHalo(
-                                halo=(test_input.shape[test_output.ndim-3]//8) & ~1, 
+                                halo=(test_output.shape[test_output.ndim-3]//8) & ~1, 
                                     id=AxisId("z"), 
                                     size=SizeReference(
                                         tensor_id='input0', # type: ignore
@@ -748,10 +748,10 @@ class BiaPy:
                             )
                         ]
                     else:
-                        output_axes += [SpaceOutputAxis(id=AxisId("z"), size=test_input.shape[test_output.ndim-3])]
+                        output_axes += [SpaceOutputAxis(id=AxisId("z"), size=test_output.shape[test_output.ndim-3])]
                 output_axes += [
                     SpaceOutputAxisWithHalo(
-                        halo=(test_input.shape[test_output.ndim-2]//8) & ~1, 
+                        halo=(test_output.shape[test_output.ndim-2]//8) & ~1, 
                         id=AxisId("y"), 
                         size=SizeReference(
                             tensor_id='input0', # type: ignore
@@ -763,7 +763,7 @@ class BiaPy:
                 ]
                 output_axes += [
                     SpaceOutputAxisWithHalo(
-                        halo=(test_input.shape[test_output.ndim-1]//8) & ~1,  
+                        halo=(test_output.shape[test_output.ndim-1]//8) & ~1,  
                         id=AxisId("x"),
                         size=SizeReference(
                             tensor_id='input0', # type: ignore
