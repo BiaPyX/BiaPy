@@ -275,6 +275,7 @@ def build_model(
                 alpha=1.67,
                 z_down=cfg.MODEL.Z_DOWN,
                 output_channels=output_channels,
+                explicit_activations=False,
             )
             if cfg.PROBLEM.TYPE == "SUPER_RESOLUTION":
                 args["upsampling_factor"] = cfg.PROBLEM.SUPER_RESOLUTION.UPSCALING
