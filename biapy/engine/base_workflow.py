@@ -1561,12 +1561,13 @@ class Base_Workflow(metaclass=ABCMeta):
             if apply_norm:
                 if self.cfg.PROBLEM.NDIM == "2D":
                     # Transpose to (b,y,x,c) for normalization and back to (b,c,y,x) after
-                    self.bmz_config[sample_key], _ = normalize_image(self.bmz_config[sample_key].transpose(0, 2, 3, 1), self.norm_module)
+                    self.bmz_config[sample_key], bmz_norm_used = normalize_image(self.bmz_config[sample_key].transpose(0, 2, 3, 1), self.norm_module)
                     self.bmz_config[sample_key] = self.bmz_config[sample_key].astype(np.float32).transpose(0, 3, 1, 2)
                 else:  
                     # Transpose to (b,z,y,x,c) for normalization and back to (b,c,z,y,x) after
-                    self.bmz_config[sample_key], _ = normalize_image(self.bmz_config[sample_key].transpose(0, 2, 3, 4, 1), self.norm_module)
+                    self.bmz_config[sample_key], bmz_norm_used = normalize_image(self.bmz_config[sample_key].transpose(0, 2, 3, 4, 1), self.norm_module)
                     self.bmz_config[sample_key] = self.bmz_config[sample_key].astype(np.float32).transpose(0, 4, 1, 2, 3)
+                print("Normalization used in when creating BMZ data: {}".format(bmz_norm_used))
 
         # Save test_input without the normalization if not already saved
         if "test_input" not in self.bmz_config:
