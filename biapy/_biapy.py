@@ -598,6 +598,7 @@ class BiaPy:
 
         # Add percentile norm
         preprocessing = []
+        axes = list("zyx") if self.cfg.PROBLEM.NDIM == "3D" else list("yx")
         if self.cfg.DATA.NORMALIZATION.PERC_CLIP.ENABLE:
             min_percentile = max(self.cfg.DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC, 0)
             max_percentile = min(self.cfg.DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC, 100)
@@ -608,6 +609,7 @@ class BiaPy:
                         "kwargs": {
                             "max_percentile": max_percentile,
                             "min_percentile": min_percentile,
+                            "axes": axes,
                         },
                     }
                 )
@@ -621,11 +623,11 @@ class BiaPy:
                             "kwargs": {
                                 "max_value": upper_value if upper_value != -1 else None,
                                 "min_value": lower_value if lower_value != -1 else None,
+                                "axes": axes,
                             },
                         }
                     )
 
-        axes = list("zyx") if self.cfg.PROBLEM.NDIM == "3D" else list("yx")
         if self.cfg.DATA.NORMALIZATION.TYPE == "div":
             max_val = 255
             if not reuse_original_bmz_config:
