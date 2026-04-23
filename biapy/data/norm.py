@@ -100,11 +100,11 @@ def normalize_image(
                 assert isinstance(norm_module["lower_bound_val"], list), "'lower_bound_val' should be a list of float/integer values"
                 if norm_module["lower_bound_val"][0] != -1:
                     if len(norm_module["lower_bound_val"]) == 1:
-                        lower_bound_val = float(norm_module["lower_bound_val"][0])
+                        lower_bound_val = [float(norm_module["lower_bound_val"][0]) for c in range(img.shape[-1])]
                     else:
                         assert len(norm_module["lower_bound_val"]) == img.shape[-1], "If more that one lower_bound_val value is provided, the number of "
                         "lower_bound_val values should be the same as the number of channels in the input image"
-                        lower_bound_val = float(norm_module["lower_bound_val"][c])
+                        lower_bound_val = norm_module["lower_bound_val"]
                 else:
                     assert "per_lower_bound" in norm_module, "If 'lower_bound_val' is not provided, 'per_lower_bound' should be provided"
                     per_lower_bound = norm_module["per_lower_bound"] 
@@ -116,11 +116,11 @@ def normalize_image(
                 assert isinstance(norm_module["upper_bound_val"], list), "'upper_bound_val' should be a list of float/integer values"
                 if norm_module["upper_bound_val"][0] != -1:
                     if len(norm_module["upper_bound_val"]) == 1:
-                        upper_bound_val = float(norm_module["upper_bound_val"][0])
+                        upper_bound_val = [float(norm_module["upper_bound_val"][0]) for c in range(img.shape[-1])]
                     else:
                         assert len(norm_module["upper_bound_val"]) == img.shape[-1], "If more that one upper_bound_val value is provided, the number of "
                         "upper_bound_val values should be the same as the number of channels in the input image"
-                        upper_bound_val = float(norm_module["upper_bound_val"][c])
+                        upper_bound_val = norm_module["upper_bound_val"]
                 else:
                     assert "per_upper_bound" in norm_module, "If 'upper_bound_val' is not provided, 'per_upper_bound' should be provided"
                     per_upper_bound = norm_module["per_upper_bound"]     
@@ -173,7 +173,7 @@ def normalize_image(
     for c in range(img.shape[-1]):
         new_norm_info["per_channel_info"][f"{c}"] = {}
         if norm_module["percentile_clip"]:
-            img[..., c], x_lwr, x_upr = percentile_clip(
+            img[..., c], x_lwr, x_upr = percentile_clip( # type: ignore
                 img[..., c], 
                 per_lower_bound=per_lower_bound,
                 per_upper_bound=per_upper_bound,
@@ -185,7 +185,7 @@ def normalize_image(
             new_norm_info["per_channel_info"][f"{c}"]["upper_bound_val"] = x_upr
         
         if norm_module["type"] in ["div", "scale_range"]:
-            img[..., c], max_val, min_val = norm_range01(
+            img[..., c], max_val, min_val = norm_range01( # type: ignore
                 img[..., c],
                 div_using_max_and_scale=(norm_module["type"] == "scale_range"),
                 max_val_to_div = max_val_to_div[c] if max_val_to_div is not None else None,
@@ -196,7 +196,7 @@ def normalize_image(
             new_norm_info["per_channel_info"][f"{c}"]["max_val_to_div"] = max_val
 
         elif norm_module["type"] == "zero_mean_unit_variance":
-            img[..., c], used_mean, used_std = zero_mean_unit_variance_normalization(
+            img[..., c], used_mean, used_std = zero_mean_unit_variance_normalization( # type: ignore
                 img[..., c], 
                 mean=mean[c] if mean is not None else None,
                 std=std[c] if std is not None else None,
@@ -280,12 +280,12 @@ def normalize_mask(
         norm_info = {
             "mask_norm": norm_module["mask_norm"],
             "orig_dtype": orig_dtype,
+            "per_channel_info": {}
         }
         if "per_channel_info" in norm_module:
             norm_info["per_channel_info"] = norm_module["per_channel_info"]
             channels_to_analize = len([key for key, val in norm_module["per_channel_info"].items() if val["type"] != "classes"])
         else:
-            norm_info["per_channel_info"] = {}
             if n_classes > 2 and instance_problem:
                 channels_to_analize = mask.shape[-1] - 1
                 norm_info["per_channel_info"][channels_to_analize] = {"type": "classes"}
@@ -299,7 +299,8 @@ def normalize_mask(
                     norm_info["per_channel_info"][j]["div"] = False
 
                 if instance_problem:
-                    if len(np.unique(mask[..., j])) > 2 and np.issubdtype(mask.dtype, np.floating):
+                    is_float = np.issubdtype(mask.dtype, np.floating) if isinstance(mask, np.ndarray) else torch.is_floating_point(mask)
+                    if len(np.unique(mask[..., j])) > 2 and is_float:
                         norm_info["per_channel_info"][j]["type"] = "no_bin"
                 else:  # In semantic seg, maybe the mask are in 255
                     if np.max(mask[..., j]) > max(n_classes,_ignore_index):
@@ -308,7 +309,7 @@ def normalize_mask(
         if apply_norm:
             for j in range(channels_to_analize):
                 if norm_info["per_channel_info"][j]["div"]:
-                    mask[..., j] = mask[..., j] / 255
+                        mask[..., j] = mask[..., j] / 255 # type: ignore
 
     # Continue normalization as if it were an image
     # Normalization in test should not be applied to mask/ground truth data
@@ -612,13 +613,13 @@ def zero_mean_unit_variance_normalization(
         if not isinstance(data, np.floating):
             data = data.astype(np.float32)
 
-    mean = data.mean() if mean is None else mean
-    std = data.std() if std is None else std
+    _mean = data.mean() if mean is None else mean
+    _std = data.std() if std is None else std
 
     if apply_norm:
-        data = (data - mean) / (max(std, eps))
+        data = (data - _mean) / (max(_std, eps))
 
-    return data, mean, std
+    return data, float(_mean), float(_std)
 
 def undo_image_norm(
     data: NDArray | torch.Tensor,
@@ -702,9 +703,10 @@ def undo_norm_range01(
     max_val_to_div = [norm_info["per_channel_info"][str(c)].get("max_val_to_div", None) for c in range(data.shape[-1])]
     min_val_to_div = [norm_info["per_channel_info"][str(c)].get("min_val_to_div", None) for c in range(data.shape[-1])]
 
-    data = (data * max_val_to_div) + min_val_to_div
-
-    return data
+    if isinstance(data, np.ndarray):
+        return (data * max_val_to_div) + min_val_to_div
+    else:
+        return (data * torch.tensor(max_val_to_div, device=data.device)) + torch.tensor(min_val_to_div, device=data.device)
 
 def undo_zero_mean_unit_variance_normalization(
     data: NDArray | torch.Tensor,
@@ -739,4 +741,7 @@ def undo_zero_mean_unit_variance_normalization(
     mean = [norm_info["per_channel_info"][str(c)].get("mean", None) for c in range(data.shape[-1])]
     std = [norm_info["per_channel_info"][str(c)].get("std", None) for c in range(data.shape[-1])]
 
-    return (data * std) + mean
+    if isinstance(data, np.ndarray):
+        return (data * std) + mean
+    else:
+        return (data * torch.tensor(std, device=data.device)) + torch.tensor(mean, device=data.device)
