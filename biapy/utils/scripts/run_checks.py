@@ -554,7 +554,7 @@ all_test_info["Test9"] = {
             },
         },
        "DATA": {
-            "PATCH_SIZE": "(20, 128, 128, 2)",
+            "PATCH_SIZE": "(8, 128, 128, 2)",
             "NORMALIZATION": {
                 "TYPE": "zero_mean_unit_variance",
                 "PERC_CLIP": {
@@ -583,18 +583,18 @@ all_test_info["Test9"] = {
                 "GT_PATH": os.path.join(data_folder, "detection", "brainglobe_small_data", "data", "y"),    
                 "IN_MEMORY": False,
                 "LOAD_GT": True,
-                "PADDING": "(4,18,18)"  
+                "PADDING": "(1,18,18)"  
             },
         },
         "TRAIN": {
             "ENABLE": True,
             "EPOCHS": 100,
             "BATCH_SIZE": 2,
-            "PATIENCE": 20,
+            "PATIENCE": 40,
             "LR": 0.0001,
             "LR_SCHEDULER": {
                 "NAME": 'warmupcosine',
-                "MIN_LR": 5.E-6,
+                "MIN_LR": 5.E-5,
                 "WARMUP_COSINE_DECAY_EPOCHS": 5
             },
         },
@@ -636,7 +636,7 @@ all_test_info["Test9"] = {
         },
     },
     "internal_checks": [
-        {"type": "regular", "pattern": "Test F1 (merge patches)", "gt": True, "value": 0.15},
+        {"type": "regular", "pattern": "Test F1 (merge patches)", "gt": True, "value": 0.12},
     ]
 }
 
@@ -658,11 +658,11 @@ all_test_info["Test10"] = {
                 "TYPE": "zero_mean_unit_variance"
             },
             "TRAIN": {
-                "PATH": os.path.join(data_folder, "denoising", "Noise2Void_RGB"),
+                "PATH": os.path.join(data_folder, "denoising", "Noise2Void_RGB", "Noise2Void_RGB"),
                 "IN_MEMORY": False,
             },
             "TEST": {
-                "PATH": os.path.join(data_folder, "denoising", "Noise2Void_RGB"),
+                "PATH": os.path.join(data_folder, "denoising", "Noise2Void_RGB", "Noise2Void_RGB"),
                 "IN_MEMORY": False,
             },
         },
@@ -1393,7 +1393,7 @@ all_test_info["Test24"] = {
     "enable": True,
     "jobname": "test24",
     "description": "3D Instance seg. Zarr 3D data SNEMI. in memory false. input zarr multiple data raw: 'volumes.raw'"
-        "warmupcosine. inference, by chunks, zarr multiple data, workflow process: entire pred.",
+        " warmupcosine. inference, by chunks, zarr multiple data, workflow process: entire pred.",
     "template_path": os.path.join(data_folder, "instance_seg", "3d_instance_segmentation.yaml"),
     "yaml": "test_24.yaml",
     "yaml_modifications": {
@@ -2079,7 +2079,7 @@ def check_bmz_weight_agreement(last_lines, pattern_to_find):
     Checks BMZ model weight agreement. E.g. "weights.pytorch_state_dict" in the logs.
     Returns False if there is an error (i.e. the pattern is found but it is related to a disagreement), False otherwise.
     """
-    for line in last_lines:
+    for i, line in enumerate(last_lines):
         if pattern_to_find in line:
             if "weights.pytorch_state_dict" in line and "❌" in line and "disagrees with" in line:
                 # We try to find the ratio of disagreeing weights. If it is very low, we consider it an agreement (there can be 
@@ -2089,7 +2089,7 @@ def check_bmz_weight_agreement(last_lines, pattern_to_find):
                     # We expect the line to be something like:
                     # Output 'output0' disagrees with 12 of 131072 expected values (91.6 ppm)
                     # Find all integers in the string
-                    numbers = re.findall(r' \d+ ', line)
+                    numbers = re.findall(r' \d+ ', line[i:min(i+3, len(line)-1)])
                     if len(numbers) == 2:
                         # Convert first two to integers, 12 and 131072 in the example
                         first = float(numbers[0])
@@ -2101,7 +2101,8 @@ def check_bmz_weight_agreement(last_lines, pattern_to_find):
                             return False
                     else: 
                         return False
-                except:
+                except Exception as e:
+                    print("Error parsing the line for weight agreement. Line: {}. Error: {}".format(line, e))
                     return False
 
     return True

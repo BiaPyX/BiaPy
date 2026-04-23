@@ -158,6 +158,11 @@ class Config:
         #          Options are '', 'linear', and 'sigmoid'. Default: ''
         #       - 'mask_values': bool, specifies whether to mask the distance channel so the loss is computed only on non-zero values.
         #          Default: True
+        #   - Gh, Gv and Gz channels. Possible options:
+        #       - 'niter': int, number of iterations for the diffusion process. Default: 200
+        #       - 'scale_flows': float, scaling factor applied to the target flow channels. Default: 5.0
+        #       - 'gradient_type': str, method to compute the gradients. Options are "cellpose" and "omnipose". Default: "omnipose"
+        #       - 'mask_values': bool, specifies whether to mask the flow channel so the loss is computed only on non-zero values. Default: True
         #   - 'Db' channel. Possible options:
         #       - 'val_type': str, to determine how to modify the distance values. Default: 'norm'. Options are:
         #           - 'raw': to leave the distances as they are calculated.

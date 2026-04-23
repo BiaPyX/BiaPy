@@ -411,7 +411,7 @@ def labels_into_channels(
         else:
             c_number += 1
 
-    if any(x for x in ["Dc", "Dn", "D", "Z", "V", "H", "R", "We"] if x in mode):
+    if any(x for x in ["Dc", "Dn", "D", "Z", "V", "H", "R", "We", "Gv", "Gh", "Gz"] if x in mode):
         dtype = np.float32
     elif "Db" in mode:
         dtype = np.uint8 if channel_extra_opts.get("Db", {}).get("val_type", "norm") == "discretize" else np.float32
@@ -435,7 +435,7 @@ def labels_into_channels(
     # Precompute regionprops only when needed
     needs_props = False
     if (
-        any(x in mode for x in ("Z", "V", "H"))
+        any(x in mode for x in ("Z", "V", "H", "Gv", "Gh", "Gz"))
         or ("P" in mode and channel_extra_opts.get("P", {}).get("type", "") == "skeleton")
         or ("Dc" in mode)
     ):
@@ -458,14 +458,14 @@ def labels_into_channels(
     fg_mask = (vol > 0).astype(np.uint8)
     bg_mask = (vol == 0).astype(np.uint8)
 
-    # Precompute flow channels if any of H/V/Z is requested
+    # Precompute horizontal/vertical/depth channels if any of H/V/Z is requested
     if any(ch in mode for ch in ("Z", "V", "H")):
         norm_flag = True
         for ch in ("Z", "V", "H"): 
             if ch in channel_extra_opts and "norm" in channel_extra_opts[ch]:
                 norm_flag = bool(channel_extra_opts[ch]["norm"])
                 break
-        hv_channels = create_flow_channels(
+        hv_channels = create_HoVe_channels(
             vol,
             ref_point="center",
             normalize_values=norm_flag,
@@ -758,7 +758,7 @@ def labels_into_channels(
             
         new_mask[..., mode.index("D")] = sdist
         
-    # ---------- H / V / Z (flow-like channels) ----------
+    # ---------- H / V / Z (horizontal/vertical/depth channels) ----------
     if "Z" in mode:
         new_mask[..., mode.index("Z")] = hv_channels[...,0]
     if "V" in mode:
@@ -767,6 +767,89 @@ def labels_into_channels(
     if "H" in mode:
         ch_pos = 1 if new_mask[..., mode.index("H")].ndim == 2 else 2
         new_mask[..., mode.index("H")] = hv_channels[...,ch_pos]
+
+    # ---------- Gv / Gh / Gz (flow-like channels) ----------
+    if 'Gv' in mode:
+        niter = channel_extra_opts.get("Gv", {}).get("niter", 200)
+        gtype = channel_extra_opts.get("Gv", {}).get("gradient_type", "cellpose")
+        Gv = np.zeros_like(vol, dtype=np.float32)
+        Gh = np.zeros_like(vol, dtype=np.float32)
+        if vol.ndim == 3:
+            Gz = np.zeros_like(vol, dtype=np.float32)
+
+        if gtype == "omnipose":
+            # 1. Calculate Distance Transform (The "Potential Field")
+            dist_field = edt.edt(vol, anisotropy=resolution, parallel=-1).astype(np.float32)
+
+            # 2. Calculate Gradients of the Distance Field
+            # np.gradient returns [dz, dy, dx] for 3D or [dy, dx] for 2D
+            grads = np.gradient(dist_field)
+            
+            # 3. Normalize the flows
+            # Omnipose uses normalized gradients as direction vectors
+            mag = np.sqrt(sum(g**2 for g in grads) + 1e-6)
+            grads = [g / mag for g in grads]
+
+            # 4. Apply mask and save to global arrays
+            if vol.ndim == 3:
+                Gz = grads[-3]
+            Gv = grads[-2]
+            Gh = grads[-1]
+        else:
+            for i, lb in tqdm(enumerate(instances), disable=disable_tqdm):
+                slc = slice_from_props(props_tbl, i, vol.ndim)
+                mask = (vol[slc] == lb)
+                
+                # 1. Define the center (source of the heat)
+                # We find the pixel closest to the median of the mask coordinates
+                coords = np.nonzero(mask)
+                centers = [int(np.median(c)) for c in coords]
+
+                # 2. Iterative Diffusion Process
+                # We initialize the center with a value and let it diffuse strictly within the mask
+                heat = np.zeros_like(mask, dtype=np.float32)
+                heat[tuple(centers)] = 1.0
+                
+                # Pre-calculate diffusion normalization
+                # 2D (4 neighbors) -> 0.25 | 3D (6 neighbors) -> 0.1666...
+                diff_coeff = 1.0 / (2 * vol.ndim)
+
+                for _ in range(niter):
+                    # Compute sum of neighbors across all available axes
+                    neighbor_sum = 0
+                    for axis in range(vol.ndim):
+                        neighbor_sum += np.roll(heat, 1, axis=axis) + np.roll(heat, -1, axis=axis)
+                    
+                    new_heat = neighbor_sum * diff_coeff
+                    heat[coords] = new_heat[coords]
+
+                    # Keep the source hot
+                    heat[tuple(centers)] = 1.0
+
+                # 3. Calculate Gradients
+                # np.gradient returns a list of arrays: [d0, d1, d2] -> [dz, dy, dx] in 3D
+                grads = np.gradient(heat)
+                
+                # 4. Normalize the flows
+                mag = np.sqrt(sum(g**2 for g in grads) + 1e-6)
+                grads = [g / mag for g in grads]
+                
+                # 5. Apply mask and save to global arrays
+                if vol.ndim == 3:
+                    # grads[0]=dz, grads[1]=dy, grads[2]=dx
+                    Gz[slc][mask] = grads[0][mask]
+                    Gv[slc][mask] = grads[1][mask]
+                    Gh[slc][mask] = grads[2][mask]
+                else:
+                    # grads[0]=dy, grads[1]=dx
+                    Gv[slc][mask] = grads[0][mask]
+                    Gh[slc][mask] = grads[1][mask]
+
+        # Map back to the new_mask channels
+        if "Gz" in mode and Gz is not None:
+            new_mask[..., mode.index("Gz")] = Gz
+        new_mask[..., mode.index("Gv")] = Gv
+        new_mask[..., mode.index("Gh")] = Gh
 
     # ---------- T (touching area) ----------
     if "T" in mode:
@@ -1216,7 +1299,6 @@ def radial_distances(
                     break
 
     return D
-
 
 def euler_integration(flow: NDArray, coords: NDArray, n_steps: int = 200, dt: float = 1.0, suppressed: bool = True):
     """
@@ -2026,7 +2108,7 @@ def _process_synapses_by_chunks_of_data(
                     grown_labels[mask_coords[:,0], mask_coords[:,1], mask_coords[:,2]] = seeds[seed_coords[nn,0], seed_coords[nn,1], seed_coords[nn,2]]
                     
                     axis_order = "".join([x for x in channel_mode if x in ["H", "V", "Z"]])
-                    out_flow = create_flow_channels(
+                    out_flow = create_HoVe_channels(
                         grown_labels,
                         ref_point="presynaptic",
                         label_to_pre_site=label_to_pre_site,
@@ -2070,7 +2152,7 @@ def _process_synapses_by_chunks_of_data(
     if isinstance(fid_mask, h5py.File): 
         fid_mask.close()
 
-def create_flow_channels(
+def create_HoVe_channels(
     data: NDArray, 
     ref_point: str = "center", 
     label_to_pre_site: Optional[Dict] = None, 
@@ -2087,12 +2169,14 @@ def create_flow_channels(
     Parameters
     ----------
     data : 2D/3D Numpy array
-        Instance mask to create the flow channels from. E.g. ``(500, 500)`` for 2D and ``(200, 1000, 1000)`` for 3D.
+        Instance mask to create horizontal/vertical/depth channels from. E.g. ``(500, 500)`` for 2D and 
+        ``(200, 1000, 1000)`` for 3D.
 
     ref_point : str, optional
-        Reference point to be used to create the flow channels. Possible values: ``center``, ``presynaptic``.
-         - 'center': point to the centroid.
-         - 'presynaptic': point to the presynaptic site. To use this ``label_to_pre_site`` must be provided.
+        Reference point to be used to create the horizontal/vertical/depth channels. Possible values: ``center``, 
+        ``presynaptic``. Details:
+            - 'center': point to the centroid.
+            - 'presynaptic': point to the presynaptic site. To use this ``label_to_pre_site`` must be provided.
 
     label_to_pre_site : dict, optional
         Reference of the presynaptic site for each label within the provided volume (``data``).
@@ -2104,12 +2188,13 @@ def create_flow_channels(
         If region properties have already been calculated, they can be provided here to avoid recalculation.
 
     resolution : list of int or float, optional
-        Physical resolution of the data in each dimension. Used to scale the flow values to physical units if provided. Default is [1,1,1] (isotropic).
+        Physical resolution of the data in each dimension. Used to scale the horizontal/vertical/depth values 
+        to physical units if provided. Default is [1,1,1] (isotropic).
 
     Returns
     -------
     new_mask : 3D/4D Numpy array
-        Flow channels. E.g. ``(500, 500, 2)`` for 2D and ``(200, 1000, 1000, 3)`` for 3D.
+        Horizontal/vertical/depth channels. E.g. ``(500, 500, 2)`` for 2D and ``(200, 1000, 1000, 3)`` for 3D.
     """
     assert ref_point in ["center", "presynaptic"]
     if ref_point == "presynaptic" and label_to_pre_site is None:
