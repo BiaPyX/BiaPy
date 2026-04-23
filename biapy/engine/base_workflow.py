@@ -1589,13 +1589,16 @@ class Base_Workflow(metaclass=ABCMeta):
             assert "pred" in pred and "mask" in pred, "The model output should contain 'pred' and 'mask' for the MAE pretext task."
             mask = pred["mask"]
             pred = pred["pred"]
-            pred, _, _ = self.model_without_ddp.save_images(
+            pred, p_mask, _ = self.model_without_ddp.save_images(
                 torch.from_numpy(self.bmz_config["test_input_norm"]).to(self.device),
                 pred,
                 mask,
                 self.dtype,
             ) # type: ignore
-            pred = torch.from_numpy(pred.transpose(0, 3, 1, 2))
+
+            # We call MAE again with "return_just_preds" that sets a seed in the random masking to ensure that the same mask is applied here 
+            # and in the BMZ exported model. If not BMZ check will crash reproducing the output 
+            pred = self.model(torch.from_numpy(self.bmz_config["test_input_norm"]).to(self.device), return_just_preds=True)
         else:
             pred = self.apply_model_activations(pred)
             # Multi-head concatenation
@@ -1610,6 +1613,8 @@ class Base_Workflow(metaclass=ABCMeta):
         if "cover_gt" not in self.bmz_config or ("cover_gt" in self.bmz_config and self.bmz_config["cover_gt"] is None):
             if self.bmz_config["test_output"].ndim == 1:  # Classification
                 self.bmz_config["cover_gt"] = self.bmz_config["test_output"].copy()
+            elif self.cfg.PROBLEM.TYPE == "SELF_SUPERVISED" and self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK.lower() == "masking":
+                self.bmz_config["cover_gt"] = p_mask[0].copy()
             else:
                 self.bmz_config["cover_gt"] = self.bmz_config["test_output"].copy().transpose(0, *range(2, self.bmz_config["test_output"].ndim), 1)[0]
             if self.cfg.DATA.N_CLASSES > 2 and self.cfg.PROBLEM.TYPE == "SEMANTIC_SEG":

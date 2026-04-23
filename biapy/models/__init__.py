@@ -39,7 +39,7 @@ from bioimageio.core.backends.pytorch_backend import load_torch_model
 from bioimageio.spec.model.v0_4 import ModelDescr as ModelDescr_v0_4
 from bioimageio.spec.model.v0_5 import ModelDescr as ModelDescr_v0_5
 from bioimageio.spec import load_description
-
+from bioimageio.spec.model import v0_4, v0_5
 
 def build_model(
     cfg: CN, 
@@ -365,6 +365,7 @@ def build_model(
                 masking_type=cfg.MODEL.MAE_MASK_TYPE,
                 mask_ratio=cfg.MODEL.MAE_MASK_RATIO,
                 return_just_preds=False,
+                device=device.type,
             )
             model = MaskedAutoencoderViT(**args)  # type: ignore
             callable_model = MaskedAutoencoderViT  # type: ignore
@@ -634,6 +635,31 @@ def merge_import_lines(import_lines: List[str]) -> List[str]:
     merged.extend(sorted(standalone_imports))
     return sorted(merged)
 
+def adapt_bmz_model_kwargs(model_kwargs: Dict, model_to_consume: bool) -> Dict:
+    """
+    Adapt BMZ model arguments to be compatible with BiaPy's model building functions.
+
+    Parameters
+    ----------
+    model_kwargs : dict
+        Dictionary of model arguments to be adapted.
+
+    model_to_consume : bool
+        Whether the model is being adapted for consumption (True) or for exporting (False).
+
+    Returns
+    -------
+    adapted_args : dict
+        Dictionary of adapted arguments ready to be passed to the model building function.
+    """
+    adapted_args = model_kwargs.copy()
+
+    if "explicit_activations" in model_kwargs:
+        adapted_args["explicit_activations"] = not model_to_consume
+    if "return_just_preds" in model_kwargs:
+        adapted_args["return_just_preds"] = not model_to_consume
+
+    return adapted_args
 
 def build_bmz_model(cfg: CN, model: ModelDescr_v0_4 | ModelDescr_v0_5, device: torch.device) -> nn.Module:
     """
@@ -656,7 +682,13 @@ def build_bmz_model(cfg: CN, model: ModelDescr_v0_4 | ModelDescr_v0_5, device: t
         Torch model.
     """
     assert model.weights.pytorch_state_dict
-    model_instance = load_torch_model(model.weights.pytorch_state_dict, load_state=True, devices=[device])
+    weight_spec = model.weights.pytorch_state_dict
+    if isinstance(weight_spec, v0_4.PytorchStateDictWeightsDescr):
+        weight_spec.kwargs = adapt_bmz_model_kwargs(weight_spec.kwargs, model_to_consume=True)
+    elif isinstance(weight_spec, v0_5.PytorchStateDictWeightsDescr):
+        weight_spec.architecture.kwargs = adapt_bmz_model_kwargs(weight_spec.architecture.kwargs, model_to_consume=True)
+
+    model_instance = load_torch_model(weight_spec, load_state=True, devices=[device])
 
     # Check the network created
     if cfg.PROBLEM.NDIM == "2D":

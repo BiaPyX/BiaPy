@@ -683,7 +683,7 @@ def create_model_doc(
             default_flow_style=False,  # block style (multi-line)
             width=1000                 # avoid line wrapping
         )
-
+    model_arch = biapy_cfg.MODEL.ARCHITECTURE.lower()
     message = ""
     message += f'# {bmz_cfg["model_name"]}\n'
     message += "\n"
@@ -753,6 +753,9 @@ def create_model_doc(
         message += "{}\n".format(cfg_data_mes)
         message += "```\n"
         message += "\n"
+        if model_arch == "mae":
+            message += "IMPORTANT NOTICE: In order to enable random masking in the model ensure to set the 'return_just_preds' parameter to False when calling the model.\n"
+            message += "\n"
     message += "## Contact\n"
     message += "For problems with BiaPy library itself checkout our [FAQ & Troubleshooting section](https://biapy.readthedocs.io/en/latest/get_started/faq.html).\n"
     message += "\n"
@@ -765,7 +768,6 @@ def create_model_doc(
     message += "\n"
     message += "## References\n"
     message += "[1] Franco-Barranco, Daniel, et al. \"BiaPy: Accessible deep learning on bioimages.\" Nature Methods (2025): 1-3.\n"
-    model_arch = biapy_cfg.MODEL.ARCHITECTURE.lower()
     ref_count = 2
     if model_arch in ["unet", "resunet", "seunet", "resunet_se", "attention_unet"]:
         message += f"[{ref_count}] Franco-Barranco, Daniel, Arrate Muñoz-Barrutia, and Ignacio Arganda-Carreras. \"Stable deep neural network architectures for mitochondria segmentation on electron microscopy volumes.\" Neuroinformatics 20.2 (2022): 437-450.\n"

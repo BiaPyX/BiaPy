@@ -65,7 +65,7 @@ from biapy.models.bmz_utils import (
     create_model_cover,
     get_bmz_model_info,
 )
-
+from biapy.models import adapt_bmz_model_kwargs
 from biapy.config.config import Config, update_dependencies
 from biapy.engine.check_configuration import (
     check_configuration,
@@ -1076,10 +1076,7 @@ class BiaPy:
 
             arch_file_sha256 = create_file_sha256sum(arch_file_path)
             model_kwargs = self.workflow.model_build_kwargs.copy()
-            if "explicit_activations" in model_kwargs:
-                model_kwargs["explicit_activations"] = True
-            if "return_just_preds" in model_kwargs:
-                model_kwargs["return_just_preds"] = True
+            model_kwargs = adapt_bmz_model_kwargs(model_kwargs, model_to_consume=False)
 
             pytorch_architecture = ArchitectureFromFileDescr(
                 source=Path(arch_file_path),

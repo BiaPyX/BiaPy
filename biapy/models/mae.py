@@ -628,7 +628,7 @@ class MaskedAutoencoderViT(nn.Module):
         loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
         return loss
 
-    def forward(self, imgs) -> dict | torch.Tensor:
+    def forward(self, imgs, return_just_preds=False) -> dict | torch.Tensor:
         """
         Perform the complete forward pass of the Masked Autoencoder.
 
@@ -654,12 +654,15 @@ class MaskedAutoencoderViT(nn.Module):
             - "mask": The binary mask used during masking (Tensor), shape `(N, L)`.
             
         """
+        if return_just_preds or self.return_just_preds:
+            torch.manual_seed(0)  # ensure deterministic results for visualization and BMZ export
+
         latent, mask, ids_restore = self.forward_encoder(imgs)
         pred = self.forward_decoder(latent, ids_restore)  # [N, L, p*p*3]
         loss = self.forward_loss(imgs, pred, mask)
 
-        if self.return_just_preds:
-            return pred
+        if return_just_preds or self.return_just_preds:
+            return self.unpatchify(pred)
         return { "loss": loss, "pred": pred, "mask": mask}
 
     def save_images(self, _x, _y, _mask, dtype):
