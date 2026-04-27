@@ -202,7 +202,8 @@ def extract_BMZ_sample_and_cover(
     cover_gt : NDArray
         The ground truth img_gt cover (2D slice). Shape will be (H, W, C).
     """
-    cover_raw, cover_gt = None, img_gt
+    cover_raw = None
+    cover_gt = img_gt if not isinstance(img_gt, int) else None
     mask_available = img_gt is not None and isinstance(img_gt, np.ndarray)
     dims = 2 if not is_3d else 3
     scale = [1,] * dims

@@ -373,7 +373,7 @@ def create_train_val_augmentors(
     bmz_input_sample, mask_sample = train_generator.load_sample(0, first_load=True)
     bmz_input_sample, cover_raw, cover_gt = extract_BMZ_sample_and_cover(
         img=bmz_input_sample,
-        img_gt=mask_sample,
+        img_gt=mask_sample if not isinstance(mask_sample, int) else None,
         patch_size=cfg.DATA.PATCH_SIZE,
         is_3d=cfg.PROBLEM.NDIM == "3D",
         input_axis_order=cfg.DATA.TRAIN.INPUT_IMG_AXES_ORDER,
