@@ -25,11 +25,13 @@ References:
 """
 
 from functools import partial
+from typing import List
 
 import torch
 import torch.nn as nn
 import timm.models.vision_transformer
 
+from biapy.models.blocks import prepare_activation_layers
 from biapy.models.tr_layers import PatchEmbed
 
 
@@ -60,7 +62,15 @@ class VisionTransformer(timm.models.vision_transformer.VisionTransformer):
         `num_heads`, `mlp_ratio`, `qkv_bias`, `norm_layer`, etc.
     """
 
-    def __init__(self, ndim=2, global_pool=False, **kwargs):
+    def __init__(
+        self, 
+        ndim: int = 2, 
+        global_pool: bool = False, 
+        head_activations: List[str] = ["ce_sigmoid"],         
+        output_channel_info: List[str] = ["F"],
+        explicit_activations: bool = False,
+        **kwargs
+    ):
         """
         Initialize the VisionTransformer model.
 
@@ -75,6 +85,8 @@ class VisionTransformer(timm.models.vision_transformer.VisionTransformer):
             Number of input dimensions (2 for 2D images, 3 for 3D images). Defaults to 2.
         global_pool : bool, optional
             If True, enables global average pooling of patch tokens. Defaults to False.
+        explicit_activations : bool, optional
+            If True, enables explicit activation functions. Defaults to False.
         **kwargs
             Keyword arguments to pass to the parent `timm.models.vision_transformer.VisionTransformer`
             constructor. These typically include `img_size`, `patch_size`, `in_chans`,
@@ -83,7 +95,9 @@ class VisionTransformer(timm.models.vision_transformer.VisionTransformer):
         super(VisionTransformer, self).__init__(**kwargs)
         self.ndim = ndim
         self.global_pool = global_pool
-
+        self.explicit_activations = explicit_activations
+        if self.explicit_activations:
+            self.class_head_activations, _ = prepare_activation_layers(head_activations, output_channel_info, [self.num_classes])
         if self.global_pool:
             norm_layer = partial(nn.LayerNorm, eps=1e-6)
             embed_dim = kwargs["embed_dim"]
@@ -147,6 +161,13 @@ class VisionTransformer(timm.models.vision_transformer.VisionTransformer):
 
         return outcome
 
+    def forward(self, x):
+        outs = super(VisionTransformer, self).forward(x)
+        # Apply activations to the output heads if explicit_activations is True
+        if self.explicit_activations:
+            outs = self.class_head_activations[0](outs)
+        
+        return outs
 
 def vit_base_patch16(**kwargs):
     """

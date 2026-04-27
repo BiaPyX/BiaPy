@@ -1545,7 +1545,7 @@ class Base_Workflow(metaclass=ABCMeta):
             """
             img = img.astype(np.float32)
             if len(img.shape) == 2:  # Classification
-                self.bmz_config[sample_key] = img[0]
+                self.bmz_config[sample_key] = img.copy()
             else:
                 self.bmz_config[sample_key] = img[0].copy()
 

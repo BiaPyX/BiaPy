@@ -728,8 +728,11 @@ class BiaPy:
             )
             np.save(test_output_path, test_output)
             # Classification workflow
-            if len(test_output.shape) == 1:
-                output_axes = [SpaceOutputAxis(id=AxisId("z"), size=test_input.shape[0])]
+            if len(test_output.shape) == 2:
+                output_axes = [
+                    BatchAxis(size=1),
+                    SpaceOutputAxis(id=AxisId("z"), size=self.cfg.DATA.N_CLASSES)
+                ]
             else:
                 output_axes = [
                     BatchAxis(size=1),

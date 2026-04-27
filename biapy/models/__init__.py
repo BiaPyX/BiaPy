@@ -253,6 +253,9 @@ def build_model(
                 in_chans=cfg.DATA.PATCH_SIZE[-1],
                 ndim=ndim,
                 num_classes=cfg.DATA.N_CLASSES,
+                explicit_activations=False,
+                head_activations=head_activations,
+                output_channel_info=output_channel_info,
             )
             if cfg.MODEL.VIT_MODEL == "custom":
                 args2 = dict(
