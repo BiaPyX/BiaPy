@@ -1043,6 +1043,7 @@ def check_bmz_model_compatibility(
         opts["PROBLEM.INSTANCE_SEG.WATERSHED.TOPOGRAPHIC_SURFACE_CHANNEL"] = ""
         opts["PROBLEM.INSTANCE_SEG.WATERSHED.GROWTH_MASK_CHANNELS"] = []
         opts["PROBLEM.INSTANCE_SEG.INSTANCE_CREATION_PROCESS"] = ""
+        opts["PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS"] = [{}]
 
         if classes != 2:
             opts["DATA.N_CLASSES"] = max(2, classes)
@@ -1138,9 +1139,10 @@ def check_bmz_model_compatibility(
     if "preprocessing" in (inputs[0] or {}):
         preproc_info = inputs[0]["preprocessing"]
         key_to_find = "id" if model_version > Version("0.5.0") else "name"
+
         if isinstance(preproc_info, list):
             # remove ensure_dtype->float casts (BiaPy does it anyway)
-            new_preproc_info = []
+            filtered_preproc_info = []
             for preproc in preproc_info:
                 if key_to_find in preproc and not (
                     preproc[key_to_find] == "ensure_dtype"
@@ -1148,81 +1150,74 @@ def check_bmz_model_compatibility(
                     and "dtype" in preproc["kwargs"]
                     and "float" in str(preproc["kwargs"]["dtype"])
                 ):
-                    new_preproc_info.append(preproc)
-            preproc_info = new_preproc_info.copy()
+                    filtered_preproc_info.append(preproc)
 
-            if len(preproc_info) > 1:
-                reason_message = (
-                    f"[{specific_workflow}] More than one preprocessing from BMZ not implemented yet {axes_order}\n"
-                )
-                return preproc_info, True, reason_message, opts
-            elif len(preproc_info) == 1:
-                preproc_info = preproc_info[0]
-                if key_to_find in preproc_info:
-                    proc_id = preproc_info[key_to_find]
-                    if proc_id not in [
-                        "zero_mean_unit_variance",
-                        "fixed_zero_mean_unit_variance",
-                        "scale_range",
-                        "scale_linear",
-                        "clip"
-                    ]:
-                        reason_message = (
-                            f"[{specific_workflow}] Not recognized preprocessing found: {proc_id}\n"
-                        )
-                        return preproc_info, True, reason_message, opts
-                    else:
-                        # zero_mean_unit_variance / fixed_zero_mean_unit_variance -> zero_mean_unit_variance(mean,std)
-                        if proc_id in ["fixed_zero_mean_unit_variance", "zero_mean_unit_variance"]:
-                            if "kwargs" in preproc_info and "mean" in preproc_info["kwargs"]:
-                                mean = preproc_info["kwargs"]["mean"]
-                                std = preproc_info["kwargs"]["std"]
-                            elif "mean" in preproc_info:
-                                mean = preproc_info["mean"]
-                                std = preproc_info["std"]
-                            else:
-                                mean, std = -1.0, -1.0
-
-                            if not isinstance(mean, list):
-                                mean = [float(mean)]
-                            if not isinstance(std, list):
-                                std = [float(std)]
-
-                            opts["DATA.NORMALIZATION.TYPE"] = "zero_mean_unit_variance"
-                            opts["DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.MEAN_VAL"] = mean
-                            opts["DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.STD_VAL"] = std
-
-                        # scale_linear ~ div (gain not handled, same as original)
-                        elif proc_id == "scale_linear":
-                            opts["DATA.NORMALIZATION.TYPE"] = "div"
-
-                        # scale_range -> scale_range (+ optional PERC_CLIP)
-                        elif proc_id == "scale_range":
-                            opts["DATA.NORMALIZATION.TYPE"] = "scale_range"
-                            min_percentile = float(preproc_info["kwargs"].get("min_percentile", 0))
-                            max_percentile = float(preproc_info["kwargs"].get("max_percentile", 100))
-                            # Check if there is percentile clipping
-                            if min_percentile != 0 or max_percentile != 100:
-                                opts["DATA.NORMALIZATION.PERC_CLIP.ENABLE"] = True
-                                opts["DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC"] = min_percentile
-                                opts["DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC"] = max_percentile
-                        elif proc_id == "clip":
-                            opts["DATA.NORMALIZATION.PERC_CLIP.ENABLE"] = True
-                            min_percentile = float(preproc_info["kwargs"].get("min_percentile", 0))
-                            max_percentile = float(preproc_info["kwargs"].get("max_percentile", 100))
-                            max_value = float(preproc_info["kwargs"].get("max_value", -1))
-                            min_value = float(preproc_info["kwargs"].get("min_value", -1))
-                            if min_percentile != 0 or max_percentile != 100:
-                                opts["DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC"] = min_percentile
-                                opts["DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC"] = max_percentile
-                            elif min_value != -1 or max_value != -1:
-                                opts["DATA.NORMALIZATION.PERC_CLIP.LOWER_VALUE"] = min_value
-                                opts["DATA.NORMALIZATION.PERC_CLIP.UPPER_VALUE"] = max_value
-                else:
+            for preproc_info in filtered_preproc_info:
+                if key_to_find not in preproc_info:
                     reason_message = (
                         f"[{specific_workflow}] Not recognized preprocessing structure found: {preproc_info}\n"
                     )
                     return preproc_info, True, reason_message, opts
+                
+                proc_id = preproc_info[key_to_find]
+                if proc_id not in [
+                    "zero_mean_unit_variance",
+                    "fixed_zero_mean_unit_variance",
+                    "scale_range",
+                    "scale_linear",
+                    "clip"
+                ]:
+                    reason_message = (
+                        f"[{specific_workflow}] Not recognized preprocessing found: {proc_id}\n"
+                    )
+                    return preproc_info, True, reason_message, opts
+
+                # zero_mean_unit_variance / fixed_zero_mean_unit_variance -> zero_mean_unit_variance(mean,std)
+                if proc_id in ["fixed_zero_mean_unit_variance", "zero_mean_unit_variance"]:
+                    if "kwargs" in preproc_info and "mean" in preproc_info["kwargs"]:
+                        mean = preproc_info["kwargs"]["mean"]
+                        std = preproc_info["kwargs"]["std"]
+                    elif "mean" in preproc_info:
+                        mean = preproc_info["mean"]
+                        std = preproc_info["std"]
+                    else:
+                        mean, std = -1.0, -1.0
+
+                    if not isinstance(mean, list):
+                        mean = [float(mean)]
+                    if not isinstance(std, list):
+                        std = [float(std)]
+
+                    opts["DATA.NORMALIZATION.TYPE"] = "zero_mean_unit_variance"
+                    opts["DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.MEAN_VAL"] = mean
+                    opts["DATA.NORMALIZATION.ZERO_MEAN_UNIT_VAR.STD_VAL"] = std
+
+                # scale_linear ~ div (gain not handled, same as original)
+                elif proc_id == "scale_linear":
+                    opts["DATA.NORMALIZATION.TYPE"] = "div"
+
+                # scale_range -> scale_range (+ optional PERC_CLIP)
+                elif proc_id == "scale_range":
+                    opts["DATA.NORMALIZATION.TYPE"] = "scale_range"
+                    min_percentile = float(preproc_info["kwargs"].get("min_percentile", 0))
+                    max_percentile = float(preproc_info["kwargs"].get("max_percentile", 100))
+                    # Check if there is percentile clipping
+                    if min_percentile != 0 or max_percentile != 100:
+                        opts["DATA.NORMALIZATION.PERC_CLIP.ENABLE"] = True
+                        opts["DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC"] = min_percentile
+                        opts["DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC"] = max_percentile
+                elif proc_id == "clip":
+                    opts["DATA.NORMALIZATION.PERC_CLIP.ENABLE"] = True
+                    min_percentile = float(preproc_info["kwargs"].get("min_percentile", 0))
+                    max_percentile = float(preproc_info["kwargs"].get("max_percentile", 100))
+                    max_value = float(preproc_info["kwargs"].get("max_value", -1))
+                    min_value = float(preproc_info["kwargs"].get("min_value", -1))
+                    if min_percentile != 0 or max_percentile != 100:
+                        opts["DATA.NORMALIZATION.PERC_CLIP.LOWER_PERC"] = min_percentile
+                        opts["DATA.NORMALIZATION.PERC_CLIP.UPPER_PERC"] = max_percentile
+                    elif min_value != -1 or max_value != -1:
+                        opts["DATA.NORMALIZATION.PERC_CLIP.LOWER_VALUE"] = min_value
+                        opts["DATA.NORMALIZATION.PERC_CLIP.UPPER_VALUE"] = max_value
 
     # --------- Post-processing in kwargs (unsupported) ---------
     if "postprocessing" in model_kwargs and model_kwargs["postprocessing"] is not None:
