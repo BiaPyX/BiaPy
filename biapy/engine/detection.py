@@ -830,6 +830,10 @@ class Detection_Workflow(Base_Workflow):
                 for j, cor in enumerate(gt_coordinates):
                     z, y, x = cor
                     z, y, x = int(z), int(y), int(x)
+                    if z >= pred_shape[0] or y >= pred_shape[1] or x >= pred_shape[2]:
+                        print(f"WARNING: GT point [{z},{y},{x}] outside image with shape {pred_shape}. Skipping it in the summary image.")
+                        continue
+                    
                     if gt_assoc is not None:
                         if gt_assoc[gt_assoc["gt_id"] == j + 1]["tag"].iloc[0] == "TP":
                             points_pred_mask_color[z, y, x] = (0, 255, 0)  # Green
