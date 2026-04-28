@@ -72,6 +72,7 @@ class U_NeXt_V1(nn.Module):
         stem_k_size=2,
         contrast: bool = False,
         contrast_proj_dim: int = 256,
+        return_one_tensor: bool = False,
     ):
         """
         Initialize the U-NeXt_V1 model.
@@ -179,6 +180,10 @@ class U_NeXt_V1(nn.Module):
         contrast_proj_dim : int, optional
             Dimension of the projection head for contrastive learning, if `contrast` is True.
             Defaults to `256`.
+
+        return_one_tensor : bool, optional
+            If True, concatenates all outputs into a single tensor along the channel dimension
+            in the forward pass. Defaults to `False`.
         """
         super(U_NeXt_V1, self).__init__()
 
@@ -198,6 +203,7 @@ class U_NeXt_V1(nn.Module):
         self.output_channel_info = output_channel_info
         self.return_class = True if "class" in output_channel_info else False
         self.explicit_activations = explicit_activations
+        self.return_one_tensor = return_one_tensor
         if self.explicit_activations:
             assert len(head_activations) == sum(output_channels), "If 'explicit_activations' is True, 'head_activations' needs to "
             "have the same number of values as 'output_channels'"
@@ -453,7 +459,11 @@ class U_NeXt_V1(nn.Module):
         if self.contrast:
             out_dict["embed"] = self.proj_head(feats[0])
 
-        if len(out_dict.keys()) == 1:
-            return out_dict["pred"]
+        if self.return_one_tensor:
+            # Concatenate all outputs into a single tensor along the channel dimension
+            return torch.cat((out_dict["pred"], torch.argmax(out_dict["class"], dim=1).unsqueeze(1)), dim=1)
         else:
-            return out_dict
+            if len(out_dict.keys()) == 1:
+                return out_dict["pred"]
+            else:
+                return out_dict

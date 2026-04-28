@@ -124,6 +124,7 @@ def build_model(
             separated_decoders=cfg.PROBLEM.INSTANCE_SEG.SEPARATED_DECODERS_PER_HEAD,
             isotropy=cfg.MODEL.ISOTROPY,
             larger_io=cfg.MODEL.LARGER_IO,
+            return_one_tensor=False,
         )
         if modelname == "unet":
             callable_model = U_Net  # type: ignore
@@ -173,6 +174,7 @@ def build_model(
             output_channel_info=output_channel_info,
             explicit_activations=False,
             activation=cfg.MODEL.ACTIVATION.lower(),
+            return_one_tensor=False,
         )
 
         variant = str(cfg.MODEL.HRNET.VARIANT).lower()
@@ -231,6 +233,7 @@ def build_model(
             explicit_activations=False,
             head_activations=head_activations,
             output_channel_info=output_channel_info,
+            return_one_tensor=False,
         )
         model = build_stunet(**args) # type: ignore
     else:
@@ -306,6 +309,7 @@ def build_model(
                 k_size=cfg.MODEL.UNETR_DEC_KERNEL_SIZE,
                 contrast=cfg.LOSS.CONTRAST.ENABLE,
                 contrast_proj_dim=cfg.LOSS.CONTRAST.PROJ_DIM,
+                return_one_tensor=False,
             )
             model = UNETR(**args)  # type: ignore
             callable_model = UNETR  # type: ignore
@@ -661,6 +665,8 @@ def adapt_bmz_model_kwargs(model_kwargs: Dict, model_to_consume: bool) -> Dict:
         adapted_args["explicit_activations"] = not model_to_consume
     if "return_just_preds" in model_kwargs:
         adapted_args["return_just_preds"] = not model_to_consume
+    if "return_one_tensor" in model_kwargs:
+        adapted_args["return_one_tensor"] = not model_to_consume
 
     return adapted_args
 

@@ -147,6 +147,9 @@ class STUNet(nn.Module):
     deep_supervision : bool
         Whether to enable deep supervision (multiple outputs).
 
+    return_one_tensor : bool
+        If True, concatenates all outputs into a single tensor along the channel dimension.
+
     Returns
     -------
     STUNet
@@ -163,6 +166,7 @@ class STUNet(nn.Module):
         dims: Sequence[int] = (32, 64, 128, 256, 512, 512),
         pool_op_kernel_sizes: Optional[Sequence[Sequence[int]]] = None,
         conv_kernel_sizes: Optional[Sequence[Sequence[int]]] = None,
+        return_one_tensor: bool = False,
         *,
         deep_supervision: bool = True,
     ):
@@ -176,6 +180,7 @@ class STUNet(nn.Module):
         self.output_channels = output_channels
         self.output_channel_info = output_channel_info
         self.explicit_activations = explicit_activations
+        self.return_one_tensor = return_one_tensor
         self.return_class = True if "class" in output_channel_info else False
         self.image_shape = image_shape
         self.ndim = 3 if len(image_shape) == 4 else 2
@@ -382,10 +387,14 @@ class STUNet(nn.Module):
         if self.return_class:
             out_dict["class"] = torch.cat(class_outs, dim=1)
 
-        if len(out_dict.keys()) == 1:
-            return out_dict["pred"]
+        if self.return_one_tensor:
+            # Concatenate all outputs into a single tensor along the channel dimension
+            return torch.cat((out_dict["pred"], torch.argmax(out_dict["class"], dim=1).unsqueeze(1)), dim=1)
         else:
-            return out_dict
+            if len(out_dict.keys()) == 1:
+                return out_dict["pred"]
+            else:
+                return out_dict
 
 
 # --------------------------------------------------------------------------------------

@@ -59,6 +59,7 @@ class Attention_U_Net(nn.Module):
         larger_io=True,
         contrast: bool = False,
         contrast_proj_dim: int = 256,
+        return_one_tensor: bool = False,
     ):
         """
         Create 2D/3D U-Net with Attention blocks.
@@ -132,6 +133,10 @@ class Attention_U_Net(nn.Module):
         contrast_proj_dim : int, optional
             Dimension of the projection head for contrastive learning. Default is ``256``.
 
+        return_one_tensor : bool, optional
+            Whether to return a single tensor with all outputs concatenated (if False, returns a dictionary
+            with separate entries). Default is ``False``.
+
         Returns
         -------
         model : Torch model
@@ -173,6 +178,7 @@ class Attention_U_Net(nn.Module):
         self.return_class = True if "class" in output_channel_info else False
         self.contrast = contrast
         self.explicit_activations = explicit_activations
+        self.return_one_tensor = return_one_tensor
         if self.explicit_activations:
             assert len(head_activations) == sum(output_channels), "If 'explicit_activations' is True, 'head_activations' needs to "
             "have the same number of values as 'output_channels'"
@@ -417,7 +423,11 @@ class Attention_U_Net(nn.Module):
         if self.contrast:
             out_dict["embed"] = self.proj_head(feats[0])
 
-        if len(out_dict.keys()) == 1:
-            return out_dict["pred"]
+        if self.return_one_tensor:
+            # Concatenate all outputs into a single tensor along the channel dimension
+            return torch.cat((out_dict["pred"], torch.argmax(out_dict["class"], dim=1).unsqueeze(1)), dim=1)
         else:
-            return out_dict
+            if len(out_dict.keys()) == 1:
+                return out_dict["pred"]
+            else:
+                return out_dict

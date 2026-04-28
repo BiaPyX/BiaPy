@@ -456,6 +456,7 @@ class HighResolutionNet(nn.Module):
         contrast_proj_dim: int = 256,
         head_type: str = "FCN",
         activation: str = "relu",
+        return_one_tensor: bool = False,
     ):
         """
         Implements a 2D/3D High-Resolution Net (HRNet) model.
@@ -522,6 +523,10 @@ class HighResolutionNet(nn.Module):
         activation : str, optional
             Activation function to use in the HRNet blocks. Default is "relu".
 
+        return_one_tensor : bool, optional
+            Whether to return a single tensor with all outputs concatenated (if False, returns a dictionary
+            with separate entries). Default is ``False``.
+
         Returns
         -------
         model : nn.Module
@@ -554,6 +559,7 @@ class HighResolutionNet(nn.Module):
         self.contrast = contrast
         self.head_type = head_type
         self.explicit_activations = explicit_activations
+        self.return_one_tensor = return_one_tensor
         self.activation = activation
         if self.explicit_activations:
             assert len(head_activations) == sum(output_channels), "If 'explicit_activations' is True, 'head_activations' needs to have the same number of values as 'output_channels'"
@@ -1064,7 +1070,11 @@ class HighResolutionNet(nn.Module):
         if self.contrast:
             out_dict["embed"] = self.proj_head(feats)
 
-        if len(out_dict.keys()) == 1:
-            return out_dict["pred"]
+        if self.return_one_tensor:
+            # Concatenate all outputs into a single tensor along the channel dimension
+            return torch.cat((out_dict["pred"], torch.argmax(out_dict["class"], dim=1).unsqueeze(1)), dim=1)
         else:
-            return out_dict
+            if len(out_dict.keys()) == 1:
+                return out_dict["pred"]
+            else:
+                return out_dict
