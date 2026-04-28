@@ -49,11 +49,11 @@ if not os.path.exists(BIAPY_FOLDER):
 # ---------------------------------------------------------       
 all_test_info = {}
 all_test_info["Test1"] = {
-    "enable": False,
+    "enable": True,
     "jobname": "test1",
     "description": "2D Semantic seg. Lucchi++. Basic DA. unet. 2D stack as 3D. Post-proc: z-filtering. BMZ export through YAML.",
     "template_path": os.path.join(data_folder, "semantic_seg", "2d_semantic_segmentation.yaml"),
-    "yaml": "test_1.yaml",
+    "yaml": "test1.yaml",
     "yaml_modifications": {
         "DATA": {
             "TRAIN": {
@@ -116,11 +116,11 @@ all_test_info["Test1"] = {
 }
 
 all_test_info["Test2"] = {
-    "enable": False,
+    "enable": True,
     "jobname": "test2",
     "description": "3D Semantic seg. Lucchi++. attention_unet. Basic DA.",
     "template_path": os.path.join(data_folder, "semantic_seg", "3d_semantic_segmentation.yaml"),
-    "yaml": "test_2.yaml",
+    "yaml": "test2.yaml",
     "yaml_modifications": {
         "AUGMENTOR": {
             "CONTRAST": True,
@@ -171,7 +171,7 @@ all_test_info["Test3"] = {
     "description": "2D Instance seg. Stardist 2D data. Basic DA. BC (auto). resunet++. "
         "Post-proc: Clear border + remove instances by properties.",
     "template_path": os.path.join(data_folder, "instance_seg", "2d_instance_segmentation.yaml"),
-    "yaml": "test_3.yaml",
+    "yaml": "test3.yaml",
     "yaml_modifications": {
         "PROBLEM": {
             "TYPE": "INSTANCE_SEG",
@@ -243,7 +243,7 @@ all_test_info["Test4"] = {
     "jobname": "test4",
     "description": "3D Instance seg. Demo 3D data. Basic DA. BCD (manual). resunet. Watershed multiple options. Post-proc: Clear border",
     "template_path": os.path.join(data_folder, "instance_seg", "3d_instance_segmentation.yaml"),
-    "yaml": "test_4.yaml",
+    "yaml": "test4.yaml",
     "yaml_modifications": {
         "PROBLEM": {
             "TYPE": "INSTANCE_SEG",
@@ -313,7 +313,7 @@ all_test_info["Test5"] = {
     "jobname": "test5",
     "description": "3D Instance seg. Cyst data. Basic DA. BCM (auto). resunet. Post-proc: Clear border + Voronoi + remove by props",
     "template_path": os.path.join(data_folder, "instance_seg", "3d_instance_segmentation.yaml"),
-    "yaml": "test_5.yaml",
+    "yaml": "test5.yaml",
     "yaml_modifications": {
         'PROBLEM': {
             'INSTANCE_SEG': {
@@ -388,7 +388,7 @@ all_test_info["Test6"] = {
     "description": "2D Detection. Stardist v2 2D data. zero_mean_unit_variance norm, percentile clip. Basic DA. Export model to BMZ. "
         "multiresunet. Post-proc: remove close points + det watershed",
     "template_path": os.path.join(data_folder, "detection", "2d_detection.yaml"),
-    "yaml": "test_6.yaml",
+    "yaml": "test6.yaml",
     "yaml_modifications": {
         "PROBLEM": {
             "TYPE": "DETECTION",
@@ -467,7 +467,7 @@ all_test_info["Test8"] = {
     "description": "3D Detection. NucMM-Z 3D data. zero_mean_unit_variance norm, percentile clip. Basic DA. "
         "unetr. Post-proc: remove close points + det watershed",
     "template_path": os.path.join(data_folder, "detection", "3d_detection.yaml"),
-    "yaml": "test_8.yaml",
+    "yaml": "test8.yaml",
     "yaml_modifications": {
         "PROBLEM": {
             "DETECTION": {
@@ -545,7 +545,7 @@ all_test_info["Test9"] = {
     "description": "3D Detection. Zarr 3D data (Brainglobe). zero_mean_unit_variance norm, percentile norm, per image. "
         "filter samples: foreground + mean. warmupcosine. Basic DA. resunet. test by chunks: Zarr. Post-proc: remove close points",
     "template_path": os.path.join(data_folder, "detection", "3d_detection.yaml"),
-    "yaml": "test_9.yaml",
+    "yaml": "test9.yaml",
     "yaml_modifications": {
         "PROBLEM": {
             "DETECTION": {
@@ -645,7 +645,7 @@ all_test_info["Test10"] = {
     "jobname": "test10",
     "description": "2D Denoising. LongBeach data (N2V RGB data). zero_mean_unit_variance norm. Basic DA.",
     "template_path": os.path.join(data_folder, "denoising", "2d_denoising.yaml"),
-    "yaml": "test_10.yaml",
+    "yaml": "test10.yaml",
     "yaml_modifications": {
         "PROBLEM": {
             "DENOISING": {
@@ -695,7 +695,7 @@ all_test_info["Test11"] = {
     "description": "3D Denoising. Flywing 3D data. zero_mean_unit_variance norm. Basic DA. "
         "resunet. Post-proc: remove close points + det watershed",
     "template_path": os.path.join(data_folder, "denoising", "3d_denoising.yaml"),
-    "yaml": "test_11.yaml",
+    "yaml": "test11.yaml",
     "yaml_modifications": {
         "PROBLEM": {
             "DENOISING": {
@@ -744,7 +744,7 @@ all_test_info["Test12"] = {
     "jobname": "test12",
     "description": "2D super-resolution. SR 2D data. Cross-val. Basic DA. DFCAN",
     "template_path": os.path.join(data_folder, "sr", "2d_super_resolution.yaml"),
-    "yaml": "test_12.yaml",
+    "yaml": "test12.yaml",
     "yaml_modifications": {
         "DATA": {
             "TRAIN": {
@@ -799,7 +799,7 @@ all_test_info["Test13"] = {
     "jobname": "test13",
     "description": "3D super-resolution. SR 3D data. Cross-val. Basic DA. resunet. one-cycle",
     "template_path": os.path.join(data_folder, "sr", "3d_super_resolution.yaml"),
-    "yaml": "test_13.yaml",
+    "yaml": "test13.yaml",
     "yaml_modifications": {
         "PROBLEM": {
             "SUPER_RESOLUTION": {
@@ -862,7 +862,7 @@ all_test_info["Test14"] = {
     "jobname": "test14",
     "description": "2D self-supervision. Lucchi data. Cross-val. Basic DA. rcan. Export BMZ model.",
     "template_path": os.path.join(data_folder, "ssl", "2d_self_supervision.yaml"),
-    "yaml": "test_14.yaml",
+    "yaml": "test14.yaml",
     "yaml_modifications": {
         "DATA": {
             "NORMALIZATION": {
@@ -917,7 +917,7 @@ all_test_info["Test15"] = {
     "jobname": "test15",
     "description": "2D self-supervision. Lucchi data. Cross-val. Basic DA. mae, masking: random",
     "template_path": os.path.join(data_folder, "ssl", "2d_self_supervision.yaml"),
-    "yaml": "test_15.yaml",
+    "yaml": "test15.yaml",
     "yaml_modifications": {
         "PROBLEM": {
             "SELF_SUPERVISED": {
@@ -1205,8 +1205,13 @@ all_test_info["Test20"] = {
         },
         "TRAIN": {
             "ENABLE": True,
-            "EPOCHS": 5,
-            "PATIENCE": -1, 
+            "EPOCHS": 10,
+            "PATIENCE": -1,
+            "OPTIMIZER": "ADAMW",
+            "LR": 0.001,
+            "LR_SCHEDULER": {
+                "NAME": 'onecycle'
+            } 
         },
         "MODEL": {
             "ARCHITECTURE": "efficientnet_b1",
@@ -1343,18 +1348,18 @@ all_test_info["Test23"] = {
             "REFLECT_TO_COMPLETE_SHAPE": True,
             "PATCH_SIZE": "(1024, 1024, 1)",
             "TRAIN": {
-                "PATH": os.path.join(data_folder, "image_to_image", "reduced_actin_lightmycells", "actin", "raw"),
-                "GT_PATH": os.path.join(data_folder, "image_to_image", "reduced_actin_lightmycells", "actin", "label"),
+                "PATH": os.path.join(data_folder, "image_to_image", "reduced_actin_lightmycells", "reduced_actin_lightmycells","actin", "raw"),
+                "GT_PATH": os.path.join(data_folder, "image_to_image", "reduced_actin_lightmycells", "reduced_actin_lightmycells","actin", "label"),
                 "IN_MEMORY": False,
             },
             "VAL": {
                 "FROM_TRAIN": False,
-                "PATH": os.path.join(data_folder, "image_to_image", "reduced_actin_lightmycells", "actin", "raw"),
-                "GT_PATH": os.path.join(data_folder,"image_to_image", "reduced_actin_lightmycells", "actin", "label"),
+                "PATH": os.path.join(data_folder, "image_to_image", "reduced_actin_lightmycells", "reduced_actin_lightmycells","actin", "raw"),
+                "GT_PATH": os.path.join(data_folder,"image_to_image", "reduced_actin_lightmycells", "reduced_actin_lightmycells","actin", "label"),
             },
             "TEST": {
-                "PATH": os.path.join(data_folder, "image_to_image", "reduced_actin_lightmycells", "actin", "raw"),
-                "GT_PATH": os.path.join(data_folder, "image_to_image", "reduced_actin_lightmycells", "actin", "label"),
+                "PATH": os.path.join(data_folder, "image_to_image", "reduced_actin_lightmycells", "reduced_actin_lightmycells","actin", "raw"),
+                "GT_PATH": os.path.join(data_folder, "image_to_image", "reduced_actin_lightmycells", "reduced_actin_lightmycells","actin", "label"),
                 "IN_MEMORY": False,
                 "PADDING": "(200,200)"
             }
@@ -1395,7 +1400,7 @@ all_test_info["Test24"] = {
     "description": "3D Instance seg. Zarr 3D data SNEMI. in memory false. input zarr multiple data raw: 'volumes.raw'"
         " warmupcosine. inference, by chunks, zarr multiple data, workflow process: entire pred.",
     "template_path": os.path.join(data_folder, "instance_seg", "3d_instance_segmentation.yaml"),
-    "yaml": "test_24.yaml",
+    "yaml": "test24.yaml",
     "yaml_modifications": {
         "PROBLEM": {
             "INSTANCE_SEG": {
@@ -1486,13 +1491,13 @@ all_test_info["Test25"] = {
     "jobname": "test25",
     "description": "3D Image to image. Nuclear_Pore_complex_3D data. in memory true. val 0.1 of train.",
     "template_path": os.path.join(data_folder, "image_to_image", "3d_image_to_image.yaml"),
-    "yaml": "test_25.yaml",
+    "yaml": "test25.yaml",
     "yaml_modifications": {
         "DATA": {
              "PATCH_SIZE": "(6,128,128,1)",
              "TRAIN": {
-                "PATH": os.path.join(data_folder, "image_to_image", "Nuclear_Pore_complex_3D", "data", "train", "raw"),
-                "GT_PATH": os.path.join(data_folder, "image_to_image", "Nuclear_Pore_complex_3D", "data", "train", "label"),  
+                "PATH": os.path.join(data_folder, "image_to_image", "Nuclear_Pore_complex_3D", "Nuclear_Pore_complex_3D", "data", "train", "raw"),
+                "GT_PATH": os.path.join(data_folder, "image_to_image", "Nuclear_Pore_complex_3D", "Nuclear_Pore_complex_3D", "data", "train", "label"),  
                 "IN_MEMORY": True,
             },
             "VAL": {
@@ -1500,8 +1505,8 @@ all_test_info["Test25"] = {
                 "SPLIT_TRAIN": 0.1,
             },
             "TEST": {
-                "PATH": os.path.join(data_folder, "image_to_image", "Nuclear_Pore_complex_3D", "data", "test", "raw"),
-                "GT_PATH": os.path.join(data_folder, "image_to_image", "Nuclear_Pore_complex_3D", "data", "test", "label"),
+                "PATH": os.path.join(data_folder, "image_to_image", "Nuclear_Pore_complex_3D", "Nuclear_Pore_complex_3D", "data", "test", "raw"),
+                "GT_PATH": os.path.join(data_folder, "image_to_image", "Nuclear_Pore_complex_3D", "Nuclear_Pore_complex_3D", "data", "test", "label"),
                 "IN_MEMORY": False,
                 "PADDING": "(0,24,24)"
             },
@@ -1535,19 +1540,18 @@ all_test_info["Test26"] = {
     "description": "2D instance segmentation. BMZ 'stupendous-blowfish' model import, inference and export. "
         "zero_mean_unit_variance + format_version: 0.5.3 ",
     "template_path": os.path.join(data_folder, "instance_seg", "2d_instance_segmentation.yaml"),
-    "yaml": "test_26.yaml",
+    "yaml": "test26.yaml",
     "yaml_modifications": {
         "PROBLEM": {
             "INSTANCE_SEG": {
-                "DATA_CHANNELS": 'A',
+                "DATA_CHANNELS": "['F', 'Db']",
                 "DATA_MW_TH_TYPE": "auto",
-                "DATA_CHANNEL_WEIGHTS": (1),
             },
         },
         "DATA": {
             "TEST": {
-                "PATH": os.path.join(data_folder, "instance_seg", "dsb2018", "test", "images"),
-                "GT_PATH": os.path.join(data_folder, "instance_seg", "dsb2018", "test", "masks"),
+                "PATH": os.path.join(data_folder, "instance_seg", "dsb2018", "dsb2018", "test", "images"),
+                "GT_PATH": os.path.join(data_folder, "instance_seg", "dsb2018", "dsb2018", "test", "masks"),
                 "IN_MEMORY": False,
                 "LOAD_GT": True
             },
@@ -1582,9 +1586,9 @@ all_test_info["Test27"] = {
     "description": "2D instance segmentation. BMZ 'hiding-blowfish' model import, inference and export."
         "scale_range + format_version: 0.4.10",
     "template_path": os.path.join(data_folder, "instance_seg", "2d_instance_segmentation.yaml"),
-    "yaml": "test_27.yaml",
+    "yaml": "test27.yaml",
     "yaml_modifications": {
-        "PROBEM": {
+        "PROBLEM": {
             "INSTANCE_SEG": {
                 "DATA_CHANNELS": 'Db',
                 "DATA_MW_TH_TYPE": "auto",
@@ -1592,8 +1596,8 @@ all_test_info["Test27"] = {
         },
         "DATA": {
             "TEST": {
-                "PATH": os.path.join(data_folder, "instance_seg", "MitoEM_human_2d_toy_data", "toy", "train", "raw"),
-                "GT_PATH": os.path.join(data_folder, "instance_seg", "MitoEM_human_2d_toy_data", "toy", "train", "label"),
+                "PATH": os.path.join(data_folder, "instance_seg", "MitoEM_human_2d_toy_data", "MitoEM_human_2d_toy_data", "toy", "train", "raw"),
+                "GT_PATH": os.path.join(data_folder, "instance_seg", "MitoEM_human_2d_toy_data", "MitoEM_human_2d_toy_data", "toy", "train", "label"),
                 "IN_MEMORY": False,
                 "LOAD_GT": True
             },
@@ -1626,13 +1630,13 @@ all_test_info["Test28"] = {
     "description": "2D instance segmentation. BMZ 'frank-boar' model import, finetunning and export (reusing model original info)."
         "zero_mean_unit_variance + format_version: 0.5.3 ",
     "template_path": os.path.join(data_folder, "instance_seg", "2d_instance_segmentation.yaml"),
-    "yaml": "test_28.yaml",
+    "yaml": "test28.yaml",
     "yaml_modifications": {
         "PROBLEM": {
             "INSTANCE_SEG": {
                 "DATA_CHANNELS": 'BC',
                 "DATA_MW_TH_TYPE": "auto",
-                "DATA_CHANNEL_WEIGHTS": (0.5, 1),
+                "DATA_CHANNEL_WEIGHTS": "(0.5, 1)",
             },
         },
         "DATA": {
@@ -1681,7 +1685,7 @@ all_test_info["Test29"] = {
     "jobname": "test29",
     "description": "2D Instance seg. Conic 2D data (multihead). Basic DA. BC (auto). resunet++. ",
     "template_path": os.path.join(data_folder, "instance_seg", "2d_instance_segmentation.yaml"),
-    "yaml": "test_29.yaml",
+    "yaml": "test29.yaml",
     "yaml_modifications": {
         "PROBLEM": {
             "INSTANCE_SEG": {
@@ -1741,7 +1745,7 @@ all_test_info["Test30"] = {
     "jobname": "test30",
     "description": "3D Instance seg. Cyst data. BCM. BMZ pretrained model: 'venomous-swan'. Post-proc: Clear border + Voronoi",
     "template_path": os.path.join(data_folder, "instance_seg", "3d_instance_segmentation.yaml"),
-    "yaml": "test_30.yaml",
+    "yaml": "test30.yaml",
     "yaml_modifications": {
         "PROBLEM": {
             "INSTANCE_SEG": {
@@ -1787,13 +1791,14 @@ all_test_info["Test31"] = {
     "jobname": "test31",
     "description": "3D Detection. Achucarro data. points+classes. Export model to BMZ",
     "template_path": os.path.join(data_folder, "detection", "3d_detection.yaml"),
-    "yaml": "test_31.yaml",
+    "yaml": "test31.yaml",
     "yaml_modifications": {
         "PROBLEM": {
             "DETECTION": {
                 "CENTRAL_POINT_DILATION": [3],
                 "CHECK_POINTS_CREATED": False,
-                "DATA_CHECK_MW": False
+                "DATA_CHECK_MW": False,
+                "DATA_CHANNEL_WEIGHTS": "(2, 1)",
             }
         },
         "DATA": {
@@ -1819,6 +1824,10 @@ all_test_info["Test31"] = {
                 "LOAD_GT": True,
                 "PADDING": "(4,18,18)"
             },
+        },
+        "LOSS": {
+            "TYPE": "CE",
+            "CLASS_REBALANCE": True,
         },
         "TRAIN": {
              "ENABLE": True,
@@ -2089,7 +2098,7 @@ def check_bmz_weight_agreement(last_lines, pattern_to_find):
                     # We expect the line to be something like:
                     # Output 'output0' disagrees with 12 of 131072 expected values (91.6 ppm)
                     # Find all integers in the string
-                    numbers = re.findall(r' \d+ ', line[i:min(i+3, len(line)-1)])
+                    numbers = re.findall(r' \d+ ', "".join(last_lines[i:min(i+3, len(last_lines)-1)]))
                     if len(numbers) == 2:
                         # Convert first two to integers, 12 and 131072 in the example
                         first = float(numbers[0])
