@@ -2524,50 +2524,45 @@ def create_detection_masks(cfg: CN, data_type: str = "train"):
         # 4. Paint points directly into the disk-backed array
         for j in range(len(coords[0])):
             c_point = class_points[j]
-            # Define local patch to dilate
-            p_coords = []
-            for dim in range(len(shape)):
-                p_coords.append(max(0, coords[dim][j] - 1 - cpd[dim]))
-                p_coords.append(min(shape[dim], coords[dim][j] + 1 + cpd[dim]))
+            # --- A. Coordinate Setup ---
+            # Convert global coordinates to integers immediately
+            global_c = [int(coords[d][j]) for d in range(len(shape))]
+            
+            # Skip if center point is outside array boundaries
+            if any(global_c[d] < 0 or global_c[d] >= shape[d] for d in range(len(shape))):
+                continue
 
-            # Slicing logic
-            if cfg.PROBLEM.NDIM == "3D":
-                s_z = slice(p_coords[0], p_coords[1])
-                s_y = slice(p_coords[2], p_coords[3])
-                s_x = slice(p_coords[4], p_coords[5])
-                local_mask = mask[s_z, s_y, s_x, 0]
-                # Relative center for dilation
-                rel_c = [coords[0][j]-p_coords[0], coords[1][j]-p_coords[2], coords[2][j]-p_coords[4]]
-            else:
-                s_y = slice(p_coords[0], p_coords[1])
-                s_x = slice(p_coords[2], p_coords[3])
-                local_mask = mask[s_y, s_x, 0]
-                rel_c = [coords[0][j]-p_coords[0], coords[1][j]-p_coords[2]]
+            # --- B. Dynamic Slicing (Handles 2D and 3D) ---
+            slices = []
+            rel_coords = []
+            for d in range(len(shape)):
+                start = max(0, global_c[d] - 1 - cpd[d])
+                end = min(shape[d], global_c[d] + 2 + cpd[d]) 
+                slices.append(slice(start, end))
+                rel_coords.append(global_c[d] - start)
 
-            # Paint and Dilate
-            patch = np.zeros(local_mask.shape, dtype=np.uint8)
-            # Simple center painting
-            if cfg.PROBLEM.NDIM == "3D":
-                patch[rel_c[0], rel_c[1], rel_c[2]] = 1
-            else:
-                patch[rel_c[0], rel_c[1]] = 1
+            target_slice = tuple(slices)
 
-            patch = binary_dilation_scipy(patch, iterations=1, structure=ellipse_footprint)
+            # --- C. Create the Patch (Local Dilation) ---
+            # Determine patch shape by looking at the slice size
+            local_chunk = mask[target_slice] 
+            patch_shape = local_chunk.shape[:-1] # Exclude channel dimension
+            patch = np.zeros(patch_shape, dtype=np.uint8)
+            patch[tuple(rel_coords)] = 1
+            update = binary_dilation_scipy(patch, iterations=1, structure=ellipse_footprint)
 
-            # Write back to Zarr/H5 (only where mask was 0 to avoid overlapping issues)
-            update = patch.astype(dtype_str)
-            if cfg.PROBLEM.NDIM == "3D":
-                current_val = mask[s_z, s_y, s_x, :]
-                current_val[..., 0] = np.where(current_val[..., 0] == 0, update, current_val[..., 0])
-                if channels > 1:
-                    current_val[..., 1] = np.where(current_val[..., 1] == 0, update * c_point, current_val[..., 1])
-                mask[s_z, s_y, s_x, :] = current_val
-            else:
-                current_val = mask[s_y, s_x, :]
-                current_val[..., 0] = np.where(current_val[..., 0] == 0, update, current_val[..., 0])
-                if channels > 1:
-                    current_val[..., 1] = np.where(current_val[..., 1] == 0, update * c_point, current_val[..., 1])
-                mask[s_y, s_x, :] = current_val
+            # --- D. Multi-Channel Update (Disk-Backed) ---
+            # Channel 0: Occupancy (Binary)
+            # Only update where the mask is currently 0
+            mask_to_fill = (local_chunk[..., 0] == 0) & (update > 0)
+            local_chunk[mask_to_fill, 0] = 1 
+            
+            # Channel 1: Class/Instance ID
+            if channels > 1:
+                local_chunk[mask_to_fill, 1] = c_point
+
+            # Write the modified chunk back to the disk-backed array
+            mask[target_slice] = local_chunk
 
         # Finalize
         if is_h5 and working_with_chunked_data:
