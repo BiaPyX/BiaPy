@@ -684,10 +684,17 @@ class BiaPy:
 
         print("Pre-processing: {}".format(preprocessing))
 
-        # Post-processing deactivated as the models now are built with activations when they are exported
-        # so no post-processing is needed
+        # Post-processing activated only for old BiaPy models uploaded to BMZ without no "explicit_activations" field
         postprocessing = []
-        print("Post-processing: any")
+        if "postprocessing" in self.workflow.bmz_config:
+            for post in self.workflow.bmz_config["postprocessing"]:
+                if post == "sigmoid":
+                    postprocessing.append(
+                        {
+                            "id": "sigmoid",
+                        }
+                    )
+        print("Post-processing: {}".format(postprocessing))
 
         # Save input/output samples
         os.makedirs(building_dir, exist_ok=True)

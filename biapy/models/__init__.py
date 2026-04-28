@@ -664,6 +664,57 @@ def adapt_bmz_model_kwargs(model_kwargs: Dict, model_to_consume: bool) -> Dict:
 
     return adapted_args
 
+def get_bmz_model_kwargs(model: ModelDescr_v0_4 | ModelDescr_v0_5) -> Dict:
+    """
+    Get the PyTorch state dict weight specification from a BMZ model description.
+
+    Parameters
+    ----------
+    model : ModelDescr_v0_4 | ModelDescr_v0_5
+        BMZ model description.
+
+    Returns
+    -------
+    model_kwargs : dict
+        Dictionary of model arguments extracted from the BMZ model description, ready to be adapted for BiaPy's model building functions.
+    """
+    assert model.weights.pytorch_state_dict
+    weight_spec = model.weights.pytorch_state_dict
+    if isinstance(weight_spec, v0_4.PytorchStateDictWeightsDescr):
+        return weight_spec.kwargs
+    elif isinstance(weight_spec, v0_5.PytorchStateDictWeightsDescr):
+        return weight_spec.architecture.kwargs
+    else:
+        raise ValueError("Unsupported weight specification type in BMZ model description.")
+
+def update_bmz_model_kwargs_to_biapy(new_biapy_model_kwargs: Dict, model: ModelDescr_v0_4 | ModelDescr_v0_5):
+    """
+    Build a model from Bioimage Model Zoo (BMZ).
+
+    Parameters
+    ----------
+    new_biapy_model_kwargs : dict
+        Dictionary of model arguments as expected by BiaPy's model building functions.
+
+    model : ModelDescr
+        BMZ model RDF that contains all the information of the model.
+
+    Returns
+    -------
+    bmz_model_kwargs : dict
+        Updated dictionary of model arguments to be used in the BMZ model RDF, ensuring compatibility with BiaPy.
+    """
+    bmz_model_kwargs = get_bmz_model_kwargs(model)
+    for k, v in new_biapy_model_kwargs.items():
+        if k in bmz_model_kwargs:
+            if bmz_model_kwargs[k] != new_biapy_model_kwargs[k]:
+                print(f"    Updating BMZ model argument '{k}' from '{bmz_model_kwargs[k]}' to '{new_biapy_model_kwargs[k]}'")
+                bmz_model_kwargs[k] = new_biapy_model_kwargs[k]
+        else:
+            print(f"    Adding new argument '{k}' with value '{v}'")
+            bmz_model_kwargs[k] = v
+    return bmz_model_kwargs
+
 def build_bmz_model(cfg: CN, model: ModelDescr_v0_4 | ModelDescr_v0_5, device: torch.device) -> nn.Module:
     """
     Build a model from Bioimage Model Zoo (BMZ).
@@ -718,6 +769,44 @@ def build_bmz_model(cfg: CN, model: ModelDescr_v0_4 | ModelDescr_v0_5, device: t
     )
 
     return model_instance
+
+def is_biapy_model(model: ModelDescr_v0_4 | ModelDescr_v0_5) -> bool:
+    """
+    Check if a model is a BiaPy model by looking for: 
+        1) the presence of "danifranco" in the GitHub username or "Daniel Franco" in the author name.
+        2) the presence of "biapy" in the model tags.
+        3) the presence of a citation with the text "BiaPy: accessible deep learning on bioimages" in the citations of the model.
+
+    Parameters
+    ----------
+    model : ModelDescr_v0_4 | ModelDescr_v0_5
+        The model to check.
+
+    Returns
+    -------
+    bool
+        True if the model is a BiaPy model, False otherwise.
+    """
+    try:
+        # Check authors for "danifranco" GitHub username or "Daniel Franco" name
+        for author in model.authors:
+            github_username = author.github_user if hasattr(author, "github_user") else ""
+            author_name = author.name if hasattr(author, "name") else ""
+            if github_username == "danifranco" or author_name in ["Daniel Franco-Barranco", "Daniel Franco Barranco", "Daniel Franco"]:
+                return True
+            
+        tags = model.tags if hasattr(model, "tags") else [""]
+        if "biapy" in tags:
+            return True
+
+        for cite in model.cite:
+            cite_text = cite.text if hasattr(cite, "text") else ""
+            if "BiaPy: accessible deep learning on bioimages" == cite_text:
+                return True
+    except Exception as e:
+        print(f"Warning: Could not determine if model is a BiaPy model due to error: {e}")
+
+    return False
 
 def find_bmz_models(
     model_ID: Optional[str] = None,

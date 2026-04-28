@@ -29,6 +29,8 @@ from biapy.models import (
     build_model,
     build_torchvision_model,
     build_bmz_model,
+    is_biapy_model,
+    get_bmz_model_kwargs,
     check_bmz_args,
 )
 from biapy.models.blocks import get_activation
@@ -818,12 +820,28 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.bmz_config["scanned_files"],
                 self.model_build_kwargs,
                 self.network_stride,
-            ) = build_model(self.cfg, self.model_output_channels, self.model_output_channel_info, self.head_activations, self.device)
+            ) = build_model(
+                self.cfg, 
+                self.model_output_channels, 
+                self.model_output_channel_info,
+                self.head_activations,
+                self.device
+            )
+            self.bmz_config["is_biapy_model"] = True
         elif self.cfg.MODEL.SOURCE == "torchvision":
             self.model, self.torchvision_preprocessing = build_torchvision_model(self.cfg, self.device)
+            self.bmz_config["is_biapy_model"] = False
         # BioImage Model Zoo pretrained models
         elif self.cfg.MODEL.SOURCE == "bmz":
             self.model = build_bmz_model(self.cfg, self.bmz_config["original_bmz_config"], self.device)
+
+            # For old BMZ models uploaded in BMZ we need to explicitly insert the sigmoid activation as postprocessing
+            self.bmz_config["is_biapy_model"] = is_biapy_model(self.bmz_config["original_bmz_config"])
+            bmz_model_kwargs = get_bmz_model_kwargs(self.bmz_config["original_bmz_config"])
+            if self.bmz_config["is_biapy_model"] and "explicit_activation" not in bmz_model_kwargs:
+                self.bmz_config["postprocessing"] = []
+                if self.head_activations[0] in ["ce_sigmoid", "Sigmoid"]:
+                    self.bmz_config["postprocessing"].append("sigmoid")
 
         self.model_without_ddp = self.model
         if self.args.distributed:
@@ -1619,14 +1637,6 @@ class Base_Workflow(metaclass=ABCMeta):
                 self.bmz_config["cover_gt"] = self.bmz_config["test_output"].copy().transpose(0, *range(2, self.bmz_config["test_output"].ndim), 1)[0]
             if self.cfg.DATA.N_CLASSES > 2 and self.cfg.PROBLEM.TYPE == "SEMANTIC_SEG":
                 self.bmz_config["cover_gt"] = np.expand_dims(np.argmax(self.bmz_config["cover_gt"], -1), -1)
-            
-        self.bmz_config["postprocessing"] = []
-        if self.cfg.MODEL.SOURCE == "biapy":
-            # Check activations to be inserted as postprocessing in BMZ
-            act = list(self.head_activations[0])
-            for ac in act:
-                if ac in ["ce_sigmoid", "Sigmoid"]:
-                    self.bmz_config["postprocessing"].append("sigmoid")
 
     def process_test_sample(self):
         """Process a sample in the inference phase."""
