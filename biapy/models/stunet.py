@@ -387,14 +387,15 @@ class STUNet(nn.Module):
         if self.return_class:
             out_dict["class"] = torch.cat(class_outs, dim=1)
 
-        if self.return_one_tensor:
-            # Concatenate all outputs into a single tensor along the channel dimension
-            return torch.cat((out_dict["pred"], torch.argmax(out_dict["class"], dim=1).unsqueeze(1)), dim=1)
+        if len(out_dict.keys()) == 1:
+            return out_dict["pred"]
         else:
-            if len(out_dict.keys()) == 1:
-                return out_dict["pred"]
-            else:
-                return out_dict
+            if self.return_one_tensor:
+                if "class" in out_dict:
+                    return torch.cat((out_dict["pred"], torch.argmax(out_dict["class"], dim=1).unsqueeze(1)), dim=1)
+                else:
+                    return out_dict["pred"]
+            return out_dict
 
 
 # --------------------------------------------------------------------------------------
@@ -414,7 +415,8 @@ def _common_kernels():
 
 
 def STUNet_base(image_shape: Tuple[int, ...] = (256, 256, 1), output_channels: List[int] = [1], output_channel_info: List[str] = ["F"], 
-                deep_supervision: bool = True, explicit_activations: bool = False, head_activations: List[str] = []) -> STUNet:
+                deep_supervision: bool = True, explicit_activations: bool = False, head_activations: List[str] = [], 
+                return_one_tensor: bool = False) -> STUNet:
     conv_kernel_sizes, pool_op_kernel_sizes = _common_kernels()
     return STUNet(
         image_shape=image_shape,
@@ -427,10 +429,12 @@ def STUNet_base(image_shape: Tuple[int, ...] = (256, 256, 1), output_channels: L
         pool_op_kernel_sizes=pool_op_kernel_sizes,
         conv_kernel_sizes=conv_kernel_sizes,
         deep_supervision=deep_supervision,
+        return_one_tensor=return_one_tensor,
     )
 
 def STUNet_small(image_shape: Tuple[int, ...] = (256, 256, 1), output_channels: List[int] = [1], output_channel_info: List[str] = ["F"], 
-                 deep_supervision: bool = True, explicit_activations: bool = False, head_activations: List[str] = []) -> STUNet:
+                 deep_supervision: bool = True, explicit_activations: bool = False, head_activations: List[str] = [], 
+                 return_one_tensor: bool = False) -> STUNet:
     conv_kernel_sizes, pool_op_kernel_sizes = _common_kernels()
     return STUNet(
         image_shape=image_shape,
@@ -442,12 +446,14 @@ def STUNet_small(image_shape: Tuple[int, ...] = (256, 256, 1), output_channels: 
         dims=[16, 32, 64, 128, 256, 256],
         pool_op_kernel_sizes=pool_op_kernel_sizes,
         conv_kernel_sizes=conv_kernel_sizes,
-        deep_supervision=deep_supervision,  
+        deep_supervision=deep_supervision,
+        return_one_tensor=return_one_tensor,  
     )
 
 
 def STUNet_large(image_shape: Tuple[int, ...] = (256, 256, 1), output_channels: List[int] = [1], output_channel_info: List[str] = ["F"], 
-                 deep_supervision: bool = True, explicit_activations: bool = False, head_activations: List[str] = []) -> STUNet:
+                 deep_supervision: bool = True, explicit_activations: bool = False, head_activations: List[str] = [], 
+                 return_one_tensor: bool = False) -> STUNet:
     conv_kernel_sizes, pool_op_kernel_sizes = _common_kernels()
     return STUNet(
         image_shape=image_shape,
@@ -460,6 +466,7 @@ def STUNet_large(image_shape: Tuple[int, ...] = (256, 256, 1), output_channels: 
         pool_op_kernel_sizes=pool_op_kernel_sizes,
         conv_kernel_sizes=conv_kernel_sizes,
         deep_supervision=deep_supervision,
+        return_one_tensor=return_one_tensor,  
     )
 
 
@@ -508,7 +515,7 @@ def load_stunet_pretrained_encoder_from_ckpt(model: STUNet, checkpoint: Dict[str
 
 def build_stunet(variant: str, image_shape: Tuple[int, ...] = (256, 256, 1), output_channels: List[int] = [1], output_channel_info=["F"], 
                  explicit_activations: bool = False, head_activations: List[str] = ["ce_sigmoid"], deep_supervision: bool = True, 
-                 pretrained: Union[bool, str] = False, map_location: str = "cpu") -> STUNet:
+                 pretrained: Union[bool, str] = False, map_location: str = "cpu", return_one_tensor: bool = False) -> STUNet:
     """
     Build a STUNet model (small, base, large) with optional pretrained encoder loading.
 
@@ -535,24 +542,29 @@ def build_stunet(variant: str, image_shape: Tuple[int, ...] = (256, 256, 1), out
         If str, it can be a key in PRETRAINED_STUNET or a URL.
     map_location : str
         Device to map the loaded checkpoint.
+    return_one_tensor : bool
+        If True, concatenates all outputs into a single tensor along the channel dimension.
     """
     v = variant.lower()
     if v == "small":
         model = STUNet_small(
             image_shape=image_shape, output_channels=output_channels, output_channel_info=output_channel_info, 
             deep_supervision=deep_supervision, explicit_activations=explicit_activations, head_activations=head_activations,
+            return_one_tensor=return_one_tensor,  
         )
         default_key = "orgmim_cnn_small"
     elif v == "base":
         model = STUNet_base(
             image_shape=image_shape, output_channels=output_channels, output_channel_info=output_channel_info, 
             deep_supervision=deep_supervision, explicit_activations=explicit_activations, head_activations=head_activations,
+            return_one_tensor=return_one_tensor,  
         )
         default_key = "orgmim_cnn_base"
     elif v == "large":
         model = STUNet_large(
             image_shape=image_shape, output_channels=output_channels, output_channel_info=output_channel_info, 
             deep_supervision=deep_supervision, explicit_activations=explicit_activations, head_activations=head_activations,
+            return_one_tensor=return_one_tensor, 
         )
         default_key = "orgmim_cnn_large"
     else:

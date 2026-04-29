@@ -423,11 +423,12 @@ class Attention_U_Net(nn.Module):
         if self.contrast:
             out_dict["embed"] = self.proj_head(feats[0])
 
-        if self.return_one_tensor:
-            # Concatenate all outputs into a single tensor along the channel dimension
-            return torch.cat((out_dict["pred"], torch.argmax(out_dict["class"], dim=1).unsqueeze(1)), dim=1)
+        if len(out_dict.keys()) == 1:
+            return out_dict["pred"]
         else:
-            if len(out_dict.keys()) == 1:
-                return out_dict["pred"]
-            else:
-                return out_dict
+            if self.return_one_tensor:
+                if "class" in out_dict:
+                    return torch.cat((out_dict["pred"], torch.argmax(out_dict["class"], dim=1).unsqueeze(1)), dim=1)
+                else:
+                    return out_dict["pred"]
+            return out_dict
