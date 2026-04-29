@@ -1383,7 +1383,9 @@ all_test_info["Test23"] = {
         "TEST": {
             "ENABLE": True,
         },
-        "PATHS": {},
+        "PATHS": {
+            "CHECKPOINT_FILE": "",
+        },
     },
     "bmz_by_command": True,
     "bmz_package": "lightmycells_model.zip",
@@ -1544,7 +1546,7 @@ all_test_info["Test26"] = {
     "yaml_modifications": {
         "PROBLEM": {
             "INSTANCE_SEG": {
-                "DATA_CHANNELS": "['F', 'Db']",
+                "DATA_CHANNELS": "[F, Db]",
                 "DATA_MW_TH_TYPE": "auto",
             },
         },
@@ -1590,7 +1592,7 @@ all_test_info["Test27"] = {
     "yaml_modifications": {
         "PROBLEM": {
             "INSTANCE_SEG": {
-                "DATA_CHANNELS": 'Db',
+                "DATA_CHANNELS": '[Db]',
                 "DATA_MW_TH_TYPE": "auto",
             },
         },
@@ -2090,30 +2092,32 @@ def check_bmz_weight_agreement(last_lines, pattern_to_find):
     """
     for i, line in enumerate(last_lines):
         if pattern_to_find in line:
-            if "weights.pytorch_state_dict" in line and "❌" in line and "disagrees with" in line:
-                # We try to find the ratio of disagreeing weights. If it is very low, we consider it an agreement (there can be 
-                # some small numerical differences that do not affect the model performance). If it is higher than a threshold,
-                # we consider it a disagreement and return False.
-                try:
-                    # We expect the line to be something like:
-                    # Output 'output0' disagrees with 12 of 131072 expected values (91.6 ppm)
-                    # Find all integers in the string
-                    numbers = re.findall(r' \d+ ', "".join(last_lines[i:min(i+3, len(last_lines)-1)]))
-                    if len(numbers) == 2:
-                        # Convert first two to integers, 12 and 131072 in the example
-                        first = float(numbers[0])
-                        second = float(numbers[1])
+            if "✔️" in line:
+                return True
+            else: # "❌" or "⚠" in line
+                error_lines = last_lines[i:min(i+5, len(last_lines)-1)]
+                if  "disagrees with" in error_lines:
+                    # We try to find the ratio of disagreeing weights. If it is very low, we consider it an agreement (there can be 
+                    # some small numerical differences that do not affect the model performance). If it is higher than a threshold,
+                    # we consider it a disagreement and return False.
+                    try:
+                        # We expect the line to be something like:
+                        # Output 'output0' disagrees with 12 of 131072 expected values (91.6 ppm)
+                        # Find all integers in the string
+                        numbers = re.findall(r' \d+ ', "".join(last_lines[i:min(i+3, len(last_lines)-1)]))
+                        if len(numbers) == 2:
+                            # Convert first two to integers, 12 and 131072 in the example
+                            first = float(numbers[0])
+                            second = float(numbers[1])
 
-                        # Compute ratio
-                        ratio = first / second
-                        if ratio > 15: # If more than 15% of the weights disagree, we consider it a disagreement
-                            return False
-                    else: 
-                        return False
-                except Exception as e:
-                    print("Error parsing the line for weight agreement. Line: {}. Error: {}".format(line, e))
-                    return False
-
+                            # Compute ratio
+                            ratio = first / second
+                            if ratio > 15: # If more than 15% of the weights disagree, we consider it a disagreement
+                                return False
+                    except Exception as e:
+                        raise ValueError(f"Error parsing BMZ output agreement error message. Message: {''.join(error_lines)}. Error: {e}")
+                message = "".join(error_lines)
+                raise ValueError(f"Error checking BMZ output agreement. Error message reported by bioimageio:\n{message}")
     return True
 
 def check_value(last_lines, pattern_to_find, ref_value, gt=True):
@@ -2182,7 +2186,6 @@ def print_result(finished_good, jobname, int_checks):
         print(f"** {jobname} job: [OK] ({int_checks} internal checks passed)")
     else:
         print(f"** {jobname} job: [ERROR] ({sum(finished_good)} of {int_checks} internal checks passed)")
-    print("######")
 
 
 def runjob(test_info, yaml_file, multigpu=False, bmz_by_command=False, bmz_package=None, reuse_original_bmz_config=False):
@@ -2288,7 +2291,7 @@ for test_key, test_info in all_test_info.items():
     print(f"\n==============================================")
     print(f"Running {test_key}: {test_info['description']}")
     print(f"==============================================")
-    
+
     try:
         correct = True
         results = []
