@@ -23,9 +23,8 @@ import re
 import torch
 import torch.nn as nn
 from torchinfo import summary
-from typing import Iterable, Optional, Dict, Tuple, List, Callable
+from typing import Iterable, Optional, Dict, Tuple, List, Callable, Any
 from packaging.version import Version
-from functools import partial
 from yacs.config import CfgNode as CN
 import ast
 from collections import deque, defaultdict
@@ -1637,3 +1636,41 @@ def can_import_env_deps(
 
     ok = len(failures) == 0
     return ok, ("" if ok else ", ".join(failures))
+
+def get_last_layer_info(model: nn.Module) -> Dict[str, Any]:
+    """
+    Recursively finds the last layer of a model and checks if it's an activation.
+
+    Parameters
+    ----------
+    model : nn.Module
+        The PyTorch model to analyze.
+
+    Returns
+    -------
+    dict
+        A dictionary containing:
+        - "layer_object": The last layer object found in the model.
+        - "layer_type": The type name of the last layer.
+        - "is_activation": A boolean indicating whether the last layer is a common activation function.
+    """
+    # 1. Recursively find the last child module
+    last_layer = model
+    while list(last_layer.children()):
+        last_layer = list(last_layer.children())[-1]
+
+    # 2. Define a tuple of common activation types
+    activation_types = (
+        nn.ReLU, nn.Sigmoid, nn.Softmax, nn.LogSoftmax, 
+        nn.Tanh, nn.LeakyReLU, nn.ELU, nn.PReLU, nn.GELU,
+        nn.Softplus, nn.Softsign, nn.Hardtanh
+    )
+
+    # 3. Check if the last layer is an instance of these types
+    is_activation = isinstance(last_layer, activation_types)
+    
+    return {
+        "layer_object": last_layer,
+        "layer_type": type(last_layer).__name__,
+        "is_activation": is_activation
+    }

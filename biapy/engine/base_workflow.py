@@ -32,6 +32,7 @@ from biapy.models import (
     is_biapy_model,
     get_bmz_model_kwargs,
     check_bmz_args,
+    get_last_layer_info,
 )
 from biapy.models.blocks import get_activation
 from biapy.engine import prepare_optimizer, build_callbacks
@@ -177,6 +178,7 @@ class Base_Workflow(metaclass=ABCMeta):
         self.dtype_str = "float32" if not self.cfg.TEST.REDUCE_MEMORY else "float16"
         self.loss_dtype = torch.float32
         self.dims = 2 if self.cfg.PROBLEM.NDIM == "2D" else 3
+        self.apply_activations = True
 
         self.use_gt = False
         if self.cfg.DATA.TEST.LOAD_GT or self.cfg.DATA.TEST.USE_VAL_AS_TEST:
@@ -843,6 +845,11 @@ class Base_Workflow(metaclass=ABCMeta):
                 if self.head_activations[0] in ["ce_sigmoid", "Sigmoid"]:
                     self.bmz_config["postprocessing"].append("sigmoid")
 
+            layer_info = get_last_layer_info(self.model)
+            if layer_info['is_activation']:
+                print("[BMZ] Disabling manual activations after the model as the last layer of the model is already an activation function ({}).".format(layer_info['layer_type']))
+                self.apply_activations = False
+
         self.model_without_ddp = self.model
         if self.args.distributed:
             self.model = torch.nn.parallel.DistributedDataParallel(
@@ -1228,7 +1235,10 @@ class Base_Workflow(metaclass=ABCMeta):
             Resulting predictions after applying last activation(s).
         """
         # Do not apply any activation when using masking as pretext task
-        if self.cfg.PROBLEM.TYPE == "SELF_SUPERVISED" and self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK.lower() == "masking":
+        if (
+            not self.apply_activations
+            or (self.cfg.PROBLEM.TYPE == "SELF_SUPERVISED" and self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK.lower() == "masking")
+        ):
             return pred
 
         # 1. Expand channel info to map 1-to-1 with every channel
