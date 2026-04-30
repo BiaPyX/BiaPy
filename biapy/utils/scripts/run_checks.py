@@ -2096,7 +2096,7 @@ def check_bmz_weight_agreement(last_lines, pattern_to_find):
             if "✔️" in line:
                 return True
             else: # "❌" or "⚠" in line
-                error_lines = last_lines[i:min(i+5, len(last_lines)-1)]
+                error_lines = "".join(last_lines[i:min(i+5, len(last_lines)-1)])
                 if  "disagrees with" in error_lines:
                     # We try to find the ratio of disagreeing weights. If it is very low, we consider it an agreement (there can be 
                     # some small numerical differences that do not affect the model performance). If it is higher than a threshold,
@@ -2105,7 +2105,7 @@ def check_bmz_weight_agreement(last_lines, pattern_to_find):
                         # We expect the line to be something like:
                         # Output 'output0' disagrees with 12 of 131072 expected values (91.6 ppm)
                         # Find all integers in the string
-                        numbers = re.findall(r' \d+ ', "".join(last_lines[i:min(i+3, len(last_lines)-1)]))
+                        numbers = re.findall(r' \d+ ', error_lines)
                         if len(numbers) == 2:
                             # Convert first two to integers, 12 and 131072 in the example
                             first = float(numbers[0])
@@ -2113,8 +2113,8 @@ def check_bmz_weight_agreement(last_lines, pattern_to_find):
 
                             # Compute ratio
                             ratio = first / second
-                            if ratio > 15: # If more than 15% of the weights disagree, we consider it a disagreement
-                                return False
+                            if ratio < 15: # If more than 15% of the weights disagree, we consider it a disagreement
+                                return True
                     except Exception as e:
                         raise ValueError(f"Error parsing BMZ output agreement error message. Message: {''.join(error_lines)}. Error: {e}")
                 message = "".join(error_lines)
