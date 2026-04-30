@@ -3327,10 +3327,10 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict) -> dict:
         if "NORMALIZATION" in old_cfg["DATA"]:
             if "PERC_CLIP" in old_cfg["DATA"]["NORMALIZATION"]:
                 val = old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"]
-                if isinstance(val, bool) and val:
+                if isinstance(val, bool):
                     del old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"]
                     old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"] = {}
-                    old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"]["ENABLE"] = True
+                    old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"]["ENABLE"] = val
                     if "PERC_LOWER" in old_cfg["DATA"]["NORMALIZATION"]:
                         old_cfg["DATA"]["NORMALIZATION"]["PERC_CLIP"]["LOWER_PERC"] = old_cfg["DATA"]["NORMALIZATION"][
                             "PERC_LOWER"
