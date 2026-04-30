@@ -300,6 +300,14 @@ class Detection_Workflow(Base_Workflow):
             else:
                 _output = output
 
+        if self.separated_class_channel and self.gt_channels_expected != _output.shape[1]:
+            class_idx = self.model_output_channel_info.index("class") if "class" in self.model_output_channel_info else -1
+            _output = torch.cat( 
+                (
+                    _output[:,:-self.model_output_channels[class_idx]],  
+                    torch.argmax(_output[:, -self.model_output_channels[class_idx]:], dim=1).unsqueeze(1)
+                ), dim=1) 
+            
         if isinstance(targets, np.ndarray):
             _targets = to_pytorch_format(
                 targets.copy(),
@@ -410,13 +418,13 @@ class Detection_Workflow(Base_Workflow):
                 if self.dims == 3:
                     point_area = class_channel[
                         max(0, point[0] - 1) : min(pred.shape[0], point[0] + 1),
-                        max(0, point[1] - 1) : min(pred.shape[1], point[1] + 1),
-                        max(0, point[2] - 1) : min(pred.shape[2], point[2] + 1),
+                        max(0, point[1] - 2) : min(pred.shape[1], point[1] + 2),
+                        max(0, point[2] - 2) : min(pred.shape[2], point[2] + 2),
                     ]
                 else:
                     point_area = class_channel[
-                        max(0, point[0] - 1) : min(pred.shape[0], point[0] + 1),
-                        max(0, point[1] - 1) : min(pred.shape[1], point[1] + 1),
+                        max(0, point[0] - 2) : min(pred.shape[0], point[0] + 2),
+                        max(0, point[1] - 2) : min(pred.shape[1], point[1] + 2),
                     ]
                 instance_classes, instance_classes_count = np.unique(point_area, return_counts=True)
                 # Remove background

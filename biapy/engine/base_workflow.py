@@ -1491,7 +1491,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 # Multi-head concatenation
                 if isinstance(p, dict):
                     if "class" in p:
-                        p = torch.cat((p["pred"], torch.argmax(p["class"], dim=1).unsqueeze(1)), dim=1)
+                        p = torch.cat((p["pred"], p["class"]), dim=1)
                     else:
                         p = p["pred"]
 
@@ -1521,7 +1521,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 # Multi-head concatenation
                 if isinstance(p, dict):
                     if "class" in p:
-                        p = torch.cat((p["pred"], torch.argmax(p["class"], dim=1).unsqueeze(1)), dim=1)
+                        p = torch.cat((p["pred"], p["class"]), dim=1)
                     else:
                         p = p["pred"]
 
@@ -1873,6 +1873,14 @@ class Base_Workflow(metaclass=ABCMeta):
                 # Apply mask
                 if self.cfg.TEST.POST_PROCESSING.APPLY_MASK:
                     pred = np.expand_dims(apply_binary_mask(pred[0], self.cfg.DATA.TEST.BINARY_MASKS), 0)
+
+                if self.separated_class_channel:
+                    class_idx = self.model_output_channel_info.index("class") if "class" in self.model_output_channel_info else -1
+                    pred = np.concatenate( 
+                        (
+                            pred[...,:-self.model_output_channels[class_idx]],  
+                            np.expand_dims(np.argmax(pred[..., -self.model_output_channels[class_idx]:], axis=-1), axis=-1)
+                        ), axis=-1)                            
 
                 # Save image
                 if self.cfg.PATHS.RESULT_DIR.PER_IMAGE != "" and self.cfg.TEST.SAVE_MODEL_RAW_OUTPUT:
@@ -2382,6 +2390,14 @@ class Base_Workflow(metaclass=ABCMeta):
                 # Pass the batch through the model
                 pred = self.predict_batches_in_test(img, mask, disable_tqdm=True)
 
+                if self.separated_class_channel:
+                    class_idx = self.model_output_channel_info.index("class") if "class" in self.model_output_channel_info else -1
+                    pred = np.concatenate( 
+                        (
+                            pred[...,:-self.model_output_channels[class_idx]],  
+                            np.expand_dims(np.argmax(pred[..., -self.model_output_channels[class_idx]:], axis=-1), axis=-1)
+                        ), axis=-1) 
+                
                 lbreaked = False
                 for i in range(pred.shape[0]):
                     # Break the loop as those samples were created just to complete the last batch

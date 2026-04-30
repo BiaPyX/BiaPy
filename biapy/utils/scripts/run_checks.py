@@ -13,6 +13,7 @@ import time
 import requests
 import collections.abc
 import re
+import ast 
 
 # ---------------------------------------------------------
 # ARGUMENT PARSING
@@ -1546,7 +1547,7 @@ all_test_info["Test26"] = {
     "yaml_modifications": {
         "PROBLEM": {
             "INSTANCE_SEG": {
-                "DATA_CHANNELS": "[F, Db]",
+                "DATA_CHANNELS": "['F', 'Db']",
                 "DATA_MW_TH_TYPE": "auto",
             },
         },
@@ -1592,7 +1593,7 @@ all_test_info["Test27"] = {
     "yaml_modifications": {
         "PROBLEM": {
             "INSTANCE_SEG": {
-                "DATA_CHANNELS": '[Db]',
+                "DATA_CHANNELS": "['Db']",
                 "DATA_MW_TH_TYPE": "auto",
             },
         },
@@ -2236,7 +2237,13 @@ def update_nested_dict(d, u):
         if isinstance(v, collections.abc.Mapping):
             d[k] = update_nested_dict(d.get(k, {}), v)
         else:
-            d[k] = v
+            if isinstance(v, str) and any(x for x in ["[", "]"] if x in v):
+                try:
+                    d[k] = ast.literal_eval(v)
+                except (ValueError, SyntaxError):
+                    d[k] = v
+            else:
+                d[k] = v
     return d
 
 
