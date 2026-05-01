@@ -520,7 +520,7 @@ class CrossEntropyLoss_wrapper:
         else:
             self.loss = torch.nn.CrossEntropyLoss(ignore_index=self.ignore_index, weight=self.class_weights)
         if self.separated_class_channel:
-            self.class_channel_loss = torch.nn.CrossEntropyLoss(ignore_index=self.ignore_index)
+            self.class_channel_loss = torch.nn.CrossEntropyLoss(ignore_index=self.ignore_index, reduction="none")
 
     def __call__(self, y_pred, y_true):
         """
@@ -580,11 +580,16 @@ class CrossEntropyLoss_wrapper:
                 loss_fn = self.loss
 
             if self.separated_class_channel:
-                _loss = (
-                    self.channel_weights[0] * loss_fn(pd[:, 0], _y_true[:, 0].float()) 
-                    + self.channel_weights[1] * self.class_channel_loss(
-                        _y_pred_class[j], _y_true[:, -1].type(torch.long)
-                    )
+                mask = (_y_true[:, 0] != 0).float()
+                if isinstance(self.ignore_index, (int, float)):
+                    mask = mask * (_y_true[:, 0] != self.ignore_index).float()
+                loss_cls = self.class_channel_loss(_y_pred_class[j], _y_true[:, -1].type(torch.long))
+                loss_cls = loss_cls * mask
+                loss_cls = loss_cls.sum() / mask.sum().clamp_min(1.0)
+
+                _loss =  (
+                    self.channel_weights[0] * loss_fn(pd[:, 0], _y_true[:, 0].float())
+                    +  self.channel_weights[1] * loss_cls
                 )
             else:
                 if self.num_classes <= 2:
@@ -1392,7 +1397,7 @@ class instance_segmentation_loss:
         self.ignore_index = ignore_index
         self.ignore_values = True if ignore_index != -1 else False
         self.losses_to_use = losses_to_use
-        self.class_channel_loss = torch.nn.CrossEntropyLoss() if self.n_classes > 2 else None
+        self.class_channel_loss = torch.nn.CrossEntropyLoss(reduction="none") if self.n_classes > 2 else None
         self.gamma = 0.5  # for intermediate outputs weighting
 
         if len(self.losses_to_use) != 0:
@@ -1478,6 +1483,8 @@ class instance_segmentation_loss:
                 mask = None
                 if mask_vals:
                     mask = (y_true_slice != 0).float()
+                    if self.ignore_values:
+                        mask = mask * (y_true_slice != self.ignore_index).float()
 
                 if y_pred_slice.shape[-self.ndim :] != y_true_slice.shape[-self.ndim :]:
                     y_true_slice = scale_target(y_true_slice, y_pred_slice.shape[-self.ndim :])
@@ -1527,7 +1534,17 @@ class instance_segmentation_loss:
                 inter_output_loss += self.channel_weights[i] * channel_loss_val
             
             if self.n_classes > 2 and isinstance(y_pred, dict) and "class" in y_pred:
-                loss += self.channel_weights[-1] * self.class_channel_loss(_y_pred_class[idx], y_true[:, -1].type(torch.long))
+                loss_tensor = self.class_channel_loss(_y_pred_class[idx], y_true[:, -1].type(torch.long))
+                # multiply by spatial border weights after crit
+                if w_borders is not None:
+                    loss_tensor = loss_tensor * w_borders
+                # Apply always a mask to the class channel to consider only the pixels where there is an instance (non-zero in the GT)
+                # for the loss calculation, otherwise the loss value can be very low and not contribute to the training. 
+                if mask is None:
+                    mask = (y_true[:, -1] != 0).float()
+                loss_tensor = loss_tensor * mask
+                denom = mask.sum().clamp_min(1.0)
+                loss += self.channel_weights[-1] * (loss_tensor.sum() / denom)
             
             loss += inter_output_weights[idx] * inter_output_loss
 
