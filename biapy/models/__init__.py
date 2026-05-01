@@ -233,6 +233,7 @@ def build_model(
             head_activations=head_activations,
             output_channel_info=output_channel_info,
             return_one_tensor=False,
+            pretrained=cfg.MODEL.STUNET.PRETRAINED,
         )
         model = build_stunet(**args) # type: ignore
     else:

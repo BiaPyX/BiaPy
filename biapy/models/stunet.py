@@ -583,5 +583,8 @@ def build_stunet(variant: str, image_shape: Tuple[int, ...] = (256, 256, 1), out
 
         ckpt = download_pretrained_ckpt(url, map_location=map_location)
         load_stunet_pretrained_encoder_from_ckpt(model, ckpt)
+        print(f"[STUNet] Built {variant} variant with pretrained encoder from {url}")
+    else:
+        print(f"[STUNet] Built {variant} variant without pretrained weights")
 
     return model
