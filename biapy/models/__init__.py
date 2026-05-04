@@ -302,11 +302,11 @@ def build_model(
                 output_channel_info=output_channel_info,
                 head_activations=head_activations,
                 explicit_activations=False,
-                decoder_activation=cfg.MODEL.UNETR_DEC_ACTIVATION.lower(),
+                decoder_activation=cfg.MODEL.ACTIVATION.lower(),
                 ViT_hidd_mult=cfg.MODEL.UNETR_VIT_HIDD_MULT,
                 normalization=cfg.MODEL.NORMALIZATION,
                 dropout=cfg.MODEL.DROPOUT_VALUES[0],
-                k_size=cfg.MODEL.UNETR_DEC_KERNEL_SIZE,
+                k_size=cfg.MODEL.KERNEL_SIZE,
                 contrast=cfg.LOSS.CONTRAST.ENABLE,
                 contrast_proj_dim=cfg.LOSS.CONTRAST.PROJ_DIM,
                 return_one_tensor=False,
@@ -1142,8 +1142,6 @@ def check_bmz_model_compatibility(
 
         if classes != 2:
             opts["DATA.N_CLASSES"] = max(2, classes)
-        if channel_code == "A":
-            opts["LOSS.CLASS_REBALANCE"] = "auto"
 
     elif specific_workflow in ["all", "DETECTION"] and "detection" in tags:
         pass
