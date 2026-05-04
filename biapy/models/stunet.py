@@ -469,24 +469,6 @@ def STUNet_large(image_shape: Tuple[int, ...] = (256, 256, 1), output_channels: 
         return_one_tensor=return_one_tensor,  
     )
 
-
-# --------------------------------------------------------------------------------------
-# Optional: OrgMIM-compatible pretrained encoder loading
-# --------------------------------------------------------------------------------------
-
-PRETRAINED_STUNET: Dict[str, Dict[str, str]] = {
-    "orgmim_cnn_base": {
-        "url": "https://huggingface.co/yanchaoz/OrgMIM-models/resolve/main/orgmim_spark_b_learner.ckpt",
-    },
-    "orgmim_cnn_small": {
-        "url": "https://huggingface.co/yanchaoz/OrgMIM-models/resolve/main/orgmim_spark_s_learner.ckpt",
-    },
-    "orgmim_cnn_large": {
-        "url": "https://huggingface.co/yanchaoz/OrgMIM-models/resolve/main/orgmim_spark_l_learner.ckpt",
-    },
-}
-
-
 def download_pretrained_ckpt(url: str, map_location: str = "cpu") -> Dict[str, Any]:
     """
     Download checkpoint automatically (cached by torch).
@@ -569,6 +551,22 @@ def build_stunet(variant: str, image_shape: Tuple[int, ...] = (256, 256, 1), out
         default_key = "orgmim_cnn_large"
     else:
         raise ValueError("variant must be one of: small | base | large")
+    
+    # --------------------------------------------------------------------------------------
+    # Optional: OrgMIM-compatible pretrained encoder loading
+    # --------------------------------------------------------------------------------------
+
+    PRETRAINED_STUNET: Dict[str, Dict[str, str]] = {
+        "orgmim_cnn_base": {
+            "url": "https://huggingface.co/yanchaoz/OrgMIM-models/resolve/main/orgmim_spark_b_learner.ckpt",
+        },
+        "orgmim_cnn_small": {
+            "url": "https://huggingface.co/yanchaoz/OrgMIM-models/resolve/main/orgmim_spark_s_learner.ckpt",
+        },
+        "orgmim_cnn_large": {
+            "url": "https://huggingface.co/yanchaoz/OrgMIM-models/resolve/main/orgmim_spark_l_learner.ckpt",
+        },
+    }
 
     if pretrained:
         if isinstance(pretrained, str):
