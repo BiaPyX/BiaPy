@@ -953,7 +953,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 pred_labels = pred_labels[0]
             pred_labels, d_result = measure_morphological_props_and_filter(
                 pred_labels,
-                intensity_image=self.current_sample["X"][0] if self.cfg.PROBLEM.NDIM == "2D" else self.current_sample["X"],
+                intensity_image=self.current_sample["X"].squeeze(),
                 resolution=self.resolution,
                 extra_props=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.EXTRA_PROPS,
                 filter_instances=self.cfg.TEST.POST_PROCESSING.MEASURE_PROPERTIES.REMOVE_BY_PROPERTIES.ENABLE,
