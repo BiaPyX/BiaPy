@@ -450,19 +450,15 @@ class loss_encapsulation(nn.Module):
        
 class CrossEntropyLoss_wrapper:
     """
-    Wrapper for PyTorch's CrossEntropyLoss and BCEWithLogitsLoss. Supports multi-head (separated_class_channel), deep supervision lists, 
-    class rebalancing, and channel weighting.
+    Wrapper for PyTorch's CrossEntropyLoss and BCEWithLogitsLoss with support for class rebalancing.
     """
 
     def __init__(
         self,
         num_classes: int,
         ndim: int = 2,
-        separated_class_channel: bool = False,
-        model_source: str = "biapy",
         class_rebalance: str = "none",
         class_weights: List[float] = [],
-        channel_weights = (1, 1),
         ignore_index: int = -1,
         device=None,
     ):
@@ -477,21 +473,11 @@ class CrossEntropyLoss_wrapper:
         ndim : int, optional
             Number of dimensions of the input data. 2 for 2D images, 3 for 3D volumes.
 
-        separated_class_channel : bool, optional
-            For separated_class_channel predictions e.g. points + classification in detection.
-
-        model_source : str, optional
-            Source of the model. It can be "biapy", "bmz" or "torchvision".
-
         class_rebalance: str, optional
-            Whether to reweight classes (inside loss function) or not. Options are: "none", "auto" and "manual".
+            Whether to reweight classes or not. Options are: "none" and "manual".
 
         class_weights : list of float, optional
             List of weights for each class to be used in "manual" class rebalancing. E.g. ``[0.7, 0.3]`` for 2 classes.
-
-        channel_weights : 2 float tuple, optional
-            Weights to be applied to segmentation (binary and contours) and to distances respectively. E.g. ``(1, 0.2)``,
-            ``1`` should be multipled by ``BCE`` for the first two channels and ``0.2`` to ``MSE`` for the last channel.
 
         ignore_index : int, optional
             Value to ignore in the loss calculation. If not provided, no value will be ignored.
@@ -500,12 +486,9 @@ class CrossEntropyLoss_wrapper:
             Using device. Most commonly "cpu" or "cuda" for GPU, but also potentially "mps".
         """
         self.ndim = ndim
-        self.model_source = model_source
-        self.separated_class_channel = separated_class_channel
         self.num_classes = num_classes
         self.class_rebalance = class_rebalance
         self.class_weights = None
-        self.channel_weights = channel_weights
         self.ignore_index = ignore_index if ignore_index != -1 else -100  # Default ignore index for CrossEntropyLoss
         self.device = device if device is not None else torch.device("cpu")
 
@@ -516,11 +499,134 @@ class CrossEntropyLoss_wrapper:
             self.class_weights = torch.tensor(class_weights, device=device, dtype=torch.float32)
 
         if num_classes <= 2:
-            self.loss = torch.nn.BCEWithLogitsLoss()
+            self.loss = torch.nn.BCEWithLogitsLoss(weight=self.class_weights)
         else:
             self.loss = torch.nn.CrossEntropyLoss(ignore_index=self.ignore_index, weight=self.class_weights)
+
+    def __call__(self, y_pred, y_true):
+        """
+        Calculate CrossEntropyLoss.
+
+        Parameters
+        ----------
+        y_true : torch.Tensor
+            Ground truth masks.
+
+        y_pred : torch.Tensor
+            Predicted masks.
+
+        Returns
+        -------
+        loss : torch.Tensor
+            Loss value.
+        """
+        _y_pred = y_pred["pred"] if isinstance(y_pred, dict) and "pred" in y_pred else y_pred
+
+        if not isinstance(_y_pred, list):
+            _y_pred = [_y_pred]
+            inter_output_weights = [1.0]
+        else:
+            w = [self.gamma**i for i in range(len(_y_pred))]
+            s = sum(w)
+            inter_output_weights = [x / s for x in w]
+
+        loss = 0
+        for j, pd in enumerate(_y_pred):
+            _y_true = scale_target(y_true, pd.shape[-self.ndim :]) if pd.shape[-self.ndim :] != y_true.shape[-self.ndim :] else y_true
+
+            if self.num_classes <= 2:
+                _loss = self.loss(pd, _y_true.type(torch.float32))
+            else:
+                _loss = self.loss(pd, _y_true[:, 0].type(torch.long))
+        
+            loss += _loss * inter_output_weights[j]
+
+        return loss
+
+
+class detection_loss:
+    """
+    Loss for detection models with separated_class_channel. Combines BCE for the foreground and CrossEntropy for the class channel, 
+    with optional class rebalancing and channel weighting.
+    """
+
+    def __init__(
+        self,
+        ndim: int = 2,
+        class_rebalance_within_channels: bool = True,
+        separated_class_channel: bool = False,
+        num_classes: int = 2,
+        channel_weights = (1, 1),
+        class_rebalance: str = "none",
+        class_weights: List[float] = [],
+        ignore_index: int = -1,
+        device=None,
+    ):
+        """
+        Initialize detection loss.
+
+        Parameters
+        ----------
+        ndim : int, optional
+            Number of dimensions of the input data. 2 for 2D images, 3 for 3D volumes.
+
+        class_rebalance_within_channels : bool, optional
+            Whether to apply a rebalancing strategy to the loss function to give more importance to underrepresented pixels within the channels.
+            The weights are calculated automatically based on the number of pixels of each class. In the specific case of detection, where there
+            are usually much less pixels representing the center of the objects to detect than background pixels, with this option activated, 
+            the loss will give more importance to the pixels representing the center of the objects to help the model learn better to predict them.
+        
+        separated_class_channel : bool, optional
+            When a separated class channel is expected in the predictions e.g. points + classification in detection.
+
+        num_classes : int
+            Number of classes. This only works if ``separated_class_channel`` is ``True``.
+    
+        channel_weights : 2 float tuple, optional
+            Weights to be applied to each channel of the data, i.e., centroid detection and class. E.g. ``(1, 0.2)``.
+            This only works if ``separated_class_channel`` is ``True``.
+
+        class_rebalance: str, optional
+            Whether to reweight classes or not. This only works if ``separated_class_channel`` is ``True``. 
+            Options are: "none" and ``"manual"``.
+
+        class_weights : list of float, optional
+            List of weights for each class to be used in ``"manual"`` class rebalancing. This only works when ``separated_class_channel`` is ``True`` and
+            ``class_rebalance`` is ``"manual"``. E.g. ``[1, 1.7, 0.5]`` for 3 classes.
+
+        ignore_index : int, optional
+            Value to ignore in the loss calculation. If not provided, no value will be ignored. This only works when ``separated_class_channel`` is ``True``.
+        
+        device : Torch device, optional
+            Using device. Most commonly "cpu" or "cuda" for GPU, but also potentially "mps".
+        """
+        if separated_class_channel:
+            if class_rebalance == "manual" and not class_weights:
+                raise ValueError("class_weights must be provided when class_rebalance is 'manual'")
+            self.channel_weights = channel_weights
+            if len(self.channel_weights) != 2:
+                raise ValueError("channel_weights must be a tuple of 2 float values when separated_class_channel is True")
+        else:
+            self.channel_weights = (1, 0)
+        self.ndim = ndim
+        self.separated_class_channel = separated_class_channel
+        self.num_classes = num_classes
+        self.class_rebalance_within_channels = class_rebalance_within_channels
+        self.class_rebalance = class_rebalance
+        self.class_weights = None
+        self.ignore_index = ignore_index if ignore_index != -1 else -100  # Default ignore index for CrossEntropyLoss
+        self.device = device if device is not None else torch.device("cpu")
+        self.gamma = 0.5
+
+        if self.class_rebalance == "manual":
+            self.class_weights = torch.tensor(class_weights, device=device, dtype=torch.float32)
+
+        self.centroid_loss = torch.nn.BCEWithLogitsLoss()
         if self.separated_class_channel:
-            self.class_channel_loss = torch.nn.CrossEntropyLoss(ignore_index=self.ignore_index, reduction="none")
+            if self.num_classes > 2:
+                self.class_channel_loss = torch.nn.CrossEntropyLoss(ignore_index=self.ignore_index, weight=self.class_weights, reduction="none")
+            else:
+                self.class_channel_loss = torch.nn.BCEWithLogitsLoss()
 
     def __call__(self, y_pred, y_true):
         """
@@ -548,11 +654,6 @@ class CrossEntropyLoss_wrapper:
         else:
             _y_pred = y_pred["pred"] if isinstance(y_pred, dict) and "pred" in y_pred else y_pred
 
-        # For those cases that are predicting 2 channels (binary case) we adapt the GT to match.
-        # It's supposed to have 0 value as background and 1 as foreground
-        if self.model_source == "bmz" and self.num_classes <= 2 and _y_pred.shape[1] != y_true.shape[1]:
-            y_true = torch.cat((1 - y_true, y_true), 1)
-
         if not isinstance(_y_pred, list):
             _y_pred = [_y_pred]
             _y_pred_class = [_y_pred_class] if self.separated_class_channel else None
@@ -566,18 +667,13 @@ class CrossEntropyLoss_wrapper:
         for j, pd in enumerate(_y_pred):
             _y_true = scale_target(y_true, pd.shape[-self.ndim :]) if pd.shape[-self.ndim :] != y_true.shape[-self.ndim :] else y_true
 
-            if self.class_rebalance == "auto":
-                if self.separated_class_channel:
-                    weight_mask = weight_binary_ratio(_y_true[:, 0])
-                    loss_fn = torch.nn.BCEWithLogitsLoss(weight=weight_mask)
-                else:
-                    if self.num_classes <= 2:
-                        weight_mask = weight_binary_ratio(_y_true)
-                        loss_fn = torch.nn.BCEWithLogitsLoss(weight=weight_mask)
-                    else:
-                        loss_fn = self.loss
+            if self.class_rebalance_within_channels:
+                weight_mask = weight_binary_ratio(_y_true[:, 0])
+                loss_fn = torch.nn.BCEWithLogitsLoss(weight=weight_mask)
             else:
-                loss_fn = self.loss
+                loss_fn = self.centroid_loss
+
+            _loss = self.channel_weights[0] * loss_fn(pd[:, 0], _y_true[:, 0].type(torch.float32))
 
             if self.separated_class_channel:
                 mask = (_y_true[:, 0] != 0).float()
@@ -587,20 +683,11 @@ class CrossEntropyLoss_wrapper:
                 loss_cls = loss_cls * mask
                 loss_cls = loss_cls.sum() / mask.sum().clamp_min(1.0)
 
-                _loss =  (
-                    self.channel_weights[0] * loss_fn(pd[:, 0], _y_true[:, 0].float())
-                    +  self.channel_weights[1] * loss_cls
-                )
-            else:
-                if self.num_classes <= 2:
-                    _loss = loss_fn(pd, _y_true.type(torch.float32))
-                else:
-                    _loss = loss_fn(pd, _y_true[:, 0].type(torch.long))
+                _loss += self.channel_weights[1] * loss_cls
             
             loss += _loss * inter_output_weights[j]
 
         return loss
-
 
 class DiceLoss(nn.Module):
     def __init__(self, batch_dice: bool = True, smooth: float = 1e-5):
@@ -1370,7 +1457,7 @@ class instance_segmentation_loss:
 
         gt_channels_expected : int, optional
             Number of channels expected in the ground truth (default: 1). This is used to check that the GT loaded has the
-            expected number of channels. If ``extra_weight_in_borders`` is True, then 1 channel will be added to the expected
+            expected number of channels. If ``extra_weight_in_borders`` is ``True``, then 1 channel will be added to the expected
             GT channels to account for the extra weight in borders channel.
 
         n_classes : int, optional

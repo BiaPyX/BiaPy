@@ -1213,24 +1213,12 @@ def check_configuration(cfg, jobname, check_data_paths=True):
         if cfg.DATA.N_CLASSES > 2:
             if loss not in ["CE", 'W_CE_DICE']:
                 raise ValueError("'DATA.N_CLASSES' are only used in ['CE', 'W_CE_DICE'] losses and not with {}".format(loss))
-            if cfg.LOSS.CLASS_REBALANCE == "auto":
-                raise ValueError(
-                    "'LOSS.CLASS_REBALANCE' can not be set to 'auto' when 'DATA.N_CLASSES' > 2 as it is only valid for binary problems. " \
-                    "Use 'manual' and 'LOSS.CLASS_WEIGHTS' if you really want to rebalance classes. If not, set 'LOSS.CLASS_REBALANCE' to 'none'."
-                )
+
             if cfg.LOSS.CLASS_WEIGHTS != [] and len(cfg.LOSS.CLASS_WEIGHTS) != cfg.DATA.N_CLASSES:
                 raise ValueError("'LOSS.CLASS_WEIGHTS' must be a list of length equal to the number of classes")
     elif cfg.PROBLEM.TYPE == "DETECTION":
-        loss = "CE" if cfg.LOSS.TYPE == "" else cfg.LOSS.TYPE
-        assert loss in [
-            "CE",
-            "DICE",
-            "W_CE_DICE",
-        ], "LOSS.TYPE not in ['CE', 'DICE', 'W_CE_DICE']"
-
+        loss = "CE"
         if cfg.DATA.N_CLASSES > 2:
-            if loss not in ["CE", 'W_CE_DICE']:
-                raise ValueError("'DATA.N_CLASSES' are only used in ['CE', 'W_CE_DICE'] losses and not with {}".format(loss))
             if cfg.LOSS.CLASS_WEIGHTS != [] and len(cfg.LOSS.CLASS_WEIGHTS) != cfg.DATA.N_CLASSES:
                 raise ValueError("'LOSS.CLASS_WEIGHTS' must be a list of length equal to the number of classes")
 
@@ -1252,11 +1240,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 len(cfg.LOSS.WEIGHTS) == 2
             ), "'LOSS.WEIGHTS' needs to be a list of two floats when using LOSS.TYPE is in ['W_MAE_SSIM', 'W_MSE_SSIM']"
             assert sum(cfg.LOSS.WEIGHTS) == 1, "'LOSS.WEIGHTS' values need to sum 1"
-    elif cfg.PROBLEM.TYPE == "INSTANCE_SEG":
-        assert cfg.LOSS.CLASS_REBALANCE in [
-        "none",
-        "auto",
-    ], "LOSS.CLASS_REBALANCE not in ['none', 'auto'] for INSTANCE_SEG workflow"
     elif cfg.PROBLEM.TYPE == "DENOISING":
         loss = "MSE" if cfg.LOSS.TYPE == "" else cfg.LOSS.TYPE
         assert loss == "MSE", "LOSS.TYPE must be 'MSE'"
@@ -1270,8 +1253,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     assert cfg.LOSS.CLASS_REBALANCE in [
         "none",
         "manual",
-        "auto",
-    ], "LOSS.CLASS_REBALANCE not in ['none', 'manual', 'auto']"
+    ], "LOSS.CLASS_REBALANCE not in ['none', 'manual']"
     if cfg.LOSS.CLASS_REBALANCE == "manual":
         if cfg.LOSS.CLASS_WEIGHTS == []:
             raise ValueError("'LOSS.CLASS_WEIGHTS' needs to be configured when 'LOSS.CLASS_REBALANCE' is 'manual'")
@@ -1832,8 +1814,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
     #### Classification ####
     elif cfg.PROBLEM.TYPE == "CLASSIFICATION":
-        if cfg.TEST.BY_CHUNKS.ENABLE:
-            raise ValueError("'TEST.BY_CHUNKS.ENABLE' can not be activated for CLASSIFICATION workflow")
         if cfg.MODEL.SOURCE == "torchvision":
             if cfg.MODEL.TORCHVISION_MODEL_NAME not in [
                 "alexnet",
@@ -2155,6 +2135,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     print("Found {} test classes".format(len(list_of_classes)))
             
         if cfg.TEST.BY_CHUNKS.ENABLE:
+            if cfg.PROBEM.TYPE not in ["SEMANTIC_SEG", "INSTANCE_SEG", "DETECTION"]:
+                raise ValueError("'TEST.BY_CHUNKS' can only be activated in 'SEMANTIC_SEG', 'INSTANCE_SEG' and 'DETECTION' workflows")
             if cfg.PROBLEM.NDIM == "2D":
                 raise ValueError("'TEST.BY_CHUNKS' can not be activated when 'PROBLEM.NDIM' is 2D")
             if cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.ENABLE:
@@ -2162,6 +2144,9 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     "chunk_by_chunk",
                     "entire_pred",
                 ], "'TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE' needs to be in ['chunk_by_chunk', 'entire_pred']"
+            if cfg.PROBEM.TYPE == "INSTANCE_SEG":
+                if cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE == 'chunk_by_chunk':
+                    raise NotImplementedError("Chunk by chunk processing is not implemented yet for instance segmentation workflow")
             if len(cfg.DATA.TEST.INPUT_IMG_AXES_ORDER) < 3:
                 raise ValueError("'DATA.TEST.INPUT_IMG_AXES_ORDER' needs to be at least of length 3, e.g., 'ZYX'")
             if cfg.DATA.TEST.INPUT_ZARR_MULTIPLE_DATA:
@@ -2658,10 +2643,11 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 "vit",
                 "mae",
                 "hrnet",
+                "stunet",
             ]:
                 raise ValueError(
                     "'SELF_SUPERVISED' models available are these: ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'resunet_se', "
-                    "'unetr', 'unext_v1', 'unext_v2', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae', 'hrnet']"
+                    "'unetr', 'unext_v1', 'unext_v2', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae', 'hrnet', 'stunet']"
                 )
 
             # Not allowed archs
@@ -3032,6 +3018,7 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict) -> dict:
     new_cfg : dict
         Updated configuration to the current BiaPy version.
     """
+    workflow = old_cfg.get("PROBLEM", {}).get("TYPE", "SEMANTIC_SEG")
     if "TEST" in old_cfg:
         if "STATS" in old_cfg["TEST"]:
             full_image = old_cfg["TEST"]["STATS"]["FULL_IMG"]
@@ -3407,7 +3394,16 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict) -> dict:
 
     if "LOSS" in old_cfg and "CLASS_REBALANCE" in old_cfg["LOSS"]:
         if isinstance(old_cfg["LOSS"]["CLASS_REBALANCE"], bool):
-            old_cfg["LOSS"]["CLASS_REBALANCE"] = "auto" if old_cfg["LOSS"]["CLASS_REBALANCE"] else "none"
+            val = bool(old_cfg["LOSS"]["CLASS_REBALANCE"])
+            old_cfg["LOSS"]["CLASS_REBALANCE"] = "none"
+            if workflow == "INSTANCE_SEG":
+                old_cfg["PROBLEM"]["INSTANCE_SEG"]["CLASS_REBALANCE_WITHIN_CHANNELS"] = val
+            elif workflow == "DETECTION":
+                old_cfg["PROBLEM"]["DETECTION"]["CLASS_REBALANCE_WITHIN_CHANNELS"] = val
+            elif workflow == "SEMANTIC_SEG":
+                cls_weights = old_cfg.get("LOSS", {}).get("CLASS_WEIGHTS", [])
+                if cls_weights != []:
+                    old_cfg["LOSS"]["CLASS_REBALANCE"] = "manual"
 
     if "TEST" in old_cfg and "BY_CHUNKS" in old_cfg["TEST"] and "FORMAT" in old_cfg["TEST"]["BY_CHUNKS"]:
         del old_cfg["TEST"]["BY_CHUNKS"]["FORMAT"]
@@ -3422,7 +3418,12 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict) -> dict:
             if old_cfg["MODEL"]["BATCH_NORMALIZATION"]:
                 old_cfg["MODEL"]["NORMALIZATION"] = "bn"
             del old_cfg["MODEL"]["BATCH_NORMALIZATION"]
-
+        if "UNETR_DEC_ACTIVATION" in old_cfg["MODEL"]:
+            old_cfg["MODEL"]["ACTIVATION"] = old_cfg["MODEL"]["UNETR_DEC_ACTIVATION"]
+            del old_cfg["MODEL"]["UNETR_DEC_ACTIVATION"]
+        if "UNETR_DEC_KERNEL_SIZE" in old_cfg["MODEL"]:
+            old_cfg["MODEL"]["KERNEL_SIZE"] = old_cfg["MODEL"]["UNETR_DEC_KERNEL_SIZE"]
+            del old_cfg["MODEL"]["UNETR_DEC_KERNEL_SIZE"]
         if "N_CLASSES" in old_cfg["MODEL"]:
             if "DATA" not in old_cfg:
                 old_cfg["DATA"] = {}

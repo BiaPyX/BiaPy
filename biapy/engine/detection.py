@@ -34,7 +34,7 @@ from biapy.engine.metrics import (
     multiple_metrics,
     DiceCELoss,
     DiceLoss,
-    CrossEntropyLoss_wrapper,
+    detection_loss,
 )
 from biapy.data.pre_processing import create_detection_masks
 from biapy.engine.base_workflow import Base_Workflow
@@ -226,36 +226,18 @@ class Detection_Workflow(Base_Workflow):
             self.test_extra_metrics += ["Precision (class)", "Recall (class)", "F1 (class)", "TP (class)", "FN (class)"]
         self.test_metric_names += self.test_extra_metrics
 
-        if self.cfg.LOSS.TYPE == "CE":
-            self.loss = CrossEntropyLoss_wrapper(
-                num_classes=2, # in detection the first channel is always binary, even if there are more classes in the classification channel
-                ndim=self.dims,
-                separated_class_channel=self.separated_class_channel,
-                model_source=self.cfg.MODEL.SOURCE,
-                class_rebalance=self.cfg.LOSS.CLASS_REBALANCE,
-                channel_weights = self.cfg.PROBLEM.DETECTION.DATA_CHANNEL_WEIGHTS,
-                class_weights=self.cfg.LOSS.CLASS_WEIGHTS,
-                ignore_index=self.cfg.LOSS.IGNORE_INDEX,
-                device=self.device,
-            )
-        elif self.cfg.LOSS.TYPE == "DICE":
-            self.loss = DiceLoss()
-        elif self.cfg.LOSS.TYPE == "W_CE_DICE":
-            self.loss = DiceCELoss(
-                num_classes=2, # in detection the first channel is always binary, even if there are more classes in the classification channel
-                ndim=self.dims,
-                batch_dice=True,
-                separated_class_channel=self.separated_class_channel,
-                model_source=self.cfg.MODEL.SOURCE,
-                class_rebalance=self.cfg.LOSS.CLASS_REBALANCE,
-                ignore_index=self.cfg.LOSS.IGNORE_INDEX,
-                channel_weights = self.cfg.PROBLEM.DETECTION.DATA_CHANNEL_WEIGHTS,
-                class_weights=self.cfg.LOSS.CLASS_WEIGHTS,
-                w_dice=self.cfg.LOSS.WEIGHTS[0],
-                w_ce=self.cfg.LOSS.WEIGHTS[1],
-                device=self.device,
-            )
-
+        self.loss = detection_loss(
+            ndim=self.dims,
+            class_rebalance_within_channels=self.cfg.PROBLEM.DETECTION.CLASS_REBALANCE_WITHIN_CHANNELS,
+            separated_class_channel=self.separated_class_channel,
+            num_classes=self.cfg.DATA.N_CLASSES,
+            channel_weights = self.cfg.PROBLEM.DETECTION.DATA_CHANNEL_WEIGHTS,
+            class_rebalance=self.cfg.LOSS.CLASS_REBALANCE,
+            class_weights=self.cfg.LOSS.CLASS_WEIGHTS,
+            ignore_index=self.cfg.LOSS.IGNORE_INDEX,
+            device=self.device,
+        )
+    
         super().define_metrics()
 
     def metric_calculation(

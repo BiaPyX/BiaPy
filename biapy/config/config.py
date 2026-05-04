@@ -245,7 +245,7 @@ class Config:
         #  - "mse": mean squared error. Ref: https://pytorch.org/docs/stable/generated/torch.nn.MSELoss.html
         #  - "triplet": triplet loss. Ref: https://pytorch.org/docs/stable/generated/torch.nn.TripletMarginLoss.html
         _C.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES = []
-        # Wheter to apply a rebalancing strategy to the loss function to give more importance to underrepresented pixels within the channels. 
+        # Whether to apply a rebalancing strategy to the loss function to give more importance to underrepresented pixels within the channels. 
         # The weights are calculated automatically based on the number of pixels of each class per batch and directly in the loss computation.
         # For example, in the case of the "C" channel, which represents the contours of the instances, there are usually much less pixels representing
         # contours than pixels representing the background. With this option activated, the loss will give more importance to contour pixels to help
@@ -413,11 +413,11 @@ class Config:
         _C.PROBLEM.DETECTION.CHECK_POINTS_CREATED = True
         # Whether to save watershed check files
         _C.PROBLEM.DETECTION.DATA_CHECK_MW = False
-        # Wheter to apply a rebalancing strategy to the loss function to give more importance to underrepresented pixels within the channels. 
+        # Whether to apply a rebalancing strategy to the loss function to give more importance to underrepresented pixels within the channels. 
         # The weights are calculated automatically based on the number of pixels of each class per batch and directly in the loss computation.
         # In the specific case of detection, where there are usually much less pixels representing the center of the objects to detect than
-        # background pixels, with this option activated, the loss will give more importance to object pixels to help the model learn better
-        # to predict them.
+        # background pixels, with this option activated, the loss will give more importance to the pixels representing the center of the objects
+        # to help the model learn better to predict them.
         _C.PROBLEM.DETECTION.CLASS_REBALANCE_WITHIN_CHANNELS = True
         # Weights to be applied to the channels when doing detection with classes. Notice that these weights are not applied directly to the loss,
         # but to the predicted channels before calculating the loss. The length of the list must be equal to the number of channels. 
@@ -1423,10 +1423,7 @@ class Config:
         #       * "W_CE_DICE": CE and Dice (with a weight term on each one that must sum 1). Ref: https://www.kaggle.com/code/bigironsphere/loss-function-library-keras-pytorch
         #   * Instance segmentation: automatically set depending on the channels selected (PROBLEM.INSTANCE_SEG.DATA_CHANNELS). 
         #     It can be also set manually with PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES. 
-        #   * Detection:
-        #       * "CE" (default): cross entropy. Ref: https://pytorch.org/docs/stable/generated/torch.nn.CrossEntropyLoss.html
-        #       * "DICE": Dice loss. Ref: https://www.kaggle.com/code/bigironsphere/loss-function-library-keras-pytorch
-        #       * "W_CE_DICE": CE and Dice (with a weight term on each one that must sum 1). Ref: https://www.kaggle.com/code/bigironsphere/loss-function-library-keras-pytorch
+        #   * Detection: CE always used. Ref: https://pytorch.org/docs/stable/generated/torch.nn.CrossEntropyLoss.html
         #   * Denoising:
         #       * "MAE": mean absolute error (MAE or L1 loss). Ref: https://pytorch.org/docs/stable/generated/torch.nn.L1Loss.html#torch.nn.L1Loss
         #       * "MSE" (default): mean square error (MSE). Ref: https://pytorch.org/docs/stable/generated/torch.nn.MSELoss.html#torch.nn.MSELoss
@@ -1454,9 +1451,7 @@ class Config:
         #       * "W_MSE_SSIM": MSE and SSIM (with a weight term on each one that must sum 1).
         _C.LOSS.TYPE = ""
         # Weights to be applied in multiple loss combination cases, by multiplying the corresponding weight to each loss. For example, in the case of "W_CE_DICE", the final loss will be: 
-        # LOSS.WEIGHTS[0] * CE + LOSS.WEIGHTS[1] * DICE. The length of the list must be equal to the number of losses that are combined.   
-        # Notice that PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS and PROBLEM.DETECTION.DATA_CHANNEL_WEIGHTS are weights that are applied to the output channels of the model and not to the 
-        # losses, so they are different from these LOSS.WEIGHTS.
+        # LOSS.WEIGHTS[0] * CE + LOSS.WEIGHTS[1] * DICE. The length of the list must be equal to the number of losses that are combined.
         _C.LOSS.WEIGHTS = [1.0, 1.0]
         # To weight classes in an imbalanced dataset. Options available are:
         #   * 'none': no class rebalancing is applied

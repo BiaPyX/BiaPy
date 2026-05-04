@@ -194,7 +194,6 @@ class Semantic_Segmentation_Workflow(Base_Workflow):
             semantic_loss = CrossEntropyLoss_wrapper(
                 num_classes=self.cfg.DATA.N_CLASSES,
                 ndim=self.dims,
-                model_source=self.cfg.MODEL.SOURCE,
                 class_rebalance=self.cfg.LOSS.CLASS_REBALANCE,
                 class_weights=self.cfg.LOSS.CLASS_WEIGHTS,
                 ignore_index=self.cfg.LOSS.IGNORE_INDEX,

@@ -491,7 +491,7 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 channel_extra_opts = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0],
                 gt_channels_expected = self.gt_channels_expected,
                 n_classes=self.cfg.DATA.N_CLASSES,
-                class_rebalance=self.cfg.LOSS.CLASS_REBALANCE,
+                class_rebalance=self.cfg.PROBLEM.INSTANCE_SEG.CLASS_REBALANCE_WITHIN_CHANNELS,
                 class_weights=self.cfg.LOSS.CLASS_WEIGHTS,
                 ignore_index=self.cfg.LOSS.IGNORE_INDEX
             )
