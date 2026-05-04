@@ -2135,7 +2135,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     print("Found {} test classes".format(len(list_of_classes)))
             
         if cfg.TEST.BY_CHUNKS.ENABLE:
-            if cfg.PROBEM.TYPE not in ["SEMANTIC_SEG", "INSTANCE_SEG", "DETECTION"]:
+            if cfg.PROBLEM.TYPE not in ["SEMANTIC_SEG", "INSTANCE_SEG", "DETECTION"]:
                 raise ValueError("'TEST.BY_CHUNKS' can only be activated in 'SEMANTIC_SEG', 'INSTANCE_SEG' and 'DETECTION' workflows")
             if cfg.PROBLEM.NDIM == "2D":
                 raise ValueError("'TEST.BY_CHUNKS' can not be activated when 'PROBLEM.NDIM' is 2D")
@@ -2144,7 +2144,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                     "chunk_by_chunk",
                     "entire_pred",
                 ], "'TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE' needs to be in ['chunk_by_chunk', 'entire_pred']"
-            if cfg.PROBEM.TYPE == "INSTANCE_SEG":
+            if cfg.PROBLEM.TYPE == "INSTANCE_SEG":
                 if cfg.TEST.BY_CHUNKS.WORKFLOW_PROCESS.TYPE == 'chunk_by_chunk':
                     raise NotImplementedError("Chunk by chunk processing is not implemented yet for instance segmentation workflow")
             if len(cfg.DATA.TEST.INPUT_IMG_AXES_ORDER) < 3:
