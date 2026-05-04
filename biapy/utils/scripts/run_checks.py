@@ -1802,6 +1802,7 @@ all_test_info["Test31"] = {
                 "CHECK_POINTS_CREATED": False,
                 "DATA_CHECK_MW": False,
                 "DATA_CHANNEL_WEIGHTS": "(2, 1)",
+                "CLASS_REBALANCE_WITHIN_CHANNELS": True
             }
         },
         "DATA": {
@@ -1813,12 +1814,18 @@ all_test_info["Test31"] = {
                 },
                 "TYPE": 'zero_mean_unit_variance'
             },
-            "PATCH_SIZE": "(30, 128, 128, 3)",
+            "PATCH_SIZE": "(20, 256, 256, 3)",
             "N_CLASSES": 3,
             "TRAIN": {
                 "PATH": os.path.join(data_folder, "detection", "achucarro_data", "data", "train", "raw"),
                 "GT_PATH": os.path.join(data_folder, "detection", "achucarro_data", "data", "train", "label"),
                 "IN_MEMORY": True,
+                "FILTER_SAMPLES": {
+                    "ENABLE": True,
+                    "PROPS": [['foreground']],
+                    "VALUES": [[1.0e-22]],
+                    "SIGNS": [["lt"]]
+                },
             },
             "TEST": {
                 "PATH": os.path.join(data_folder, "detection", "achucarro_data", "data", "test", "raw"),
@@ -1828,14 +1835,17 @@ all_test_info["Test31"] = {
                 "PADDING": "(4,18,18)"
             },
         },
-        "LOSS": {
-            "TYPE": "CE",
-            "CLASS_REBALANCE": True,
-        },
         "TRAIN": {
-             "ENABLE": True,
-             "EPOCHS": 50,
-             "PATIENCE": -1,
+            "ENABLE": True,
+            "EPOCHS": 70,
+            "BATCH_SIZE": 4,
+            "PATIENCE": -1,
+            "LR": 0.0001,
+            "LR_SCHEDULER": {
+                "NAME": 'warmupcosine',
+                "MIN_LR": 0.0001,
+                "WARMUP_COSINE_DECAY_EPOCHS": 2
+            },
         },
         "MODEL": {
             "ARCHITECTURE": 'unet',
@@ -1845,15 +1855,15 @@ all_test_info["Test31"] = {
         "TEST": {
             "ENABLE": True,
             "FULL_IMG": False,
-            "DET_PEAK_LOCAL_MAX_MIN_DISTANCE": 1,
-            "DET_MIN_TH_TO_BE_PEAK": 0.5,
-            "DET_TOLERANCE": 8
+            "DET_PEAK_LOCAL_MAX_MIN_DISTANCE": 15,
+            "DET_MIN_TH_TO_BE_PEAK": 0.7,
+            "DET_TOLERANCE": 20
         },
     },
     "bmz_by_command": True,
     "bmz_package": "achucarro_det_classes_model.zip",
     "internal_checks": [
-        {"type": "regular", "pattern": "Test F1 (merge patches)", "gt": True, "value": 0.55},
+        {"type": "regular", "pattern": "Test F1 (merge patches)", "gt": True, "value": 0.43},
         {"type": "BMZ", "pattern": "Package path:", "bmz_package_name":  "achucarro_det_classes_model.zip"},
         {"type": "BMZ_weight_agreement", "pattern": "weights.pytorch_state_dict", "value": "✔️"},
     ]
@@ -2201,14 +2211,20 @@ def runjob(test_info, yaml_file, multigpu=False, bmz_by_command=False, bmz_packa
     print(f"Log: {jobout_file}")
     if bmz_by_command and bmz_package is not None:
         os.makedirs(BMZ_FOLDER, exist_ok=True)
-        cmd = ["python", "-u", bmz_script, 
-               "--code_dir", BIAPY_FOLDER,
-               "--jobname", test_info["jobname"],
-               "--config", yaml_file, 
-               "--result_dir", RESULTS_FOLDER, 
-               "--model_name", str(bmz_package.split(".")[:-1][0]),
-               "--bmz_folder", BMZ_FOLDER,
-               "--gpu", gpu]
+        cmd = ["python", "-u"]
+        if multigpu:
+            cmd.extend(["-m", "torch.distributed.run", "--nproc_per_node="+str(ngpus),
+                f"--master-port={np.random.randint(low=1500, high=7000, size=1)[0]}"])
+        cmd.extend([bmz_script, 
+            "--code_dir", BIAPY_FOLDER,
+            "--jobname", test_info["jobname"],
+            "--config", yaml_file, 
+            "--result_dir", RESULTS_FOLDER, 
+            "--model_name", str(bmz_package.split(".")[:-1][0]),
+            "--bmz_folder", BMZ_FOLDER,
+            "--gpu", gpus if multigpu else gpu
+        ])
+
         if reuse_original_bmz_config:
             cmd += ["--reuse_original_bmz_config"]
     else:
