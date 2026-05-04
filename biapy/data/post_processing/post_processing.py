@@ -865,11 +865,7 @@ def extract_points_in_predictions(
         lbl_cont += 1
 
     # Dilate the labels
-    new_data = dilation(
-        new_data,
-        iterations=1,
-        structure=ellipse_footprint_cpd,
-    )
+    new_data = dilation(new_data, footprint=ellipse_footprint_cpd)
 
     d_result["ids"] = ids
     first_tag = point_type
@@ -2369,7 +2365,7 @@ def detection_watershed(
     print("Dilating a bit the seeds . . .")
     seeds = seeds.squeeze()
     if all(x != 0 for x in first_dilation):
-        seeds += (dilation(seeds, structure=np.ones(first_dilation))).astype(np.uint8) # type: ignore
+        seeds += (dilation(seeds, footprint=np.ones(first_dilation))).astype(np.uint8) # type: ignore
 
     # Background seed
     seeds = label(seeds) # type: ignore
