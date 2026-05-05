@@ -1421,7 +1421,7 @@ class Config:
         # Weight decay
         _C.TRAIN.W_DECAY = 0.02
         # Coefficients used for computing running averages of gradient and its square. Used in ADAM and ADAMW optmizers
-        _C.TRAIN.OPT_BETAS = [(0.9, 0.999)]
+        _C.TRAIN.OPT_BETAS = [[0.9, 0.999]]
         # Batch size
         _C.TRAIN.BATCH_SIZE = 2
         # If memory or # gpus is limited, use this variable to maintain the effective batch size, which is

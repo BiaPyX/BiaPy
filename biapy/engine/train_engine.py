@@ -33,12 +33,12 @@ def train_one_epoch(
     device: torch.device,
     epoch: int,
     log_writer: Optional[TensorboardLogger] = None,
-    lr_scheduler: Optional[list[Optional[Scheduler]]] = None,
+    lr_scheduler: list[Optional[Scheduler]] = None,
     verbose: bool = False,
     memory_bank: Optional[MemoryBank] = None,
     total_iters: int=0,
     contrast_warmup_iters: int=0,
-    loss_names: Optional[list[str]] = None,
+    loss_names: list[str] = None,
 ):
     """
     Train the model for one epoch.
@@ -70,7 +70,7 @@ def train_one_epoch(
         Current epoch number.
     log_writer : TensorboardLogger, optional
         Logger for TensorBoard.
-    lr_scheduler : List[Scheduler], optional
+    lr_scheduler : List[Scheduler]
         Learning rate scheduler.
     verbose : bool, optional
         Verbosity flag.
@@ -91,13 +91,13 @@ def train_one_epoch(
     # Switch to training mode
     model.train(True)
     has_discriminator = hasattr(model, "discriminator") and model.discriminator is not None
-
+    lr_names = []
     # Ensure correct order of each epoch info by adding loss first
     metric_logger = MetricLogger(delimiter="  ", verbose=verbose)
     for loss_name in loss_names:
+        lr_name = "lr" + loss_name.strip("loss")
+        lr_names.append(lr_name)
         metric_logger.add_meter(loss_name, SmoothedValue())
-    for i in range(len(optimizer)):
-        lr_name = "lr" if i == 0 else f"lr_{i}" # MAYBE THIS NAME SHOULD BE BETTER
         metric_logger.add_meter(lr_name, SmoothedValue(window_size=1, fmt="{value:.6f}"))
 
     # Set up the header for logging
@@ -194,19 +194,39 @@ def train_one_epoch(
         else:
             metric_logger.meters[precalculated_metric_name].update(precalculated_metric)
 
-        # Forward pass scaling the loss
-        if (step + 1) % cfg.TRAIN.ACCUM_ITER == 0:
-            for i, (opt, loss_tensor) in enumerate(zip(optimizer, losses)):
-                loss_tensor = loss_tensor / cfg.TRAIN.ACCUM_ITER
+        # Question
+        # With ACCUM_ITER=4:
+        # Step 1: loss /= 4 → loss=15.4 → if (1%4==0)? No  → backward SKIPPED → grads: 0
+        # Step 2: loss /= 4 → loss=10.3 → if (2%4==0)? No  → backward SKIPPED → grads: 0
+        # Step 3: loss /= 4 → loss=12.1 → if (3%4==0)? No  → backward SKIPPED → grads: 0
+        # Step 4: loss /= 4 → loss=9.8  → if (4%4==0)? Yes → backward + step  → grads from step 4 only
 
-                if has_discriminator and i == 1:
-                    opt.zero_grad()
+        # Original code
+        # if (step + 1) % cfg.TRAIN.ACCUM_ITER == 0:
+        #     for i, (opt, loss_tensor) in enumerate(zip(optimizer, losses)):
+        #         loss_tensor = loss_tensor / cfg.TRAIN.ACCUM_ITER
+        #         if has_discriminator and i == 1:
+        #             opt.zero_grad()
+        #         loss_tensor.backward()
+        #         opt.step()  # update weight
+        #         opt.zero_grad()           
+        #         if lr_scheduler[i] and isinstance(lr_scheduler[i], OneCycleLR) and cfg.TRAIN.LR_SCHEDULER.NAME == "onecycle":
+        #             lr_scheduler[i].step()
 
-                loss_tensor.backward()
-                opt.step()  # update weight
-                opt.zero_grad()         
-                if lr_scheduler[i] and isinstance(lr_scheduler[i], OneCycleLR) and cfg.TRAIN.LR_SCHEDULER.NAME == "onecycle":
-                    lr_scheduler[i].step()
+        # With ACCUM_ITER=4:
+        # Step 1: loss/4 → loss.backward() → grads accumulate   (no step)
+        # Step 2: loss/4 → loss.backward() → grads accumulate   (no step)  
+        # Step 3: loss/4 → loss.backward() → grads accumulate   (no step)
+        # Step 4: loss/4 → loss.backward() → step() + zero_grad()  (all 4 batches)
+
+        # New code
+        should_step = (step + 1) % cfg.TRAIN.ACCUM_ITER == 0
+        for i, (opt, loss_tensor) in enumerate(zip(optimizer, losses)):
+            scaled = loss_tensor / cfg.TRAIN.ACCUM_ITER
+            scaled.backward()
+            if should_step:
+                opt.step()
+                opt.zero_grad() 
 
         if device.type != "cpu":
             getattr(torch, device.type).synchronize()
@@ -222,15 +242,14 @@ def train_one_epoch(
 
         # Update lr in loggers
         for i, opt in enumerate(optimizer):
-            lr_name = "lr" if i == 0 else f"lr_{i}" # tis name?
             max_lr = 0.0
             for group in opt.param_groups:
                 max_lr = max(max_lr, group["lr"])
             if step == 0:
-                metric_logger.add_meter(lr_name, SmoothedValue(window_size=1, fmt="{value:.6f}"))
-            metric_logger.update(**{lr_name: max_lr})
+                metric_logger.add_meter(lr_names[i], SmoothedValue(window_size=1, fmt="{value:.6f}"))
+            metric_logger.update(**{lr_names[i]: max_lr})
             if log_writer:
-                log_writer.update(head="opt", **{lr_name: max_lr})
+                log_writer.update(head="opt", **{lr_names[i]: max_lr})
 
     # Gather the stats from all processes
     metric_logger.synchronize_between_processes()
@@ -248,9 +267,9 @@ def evaluate(
     prepare_targets: Callable,
     epoch: int,
     data_loader: DataLoader,
-    lr_scheduler: Optional[list[Optional[Scheduler]]] = None,
+    lr_scheduler: list[Optional[Scheduler]] = None,
     memory_bank: Optional[MemoryBank] = None,
-    loss_names: Optional[list[str]] = None,
+    loss_names: list[str] = None,
 ):
     """
     Evaluate the model on the validation set.
@@ -314,12 +333,11 @@ def evaluate(
             d_fake_for_g = model.discriminator(fake_img)
             loss_g = loss_function.forward_generator(fake_img, targets, d_fake_for_g)
             losses.append(loss_g)
-
             d_real = model.discriminator(targets)
             d_fake = model.discriminator(fake_img.detach())
             loss_d = loss_function.forward_discriminator(d_real, d_fake)
             losses.append(loss_d)
-            
+
         elif memory_bank is not None:
             with_embed = False
 

@@ -2723,7 +2723,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     assert cfg.MODEL.OUT_CHECKPOINT_FORMAT in ["pth", "safetensors"], "MODEL.OUT_CHECKPOINT_FORMAT not in ['pth', 'safetensors']"
 
     ### Train ###
-
+    ## Optimizers ##
     if not isinstance(cfg.TRAIN.OPTIMIZER, list):
         raise ValueError("'TRAIN.OPTIMIZER' must be a list")
 
@@ -2742,30 +2742,39 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "Multiple optimizers were provided but no discriminator architecture is configured. "
             "Either set a discriminator (e.g. 'MODEL.NAFNET.ARCHITECTURE_D') or reduce 'TRAIN.OPTIMIZER' to a single entry."
         )
-
-    if not isinstance(cfg.TRAIN.LR, list):
-        raise ValueError("'TRAIN.LR' must be a list")
-    
-    if not isinstance(cfg.TRAIN.OPT_BETAS, list):
-        raise ValueError("'TRAIN.OPT_BETAS' must be a list")
-    
-    if len(cfg.TRAIN.OPTIMIZER) != len(cfg.TRAIN.LR):
-        raise ValueError("'TRAIN.OPTIMIZER' and 'TRAIN.LR' must have the same length")
-
-    # this should be == len only and below
-    if len(cfg.TRAIN.OPT_BETAS) not in [1, len(cfg.TRAIN.OPTIMIZER)]:
-        raise ValueError("'TRAIN.OPT_BETAS' must have length 1 or match 'TRAIN.OPTIMIZER' length")
-    # This     
-    if len(cfg.TRAIN.OPT_BETAS) == 1 and len(cfg.TRAIN.OPTIMIZER) > 1:
-        opts.extend(["TRAIN.OPT_BETAS", cfg.TRAIN.OPT_BETAS * len(cfg.TRAIN.OPTIMIZER)])
-
-    for beta_pair in cfg.TRAIN.OPT_BETAS:
-        if not isinstance(beta_pair, (list, tuple)) or len(beta_pair) != 2:
-            raise ValueError("Each entry in 'TRAIN.OPT_BETAS' must be a tuple/list of length 2")
-
     for opt in cfg.TRAIN.OPTIMIZER:
         if opt not in ["SGD", "ADAM", "ADAMW"]:
             raise ValueError("'TRAIN.OPTIMIZER' values must be in ['SGD', 'ADAM', 'ADAMW']")
+    ## LR ##
+    if not isinstance(cfg.TRAIN.LR, list):
+        raise ValueError("'TRAIN.LR' must be a list")
+    if len(cfg.TRAIN.OPTIMIZER) != len(cfg.TRAIN.LR):
+        raise ValueError("'TRAIN.OPTIMIZER' and 'TRAIN.LR' must have the same length")
+
+    ## Betas ##
+    if not isinstance(cfg.TRAIN.OPT_BETAS, list):
+        raise ValueError("'TRAIN.OPT_BETAS' must be a list")
+    for idx, beta_pair in enumerate(cfg.TRAIN.OPT_BETAS):
+        if isinstance(beta_pair, str):
+            raise ValueError(
+                f"Config Error in 'TRAIN.OPT_BETAS': Found a string '{beta_pair}'. "
+                f"You must use nested square brackets `[]`. "
+                f"Change it to: [[0.9, 0.999]]"
+            )
+        
+        if not isinstance(beta_pair, list):
+            raise ValueError(
+                f"Config Error: Each item in 'TRAIN.OPT_BETAS' must be a list. "
+                f"Got {type(beta_pair).__name__} at index {idx}."
+            )
+    if len(cfg.TRAIN.OPT_BETAS) not in [1, len(cfg.TRAIN.OPTIMIZER)]:
+        raise ValueError("'TRAIN.OPT_BETAS' must have length 1 or match 'TRAIN.OPTIMIZER' length")
+    if len(cfg.TRAIN.OPT_BETAS) == 1 and len(cfg.TRAIN.OPTIMIZER) > 1:
+        cfg.TRAIN.OPT_BETAS = cfg.TRAIN.OPT_BETAS * len(cfg.TRAIN.OPTIMIZER)
+    for beta_pair in cfg.TRAIN.OPT_BETAS:
+        if len(beta_pair) != 2:
+            raise ValueError("Each entry in 'TRAIN.OPT_BETAS' must be a tuple/list of length 2")
+
 
     if cfg.TRAIN.ENABLE and cfg.TRAIN.LR_SCHEDULER.NAME != "":
         if cfg.TRAIN.LR_SCHEDULER.NAME not in [
@@ -3111,14 +3120,13 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict):
             old_cfg["TRAIN"]["OPTIMIZER"] = [old_cfg["TRAIN"]["OPTIMIZER"]]
         if "LR" in old_cfg["TRAIN"] and isinstance(old_cfg["TRAIN"]["LR"], float):
             old_cfg["TRAIN"]["LR"] = [old_cfg["TRAIN"]["LR"]]
-        if "OPT_BETAS" in old_cfg["TRAIN"]:
-            if isinstance(old_cfg["TRAIN"]["OPT_BETAS"], tuple):
-                old_cfg["TRAIN"]["OPT_BETAS"] = [list(old_cfg["TRAIN"]["OPT_BETAS"])]
-            elif isinstance(old_cfg["TRAIN"]["OPT_BETAS"], list) and not isinstance(old_cfg["TRAIN"]["OPT_BETAS"][0], list):
-                old_cfg["TRAIN"]["OPT_BETAS"] = [old_cfg["TRAIN"]["OPT_BETAS"]]
+        if "OPT_BETAS" in old_cfg["TRAIN"] and isinstance(old_cfg["TRAIN"]["OPT_BETAS"], str):
+                clean_str = old_cfg["TRAIN"]["OPT_BETAS"].strip().strip("()")
+                number_list = [float(x.strip()) for x in clean_str.split(",")]
+                old_cfg["TRAIN"]["OPT_BETAS"] = [number_list]
         if "LR_SCHEDULER" in old_cfg["TRAIN"]:
             if "MIN_LR" in old_cfg["TRAIN"]["LR_SCHEDULER"] and isinstance(old_cfg["TRAIN"]["LR_SCHEDULER"]["MIN_LR"], float):
-                old_cfg["TRAIN"]["LR_SCHEDULER"]["MIN_LR"] = [old_cfg["TRAIN"]["LR_SCHEDULER"]["MIN_LR"]]
+                old_cfg["TRAIN"]["LR_SCHEDULER"]["MIN_LR"] = [old_cfg["TRAIN"]["LR_SCHEDULER"]["MIN_LR"]] * len(old_cfg["TRAIN"]["OPTIMIZER"])
         # and what about the rest, min lr optimizer?
     if "TEST" in old_cfg:
         if "STATS" in old_cfg["TEST"]:
