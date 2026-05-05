@@ -2166,7 +2166,7 @@ class SpatialEmbLoss(nn.Module):
         iou = iou / B
         return loss + prediction.sum() * 0, float(iou), "IoU" # keep graph identical to originals
 
-class VGGLoss(nn.Module):
+class VGG(nn.Module):
     """Perceptual loss based on VGG16 feature activations.
 
     This loss compares intermediate VGG feature maps of prediction and target
@@ -2241,7 +2241,7 @@ class VGGLoss(nn.Module):
         target_vgg = self.vgg(target)
         return self.loss(pred_vgg, target_vgg)
 
-class ComposedGANLoss(nn.Module):
+class CycleGanLoss(nn.Module):
     """Weighted composite loss for generator and discriminator training.
 
     This class combines multiple objectives for GAN-based image restoration:
@@ -2253,7 +2253,7 @@ class ComposedGANLoss(nn.Module):
     - SSIM term
 
     Each term is controlled by configuration weights under
-    ``LOSS.COMPOSED_GAN``. Heavy components (VGG/SSIM modules) are created only
+    ``LOSS.CYCLEGAN``. Heavy components (VGG/SSIM modules) are created only
     when their weight is greater than zero.
 
     References
@@ -2277,21 +2277,21 @@ class ComposedGANLoss(nn.Module):
         Parameters
         ----------
         cfg : yacs.config.CfgNode
-                Global configuration node. Uses ``cfg.LOSS.COMPOSED_GAN`` weights.
+                Global configuration node. Uses ``cfg.LOSS.CYCLEGAN`` weights.
         device : torch.device
                 Device where loss terms are computed.
         """
         super().__init__()
         self.device = device
-        self.w_gan = cfg.LOSS.COMPOSED_GAN.LAMBDA_GAN
-        self.w_l1 = cfg.LOSS.COMPOSED_GAN.LAMBDA_RECON
-        self.w_vgg = cfg.LOSS.COMPOSED_GAN.ALPHA_PERCEPTUAL
-        self.w_ssim = cfg.LOSS.COMPOSED_GAN.GAMMA_SSIM
-        self.w_mse = cfg.LOSS.COMPOSED_GAN.DELTA_MSE
+        self.w_gan = cfg.LOSS.CYCLEGAN.LAMBDA_GAN
+        self.w_l1 = cfg.LOSS.CYCLEGAN.LAMBDA_RECON
+        self.w_vgg = cfg.LOSS.CYCLEGAN.ALPHA_PERCEPTUAL
+        self.w_ssim = cfg.LOSS.CYCLEGAN.GAMMA_SSIM
+        self.w_mse = cfg.LOSS.CYCLEGAN.DELTA_MSE
 
         # Dont load the vgg if not       
         if self.w_vgg > 0:
-            self.vgg = VGGLoss(device)
+            self.vgg = VGG(device)
         if self.w_ssim > 0:
             self.ssim = StructuralSimilarityIndexMeasure(data_range=1.0).to(device)
             

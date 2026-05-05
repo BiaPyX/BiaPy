@@ -2274,7 +2274,7 @@ try:
         biapy_config['TRAIN']['PATIENCE'] = -1
         biapy_config['TRAIN']['LR_SCHEDULER'] = {}
         biapy_config['TRAIN']['LR_SCHEDULER']['NAME'] = 'onecycle'
-        biapy_config['TRAIN']['LR'] = [0.001]
+        biapy_config['TRAIN']['LR'] = 0.001
         biapy_config['TRAIN']['BATCH_SIZE'] = 16
 
         biapy_config['MODEL']['ARCHITECTURE'] = 'resunet'
@@ -3334,7 +3334,7 @@ try:
         biapy_config['TRAIN']['EPOCHS'] = 100
         biapy_config['TRAIN']['BATCH_SIZE'] = 1
         biapy_config['TRAIN']['PATIENCE'] = 20
-        biapy_config['TRAIN']['LR'] = [0.0001]
+        biapy_config['TRAIN']['LR'] = 0.0001
         biapy_config['TRAIN']['LR_SCHEDULER'] = {}
         biapy_config['TRAIN']['LR_SCHEDULER']['NAME'] = 'warmupcosine'
         biapy_config['TRAIN']['LR_SCHEDULER']['MIN_LR'] = 5.E-6
@@ -3449,8 +3449,8 @@ try:
         biapy_config['TRAIN']['ENABLE'] = True
         biapy_config['TRAIN']['EPOCHS'] = 80
         biapy_config['TRAIN']['PATIENCE'] = -1
-        biapy_config['TRAIN']['OPTIMIZER'] = ["ADAMW"]
-        biapy_config['TRAIN']['LR'] = [1.E-4]
+        biapy_config['TRAIN']['OPTIMIZER'] = "ADAMW"
+        biapy_config['TRAIN']['LR'] = 1.E-4
         biapy_config['TRAIN']['LR_SCHEDULER'] = {}
         biapy_config['TRAIN']['LR_SCHEDULER']['NAME'] = 'warmupcosine'
         biapy_config['TRAIN']['LR_SCHEDULER']['MIN_LR'] = 5.E-6

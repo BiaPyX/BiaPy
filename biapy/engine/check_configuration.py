@@ -1242,7 +1242,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     ], "LOSS.CLASS_REBALANCE not in ['none', 'auto'] for INSTANCE_SEG workflow"
     elif cfg.PROBLEM.TYPE == "DENOISING":
         loss = "MSE" if cfg.LOSS.TYPE == "" else cfg.LOSS.TYPE
-        assert loss in ["MSE", "COMPOSED_GAN"], "LOSS.TYPE must be in ['MSE', 'COMPOSED_GAN'] for DENOISING"
+        assert loss in ["MSE", "CYCLEGAN"], "LOSS.TYPE must be in ['MSE', 'CYCLEGAN'] for DENOISING"
     elif cfg.PROBLEM.TYPE == "CLASSIFICATION":
         loss = "CE" if cfg.LOSS.TYPE == "" else cfg.LOSS.TYPE
         assert loss == "CE", "LOSS.TYPE must be 'CE'"
@@ -1797,10 +1797,10 @@ def check_configuration(cfg, jobname, check_data_paths=True):
 
     #### Denoising ####
     elif cfg.PROBLEM.TYPE == "DENOISING":
-        if cfg.PROBLEM.DENOISING.LOAD_GT_DATA or cfg.LOSS.TYPE == "COMPOSED_GAN":
+        if cfg.PROBLEM.DENOISING.LOAD_GT_DATA or cfg.LOSS.TYPE == "CYCLEGAN":
             if not cfg.DATA.TRAIN.GT_PATH and not cfg.DATA.TRAIN.INPUT_ZARR_MULTIPLE_DATA:
                 raise ValueError(
-                    "Supervised denoising (e.g., with COMPOSED_GAN or LOAD_GT_DATA=True) "
+                    "Supervised denoising (e.g., with CYCLEGAN or LOAD_GT_DATA=True) "
                     "requires ground truth. 'DATA.TRAIN.GT_PATH' must be provided."
                 )
         else:
@@ -2723,18 +2723,41 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     assert cfg.MODEL.OUT_CHECKPOINT_FORMAT in ["pth", "safetensors"], "MODEL.OUT_CHECKPOINT_FORMAT not in ['pth', 'safetensors']"
 
     ### Train ###
+
     if not isinstance(cfg.TRAIN.OPTIMIZER, list):
         raise ValueError("'TRAIN.OPTIMIZER' must be a list")
+
+    # discriminator_configured = False
+    if cfg.MODEL.ARCHITECTURE in ['nafnet'] and cfg.MODEL.NAFNET.ARCHITECTURE_D != "":
+        # discriminator_configured = True
+        if len(cfg.TRAIN.OPTIMIZER) != 2:
+            raise ValueError(
+                f"Configuration mismatch: You requested {len(cfg.TRAIN.OPTIMIZER)} optimizers, "
+                f"but the model has 2 parameter group(s). "
+                f"Check your TRAIN.OPTIMIZER list in the config."
+            )
+        
+    elif len(cfg.TRAIN.OPTIMIZER) > 1:
+        raise ValueError(
+            "Multiple optimizers were provided but no discriminator architecture is configured. "
+            "Either set a discriminator (e.g. 'MODEL.NAFNET.ARCHITECTURE_D') or reduce 'TRAIN.OPTIMIZER' to a single entry."
+        )
+
     if not isinstance(cfg.TRAIN.LR, list):
         raise ValueError("'TRAIN.LR' must be a list")
+    
     if not isinstance(cfg.TRAIN.OPT_BETAS, list):
         raise ValueError("'TRAIN.OPT_BETAS' must be a list")
+    
     if len(cfg.TRAIN.OPTIMIZER) != len(cfg.TRAIN.LR):
         raise ValueError("'TRAIN.OPTIMIZER' and 'TRAIN.LR' must have the same length")
-    print(cfg.TRAIN.OPT_BETAS)
-    print(len(cfg.TRAIN.OPT_BETAS))
+
+    # this should be == len only and below
     if len(cfg.TRAIN.OPT_BETAS) not in [1, len(cfg.TRAIN.OPTIMIZER)]:
         raise ValueError("'TRAIN.OPT_BETAS' must have length 1 or match 'TRAIN.OPTIMIZER' length")
+    # This     
+    if len(cfg.TRAIN.OPT_BETAS) == 1 and len(cfg.TRAIN.OPTIMIZER) > 1:
+        opts.extend(["TRAIN.OPT_BETAS", cfg.TRAIN.OPT_BETAS * len(cfg.TRAIN.OPTIMIZER)])
 
     for beta_pair in cfg.TRAIN.OPT_BETAS:
         if not isinstance(beta_pair, (list, tuple)) or len(beta_pair) != 2:
@@ -2751,7 +2774,22 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "onecycle",
         ]:
             raise ValueError("'TRAIN.LR_SCHEDULER.NAME' must be in ['reduceonplateau', 'warmupcosine', 'onecycle']")
-        if cfg.TRAIN.LR_SCHEDULER.MIN_LR == -1.0 and cfg.TRAIN.LR_SCHEDULER.NAME != "onecycle":
+        if cfg.TRAIN.LR_SCHEDULER.NAME != "onecycle":
+            if not isinstance(cfg.TRAIN.LR_SCHEDULER.MIN_LR, list):
+                raise ValueError("'TRAIN.LR_SCHEDULER.MIN_LR' must be a list")
+            # same here?
+            if len(cfg.TRAIN.LR_SCHEDULER.MIN_LR) not in [1, len(cfg.TRAIN.OPTIMIZER)]:
+                raise ValueError("'TRAIN.LR_SCHEDULER.MIN_LR' must have length 1 or match 'TRAIN.OPTIMIZER' length")
+            if len(cfg.TRAIN.LR_SCHEDULER.MIN_LR) == 1 and len(cfg.TRAIN.OPTIMIZER) > 1:
+                opts.extend(["TRAIN.LR_SCHEDULER.MIN_LR", cfg.TRAIN.LR_SCHEDULER.MIN_LR * len(cfg.TRAIN.OPTIMIZER)])
+            if all(x == -1.0 for x in cfg.TRAIN.LR_SCHEDULER.MIN_LR):
+                raise ValueError(
+                    "'TRAIN.LR_SCHEDULER.MIN_LR' needs to be set when 'TRAIN.LR_SCHEDULER.NAME' is between ['reduceonplateau', 'warmupcosine']"
+                )
+        elif len(cfg.TRAIN.LR_SCHEDULER.MIN_LR) > 1 and len(cfg.TRAIN.LR_SCHEDULER.MIN_LR) != len(cfg.TRAIN.OPTIMIZER):
+            raise ValueError("'TRAIN.LR_SCHEDULER.MIN_LR' must have length 1 or match 'TRAIN.OPTIMIZER' length")
+
+        if cfg.TRAIN.LR_SCHEDULER.NAME != "onecycle" and all(x == -1.0 for x in cfg.TRAIN.LR_SCHEDULER.MIN_LR):
             raise ValueError(
                 "'TRAIN.LR_SCHEDULER.MIN_LR' needs to be set when 'TRAIN.LR_SCHEDULER.NAME' is between ['reduceonplateau', 'warmupcosine']"
             )
@@ -3001,6 +3039,7 @@ def compare_configurations_without_model(actual_cfg, old_cfg, header_message="",
         "PROBLEM.INSTANCE_SEG.DATA_CHANNELS",
         "PROBLEM.SUPER_RESOLUTION.UPSCALING",
         "DATA.N_CLASSES",
+        "TRAIN.OPTIMIZER", # yeah not so sure how many
     ]
 
     def get_attribute_recursive(var, attr):
@@ -3067,6 +3106,20 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict):
     new_cfg : dict
         Updated configuration to the current BiaPy version.
     """
+    if "TRAIN" in old_cfg:
+        if "OPTIMIZER" in old_cfg["TRAIN"] and isinstance(old_cfg["TRAIN"]["OPTIMIZER"], str):
+            old_cfg["TRAIN"]["OPTIMIZER"] = [old_cfg["TRAIN"]["OPTIMIZER"]]
+        if "LR" in old_cfg["TRAIN"] and isinstance(old_cfg["TRAIN"]["LR"], float):
+            old_cfg["TRAIN"]["LR"] = [old_cfg["TRAIN"]["LR"]]
+        if "OPT_BETAS" in old_cfg["TRAIN"]:
+            if isinstance(old_cfg["TRAIN"]["OPT_BETAS"], tuple):
+                old_cfg["TRAIN"]["OPT_BETAS"] = [list(old_cfg["TRAIN"]["OPT_BETAS"])]
+            elif isinstance(old_cfg["TRAIN"]["OPT_BETAS"], list) and not isinstance(old_cfg["TRAIN"]["OPT_BETAS"][0], list):
+                old_cfg["TRAIN"]["OPT_BETAS"] = [old_cfg["TRAIN"]["OPT_BETAS"]]
+        if "LR_SCHEDULER" in old_cfg["TRAIN"]:
+            if "MIN_LR" in old_cfg["TRAIN"]["LR_SCHEDULER"] and isinstance(old_cfg["TRAIN"]["LR_SCHEDULER"]["MIN_LR"], float):
+                old_cfg["TRAIN"]["LR_SCHEDULER"]["MIN_LR"] = [old_cfg["TRAIN"]["LR_SCHEDULER"]["MIN_LR"]]
+        # and what about the rest, min lr optimizer?
     if "TEST" in old_cfg:
         if "STATS" in old_cfg["TEST"]:
             full_image = old_cfg["TEST"]["STATS"]["FULL_IMG"]

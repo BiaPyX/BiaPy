@@ -1168,8 +1168,6 @@ class Config:
         #   * Classification: 'simple_cnn', 'vit', 'efficientnet_b[0-7]' (only 2D)
         #   * Image to image: 'edsr', 'rcan', 'dfcan', 'wdsr', 'unet', 'resunet', 'resunet++', 'seunet', 'resunet_se', 'attention_unet', 'unetr', 'multiresunet', 'unext_v1', 'unext_v2'
         _C.MODEL.ARCHITECTURE = "unet"
-        # Architecture of the network. Possible values are:
-        #   * 'patchgan'
         # Number of feature maps on each level of the network.
         _C.MODEL.FEATURE_MAPS = [16, 32, 64, 128, 256]
         # Values to make the dropout with. Set to 0 to prevent dropout. When using it with 'ViT' or 'unetr'
@@ -1396,18 +1394,18 @@ class Config:
         _C.LOSS.CONTRAST.PIXEL_UPD_FREQ = 10
 
         # Fine-grained GAN composition. Set any weight to 0.0 to disable that term.
-        # Used when LOSS.TYPE == "COMPOSED_GAN".
-        _C.LOSS.COMPOSED_GAN = CN()
+        # Used when LOSS.TYPE == "CYCLEGAN".
+        _C.LOSS.CYCLEGAN = CN()
         # Weight for adversarial BCE term.
-        _C.LOSS.COMPOSED_GAN.LAMBDA_GAN = 1.0
+        _C.LOSS.CYCLEGAN.LAMBDA_GAN = 1.0
         # Weight for L1 reconstruction term.
-        _C.LOSS.COMPOSED_GAN.LAMBDA_RECON = 10.0
+        _C.LOSS.CYCLEGAN.LAMBDA_RECON = 10.0
         # Weight for MSE reconstruction term.
-        _C.LOSS.COMPOSED_GAN.DELTA_MSE = 0.0
+        _C.LOSS.CYCLEGAN.DELTA_MSE = 0.0
         # Weight for VGG perceptual term.
-        _C.LOSS.COMPOSED_GAN.ALPHA_PERCEPTUAL = 0.0
+        _C.LOSS.CYCLEGAN.ALPHA_PERCEPTUAL = 0.0
         # Weight for SSIM term.
-        _C.LOSS.COMPOSED_GAN.GAMMA_SSIM = 1.0
+        _C.LOSS.CYCLEGAN.GAMMA_SSIM = 1.0
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # Training phase
@@ -1449,7 +1447,7 @@ class Config:
         _C.TRAIN.LR_SCHEDULER = CN()
         _C.TRAIN.LR_SCHEDULER.NAME = ""  # Possible options: 'warmupcosine', 'reduceonplateau', 'onecycle'
         # Lower bound on the learning rate used in 'warmupcosine' and 'reduceonplateau'
-        _C.TRAIN.LR_SCHEDULER.MIN_LR = -1.0
+        _C.TRAIN.LR_SCHEDULER.MIN_LR = [-1.0]
         # Factor by which the learning rate will be reduced
         _C.TRAIN.LR_SCHEDULER.REDUCEONPLATEAU_FACTOR = 0.5
         # Number of epochs with no improvement after which learning rate will be reduced. Need to be less than 'TRAIN.PATIENCE'

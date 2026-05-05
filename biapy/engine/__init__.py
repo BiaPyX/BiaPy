@@ -59,19 +59,11 @@ def prepare_optimizer(
     else:
         param_groups = [[p for p in model_without_ddp.parameters()]]
 
-    ## Not quite sure if this is the best place to do this
-    if len(cfg.TRAIN.OPTIMIZER) != len(param_groups):
-        raise ValueError(
-            f"Configuration mismatch: You requested {len(cfg.TRAIN.OPTIMIZER)} optimizers, "
-            f"but the model has {len(param_groups)} parameter group(s). "
-            f"Check your TRAIN.OPTIMIZER list in the config."
-        )
-
     for i in range(len(cfg.TRAIN.OPTIMIZER)):
-        lr = cfg.TRAIN.LR if cfg.TRAIN.LR_SCHEDULER.NAME != "warmupcosine" else [cfg.TRAIN.LR_SCHEDULER.MIN_LR] * len(cfg.TRAIN.LR)
+        lr = cfg.TRAIN.LR if cfg.TRAIN.LR_SCHEDULER.NAME != "warmupcosine" else cfg.TRAIN.LR_SCHEDULER.MIN_LR
         opt_args = {}
         if cfg.TRAIN.OPTIMIZER[i] in ["ADAM", "ADAMW"]:
-            opt_args["betas"] = cfg.TRAIN.OPT_BETAS[i] if i < len(cfg.TRAIN.OPT_BETAS) else cfg.TRAIN.OPT_BETAS[0]
+            opt_args["betas"] = cfg.TRAIN.OPT_BETAS[i]
         optimizer = timm.optim.create_optimizer_v2(
             param_groups[i],
             opt=cfg.TRAIN.OPTIMIZER[i],
@@ -90,12 +82,12 @@ def prepare_optimizer(
                     optimizer,
                     patience=cfg.TRAIN.LR_SCHEDULER.REDUCEONPLATEAU_PATIENCE,
                     factor=cfg.TRAIN.LR_SCHEDULER.REDUCEONPLATEAU_FACTOR,
-                    min_lr=cfg.TRAIN.LR_SCHEDULER.MIN_LR,
+                    min_lr=cfg.TRAIN.LR_SCHEDULER.MIN_LR[i],
                 )
             elif cfg.TRAIN.LR_SCHEDULER.NAME == "warmupcosine":
                 lr_scheduler = WarmUpCosineDecayScheduler(
                     lr=cfg.TRAIN.LR[i],
-                    min_lr=cfg.TRAIN.LR_SCHEDULER.MIN_LR,
+                    min_lr=cfg.TRAIN.LR_SCHEDULER.MIN_LR[i],
                     warmup_epochs=cfg.TRAIN.LR_SCHEDULER.WARMUP_COSINE_DECAY_EPOCHS,
                     epochs=cfg.TRAIN.EPOCHS,
                 )

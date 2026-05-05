@@ -346,7 +346,7 @@ def save_model(cfg, biapy_version, jobname, epoch, model_without_ddp, optimizer,
         to_save = {
             "model_build_kwargs": model_build_kwargs,
             "model": model_without_ddp.state_dict(),
-            "optimizer": [opt.state_dict() for opt in optimizer], # should i check if none? if i leave empty it uses default.
+            "optimizer": [opt.state_dict() for opt in optimizer],
             "epoch": epoch,
             "cfg": cfg,
             "biapy_version": biapy_version,
@@ -553,23 +553,22 @@ def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=Non
         model_without_ddp.load_state_dict(filtered_state_dict, strict=False)
 
     print("Model weights loaded!")
-
     if "discriminator_state_dict" in checkpoint:
         if hasattr(model_without_ddp, 'discriminator') and model_without_ddp.discriminator is not None:
-            # We use strict=False just in case there are minor architecture changes
             model_without_ddp.discriminator.load_state_dict(checkpoint["discriminator_state_dict"], strict=False)
             print("Discriminator weights loaded!")
-    
+
     if cfg.MODEL.LOAD_CHECKPOINT_ONLY_WEIGHTS:
         return start_epoch, resume
 
     # Load also opt, epoch and scaler info
     if "optimizer" in checkpoint and optimizer is not None:
-        # im leaving this for prior non list optimizers for backward compatibility,
+        # Backward compatibility: checkpoints are not converted in check_configuration.
         checkpoint_optimizer = checkpoint["optimizer"]
         if isinstance(checkpoint_optimizer, dict):
             checkpoint_optimizer = [checkpoint_optimizer]
 
+        # I probably have to check length is the same in here. Right? 
         loaded_optimizers = 0
         for opt, opt_state in zip(optimizer, checkpoint_optimizer):
             opt.load_state_dict(opt_state)

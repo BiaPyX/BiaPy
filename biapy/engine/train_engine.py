@@ -38,6 +38,7 @@ def train_one_epoch(
     memory_bank: Optional[MemoryBank] = None,
     total_iters: int=0,
     contrast_warmup_iters: int=0,
+    loss_names: Optional[list[str]] = None,
 ):
     """
     Train the model for one epoch.
@@ -90,13 +91,14 @@ def train_one_epoch(
     # Switch to training mode
     model.train(True)
     has_discriminator = hasattr(model, "discriminator") and model.discriminator is not None
-    lr_scheduler = [None] * len(optimizer) if lr_scheduler is None else lr_scheduler
 
     # Ensure correct order of each epoch info by adding loss first
     metric_logger = MetricLogger(delimiter="  ", verbose=verbose)
-    for i in range(len(optimizer)):
-        loss_name = "loss" if i == 0 else f"loss_{i}"
+    for loss_name in loss_names:
         metric_logger.add_meter(loss_name, SmoothedValue())
+    for i in range(len(optimizer)):
+        lr_name = "lr" if i == 0 else f"lr_{i}" # MAYBE THIS NAME SHOULD BE BETTER
+        metric_logger.add_meter(lr_name, SmoothedValue(window_size=1, fmt="{value:.6f}"))
 
     # Set up the header for logging
     header = "Epoch: [{}]".format(epoch + 1)
@@ -131,13 +133,18 @@ def train_one_epoch(
 
         # Loss function call
         losses = []
-        if has_discriminator and len(optimizer) > 1:
+        if has_discriminator:
             fake_img = outputs["pred"] if isinstance(outputs, dict) else outputs
             fake_img = torch.clamp(fake_img, 0, 1)
 
+            # Avoid accumulating discriminator gradients during generator loss.
+            for p in model.discriminator.parameters():
+                p.requires_grad_(False)
             d_fake_for_g = model.discriminator(fake_img)
             loss_g = loss_function.forward_generator(fake_img, targets, d_fake_for_g)
             losses.append(loss_g)
+            for p in model.discriminator.parameters():
+                p.requires_grad_(True)
 
             d_real = model.discriminator(targets)
             d_fake = model.discriminator(fake_img.detach())
@@ -168,7 +175,7 @@ def train_one_epoch(
             loss = loss_function(outputs, targets)
             losses.append(loss)
 
-        # Separate metric if precalculated inside the loss (e.g. Embedding loss)
+        # Separate metric if precalculated inside the loss (e.g. Embedding loss) 
         precalculated_metric, precalculated_metric_name = None, None
         if isinstance(losses[0], tuple):
             precalculated_metric = losses[0][1]
@@ -197,8 +204,7 @@ def train_one_epoch(
 
                 loss_tensor.backward()
                 opt.step()  # update weight
-                opt.zero_grad()
-                
+                opt.zero_grad()         
                 if lr_scheduler[i] and isinstance(lr_scheduler[i], OneCycleLR) and cfg.TRAIN.LR_SCHEDULER.NAME == "onecycle":
                     lr_scheduler[i].step()
 
@@ -207,8 +213,8 @@ def train_one_epoch(
 
         # Update loss in loggers
         for i, loss_tensor in enumerate(losses):
-            loss_name = "loss" if i == 0 else f"loss_{i}"
-            val = loss_tensor.item() * cfg.TRAIN.ACCUM_ITER
+            loss_name = loss_names[i]
+            val = loss_tensor.item()
             metric_logger.update(**{loss_name: val})
             loss_value_reduce = all_reduce_mean(val)
             if log_writer:
@@ -216,7 +222,7 @@ def train_one_epoch(
 
         # Update lr in loggers
         for i, opt in enumerate(optimizer):
-            lr_name = "lr" if i == 0 else f"lr_{i}"
+            lr_name = "lr" if i == 0 else f"lr_{i}" # tis name?
             max_lr = 0.0
             for group in opt.param_groups:
                 max_lr = max(max_lr, group["lr"])
@@ -244,6 +250,7 @@ def evaluate(
     data_loader: DataLoader,
     lr_scheduler: Optional[list[Optional[Scheduler]]] = None,
     memory_bank: Optional[MemoryBank] = None,
+    loss_names: Optional[list[str]] = None,
 ):
     """
     Evaluate the model on the validation set.
@@ -282,9 +289,7 @@ def evaluate(
     has_discriminator = hasattr(model, "discriminator") and model.discriminator is not None
     # Ensure correct order of each epoch info by adding loss first
     metric_logger = MetricLogger(delimiter="  ")
-    num_losses = 2 if has_discriminator else 1
-    for i in range(num_losses):
-        loss_name = "loss" if i == 0 else f"loss_{i}"
+    for loss_name in loss_names:
         metric_logger.add_meter(loss_name, SmoothedValue())
     header = "Epoch: [{}]".format(epoch + 1)
 
@@ -298,7 +303,7 @@ def evaluate(
         targets = prepare_targets(targets, images)
 
         # Pass the images through the model
-        outputs = model_call_func(images, is_train=True) # Im not Undertanding why is this True? 
+        outputs = model_call_func(images, is_train=True)
         
         # Loss function call
         losses = []
@@ -325,6 +330,7 @@ def evaluate(
                 'pixel_queue': memory_bank.pixel_queue,
                 'segment_queue': memory_bank.segment_queue,
             }
+
             loss = loss_function(outputs, targets, with_embed=with_embed)
             losses.append(loss)
         else:
@@ -352,7 +358,7 @@ def evaluate(
 
         # Update loss in loggers
         for i, loss_tensor in enumerate(losses):
-            loss_name = "loss" if i == 0 else f"loss_{i}"
+            loss_name = loss_names[i]
             metric_logger.update(**{loss_name: loss_tensor.item()})
 
     # Gather the stats from all processes
@@ -364,7 +370,7 @@ def evaluate(
     if lr_scheduler and cfg.TRAIN.LR_SCHEDULER.NAME == "reduceonplateau":
         for i, sched in enumerate(lr_scheduler):
             if sched and isinstance(sched, ReduceLROnPlateau):
-                loss_name = "loss" if i == 0 else f"loss_{i}"
+                loss_name = loss_names[i]
                 sched.step(metric_logger.meters[loss_name].global_avg, epoch=epoch)
 
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}

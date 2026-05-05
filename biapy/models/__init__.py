@@ -381,7 +381,6 @@ def build_model(
             )
             callable_model = NAFNet   # type: ignore
             model = callable_model(**args)  # type: ignore
-
     # Check the network created
     model.to(device)
     if cfg.PROBLEM.NDIM == "2D":
@@ -420,6 +419,7 @@ def build_model(
         init_embedding_output(model, n_sigma=2 if cfg.PROBLEM.NDIM == "2D" else 3)
 
     return model, str(callable_model.__name__), collected_sources, all_import_lines, scanned_files, args, network_stride  # type: ignore
+
 
 def init_embedding_output(model: nn.Module, n_sigma: int = 2):
     """

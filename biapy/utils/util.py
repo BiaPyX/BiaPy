@@ -34,7 +34,7 @@ from biapy.engine.metrics import jaccard_index_numpy
 from biapy.utils.misc import is_main_process
 
 
-def create_plots(results, metrics, job_id, chartOutDir):
+def create_plots(results, metrics, loss_names, job_id, chartOutDir):
     """
     Create loss and main metric plots with the given results.
 
@@ -50,6 +50,8 @@ def create_plots(results, metrics, job_id, chartOutDir):
         and its validation counterpart (e.g., 'val_jaccard_index').
     metrics : List[str]
         A list of metric names (e.g., ["jaccard_index", "f1_score"]) present in `results`.
+    loss_names : List[str]
+        A list of loss function names (e.g., ["loss", "loss_discriminator"]) present in `results`.
     job_id : str
         A unique identifier for the job, used in plot titles and filenames.
     chartOutDir : str
@@ -76,8 +78,7 @@ def create_plots(results, metrics, job_id, chartOutDir):
     os.environ["QT_QPA_PLATFORM"] = "offscreen"
 
     # Loss
-    loss_keys = ["loss"] + [k for k in results if "loss" in k and k not in ["loss", "val_loss"]]
-    for loss_key in loss_keys:
+    for loss_key in loss_names:
         val_loss_key = f"val_{loss_key}"
         plt.plot(results[loss_key])
         if val_loss_key in results:

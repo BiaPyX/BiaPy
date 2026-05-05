@@ -229,6 +229,7 @@ class Base_Workflow(metaclass=ABCMeta):
         self.gt_channels_expected = -1 
         self.train_metrics_message = ""
         self.test_metrics_message = ""
+        self.loss_names = ["loss"]
         
         self.resolution: List[int | float] = list(self.cfg.DATA.TEST.RESOLUTION)
         if self.cfg.PROBLEM.NDIM == "2D":
@@ -835,8 +836,9 @@ class Base_Workflow(metaclass=ABCMeta):
             self.log_writer = None
 
         self.plot_values = {}
-        self.plot_values["loss"] = []
-        self.plot_values["val_loss"] = []
+        for loss_name in self.loss_names:
+            self.plot_values[loss_name] = []
+            self.plot_values[f"val_{loss_name}"] = []
         for i in range(len(self.train_metric_names)):
             self.plot_values[self.train_metric_names[i]] = []
             self.plot_values["val_" + self.train_metric_names[i]] = []
@@ -846,6 +848,11 @@ class Base_Workflow(metaclass=ABCMeta):
         self.load_train_data()
         if not self.model_prepared:
             self.prepare_model()
+            
+        if hasattr(self.model_without_ddp, "discriminator") and self.model_without_ddp.discriminator is not None:
+            if "loss_discriminator" not in self.loss_names:
+                self.loss_names.append("loss_discriminator")
+                
         self.prepare_train_generators()
         self.prepare_logging_tool()
         self.early_stopping = build_callbacks(self.cfg)
@@ -910,6 +917,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 memory_bank=self.memory_bank,
                 total_iters=total_iters,
                 contrast_warmup_iters=contrast_init_iter,
+                loss_names=self.loss_names,
             )
             total_iters += iterations_done
 
@@ -944,6 +952,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     data_loader=self.val_generator,
                     lr_scheduler=self.lr_scheduler,
                     memory_bank=self.memory_bank,
+                    loss_names=self.loss_names,
                 )
 
                 # Save checkpoint is val loss improved
@@ -1006,22 +1015,11 @@ class Base_Workflow(metaclass=ABCMeta):
                     f.write(json.dumps(log_stats) + "\n")
 
                 # Create training plot
-                self.plot_values["loss"].append(train_stats["loss"])
-                if self.val_generator:
-                    self.plot_values["val_loss"].append(test_stats["loss"])
-                extra_loss_keys = [k for k in train_stats if "loss" in k and k != "loss"]
-                for loss_key in extra_loss_keys:
-                    val_loss_key = f"val_{loss_key}"
-                    
-                    if loss_key not in self.plot_values:
-                        self.plot_values[loss_key] = []
-                        if self.val_generator:
-                            self.plot_values[val_loss_key] = []
-                            
-                    # Append the values
-                    self.plot_values[loss_key].append(train_stats[loss_key])
+                for loss_name in self.loss_names:
+                    self.plot_values[loss_name].append(train_stats[loss_name])
                     if self.val_generator:
-                        self.plot_values[val_loss_key].append(test_stats.get(loss_key, 0.0))
+                        self.plot_values[f"val_{loss_name}"].append(test_stats[loss_name])
+                
                 for i in range(len(self.train_metric_names)):
                     self.plot_values[self.train_metric_names[i]].append(train_stats[self.train_metric_names[i]])
                     if self.val_generator:
@@ -1032,6 +1030,7 @@ class Base_Workflow(metaclass=ABCMeta):
                     create_plots(
                         self.plot_values,
                         self.train_metric_names,
+                        self.loss_names,
                         self.job_identifier,
                         self.cfg.PATHS.CHARTS,
                     )

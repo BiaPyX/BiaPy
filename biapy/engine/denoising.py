@@ -26,7 +26,7 @@ from biapy.data.data_3D_manipulation import (
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.data.data_manipulation import save_tif
 from biapy.utils.misc import to_pytorch_format, is_main_process, MetricLogger
-from biapy.engine.metrics import n2v_loss_mse, loss_encapsulation, ComposedGANLoss
+from biapy.engine.metrics import n2v_loss_mse, loss_encapsulation, CycleGanLoss
 
 
 class Denoising_Workflow(Base_Workflow):
@@ -166,8 +166,8 @@ class Denoising_Workflow(Base_Workflow):
         # print("Overriding 'LOSS.TYPE' to set it to N2V loss (masked MSE)")
         if self.cfg.LOSS.TYPE == "MSE":
             self.loss = loss_encapsulation(n2v_loss_mse)
-        elif self.cfg.LOSS.TYPE == "COMPOSED_GAN":
-            self.loss = ComposedGANLoss(cfg=self.cfg, device=self.device)
+        elif self.cfg.LOSS.TYPE == "CYCLEGAN":
+            self.loss = CycleGanLoss(cfg=self.cfg, device=self.device)
 
         super().define_metrics()
 
@@ -234,10 +234,12 @@ class Denoising_Workflow(Base_Workflow):
 
         with torch.no_grad():
             for i, metric in enumerate(list_to_use):
+                # Nafnet for Gan With Supervised
                 if _targets.shape[1] == _output.shape[1]:
                     target_for_metric = _targets.contiguous()
+                # Normal N2Void
                 else:
-                    target_for_metric = _targets[:, _output.shape[1]:].contiguous()
+                    target_for_metric = metric(_output.contiguous(), _targets[:, _output.shape[1]:].contiguous())
                 val = metric(_output.contiguous(), target_for_metric)
                 val = val.item() if not torch.isnan(val) else 0
                 out_metrics[list_names_to_use[i]] = val
