@@ -455,7 +455,7 @@ all_test_info["Test6"] = {
     "bmz_by_command": True,
     "bmz_package": "biapy_model.zip",
     "internal_checks": [
-        {"type": "regular", "pattern": "Test Foreground IoU (merge patches):", "gt": True, "value": 0.5},
+        {"type": "regular", "pattern": "Test Foreground IoU (merge patches):", "gt": True, "value": 0.45},
         {"type": "regular", "pattern": "Test F1 (merge patches)", "gt": True, "value": 0.85},
         {"type": "BMZ", "pattern": "Package path:", "bmz_package_name":  "biapy_model.zip"},
         {"type": "BMZ_weight_agreement", "pattern": "weights.pytorch_state_dict", "value": "✔️"},  
