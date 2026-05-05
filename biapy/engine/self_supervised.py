@@ -510,7 +510,7 @@ class Self_supervised_Workflow(Base_Workflow):
                 if self.cfg.PROBLEM.SELF_SUPERVISED.PRETEXT_TASK == "masking":
                     p = self.apply_model_activations(p)
                     p, mask = p["pred"], p["mask"]
-                    p, m, pv = self.model.save_images(
+                    p, m, pv = self.model_without_ddp.save_images(
                         to_pytorch_format(
                             self.current_sample["X"][k * self.cfg.TRAIN.BATCH_SIZE : top],
                             self.axes_order,
