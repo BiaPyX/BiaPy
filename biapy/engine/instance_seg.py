@@ -485,15 +485,17 @@ class Instance_Segmentation_Workflow(Base_Workflow):
         else:
             instance_loss = instance_segmentation_loss(
                 channel_weights = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNEL_WEIGHTS,
+                class_rebalance_within_channels=self.cfg.PROBLEM.INSTANCE_SEG.CLASS_REBALANCE_WITHIN_CHANNELS,
+                separated_class_channel=self.separated_class_channel,
                 ndim = self.dims,
                 out_channels = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS,
                 losses_to_use = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_LOSSES,
                 channel_extra_opts = self.cfg.PROBLEM.INSTANCE_SEG.DATA_CHANNELS_EXTRA_OPTS[0],
                 gt_channels_expected = self.gt_channels_expected,
-                n_classes=self.cfg.DATA.N_CLASSES,
-                class_rebalance=self.cfg.PROBLEM.INSTANCE_SEG.CLASS_REBALANCE_WITHIN_CHANNELS,
+                class_rebalance=self.cfg.LOSS.CLASS_REBALANCE,
                 class_weights=self.cfg.LOSS.CLASS_WEIGHTS,
-                ignore_index=self.cfg.LOSS.IGNORE_INDEX
+                ignore_index=self.cfg.LOSS.IGNORE_INDEX,
+                device=self.device,
             )
         
         if self.cfg.LOSS.CONTRAST.ENABLE: 

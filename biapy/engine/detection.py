@@ -230,7 +230,6 @@ class Detection_Workflow(Base_Workflow):
             ndim=self.dims,
             class_rebalance_within_channels=self.cfg.PROBLEM.DETECTION.CLASS_REBALANCE_WITHIN_CHANNELS,
             separated_class_channel=self.separated_class_channel,
-            num_classes=self.cfg.DATA.N_CLASSES,
             channel_weights = self.cfg.PROBLEM.DETECTION.DATA_CHANNEL_WEIGHTS,
             class_rebalance=self.cfg.LOSS.CLASS_REBALANCE,
             class_weights=self.cfg.LOSS.CLASS_WEIGHTS,

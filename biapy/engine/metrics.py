@@ -555,7 +555,6 @@ class detection_loss:
         ndim: int = 2,
         class_rebalance_within_channels: bool = True,
         separated_class_channel: bool = False,
-        num_classes: int = 2,
         channel_weights = (1, 1),
         class_rebalance: str = "none",
         class_weights: List[float] = [],
@@ -579,9 +578,6 @@ class detection_loss:
         separated_class_channel : bool, optional
             When a separated class channel is expected in the predictions e.g. points + classification in detection.
 
-        num_classes : int
-            Number of classes. This only works if ``separated_class_channel`` is ``True``.
-    
         channel_weights : 2 float tuple, optional
             Weights to be applied to each channel of the data, i.e., centroid detection and class. E.g. ``(1, 0.2)``.
             This only works if ``separated_class_channel`` is ``True``.
@@ -595,7 +591,7 @@ class detection_loss:
             ``class_rebalance`` is ``"manual"``. E.g. ``[1, 1.7, 0.5]`` for 3 classes.
 
         ignore_index : int, optional
-            Value to ignore in the loss calculation. If not provided, no value will be ignored. This only works when ``separated_class_channel`` is ``True``.
+            Value to ignore in the loss calculation. If not provided, no value will be ignored.
         
         device : Torch device, optional
             Using device. Most commonly "cpu" or "cuda" for GPU, but also potentially "mps".
@@ -610,7 +606,6 @@ class detection_loss:
             self.channel_weights = (1, 0)
         self.ndim = ndim
         self.separated_class_channel = separated_class_channel
-        self.num_classes = num_classes
         self.class_rebalance_within_channels = class_rebalance_within_channels
         self.class_rebalance = class_rebalance
         self.class_weights = None
@@ -623,10 +618,7 @@ class detection_loss:
 
         self.centroid_loss = torch.nn.BCEWithLogitsLoss()
         if self.separated_class_channel:
-            if self.num_classes > 2:
-                self.class_channel_loss = torch.nn.CrossEntropyLoss(ignore_index=self.ignore_index, weight=self.class_weights, reduction="none")
-            else:
-                self.class_channel_loss = torch.nn.BCEWithLogitsLoss()
+            self.class_channel_loss = torch.nn.CrossEntropyLoss(ignore_index=self.ignore_index, weight=self.class_weights, reduction="none")
 
     def __call__(self, y_pred, y_true):
         """
@@ -1408,9 +1400,6 @@ class instance_segmentation_loss:
     gt_channels_expected : int, optional
         Number of channels expected in the ground truth (default: 1).   
 
-    n_classes : int, optional
-        Number of classes for the class channel (default: 2).
-
     class_rebalance : str, optional
         Whether to reweight classes (inside loss function) or not. Options are: "none" and "auto".
 
@@ -1425,14 +1414,16 @@ class instance_segmentation_loss:
         self,
         channel_weights=(1, 1),
         ndim: int = 2,
+        class_rebalance_within_channels: bool = False,
+        separated_class_channel: bool = False,
         out_channels=["F", "C"],
         losses_to_use=[],
         channel_extra_opts={},
         gt_channels_expected: int = 1,
-        n_classes=2,
         class_rebalance: str = "none",
         class_weights: List[float] = [],
         ignore_index: int = -1,
+        device = None,
     ):
         """
         Initialize the custom loss that mixed BCE and MSE depending on the ``out_channels`` variable.
@@ -1440,11 +1431,21 @@ class instance_segmentation_loss:
         Parameters
         ----------
         channel_weights : 2 float tuple, optional
-            Weights to be applied to segmentation (binary and contours) and to distances respectively. E.g. ``(1, 0.2)``,
-            ``1`` should be multipled by ``BCE`` for the first two channels and ``0.2`` to ``MSE`` for the last channel.
+            Weights to be applied to be applied to each channel of the data. E.g. if working with F + C channels, 
+            you can provide for example these weights: ``(1, 2)`` so the contours will have more importance in the
+            loss calculation. 
 
         ndim : int, optional
             Number of dimensions of the input data. 2 for 2D images, 3 for 3D volumes.
+
+        class_rebalance_within_channels : bool, optional
+            Whether to apply a rebalancing strategy to the loss function to give more importance to underrepresented pixels within the channels.
+            The weights are calculated automatically based on the number of pixels of each class. In the specific case of detection, where there
+            are usually much less pixels representing the center of the objects to detect than background pixels, with this option activated, 
+            the loss will give more importance to the pixels representing the center of the objects to help the model learn better to predict them.
+        
+        separated_class_channel : bool, optional
+            When a separated class channel is expected in the predictions e.g. instances + classification in instance segmentation.
 
         out_channels : List of str, optional
             Channels to operate with.
@@ -1460,37 +1461,53 @@ class instance_segmentation_loss:
             expected number of channels. If ``extra_weight_in_borders`` is ``True``, then 1 channel will be added to the expected
             GT channels to account for the extra weight in borders channel.
 
-        n_classes : int, optional
-            Number of classes for the class channel (default: 2).
-        
         class_rebalance: str, optional
-            Whether to reweight classes (inside loss function) or not. Options are: "none", "auto" and "manual".
+            Whether to reweight classes or not. This only works if ``separated_class_channel`` is ``True``. 
+            Options are: "none" and ``"manual"``.
 
-        class_weights : List of float, optional
-            Weights for each class to be used in the loss calculation.
+        class_weights : list of float, optional
+            List of weights for each class to be used in ``"manual"`` class rebalancing. This only works when ``separated_class_channel`` is ``True`` and
+            ``class_rebalance`` is ``"manual"``. E.g. ``[1, 1.7, 0.5]`` for 3 classes.
 
         ignore_index : int, optional
-            Value to ignore in the loss calculation.
+            Value to ignore in the loss calculation. If not provided, no value will be ignored.
+        
+        device : Torch device, optional
+            Using device. Most commonly "cpu" or "cuda" for GPU, but also potentially "mps".
         """
-        self.channel_weights = channel_weights
+        if separated_class_channel:
+            if class_rebalance == "manual" and not class_weights:
+                raise ValueError("class_weights must be provided when class_rebalance is 'manual'")
+            self.channel_weights = channel_weights
+            if len(self.channel_weights) != 2:
+                raise ValueError("channel_weights must be a tuple of 2 float values when separated_class_channel is True")
+        else:
+            self.channel_weights = (1, 0)
+        self.class_rebalance_within_channels = class_rebalance_within_channels 
+        self.separated_class_channel = separated_class_channel
         self.ndim = ndim
         self.out_channels = [x for x in out_channels if x != "We"]
         self.extra_weight_in_borders = out_channels.count("We") > 0
         self.gt_channels_expected = gt_channels_expected if not self.extra_weight_in_borders else gt_channels_expected + 1
         self.channel_extra_opts = channel_extra_opts
-        self.n_classes = n_classes
         self.class_rebalance = class_rebalance
-        self.class_weights = class_weights if class_rebalance == "manual" else None
+        self.class_weights = None
         self.ignore_index = ignore_index
         self.ignore_values = True if ignore_index != -1 else False
         self.losses_to_use = losses_to_use
-        self.class_channel_loss = torch.nn.CrossEntropyLoss(reduction="none") if self.n_classes > 2 else None
-        self.gamma = 0.5  # for intermediate outputs weighting
+        self.device = device if device is not None else torch.device("cpu")
+        self.gamma = 0.5
+
+        if self.class_rebalance == "manual":
+            self.class_weights = torch.tensor(class_weights, device=device, dtype=torch.float32)
 
         if len(self.losses_to_use) != 0:
             assert len(self.out_channels) == len(self.losses_to_use), "Length of out_channels and losses_to_use should be the same. Provided {} and {}".format(
                 self.out_channels, self.losses_to_use
             )
+
+        if self.separated_class_channel:
+            self.class_channel_loss = torch.nn.CrossEntropyLoss(ignore_index=self.ignore_index, weight=self.class_weights, reduction="none")
 
     def __call__(self, y_pred, y_true):
         """
@@ -1514,7 +1531,9 @@ class instance_segmentation_loss:
         else:
             _y_pred = y_pred
     
-        if self.n_classes > 2 and isinstance(y_pred, dict) and "class" in y_pred:
+        if self.separated_class_channel:
+            assert isinstance(y_pred, dict), "When separated_class_channel is True, y_pred should be a dict with 'pred' and 'class' keys. Provided type: {}".format(type(y_pred))
+            assert "class" in y_pred, "When separated_class_channel is True, y_pred should be a dict with 'pred' and 'class' keys. Provided keys: {}".format(y_pred.keys())
             _y_pred_class = y_pred["class"]
 
         assert (y_true.shape[1] == self.gt_channels_expected), (
@@ -1529,7 +1548,7 @@ class instance_segmentation_loss:
 
         if not isinstance(_y_pred, list):
             _y_pred = [_y_pred]
-            _y_pred_class = [_y_pred_class] if self.n_classes > 2 and isinstance(y_pred, dict) and "class" in y_pred else None
+            _y_pred_class = [_y_pred_class] if self.separated_class_channel else None
             inter_output_weights = [1.0]
         else:
             w = [self.gamma**i for i in range(len(_y_pred))]
@@ -1579,10 +1598,8 @@ class instance_segmentation_loss:
                 # class-rebalance / ignore_index weights for BCE
                 weight = None
                 if self.losses_to_use[i] in ["bce", "ce"] and channel in ["B","F","P","C","T","A","M","F_pre","F_post"]:
-                    if self.class_rebalance == "auto":
+                    if self.class_rebalance_within_channels:
                         weight = weight_binary_ratio(y_true_slice).float()
-                    elif self.class_rebalance == "manual" and self.class_weights is not None:
-                        weight = torch.tensor(self.class_weights, device=y_true.device).float()
                     if self.ignore_values:
                         ignore_mask = (y_true_slice != self.ignore_index).float()
                         weight = ignore_mask if weight is None else weight * ignore_mask
@@ -1620,7 +1637,7 @@ class instance_segmentation_loss:
                 channel_loss_val = loss_tensor.sum() / denom
                 inter_output_loss += self.channel_weights[i] * channel_loss_val
             
-            if self.n_classes > 2 and isinstance(y_pred, dict) and "class" in y_pred:
+            if self.separated_class_channel:
                 loss_tensor = self.class_channel_loss(_y_pred_class[idx], y_true[:, -1].type(torch.long))
                 # multiply by spatial border weights after crit
                 if w_borders is not None:
