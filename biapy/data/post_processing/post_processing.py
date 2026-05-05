@@ -896,6 +896,7 @@ def extract_points_in_predictions(
     
     # Save just the points and their probabilities
     if out_dir is not None:
+        os.makedirs(out_dir, exist_ok=True)
         points_df.to_csv(
             os.path.join(
                 out_dir,
@@ -1112,6 +1113,7 @@ def extract_synapse_connectivity(
                 ],
             )
             pre_post_map_df.sort_values(by=["pre_id", "post_id"])
+            os.makedirs(csv_dir, exist_ok=True)
             pre_post_map_df.to_csv(
                 os.path.join(
                     csv_dir,
