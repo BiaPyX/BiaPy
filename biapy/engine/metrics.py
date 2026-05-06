@@ -1478,11 +1478,8 @@ class instance_segmentation_loss:
         if separated_class_channel:
             if class_rebalance == "manual" and not class_weights:
                 raise ValueError("class_weights must be provided when class_rebalance is 'manual'")
-            self.channel_weights = channel_weights
-            if len(self.channel_weights) != 2:
-                raise ValueError("channel_weights must be a tuple of 2 float values when separated_class_channel is True")
-        else:
-            self.channel_weights = (1, 0)
+
+        self.channel_weights = channel_weights
         self.class_rebalance_within_channels = class_rebalance_within_channels 
         self.separated_class_channel = separated_class_channel
         self.ndim = ndim
