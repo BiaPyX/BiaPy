@@ -540,7 +540,6 @@ def connect_pre_post_synapse_points_by_distance(
     post_points_df: pd.DataFrame,
     post_points: NDArray,
     out_dir: Optional[str] = None,
-    verbose: bool = True,
 ):
     """
     Connect pre and post synaptic points by distance. For each pre point, find the closest post point and assign it as a synapse.
@@ -557,8 +556,6 @@ def connect_pre_post_synapse_points_by_distance(
         Array containing the coordinates of the post synaptic points. Shape (N_post, 3) for 3D data or (N_post, 2) for 2D data.
     out_dir : str, optional
         Directory to save the output data into. If None, the output data will not be saved.
-    verbose : bool, optional
-        Whether to print the progress of the function or not.
     """
     pre_post_mapping = {}
     pres, posts = [], []
@@ -585,12 +582,6 @@ def connect_pre_post_synapse_points_by_distance(
                 # For those pre points that do not have any post points assigned just put a -1 value
                 pres.append(i)
                 posts.append(-1)
-    else:
-        if verbose:
-            if len(pre_points) == 0:
-                print("No pre synaptic points found!")
-            if len(post_points) == 0:
-                print("No post synaptic points found!")
 
     # Create a mapping dataframe
     pre_post_map_df = pd.DataFrame(
