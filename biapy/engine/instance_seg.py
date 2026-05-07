@@ -1770,7 +1770,6 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                     post_points_df=points_available["post"]["df"],
                     post_points=points_available["post"]["points"],
                     out_dir=self.cfg.PATHS.RESULT_DIR.DET_LOCAL_MAX_COORDS_CHECK_POST_PROCESSING,
-                    verbose=self.cfg.TEST.VERBOSE,
                 )
                 
             if self.cfg.TEST.BY_CHUNKS.SAVE_OUT_TIF:

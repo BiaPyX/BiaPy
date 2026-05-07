@@ -723,7 +723,6 @@ def create_synapses_from_point_probs(
         post_points_df=post_points_df,
         post_points=post_points,
         out_dir=out_dir,
-        verbose=verbose,
     )
 
     return pre_points_df, pre_points, post_points_df, post_points
