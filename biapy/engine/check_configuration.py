@@ -3124,6 +3124,8 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict):
                 clean_str = old_cfg["TRAIN"]["OPT_BETAS"].strip().strip("()")
                 number_list = [float(x.strip()) for x in clean_str.split(",")]
                 old_cfg["TRAIN"]["OPT_BETAS"] = [number_list]
+        if "ACCUM_ITER" in old_cfg["TRAIN"]:
+            del old_cfg["TRAIN"]["ACCUM_ITER"]
         if "LR_SCHEDULER" in old_cfg["TRAIN"]:
             if "MIN_LR" in old_cfg["TRAIN"]["LR_SCHEDULER"] and isinstance(old_cfg["TRAIN"]["LR_SCHEDULER"]["MIN_LR"], float):
                 old_cfg["TRAIN"]["LR_SCHEDULER"]["MIN_LR"] = [old_cfg["TRAIN"]["LR_SCHEDULER"]["MIN_LR"]] * len(old_cfg["TRAIN"]["OPTIMIZER"])

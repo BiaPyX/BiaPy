@@ -312,8 +312,10 @@ class NAFNet(nn.Module):
 
         Returns
         -------
-        torch.Tensor
-            Restored image with original spatial size `(H, W)`.
+        torch.Tensor or dict
+            Restored image with original spatial size `(H, W)`. If the
+            discriminator is active, returns ``{"pred": tensor}`` so that the
+            output can be enriched with loss information by ``forward_loss``.
         """
         B, C, H, W = inp.shape
         inp = self.check_image_size(inp)
@@ -337,7 +339,52 @@ class NAFNet(nn.Module):
         x = self.ending(x)
         x = x + inp
 
-        return x[:, :, :H, :W]
+        pred = x[:, :, :H, :W]
+
+        if self.discriminator is not None:
+            return {"pred": pred}
+        return pred
+
+    def forward_loss(self, pred, targets, loss_fn):
+        """Compute GAN losses using the discriminator and the given loss function.
+
+        Follows the same pattern as ``MaskedAutoencoderViT.forward_loss``:
+        the loss is computed internally by the model so that the training
+        engine does not need to know about discriminators.
+
+        Parameters
+        ----------
+        pred : torch.Tensor
+            Generator prediction (restored image).
+        targets : torch.Tensor
+            Ground-truth clean image.
+        loss_fn : nn.Module
+            Loss module (e.g. ``CycleGanLoss``) providing
+            ``forward_generator`` and ``forward_discriminator``.
+
+        Returns
+        -------
+        tuple or None
+            ``(loss_generator, loss_discriminator)`` if the discriminator is
+            available, otherwise ``None``.
+        """
+        if self.discriminator is None:
+            return None
+
+        fake_img = torch.clamp(pred, 0, 1)
+
+        for p in self.discriminator.parameters():
+            p.requires_grad_(False)
+        d_fake_for_g = self.discriminator(fake_img)
+        loss_g = loss_fn.forward_generator(fake_img, targets, d_fake_for_g)
+        for p in self.discriminator.parameters():
+            p.requires_grad_(True)
+
+        d_real = self.discriminator(targets)
+        d_fake = self.discriminator(fake_img.detach())
+        loss_d = loss_fn.forward_discriminator(d_real, d_fake)
+
+        return (loss_g, loss_d)
 
     def check_image_size(self, x):
         """Pad image so height/width are divisible by internal stride.

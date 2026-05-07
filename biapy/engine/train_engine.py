@@ -90,7 +90,6 @@ def train_one_epoch(
     """
     # Switch to training mode
     model.train(True)
-    has_discriminator = hasattr(model, "discriminator") and model.discriminator is not None
     lr_names = []
     # Ensure correct order of each epoch info by adding loss first
     metric_logger = MetricLogger(delimiter="  ", verbose=verbose)
@@ -111,10 +110,7 @@ def train_one_epoch(
 
         # Apply warmup cosine decay scheduler if selected
         # (notice we use a per iteration (instead of per epoch) lr scheduler)
-        if (
-            epoch % cfg.TRAIN.ACCUM_ITER == 0
-            and cfg.TRAIN.LR_SCHEDULER.NAME == "warmupcosine"
-        ):
+        if cfg.TRAIN.LR_SCHEDULER.NAME == "warmupcosine":
             for sched, opt in zip(lr_scheduler, optimizer):
                 if sched and isinstance(sched, WarmUpCosineDecayScheduler):
                     sched.adjust_learning_rate(opt, step / len(data_loader) + epoch)
@@ -133,25 +129,7 @@ def train_one_epoch(
 
         # Loss function call
         losses = []
-        if has_discriminator:
-            fake_img = outputs["pred"] if isinstance(outputs, dict) else outputs
-            fake_img = torch.clamp(fake_img, 0, 1)
-
-            # Avoid accumulating discriminator gradients during generator loss.
-            for p in model.discriminator.parameters():
-                p.requires_grad_(False)
-            d_fake_for_g = model.discriminator(fake_img)
-            loss_g = loss_function.forward_generator(fake_img, targets, d_fake_for_g)
-            losses.append(loss_g)
-            for p in model.discriminator.parameters():
-                p.requires_grad_(True)
-
-            d_real = model.discriminator(targets)
-            d_fake = model.discriminator(fake_img.detach())
-            loss_d = loss_function.forward_discriminator(d_real, d_fake)
-            losses.append(loss_d)
-            
-        elif memory_bank is not None:
+        if memory_bank is not None:
             if total_iters + step >= contrast_warmup_iters:
                 with_embed = True
             else:
@@ -172,8 +150,11 @@ def train_one_epoch(
             )
             losses.append(loss)
         else:
-            loss = loss_function(outputs, targets)
-            losses.append(loss)
+            result = loss_function(outputs, targets)
+            if isinstance(result, (list, tuple)):
+                losses.extend(result)
+            else:
+                losses.append(result)
 
         # Separate metric if precalculated inside the loss (e.g. Embedding loss) 
         precalculated_metric, precalculated_metric_name = None, None
@@ -193,40 +174,6 @@ def train_one_epoch(
             metric_function(outputs, targets, metric_logger=metric_logger)
         else:
             metric_logger.meters[precalculated_metric_name].update(precalculated_metric)
-
-        # Question
-        # With ACCUM_ITER=4:
-        # Step 1: loss /= 4 → loss=15.4 → if (1%4==0)? No  → backward SKIPPED → grads: 0
-        # Step 2: loss /= 4 → loss=10.3 → if (2%4==0)? No  → backward SKIPPED → grads: 0
-        # Step 3: loss /= 4 → loss=12.1 → if (3%4==0)? No  → backward SKIPPED → grads: 0
-        # Step 4: loss /= 4 → loss=9.8  → if (4%4==0)? Yes → backward + step  → grads from step 4 only
-
-        # Original code
-        # if (step + 1) % cfg.TRAIN.ACCUM_ITER == 0:
-        #     for i, (opt, loss_tensor) in enumerate(zip(optimizer, losses)):
-        #         loss_tensor = loss_tensor / cfg.TRAIN.ACCUM_ITER
-        #         if has_discriminator and i == 1:
-        #             opt.zero_grad()
-        #         loss_tensor.backward()
-        #         opt.step()  # update weight
-        #         opt.zero_grad()           
-        #         if lr_scheduler[i] and isinstance(lr_scheduler[i], OneCycleLR) and cfg.TRAIN.LR_SCHEDULER.NAME == "onecycle":
-        #             lr_scheduler[i].step()
-
-        # With ACCUM_ITER=4:
-        # Step 1: loss/4 → loss.backward() → grads accumulate   (no step)
-        # Step 2: loss/4 → loss.backward() → grads accumulate   (no step)  
-        # Step 3: loss/4 → loss.backward() → grads accumulate   (no step)
-        # Step 4: loss/4 → loss.backward() → step() + zero_grad()  (all 4 batches)
-
-        # New code
-        should_step = (step + 1) % cfg.TRAIN.ACCUM_ITER == 0
-        for i, (opt, loss_tensor) in enumerate(zip(optimizer, losses)):
-            scaled = loss_tensor / cfg.TRAIN.ACCUM_ITER
-            scaled.backward()
-            if should_step:
-                opt.step()
-                opt.zero_grad() 
 
         if device.type != "cpu":
             getattr(torch, device.type).synchronize()
@@ -305,7 +252,6 @@ def evaluate(
     dict
         Dictionary of averaged metrics for the validation set.
     """
-    has_discriminator = hasattr(model, "discriminator") and model.discriminator is not None
     # Ensure correct order of each epoch info by adding loss first
     metric_logger = MetricLogger(delimiter="  ")
     for loss_name in loss_names:
@@ -326,19 +272,7 @@ def evaluate(
         
         # Loss function call
         losses = []
-        if has_discriminator:
-            fake_img = outputs["pred"] if isinstance(outputs, dict) else outputs
-            fake_img = torch.clamp(fake_img, 0, 1)
-
-            d_fake_for_g = model.discriminator(fake_img)
-            loss_g = loss_function.forward_generator(fake_img, targets, d_fake_for_g)
-            losses.append(loss_g)
-            d_real = model.discriminator(targets)
-            d_fake = model.discriminator(fake_img.detach())
-            loss_d = loss_function.forward_discriminator(d_real, d_fake)
-            losses.append(loss_d)
-
-        elif memory_bank is not None:
+        if memory_bank is not None:
             with_embed = False
 
             outputs = {
@@ -352,8 +286,11 @@ def evaluate(
             loss = loss_function(outputs, targets, with_embed=with_embed)
             losses.append(loss)
         else:
-            loss = loss_function(outputs, targets)
-            losses.append(loss)
+            result = loss_function(outputs, targets)
+            if isinstance(result, (list, tuple)):
+                losses.extend(result)
+            else:
+                losses.append(result)
 
         # Separate metric if precalculated inside the loss (e.g. Embedding loss)
         precalculated_metric, precalculated_metric_name = None, None

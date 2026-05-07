@@ -848,11 +848,6 @@ class Base_Workflow(metaclass=ABCMeta):
         self.load_train_data()
         if not self.model_prepared:
             self.prepare_model()
-            
-        if hasattr(self.model_without_ddp, "discriminator") and self.model_without_ddp.discriminator is not None:
-            if "loss_discriminator" not in self.loss_names:
-                self.loss_names.append("loss_discriminator")
-                
         self.prepare_train_generators()
         self.prepare_logging_tool()
         self.early_stopping = build_callbacks(self.cfg)

@@ -313,7 +313,7 @@ def create_train_val_augmentors(
         )
 
     # Training dataset
-    total_batch_size = cfg.TRAIN.BATCH_SIZE * get_world_size() * cfg.TRAIN.ACCUM_ITER
+    total_batch_size = cfg.TRAIN.BATCH_SIZE * get_world_size()
     training_samples = len(train_generator)
 
     # ---- Choose num_workers for this DataLoader ----
@@ -348,7 +348,6 @@ def create_train_val_augmentors(
 
     num_training_steps_per_epoch = training_samples // total_batch_size
     print(f"Train/val generators with {num_workers} workers")
-    print("Accumulate grad iterations: %d" % cfg.TRAIN.ACCUM_ITER)
     print("Effective batch size: %d" % total_batch_size)
     print("Sampler_train = %s" % str(sampler_train))
     train_dataset = DataLoader(

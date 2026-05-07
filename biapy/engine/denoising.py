@@ -167,9 +167,38 @@ class Denoising_Workflow(Base_Workflow):
         if self.cfg.LOSS.TYPE == "MSE":
             self.loss = loss_encapsulation(n2v_loss_mse)
         elif self.cfg.LOSS.TYPE == "CYCLEGAN":
-            self.loss = CycleGanLoss(cfg=self.cfg, device=self.device)
+            self.cyclegan_loss = CycleGanLoss(cfg=self.cfg, device=self.device)
+            self.loss = self.NAFNetGan_loss_wrapper
+            if "loss_discriminator" not in self.loss_names:
+                self.loss_names.append("loss_discriminator")
 
         super().define_metrics()
+
+    def NAFNetGan_loss_wrapper(self, output, targets):
+        """Extract pre-computed GAN losses from NAFNet.
+
+        Follows the same pattern as ``MaskedAutoencoderViT_loss_wrapper``:
+        the model computes losses internally via :meth:`NAFNet.forward_loss`,
+        and this wrapper retrieves them so the training engine never
+        sees the discriminator.
+
+        Parameters
+        ----------
+        output : torch.Tensor or dict
+            Model predictions (dict with ``"pred"`` key).
+        targets : torch.Tensor
+            Ground-truth images.
+
+        Returns
+        -------
+        tuple
+            ``(loss_generator, loss_discriminator)``.
+        """
+        if isinstance(output, dict):
+            pred = output["pred"]
+        else:
+            pred = output
+        return self.model_without_ddp.forward_loss(pred, targets, self.cyclegan_loss)
 
     def metric_calculation(
         self,

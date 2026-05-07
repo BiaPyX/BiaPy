@@ -1424,9 +1424,6 @@ class Config:
         _C.TRAIN.OPT_BETAS = [[0.9, 0.999]]
         # Batch size
         _C.TRAIN.BATCH_SIZE = 2
-        # If memory or # gpus is limited, use this variable to maintain the effective batch size, which is
-        # batch_size (per gpu) * nodes * (gpus per node) * accum_iter.
-        _C.TRAIN.ACCUM_ITER = 1
         # Number of epochs to train the model
         _C.TRAIN.EPOCHS = 360
         # Epochs to wait with no validation data improvement until the training is stopped
