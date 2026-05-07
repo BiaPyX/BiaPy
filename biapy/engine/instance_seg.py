@@ -1274,7 +1274,6 @@ class Instance_Segmentation_Workflow(Base_Workflow):
                 relative_th_value=self.cfg.PROBLEM.INSTANCE_SEG.SYNAPSES.TH_TYPE in ["relative", "relative_by_patch"], 
                 out_dir=out_dir,
                 filenames = filenames,
-                verbose=self.cfg.TEST.VERBOSE,
             )
             points_available["pre"] = {"points": pre_points, "df": pre_points_df}
             points_available["post"] = {"points": post_points, "df": post_points_df}
