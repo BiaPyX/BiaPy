@@ -13,7 +13,6 @@ from torch.optim.optimizer import Optimizer
 from typing import Callable, Optional
 from torch.utils.data import DataLoader
 from yacs.config import CfgNode as CN
-from torch.amp import GradScaler, autocast # tmp
 from torch.nn.utils import clip_grad_norm_
 from biapy.utils.misc import MetricLogger, SmoothedValue, TensorboardLogger, all_reduce_mean
 from biapy.engine import Scheduler
