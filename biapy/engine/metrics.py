@@ -17,13 +17,9 @@ from torchmetrics.image import StructuralSimilarityIndexMeasure
 from pytorch_msssim import SSIM
 import torch.nn.functional as F
 import torch.nn as nn
-<<<<<<< HEAD
-from typing import Optional, List, Tuple, Dict
 from torchvision import transforms
 from torchvision.models import vgg16, VGG16_Weights
-=======
 from typing import Optional, List, Tuple, Dict, Union
->>>>>>> upstream/master
 
 def jaccard_index_numpy(y_true, y_pred):
     """

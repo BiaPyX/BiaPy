@@ -26,13 +26,8 @@ from biapy.data.data_3D_manipulation import (
 from biapy.engine.base_workflow import Base_Workflow
 from biapy.data.data_manipulation import save_tif
 from biapy.utils.misc import to_pytorch_format, is_main_process, MetricLogger
-<<<<<<< HEAD
 from biapy.engine.metrics import n2v_loss_mse, loss_encapsulation, CycleGanLoss
-
-=======
-from biapy.engine.metrics import n2v_loss_mse, loss_encapsulation
 from biapy.data.norm import undo_image_norm
->>>>>>> upstream/master
 
 class Denoising_Workflow(Base_Workflow):
     """

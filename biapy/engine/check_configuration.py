@@ -2355,12 +2355,8 @@ def check_configuration(cfg, jobname, check_data_paths=True):
             "unext_v2",
             "hrnet",
             "stunet",
-<<<<<<< HEAD
             "nafnet",
-        ], "MODEL.ARCHITECTURE not in ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'simple_cnn', 'efficientnet_b[0-7]', 'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae', 'unext_v1', 'unext_v2', 'hrnet18', 'hrnet32', 'hrnet48', 'hrnet64', 'stunet']"
-=======
         ], "MODEL.ARCHITECTURE not in ['unet', 'resunet', 'resunet++', 'attention_unet', 'multiresunet', 'seunet', 'simple_cnn', 'efficientnet_b[0-7]', 'unetr', 'edsr', 'rcan', 'dfcan', 'wdsr', 'vit', 'mae', 'unext_v1', 'unext_v2', 'hrnet', 'stunet']"
->>>>>>> upstream/master
         if (
             model_arch
             not in [
@@ -3081,8 +3077,6 @@ def _assert_list_of_pos_ints(x, ctx):
     for i, v in enumerate(x):
         assert isinstance(v, int) and v > 0, f"'{ctx}[{i}]' must be a positive integer"
 
-
-<<<<<<< HEAD
 def compare_configurations_without_model(actual_cfg, old_cfg, header_message="", old_cfg_version=None):
     """
     Compare two BiaPy configurations and raise an error if critical workflow variables differ.
@@ -3165,11 +3159,7 @@ def compare_configurations_without_model(actual_cfg, old_cfg, header_message="",
             
     print("Configurations seem to be compatible. Continuing . . .")
 
-
-def convert_old_model_cfg_to_current_version(old_cfg: dict):
-=======
 def convert_old_model_cfg_to_current_version(old_cfg: dict) -> dict:
->>>>>>> upstream/master
     """
     Convert old configuration to the current BiaPy version.
     
@@ -3186,7 +3176,6 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict) -> dict:
     new_cfg : dict
         Updated configuration to the current BiaPy version.
     """
-<<<<<<< HEAD
     if "TRAIN" in old_cfg:
         if "OPTIMIZER" in old_cfg["TRAIN"] and isinstance(old_cfg["TRAIN"]["OPTIMIZER"], str):
             old_cfg["TRAIN"]["OPTIMIZER"] = [old_cfg["TRAIN"]["OPTIMIZER"]]
@@ -3201,9 +3190,7 @@ def convert_old_model_cfg_to_current_version(old_cfg: dict) -> dict:
         if "LR_SCHEDULER" in old_cfg["TRAIN"]:
             if "MIN_LR" in old_cfg["TRAIN"]["LR_SCHEDULER"] and isinstance(old_cfg["TRAIN"]["LR_SCHEDULER"]["MIN_LR"], float):
                 old_cfg["TRAIN"]["LR_SCHEDULER"]["MIN_LR"] = [old_cfg["TRAIN"]["LR_SCHEDULER"]["MIN_LR"]] * len(old_cfg["TRAIN"]["OPTIMIZER"])
-=======
     workflow = old_cfg.get("PROBLEM", {}).get("TYPE", "SEMANTIC_SEG")
->>>>>>> upstream/master
     if "TEST" in old_cfg:
         if "STATS" in old_cfg["TEST"]:
             full_image = old_cfg["TEST"]["STATS"]["FULL_IMG"]

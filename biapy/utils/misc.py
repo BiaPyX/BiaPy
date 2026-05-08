@@ -567,24 +567,17 @@ def load_model_checkpoint(cfg, jobname, model_without_ddp, device, optimizer=Non
             print("Discriminator weights loaded!")
 
     # Load also opt, epoch and scaler info
-<<<<<<< HEAD
-    if "optimizer" in checkpoint and optimizer is not None:
+    if "optimizer" in checkpoint and optimizer is not None and "optimizer" in cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT:
         # Backward compatibility: checkpoints are not converted in check_configuration.
         checkpoint_optimizer = checkpoint["optimizer"]
         if isinstance(checkpoint_optimizer, dict):
             checkpoint_optimizer = [checkpoint_optimizer]
 
-        # I probably have to check length is the same in here. Right? 
         loaded_optimizers = 0
         for opt, opt_state in zip(optimizer, checkpoint_optimizer):
-            opt.load_state_dict(opt_state)
+            opt.load_state_dict(opt_state, strict=False)
             loaded_optimizers += 1
         print(f"Optimizer info loaded for {loaded_optimizers}/{len(optimizer)} optimizer(s)!")
-=======
-    if "optimizer" in checkpoint and optimizer is not None and "optimizer" in cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT:
-        optimizer.load_state_dict(checkpoint["optimizer"], strict=False)
-        print("Optimizer info loaded!")
->>>>>>> upstream/master
 
     start_epoch = 0
     if "epoch" in checkpoint and "epoch" in cfg.MODEL.ITEMS_TO_LOAD_FROM_CHECKPOINT:
