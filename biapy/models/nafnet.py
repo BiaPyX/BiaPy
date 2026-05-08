@@ -296,7 +296,18 @@ class NAFNet(nn.Module):
 
         self.discriminator = discriminator
 
-        
+    @property
+    def param_groups(self):
+        """Return parameter groups for separate optimizers.
+        When a discriminator is present, returns ``[generator_params, discriminator_params]``
+        so that :func:`prepare_optimizer` can assign a separate optimizer and learning
+        rate to each group. Without a discriminator, returns a single group.
+        """
+        if self.discriminator is not None:
+            gen_params = [p for n, p in self.named_parameters() if not n.startswith("discriminator.")]
+            return [gen_params, list(self.discriminator.parameters())]
+        return [list(self.parameters())]
+
     def forward(self, inp):
         """Run a forward pass through NAFNet.
 

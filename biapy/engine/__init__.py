@@ -49,13 +49,8 @@ def prepare_optimizer(
     optimizers = []
     lr_schedulers = []
     
-    if hasattr(model_without_ddp, 'discriminator') and model_without_ddp.discriminator is not None:
-        param_groups = [
-            # Generator
-            [p for n, p in model_without_ddp.named_parameters() if not n.startswith("discriminator.")], # should this be and p.requires_grad, same below? 
-            # Discriminator
-            [p for p in model_without_ddp.discriminator.parameters()] 
-        ]
+    if hasattr(model_without_ddp, 'param_groups'):
+        param_groups = model_without_ddp.param_groups
     else:
         param_groups = [[p for p in model_without_ddp.parameters()]]
 

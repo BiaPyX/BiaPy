@@ -1072,8 +1072,7 @@ class Base_Workflow(metaclass=ABCMeta):
                 for loss_name in self.loss_names:
                     self.plot_values[loss_name].append(train_stats[loss_name])
                     if self.val_generator:
-                        self.plot_values[f"val_{loss_name}"].append(test_stats[loss_name])
-                
+                        self.plot_values[f"val_{loss_name}"].append(test_stats[loss_name])              
                 for i in range(len(self.train_metric_names)):
                     self.plot_values[self.train_metric_names[i]].append(train_stats[self.train_metric_names[i]])
                     if self.val_generator:

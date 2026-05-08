@@ -2783,17 +2783,13 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     ## Optimizers ##
     if not isinstance(cfg.TRAIN.OPTIMIZER, list):
         raise ValueError("'TRAIN.OPTIMIZER' must be a list")
-
-    # discriminator_configured = False
     if cfg.MODEL.ARCHITECTURE in ['nafnet'] and cfg.MODEL.NAFNET.ARCHITECTURE_D != "":
-        # discriminator_configured = True
         if len(cfg.TRAIN.OPTIMIZER) != 2:
             raise ValueError(
                 f"Configuration mismatch: You requested {len(cfg.TRAIN.OPTIMIZER)} optimizers, "
                 f"but the model has 2 parameter group(s). "
                 f"Check your TRAIN.OPTIMIZER list in the config."
             )
-        
     elif len(cfg.TRAIN.OPTIMIZER) > 1:
         raise ValueError(
             "Multiple optimizers were provided but no discriminator architecture is configured. "
@@ -2802,6 +2798,7 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     for opt in cfg.TRAIN.OPTIMIZER:
         if opt not in ["SGD", "ADAM", "ADAMW"]:
             raise ValueError("'TRAIN.OPTIMIZER' values must be in ['SGD', 'ADAM', 'ADAMW']")
+
     ## LR ##
     if not isinstance(cfg.TRAIN.LR, list):
         raise ValueError("'TRAIN.LR' must be a list")
@@ -2818,7 +2815,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
                 f"You must use nested square brackets `[]`. "
                 f"Change it to: [[0.9, 0.999]]"
             )
-        
         if not isinstance(beta_pair, list):
             raise ValueError(
                 f"Config Error: Each item in 'TRAIN.OPT_BETAS' must be a list. "
@@ -2831,7 +2827,6 @@ def check_configuration(cfg, jobname, check_data_paths=True):
     for beta_pair in cfg.TRAIN.OPT_BETAS:
         if len(beta_pair) != 2:
             raise ValueError("Each entry in 'TRAIN.OPT_BETAS' must be a tuple/list of length 2")
-
 
     if cfg.TRAIN.ENABLE and cfg.TRAIN.LR_SCHEDULER.NAME != "":
         if cfg.TRAIN.LR_SCHEDULER.NAME not in [
